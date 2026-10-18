@@ -551,7 +551,7 @@ type Gateway interface {
 	// GetSimImpairment and SetSimImpairment read and record what is broken on
 	// a simulated component (by resolved id; the caller checks scope).
 	GetSimImpairment(ctx context.Context, componentID string) (impair.Impairment, error)
-	SetSimImpairment(ctx context.Context, actorID, componentID string, imp impair.Impairment) error
+	SetSimImpairment(ctx context.Context, actorID, componentID string, imp impair.Impairment) (impair.Impairment, error)
 	// ResolveTaskOwner binds a task's owner component and confines the node to its
 	// own tasks, for the telemetry ingest consumer.
 	ResolveTaskOwner(ctx context.Context, taskID, nodeName string) (TaskOwner, bool, error)

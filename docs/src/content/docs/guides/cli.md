@@ -182,6 +182,9 @@ omniglass component impairment set panel-1 --latency-ms 300  # or slow it
 omniglass component impairment set panel-1                   # repair it
 ```
 
+A set replaces the whole impairment, so name every fault you want at once: `--latency-ms 300` on an
+unplugged device plugs it back in.
+
 Impairments apply only on a simulator started with `--impairments` and `NET_ADMIN`, in a namespace
 of its own, since it rewrites that namespace's firewall.
 

@@ -54,6 +54,15 @@ func dropFirewall() error {
 	if err != nil {
 		return err
 	}
+	if err := queueDropTable(c); err != nil {
+		return err
+	}
+	return c.Flush()
+}
+
+// queueDropTable queues the deletion of the simulator's table, if it exists,
+// on c's pending batch.
+func queueDropTable(c *nftables.Conn) error {
 	tables, err := c.ListTablesOfFamily(nftables.TableFamilyINet)
 	if err != nil {
 		return err
@@ -63,19 +72,20 @@ func dropFirewall() error {
 			c.DelTable(t)
 		}
 	}
-	return c.Flush()
+	return nil
 }
 
 // applyFirewall builds the simulator's table: traffic to an unplugged device
 // is dropped (a dark device: connects time out, datagrams vanish, pings go
 // unanswered), and an ICMP echo to a loopback address that is no device is
-// dropped, so ping answers only for devices.
+// dropped, so ping answers only for devices. The old table goes and the new
+// one arrives in one batch, so an unplugged device never answers in between.
 func applyFirewall(p Plan) error {
-	if err := dropFirewall(); err != nil {
-		return err
-	}
 	c, err := nftables.New()
 	if err != nil {
+		return err
+	}
+	if err := queueDropTable(c); err != nil {
 		return err
 	}
 	t := c.AddTable(&nftables.Table{Family: nftables.TableFamilyINet, Name: tableName})
@@ -153,11 +163,21 @@ func dropShaping() error {
 	return nil
 }
 
-// applyShaping hangs one class per degraded device off a root htb on
-// loopback: the class carries the device's rate limit, a netem under it the
-// delay, jitter and loss, and a u32 filter sends traffic bound for the
-// device's address into it. Only the direction toward the device is shaped,
-// so a latency of N adds N to a round trip.
+// maxShaped bounds how many devices can be degraded at once: each takes two
+// htb classes and a netem handle, numbered from fixed bases.
+const maxShaped = 16_000
+
+// directQlen is the htb root's queue for unclassified traffic (everything on
+// loopback that is not a degraded device's). Loopback normally queues
+// nothing, so the root is given room enough never to drop it.
+var directQlen uint32 = 1 << 16
+
+// applyShaping hangs classes off a root htb on loopback for each degraded
+// device. Traffic toward the device takes a class carrying its rate limit
+// with a netem under it for the delay, jitter and loss, so a latency of N
+// adds N to a round trip. Traffic from the device takes a second class with
+// only the rate limit, so the limit holds both ways (a collector's download
+// as well as its request) without counting the latency twice.
 func applyShaping(shaped []Shape) error {
 	if err := dropShaping(); err != nil {
 		return err
@@ -165,27 +185,32 @@ func applyShaping(shaped []Shape) error {
 	if len(shaped) == 0 {
 		return nil
 	}
+	if len(shaped) > maxShaped {
+		return fmt.Errorf("%d degraded devices, more than the %d one simulator can shape", len(shaped), maxShaped)
+	}
 	lo, err := loopback()
 	if err != nil {
 		return err
 	}
 	idx := lo.Attrs().Index
 	root := netlink.MakeHandle(qdiscMajr, 0)
-	if err := netlink.QdiscAdd(netlink.NewHtb(netlink.QdiscAttrs{LinkIndex: idx, Handle: root, Parent: netlink.HANDLE_ROOT})); err != nil {
+	htb := netlink.NewHtb(netlink.QdiscAttrs{LinkIndex: idx, Handle: root, Parent: netlink.HANDLE_ROOT})
+	htb.DirectQlen = &directQlen
+	if err := netlink.QdiscAdd(htb); err != nil {
 		return fmt.Errorf("root qdisc: %w", err)
 	}
 	for i, s := range shaped {
-		minor := uint16(i + 1)
-		class := netlink.MakeHandle(qdiscMajr, minor)
-		rate := uint64(10_000_000_000) // bits per second; unshaped: 10 Gbit/s
+		rate := uint64(10_000_000_000) // bits per second; unlimited: 10 Gbit/s
 		if s.RateKbit > 0 {
 			rate = uint64(s.RateKbit) * 1000
 		}
-		if err := netlink.ClassAdd(netlink.NewHtbClass(netlink.ClassAttrs{LinkIndex: idx, Parent: root, Handle: class},
-			netlink.HtbClassAttrs{Rate: rate, Ceil: rate})); err != nil {
-			return fmt.Errorf("class for %s: %w", s.Addr, err)
+		b := s.Addr.As4()
+		addr := binary.BigEndian.Uint32(b[:])
+		toward := netlink.MakeHandle(qdiscMajr, uint16(2*i+1))
+		if err := addClass(idx, root, toward, rate); err != nil {
+			return fmt.Errorf("class toward %s: %w", s.Addr, err)
 		}
-		if err := netlink.QdiscAdd(netlink.NewNetem(netlink.QdiscAttrs{LinkIndex: idx, Parent: class, Handle: netlink.MakeHandle(0x600+uint16(i), 0)},
+		if err := netlink.QdiscAdd(netlink.NewNetem(netlink.QdiscAttrs{LinkIndex: idx, Parent: toward, Handle: netlink.MakeHandle(0x600+uint16(i), 0)},
 			netlink.NetemQdiscAttrs{
 				Latency: uint32(s.LatencyMs) * 1000,
 				Jitter:  uint32(s.JitterMs) * 1000,
@@ -193,15 +218,35 @@ func applyShaping(shaped []Shape) error {
 			})); err != nil {
 			return fmt.Errorf("netem for %s: %w", s.Addr, err)
 		}
-		b := s.Addr.As4()
-		if err := netlink.FilterAdd(&netlink.U32{
-			FilterAttrs: netlink.FilterAttrs{LinkIndex: idx, Parent: root, Priority: 1, Protocol: unix.ETH_P_IP},
-			ClassId:     class,
-			Sel: &netlink.TcU32Sel{Flags: nl.TC_U32_TERMINAL, Nkeys: 1,
-				Keys: []netlink.TcU32Key{{Mask: 0xffffffff, Val: binary.BigEndian.Uint32(b[:]), Off: 16}}},
-		}); err != nil {
-			return fmt.Errorf("filter for %s: %w", s.Addr, err)
+		if err := addFilter(idx, root, toward, addr, 16); err != nil { // destination address
+			return fmt.Errorf("filter toward %s: %w", s.Addr, err)
+		}
+		if s.RateKbit == 0 {
+			continue
+		}
+		from := netlink.MakeHandle(qdiscMajr, uint16(2*i+2))
+		if err := addClass(idx, root, from, rate); err != nil {
+			return fmt.Errorf("class from %s: %w", s.Addr, err)
+		}
+		if err := addFilter(idx, root, from, addr, 12); err != nil { // source address
+			return fmt.Errorf("filter from %s: %w", s.Addr, err)
 		}
 	}
 	return nil
+}
+
+func addClass(idx int, root, handle uint32, rate uint64) error {
+	return netlink.ClassAdd(netlink.NewHtbClass(netlink.ClassAttrs{LinkIndex: idx, Parent: root, Handle: handle},
+		netlink.HtbClassAttrs{Rate: rate, Ceil: rate}))
+}
+
+// addFilter steers IPv4 packets whose address at off (16 the destination,
+// 12 the source) is addr into class.
+func addFilter(idx int, root, class, addr uint32, off int32) error {
+	return netlink.FilterAdd(&netlink.U32{
+		FilterAttrs: netlink.FilterAttrs{LinkIndex: idx, Parent: root, Priority: 1, Protocol: unix.ETH_P_IP},
+		ClassId:     class,
+		Sel: &netlink.TcU32Sel{Flags: nl.TC_U32_TERMINAL, Nkeys: 1,
+			Keys: []netlink.TcU32Key{{Mask: 0xffffffff, Val: addr, Off: off}}},
+	})
 }

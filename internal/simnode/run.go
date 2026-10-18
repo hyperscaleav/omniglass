@@ -126,6 +126,14 @@ func Run(ctx context.Context, cfg Config) error {
 	if ap == nil {
 		ap = impair.NewNetlink()
 	}
+	// A simulator killed without the chance to clear leaves its table and
+	// qdisc behind; holding NET_ADMIN, it sweeps them before it starts,
+	// impairing or not.
+	if caps.NetAdmin {
+		if err := ap.Clear(); err != nil {
+			log.Warn("could not clear a previous run's impairments", "error", err)
+		}
+	}
 	impairs := newImpairer(ap, cfg.Impairments && caps.NetAdmin)
 	if !cfg.Impairments {
 		impairs.st.Reason = "impairments are off; run the simulator with --impairments (and NET_ADMIN) to enable them"

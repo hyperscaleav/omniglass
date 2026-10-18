@@ -638,7 +638,7 @@ export interface paths {
         get: operations["get-component-impairment"];
         /**
          * Break or repair a simulated device
-         * @description Sets what is broken on a simulated component: unplugged, or a link with added latency, jitter, loss or a rate limit. An all-zero body repairs it. Audited. The simulator beside the component's node applies it on its next pull. Gated by simulation:update, whose scope is resolved on the component tier; a component outside the caller's component:read is a non-disclosing 404, and one it can read but not impair is a 403. Jitter above latency, or a value outside its range, is a 422.
+         * @description Sets what is broken on a simulated component: unplugged, or a link with added latency, jitter, loss or a rate limit. It replaces the whole impairment, so a field left out reads as zero (setting a latency on an unplugged device plugs it back in); an empty body repairs it. Returns the impairment as stored, loss rounded to hundredths. Audited. The simulator beside the component's node applies it on its next pull. Gated by simulation:update, whose scope is resolved on the component tier; a component outside the caller's component:read is a non-disclosing 404, and one it can read but not impair is a 403. Jitter above latency, or a value outside its range, is a 422.
          */
         put: operations["set-component-impairment"];
         post?: never;
@@ -5482,12 +5482,12 @@ export interface components {
             latency_ms?: number;
             /**
              * Format: double
-             * @description Share of packets toward the device dropped, in percent
+             * @description Share of packets toward the device dropped, in percent, to hundredths
              */
             loss_pct?: number;
             /**
              * Format: int64
-             * @description Bandwidth limit toward the device, in kilobits per second; 0 is unlimited
+             * @description Bandwidth limit on the device's link, both ways, in kilobits per second; 0 is unlimited
              */
             rate_kbit?: number;
             /** @description Dark on every protocol: connects time out, datagrams and pings go unanswered */

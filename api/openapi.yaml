@@ -2536,14 +2536,15 @@ components:
           minimum: 0
           type: integer
         loss_pct:
-          description: Share of packets toward the device dropped, in percent
+          description: Share of packets toward the device dropped, in percent, to hundredths
           format: double
           maximum: 100
           minimum: 0
           type: number
         rate_kbit:
-          description: Bandwidth limit toward the device, in kilobits per second; 0 is unlimited
+          description: Bandwidth limit on the device's link, both ways, in kilobits per second; 0 is unlimited
           format: int64
+          maximum: 10000000
           minimum: 0
           type: integer
         unplugged:
@@ -8189,7 +8190,7 @@ paths:
       summary: Get what is broken on a simulated device
       x-omniglass-permission: simulation:read
     put:
-      description: "Sets what is broken on a simulated component: unplugged, or a link with added latency, jitter, loss or a rate limit. An all-zero body repairs it. Audited. The simulator beside the component's node applies it on its next pull. Gated by simulation:update, whose scope is resolved on the component tier; a component outside the caller's component:read is a non-disclosing 404, and one it can read but not impair is a 403. Jitter above latency, or a value outside its range, is a 422."
+      description: "Sets what is broken on a simulated component: unplugged, or a link with added latency, jitter, loss or a rate limit. It replaces the whole impairment, so a field left out reads as zero (setting a latency on an unplugged device plugs it back in); an empty body repairs it. Returns the impairment as stored, loss rounded to hundredths. Audited. The simulator beside the component's node applies it on its next pull. Gated by simulation:update, whose scope is resolved on the component tier; a component outside the caller's component:read is a non-disclosing 404, and one it can read but not impair is a 403. Jitter above latency, or a value outside its range, is a 422."
       operationId: set-component-impairment
       parameters:
         - description: The simulated component's name, or a dotted address

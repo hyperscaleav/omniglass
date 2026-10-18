@@ -142,10 +142,11 @@ test-netadmin:
 	trap 'docker stop $$pg >/dev/null 2>&1; docker network rm $$net >/dev/null 2>&1' EXIT; \
 	docker network create $$net >/dev/null; \
 	docker run -d --rm --name $$pg --network $$net -e POSTGRES_PASSWORD=netadmin postgres:18 >/dev/null; \
-	until docker exec $$pg pg_isready -U postgres >/dev/null 2>&1; do sleep 1; done; \
+	n=0; until docker exec $$pg pg_isready -h 127.0.0.1 -U postgres >/dev/null 2>&1; do \
+		n=$$((n+1)); [ $$n -lt 60 ] || { echo "postgres did not come up"; exit 1; }; sleep 1; done; \
 	docker run --rm --network $$net --cap-add NET_ADMIN --sysctl net.ipv4.ping_group_range="0 2147483647" \
 		-v "$(CURDIR):/w" -w /w -v omniglass-netadmin-gomod:/go/pkg/mod -v omniglass-netadmin-gocache:/root/.cache/go-build \
-		-e OMNIGLASS_NETADMIN=1 -e OMNIGLASS_TEST_ADMIN_DSN="postgres://postgres:netadmin@$$pg:5432/postgres?sslmode=disable" \
+		-e GOFLAGS=-buildvcs=false -e OMNIGLASS_NETADMIN=1 -e OMNIGLASS_TEST_ADMIN_DSN="postgres://postgres:netadmin@$$pg:5432/postgres?sslmode=disable" \
 		$(NETADMIN_IMG) go test -tags netadmin -p 1 -count=1 -run '$(NETADMIN_RUN)' $(NETADMIN_PKGS)
 
 # One simulator process serving a 1,000-device fleet: startup time, goroutines

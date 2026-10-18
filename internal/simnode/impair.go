@@ -22,6 +22,7 @@ type impairer struct {
 	ap       applier
 	netAdmin bool
 	last     *impair.Plan
+	tried    bool // an apply was attempted, so the kernel may hold some of it
 	st       collection.SimImpairmentStatus
 }
 
@@ -57,6 +58,7 @@ func (m *impairer) reconcile(served map[string]netip.Addr, wants map[string]coll
 		m.st.Impaired = impaired
 		return
 	}
+	m.tried = true
 	if err := m.ap.Apply(p); err != nil {
 		m.st = collection.SimImpairmentStatus{Available: true, Error: err.Error()}
 		m.last = nil
@@ -68,9 +70,11 @@ func (m *impairer) reconcile(served map[string]netip.Addr, wants map[string]coll
 
 func (m *impairer) status() collection.SimImpairmentStatus { return m.st }
 
-// clear removes what was applied, when the simulator stops.
+// clear removes what was applied, when the simulator stops. A failed apply
+// may have left half its plan behind (the firewall without the shaping), so
+// any attempt is cleared, not only a success.
 func (m *impairer) clear() {
-	if m.netAdmin && m.last != nil {
+	if m.netAdmin && m.tried {
 		_ = m.ap.Clear()
 	}
 }

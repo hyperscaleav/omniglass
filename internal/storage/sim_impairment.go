@@ -32,33 +32,44 @@ func (p *PG) GetSimImpairment(ctx context.Context, componentID string) (impair.I
 
 // SetSimImpairment records what is broken on a simulated component (by its
 // already-resolved id, scope checked by the caller), audited in the same
-// transaction. The zero impairment clears it: a healthy device has no row.
-func (p *PG) SetSimImpairment(ctx context.Context, actorID, componentID string, imp impair.Impairment) error {
+// transaction, and returns it as stored (loss to hundredths). It replaces
+// the whole impairment; the zero impairment clears it, so a healthy device
+// has no row.
+func (p *PG) SetSimImpairment(ctx context.Context, actorID, componentID string, imp impair.Impairment) (impair.Impairment, error) {
+	imp = imp.Normalized()
 	if err := imp.Validate(); err != nil {
-		return fmt.Errorf("%w: %v", ErrSimImpairmentInvalid, err)
-	}
-	old, err := p.GetSimImpairment(ctx, componentID)
-	if err != nil {
-		return err
+		return impair.Impairment{}, fmt.Errorf("%w: %v", ErrSimImpairmentInvalid, err)
 	}
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
-		return fmt.Errorf("storage: begin set sim impairment: %w", err)
+		return impair.Impairment{}, fmt.Errorf("storage: begin set sim impairment: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
+	// The old value is read under the row's lock, so the audit's before
+	// is the state this write replaced.
+	var old impair.Impairment
+	err = tx.QueryRow(ctx, `select unplugged, latency_ms, jitter_ms, loss_pct::float8, rate_kbit
+		from sim_impairment where component_id = $1 for update`, componentID).
+		Scan(&old.Unplugged, &old.LatencyMs, &old.JitterMs, &old.LossPct, &old.RateKbit)
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return impair.Impairment{}, fmt.Errorf("storage: sim impairment of %s: %w", componentID, err)
+	}
 	if imp == (impair.Impairment{}) {
 		if _, err := tx.Exec(ctx, `delete from sim_impairment where component_id = $1`, componentID); err != nil {
-			return fmt.Errorf("storage: clear sim impairment of %s: %w", componentID, err)
+			return impair.Impairment{}, fmt.Errorf("storage: clear sim impairment of %s: %w", componentID, err)
 		}
 	} else if _, err := tx.Exec(ctx, `insert into sim_impairment (component_id, unplugged, latency_ms, jitter_ms, loss_pct, rate_kbit)
 		values ($1, $2, $3, $4, $5, $6)
 		on conflict (component_id) do update set unplugged = excluded.unplugged, latency_ms = excluded.latency_ms,
 			jitter_ms = excluded.jitter_ms, loss_pct = excluded.loss_pct, rate_kbit = excluded.rate_kbit, updated_at = now()`,
 		componentID, imp.Unplugged, imp.LatencyMs, imp.JitterMs, imp.LossPct, imp.RateKbit); err != nil {
-		return fmt.Errorf("storage: set sim impairment of %s: %w", componentID, err)
+		return impair.Impairment{}, fmt.Errorf("storage: set sim impairment of %s: %w", componentID, err)
 	}
 	if err := writeAuditRes(ctx, tx, actorID, "update", "sim_impairment", componentID, old, imp); err != nil {
-		return err
+		return impair.Impairment{}, err
 	}
-	return tx.Commit(ctx)
+	if err := tx.Commit(ctx); err != nil {
+		return impair.Impairment{}, fmt.Errorf("storage: commit sim impairment: %w", err)
+	}
+	return imp, nil
 }

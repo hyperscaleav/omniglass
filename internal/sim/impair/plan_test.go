@@ -67,3 +67,25 @@ func addrs(as []netip.Addr) string {
 	}
 	return strings.Join(s, " ")
 }
+
+// The rate is bounded where the column is: a value Postgres would refuse is
+// refused as invalid instead.
+func TestValidateBoundsTheRate(t *testing.T) {
+	if err := (Impairment{RateKbit: maxRateKbit}).Validate(); err != nil {
+		t.Fatalf("the maximum rate is refused: %v", err)
+	}
+	if err := (Impairment{RateKbit: maxRateKbit + 1}).Validate(); err == nil {
+		t.Fatal("a rate above the maximum validated")
+	}
+}
+
+// Loss is held to hundredths, as it is stored, so what an operator sets is
+// what reads back, and a loss that rounds to nothing is no impairment.
+func TestNormalizedRoundsLossToHundredths(t *testing.T) {
+	if got := (Impairment{LossPct: 2.555}).Normalized().LossPct; got != 2.56 {
+		t.Fatalf("2.555 normalized to %v, want 2.56", got)
+	}
+	if got := (Impairment{LossPct: 0.004}).Normalized(); got.Shaped() {
+		t.Fatalf("0.004%% loss normalized to %+v, want healthy", got)
+	}
+}

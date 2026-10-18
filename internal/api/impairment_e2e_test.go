@@ -88,6 +88,7 @@ func TestComponentImpairmentAPI(t *testing.T) {
 	}
 
 	c.do(ownerTok, http.MethodPut, "/components/dsp/impairment", map[string]any{"latency_ms": 10, "jitter_ms": 50}, http.StatusUnprocessableEntity)
+	c.do(ownerTok, http.MethodPut, "/components/dsp/impairment", map[string]any{"rate_kbit": 3_000_000_000}, http.StatusUnprocessableEntity)
 
 	viewer := setupAllViewer(t, ctx, dsn, "impair-viewer")
 	c.do(viewer, http.MethodGet, "/components/dsp/impairment", nil, http.StatusOK)

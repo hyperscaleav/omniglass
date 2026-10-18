@@ -151,11 +151,15 @@ show:
   ping goes unanswered;
 - **latency** and **jitter**: a delay, with variation, on traffic toward the device, which shows in
   the collector's connect times and round trips;
-- **loss**: a share of packets toward the device dropped;
-- **rate**: a bandwidth limit toward the device.
+- **loss**: a share of packets toward the device dropped (to hundredths of a percent);
+- **rate**: a bandwidth limit on the device's link, both ways, so it slows what a collector
+  downloads as well as what it sends. The return path is limited but not delayed, so a latency
+  still counts once per round trip.
 
 `PUT /components/{name}/impairment` sets it (`omniglass component impairment set <component>
---unplugged`, `--latency-ms 300`, ...), an all-zero body repairs it, and `GET` reads it back. Both
+--unplugged`, `--latency-ms 300`, ...) and `GET` reads it back. A set replaces the whole
+impairment: a field left out reads as zero, so setting a latency on an unplugged device plugs it
+back in, and an empty set repairs it. Both
 are gated (`simulation:update`, which operators hold, and `simulation:read`), resolve the component
 in the caller's component scope, and the write is audited. The node's simulation view shows each
 device's impairment and the simulator's account of applying it.
@@ -163,7 +167,9 @@ device's impairment and the simulator's account of applying it.
 The simulator applies impairments only when started with `--impairments` and holding `NET_ADMIN`,
 in a network namespace of its own (a pod or container): it rewrites that namespace's firewall and
 traffic shaping, through netlink with no `nft` or `tc` binary. It owns one nftables table and one
-root qdisc on loopback and touches nothing else. Without the flag or the capability it applies
+root qdisc on loopback and touches nothing else, though while any device is degraded all loopback
+traffic passes that root (unclassified traffic unshaped). It clears both when it stops, and sweeps
+any a killed run left behind when it starts. Without the flag or the capability it applies
 nothing and says why, in the simulation view. With them, **ping tells the truth**: an ICMP echo to
 a loopback address that is no device is dropped, so only devices answer.
 

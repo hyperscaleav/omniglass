@@ -3967,7 +3967,7 @@
      },
      {
       "name": "sim_impairment_rate_kbit_check",
-      "expr": "CHECK ((rate_kbit \u003e= 0))"
+      "expr": "CHECK (((rate_kbit \u003e= 0) AND (rate_kbit \u003c= 10000000)))"
      }
     ]
    }

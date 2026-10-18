@@ -8,6 +8,7 @@ package impair
 import (
 	"context"
 	"errors"
+	"io"
 	"net"
 	"net/netip"
 	"os"
@@ -127,4 +128,80 @@ func TestNetlinkApplierBreaksAndRestoresDevices(t *testing.T) {
 func isTimeout(err error) bool {
 	var ne net.Error
 	return errors.As(err, &ne) && ne.Timeout()
+}
+
+// serveBulk answers each connection by reading what the client sends, then
+// writing n bytes back: a device a collector downloads from and uploads to.
+func serveBulk(t *testing.T, addr string, n int) {
+	t.Helper()
+	l, err := net.Listen("tcp", addr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { l.Close() })
+	go func() {
+		for {
+			c, err := l.Accept()
+			if err != nil {
+				return
+			}
+			go func(c net.Conn) {
+				defer c.Close()
+				_, _ = io.Copy(io.Discard, c)
+				_, _ = c.Write(make([]byte, n))
+			}(c)
+		}
+	}()
+}
+
+// transfer sends up bytes, then reads until the device closes, and reports
+// how long the whole exchange took: the device answers only after it has
+// read everything sent.
+func transfer(t *testing.T, addr string, up int) time.Duration {
+	t.Helper()
+	c, err := net.Dial("tcp", addr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c.Close()
+	start := time.Now()
+	if _, err := c.Write(make([]byte, up)); err != nil {
+		t.Fatal(err)
+	}
+	_ = c.(*net.TCPConn).CloseWrite()
+	if _, err := io.Copy(io.Discard, c); err != nil {
+		t.Fatal(err)
+	}
+	return time.Since(start)
+}
+
+// A rate limit holds in both directions (what the collector downloads as
+// well as what it sends), while the latency still counts once per round
+// trip: the return path is rate limited but not delayed.
+func TestNetlinkRateLimitsBothDirections(t *testing.T) {
+	if os.Getenv("OMNIGLASS_NETADMIN") != "1" {
+		t.Fatal("this test rewrites the network it runs in; run it through make test-netadmin")
+	}
+	const dev = "127.63.0.5"
+	serveBulk(t, dev+":9090", 64<<10) // the device sends 64 KiB
+	serveBulk(t, dev+":9091", 0)      // the device only takes
+	ap := NewNetlink()
+	t.Cleanup(func() { _ = ap.Clear() })
+	if err := ap.Apply(PlanFor([]Device{{Addr: netip.MustParseAddr(dev), Impairment: Impairment{LatencyMs: 200, RateKbit: 256}}})); err != nil {
+		t.Fatal(err)
+	}
+	// 64 KiB at 256 kbit/s is about two seconds each way.
+	if down := transfer(t, dev+":9090", 0); down < 1500*time.Millisecond {
+		t.Errorf("downloaded 64 KiB from a 256 kbit/s device in %v; the rate does not hold toward the collector", down)
+	}
+	if up := transfer(t, dev+":9091", 64<<10); up < 1500*time.Millisecond {
+		t.Errorf("uploaded 64 KiB to a 256 kbit/s device in %v; the rate does not hold toward the device", up)
+	}
+	took, err := dial(dev + ":9090")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if took < 190*time.Millisecond || took > 350*time.Millisecond {
+		t.Errorf("a connect took %v with 200 ms of latency; want the latency once per round trip", took)
+	}
 }

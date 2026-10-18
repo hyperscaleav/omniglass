@@ -290,8 +290,9 @@ is fleet-wide, so `node:read` and `node:create` require an **all-scope** grant.
 
 **A simulated device can be broken on purpose.** `GET` and `PUT /components/{name}/impairment`
 (gated `simulation:read` and `simulation:update`, component-scoped, the write audited) read and set
-what is broken on a simulated component: unplugged, or latency, jitter, loss and a rate limit toward
-it. An all-zero body repairs the device; jitter above latency or a value out of range is a 422. The
+what is broken on a simulated component: unplugged, or latency, jitter and loss toward it and a rate
+limit both ways. A set replaces the whole impairment (a field left out is zero, an empty body repairs
+the device) and returns it as stored; jitter above latency or a value out of range is a 422. The
 simulator beside the component's node applies it ([simulation](/architecture/simulation/)).
 
 **A node's simulator is a read beside it.** `GET /nodes/{name}/simulation` (gated `node:read`, all-scope)

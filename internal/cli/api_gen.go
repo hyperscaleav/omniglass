@@ -889,7 +889,7 @@ func generatedCommands() []*cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "set <name>",
 						Short:   "Break or repair a simulated device",
-						Long:    "Sets what is broken on a simulated component: unplugged, or a link with added latency, jitter, loss or a rate limit. An all-zero body repairs it. Audited. The simulator beside the component's node applies it on its next pull. Gated by simulation:update, whose scope is resolved on the component tier; a component outside the caller's component:read is a non-disclosing 404, and one it can read but not impair is a 403. Jitter above latency, or a value outside its range, is a 422.",
+						Long:    "Sets what is broken on a simulated component: unplugged, or a link with added latency, jitter, loss or a rate limit. It replaces the whole impairment, so a field left out reads as zero (setting a latency on an unplugged device plugs it back in); an empty body repairs it. Returns the impairment as stored, loss rounded to hundredths. Audited. The simulator beside the component's node applies it on its next pull. Gated by simulation:update, whose scope is resolved on the component tier; a component outside the caller's component:read is a non-disclosing 404, and one it can read but not impair is a 403. Jitter above latency, or a value outside its range, is a 422.",
 						Example: "  omniglass component impairment set <name>",
 						Args:    cobra.ExactArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
@@ -915,8 +915,8 @@ func generatedCommands() []*cobra.Command {
 					}
 					cmd.Flags().IntVar(&fJitterMs, "jitter-ms", 0, "Variation on the delay, in milliseconds; at most the latency")
 					cmd.Flags().IntVar(&fLatencyMs, "latency-ms", 0, "Delay added to traffic toward the device, in milliseconds")
-					cmd.Flags().Float64Var(&fLossPct, "loss-pct", 0, "Share of packets toward the device dropped, in percent")
-					cmd.Flags().IntVar(&fRateKbit, "rate-kbit", 0, "Bandwidth limit toward the device, in kilobits per second; 0 is unlimited")
+					cmd.Flags().Float64Var(&fLossPct, "loss-pct", 0, "Share of packets toward the device dropped, in percent, to hundredths")
+					cmd.Flags().IntVar(&fRateKbit, "rate-kbit", 0, "Bandwidth limit on the device's link, both ways, in kilobits per second; 0 is unlimited")
 					cmd.Flags().BoolVar(&fUnplugged, "unplugged", false, "Dark on every protocol: connects time out, datagrams and pings go unanswered")
 					return cmd
 				}()

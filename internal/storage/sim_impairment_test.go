@@ -58,8 +58,8 @@ func TestSimImpairment(t *testing.T) {
 		t.Fatalf("a fresh device: %+v (%v), want healthy", got, err)
 	}
 	want := impair.Impairment{LatencyMs: 250, JitterMs: 50, LossPct: 2.5}
-	if err := gw.SetSimImpairment(ctx, "", id, want); err != nil {
-		t.Fatal(err)
+	if got, err := gw.SetSimImpairment(ctx, "", id, want); err != nil || got != want {
+		t.Fatalf("set returned %+v (%v), want %+v", got, err, want)
 	}
 	if got, err := gw.GetSimImpairment(ctx, id); err != nil || got != want {
 		t.Fatalf("read back %+v (%v), want %+v", got, err, want)
@@ -69,11 +69,20 @@ func TestSimImpairment(t *testing.T) {
 		t.Fatalf("device list = %+v (%v), want the impairment carried", devs, err)
 	}
 
-	if err := gw.SetSimImpairment(ctx, "", id, impair.Impairment{LatencyMs: 10, JitterMs: 20}); !errors.Is(err, storage.ErrSimImpairmentInvalid) {
+	if _, err := gw.SetSimImpairment(ctx, "", id, impair.Impairment{LatencyMs: 10, JitterMs: 20}); !errors.Is(err, storage.ErrSimImpairmentInvalid) {
 		t.Fatalf("jitter above latency: err %v, want ErrSimImpairmentInvalid", err)
 	}
 
-	if err := gw.SetSimImpairment(ctx, "", id, impair.Impairment{}); err != nil {
+	// Loss is stored to hundredths, and what is returned is what is stored.
+	if got, err := gw.SetSimImpairment(ctx, "", id, impair.Impairment{LossPct: 2.555}); err != nil || got.LossPct != 2.56 {
+		t.Fatalf("2.555%% loss returned %+v (%v), want 2.56", got, err)
+	}
+	if got, _ := gw.GetSimImpairment(ctx, id); got.LossPct != 2.56 {
+		t.Fatalf("2.555%% loss read back %v, want 2.56", got.LossPct)
+	}
+
+	// A loss that rounds to nothing is a healthy device: no row.
+	if _, err := gw.SetSimImpairment(ctx, "", id, impair.Impairment{LossPct: 0.004}); err != nil {
 		t.Fatal(err)
 	}
 	if devs, _ := gw.NodeSimDevices(ctx, "edge", all); devs[0].Impairment != nil {
@@ -83,7 +92,7 @@ func TestSimImpairment(t *testing.T) {
 	if err := conn.QueryRow(ctx, `select count(*) from audit_log where resource = 'sim_impairment' and resource_id = $1`, id).Scan(&audits); err != nil {
 		t.Fatal(err)
 	}
-	if audits != 2 {
-		t.Fatalf("%d audit rows for two writes", audits)
+	if audits != 3 {
+		t.Fatalf("%d audit rows for three writes", audits)
 	}
 }

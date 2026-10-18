@@ -8,6 +8,7 @@ package impair
 
 import (
 	"fmt"
+	"math"
 	"net/netip"
 	"slices"
 )
@@ -26,6 +27,10 @@ type Impairment struct {
 // any collector's timeout.
 const maxLatencyMs = 10_000
 
+// maxRateKbit bounds a rate limit at 10 Gbit/s, past any link a simulated
+// device stands for (and inside the column that stores it).
+const maxRateKbit = 10_000_000
+
 // Validate refuses an impairment the network cannot apply.
 func (i Impairment) Validate() error {
 	switch {
@@ -35,10 +40,17 @@ func (i Impairment) Validate() error {
 		return fmt.Errorf("jitter_ms %d must be between 0 and the latency (%d)", i.JitterMs, i.LatencyMs)
 	case i.LossPct < 0 || i.LossPct > 100:
 		return fmt.Errorf("loss_pct %g is outside 0 to 100", i.LossPct)
-	case i.RateKbit < 0:
-		return fmt.Errorf("rate_kbit %d is negative", i.RateKbit)
+	case i.RateKbit < 0 || i.RateKbit > maxRateKbit:
+		return fmt.Errorf("rate_kbit %d is outside 0 to %d", i.RateKbit, maxRateKbit)
 	}
 	return nil
+}
+
+// Normalized holds loss to hundredths of a percent, the precision it is
+// stored at, so what is set is what reads back.
+func (i Impairment) Normalized() Impairment {
+	i.LossPct = math.Round(i.LossPct*100) / 100
+	return i
 }
 
 // Shaped reports whether the impairment degrades the link (delay, jitter,

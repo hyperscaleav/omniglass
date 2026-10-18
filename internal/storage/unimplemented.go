@@ -459,8 +459,8 @@ func (UnimplementedGateway) SweepCommandSettlements(context.Context) error { ret
 func (UnimplementedGateway) GetSimImpairment(context.Context, string) (impair.Impairment, error) {
 	return impair.Impairment{}, nil
 }
-func (UnimplementedGateway) SetSimImpairment(context.Context, string, string, impair.Impairment) error {
-	return nil
+func (UnimplementedGateway) SetSimImpairment(context.Context, string, string, impair.Impairment) (impair.Impairment, error) {
+	return impair.Impairment{}, nil
 }
 func (UnimplementedGateway) NodeSimDevices(context.Context, string, scope.Set) ([]SimDevice, error) {
 	return nil, nil
