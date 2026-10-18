@@ -1553,7 +1553,7 @@ Patches a rule (an absent field is unchanged), bumping its version; disabling it
 | `--label` | string | (none) | A human label; also the alarm message when message is empty |
 | `--message` | string | (none) | The alarm message; empty uses the label or the name |
 | `--sample-key` | string | (none) | The property or metric the rule reads |
-| `--selector` | string | (none) | The components the rule watches (component types and components); absent is every component |
+| `--selector` | string | (none) | Replace the components the rule watches; absent leaves them unchanged, and an empty selector watches every component |
 | `--severity` | string | (none) | The severity level the alarm is raised at, by name |
 
 Example:
@@ -3997,7 +3997,7 @@ Delete a severity level
 omniglass severity-level delete <name>
 ```
 
-Removes an operator level no alarm names; an official level or one in use is a 409. Audited. Gated by severity_level:delete.
+Removes an operator level no alarm or event rule names; an official level or one in use is a 409. Audited. Gated by severity_level:delete.
 
 Example:
 

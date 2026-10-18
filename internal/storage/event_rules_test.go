@@ -109,3 +109,61 @@ func TestEventRules(t *testing.T) {
 }
 
 func ptrCriteria(c rules.Criteria) *rules.Criteria { return &c }
+
+// A rule outlives what it points at: deleting a component it selects or the
+// sample key it reads leaves the rule editable (an operator can still
+// disable it), it just matches nothing; a patch that changes nothing bumps
+// nothing; and the sustains and clear fields refuse what they cannot mean.
+func TestEventRuleEdgeCases(t *testing.T) {
+	if testing.Short() {
+		t.Skip("integration test needs Postgres")
+	}
+	ctx := context.Background()
+	gw, err := storage.NewPG(ctx, storagetest.NewDSN(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer gw.Close()
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatal(err)
+	}
+	all := scope.Set{All: true}
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "doomed"}, all, all, all, all); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := gw.CreateMetricType(ctx, "", storage.MetricTypeSpec{Name: "doomed-metric", DataType: "float"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := gw.CreateEventRule(ctx, "", storage.EventRuleSpec{Name: "on-doomed", SampleKey: "doomed-metric",
+		Fire: criteria("gt", 1), Severity: "info", Selector: storage.EventRuleSelector{Components: []string{"doomed"}}}, all); err != nil {
+		t.Fatal(err)
+	}
+	if err := gw.DeleteComponent(ctx, "", "doomed", all, all); err != nil {
+		t.Fatal(err)
+	}
+	if err := gw.DeleteMetricType(ctx, "", "doomed-metric"); err != nil {
+		t.Fatal(err)
+	}
+	off := false
+	upd, err := gw.UpdateEventRule(ctx, "", "on-doomed", storage.EventRulePatch{Enabled: &off}, all, all)
+	if err != nil || upd.Enabled {
+		t.Fatalf("disabling a rule whose component and key were deleted: %+v (%v), want it disabled", upd, err)
+	}
+
+	// A patch that changes nothing changes nothing, version included.
+	same, err := gw.UpdateEventRule(ctx, "", "on-doomed", storage.EventRulePatch{Enabled: &off}, all, all)
+	if err != nil || same.Version != upd.Version {
+		t.Fatalf("a no-op patch moved the version from %d to %d (%v)", upd.Version, same.Version, err)
+	}
+
+	clear := criteria("lt", 1)
+	if _, err := gw.UpdateEventRule(ctx, "", "on-doomed", storage.EventRulePatch{Clear: &clear, ClearNegates: true}, all, all); !errors.Is(err, storage.ErrEventRuleInvalid) {
+		t.Fatalf("a clear criterion and clear_negates together: err %v, want ErrEventRuleInvalid", err)
+	}
+	for _, d := range []time.Duration{time.Nanosecond, 1500 * time.Nanosecond, 400 * 24 * time.Hour} {
+		if _, err := gw.CreateEventRule(ctx, "", storage.EventRuleSpec{Name: "sustain-x", SampleKey: "room-temperature",
+			Fire: criteria("gt", 1), FireSustain: d, Severity: "info"}, all); !errors.Is(err, storage.ErrEventRuleInvalid) {
+			t.Errorf("a sustain of %v: err %v, want ErrEventRuleInvalid", d, err)
+		}
+	}
+}

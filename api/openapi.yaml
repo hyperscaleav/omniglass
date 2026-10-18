@@ -7510,7 +7510,7 @@ components:
           type: string
         selector:
           $ref: "#/components/schemas/SelectorBody"
-          description: The components the rule watches (component types and components); absent is every component
+          description: Replace the components the rule watches; absent leaves them unchanged, and an empty selector watches every component
         severity:
           description: The severity level the alarm is raised at, by name
           type: string
@@ -13493,7 +13493,7 @@ paths:
       x-omniglass-permission: severity_level:create
   /severity-levels/{name}:
     delete:
-      description: Removes an operator level no alarm names; an official level or one in use is a 409. Audited. Gated by severity_level:delete.
+      description: Removes an operator level no alarm or event rule names; an official level or one in use is a 409. Audited. Gated by severity_level:delete.
       operationId: delete-severity-level
       parameters:
         - description: The level's name

@@ -130,12 +130,56 @@ func invalidRule(format string, a ...any) error {
 	return fmt.Errorf("%w: %s", ErrEventRuleInvalid, fmt.Sprintf(format, a...))
 }
 
+// maxSustain bounds a sustain: a year is past any condition worth holding an
+// alarm open for, and well inside what a duration and an interval both hold.
+const maxSustain = 365 * 24 * time.Hour
+
+// ruleChecks says which of a rule's references to validate: all of them on
+// create; on update only what the patch changed, so a rule whose component
+// or key was deleted can still be edited (disabled, at least), and simply
+// matches nothing until it is pointed somewhere real.
+type ruleChecks struct {
+	key, criteria, selector bool
+}
+
+var checkAll = ruleChecks{key: true, criteria: true, selector: true}
+
 // prepareEventRule validates a rule against the registries and resolves its
-// selector's components to ids, returning the lane its key reads.
-func prepareEventRule(ctx context.Context, q querier, r *EventRule) error {
+// selector's components to ids, setting the lane its key reads.
+func prepareEventRule(ctx context.Context, q querier, r *EventRule, check ruleChecks) error {
 	if err := ValidateName("event_rule", r.Name); err != nil {
 		return fmt.Errorf("%w: %w", ErrEventRuleInvalid, err)
 	}
+	for _, d := range []time.Duration{r.FireSustain, r.ClearSustain} {
+		if d < 0 || d > maxSustain {
+			return invalidRule("a sustain must be between 0s and %s", maxSustain)
+		}
+		if d%time.Microsecond != 0 {
+			return invalidRule("a sustain is kept to the microsecond; %s is finer", d)
+		}
+	}
+	if check.key {
+		if err := resolveRuleLane(ctx, q, r); err != nil {
+			return err
+		}
+	}
+	if check.key || check.criteria {
+		if err := r.FireCriteria.Validate(r.SampleLane); err != nil {
+			return invalidRule("fire criteria: %v", err)
+		}
+		if r.ClearCriteria != nil {
+			if err := r.ClearCriteria.Validate(r.SampleLane); err != nil {
+				return invalidRule("clear criteria: %v", err)
+			}
+		}
+	}
+	if check.selector {
+		return resolveRuleSelector(ctx, q, r)
+	}
+	return nil
+}
+
+func resolveRuleLane(ctx context.Context, q querier, r *EventRule) error {
 	var isProperty, isMetric bool
 	if err := q.QueryRow(ctx, `select exists (select 1 from property_type where name = $1),
 		exists (select 1 from metric_type where name = $1)`, r.SampleKey).Scan(&isProperty, &isMetric); err != nil {
@@ -149,17 +193,10 @@ func prepareEventRule(ctx context.Context, q querier, r *EventRule) error {
 	default:
 		return invalidRule("sample key %q is not a registered property or metric", r.SampleKey)
 	}
-	if err := r.FireCriteria.Validate(r.SampleLane); err != nil {
-		return invalidRule("fire criteria: %v", err)
-	}
-	if r.ClearCriteria != nil {
-		if err := r.ClearCriteria.Validate(r.SampleLane); err != nil {
-			return invalidRule("clear criteria: %v", err)
-		}
-	}
-	if r.FireSustain < 0 || r.ClearSustain < 0 {
-		return invalidRule("a sustain cannot be negative")
-	}
+	return nil
+}
+
+func resolveRuleSelector(ctx context.Context, q querier, r *EventRule) error {
 	for _, t := range r.Selector.ComponentTypes {
 		var ok bool
 		if err := q.QueryRow(ctx, `select exists (select 1 from component_type where name = $1)`, t).Scan(&ok); err != nil {
@@ -267,7 +304,7 @@ func (p *PG) CreateEventRule(ctx context.Context, actorID string, spec EventRule
 		return nil, fmt.Errorf("storage: begin create event rule: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
-	if err := prepareEventRule(ctx, tx, &r); err != nil {
+	if err := prepareEventRule(ctx, tx, &r, checkAll); err != nil {
 		return nil, err
 	}
 	sel, fire, clear, err := ruleArgs(r)
@@ -339,6 +376,9 @@ func (p *PG) UpdateEventRule(ctx context.Context, actorID, name string, patch Ev
 	if patch.Fire != nil {
 		r.FireCriteria = *patch.Fire
 	}
+	if patch.Clear != nil && patch.ClearNegates {
+		return nil, invalidRule("set a clear criterion or clear_negates, not both")
+	}
 	if patch.Clear != nil {
 		c := *patch.Clear
 		r.ClearCriteria = &c
@@ -361,8 +401,13 @@ func (p *PG) UpdateEventRule(ctx context.Context, actorID, name string, patch Ev
 	if patch.Enabled != nil {
 		r.Enabled = *patch.Enabled
 	}
-	if err := prepareEventRule(ctx, tx, &r); err != nil {
+	check := ruleChecks{key: patch.SampleKey != nil, criteria: patch.Fire != nil || patch.Clear != nil, selector: patch.Selector != nil}
+	if err := prepareEventRule(ctx, tx, &r, check); err != nil {
 		return nil, err
+	}
+	// A patch that changes nothing writes nothing: no version bump, no audit.
+	if sameAuthoredRule(old, r) {
+		return &old, nil
 	}
 	sel, fire, clear, err := ruleArgs(r)
 	if err != nil {
@@ -411,4 +456,22 @@ func (p *PG) DeleteEventRule(ctx context.Context, actorID, name string, read, ac
 		return err
 	}
 	return tx.Commit(ctx)
+}
+
+// sameAuthoredRule reports whether two versions of a rule say the same thing.
+func sameAuthoredRule(a, b EventRule) bool {
+	type authored struct {
+		Label, Description, SampleKey, Severity, Message string
+		Selector                                         EventRuleSelector
+		Fire                                             rules.Criteria
+		Clear                                            *rules.Criteria
+		FireSustain, ClearSustain                        time.Duration
+		Enabled                                          bool
+	}
+	pick := func(r EventRule) string {
+		j, _ := json.Marshal(authored{r.Label, r.Description, r.SampleKey, r.Severity, r.Message, r.Selector,
+			r.FireCriteria, r.ClearCriteria, r.FireSustain, r.ClearSustain, r.Enabled})
+		return string(j)
+	}
+	return pick(a) == pick(b)
 }

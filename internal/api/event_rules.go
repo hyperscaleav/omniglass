@@ -115,7 +115,7 @@ type updateEventRuleInput struct {
 	Body struct {
 		Label         *string       `json:"label,omitempty" required:"false" doc:"A human label; also the alarm message when message is empty"`
 		Description   *string       `json:"description,omitempty" required:"false" doc:"What the rule watches for and why"`
-		Selector      *selectorBody `json:"selector,omitempty" required:"false" doc:"The components the rule watches (component types and components); absent is every component"`
+		Selector      *selectorBody `json:"selector,omitempty" required:"false" doc:"Replace the components the rule watches; absent leaves them unchanged, and an empty selector watches every component"`
 		SampleKey     *string       `json:"sample_key,omitempty" required:"false" doc:"The property or metric the rule reads"`
 		FireCriteria  *criteriaBody `json:"fire_criteria,omitempty" required:"false" doc:"The criteria that opens an alarm: {op, value}"`
 		ClearCriteria *criteriaBody `json:"clear_criteria,omitempty" required:"false" doc:"The criteria that clears it: {op, value}; absent clears on the negation of fire_criteria"`

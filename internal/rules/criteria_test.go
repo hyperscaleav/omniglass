@@ -2,6 +2,7 @@ package rules
 
 import (
 	"encoding/json"
+	"math"
 	"testing"
 )
 
@@ -86,5 +87,19 @@ func TestNegate(t *testing.T) {
 	gt := crit(t, `{"op":"gt","value":80}`).Negate()
 	if ok, _ := gt.Eval(80.0); !ok {
 		t.Error("the negation of gt 80 did not match 80")
+	}
+}
+
+// A criterion judges a sample by its lane's type: a text criterion takes
+// only text, and a number that is not a number (NaN, infinity) decides
+// nothing rather than holding neither fire nor clear forever.
+func TestCriteriaRefusesTheWrongType(t *testing.T) {
+	if _, err := crit(t, `{"op":"eq","value":"1000000"}`).Eval(1000000.0); err == nil {
+		t.Error("a text criterion compared a number by its printed form")
+	}
+	for _, v := range []any{"NaN", "Inf", math.NaN(), math.Inf(1)} {
+		if _, err := crit(t, `{"op":"gt","value":5}`).Eval(v); err == nil {
+			t.Errorf("a numeric criterion evaluated %v", v)
+		}
 	}
 }

@@ -40,7 +40,7 @@ var (
 	ErrSeverityLevelExists   = errors.New("storage: a severity level already has that name or rank")
 	ErrSeverityLevelOfficial = errors.New("storage: an official severity level is read-only")
 	ErrSeverityLevelInvalid  = errors.New("storage: severity level is invalid")
-	ErrSeverityLevelInUse    = errors.New("storage: severity level is in use")
+	ErrSeverityLevelInUse    = errors.New("storage: severity level is in use by an alarm or an event rule")
 )
 
 // SeverityColors is the palette a level's color is drawn from: the console
@@ -247,7 +247,7 @@ func (p *PG) UpdateSeverityLevel(ctx context.Context, actorID, name string, patc
 	return &updated, nil
 }
 
-// DeleteSeverityLevel removes an operator level no alarm names, audited.
+// DeleteSeverityLevel removes an operator level no alarm or rule names, audited.
 func (p *PG) DeleteSeverityLevel(ctx context.Context, actorID, name string) error {
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {

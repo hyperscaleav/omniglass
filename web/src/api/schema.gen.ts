@@ -3096,7 +3096,7 @@ export interface paths {
         post?: never;
         /**
          * Delete a severity level
-         * @description Removes an operator level no alarm names; an official level or one in use is a 409. Audited. Gated by severity_level:delete.
+         * @description Removes an operator level no alarm or event rule names; an official level or one in use is a 409. Audited. Gated by severity_level:delete.
          */
         delete: operations["delete-severity-level"];
         options?: never;
@@ -8436,7 +8436,7 @@ export interface components {
             message?: string;
             /** @description The property or metric the rule reads */
             sample_key?: string;
-            /** @description The components the rule watches (component types and components); absent is every component */
+            /** @description Replace the components the rule watches; absent leaves them unchanged, and an empty selector watches every component */
             selector?: components["schemas"]["SelectorBody"];
             /** @description The severity level the alarm is raised at, by name */
             severity?: string;

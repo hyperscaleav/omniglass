@@ -7,6 +7,7 @@ package rules
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"strconv"
 )
 
@@ -73,13 +74,16 @@ func (c Criteria) number() (float64, bool) {
 	return f, true
 }
 
-// Eval reports whether a sample value meets the criterion: a string for a
-// property, a float64 (or a numeric string) for a metric.
+// Eval reports whether a sample value meets the criterion, judging it by the
+// lane's type: a text criterion takes only a string (a property's value); a
+// numeric one takes a float64 (a metric's value) or numeric text. A number
+// that is no number (NaN, infinity) is refused: it would meet neither a
+// criterion nor its negation, so it could open nothing and clear nothing.
 func (c Criteria) Eval(value any) (bool, error) {
 	if want, ok := c.text(); ok {
 		got, isText := value.(string)
 		if !isText {
-			got = fmt.Sprint(value)
+			return false, fmt.Errorf("a text criterion compares text, not %T", value)
 		}
 		switch c.Op {
 		case "eq":
@@ -107,6 +111,9 @@ func (c Criteria) Eval(value any) (bool, error) {
 		got = f
 	default:
 		return false, fmt.Errorf("sample value %v is not a number", value)
+	}
+	if math.IsNaN(got) || math.IsInf(got, 0) {
+		return false, fmt.Errorf("sample value %v is not a finite number", got)
 	}
 	switch c.Op {
 	case "eq":

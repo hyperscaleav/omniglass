@@ -2174,7 +2174,7 @@ func generatedCommands() []*cobra.Command {
 				cmd.Flags().StringVar(&fLabel, "label", "", "A human label; also the alarm message when message is empty")
 				cmd.Flags().StringVar(&fMessage, "message", "", "The alarm message; empty uses the label or the name")
 				cmd.Flags().StringVar(&fSampleKey, "sample-key", "", "The property or metric the rule reads")
-				cmd.Flags().StringVar(&fSelector, "selector", "", "The components the rule watches (component types and components); absent is every component")
+				cmd.Flags().StringVar(&fSelector, "selector", "", "Replace the components the rule watches; absent leaves them unchanged, and an empty selector watches every component")
 				cmd.Flags().StringVar(&fSeverity, "severity", "", "The severity level the alarm is raised at, by name")
 				return cmd
 			}()
@@ -5283,7 +5283,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "delete <name>",
 					Short:   "Delete a severity level",
-					Long:    "Removes an operator level no alarm names; an official level or one in use is a 409. Audited. Gated by severity_level:delete.",
+					Long:    "Removes an operator level no alarm or event rule names; an official level or one in use is a 409. Audited. Gated by severity_level:delete.",
 					Example: "  omniglass severity-level delete <name>",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {

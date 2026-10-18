@@ -116,45 +116,64 @@ The permission lint now catches any attempt to write it back, because `alarm` is
 route surface knows and neither of the other two verbs gates anything.
 :::
 
-:::design[The `event_rule` (ADR-0050)]
-
 ## The `event_rule`
 
-An `event_rule` carries a required `fire_criteria` and an optional `clear_criteria`. With a
-`clear_criteria` the fire event **opens** an alarm and the clear event **resolves** it; without one
-the rule is momentary (a one-shot event, no alarm). There is no separate `alarm_rule`.
+An `event_rule` raises alarms on its own (#918, #919; [ADR-0144](/architecture/decisions/#adr-0144-alarms-are-raised-by-event-rules-at-a-severity-level-from-a-ranked-registry)).
+It reads one **sample key** (a registered property or metric, whose lane it records), carries a
+required **`fire_criteria`** and an optional **`clear_criteria`**, and names a **severity level**.
+When a landed sample meets the fire criteria the rule opens an alarm on the sample's component; when
+one meets the clear criteria it clears it; a rule with no clear criteria clears on the **negation** of
+its fire criteria. There is no separate `alarm_rule`.
 
 ```yaml
 event_rule:
-  scope: 'component.template == "polaris-dsp-16"'   # the shared selector (expressions)
-  sample: dsp.temperature
-  window: { reduce: avg, over: 10m }                 # machinery (optional)
-  fire_criteria: "value > 65"                        # opens the alarm
-  clear_criteria: "value < 60"                       # resolves it (defaults to !fire_criteria)
-  for: 0                                             # fire-side sustain (optional)
-  for_clear: 0                                       # clear-side sustain (optional)
-  severity: average
+  name: reach-lost
+  sample_key: endpoint-reachable       # a property (text) or a metric (number)
+  fire_criteria: { op: eq, value: down }
+  clear_criteria: { op: eq, value: up } # optional: absent, the negation of fire
+  fire_sustain: 30s                     # how long fire must hold (#920)
+  clear_sustain: 0s
+  severity: high
+  selector: { component_types: [display], components: [] }   # empty: every component
 ```
 
-`scope` selects the entities (fan-out, one alarm per match); `sample` is the input;
-`window` / `for` / `for_clear` are aggregation machinery; `fire_criteria` / `clear_criteria` are the
-Expr leaves; `severity` names a level by id (below). A rule is **suppressible by name through the
-cascade** ([cascade](/architecture/cascade/)): a high-weight group removes a false-firing rule
-without editing it.
+The evaluator judges each sample **as it lands, in the same transaction**, through the same guarded
+conditional insert, audit row and health recompute a hand-raised alarm uses, so a rule-raised alarm
+feeds health exactly as a hand-raised one does; it writes as the system actor. The alarm names its rule
+(`raised_by_rule_id`, set null if the rule is deleted), and its condition identity is the rule's name
+plus the sample's **instance**, so a per-endpoint input holds **one alarm per endpoint**: a component
+whose SNMP and HTTP both fail carries two, and one recovering clears only its own. A repeated or
+redelivered sample changes nothing. A disabled rule evaluates nothing, and re-enabling it opens no
+duplicate against an alarm still open.
 
-`for` and `for_clear` are **symmetric sustains** on the two edges, defaulting to `0`, set
-independently: a long `for_clear` over a short `for` holds an incident through a noisy recovery
-without delaying the page.
+Criteria are, for now, one comparison of the arriving sample's value, `{op, value}`: a property
+compares text (`eq`, `ne`), a metric compares numbers (`eq` `ne` `gt` `ge` `lt` `le`); a sample of
+the wrong type, or a number that is no number, decides nothing. The column is jsonb, so the
+[expression](/architecture/expressions/) leaf replaces the comparison without a schema change (#524).
+The **selector** picks the components a rule watches: those whose type falls within a listed component
+type, and those listed by id; empty, every component. A rule outlives what it points at: deleting a
+component or a key it reads leaves it editable, and it simply matches nothing.
+
+Rules are **fleet-wide config**: authored at `/event-rules` with `rule:*` and an all-scope grant, read
+by any all-scope reader; a version bumps on every change.
 
 A rule does not declare a health verdict itself: the alarm it raises impairs its owner's own
 verdict (any active alarm degrades it, one at or above `high` is an outage). Only an outage owner stops
 occupying the [system roles](/architecture/core-entities/#system-roles-the-slots-a-system-needs-filled)
 it fills; a lesser alarm degrades it but leaves it in place. When it does drop out (#626), how much
-that matters is the role's **impact** ([health](/architecture/health/)). A rule scoped to whichever
-arc owns its sample yields
-**component-level** and **system-level** alarms with one machinery (a system-scoped rule reads
-member data, fires a system-owned alarm).
+that matters is the role's **impact** ([health](/architecture/health/)).
+
+:::design[The rest of the event rule (ADR-0050)]
+Still design: **expression criteria** and an **expression selector** (`scope:
+'component.template == "polaris-dsp-16"'`, fan-out, one alarm per match) once the engine lands (#524);
+a **window** (`window: { reduce: avg, over: 10m }`) aggregating the input before the criteria; a rule
+**suppressible by name through the cascade** ([cascade](/architecture/cascade/)), so a high-weight group
+removes a false-firing rule without editing it; and a rule scoped to whichever arc owns its sample,
+yielding **system-level** alarms with the same machinery (a system-scoped rule reads member data and
+fires a system-owned alarm). Sustains are clocked by samples, so a condition that goes silent mid-sustain
+waits for the next sample rather than a timer.
 :::
+
 
 ## Severity: a registry of named levels
 

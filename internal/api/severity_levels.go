@@ -131,7 +131,7 @@ func registerSeverityLevelRoutes(api huma.API, a *authenticator, gw storage.Gate
 		Path:          "/severity-levels/{name}",
 		DefaultStatus: http.StatusNoContent,
 		Summary:       "Delete a severity level",
-		Description:   "Removes an operator level no alarm names; an official level or one in use is a 409. Audited. Gated by severity_level:delete.",
+		Description:   "Removes an operator level no alarm or event rule names; an official level or one in use is a 409. Audited. Gated by severity_level:delete.",
 	}, "severity_level", "delete"), func(ctx context.Context, in *severityLevelNameInput) (*struct{}, error) {
 		if err := gw.DeleteSeverityLevel(ctx, actorID(ctx), in.Name); err != nil {
 			return nil, mapSeverityLevelErr(err)
@@ -152,7 +152,7 @@ func mapSeverityLevelErr(err error) error {
 	case errors.Is(err, storage.ErrSeverityLevelExists):
 		return huma.Error409Conflict("a severity level already has that name or rank")
 	case errors.Is(err, storage.ErrSeverityLevelInUse):
-		return huma.Error409Conflict("an alarm still names this severity level")
+		return huma.Error409Conflict("an alarm or an event rule still names this severity level")
 	case errors.Is(err, storage.ErrSeverityLevelInvalid):
 		return huma.Error422UnprocessableEntity(err.Error())
 	}

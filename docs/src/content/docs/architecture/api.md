@@ -327,6 +327,14 @@ needing `system:create`, `system:update`, `system:read`, `component:create`, `en
 simulated component per staffed role at its own free address with its endpoint on the node, and each
 role assignment, in one transaction: it lands whole or not at all.
 
+**Alarms are raised by rules and graded by a level registry.** `/severity-levels` (read with
+`severity_level:read`, written with `severity_level:*`) lists the severity levels least to most severe,
+each with whether an alarm at it puts a component in outage; official levels are read-only. `/event-rules`
+(gated `rule:*`, fleet-wide config, all-scope grants only) authors the rules that raise alarms: a sample
+key, fire and clear criteria, sustains, a severity level and a selector; an unknown key or level, or
+criteria its lane cannot evaluate, is a 422. An alarm body names its component by name and uuid, and a
+rule-raised one its rule (`raised_by_rule`, `raised_by_rule_id`).
+
 **The endpoint is authored; the task is derived.** An endpoint is addressed by a surrogate `id` and
 **named by its protocol**: `name` derives from `transport`, unique **within its component**
 (create takes a type, not a name; a duplicate protocol on one component is a **409**). Creating an
