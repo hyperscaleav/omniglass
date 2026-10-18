@@ -39,7 +39,8 @@ restart.
 ## See it
 
 While a simulator is connected, **Simulation** appears in the sidebar (with `simulation:read`, which
-viewers hold). The page has a card per node with a simulator, saying whether it is connected, its total
+viewers hold). You see each simulator that serves a component in your scope, and only those
+components: a technician scoped to a building sees that building's simulated components. The page has a card per node with a simulator, saying whether it is connected, its total
 hits and components, what it may do where it runs (**Low ports**: bind ports below 1024; **Port offset**:
 the lift it applies when it cannot; **NET_ADMIN**), and whether it can apply impairments (and if not,
 why). Under it, a table lists every simulated component with its product, address, hits, last hit

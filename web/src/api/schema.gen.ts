@@ -2993,7 +2993,7 @@ export interface paths {
         };
         /**
          * Get the simulated fleet
-         * @description Every node a simulator has pulled for since the server started (that the caller may read), each with its capabilities, its account of impairments, and the components it simulates within the caller's component read scope, joined to their live hits. Connected is true when any simulator pulled recently. Hits are per server process, not stored. Gated by simulation:read.
+         * @description Every node a simulator has pulled for since the server started, each with its capabilities, its account of impairments, and the components it simulates within the caller's component read scope, joined to their live hits. A caller sees a node's simulator when its component read scope holds at least one component the node simulates (an all-scope reader sees all of them); no node read is needed. Connected is true when any listed simulator pulled recently. Hits are per server process, not stored. Gated by simulation:read.
          */
         get: operations["get-simulation"];
         put?: never;
@@ -7423,7 +7423,7 @@ export interface components {
             readonly $schema?: string;
             /** @description Any simulator pulled its device list recently; the console shows its Simulation page only then. */
             connected: boolean;
-            /** @description Each node a simulator has pulled for since the server started, that the caller may read. */
+            /** @description Each node a simulator has pulled for since the server started, whose simulated components the caller's scope reaches. */
             nodes: components["schemas"]["SimNodeBody"][] | null;
         };
         SimImpairmentStatus: {

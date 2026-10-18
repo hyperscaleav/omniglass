@@ -137,6 +137,9 @@ func TestSimulationFleetAPI(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	if _, err := conn.Exec(ctx, `insert into role (name, permissions) values ('sim-scoped-reader', '{"simulation:read","component:read"}')`); err != nil {
+		t.Fatal(err)
+	}
 	hub := &fakeHub{Registry: simhub.New()}
 	srv := httptest.NewServer(api.NewHandler(gw, api.WithSimHub(hub)))
 	defer srv.Close()
@@ -164,6 +167,45 @@ func TestSimulationFleetAPI(t *testing.T) {
 		t.Fatalf("fleet = %+v, want site-a's simulator serving panel-1", fleet)
 	}
 	c.do("", http.MethodGet, "/simulation", nil, http.StatusUnauthorized)
+
+	// simulation:read is the whole gate (no node read needed): a caller
+	// scoped to one component sees the node that simulates it, with only
+	// that component; a caller whose scope holds no simulated component
+	// sees no simulator at all, so the console hides its page.
+	scopedTo := func(component string) string {
+		tok, hash, prefix, err := auth.NewBearerToken()
+		if err != nil {
+			t.Fatal(err)
+		}
+		var pid string
+		if err := conn.QueryRow(ctx, `insert into principal (kind) values ('service') returning id`).Scan(&pid); err != nil {
+			t.Fatal(err)
+		}
+		for _, q := range []struct {
+			sql  string
+			args []any
+		}{
+			{`insert into service (principal_id, name) values ($1, $2)`, []any{pid, "simfleet-scoped-" + component}},
+			{`insert into credential (principal_id, kind, secret_hash, prefix) values ($1, 'bearer', $2, $3)`, []any{pid, hash, prefix}},
+			{`insert into principal_grant (principal_id, role_id, scope_kind, scope_id) values ($1, (select id from role where name = 'sim-scoped-reader'), 'component', (select id::text from component where name = $2))`, []any{pid, component}},
+		} {
+			if _, err := conn.Exec(ctx, q.sql, q.args...); err != nil {
+				t.Fatalf("%s: %v", q.sql, err)
+			}
+		}
+		return tok
+	}
+	var scoped fleetBody
+	get(scopedTo("panel-1"), "/simulation", &scoped)
+	if !scoped.Connected || len(scoped.Nodes) != 1 || scoped.Nodes[0].Node != "site-a" ||
+		len(scoped.Nodes[0].Components) != 1 || scoped.Nodes[0].Components[0].Component != "panel-1" {
+		t.Fatalf("a caller scoped to panel-1 reads %+v, want site-a with panel-1", scoped)
+	}
+	var elsewhere fleetBody
+	get(scopedTo("loose"), "/simulation", &elsewhere)
+	if elsewhere.Connected || len(elsewhere.Nodes) != 0 {
+		t.Fatalf("a caller scoped to no simulated component reads %+v, want no simulator", elsewhere)
+	}
 
 	// The catalog lists each profile with the products it simulates.
 	var cat struct {

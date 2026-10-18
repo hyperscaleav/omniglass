@@ -303,7 +303,8 @@ and the hits the server has seen per device. Hits are a live signal kept in the 
 stored, so they start from zero when the server restarts; a node with no simulator reads `connected: false`.
 
 **The simulated fleet has its own reads and two writes.** `GET /simulation` (gated `simulation:read`)
-is every node whose simulator has pulled since the server started (the nodes the caller may read), each
+is every node whose simulator has pulled since the server started and simulates a component in the caller's
+scope (an all-scope reader sees every one; no node read is needed), each
 with its capabilities, its account of impairments and its simulated components in the caller's component scope;
 `connected` is true when any of them pulled recently, which is what shows the console's Simulation page.
 `GET /simulation/profiles` is the simulator's embedded profile catalog, each profile with the products it

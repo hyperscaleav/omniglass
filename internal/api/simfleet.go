@@ -56,7 +56,7 @@ type simNodeBody struct {
 type simFleetOutput struct {
 	Body struct {
 		Connected bool          `json:"connected" doc:"Any simulator pulled its device list recently; the console shows its Simulation page only then."`
-		Nodes     []simNodeBody `json:"nodes" doc:"Each node a simulator has pulled for since the server started, that the caller may read."`
+		Nodes     []simNodeBody `json:"nodes" doc:"Each node a simulator has pulled for since the server started, whose simulated components the caller's scope reaches."`
 	}
 }
 
@@ -250,7 +250,7 @@ func registerSimFleetRoutes(api huma.API, a *authenticator, gw storage.Gateway, 
 		Method:      http.MethodGet,
 		Path:        "/simulation",
 		Summary:     "Get the simulated fleet",
-		Description: "Every node a simulator has pulled for since the server started (that the caller may read), each with its capabilities, its account of impairments, and the components it simulates within the caller's component read scope, joined to their live hits. Connected is true when any simulator pulled recently. Hits are per server process, not stored. Gated by simulation:read.",
+		Description: "Every node a simulator has pulled for since the server started, each with its capabilities, its account of impairments, and the components it simulates within the caller's component read scope, joined to their live hits. A caller sees a node's simulator when its component read scope holds at least one component the node simulates (an all-scope reader sees all of them); no node read is needed. Connected is true when any listed simulator pulled recently. Hits are per server process, not stored. Gated by simulation:read.",
 	}, "simulation", "read"), func(ctx context.Context, _ *struct{}) (*simFleetOutput, error) {
 		out := &simFleetOutput{}
 		out.Body.Nodes = []simNodeBody{}
@@ -258,13 +258,20 @@ func registerSimFleetRoutes(api huma.API, a *authenticator, gw storage.Gateway, 
 			return out, nil
 		}
 		now := time.Now()
+		read := a.scopeFor(ctx, "component", "read")
 		for _, node := range hub.Nodes() {
-			if _, err := gw.GetNode(ctx, node, a.scopeFor(ctx, "node", "read")); err != nil {
-				continue // a node the caller may not read is not listed
-			}
-			devices, err := gw.NodeSimDevices(ctx, node, a.scopeFor(ctx, "component", "read"))
+			devices, err := gw.NodeSimDevices(ctx, node, read)
 			if err != nil {
 				return nil, huma.Error500InternalServerError("get simulation")
+			}
+			// simulation:read is the whole gate: a caller sees a node's
+			// simulator when its component scope holds at least one of the
+			// components the node simulates (an all-scope reader sees every
+			// simulator, even one serving nothing yet). No node read is
+			// needed; the node's name and capabilities are what such a
+			// caller learns.
+			if len(devices) == 0 && !read.All {
+				continue
 			}
 			st, seen := status(node)
 			b := simulationBody(devices, st, seen, now).Body
