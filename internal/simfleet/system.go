@@ -61,8 +61,8 @@ func (p SystemPlan) Components() int {
 }
 
 // PlanSystem staffs a standard's roles with simulated products. Each role
-// takes the first simulated product that fits it (pins in pin order, else
-// products by name), as many as its quorum and at least one, capped at its
+// takes the first simulated product that fits it (its pins in the order
+// given, else products by name), as many as its quorum and at least one, capped at its
 // capacity; a role nothing simulated fits is left unstaffed, short its
 // quorum, with the reason. Of each choice it takes one alternate: the first
 // by name whose roles can all be staffed, else the one staffing the most.
@@ -104,7 +104,18 @@ func PlanSystem(roles []Role, products []Product, cat SystemCatalog) SystemPlan 
 					return f
 				}
 			}
-			f.Missing, f.Reason = want, fmt.Sprintf("no pinned product (%s) is simulated", strings.Join(r.PinnedProducts, ", "))
+			f.Missing = want
+			simulated := []string{}
+			for _, name := range r.PinnedProducts {
+				if cat.Simulated(name) {
+					simulated = append(simulated, name)
+				}
+			}
+			if len(simulated) == 0 {
+				f.Reason = fmt.Sprintf("no pinned product (%s) is simulated", strings.Join(r.PinnedProducts, ", "))
+			} else {
+				f.Reason = fmt.Sprintf("the simulated pinned products (%s) are not a %s", strings.Join(simulated, ", "), strings.Join(r.AcceptedTypes, " or "))
+			}
 			return f
 		}
 		for _, p := range sorted {
@@ -115,7 +126,7 @@ func PlanSystem(roles []Role, products []Product, cat SystemCatalog) SystemPlan 
 		}
 		f.Missing = want
 		if len(r.AcceptedTypes) > 0 {
-			f.Reason = fmt.Sprintf("no simulated product is a %s", strings.Join(r.AcceptedTypes, " or "))
+			f.Reason = fmt.Sprintf("no simulated product is %s %s", article(r.AcceptedTypes[0]), strings.Join(r.AcceptedTypes, " or "))
 		} else {
 			f.Reason = "no product is simulated"
 		}
@@ -180,4 +191,12 @@ func PlanSystem(roles []Role, products []Product, cat SystemCatalog) SystemPlan 
 		plan.Roles = append(plan.Roles, fill(r))
 	}
 	return plan
+}
+
+// article is "a" or "an" for a component type name.
+func article(word string) string {
+	if word != "" && strings.ContainsRune("aeiou", rune(word[0])) {
+		return "an"
+	}
+	return "a"
 }

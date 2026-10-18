@@ -217,7 +217,7 @@ A simulated system is built to a **standard**, the platform's own archetype, not
 simulator vocabulary. `GET /simulation/standards/{standard}:plan` (`omniglass simulation plan-system
 <standard>`) staffs each of the standard's roles with the first simulated product that fits its
 accepted types and pins, as many as its quorum and at least one, capped at its capacity, and takes one
-alternate per choice (the first that can be fully staffed). A role no simulated product fits is left
+alternate per choice (the first that can be fully staffed, else the one that staffs the most). A role no simulated product fits is left
 short, with the reason: that list is what the simulator's catalog still lacks.
 `POST /nodes/{name}/simulation/systems` (`omniglass simulation add-system <node> --standard <standard>
 --system-type <type>`) then creates the system, a component per staffed slot (named as an unnamed

@@ -96,6 +96,37 @@ func TestSimulatedSystemAPI(t *testing.T) {
 		}
 	}
 
+	// A builder whose component and endpoint creates reach only loc-s: the
+	// system's components are created without a parent, which needs an
+	// all-scope component:create, so the add is refused as a 403 naming
+	// the component tier, not a 500.
+	if _, err := conn.Exec(ctx, `insert into role (name, permissions) values
+		('sim-sys-all', '{"system:create","system:update","system:read","location:read","node:read","simulation:read"}'),
+		('sim-sys-loc', '{"component:create","endpoint:create","simulation:update"}')`); err != nil {
+		t.Fatal(err)
+	}
+	locTok, lhash, lprefix, err := auth.NewBearerToken()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var lpid string
+	if err := conn.QueryRow(ctx, `insert into principal (kind) values ('service') returning id`).Scan(&lpid); err != nil {
+		t.Fatal(err)
+	}
+	for _, q := range []struct {
+		sql  string
+		args []any
+	}{
+		{`insert into service (principal_id, name) values ($1, 'sim-sys-loc')`, []any{lpid}},
+		{`insert into credential (principal_id, kind, secret_hash, prefix) values ($1, 'bearer', $2, $3)`, []any{lpid, lhash, lprefix}},
+		{`insert into principal_grant (principal_id, role_id, scope_kind, scope_id) values ($1, (select id from role where name = 'sim-sys-all'), 'all', null)`, []any{lpid}},
+		{`insert into principal_grant (principal_id, role_id, scope_kind, scope_id) values ($1, (select id from role where name = 'sim-sys-loc'), 'location', (select id::text from location where name = 'loc-s'))`, []any{lpid}},
+	} {
+		if _, err := conn.Exec(ctx, q.sql, q.args...); err != nil {
+			t.Fatalf("%s: %v", q.sql, err)
+		}
+	}
+
 	hub := &fakeHub{Registry: simhub.New()}
 	hub.Pulled("site-a", collection.SimCapabilities{PortOffset: 10000}, nil)
 	srv := httptest.NewServer(api.NewHandler(gw, api.WithSimHub(hub)))
@@ -154,6 +185,7 @@ func TestSimulatedSystemAPI(t *testing.T) {
 		t.Fatalf("a builder without system:create was refused with %s, want it to say so", out)
 	}
 	c.do(ownerTok, http.MethodPost, "/nodes/site-b/simulation/systems", body, http.StatusConflict)
+	c.do(locTok, http.MethodPost, "/nodes/site-a/simulation/systems", body, http.StatusForbidden)
 	if n := componentsBefore(); n != before {
 		t.Fatalf("refused adds left %d components", n-before)
 	}

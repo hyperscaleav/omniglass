@@ -40,6 +40,23 @@ type SimSystem struct {
 	Components []*Component
 }
 
+// SimSystemError says which piece of a simulated system failed, so a caller
+// can map the cause the way that piece's own route maps it.
+type SimSystemError struct {
+	Stage string // system, component, endpoint, role
+	Role  string
+	Err   error
+}
+
+func (e *SimSystemError) Error() string {
+	if e.Role == "" {
+		return fmt.Sprintf("storage: sim system %s: %v", e.Stage, e.Err)
+	}
+	return fmt.Sprintf("storage: sim system %s for role %s: %v", e.Stage, e.Role, e.Err)
+}
+
+func (e *SimSystemError) Unwrap() error { return e.Err }
+
 // CreateSimSystem creates a simulated system whole, in one transaction: the
 // system, then for each planned component the component, its endpoints on
 // the node, and its role assignment. Every piece is the ordinary create
@@ -54,7 +71,7 @@ func (p *PG) CreateSimSystem(ctx context.Context, actorID string, spec SimSystem
 	defer func() { _ = tx.Rollback(ctx) }()
 	sys, err := p.createSystemTx(ctx, tx, actorID, spec.System, sc.SystemCreate, sc.LocationRead)
 	if err != nil {
-		return nil, err
+		return nil, &SimSystemError{Stage: "system", Err: err}
 	}
 	out := &SimSystem{System: sys}
 	node := spec.Node
@@ -63,17 +80,17 @@ func (p *PG) CreateSimSystem(ctx context.Context, actorID string, spec SimSystem
 		c, err := p.createComponentTx(ctx, tx, actorID, ComponentSpec{ProductName: &product, LocationName: spec.System.LocationName},
 			sc.ComponentCreate, sc.LocationRead, sc.SystemRead, sc.SystemUpdate)
 		if err != nil {
-			return nil, fmt.Errorf("storage: sim system %s component: %w", slot.Role, err)
+			return nil, &SimSystemError{Stage: "component", Role: slot.Role, Err: err}
 		}
 		for _, e := range slot.Endpoints {
 			id := c.ID
 			e.Component, e.Node, e.SecretRead, e.CanAdmin = &id, &node, sc.SecretRead, sc.CanAdmin
 			if _, err := p.createEndpointTx(ctx, tx, actorID, e, sc.EndpointCreate); err != nil {
-				return nil, fmt.Errorf("storage: sim system %s endpoint: %w", slot.Role, err)
+				return nil, &SimSystemError{Stage: "endpoint", Role: slot.Role, Err: err}
 			}
 		}
 		if err := p.assignRoleTx(ctx, tx, actorID, sys.ID, slot.Role, c.ID, sc.SystemRead, sc.SystemUpdate); err != nil {
-			return nil, fmt.Errorf("storage: sim system %s role: %w", slot.Role, err)
+			return nil, &SimSystemError{Stage: "role", Role: slot.Role, Err: err}
 		}
 		out.Components = append(out.Components, c)
 	}

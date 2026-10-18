@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"time"
@@ -147,6 +148,26 @@ func planSimSystem(ctx context.Context, gw storage.Gateway, standard string, sto
 	}), nil
 }
 
+// mapSimSystemErr maps a simulated system's failure the way the failing
+// piece's own route maps it: a component refused is the component route's
+// 403, a role shortfall the role route's 422, and so on.
+func mapSimSystemErr(err error) error {
+	var se *storage.SimSystemError
+	if !errors.As(err, &se) {
+		return mapSystemErr(err)
+	}
+	switch se.Stage {
+	case "component":
+		return mapComponentErr(se.Err)
+	case "endpoint":
+		return mapEndpointErr(se.Err)
+	case "role":
+		return mapRoleErr(se.Err)
+	default:
+		return mapSystemErr(se.Err)
+	}
+}
+
 func fillBody(f simfleet.RoleFill) simRoleFillBody {
 	return simRoleFillBody{Role: f.Role, Alternate: f.Alternate, Product: f.Product, Count: f.Count, Missing: f.Missing, Reason: f.Reason}
 }
@@ -186,7 +207,7 @@ func registerSimSystemRoutes(api huma.API, a *authenticator, gw storage.Gateway,
 		Path:          "/nodes/{name}/simulation/systems",
 		DefaultStatus: http.StatusCreated,
 		Summary:       "Add a simulated system",
-		Description:   "Creates a system built to a standard, with a simulated component for each staffed role in the standard's plan (see plan-simulation-system), each at its own free address in the simulated block with its endpoint placed on the node, and assigned its role, all in one transaction: it lands whole or not at all. Component names are minted as an unnamed create mints them; roles nothing simulated fits are left short and listed. The simulator serves the components from its next pull. Gated by simulation:update, and also needs system:create, system:update, component:create and endpoint:create, each in the caller's own scope. A node with no simulator connected is a 409, and a standard nothing simulated can staff a 422.",
+		Description:   "Creates a system built to a standard, with a simulated component for each staffed role in the standard's plan (see plan-simulation-system), each at its own free address in the simulated block with its endpoint placed on the node, and assigned its role, all in one transaction: it lands whole or not at all. Component names are minted as an unnamed create mints them; roles nothing simulated fits are left short and listed. The simulator serves the components from its next pull. Gated by simulation:update, and also needs system:create, system:update, component:create and endpoint:create, each in the caller's own scope; the components are created without a parent, so component:create must be all-scope. A refused piece is mapped as its own route maps it (a component refused is a 403). A node with no simulator connected is a 409, and a standard nothing simulated can staff a 422.",
 	}, "simulation", "update"), func(ctx context.Context, in *addSimSystemInput) (*addSimSystemOutput, error) {
 		for _, need := range [][2]string{{"system", "create"}, {"system", "update"}, {"component", "create"}, {"endpoint", "create"}} {
 			if !a.allows(ctx, need[0], need[1]) {
@@ -284,7 +305,7 @@ func registerSimSystemRoutes(api huma.API, a *authenticator, gw storage.Gateway,
 				SecretRead: a.scopeFor(ctx, "secret", "read"), CanAdmin: a.canSecretAdmin(ctx, "read"),
 			})
 			if err != nil {
-				return mapSystemErr(err)
+				return mapSimSystemErr(err)
 			}
 			out.Body.System = made.System.Name
 			for i, c := range made.Components {

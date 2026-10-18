@@ -116,3 +116,16 @@ func TestPlanSystemUntypedRoleTakesAnything(t *testing.T) {
 		t.Errorf("untyped = %+v, want some simulated product", f)
 	}
 }
+
+// A short role's reason reads as English, and a pin that is simulated but
+// outside the role's types says so rather than that nothing is simulated.
+func TestPlanSystemReasonsReadTrue(t *testing.T) {
+	p := planOf(t, []Role{{Name: "amp", Quorum: 1, AcceptedTypes: []string{"amplifier"}}})
+	if f, _ := fillOf(p, "amp"); !strings.Contains(f.Reason, "an amplifier") {
+		t.Errorf("reason %q, want an article that fits", f.Reason)
+	}
+	p = planOf(t, []Role{{Name: "main-display", Quorum: 1, AcceptedTypes: []string{"display"}, PinnedProducts: []string{"bar-1"}}})
+	if f, _ := fillOf(p, "main-display"); !strings.Contains(f.Reason, "bar-1") || strings.Contains(f.Reason, "is simulated") {
+		t.Errorf("reason %q, want it to say the simulated pin does not fit the role", f.Reason)
+	}
+}
