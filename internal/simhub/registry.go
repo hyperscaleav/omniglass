@@ -34,7 +34,15 @@ type Status struct {
 	LastSeen     time.Time
 	Capabilities collection.SimCapabilities
 	Serving      map[string]bool
-	Devices      map[string]DeviceHits
+	// Listed is the components the server handed the simulator on its
+	// latest pull: one listed but not serving failed to start; one not
+	// listed was added since.
+	Listed map[string]bool
+	// ListedSince is when each listed component was first handed over, so
+	// one handed over a moment ago reads as pending, not failed, until the
+	// simulator's next report.
+	ListedSince map[string]time.Time
+	Devices     map[string]DeviceHits
 	// Impairments is the simulator's latest account of impairments: whether
 	// it can apply them, its last error, and what it impairs now.
 	Impairments collection.SimImpairmentStatus
@@ -45,6 +53,7 @@ type nodeState struct {
 	impairs  collection.SimImpairmentStatus
 	caps     collection.SimCapabilities
 	listed   map[string]bool
+	since    map[string]time.Time
 	serving  map[string]bool
 	devices  map[string]*DeviceHits
 }
@@ -75,9 +84,16 @@ func (r *Registry) Pulled(node string, caps collection.SimCapabilities, componen
 	st.lastSeen = r.now()
 	st.caps = caps
 	st.listed = make(map[string]bool, len(componentIDs))
+	since := make(map[string]time.Time, len(componentIDs))
 	for _, id := range componentIDs {
 		st.listed[id] = true
+		if t, ok := st.since[id]; ok {
+			since[id] = t
+		} else {
+			since[id] = st.lastSeen
+		}
 	}
+	st.since = since
 	for id := range st.devices {
 		if !st.listed[id] {
 			delete(st.devices, id)
@@ -157,11 +173,19 @@ func (r *Registry) Status(node string) (Status, bool) {
 		LastSeen:     st.lastSeen,
 		Capabilities: st.caps,
 		Serving:      make(map[string]bool, len(st.serving)),
+		Listed:       make(map[string]bool, len(st.listed)),
+		ListedSince:  make(map[string]time.Time, len(st.since)),
 		Impairments:  st.impairs,
 		Devices:      make(map[string]DeviceHits, len(st.devices)),
 	}
 	for id := range st.serving {
 		out.Serving[id] = true
+	}
+	for id := range st.listed {
+		out.Listed[id] = true
+	}
+	for id, t := range st.since {
+		out.ListedSince[id] = t
 	}
 	for id, d := range st.devices {
 		cp := *d

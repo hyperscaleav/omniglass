@@ -5968,14 +5968,23 @@ components:
           description: The component's product; its name selects the simulator profile.
           type: string
         serving:
-          description: Whether the simulator reported serving this device in its latest batch.
+          description: Whether the simulator reported serving this component in its latest batch.
           type: boolean
+        state:
+          description: "The simulated component's state, most urgent first: offline (its simulator stopped reporting), pending (added since the simulator's last pull), failed (handed to the simulator but not served), serving."
+          enum:
+            - serving
+            - pending
+            - failed
+            - offline
+          type: string
       required:
         - component_id
         - component
         - product
         - address
         - serving
+        - state
         - hits
         - hits_by_protocol
         - impaired

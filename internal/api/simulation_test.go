@@ -74,3 +74,30 @@ func TestSimSurfaceSpeaksTheVocabulary(t *testing.T) {
 		}
 	}
 }
+
+// A simulated component's state, most urgent first: offline when its
+// simulator stopped reporting, pending when added since the simulator's last
+// pull, failed when handed over but not served, serving otherwise.
+func TestSimulationBodyStates(t *testing.T) {
+	now := time.Unix(1_800_000_000, 0)
+	devs := []storage.SimDevice{{ComponentID: "on", Name: "a"}, {ComponentID: "new", Name: "b"}, {ComponentID: "broken", Name: "c"}, {ComponentID: "fresh", Name: "d"}}
+	st := simhub.Status{LastSeen: now.Add(-5 * time.Second),
+		Listed:      map[string]bool{"on": true, "broken": true, "fresh": true},
+		ListedSince: map[string]time.Time{"on": now.Add(-time.Minute), "broken": now.Add(-time.Minute), "fresh": now.Add(-time.Second)},
+		Serving:     map[string]bool{"on": true}}
+	got := map[string]string{}
+	for _, d := range simulationBody(devs, st, true, now).Body.Devices {
+		got[d.ComponentID] = d.State
+	}
+	// Just handed over and not yet reported: still pending, not failed.
+	if got["on"] != "serving" || got["new"] != "pending" || got["broken"] != "failed" || got["fresh"] != "pending" {
+		t.Fatalf("states = %v", got)
+	}
+	stale := simulationBody(devs, st, true, now.Add(10*time.Minute)).Body.Devices
+	never := simulationBody(devs, simhub.Status{}, false, now).Body.Devices
+	for _, d := range append(stale, never...) {
+		if d.State != "offline" {
+			t.Fatalf("%s with no live simulator reads %q, want offline", d.ComponentID, d.State)
+		}
+	}
+}

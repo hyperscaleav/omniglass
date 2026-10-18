@@ -7489,8 +7489,13 @@ export interface components {
             last_protocol?: string;
             /** @description The component's product; its name selects the simulator profile. */
             product: string;
-            /** @description Whether the simulator reported serving this device in its latest batch. */
+            /** @description Whether the simulator reported serving this component in its latest batch. */
             serving: boolean;
+            /**
+             * @description The simulated component's state, most urgent first: offline (its simulator stopped reporting), pending (added since the simulator's last pull), failed (handed to the simulator but not served), serving.
+             * @enum {string}
+             */
+            state: "serving" | "pending" | "failed" | "offline";
         };
         SimFleetOutputBody: {
             /**
