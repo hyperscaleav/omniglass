@@ -276,6 +276,8 @@ var nameOverride = map[string]([]string){
 	"get-simulation":                {"simulation", "get"},
 	"list-simulation-profiles":      {"simulation", "profiles"},
 	"add-node-simulation-component": {"simulation", "add-component"},
+	"plan-simulation-system":        {"simulation", "plan-system"},
+	"add-node-simulation-system":    {"simulation", "add-system"},
 	"get-component-simulation":      {"component", "simulation", "get"},
 	"fire-component-simulation":     {"component", "simulation", "fire"},
 	"login":                         {"auth", "login"},

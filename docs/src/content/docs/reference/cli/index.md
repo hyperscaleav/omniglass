@@ -3896,6 +3896,29 @@ Example:
 omniglass simulation add-component <name> --name name --product product
 ```
 
+### `omniglass simulation add-system`
+
+Add a simulated system
+
+```
+omniglass simulation add-system <name> [flags]
+```
+
+Creates a system built to a standard, with a simulated component for each staffed role in the standard's plan (see plan-simulation-system), each at its own free address in the simulated block with its endpoint placed on the node, and assigned its role, all in one transaction: it lands whole or not at all. Component names are minted as an unnamed create mints them; roles nothing simulated fits are left short and listed. The simulator serves the components from its next pull. Gated by simulation:update, and also needs system:create, system:update, component:create and endpoint:create, each in the caller's own scope. A node with no simulator connected is a 409, and a standard nothing simulated can staff a 422.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--location` | string | (none) | Where the system and its components sit, by name or dotted path |
+| `--name` | string | (none) | The system's name; minted from its type when empty |
+| `--standard` | string | (none) | The standard the system is built to; its roles decide the components |
+| `--system-type` | string | (none) | The system's type, which also mints its name when none is given |
+
+Example:
+
+```sh
+omniglass simulation add-system <name> --standard standard --system-type system_type
+```
+
 ### `omniglass simulation get`
 
 Get the simulated fleet
@@ -3910,6 +3933,22 @@ Example:
 
 ```sh
 omniglass simulation get
+```
+
+### `omniglass simulation plan-system`
+
+Plan a simulated system to a standard
+
+```
+omniglass simulation plan-system <standard>
+```
+
+Previews a simulated system built to a standard: each of the standard's roles (one alternate taken per choice) staffed with the first simulated product that fits its accepted types and pins, as many as its quorum and at least one, or left short with the reason when nothing simulated fits. Creates nothing. Gated by simulation:read.
+
+Example:
+
+```sh
+omniglass simulation plan-system <standard>
 ```
 
 ### `omniglass simulation profiles`

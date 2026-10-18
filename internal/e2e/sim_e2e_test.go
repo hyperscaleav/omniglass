@@ -205,6 +205,38 @@ func TestSimulatorEndToEnd(t *testing.T) {
 		}
 		return false
 	})
+
+	// A whole simulated system to a standard, through the CLI: the system and
+	// a component per staffed role, served on the next pull with no restart.
+	out, code = cli("simulation", "add-system", "edge-e", "--standard", "meeting-room", "--system-type", "meeting",
+		"--server", server, "--token", ownerTok)
+	if code != 0 {
+		t.Fatalf("add-system exit %d:\n%s", code, out)
+	}
+	var sys struct {
+		Components []struct {
+			Component string `json:"component"`
+		} `json:"components"`
+	}
+	if err := json.Unmarshal([]byte(out), &sys); err != nil || len(sys.Components) < 3 {
+		t.Fatalf("add-system answered %s (%v), want at least three components", out, err)
+	}
+	waitFor(t, "the simulator to serve every component of the system", func() bool {
+		v, ok := read()
+		if !ok {
+			return false
+		}
+		serving := map[string]bool{}
+		for _, d := range v.Devices {
+			serving[d.Component] = d.Serving
+		}
+		for _, c := range sys.Components {
+			if !serving[c.Component] {
+				return false
+			}
+		}
+		return true
+	})
 }
 
 // e2eSimulatedRoute is a plain-HTTP surface of the product's profile and

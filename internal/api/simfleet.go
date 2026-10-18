@@ -446,28 +446,9 @@ func registerSimFleetRoutes(api huma.API, a *authenticator, gw storage.Gateway, 
 		if err != nil {
 			return nil, huma.Error500InternalServerError("list products")
 		}
-		drivers := map[string]string{}
-		for _, p := range products {
-			if p.DriverName != nil {
-				drivers[p.Name] = *p.DriverName
-			}
-		}
+		drivers := simDrivers(products)
 		secretRead, canAdmin := a.scopeFor(ctx, "secret", "read"), a.canSecretAdmin(ctx, "read")
-		attachable := func(driver string) bool {
-			if driver != "snmp-generic" {
-				return true
-			}
-			secrets, err := gw.ListSecrets(ctx, secretRead, canAdmin)
-			if err != nil {
-				return false
-			}
-			for _, s := range secrets {
-				if s.Name == simfleet.CommunitySecret {
-					return true
-				}
-			}
-			return false
-		}
+		attachable := simAttachable(ctx, a, gw)
 		// Planning and creating hold the address lock, so two adds at once
 		// cannot be handed the same address.
 		var c *storage.Component
@@ -509,14 +490,8 @@ func registerSimFleetRoutes(api huma.API, a *authenticator, gw storage.Gateway, 
 				return huma.Error409Conflict(fmt.Sprintf("the collector has no way to reach a simulated %s: its profile serves no HTTP or TCP surface to probe", product))
 			}
 			node, id := in.Name, c.ID
-			for _, e := range plan[0].Endpoints {
-				spec := storage.EndpointSpec{Component: &id, Node: &node, SecretRead: secretRead, CanAdmin: canAdmin}
-				if e.Driver != "" {
-					driver := e.Driver
-					spec.Driver, spec.Inputs = &driver, e.Inputs
-				} else {
-					spec.Transport, spec.Params = e.Transport, []byte(fmt.Sprintf(`{"target":%q}`, e.Target))
-				}
+			for _, spec := range simEndpointSpecs(plan[0].Endpoints) {
+				spec.Component, spec.Node, spec.SecretRead, spec.CanAdmin = &id, &node, secretRead, canAdmin
 				if _, err := gw.CreateEndpoint(ctx, actorID(ctx), spec, a.scopeFor(ctx, "endpoint", "create")); err != nil {
 					undo()
 					return mapEndpointErr(err)

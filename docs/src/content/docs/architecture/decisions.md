@@ -181,6 +181,7 @@ below from the project's history. From here it grows one slice at a time.
 | [ADR-0140](#adr-0140-a-system-is-what-the-business-groups-a-location-is-where-things-sit-and-a-room-is-one-thing) | 2026-10-11 | Accepted | A system is the logical grouping the business cares about and support troubleshoots through; a location is the physical grouping that finds the box on site; operators add components to a system. Every system has a place, which bounds its components (checked against the primary system only) and its subsystems; a component's place is inherited from its primary system unless set, derived at read time; systems group into systems (a divisible hall and its rooms); a place holding one system is one thing with it. The cross-tier scope expansion is decided separately (#10) |
 | [ADR-0141](#adr-0141-a-command-settles-when-its-evidence-arrives-from-its-reply-first-and-observation-second) | 2026-10-18 | Accepted | A command settles as soon as its evidence arrives: a matching observation taken after the intent, or the device's reply when its driver binding says the reply carries it. Each binding declares its source (`from: response` with a value `extract` or a `success` match, or `from: observe`, the default); the window bounds the wait, not the settling; a sweep times out what nothing settles. Revises ADR-0063's pending-until-the-window-passes rule |
 | [ADR-0142](#adr-0142-the-simulator-is-a-run-mode-beside-its-node-holding-that-nodes-identity) | 2026-10-18 | Accepted | The simulator is `omniglass sim run`, a run mode beside its node that holds the node's identity and simulates the components placed on it; impairments are opt-in (`--impairments` and `NET_ADMIN`), the console's operations run in process, a rate limit holds both ways, hits are live, not stored, and `simulation:read` (with component scope) is the whole gate on the simulated fleet |
+| [ADR-0143](#adr-0143-a-simulated-system-is-built-to-a-standard-with-platform-minted-names) | 2026-10-18 | Accepted | A simulated system is built to a standard: each role staffed with a simulated product that fits, short roles listed, names platform-minted, all in one transaction; the lab archetypes are not an operator concept |
 
 ## Entries
 
@@ -6475,3 +6476,20 @@ interface create form, since that name is the platform's to mint.
   while building it (#889, #890): the first after seeing what `NET_ADMIN` on a host namespace would
   do, the second because a per-protocol client would have bypassed nothing an operator needs and
   could not reach a device that is broken on purpose.
+
+### ADR-0143: A simulated system is built to a standard, with platform-minted names
+
+- **Date:** 2026-10-18 | **Status:** Accepted | **Pages:** [simulation](/architecture/simulation/), [API](/architecture/api/)
+- **Decision:** Adding a whole simulated system builds it to one of the platform's standards. Each of
+  the standard's roles is staffed with the first simulated product that fits its accepted types and
+  pins (quorum-many, at least one, capped at capacity; one alternate per choice, the first fully
+  staffable); a role nothing simulated fits is left short and listed with the reason. Components are
+  named as an unnamed create names them. The system, components, endpoints and role assignments land
+  in one transaction, each through the ordinary create with the caller's scope and audit row. The lab's
+  room archetypes (`internal/sim/profiles/systems`) are not an operator concept; they remain only as
+  the simulator's internal fleet compiler input (#914).
+- **Context:** #911 proposed adding a system from the lab's archetypes. Their roles and component mixes
+  did not match the platform's standards (a "codec" slot holding a video bar, products with no seeded
+  counterpart, display and DSP mixes no standard declares), so a mapping table would have kept two
+  vocabularies for one idea. The architect ruled the standard is the archetype and names follow the
+  platform's own minting.

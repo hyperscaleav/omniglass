@@ -285,6 +285,7 @@ func registerRoutes(api huma.API, gw storage.Gateway, svc *settings.Service, o o
 	registerTelemetryRoutes(api, a, gw, o.telemetryPub)
 	registerSimulationRoutes(api, a, gw, o.simStatus)
 	registerSimFleetRoutes(api, a, gw, o.simHub)
+	registerSimSystemRoutes(api, a, gw, o.simHub)
 	registerImpairmentRoutes(api, a, gw)
 	registerEventTypeRoutes(api, a, gw)
 	registerCommandTypeRoutes(api, a, gw)

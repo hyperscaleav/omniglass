@@ -90,6 +90,85 @@ components:
         - address
         - endpoints
       type: object
+    AddSimSystemComponentBody:
+      additionalProperties: false
+      properties:
+        address:
+          description: The loopback address the simulated component answers on.
+          type: string
+        component:
+          type: string
+        product:
+          type: string
+        role:
+          type: string
+      required:
+        - component
+        - role
+        - product
+        - address
+      type: object
+    AddSimSystemInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/AddSimSystemInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        location:
+          description: Where the system and its components sit, by name or dotted path
+          type: string
+        name:
+          description: The system's name; minted from its type when empty
+          type: string
+        standard:
+          description: The standard the system is built to; its roles decide the components
+          minLength: 1
+          type: string
+        system_type:
+          description: The system's type, which also mints its name when none is given
+          minLength: 1
+          type: string
+      required:
+        - standard
+        - system_type
+      type: object
+    AddSimSystemOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/AddSimSystemOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        components:
+          items:
+            $ref: "#/components/schemas/AddSimSystemComponentBody"
+          type:
+            - array
+            - "null"
+        node:
+          type: string
+        system:
+          type: string
+        unstaffed:
+          description: The roles nothing simulated could fill, left short.
+          items:
+            $ref: "#/components/schemas/SimRoleFillBody"
+          type:
+            - array
+            - "null"
+      required:
+        - system
+        - node
+        - components
+        - unstaffed
+      type: object
     AlarmBody:
       additionalProperties: false
       properties:
@@ -6061,6 +6140,32 @@ components:
       required:
         - profiles
       type: object
+    SimRoleFillBody:
+      additionalProperties: false
+      properties:
+        alternate:
+          description: The choice alternate the role belongs to, choice/alternate; empty when unconditional.
+          type: string
+        count:
+          description: "How many simulated components the role gets: its quorum, at least one, capped at its capacity."
+          format: int64
+          type: integer
+        missing:
+          description: How many the role stays short when nothing simulated fits.
+          format: int64
+          type: integer
+        product:
+          description: The simulated product chosen for the role; empty when nothing simulated fits.
+          type: string
+        reason:
+          description: Why the role is left unstaffed.
+          type: string
+        role:
+          type: string
+      required:
+        - role
+        - count
+      type: object
     SimRouteBody:
       additionalProperties: false
       properties:
@@ -6127,6 +6232,39 @@ components:
         - protocol
         - port
         - fireable
+      type: object
+    SimSystemPlanOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/SimSystemPlanOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        alternates:
+          additionalProperties:
+            type: string
+          description: The alternate taken for each of the standard's choices.
+          type: object
+        components:
+          description: How many simulated components the system would get.
+          format: int64
+          type: integer
+        roles:
+          items:
+            $ref: "#/components/schemas/SimRoleFillBody"
+          type:
+            - array
+            - "null"
+        standard:
+          type: string
+      required:
+        - standard
+        - alternates
+        - roles
+        - components
       type: object
     SimulationOutputBody:
       additionalProperties: false
@@ -10951,6 +11089,39 @@ paths:
           description: Error
       summary: Add a simulated component
       x-omniglass-permission: simulation:update
+  /nodes/{name}/simulation/systems:
+    post:
+      description: "Creates a system built to a standard, with a simulated component for each staffed role in the standard's plan (see plan-simulation-system), each at its own free address in the simulated block with its endpoint placed on the node, and assigned its role, all in one transaction: it lands whole or not at all. Component names are minted as an unnamed create mints them; roles nothing simulated fits are left short and listed. The simulator serves the components from its next pull. Gated by simulation:update, and also needs system:create, system:update, component:create and endpoint:create, each in the caller's own scope. A node with no simulator connected is a 409, and a standard nothing simulated can staff a 422."
+      operationId: add-node-simulation-system
+      parameters:
+        - description: The node whose simulator serves the system's components
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The node whose simulator serves the system's components
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AddSimSystemInputBody"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AddSimSystemOutputBody"
+          description: Created
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Add a simulated system
+      x-omniglass-permission: simulation:update
   /nodes/{name}:enroll:
     post:
       description: Mints (or re-mints) the node's enrollment token and returns it once. The token is stored only as a hash; it is never logged. Gated by node:enroll.
@@ -12815,6 +12986,33 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: List the simulator's profiles
+      x-omniglass-permission: simulation:read
+  /simulation/standards/{standard}:plan:
+    get:
+      description: "Previews a simulated system built to a standard: each of the standard's roles (one alternate taken per choice) staffed with the first simulated product that fits its accepted types and pins, as many as its quorum and at least one, or left short with the reason when nothing simulated fits. Creates nothing. Gated by simulation:read."
+      operationId: plan-simulation-system
+      parameters:
+        - description: The standard to staff, by name
+          in: path
+          name: standard
+          required: true
+          schema:
+            description: The standard to staff, by name
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SimSystemPlanOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Plan a simulated system to a standard
       x-omniglass-permission: simulation:read
   /standards:
     get:

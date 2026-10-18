@@ -211,6 +211,23 @@ as that node's simulator lifts its ports. The simulator serves it from its next 
 restart. Changing its product among the products its profile simulates keeps its endpoints valid
 (they share a driver), and deleting the component removes it from the simulation.
 
+## Adding a simulated system
+
+A simulated system is built to a **standard**, the platform's own archetype, not to a separate
+simulator vocabulary. `GET /simulation/standards/{standard}:plan` (`omniglass simulation plan-system
+<standard>`) staffs each of the standard's roles with the first simulated product that fits its
+accepted types and pins, as many as its quorum and at least one, capped at its capacity, and takes one
+alternate per choice (the first that can be fully staffed). A role no simulated product fits is left
+short, with the reason: that list is what the simulator's catalog still lacks.
+`POST /nodes/{name}/simulation/systems` (`omniglass simulation add-system <node> --standard <standard>
+--system-type <type>`) then creates the system, a component per staffed slot (named as an unnamed
+create names it), each at its own free address with its planned endpoint on the node, and each role
+assignment, in one transaction under the address lock, so the system lands whole or not at all. Every
+piece is the ordinary create with the caller's own scope and audit row. The simulator serves the
+components from its next pull. The lab's room archetypes in the catalog (`profiles/systems`) remain
+only as the input of the simulator's internal fleet compiler (#914); they are not how an operator
+adds a system ([ADR-0143](/architecture/decisions/#adr-0143-a-simulated-system-is-built-to-a-standard-with-platform-minted-names)).
+
 ## In the console
 
 Everything above has a console surface, shown only while a simulator is connected: the

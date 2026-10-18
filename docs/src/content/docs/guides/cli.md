@@ -185,6 +185,8 @@ omniglass simulation profiles                                # the profile catal
 omniglass component simulation get panel-1                   # its API surface: protocols, routes, commands, OIDs
 omniglass component simulation fire panel-1 --surface nvp --command "SET INPUT hdmi2"   # the device answers
 omniglass simulation add-component edge-hq --name panel-9 --product newtron-panel-7       # served on the next pull
+omniglass simulation plan-system meeting-room                                               # each role and the product it would get
+omniglass simulation add-system edge-hq --standard meeting-room --system-type meeting --location boardroom-a   # the whole system
 ```
 
 A set replaces the whole impairment, so name every fault you want at once: `--latency-ms 300` on an

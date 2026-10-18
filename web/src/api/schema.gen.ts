@@ -1972,6 +1972,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/nodes/{name}/simulation/systems": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add a simulated system
+         * @description Creates a system built to a standard, with a simulated component for each staffed role in the standard's plan (see plan-simulation-system), each at its own free address in the simulated block with its endpoint placed on the node, and assigned its role, all in one transaction: it lands whole or not at all. Component names are minted as an unnamed create mints them; roles nothing simulated fits are left short and listed. The simulator serves the components from its next pull. Gated by simulation:update, and also needs system:create, system:update, component:create and endpoint:create, each in the caller's own scope. A node with no simulator connected is a 409, and a standard nothing simulated can staff a 422.
+         */
+        post: operations["add-node-simulation-system"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/nodes/{name}:enroll": {
         parameters: {
             query?: never;
@@ -3016,6 +3036,26 @@ export interface paths {
          * @description The simulator's profile catalog, embedded in the binary: each profile with the products it simulates and the protocols it speaks. Adding a simulated component names one of these products. Gated by simulation:read.
          */
         get: operations["list-simulation-profiles"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/simulation/standards/{standard}:plan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Plan a simulated system to a standard
+         * @description Previews a simulated system built to a standard: each of the standard's roles (one alternate taken per choice) staffed with the first simulated product that fits its accepted types and pins, as many as its quorum and at least one, or left short with the reason when nothing simulated fits. Creates nothing. Gated by simulation:read.
+         */
+        get: operations["plan-simulation-system"];
         put?: never;
         post?: never;
         delete?: never;
@@ -4206,6 +4246,42 @@ export interface components {
              */
             endpoints: number;
             node: string;
+        };
+        AddSimSystemComponentBody: {
+            /** @description The loopback address the simulated component answers on. */
+            address: string;
+            component: string;
+            product: string;
+            role: string;
+        };
+        AddSimSystemInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/AddSimSystemInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description Where the system and its components sit, by name or dotted path */
+            location?: string;
+            /** @description The system's name; minted from its type when empty */
+            name?: string;
+            /** @description The standard the system is built to; its roles decide the components */
+            standard: string;
+            /** @description The system's type, which also mints its name when none is given */
+            system_type: string;
+        };
+        AddSimSystemOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/AddSimSystemOutputBody.json
+             */
+            readonly $schema?: string;
+            components: components["schemas"]["AddSimSystemComponentBody"][] | null;
+            node: string;
+            system: string;
+            /** @description The roles nothing simulated could fill, left short. */
+            unstaffed: components["schemas"]["SimRoleFillBody"][] | null;
         };
         AlarmBody: {
             /**
@@ -7482,6 +7558,25 @@ export interface components {
             readonly $schema?: string;
             profiles: components["schemas"]["SimProfileBody"][] | null;
         };
+        SimRoleFillBody: {
+            /** @description The choice alternate the role belongs to, choice/alternate; empty when unconditional. */
+            alternate?: string;
+            /**
+             * Format: int64
+             * @description How many simulated components the role gets: its quorum, at least one, capped at its capacity.
+             */
+            count: number;
+            /**
+             * Format: int64
+             * @description How many the role stays short when nothing simulated fits.
+             */
+            missing?: number;
+            /** @description The simulated product chosen for the role; empty when nothing simulated fits. */
+            product?: string;
+            /** @description Why the role is left unstaffed. */
+            reason?: string;
+            role: string;
+        };
         SimRouteBody: {
             example?: string;
             method: string;
@@ -7509,6 +7604,25 @@ export interface components {
             routes?: components["schemas"]["SimRouteBody"][] | null;
             summary?: string;
             tls?: boolean;
+        };
+        SimSystemPlanOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/SimSystemPlanOutputBody.json
+             */
+            readonly $schema?: string;
+            /** @description The alternate taken for each of the standard's choices. */
+            alternates: {
+                [key: string]: string;
+            };
+            /**
+             * Format: int64
+             * @description How many simulated components the system would get.
+             */
+            components: number;
+            roles: components["schemas"]["SimRoleFillBody"][] | null;
+            standard: string;
         };
         SimulationOutputBody: {
             /**
@@ -12543,6 +12657,42 @@ export interface operations {
             };
         };
     };
+    "add-node-simulation-system": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The node whose simulator serves the system's components */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AddSimSystemInputBody"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AddSimSystemOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     "enroll-node": {
         parameters: {
             query?: never;
@@ -14820,6 +14970,38 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SimProfilesOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "plan-simulation-system": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The standard to staff, by name */
+                standard: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SimSystemPlanOutputBody"];
                 };
             };
             /** @description Error */

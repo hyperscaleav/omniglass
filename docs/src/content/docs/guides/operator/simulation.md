@@ -91,6 +91,22 @@ display line in its sizes, say), which keeps its endpoint valid (with `component
 **Remove** deletes the component after a confirmation, which removes it from the simulation (with
 `component:delete`).
 
+## Add a whole system
+
+A simulated system is built to one of your **standards** (a meeting room, a huddle room, a digital
+sign). Omniglass staffs each of the standard's roles with a simulated product that fits it, and lists
+the roles it cannot fill yet, which stay short so the system honestly reads that way. Preview the plan,
+then add it:
+
+```sh
+omniglass simulation plan-system meeting-room
+omniglass simulation add-system edge-hq --standard meeting-room --system-type meeting --location boardroom-a
+```
+
+The system and its components land together or not at all (with `simulation:update`, plus
+`system:create`, `system:update`, `component:create` and `endpoint:create`), named as any new system and
+component are named, and the simulator serves them from its next pull.
+
 ## Break it on purpose
 
 The drawer's **Impairment** controls (with `simulation:update`) break the component the way real gear

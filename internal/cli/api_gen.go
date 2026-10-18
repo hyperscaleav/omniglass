@@ -5056,6 +5056,46 @@ func generatedCommands() []*cobra.Command {
 		}())
 		parent.AddCommand(func() *cobra.Command {
 			cmd := func() *cobra.Command {
+				var fLocation string
+				var fName string
+				var fStandard string
+				var fSystemType string
+				cmd := &cobra.Command{
+					Use:     "add-system <name>",
+					Short:   "Add a simulated system",
+					Long:    "Creates a system built to a standard, with a simulated component for each staffed role in the standard's plan (see plan-simulation-system), each at its own free address in the simulated block with its endpoint placed on the node, and assigned its role, all in one transaction: it lands whole or not at all. Component names are minted as an unnamed create mints them; roles nothing simulated fits are left short and listed. The simulator serves the components from its next pull. Gated by simulation:update, and also needs system:create, system:update, component:create and endpoint:create, each in the caller's own scope. A node with no simulator connected is a 409, and a standard nothing simulated can staff a 422.",
+					Example: "  omniglass simulation add-system <name> --standard standard --system-type system_type",
+					Args:    cobra.ExactArgs(1),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/nodes/%s/simulation/systems", url.PathEscape(args[0]))
+						body := map[string]any{}
+						if cmd.Flags().Changed("location") {
+							body["location"] = fLocation
+						}
+						if cmd.Flags().Changed("name") {
+							body["name"] = fName
+						}
+						if cmd.Flags().Changed("standard") {
+							body["standard"] = fStandard
+						}
+						if cmd.Flags().Changed("system-type") {
+							body["system_type"] = fSystemType
+						}
+						return runAPICommand(cmd, "POST", path, body)
+					},
+				}
+				cmd.Flags().StringVar(&fLocation, "location", "", "Where the system and its components sit, by name or dotted path")
+				cmd.Flags().StringVar(&fName, "name", "", "The system's name; minted from its type when empty")
+				cmd.Flags().StringVar(&fStandard, "standard", "", "The standard the system is built to; its roles decide the components")
+				_ = cmd.MarkFlagRequired("standard")
+				cmd.Flags().StringVar(&fSystemType, "system-type", "", "The system's type, which also mints its name when none is given")
+				_ = cmd.MarkFlagRequired("system-type")
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "get",
 					Short:   "Get the simulated fleet",
@@ -5064,6 +5104,23 @@ func generatedCommands() []*cobra.Command {
 					Args:    cobra.ExactArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
 						path := fmt.Sprintf("/api/v1/simulation")
+						return runAPICommand(cmd, "GET", path, nil)
+					},
+				}
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				cmd := &cobra.Command{
+					Use:     "plan-system <standard>",
+					Short:   "Plan a simulated system to a standard",
+					Long:    "Previews a simulated system built to a standard: each of the standard's roles (one alternate taken per choice) staffed with the first simulated product that fits its accepted types and pins, as many as its quorum and at least one, or left short with the reason when nothing simulated fits. Creates nothing. Gated by simulation:read.",
+					Example: "  omniglass simulation plan-system <standard>",
+					Args:    cobra.ExactArgs(1),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/simulation/standards/%s:plan", url.PathEscape(args[0]))
 						return runAPICommand(cmd, "GET", path, nil)
 					},
 				}
