@@ -5,6 +5,7 @@
 package simhub
 
 import (
+	"sort"
 	"sync"
 	"time"
 
@@ -129,6 +130,18 @@ func (r *Registry) Report(node string, b collection.SimHitBatch) (accepted, reje
 		d.LastAt, d.LastProtocol = now, h.Protocol
 	}
 	return accepted, rejected
+}
+
+// Nodes lists the nodes whose simulator has pulled, sorted.
+func (r *Registry) Nodes() []string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	out := make([]string, 0, len(r.nodes))
+	for n := range r.nodes {
+		out = append(out, n)
+	}
+	sort.Strings(out)
+	return out
 }
 
 // Status returns a copy of a node's simulator status, or false when no

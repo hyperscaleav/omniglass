@@ -1,6 +1,9 @@
 package collection
 
-import "time"
+import (
+	"errors"
+	"time"
+)
 
 // The simulator's wire. A simulator runs beside a node and authenticates
 // with that node's credential, so it rides the node's subject grant: it may
@@ -24,6 +27,10 @@ func SimHitSubject(node string) string { return subjectPrefix + "simhit." + node
 // server requesting). The simulator subscribes with the node's grant and
 // answers each request once.
 func SimopSubject(node string) string { return subjectPrefix + "simop." + node }
+
+// ErrNoSimulator is the answer to an operation when no simulator beside the
+// node is listening (or none answered in time).
+var ErrNoSimulator = errors.New("no simulator answered")
 
 // SimOperation is one operation fired at a simulated device: an HTTP call
 // (Method, Path, Body), a command line (Command, on the interface Protocol),

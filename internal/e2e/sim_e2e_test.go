@@ -13,6 +13,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"sort"
+	"strings"
 	"testing"
 	"time"
 
@@ -156,6 +157,69 @@ func TestSimulatorEndToEnd(t *testing.T) {
 		v, ok := read()
 		return ok && len(v.Devices) == 1 && v.Devices[0].HitsByProtocol["tcp"] > 0
 	})
+
+	// The console's way in: fire an HTTP route from the device's surface at
+	// the real simulator, through the server and the bus, and get the
+	// device's answer; the fire is itself a hit.
+	iface, path := e2eSimulatedRoute(t, product)
+	out, code := cli("component", "simulation", "fire", "sim-dev", "--interface", iface, "--path", path,
+		"--server", server, "--token", ownerTok)
+	if code != 0 {
+		t.Fatalf("fire exit %d:\n%s", code, out)
+	}
+	var answer struct {
+		Status int    `json:"status"`
+		Body   string `json:"body"`
+		Error  string `json:"error"`
+	}
+	if err := json.Unmarshal([]byte(out), &answer); err != nil || answer.Status != 200 || answer.Body == "" || answer.Error != "" {
+		t.Fatalf("fire %s %s answered %s (%v), want the device's 200", iface, path, out, err)
+	}
+	waitFor(t, "the fire's hit to show", func() bool {
+		v, ok := read()
+		return ok && len(v.Devices) == 1 && v.Devices[0].HitsByProtocol["http"] > 0
+	})
+
+	// Add a simulated device from the console's route: the simulator picks it
+	// up on its next pull and serves it, with no restart.
+	if out, code := cli("simulation", "add-device", "edge-e", "--name", "sim-added", "--product", product,
+		"--server", server, "--token", ownerTok); code != 0 {
+		t.Fatalf("add-device exit %d:\n%s", code, out)
+	}
+	waitFor(t, "the simulator to serve the added device", func() bool {
+		v, ok := read()
+		if !ok {
+			return false
+		}
+		for _, d := range v.Devices {
+			if d.Component == "sim-added" && d.Serving {
+				return true
+			}
+		}
+		return false
+	})
+}
+
+// e2eSimulatedRoute is a plain-HTTP interface of the product's profile and
+// a GET route it serves.
+func e2eSimulatedRoute(t *testing.T, product string) (string, string) {
+	t.Helper()
+	store, err := profile.LoadStoreFS(profiles.FS)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, iface := range store.Devices[product].Interfaces {
+		if iface.Protocol != "http" || iface.TLS {
+			continue
+		}
+		for _, r := range iface.Routes {
+			if path, ok := strings.CutPrefix(r.Match, "GET "); ok && path != "/" {
+				return iface.Name, path
+			}
+		}
+	}
+	t.Fatalf("%s's profile has no plain-HTTP GET route", product)
+	return "", ""
 }
 
 func e2eSimulatedProduct(t *testing.T, ctx context.Context, conn *pgx.Conn) (string, int) {

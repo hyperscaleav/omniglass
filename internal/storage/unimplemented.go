@@ -462,6 +462,13 @@ func (UnimplementedGateway) GetSimImpairment(context.Context, string) (impair.Im
 func (UnimplementedGateway) SetSimImpairment(context.Context, string, string, impair.Impairment) (impair.Impairment, error) {
 	return impair.Impairment{}, nil
 }
+func (UnimplementedGateway) ComponentSimNode(context.Context, string) (string, error) {
+	return "", nil
+}
+func (UnimplementedGateway) SimAddressesInUse(context.Context) (map[string]bool, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) AuditSimOperation(context.Context, string, string, any) error { return nil }
 func (UnimplementedGateway) NodeSimDevices(context.Context, string, scope.Set) ([]SimDevice, error) {
 	return nil, nil
 }

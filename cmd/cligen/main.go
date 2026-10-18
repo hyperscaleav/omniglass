@@ -271,8 +271,15 @@ var nameOverride = map[string]([]string){
 	// A component has one impairment: read and set, not list and update.
 	"get-component-impairment": {"component", "impairment", "get"},
 	"set-component-impairment": {"component", "impairment", "set"},
-	"login":                    {"auth", "login"},
-	"logout":                   {"auth", "logout"},
+	// The simulated fleet: one group for the fleet, its catalog and adding a
+	// device; a component's own simulation beside its impairment.
+	"get-simulation":             {"simulation", "get"},
+	"list-simulation-profiles":   {"simulation", "profiles"},
+	"add-node-simulation-device": {"simulation", "add-device"},
+	"get-component-simulation":   {"component", "simulation", "get"},
+	"fire-component-simulation":  {"component", "simulation", "fire"},
+	"login":                      {"auth", "login"},
+	"logout":                     {"auth", "logout"},
 }
 
 func buildCommands(doc spec, base string) []command {

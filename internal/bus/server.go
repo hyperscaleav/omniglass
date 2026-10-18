@@ -297,7 +297,11 @@ func (s *Server) SimStatus(node string) (SimStatus, bool) { return s.sims.Status
 
 // ErrNoSimulator is FireSimOperation's answer when no simulator beside the
 // node is listening (or none answered in time).
-var ErrNoSimulator = errors.New("bus: no simulator answered")
+var ErrNoSimulator = collection.ErrNoSimulator
+
+// Nodes lists the nodes whose simulator has pulled since the server
+// started.
+func (s *Server) Nodes() []string { return s.sims.Nodes() }
 
 // FireSimOperation asks the simulator beside node to run op against one of
 // its devices and returns the device's answer.

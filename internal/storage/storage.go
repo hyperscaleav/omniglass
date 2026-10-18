@@ -552,6 +552,13 @@ type Gateway interface {
 	// a simulated component (by resolved id; the caller checks scope).
 	GetSimImpairment(ctx context.Context, componentID string) (impair.Impairment, error)
 	SetSimImpairment(ctx context.Context, actorID, componentID string, imp impair.Impairment) (impair.Impairment, error)
+	// ComponentSimNode, SimAddressesInUse and AuditSimOperation back the
+	// console's simulation surfaces: the node whose simulator serves a
+	// component, the addresses a new simulated device must avoid, and the
+	// audit row for an operation fired at one.
+	ComponentSimNode(ctx context.Context, componentID string) (string, error)
+	SimAddressesInUse(ctx context.Context) (map[string]bool, error)
+	AuditSimOperation(ctx context.Context, actorID, componentID string, op any) error
 	// ResolveTaskOwner binds a task's owner component and confines the node to its
 	// own tasks, for the telemetry ingest consumer.
 	ResolveTaskOwner(ctx context.Context, taskID, nodeName string) (TaskOwner, bool, error)
