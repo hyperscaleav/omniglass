@@ -15,7 +15,8 @@ import (
 )
 
 func newSeedDevCmd() *cobra.Command {
-	return &cobra.Command{
+	var simFleet bool
+	cmd := &cobra.Command{
 		Use:   "seed-dev",
 		Short: "Seed a dev database with example locations, users, and grants (idempotent; never for production)",
 		Long: "Populate a fresh dev database with a small example fleet so `make dev` comes up " +
@@ -24,15 +25,17 @@ func newSeedDevCmd() *cobra.Command {
 			"Not for production: these are operator rows, not ship-with reference data.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runSeedDev(cmd.Context())
+			return runSeedDev(cmd.Context(), simFleet)
 		},
 	}
+	cmd.Flags().BoolVar(&simFleet, "sim-fleet", true, "wire the simulated fleet: addresses and endpoints on the dev node for every component the simulator serves (make dev-sim collects from them)")
+	return cmd
 }
 
 // runSeedDev ensures the schema and reference data exist, then installs the dev
 // example fleet idempotently (the same trusted lane as bootstrap). The audit
 // actor is left empty: these are system-seeded dev rows, not an operator action.
-func runSeedDev(ctx context.Context) error {
+func runSeedDev(ctx context.Context, simFleet bool) error {
 	c := cfg()
 	if err := migrate.Run(c.DSN); err != nil {
 		return err
@@ -51,7 +54,7 @@ func runSeedDev(ctx context.Context) error {
 	if err := seed.Run(ctx, gw); err != nil {
 		return err
 	}
-	if err := devseed.Run(ctx, gw, ""); err != nil {
+	if err := devseed.RunWith(ctx, gw, "", devseed.Options{SimFleet: simFleet}); err != nil {
 		return err
 	}
 	// Report the fixture's size so the message never drifts from the data. Roots

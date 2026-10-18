@@ -68,7 +68,7 @@ app migrate
 # the already-exists case by checking the outcome, never by ignoring failure.
 app bootstrap dev --password dev >/dev/null 2>&1 || true
 app set-password dev dev >/dev/null
-app seed-dev
+app seed-dev --sim-fleet=false
 
 docker run -d --name ogshots-srv --network "$NET" -v "$ROOT/bin/omniglass:/omniglass:ro" \
   -e OMNIGLASS_DSN="$DSN" -e OMNIGLASS_SECRET_KEY="$KEY" "$APPIMG" /omniglass server >/dev/null

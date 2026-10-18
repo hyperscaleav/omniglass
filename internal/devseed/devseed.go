@@ -213,11 +213,24 @@ func Fixtures() (Doc, error) {
 	return doc, nil
 }
 
+// Options tunes a Run. SimFleet wires the simulated fleet (addresses and
+// endpoints on the dev node for every component the simulator serves).
+type Options struct {
+	SimFleet bool
+}
+
 // Run installs the example fleet idempotently through the Storage Gateway.
 // actorID is the audit actor for the created rows (empty for a system actor). The
 // trusted lane grants the all scope; callers are the direct-DB commands, never a
 // request handler.
 func Run(ctx context.Context, gw storage.Gateway, actorID string) error {
+	return RunWith(ctx, gw, actorID, Options{SimFleet: true})
+}
+
+// RunWith is Run with options: the docs screenshot harness seeds without
+// the simulated fleet, whose hundred-odd audited endpoint creates would
+// fill the pages it photographs.
+func RunWith(ctx context.Context, gw storage.Gateway, actorID string, opts Options) error {
 	doc, err := Fixtures()
 	if err != nil {
 		return err
@@ -631,6 +644,9 @@ func Run(ctx context.Context, gw storage.Gateway, actorID string) error {
 	// Last: the simulated fleet, addresses and endpoints on the dev node for
 	// every component the simulator serves, so make dev-sim collects for
 	// real. Last, so a failure here cannot skip the seeding before it.
+	if !opts.SimFleet {
+		return nil
+	}
 	return seedSimFleet(ctx, gw, actorID)
 }
 
