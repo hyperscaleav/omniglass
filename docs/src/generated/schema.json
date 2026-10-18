@@ -897,6 +897,72 @@
      }
     ]
    },
+   "sim_impairment": {
+    "columns": [
+     {
+      "name": "component_id",
+      "type": "uuid",
+      "nullable": false,
+      "pk": true,
+      "fk": true,
+      "fk_target": "component.id"
+     },
+     {
+      "name": "unplugged",
+      "type": "boolean",
+      "nullable": false,
+      "default": "false"
+     },
+     {
+      "name": "latency_ms",
+      "type": "integer",
+      "nullable": false,
+      "default": "0"
+     },
+     {
+      "name": "jitter_ms",
+      "type": "integer",
+      "nullable": false,
+      "default": "0"
+     },
+     {
+      "name": "loss_pct",
+      "type": "numeric",
+      "nullable": false,
+      "default": "0"
+     },
+     {
+      "name": "rate_kbit",
+      "type": "integer",
+      "nullable": false,
+      "default": "0"
+     },
+     {
+      "name": "updated_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+     }
+    ],
+    "checks": [
+     {
+      "name": "sim_impairment_check",
+      "expr": "CHECK (((jitter_ms \u003e= 0) AND (jitter_ms \u003c= latency_ms)))"
+     },
+     {
+      "name": "sim_impairment_latency_ms_check",
+      "expr": "CHECK (((latency_ms \u003e= 0) AND (latency_ms \u003c= 10000)))"
+     },
+     {
+      "name": "sim_impairment_loss_pct_check",
+      "expr": "CHECK (((loss_pct \u003e= (0)::numeric) AND (loss_pct \u003c= (100)::numeric)))"
+     },
+     {
+      "name": "sim_impairment_rate_kbit_check",
+      "expr": "CHECK (((rate_kbit \u003e= 0) AND (rate_kbit \u003c= 10000000)))"
+     }
+    ]
+   },
    "task": {
     "columns": [
      {
@@ -3900,74 +3966,6 @@
      {
       "name": "property_type_handle_key",
       "definition": "CREATE UNIQUE INDEX property_type_handle_key ON public.property_type USING btree (name)"
-     }
-    ]
-   }
-  },
-  "unclustered": {
-   "sim_impairment": {
-    "columns": [
-     {
-      "name": "component_id",
-      "type": "uuid",
-      "nullable": false,
-      "pk": true,
-      "fk": true,
-      "fk_target": "component.id"
-     },
-     {
-      "name": "unplugged",
-      "type": "boolean",
-      "nullable": false,
-      "default": "false"
-     },
-     {
-      "name": "latency_ms",
-      "type": "integer",
-      "nullable": false,
-      "default": "0"
-     },
-     {
-      "name": "jitter_ms",
-      "type": "integer",
-      "nullable": false,
-      "default": "0"
-     },
-     {
-      "name": "loss_pct",
-      "type": "numeric",
-      "nullable": false,
-      "default": "0"
-     },
-     {
-      "name": "rate_kbit",
-      "type": "integer",
-      "nullable": false,
-      "default": "0"
-     },
-     {
-      "name": "updated_at",
-      "type": "timestamp with time zone",
-      "nullable": false,
-      "default": "now()"
-     }
-    ],
-    "checks": [
-     {
-      "name": "sim_impairment_check",
-      "expr": "CHECK (((jitter_ms \u003e= 0) AND (jitter_ms \u003c= latency_ms)))"
-     },
-     {
-      "name": "sim_impairment_latency_ms_check",
-      "expr": "CHECK (((latency_ms \u003e= 0) AND (latency_ms \u003c= 10000)))"
-     },
-     {
-      "name": "sim_impairment_loss_pct_check",
-      "expr": "CHECK (((loss_pct \u003e= (0)::numeric) AND (loss_pct \u003c= (100)::numeric)))"
-     },
-     {
-      "name": "sim_impairment_rate_kbit_check",
-      "expr": "CHECK (((rate_kbit \u003e= 0) AND (rate_kbit \u003c= 10000000)))"
      }
     ]
    }

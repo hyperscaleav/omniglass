@@ -325,6 +325,10 @@ collection: {
     id: bigint {constraint: primary_key}
     node_id: uuid {constraint: foreign_key}
   }
+  sim_impairment: {
+    shape: sql_table
+    component_id: uuid {constraint: primary_key}
+  }
   task: {
     shape: sql_table
     id: text {constraint: primary_key}
@@ -401,13 +405,6 @@ audit: {
   }
 }
 
-unclustered: {
-  sim_impairment: {
-    shape: sql_table
-    component_id: uuid {constraint: primary_key}
-  }
-}
-
 audit.audit_log.actor_principal_id -> identity.principal.id
 audit.audit_log.real_actor_principal_id -> identity.principal.id
 catalog.component_type.parent_id -> catalog.component_type.id
@@ -428,6 +425,7 @@ catalog.system_type.parent_id -> catalog.system_type.id
 collection.node.location_id -> fleet.location.id
 collection.node.principal_id -> identity.principal.id
 collection.node_log.node_id -> collection.node.principal_id
+collection.sim_impairment.component_id -> fleet.component.id
 collection.task.endpoint_id -> fleet.endpoint.id
 config.credential.principal_id -> identity.principal.id
 config.secret.component_id -> fleet.component.id
@@ -521,7 +519,6 @@ telemetry.property.location_id -> fleet.location.id
 telemetry.property.node_id -> collection.node.principal_id
 telemetry.property.property_type_id -> telemetry.property_type.id
 telemetry.property.system_id -> fleet.system.id
-unclustered.sim_impairment.component_id -> fleet.component.id
 ```
 
 <!-- erd:end -->
