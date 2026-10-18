@@ -1,7 +1,7 @@
 # Local dev loop + the build/run flow for the single binary. Production deploy
 # is BYO Postgres; tests use ephemeral testcontainer Postgres.
 
-.PHONY: build build-web web image gen gen-proto gen-web test test-web test-short test-e2e bench clean-testcontainers tidy up down dev release-plan release-apply release-snapshot docs-shots docs-shots-check docs-shots-verify dev-sim bench-sim
+.PHONY: build build-web web image gen gen-proto gen-web test test-web test-short test-e2e bench clean-testcontainers tidy up down dev release-plan release-apply release-snapshot docs-shots docs-shots-check docs-shots-verify dev-sim bench-sim test-netadmin
 
 # Build the single binary (no console embedded; serves the build-the-console
 # placeholder under /web).
@@ -124,6 +124,17 @@ test-short:
 # another worktree moves these numbers more than most regressions would.
 bench:
 	go test -run '^$$' -bench . -benchmem -count=5 ./internal/storage/...
+
+# The tests that need NET_ADMIN (impairments rewrite the firewall and tc of
+# the network they run in) run in a container of their own, never on the host:
+# NET_ADMIN, its own network namespace, and the ping sysctl the collector's
+# unprivileged pinger needs. Docker is already a requirement of make test.
+NETADMIN_IMG ?= golang:1.25
+NETADMIN_PKGS ?= ./internal/sim/impair/
+test-netadmin:
+	docker run --rm --cap-add NET_ADMIN --sysctl net.ipv4.ping_group_range="0 2147483647" \
+		-v "$(CURDIR):/w" -w /w -v omniglass-netadmin-gomod:/go/pkg/mod -v omniglass-netadmin-gocache:/root/.cache/go-build \
+		-e OMNIGLASS_NETADMIN=1 $(NETADMIN_IMG) go test -tags netadmin -count=1 $(NETADMIN_PKGS)
 
 # One simulator process serving a 1,000-device fleet: startup time, goroutines
 # and heap while serving, and goroutines left behind after it stops.
