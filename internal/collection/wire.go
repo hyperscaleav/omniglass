@@ -123,4 +123,7 @@ type CommandPullReply struct {
 type CommandStatus struct {
 	ID    int64  `json:"id"`
 	Error string `json:"error,omitempty"`
+	// Reply is the device's answer to the command, which a binding that
+	// settles from the response reads on the server (ADR-0141).
+	Reply string `json:"reply,omitempty"`
 }

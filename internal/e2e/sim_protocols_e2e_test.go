@@ -206,4 +206,11 @@ func TestOperatorMonitorsAndConfiguresSimulatedDevices(t *testing.T) {
 		got, err := lx.Exchange(ctx, net.JoinHostPort(panelIP, "51325"), "GET INPUT", time.Second)
 		return err == nil && got == "INPUT hdmi3"
 	})
+	// The device's reply settles the command (ADR-0141), well inside its
+	// window and without waiting for the next poll.
+	waitFor(t, "the command to settle from the panel's reply", func() bool {
+		var status string
+		err := conn.QueryRow(ctx, `select status from command order by id desc limit 1`).Scan(&status)
+		return err == nil && status == "settled"
+	})
 }

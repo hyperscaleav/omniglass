@@ -40,9 +40,10 @@ const (
 
 // Settle computes a command's settlement verdict. Pure: the whole judgment is a
 // function of the intended value and its time, the observed value, the window, and
-// now. Within the window the verdict is pending regardless of the observed value;
-// past it, a match is settled and anything else is failed. A nil intended value is
-// none (nothing was told).
+// now. A match observed at or after the intent is settled at once (ADR-0141);
+// otherwise, within the window the verdict is pending, and past it a match is
+// settled and anything else is failed. A nil intended value is none (nothing was
+// told).
 //
 // A window of zero is terminal BY CONSTRUCTION, never by arithmetic (#667). It is
 // the documented way to say "settle immediately", which is a statement about
@@ -57,6 +58,12 @@ const (
 func Settle(intended, observed *CurrentValue, windowSeconds int, now time.Time) SettlementVerdict {
 	if intended == nil {
 		return SettlementNone
+	}
+	// The evidence settles it as soon as it arrives (ADR-0141): an observation
+	// taken at or after the intent that matches it. The window bounds the wait,
+	// not the settling.
+	if observed != nil && !observed.TS.Before(intended.TS) && bytes.Equal(observed.Value, intended.Value) {
+		return SettlementSettled
 	}
 	if windowSeconds > 0 && now.Sub(intended.TS) < time.Duration(windowSeconds)*time.Second {
 		return SettlementPending
@@ -136,36 +143,63 @@ func (p *PG) settleCheck(ctx context.Context, q txQuerier, ct *CommandType, owne
 	} else if err != nil {
 		return err
 	}
-	sql := fmt.Sprintf(`select id from command
-		where status = 'issued' and owner_kind = $1 and %s = $2
-		  and command_type_id = $3 and instance = $4
-		order by id`, col)
-	rows, err := q.Query(ctx, sql, ownerKind, arc, ct.ID, instance)
+	// A command issued with no instance of its own is judged against the
+	// series of the endpoint it was dispatched over, where the driver's
+	// observations of the target land (#900; the general meaning of instance
+	// is #456).
+	sql := fmt.Sprintf(`select c.id,
+			coalesce(nullif(c.instance, ''), (select e.name from endpoint e where e.id = c.dispatched_endpoint_id), '')
+		from command c
+		where c.status = 'issued' and c.owner_kind = $1 and c.%s = $2
+		  and c.command_type_id = $3 and c.instance = $4
+		order by c.id`, col)
+	pending, err := p.pendingCommands(ctx, q, sql, ownerKind, arc, ct.ID, instance)
 	if err != nil {
 		return fmt.Errorf("storage: settle check %s/%s: %w", ownerID, ct.Name, err)
 	}
-	var ids []int64
+	return p.judgeCommands(ctx, q, ct, ownerKind, arc, pending, now)
+}
+
+// pendingCommand is an issued command and the series instance its target is
+// observed on.
+type pendingCommand struct {
+	id       int64
+	instance string
+}
+
+func (p *PG) pendingCommands(ctx context.Context, q querier, sql string, args ...any) ([]pendingCommand, error) {
+	rows, err := q.Query(ctx, sql, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []pendingCommand
 	for rows.Next() {
-		var id int64
-		if err := rows.Scan(&id); err != nil {
-			rows.Close()
-			return fmt.Errorf("storage: settle check scan: %w", err)
+		var pc pendingCommand
+		if err := rows.Scan(&pc.id, &pc.instance); err != nil {
+			return nil, err
 		}
-		ids = append(ids, id)
+		out = append(out, pc)
 	}
-	rows.Close()
-	if err := rows.Err(); err != nil {
-		return fmt.Errorf("storage: settle check %s/%s: %w", ownerID, ct.Name, err)
-	}
-	if len(ids) == 0 {
-		return nil
-	}
-	observed, err := p.latestTargetValue(ctx, q, ct, ownerKind, arc, instance, "observed")
-	if err != nil {
-		return err
-	}
-	for _, id := range ids {
-		intended, err := p.commandIntendedValue(ctx, q, ct, id)
+	return out, rows.Err()
+}
+
+// judgeCommands settles each pending command against its own intended row
+// and the latest observation of its target on its series, stamping a
+// terminal verdict with settled_at; a pending verdict leaves it issued.
+func (p *PG) judgeCommands(ctx context.Context, q txQuerier, ct *CommandType, ownerKind, arc string, pending []pendingCommand, now time.Time) error {
+	observedOn := map[string]*CurrentValue{}
+	for _, pc := range pending {
+		observed, seen := observedOn[pc.instance]
+		if !seen {
+			var err error
+			observed, err = p.latestTargetValue(ctx, q, ct, ownerKind, arc, pc.instance, "observed")
+			if err != nil {
+				return err
+			}
+			observedOn[pc.instance] = observed
+		}
+		intended, err := p.commandIntendedValue(ctx, q, ct, pc.id)
 		if err != nil {
 			return err
 		}
@@ -177,8 +211,112 @@ func (p *PG) settleCheck(ctx context.Context, q txQuerier, ct *CommandType, owne
 		} else {
 			status = terminalStatus(verdict, observed)
 		}
-		if _, err := q.Exec(ctx, `update command set status = $2, settled_at = $3 where id = $1`, id, status, now); err != nil {
-			return fmt.Errorf("storage: record command %d settlement: %w", id, err)
+		if err := markSettlement(ctx, q, pc.id, status, now); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// markSettlement stamps a command's terminal status, once.
+func markSettlement(ctx context.Context, q txQuerier, id int64, status string, now time.Time) error {
+	if _, err := q.Exec(ctx, `update command set status = $2, settled_at = $3 where id = $1 and status = 'issued'`, id, status, now); err != nil {
+		return fmt.Errorf("storage: record command %d settlement: %w", id, err)
+	}
+	return nil
+}
+
+// settleOnObservation runs when an observation of a property lands: every
+// issued command whose type targets that property, on that owner and series
+// (its own instance, or the endpoint it was dispatched over when it has
+// none), is judged against it. The second way a command settles (ADR-0141).
+func (p *PG) settleOnObservation(ctx context.Context, q txQuerier, ownerKind, arc, propertyKey, instance string, now time.Time) error {
+	col, err := ownerColumn(ownerKind)
+	if err != nil {
+		return err
+	}
+	rows, err := q.Query(ctx, `select distinct ct.name from command_type ct
+		join property_type pt on pt.id = ct.target_property_type_id
+		where pt.name = $1`, propertyKey)
+	if err != nil {
+		return fmt.Errorf("storage: command types targeting %s: %w", propertyKey, err)
+	}
+	var types []string
+	for rows.Next() {
+		var n string
+		if err := rows.Scan(&n); err != nil {
+			rows.Close()
+			return err
+		}
+		types = append(types, n)
+	}
+	rows.Close()
+	for _, name := range types {
+		ct, err := scanCommandType(q.QueryRow(ctx, `select `+commandTypeCols+` from command_type where name = $1`, name))
+		if err != nil {
+			return fmt.Errorf("storage: command type %s: %w", name, err)
+		}
+		sql := fmt.Sprintf(`select c.id, $4::text from command c
+			where c.status = 'issued' and c.owner_kind = $1 and c.%s = $2 and c.command_type_id = $3
+			  and (c.instance = $4 or (c.instance = '' and exists (
+				select 1 from endpoint e where e.id = c.dispatched_endpoint_id and e.name = $4)))
+			order by c.id`, col)
+		pending, err := p.pendingCommands(ctx, q, sql, ownerKind, arc, ct.ID, instance)
+		if err != nil {
+			return fmt.Errorf("storage: commands awaiting %s: %w", propertyKey, err)
+		}
+		if err := p.judgeCommands(ctx, q, ct, ownerKind, arc, pending, now); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// SweepCommandSettlements judges every issued command whose settle window
+// has passed, so a command nothing else settles reaches timed-out (or
+// failed) without waiting for another command or read. The server runs it
+// on a short interval.
+func (p *PG) SweepCommandSettlements(ctx context.Context) error {
+	rows, err := p.pool.Query(ctx, `select distinct c.owner_kind,
+			coalesce(c.component_id, c.system_id, c.location_id, c.node_id)::text, ct.name, c.instance
+		from command c join command_type ct on ct.id = c.command_type_id
+		where c.status = 'issued' and c.ts < now() - make_interval(secs => ct.settle_window_seconds)`)
+	if err != nil {
+		return fmt.Errorf("storage: sweep settlements: %w", err)
+	}
+	type series struct{ ownerKind, arc, commandType, instance string }
+	var due []series
+	for rows.Next() {
+		var s series
+		if err := rows.Scan(&s.ownerKind, &s.arc, &s.commandType, &s.instance); err != nil {
+			rows.Close()
+			return fmt.Errorf("storage: sweep scan: %w", err)
+		}
+		due = append(due, s)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("storage: sweep settlements: %w", err)
+	}
+	for _, s := range due {
+		ct, err := p.GetCommandType(ctx, s.commandType)
+		if err != nil {
+			return err
+		}
+		tx, err := p.pool.Begin(ctx)
+		if err != nil {
+			return fmt.Errorf("storage: begin sweep: %w", err)
+		}
+		now, err := dbNow(ctx, tx)
+		if err == nil {
+			err = p.settleCheck(ctx, tx, ct, s.ownerKind, s.arc, s.instance, now)
+		}
+		if err == nil {
+			err = tx.Commit(ctx)
+		}
+		_ = tx.Rollback(ctx)
+		if err != nil {
+			return fmt.Errorf("storage: sweep %s %s: %w", s.commandType, s.arc, err)
 		}
 	}
 	return nil

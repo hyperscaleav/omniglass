@@ -179,6 +179,7 @@ below from the project's history. From here it grows one slice at a time.
 | [ADR-0138](#adr-0138-the-autopilot-ships-a-daily-slice-and-pr-review-is-its-approval-gate) | 2026-09-17 | Accepted | A scheduled daily session (the autopilot) ships one thin slice per day: for slices it scopes itself it files the definition in the `/define-work` shape with the `Mode: autopilot (ADR-0138)` marker and proceeds, the Define gate's approval comment moving to the architect's review of the PR (merge accepts, close vetoes). An in-progress loop, an approved definition, and a priority `Bug` outrank self-scoping; invariant surfaces (the authorization layers, the migration rules, the audit contract), breaking API changes and dependency majors stay behind a human approval comment; at most two autopilot PRs stay open; provenance is a marker line, never a new label class; the autopilot never merges |
 | [ADR-0139](#adr-0139-a-detail-view-is-one-per-system-its-place-a-card-of-context) | 2026-10-05 | Accepted | Systems are the unit Omniglass monitors; places are folders and metadata; components are pieces of systems. A detail view is one per system, its place a card of context above the system card and its tabs; a place holding exactly one system lands on it, and a place holding none or several keeps its own view (a brief card per system, then the outline rooted there). The side panel is the glance (verdict, why, context, identity and tags), configuration staying on Configure, revising #826's one-form panel. The shipped system label rule leads with the place, and healthy is grey on every health pill (#872) |
 | [ADR-0140](#adr-0140-a-system-is-what-the-business-groups-a-location-is-where-things-sit-and-a-room-is-one-thing) | 2026-10-11 | Accepted | A system is the logical grouping the business cares about and support troubleshoots through; a location is the physical grouping that finds the box on site; operators add components to a system. Every system has a place, which bounds its components (checked against the primary system only) and its subsystems; a component's place is inherited from its primary system unless set, derived at read time; systems group into systems (a divisible hall and its rooms); a place holding one system is one thing with it. The cross-tier scope expansion is decided separately (#10) |
+| [ADR-0141](#adr-0141-a-command-settles-when-its-evidence-arrives-from-its-reply-first-and-observation-second) | 2026-10-18 | Accepted | A command settles as soon as its evidence arrives: a matching observation taken after the intent, or the device's reply when its driver binding says the reply carries it. Each binding declares its source (`from: response` with a value `extract` or a `success` match, or `from: observe`, the default); the window bounds the wait, not the settling; a sweep times out what nothing settles. Revises ADR-0063's pending-until-the-window-passes rule |
 
 ## Entries
 
@@ -6410,3 +6411,25 @@ interface create form, since that name is the platform's to mint.
   The `core-entities` claim that system nesting feeds the health rollup is corrected with this entry;
   the parent-verdict rule is decided with the grouping slice.
 
+### ADR-0141: A command settles when its evidence arrives, from its reply first and observation second
+
+- **Date:** 2026-10-18 | **Status:** Accepted | **Pages:** [commands](/architecture/commands/)
+- **Decision:** A settleable command settles the moment its evidence arrives, not when its window
+  closes: a matching observation of its target taken at or after the intent settles it inside the
+  window. Where the evidence comes from is declared on the driver's command binding:
+  `settle: { from: response }` reads the device's reply to the command, with `extract` (the reply
+  carries the new value, recorded as an observation and compared to the intent) or `success` (the
+  reply only confirms); `from: observe`, the default, waits for the next observation. A reply that
+  fails the binding's reading, or an execution error, fails a response-settled command at once.
+  The settle check runs at issue, on the execution report, when an observation of the target lands,
+  and on a server sweep that times out commands past their window. A command issued with no
+  instance is judged on the series of the endpoint it was dispatched over.
+- **Context:** ADR-0063 held a command pending for its whole window and judged it only after,
+  and the check ran only at issue and on reads. Run against the simulator (#888, #900), `set-input`
+  to a panel actuated, the device switched, and the next poll saw it, yet the command stayed
+  `issued` and was later recorded `timed-out`: the panel is polled every 30 seconds against a
+  15-second window, nothing re-checked a lone command, and the CLI's instance-less command never
+  met the endpoint-instanced observation. The architect ruled that settlement reads the command's
+  response first and the next observation second, configured per command binding. The window
+  stays the driver's fact about actuation time; what changes is that it bounds the wait rather
+  than delaying a verdict already in hand.

@@ -451,9 +451,10 @@ func (UnimplementedGateway) NodeWorklist(context.Context, string) (Worklist, err
 func (UnimplementedGateway) PendingNodeCommands(context.Context, string) ([]CommandDelivery, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) RecordCommandExecution(context.Context, string, int64, string) error {
+func (UnimplementedGateway) RecordCommandExecution(context.Context, string, int64, string, string) error {
 	return nil
 }
+func (UnimplementedGateway) SweepCommandSettlements(context.Context) error { return nil }
 func (UnimplementedGateway) NodeSimDevices(context.Context, string, scope.Set) ([]SimDevice, error) {
 	return nil, nil
 }

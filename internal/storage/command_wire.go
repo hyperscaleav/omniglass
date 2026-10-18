@@ -9,6 +9,7 @@ import (
 	"strconv"
 
 	"github.com/hyperscaleav/omniglass/internal/driver"
+	"github.com/jackc/pgx/v5"
 )
 
 // The command wire's storage side (#815): resolving a node's pending command
@@ -163,8 +164,22 @@ func (p *PG) PendingNodeCommands(ctx context.Context, node string) ([]CommandDel
 // command it never received. An update that matches no row (a report for a
 // command dispatched to a different node, or already stamped) is ErrCommandNotDispatchedHere,
 // which the bus logs rather than silently dropping.
-func (p *PG) RecordCommandExecution(ctx context.Context, node string, commandID int64, execErr string) error {
-	tag, err := p.pool.Exec(ctx, `
+//
+// When the binding settles from the response (ADR-0141), the reply decides
+// the command in the same transaction: a value it carries is recorded as an
+// observation of the target on the dispatched endpoint and settles or fails
+// the command against its intent; a confirmation settles it; a reply that
+// fails the binding's reading, or an execution error, fails it at once.
+func (p *PG) RecordCommandExecution(ctx context.Context, node string, commandID int64, execErr, reply string) error {
+	tx, err := p.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("storage: begin record execution: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	var (
+		ownerKind, arc, instance, commandType, endpointID string
+	)
+	err = tx.QueryRow(ctx, `
 		update command c set executed_at = now(), exec_error = nullif($3, '')
 		where c.id = $1
 		  and c.executed_at is null
@@ -172,15 +187,112 @@ func (p *PG) RecordCommandExecution(ctx context.Context, node string, commandID 
 		  and exists (
 			select 1 from endpoint i
 			where i.id = c.dispatched_endpoint_id
-			  and i.node_name = (select principal_id from node where name = $2))`,
-		commandID, node, execErr)
+			  and i.node_name = (select principal_id from node where name = $2))
+		returning c.owner_kind, coalesce(c.component_id, c.system_id, c.location_id, c.node_id)::text,
+			c.instance, (select name from command_type where id = c.command_type_id), c.dispatched_endpoint_id::text`,
+		commandID, node, execErr).Scan(&ownerKind, &arc, &instance, &commandType, &endpointID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return ErrCommandNotDispatchedHere
+	}
 	if err != nil {
 		return fmt.Errorf("storage: record execution of command %d: %w", commandID, err)
 	}
-	if tag.RowsAffected() == 0 {
-		return ErrCommandNotDispatchedHere
+	if err := p.settleFromResponse(ctx, tx, commandID, ownerKind, arc, instance, commandType, endpointID, execErr, reply); err != nil {
+		return err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("storage: commit record execution: %w", err)
 	}
 	return nil
+}
+
+// settleFromResponse applies the dispatched endpoint's binding to the reply,
+// when that binding settles from the response; otherwise it decides nothing
+// and the command waits on observation.
+func (p *PG) settleFromResponse(ctx context.Context, tx pgx.Tx, commandID int64, ownerKind, arc, instance, commandType, endpointID, execErr, reply string) error {
+	var epName, transport string
+	var spec []byte
+	err := tx.QueryRow(ctx, `select e.name, e.transport, d.spec from endpoint e join driver d on d.id = e.driver_id where e.id = $1`,
+		endpointID).Scan(&epName, &transport, &spec)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("storage: dispatched endpoint of command %d: %w", commandID, err)
+	}
+	sp, err := driver.Parse(spec)
+	if err != nil {
+		return nil // a stored spec is validated at write; nothing to read it by
+	}
+	var binding *driver.CommandBinding
+	for i := range sp.Commands {
+		if sp.Commands[i].CommandType == commandType {
+			binding = &sp.Commands[i]
+		}
+	}
+	if binding == nil || binding.Settle == nil || binding.Settle.From != driver.SettleFromResponse {
+		return nil
+	}
+	now, err := dbNow(ctx, tx)
+	if err != nil {
+		return err
+	}
+	if execErr != "" {
+		return markSettlement(ctx, tx, commandID, "failed", now)
+	}
+	verdict := binding.JudgeReply(reply)
+	if !verdict.Succeeded {
+		return markSettlement(ctx, tx, commandID, "failed", now)
+	}
+	if !verdict.HasValue {
+		return markSettlement(ctx, tx, commandID, "settled", now)
+	}
+	ct, err := scanCommandType(tx.QueryRow(ctx, `select `+commandTypeCols+` from command_type where name = $1`, commandType))
+	if err != nil {
+		return fmt.Errorf("storage: command type %s: %w", commandType, err)
+	}
+	series := instance
+	if series == "" {
+		series = epName
+	}
+	// The reply is an observation of the target, recorded where the
+	// driver's polls of it land.
+	if ct.TargetPropertyType != "" {
+		col, err := ownerColumn(ownerKind)
+		if err != nil {
+			return err
+		}
+		sql := fmt.Sprintf(`insert into property (ts, owner_kind, %s, property_type_id, instance, value, provenance, source)
+			values ($1, $2, $3, (select id from property_type where name = $4), $5, to_jsonb($6::text), 'observed', $7)`, col)
+		if _, err := tx.Exec(ctx, sql, now, ownerKind, arc, ct.TargetPropertyType, series, verdict.Value, transport); err != nil {
+			return fmt.Errorf("storage: record command %d reply as an observation: %w", commandID, err)
+		}
+	}
+	intended, err := p.commandIntendedValue(ctx, tx, ct, commandID)
+	if err != nil {
+		return err
+	}
+	status := "settled"
+	if intended != nil && !replyMatchesIntent(intended.Value, verdict.Value) {
+		status = "failed"
+	}
+	return markSettlement(ctx, tx, commandID, status, now)
+}
+
+// replyMatchesIntent compares a reply's extracted text to an intended value:
+// a JSON string by its text, anything else (a number) by its JSON form.
+func replyMatchesIntent(intended json.RawMessage, value string) bool {
+	var s string
+	if json.Unmarshal(intended, &s) == nil {
+		return s == value
+	}
+	if f, err := strconv.ParseFloat(value, 64); err == nil {
+		var want float64
+		if json.Unmarshal(intended, &want) == nil {
+			return f == want
+		}
+	}
+	return bytes.Equal(bytes.TrimSpace(intended), []byte(value))
 }
 
 // ErrCommandNotDispatchedHere marks an execution report a node had no standing

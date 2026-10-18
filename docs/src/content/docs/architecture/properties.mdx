@@ -174,7 +174,8 @@ Issuing a command records the invocation, a caused **event**, and the **intended
 1. command issued:  "power on display-5"  -> the command row + a caused event
 2. intended write:  display-5 power = on, provenance=intended, command_id=<the command>
                     a bet: intended, not measured
-3. adaptive poll:   the command triggers a poll sooner than the normal interval
+3. the evidence:    the device's reply when its binding settles from the response,
+                    else the next poll (adaptive: sooner than the normal interval)
 4. observed arrives:
      observed = on  -> settled (the bet paid off; the command records it)
      observed = off -> failed (the command did not land)

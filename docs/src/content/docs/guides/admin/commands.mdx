@@ -99,14 +99,18 @@ non-disclosing 404. One transaction records three things:
   be a JSON number (422 otherwise).
 
 The issue response returns the computed **settlement verdict** (`none` for fire-and-forget,
-else `pending`, `settled`, or `failed`): within the settle window the verdict is pending, and
-past it the latest observed value either matches the intended one or does not. The command row
-also records a terminal **status**, `issued` until a settle-check stamps `settled`, `failed`
-(the device reported a different value), or `timed-out` (the window expired with nothing
-observed), with `settled_at` as the terminal moment. The settle-check runs wherever settlement
-is evaluated, at issue and on every settlement read, so a zero-window command returns already
-terminal, and a fire-and-forget command records `settled` at issue since it has nothing to wait
-on. This surface records and reconciles; carrying the invocation to the device is not part of
+else `pending`, `settled`, or `failed`): a matching observation taken after the intent settles
+the command as soon as it arrives, within the window a difference is still pending, and past it
+the latest observed value either matches the intended one or does not. The command row also
+records a terminal **status**, `issued` until it is stamped `settled`, `failed` (the device
+reported a different value, or its reply said no), or `timed-out` (the window expired with
+nothing observed), with `settled_at` as the terminal moment. Which evidence settles a command is
+the driver's declaration on its binding: the device's reply, or the next observation of the
+target ([commands](/architecture/commands/)). The check runs at issue, when the execution report
+lands, when an observation of the target lands, and on a sweep every few seconds for commands
+past their window, so a zero-window command returns already terminal, a fire-and-forget command
+records `settled` at issue since it has nothing to wait on, and no command stays `issued` past
+its window. This surface records and reconciles; carrying the invocation to the device is not part of
 it.
 
 From the CLI, the catalog is `omniglass command-type list|get|create|update|delete`, and

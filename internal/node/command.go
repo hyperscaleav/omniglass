@@ -28,6 +28,7 @@ const commandMemoryTTL = 15 * time.Minute
 // and when it was recorded, so a stale entry can be pruned.
 type commandOutcome struct {
 	outcome string
+	reply   string
 	at      time.Time
 }
 
@@ -57,17 +58,17 @@ func runCommands(ctx context.Context, nc *nats.Conn, name string, runner *collec
 	}
 	for _, d := range reply.Commands {
 		o, done := executed[d.ID]
-		outcome := o.outcome
+		outcome, reply := o.outcome, o.reply
 		if !done {
-			outcome = executeDelivery(ctx, runner, d)
-			executed[d.ID] = commandOutcome{outcome: outcome, at: now}
+			reply, outcome = executeDelivery(ctx, runner, d)
+			executed[d.ID] = commandOutcome{outcome: outcome, reply: reply, at: now}
 			if outcome == "" {
 				slog.Info("command actuated", "facility", "command", "command", d.ID, "type", d.CommandType)
 			} else {
 				slog.Warn("command failed", "facility", "command", "command", d.ID, "type", d.CommandType, "error", outcome)
 			}
 		}
-		st, err := json.Marshal(collection.CommandStatus{ID: d.ID, Error: outcome})
+		st, err := json.Marshal(collection.CommandStatus{ID: d.ID, Error: outcome, Reply: reply})
 		if err != nil {
 			continue
 		}
@@ -76,23 +77,25 @@ func runCommands(ctx context.Context, nc *nats.Conn, name string, runner *collec
 }
 
 // executeDelivery actuates one rendered command over its transport, returning
-// the empty string on success and the failure story otherwise. Any answer from
-// the device counts as an actuation; whether the device DID it is settlement's
-// judgment, made against observed values, not the wire's.
-func executeDelivery(ctx context.Context, runner *collection.Runner, d collection.CommandDelivery) string {
+// the device's reply and the failure story (empty on success). Any answer
+// from the device counts as an actuation; whether the device DID it is
+// settlement's judgment, made on the server from the reply (when the binding
+// settles from the response) or from what is observed next.
+func executeDelivery(ctx context.Context, runner *collection.Runner, d collection.CommandDelivery) (reply, outcome string) {
 	switch d.Transport {
 	case "tcp":
 		if runner.Line == nil {
-			return "node: no line actuator wired"
+			return "", "node: no line actuator wired"
 		}
 		if d.Target == "" {
-			return "node: command delivery carries no target"
+			return "", "node: command delivery carries no target"
 		}
-		if _, err := runner.Line.Exchange(ctx, d.Target, d.Line, 0); err != nil {
-			return err.Error()
+		reply, err := runner.Line.Exchange(ctx, d.Target, d.Line, 0)
+		if err != nil {
+			return "", err.Error()
 		}
-		return ""
+		return reply, ""
 	default:
-		return "node: no actuator for transport " + d.Transport
+		return "", "node: no actuator for transport " + d.Transport
 	}
 }

@@ -631,7 +631,7 @@ func TestCommandWireDelivery(t *testing.T) {
 	// Another node cannot stamp the execution: a report from a node the command
 	// was not dispatched to is rejected (not a silent no-op), so a stray or
 	// forged status cannot close a command a different node owns.
-	if err := gw.RecordCommandExecution(ctx, "edge-idle", cmd.ID, ""); !errors.Is(err, storage.ErrCommandNotDispatchedHere) {
+	if err := gw.RecordCommandExecution(ctx, "edge-idle", cmd.ID, "", ""); !errors.Is(err, storage.ErrCommandNotDispatchedHere) {
 		t.Fatalf("record from wrong node: err = %v, want ErrCommandNotDispatchedHere", err)
 	}
 	conn, err := pgx.Connect(ctx, dsn)
@@ -650,14 +650,14 @@ func TestCommandWireDelivery(t *testing.T) {
 	if executed = row(); executed != nil {
 		t.Fatalf("wrong node stamped execution")
 	}
-	if err := gw.RecordCommandExecution(ctx, "edge-9", cmd.ID, ""); err != nil {
+	if err := gw.RecordCommandExecution(ctx, "edge-9", cmd.ID, "", ""); err != nil {
 		t.Fatalf("record: %v", err)
 	}
 	if executed = row(); executed == nil {
 		t.Fatal("execution not stamped")
 	}
 	first := *executed
-	if err := gw.RecordCommandExecution(ctx, "edge-9", cmd.ID, "late duplicate"); !errors.Is(err, storage.ErrCommandNotDispatchedHere) {
+	if err := gw.RecordCommandExecution(ctx, "edge-9", cmd.ID, "late duplicate", ""); !errors.Is(err, storage.ErrCommandNotDispatchedHere) {
 		t.Fatalf("re-record: err = %v, want ErrCommandNotDispatchedHere (already stamped)", err)
 	}
 	if executed = row(); !executed.Equal(first) {

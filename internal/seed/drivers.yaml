@@ -60,7 +60,11 @@ drivers:
           emits:
             - { name: video-input, extract: { regex: "^EVT INPUT (\\S+)$" } }
       commands:
-        - { command_type: set-input, request: { line: "SET INPUT ${value}" } }
+        # The panel answers SET INPUT with the input it now shows, so the
+        # reply settles the command (ADR-0141).
+        - command_type: set-input
+          request: { line: "SET INPUT ${value}" }
+          settle: { from: response, extract: { regex: "^INPUT (\\S+)$" } }
   - id: http-json
     label: HTTP JSON
     version: "1.0.0"

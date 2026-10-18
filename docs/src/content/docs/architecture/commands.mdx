@@ -51,14 +51,14 @@ The issue records; the **wire actuates** (#815). The moving parts:
   TTL it stops being deliverable at all (settlement's `timed-out` covers a command no node picked
   up). The node remembers each command's outcome per id, so a redelivery repeats the **report**,
   never the actuation.
-- **The report is not the verdict.** The node reports execution on
-  `og.v1.commandstatus.<node>` (any device answer counts as actuated; a failure carries its
-  story into `exec_error`), and the row stamps `executed_at` once, confined to the node the
-  command's **dispatched endpoint** is placed on: a report from any other node is rejected and
-  logged, never a silent stamp, so a second node holding an unrelated endpoint on the same
-  component cannot close a command it never received. Whether the device **did** it stays
-  settlement's judgment of observed against intended; the settle loop now closes with real
-  observed values, since the driver's polls (#814) are what report the device's state back.
+- **The report carries the reply; the binding judges it.** The node reports execution on
+  `og.v1.commandstatus.<node>` with the device's reply (any device answer counts as actuated; a
+  failure carries its story into `exec_error`), and the row stamps `executed_at` once, confined
+  to the node the command's **dispatched endpoint** is placed on: a report from any other node is
+  rejected and logged, never a silent stamp, so a second node holding an unrelated endpoint on the
+  same component cannot close a command it never received. Whether the device **did** it is
+  settlement's judgment, made on the server: from the reply when the binding settles from the
+  response, otherwise from the next observation the driver's polls (#814) report.
 
 A **command** is the "do" half of the telemetry model, alongside a [metric or property](/architecture/properties/) (**know**) and an [event](/architecture/events/) (**happen**): it records what a component was **told**. Its registry is `command_type`, the driver-owned twin of the sample and event catalogs.
 
@@ -92,11 +92,35 @@ command ([the three-way split](/architecture/identity-access/#the-three-way-stat
 A command's effect is judged as a pure function of the intended value, the observed value, and the settle window:
 
 - **none**: nothing was told (fire-and-forget, or no intended value).
-- **pending**: still within the settle window, so a difference from observed is not yet drift.
-- **settled**: past the window, observed matches intended.
+- **settled**: an observation taken at or after the intent matches it, as soon as one arrives; or,
+  past the window, the latest observation matches.
+- **pending**: still within the settle window with no matching observation yet, so a difference
+  from observed is not yet drift.
 - **failed**: past the window, observed does not match (or is absent).
 
 This is the windowed form of the `told` versus `is` comparison the [reconciliation read](/architecture/variables/) opens.
+The window bounds how long a command waits for its evidence, not when it may settle
+([ADR-0141](/architecture/decisions/#adr-0141-a-command-settles-when-its-evidence-arrives-from-its-reply-first-and-observation-second)).
+
+**Where the evidence comes from is the driver's to declare.** Each command binding in a driver
+spec says how its commands settle:
+
+- `settle: { from: response, extract: { regex: ... } }`: the device's reply carries the new value
+  (`SET INPUT hdmi3` answers `INPUT hdmi3`). The server reads it when the execution report lands,
+  records it as an observation of the target on the dispatched endpoint, and settles the command
+  if it matches the intent or fails it if not.
+- `settle: { from: response, success: { regex: ... } }`: the reply only confirms (`OK`). A
+  matching reply settles the command; any other fails it.
+- `settle: { from: observe }`, the default: the reply decides nothing, and the next observation of
+  the target settles the command. The settle check runs when an observation lands, not only at
+  issue and on reads.
+
+In every mode an execution error fails a response-settled command at once, and **a sweep** the
+server runs every few seconds judges each command whose window has passed, so one that no reply
+and no observation settles reaches `timed-out` without waiting for another command or a read. A
+command issued with no instance of its own is judged against the series of the endpoint it was
+dispatched over, where that driver's observations of the target land (#456 owns the general
+meaning of instance).
 
 **A zero window is terminal by construction, never by arithmetic**
 ([ADR-0108](/architecture/decisions/#adr-0108-settlement-reads-one-clock-and-a-zero-window-is-a-statement-of-intent)).

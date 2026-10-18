@@ -39,6 +39,7 @@ type Server struct {
 	consumeCtx    jetstream.ConsumeContext // the telemetry durable consumer's pull loop
 	internalToken string
 	sims          *simhub.Registry // the simulators beside this server's nodes
+	stopSweep     chan struct{}    // ends the settlement sweep
 	ownStoreDir   string           // non-empty when the Server created (and must clean) it
 }
 
@@ -173,7 +174,7 @@ func (s *Server) subscribe() error {
 		// different node, or already stamped) is logged, never silently
 		// dropped: it is either a race or a misbehaving node, and both want a
 		// trail.
-		if err := s.store.RecordCommandExecution(context.Background(), node, st.ID, st.Error); err != nil {
+		if err := s.store.RecordCommandExecution(context.Background(), node, st.ID, st.Error, st.Reply); err != nil {
 			slog.Warn("command execution report rejected", "facility", "command", "node", node, "command", st.ID, "error", err.Error())
 		}
 	})
@@ -185,6 +186,7 @@ func (s *Server) subscribe() error {
 	if err := s.subscribeSim(); err != nil {
 		return err
 	}
+	s.startSettlementSweep()
 
 	// The telemetry ingest path: a JetStream stream + durable consumer over the
 	// same internal client. It carries the node -> server sample flow.
@@ -221,6 +223,10 @@ func (s *Server) ClientURL() string { return s.ns.ClientURL() }
 // Shutdown drains the internal client and stops the server, then removes an
 // owned JetStream store dir. Idempotent enough to defer.
 func (s *Server) Shutdown() {
+	if s.stopSweep != nil {
+		close(s.stopSweep)
+		s.stopSweep = nil
+	}
 	for _, sub := range s.subs {
 		_ = sub.Unsubscribe()
 	}
@@ -331,4 +337,31 @@ func (s *Server) subscribeSim() error {
 	}
 	s.subs = append(s.subs, list, hits)
 	return nil
+}
+
+// settlementSweepEvery is how often the server judges commands whose settle
+// window has passed: often enough that a timed-out command reads timed-out
+// within seconds of its window.
+const settlementSweepEvery = 5 * time.Second
+
+// startSettlementSweep judges past-window commands on an interval, so a
+// command no reply and no observation settles still reaches a terminal
+// status (ADR-0141).
+func (s *Server) startSettlementSweep() {
+	s.stopSweep = make(chan struct{})
+	stop := s.stopSweep
+	go func() {
+		t := time.NewTicker(settlementSweepEvery)
+		defer t.Stop()
+		for {
+			select {
+			case <-stop:
+				return
+			case <-t.C:
+				if err := s.store.SweepCommandSettlements(context.Background()); err != nil {
+					slog.Warn("settlement sweep failed", "facility", "command", "error", err.Error())
+				}
+			}
+		}
+	}()
 }

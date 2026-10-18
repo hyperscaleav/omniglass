@@ -78,6 +78,14 @@ func (p *PG) InsertPropertySamples(ctx context.Context, evs []PropertySampleWrit
 		if _, err := tx.Exec(ctx, sql, ts, ev.OwnerKind, arc, ev.Key, ev.Instance, ev.Value, ev.Source); err != nil {
 			return fmt.Errorf("storage: insert property sample %s/%s: %w", ev.OwnerID, ev.Key, err)
 		}
+		// An observation may be what a pending command was waiting on.
+		now, err := dbNow(ctx, tx)
+		if err != nil {
+			return err
+		}
+		if err := p.settleOnObservation(ctx, tx, ev.OwnerKind, arc, ev.Key, ev.Instance, now); err != nil {
+			return err
+		}
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return fmt.Errorf("storage: commit insert property samples: %w", err)

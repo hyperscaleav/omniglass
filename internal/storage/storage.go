@@ -541,7 +541,9 @@ type Gateway interface {
 	// The command wire (#815): a node's pending queue, resolved and rendered,
 	// and its execution reports.
 	PendingNodeCommands(ctx context.Context, name string) ([]CommandDelivery, error)
-	RecordCommandExecution(ctx context.Context, name string, commandID int64, execErr string) error
+	RecordCommandExecution(ctx context.Context, name string, commandID int64, execErr, reply string) error
+	// SweepCommandSettlements judges issued commands whose settle window has passed.
+	SweepCommandSettlements(ctx context.Context) error
 	// NodeSimDevices lists the components a simulator beside the node serves,
 	// within the component read scope.
 	NodeSimDevices(ctx context.Context, name string, read scope.Set) ([]SimDevice, error)
