@@ -11,14 +11,16 @@ import {
   raiseAlarm,
   splitAlarms,
   unacknowledgedCount,
-  type Severity,
 } from "../lib/alarms";
+import { useSeverity } from "../lib/severity";
+import { entityLabel } from "../lib/entities";
+import SeverityBadge from "./SeverityBadge";
 
 // AlarmsPanel: what is wrong with this component, and what was.
 //
 // An alarm is where fleet health starts, and it impairs its component's own
-// verdict wholesale (#626): any active alarm degrades it, a critical one is an
-// outage. A system role the component fills no longer counts it toward quorum
+// verdict wholesale (#626): any active alarm degrades it, one at an outage
+// severity level (high and above) is an outage. A system role the component fills no longer counts it toward quorum
 // while it is down, so the role can drop below quorum and its impact becomes
 // the system's verdict.
 //
@@ -41,14 +43,10 @@ import {
 // also where the raise and clear controls live, in order to say "I have seen this"
 // would put a triage act behind the guard for a different kind of act.
 
-const SEVERITY: Record<string, string> = { critical: "badge-error", warning: "badge-warning", info: "badge-info" };
-const severityBadge = (s: string) => SEVERITY[s] ?? "badge-ghost";
-
-const SEVERITIES: { value: Severity; label: string }[] = [
-  { value: "info", label: "info (recorded, nothing is worse for it)" },
-  { value: "warning", label: "warning (degraded, still working)" },
-  { value: "critical", label: "critical (this component is out)" },
-];
+//
+// Severity is the registry's (#917): the raise form offers its levels, least to
+// most severe, each saying what it does to this component, and the badges render
+// each level's label and color through SeverityBadge.
 
 export default function AlarmsPanel(props: { component: string; canUpdate: boolean; canAcknowledge?: boolean }): JSX.Element {
   const qc = useQueryClient();
@@ -59,7 +57,8 @@ export default function AlarmsPanel(props: { component: string; canUpdate: boole
     refetchOnWindowFocus: false,
   }));
 
-  const split = createMemo(() => splitAlarms(q.data ?? []));
+  const scale = useSeverity();
+  const split = createMemo(() => splitAlarms(q.data ?? [], scale().levels));
   const active = () => split().active;
   const cleared = () => split().cleared;
   // The queue an operator actually works: raised, and nobody has looked at it.
@@ -67,7 +66,10 @@ export default function AlarmsPanel(props: { component: string; canUpdate: boole
 
   const [err, setErr] = createSignal<string | null>(null);
   const [busy, setBusy] = createSignal(false);
-  const [severity, setSeverity] = createSignal<Severity>("warning");
+  // The chosen level, by name. Empty means "the default": the registry's least
+  // severe level, so a raise nobody tuned is the mildest one, never an outage.
+  const [chosen, setChosen] = createSignal("");
+  const severity = () => chosen() || scale().levels[0]?.name || "";
   const [message, setMessage] = createSignal("");
 
   async function run(write: () => Promise<void>, after?: () => void) {
@@ -93,7 +95,7 @@ export default function AlarmsPanel(props: { component: string; canUpdate: boole
         }).then(() => undefined),
       () => {
         setMessage("");
-        setSeverity("warning");
+        setChosen("");
       },
     );
 
@@ -116,7 +118,7 @@ export default function AlarmsPanel(props: { component: string; canUpdate: boole
       </div>
       <p class="text-[11px] text-base-content/50">
         An alarm records a condition on this component and takes its own verdict down (any active alarm degrades it,
-        a critical one is an outage). Any role it fills stops counting it toward quorum while it stays down, which is
+        one at an outage level is an outage). Any role it fills stops counting it toward quorum while it stays down, which is
         how a fault on a box becomes a verdict on a room.
       </p>
       <p class="text-[11px] text-base-content/50">
@@ -147,7 +149,7 @@ export default function AlarmsPanel(props: { component: string; canUpdate: boole
             {(a) => (
               <div class="flex flex-col gap-1.5 px-3 py-2.5">
                 <div class="flex flex-wrap items-baseline gap-2">
-                  <span class={`badge badge-soft badge-sm shrink-0 ${severityBadge(a.severity)}`}>{a.severity}</span>
+                  <SeverityBadge name={a.severity} />
                   <span class="min-w-0 flex-1 text-sm text-base-content/85">{a.message || "(no message)"}</span>
                   <span class="shrink-0 text-[11px] text-base-content/45" title={a.raised_at}>
                     raised {rel(a.raised_at)}
@@ -204,10 +206,15 @@ export default function AlarmsPanel(props: { component: string; canUpdate: boole
             <select
               class="select select-bordered select-sm w-full min-w-0 sm:w-auto sm:flex-none"
               aria-label="Alarm severity"
-              value={severity()}
-              onChange={(e) => setSeverity(e.currentTarget.value as Severity)}
+              onChange={(e) => setChosen(e.currentTarget.value)}
             >
-              <For each={SEVERITIES}>{(s) => <option value={s.value}>{s.label}</option>}</For>
+              <For each={scale().levels}>
+                {(l) => (
+                  <option value={l.name} selected={l.name === severity()}>
+                    {`${entityLabel(l)} (${l.outage ? "takes this component out" : "degrades it, still working"})`}
+                  </option>
+                )}
+              </For>
             </select>
             <input
               class="input input-bordered input-sm min-w-0 flex-1"
@@ -220,7 +227,7 @@ export default function AlarmsPanel(props: { component: string; canUpdate: boole
               size="sm"
               intent="warn"
               icon={Siren}
-              disabled={busy()}
+              disabled={busy() || !severity()}
               onClick={() => void raise()}
             >
               Raise alarm
@@ -239,7 +246,7 @@ export default function AlarmsPanel(props: { component: string; canUpdate: boole
             <For each={cleared()}>
               {(a) => (
                 <div class="flex flex-wrap items-baseline gap-2 px-3 py-2 opacity-70">
-                  <span class={`badge badge-outline badge-sm shrink-0 ${severityBadge(a.severity)}`}>{a.severity}</span>
+                  <SeverityBadge name={a.severity} />
                   <span class="min-w-0 flex-1 text-[12.5px] text-base-content/70">{a.message || "(no message)"}</span>
                   <span class="shrink-0 text-[11px] text-base-content/45">
                     raised {rel(a.raised_at)}

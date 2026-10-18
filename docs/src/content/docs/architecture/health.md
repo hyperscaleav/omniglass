@@ -54,7 +54,7 @@ Health is a chain, every hop a thing an operator already models:
 ```text
 alarm on a component
   -> the component's own verdict moves (any active alarm; #626)
-    -> a critical alarm takes it to outage, and only then does it stop
+    -> an alarm at or above high takes it to outage, and only then does it stop
        occupying the roles it is assigned to (a lesser alarm still degrades
        it, but it keeps its slot)
       -> a role falls below its quorum and is impaired
@@ -64,7 +64,7 @@ alarm on a component
 ```
 
 - An **[alarm](#the-alarm-what-is-wrong-with-one-component)** is **component-local** and impairs its
-  component **wholesale**: any active alarm degrades it, a critical one is an outage. It no longer
+  component **wholesale**: any active alarm degrades it, one at or above `high` is an outage. It no longer
   names what it takes away (#626 retired the capability registry that used to route it).
 - A component **occupies** a [system role](/architecture/core-entities/#system-roles-the-slots-a-system-needs-filled)
   it is assigned to unless its own verdict is currently **outage**: a merely **degraded** component
@@ -129,7 +129,7 @@ included: the build the room was not made to is not outstanding work.
 
 Health is **distinct from severity**: severity is an alarm's alert importance
 ([alarms and actions](/architecture/alarms-actions/)), health an entity's operational state; a
-`critical` alarm on a component filling no role moves nothing above it.
+`high` alarm on a component filling no role moves nothing above it.
 
 ## The rollup is a pure function
 
@@ -254,7 +254,7 @@ change, never a sample: the availability strip's data and the answer to "since w
 
 ## The alarm: what is wrong with one component
 
-An alarm is a row on a component with a **`severity`** (`info`, `warning`, or `critical`), a
+An alarm is a row on a component with a **`severity`** (a [severity level](/architecture/alarms-actions/#severity-a-registry-of-named-levels) by name, `info` to `disaster`), a
 **message**, a **`raised_at`**, and a **nullable `cleared_at`**. Clearing sets `cleared_at` and
 **keeps the row**; clearing an already-cleared alarm is an explicit miss, not a silent success.
 
@@ -265,7 +265,7 @@ room cannot be made to look healthy by somebody looking at it
 verdict answers "is this component out", which is a question about the condition; the
 acknowledgement answers "has anybody seen this", which is a question about a person.
 
-Severity drives the **component's own** verdict (any active alarm makes it `degraded`, a `critical`
+Severity drives the **component's own** verdict (any active alarm makes it `degraded`, one at or above `high`
 one an `outage`) and **nothing above it**: what reaches a role is only whether its occupant's
 verdict is `outage`, not the severity that produced it or whether it is merely `degraded`. Severity
 is how loudly to page somebody, impact is what the room lost. A component's verdict records on its

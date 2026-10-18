@@ -244,6 +244,7 @@ telemetry: {
     id: uuid {constraint: primary_key}
     acknowledged_by: uuid {constraint: foreign_key}
     component_id: uuid {constraint: foreign_key}
+    severity: text {constraint: foreign_key}
   }
   command: {
     shape: sql_table
@@ -309,6 +310,10 @@ telemetry: {
     system_id: uuid {constraint: foreign_key}
   }
   property_type: {
+    shape: sql_table
+    id: uuid {constraint: primary_key}
+  }
+  severity_level: {
     shape: sql_table
     id: uuid {constraint: primary_key}
   }
@@ -488,6 +493,7 @@ identity.system_role_type.component_type_id -> catalog.component_type.id
 identity.system_role_type.role_id -> identity.system_role.id
 telemetry.alarm.acknowledged_by -> identity.principal.id
 telemetry.alarm.component_id -> fleet.component.id
+telemetry.alarm.severity -> telemetry.severity_level.name
 telemetry.command.caused_event_id -> telemetry.event.id
 telemetry.command.command_type_id -> telemetry.command_type.id
 telemetry.command.component_id -> fleet.component.id

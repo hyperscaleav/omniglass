@@ -182,6 +182,12 @@ func TestEveryWritePathStoresNullForAnUnsetLabel(t *testing.T) {
 			}
 			return "name", "lbl-metric"
 		},
+		"severity_level": func(t *testing.T) (string, string) {
+			if _, err := gw.CreateSeverityLevel(ctx, "", storage.SeverityLevel{Name: "lbl-severity", Label: blank, Color: "gray", Rank: 777}); err != nil {
+				t.Fatalf("create severity_level: %v", err)
+			}
+			return "name", "lbl-severity"
+		},
 		"event_type": func(t *testing.T) (string, string) {
 			if _, err := gw.CreateEventType(ctx, "", storage.EventTypeSpec{Name: "lbl-event", Label: blank}); err != nil {
 				t.Fatalf("create event_type: %v", err)

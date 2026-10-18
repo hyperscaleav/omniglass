@@ -316,8 +316,8 @@ what was wrong underneath.
 
 Raising one takes two things:
 
-- a **severity**: `info`, `warning`, or `critical`. This is how loudly to treat it, and it sets the
-  **component's own** verdict (any active alarm makes the component degraded, a critical one an
+- a **severity**: one of the severity levels (`info`, `warning`, `average`, `high`, `disaster`, or one your admin added). This is how loudly to treat it, and it sets the
+  **component's own** verdict (any active alarm makes the component degraded, one at `high` or above an
   outage). Only an **outage** stops a component occupying a role it fills: an info or warning
   alarm still degrades it, but the component keeps its slot, so a quiet issue does not short-staff
   a system on its own;
@@ -386,7 +386,7 @@ and the role it impairs, and the component rows beneath carry the arithmetic. Re
 chain:
 
 ```text
-alarm on mic-pod-2 (critical, "no audio on channel 1")
+alarm on mic-pod-2 (high, "no audio on channel 1")
   -> mic-pod-2 is down (its own verdict, from the alarm)
     -> role room-mic wants 2, and mic-pod-2 no longer occupies its slot
       -> only 1 assigned component still occupies it
@@ -419,7 +419,7 @@ Once, in order, on a real system:
 2. **Staff the system.** Assign components to each role from the system's **Roles** panel. A component
    of the wrong type is refused by name (`component "panel-1" is a display; role "Room Microphone"
    wants a video-bar`), so a wrong assignment never becomes a wrong verdict.
-3. **Raise an alarm.** On one of the mic pods, raise a `critical` alarm.
+3. **Raise an alarm.** On one of the mic pods, raise a `high` alarm.
 4. **Watch the system move.** The system goes **degraded** (the `room-mic` role now has one occupant
    against a quorum of 2, and its impact is `degraded`), and the location above it follows. Had
    the alarm been on the main display instead, the system would be an **outage**, because that role says so.

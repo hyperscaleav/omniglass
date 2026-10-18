@@ -185,7 +185,7 @@ func TestHealthTransitionsThroughTheChain(t *testing.T) {
 	// The critical alarm takes bar-1 down, its only occupant, so the role drops
 	// below quorum.
 	alarm, err := f.gw.RaiseAlarm(ctx, "", "bar-1", storage.AlarmSpec{
-		Severity: "critical", Message: "mic array not responding",
+		Severity: "high", Message: "mic array not responding",
 	})
 	if err != nil {
 		t.Fatalf("raise alarm: %v", err)
@@ -262,7 +262,7 @@ func TestHealthReportNamesTheCause(t *testing.T) {
 	ctx := context.Background()
 
 	alarm, err := f.gw.RaiseAlarm(ctx, "", "bar-1", storage.AlarmSpec{
-		Severity: "critical", Message: "mic array not responding",
+		Severity: "high", Message: "mic array not responding",
 	})
 	if err != nil {
 		t.Fatalf("raise alarm: %v", err)
@@ -326,7 +326,7 @@ func TestHealthImpactAndQuorum(t *testing.T) {
 	ctx := context.Background()
 
 	if _, err := f.gw.RaiseAlarm(ctx, "", "bar-1", storage.AlarmSpec{
-		Severity: "critical", Message: "mic dead",
+		Severity: "high", Message: "mic dead",
 	}); err != nil {
 		t.Fatalf("raise alarm: %v", err)
 	}
@@ -403,7 +403,7 @@ func TestHealthMovesOnUnassign(t *testing.T) {
 	// critical one stops it occupying the slot because its own verdict went to
 	// outage.
 	alarm, err := f.gw.RaiseAlarm(ctx, "", "bar-1", storage.AlarmSpec{
-		Severity: "critical", Message: "mic dead",
+		Severity: "high", Message: "mic dead",
 	})
 	if err != nil {
 		t.Fatalf("raise alarm: %v", err)
@@ -710,7 +710,7 @@ func TestHealthMovesOnRelocation(t *testing.T) {
 	f.mustLocation(t, ctx, "hq-r2", "room", ptrStr("hq-b2"))
 
 	if _, err := f.gw.RaiseAlarm(ctx, "", "bar-1", storage.AlarmSpec{
-		Severity: "critical", Message: "mic dead",
+		Severity: "high", Message: "mic dead",
 	}); err != nil {
 		t.Fatalf("raise alarm: %v", err)
 	}
@@ -905,7 +905,7 @@ func TestAlarmImpairsComponentImpairsSlot(t *testing.T) {
 	}
 
 	if _, err := f.gw.RaiseAlarm(ctx, "", "bar-1", storage.AlarmSpec{
-		Severity: "critical", Message: "mic array not responding",
+		Severity: "high", Message: "mic array not responding",
 	}); err != nil {
 		t.Fatalf("raise alarm: %v", err)
 	}
@@ -999,7 +999,7 @@ func TestAlarmOnSpareDoesNotShort(t *testing.T) {
 	}
 
 	if _, err := f.gw.RaiseAlarm(ctx, "", "bar-1", storage.AlarmSpec{
-		Severity: "critical", Message: "mic array not responding",
+		Severity: "high", Message: "mic array not responding",
 	}); err != nil {
 		t.Fatalf("raise alarm: %v", err)
 	}
@@ -1073,7 +1073,7 @@ func TestShortAndUnderstaffedDivergeOnCriticalAlarm(t *testing.T) {
 		ctx := context.Background()
 
 		if _, err := f.gw.RaiseAlarm(ctx, "", "bar-1", storage.AlarmSpec{
-			Severity: "critical", Message: "mic array not responding",
+			Severity: "high", Message: "mic array not responding",
 		}); err != nil {
 			t.Fatalf("raise alarm: %v", err)
 		}

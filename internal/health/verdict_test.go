@@ -183,11 +183,14 @@ func TestRollUpAndComponentVerdict(t *testing.T) {
 	if got := health.ComponentVerdict(nil); got != health.Healthy {
 		t.Fatalf("no alarms = %v, want healthy", got)
 	}
-	if got := health.ComponentVerdict([]string{"warning"}); got != health.Degraded {
-		t.Fatalf("a warning = %v, want degraded", got)
+	if got := health.ComponentVerdict([]int{20}); got != health.Degraded {
+		t.Fatalf("a warning (rank 20) = %v, want degraded", got)
 	}
-	if got := health.ComponentVerdict([]string{"warning", "critical"}); got != health.Outage {
-		t.Fatalf("a critical among others = %v, want outage", got)
+	if got := health.ComponentVerdict([]int{health.OutageRank - 1}); got != health.Degraded {
+		t.Fatalf("just below the outage floor = %v, want degraded", got)
+	}
+	if got := health.ComponentVerdict([]int{20, health.OutageRank}); got != health.Outage {
+		t.Fatalf("an alarm at the outage floor among others = %v, want outage", got)
 	}
 }
 

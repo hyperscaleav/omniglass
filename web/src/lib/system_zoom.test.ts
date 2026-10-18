@@ -3,6 +3,7 @@ import { alarmRows, componentCards, sinceOf, systemZoomVM } from "./system_zoom"
 import type { FleetView } from "./fleet";
 import type { EffectiveRole, FleetHealth } from "./system_zoom";
 import { uuidFor } from "./testids";
+import { SEEDED_LEVELS } from "./testseverity";
 
 // The system zoom's view model (#636): the typed slots a system needs filled,
 // merged from the two reads that each carry half the story. The health read
@@ -55,7 +56,7 @@ const health: FleetHealth = {
       name: "room-mic", label: "Room Microphone", impact: "degraded", quorum: 2, satisfying: 1, short: 1, spare: 0,
       impaired: true, active: true, assigned_to: ["videobar-1", "mic-1"], down: ["mic-1"],
       alarms: [
-        { id: "al-1", component: uuidFor("sz-c-mic"), severity: "critical", message: "No route to host", raised_at: "2026-08-15T14:20:00Z" },
+        { id: "al-1", component: uuidFor("sz-c-mic"), severity: "high", message: "No route to host", raised_at: "2026-08-15T14:20:00Z" },
         { id: "al-2", component: uuidFor("sz-c-mic"), severity: "warning", message: "Fan speed high", raised_at: "2026-08-15T13:00:00Z" },
       ],
     },
@@ -74,7 +75,7 @@ const health: FleetHealth = {
     {
       name: "conf-codec", label: "conf-codec", impact: "outage", quorum: 1, satisfying: 0, short: 1, spare: 0,
       impaired: true, active: false, assigned_to: [], down: [],
-      alarms: [{ id: "al-ghost", component: uuidFor("sz-c-ghost"), severity: "critical", message: "From the build not in use", raised_at: "2026-08-10T00:00:00Z" }],
+      alarms: [{ id: "al-ghost", component: uuidFor("sz-c-ghost"), severity: "high", message: "From the build not in use", raised_at: "2026-08-10T00:00:00Z" }],
       choice: "conferencing", alternate: "component-system",
     },
   ],
@@ -165,8 +166,8 @@ describe("systemZoomVM", () => {
 describe("alarmRows", () => {
   const now = Date.parse("2026-08-15T17:00:00Z");
   it("flattens the active roles' alarms worst-first, joined to the role and the component's id", () => {
-    const rows = alarmRows(health, view, uuidFor("sz-sys"));
-    expect(rows.map((r) => r.severity)).toEqual(["critical", "warning"]);
+    const rows = alarmRows(health, view, uuidFor("sz-sys"), SEEDED_LEVELS);
+    expect(rows.map((r) => r.severity)).toEqual(["high", "warning"]);
     expect(rows[0]).toMatchObject({
       message: "No route to host",
       component: "mic-1",
@@ -176,7 +177,7 @@ describe("alarmRows", () => {
   });
 
   it("never carries an alarm from a build not in use: an inactive role's alarms did not move the verdict", () => {
-    const rows = alarmRows(health, view, uuidFor("sz-sys"));
+    const rows = alarmRows(health, view, uuidFor("sz-sys"), SEEDED_LEVELS);
     expect(rows.find((r) => r.message === "From the build not in use")).toBeUndefined();
   });
 
@@ -188,11 +189,11 @@ describe("alarmRows", () => {
         {
           name: "spare-mic", label: "Spare Microphone", impact: "none", quorum: 1, satisfying: 0, short: 1, spare: 0,
           impaired: true, active: true, assigned_to: ["mic-1"], down: ["mic-1"],
-          alarms: [{ id: "al-1", component: uuidFor("sz-c-mic"), severity: "critical", message: "No route to host", raised_at: "2026-08-15T14:20:00Z" }],
+          alarms: [{ id: "al-1", component: uuidFor("sz-c-mic"), severity: "high", message: "No route to host", raised_at: "2026-08-15T14:20:00Z" }],
         },
       ],
     } as never;
-    const rows = alarmRows(doubled, view, uuidFor("sz-sys"));
+    const rows = alarmRows(doubled, view, uuidFor("sz-sys"), SEEDED_LEVELS);
     expect(rows.filter((r) => r.id === "al-1")).toHaveLength(1);
   });
 

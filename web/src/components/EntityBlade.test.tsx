@@ -19,6 +19,7 @@ import { LOCATION_TYPES_KEY } from "../lib/location_types";
 import { STANDARDS_KEY } from "../lib/standards";
 import { PRODUCTS_KEY } from "../lib/products";
 import { uuidFor } from "../lib/testids";
+import { seedSeverityLevels } from "../lib/testseverity";
 
 // The fleet EntityBlade (#799, refit in #826, the glance since #872): verdict
 // and since lead, the alarms say why with their severity, the context the
@@ -56,7 +57,7 @@ const health: FleetHealth = {
     {
       name: "room-mic", label: "Room Microphone", impact: "degraded", quorum: 1, satisfying: 0, short: 1, spare: 0,
       impaired: true, active: true, assigned_to: ["mic-1"], down: ["mic-1"],
-      alarms: [{ id: "al-1", component: uuidFor("eb-c-mic"), severity: "critical", message: "No route to host", raised_at: "2026-08-15T14:20:00Z" }],
+      alarms: [{ id: "al-1", component: uuidFor("eb-c-mic"), severity: "high", message: "No route to host", raised_at: "2026-08-15T14:20:00Z" }],
     },
   ],
   systems: [],
@@ -75,6 +76,7 @@ const declared = [
 
 function mountBlade(ref: { kind: string; id: string }) {
   const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
+  seedSeverityLevels(qc);
   qc.setQueryData([...FLEET_VIEW_KEY], view);
   qc.setQueryData([...ME_KEY], me);
   qc.setQueryData([...systemHealthKey(uuidFor("eb-sys"))], health);
@@ -94,7 +96,7 @@ function mountBlade(ref: { kind: string; id: string }) {
     { id: uuidFor("eb-c-bar"), name: "videobar-1", label: "", component_type: "video-bar", actions: [] },
   ]);
   qc.setQueryData([...componentAlarmsKey(uuidFor("eb-c-mic"))], [
-    { id: "al-1", severity: "critical", message: "No route to host", raised_at: "2026-08-15T14:20:00Z", active: true },
+    { id: "al-1", severity: "high", message: "No route to host", raised_at: "2026-08-15T14:20:00Z", active: true },
   ]);
   qc.setQueryData([...componentSystemsKey(uuidFor("eb-c-mic"))], [{ system_id: uuidFor("eb-sys"), system: "boardroom", primary: true }]);
 
@@ -132,7 +134,7 @@ describe("the system blade", () => {
     expect(within(blade).getAllByText("degraded").length).toBeGreaterThan(0);
     expect(within(blade).getByText(/since /)).toBeTruthy();
     const why = within(blade).getByTestId("blade-why");
-    expect(within(why).getByText("critical")).toBeTruthy();
+    expect(within(why).getByText("High")).toBeTruthy();
     expect(within(why).getByText("No route to host")).toBeTruthy();
     expect(within(why).getByRole("button", { name: "mic-1" })).toBeTruthy();
   });
@@ -198,7 +200,7 @@ describe("the component blade", () => {
     const blade = await screen.findByRole("dialog");
     expect(within(blade).getAllByText("outage").length).toBeGreaterThan(0);
     const why = within(blade).getByTestId("blade-why");
-    expect(within(why).getByText("critical")).toBeTruthy();
+    expect(within(why).getByText("High")).toBeTruthy();
     expect(within(why).getByText("No route to host")).toBeTruthy();
     const serves = within(blade).getByTestId("blade-serves");
     expect(within(serves).getByText("Boardroom")).toBeTruthy();

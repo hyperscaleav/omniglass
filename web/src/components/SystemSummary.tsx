@@ -2,6 +2,8 @@ import { For, Show, createMemo } from "solid-js";
 import { useNavigate } from "@solidjs/router";
 import { useQuery } from "@tanstack/solid-query";
 import HealthBadge from "./HealthBadge";
+import SeverityBadge from "./SeverityBadge";
+import { useSeverity } from "../lib/severity";
 import { FLEET_VIEW_KEY, fleetView } from "../lib/fleet";
 import { systemHealth, systemHealthKey } from "../lib/health";
 import { STANDARDS_KEY, listStandards } from "../lib/standards";
@@ -35,7 +37,8 @@ export default function SystemSummary(props: { systemId: string }) {
     const row = h ? (standards.data ?? []).find((s) => s.name === h) : undefined;
     return row ? entityLabel(row) : h ?? "";
   });
-  const why = createMemo(() => (health.data && view.data ? alarmRows(health.data, view.data, props.systemId) : []));
+  const scale = useSeverity();
+  const why = createMemo(() => (health.data && view.data ? alarmRows(health.data, view.data, props.systemId, scale().levels) : []));
   const strip = createMemo(() => (health.data ? slotStrip(health.data) : undefined));
   const count = () => (system()?.dots ?? []).length;
   return (
@@ -63,7 +66,7 @@ export default function SystemSummary(props: { systemId: string }) {
       <For each={why()}>
         {(a) => (
           <span class="flex items-baseline gap-2 text-xs">
-            <span class="badge badge-xs" classList={{ "badge-error badge-soft": a.severity === "critical", "badge-warning badge-soft": a.severity !== "critical" }}>{a.severity}</span>
+            <SeverityBadge name={a.severity} size="xs" />
             <span class="font-data text-base-content/80">{a.component}</span>
             <span class="min-w-0 flex-1 truncate text-base-content/60">{a.message}</span>
           </span>

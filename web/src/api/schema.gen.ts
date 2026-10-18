@@ -475,7 +475,7 @@ export interface paths {
         put?: never;
         /**
          * Raise an alarm on a component
-         * @description Records a condition on this component, then recomputes health in the same transaction: the component's own verdict moves, and if it is now outage (a critical alarm), any role it occupies loses it as an occupant while the alarm is active, which can move its system and location verdicts with it; a lesser (info or warning) alarm degrades the component but leaves it occupying its roles. Gated by component:update; read and update scopes drive the 404 versus 403 split.
+         * @description Records a condition on this component, then recomputes health in the same transaction: the component's own verdict moves, and if it is now outage (an alarm at or above the high level), any role it occupies loses it as an occupant while the alarm is active, which can move its system and location verdicts with it; a lesser alarm degrades the component but leaves it occupying its roles. Gated by component:update; read and update scopes drive the 404 versus 403 split.
          */
         post: operations["raise-component-alarm"];
         delete?: never;
@@ -3004,6 +3004,58 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/severity-levels": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List severity levels
+         * @description Lists the severity levels, least to most severe, each with whether an active alarm at it puts a component in outage. Gated by severity_level:read.
+         */
+        get: operations["list-severity-level"];
+        put?: never;
+        /**
+         * Create a severity level
+         * @description Adds an operator severity level at a rank of its own, between two others without renumbering. A name or rank already taken is a 409; a color outside the palette is a 422. Audited. Gated by severity_level:create.
+         */
+        post: operations["create-severity-level"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/severity-levels/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get a severity level
+         * @description Returns one severity level by name. Gated by severity_level:read.
+         */
+        get: operations["get-severity-level"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete a severity level
+         * @description Removes an operator level no alarm names; an official level or one in use is a 409. Audited. Gated by severity_level:delete.
+         */
+        delete: operations["delete-severity-level"];
+        options?: never;
+        head?: never;
+        /**
+         * Update a severity level
+         * @description Patches an operator level's name, label, color or rank (an absent field is unchanged); a rename carries every alarm at the level with it. Official levels are read-only (409). Audited. Gated by severity_level:update.
+         */
+        patch: operations["update-severity-level"];
+        trace?: never;
+    };
     "/simulation": {
         parameters: {
             query?: never;
@@ -4314,7 +4366,7 @@ export interface components {
             message: string;
             /** Format: date-time */
             raised_at: string;
-            /** @description info, warning, or critical */
+            /** @description The severity level the alarm was raised at, by name (see /severity-levels) */
             severity: string;
         };
         AuditEventBody: {
@@ -5032,6 +5084,25 @@ export interface components {
             owner_kind: "platform" | "location" | "component";
             /** @description A secret_type id */
             secret_type: string;
+        };
+        CreateSeverityLevelInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/CreateSeverityLevelInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description One of gray, blue, green, yellow, orange, red, darkred */
+            color: string;
+            /** @description A human label */
+            label?: string;
+            /** @description The level's name (lowercase kebab) */
+            name: string;
+            /**
+             * Format: int64
+             * @description Its place among the levels: higher is more severe; unique
+             */
+            rank: number;
         };
         CreateStandardInputBody: {
             /**
@@ -6125,6 +6196,15 @@ export interface components {
             readonly $schema?: string;
             secrets: components["schemas"]["SecretBody"][] | null;
         };
+        ListSeverityLevelsOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/ListSeverityLevelsOutputBody.json
+             */
+            readonly $schema?: string;
+            severity_levels: components["schemas"]["SeverityLevelBody"][] | null;
+        };
         ListStandardMetricsOutputBody: {
             /**
              * Format: uri
@@ -6839,11 +6919,8 @@ export interface components {
             dedup_key?: string;
             /** @description What is wrong, for the operator reading it later */
             message?: string;
-            /**
-             * @description How bad it is; critical puts the component itself in outage
-             * @enum {string}
-             */
-            severity: "info" | "warning" | "critical";
+            /** @description How bad it is: a severity level by name (see /severity-levels); a level at or above high puts the component itself in outage */
+            severity: string;
         };
         ReachEndpointBody: {
             /** @description The probed address (target[:port]) from the endpoint params */
@@ -7452,6 +7529,33 @@ export interface components {
                 [key: string]: string;
             };
             values: components["schemas"]["Settings"];
+        };
+        SeverityLevelBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/SeverityLevelBody.json
+             */
+            readonly $schema?: string;
+            /**
+             * @description The hue the console renders the level in
+             * @enum {string}
+             */
+            color: "gray" | "blue" | "green" | "yellow" | "orange" | "red" | "darkred";
+            /** @description The level's uuid, the stable form of name */
+            id: string;
+            label?: string;
+            /** @description The level's name; alarms and rules name it */
+            name: string;
+            /** @description Shipped with the platform and read-only */
+            official: boolean;
+            /** @description Whether an active alarm at this level puts its component in outage (at or above the high level's rank); below it, an alarm degrades */
+            outage: boolean;
+            /**
+             * Format: int64
+             * @description Compares levels: higher is more severe
+             */
+            rank: number;
         };
         SimCapabilities: {
             low_ports: boolean;
@@ -8314,6 +8418,25 @@ export interface components {
             };
             /** @description A new label; an empty string clears it, and the surface falls back to the name. Omit to leave it alone */
             label?: string;
+        };
+        UpdateSeverityLevelInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/UpdateSeverityLevelInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description One of gray, blue, green, yellow, orange, red, darkred */
+            color?: string;
+            /** @description A human label */
+            label?: string;
+            /** @description A new name; every alarm at this level follows */
+            name?: string;
+            /**
+             * Format: int64
+             * @description Its place among the levels; unique
+             */
+            rank?: number;
         };
         UpdateStandardInputBody: {
             /**
@@ -14920,6 +15043,166 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "list-severity-level": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListSeverityLevelsOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "create-severity-level": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateSeverityLevelInputBody"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SeverityLevelBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "get-severity-level": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The level's name */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SeverityLevelBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "delete-severity-level": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The level's name */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "update-severity-level": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The level's name */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateSeverityLevelInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SeverityLevelBody"];
+                };
             };
             /** @description Error */
             default: {

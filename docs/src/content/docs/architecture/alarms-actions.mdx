@@ -16,10 +16,11 @@ in credentials; the Expr and Go-template machinery in [expressions](/architectur
 
 :::note[Partial]
 Built today: the **alarm as a held row**, raised on a **component** by a caller, carrying a `severity`
-(`info` / `warning` / `critical`), a message, a `raised_at`, and a nullable `cleared_at` (clearing keeps
-the row). Any active alarm reaches a system through the component's own verdict (any active alarm
-degrades it, a `critical` one is an outage), and a `critical` alarm impairs every
-[role](/architecture/health/) that component occupies while it stays open, since only an outage
+(a level of the [severity registry](#severity-a-registry-of-named-levels), by name), a message, a
+`raised_at`, and a nullable `cleared_at` (clearing keeps the row). Any active alarm reaches a system
+through the component's own verdict (any active alarm degrades it, one at or above the `high` level
+is an outage), and such an alarm impairs every [role](/architecture/health/) that component occupies
+while it stays open, since only an outage
 component stops occupying its slots; a lesser alarm degrades the component but leaves it in place
 (#626: an alarm no longer names what it degrades).
 
@@ -146,7 +147,7 @@ independently: a long `for_clear` over a short `for` holds an incident through a
 without delaying the page.
 
 A rule does not declare a health verdict itself: the alarm it raises impairs its owner's own
-verdict (any active alarm degrades it, a `critical` one is an outage). Only an outage owner stops
+verdict (any active alarm degrades it, one at or above `high` is an outage). Only an outage owner stops
 occupying the [system roles](/architecture/core-entities/#system-roles-the-slots-a-system-needs-filled)
 it fills; a lesser alarm degrades it but leaves it in place. When it does drop out (#626), how much
 that matters is the role's **impact** ([health](/architecture/health/)). A rule scoped to whichever
@@ -154,8 +155,6 @@ arc owns its sample yields
 **component-level** and **system-level** alarms with one machinery (a system-scoped rule reads
 member data, fires a system-owned alarm).
 :::
-
-::::design[The severity-level registry (ADR-0050)]
 
 ## Severity: a registry of named levels
 
@@ -178,12 +177,18 @@ The set is **operator-customizable** (relabel to P1/P2/P3, recolor, insert, thre
 all config. Predicates compare **by level** through the order (`alarm.severity >= "high"` matches
 `high` and `disaster`); the UI renders the label and color.
 
+Built (#917): the `severity_level` table (the order column is `rank`, since `order` is a reserved
+word), the five official levels above from the boot seed, and operator levels at
+`/severity-levels` (`omniglass severity-level create`, gated `severity_level:*`; a name or rank
+already taken is a 409, an official level is read-only). An alarm's `severity` references a level
+**by name** (a rename carries its alarms; a level an alarm names cannot be deleted). A component's
+own verdict reads the rank: **`high` and above is an outage**, anything lower degrades. The retired
+three values mapped by meaning: `critical` became `high`, `info` and `warning` kept their names.
+
 :::caution[Open question]
 Whether a severity level is purely a label, color, and order, or also carries policy such as a
 default ack-timeout per level.
 :::
-
-::::
 
 :::design[The `action` entity (ADR-0050)]
 

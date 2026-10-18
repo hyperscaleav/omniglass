@@ -452,6 +452,14 @@ type Gateway interface {
 	// The event_type registry (ADR-0063 #395): the occurrence keyspace, the twin of
 	// property_type. Seeded official and operator-extensible; a registered event_type
 	// name routes an occurrence to the event sink.
+	// The severity level registry (#917): official levels from the boot seed,
+	// operator levels created, renamed, recolored, re-ranked and deleted.
+	UpsertSeverityLevel(ctx context.Context, l SeverityLevel) error
+	ListSeverityLevels(ctx context.Context) ([]SeverityLevel, error)
+	GetSeverityLevel(ctx context.Context, name string) (*SeverityLevel, error)
+	CreateSeverityLevel(ctx context.Context, actorID string, l SeverityLevel) (*SeverityLevel, error)
+	UpdateSeverityLevel(ctx context.Context, actorID, name string, patch SeverityLevelPatch) (*SeverityLevel, error)
+	DeleteSeverityLevel(ctx context.Context, actorID, name string) error
 	UpsertEventType(ctx context.Context, et EventType) error
 	ListEventTypes(ctx context.Context) ([]EventType, error)
 	GetEventType(ctx context.Context, name string) (*EventType, error)

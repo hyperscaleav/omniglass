@@ -18,6 +18,7 @@ import type { components } from "../api/schema.gen";
 import type { FleetView } from "./fleet";
 import { entityLabel } from "./entities";
 import { sortAlarms } from "./alarms";
+import type { SeverityLevel } from "./severity";
 
 export type FleetHealth = components["schemas"]["FleetHealthOutputBody"];
 export type HealthRole = components["schemas"]["HealthRoleBody"];
@@ -180,7 +181,7 @@ export type AlarmRow = {
   raisedAt: string;
 };
 
-export function alarmRows(health: FleetHealth, view: FleetView, systemId: string): AlarmRow[] {
+export function alarmRows(health: FleetHealth, view: FleetView, systemId: string, levels?: SeverityLevel[] | null): AlarmRow[] {
   const self = (view.systems ?? []).find((s) => s.id === systemId);
   // The alarm wire names its component by UUID (healthAlarmBody carries
   // a.ComponentID); the projection's dots translate it to the name an
@@ -206,7 +207,7 @@ export function alarmRows(health: FleetHealth, view: FleetView, systemId: string
   // The wire repeats an alarm under every role its down component staffs;
   // the strip is a list of alarms, not of role pairings, so the first
   // occurrence after the worst-first sort wins.
-  const sorted = sortAlarms(rows.map((r) => ({ ...r, raised_at: r.raisedAt }))).map(({ raised_at: _, ...r }) => r as AlarmRow);
+  const sorted = sortAlarms(rows.map((r) => ({ ...r, raised_at: r.raisedAt })), levels).map(({ raised_at: _, ...r }) => r as AlarmRow);
   const seen = new Set<string>();
   return sorted.filter((r) => (seen.has(r.id) ? false : (seen.add(r.id), true)));
 }

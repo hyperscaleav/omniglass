@@ -216,11 +216,11 @@ func (p *PG) recomputeChain(ctx context.Context, q txQuerier, components, system
 		if err := lockHealthOwner(ctx, q, "component", c.ID); err != nil {
 			return err
 		}
-		severities, err := p.activeAlarmSeverities(ctx, q, c.ID)
+		ranks, err := p.activeAlarmRanks(ctx, q, c.ID)
 		if err != nil {
 			return err
 		}
-		if err := recordHealth(ctx, q, "component", c.ID, health.ComponentVerdict(severities)); err != nil {
+		if err := recordHealth(ctx, q, "component", c.ID, health.ComponentVerdict(ranks)); err != nil {
 			return err
 		}
 		staffed, err := p.systemsStaffedBy(ctx, q, c.ID)
@@ -492,20 +492,21 @@ func ownerArcExprN(ownerKind string, n int) string {
 	return fmt.Sprintf("$%d::text", n)
 }
 
-// activeAlarmSeverities lists the severities of a component's active alarms, the
-// only input its own verdict takes. Takes the component's id directly (every
+// activeAlarmRanks lists the severity ranks of a component's active alarms,
+// the only input its own verdict takes. Takes the component's id directly (every
 // caller already has it, recomputeChain's ownerRef included): binding it
 // avoids re-deriving an id from a name that #627 no longer guarantees is
 // unique.
-func (p *PG) activeAlarmSeverities(ctx context.Context, q txQuerier, componentID string) ([]string, error) {
-	var severities []string
+func (p *PG) activeAlarmRanks(ctx context.Context, q txQuerier, componentID string) ([]int, error) {
+	var ranks []int
 	if err := q.QueryRow(ctx, `
-		select coalesce(array_agg(severity), '{}')
-		from alarm where component_id = $1::uuid and cleared_at is null`,
-		componentID).Scan(&severities); err != nil {
-		return nil, fmt.Errorf("storage: active alarm severities %q: %w", componentID, err)
+		select coalesce(array_agg(l.rank), '{}')
+		from alarm a join severity_level l on l.name = a.severity
+		where a.component_id = $1::uuid and a.cleared_at is null`,
+		componentID).Scan(&ranks); err != nil {
+		return nil, fmt.Errorf("storage: active alarm ranks %q: %w", componentID, err)
 	}
-	return severities, nil
+	return ranks, nil
 }
 
 // componentVerdict resolves one component's own current verdict from its
@@ -513,13 +514,13 @@ func (p *PG) activeAlarmSeverities(ctx context.Context, q txQuerier, componentID
 // not just run), but the same live computation the recompute makes. It is the
 // only input a slot it occupies takes now: an alarm impairs a component
 // wholesale, not by name capability, so there is nothing else to resolve.
-// Takes the component's id (see activeAlarmSeverities).
+// Takes the component's id (see activeAlarmRanks).
 func (p *PG) componentVerdict(ctx context.Context, q txQuerier, componentID string) (health.Verdict, error) {
-	severities, err := p.activeAlarmSeverities(ctx, q, componentID)
+	ranks, err := p.activeAlarmRanks(ctx, q, componentID)
 	if err != nil {
 		return health.Healthy, err
 	}
-	return health.ComponentVerdict(severities), nil
+	return health.ComponentVerdict(ranks), nil
 }
 
 // systemsStaffedBy lists the systems this component fills a role in, the systems

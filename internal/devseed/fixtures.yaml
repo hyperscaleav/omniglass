@@ -2037,7 +2037,7 @@ role_assignments:
 
 alarms:
   - component: aud-dsp
-    severity: critical
+    severity: high
     message: No route to host on the control interface
     dedup_key: unreachable
   # A warning that costs nothing structural: the component reads degraded and

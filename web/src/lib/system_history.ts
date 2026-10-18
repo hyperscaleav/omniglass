@@ -4,7 +4,8 @@
 // cleared ones included, merged onto one list and one axis. Ongoing first
 // (they are what is wrong now), then newest raise first; an alarm that
 // cleared before the window began is history the window does not show.
-import { severityRank, type Alarm } from "./alarms";
+import type { Alarm } from "./alarms";
+import { compareSeverity, type SeverityLevel } from "./severity";
 import { verdictRank } from "./health";
 import type { Span } from "./timeline";
 
@@ -21,7 +22,8 @@ export type IncidentRow = {
   ongoing: boolean;
 };
 
-export function incidentRows(members: MemberAlarms[], now: number, windowHours: number): IncidentRow[] {
+export function incidentRows(members: MemberAlarms[], now: number, windowHours: number, levels?: SeverityLevel[] | null): IncidentRow[] {
+  const bySeverity = compareSeverity(levels);
   const start = now - windowHours * 3600_000;
   const rows: IncidentRow[] = [];
   for (const m of members) {
@@ -44,7 +46,7 @@ export function incidentRows(members: MemberAlarms[], now: number, windowHours: 
   return rows.sort(
     (x, y) =>
       Number(y.ongoing) - Number(x.ongoing) ||
-      severityRank(x.severity) - severityRank(y.severity) ||
+      bySeverity(x.severity, y.severity) ||
       y.raisedAt.localeCompare(x.raisedAt),
   );
 }

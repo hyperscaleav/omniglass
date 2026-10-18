@@ -32,7 +32,9 @@ import { entityLabel } from "../lib/entities";
 import { can, useMe } from "../lib/auth";
 import { describeError, fmtTime } from "../lib/format";
 import { durationText } from "../lib/timeline";
-import { componentAlarms, componentAlarmsKey, severityRank } from "../lib/alarms";
+import { componentAlarms, componentAlarmsKey } from "../lib/alarms";
+import { useSeverity } from "../lib/severity";
+import SeverityBadge from "../components/SeverityBadge";
 import { incidentReasons, incidentRows, incidentsOf, markerX, uptimePct, type MemberAlarms } from "../lib/system_history";
 import { spans as timelineSpans } from "../lib/timeline";
 import { systemEvents, systemEventsKey, systemLogs, systemLogsKey } from "../lib/system_activity";
@@ -92,7 +94,11 @@ export default function SystemZoom() {
     return systemZoomVM(health.data, declared.data, view.data, id());
   });
 
-  const alarms = createMemo(() => (view.data && health.data ? alarmRows(health.data, view.data, id()) : []));
+  const scale = useSeverity();
+  const alarms = createMemo(() => (view.data && health.data ? alarmRows(health.data, view.data, id(), scale().levels) : []));
+  // The strip reads red when any alarm on it is at an outage level (the
+  // registry's flag, #917), amber when they only degrade.
+  const inOutage = createMemo(() => alarms().some((a) => scale().outage(a.severity)));
   const bodyOf = createMemo(() => (vm() ? componentCards(vm()!) : undefined));
   const metricsQ = useQuery(() => ({ queryKey: systemMetricsKey(id()), queryFn: () => systemMetrics(id()) }));
   const standards = useQuery(() => ({ queryKey: STANDARDS_KEY, queryFn: listStandards }));
@@ -175,7 +181,7 @@ export default function SystemZoom() {
       componentId: m.componentId,
       alarms: alarmHistories[i]?.data ?? [],
     }));
-    return incidentRows(members, pageNow, 30 * 24);
+    return incidentRows(members, pageNow, 30 * 24, scale().levels);
   });
   const otherAlarms = createMemo(() => {
     const inIncident = new Set(incidentList().flatMap((inc) => incidentReasons(inc, incidents()).map((r) => r.id)));
@@ -312,7 +318,7 @@ export default function SystemZoom() {
                       <span
                         data-testid={`incident-marker-${inc.id}`}
                         class="absolute top-0 h-0 w-0 -translate-x-1/2 border-x-4 border-b-6 border-x-transparent"
-                        classList={{ "border-b-error": inc.severity === "critical", "border-b-warning": inc.severity !== "critical" }}
+                        classList={{ "border-b-error": scale().outage(inc.severity), "border-b-warning": !scale().outage(inc.severity) }}
                         style={{ left: `${markerX(inc.raisedAt, pageNow, 30 * 24 * 3600_000) * 100}%` }}
                         title={`${inc.message} · ${inc.component}`}
                       />
@@ -381,7 +387,7 @@ export default function SystemZoom() {
                                   <For each={reasons()}>
                                     {(r) => (
                                       <li class="flex flex-wrap items-baseline gap-x-2 text-xs">
-                                        <span class="badge badge-xs" classList={{ "badge-error badge-soft": r.severity === "critical", "badge-warning badge-soft": r.severity !== "critical" }}>{r.severity}</span>
+                                        <SeverityBadge name={r.severity} size="xs" />
                                         <span>{r.message}</span>
                                         <button type="button" class="cursor-pointer font-mono text-base-content/70 hover:underline" onClick={(e) => { e.stopPropagation(); openComponent(r.componentId); }}>{r.component}</button>
                                         <span class="text-base-content/45 tabular-nums">
@@ -409,7 +415,7 @@ export default function SystemZoom() {
                   <For each={otherAlarms()}>
                     {(r) => (
                       <li class="flex flex-wrap items-baseline gap-x-2 px-3 py-1.5 text-xs">
-                        <span class="badge badge-xs" classList={{ "badge-error badge-soft": r.severity === "critical", "badge-warning badge-soft": r.severity !== "critical" }}>{r.severity}</span>
+                        <SeverityBadge name={r.severity} size="xs" />
                         <span>{r.message}</span>
                         <button type="button" class="cursor-pointer font-mono text-base-content/70 hover:underline" onClick={() => openComponent(r.componentId)}>{r.component}</button>
                         <span class="ml-auto text-base-content/45 tabular-nums">{fmtTime(r.raisedAt)}</span>
@@ -462,12 +468,12 @@ export default function SystemZoom() {
                   {/* Cause before arithmetic (#785): what is wrong, on which
                       component, impairing which role, since when. */}
                   <Show when={alarms().length > 0}>
-                    <section data-testid="alarm-strip" class="flex flex-col gap-1.5 rounded-box border p-3" classList={{ "border-error/40 bg-error/5": severityRank(alarms()[0].severity) === 0, "border-warning/40 bg-warning/5": severityRank(alarms()[0].severity) !== 0 }}>
+                    <section data-testid="alarm-strip" class="flex flex-col gap-1.5 rounded-box border p-3" classList={{ "border-error/40 bg-error/5": inOutage(), "border-warning/40 bg-warning/5": !inOutage() }}>
                       <h2 class="eyebrow">Why</h2>
                       <For each={alarms()}>
                         {(a) => (
                           <div class="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-sm">
-                            <span class="badge badge-sm" classList={{ "badge-error badge-soft": a.severity === "critical", "badge-warning badge-soft": a.severity !== "critical" }}>{a.severity}</span>
+                            <SeverityBadge name={a.severity} />
                             <span>{a.message}</span>
                             <Show when={a.componentId} fallback={<span class="font-mono text-xs text-base-content/60">{a.component}</span>}>
                               {(cid) => <button type="button" class="cursor-pointer font-mono text-xs text-base-content/80 hover:underline" onClick={() => openComponent(cid())}>{a.component}</button>}

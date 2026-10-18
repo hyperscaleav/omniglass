@@ -130,7 +130,7 @@ func measureRaiseClear(t *testing.T, gw storage.Gateway, c *querycount.Counter, 
 	}
 	c.Reset()
 	a, err := gw.RaiseAlarm(ctx, "", "bar-1", storage.AlarmSpec{
-		Severity: "critical", Message: "measured", DedupKey: "measured",
+		Severity: "high", Message: "measured", DedupKey: "measured",
 	})
 	if err != nil {
 		t.Fatalf("raise: %v", err)

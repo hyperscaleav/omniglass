@@ -20,6 +20,9 @@ import (
 //go:embed roles.yaml
 var rolesYAML []byte
 
+//go:embed severity_levels.yaml
+var severityLevelsYAML []byte
+
 //go:embed location_types.yaml
 var locationTypesYAML []byte
 
@@ -238,6 +241,11 @@ func Run(ctx context.Context, gw storage.Gateway) error {
 	if err := seedRoles(ctx, gw); err != nil {
 		return err
 	}
+	// The severity levels before anything that names one: an alarm references
+	// a level by name, so the registry lands first.
+	if err := seedSeverityLevels(ctx, gw); err != nil {
+		return err
+	}
 	// The global label rules before any classifier: they are the outermost tier
 	// of a ladder every other seeded row can override, and the order a
 	// resolver reads them in is the reverse of the order they are written.
@@ -365,6 +373,30 @@ func seedMetricTypes(ctx context.Context, gw storage.Gateway) error {
 
 // seedEventTypes installs the ship-with event_type registry (the occurrence
 // keyspace), authoritative on conflict like the property registry.
+// seedSeverityLevels installs the official severity levels, authoritative on
+// conflict like the other registries; an operator's own levels are untouched.
+func seedSeverityLevels(ctx context.Context, gw storage.Gateway) error {
+	var doc struct {
+		Levels []struct {
+			Name  string `yaml:"name"`
+			Label string `yaml:"label"`
+			Color string `yaml:"color"`
+			Rank  int    `yaml:"rank"`
+		} `yaml:"levels"`
+	}
+	if err := yaml.Unmarshal(severityLevelsYAML, &doc); err != nil {
+		return fmt.Errorf("seed: parse severity_levels: %w", err)
+	}
+	for _, l := range doc.Levels {
+		if err := gw.UpsertSeverityLevel(ctx, storage.SeverityLevel{
+			Name: l.Name, Label: l.Label, Color: l.Color, Rank: l.Rank, Official: true,
+		}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func seedEventTypes(ctx context.Context, gw storage.Gateway) error {
 	var doc struct {
 		EventTypes []struct {

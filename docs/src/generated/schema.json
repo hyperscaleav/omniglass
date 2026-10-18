@@ -3057,7 +3057,9 @@
      {
       "name": "severity",
       "type": "text",
-      "nullable": false
+      "nullable": false,
+      "fk": true,
+      "fk_target": "severity_level.name"
      },
      {
       "name": "message",
@@ -3111,12 +3113,6 @@
       "nullable": true,
       "fk": true,
       "fk_target": "principal.id"
-     }
-    ],
-    "checks": [
-     {
-      "name": "alarm_severity_check",
-      "expr": "CHECK ((severity = ANY (ARRAY['info'::text, 'warning'::text, 'critical'::text])))"
      }
     ],
     "uniques": [
@@ -3966,6 +3962,72 @@
      {
       "name": "property_type_handle_key",
       "definition": "CREATE UNIQUE INDEX property_type_handle_key ON public.property_type USING btree (name)"
+     }
+    ]
+   },
+   "severity_level": {
+    "columns": [
+     {
+      "name": "id",
+      "type": "uuid",
+      "nullable": false,
+      "default": "uuidv7()",
+      "pk": true
+     },
+     {
+      "name": "name",
+      "type": "text",
+      "nullable": false
+     },
+     {
+      "name": "label",
+      "type": "text",
+      "nullable": true
+     },
+     {
+      "name": "color",
+      "type": "text",
+      "nullable": false,
+      "default": "''::text"
+     },
+     {
+      "name": "rank",
+      "type": "integer",
+      "nullable": false
+     },
+     {
+      "name": "official",
+      "type": "boolean",
+      "nullable": false,
+      "default": "false"
+     },
+     {
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+     },
+     {
+      "name": "updated_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+     }
+    ],
+    "checks": [
+     {
+      "name": "severity_level_rank_check",
+      "expr": "CHECK ((rank \u003e 0))"
+     }
+    ],
+    "uniques": [
+     {
+      "name": "severity_level_name_key",
+      "definition": "CREATE UNIQUE INDEX severity_level_name_key ON public.severity_level USING btree (name)"
+     },
+     {
+      "name": "severity_level_rank_key",
+      "definition": "CREATE UNIQUE INDEX severity_level_rank_key ON public.severity_level USING btree (rank)"
      }
     ]
    }

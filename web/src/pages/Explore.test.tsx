@@ -401,7 +401,7 @@ describe("the states an operator can land in", () => {
 describe("the Detail column", () => {
   it("names the alarm behind a component's red light, matched by the component's id", async () => {
     // A health report names an alarm's component by uuid (internal/api/health.go).
-    const report = { roles: [{ alarms: [{ id: "a1", component: uuidFor("dsp-1"), severity: "critical", message: "No signal on input 3" }] }] };
+    const report = { roles: [{ alarms: [{ id: "a1", component: uuidFor("dsp-1"), severity: "high", message: "No signal on input 3" }] }] };
     mount("/web/explore", owner, view, false, components, (qc) => qc.setQueryData([...systemHealthKey(uuidFor("s-aud"))], report));
     await screen.findByRole("tree");
     expand("Headquarters");

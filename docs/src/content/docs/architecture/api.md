@@ -660,7 +660,7 @@ cost it the slot).
 
 **[Health](/architecture/health/)** is two shapes on this surface: the **alarm** (what is wrong with one
 component) and the **report** (what that means for a system or a location); an alarm is
-component-local, reaching a room only through the component's own verdict. Only a `critical` alarm
+component-local, reaching a room only through the component's own verdict. Only an alarm at or above `high`
 takes that verdict to outage and impairs every role the component occupies while it is active; an
 `info` or `warning` alarm degrades the component but leaves it occupying its roles.
 
@@ -671,8 +671,8 @@ An alarm hangs off its component and rides that component's gating:
   `unacknowledged` (on its own, raised and unacknowledged; with `include_cleared`, also the
   incidents that came and went unattended).
 - `POST /components/{name}/alarms` raises one from `{severity, message?, dedup_key?}` (201,
-  `component:update`). `severity` is `info` / `warning` / `critical`, driving the component's own
-  verdict (any active alarm degrades it, a critical one is an outage); `dedup_key` is the condition
+  `component:update`). `severity` names a [severity level](/architecture/alarms-actions/#severity-a-registry-of-named-levels) (`GET /severity-levels`, an unknown one a 422), driving the component's own
+  verdict (any active alarm degrades it, one at or above `high` is an outage); `dedup_key` is the condition
   identity, defaulting to the message. A bad severity is a **422**.
 - `DELETE /components/{name}/alarms/{id}` clears it (204, `component:update`). The row is **kept**, so
   the record of what was wrong outlives the fix; clearing one already cleared, or another

@@ -851,3 +851,18 @@ func (UnimplementedGateway) ListMetricSeries(context.Context, string, string, st
 func (UnimplementedGateway) ListPropertySeries(context.Context, string, string, string, time.Duration, int) ([]PropertySample, error) {
 	return nil, nil
 }
+
+func (UnimplementedGateway) UpsertSeverityLevel(context.Context, SeverityLevel) error { return nil }
+func (UnimplementedGateway) ListSeverityLevels(context.Context) ([]SeverityLevel, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) GetSeverityLevel(context.Context, string) (*SeverityLevel, error) {
+	return nil, ErrSeverityLevelNotFound
+}
+func (UnimplementedGateway) CreateSeverityLevel(context.Context, string, SeverityLevel) (*SeverityLevel, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) UpdateSeverityLevel(context.Context, string, string, SeverityLevelPatch) (*SeverityLevel, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) DeleteSeverityLevel(context.Context, string, string) error { return nil }

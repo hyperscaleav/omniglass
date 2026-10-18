@@ -119,11 +119,11 @@ func TestHealthAPI(t *testing.T) {
 	// is assigned to.
 	var raised alarmWire
 	if err := json.Unmarshal(c.do(ownerTok, http.MethodPost, "/components/bar-1/alarms", map[string]any{
-		"severity": "critical", "message": "mic array not responding",
+		"severity": "high", "message": "mic array not responding",
 	}, http.StatusCreated), &raised); err != nil {
 		t.Fatalf("decode raised alarm: %v", err)
 	}
-	if !raised.Active || raised.Severity != "critical" {
+	if !raised.Active || raised.Severity != "high" {
 		t.Fatalf("raised alarm = %+v, want an active critical", raised)
 	}
 

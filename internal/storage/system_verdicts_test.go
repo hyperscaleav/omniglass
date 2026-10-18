@@ -61,7 +61,7 @@ func verdictFleet(t *testing.T, gw storage.Gateway, systems int) {
 		}
 		// Every third system's member is in trouble, so the answer is a mix.
 		if i%3 == 1 {
-			sev := "critical"
+			sev := "high"
 			if i%2 == 0 {
 				sev = "warning"
 			}

@@ -134,10 +134,11 @@ var IdentityShapes = map[string]TableIdentity{
 	// relationship component_type's root/child split already has.
 	"role_choice": {Shape: ShapeKeyBearing}, "choice_alternate": {Shape: ShapeKeyBearing},
 	// Keyspace: a name, on the other rule.
-	"property_type": {Shape: ShapeKeyspace, Reason: "serial-number, a signal name referenced from drivers and templates"},
-	"metric_type":   {Shape: ShapeKeyspace, Reason: "icmp-rtt-avg, a numeric-series name referenced from drivers and templates"},
-	"event_type":    {Shape: ShapeKeyspace, Reason: "call-started, an occurrence name"},
-	"command_type":  {Shape: ShapeKeyspace, Reason: "set-input, a command name"},
+	"property_type":  {Shape: ShapeKeyspace, Reason: "serial-number, a signal name referenced from drivers and templates"},
+	"metric_type":    {Shape: ShapeKeyspace, Reason: "icmp-rtt-avg, a numeric-series name referenced from drivers and templates"},
+	"event_type":     {Shape: ShapeKeyspace, Reason: "call-started, an occurrence name"},
+	"severity_level": {Shape: ShapeKeyBearing, Reason: "high, a named level rules and alarms reference"},
+	"command_type":   {Shape: ShapeKeyspace, Reason: "set-input, a command name"},
 
 	// A human identifier that is not a name. These are the exceptions worth stating.
 	"human": {Shape: ShapeHumanNotAKey, Reason: "a username: its own rule, its own uniqueness, and not an " +

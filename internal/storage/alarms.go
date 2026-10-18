@@ -8,6 +8,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 // The alarm write side. An alarm is component-local and impairs it wholesale
@@ -84,11 +85,6 @@ var (
 	ErrAlarmSeverity = errors.New("storage: unknown alarm severity")
 )
 
-// alarmSeverities is the severity domain, mirroring the table's CHECK. Validating
-// here turns an operator typo into a named refusal instead of a constraint
-// violation surfacing as a 500.
-var alarmSeverities = map[string]bool{"info": true, "warning": true, "critical": true}
-
 // alarmCols is the read shape. acknowledged_by surfaces the acting principal's
 // IDENTIFIER rather than its uuid, so every alarm read hands the API something
 // an operator recognises (ADR-0062); it reads empty once that principal is
@@ -117,9 +113,6 @@ func scanAlarm(row pgx.Row) (*Alarm, error) {
 // RaiseAlarm records a condition on a component, then recomputes the health
 // chain in the same transaction. An unknown component is ErrComponentNotFound.
 func (p *PG) RaiseAlarm(ctx context.Context, actorID, componentName string, spec AlarmSpec) (*Alarm, error) {
-	if !alarmSeverities[spec.Severity] {
-		return nil, ErrAlarmSeverity
-	}
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("storage: begin raise alarm: %w", err)
@@ -165,6 +158,17 @@ func (p *PG) RaiseAlarm(ctx context.Context, actorID, componentName string, spec
 		returning id, raised_at, dedup_key`,
 		component.ID, spec.Severity, spec.Message, spec.DedupKey).Scan(&a.ID, &a.RaisedAt, &a.DedupKey)
 	if errors.Is(err, pgx.ErrNoRows) {
+		// The severity names a level in the registry (#917). A raise that
+		// lands on an open alarm's dedup key inserts nothing, so the foreign
+		// key never checks it: check here, on this path only, so the winning
+		// raise costs no extra statement.
+		var known bool
+		if err := tx.QueryRow(ctx, `select exists (select 1 from severity_level where name = $1)`, spec.Severity).Scan(&known); err != nil {
+			return nil, fmt.Errorf("storage: check alarm severity: %w", err)
+		}
+		if !known {
+			return nil, ErrAlarmSeverity
+		}
 		existing, gerr := scanAlarm(tx.QueryRow(ctx, `
 			select `+alarmCols+`
 			from alarm a
@@ -174,6 +178,10 @@ func (p *PG) RaiseAlarm(ctx context.Context, actorID, componentName string, spec
 			return nil, fmt.Errorf("storage: read existing open alarm on %q: %w", componentName, gerr)
 		}
 		return existing, nil
+	}
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) && pgErr.Code == "23503" && pgErr.ConstraintName == "alarm_severity_fkey" {
+		return nil, ErrAlarmSeverity
 	}
 	if err != nil {
 		return nil, fmt.Errorf("storage: insert alarm on %q: %w", componentName, err)

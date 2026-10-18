@@ -212,7 +212,7 @@ components:
           format: date-time
           type: string
         severity:
-          description: info, warning, or critical
+          description: The severity level the alarm was raised at, by name (see /severity-levels)
           type: string
       required:
         - id
@@ -1470,6 +1470,35 @@ components:
         - secret_type
         - owner_kind
         - fields
+      type: object
+    CreateSeverityLevelInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/CreateSeverityLevelInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        color:
+          description: One of gray, blue, green, yellow, orange, red, darkred
+          type: string
+        label:
+          description: A human label
+          type: string
+        name:
+          description: The level's name (lowercase kebab)
+          minLength: 1
+          type: string
+        rank:
+          description: "Its place among the levels: higher is more severe; unique"
+          format: int64
+          type: integer
+      required:
+        - name
+        - color
+        - rank
       type: object
     CreateStandardInputBody:
       additionalProperties: false
@@ -3479,6 +3508,25 @@ components:
       required:
         - secrets
       type: object
+    ListSeverityLevelsOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/ListSeverityLevelsOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        severity_levels:
+          items:
+            $ref: "#/components/schemas/SeverityLevelBody"
+          type:
+            - array
+            - "null"
+      required:
+        - severity_levels
+      type: object
     ListStandardMetricsOutputBody:
       additionalProperties: false
       properties:
@@ -4813,11 +4861,8 @@ components:
           description: What is wrong, for the operator reading it later
           type: string
         severity:
-          description: How bad it is; critical puts the component itself in outage
-          enum:
-            - info
-            - warning
-            - critical
+          description: "How bad it is: a severity level by name (see /severity-levels); a level at or above high puts the component itself in outage"
+          minLength: 1
           type: string
       required:
         - severity
@@ -5902,6 +5947,53 @@ components:
         - values
         - sources
         - locks
+      type: object
+    SeverityLevelBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/SeverityLevelBody.json
+          format: uri
+          readOnly: true
+          type: string
+        color:
+          description: The hue the console renders the level in
+          enum:
+            - gray
+            - blue
+            - green
+            - yellow
+            - orange
+            - red
+            - darkred
+          type: string
+        id:
+          description: The level's uuid, the stable form of name
+          type: string
+        label:
+          type: string
+        name:
+          description: The level's name; alarms and rules name it
+          type: string
+        official:
+          description: Shipped with the platform and read-only
+          type: boolean
+        outage:
+          description: Whether an active alarm at this level puts its component in outage (at or above the high level's rank); below it, an alarm degrades
+          type: boolean
+        rank:
+          description: "Compares levels: higher is more severe"
+          format: int64
+          type: integer
+      required:
+        - id
+        - name
+        - color
+        - rank
+        - official
+        - outage
       type: object
     SimCapabilities:
       additionalProperties: false
@@ -7429,6 +7521,30 @@ components:
           maxLength: 200
           type: string
       type: object
+    UpdateSeverityLevelInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/UpdateSeverityLevelInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        color:
+          description: One of gray, blue, green, yellow, orange, red, darkred
+          type: string
+        label:
+          description: A human label
+          type: string
+        name:
+          description: A new name; every alarm at this level follows
+          type: string
+        rank:
+          description: Its place among the levels; unique
+          format: int64
+          type: integer
+      type: object
     UpdateStandardInputBody:
       additionalProperties: false
       properties:
@@ -8433,7 +8549,7 @@ paths:
       summary: List a component's alarms
       x-omniglass-permission: component:read
     post:
-      description: "Records a condition on this component, then recomputes health in the same transaction: the component's own verdict moves, and if it is now outage (a critical alarm), any role it occupies loses it as an occupant while the alarm is active, which can move its system and location verdicts with it; a lesser (info or warning) alarm degrades the component but leaves it occupying its roles. Gated by component:update; read and update scopes drive the 404 versus 403 split."
+      description: "Records a condition on this component, then recomputes health in the same transaction: the component's own verdict moves, and if it is now outage (an alarm at or above the high level), any role it occupies loses it as an occupant while the alarm is active, which can move its system and location verdicts with it; a lesser alarm degrades the component but leaves it occupying its roles. Gated by component:update; read and update scopes drive the 404 versus 403 split."
       operationId: raise-component-alarm
       parameters:
         - description: The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
@@ -12962,6 +13078,130 @@ paths:
       summary: Restore all settings to defaults
       x-omniglass-permission: settings:update
       x-omniglass-platform-permission: platform:update
+  /severity-levels:
+    get:
+      description: Lists the severity levels, least to most severe, each with whether an active alarm at it puts a component in outage. Gated by severity_level:read.
+      operationId: list-severity-level
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListSeverityLevelsOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: List severity levels
+      x-omniglass-permission: severity_level:read
+    post:
+      description: Adds an operator severity level at a rank of its own, between two others without renumbering. A name or rank already taken is a 409; a color outside the palette is a 422. Audited. Gated by severity_level:create.
+      operationId: create-severity-level
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateSeverityLevelInputBody"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SeverityLevelBody"
+          description: Created
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Create a severity level
+      x-omniglass-permission: severity_level:create
+  /severity-levels/{name}:
+    delete:
+      description: Removes an operator level no alarm names; an official level or one in use is a 409. Audited. Gated by severity_level:delete.
+      operationId: delete-severity-level
+      parameters:
+        - description: The level's name
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The level's name
+            type: string
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Delete a severity level
+      x-omniglass-permission: severity_level:delete
+    get:
+      description: Returns one severity level by name. Gated by severity_level:read.
+      operationId: get-severity-level
+      parameters:
+        - description: The level's name
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The level's name
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SeverityLevelBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Get a severity level
+      x-omniglass-permission: severity_level:read
+    patch:
+      description: Patches an operator level's name, label, color or rank (an absent field is unchanged); a rename carries every alarm at the level with it. Official levels are read-only (409). Audited. Gated by severity_level:update.
+      operationId: update-severity-level
+      parameters:
+        - description: The level's name
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The level's name
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateSeverityLevelInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SeverityLevelBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Update a severity level
+      x-omniglass-permission: severity_level:update
   /simulation:
     get:
       description: Every node a simulator has pulled for since the server started, each with its capabilities, its account of impairments, and the components it simulates within the caller's component read scope, joined to their live hits. A caller sees a node's simulator when its component read scope holds at least one component the node simulates (an all-scope reader sees all of them); no node read is needed. Connected is true when any listed simulator pulled recently. Hits are per server process, not stored. Gated by simulation:read.

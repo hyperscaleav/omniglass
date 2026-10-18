@@ -3,6 +3,8 @@ import { render, fireEvent, waitFor, within } from "@solidjs/testing-library";
 import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
 import AlarmsPanel from "./AlarmsPanel";
 import { componentAlarmsKey, type Alarm } from "../lib/alarms";
+import { MAJOR_LEVEL, SEEDED_LEVELS, seedSeverityLevels } from "../lib/testseverity";
+import type { SeverityLevel } from "../lib/severity";
 
 // The alarms panel is where fleet health starts: a condition on this component
 // that impairs its own verdict wholesale (#626). Rows are seeded into the query
@@ -26,7 +28,7 @@ const alarms: Alarm[] = [
   {
     id: "a-2",
     component: "disp-1",
-    severity: "critical",
+    severity: "high",
     message: "HDMI board failed",
     dedup_key: "test.condition",
     raised_at: ago(3_600_000),
@@ -50,9 +52,10 @@ function json(body: unknown, status = 200, type = "application/json") {
   return new Response(JSON.stringify(body), { status, headers: { "Content-Type": type } });
 }
 
-function mount(opts: { rows?: Alarm[]; canUpdate?: boolean; canAcknowledge?: boolean } = {}) {
+function mount(opts: { rows?: Alarm[]; canUpdate?: boolean; canAcknowledge?: boolean; levels?: SeverityLevel[] } = {}) {
   const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
   qc.setQueryData([...componentAlarmsKey("disp-1")], opts.rows ?? alarms);
+  seedSeverityLevels(qc, opts.levels ?? SEEDED_LEVELS);
   return render(() => (
     <QueryClientProvider client={qc}>
       <AlarmsPanel
@@ -72,7 +75,7 @@ describe("AlarmsPanel", () => {
   it("lists an active alarm with its severity and message", () => {
     const { getByText } = mount();
     const row = alarmRow(getByText("HDMI board failed"));
-    expect(within(row).getByText("critical")).toBeTruthy();
+    expect(within(row).getByText("High")).toBeTruthy();
     expect(within(row).getByText(/raised 1h ago/)).toBeTruthy();
   });
 
@@ -104,14 +107,14 @@ describe("AlarmsPanel", () => {
     });
 
     const { getByLabelText, getByText } = mount();
-    fireEvent.change(getByLabelText("Alarm severity"), { target: { value: "critical" } });
+    fireEvent.change(getByLabelText("Alarm severity"), { target: { value: "high" } });
     fireEvent.input(getByLabelText("Alarm message"), { target: { value: "Fan seized" } });
     fireEvent.click(getByText("Raise alarm"));
 
     await waitFor(() => expect(post).toBeTruthy());
     expect(post!.url).toContain("/components/disp-1/alarms");
     expect(JSON.parse(await post!.text())).toEqual({
-      severity: "critical",
+      severity: "high",
       message: "Fan seized",
     });
   });
@@ -136,7 +139,7 @@ describe("AlarmsPanel", () => {
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const req = input as Request;
       if (req.method === "POST") {
-        return json({ title: "Unprocessable Entity", status: 422, detail: "severity must be info, warning, or critical" }, 422, "application/problem+json");
+        return json({ title: "Unprocessable Entity", status: 422, detail: "unknown severity level \"bogus\"" }, 422, "application/problem+json");
       }
       return json({ component: "disp-1", alarms });
     });
@@ -145,7 +148,7 @@ describe("AlarmsPanel", () => {
     fireEvent.click(getByText("Raise alarm"));
 
     const alert = await waitFor(() => getAllByRole("alert")[0]);
-    expect(alert.textContent).toBe("severity must be info, warning, or critical");
+    expect(alert.textContent).toBe("unknown severity level \"bogus\"");
     expect(queryByText("The operation failed.")).toBeNull();
   });
 
@@ -222,5 +225,56 @@ describe("AlarmsPanel", () => {
     const { getByRole } = mount();
     const group = getByRole("group", { name: /recently cleared/i });
     expect(within(group).getByText(/never acknowledged/)).toBeTruthy();
+  });
+
+  // Severity is the registry's (#917): the form lists its levels least to most
+  // severe, shows each label with what it does, and sends the name.
+  it("offers the registry's levels, labelled, least to most severe", () => {
+    const { getByLabelText } = mount();
+    const options = [...(getByLabelText("Alarm severity") as HTMLSelectElement).options];
+    expect(options.map((o) => o.value)).toEqual(["info", "warning", "average", "high", "disaster"]);
+    expect(options.map((o) => o.textContent)).toEqual([
+      "Info (degrades it, still working)",
+      "Warning (degrades it, still working)",
+      "Average (degrades it, still working)",
+      "High (takes this component out)",
+      "Disaster (takes this component out)",
+    ]);
+  });
+
+  it("raises at the least severe level when nobody picks one", async () => {
+    let post: Request | undefined;
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const req = input as Request;
+      if (req.method === "POST") { post = req.clone(); return json(alarms[0], 201); }
+      return json({ component: "disp-1", alarms });
+    });
+    const { getByText } = mount();
+    fireEvent.click(getByText("Raise alarm"));
+    await waitFor(() => expect(post).toBeTruthy());
+    expect(JSON.parse(await post!.text()).severity).toBe("info");
+  });
+
+  it("offers, renders and sorts an operator-defined level by the registry alone", async () => {
+    let post: Request | undefined;
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const req = input as Request;
+      if (req.method === "POST") { post = req.clone(); return json(alarms[0], 201); }
+      return json({ component: "disp-1", alarms });
+    });
+    const rows: Alarm[] = [
+      { ...alarms[0], id: "a-avg", severity: "average", message: "Fan noisy", raised_at: ago(60_000) },
+      { ...alarms[0], id: "a-maj", severity: "major", message: "Fan failing", raised_at: ago(3_600_000) },
+    ];
+    const { getByLabelText, getByText, getAllByText } = mount({ rows, levels: [...SEEDED_LEVELS, MAJOR_LEVEL] });
+    const options = [...(getByLabelText("Alarm severity") as HTMLSelectElement).options].map((o) => o.value);
+    expect(options).toEqual(["info", "warning", "average", "major", "high", "disaster"]);
+    expect(getByText("Major").classList.contains("badge-average")).toBe(true);
+    expect(getAllByText(/Fan failing|Fan noisy/).map((e) => e.textContent)).toEqual(["Fan failing", "Fan noisy"]);
+
+    fireEvent.change(getByLabelText("Alarm severity"), { target: { value: "major" } });
+    fireEvent.click(getByText("Raise alarm"));
+    await waitFor(() => expect(post).toBeTruthy());
+    expect(JSON.parse(await post!.text()).severity).toBe("major");
   });
 });

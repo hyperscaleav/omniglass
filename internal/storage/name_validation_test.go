@@ -34,7 +34,14 @@ import (
 // Each entry creates one entity with the given key and returns the error. A nil error
 // means the table accepted an illegal key.
 func provedByCreate(ctx context.Context, gw *storage.PG) map[string]func(key string) error {
+	severityRank := 0
 	return map[string]func(key string) error{
+		"severity_level": func(s string) error {
+			// Each call takes a rank of its own, since ranks are unique.
+			severityRank++
+			_, err := gw.CreateSeverityLevel(ctx, "", storage.SeverityLevel{Name: s, Label: "X", Color: "gray", Rank: 1000 + severityRank})
+			return err
+		},
 		"component": func(s string) error {
 			_, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: s}, all, all, all, all)
 			return err

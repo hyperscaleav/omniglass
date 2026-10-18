@@ -509,7 +509,7 @@ func generatedCommands() []*cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "create <name>",
 						Short:   "Raise an alarm on a component",
-						Long:    "Records a condition on this component, then recomputes health in the same transaction: the component's own verdict moves, and if it is now outage (a critical alarm), any role it occupies loses it as an occupant while the alarm is active, which can move its system and location verdicts with it; a lesser (info or warning) alarm degrades the component but leaves it occupying its roles. Gated by component:update; read and update scopes drive the 404 versus 403 split.",
+						Long:    "Records a condition on this component, then recomputes health in the same transaction: the component's own verdict moves, and if it is now outage (an alarm at or above the high level), any role it occupies loses it as an occupant while the alarm is active, which can move its system and location verdicts with it; a lesser alarm degrades the component but leaves it occupying its roles. Gated by component:update; read and update scopes drive the 404 versus 403 split.",
 						Example: "  omniglass component alarm create <name> --severity severity",
 						Args:    cobra.ExactArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
@@ -529,7 +529,7 @@ func generatedCommands() []*cobra.Command {
 					}
 					cmd.Flags().StringVar(&fDedupKey, "dedup-key", "", "The condition identity; defaults to the message. Raising an already-open (component, dedup_key) returns the existing open alarm instead of a duplicate")
 					cmd.Flags().StringVar(&fMessage, "message", "", "What is wrong, for the operator reading it later")
-					cmd.Flags().StringVar(&fSeverity, "severity", "", "How bad it is; critical puts the component itself in outage")
+					cmd.Flags().StringVar(&fSeverity, "severity", "", "How bad it is: a severity level by name (see /severity-levels); a level at or above high puts the component itself in outage")
 					_ = cmd.MarkFlagRequired("severity")
 					return cmd
 				}()
@@ -5008,6 +5008,143 @@ func generatedCommands() []*cobra.Command {
 						return runAPICommand(cmd, "PATCH", path, nil)
 					},
 				}
+				return cmd
+			}()
+			return cmd
+		}())
+		return parent
+	}())
+	roots = append(roots, func() *cobra.Command {
+		parent := &cobra.Command{
+			Use:   "severity-level",
+			Short: "Commands for the severity-level resource",
+		}
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				var fColor string
+				var fLabel string
+				var fName string
+				var fRank int
+				cmd := &cobra.Command{
+					Use:     "create",
+					Short:   "Create a severity level",
+					Long:    "Adds an operator severity level at a rank of its own, between two others without renumbering. A name or rank already taken is a 409; a color outside the palette is a 422. Audited. Gated by severity_level:create.",
+					Example: "  omniglass severity-level create --color color --name name --rank <int>",
+					Args:    cobra.ExactArgs(0),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/severity-levels")
+						body := map[string]any{}
+						if cmd.Flags().Changed("color") {
+							body["color"] = fColor
+						}
+						if cmd.Flags().Changed("label") {
+							body["label"] = fLabel
+						}
+						if cmd.Flags().Changed("name") {
+							body["name"] = fName
+						}
+						if cmd.Flags().Changed("rank") {
+							body["rank"] = fRank
+						}
+						return runAPICommand(cmd, "POST", path, body)
+					},
+				}
+				cmd.Flags().StringVar(&fColor, "color", "", "One of gray, blue, green, yellow, orange, red, darkred")
+				_ = cmd.MarkFlagRequired("color")
+				cmd.Flags().StringVar(&fLabel, "label", "", "A human label")
+				cmd.Flags().StringVar(&fName, "name", "", "The level's name (lowercase kebab)")
+				_ = cmd.MarkFlagRequired("name")
+				cmd.Flags().IntVar(&fRank, "rank", 0, "Its place among the levels: higher is more severe; unique")
+				_ = cmd.MarkFlagRequired("rank")
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				cmd := &cobra.Command{
+					Use:     "delete <name>",
+					Short:   "Delete a severity level",
+					Long:    "Removes an operator level no alarm names; an official level or one in use is a 409. Audited. Gated by severity_level:delete.",
+					Example: "  omniglass severity-level delete <name>",
+					Args:    cobra.ExactArgs(1),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/severity-levels/%s", url.PathEscape(args[0]))
+						return runAPICommand(cmd, "DELETE", path, nil)
+					},
+				}
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				cmd := &cobra.Command{
+					Use:     "get <name>",
+					Short:   "Get a severity level",
+					Long:    "Returns one severity level by name. Gated by severity_level:read.",
+					Example: "  omniglass severity-level get <name>",
+					Args:    cobra.ExactArgs(1),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/severity-levels/%s", url.PathEscape(args[0]))
+						return runAPICommand(cmd, "GET", path, nil)
+					},
+				}
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				cmd := &cobra.Command{
+					Use:     "list",
+					Short:   "List severity levels",
+					Long:    "Lists the severity levels, least to most severe, each with whether an active alarm at it puts a component in outage. Gated by severity_level:read.",
+					Example: "  omniglass severity-level list",
+					Args:    cobra.ExactArgs(0),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/severity-levels")
+						return runAPICommand(cmd, "GET", path, nil)
+					},
+				}
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				var fColor string
+				var fLabel string
+				var fName string
+				var fRank int
+				cmd := &cobra.Command{
+					Use:     "update <name>",
+					Short:   "Update a severity level",
+					Long:    "Patches an operator level's name, label, color or rank (an absent field is unchanged); a rename carries every alarm at the level with it. Official levels are read-only (409). Audited. Gated by severity_level:update.",
+					Example: "  omniglass severity-level update <name>",
+					Args:    cobra.ExactArgs(1),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/severity-levels/%s", url.PathEscape(args[0]))
+						body := map[string]any{}
+						if cmd.Flags().Changed("color") {
+							body["color"] = fColor
+						}
+						if cmd.Flags().Changed("label") {
+							body["label"] = fLabel
+						}
+						if cmd.Flags().Changed("name") {
+							body["name"] = fName
+						}
+						if cmd.Flags().Changed("rank") {
+							body["rank"] = fRank
+						}
+						return runAPICommand(cmd, "PATCH", path, body)
+					},
+				}
+				cmd.Flags().StringVar(&fColor, "color", "", "One of gray, blue, green, yellow, orange, red, darkred")
+				cmd.Flags().StringVar(&fLabel, "label", "", "A human label")
+				cmd.Flags().StringVar(&fName, "name", "", "A new name; every alarm at this level follows")
+				cmd.Flags().IntVar(&fRank, "rank", 0, "Its place among the levels; unique")
 				return cmd
 			}()
 			return cmd

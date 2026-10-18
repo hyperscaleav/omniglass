@@ -50,7 +50,7 @@ func ackFixture(t *testing.T) (storage.Gateway, string, string, *storage.Alarm) 
 		t.Fatalf("component: %v", err)
 	}
 	a, err := gw.RaiseAlarm(ctx, "", "codec-1", storage.AlarmSpec{
-		Severity: "critical", Message: "no signal", DedupKey: "no-signal",
+		Severity: "high", Message: "no signal", DedupKey: "no-signal",
 	})
 	if err != nil {
 		t.Fatalf("raise: %v", err)
@@ -394,7 +394,7 @@ func TestTheHealthReportNamesWhoAcknowledged(t *testing.T) {
 	ctx := context.Background()
 
 	alarm, err := f.gw.RaiseAlarm(ctx, "", "bar-1", storage.AlarmSpec{
-		Severity: "critical", Message: "mic array not responding",
+		Severity: "high", Message: "mic array not responding",
 	})
 	if err != nil {
 		t.Fatalf("raise alarm: %v", err)
