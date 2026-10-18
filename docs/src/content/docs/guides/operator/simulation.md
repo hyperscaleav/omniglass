@@ -95,7 +95,10 @@ display line in its sizes, say), which keeps its endpoint valid (with `component
 
 A simulated system is built to one of your **standards** (a meeting room, a huddle room, a digital
 sign). Omniglass staffs each of the standard's roles with a simulated product that fits it, and lists
-the roles it cannot fill yet, which stay short so the system honestly reads that way. Preview the plan,
+the roles it cannot fill yet, which stay short so the system honestly reads that way. On the
+Simulation page, **Add simulated system** asks for a node, a standard, a system type, and optionally a
+place and a name; choosing the standard previews its **plan** (each role, the product it gets and how
+many, and any short role with its reason) before anything is created. From a terminal, preview the plan,
 then add it:
 
 ```sh

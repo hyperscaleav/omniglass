@@ -6260,7 +6260,7 @@ aliases), and ADR-0142 for the run mode. The profile vocabulary meets ADR-0134 o
 "interfaces" are its protocol surfaces wherever an operator reads them, and the fire body names a
 `surface`.
 
-### A whole simulated system, built to a standard (#911, slice #912)
+### A whole simulated system, built to a standard (#911, slices #912 and #913)
 
 An operator adds a simulated system in one step: `POST /nodes/{name}/simulation/systems` (`omniglass
 simulation add-system`) builds a system to a standard, staffing each of the standard's roles with a
@@ -6272,4 +6272,5 @@ committed once. `GET /simulation/standards/{standard}:plan` previews it, roles n
 listed short with the reason. The architect ruled the platform's standard is the archetype and names are
 platform-minted; the lab's room archetypes stay only as the fleet compiler's input (#914). The
 real-simulator e2e adds a meeting room through the CLI and waits for the simulator to serve every
-component.
+component. The console's **Add simulated system** (#913) previews the plan as the standard is chosen
+and adds the system from the Simulation page.

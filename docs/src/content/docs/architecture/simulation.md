@@ -232,7 +232,8 @@ adds a system ([ADR-0143](/architecture/decisions/#adr-0143-a-simulated-system-i
 
 Everything above has a console surface, shown only while a simulator is connected: the
 **Simulation** page lists every simulated component in a table, a row lighting up when the
-collector reaches it; the simulation drawer carries its status, its impairment controls and its
+collector reaches it, and adds a simulated component or a whole simulated system (previewing the
+standard's plan); the simulation drawer carries its status, its impairment controls and its
 API surface, with a form to fire any operation; and a simulated component's own page carries a
 Simulation section that opens the same drawer. The walk-through is the
 [simulation guide](/guides/operator/simulation/).
