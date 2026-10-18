@@ -34,7 +34,7 @@ func newSimCmd() *cobra.Command {
 		Use:   "run",
 		Short: "Serve the node's simulated devices and follow changes until interrupted",
 		Long: "Serves each component placed on the node whose product has a simulator profile and whose " +
-			"interfaces target a loopback address, on that address, and reports every request it answers " +
+			"endpoints target a loopback address, on that address, and reports every request it answers " +
 			"to the server. Re-pulls the device list on an interval, so devices added or removed on the " +
 			"server start or stop without a restart.",
 		RunE: func(cmd *cobra.Command, _ []string) error {

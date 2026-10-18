@@ -27,6 +27,9 @@ There are two ways to operate, and they are the same API with the same checks be
   children, and creating, editing, or deleting.
 - **[Nodes and reachability](/guides/operator/collection/)**: enrolling a collection node,
   adding a protocol-named endpoint to a component, and reading its reachability and events.
+- **[Simulate a fleet](/guides/operator/simulation/)**: running the device simulator beside a node,
+  watching the collector reach its devices, exercising and adding a device, and breaking one on
+  purpose.
 
 ## Getting around
 

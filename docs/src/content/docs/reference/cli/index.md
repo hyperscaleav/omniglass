@@ -3859,7 +3859,7 @@ Serve the node's simulated devices and follow changes until interrupted
 omniglass sim run [flags]
 ```
 
-Serves each component placed on the node whose product has a simulator profile and whose interfaces target a loopback address, on that address, and reports every request it answers to the server. Re-pulls the device list on an interval, so devices added or removed on the server start or stop without a restart.
+Serves each component placed on the node whose product has a simulator profile and whose endpoints target a loopback address, on that address, and reports every request it answers to the server. Re-pulls the device list on an interval, so devices added or removed on the server start or stop without a restart.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|

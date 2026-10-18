@@ -102,8 +102,9 @@ Two facts shape where the simulator runs:
 The simulator is its own run mode, `omniglass sim run`, that runs beside a node and shares its
 loopback, holding that node's credential: it reads the same `OMNIGLASS_SERVER`,
 `OMNIGLASS_NODE_NAME` and `OMNIGLASS_NODE_TOKEN` as `node run`, so the node's subject grant is its
-grant too. It can pull the devices behind its own node and report hits on them, never another
-node's.
+grant too. It can pull the devices behind its own node, report hits on them, and answer the
+operations the server asks of its node's simulator, never another node's
+([ADR-0142](/architecture/decisions/#adr-0142-the-simulator-is-a-run-mode-beside-its-node-holding-that-nodes-identity)).
 
 On every pull (every ten seconds by default) it asks the server for each component with an
 endpoint placed on the node, with the component's product and the host its endpoints target, and
