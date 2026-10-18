@@ -221,7 +221,7 @@ interpolated values, no observed side); the full split is
 **Explore holds the fleet entities**: locations, systems, and components, reached through its
 outline of places. **Nodes**, the collection daemons, are monitored and
 scope-controlled (live, gated on `node:read` plus ABAC scope), so a node keeps its own sidebar
-entry rather than sitting in Admin. **Interfaces and tasks are not nav items**: an interface is a
+entry rather than sitting in Admin. **Endpoints and tasks are not nav items**: an endpoint is a
 panel on a component, a task a panel on a node, facets of the owning entity's detail page.
 
 Admin is the renamed Settings group: Users, Roles, Groups, Audit, plus the live Settings leaf, the

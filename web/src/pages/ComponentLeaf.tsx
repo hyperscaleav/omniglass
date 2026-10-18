@@ -301,15 +301,15 @@ export default function ComponentLeaf() {
               </section>
             </Show>
             <section data-testid="leaf-collection" class="rounded-box border border-base-300 bg-base-100 p-3.5 text-sm">
-              <Eyebrow label="Collection" hint="How this component is read: each interface, the node collecting it, and the layers that answer. A stale sample under a healthy node points at the device or the path, not at collection." />
-              <Show when={reach.data && (reach.data.interfaces ?? []).length > 0} fallback={<p class="text-base-content/60">No interface declared yet, so nothing collects from this component.</p>}>
+              <Eyebrow label="Collection" hint="How this component is read: each endpoint, the node collecting it, and the layers that answer. A stale sample under a healthy node points at the device or the path, not at collection." />
+              <Show when={reach.data && (reach.data.endpoints ?? []).length > 0} fallback={<p class="text-base-content/60">No endpoint declared yet, so nothing collects from this component.</p>}>
                 <ul class="flex flex-col gap-1">
-                  <For each={reach.data!.interfaces}>
+                  <For each={reach.data!.endpoints}>
                     {(iface) => {
                       const state = () => collectionState(iface, iface.node ? nodeByName().get(iface.node) : undefined);
                       return (
                         <li class="flex flex-wrap items-center gap-2 text-xs">
-                          <span class="font-medium">{iface.interface}</span>
+                          <span class="font-medium">{iface.endpoint}</span>
                           {/* The layer rungs, so device-versus-path reads at
                               a glance: ping answers the path, the port
                               answers the service. */}
@@ -326,7 +326,7 @@ export default function ComponentLeaf() {
                           <Show when={iface.verdict}>
                             <span class="text-base-content/50">last sample {ageWords(iface.verdict!.ts)}</span>
                           </Show>
-                          <span data-testid={`collection-${iface.interface}`} class="rounded border border-base-content/20 px-1.5 py-0.5">
+                          <span data-testid={`collection-${iface.endpoint}`} class="rounded border border-base-content/20 px-1.5 py-0.5">
                             {
                               {
                                 collecting: "collecting",

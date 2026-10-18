@@ -58,8 +58,8 @@ func TestCollectionReferencesSurviveARename(t *testing.T) {
 	// One interface carrying both arcs at once: owned by the component, placed on
 	// the node. Creating it derives the reachability task, so the worklist below is
 	// the real resolved thing rather than a hand-built row.
-	iface, err := gw.CreateInterface(ctx, "", storage.InterfaceSpec{
-		Type: "icmp", Component: strptr("old-codec"), Node: strptr("edge"),
+	iface, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{
+		Transport: "icmp", Component: strptr("old-codec"), Node: strptr("edge"),
 		Params: []byte(`{"target":"10.0.0.1"}`)}, all)
 	if err != nil {
 		t.Fatalf("interface: %v", err)
@@ -78,7 +78,7 @@ func TestCollectionReferencesSurviveARename(t *testing.T) {
 		t.Fatalf("rename location: %v", err)
 	}
 
-	got, err := gw.GetInterface(ctx, iface.ID, all)
+	got, err := gw.GetEndpoint(ctx, iface.ID, all)
 	if err != nil {
 		t.Fatalf("get interface after rename: %v", err)
 	}
@@ -94,7 +94,7 @@ func TestCollectionReferencesSurviveARename(t *testing.T) {
 
 	// The reachability read addresses the component by its new name; before the
 	// conversion this returned nothing, because the arc still held the old one.
-	ifaces, err := gw.ListComponentInterfaces(ctx, "new-codec")
+	ifaces, err := gw.ListComponentEndpoints(ctx, "new-codec")
 	if err != nil {
 		t.Fatalf("list component interfaces: %v", err)
 	}
@@ -142,8 +142,8 @@ func TestCollectionReferencesSurviveARename(t *testing.T) {
 	if len(wl.Tasks) != 1 {
 		t.Fatalf("tasks for the renamed node = %d, want 1 (its interface lost its placement)", len(wl.Tasks))
 	}
-	if wl.Tasks[0].InterfaceName != iface.Name {
-		t.Errorf("worklist interface = %q, want %q", wl.Tasks[0].InterfaceName, iface.Name)
+	if wl.Tasks[0].EndpointName != iface.Name {
+		t.Errorf("worklist interface = %q, want %q", wl.Tasks[0].EndpointName, iface.Name)
 	}
 }
 

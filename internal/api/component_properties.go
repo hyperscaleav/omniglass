@@ -19,7 +19,7 @@ import (
 
 // componentPropertyInstance is the instance dimension these routes write. The
 // component detail sets the un-instanced value; a per-instance property (one per
-// interface, say) lands with the surface that addresses instances.
+// endpoint, say) lands with the surface that addresses instances.
 const componentPropertyInstance = ""
 
 type effectivePropertyBody struct {

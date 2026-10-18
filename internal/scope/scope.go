@@ -167,8 +167,8 @@ func Covers(resource, target string) bool {
 // tree entity is scoped by its own kind. interface and task are the exception:
 // they are not tree entities of their own, they hang off a component (an
 // interface owns a component, a task owns an interface), so they cascade through
-// the COMPONENT tier. A component-scoped grant that carries interface:<action> /
-// task:<action> confers that scope on the interface/task; the gateway then
+// the COMPONENT tier. A component-scoped grant that carries endpoint:<action> /
+// task:<action> confers that scope on the endpoint/task; the gateway then
 // filters by "the owning component is in this component-tier scope". group joins
 // as it lands.
 func applicableKinds(resource string) map[string]bool {
@@ -177,9 +177,9 @@ func applicableKinds(resource string) map[string]bool {
 		return map[string]bool{"location": true}
 	case "system":
 		return map[string]bool{"system": true}
-	case "component", "interface", "task", "alarm", "command":
+	case "component", "endpoint", "task", "alarm", "command":
 		// An alarm hangs off a component (the thin-cut owner), so the component
-		// tier is what can contain it, exactly as for an interface or a task. It
+		// tier is what can contain it, exactly as for an endpoint or a task. It
 		// gets its own case rather than borrowing "component" because the ACTION
 		// differs: an acknowledgement resolves from grants carrying
 		// alarm:acknowledge, not from the component-update scope, so a role that

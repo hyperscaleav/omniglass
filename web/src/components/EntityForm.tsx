@@ -317,8 +317,8 @@ export default function EntityForm(props: {
         <PropertiesPanel component={id} edit={slot} onOpen={(property) => blades.push({ kind: "property-resolution", id: propertyBladeId(id, property) })} />
         <ReachabilityPanel
           name={id}
-          onAdd={can(me.data, "interface", "create") ? () => blades.push({ kind: "interface-create", id }) : undefined}
-          onOpenInterface={can(me.data, "interface", "read") ? (ifid) => blades.push({ kind: "interface", id: ifid }) : undefined}
+          onAdd={can(me.data, "endpoint", "create") ? () => blades.push({ kind: "endpoint-create", id }) : undefined}
+          onOpenEndpoint={can(me.data, "endpoint", "read") ? (ifid) => blades.push({ kind: "endpoint", id: ifid }) : undefined}
         />
         <AlarmsPanel component={id} canUpdate={slot.editing() && canUpdate()} canAcknowledge={can(me.data, "alarm", "acknowledge")} />
       </>
@@ -431,7 +431,7 @@ export default function EntityForm(props: {
         </Show>
 
         {/* The kind's panels are configuration (roles, properties and their
-            cascade, reconciliation, interfaces): the page host's Configure tab
+            cascade, reconciliation, endpoints): the page host's Configure tab
             carries them, and the blade stays the glance an operator landed on
             from a row (#872). */}
         <Show when={props.host !== "blade"}>

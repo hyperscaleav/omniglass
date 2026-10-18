@@ -732,12 +732,48 @@ components:
           minLength: 1
           pattern: ^[a-z0-9][a-z0-9-]*$
           type: string
+        spec:
+          description: The declarative spec body; validated against the catalogs, and a spec that fails validation refuses the write (422)
         version:
           description: A free-form version string, e.g. 1.0.0
           type: string
       required:
         - name
         - label
+      type: object
+    CreateEndpointInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/CreateEndpointInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        component:
+          description: Owning component, by name or id; omit for a server-hosted endpoint (needs an all-scoped grant)
+          type: string
+        driver:
+          description: "Attach this driver (by name or id): the spec derives the transport and params, and the endpoint's tasks derive from the spec's functions"
+          type: string
+        inputs:
+          additionalProperties:
+            type: string
+          description: The inputs the driver's spec declares (host, port, credentials as secret reference names); required ones must be supplied, defaults fill the rest
+          type: object
+        label:
+          description: What an operator reads in lists (Control processor). Settable here because the name is derived from the transport, so it says how the device is reached and never what the connection is for
+          maxLength: 200
+          type: string
+        node:
+          description: Node placement, by name or id
+          type: string
+        params:
+          description: Address/target settings (jsonb); an attach derives them from the inputs instead
+        transport:
+          description: A transport name from the code registry (GET /transports); the endpoint is named by it, unique within the component. Exactly one of transport (a bare probe endpoint) or driver (an attach) is set
+          type: string
       type: object
     CreateEventTypeInputBody:
       additionalProperties: false
@@ -891,35 +927,6 @@ components:
           type: string
       required:
         - name
-      type: object
-    CreateInterfaceInputBody:
-      additionalProperties: false
-      properties:
-        $schema:
-          description: A URL to the JSON Schema for this object.
-          examples:
-            - /api/v1/schemas/CreateInterfaceInputBody.json
-          format: uri
-          readOnly: true
-          type: string
-        component:
-          description: Owning component, by name or id; omit for a server-hosted interface (needs an all-scoped grant)
-          type: string
-        interface_type:
-          description: An interface_type name (the protocol); the interface is named by it, unique within the component
-          minLength: 1
-          type: string
-        label:
-          description: What an operator reads in lists (Control processor). Settable here because the name is derived from the type, so it says how the device is reached and never what the connection is for
-          maxLength: 200
-          type: string
-        node:
-          description: Node placement, by name or id
-          type: string
-        params:
-          description: Endpoint/target settings (jsonb)
-      required:
-        - interface_type
       type: object
     CreateLocationInputBody:
       additionalProperties: false
@@ -1585,6 +1592,8 @@ components:
           type: string
         official:
           type: boolean
+        spec:
+          description: "The declarative spec body (#813): transports, inputs, poll functions, listeners, command bindings. Absent on a stub that cannot be attached yet"
         version:
           type: string
       required:
@@ -1810,6 +1819,55 @@ components:
       required:
         - variables
       type: object
+    EndpointBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/EndpointBody.json
+          format: uri
+          readOnly: true
+          type: string
+        component:
+          description: The owning component name; absent for a server-hosted endpoint
+          type: string
+        component_id:
+          description: The owning component's id; the stable form of component
+          type: string
+        driver:
+          description: The driver this endpoint was attached through (#813); absent for a bare probe endpoint
+          type: string
+        driver_id:
+          description: The attached driver's id; the stable form of driver
+          type: string
+        id:
+          description: The endpoint's surrogate id (the address)
+          type: string
+        inputs:
+          description: The effective inputs supplied at attach, defaults baked; secret inputs are reference names, never values
+        label:
+          description: "The friendly string an operator reads, and the only identity string an operator types here: the name is derived from the transport. Absent when unset, and a surface with none renders the name verbatim"
+          type: string
+        name:
+          description: The derived name (its transport), unique within the owning component
+          type: string
+        node:
+          description: The node placement name, if assigned
+          type: string
+        node_id:
+          description: The placed node's id; the stable form of node
+          type: string
+        params:
+          description: The address/target settings (jsonb)
+        transport:
+          description: The transport name (the wire this endpoint speaks over), from the code registry
+          type: string
+      required:
+        - id
+        - name
+        - transport
+      type: object
     EnrollOutputBody:
       additionalProperties: false
       properties:
@@ -1955,7 +2013,7 @@ components:
           description: The event_type's uuid, the stable form of key
           type: string
         instance:
-          description: The series discriminator (e.g. the interface), when set
+          description: The series discriminator (e.g. the endpoint), when set
           type: string
         key:
           description: The event_type name of the occurrence (e.g. call-started)
@@ -1970,7 +2028,7 @@ components:
           description: The lineage of the occurrence (observed for direct collection)
           type: string
         source:
-          description: The interface type that produced the occurrence
+          description: The transport that produced the occurrence
           type: string
         ts:
           description: When the occurrence happened
@@ -2506,51 +2564,6 @@ components:
         - target_id
         - expires_at
       type: object
-    InterfaceBody:
-      additionalProperties: false
-      properties:
-        $schema:
-          description: A URL to the JSON Schema for this object.
-          examples:
-            - /api/v1/schemas/InterfaceBody.json
-          format: uri
-          readOnly: true
-          type: string
-        component:
-          description: The owning component name; absent for a server-hosted interface
-          type: string
-        component_id:
-          description: The owning component's id; the stable form of component
-          type: string
-        id:
-          description: The interface's surrogate id (the address)
-          type: string
-        interface_type:
-          description: The interface_type name (the protocol)
-          type: string
-        interface_type_id:
-          description: The interface_type's uuid, the stable form of interface_type
-          type: string
-        label:
-          description: "The friendly string an operator reads, and the only identity string an operator types here: the name is derived from the type. Absent when unset, and a surface with none renders the name verbatim"
-          type: string
-        name:
-          description: The derived name (its protocol), unique within the owning component
-          type: string
-        node:
-          description: The node placement name, if assigned
-          type: string
-        node_id:
-          description: The placed node's id; the stable form of node
-          type: string
-        params:
-          description: The endpoint/target settings (jsonb)
-      required:
-        - id
-        - name
-        - interface_type
-        - interface_type_id
-      type: object
     IssueCommandInputBody:
       additionalProperties: false
       properties:
@@ -2566,7 +2579,7 @@ components:
           minLength: 1
           type: string
         instance:
-          description: The series discriminator (e.g. an interface), when the target is instanced
+          description: The series discriminator (e.g. an endpoint), when the target is instanced
           type: string
         params:
           description: The invocation params, stored on the command and the caused event
@@ -2812,6 +2825,25 @@ components:
       required:
         - drivers
       type: object
+    ListEndpointsOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/ListEndpointsOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        endpoints:
+          items:
+            $ref: "#/components/schemas/EndpointBody"
+          type:
+            - array
+            - "null"
+      required:
+        - endpoints
+      type: object
     ListEventTypesOutputBody:
       additionalProperties: false
       properties:
@@ -2887,25 +2919,6 @@ components:
             - "null"
       required:
         - groups
-      type: object
-    ListInterfacesOutputBody:
-      additionalProperties: false
-      properties:
-        $schema:
-          description: A URL to the JSON Schema for this object.
-          examples:
-            - /api/v1/schemas/ListInterfacesOutputBody.json
-          format: uri
-          readOnly: true
-          type: string
-        interfaces:
-          items:
-            $ref: "#/components/schemas/InterfaceBody"
-          type:
-            - array
-            - "null"
-      required:
-        - interfaces
       type: object
     ListLocationTypeMetricsOutputBody:
       additionalProperties: false
@@ -3406,6 +3419,25 @@ components:
             - "null"
       required:
         - tasks
+      type: object
+    ListTransportsOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/ListTransportsOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        transports:
+          items:
+            $ref: "#/components/schemas/Transport"
+          type:
+            - array
+            - "null"
+      required:
+        - transports
       type: object
     ListVariablesOutputBody:
       additionalProperties: false
@@ -4535,23 +4567,17 @@ components:
       required:
         - severity
       type: object
-    ReachHistoryBody:
+    ReachEndpointBody:
       additionalProperties: false
       properties:
-        ts:
-          format: date-time
+        address:
+          description: The probed address (target[:port]) from the endpoint params
           type: string
-        value:
-          type: string
-      required:
-        - ts
-        - value
-      type: object
-    ReachInterfaceBody:
-      additionalProperties: false
-      properties:
+        authenticated:
+          $ref: "#/components/schemas/ReachVerdictBody"
+          description: The auth rung (the probe's credential was accepted), present only when a credential was tried
         endpoint:
-          description: The probed endpoint (target[:port]) from the interface params
+          description: The endpoint's derived name (its transport)
           type: string
         history:
           description: The recent verdict transitions, oldest first, for the availability strip
@@ -4560,12 +4586,6 @@ components:
           type:
             - array
             - "null"
-        interface:
-          description: The interface's derived name (its protocol)
-          type: string
-        interface_type:
-          description: The interface type (icmp, tcp, ...)
-          type: string
         label:
           description: The friendly string an operator reads; absent when unset, and the row then reads the derived name verbatim
           type: string
@@ -4577,17 +4597,35 @@ components:
             - array
             - "null"
         node:
-          description: The node that probes this interface
+          description: The node that probes this endpoint
+          type: string
+        responsive:
+          $ref: "#/components/schemas/ReachVerdictBody"
+          description: The layer-7 responds rung (the protocol itself answered), when a probe has climbed it
+        transport:
+          description: The transport (icmp, tcp, ...)
           type: string
         verdict:
           $ref: "#/components/schemas/ReachVerdictBody"
           description: The latest reachability verdict, or null if none yet
       required:
-        - interface
-        - interface_type
+        - endpoint
+        - transport
         - verdict
         - layers
         - history
+      type: object
+    ReachHistoryBody:
+      additionalProperties: false
+      properties:
+        ts:
+          format: date-time
+          type: string
+        value:
+          type: string
+      required:
+        - ts
+        - value
       type: object
     ReachLayerBody:
       additionalProperties: false
@@ -4641,15 +4679,15 @@ components:
           type: string
         component:
           type: string
-        interfaces:
+        endpoints:
           items:
-            $ref: "#/components/schemas/ReachInterfaceBody"
+            $ref: "#/components/schemas/ReachEndpointBody"
           type:
             - array
             - "null"
       required:
         - component
-        - interfaces
+        - endpoints
       type: object
     ReconPropertyBody:
       additionalProperties: false
@@ -5820,7 +5858,7 @@ components:
           description: The event_type's uuid, the stable form of key
           type: string
         instance:
-          description: The series discriminator (e.g. the interface), when set
+          description: The series discriminator (e.g. the endpoint), when set
           type: string
         key:
           description: The event_type name of the occurrence (e.g. call-started)
@@ -5841,7 +5879,7 @@ components:
           description: The lineage of the occurrence (observed for direct collection)
           type: string
         source:
-          description: The interface type that produced the occurrence
+          description: The transport that produced the occurrence
           type: string
         ts:
           description: When the occurrence happened
@@ -6297,17 +6335,17 @@ components:
           type: string
         enabled:
           type: boolean
-        id:
+        endpoint_id:
+          description: The endpoint's surrogate id this task runs over
           type: string
-        interface_id:
-          description: The interface's surrogate id this task runs over
+        id:
           type: string
         label:
           type: string
         mode:
           type: string
         node:
-          description: The node placement name, projected from the interface
+          description: The node placement name, projected from the endpoint
           type: string
         node_id:
           description: The placed node's id; the stable form of node
@@ -6317,8 +6355,25 @@ components:
       required:
         - id
         - mode
-        - interface_id
+        - endpoint_id
         - enabled
+      type: object
+    Transport:
+      additionalProperties: false
+      properties:
+        built:
+          type: boolean
+        description:
+          type: string
+        held:
+          type: boolean
+        name:
+          type: string
+      required:
+        - name
+        - description
+        - held
+        - built
       type: object
     UISettings:
       additionalProperties: false
@@ -6432,9 +6487,31 @@ components:
         label:
           description: A new operator-facing label
           type: string
+        spec:
+          description: A replacement spec body; validated like the create's, refused with a 422 when it cannot be interpreted
         version:
           description: A new version string, e.g. 1.0.1
           type: string
+      type: object
+    UpdateEndpointInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/UpdateEndpointInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        label:
+          description: A new label; an empty string clears it, and the surface falls back to the derived name. Omit to leave it alone
+          maxLength: 200
+          type: string
+        node:
+          description: Reassign the node placement, by name or id
+          type: string
+        params:
+          description: Replace the address/target settings (jsonb)
       type: object
     UpdateEventTypeInputBody:
       additionalProperties: false
@@ -6473,26 +6550,6 @@ components:
           description: Label; empty clears it
           maxLength: 200
           type: string
-      type: object
-    UpdateInterfaceInputBody:
-      additionalProperties: false
-      properties:
-        $schema:
-          description: A URL to the JSON Schema for this object.
-          examples:
-            - /api/v1/schemas/UpdateInterfaceInputBody.json
-          format: uri
-          readOnly: true
-          type: string
-        label:
-          description: A new label; an empty string clears it, and the surface falls back to the derived name. Omit to leave it alone
-          maxLength: 200
-          type: string
-        node:
-          description: Reassign the node placement, by name or id
-          type: string
-        params:
-          description: Replace the endpoint/target settings (jsonb)
       type: object
     UpdateLocationInputBody:
       additionalProperties: false
@@ -8242,7 +8299,7 @@ paths:
       x-omniglass-permission: component:read
   /components/{name}/reachability:
     get:
-      description: Composes, per interface, the latest reachability verdict, the probe-layer signals that compose it, and the recent verdict transitions for the availability strip. Gated by component:read; an out-of-scope component is a non-disclosing 404.
+      description: Composes, per endpoint, the latest reachability verdict, the probe-layer signals that compose it, and the recent verdict transitions for the availability strip. Gated by component:read; an out-of-scope component is a non-disclosing 404.
       operationId: get-component-reachability
       parameters:
         - description: The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
@@ -8265,7 +8322,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
-      summary: Read a component's per-interface reachability
+      summary: Read a component's per-endpoint reachability
       x-omniglass-permission: component:read
   /components/{name}/reconciliation:
     get:
@@ -8687,6 +8744,128 @@ paths:
           description: Error
       summary: Update a driver
       x-omniglass-permission: driver:update
+  /endpoints:
+    get:
+      description: Lists the endpoints whose owning component the caller may read (the component cascade). Gated by endpoint:read.
+      operationId: list-endpoints
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListEndpointsOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: List endpoints in scope
+      x-omniglass-permission: endpoint:read
+    post:
+      description: Creates an endpoint owned by a component (or a server-hosted one, which needs an all-scoped grant), named by its transport; the optional label is the only identity string an operator types, and is where what the connection is FOR goes. The create scope cascades through the owning component. Gated by endpoint:create.
+      operationId: create-endpoint
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateEndpointInputBody"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EndpointBody"
+          description: Created
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Create an endpoint
+      x-omniglass-permission: endpoint:create
+  /endpoints/{id}:
+    delete:
+      description: Deletes an endpoint, refused while a task still references it. Gated by endpoint:delete; read and delete scopes (through the component) drive the 404 versus 403 split.
+      operationId: delete-endpoint
+      parameters:
+        - description: The endpoint's surrogate id
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The endpoint's surrogate id
+            type: string
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Delete an endpoint
+      x-omniglass-permission: endpoint:delete
+    get:
+      description: Fetches an endpoint by id. An endpoint whose component is out of the caller's read scope is a non-disclosing 404. Gated by endpoint:read.
+      operationId: get-endpoint
+      parameters:
+        - description: The endpoint's surrogate id
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The endpoint's surrogate id
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EndpointBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Get an endpoint
+      x-omniglass-permission: endpoint:read
+    patch:
+      description: Patches an endpoint's node placement, params or label; an empty label clears it and the surface falls back to the derived name. Gated by endpoint:update; read and update scopes (through the component) drive the 404 versus 403 split.
+      operationId: update-endpoint
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateEndpointInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EndpointBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Update an endpoint
+      x-omniglass-permission: endpoint:update
   /event-types:
     get:
       description: Lists every registered event type (official and custom). The catalog is fleet-wide reference data. Gated by event_type:read.
@@ -8948,128 +9127,6 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Liveness and database-reachability probe
-  /interfaces:
-    get:
-      description: Lists the interfaces whose owning component the caller may read (the component cascade). Gated by interface:read.
-      operationId: list-interfaces
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ListInterfacesOutputBody"
-          description: OK
-        default:
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ErrorModel"
-          description: Error
-      summary: List interfaces in scope
-      x-omniglass-permission: interface:read
-    post:
-      description: Creates an interface owned by a component (or a server-hosted one, which needs an all-scoped grant), named by its protocol; the optional label is the only identity string an operator types, and is where what the connection is FOR goes. The create scope cascades through the owning component. Gated by interface:create.
-      operationId: create-interface
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/CreateInterfaceInputBody"
-        required: true
-      responses:
-        "201":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/InterfaceBody"
-          description: Created
-        default:
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ErrorModel"
-          description: Error
-      summary: Create an interface
-      x-omniglass-permission: interface:create
-  /interfaces/{id}:
-    delete:
-      description: Deletes an interface, refused while a task still references it. Gated by interface:delete; read and delete scopes (through the component) drive the 404 versus 403 split.
-      operationId: delete-interface
-      parameters:
-        - description: The interface's surrogate id
-          in: path
-          name: id
-          required: true
-          schema:
-            description: The interface's surrogate id
-            type: string
-      responses:
-        "204":
-          description: No Content
-        default:
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ErrorModel"
-          description: Error
-      summary: Delete an interface
-      x-omniglass-permission: interface:delete
-    get:
-      description: Fetches an interface by id. An interface whose component is out of the caller's read scope is a non-disclosing 404. Gated by interface:read.
-      operationId: get-interface
-      parameters:
-        - description: The interface's surrogate id
-          in: path
-          name: id
-          required: true
-          schema:
-            description: The interface's surrogate id
-            type: string
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/InterfaceBody"
-          description: OK
-        default:
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ErrorModel"
-          description: Error
-      summary: Get an interface
-      x-omniglass-permission: interface:read
-    patch:
-      description: Patches an interface's node placement, params or label; an empty label clears it and the surface falls back to the derived name. Gated by interface:update; read and update scopes (through the component) drive the 404 versus 403 split.
-      operationId: update-interface
-      parameters:
-        - in: path
-          name: id
-          required: true
-          schema:
-            type: string
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/UpdateInterfaceInputBody"
-        required: true
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/InterfaceBody"
-          description: OK
-        default:
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ErrorModel"
-          description: Error
-      summary: Update an interface
-      x-omniglass-permission: interface:update
   /location-types:
     get:
       description: Lists the location_type registry (the shape-definers a location is classified by), ordered alphabetically by label. Populates the type picker on the location form. Gated by location_type:read.
@@ -10098,7 +10155,7 @@ paths:
       x-omniglass-permission: node:create
   /nodes/{name}:
     delete:
-      description: "Decommissions a node: a hard delete that cascades its interfaces, their derived tasks, its node-owned tags and self-telemetry, and its enrollment credential. Component telemetry it collected is unaffected. Requires an all-scope action. Gated by node:delete."
+      description: "Decommissions a node: a hard delete that cascades its endpoints, their derived tasks, its node-owned tags and self-telemetry, and its enrollment credential. Component telemetry it collected is unaffected. Requires an all-scope action. Gated by node:delete."
       operationId: delete-node
       parameters:
         - description: The node's unique name
@@ -13766,7 +13823,7 @@ paths:
       x-omniglass-permission: tag:read
   /tasks:
     get:
-      description: Lists the tasks whose interface's owning component the caller may read (the component cascade). Tasks are derived from interfaces, not authored. Gated by task:read.
+      description: Lists the tasks whose endpoint's owning component the caller may read (the component cascade). Tasks are derived from endpoints, not authored. Gated by task:read.
       operationId: list-tasks
       responses:
         "200":
@@ -13835,6 +13892,25 @@ paths:
           description: Error
       summary: Push telemetry for an owner
       x-omniglass-permission: telemetry:push
+  /transports:
+    get:
+      description: "Lists the transport registry: the wires an endpoint can speak over, a build-time fact of the binary (ADR-0073). Gated by endpoint:read, the surface that consumes it."
+      operationId: list-transports
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListTransportsOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: List the transports the platform speaks
+      x-omniglass-permission: endpoint:read
   /variables:
     get:
       description: Lists every variable. Requires an all-scope read. Gated by variable:read.

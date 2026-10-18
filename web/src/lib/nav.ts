@@ -139,7 +139,7 @@ export const OFF_RAIL: { path: string; label: string; hint: string; resource?: s
   // The fleet kinds (#798, #861): Explore's outline lists them and each bare
   // URL redirects there, but the workspace routes (/locations/{id} and
   // friends) still resolve identity and gate here.
-  { path: "/components", label: "Components", resource: "component", hint: "A component's workspace: its declared config, props, and tags. Device interfaces are a panel on the component." },
+  { path: "/components", label: "Components", resource: "component", hint: "A component's workspace: its declared config, props, and tags. Device endpoints are a panel on the component." },
   { path: "/systems", label: "Systems", resource: "system", hint: "A system's workspace: its standard, roles, health, and the components that make it up." },
   { path: "/locations", label: "Locations", resource: "location", hint: "A location's workspace: where it sits, what it holds, and the systems placed there." },
   { path: "/products", label: "Products", resource: "product", hint: "A concrete SKU: a vendor's product, its driver, kind, and the component type it is classified under." },

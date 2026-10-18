@@ -56,6 +56,12 @@
       "labelled": true
     },
     {
+      "table": "endpoint",
+      "shape": "key-bearing",
+      "proved_elsewhere": "the name is server-derived, not operator-typed: EndpointSpec carries no Name and the column is set from spec.Transport, a name the code registry already validated",
+      "labelled": true
+    },
+    {
       "table": "event",
       "shape": "id only",
       "labelled": false
@@ -83,19 +89,6 @@
       "table": "impersonation_session",
       "shape": "id only",
       "labelled": false
-    },
-    {
-      "table": "interface",
-      "shape": "key-bearing",
-      "proved_elsewhere": "the name is server-derived, not operator-typed: InterfaceSpec carries no Name and the column is set from spec.Type, an already-validated interface_type name",
-      "labelled": true
-    },
-    {
-      "table": "interface_type",
-      "shape": "key-bearing",
-      "proved_elsewhere": "seeded only, no create path on the gateway",
-      "labelled": false,
-      "no_label": "retires with the interface.type FK (ADR-0073); a label added here would be dropped with the table"
     },
     {
       "table": "label_rule",

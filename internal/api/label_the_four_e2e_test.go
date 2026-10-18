@@ -150,8 +150,8 @@ func TestTheFourCarryALabelOverTheWire(t *testing.T) {
 
 	// --- interface: the label AT CREATE --------------------------------------
 	c.do(tok, http.MethodPost, "/components", map[string]any{"name": "codec-1", "product": "generic-device"}, http.StatusCreated)
-	first := decode(c.do(tok, http.MethodPost, "/interfaces", map[string]any{
-		"interface_type": "ssh", "component": "codec-1", "label": "Control processor",
+	first := decode(c.do(tok, http.MethodPost, "/endpoints", map[string]any{
+		"transport": "ssh", "component": "codec-1", "label": "Control processor",
 	}, http.StatusCreated))
 	if first.Label != "Control processor" {
 		t.Errorf("interface label = %q on the create response: the label is the ONLY operator-typed "+
@@ -161,13 +161,13 @@ func TestTheFourCarryALabelOverTheWire(t *testing.T) {
 		t.Errorf("interface name = %q, want the derived ssh: a label does not name the row", first.Name)
 	}
 	// The second of the same protocol, unlabelled, reads its derived name.
-	second := decode(c.do(tok, http.MethodPost, "/interfaces", map[string]any{
-		"interface_type": "tcp", "component": "codec-1",
+	second := decode(c.do(tok, http.MethodPost, "/endpoints", map[string]any{
+		"transport": "tcp", "component": "codec-1",
 	}, http.StatusCreated))
 	if second.Label != "" {
 		t.Errorf("interface label = %q on a create with none, want absent", second.Label)
 	}
-	patched := decode(c.do(tok, http.MethodPatch, "/interfaces/"+second.ID, map[string]any{
+	patched := decode(c.do(tok, http.MethodPatch, "/endpoints/"+second.ID, map[string]any{
 		"label": "Streaming control",
 	}, http.StatusOK))
 	if patched.Label != "Streaming control" || patched.Name != "tcp" {

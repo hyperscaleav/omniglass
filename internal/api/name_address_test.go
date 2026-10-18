@@ -43,7 +43,6 @@ var referenceFields = map[string]string{
 	"driver_id":          "driver",
 	"standard_id":        "standard",
 	"parent_standard_id": "parent_standard",
-	"interface_type_id":  "interface_type",
 	"property_type_id":   "property_type_name",
 	"metric_type_id":     "metric_type_name",
 	"event_type_id":      "event_type_name",
@@ -55,34 +54,28 @@ var referenceFields = map[string]string{
 // registry by its handle must ALSO carry the uuid, so a name-only reference (which
 // the forward `*_id` scan cannot see, because there is no id field to trip on)
 // cannot slip through. Keyed by the NAME field, valued by the id field it requires.
-// Only unambiguous registry-name fields belong here. The interface's registry
-// reference is `interface_type` (not a bare `type`, which also names an RFC-9457
-// error type and a secret field's data type), so it can be reverse-checked like
-// `location_type` and `secret_type`.
+// Only unambiguous registry-name fields belong here. An endpoint's `transport`
+// is deliberately absent: transports are a code registry (ADR-0073) with no
+// uuid to pair, so the name alone IS the stable handle.
 var registryNameRefs = map[string]string{
 	"location_type":      "location_type_id",
 	"secret_type":        "secret_type_id",
-	"interface_type":     "interface_type_id",
 	"property_type_name": "property_type_id",
 	"metric_type_name":   "metric_type_id",
 }
 
 // reverseNameOnlyOK exempts a specific `Schema.field` from the reverse check: a
 // diagnostic BFF row that carries a registry name for display where the id would
-// be dead weight. ReachInterfaceBody is the per-component reachability read; it
-// names its interface and its interface_type for the operator's eyes and is never
-// fed back to a write, so it carries them name-only on purpose, exactly as it
-// carries the interface name-only.
-var reverseNameOnlyOK = map[string]bool{
-	"ReachInterfaceBody.interface_type": true,
-}
+// be dead weight. Empty today: the one exemption it held (the reachability
+// row's interface_type) retired with the interface_type registry (ADR-0073).
+var reverseNameOnlyOK = map[string]bool{}
 
 // Schemas where a *_id field addresses something with no name to pair it with.
 // Each entry is a real decision: if the target has a name, carry the name too.
 var idOnlyIsCorrect = map[string]string{
 	"resource_id":     "an audit row's target is polymorphic and may since have been deleted",
 	"value_id":        "a stored property value has no name, only the property it answers",
-	"interface_id":    "an interface's name is unique only within its component",
+	"endpoint_id":     "an endpoint's name is unique only within its component",
 	"principal_id":    "a principal is addressed by uuid; a username is a credential, not an address",
 	"scope_id":        "a scope root is a uuid handle on a subtree",
 	"group_id":        "a principal group is uuid-keyed",
