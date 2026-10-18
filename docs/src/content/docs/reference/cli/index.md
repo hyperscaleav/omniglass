@@ -3583,10 +3583,14 @@ omniglass secret-type list
 Seed a dev database with example locations, users, and grants (idempotent; never for production)
 
 ```
-omniglass seed-dev
+omniglass seed-dev [flags]
 ```
 
 Populate a fresh dev database with a small example fleet so `make dev` comes up with locations, sign-in-able users, and their grants instead of empty. The same trusted direct-DB lane as bootstrap, and idempotent, so it runs on every `make dev`. Not for production: these are operator rows, not ship-with reference data.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--sim-fleet` | bool | `true` | wire the simulated fleet: addresses and endpoints on the dev node for every component the simulator serves (make dev-sim collects from them) |
 
 ## `omniglass server`
 
