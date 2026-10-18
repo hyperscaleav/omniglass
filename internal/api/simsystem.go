@@ -56,6 +56,7 @@ type addSimSystemComponentBody struct {
 type addSimSystemOutput struct {
 	Body struct {
 		System     string                      `json:"system"`
+		SystemID   string                      `json:"system_id" doc:"The new system's id, the stable address a link to it uses."`
 		Node       string                      `json:"node"`
 		Components []addSimSystemComponentBody `json:"components"`
 		Unstaffed  []simRoleFillBody           `json:"unstaffed" doc:"The roles nothing simulated could fill, left short."`
@@ -307,7 +308,7 @@ func registerSimSystemRoutes(api huma.API, a *authenticator, gw storage.Gateway,
 			if err != nil {
 				return mapSimSystemErr(err)
 			}
-			out.Body.System = made.System.Name
+			out.Body.System, out.Body.SystemID = made.System.Name, made.System.ID
 			for i, c := range made.Components {
 				out.Body.Components = append(out.Body.Components, addSimSystemComponentBody{Component: c.Name,
 					Role: slots[i].role, Product: slots[i].product, Address: addrs[i].Address})

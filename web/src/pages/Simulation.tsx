@@ -11,7 +11,8 @@ import ListShell from "../components/ListShell";
 import { IdentityCell } from "../components/IdentityCell";
 import { NAME_MIN_W } from "../components/TreeList";
 import SimComponentDrawer from "../components/SimComponentDrawer";
-import { ChevronRight, FlaskConical, MapPin, Plug, Plus, RotateCcw } from "../components/icons";
+import AddSimSystemForm from "../components/AddSimSystemForm";
+import { ChevronRight, FlaskConical, MapPin, Plug, Plus, RotateCcw, X } from "../components/icons";
 import { useFormActions } from "../lib/formactions";
 import { can, useMe } from "../lib/auth";
 import { describeError, rel } from "../lib/format";
@@ -34,6 +35,7 @@ import {
   totalHits,
   validateAddComponent,
   type AddComponentDraft,
+  type AddSimSystemResult,
   type SimComponent,
   type SimNode,
 } from "../lib/simulation";
@@ -45,7 +47,8 @@ import {
 // what has reached it, and a brief highlight when a hit lands on it. A Node
 // column joins only when more than one node serves. A row opens the component's
 // drawer (status, impairment, API surface). The one primary action adds a
-// simulated component. Its sidebar door shows only while a simulator is
+// simulated component; beside it, quieter, adding a simulated system builds a
+// whole system to a standard, a simulated component per staffed role (#913). Its sidebar door shows only while a simulator is
 // connected; this page renders an honest face either way.
 //
 // Rows iterate stable component ids, never the objects a poll hands back: a
@@ -67,7 +70,15 @@ export default function Simulation(): JSX.Element {
   const byId = createMemo(() => new Map((components.data ?? []).map((c) => [c.id, c])));
 
   const canAdd = () => can(me.data, "simulation", "update") && can(me.data, "component", "create") && can(me.data, "endpoint", "create");
+  const canAddSystem = () =>
+    can(me.data, "simulation", "update") &&
+    can(me.data, "system", "create") &&
+    can(me.data, "system", "update") &&
+    can(me.data, "component", "create") &&
+    can(me.data, "endpoint", "create");
   const [adding, setAdding] = createSignal(false);
+  const [addingSystem, setAddingSystem] = createSignal(false);
+  const [added, setAdded] = createSignal<AddSimSystemResult | null>(null);
   const [open, setOpen] = createSignal<string | null>(null);
 
   // The highlight: each poll's risen components get a token; a timer clears the
@@ -109,12 +120,20 @@ export default function Simulation(): JSX.Element {
     return m;
   });
   const canAddNow = () => canAdd() && connectedNodes(sim.data).length > 0;
+  const canAddSystemNow = () => canAddSystem() && connectedNodes(sim.data).length > 0;
   const AddButton = () => (
-    <Show when={canAdd()}>
-      <Button intent="action" icon={Plus} disabled={!canAddNow()} title={canAddNow() ? undefined : "No simulator is connected"} onClick={() => setAdding(true)}>
-        Add simulated component
-      </Button>
-    </Show>
+    <>
+      <Show when={canAddSystem()}>
+        <Button icon={Plus} disabled={!canAddSystemNow()} title={canAddSystemNow() ? undefined : "No simulator is connected"} onClick={() => setAddingSystem(true)}>
+          Add simulated system
+        </Button>
+      </Show>
+      <Show when={canAdd()}>
+        <Button intent="action" icon={Plus} disabled={!canAddNow()} title={canAddNow() ? undefined : "No simulator is connected"} onClick={() => setAdding(true)}>
+          Add simulated component
+        </Button>
+      </Show>
+    </>
   );
 
   return (
@@ -145,6 +164,10 @@ export default function Simulation(): JSX.Element {
         </div>
       </Show>
 
+      <Show when={added()}>
+        {(r) => <AddedNote result={r()} onDismiss={() => setAdded(null)} />}
+      </Show>
+
       <Show when={sim.data && nodeNames().length === 0}>
         <EmptyState
           title="No simulator connected"
@@ -168,7 +191,7 @@ export default function Simulation(): JSX.Element {
               <EmptyState
                 title="No simulated components yet"
                 hint="A simulated component is one whose product a simulator profile answers for: a loopback address that speaks HTTP, SNMP, SSH or Telnet like the real product, so collection, drivers and alarms run end to end with no hardware."
-                action={<Show when={canAddNow()}><AddButton /></Show>}
+                action={<Show when={canAddNow() || canAddSystemNow()}><div class="flex items-center gap-2"><AddButton /></div></Show>}
               />
             }
           >
@@ -180,12 +203,36 @@ export default function Simulation(): JSX.Element {
       <Drawer open={adding()} onClose={() => setAdding(false)} title="Add simulated component">
         <AddComponentForm nodes={connectedNodes(sim.data)} close={() => setAdding(false)} />
       </Drawer>
+      <Drawer open={addingSystem()} onClose={() => setAddingSystem(false)} title="Add simulated system">
+        <AddSimSystemForm nodes={connectedNodes(sim.data)} close={() => setAddingSystem(false)} onAdded={setAdded} />
+      </Drawer>
       <SimComponentDrawer id={open()} onClose={() => setOpen(null)} />
     </Page>
   );
 }
 
 type SimRowData = { node: string; sim: SimComponent };
+
+// AddedNote: what the last add-simulated-system created, until dismissed. The
+// new components are already in the table below; this names the system they
+// belong to and the roles it was left short.
+function AddedNote(props: { result: AddSimSystemResult; onDismiss: () => void }) {
+  const n = () => (props.result.components ?? []).length;
+  const short = () => props.result.unstaffed ?? [];
+  return (
+    <div role="status" class="alert alert-success alert-soft flex items-center justify-between text-sm" data-testid="sim-system-added">
+      <span>
+        Added simulated system <span class="font-data font-semibold">{props.result.system}</span> on{" "}
+        <span class="font-data">{props.result.node}</span>: {n()} {n() === 1 ? "component" : "components"}
+        <Show when={short().length > 0}>
+          , short <span title={short().map((r) => `${r.role}: ${r.reason ?? "nothing simulated fits"}`).join("\n")}>{short().map((r) => r.role).join(", ")}</span>
+        </Show>
+        .
+      </span>
+      <Button square size="xs" icon={X} label="Dismiss" onClick={() => props.onDismiss()} />
+    </div>
+  );
+}
 
 function sameList(a: readonly string[], b: readonly string[]): boolean {
   return a.length === b.length && a.every((x, i) => x === b[i]);
@@ -396,7 +443,7 @@ function SimRow(props: { id: string; row: SimRowData; component?: FleetComponent
       <td class="truncate font-data text-xs text-base-content/70" title={d().product}>{d().product}</td>
       <td class="font-data text-xs">{d().address}</td>
       <td>
-        <span class={d().serving ? PILL_NEUTRAL : PILL_WARN}>{d().serving ? "serving" : "not serving"}</span>
+        <span class={`${d().serving ? PILL_NEUTRAL : PILL_WARN} whitespace-nowrap`}>{d().serving ? "serving" : "not serving"}</span>
       </td>
       <td class="text-right font-data tnum text-sm font-semibold" data-testid="row-hits">{d().hits.toLocaleString()}</td>
       <td class="text-xs">

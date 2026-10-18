@@ -192,6 +192,7 @@ func TestSimulatedSystemAPI(t *testing.T) {
 
 	var added struct {
 		System     string `json:"system"`
+		SystemID   string `json:"system_id"`
 		Components []struct {
 			Component string `json:"component"`
 			Role      string `json:"role"`
@@ -206,7 +207,7 @@ func TestSimulatedSystemAPI(t *testing.T) {
 	if err := json.Unmarshal(c.do(ownerTok, http.MethodPost, "/nodes/site-a/simulation/systems", body, http.StatusCreated), &added); err != nil {
 		t.Fatal(err)
 	}
-	if added.System == "" || len(added.Components) != plan.Components {
+	if added.System == "" || added.SystemID == "" || len(added.Components) != plan.Components {
 		t.Fatalf("added = %+v, want a system and the plan's %d components", added, plan.Components)
 	}
 	seen := map[string]bool{}

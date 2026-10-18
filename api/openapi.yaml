@@ -156,6 +156,9 @@ components:
           type: string
         system:
           type: string
+        system_id:
+          description: The new system's id, the stable address a link to it uses.
+          type: string
         unstaffed:
           description: The roles nothing simulated could fill, left short.
           items:
@@ -165,6 +168,7 @@ components:
             - "null"
       required:
         - system
+        - system_id
         - node
         - components
         - unstaffed

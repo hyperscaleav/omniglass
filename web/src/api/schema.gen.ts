@@ -4280,6 +4280,8 @@ export interface components {
             components: components["schemas"]["AddSimSystemComponentBody"][] | null;
             node: string;
             system: string;
+            /** @description The new system's id, the stable address a link to it uses. */
+            system_id: string;
             /** @description The roles nothing simulated could fill, left short. */
             unstaffed: components["schemas"]["SimRoleFillBody"][] | null;
         };

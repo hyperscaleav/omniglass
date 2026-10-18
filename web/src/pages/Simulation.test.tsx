@@ -9,12 +9,16 @@ import SimulationSection from "../components/SimulationSection";
 import { ME_KEY, type Me } from "../lib/auth";
 import { COMPONENTS_KEY, type Component } from "../lib/components";
 import { LOCATIONS_KEY } from "../lib/locations";
+import { STANDARDS_KEY, type Standard } from "../lib/standards";
+import { SYSTEM_TYPES_KEY, type SystemType } from "../lib/system_types";
 import {
   SIMULATION_KEY,
   SIM_PROFILES_KEY,
   componentSimKey,
   impairmentKey,
+  simPlanKey,
   type ComponentSim,
+  type SimSystemPlan,
   type SimComponent,
   type SimFleet,
 } from "../lib/simulation";
@@ -515,6 +519,191 @@ describe("the Simulation page's writes and stale state", () => {
     stubFetch();
     await openAdd(placeless);
     await screen.findByLabelText("Name");
+    expect(screen.queryByLabelText("Location")).toBeNull();
+    expect(calls.some((c) => c.path.startsWith("/locations"))).toBe(false);
+  });
+});
+
+// Adding a whole simulated system to a standard (#913).
+const standards: Standard[] = [
+  { id: uuidFor("std-meeting"), name: "meeting-room", label: "Meeting room", official: true },
+  { id: uuidFor("std-huddle"), name: "huddle-space", label: "Huddle space", official: true },
+];
+const systemTypes: SystemType[] = [
+  { id: uuidFor("st-room"), name: "room-system", label: "Room system", official: true } as SystemType,
+];
+const meetingPlan: SimSystemPlan = {
+  standard: "meeting-room",
+  alternates: { audio: "ceiling" },
+  components: 3,
+  roles: [
+    { role: "display", product: "boreal-edge-55", count: 2 },
+    { role: "ceiling-mic", alternate: "audio/ceiling", product: "polaris-mic-1", count: 1 },
+    { role: "camera", count: 0, missing: 1, reason: "no simulated product is a camera" },
+  ],
+};
+const systemMaker: Me = {
+  principal: { id: "u-sm", kind: "human" }, human: { username: "system-maker" },
+  permissions: ["simulation:read", "simulation:update", "system:create", "system:update", "component:read", "component:create", "endpoint:create", "standard:read", "system_type:read"], grants: [],
+};
+const noSystemUpdate: Me = {
+  principal: { id: "u-ns", kind: "human" }, human: { username: "no-system-update" },
+  permissions: ["*:read", "simulation:update", "system:create", "component:create", "endpoint:create"], grants: [],
+};
+
+describe("adding a simulated system", () => {
+  async function openAddSystem(me: Me = admin, plan: SimSystemPlan | null = meetingPlan) {
+    const r = mount(() => <Simulation />, me);
+    r.qc.setQueryData([...STANDARDS_KEY], standards);
+    r.qc.setQueryData([...SYSTEM_TYPES_KEY], systemTypes);
+    if (plan) r.qc.setQueryData([...simPlanKey(plan.standard)], plan);
+    r.qc.removeQueries({ queryKey: LOCATIONS_KEY });
+    fireEvent.click(await screen.findByRole("button", { name: /Add simulated system/ }));
+    return r;
+  }
+
+  async function fill(standard = "meeting-room") {
+    fireEvent.change(await screen.findByLabelText("Standard"), { target: { value: standard } });
+    fireEvent.change(screen.getByLabelText("System type"), { target: { value: "room-system" } });
+  }
+
+  it("offers the action beside Add simulated component, quiet, to a principal holding every permission it needs", async () => {
+    stubFetch();
+    mount(() => <Simulation />);
+    const sys = await screen.findByRole("button", { name: /Add simulated system/ });
+    expect(sys.classList.contains("btn-quiet")).toBe(true);
+    expect(screen.getByRole("button", { name: /Add simulated component/ }).classList.contains("btn-action")).toBe(true);
+  });
+
+  it("hides the action from a principal missing any one of the permissions", async () => {
+    stubFetch();
+    mount(() => <Simulation />, noSystemUpdate);
+    await screen.findAllByTestId("sim-row");
+    expect(screen.getByRole("button", { name: /Add simulated component/ })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /Add simulated system/ })).toBeNull();
+  });
+
+  it("hides the action from a reader", async () => {
+    stubFetch();
+    mount(() => <Simulation />, viewer);
+    await screen.findAllByTestId("sim-row");
+    expect(screen.queryByRole("button", { name: /Add simulated system/ })).toBeNull();
+  });
+
+  it("previews the plan once a standard is chosen: each role's product and count, the short role with its reason, the total", async () => {
+    stubFetch();
+    await openAddSystem();
+    expect(screen.queryByTestId("sim-plan")).toBeNull();
+    fireEvent.change(await screen.findByLabelText("Standard"), { target: { value: "meeting-room" } });
+    const preview = await screen.findByTestId("sim-plan");
+    const rows = within(preview).getAllByTestId("plan-role");
+    expect(rows.map((r) => r.getAttribute("data-role"))).toEqual(["display", "ceiling-mic", "camera"]);
+    expect(within(rows[0]).getByText("boreal-edge-55")).toBeTruthy();
+    expect(rows[0].lastElementChild!.textContent).toBe("2");
+    expect(within(rows[1]).getByText("audio/ceiling")).toBeTruthy();
+    expect(rows[2].getAttribute("data-short")).toBe("true");
+    expect(within(rows[2]).getByTestId("plan-short").textContent).toContain("no simulated product is a camera");
+    expect(within(preview).getByTestId("plan-total").textContent).toBe("3");
+    expect(within(preview).getByTestId("plan-short-count").textContent).toBe("1 short");
+  });
+
+  it("reads the plan from the API for the chosen standard", async () => {
+    stubFetch({ "GET /simulation/standards/huddle-space:plan": { ...meetingPlan, standard: "huddle-space", components: 1, roles: [{ role: "display", product: "boreal-edge-55", count: 1 }] } });
+    await openAddSystem();
+    fireEvent.change(await screen.findByLabelText("Standard"), { target: { value: "huddle-space" } });
+    await waitFor(() => expect(screen.getByTestId("plan-total").textContent).toBe("1"));
+    expect(calls.some((c) => c.method === "GET" && c.path === "/simulation/standards/huddle-space:plan")).toBe(true);
+  });
+
+  it("refuses to add when nothing in the standard can be simulated", async () => {
+    stubFetch();
+    const empty: SimSystemPlan = { standard: "meeting-room", alternates: {}, components: 0, roles: [{ role: "camera", count: 0, missing: 1, reason: "no simulated product is a camera" }] };
+    await openAddSystem(admin, empty);
+    await fill();
+    expect(await screen.findByTestId("plan-empty")).toBeTruthy();
+    expect((screen.getByRole("button", { name: "Add system" }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("sends the standard, the type and only what was filled, then closes, refreshes the fleet and names the system", async () => {
+    stubFetch({
+      "POST /nodes/edge-hq/simulation/systems": new Answer(201, {
+        system: "room-system-7", node: "edge-hq",
+        components: [
+          { component: "display-1", role: "display", product: "boreal-edge-55", address: "127.60.0.4" },
+          { component: "display-2", role: "display", product: "boreal-edge-55", address: "127.60.0.5" },
+          { component: "mic-1", role: "ceiling-mic", product: "polaris-mic-1", address: "127.60.0.6" },
+        ],
+        unstaffed: [{ role: "camera", count: 0, missing: 1, reason: "no simulated product is a camera" }],
+      }),
+    });
+    const { qc } = await openAddSystem();
+    const invalidate = vi.spyOn(qc, "invalidateQueries");
+    await fill();
+    const add = screen.getByRole("button", { name: "Add system" }) as HTMLButtonElement;
+    await waitFor(() => expect(add.disabled).toBe(false));
+    fireEvent.click(add);
+    await waitFor(() => expect(calls.some((c) => c.method === "POST")).toBe(true));
+    const post = calls.find((c) => c.method === "POST")!;
+    expect(post.path).toBe("/nodes/edge-hq/simulation/systems");
+    expect(post.body).toEqual({ standard: "meeting-room", system_type: "room-system" });
+    await waitFor(() => expect(screen.queryByRole("button", { name: "Add system" })).toBeNull());
+    const note = await screen.findByTestId("sim-system-added");
+    expect(note.textContent).toContain("room-system-7");
+    expect(note.textContent).toContain("3 components");
+    expect(note.textContent).toContain("camera");
+    const keys = invalidate.mock.calls.map((c) => JSON.stringify(c[0]?.queryKey));
+    expect(keys).toContain(JSON.stringify(SIMULATION_KEY));
+    expect(keys).toContain(JSON.stringify(COMPONENTS_KEY));
+    fireEvent.click(within(note).getByRole("button", { name: "Dismiss" }));
+    expect(screen.queryByTestId("sim-system-added")).toBeNull();
+  });
+
+  it("sends a typed name and a chosen place", async () => {
+    stubFetch({ "POST /nodes/edge-hq/simulation/systems": new Answer(201, { system: "lab-room", node: "edge-hq", components: [], unstaffed: [] }) });
+    const { qc } = await openAddSystem();
+    qc.setQueryData([...LOCATIONS_KEY], [{ id: uuidFor("loc-a"), name: "boardroom-a", label: "Boardroom A", path: "hq.boardroom-a" }]);
+    await fill();
+    fireEvent.change(await screen.findByLabelText("Location"), { target: { value: "hq.boardroom-a" } });
+    fireEvent.input(screen.getByLabelText("Name"), { target: { value: "lab-room" } });
+    const add = screen.getByRole("button", { name: "Add system" }) as HTMLButtonElement;
+    await waitFor(() => expect(add.disabled).toBe(false));
+    fireEvent.click(add);
+    await waitFor(() => expect(calls.some((c) => c.method === "POST")).toBe(true));
+    expect(calls.find((c) => c.method === "POST")!.body).toEqual({ standard: "meeting-room", system_type: "room-system", name: "lab-room", location: "hq.boardroom-a" });
+  });
+
+  for (const [status, title, detail] of [
+    [409, "Conflict", "no simulator is connected to node edge-hq"],
+    [422, "Unprocessable Entity", "nothing in standard meeting-room can be simulated"],
+    [403, "Forbidden", "missing permission system:update"],
+  ] as const) {
+    it(`surfaces a ${status} in the form and keeps it open`, async () => {
+      stubFetch({ "POST /nodes/edge-hq/simulation/systems": new Answer(status, { title, status, detail }) });
+      await openAddSystem();
+      await fill();
+      const add = screen.getByRole("button", { name: "Add system" }) as HTMLButtonElement;
+      await waitFor(() => expect(add.disabled).toBe(false));
+      fireEvent.click(add);
+      const alert = await screen.findByTestId("add-system-error");
+      expect(alert.textContent).toContain(detail);
+      expect(screen.getByRole("button", { name: "Add system" })).toBeTruthy();
+      expect(screen.queryByTestId("sim-system-added")).toBeNull();
+    });
+  }
+
+  it("refuses a malformed name before it is sent", async () => {
+    stubFetch();
+    await openAddSystem();
+    await fill();
+    fireEvent.input(screen.getByLabelText("Name"), { target: { value: "Lab Room" } });
+    expect(await screen.findByText(/Lowercase letters, digits and hyphens/)).toBeTruthy();
+    expect((screen.getByRole("button", { name: "Add system" }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("offers no Location to a principal who cannot read places, and never asks for them", async () => {
+    stubFetch();
+    await openAddSystem(systemMaker);
+    await screen.findByLabelText("Standard");
     expect(screen.queryByLabelText("Location")).toBeNull();
     expect(calls.some((c) => c.path.startsWith("/locations"))).toBe(false);
   });

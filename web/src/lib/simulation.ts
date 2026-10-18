@@ -25,6 +25,10 @@ export type SimResult = S["SimOperationResult"];
 export type FireInput = Omit<S["FireSimInputBody"], "$schema">;
 export type AddSimComponent = Omit<S["AddSimComponentInputBody"], "$schema">;
 export type AddSimComponentResult = S["AddSimComponentOutputBody"];
+export type SimSystemPlan = S["SimSystemPlanOutputBody"];
+export type SimRoleFill = S["SimRoleFillBody"];
+export type AddSimSystem = Omit<S["AddSimSystemInputBody"], "$schema">;
+export type AddSimSystemResult = S["AddSimSystemOutputBody"];
 
 // The impairment as the console holds it: every field present, since a PUT
 // replaces the whole impairment and a field left out reads as zero.
@@ -42,6 +46,7 @@ export const SIMULATION_KEY = ["simulation"] as const;
 export const SIM_PROFILES_KEY = ["simulation", "profiles"] as const;
 export const componentSimKey = (id: string) => ["simulation", "component", id] as const;
 export const impairmentKey = (id: string) => ["simulation", "impairment", id] as const;
+export const simPlanKey = (standard: string) => ["simulation", "plan", standard] as const;
 
 // How often each surface reads the fleet: the sidebar only needs to know a
 // simulator is there, the page wants hits as they land.
@@ -87,6 +92,18 @@ export async function addSimComponent(node: string, body: AddSimComponent): Prom
   const { data, error } = await api.POST("/nodes/{name}/simulation/components", { params: { path: { name: node } }, body });
   if (error) throw error;
   return data as AddSimComponentResult;
+}
+
+export async function planSimSystem(standard: string): Promise<SimSystemPlan> {
+  const { data, error } = await api.GET("/simulation/standards/{standard}:plan", { params: { path: { standard } } });
+  if (error) throw error;
+  return data as SimSystemPlan;
+}
+
+export async function addSimSystem(node: string, body: AddSimSystem): Promise<AddSimSystemResult> {
+  const { data, error } = await api.POST("/nodes/{name}/simulation/systems", { params: { path: { name: node } }, body });
+  if (error) throw error;
+  return data as AddSimSystemResult;
 }
 
 export async function getImpairment(id: string): Promise<Impairment> {
@@ -245,6 +262,39 @@ export function validateAddComponent(d: AddComponentDraft): AddComponentErrors {
   const nameErr = d.name.trim() ? entityNameError(d.name.trim()) : "Name the new component.";
   if (nameErr) e.name = nameErr;
   return e;
+}
+
+// The add-system form's rule: node, standard and system type must be chosen;
+// the name is optional (the server mints one from the type) but, when typed,
+// follows the entity name rule.
+export type AddSystemDraft = { node: string; standard: string; system_type: string; name: string; location: string };
+export type AddSystemErrors = Partial<Record<keyof AddSystemDraft, string>>;
+
+export function validateAddSystem(d: AddSystemDraft): AddSystemErrors {
+  const e: AddSystemErrors = {};
+  if (!d.node) e.node = "Choose the node whose simulator serves it.";
+  if (!d.standard) e.standard = "Choose the standard the system is built to.";
+  if (!d.system_type) e.system_type = "Choose the system's type.";
+  const nameErr = entityNameError(d.name.trim());
+  if (nameErr) e.name = nameErr;
+  return e;
+}
+
+// addSystemBody turns a draft into the request, leaving out what was left empty.
+export function addSystemBody(d: AddSystemDraft): AddSimSystem {
+  const name = d.name.trim();
+  return {
+    standard: d.standard,
+    system_type: d.system_type,
+    ...(name ? { name } : {}),
+    ...(d.location ? { location: d.location } : {}),
+  };
+}
+
+// planShortfall: the roles a plan leaves short, and by how many in all.
+export function planShortfall(p: SimSystemPlan | undefined): { roles: SimRoleFill[]; missing: number } {
+  const roles = (p?.roles ?? []).filter((r) => (r.missing ?? 0) > 0 || !r.product);
+  return { roles, missing: roles.reduce((n, r) => n + (r.missing ?? 0), 0) };
 }
 
 // surfaceKind says which fire form a surface takes: an HTTP call, a command
