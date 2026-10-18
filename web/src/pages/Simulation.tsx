@@ -357,7 +357,7 @@ function SimTable(props: {
     { key: "place", type: "string", hint: "substring", get: place, values: (rows) => distinct(rows, place) },
     { key: "product", type: "string", hint: "exact", get: (id) => props.rowBy.get(id)?.sim.product, values: (rows) => distinct(rows, (id) => props.rowBy.get(id)?.sim.product) },
     ...(props.showNode ? [{ key: "node", type: "string" as const, hint: "exact", get: (id: string) => props.rowBy.get(id)?.node, values: (rows: string[]) => distinct(rows, (id) => props.rowBy.get(id)?.node) }] : []),
-    { key: "status", type: "string", hint: "exact", get: (id) => props.rowBy.get(id)?.sim.state, values: () => [...SIM_STATES] },
+    { key: "status", type: "string", hint: "exact", get: (id) => props.rowBy.get(id)?.sim.status, values: () => [...SIM_STATES] },
     { key: "impairment", type: "string", hint: "substring", get: (id) => impairmentText(props.rowBy.get(id)?.sim), values: () => ["unplugged", "not applied", "none"] },
   ];
   return (

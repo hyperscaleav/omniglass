@@ -75,7 +75,7 @@ func TestSimSurfaceSpeaksTheVocabulary(t *testing.T) {
 	}
 }
 
-// A simulated component's state, most urgent first: offline when its
+// A simulated component's status, most urgent first: offline when its
 // simulator stopped reporting, starting when added since the simulator's
 // last pull, failed when handed over but not started, running otherwise.
 func TestSimulationBodyStates(t *testing.T) {
@@ -87,7 +87,7 @@ func TestSimulationBodyStates(t *testing.T) {
 		Serving:     map[string]bool{"on": true}}
 	got := map[string]string{}
 	for _, d := range simulationBody(devs, st, true, now).Body.Devices {
-		got[d.ComponentID] = d.State
+		got[d.ComponentID] = d.Status
 	}
 	// Just handed over and not yet reported: still starting, not failed.
 	if got["on"] != "running" || got["new"] != "starting" || got["broken"] != "failed" || got["fresh"] != "starting" {
@@ -96,8 +96,8 @@ func TestSimulationBodyStates(t *testing.T) {
 	stale := simulationBody(devs, st, true, now.Add(10*time.Minute)).Body.Devices
 	never := simulationBody(devs, simhub.Status{}, false, now).Body.Devices
 	for _, d := range append(stale, never...) {
-		if d.State != "offline" {
-			t.Fatalf("%s with no live simulator reads %q, want offline", d.ComponentID, d.State)
+		if d.Status != "offline" {
+			t.Fatalf("%s with no live simulator reads %q, want offline", d.ComponentID, d.Status)
 		}
 	}
 }

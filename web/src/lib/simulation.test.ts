@@ -26,7 +26,7 @@ import {
 } from "./simulation";
 
 const row = (id: string, hits: number): SimComponent => ({
-  component_id: id, component: id, product: "p", address: "127.60.0.2", serving: true, state: "running", hits, hits_by_protocol: {}, impaired: false,
+  component_id: id, component: id, product: "p", address: "127.60.0.2", serving: true, status: "running", hits, hits_by_protocol: {}, impaired: false,
 });
 
 describe("risenHits", () => {
@@ -78,7 +78,7 @@ describe("impairment words", () => {
 // The status is the server's state, untouched by an impairment; the impairment
 // rides beside it as its own fact, with whether the simulator applied it.
 describe("a simulated component's status", () => {
-  const sim = (state: SimComponent["state"], impairment?: SimComponent["impairment"], impaired = false) => ({ state, impairment, impaired });
+  const sim = (status: SimComponent["status"], impairment?: SimComponent["impairment"], impaired = false) => ({ status, impairment, impaired });
 
   it("is each state as the server names it, with no impairment when none is set", () => {
     for (const s of ["offline", "failed", "starting", "running"] as const) {

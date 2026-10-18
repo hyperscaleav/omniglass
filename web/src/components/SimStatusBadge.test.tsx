@@ -6,7 +6,7 @@ import type { SimComponent } from "../lib/simulation";
 // The status chip is HealthBadge's recipe: each state carries its word, its own
 // glyph and its look, running stays grey, starting wears the incomplete look.
 // The impairment is not a status: it is a second, warning chip beside it.
-const sim = (state: SimComponent["state"], impairment?: SimComponent["impairment"], impaired = false) => ({ state, impairment, impaired });
+const sim = (status: SimComponent["status"], impairment?: SimComponent["impairment"], impaired = false) => ({ status, impairment, impaired });
 const STATES = ["offline", "failed", "starting", "running"] as const;
 
 describe("SimStatusBadge", () => {

@@ -39,7 +39,7 @@ const DISPLAY = uuidFor("sim-display");
 const DSP = uuidFor("sim-dsp");
 
 const simRow = (id: string, name: string, hits: number, extra: Partial<SimComponent> = {}): SimComponent => ({
-  component_id: id, component: name, product: "boreal-edge-55", address: "127.60.0.2", serving: true, state: "running",
+  component_id: id, component: name, product: "boreal-edge-55", address: "127.60.0.2", serving: true, status: "running",
   hits, hits_by_protocol: hits ? { snmp: hits } : {}, impaired: false, last_protocol: hits ? "snmp" : undefined, ...extra,
 });
 
@@ -183,8 +183,8 @@ describe("the Simulation page", () => {
   it("shows a failed and a starting component by their state, the impairment set on the starting one marked not applied", async () => {
     const f = fleet([0, 0]);
     f.nodes![0].components = [
-      simRow(DISPLAY, "display-1", 0, { state: "failed", serving: false }),
-      simRow(DSP, "dsp-1", 0, { state: "starting", serving: false, impairment: { latency_ms: 150, loss_pct: 2.5 } }),
+      simRow(DISPLAY, "display-1", 0, { status: "failed", serving: false }),
+      simRow(DSP, "dsp-1", 0, { status: "starting", serving: false, impairment: { latency_ms: 150, loss_pct: 2.5 } }),
     ];
     current = { fleet: f };
     stubFetch();
@@ -199,7 +199,7 @@ describe("the Simulation page", () => {
   it("filters by state, and by the impairment's words", async () => {
     const f = fleet([0, 0]);
     f.nodes![0].components = [
-      simRow(DISPLAY, "display-1", 0, { state: "failed", serving: false }),
+      simRow(DISPLAY, "display-1", 0, { status: "failed", serving: false }),
       simRow(DSP, "dsp-1", 0, { impaired: true, impairment: { latency_ms: 150, loss_pct: 2.5 } }),
     ];
     current = { fleet: f };

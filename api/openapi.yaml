@@ -5970,7 +5970,7 @@ components:
         serving:
           description: Whether the simulator reported serving this component in its latest batch.
           type: boolean
-        state:
+        status:
           description: "What the simulator is doing with the component, most urgent first: offline (its simulator stopped reporting), starting (added since the simulator's last pull, or handed over moments ago), failed (handed to the simulator but not started), running."
           enum:
             - running
@@ -5984,7 +5984,7 @@ components:
         - product
         - address
         - serving
-        - state
+        - status
         - hits
         - hits_by_protocol
         - impaired

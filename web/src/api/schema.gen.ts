@@ -7495,7 +7495,7 @@ export interface components {
              * @description What the simulator is doing with the component, most urgent first: offline (its simulator stopped reporting), starting (added since the simulator's last pull, or handed over moments ago), failed (handed to the simulator but not started), running.
              * @enum {string}
              */
-            state: "running" | "starting" | "failed" | "offline";
+            status: "running" | "starting" | "failed" | "offline";
         };
         SimFleetOutputBody: {
             /**

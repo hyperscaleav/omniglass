@@ -117,7 +117,11 @@ publishes the hits it saw and the devices it is serving.
 
 The server accepts hits only for components it handed that node, keeps them in memory (a live
 signal, not stored history), and joins them to the node's devices at
-`GET /nodes/{name}/simulation`, which the CLI reads as `omniglass node simulation <node>`. A
+`GET /nodes/{name}/simulation`, which the CLI reads as `omniglass node simulation <node>`. Each
+component carries a `status`, what the simulator is doing with it: `running`; `starting` (added since
+its last pull, or handed over in the last five seconds); `failed` (handed over and not started); or
+`offline` (the simulator stopped reporting). The words are the simulator's own, so they never borrow
+reachability's up and down or health's verdicts. A
 connection a device accepts counts as a hit, so a collector's bare reachability probe shows there
 as `tcp`, beside the requests it answers.
 

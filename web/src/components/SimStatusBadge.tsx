@@ -45,7 +45,7 @@ const SHAPED_HINT = "An operator shaped its traffic (latency, jitter, loss or a 
 const NOT_APPLIED_HINT = "The impairment is set, but the simulator did not apply it: impairments are unavailable on its node, the change has not reached it yet, or the component is not running.";
 
 export default function SimStatusBadge(props: {
-  sim: Pick<SimComponent, "state" | "impairment" | "impaired">;
+  sim: Pick<SimComponent, "status" | "impairment" | "impaired">;
   size?: "xs" | "sm" | "md";
 }) {
   const status = () => simStatus(props.sim);

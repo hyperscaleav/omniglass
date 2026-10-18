@@ -154,7 +154,7 @@ export function impairmentSummary(i: Partial<Impairment> | null | undefined): st
 // starting (added since the simulator's last pull, or handed over moments ago),
 // running. What an operator broke on it is not a status; it rides beside the
 // status as its own fact.
-export type SimState = SimComponent["state"];
+export type SimState = SimComponent["status"];
 export const SIM_STATES: readonly SimState[] = ["offline", "failed", "starting", "running"];
 export type SimStatus = {
   state: SimState;
@@ -172,10 +172,10 @@ export type SimStatus = {
 // simStatus derives the status and the impairment beside it. The state is the
 // server's, never altered by an impairment: an offline component with an
 // impairment set still reads offline.
-export function simStatus(d: Pick<SimComponent, "state" | "impairment" | "impaired">): SimStatus {
-  if (!isImpaired(d.impairment)) return { state: d.state };
+export function simStatus(d: Pick<SimComponent, "status" | "impairment" | "impaired">): SimStatus {
+  if (!isImpaired(d.impairment)) return { state: d.status };
   return {
-    state: d.state,
+    state: d.status,
     impairment: { unplugged: toImpairment(d.impairment).unplugged, summary: impairmentSummary(d.impairment), applied: d.impaired },
   };
 }
