@@ -95,7 +95,7 @@ type Component struct {
 // behind it. A Degraded component still occupies: severity is how loudly to
 // page somebody, not a second threshold for staffing, so an info or warning
 // alarm never shorts a role by itself. This is the mechanism by which a
-// critical alarm reaches a system: impair the component down to Outage, and
+// high-severity alarm reaches a system: impair the component down to Outage, and
 // every role it occupies loses one occupant.
 func (c Component) Occupies() bool {
 	return c.Verdict != Outage

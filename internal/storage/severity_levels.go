@@ -70,16 +70,32 @@ func scanSeverityLevel(row pgx.Row) (SeverityLevel, error) {
 
 // UpsertSeverityLevel installs an official level, authoritative on conflict
 // (the boot-seed bucket); an operator's own levels keep distinct names and
-// are untouched.
+// are untouched. An official level never takes over an operator's: a name or
+// rank an operator level already holds is refused, naming it, so a release
+// that ships a new official level in a gap an operator used stops the boot
+// with what to change rather than silently overwriting or failing opaquely.
 func (p *PG) UpsertSeverityLevel(ctx context.Context, l SeverityLevel) error {
 	if err := validateSeverityLevel(l.Name, l.Color, l.Rank); err != nil {
 		return fmt.Errorf("storage: upsert severity level %q: %w", l.Name, err)
+	}
+	var holder string
+	err := p.pool.QueryRow(ctx, `select name from severity_level
+		where (name = $1 or rank = $2) and not official limit 1`, l.Name, l.Rank).Scan(&holder)
+	if err == nil {
+		return fmt.Errorf("%w: the operator level %q holds the name or rank of the official level %q (rank %d); rename or re-rank it",
+			ErrSeverityLevelExists, holder, l.Name, l.Rank)
+	}
+	if !errors.Is(err, pgx.ErrNoRows) {
+		return fmt.Errorf("storage: check severity level %q: %w", l.Name, err)
 	}
 	if _, err := p.pool.Exec(ctx, `insert into severity_level (name, label, color, rank, official)
 		values ($1, $2, $3, $4, $5)
 		on conflict (name) do update set label = excluded.label, color = excluded.color,
 			rank = excluded.rank, official = excluded.official, updated_at = now()`,
 		l.Name, labelOrNull(l.Label), l.Color, l.Rank, l.Official); err != nil {
+		if isUniqueViolation(err) {
+			return fmt.Errorf("%w: another level holds rank %d", ErrSeverityLevelExists, l.Rank)
+		}
 		return fmt.Errorf("storage: upsert severity level %q: %w", l.Name, err)
 	}
 	return nil
@@ -194,6 +210,33 @@ func (p *PG) UpdateSeverityLevel(ctx context.Context, actorID, name string, patc
 	}
 	if err != nil {
 		return nil, fmt.Errorf("storage: update severity level %q: %w", name, err)
+	}
+	// A re-rank can move every component with an open alarm at this level
+	// across the outage floor, and health is recorded, not computed on read:
+	// recompute each one in this transaction.
+	if updated.Rank != old.Rank {
+		rows, err := tx.Query(ctx, `select distinct component_id::text from alarm where severity = $1 and cleared_at is null`, updated.Name)
+		if err != nil {
+			return nil, fmt.Errorf("storage: components at severity level %q: %w", updated.Name, err)
+		}
+		var ids []string
+		for rows.Next() {
+			var id string
+			if err := rows.Scan(&id); err != nil {
+				rows.Close()
+				return nil, fmt.Errorf("storage: scan component at severity level: %w", err)
+			}
+			ids = append(ids, id)
+		}
+		rows.Close()
+		if err := rows.Err(); err != nil {
+			return nil, err
+		}
+		for _, id := range ids {
+			if err := p.RecomputeHealth(ctx, tx, id); err != nil {
+				return nil, fmt.Errorf("storage: recompute health after re-ranking %q: %w", updated.Name, err)
+			}
+		}
 	}
 	if err := writeAuditRes(ctx, tx, actorID, "update", "severity_level", old.ID, old, updated); err != nil {
 		return nil, err

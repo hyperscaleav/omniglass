@@ -182,6 +182,7 @@ below from the project's history. From here it grows one slice at a time.
 | [ADR-0141](#adr-0141-a-command-settles-when-its-evidence-arrives-from-its-reply-first-and-observation-second) | 2026-10-18 | Accepted | A command settles as soon as its evidence arrives: a matching observation taken after the intent, or the device's reply when its driver binding says the reply carries it. Each binding declares its source (`from: response` with a value `extract` or a `success` match, or `from: observe`, the default); the window bounds the wait, not the settling; a sweep times out what nothing settles. Revises ADR-0063's pending-until-the-window-passes rule |
 | [ADR-0142](#adr-0142-the-simulator-is-a-run-mode-beside-its-node-holding-that-nodes-identity) | 2026-10-18 | Accepted | The simulator is `omniglass sim run`, a run mode beside its node that holds the node's identity and simulates the components placed on it; impairments are opt-in (`--impairments` and `NET_ADMIN`), the console's operations run in process, a rate limit holds both ways, hits are live, not stored, and `simulation:read` (with component scope) is the whole gate on the simulated fleet |
 | [ADR-0143](#adr-0143-a-simulated-system-is-built-to-a-standard-with-platform-minted-names) | 2026-10-18 | Accepted | A simulated system is built to a standard: each role staffed with a simulated product that fits, short roles listed, names platform-minted, all in one transaction; the lab archetypes are not an operator concept |
+| [ADR-0144](#adr-0144-alarms-are-raised-by-event-rules-at-a-severity-level-from-a-ranked-registry) | 2026-10-18 | Accepted | Alarms are raised by event rules (one table per rule kind, `rule:*` authoring, `raised_by_rule_id`, one alarm per endpoint) at a severity level from a ranked registry referenced by name; `critical` became `high`, the outage floor |
 
 ## Entries
 
@@ -6493,3 +6494,31 @@ interface create form, since that name is the platform's to mint.
   counterpart, display and DSP mixes no standard declares), so a mapping table would have kept two
   vocabularies for one idea. The architect ruled the standard is the archetype and names follow the
   platform's own minting.
+
+### ADR-0144: Alarms are raised by event rules, at a severity level from a ranked registry
+
+- **Date:** 2026-10-18 | **Status:** Accepted | **Pages:** [alarms and actions](/architecture/alarms-actions/), [health](/architecture/health/), [glossary](/architecture/glossary/)
+- **Decision:** The detection half of ADR-0050 is built (epic #819), on five rulings the architect took
+  at approval:
+  1. **One table per rule kind:** `event_rule` now; `calc_rule` and `action_rule` join as siblings.
+  2. **`rule:*` gates authoring**, one resource across kinds; reading raised alarms keeps its
+     component-tier gates.
+  3. **An alarm names the rule that raised it** in a nullable `raised_by_rule_id`, its `dedup_key`
+     taken from the rule.
+  4. **Severity is a registry of named, ranked levels**, referenced **by name** (a foreign key with
+     `ON UPDATE CASCADE`). The design's `order` column is named `rank` (a reserved word otherwise). The
+     three values ADR-0050 fixed map by meaning: `critical`, the outage word, becomes `high`, the outage
+     floor of the ranked levels, so no verdict moved; a component's own verdict now reads the rank
+     (`high` and above is an outage). The reference is added `NOT VALID` because the levels are
+     boot-seeded after migrations run; it is enforced on every write. An official level never takes
+     over an operator's (a clash stops the boot naming it), and re-ranking a level recomputes the
+     health of every component with an open alarm at it.
+  5. **One alarm per endpoint** for a per-endpoint input: the dedup key is the rule name plus the
+     sample's instance, so a component with several endpoints holds an alarm per endpoint.
+
+  Rules are fleet-wide config, read and written with an all-scope grant, until a rule can be owned at a
+  location or system tier.
+- **Context:** #606 left the rules vocabulary to the definition that builds it; #819's definition
+  posed the five forks with the concrete DDL and the architect approved every recommendation
+  (2026-10-18). ADR-0050 had fixed severity at three values with a CHECK; the registry supersedes that
+  part of it.

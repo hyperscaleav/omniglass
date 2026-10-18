@@ -182,7 +182,7 @@ func TestHealthTransitionsThroughTheChain(t *testing.T) {
 		before[o] = n
 	}
 
-	// The critical alarm takes bar-1 down, its only occupant, so the role drops
+	// The high alarm takes bar-1 down, its only occupant, so the role drops
 	// below quorum.
 	alarm, err := f.gw.RaiseAlarm(ctx, "", "bar-1", storage.AlarmSpec{
 		Severity: "high", Message: "mic array not responding",

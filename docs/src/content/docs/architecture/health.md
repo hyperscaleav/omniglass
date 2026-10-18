@@ -241,7 +241,7 @@ Two reads, both scope-injected, both a non-disclosing 404 for an owner outside t
 ([API](/architecture/api/#health-the-verdict-and-why)).
 
 **A system's report** is the verdict, every role it needs filled, and for an impaired role the
-causing chain: "the `room-mic` role wants 2 and has 1, because `mic-pod-2` went down on a critical
+causing chain: "the `room-mic` role wants 2 and has 1, because `mic-pod-2` went down on a high
 alarm raised at 14:02" tells the operator where to walk. A role impaired with **no assigned component
 down** (nobody assigned, or fewer assigned than the quorum wants) names no alarm, distinguishing
 **short-staffed** from **broken**.

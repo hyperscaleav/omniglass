@@ -1468,7 +1468,7 @@ func TestSeededFleetShowsEveryVerdict(t *testing.T) {
 		{"boardroom-a", "healthy", "fully staffed, the shared audio rack counted where it physically sits"},
 		{"boardroom-b", "healthy", "fully staffed: its own bar, displays, mics, and panels, plus the divisible pair's shared DSP and amplifier (#802)"},
 		{"briefing", "incomplete", "deployed except the scheduling panel nobody has installed: short one commissioning item"},
-		{"auditorium", "degraded", "fully staffed, but a critical alarm took the DSP down: a real failure in the middle of the chain, not a gap"},
+		{"auditorium", "degraded", "fully staffed, but a high alarm took the DSP down: a real failure in the middle of the chain, not a gap"},
 		{"bay-1", "healthy", "panel and player staffed and quiet"},
 		{"huddle", "healthy", "built all-in-one, so the component-build alternate it never staffed does not impair it"},
 	} {

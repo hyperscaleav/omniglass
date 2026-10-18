@@ -163,10 +163,10 @@ func TestFleetViewAPI(t *testing.T) {
 
 	v = view(ownerTok)
 	if got := v.Systems[0].Dots[0].Verdict; got != "outage" {
-		t.Errorf("dot verdict after a critical alarm = %q, want outage", got)
+		t.Errorf("dot verdict after a high alarm = %q, want outage", got)
 	}
 	if got := v.Systems[0].Verdict; got != "outage" {
-		t.Errorf("system verdict after a critical alarm = %q, want outage", got)
+		t.Errorf("system verdict after a high alarm = %q, want outage", got)
 	}
 	for _, l := range v.Locations {
 		if l.Name == "hq" && l.Verdict != "outage" {

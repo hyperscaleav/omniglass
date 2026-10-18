@@ -3,6 +3,7 @@ package storage_test
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/hyperscaleav/omniglass/internal/seed"
@@ -102,5 +103,53 @@ func TestSeverityLevels(t *testing.T) {
 	}
 	if _, v := f.recorded(t, ctx, "component", "bar-1"); v != "outage" {
 		t.Fatalf("a high alarm left bar-1 %q, want outage", v)
+	}
+}
+
+// Re-ranking a level an open alarm uses moves its component's recorded
+// health with it: across the outage floor and back.
+func TestSeverityReRankMovesHealth(t *testing.T) {
+	f := newHealthFixture(t)
+	ctx := context.Background()
+	if _, err := f.gw.CreateSeverityLevel(ctx, "", storage.SeverityLevel{Name: "major", Color: "orange", Rank: 35}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.gw.RaiseAlarm(ctx, "", "bar-1", storage.AlarmSpec{Severity: "major", Message: "fan noise"}); err != nil {
+		t.Fatal(err)
+	}
+	for _, step := range []struct {
+		rank int
+		want string
+	}{{45, "outage"}, {35, "degraded"}} {
+		r := step.rank
+		if _, err := f.gw.UpdateSeverityLevel(ctx, "", "major", storage.SeverityLevelPatch{Rank: &r}); err != nil {
+			t.Fatal(err)
+		}
+		if _, v := f.recorded(t, ctx, "component", "bar-1"); v != step.want {
+			t.Fatalf("after re-ranking major to %d bar-1 reads %q, want %s", r, v, step.want)
+		}
+	}
+}
+
+// An official level never takes over an operator's: a name or a rank an
+// operator level already holds is refused with a message naming it, not
+// silently overwritten and not a raw constraint error.
+func TestSeverityOfficialUpsertRefusesAnOperatorLevel(t *testing.T) {
+	f := newHealthFixture(t)
+	ctx := context.Background()
+	if _, err := f.gw.CreateSeverityLevel(ctx, "", storage.SeverityLevel{Name: "p1", Color: "red", Rank: 45}); err != nil {
+		t.Fatal(err)
+	}
+	for _, l := range []storage.SeverityLevel{
+		{Name: "p1", Color: "red", Rank: 60, Official: true},
+		{Name: "catastrophe", Color: "darkred", Rank: 45, Official: true},
+	} {
+		err := f.gw.UpsertSeverityLevel(ctx, l)
+		if !errors.Is(err, storage.ErrSeverityLevelExists) || !strings.Contains(err.Error(), "p1") {
+			t.Errorf("official %+v: err %v, want ErrSeverityLevelExists naming the operator level p1", l, err)
+		}
+	}
+	if got, _ := f.gw.GetSeverityLevel(ctx, "p1"); got == nil || got.Official || got.Rank != 45 {
+		t.Fatalf("p1 = %+v, want the operator's level untouched", got)
 	}
 }

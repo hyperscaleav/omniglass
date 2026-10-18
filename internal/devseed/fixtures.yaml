@@ -556,7 +556,7 @@ components:
     product: boreal-edge-98
     location: auditorium
   # The hall's chain (#802): projection, the audio rack, switching, control,
-  # and the back-of-room capture cameras. The critical alarm (below) takes the
+  # and the back-of-room capture cameras. The high alarm (below) takes the
   # DSP down, so the hall drops on a real failure in the middle of the chain.
   - key: auditorium-projector
     product: boreal-beam-340
@@ -1474,7 +1474,7 @@ role_assignments:
     role: main-display
     component: huddle-display
   # The auditorium is fully staffed on its hall-scale chain (#802). The
-  # critical alarm (below) takes the DSP down, so the hall drops on a real
+  # high alarm (below) takes the DSP down, so the hall drops on a real
   # failure in the middle of the signal path.
   - system: auditorium-av
     role: projection

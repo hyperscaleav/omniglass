@@ -371,8 +371,6 @@ func seedMetricTypes(ctx context.Context, gw storage.Gateway) error {
 	return nil
 }
 
-// seedEventTypes installs the ship-with event_type registry (the occurrence
-// keyspace), authoritative on conflict like the property registry.
 // seedSeverityLevels installs the official severity levels, authoritative on
 // conflict like the other registries; an operator's own levels are untouched.
 func seedSeverityLevels(ctx context.Context, gw storage.Gateway) error {
@@ -397,6 +395,8 @@ func seedSeverityLevels(ctx context.Context, gw storage.Gateway) error {
 	return nil
 }
 
+// seedEventTypes installs the ship-with event_type registry (the occurrence
+// keyspace), authoritative on conflict like the property registry.
 func seedEventTypes(ctx context.Context, gw storage.Gateway) error {
 	var doc struct {
 		EventTypes []struct {

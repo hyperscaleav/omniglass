@@ -113,7 +113,7 @@ func TestAcknowledgingRecordsNoHealthTransition(t *testing.T) {
 	}
 	beforeRows, beforeVerdict := recordedHealth(t, dsn, component.ID)
 	if beforeVerdict != "outage" {
-		t.Fatalf("recorded verdict before the acknowledgement is %q, want outage: the fixture's critical alarm never landed", beforeVerdict)
+		t.Fatalf("recorded verdict before the acknowledgement is %q, want outage: the fixture's high alarm never landed", beforeVerdict)
 	}
 
 	if _, err := gw.AcknowledgeAlarm(ctx, ackActor(t, dsn, "jordan-ops"), comp, raised.ID); err != nil {
@@ -125,7 +125,7 @@ func TestAcknowledgingRecordsNoHealthTransition(t *testing.T) {
 		t.Errorf("the acknowledgement recorded %d health sample(s): acknowledging is not fixing, so there is no transition to record", afterRows-beforeRows)
 	}
 	if afterVerdict != "outage" {
-		t.Errorf("recorded verdict %q, want outage: the critical alarm is still raised", afterVerdict)
+		t.Errorf("recorded verdict %q, want outage: the high alarm is still raised", afterVerdict)
 	}
 }
 
