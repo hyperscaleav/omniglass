@@ -80,6 +80,7 @@ gen-web:
 TEST_PARALLEL ?= 1
 test: test-web
 	go test -p $(TEST_PARALLEL) ./...
+	$(MAKE) test-netadmin
 
 # The SPA typecheck + unit and theming-ban tests. Part of the local gate so
 # web-only regressions (an illegible badge class, a broken page descriptor, a
