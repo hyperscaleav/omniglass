@@ -13,7 +13,8 @@ import { IdentityCell } from "../components/IdentityCell";
 import { NAME_MIN_W } from "../components/TreeList";
 import SimComponentDrawer from "../components/SimComponentDrawer";
 import AddSimSystemForm from "../components/AddSimSystemForm";
-import { ChevronRight, FlaskConical, MapPin, Plug, Plus, RotateCcw, X } from "../components/icons";
+import { ChevronRight, FlaskConical, MapPin, Plus, RotateCcw, X } from "../components/icons";
+import SimStatusBadge from "../components/SimStatusBadge";
 import { useFormActions } from "../lib/formactions";
 import { can, useMe } from "../lib/auth";
 import { describeError, rel } from "../lib/format";
@@ -29,10 +30,11 @@ import {
   addSimComponent,
   connectedNodes,
   getSimulation,
-  impairmentSummary,
   listSimProfiles,
   productGroups,
   risenHits,
+  simStatus,
+  SIM_STATES,
   totalHits,
   validateAddComponent,
   type AddComponentDraft,
@@ -319,10 +321,9 @@ const COLS: { key: string; label: string; width: number; right?: boolean }[] = [
   { key: "node", label: "Node", width: 130 },
   { key: "product", label: "Product", width: 160 },
   { key: "address", label: "Address", width: 112 },
-  { key: "serving", label: "Serving", width: 100 },
+  { key: "status", label: "Status", width: 264 },
   { key: "hits", label: "Hits", width: 80, right: true },
   { key: "last", label: "Last hit", width: 132 },
-  { key: "impairment", label: "Impairment", width: 184 },
 ];
 const OPEN_W = 40;
 
@@ -356,7 +357,8 @@ function SimTable(props: {
     { key: "place", type: "string", hint: "substring", get: place, values: (rows) => distinct(rows, place) },
     { key: "product", type: "string", hint: "exact", get: (id) => props.rowBy.get(id)?.sim.product, values: (rows) => distinct(rows, (id) => props.rowBy.get(id)?.sim.product) },
     ...(props.showNode ? [{ key: "node", type: "string" as const, hint: "exact", get: (id: string) => props.rowBy.get(id)?.node, values: (rows: string[]) => distinct(rows, (id) => props.rowBy.get(id)?.node) }] : []),
-    { key: "impairment", type: "string", hint: "exact", get: (id) => (isRowImpaired(props.rowBy.get(id)?.sim) ? "impaired" : "healthy"), values: () => ["impaired", "healthy"] },
+    { key: "status", type: "string", hint: "exact", get: (id) => props.rowBy.get(id)?.sim.state, values: () => [...SIM_STATES] },
+    { key: "impairment", type: "string", hint: "substring", get: (id) => impairmentText(props.rowBy.get(id)?.sim), values: () => ["unplugged", "not applied", "none"] },
   ];
   return (
     <ListShell filterKeys={filterKeys()} rows={ids()} placeholder="filter by name, place, product..." trailing={props.trailing}>
@@ -398,11 +400,15 @@ function SimTable(props: {
   );
 }
 
-const isRowImpaired = (d: SimComponent | undefined) => !!d && (d.impaired || !!d.impairment);
+// The impairment as the filter matches it: the chip's words and its
+// not-applied note, or "none".
+const impairmentText = (d: SimComponent | undefined) => {
+  const i = d ? simStatus(d).impairment : undefined;
+  return i ? `${i.summary}${i.applied ? "" : " not applied"}` : "none";
+};
 
 function SimRow(props: { id: string; row: SimRowData; component?: FleetComponent; blink?: number; showNode: boolean; onOpen: () => void }) {
   const d = () => props.row.sim;
-  const impaired = () => isRowImpaired(d());
   // The highlight is driven by its token, not a boolean: a second rise landing
   // inside the first highlight brings a new token, and the animation restarts
   // (class off, a forced reflow, class on) instead of being swallowed by a
@@ -451,8 +457,8 @@ function SimRow(props: { id: string; row: SimRowData; component?: FleetComponent
       </Show>
       <td class="truncate font-data text-xs text-base-content/70" title={d().product}>{d().product}</td>
       <td class="font-data text-xs">{d().address}</td>
-      <td>
-        <span class={`${d().serving ? PILL_NEUTRAL : PILL_WARN} whitespace-nowrap`}>{d().serving ? "serving" : "not serving"}</span>
+      <td class="py-1.5">
+        <SimStatusBadge sim={d()} />
       </td>
       <td class="text-right font-data tnum text-sm font-semibold" data-testid="row-hits">{d().hits.toLocaleString()}</td>
       <td class="text-xs">
@@ -461,14 +467,6 @@ function SimRow(props: { id: string; row: SimRowData; component?: FleetComponent
           <Show when={d().last_protocol}>
             <span class="ml-1.5 font-data text-base-content/50">{d().last_protocol}</span>
           </Show>
-        </Show>
-      </td>
-      <td>
-        <Show when={impaired()} fallback={<span class="text-xs text-base-content/40">none</span>}>
-          <span class={`${PILL_WARN} max-w-full gap-1`} title={`Impaired: ${impairmentSummary(d().impairment)}`} data-testid="impaired-pill">
-            <Plug size={12} />
-            <span class="truncate">{impairmentSummary(d().impairment)}</span>
-          </span>
         </Show>
       </td>
       <td class="text-base-content/30"><ChevronRight size={15} /></td>

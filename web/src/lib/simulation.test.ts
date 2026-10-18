@@ -20,12 +20,13 @@ import {
   validateAddSystem,
   addSystemBody,
   planShortfall,
+  simStatus,
   type SimComponent,
   type SimSurface,
 } from "./simulation";
 
 const row = (id: string, hits: number): SimComponent => ({
-  component_id: id, component: id, product: "p", address: "127.60.0.2", serving: true, hits, hits_by_protocol: {}, impaired: false,
+  component_id: id, component: id, product: "p", address: "127.60.0.2", serving: true, state: "running", hits, hits_by_protocol: {}, impaired: false,
 });
 
 describe("risenHits", () => {
@@ -71,6 +72,53 @@ describe("impairment words", () => {
     expect(impairmentSummary({ unplugged: true, latency_ms: 50 })).toBe("unplugged");
     expect(impairmentSummary({ latency_ms: 200, jitter_ms: 20, loss_pct: 5 })).toBe("200 ms ±20, 5% loss");
     expect(isImpaired({ rate_kbit: 64 })).toBe(true);
+  });
+});
+
+// The status is the server's state, untouched by an impairment; the impairment
+// rides beside it as its own fact, with whether the simulator applied it.
+describe("a simulated component's status", () => {
+  const sim = (state: SimComponent["state"], impairment?: SimComponent["impairment"], impaired = false) => ({ state, impairment, impaired });
+
+  it("is each state as the server names it, with no impairment when none is set", () => {
+    for (const s of ["offline", "failed", "starting", "running"] as const) {
+      expect(simStatus(sim(s))).toEqual({ state: s });
+    }
+  });
+
+  it("keeps offline, failed and starting over any impairment set: the impairment rides beside, never replaces", () => {
+    for (const s of ["offline", "failed", "starting"] as const) {
+      expect(simStatus(sim(s, { unplugged: true })).state).toBe(s);
+    }
+    expect(simStatus(sim("offline", { latency_ms: 150 }))).toEqual({
+      state: "offline",
+      impairment: { unplugged: false, summary: "150 ms", applied: false },
+    });
+  });
+
+  it("names an applied unplug as unplugged, over any shaping set with it", () => {
+    expect(simStatus(sim("running", { unplugged: true, latency_ms: 50 }, true))).toEqual({
+      state: "running",
+      impairment: { unplugged: true, summary: "unplugged", applied: true },
+    });
+  });
+
+  it("summarises applied shaping in a few words", () => {
+    expect(simStatus(sim("running", { latency_ms: 150, loss_pct: 2.5 }, true))).toEqual({
+      state: "running",
+      impairment: { unplugged: false, summary: "150 ms, 2.5% loss", applied: true },
+    });
+  });
+
+  it("marks an impairment the simulator did not apply, and keeps the state", () => {
+    expect(simStatus(sim("running", { rate_kbit: 64 }, false))).toEqual({
+      state: "running",
+      impairment: { unplugged: false, summary: "64 kbit/s", applied: false },
+    });
+  });
+
+  it("treats an all-zero impairment as none, whatever impaired says", () => {
+    expect(simStatus(sim("running", HEALTHY, true))).toEqual({ state: "running" });
   });
 });
 

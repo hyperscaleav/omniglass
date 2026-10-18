@@ -39,7 +39,7 @@ const DISPLAY = uuidFor("sim-display");
 const DSP = uuidFor("sim-dsp");
 
 const simRow = (id: string, name: string, hits: number, extra: Partial<SimComponent> = {}): SimComponent => ({
-  component_id: id, component: name, product: "boreal-edge-55", address: "127.60.0.2", serving: true,
+  component_id: id, component: name, product: "boreal-edge-55", address: "127.60.0.2", serving: true, state: "running",
   hits, hits_by_protocol: hits ? { snmp: hits } : {}, impaired: false, last_protocol: hits ? "snmp" : undefined, ...extra,
 });
 
@@ -164,13 +164,58 @@ describe("the Simulation page", () => {
     expect(within(rows[0]).getByText("boardroom-a")).toBeTruthy();
     expect(within(rows[0]).getByText("127.60.0.2")).toBeTruthy();
     expect(within(rows[0]).getByTestId("row-hits").textContent).toBe("3");
-    expect(within(rows[0]).queryByTestId("impaired-pill")).toBeNull();
-    expect(within(rows[1]).getByTestId("impaired-pill").textContent).toContain("unplugged");
+    // One Status column: each row's state, the impaired one with its impairment beside it.
+    const headers = within(screen.getByTestId("sim-table")).getAllByRole("columnheader").map((h) => h.textContent);
+    expect(headers).toContain("Status");
+    expect(headers).not.toContain("Serving");
+    expect(headers).not.toContain("Impairment");
+    expect(within(rows[0]).getByTestId("sim-state").textContent).toBe("running");
+    expect(within(rows[0]).queryByTestId("sim-impairment-chip")).toBeNull();
+    expect(within(rows[1]).getByTestId("sim-state").textContent).toBe("running");
+    expect(within(rows[1]).getByTestId("sim-impairment-chip").textContent).toBe("unplugged");
     expect(screen.getByTestId("node-hits").textContent).toBe("3");
     expect(screen.getByText("unavailable")).toBeTruthy();
     // One node: no Node column.
     expect(within(screen.getByTestId("sim-table")).queryByRole("columnheader", { name: "Node" })).toBeNull();
     expect(screen.getByRole("button", { name: /Add simulated component/ })).toBeTruthy();
+  });
+
+  it("shows a failed and a starting component by their state, the impairment set on the starting one marked not applied", async () => {
+    const f = fleet([0, 0]);
+    f.nodes![0].components = [
+      simRow(DISPLAY, "display-1", 0, { state: "failed", serving: false }),
+      simRow(DSP, "dsp-1", 0, { state: "starting", serving: false, impairment: { latency_ms: 150, loss_pct: 2.5 } }),
+    ];
+    current = { fleet: f };
+    stubFetch();
+    mount(() => <Simulation />);
+    const rows = await screen.findAllByTestId("sim-row");
+    expect(within(rows[0]).getByTestId("sim-state").textContent).toBe("failed");
+    expect(within(rows[1]).getByTestId("sim-state").textContent).toBe("starting");
+    expect(within(rows[1]).getByTestId("sim-impairment-chip").textContent).toBe("150 ms, 2.5% loss");
+    expect(within(rows[1]).getByTestId("sim-not-applied")).toBeTruthy();
+  });
+
+  it("filters by state, and by the impairment's words", async () => {
+    const f = fleet([0, 0]);
+    f.nodes![0].components = [
+      simRow(DISPLAY, "display-1", 0, { state: "failed", serving: false }),
+      simRow(DSP, "dsp-1", 0, { impaired: true, impairment: { latency_ms: 150, loss_pct: 2.5 } }),
+    ];
+    current = { fleet: f };
+    stubFetch();
+    mount(() => <Simulation />);
+    await screen.findAllByTestId("sim-row");
+    const filter = (text: string) => {
+      const input = screen.getByRole("combobox") as HTMLInputElement;
+      fireEvent.input(input, { target: { value: text } });
+      fireEvent.keyDown(input, { key: "Enter" });
+    };
+    filter("status:failed");
+    await waitFor(() => expect(screen.getAllByTestId("sim-row").map((r) => r.dataset.component)).toEqual([DISPLAY]));
+    fireEvent.click(screen.getByRole("button", { name: /clear|Clear/ }));
+    filter("impairment:loss");
+    await waitFor(() => expect(screen.getAllByTestId("sim-row").map((r) => r.dataset.component)).toEqual([DSP]));
   });
 
   it("adds a Node column when more than one node serves", async () => {
@@ -323,8 +368,16 @@ describe("the component page's Simulation section", () => {
     const section = await screen.findByTestId("leaf-simulation");
     expect(section.textContent).toContain("127.60.0.2");
     expect(section.textContent).toContain("edge-hq");
+    // One Status row carries the state and any impairment; no Serving or Impairment rows.
+    expect(within(section).getByTestId("sim-state").textContent).toBe("running");
+    const terms = [...section.querySelectorAll("dt")].map((d) => d.textContent);
+    expect(terms).toContain("Status");
+    expect(terms).not.toContain("Serving");
+    expect(terms).not.toContain("Impairment");
     fireEvent.click(within(section).getByRole("button", { name: /Open simulation/ }));
-    expect(await screen.findByTestId("sim-status")).toBeTruthy();
+    const status = await screen.findByTestId("sim-status");
+    expect(within(status).getByTestId("sim-state").textContent).toBe("running");
+    expect(status.textContent).not.toContain("Serving");
   });
 });
 

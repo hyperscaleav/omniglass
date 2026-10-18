@@ -136,8 +136,8 @@ export function isImpaired(i: Partial<Impairment> | null | undefined): boolean {
   return f.unplugged || f.latency_ms > 0 || f.jitter_ms > 0 || f.loss_pct > 0 || f.rate_kbit > 0;
 }
 
-// impairmentSummary says what is broken in a few words, for a row's impairment
-// pill and the component page's fact.
+// impairmentSummary says what is broken in a few words, for the status badge's
+// line beneath a degraded or not-applied impairment.
 export function impairmentSummary(i: Partial<Impairment> | null | undefined): string {
   const f = toImpairment(i);
   if (f.unplugged) return "unplugged";
@@ -147,6 +147,37 @@ export function impairmentSummary(i: Partial<Impairment> | null | undefined): st
   if (f.loss_pct > 0) parts.push(`${f.loss_pct}% loss`);
   if (f.rate_kbit > 0) parts.push(`${f.rate_kbit} kbit/s`);
   return parts.length ? parts.join(", ") : "healthy";
+}
+
+// A simulated component's status is the server's state, most urgent first:
+// offline (its simulator stopped reporting), failed (handed over, not served),
+// starting (added since the simulator's last pull, or handed over moments ago),
+// running. What an operator broke on it is not a status; it rides beside the
+// status as its own fact.
+export type SimState = SimComponent["state"];
+export const SIM_STATES: readonly SimState[] = ["offline", "failed", "starting", "running"];
+export type SimStatus = {
+  state: SimState;
+  // The impairment set on the component, when one is.
+  impairment?: {
+    unplugged: boolean;
+    // A few words: "unplugged", or the shaped traffic ("150 ms, 2.5% loss").
+    summary: string;
+    // Whether the simulator applied it (it may not: impairments unavailable on
+    // the node, the change not yet reached it, or the component not served).
+    applied: boolean;
+  };
+};
+
+// simStatus derives the status and the impairment beside it. The state is the
+// server's, never altered by an impairment: an offline component with an
+// impairment set still reads offline.
+export function simStatus(d: Pick<SimComponent, "state" | "impairment" | "impaired">): SimStatus {
+  if (!isImpaired(d.impairment)) return { state: d.state };
+  return {
+    state: d.state,
+    impairment: { unplugged: toImpairment(d.impairment).unplugged, summary: impairmentSummary(d.impairment), applied: d.impaired },
+  };
 }
 
 // The impairment's ranges, as the API states them. A draft field is the text

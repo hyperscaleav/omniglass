@@ -7,6 +7,7 @@ import Eyebrow from "./Eyebrow";
 import FieldRow from "./FieldRow";
 import InfoTip from "./InfoTip";
 import KVStacked from "./KVStacked";
+import SimStatusBadge from "./SimStatusBadge";
 import { ArrowUpRight, RotateCcw, Save, Zap } from "./icons";
 import { useFormActions } from "../lib/formactions";
 import { can, useMe } from "../lib/auth";
@@ -223,16 +224,6 @@ function ComponentBody(props: { id: string; onRemoved: () => void }): JSX.Elemen
   );
 }
 
-const NEUTRAL_PILL = "badge badge-sm badge-ghost";
-
-function ServingPill(props: { serving: boolean }) {
-  return (
-    <span class={props.serving ? NEUTRAL_PILL : "badge badge-sm badge-soft badge-warning"}>
-      {props.serving ? "serving" : "not serving"}
-    </span>
-  );
-}
-
 function StatusSection(props: {
   sim: ComponentSim;
   id: string;
@@ -277,7 +268,14 @@ function StatusSection(props: {
       <div class={KV_GRID}>
         <KVStacked label="Node" value={<span class="font-data">{props.sim.node}</span>} />
         <KVStacked label="Address" value={<span class="font-data">{props.sim.address}</span>} />
-        <KVStacked label="Serving" value={<ServingPill serving={!!activity()?.serving} />} />
+        <KVStacked
+          label="Status"
+          value={
+            <Show when={activity()} fallback={<span class="text-base-content/40">not reported</span>}>
+              {(a) => <SimStatusBadge sim={a()} />}
+            </Show>
+          }
+        />
         <KVStacked label="Hits" value={<span class="font-data tnum">{(activity()?.hits ?? 0).toLocaleString()}</span>} />
         <KVStacked
           label="Last hit"
