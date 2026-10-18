@@ -246,7 +246,7 @@ func TestRawTCPSession(t *testing.T) {
 	}
 
 	// Wait up to 2s for the push to arrive.
-	push := waitForFrame(t, rd, 2*time.Second)
+	push := waitForFrame(t, conn, rd, 2*time.Second)
 	if !bytes.Contains(push, []byte(`"Component":"Mixer1"`)) {
 		t.Errorf("push missing Mixer1 marker: %q", push)
 	}
@@ -325,9 +325,13 @@ func newQRCDevice(t *testing.T, hostname string) (*Device, *eventCollector) {
 // returns the FIRST frame that doesn't look like the immediate
 // open-response (the subscribe ack we already consumed). Used in
 // the push-line assertion path.
-func waitForFrame(t *testing.T, rd *bufio.Reader, timeout time.Duration) []byte {
+func waitForFrame(t *testing.T, conn net.Conn, rd *bufio.Reader, timeout time.Duration) []byte {
 	t.Helper()
 	deadline := time.Now().Add(timeout)
+	// The read itself carries the deadline: without it a frame that never
+	// comes blocks ReadBytes forever and the loop's clock never runs.
+	_ = conn.SetReadDeadline(deadline)
+	defer func() { _ = conn.SetReadDeadline(time.Time{}) }()
 	for time.Now().Before(deadline) {
 		f, err := rd.ReadBytes(0)
 		if err == nil && len(f) > 1 {
