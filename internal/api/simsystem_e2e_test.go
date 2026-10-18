@@ -102,7 +102,8 @@ func TestSimulatedSystemAPI(t *testing.T) {
 	// the component tier, not a 500.
 	if _, err := conn.Exec(ctx, `insert into role (name, permissions) values
 		('sim-sys-all', '{"system:create","system:update","system:read","location:read","node:read","simulation:read"}'),
-		('sim-sys-loc', '{"component:create","endpoint:create","simulation:update"}')`); err != nil {
+		('sim-sys-loc', '{"component:create","endpoint:create","simulation:update"}'),
+		('sim-sys-noread', '{"simulation:update","system:create","system:update","component:create","endpoint:create","node:read"}')`); err != nil {
 		t.Fatal(err)
 	}
 	locTok, lhash, lprefix, err := auth.NewBearerToken()
@@ -124,6 +125,28 @@ func TestSimulatedSystemAPI(t *testing.T) {
 	} {
 		if _, err := conn.Exec(ctx, q.sql, q.args...); err != nil {
 			t.Fatalf("%s: %v", q.sql, err)
+		}
+	}
+
+	noReadTok, nhash, nprefix, err := auth.NewBearerToken()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var npid string
+	if err := conn.QueryRow(ctx, `insert into principal (kind) values ('service') returning id`).Scan(&npid); err != nil {
+		t.Fatal(err)
+	}
+	for _, q := range []string{
+		`insert into service (principal_id, name) values ($1, 'sim-sys-noread')`,
+		`insert into credential (principal_id, kind, secret_hash, prefix) values ($1, 'bearer', $2, $3)`,
+		`insert into principal_grant (principal_id, role_id, scope_kind, scope_id) values ($1, (select id from role where name = 'sim-sys-noread'), 'all', null)`,
+	} {
+		args := []any{npid}
+		if strings.Contains(q, "credential") {
+			args = append(args, nhash, nprefix)
+		}
+		if _, err := conn.Exec(ctx, q, args...); err != nil {
+			t.Fatalf("%s: %v", q, err)
 		}
 	}
 
@@ -186,6 +209,11 @@ func TestSimulatedSystemAPI(t *testing.T) {
 	}
 	c.do(ownerTok, http.MethodPost, "/nodes/site-b/simulation/systems", body, http.StatusConflict)
 	c.do(locTok, http.MethodPost, "/nodes/site-a/simulation/systems", body, http.StatusForbidden)
+	// The add reads too: it assigns roles under system:read. A builder
+	// missing it is refused up front, saying so, before anything lands.
+	if out := c.do(noReadTok, http.MethodPost, "/nodes/site-a/simulation/systems", body, http.StatusForbidden); !strings.Contains(string(out), "system:read") {
+		t.Fatalf("a builder without system:read was refused with %s, want it to say so", out)
+	}
 	if n := componentsBefore(); n != before {
 		t.Fatalf("refused adds left %d components", n-before)
 	}

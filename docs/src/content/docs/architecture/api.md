@@ -322,7 +322,8 @@ it through placed on the node; a node with no simulator connected is a 409, a pr
 simulates a 422. A whole simulated system is built to a standard: `GET /simulation/standards/{standard}:plan`
 (gated `simulation:read`) previews each of the standard's roles staffed with a simulated product that fits
 (or left short, with why), and `POST /nodes/{name}/simulation/systems` (gated `simulation:update`, and also
-needing `system:create`, `system:update`, `component:create` and `endpoint:create`) creates the system, a
+needing `system:create`, `system:update`, `system:read`, `component:create`, `endpoint:create` and
+`node:read`, plus `location:read` when it names a place) creates the system, a
 simulated component per staffed role at its own free address with its endpoint on the node, and each
 role assignment, in one transaction: it lands whole or not at all.
 

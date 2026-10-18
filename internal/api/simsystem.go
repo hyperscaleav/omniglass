@@ -208,9 +208,13 @@ func registerSimSystemRoutes(api huma.API, a *authenticator, gw storage.Gateway,
 		Path:          "/nodes/{name}/simulation/systems",
 		DefaultStatus: http.StatusCreated,
 		Summary:       "Add a simulated system",
-		Description:   "Creates a system built to a standard, with a simulated component for each staffed role in the standard's plan (see plan-simulation-system), each at its own free address in the simulated block with its endpoint placed on the node, and assigned its role, all in one transaction: it lands whole or not at all. Component names are minted as an unnamed create mints them; roles nothing simulated fits are left short and listed. The simulator serves the components from its next pull. Gated by simulation:update, and also needs system:create, system:update, component:create and endpoint:create, each in the caller's own scope; the components are created without a parent, so component:create must be all-scope. A refused piece is mapped as its own route maps it (a component refused is a 403). A node with no simulator connected is a 409, and a standard nothing simulated can staff a 422.",
+		Description:   "Creates a system built to a standard, with a simulated component for each staffed role in the standard's plan (see plan-simulation-system), each at its own free address in the simulated block with its endpoint placed on the node, and assigned its role, all in one transaction: it lands whole or not at all. Component names are minted as an unnamed create mints them; roles nothing simulated fits are left short and listed. The simulator serves the components from its next pull. Gated by simulation:update, and also needs system:create, system:update, system:read, component:create, endpoint:create and node:read (and location:read when it names a place), each in the caller's own scope; the components are created without a parent, so component:create must be all-scope. A refused piece is mapped as its own route maps it (a component refused is a 403). A node with no simulator connected is a 409, and a standard nothing simulated can staff a 422.",
 	}, "simulation", "update"), func(ctx context.Context, in *addSimSystemInput) (*addSimSystemOutput, error) {
-		for _, need := range [][2]string{{"system", "create"}, {"system", "update"}, {"component", "create"}, {"endpoint", "create"}} {
+		needs := [][2]string{{"system", "create"}, {"system", "update"}, {"system", "read"}, {"component", "create"}, {"endpoint", "create"}, {"node", "read"}}
+		if in.Body.Location != nil && *in.Body.Location != "" {
+			needs = append(needs, [2]string{"location", "read"})
+		}
+		for _, need := range needs {
 			if !a.allows(ctx, need[0], need[1]) {
 				return nil, huma.Error403Forbidden(fmt.Sprintf("adding a simulated system also needs %s:%s", need[0], need[1]))
 			}
