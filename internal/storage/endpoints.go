@@ -289,6 +289,19 @@ func (p *PG) CreateEndpoint(ctx context.Context, actorID string, spec EndpointSp
 		return nil, fmt.Errorf("storage: begin create endpoint: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
+	it, err := p.createEndpointTx(ctx, tx, actorID, spec, create)
+	if err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("storage: commit create endpoint: %w", err)
+	}
+	return it, nil
+}
+
+// createEndpointTx is CreateEndpoint inside a transaction the caller owns, so a composite write (adding
+// a simulated system) can create it alongside the rest and commit once.
+func (p *PG) createEndpointTx(ctx context.Context, tx pgx.Tx, actorID string, spec EndpointSpec, create scope.Set) (*Endpoint, error) {
 
 	// Resolved once, via endpointComponentID (uuid-or-name, ADR-0062,
 	// resolved inside create scope per ruling 2, #627), and reused for the
@@ -363,9 +376,6 @@ func (p *PG) CreateEndpoint(ctx context.Context, actorID string, spec EndpointSp
 	}
 	if err := writeAuditRes(ctx, tx, actorID, "create", "endpoint", it.ID, nil, it); err != nil {
 		return nil, err
-	}
-	if err := tx.Commit(ctx); err != nil {
-		return nil, fmt.Errorf("storage: commit create endpoint: %w", err)
 	}
 	return it, nil
 }

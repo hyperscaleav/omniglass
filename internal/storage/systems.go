@@ -615,6 +615,19 @@ func (p *PG) CreateSystem(ctx context.Context, actorID string, spec SystemSpec, 
 		return nil, fmt.Errorf("storage: begin create system: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
+	s, err := p.createSystemTx(ctx, tx, actorID, spec, create, locationRead)
+	if err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("storage: commit create system: %w", err)
+	}
+	return s, nil
+}
+
+// createSystemTx is CreateSystem inside a transaction the caller owns, so a composite write (adding
+// a simulated system) can create it alongside the rest and commit once.
+func (p *PG) createSystemTx(ctx context.Context, tx pgx.Tx, actorID string, spec SystemSpec, create, locationRead scope.Set) (*System, error) {
 
 	// An operator-typed name is validated now, before any other resolve, so a
 	// bad slug fails fast (the existing behavior). A generated name is
@@ -753,9 +766,6 @@ func (p *PG) CreateSystem(ctx context.Context, actorID string, spec SystemSpec, 
 	// the one it is holding.
 	if err := p.recomputeSystems(ctx, tx, s.ID); err != nil {
 		return nil, err
-	}
-	if err := tx.Commit(ctx); err != nil {
-		return nil, fmt.Errorf("storage: commit create system: %w", err)
 	}
 	return s, nil
 }
