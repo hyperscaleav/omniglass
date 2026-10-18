@@ -185,6 +185,17 @@ interfaces:
 computed:
   - { path: status.device.uptime, kind: elapsed, since: status.device.boot_epoch }
 
+
+# Products this profile also simulates: the other Newtron products on newtron-nvp, so the wire a
+# collector speaks matches. Each keeps its own model name.
+products:
+  - name: newtron-slate-5
+    defaults:
+      configuration: { device: { model: "Slate 5" } }
+  - name: newtron-core-3
+    defaults:
+      configuration: { device: { model: "Core CP-3" } }
+
 defaults:
   status:
     device:

@@ -396,6 +396,14 @@ behaviors:
       - path: status.dsp.temperature
         value: "{{ sigfig 3 (clamp 38.0 58.0 (randStep 1.0 .State.status.dsp.temperature)) }}"
 
+
+# Products this profile also simulates: the Polaris amplifier, also on snmp-generic, so the wire a
+# collector speaks matches. Each keeps its own model name.
+products:
+  - name: polaris-amp-4100
+    defaults:
+      configuration: { device: { model: "Amp 4-100" } }
+
 defaults:
   status:
     device:

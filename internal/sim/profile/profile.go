@@ -25,6 +25,18 @@ type DeviceProfile struct {
 	Overrides    []Override     `yaml:"overrides"`
 	Defaults     map[string]any `yaml:"defaults"`
 	DocFixture   map[string]any `yaml:"doc_fixture"`
+	// Products are the other products this profile simulates: products of
+	// the same family on the same driver, so the wire a collector speaks
+	// matches. Each may overlay the profile's defaults with its own identity.
+	Products []ProductVariant `yaml:"products"`
+}
+
+// ProductVariant is one more product a profile simulates.
+type ProductVariant struct {
+	Name string `yaml:"name"`
+	// Defaults are deep-merged over the profile's defaults for this product
+	// (its model name, typically).
+	Defaults map[string]any `yaml:"defaults"`
 }
 
 // Doc holds human-readable documentation metadata.
@@ -460,6 +472,44 @@ type SystemDevice struct {
 type Store struct {
 	Devices map[string]*DeviceProfile
 	Systems map[string]*SystemProfile
+	// variants maps a product a profile lists to that profile and overlay.
+	variants map[string]variantRef
+}
+
+type variantRef struct {
+	profile string
+	overlay map[string]any
+}
+
+// ForProduct resolves the profile that simulates a product: the profile of
+// that name, or the profile that lists it among its products (with the
+// product's defaults overlay). ok is false when no profile simulates it.
+func (s *Store) ForProduct(product string) (profileName string, overlay map[string]any, ok bool) {
+	if _, ok := s.Devices[product]; ok {
+		return product, nil, true
+	}
+	if v, ok := s.variants[product]; ok {
+		return v.profile, v.overlay, true
+	}
+	return "", nil, false
+}
+
+// indexVariants builds the product lookup, refusing a product two profiles
+// would both answer for.
+func (s *Store) indexVariants() error {
+	s.variants = map[string]variantRef{}
+	for name, p := range s.Devices {
+		for _, v := range p.Products {
+			if _, clash := s.Devices[v.Name]; clash {
+				return fmt.Errorf("profile %q lists product %q, which is a profile of its own", name, v.Name)
+			}
+			if prev, dup := s.variants[v.Name]; dup {
+				return fmt.Errorf("product %q is listed by both %q and %q", v.Name, prev.profile, name)
+			}
+			s.variants[v.Name] = variantRef{profile: name, overlay: v.Defaults}
+		}
+	}
+	return nil
 }
 
 // LoadStore loads device and system profiles from the given profile root directory.
@@ -484,6 +534,9 @@ func LoadStoreFS(fsys fs.FS) (*Store, error) {
 	}
 	if err := s.loadSystems(fsys, "systems"); err != nil {
 		return nil, fmt.Errorf("loading system profiles: %w", err)
+	}
+	if err := s.indexVariants(); err != nil {
+		return nil, fmt.Errorf("indexing products: %w", err)
 	}
 	return s, nil
 }

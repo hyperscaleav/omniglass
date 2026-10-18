@@ -130,6 +130,11 @@ func (e *Engine) buildDevice(snap DeviceSnapshot, peersByRoom map[roomKey]map[st
 	if defaults == nil {
 		defaults = map[string]any{}
 	}
+	if snap.Product != "" && snap.Product != snap.ProfileName {
+		if _, overlay, ok := e.store.ForProduct(snap.Product); ok {
+			mergeInto(defaults, deepCopy(overlay))
+		}
+	}
 	fleet.Enrich(defaults, snap.Hostname, snap.DeviceID, ip)
 	state := snap.State
 	if state == nil {

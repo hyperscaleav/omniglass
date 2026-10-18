@@ -21,18 +21,20 @@ type Skip struct {
 }
 
 // plan turns the server's device list into the snapshots to serve. A device
-// is served when its product names a simulator profile and its address is a
-// loopback IP, the addresses a simulator sharing the node's network can
-// own. Snapshots carry no state: each device starts from its profile's
-// defaults with an identity derived from its component id.
-func plan(devices []collection.SimDevice, hasProfile func(string) bool) ([]sim.DeviceSnapshot, []Skip) {
+// is served when a simulator profile serves its product (the profile of that
+// name, or a family profile that lists it) and its address is a loopback IP,
+// the addresses a simulator sharing the node's network can own. Snapshots
+// carry no state: each device starts from its profile's defaults, with its
+// product's overlay and an identity derived from its component id.
+func plan(devices []collection.SimDevice, profileFor func(string) (string, bool)) ([]sim.DeviceSnapshot, []Skip) {
 	var snaps []sim.DeviceSnapshot
 	var skips []Skip
 	for _, d := range devices {
 		reason := ""
 		ip := net.ParseIP(d.Address)
+		profileName, served := profileFor(d.Product)
 		switch {
-		case !hasProfile(d.Product):
+		case !served:
 			reason = fmt.Sprintf("no simulator profile for product %q", d.Product)
 		case d.Address == "":
 			reason = "no address: no interface targets a host"
@@ -47,7 +49,7 @@ func plan(devices []collection.SimDevice, hasProfile func(string) bool) ([]sim.D
 		}
 		snaps = append(snaps, sim.DeviceSnapshot{
 			DeviceID: d.ComponentID, Hostname: d.Name, LoopbackIP: ip.String(),
-			ProfileName: d.Product, Version: 1,
+			ProfileName: profileName, Product: d.Product, Version: 1,
 		})
 	}
 	return snaps, skips

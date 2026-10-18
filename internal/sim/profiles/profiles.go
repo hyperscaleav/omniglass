@@ -7,7 +7,7 @@ import (
 	"io/fs"
 )
 
-//go:embed devices/*.yaml devices/schema.json systems/*.yaml fleets/*.yaml all:templates
+//go:embed devices/*.yaml devices/schema.json systems/*.yaml fleets/*.yaml coverage.yaml all:templates
 var FS embed.FS
 
 // Templates is the catalog's templates tree, rooted so profile template

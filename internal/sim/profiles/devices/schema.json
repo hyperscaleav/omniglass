@@ -88,6 +88,27 @@
       "type": "object",
       "description": "Optional documentation fixture rendered into the device's playground. Free-form.",
       "additionalProperties": true
+    },
+    "products": {
+      "type": "array",
+      "description": "Other products this profile simulates: products of the same family on the same driver, so the wire a collector speaks matches. Each may overlay the profile's defaults with its own identity.",
+      "items": {
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "The product's name in the product catalog."
+          },
+          "defaults": {
+            "type": "object",
+            "description": "Deep-merged over the profile's defaults for this product."
+          }
+        }
+      }
     }
   },
   "additionalProperties": false,

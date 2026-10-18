@@ -43,6 +43,13 @@ the binary needs nothing on disk:
 - **templates** render responses from live state, so a device's HTTP status route and its CLI
   `show channels` read the same values.
 
+A device profile is named for the product it simulates, and may list other products of its family
+that speak the same driver, each with its own identity (a model name) over the profile's defaults:
+the Boreal Edge line shares one display profile, the Newtron panels and processor share one. Every
+seeded product on the network is served by a profile or listed, with its issue, in the catalog's
+`coverage.yaml`, and a test holds the two catalogs to that. Products with no driver (a passive speaker,
+an analog microphone) are not on the network and are not simulated.
+
 The catalog names only fictional vendors (Kestrel, Polaris, Newtron, Boreal, Tessellate, Shinra Cloud), the same
 rule the boot seed follows, and a test holds it to that.
 
@@ -93,7 +100,7 @@ node's.
 
 On every pull (every ten seconds by default) it asks the server for each component with an
 interface placed on the node, with the component's product and the host its interfaces target, and
-serves the ones it can: a product whose name the catalog has a profile for, at a loopback address.
+serves the ones it can: a product a profile serves, at a loopback address.
 The rest it logs and leaves alone. A device added on the server starts serving on the next pull
 and a device removed goes dark, with no restart and no disturbance to the others. Each pull states
 what the simulator can do where it runs (bind ports below 1024, hold `NET_ADMIN`, the shift it

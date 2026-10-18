@@ -1,0 +1,10 @@
+# Seeded products on the network (they have a driver) that no simulator
+# profile serves yet, each with the issue that adds it. The coverage test
+# holds every other such product to a profile, so a new seeded product
+# either gains one or is listed here.
+unsimulated:
+  boreal-cast-m1: "#893: a media player on http-json, unlike the Boreal display profile"
+  lyra-arc-a2: "#894: no Lyra profile yet"
+  lyra-hx-1: "#894: no Lyra profile yet"
+  meridian-mx-84: "#895: no Meridian profile yet"
+  meridian-xl-1: "#895: no Meridian profile yet"

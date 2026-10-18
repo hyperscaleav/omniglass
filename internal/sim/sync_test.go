@@ -312,3 +312,17 @@ func TestEngineSyncRetriesADeviceThatFailedToStart(t *testing.T) {
 		t.Fatalf("retried device: %d", code)
 	}
 }
+
+// A product served by its family's profile starts with its own identity.
+func TestEngineSyncAppliesAProductsOverlay(t *testing.T) {
+	e := newCatalogEngine(t)
+	ip := "127.88.8.1"
+	if err := e.Sync([]DeviceSnapshot{{DeviceID: "panel", Hostname: "panel", LoopbackIP: ip,
+		ProfileName: "boreal-edge-86", Product: "boreal-edge-55", Version: 1}}); err != nil {
+		t.Fatal(err)
+	}
+	model := e.Devices()[0].State()["configuration"].(map[string]any)["device"].(map[string]any)["model"]
+	if model != "Edge 55" {
+		t.Fatalf("model = %v, want the product's own", model)
+	}
+}

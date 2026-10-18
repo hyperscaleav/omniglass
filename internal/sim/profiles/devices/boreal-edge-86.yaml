@@ -185,6 +185,26 @@ behaviors:
       - path: status.display.temperature
         value: "{{ sigfig 3 (clamp 34.0 54.0 (randStep 1.0 .State.status.display.temperature)) }}"
 
+
+# Products this profile also simulates: the Boreal displays and projector on snmp-generic, so the wire a
+# collector speaks matches. Each keeps its own model name.
+products:
+  - name: boreal-edge-55
+    defaults:
+      configuration: { device: { model: "Edge 55" } }
+  - name: boreal-edge-65
+    defaults:
+      configuration: { device: { model: "Edge 65" } }
+  - name: boreal-edge-75
+    defaults:
+      configuration: { device: { model: "Edge 75" } }
+  - name: boreal-edge-98
+    defaults:
+      configuration: { device: { model: "Edge 98" } }
+  - name: boreal-beam-340
+    defaults:
+      configuration: { device: { model: "Beam 340" } }
+
 defaults:
   status:
     device:

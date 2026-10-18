@@ -7,12 +7,15 @@ import "github.com/hyperscaleav/omniglass/internal/sim/fleet"
 // starting state. They come from a compiled fleet (internal/sim/fleet) or, in the
 // sim run mode, from the server's seeded inventory (#887).
 type DeviceSnapshot struct {
-	DeviceID    string         `json:"device_id"`
-	Hostname    string         `json:"hostname"`
-	LoopbackIP  string         `json:"loopback_ip"`
-	ProfileName string         `json:"profile_name"`
-	Version     int64          `json:"version"`
-	State       map[string]any `json:"state"`
+	DeviceID    string `json:"device_id"`
+	Hostname    string `json:"hostname"`
+	LoopbackIP  string `json:"loopback_ip"`
+	ProfileName string `json:"profile_name"`
+	// Product is the product the device is, when its profile simulates it
+	// as one of several (empty: the profile's own product).
+	Product string         `json:"product,omitempty"`
+	Version int64          `json:"version"`
+	State   map[string]any `json:"state"`
 	// SiteCode, Room and Building locate the device for per-room identity
 	// token expansion in a profile's defaults ({site}, {building}, {room},
 	// {room-device:<profile>}). Empty where the source carries none.
@@ -42,4 +45,18 @@ func Snapshots(fl *fleet.CompiledFleet) []DeviceSnapshot {
 		})
 	}
 	return out
+}
+
+// mergeInto deep-merges src over dst in place: nested maps merge key by key,
+// anything else in src replaces dst's value.
+func mergeInto(dst, src map[string]any) {
+	for k, v := range src {
+		if sm, ok := v.(map[string]any); ok {
+			if dm, ok := dst[k].(map[string]any); ok {
+				mergeInto(dm, sm)
+				continue
+			}
+		}
+		dst[k] = v
+	}
 }

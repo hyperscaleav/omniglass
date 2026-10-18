@@ -43,20 +43,32 @@ func TestCapabilitiesFrom(t *testing.T) {
 }
 
 func TestPlanServesKnownProductsOnLoopback(t *testing.T) {
-	has := func(p string) bool { return p == "sim-dsp" || p == "sim-display" }
+	profileFor := func(p string) (string, bool) {
+		switch p {
+		case "sim-dsp", "sim-display":
+			return p, true
+		case "sim-display-small": // served by its family's profile
+			return "sim-display", true
+		}
+		return "", false
+	}
 	snaps, skips := plan([]collection.SimDevice{
 		{ComponentID: "c1", Name: "dsp", Product: "sim-dsp", Address: "127.30.0.1"},
+		{ComponentID: "c6", Name: "small", Product: "sim-display-small", Address: "127.30.0.6"},
 		{ComponentID: "c2", Name: "laptop", Product: "generic-device", Address: "127.30.0.2"},
 		{ComponentID: "c3", Name: "far", Product: "sim-display", Address: "10.20.4.12"},
 		{ComponentID: "c4", Name: "named", Product: "sim-display", Address: "display.lan"},
 		{ComponentID: "c5", Name: "bare", Product: "sim-display", Address: ""},
-	}, has)
-	if len(snaps) != 1 {
-		t.Fatalf("snapshots = %+v, want only dsp", snaps)
+	}, profileFor)
+	if len(snaps) != 2 {
+		t.Fatalf("snapshots = %+v, want dsp and small", snaps)
 	}
 	s := snaps[0]
-	if s.DeviceID != "c1" || s.Hostname != "dsp" || s.ProfileName != "sim-dsp" || s.LoopbackIP != "127.30.0.1" || s.State != nil {
+	if s.DeviceID != "c1" || s.Hostname != "dsp" || s.ProfileName != "sim-dsp" || s.Product != "sim-dsp" || s.LoopbackIP != "127.30.0.1" || s.State != nil {
 		t.Fatalf("snapshot = %+v", s)
+	}
+	if v := snaps[1]; v.ProfileName != "sim-display" || v.Product != "sim-display-small" {
+		t.Fatalf("family product = %+v, want its family's profile and its own product", v)
 	}
 	reasons := map[string]string{}
 	for _, k := range skips {

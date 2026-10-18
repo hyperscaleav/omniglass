@@ -108,14 +108,14 @@ func Run(ctx context.Context, cfg Config) error {
 	hits := &hitBuffer{}
 	engine.SetHitReporter(hits.add)
 
-	hasProfile := func(p string) bool { _, ok := store.Devices[p]; return ok }
+	profileFor := func(p string) (string, bool) { name, _, ok := store.ForProduct(p); return name, ok }
 	pull := func() {
 		devices, err := pullList(nc, cfg.Name, caps)
 		if err != nil {
 			log.Warn("device list pull failed", "error", err)
 			return
 		}
-		snaps, skips := plan(devices, hasProfile)
+		snaps, skips := plan(devices, profileFor)
 		for _, s := range skips {
 			log.Debug("not simulating", "component", s.Name, "reason", s.Reason)
 		}
