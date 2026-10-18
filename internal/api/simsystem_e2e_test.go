@@ -209,10 +209,11 @@ func TestSimulatedSystemAPI(t *testing.T) {
 	}
 	c.do(ownerTok, http.MethodPost, "/nodes/site-b/simulation/systems", body, http.StatusConflict)
 	c.do(locTok, http.MethodPost, "/nodes/site-a/simulation/systems", body, http.StatusForbidden)
-	// The add reads too: it assigns roles under system:read. A builder
-	// missing it is refused up front, saying so, before anything lands.
-	if out := c.do(noReadTok, http.MethodPost, "/nodes/site-a/simulation/systems", body, http.StatusForbidden); !strings.Contains(string(out), "system:read") {
-		t.Fatalf("a builder without system:read was refused with %s, want it to say so", out)
+	// The add reads too: naming a place needs location:read. A builder
+	// missing it is refused up front, saying so, not told the place does
+	// not exist.
+	if out := c.do(noReadTok, http.MethodPost, "/nodes/site-a/simulation/systems", body, http.StatusForbidden); !strings.Contains(string(out), "location:read") {
+		t.Fatalf("a builder without location:read was refused with %s, want it to say so", out)
 	}
 	if n := componentsBefore(); n != before {
 		t.Fatalf("refused adds left %d components", n-before)
