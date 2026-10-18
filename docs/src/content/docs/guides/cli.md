@@ -171,6 +171,19 @@ node list` to the daemon and it failed asking for `--token`. The run mode is now
 omniglass node run --name edge-hq --token ogp_...   # the edge daemon: claim, pull the worklist, heartbeat
 ```
 
+The [simulator](/architecture/simulation/) runs beside a node with that node's identity, serving the
+devices placed on it, and the node's simulation view shows what it serves and what reached it:
+
+```sh
+omniglass sim run --server https://omniglass.example --name edge-hq --token ogp_... --port-offset 10000   # serve edge-hq's simulated devices
+omniglass node simulation edge-hq   # connected?, capabilities, and hits per simulated device
+```
+
+Locally, `make dev-sim` (beside `make dev`) enrolls the dev fleet's node once, keeps its token in
+`bin/edge-hq.token`, and runs the simulator and the node side by side, so the seeded fleet is
+collected for real; its devices' ports below 1024 are lifted by `SIM_PORT_OFFSET` (default 10000, where
+the dev seed aims its endpoints).
+
 The node-facing `claim` exchange is public (the enrollment token is the authentication), so
 a node presents its name and token to receive its NATS credential:
 

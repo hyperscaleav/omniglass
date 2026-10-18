@@ -1,0 +1,7 @@
+hostname      : {{ .Hostname }}
+model         : {{ .State | get "configuration" | get "device" | get "model" }}
+firmware      : {{ .State | get "configuration" | get "firmware" | get "version" }}
+serial        : {{ .State | get "configuration" | get "device" | get "serial" }}
+uptime (s)    : {{ .State | get "status" | get "device" | get "uptime" }}
+brightness    : {{ .State | get "status" | get "panel" | get "brightness" }}%
+occupancy     : {{ .State | get "status" | get "panel" | get "occupancy" }}

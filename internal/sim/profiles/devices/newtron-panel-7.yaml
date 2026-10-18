@@ -1,0 +1,278 @@
+# yaml-language-server: $schema=schema.json
+# Newtron Panel 7, 7" Touchpanel
+#
+# Newtron is the lab's fictional control-systems vendor. The Panel 7 is
+# a 7" wall-mounted capacitive touchpanel used as the room interface
+# for starting meetings, selecting sources, and controlling lighting
+# and shades. It integrates with a Kestrel codec for VC control and
+# can live standalone as a room UI.
+#
+# Auth pattern: open HTTP. The auth block declares default credentials
+# for documentation only; enforce is left at false so the listener
+# does not gate traffic. This demonstrates the backward-compat default
+# alongside the basic-auth (Boreal, Kestrel) and header-auth (Polaris)
+# variants.
+
+name: newtron-panel-7
+manufacturer: Newtron
+model: "Panel 7"
+device_type: touchpanel
+# Case-study hostname role. Hostnames come from the system-profile
+# suffix ("touch-panel"); slug_prefix only seeds the internal HostID
+# slug. Kept aligned with the case-study name.
+slug_prefix: touch-panel
+
+doc:
+  summary: "Newtron Panel 7, 7-inch room touchpanel"
+  description: |
+    Wall-mounted capacitive touchpanel for room control. Drives room
+    startup, source selection, and macro buttons. Exposes HTTP API
+    for room state and monitoring, SSH CLI for diagnostics, and SNMP
+    for operational telemetry.
+
+interfaces:
+  - name: http-api
+    protocol: http
+    port: 443
+    tls: true
+    doc:
+      summary: "Newtron HTTP API"
+      tags: [management, api]
+    auth:
+      type: basic
+      default_user: admin
+      default_password: ""
+      # enforce: false (default) leaves this listener open. Set
+      # enforce: true when the lab needs to demonstrate a credentialed
+      # touchpanel.
+    api_surface: newtron-panel
+    routes:
+      - match: "GET /"
+        template: web/newtron-panel/index.gotempl
+        doc: { summary: "Touchpanel dashboard" }
+
+      # Course teaching path for room.scene / room.source is the SSH
+      # `show room` command (see ssh-console below). The HTTP read
+      # surface deliberately does NOT expose scene/source: this status
+      # snapshot is panel + identity only, and the former GET /api/room
+      # read route (which returned scene/source/occupancy) was removed.
+      # SSH is the single way in for the two course datapoints. The web
+      # dashboard still drives scene/source over the POST control routes
+      # and reflects them in the page (the web-UI hacking surface), but
+      # there is no JSON telemetry endpoint that returns them.
+      - match: "GET /api/status"
+        template: api/newtron-panel/status.json.gotempl
+        doc: { summary: "Touchpanel status (panel backlight, occupancy, identity)", tags: [api, status] }
+
+      - match: "POST /api/room/scene"
+        template: api/newtron-panel/room-ack.json.gotempl
+        doc: { summary: "Switch room scene (e.g. presentation, vc)", tags: [api, control] }
+        example: |
+          {"scene": "presentation"}
+        mutate:
+          status.room.scene: "{{ .Request.Body.scene }}"
+
+      - match: "POST /api/room/source"
+        template: api/newtron-panel/room-ack.json.gotempl
+        doc: { summary: "Select active room source", tags: [api, control] }
+        example: |
+          {"source": "laptop"}
+        mutate:
+          status.room.source: "{{ .Request.Body.source }}"
+
+      - match: "POST /api/panel/brightness"
+        template: api/newtron-panel/room-ack.json.gotempl
+        doc: { summary: "Set panel backlight brightness (0-100)", tags: [api, control] }
+        example: |
+          {"brightness": 85}
+        mutate:
+          status.panel.brightness: "{{ .Request.Body.brightness }}"
+
+      # Reboot resets uptime and the volatile panel state back to
+      # declared defaults. The SSH `reboot` verb aliases
+      # *newtron_reboot_mutations so the two surfaces never drift.
+      - match: "POST /api/admin/reboot"
+        template: api/newtron-panel/reboot-ack.json.gotempl
+        doc: { summary: "Reboot panel (clears uptime, resets panel state)", tags: [api, admin] }
+        example: "{}"
+        mutations: &newtron_reboot_mutations
+          - { path: status.device.boot_epoch, value: "{{ now }}" }
+          - { path: status.panel.brightness, value: "{{ .Defaults.status.panel.brightness }}" }
+          - { path: status.panel.occupancy, value: "{{ .Defaults.status.panel.occupancy }}" }
+
+      # Factory reset extends to every volatile status path with a
+      # declared default in the profile.
+      - match: "POST /api/admin/factory-reset"
+        template: api/newtron-panel/factory-reset-ack.json.gotempl
+        doc: { summary: "Factory reset (resets every status path to defaults)", tags: [api, admin] }
+        example: "{}"
+        mutations: &newtron_factory_reset_mutations
+          - { path: status.device.boot_epoch, value: "{{ now }}" }
+          - { path: status.panel.brightness, value: "{{ .Defaults.status.panel.brightness }}" }
+          - { path: status.panel.occupancy, value: "{{ .Defaults.status.panel.occupancy }}" }
+          - { path: status.room.scene, value: "{{ .Defaults.status.room.scene }}" }
+          - { path: status.room.source, value: "{{ .Defaults.status.room.source }}" }
+
+  - name: ssh-console
+    protocol: ssh
+    port: 22
+    doc: { summary: "SSH diagnostic CLI (persistent session)", tags: [management, cli, persistent-session] }
+    auth:
+      type: password
+      default_user: admin
+      default_password: newtron
+    api_surface: newtron-panel
+    # persistent: true keeps the SSH connection open across commands,
+    # giving newtron parity with the other session-capable devices
+    # (persistent ssh/telnet/tcp listeners). The panel has no
+    # subscribable telemetry, so there are no `subjects` / subscribe
+    # verbs, this is a plain hot shell. All existing one-shot commands (`show status`, `show room`,
+    # `reboot`, `factory-reset`) run unchanged inside the session.
+    persistent: true
+    line_ending: "\r\n"
+    welcome: "Newtron Panel 7 CLI ready."
+    limits:
+      max_sessions_per_device: 16
+      out_buffer: 256
+    commands:
+      - match: "show status"
+        template: api/newtron-panel/cli-status.txt.gotempl
+        doc: { summary: "Panel status overview" }
+      - match: "show room"
+        template: api/newtron-panel/cli-room.txt.gotempl
+        doc: { summary: "Current room scene and source" }
+
+      # reboot / factory-reset, same anchored mutation lists as the
+      # HTTP /api/admin/* routes, so SSH and HTTP surfaces never drift.
+      - match: "reboot"
+        template: api/newtron-panel/cli-ack.txt.gotempl
+        doc: { summary: "Reboot panel" }
+        mutations: *newtron_reboot_mutations
+      - match: "factory-reset"
+        template: api/newtron-panel/cli-ack.txt.gotempl
+        doc: { summary: "Factory reset panel" }
+        mutations: *newtron_factory_reset_mutations
+
+  # NVP: the newtron-nvp driver's line protocol (TCP 51325, CRLF lines, no
+  # banner). GET INPUT reports the video input; SET INPUT selects one of the
+  # inputs the video-input property allows (the sim matches whole lines, so
+  # each is listed); SUBSCRIBE INPUT pushes "EVT INPUT <input>" on change.
+  - name: nvp
+    protocol: tcp
+    port: 51325
+    doc:
+      summary: "NVP line protocol: video input status, selection and events"
+      tags: [control, persistent-session, raw-tcp]
+    api_surface: newtron-nvp
+    persistent: true
+    line_ending: "\r\n"
+    subjects:
+      - match: "status.video.input"
+        path: "status.video.input"
+        publish_token: "INPUT"
+        push_format: "EVT INPUT {{ .Raw }}"
+    commands:
+      - match: "GET INPUT"
+        response: 'INPUT {{ .State | get "status" | get "video" | get "input" }}'
+      - match: "SET INPUT hdmi1"
+        response: "INPUT hdmi1"
+        mutations:
+          - { path: status.video.input, value: "hdmi1" }
+      - match: "SET INPUT hdmi2"
+        response: "INPUT hdmi2"
+        mutations:
+          - { path: status.video.input, value: "hdmi2" }
+      - match: "SET INPUT hdmi3"
+        response: "INPUT hdmi3"
+        mutations:
+          - { path: status.video.input, value: "hdmi3" }
+      - match: "SET INPUT dp1"
+        response: "INPUT dp1"
+        mutations:
+          - { path: status.video.input, value: "dp1" }
+      - match: "SET INPUT usbc"
+        response: "INPUT usbc"
+        mutations:
+          - { path: status.video.input, value: "usbc" }
+      - match: "SUBSCRIBE INPUT"
+        action: subscribe
+        subject: "status.video.input"
+        token: "INPUT"
+        response: "OK"
+      - match: "UNSUBSCRIBE INPUT"
+        action: unsubscribe
+        subject: "status.video.input"
+        response: "OK"
+
+  - name: snmp
+    protocol: snmp
+    port: 161
+    doc: { summary: "SNMP monitoring interface (MIB-2 only, teaching case)", tags: [monitoring] }
+    api_surface: newtron-panel
+    auth:
+      community: "public"
+    # DELIBERATELY DEAD SNMP. This panel answers only the two
+    # standard MIB-2 system OIDs (sysDescr, sysUpTime) and exposes NO
+    # enterprise telemetry, the entire 1.3.6.1.4.1.55510 arc that
+    # earlier carried brightness / occupancy / scene / source is gone.
+    # It is the lab's "SNMP looks alive but tells you nothing useful"
+    # teaching case: the agent responds, ICMP and the system group
+    # answer, but every operational signal an integrator actually
+    # wants lives behind the open HTTP API and the SSH CLI instead.
+    # Contrast with kestrel-vroom, the enterprise-MIB demo device.
+    oid_map:
+      configuration.device.model:       "1.3.6.1.2.1.1.1.0"
+      status.device.uptime:             "1.3.6.1.2.1.1.3.0"
+
+  - name: icmp
+    protocol: icmp
+    doc: { summary: "ICMP ping reachability", tags: [monitoring] }
+
+# Read-derived fields, computed on every read rather than written by a
+# timer. uptime = now - boot_epoch (seconds). No goroutine, no event:
+# reading uptime never floods the event stream the way a per-tick
+# behavior did. The boot_epoch anchor is seeded at device start and
+# re-set to "{{ now }}" by the reboot / factory-reset routes above.
+computed:
+  - { path: status.device.uptime, kind: elapsed, since: status.device.boot_epoch }
+
+defaults:
+  status:
+    device:
+      # Anchor for the computed uptime field. 0 means "unset", the
+      # simulator seeds it to the device's start time on load.
+      boot_epoch: 0
+    panel:
+      brightness: 85
+      occupancy: false
+    room:
+      scene: "idle"
+      source: "none"
+    video:
+      # The selected video input, as the NVP line protocol reports and sets
+      # it; one of the video-input property's values.
+      input: "hdmi1"
+    network:
+      ipv4:
+        address: ""
+        mac: ""
+  configuration:
+    device:
+      serial: ""
+      model: "Panel 7"
+      manufacturer: "Newtron"
+    firmware:
+      version: "4.1.2"
+    network:
+      hostname: ""
+    # WEB-DRIVER-ONLY teaching surface. configuration.room.config_version
+    # is exposed on NO API route, NO SNMP OID, and NO SSH `show` command.
+    # It is embedded into GET / ONLY as a base64 blob (see the
+    # web/newtron-panel/index.gotempl b64enc data attribute) and decoded
+    # by client JS into the DOM at runtime. A plaintext `curl GET /`
+    # scrape sees only the encoded blob and a "loading…" placeholder;
+    # the value is recoverable solely by driving a real browser (or a
+    # headless JS-running driver). This is the one datapoint a student
+    # cannot get without a browser.
+    room:
+      config_version: "rcfg-2026.05-7f3a"

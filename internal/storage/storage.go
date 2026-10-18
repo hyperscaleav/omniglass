@@ -542,6 +542,9 @@ type Gateway interface {
 	// and its execution reports.
 	PendingNodeCommands(ctx context.Context, name string) ([]CommandDelivery, error)
 	RecordCommandExecution(ctx context.Context, name string, commandID int64, execErr string) error
+	// NodeSimDevices lists the components a simulator beside the node serves,
+	// within the component read scope.
+	NodeSimDevices(ctx context.Context, name string, read scope.Set) ([]SimDevice, error)
 	// ResolveTaskOwner binds a task's owner component and confines the node to its
 	// own tasks, for the telemetry ingest consumer.
 	ResolveTaskOwner(ctx context.Context, taskID, nodeName string) (TaskOwner, bool, error)

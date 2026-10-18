@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>{{ .Hostname }}, Polaris DSP 16</title>
+<style>
+  body { font-family: -apple-system, Segoe UI, Roboto, sans-serif; background: #f4f6f4; color: #1f2d27; margin: 0; }
+  .bar { background: #13241c; color: #fff; padding: 14px 24px; display: flex; justify-content: space-between; align-items: baseline; }
+  .bar .brand { font-weight: 700; letter-spacing: 0.06em; color: #9fe0a2; }
+  .bar .model { opacity: 0.7; font-size: 13px; color: #c9d8ce; }
+  main { max-width: 920px; margin: 24px auto; padding: 0 16px; }
+  .card { background: #fff; border: 1px solid #dde5df; border-radius: 6px; padding: 18px 22px; margin-bottom: 14px; }
+  .card h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: #617368; margin: 0 0 10px; }
+  .row { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; font-size: 14px; border-bottom: 1px solid #f0f3f1; gap: 16px; }
+  .row:last-child { border-bottom: none; }
+  .row .k { color: #617368; }
+  .row .v { font-weight: 500; }
+  .meter { margin-top: 6px; background: #eaf0ec; border-radius: 3px; height: 6px; overflow: hidden; }
+  .meter .fill { height: 100%; background: #3c8b5e; }
+  table.channels { width: 100%; border-collapse: collapse; font-size: 13px; }
+  table.channels th, table.channels td { text-align: left; padding: 6px 8px; border-bottom: 1px solid #f0f3f1; }
+  table.channels th { font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: #617368; font-weight: 600; }
+  table.channels td.idx { color: #95a59d; font-variant-numeric: tabular-nums; width: 36px; }
+  table.channels td.gain { font-variant-numeric: tabular-nums; width: 90px; }
+  table.channels td.peak { font-variant-numeric: tabular-nums; width: 70px; color: #95a59d; }
+  table.channels input[type=range] { width: 140px; vertical-align: middle; }
+  button.mute { font-family: inherit; font-size: 12px; padding: 4px 10px; border: 1px solid #b9c9c0; background: #f1f5f2; color: #1f2d27; border-radius: 3px; cursor: pointer; min-width: 64px; }
+  button.mute.muted { background: #c83e3e; border-color: #a72f2f; color: #fff; font-weight: 600; }
+  button.mute:hover { background: #e2ebe5; }
+  button.mute.muted:hover { background: #b13838; }
+  .auth-card { background: #fffbe6; border-color: #ddd1a0; }
+  .auth-card.ok { background: #ecf6ee; border-color: #b9d8c0; }
+  .auth-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .auth-row input { font-family: ui-monospace, Menlo, Consolas, monospace; padding: 6px 9px; border: 1px solid #c4cfc8; border-radius: 4px; min-width: 280px; font-size: 13px; }
+  .auth-row button { font-family: inherit; font-size: 13px; padding: 6px 14px; border: 1px solid #5e9e76; background: #5e9e76; color: #fff; border-radius: 4px; cursor: pointer; }
+  .auth-row button:hover { background: #4e8865; }
+  .auth-row .hint { font-size: 12px; color: #6e7e76; }
+  .toast { position: fixed; bottom: 20px; right: 20px; background: #13241c; color: #fff; padding: 10px 16px; border-radius: 4px; font-size: 13px; opacity: 0; transition: opacity 0.2s; pointer-events: none; }
+  .toast.show { opacity: 1; }
+  .toast.err { background: #a72f2f; }
+</style>
+</head>
+<body>
+<div class="bar">
+  <div><span class="brand">POLARIS</span> &middot; {{ .Hostname }}</div>
+  <div class="model">DSP 16</div>
+</div>
+<main>
+  <div class="card auth-card" id="auth-card">
+    <h2>API Token</h2>
+    <p style="margin: 0 0 10px; font-size: 13px; color: #617368;">
+      Polaris gates every <code>/api/*</code> request behind an <code>X-Polaris-Token</code> header.
+      Paste the token here and the page will replay it on every fetch. The lab default is
+      <code>polaris-lab-token</code>.
+    </p>
+    <div class="auth-row">
+      <input type="text" id="token-input" placeholder="X-Polaris-Token value" autocomplete="off">
+      <button id="token-save">Save token</button>
+      <span class="hint" id="token-hint">No token saved &mdash; controls disabled.</span>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>DSP</h2>
+    <div class="row"><span class="k">active channels</span><span class="v">{{ .State | get "status" | get "dsp" | get "active_channels" }} / 16</span></div>
+    <div class="row"><span class="k">cpu load</span><span class="v">{{ .State | get "status" | get "dsp" | get "cpu_load" }}%</span></div>
+    <div class="meter"><div class="fill" style="width: {{ .State | get "status" | get "dsp" | get "cpu_load" }}%"></div></div>
+    <div class="row" style="margin-top: 8px"><span class="k">temperature</span><span class="v">{{ .State | get "status" | get "dsp" | get "temperature" }} &deg;C</span></div>
+    <div class="row"><span class="k">fan rpm</span><span class="v">{{ .State | get "status" | get "dsp" | get "fan_rpm" }}</span></div>
+  </div>
+
+  <div class="card">
+    <h2>Channel mixer</h2>
+    <table class="channels">
+      <thead>
+        <tr><th>#</th><th>Name</th><th>Gain (dB)</th><th>Peak</th><th></th></tr>
+      </thead>
+      <tbody>
+        {{ range $ch := .State | get "status" | get "channels" }}
+        <tr data-idx="{{ $ch | get "index" }}">
+          <td class="idx">{{ $ch | get "index" }}</td>
+          <td>{{ $ch | get "name" }}</td>
+          <td class="gain">
+            <input type="range" min="-60" max="12" step="1" value="{{ $ch | get "gain" }}" data-role="gain">
+            <span data-role="gain-val">{{ $ch | get "gain" }}</span>
+          </td>
+          <td class="peak">{{ $ch | get "peak_db" }} dB</td>
+          <td>
+            <button class="mute {{ if $ch | get "mute" }}muted{{ end }}" data-role="mute">
+              {{ if $ch | get "mute" }}MUTED{{ else }}live{{ end }}
+            </button>
+          </td>
+        </tr>
+        {{ end }}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <h2>System</h2>
+    <div class="row"><span class="k">model</span><span class="v">{{ .State | get "configuration" | get "device" | get "model" }}</span></div>
+    <div class="row"><span class="k">serial</span><span class="v">{{ .State | get "configuration" | get "device" | get "serial" }}</span></div>
+    <div class="row"><span class="k">firmware</span><span class="v">{{ .State | get "configuration" | get "firmware" | get "version" }}</span></div>
+    <div class="row"><span class="k">uptime (s)</span><span class="v">{{ .State | get "status" | get "device" | get "uptime" }}</span></div>
+    <div class="row"><span class="k">ip</span><span class="v">{{ .IP }}</span></div>
+  </div>
+</main>
+<div id="toast" class="toast"></div>
+<script>
+  const HEADER = 'X-Polaris-Token';
+  const KEY = 'polaris-token-{{ .DeviceID }}';
+  const tokenInput = document.getElementById('token-input');
+  const tokenHint = document.getElementById('token-hint');
+  const authCard = document.getElementById('auth-card');
+  const toast = document.getElementById('toast');
+
+  function flash(msg, isErr) {
+    toast.textContent = msg;
+    toast.className = 'toast show' + (isErr ? ' err' : '');
+    setTimeout(() => { toast.className = 'toast' + (isErr ? ' err' : ''); }, 1400);
+  }
+  function getToken() { return localStorage.getItem(KEY) || ''; }
+  function setToken(v) { if (v) localStorage.setItem(KEY, v); else localStorage.removeItem(KEY); paint(); }
+  function paint() {
+    const t = getToken();
+    tokenInput.value = t;
+    if (t) {
+      authCard.classList.add('ok');
+      tokenHint.textContent = 'Token saved. Controls active.';
+      document.querySelectorAll('button.mute, input[type=range][data-role=gain]')
+        .forEach(el => { el.disabled = false; });
+    } else {
+      authCard.classList.remove('ok');
+      tokenHint.textContent = 'No token saved, controls disabled.';
+      document.querySelectorAll('button.mute, input[type=range][data-role=gain]')
+        .forEach(el => { el.disabled = true; });
+    }
+  }
+
+  document.getElementById('token-save').onclick = () => {
+    setToken(tokenInput.value.trim());
+    flash('token saved');
+  };
+
+  // This page is served by the simulated device's own HTTP listener.
+  // apiURL() resolves absolute "/api/..." paths against the page's own
+  // path, so API calls stay relative to wherever the page is served.
+  function apiURL(path) {
+    if (!path.startsWith('/')) return path;
+    const base = location.pathname.replace(/\/$/, '');
+    return base + path;
+  }
+  async function send(path, body) {
+    const t = getToken();
+    if (!t) { flash('save a token first', true); return false; }
+    try {
+      const r = await fetch(apiURL(path), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', [HEADER]: t },
+        body: JSON.stringify(body),
+      });
+      if (r.status === 401) { flash('401: token rejected', true); return false; }
+      if (!r.ok) { flash('error: ' + r.status, true); return false; }
+      flash('applied');
+      return true;
+    } catch (e) {
+      flash('network error', true);
+      return false;
+    }
+  }
+  function reload() { setTimeout(() => location.reload(), 250); }
+
+  document.querySelectorAll('tr[data-idx]').forEach(row => {
+    const idx = Number(row.dataset.idx);
+    const muteBtn = row.querySelector('button[data-role=mute]');
+    muteBtn.onclick = async () => {
+      const muted = muteBtn.classList.contains('muted');
+      if (await send('/api/channels/mute', { index: idx, mute: !muted })) reload();
+    };
+    const gain = row.querySelector('input[data-role=gain]');
+    const gainVal = row.querySelector('[data-role=gain-val]');
+    gain.oninput = () => { gainVal.textContent = gain.value; };
+    gain.onchange = async () => {
+      await send('/api/channels/gain', { index: idx, gain: Number(gain.value) });
+    };
+  });
+
+  paint();
+</script>
+</body>
+</html>

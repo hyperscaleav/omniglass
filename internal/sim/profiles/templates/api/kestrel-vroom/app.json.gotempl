@@ -1,0 +1,10 @@
+{
+  {{/* @field status.app.mode string "ucc"|"signage"|"standalone" "Application platform the bar is hosting" */}}
+  "mode": "{{ .State | get "status" | get "app" | get "mode" }}",
+  {{/* @field status.app.ucc_signin string "Signed-in UCC account, empty when signed out" */}}
+  "ucc_signin": "{{ .State | get "status" | get "app" | get "ucc_signin" }}",
+  {{/* @field status.peripherals.touch_pair string "Paired touch controller hostname, empty when unpaired" */}}
+  "touch_pair": "{{ .State | get "status" | get "peripherals" | get "touch_pair" }}",
+  {{/* @field status.presentation.local_active bool "Whether a local (HDMI/USB-C) presentation is active" */}}
+  "local_presentation": {{ .State | get "status" | get "presentation" | get "local_active" }}
+}

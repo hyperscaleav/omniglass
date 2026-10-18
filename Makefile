@@ -1,7 +1,7 @@
 # Local dev loop + the build/run flow for the single binary. Production deploy
 # is BYO Postgres; tests use ephemeral testcontainer Postgres.
 
-.PHONY: build build-web web image gen gen-proto gen-web test test-web test-short test-e2e bench clean-testcontainers tidy up down dev release-plan release-apply release-snapshot docs-shots docs-shots-check docs-shots-verify
+.PHONY: build build-web web image gen gen-proto gen-web test test-web test-short test-e2e bench clean-testcontainers tidy up down dev release-plan release-apply release-snapshot docs-shots docs-shots-check docs-shots-verify dev-sim bench-sim
 
 # Build the single binary (no console embedded; serves the build-the-console
 # placeholder under /web).
@@ -125,6 +125,11 @@ test-short:
 bench:
 	go test -run '^$$' -bench . -benchmem -count=5 ./internal/storage/...
 
+# One simulator process serving a 1,000-device fleet: startup time, goroutines
+# and heap while serving, and goroutines left behind after it stops.
+bench-sim:
+	go test -run '^$$' -bench BenchmarkServeThousandDevices -benchtime 3x ./internal/sim/
+
 # Browser-driven e2e of the console against the built binary: brings up the dev
 # Postgres, embeds + serves the console, mints a token, and drives it with
 # Playwright. Needs the browser once: (cd web && npx playwright install chromium).
@@ -229,3 +234,27 @@ dev: up build-web
 	@echo "  sign in with username 'dev' and password 'dev', or paste a bearer token:"
 	@./bin/omniglass token dev --description "dev login token"
 	./bin/omniglass server
+
+# The simulated dev fleet, collected for real: run it in a second terminal while
+# `make dev` serves. It runs the simulator and the node side by side as edge-hq,
+# the dev node the seed placed every simulated device's endpoints on, so samples
+# land across the fleet. The first run enrolls edge-hq with the dev owner's token
+# (the dev seed keeps no node secret) and keeps the node token in
+# bin/edge-hq.token; later runs reuse it. Empty the file to enroll afresh.
+# SIM_PORT_OFFSET lifts the simulated devices' ports below 1024 so this runs
+# unprivileged; the dev seed aims its endpoints at the lifted ports, and a test
+# holds this default to devseed.SimPortOffset.
+SIM_PORT_OFFSET ?= 10000
+dev-sim: build
+	@if [ ! -s bin/edge-hq.token ]; then \
+		owner=$$(./bin/omniglass token dev --description "dev sim enroll" | sed -n 's/^  \([^ ][^ ]*\)$$/\1/p'); \
+		./bin/omniglass node enroll edge-hq --server http://localhost:8080 --token "$$owner" \
+			| sed -n 's/.*"token": *"\([^"]*\)".*/\1/p' > bin/edge-hq.token; \
+	fi; \
+	test -s bin/edge-hq.token || { echo "dev-sim: could not enroll edge-hq; is make dev serving?"; exit 1; }; \
+	test "$(SIM_PORT_OFFSET)" = "10000" || echo "dev-sim: SIM_PORT_OFFSET=$(SIM_PORT_OFFSET), but the dev seed aims its endpoints at ports lifted by 10000; the node will not reach the devices"; \
+	tok=$$(cat bin/edge-hq.token); \
+	./bin/omniglass node run --server http://localhost:8080 --name edge-hq --token "$$tok" & node=$$!; \
+	trap 'kill $$node 2>/dev/null' EXIT INT TERM; \
+	sleep 2; kill -0 $$node 2>/dev/null || { echo "dev-sim: the node exited at startup (see above); empty bin/edge-hq.token to enroll afresh"; exit 1; }; \
+	./bin/omniglass sim run --server http://localhost:8080 --name edge-hq --token "$$tok" --port-offset $(SIM_PORT_OFFSET)

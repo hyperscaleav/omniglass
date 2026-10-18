@@ -1,0 +1,1 @@
+{"ok": true, "mute": {{ .State | get "status" | get "audio" | get "mute" }}}

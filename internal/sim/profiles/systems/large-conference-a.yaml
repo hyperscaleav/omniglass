@@ -1,0 +1,43 @@
+# Large Conference Room, Type A
+#
+# Standard mixed-vendor large conference room for 12-20 people. One
+# Kestrel VRoom as the VC endpoint, a Newtron Panel 7 for room control,
+# two Boreal Edge 86 displays for dual-screen presentation, and a
+# Polaris DSP 16 for audio processing. Represents a realistic deployment
+# where no single vendor owns the whole room.
+
+name: large-conference-a
+doc:
+  summary: "Large conference room with dual displays, video bar, touchpanel, and DSP"
+  description: |
+    Standard large conference room archetype with a mixed-vendor stack.
+    Kestrel VRoom handles video conferencing with dual Boreal 85" displays
+    for content and far-end video. Newtron Panel 7 provides wall-mounted
+    touch control for room startup and source selection. Polaris DSP 16
+    handles mic mixing, echo cancellation, and speaker routing. Suitable
+    for board rooms, training rooms, and large meeting spaces.
+
+devices:
+  - profile: kestrel-vroom
+    role: codec
+    suffix: COD
+    count: 1
+    tags: [video, conferencing]
+
+  - profile: newtron-panel-7
+    role: touch-controller
+    suffix: TP
+    count: 1
+    tags: [control, sensors]
+
+  - profile: boreal-edge-86
+    role: display
+    suffix: DS
+    count: 2
+    tags: [display, presentation]
+
+  - profile: polaris-dsp-16
+    role: audio-dsp
+    suffix: DSP
+    count: 1
+    tags: [audio, processing]

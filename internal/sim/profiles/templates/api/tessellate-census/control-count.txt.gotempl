@@ -1,0 +1,1 @@
+#COUNT={{ .State | get "status" | get "occupancy" | get "people_count" }}

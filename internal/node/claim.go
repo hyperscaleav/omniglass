@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -19,6 +20,10 @@ type Credentials struct {
 	Username string `json:"username"`
 	Password string `json:"password"`
 }
+
+// ErrClaimRejected is a claim the server answered and refused (a wrong name
+// or token), as opposed to one that could not reach it.
+var ErrClaimRejected = errors.New("node: claim rejected")
 
 // Claim posts the enrollment token to the server's public claim endpoint and
 // returns the node's NATS credential. A non-200 (e.g. a bad token) is an error.
@@ -39,7 +44,7 @@ func Claim(ctx context.Context, serverURL, name, token string) (Credentials, err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return Credentials{}, fmt.Errorf("node: claim rejected (status %d): check the node name and enrollment token", resp.StatusCode)
+		return Credentials{}, fmt.Errorf("%w (status %d): check the node name and enrollment token", ErrClaimRejected, resp.StatusCode)
 	}
 	var creds Credentials
 	if err := json.NewDecoder(resp.Body).Decode(&creds); err != nil {

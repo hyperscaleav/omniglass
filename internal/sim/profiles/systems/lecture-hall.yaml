@@ -1,0 +1,34 @@
+# University Lecture Hall
+#
+# Tiered lecture hall (100-300 seats): codec for distance learning, four
+# large displays for multi-angle viewing, touch panel at the lectern,
+# DSP for the room's mic array and amplification.
+
+name: lecture-hall
+doc:
+  summary: "University lecture hall: codec, 4 displays, lectern touch, DSP"
+
+devices:
+  - profile: kestrel-vroom
+    role: codec
+    suffix: COD
+    count: 1
+    tags: [video, conferencing, education, large-room]
+
+  - profile: boreal-edge-86
+    role: display
+    suffix: DS
+    count: 4
+    tags: [display, presentation, education]
+
+  - profile: newtron-panel-7
+    role: touch-controller
+    suffix: TP
+    count: 1
+    tags: [control, education, lectern]
+
+  - profile: polaris-dsp-16
+    role: audio-dsp
+    suffix: DSP
+    count: 1
+    tags: [audio, processing, education, large-room]

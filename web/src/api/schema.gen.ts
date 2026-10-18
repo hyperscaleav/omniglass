@@ -1868,6 +1868,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/nodes/{name}/simulation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get a node's simulator
+         * @description The devices a simulator beside the node serves (each component with an endpoint placed on the node, within the caller's component read scope), joined to the hits the server has seen and the simulator's capabilities. Hits are live and per server process, not stored. Requires an all-scope node read. Gated by node:read.
+         */
+        get: operations["get-node-simulation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/nodes/{name}:enroll": {
         parameters: {
             query?: never;
@@ -7126,6 +7146,48 @@ export interface components {
             };
             values: components["schemas"]["Settings"];
         };
+        SimCapabilities: {
+            low_ports: boolean;
+            net_admin: boolean;
+            /** Format: int64 */
+            port_offset: number;
+        };
+        SimDeviceBody: {
+            /** @description The host the component's endpoints target. */
+            address: string;
+            /** @description The component's name. */
+            component: string;
+            component_id: string;
+            /**
+             * Format: int64
+             * @description Connections and requests the simulated device has answered since the server started.
+             */
+            hits: number;
+            hits_by_protocol: {
+                [key: string]: number;
+            };
+            /** Format: date-time */
+            last_hit_at?: string;
+            last_protocol?: string;
+            /** @description The component's product; its name selects the simulator profile. */
+            product: string;
+            /** @description Whether the simulator reported serving this device in its latest batch. */
+            serving: boolean;
+        };
+        SimulationOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/SimulationOutputBody.json
+             */
+            readonly $schema?: string;
+            capabilities: components["schemas"]["SimCapabilities"];
+            /** @description A simulator beside this node pulled its device list recently. */
+            connected: boolean;
+            devices: components["schemas"]["SimDeviceBody"][] | null;
+            /** Format: date-time */
+            last_seen?: string;
+        };
         StandardBody: {
             /**
              * Format: uri
@@ -11926,6 +11988,38 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["NodeLogsOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "get-node-simulation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The node's unique name */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SimulationOutputBody"];
                 };
             };
             /** @description Error */

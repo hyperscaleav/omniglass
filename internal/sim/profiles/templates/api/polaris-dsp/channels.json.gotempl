@@ -1,0 +1,4 @@
+{
+  "active_channels": {{ .State | get "status" | get "dsp" | get "active_channels" }},
+  "channels": {{ .State | get "status" | get "channels" | marshal }}
+}

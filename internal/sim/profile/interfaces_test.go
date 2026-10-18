@@ -1,0 +1,32 @@
+package profile
+
+import "testing"
+
+// The simulator serves one SSH and one Telnet listener per device, so a
+// profile declaring a second of either fails to load instead of serving
+// only one of them. Several tcp interfaces are fine: each gets its own.
+func TestValidateInterfaces(t *testing.T) {
+	ifaces := func(protos ...string) DeviceProfile {
+		var p DeviceProfile
+		for i, pr := range protos {
+			p.Interfaces = append(p.Interfaces, Interface{Name: pr + string(rune('a'+i)), Protocol: pr, Port: 1000 + i})
+		}
+		return p
+	}
+	for _, tc := range []struct {
+		name    string
+		p       DeviceProfile
+		wantErr bool
+	}{
+		{"one of each", ifaces("http", "ssh", "telnet", "tcp", "snmp"), false},
+		{"two tcp bands", ifaces("tcp", "tcp"), false},
+		{"two http", ifaces("http", "http"), false},
+		{"two ssh", ifaces("ssh", "ssh"), true},
+		{"two telnet", ifaces("telnet", "telnet"), true},
+		{"two snmp", ifaces("snmp", "snmp"), true},
+	} {
+		if err := validateInterfaces(&tc.p); (err != nil) != tc.wantErr {
+			t.Errorf("%s: err = %v, wantErr %v", tc.name, err, tc.wantErr)
+		}
+	}
+}

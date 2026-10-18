@@ -1,0 +1,10 @@
+{
+  "latest": {
+    "event": "{{ .State | get "status" | get "occupancy" | get "last_event" }}",
+    "vacant": {{ .State | get "status" | get "occupancy" | get "vacant" }},
+    "at": {{ .State | get "status" | get "device" | get "uptime" }}
+  },
+  "delivery": "poll",
+  "webhook_target": "{{ .State | get "configuration" | get "webhook" | get "url" }}",
+  "note": "the live head-count (people_count) is NOT exposed over HTTP, read it on the raw-TCP control band (COUNT? / SUBSCRIBE COUNT, port 5000). This route carries the occupancy event signal + vacant flag only. Webhook target is stored but not POSTed by the simulator."
+}

@@ -56,7 +56,11 @@ docker run -d --name ogshots-pg --network "$NET" \
 until docker exec ogshots-pg pg_isready -U omniglass -d omniglass >/dev/null 2>&1; do sleep 1; done
 sleep 2
 
-app() { docker run --rm --network "$NET" -v "$ROOT/bin/omniglass:/omniglass:ro" -e OMNIGLASS_DSN="$DSN" "$APPIMG" /omniglass "$@"; }
+# One secret key for every container: seed-dev seeds a secret (the simulated
+# fleet's SNMP community) that the server must decrypt, and each throwaway
+# container would otherwise mint its own key. Fixed, since it guards nothing.
+KEY=$(printf 'omniglass-docs-shots-fixed-key!!' | base64)
+app() { docker run --rm --network "$NET" -v "$ROOT/bin/omniglass:/omniglass:ro" -e OMNIGLASS_DSN="$DSN" -e OMNIGLASS_SECRET_KEY="$KEY" "$APPIMG" /omniglass "$@"; }
 
 app migrate
 # Idempotent by intent, but a swallowed TRANSIENT failure here drops audited
@@ -64,10 +68,10 @@ app migrate
 # the already-exists case by checking the outcome, never by ignoring failure.
 app bootstrap dev --password dev >/dev/null 2>&1 || true
 app set-password dev dev >/dev/null
-app seed-dev
+app seed-dev --sim-fleet=false
 
 docker run -d --name ogshots-srv --network "$NET" -v "$ROOT/bin/omniglass:/omniglass:ro" \
-  -e OMNIGLASS_DSN="$DSN" "$APPIMG" /omniglass server >/dev/null
+  -e OMNIGLASS_DSN="$DSN" -e OMNIGLASS_SECRET_KEY="$KEY" "$APPIMG" /omniglass server >/dev/null
 until docker run --rm --network "$NET" "$PWIMG" bash -c 'curl -fsS http://ogshots-srv:8080/api/v1/healthz' >/dev/null 2>&1; do sleep 1; done
 
 TOK=$(app token dev --description "docs capture" 2>/dev/null | grep -o 'ogp_[A-Za-z0-9_-]*')

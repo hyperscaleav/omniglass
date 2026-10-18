@@ -1,0 +1,901 @@
+# Shinra Global Fleet
+#
+# Synthetic fleet for the Applied Monitoring class: 5 Shinra Global sites,
+# ~1000 AV systems (~200 per site), ~80% standard-conference (the case-study
+# room: video bar, display, touch panel, people counter). The rest are
+# boardroom / large-conference / huddle for variety.
+#
+# A large example fleet manifest, kept as data.
+
+name: "shinra"
+domain: "shinra.lan"
+
+display_names:
+  style: "docker"
+
+sites:
+  - code: SFO
+    name: "Shinra HQ - San Francisco"
+    cidr: 127.10.0.0/16
+    tenant: "Shinra Global"
+    region: "North America"
+    city: "San Francisco"
+    latitude: 37.774900
+    longitude: -122.419400
+    locations:
+      - building: "Bldg-1"
+        latitude: 37.775318
+        longitude: -122.419658
+        systems:
+          - profile: standard-conference
+            system_type: "Standard Conference Room"
+            label: "Conference Room {room}"
+            count: 24
+            start_room: 100
+          - profile: large-conference-a
+            system_type: "Large Conference Room"
+            label: "Large Conference {room}"
+            count: 2
+            start_room: 300
+          - profile: boardroom
+            system_type: "Boardroom"
+            label: "Boardroom {room}"
+            count: 2
+            start_room: 500
+          - profile: huddle
+            system_type: "Huddle Space"
+            label: "Huddle {room}"
+            count: 2
+            start_room: 700
+      - building: "Bldg-2"
+        latitude: 37.774935
+        longitude: -122.420136
+        systems:
+          - profile: standard-conference
+            system_type: "Standard Conference Room"
+            label: "Conference Room {room}"
+            count: 24
+            start_room: 1100
+          - profile: large-conference-a
+            system_type: "Large Conference Room"
+            label: "Large Conference {room}"
+            count: 2
+            start_room: 1300
+          - profile: boardroom
+            system_type: "Boardroom"
+            label: "Boardroom {room}"
+            count: 2
+            start_room: 1500
+          - profile: huddle
+            system_type: "Huddle Space"
+            label: "Huddle {room}"
+            count: 2
+            start_room: 1700
+      - building: "Bldg-3"
+        latitude: 37.774553
+        longitude: -122.418614
+        systems:
+          - profile: standard-conference
+            system_type: "Standard Conference Room"
+            label: "Conference Room {room}"
+            count: 24
+            start_room: 2100
+          - profile: large-conference-a
+            system_type: "Large Conference Room"
+            label: "Large Conference {room}"
+            count: 2
+            start_room: 2300
+          - profile: boardroom
+            system_type: "Boardroom"
+            label: "Boardroom {room}"
+            count: 2
+            start_room: 2500
+          - profile: huddle
+            system_type: "Huddle Space"
+            label: "Huddle {room}"
+            count: 2
+            start_room: 2700
+      - building: "Bldg-4"
+        latitude: 37.774170
+        longitude: -122.419092
+        systems:
+          - profile: standard-conference
+            system_type: "Standard Conference Room"
+            label: "Conference Room {room}"
+            count: 24
+            start_room: 3100
+          - profile: large-conference-a
+            system_type: "Large Conference Room"
+            label: "Large Conference {room}"
+            count: 2
+            start_room: 3300
+          - profile: boardroom
+            system_type: "Boardroom"
+            label: "Boardroom {room}"
+            count: 2
+            start_room: 3500
+          - profile: huddle
+            system_type: "Huddle Space"
+            label: "Huddle {room}"
+            count: 2
+            start_room: 3700
+      - building: "Bldg-5"
+        latitude: 37.775388
+        longitude: -122.419570
+        systems:
+          - profile: standard-conference
+            system_type: "Standard Conference Room"
+            label: "Conference Room {room}"
+            count: 24
+            start_room: 4100
+          - profile: large-conference-a
+            system_type: "Large Conference Room"
+            label: "Large Conference {room}"
+            count: 2
+            start_room: 4300
+          - profile: boardroom
+            system_type: "Boardroom"
+            label: "Boardroom {room}"
+            count: 2
+            start_room: 4500
+          - profile: huddle
+            system_type: "Huddle Space"
+            label: "Huddle {room}"
+            count: 2
+            start_room: 4700
+      - building: "Bldg-6"
+        latitude: 37.775006
+        longitude: -122.420048
+        systems:
+          - profile: standard-conference
+            system_type: "Standard Conference Room"
+            label: "Conference Room {room}"
+            count: 24
+            start_room: 5100
+          - profile: large-conference-a
+            system_type: "Large Conference Room"
+            label: "Large Conference {room}"
+            count: 2
+            start_room: 5300
+          - profile: boardroom
+            system_type: "Boardroom"
+            label: "Boardroom {room}"
+            count: 2
+            start_room: 5500
+          - profile: huddle
+            system_type: "Huddle Space"
+            label: "Huddle {room}"
+            count: 2
+            start_room: 5700
+      - building: "Bldg-7"
+        latitude: 37.774623
+        longitude: -122.418526
+        systems:
+          - profile: standard-conference
+            system_type: "Standard Conference Room"
+            label: "Conference Room {room}"
+            count: 16
+            start_room: 6100
+          - profile: large-conference-a
+            system_type: "Large Conference Room"
+            label: "Large Conference {room}"
+            count: 1
+            start_room: 6300
+          - profile: boardroom
+            system_type: "Boardroom"
+            label: "Boardroom {room}"
+            count: 1
+            start_room: 6500
+          - profile: huddle
+            system_type: "Huddle Space"
+            label: "Huddle {room}"
+            count: 2
+            start_room: 6700
+  - code: NYC
+    name: "Shinra HQ - New York"
+    cidr: 127.11.0.0/16
+    tenant: "Shinra Global"
+    region: "North America"
+    city: "New York"
+    latitude: 40.712800
+    longitude: -74.006000
+    locations:
+      - building: "Bldg-1"
+        latitude: 40.713218
+        longitude: -74.006258
+        systems:
+          - profile: standard-conference
+            system_type: "Standard Conference Room"
+            label: "Conference Room {room}"
+            count: 24
+            start_room: 100
+          - profile: large-conference-a
+            system_type: "Large Conference Room"
+            label: "Large Conference {room}"
+            count: 2
+            start_room: 300
+          - profile: boardroom
+            system_type: "Boardroom"
+            label: "Boardroom {room}"
+            count: 2
+            start_room: 500
+          - profile: huddle
+            system_type: "Huddle Space"
+            label: "Huddle {room}"
+            count: 2
+            start_room: 700
+      - building: "Bldg-2"
+        latitude: 40.712835
+        longitude: -74.006736
+        systems:
+          - profile: standard-conference
+            system_type: "Standard Conference Room"
+            label: "Conference Room {room}"
+            count: 24
+            start_room: 1100
+          - profile: large-conference-a
+            system_type: "Large Conference Room"
+            label: "Large Conference {room}"
+            count: 2
+            start_room: 1300
+          - profile: boardroom
+            system_type: "Boardroom"
+            label: "Boardroom {room}"
+            count: 2
+            start_room: 1500
+          - profile: huddle
+            system_type: "Huddle Space"
+            label: "Huddle {room}"
+            count: 2
+            start_room: 1700
+      - building: "Bldg-3"
+        latitude: 40.712453
+        longitude: -74.005214
+        systems:
+          - profile: standard-conference
+            system_type: "Standard Conference Room"
+            label: "Conference Room {room}"
+            count: 24
+            start_room: 2100
+          - profile: large-conference-a
+            system_type: "Large Conference Room"
+            label: "Large Conference {room}"
+            count: 2
+            start_room: 2300
+          - profile: boardroom
+            system_type: "Boardroom"
+            label: "Boardroom {room}"
+            count: 2
+            start_room: 2500
+          - profile: huddle
+            system_type: "Huddle Space"
+            label: "Huddle {room}"
+            count: 2
+            start_room: 2700
+      - building: "Bldg-4"
+        latitude: 40.712070
+        longitude: -74.005692
+        systems:
+          - profile: standard-conference
+            system_type: "Standard Conference Room"
+            label: "Conference Room {room}"
+            count: 24
+            start_room: 3100
+          - profile: large-conference-a
+            system_type: "Large Conference Room"
+            label: "Large Conference {room}"
+            count: 2
+            start_room: 3300
+          - profile: boardroom
+            system_type: "Boardroom"
+            label: "Boardroom {room}"
+            count: 2
+            start_room: 3500
+          - profile: huddle
+            system_type: "Huddle Space"
+            label: "Huddle {room}"
+            count: 2
+            start_room: 3700
+      - building: "Bldg-5"
+        latitude: 40.713288
+        longitude: -74.006170
+        systems:
+          - profile: standard-conference
+            system_type: "Standard Conference Room"
+            label: "Conference Room {room}"
+            count: 24
+            start_room: 4100
+          - profile: large-conference-a
+            system_type: "Large Conference Room"
+            label: "Large Conference {room}"
+            count: 2
+            start_room: 4300
+          - profile: boardroom
+            system_type: "Boardroom"
+            label: "Boardroom {room}"
+            count: 2
+            start_room: 4500
+          - profile: huddle
+            system_type: "Huddle Space"
+            label: "Huddle {room}"
+            count: 2
+            start_room: 4700
+      - building: "Bldg-6"
+        latitude: 40.712906
+        longitude: -74.006648
+        systems:
+          - profile: standard-conference
+            system_type: "Standard Conference Room"
+            label: "Conference Room {room}"
+            count: 24
+            start_room: 5100
+          - profile: large-conference-a
+            system_type: "Large Conference Room"
+            label: "Large Conference {room}"
+            count: 2
+            start_room: 5300
+          - profile: boardroom
+            system_type: "Boardroom"
+            label: "Boardroom {room}"
+            count: 2
+            start_room: 5500
+          - profile: huddle
+            system_type: "Huddle Space"
+            label: "Huddle {room}"
+            count: 2
+            start_room: 5700
+      - building: "Bldg-7"
+        latitude: 40.712523
+        longitude: -74.005126
+        systems:
+          - profile: standard-conference
+            system_type: "Standard Conference Room"
+            label: "Conference Room {room}"
+            count: 16
+            start_room: 6100
+          - profile: large-conference-a
+            system_type: "Large Conference Room"
+            label: "Large Conference {room}"
+            count: 1
+            start_room: 6300
+          - profile: boardroom
+            system_type: "Boardroom"
+            label: "Boardroom {room}"
+            count: 1
+            start_room: 6500
+          - profile: huddle
+            system_type: "Huddle Space"
+            label: "Huddle {room}"
+            count: 2
+            start_room: 6700
+  - code: LON
+    name: "Shinra HQ - London"
+    cidr: 127.12.0.0/16
+    tenant: "Shinra Global"
+    region: "EMEA"
+    city: "London"
+    latitude: 51.507400
+    longitude: -0.127800
+    locations:
+      - building: "Bldg-1"
+        latitude: 51.507818
+        longitude: -0.128058
+        systems:
+          - profile: standard-conference
+            system_type: "Standard Conference Room"
+            label: "Conference Room {room}"
+            count: 24
+            start_room: 100
+          - profile: large-conference-a
+            system_type: "Large Conference Room"
+            label: "Large Conference {room}"
+            count: 2
+            start_room: 300
+          - profile: boardroom
+            system_type: "Boardroom"
+            label: "Boardroom {room}"
+            count: 2
+            start_room: 500
+          - profile: huddle
+            system_type: "Huddle Space"
+            label: "Huddle {room}"
+            count: 2
+            start_room: 700
+      - building: "Bldg-2"
+        latitude: 51.507435
+        longitude: -0.128536
+        systems:
+          - profile: standard-conference
+            system_type: "Standard Conference Room"
+            label: "Conference Room {room}"
+            count: 24
+            start_room: 1100
+          - profile: large-conference-a
+            system_type: "Large Conference Room"
+            label: "Large Conference {room}"
+            count: 2
+            start_room: 1300
+          - profile: boardroom
+            system_type: "Boardroom"
+            label: "Boardroom {room}"
+            count: 2
+            start_room: 1500
+          - profile: huddle
+            system_type: "Huddle Space"
+            label: "Huddle {room}"
+            count: 2
+            start_room: 1700
+      - building: "Bldg-3"
+        latitude: 51.507053
+        longitude: -0.127014
+        systems:
+          - profile: standard-conference
+            system_type: "Standard Conference Room"
+            label: "Conference Room {room}"
+            count: 24
+            start_room: 2100
+          - profile: large-conference-a
+            system_type: "Large Conference Room"
+            label: "Large Conference {room}"
+            count: 2
+            start_room: 2300
+          - profile: boardroom
+            system_type: "Boardroom"
+            label: "Boardroom {room}"
+            count: 2
+            start_room: 2500
+          - profile: huddle
+            system_type: "Huddle Space"
+            label: "Huddle {room}"
+            count: 2
+            start_room: 2700
+      - building: "Bldg-4"
+        latitude: 51.506670
+        longitude: -0.127492
+        systems:
+          - profile: standard-conference
+            system_type: "Standard Conference Room"
+            label: "Conference Room {room}"
+            count: 24
+            start_room: 3100
+          - profile: large-conference-a
+            system_type: "Large Conference Room"
+            label: "Large Conference {room}"
+            count: 2
+            start_room: 3300
+          - profile: boardroom
+            system_type: "Boardroom"
+            label: "Boardroom {room}"
+            count: 2
+            start_room: 3500
+          - profile: huddle
+            system_type: "Huddle Space"
+            label: "Huddle {room}"
+            count: 2
+            start_room: 3700
+      - building: "Bldg-5"
+        latitude: 51.507888
+        longitude: -0.127970
+        systems:
+          - profile: standard-conference
+            system_type: "Standard Conference Room"
+            label: "Conference Room {room}"
+            count: 24
+            start_room: 4100
+          - profile: large-conference-a
+            system_type: "Large Conference Room"
+            label: "Large Conference {room}"
+            count: 2
+            start_room: 4300
+          - profile: boardroom
+            system_type: "Boardroom"
+            label: "Boardroom {room}"
+            count: 2
+            start_room: 4500
+          - profile: huddle
+            system_type: "Huddle Space"
+            label: "Huddle {room}"
+            count: 2
+            start_room: 4700
+      - building: "Bldg-6"
+        latitude: 51.507506
+        longitude: -0.128448
+        systems:
+          - profile: standard-conference
+            system_type: "Standard Conference Room"
+            label: "Conference Room {room}"
+            count: 24
+            start_room: 5100
+          - profile: large-conference-a
+            system_type: "Large Conference Room"
+            label: "Large Conference {room}"
+            count: 2
+            start_room: 5300
+          - profile: boardroom
+            system_type: "Boardroom"
+            label: "Boardroom {room}"
+            count: 2
+            start_room: 5500
+          - profile: huddle
+            system_type: "Huddle Space"
+            label: "Huddle {room}"
+            count: 2
+            start_room: 5700
+      - building: "Bldg-7"
+        latitude: 51.507123
+        longitude: -0.126926
+        systems:
+          - profile: standard-conference
+            system_type: "Standard Conference Room"
+            label: "Conference Room {room}"
+            count: 16
+            start_room: 6100
+          - profile: large-conference-a
+            system_type: "Large Conference Room"
+            label: "Large Conference {room}"
+            count: 1
+            start_room: 6300
+          - profile: boardroom
+            system_type: "Boardroom"
+            label: "Boardroom {room}"
+            count: 1
+            start_room: 6500
+          - profile: huddle
+            system_type: "Huddle Space"
+            label: "Huddle {room}"
+            count: 2
+            start_room: 6700
+  - code: BLR
+    name: "Shinra Engineering - Bangalore"
+    cidr: 127.13.0.0/16
+    tenant: "Shinra Global"
+    region: "APAC"
+    city: "Bangalore"
+    latitude: 12.971600
+    longitude: 77.594600
+    locations:
+      - building: "Bldg-1"
+        latitude: 12.972018
+        longitude: 77.594342
+        systems:
+          - profile: standard-conference
+            system_type: "Standard Conference Room"
+            label: "Conference Room {room}"
+            count: 24
+            start_room: 100
+          - profile: large-conference-a
+            system_type: "Large Conference Room"
+            label: "Large Conference {room}"
+            count: 2
+            start_room: 300
+          - profile: boardroom
+            system_type: "Boardroom"
+            label: "Boardroom {room}"
+            count: 2
+            start_room: 500
+          - profile: huddle
+            system_type: "Huddle Space"
+            label: "Huddle {room}"
+            count: 2
+            start_room: 700
+      - building: "Bldg-2"
+        latitude: 12.971635
+        longitude: 77.593864
+        systems:
+          - profile: standard-conference
+            system_type: "Standard Conference Room"
+            label: "Conference Room {room}"
+            count: 24
+            start_room: 1100
+          - profile: large-conference-a
+            system_type: "Large Conference Room"
+            label: "Large Conference {room}"
+            count: 2
+            start_room: 1300
+          - profile: boardroom
+            system_type: "Boardroom"
+            label: "Boardroom {room}"
+            count: 2
+            start_room: 1500
+          - profile: huddle
+            system_type: "Huddle Space"
+            label: "Huddle {room}"
+            count: 2
+            start_room: 1700
+      - building: "Bldg-3"
+        latitude: 12.971253
+        longitude: 77.595386
+        systems:
+          - profile: standard-conference
+            system_type: "Standard Conference Room"
+            label: "Conference Room {room}"
+            count: 24
+            start_room: 2100
+          - profile: large-conference-a
+            system_type: "Large Conference Room"
+            label: "Large Conference {room}"
+            count: 2
+            start_room: 2300
+          - profile: boardroom
+            system_type: "Boardroom"
+            label: "Boardroom {room}"
+            count: 2
+            start_room: 2500
+          - profile: huddle
+            system_type: "Huddle Space"
+            label: "Huddle {room}"
+            count: 2
+            start_room: 2700
+      - building: "Bldg-4"
+        latitude: 12.970870
+        longitude: 77.594908
+        systems:
+          - profile: standard-conference
+            system_type: "Standard Conference Room"
+            label: "Conference Room {room}"
+            count: 24
+            start_room: 3100
+          - profile: large-conference-a
+            system_type: "Large Conference Room"
+            label: "Large Conference {room}"
+            count: 2
+            start_room: 3300
+          - profile: boardroom
+            system_type: "Boardroom"
+            label: "Boardroom {room}"
+            count: 2
+            start_room: 3500
+          - profile: huddle
+            system_type: "Huddle Space"
+            label: "Huddle {room}"
+            count: 2
+            start_room: 3700
+      - building: "Bldg-5"
+        latitude: 12.972088
+        longitude: 77.594430
+        systems:
+          - profile: standard-conference
+            system_type: "Standard Conference Room"
+            label: "Conference Room {room}"
+            count: 24
+            start_room: 4100
+          - profile: large-conference-a
+            system_type: "Large Conference Room"
+            label: "Large Conference {room}"
+            count: 2
+            start_room: 4300
+          - profile: boardroom
+            system_type: "Boardroom"
+            label: "Boardroom {room}"
+            count: 2
+            start_room: 4500
+          - profile: huddle
+            system_type: "Huddle Space"
+            label: "Huddle {room}"
+            count: 2
+            start_room: 4700
+      - building: "Bldg-6"
+        latitude: 12.971706
+        longitude: 77.593952
+        systems:
+          - profile: standard-conference
+            system_type: "Standard Conference Room"
+            label: "Conference Room {room}"
+            count: 24
+            start_room: 5100
+          - profile: large-conference-a
+            system_type: "Large Conference Room"
+            label: "Large Conference {room}"
+            count: 2
+            start_room: 5300
+          - profile: boardroom
+            system_type: "Boardroom"
+            label: "Boardroom {room}"
+            count: 2
+            start_room: 5500
+          - profile: huddle
+            system_type: "Huddle Space"
+            label: "Huddle {room}"
+            count: 2
+            start_room: 5700
+      - building: "Bldg-7"
+        latitude: 12.971323
+        longitude: 77.595474
+        systems:
+          - profile: standard-conference
+            system_type: "Standard Conference Room"
+            label: "Conference Room {room}"
+            count: 16
+            start_room: 6100
+          - profile: large-conference-a
+            system_type: "Large Conference Room"
+            label: "Large Conference {room}"
+            count: 1
+            start_room: 6300
+          - profile: boardroom
+            system_type: "Boardroom"
+            label: "Boardroom {room}"
+            count: 1
+            start_room: 6500
+          - profile: huddle
+            system_type: "Huddle Space"
+            label: "Huddle {room}"
+            count: 2
+            start_room: 6700
+  - code: HYD
+    name: "Shinra Engineering - Hyderabad"
+    cidr: 127.14.0.0/16
+    tenant: "Shinra Global"
+    region: "APAC"
+    city: "Hyderabad"
+    latitude: 17.385000
+    longitude: 78.486700
+    locations:
+      - building: "Bldg-1"
+        latitude: 17.385418
+        longitude: 78.486442
+        systems:
+          - profile: standard-conference
+            system_type: "Standard Conference Room"
+            label: "Conference Room {room}"
+            count: 24
+            start_room: 100
+          - profile: large-conference-a
+            system_type: "Large Conference Room"
+            label: "Large Conference {room}"
+            count: 2
+            start_room: 300
+          - profile: boardroom
+            system_type: "Boardroom"
+            label: "Boardroom {room}"
+            count: 2
+            start_room: 500
+          - profile: huddle
+            system_type: "Huddle Space"
+            label: "Huddle {room}"
+            count: 2
+            start_room: 700
+      - building: "Bldg-2"
+        latitude: 17.385035
+        longitude: 78.485964
+        systems:
+          - profile: standard-conference
+            system_type: "Standard Conference Room"
+            label: "Conference Room {room}"
+            count: 24
+            start_room: 1100
+          - profile: large-conference-a
+            system_type: "Large Conference Room"
+            label: "Large Conference {room}"
+            count: 2
+            start_room: 1300
+          - profile: boardroom
+            system_type: "Boardroom"
+            label: "Boardroom {room}"
+            count: 2
+            start_room: 1500
+          - profile: huddle
+            system_type: "Huddle Space"
+            label: "Huddle {room}"
+            count: 2
+            start_room: 1700
+      - building: "Bldg-3"
+        latitude: 17.384653
+        longitude: 78.487486
+        systems:
+          - profile: standard-conference
+            system_type: "Standard Conference Room"
+            label: "Conference Room {room}"
+            count: 24
+            start_room: 2100
+          - profile: large-conference-a
+            system_type: "Large Conference Room"
+            label: "Large Conference {room}"
+            count: 2
+            start_room: 2300
+          - profile: boardroom
+            system_type: "Boardroom"
+            label: "Boardroom {room}"
+            count: 2
+            start_room: 2500
+          - profile: huddle
+            system_type: "Huddle Space"
+            label: "Huddle {room}"
+            count: 2
+            start_room: 2700
+      - building: "Bldg-4"
+        latitude: 17.384270
+        longitude: 78.487008
+        systems:
+          - profile: standard-conference
+            system_type: "Standard Conference Room"
+            label: "Conference Room {room}"
+            count: 24
+            start_room: 3100
+          - profile: large-conference-a
+            system_type: "Large Conference Room"
+            label: "Large Conference {room}"
+            count: 2
+            start_room: 3300
+          - profile: boardroom
+            system_type: "Boardroom"
+            label: "Boardroom {room}"
+            count: 2
+            start_room: 3500
+          - profile: huddle
+            system_type: "Huddle Space"
+            label: "Huddle {room}"
+            count: 2
+            start_room: 3700
+      - building: "Bldg-5"
+        latitude: 17.385488
+        longitude: 78.486530
+        systems:
+          - profile: standard-conference
+            system_type: "Standard Conference Room"
+            label: "Conference Room {room}"
+            count: 24
+            start_room: 4100
+          - profile: large-conference-a
+            system_type: "Large Conference Room"
+            label: "Large Conference {room}"
+            count: 2
+            start_room: 4300
+          - profile: boardroom
+            system_type: "Boardroom"
+            label: "Boardroom {room}"
+            count: 2
+            start_room: 4500
+          - profile: huddle
+            system_type: "Huddle Space"
+            label: "Huddle {room}"
+            count: 2
+            start_room: 4700
+      - building: "Bldg-6"
+        latitude: 17.385106
+        longitude: 78.486052
+        systems:
+          - profile: standard-conference
+            system_type: "Standard Conference Room"
+            label: "Conference Room {room}"
+            count: 24
+            start_room: 5100
+          - profile: large-conference-a
+            system_type: "Large Conference Room"
+            label: "Large Conference {room}"
+            count: 2
+            start_room: 5300
+          - profile: boardroom
+            system_type: "Boardroom"
+            label: "Boardroom {room}"
+            count: 2
+            start_room: 5500
+          - profile: huddle
+            system_type: "Huddle Space"
+            label: "Huddle {room}"
+            count: 2
+            start_room: 5700
+      - building: "Bldg-7"
+        latitude: 17.384723
+        longitude: 78.487574
+        systems:
+          - profile: standard-conference
+            system_type: "Standard Conference Room"
+            label: "Conference Room {room}"
+            count: 16
+            start_room: 6100
+          - profile: large-conference-a
+            system_type: "Large Conference Room"
+            label: "Large Conference {room}"
+            count: 1
+            start_room: 6300
+          - profile: boardroom
+            system_type: "Boardroom"
+            label: "Boardroom {room}"
+            count: 1
+            start_room: 6500
+          - profile: huddle
+            system_type: "Huddle Space"
+            label: "Huddle {room}"
+            count: 2
+            start_room: 6700

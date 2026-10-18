@@ -1,0 +1,360 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/hyperscaleav/omniglass/internal/sim/profiles/devices/schema.json",
+  "title": "Omniglass Lab Device Profile",
+  "description": "Schema for simulator device profile YAMLs in internal/sim/profiles/devices/. A profile defines a device type the simulator can serve: its identity, protocol surfaces, autonomous behaviors, computed fields, and default state.",
+  "type": "object",
+  "required": [
+    "name",
+    "manufacturer",
+    "model",
+    "device_type",
+    "slug_prefix",
+    "interfaces"
+  ],
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Stable identifier for this profile. Used as the cross-reference key from system profiles and as the lookup key in the in-memory profile store. Lowercase, hyphenated.",
+      "pattern": "^[a-z0-9][a-z0-9-]*$",
+      "examples": [
+        "kestrel-vroom",
+        "boreal-edge-86",
+        "polaris-dsp-16"
+      ]
+    },
+    "manufacturer": {
+      "type": "string",
+      "description": "Display-only manufacturer name. Surfaces in device pages, inventory exports, and the doc fixture."
+    },
+    "model": {
+      "type": "string",
+      "description": "Display-only model identifier. Surfaces in device pages and inventory."
+    },
+    "device_type": {
+      "type": "string",
+      "description": "Coarse category used by inventory/grouping. Convention: 'video-codec', 'display', 'dsp', 'touch-panel', 'control-processor', 'switcher', etc. Free-form but kebab-case."
+    },
+    "slug_prefix": {
+      "type": "string",
+      "description": "Hostname prefix used when generating device hostnames in a fleet. Short and unique enough that the eventual hostname is readable.",
+      "pattern": "^[a-z0-9][a-z0-9-]*$"
+    },
+    "doc": {
+      "$ref": "#/$defs/doc"
+    },
+    "interfaces": {
+      "type": "array",
+      "description": "Protocol surfaces this device exposes, each served on the device's own loopback address.",
+      "items": {
+        "$ref": "#/$defs/interface"
+      }
+    },
+    "behaviors": {
+      "type": "array",
+      "description": "Autonomous, scheduled mutations applied to the device's state at runtime, temperature drift, scheduled state changes. Each behavior runs a goroutine and emits a StateChange event per tick. For monotonic time counters (uptime) use computed instead, which is resolved on read and emits no events.",
+      "items": {
+        "$ref": "#/$defs/behavior"
+      }
+    },
+    "computed": {
+      "type": "array",
+      "description": "Read-derived fields, computed on every read rather than written by a timer. Unlike behaviors, computed fields run no goroutine and emit no StateChange event. The canonical use is uptime as elapsed-since-boot.",
+      "items": {
+        "$ref": "#/$defs/computed"
+      }
+    },
+    "overrides": {
+      "type": "array",
+      "description": "State field overrides used by reduced or variant configurations.",
+      "items": {
+        "type": "object",
+        "properties": {
+          "match": {
+            "type": "string"
+          },
+          "rule": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "defaults": {
+      "type": "object",
+      "description": "Free-form state tree the device boots with. Paths referenced by routes/commands/oid_map should have a declared default here.",
+      "additionalProperties": true
+    },
+    "doc_fixture": {
+      "type": "object",
+      "description": "Optional documentation fixture rendered into the device's playground. Free-form.",
+      "additionalProperties": true
+    },
+    "products": {
+      "type": "array",
+      "description": "Other products this profile simulates: variants of the same kind of device (the same component type) on the same driver. Each may overlay the profile's defaults with its own identity.",
+      "items": {
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "The product's name in the product catalog."
+          },
+          "defaults": {
+            "type": "object",
+            "description": "Deep-merged over the profile's defaults for this product."
+          }
+        }
+      }
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "doc": {
+      "type": "object",
+      "description": "Human-readable documentation metadata. Surfaces in device pages and the playground.",
+      "properties": {
+        "summary": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "interface": {
+      "type": "object",
+      "required": [
+        "name",
+        "protocol"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Operator-facing identifier for this interface (e.g. 'web-admin', 'cli-ssh', 'snmp'). Used as the human handle in routes/commands documentation."
+        },
+        "protocol": {
+          "type": "string",
+          "enum": [
+            "http",
+            "https",
+            "ssh",
+            "telnet",
+            "tcp",
+            "snmp",
+            "udp",
+            "icmp"
+          ],
+          "description": "Wire protocol.  icmp is answered by the kernel, so it declares reachability without a listener."
+        },
+        "port": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 65535
+        },
+        "tls": {
+          "type": "boolean"
+        },
+        "doc": {
+          "$ref": "#/$defs/doc"
+        },
+        "auth": {
+          "$ref": "#/$defs/auth"
+        },
+        "api_surface": {
+          "type": "string",
+          "description": "Logical surface name shared with sibling interfaces that route to the same response set."
+        },
+        "routes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        },
+        "commands": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        },
+        "oid_map": {
+          "type": "object",
+          "description": "Map of state-tree paths (e.g. 'status.device.power') to SNMP OIDs.  Each entry answers SNMP GET and GETNEXT from live state.",
+          "additionalProperties": {
+            "type": "string",
+            "pattern": "^[0-9.]+$"
+          }
+        },
+        "reachable_when": {
+          "type": "string"
+        },
+        "mib": {
+          "type": "string",
+          "description": "SNMP MIB filename that defines this device's enterprise OID arc. Set on snmp interfaces with an enterprise MIB."
+        },
+        "persistent": {
+          "type": "boolean"
+        },
+        "line_ending": {
+          "type": "string"
+        },
+        "frame_start": {
+          "type": "string"
+        },
+        "frame_end": {
+          "type": "string"
+        },
+        "strip_checksum_bytes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "welcome": {
+          "type": "string"
+        },
+        "subjects": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        },
+        "limits": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      },
+      "additionalProperties": false
+    },
+    "auth": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "",
+            "basic",
+            "header",
+            "password"
+          ]
+        },
+        "default_user": {
+          "type": "string"
+        },
+        "default_password": {
+          "type": "string"
+        },
+        "community": {
+          "type": "string"
+        },
+        "enforce": {
+          "type": "boolean"
+        },
+        "permissive": {
+          "type": "boolean"
+        },
+        "api_key": {
+          "type": "string"
+        },
+        "header": {
+          "type": "string"
+        },
+        "realm": {
+          "type": "string"
+        },
+        "public_paths": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "behavior": {
+      "type": "object",
+      "required": [
+        "name",
+        "schedule"
+      ],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "schedule": {
+          "type": "object",
+          "properties": {
+            "interval": {
+              "type": "string",
+              "description": "Go duration string ('10s', '500ms', '5m'). Required for phase 1 behaviors."
+            }
+          },
+          "additionalProperties": false
+        },
+        "mutations": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        },
+        "emit": {
+          "type": "object",
+          "description": "Optional outbound webhook the behavior POSTs each tick (after mutations apply). The device's only egress-HTTP capability: best-effort, short-timeout, log-and-continue on failure. url and body are templates rendered against the tick context (.State, .Defaults, .Hostname, .DeviceID, .IP). An empty rendered url disables emission (configured-off); the behavior still ticks. Method is always POST with Content-Type application/json.",
+          "required": [
+            "url"
+          ],
+          "properties": {
+            "url": {
+              "type": "string",
+              "description": "Target URL template. Typically a single profile-level config value, e.g. '{{ .Defaults.configuration.webhook.target_url }}', so an operator points every device instance at the collector with one edit. Empty render = emission disabled."
+            },
+            "body": {
+              "type": "string",
+              "description": "POST body template (sent as application/json). May interpolate post-mutation state, e.g. '{\"host\":\"{{ .Hostname }}\",\"event\":\"meeting.started\",\"ts\":{{ now }}}'."
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "computed": {
+      "type": "object",
+      "required": [
+        "path",
+        "kind",
+        "since"
+      ],
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "State path readers observe (e.g. 'status.device.uptime'). Resolved on every read; must not also be written by a behavior."
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "elapsed"
+          ],
+          "description": "elapsed: integer seconds since the 'since' anchor timestamp."
+        },
+        "since": {
+          "type": "string",
+          "description": "Anchor state path holding a Unix-epoch seconds value (e.g. 'status.device.boot_epoch'). Seeded at device start; re-set to '{{ now }}' on reboot."
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

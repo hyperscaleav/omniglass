@@ -1,0 +1,21 @@
+# Huddle Space
+#
+# Small 4-6 person collaboration space with just an all-in-one VC bar.
+# No DSP, no separate touch panel, no second display.
+
+name: huddle
+doc:
+  summary: "Small huddle space with a single all-in-one VC bar"
+
+devices:
+  - profile: kestrel-vroom
+    role: codec
+    suffix: COD
+    count: 1
+    tags: [video, conferencing, huddle]
+
+  - profile: boreal-edge-86
+    role: display
+    suffix: DS
+    count: 1
+    tags: [display, huddle]

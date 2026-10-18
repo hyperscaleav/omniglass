@@ -1727,6 +1727,7 @@
    "label": "Boreal Edge 55",
    "vendor_id": "boreal",
    "driver_id": "snmp-generic",
+   "component_type": "display",
    "kind": "device",
    "properties": [
     {
@@ -1746,6 +1747,7 @@
    "label": "Boreal Edge 65",
    "vendor_id": "boreal",
    "driver_id": "snmp-generic",
+   "component_type": "display",
    "kind": "device",
    "properties": [
     {
@@ -1765,6 +1767,7 @@
    "label": "Boreal Edge 75",
    "vendor_id": "boreal",
    "driver_id": "snmp-generic",
+   "component_type": "display",
    "kind": "device",
    "properties": [
     {
@@ -1784,6 +1787,7 @@
    "label": "Boreal Edge 86",
    "vendor_id": "boreal",
    "driver_id": "snmp-generic",
+   "component_type": "display",
    "kind": "device",
    "properties": [
     {
@@ -1803,6 +1807,7 @@
    "label": "Boreal Edge 98",
    "vendor_id": "boreal",
    "driver_id": "snmp-generic",
+   "component_type": "display",
    "kind": "device",
    "properties": [
     {
@@ -1822,6 +1827,7 @@
    "label": "Boreal Beam 340",
    "vendor_id": "boreal",
    "driver_id": "snmp-generic",
+   "component_type": "projector",
    "kind": "device"
   },
   {
@@ -1829,6 +1835,7 @@
    "label": "Boreal Cast M1",
    "vendor_id": "boreal",
    "driver_id": "http-json",
+   "component_type": "media-player",
    "kind": "device"
   },
   {
@@ -1836,6 +1843,7 @@
    "label": "Kestrel VRoom",
    "vendor_id": "kestrel",
    "driver_id": "kestrel-api",
+   "component_type": "video-bar",
    "kind": "device",
    "properties": [
     {
@@ -1855,6 +1863,7 @@
    "label": "Kestrel Relay C1",
    "vendor_id": "kestrel",
    "driver_id": "kestrel-api",
+   "component_type": "codec",
    "kind": "device"
   },
   {
@@ -1862,6 +1871,7 @@
    "label": "Kestrel Gaze P2",
    "vendor_id": "kestrel",
    "driver_id": "kestrel-api",
+   "component_type": "ptz-camera",
    "kind": "device"
   },
   {
@@ -1869,6 +1879,7 @@
    "label": "Lyra Arc A2",
    "vendor_id": "lyra",
    "driver_id": "snmp-generic",
+   "component_type": "ceiling-mic",
    "kind": "device"
   },
   {
@@ -1876,12 +1887,14 @@
    "label": "Lyra HX-1",
    "vendor_id": "lyra",
    "driver_id": "snmp-generic",
+   "component_type": "wireless-mic",
    "kind": "device"
   },
   {
    "id": "lyra-gn-12",
    "label": "Lyra GN-12",
    "vendor_id": "lyra",
+   "component_type": "gooseneck-mic",
    "kind": "device"
   },
   {
@@ -1889,6 +1902,7 @@
    "label": "Meridian MX 84",
    "vendor_id": "meridian",
    "driver_id": "snmp-generic",
+   "component_type": "presentation-switcher",
    "kind": "device"
   },
   {
@@ -1896,6 +1910,7 @@
    "label": "Meridian XL-1",
    "vendor_id": "meridian",
    "driver_id": "snmp-generic",
+   "component_type": "av-extender",
    "kind": "device"
   },
   {
@@ -1903,6 +1918,7 @@
    "label": "Newtron Panel 7",
    "vendor_id": "newtron",
    "driver_id": "newtron-nvp",
+   "component_type": "touch-panel",
    "kind": "device"
   },
   {
@@ -1910,6 +1926,7 @@
    "label": "Newtron Slate 5",
    "vendor_id": "newtron",
    "driver_id": "newtron-nvp",
+   "component_type": "scheduling-panel",
    "kind": "device"
   },
   {
@@ -1917,6 +1934,7 @@
    "label": "Newtron Core CP-3",
    "vendor_id": "newtron",
    "driver_id": "newtron-nvp",
+   "component_type": "control-processor",
    "kind": "device"
   },
   {
@@ -1924,6 +1942,7 @@
    "label": "Polaris DSP 16",
    "vendor_id": "polaris",
    "driver_id": "snmp-generic",
+   "component_type": "dsp",
    "kind": "device"
   },
   {
@@ -1931,12 +1950,14 @@
    "label": "Polaris Amp 4-100",
    "vendor_id": "polaris",
    "driver_id": "snmp-generic",
+   "component_type": "amplifier",
    "kind": "device"
   },
   {
    "id": "polaris-sky-c6",
    "label": "Polaris Sky C6",
    "vendor_id": "polaris",
+   "component_type": "speaker",
    "kind": "device"
   },
   {
@@ -1944,21 +1965,25 @@
    "label": "Tessellate Census C1",
    "vendor_id": "tessellate",
    "driver_id": "http-json",
+   "component_type": "occupancy-sensor",
    "kind": "device"
   },
   {
    "id": "generic-device",
    "label": "Generic Device",
+   "component_type": "generic-device",
    "kind": "device"
   },
   {
    "id": "generic-app",
    "label": "Generic App",
+   "component_type": "generic-app",
    "kind": "app"
   },
   {
    "id": "generic-service",
    "label": "Generic Service",
+   "component_type": "generic-service",
    "kind": "service"
   }
  ],

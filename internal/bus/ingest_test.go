@@ -308,7 +308,7 @@ func TestTelemetryRoundTrip(t *testing.T) {
 	// THE PUSH LANE IS NOT REACHABLE BY A NODE. This is the fence the whole
 	// trust-by-subject model rests on: the consumer believes the owner carried on
 	// og.v1.api.telemetry, so a node that could publish there could forge ownership
-	// of any component. Its grant is an explicit allow-list of three own subjects,
+	// of any component. Its grant is an explicit allow-list of its own subjects,
 	// so NATS refuses this before the consumer ever sees it.
 	if err := ncA.Publish(collection.APITelemetrySubject, []byte("forged")); err != nil {
 		t.Fatalf("client-side publish to the api lane: %v", err)

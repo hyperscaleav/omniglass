@@ -1,0 +1,34 @@
+# Executive Boardroom
+#
+# Top-tier executive boardroom: codec, dual displays, touch panel, DSP.
+# Mirrors the large-conference-a stack but with executive tagging so it
+# can be placed under a distinct system type.
+
+name: boardroom
+doc:
+  summary: "Executive boardroom: codec, dual displays, touch panel, DSP"
+
+devices:
+  - profile: kestrel-vroom
+    role: codec
+    suffix: COD
+    count: 1
+    tags: [video, conferencing, executive]
+
+  - profile: newtron-panel-7
+    role: touch-controller
+    suffix: TP
+    count: 1
+    tags: [control, executive]
+
+  - profile: boreal-edge-86
+    role: display
+    suffix: DS
+    count: 2
+    tags: [display, presentation, executive]
+
+  - profile: polaris-dsp-16
+    role: audio-dsp
+    suffix: DSP
+    count: 1
+    tags: [audio, processing, executive]

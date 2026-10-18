@@ -1,0 +1,264 @@
+# yaml-language-server: $schema=schema.json
+# Kestrel VRoom, Video Conferencing Bar (UCC appliance)
+#
+# Kestrel is the lab's fictional VC hardware vendor. The VRoom is an
+# all-in-one meeting-room video bar: codec, camera, microphone array,
+# and speakers in a single horizontal bar under a display. In the
+# course it is the HTTP-JSON teaching device, every datapoint a
+# trainee monitors comes in over the HTTP JSON API, and nowhere else.
+#
+# ONE teaching interface: HTTP JSON. The five course datapoints
+#   status.app.mode              , UCC platform the bar is running
+#   status.app.ucc_signin        , signed-in UCC account (or "")
+#   status.peripherals.touch_pair, paired touch controller (or "")
+#   status.presentation.local_active, local (HDMI) presentation active
+#   status.logs.recent           , recent device log lines
+# are reachable ONLY over HTTP (GET /api/app, GET /api/status, and the
+# PRIVATE GET /api/logs). There is no SNMP, SSH, Telnet, or raw-TCP
+# surface on this device: the older generic-codec control bands were
+# removed so the bar is HTTP + ICMP only. ICMP stays (network band
+# needs every device pingable) and the web admin UI stays (it is the
+# "hacking" surface).
+#
+# PRIVATE-API teaching point: status.logs.recent is served by the
+# undocumented GET /api/logs route. The web admin page's "Recent logs"
+# card DOES fetch it (client JS), so the call shows up in the browser's
+# network tab, that is the breadcrumb. A student spots the request,
+# then calls GET /api/logs directly (e.g. wiring a collector HTTP item to
+# it). The route is a real HTTP endpoint; it is just not advertised in
+# the public API docs. Contrast with newtron's configuration.room.
+# config_version, which is a WEB-DRIVER datapoint: no endpoint at all,
+# just a base64 blob embedded in GET / that only a real browser decodes.
+#
+# Auth pattern: HTTP Basic over TLS (port 443). admin / kestrel.
+
+name: kestrel-vroom
+manufacturer: Kestrel
+model: "VRoom"
+device_type: video-codec
+# Case-study hostname role ("video-bar"). slug_prefix only seeds the
+# stable internal HostID slug; hostnames come from the system-profile
+# suffix.
+slug_prefix: video-bar
+
+doc:
+  summary: "Kestrel VRoom video conferencing bar"
+  description: |
+    All-in-one meeting room video bar: 4K camera, beamforming
+    microphone array, stereo speakers, and an embedded UCC client.
+    The course's HTTP-JSON device, app mode, UCC sign-in, touch-panel
+    pairing, local presentation, and recent logs are all read over the
+    HTTP JSON API (and nowhere else). HTTP + ICMP only; no SNMP/CLI.
+
+interfaces:
+  - name: http-api
+    protocol: http
+    port: 443
+    tls: true
+    doc:
+      summary: "Kestrel HTTP JSON API + web admin UI"
+      tags: [management, api]
+    auth:
+      type: basic
+      default_user: admin
+      default_password: kestrel
+      realm: "Kestrel VRoom"
+      enforce: true
+    api_surface: kestrel-vroom
+    routes:
+      - match: "GET /"
+        template: web/kestrel-vroom/index.gotempl
+        doc: { summary: "Codec dashboard" }
+
+      # Whole-device status snapshot. Carries the five course datapoints
+      # (app mode, UCC sign-in, touch pairing, local presentation) plus
+      # the codec's call/audio/video state. This is the public read
+      # surface a monitoring template polls.
+      - match: "GET /api/status"
+        template: api/kestrel-vroom/status.json.gotempl
+        doc: { summary: "Full status snapshot (app, call, audio, video)", tags: [api, status] }
+
+      # Application / UCC band, the course datapoints, broken out.
+      - match: "GET /api/app"
+        template: api/kestrel-vroom/app.json.gotempl
+        doc: { summary: "App mode, UCC sign-in, touch pairing, local presentation", tags: [api, app, ucc] }
+
+      # PRIVATE route. Recent device logs are served here. The route is
+      # NOT advertised as a public API, but the web admin page's "Recent
+      # logs" card DOES fetch it from client JS, so the request is
+      # visible in the browser network tab. visibility: private flags it
+      # so docgen / the console can badge or hide it; runtime serving is
+      # unchanged. This is the course's "private API" hacking datapoint:
+      # the student spots GET /api/logs in the network tab and then calls
+      # it directly (e.g. a collector HTTP item). Undocumented, but a real
+      # endpoint, contrast newtron's web-driver-only config_version.
+      - match: "GET /api/logs"
+        template: api/kestrel-vroom/logs.json.gotempl
+        visibility: private
+        doc: { summary: "Recent device logs (private; undocumented direct-call route)", tags: [api, logs, private] }
+
+      - match: "GET /api/call"
+        template: api/kestrel-vroom/call.json.gotempl
+        doc: { summary: "Current call state", tags: [api, call] }
+
+      - match: "GET /api/audio"
+        template: api/kestrel-vroom/audio.json.gotempl
+        doc: { summary: "Audio state (volume, mute)", tags: [api, audio] }
+
+      - match: "GET /api/system"
+        template: api/kestrel-vroom/system.json.gotempl
+        doc: { summary: "System unit info (serial, firmware, uptime)", tags: [api, info] }
+
+      - match: "POST /api/audio/volume"
+        template: api/kestrel-vroom/audio-ack.json.gotempl
+        doc: { summary: "Set speaker volume", tags: [api, control] }
+        example: |
+          {"volume": 50}
+        mutate:
+          status.audio.volume: "{{ .Request.Body.volume }}"
+          status.audio.speaker_level: "{{ .Request.Body.volume }}"
+
+      - match: "POST /api/audio/mute"
+        template: api/kestrel-vroom/audio-ack.json.gotempl
+        doc: { summary: "Set microphone mute", tags: [api, control] }
+        example: |
+          {"mute": true}
+        mutate:
+          status.audio.mic_mute: "{{ .Request.Body.mute }}"
+
+      - match: "POST /api/video/camera"
+        template: api/kestrel-vroom/audio-ack.json.gotempl
+        doc: { summary: "Toggle camera privacy shutter", tags: [api, control] }
+        example: |
+          {"camera_on": true}
+        mutate:
+          status.video.camera_on: "{{ .Request.Body.camera_on }}"
+
+      - match: "POST /api/system/standby"
+        template: api/kestrel-vroom/system-ack.json.gotempl
+        doc: { summary: "Set codec standby state", tags: [api, control] }
+        example: |
+          {"power": "standby"}
+        mutations:
+          - path: status.device.power
+            value: "{{ .Request.Body.power }}"
+            enum: ["on", "off", "standby"]
+
+      - match: "POST /api/call/disconnect"
+        template: api/kestrel-vroom/system-ack.json.gotempl
+        doc: { summary: "Disconnect active call", tags: [api, control] }
+        example: "{}"
+        mutate:
+          status.call.active: false
+          status.call.participants: 0
+
+      # Reboot resets uptime and a small set of volatile call/audio
+      # state back to declared defaults. HTTP-only now (the SSH/Telnet
+      # xAPI reboot verbs that used to alias this list were removed with
+      # the CLI interfaces). The anchor is kept so factory-reset and any
+      # future surface can reuse it.
+      - match: "POST /api/admin/reboot"
+        template: api/kestrel-vroom/reboot-ack.json.gotempl
+        doc: { summary: "Reboot codec (clears call + uptime)", tags: [api, admin] }
+        example: "{}"
+        mutations:
+          - { path: status.device.boot_epoch, value: "{{ now }}" }
+          - { path: status.call.active, value: false }
+          - { path: status.call.participants, value: 0 }
+          - { path: status.audio.mic_mute, value: "{{ .Defaults.status.audio.mic_mute }}" }
+          - { path: status.audio.volume, value: "{{ .Defaults.status.audio.volume }}" }
+          - { path: status.presentation.local_active, value: "{{ .Defaults.status.presentation.local_active }}" }
+
+      - match: "POST /api/admin/factory-reset"
+        template: api/kestrel-vroom/factory-reset-ack.json.gotempl
+        doc: { summary: "Factory reset (resets every status path to defaults)", tags: [api, admin] }
+        example: "{}"
+        mutations:
+          - { path: status.device.power, value: "{{ .Defaults.status.device.power }}" }
+          - { path: status.device.boot_epoch, value: "{{ now }}" }
+          - { path: status.call.active, value: "{{ .Defaults.status.call.active }}" }
+          - { path: status.call.participants, value: "{{ .Defaults.status.call.participants }}" }
+          - { path: status.audio.volume, value: "{{ .Defaults.status.audio.volume }}" }
+          - { path: status.audio.mic_mute, value: "{{ .Defaults.status.audio.mic_mute }}" }
+          - { path: status.audio.speaker_level, value: "{{ .Defaults.status.audio.speaker_level }}" }
+          - { path: status.video.camera_on, value: "{{ .Defaults.status.video.camera_on }}" }
+          - { path: status.video.resolution, value: "{{ .Defaults.status.video.resolution }}" }
+          - { path: status.app.mode, value: "{{ .Defaults.status.app.mode }}" }
+          - { path: status.app.ucc_signin, value: "{{ .Defaults.status.app.ucc_signin }}" }
+          - { path: status.peripherals.touch_pair, value: "{{ .Defaults.status.peripherals.touch_pair }}" }
+          - { path: status.presentation.local_active, value: "{{ .Defaults.status.presentation.local_active }}" }
+
+  - name: icmp
+    protocol: icmp
+    doc: { summary: "ICMP ping reachability", tags: [monitoring] }
+
+# Read-derived fields, computed on every read rather than written by a
+# timer. uptime = now - boot_epoch (seconds). No goroutine, no event.
+# boot_epoch is seeded at device start and re-set to "{{ now }}" by the
+# reboot / factory-reset routes above.
+computed:
+  - { path: status.device.uptime, kind: elapsed, since: status.device.boot_epoch }
+
+defaults:
+  status:
+    device:
+      power: "on"
+      # Anchor for the computed uptime field. 0 means "unset", seeded
+      # to the device's start time on load.
+      boot_epoch: 0
+    # ---- Course datapoints (HTTP-only teaching surface) ----
+    app:
+      # UCC platform the bar is currently hosting.
+      mode: "ucc"
+      # Signed-in UCC account, or "" when signed out. Templated per room
+      # by the fleet compiler ({site}/{building}/{room}), a shared
+      # profile must not bake one room's account onto every video bar.
+      ucc_signin: "room-{site}-{building}-{room}@shinra.lan"
+    peripherals:
+      # Paired touch controller (newtron panel) hostname, or "" when
+      # unpaired. Resolved to the actual newtron panel in THIS room by the
+      # compiler; the panel's hostname suffix is system-specific (TP1 vs
+      # touch-panel1), so it's looked up across devices rather than guessed.
+      touch_pair: "{room-device:newtron-panel-7}"
+    presentation:
+      # Local (HDMI/USB-C) presentation active vs idle.
+      local_active: false
+    logs:
+      # Recent device log lines, surfaced over the PRIVATE /api/logs
+      # route. The web admin "Recent logs" card fetches this from client
+      # JS (the network-tab breadcrumb); the student then calls
+      # GET /api/logs directly. Realistic codec-style lines, generic
+      # room id (no real hostnames), mix of INFO and WARN.
+      recent:
+        - "2026-06-13T08:41:02Z INFO  kvroom.app      UCC client signed in (account=room-vc@example.lan, tenant=teams)"
+        - "2026-06-13T08:41:05Z INFO  kvroom.pairing  Touch controller paired (model=newtron-panel-7, link=usb-c)"
+        - "2026-06-13T09:02:17Z INFO  kvroom.call     Call started (id=c8821, protocol=sip, peers=3)"
+        - "2026-06-13T09:14:53Z WARN  kvroom.net      Uplink degraded: packet loss 4.1%, jitter 38ms, enabling rate adaptation"
+        - "2026-06-13T09:15:41Z INFO  kvroom.net      Uplink recovered: loss 0.0%, jitter 6ms, resumed 1080p send"
+        - "2026-06-13T09:31:08Z WARN  kvroom.audio    Microphone array muted by far-end host during active call"
+        - "2026-06-13T09:58:22Z INFO  kvroom.call     Call ended (id=c8821, duration=3365s, reason=local-hangup)"
+        - "2026-06-13T10:03:49Z INFO  kvroom.system   Returned to standby after idle timeout (600s)"
+    # ---- Codec device state (HTTP control, not course-monitored) ----
+    call:
+      active: false
+      participants: 0
+    audio:
+      volume: 50
+      mic_mute: false
+      speaker_level: 50
+    video:
+      camera_on: true
+      resolution: "3840x2160"
+    network:
+      ipv4:
+        address: ""
+        mac: ""
+  configuration:
+    device:
+      serial: ""
+      model: "VRoom"
+      manufacturer: "Kestrel"
+    firmware:
+      version: "2.7.3"
+    network:
+      hostname: ""

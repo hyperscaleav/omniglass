@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>{{ .Hostname }}, Tessellate Census C1</title>
+<style>
+  body { font-family: -apple-system, Segoe UI, Roboto, sans-serif; background: #f5f7fa; color: #1c2230; margin: 0; }
+  .bar { background: #1c2230; color: #fff; padding: 14px 24px; display: flex; justify-content: space-between; align-items: baseline; }
+  .bar .brand { font-weight: 700; letter-spacing: 0.06em; color: #2bb5a0; }
+  .bar .model { opacity: 0.7; font-size: 13px; }
+  main { max-width: 760px; margin: 24px auto; padding: 0 16px; }
+  .card { background: #fff; border: 1px solid #dde3ec; border-radius: 6px; padding: 18px 22px; margin-bottom: 14px; }
+  .card h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: #6b7689; margin: 0 0 10px; }
+  .count { font-size: 64px; font-weight: 700; font-variant-numeric: tabular-nums; color: #1c2230; line-height: 1; }
+  .count small { font-size: 15px; font-weight: 500; color: #6b7689; margin-left: 8px; }
+  .pill { display: inline-block; padding: 4px 12px; border-radius: 999px; font-size: 13px; font-weight: 600; }
+  .pill.occupied { background: #e6f7f3; color: #157f6c; }
+  .pill.vacant { background: #fdecec; color: #a23b3b; }
+  .row { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; font-size: 14px; border-bottom: 1px solid #f0f3f8; gap: 16px; }
+  .row:last-child { border-bottom: none; }
+  .row .k { color: #6b7689; }
+  .row .v { font-weight: 500; }
+  code { background: #eef1f6; padding: 2px 6px; border-radius: 3px; font-size: 12px; }
+  .note { font-size: 12px; color: #8893a5; margin-top: 8px; line-height: 1.5; }
+</style>
+</head>
+<body>
+<div class="bar">
+  <div><span class="brand">TESSELLATE</span> &middot; {{ .Hostname }}</div>
+  <div class="model">Census C1</div>
+</div>
+<main>
+  {{ $occ := .State | get "status" | get "occupancy" }}
+  <div class="card">
+    <h2>Live occupancy</h2>
+    <div class="count">{{ $occ | get "people_count" }}<small>people in room</small></div>
+    <div style="margin-top:14px">
+      {{ if $occ | get "vacant" }}<span class="pill vacant">VACANT</span>{{ else }}<span class="pill occupied">OCCUPIED</span>{{ end }}
+      <span class="row" style="display:inline; border:none; margin-left:12px"><span class="k">last event</span> <span class="v">{{ $occ | get "last_event" }}</span></span>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Realtime delivery</h2>
+    <div class="row"><span class="k">webhook target</span><span class="v">{{ $url := .State | get "configuration" | get "webhook" | get "url" }}{{ if $url }}<code>{{ $url }}</code>{{ else }}(none set){{ end }}</span></div>
+    <div class="row"><span class="k">poll endpoint</span><span class="v"><code>GET /api/events</code></span></div>
+    <div class="row"><span class="k">control feed</span><span class="v"><code>TCP/5000 SUBSCRIBE COUNT</code></span></div>
+    <p class="note">
+      Occupancy events are delivered by polling <code>/api/events</code> or by
+      subscribing on the raw-TCP control band. The webhook target is stored for
+      reference only, this lab device does not originate outbound HTTP POSTs.
+    </p>
+  </div>
+
+  <div class="card">
+    <h2>Device</h2>
+    <div class="row"><span class="k">firmware</span><span class="v">{{ .State | get "configuration" | get "firmware" | get "version" }}</span></div>
+    <div class="row"><span class="k">serial</span><span class="v">{{ .State | get "configuration" | get "device" | get "serial" }}</span></div>
+    <div class="row"><span class="k">uptime (s)</span><span class="v">{{ .State | get "status" | get "device" | get "uptime" }}</span></div>
+    <div class="row"><span class="k">ip</span><span class="v">{{ .IP }}</span></div>
+  </div>
+</main>
+<script>
+  // This page is served by the simulated device's own HTTP listener.
+  // apiURL() resolves absolute "/api/..." paths against the page's own
+  // path, so API calls stay relative to wherever the page is served.
+  function apiURL(path) {
+    if (!path.startsWith('/')) return path;
+    const base = location.pathname.replace(/\/$/, '');
+    return base + path;
+  }
+  // Poll the live occupancy feed so the count tile updates on its own.
+  // The REST API is key-gated, so an unkeyed poll just no-ops quietly;
+  // a full reload still reflects state on every page open.
+  async function refresh() {
+    try {
+      const r = await fetch(apiURL('/api/occupancy'), {
+        headers: { 'X-Census-Key': 'census-lab-key' },
+      });
+      if (!r.ok) return;
+      const d = await r.json();
+      const c = document.querySelector('.count');
+      if (c) c.firstChild.nodeValue = String(d.people_count);
+    } catch (e) { /* transient, keep polling */ }
+  }
+  setInterval(refresh, 5000);
+</script>
+</body>
+</html>

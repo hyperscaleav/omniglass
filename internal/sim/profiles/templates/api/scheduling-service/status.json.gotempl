@@ -1,0 +1,13 @@
+{
+  "service": {
+    "model": "{{ .State | get "configuration" | get "device" | get "model" }}",
+    "firmware": "{{ .State | get "configuration" | get "firmware" | get "version" }}",
+    "uptime": {{ .State | get "status" | get "device" | get "uptime" }}
+  },
+  "bookings": {
+    "today": {{ .State | get "status" | get "bookings" | get "today" }}
+  },
+  "config": {
+    "sync_ok": {{ .State | get "configuration" | get "sync_ok" }}
+  }
+}

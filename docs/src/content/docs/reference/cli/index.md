@@ -2474,6 +2474,22 @@ Example:
 omniglass node setTag <name> --key key --value value
 ```
 
+### `omniglass node simulation`
+
+Get a node's simulator
+
+```
+omniglass node simulation <name>
+```
+
+The devices a simulator beside the node serves (each component with an endpoint placed on the node, within the caller's component read scope), joined to the hits the server has seen and the simulator's capabilities. Hits are live and per server process, not stored. Requires an all-scope node read. Gated by node:read.
+
+Example:
+
+```sh
+omniglass node simulation <name>
+```
+
 ### `omniglass node update`
 
 Update a node
@@ -3567,10 +3583,14 @@ omniglass secret-type list
 Seed a dev database with example locations, users, and grants (idempotent; never for production)
 
 ```
-omniglass seed-dev
+omniglass seed-dev [flags]
 ```
 
 Populate a fresh dev database with a small example fleet so `make dev` comes up with locations, sign-in-able users, and their grants instead of empty. The same trusted direct-DB lane as bootstrap, and idempotent, so it runs on every `make dev`. Not for production: these are operator rows, not ship-with reference data.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--sim-fleet` | bool | `true` | wire the simulated fleet: addresses and endpoints on the dev node for every component the simulator serves (make dev-sim collects from them) |
 
 ## `omniglass server`
 
@@ -3737,6 +3757,28 @@ Example:
 ```sh
 omniglass setting update <namespace>
 ```
+
+## `omniglass sim`
+
+Simulate the devices placed on a node
+
+### `omniglass sim run`
+
+Serve the node's simulated devices and follow changes until interrupted
+
+```
+omniglass sim run [flags]
+```
+
+Serves each component placed on the node whose product has a simulator profile and whose interfaces target a loopback address, on that address, and reports every request it answers to the server. Re-pulls the device list on an interval, so devices added or removed on the server start or stop without a restart.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--name` | string | (none) | the node this simulator runs beside (env OMNIGLASS_NODE_NAME) |
+| `--poll` | duration | `10s` | how often to re-pull the device list |
+| `--port-offset` | int | `0` | lift the simulated ports below 1024 by this much, to serve without the privilege to bind them |
+| `--server` | string | (none) | Omniglass server base URL (env OMNIGLASS_SERVER) |
+| `--token` | string | (none) | that node's enrollment token (env OMNIGLASS_NODE_TOKEN) |
 
 ## `omniglass standard`
 

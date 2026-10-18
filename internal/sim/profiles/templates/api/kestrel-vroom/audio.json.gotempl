@@ -1,0 +1,5 @@
+{
+  "volume": {{ .State | get "status" | get "audio" | get "volume" }},
+  "mic_mute": {{ .State | get "status" | get "audio" | get "mic_mute" }},
+  "speaker_level": {{ .State | get "status" | get "audio" | get "speaker_level" }}
+}

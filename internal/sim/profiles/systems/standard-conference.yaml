@@ -1,0 +1,55 @@
+# Standard Conference Room
+#
+# Mid-size 8-12 person conference room. The four Applied Monitoring
+# case-study devices: a video bar (the all-in-one bar handles audio, no
+# separate DSP), a single display, a touch panel, and a ceiling people
+# counter for occupancy.
+#
+# Device `suffix` values are the clean case-study role names, the
+# fleet compiler builds hostnames as
+# "<site>-[<building>-]<room>-<suffix><N>".
+
+name: standard-conference
+doc:
+  summary: "Mid-size conference room: video bar, display, touch panel, people counter"
+
+devices:
+  - profile: kestrel-vroom
+    role: video-bar
+    suffix: video-bar
+    count: 1
+    tags: [video, conferencing]
+
+  - profile: newtron-panel-7
+    role: touch-panel
+    suffix: touch-panel
+    count: 1
+    tags: [control]
+
+  - profile: boreal-edge-86
+    role: display
+    suffix: display
+    count: 1
+    tags: [display, presentation]
+
+  - profile: tessellate-census-c1
+    role: people-counter
+    suffix: people-counter
+    count: 1
+    tags: [sensors, occupancy]
+
+  # Cloud services the room signs into. They run as standalone HTTP
+  # services (no SNMP/CLI), instantiated per standard-conference room so
+  # the ucc-service / scheduling-service profiles actually appear in the
+  # fleet instead of orphaning.
+  - profile: ucc-service
+    role: ucc
+    suffix: ucc
+    count: 1
+    tags: [cloud, ucc, service]
+
+  - profile: scheduling-service
+    role: scheduling
+    suffix: scheduling
+    count: 1
+    tags: [cloud, scheduling, service]

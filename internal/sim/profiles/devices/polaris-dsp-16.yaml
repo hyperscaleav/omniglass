@@ -1,0 +1,444 @@
+# yaml-language-server: $schema=schema.json
+# Polaris DSP 16, 16-Channel Audio DSP
+#
+# Polaris is the lab's fictional audio processor vendor. The DSP 16
+# is a rack-mounted 16-channel digital signal processor for conference
+# rooms: handles mic mixing, echo cancellation, and speaker routing.
+#
+# Auth pattern: header-based API key. Every HTTP request must carry an
+# X-Polaris-Token header matching the configured api_key, otherwise
+# the listener returns 401 with a JSON error body that names the
+# expected header. This matches the convention many DSP and matrix
+# vendors use for their REST APIs (an opaque token per integration
+# rather than per-user credentials).
+
+name: polaris-dsp-16
+manufacturer: Polaris
+model: "DSP 16"
+device_type: audio-dsp
+slug_prefix: polaris-dsp
+
+doc:
+  summary: "Polaris DSP 16, 16-channel audio DSP"
+  description: |
+    Rack-mounted audio DSP for meeting rooms. 16 channels of mic
+    input with per-channel AEC and gain, configurable output routing,
+    and an HTTP management + JSON API. Exposes SNMP for operational
+    telemetry.
+
+interfaces:
+  - name: http-api
+    protocol: http
+    port: 80
+    doc: { summary: "Polaris web and JSON API", tags: [management, api] }
+    auth:
+      type: header
+      header: "X-Polaris-Token"
+      api_key: "polaris-lab-token"
+      enforce: true
+      # The dashboard HTML is intentionally public so an operator can
+      # paste their token into the page; every /api/* endpoint stays
+      # gated. This mirrors how many real DSP and matrix-vendor REST
+      # APIs separate session-based admin UIs from token-based API
+      # surfaces.
+      public_paths: ["/"]
+    api_surface: polaris-dsp
+    routes:
+      - match: "GET /"
+        template: web/polaris-dsp/index.gotempl
+        doc: { summary: "DSP dashboard" }
+
+      - match: "GET /api/status"
+        template: api/polaris-dsp/status.json.gotempl
+        doc: { summary: "DSP status snapshot", tags: [api, status] }
+
+      - match: "GET /api/channels"
+        template: api/polaris-dsp/channels.json.gotempl
+        doc: { summary: "Per-channel state (gain, mute, peak)", tags: [api, audio] }
+
+      - match: "POST /api/channels/mute"
+        template: api/polaris-dsp/channel-ack.json.gotempl
+        doc: { summary: "Mute a channel by index", tags: [api, control] }
+        example: |
+          {"index": 0, "mute": true}
+        mutate:
+          status.channels.{{ .Request.Body.index }}.mute: "{{ .Request.Body.mute }}"
+
+      - match: "POST /api/channels/gain"
+        template: api/polaris-dsp/channel-ack.json.gotempl
+        doc: { summary: "Set channel gain (-60 to +12 dB)", tags: [api, control] }
+        example: |
+          {"index": 0, "gain": -6}
+        mutate:
+          status.channels.{{ .Request.Body.index }}.gain: "{{ .Request.Body.gain }}"
+
+      # Reboot resets uptime and the volatile DSP telemetry to their
+      # declared defaults. The SSH and Telnet `system reboot` verbs
+      # alias *polaris_reboot_mutations to share the exact same list.
+      - match: "POST /api/admin/reboot"
+        template: api/polaris-dsp/reboot-ack.json.gotempl
+        doc: { summary: "Reboot DSP (clears uptime, resets cpu/temp drift)", tags: [api, admin] }
+        example: "{}"
+        mutations: &polaris_reboot_mutations
+          - { path: status.device.boot_epoch, value: "{{ now }}" }
+          - { path: status.dsp.cpu_load, value: "{{ .Defaults.status.dsp.cpu_load }}" }
+          - { path: status.dsp.temperature, value: "{{ .Defaults.status.dsp.temperature }}" }
+
+      # Factory reset extends to every volatile DSP status path with
+      # a declared default. Channels are addressed individually so the
+      # mutation list mirrors the schema the routes already use.
+      - match: "POST /api/admin/factory-reset"
+        template: api/polaris-dsp/factory-reset-ack.json.gotempl
+        doc: { summary: "Factory reset (resets every DSP status path to defaults)", tags: [api, admin] }
+        example: "{}"
+        mutations: &polaris_factory_reset_mutations
+          - { path: status.device.boot_epoch, value: "{{ now }}" }
+          - { path: status.dsp.cpu_load, value: "{{ .Defaults.status.dsp.cpu_load }}" }
+          - { path: status.dsp.active_channels, value: "{{ .Defaults.status.dsp.active_channels }}" }
+          - { path: status.dsp.temperature, value: "{{ .Defaults.status.dsp.temperature }}" }
+          - { path: status.dsp.fan_rpm, value: "{{ .Defaults.status.dsp.fan_rpm }}" }
+
+  - name: ssh-console
+    protocol: ssh
+    port: 22
+    doc: { summary: "SSH CLI with persistent-session subscriptions", tags: [management, cli, persistent-session] }
+    auth:
+      type: password
+      default_user: admin
+      default_password: polaris
+    api_surface: polaris-dsp
+    # persistent: true keeps the SSH connection open across many
+    # commands and enables `subscribe` / `unsubscribe` verbs that push
+    # state changes back as `!`-prefixed lines on the same socket.
+    # All existing one-shot commands (`show dsp`, `show channels`)
+    # continue to work unchanged.
+    persistent: true
+    line_ending: "\r\n"
+    welcome: "Polaris DSP CLI ready. 'subscribe <path>' for live updates."
+    limits:
+      max_subs_per_session: 64
+      publish_min_interval_ms: 50
+      max_sessions_per_device: 16
+      out_buffer: 256
+    subjects:
+      - match: "status.channels.*.gain"
+        path: "{{ .Subject }}"
+        publish_token: "gain"
+        push_format: '! "publishToken":"{{ .Token }}" "subject":"{{ .Subject }}" "value":{{ .Value }}'
+      - match: "status.channels.*.mute"
+        path: "{{ .Subject }}"
+        publish_token: "mute"
+        push_format: '! "publishToken":"{{ .Token }}" "subject":"{{ .Subject }}" "value":{{ .Value }}'
+      - match: "status.dsp.*"
+        path: "{{ .Subject }}"
+        publish_token: "dsp"
+        push_format: '! "publishToken":"{{ .Token }}" "subject":"{{ .Subject }}" "value":{{ .Value }}'
+    commands:
+      - match: "show dsp"
+        template: api/polaris-dsp/cli-dsp.txt.gotempl
+        doc: { summary: "DSP health and load" }
+      - match: "show channels"
+        template: api/polaris-dsp/cli-channels.txt.gotempl
+        doc: { summary: "Active channel summary" }
+
+      # system reboot / system factory-reset, same mutation lists as
+      # the matching HTTP routes via *polaris_reboot_mutations and
+      # *polaris_factory_reset_mutations anchors.
+      - match: "system reboot"
+        template: api/polaris-dsp/cli-ack.txt.gotempl
+        doc: { summary: "Reboot DSP" }
+        mutations: *polaris_reboot_mutations
+      - match: "system factory-reset"
+        template: api/polaris-dsp/cli-ack.txt.gotempl
+        doc: { summary: "Factory reset DSP" }
+        mutations: *polaris_factory_reset_mutations
+
+      # Subscribe verbs, register an on-change subscription on this
+      # session for the named state path. A `!`-prefixed line is then
+      # pushed to this socket every time the value changes (e.g. via
+      # `POST /api/channels/gain`).
+      - match: "subscribe channels.0.gain"
+        action: subscribe
+        subject: "status.channels.0.gain"
+        response: "+OK"
+      - match: "subscribe channels.1.gain"
+        action: subscribe
+        subject: "status.channels.1.gain"
+        response: "+OK"
+      - match: "subscribe channels.0.mute"
+        action: subscribe
+        subject: "status.channels.0.mute"
+        response: "+OK"
+      - match: "subscribe dsp.cpu_load"
+        action: subscribe
+        subject: "status.dsp.cpu_load"
+        response: "+OK"
+      - match: "subscribe dsp.temperature"
+        action: subscribe
+        subject: "status.dsp.temperature"
+        response: "+OK"
+
+      # Interval (heartbeat) variants, emit on a fixed cadence
+      # regardless of state change. The number after the verb is the
+      # interval in milliseconds (floored at publish_min_interval_ms).
+      - match: "subscribe dsp.cpu_load 1000"
+        action: subscribe
+        subject: "status.dsp.cpu_load"
+        interval_ms: "1000"
+        response: "+OK"
+      - match: "subscribe dsp.temperature 2000"
+        action: subscribe
+        subject: "status.dsp.temperature"
+        interval_ms: "2000"
+        response: "+OK"
+
+      # Unsubscribe verbs.
+      - match: "unsubscribe channels.0.gain"
+        action: unsubscribe
+        subject: "status.channels.0.gain"
+        response: "+OK"
+      - match: "unsubscribe channels.0.mute"
+        action: unsubscribe
+        subject: "status.channels.0.mute"
+        response: "+OK"
+      - match: "unsubscribe dsp.cpu_load"
+        action: unsubscribe
+        subject: "status.dsp.cpu_load"
+        response: "+OK"
+      - match: "unsubscribe dsp.temperature"
+        action: unsubscribe
+        subject: "status.dsp.temperature"
+        response: "+OK"
+
+  - name: telnet-console
+    protocol: telnet
+    port: 23
+    doc: { summary: "Telnet CLI with persistent-session subscriptions", tags: [management, cli, persistent-session] }
+    auth:
+      type: password
+      default_user: admin
+      default_password: polaris
+    api_surface: polaris-dsp
+    persistent: true
+    line_ending: "\r\n"
+    welcome: "Polaris DSP CLI ready. 'subscribe <path>' for live updates."
+    limits:
+      max_subs_per_session: 64
+      publish_min_interval_ms: 50
+      max_sessions_per_device: 16
+      out_buffer: 256
+    subjects:
+      - match: "status.channels.*.gain"
+        path: "{{ .Subject }}"
+        publish_token: "gain"
+        push_format: '! "publishToken":"{{ .Token }}" "subject":"{{ .Subject }}" "value":{{ .Value }}'
+      - match: "status.channels.*.mute"
+        path: "{{ .Subject }}"
+        publish_token: "mute"
+        push_format: '! "publishToken":"{{ .Token }}" "subject":"{{ .Subject }}" "value":{{ .Value }}'
+      - match: "status.dsp.*"
+        path: "{{ .Subject }}"
+        publish_token: "dsp"
+        push_format: '! "publishToken":"{{ .Token }}" "subject":"{{ .Subject }}" "value":{{ .Value }}'
+    commands:
+      - match: "show dsp"
+        template: api/polaris-dsp/cli-dsp.txt.gotempl
+      - match: "show channels"
+        template: api/polaris-dsp/cli-channels.txt.gotempl
+
+      # system reboot / system factory-reset, Telnet verbs share the
+      # SSH listener's anchored mutation lists.
+      - match: "system reboot"
+        template: api/polaris-dsp/cli-ack.txt.gotempl
+        mutations: *polaris_reboot_mutations
+      - match: "system factory-reset"
+        template: api/polaris-dsp/cli-ack.txt.gotempl
+        mutations: *polaris_factory_reset_mutations
+
+      # Subscribe / unsubscribe, same verbs as the SSH interface;
+      # both flip the same per-device SessionRegistry.
+      - match: "subscribe channels.0.gain"
+        action: subscribe
+        subject: "status.channels.0.gain"
+        response: "+OK"
+      - match: "subscribe channels.0.mute"
+        action: subscribe
+        subject: "status.channels.0.mute"
+        response: "+OK"
+      - match: "subscribe dsp.cpu_load"
+        action: subscribe
+        subject: "status.dsp.cpu_load"
+        response: "+OK"
+      - match: "subscribe dsp.cpu_load 1000"
+        action: subscribe
+        subject: "status.dsp.cpu_load"
+        interval_ms: "1000"
+        response: "+OK"
+      - match: "unsubscribe channels.0.gain"
+        action: unsubscribe
+        subject: "status.channels.0.gain"
+        response: "+OK"
+      - match: "unsubscribe channels.0.mute"
+        action: unsubscribe
+        subject: "status.channels.0.mute"
+        response: "+OK"
+      - match: "unsubscribe dsp.cpu_load"
+        action: unsubscribe
+        subject: "status.dsp.cpu_load"
+        response: "+OK"
+
+  # Raw-TCP control plane in the style of DSP remote-control protocols: JSON-RPC 2.0
+  # objects framed by a single NUL byte (\x00). No auth dialog, no
+  # IAC negotiation, no shell handshake, every connect immediately
+  # speaks the wire protocol. Fictional addition to a Polaris DSP to
+  # demonstrate the raw-TCP transport + the wire-quirks schema
+  # (line_terminator, push_format using JSON envelope) on the same
+  # device that already exposes TTP-shaped SSH/Telnet. A real Polaris
+  # would not speak it; this is a teaching surface, not vendor
+  # mapping.
+  - name: qrc
+    protocol: tcp
+    port: 1710
+    doc:
+      summary: "JSON-RPC control over raw TCP (NUL-terminated)"
+      tags: [control, persistent-session, raw-tcp]
+    api_surface: polaris-qrc
+    persistent: true
+    line_ending: "\x00"
+    welcome: '{"jsonrpc":"2.0","method":"EngineStatus","params":{"State":"Active","DesignName":"polaris-dsp-16"}}'
+    limits:
+      max_subs_per_session: 64
+      publish_min_interval_ms: 50
+      max_sessions_per_device: 16
+      out_buffer: 256
+
+    subjects:
+      - match: "status.channels.*.gain"
+        path: "{{ .Subject }}"
+        publish_token: "Mixer1.gain"
+        push_format: '{"jsonrpc":"2.0","method":"ChangeGroup.Poll","params":{"Id":"{{ .Token }}","Changes":[{"Component":"Mixer1","Name":"gain","Value":{{ .Value }}}]}}'
+
+    commands:
+      - match: '{"jsonrpc":"2.0","method":"NoOp","id":0}'
+        response: '{"jsonrpc":"2.0","result":true,"id":0}'
+        doc: { summary: "Heartbeat" }
+
+      - match: '{"jsonrpc":"2.0","method":"EngineStatus","id":1}'
+        response: '{"jsonrpc":"2.0","result":{"State":"Active","DesignName":"polaris-dsp-16"},"id":1}'
+
+      - match: '{"jsonrpc":"2.0","method":"Component.Get","params":{"Name":"Mixer1","Controls":[{"Name":"gain"}]},"id":2}'
+        response: '{"jsonrpc":"2.0","result":{"Name":"Mixer1","Controls":[{"Name":"gain","String":"{{ index (index (index .State "status") "channels") 0 | get "gain" }}","Value":{{ index (index (index .State "status") "channels") 0 | get "gain" }}}]},"id":2}'
+
+      - match: '{"jsonrpc":"2.0","method":"ChangeGroup.AddControl","params":{"Id":"sub1","Controls":["Mixer1.gain"]},"id":3}'
+        action: subscribe
+        subject: "status.channels.0.gain"
+        token: "sub1"
+        response: '{"jsonrpc":"2.0","result":true,"id":3}'
+
+      - match: '{"jsonrpc":"2.0","method":"ChangeGroup.Remove","params":{"Id":"sub1"},"id":4}'
+        action: unsubscribe
+        subject: "status.channels.0.gain"
+        response: '{"jsonrpc":"2.0","result":true,"id":4}'
+
+  - name: snmp
+    protocol: snmp
+    port: 161
+    doc: { summary: "SNMP monitoring interface", tags: [monitoring] }
+    api_surface: polaris-dsp
+    auth:
+      community: "public"
+    # Polaris uses enterprise OID 1.3.6.1.4.1.55540 (fictional arc)
+    oid_map:
+      configuration.device.model:       "1.3.6.1.2.1.1.1.0"   # sysDescr, which every agent answers
+      status.device.uptime:             "1.3.6.1.2.1.1.3.0"
+      status.dsp.cpu_load:              "1.3.6.1.4.1.55540.2.1.0"
+      status.dsp.active_channels:       "1.3.6.1.4.1.55540.2.2.0"
+      status.dsp.temperature:           "1.3.6.1.4.1.55540.2.3.0"
+      status.dsp.fan_rpm:               "1.3.6.1.4.1.55540.2.4.0"
+      configuration.firmware.version:   "1.3.6.1.4.1.55540.5.1.0"
+      configuration.device.serial:      "1.3.6.1.4.1.55540.5.2.0"
+
+  - name: udp-echo
+    protocol: udp
+    port: 9000
+    doc:
+      summary: "UDP echo responder for custom protocol probing"
+      tags: [diagnostic]
+    api_surface: polaris-dsp
+
+  - name: icmp
+    protocol: icmp
+    doc: { summary: "ICMP ping reachability", tags: [monitoring] }
+
+# Read-derived fields, computed on every read rather than written by a
+# timer. uptime = now - boot_epoch (seconds). No goroutine, no event:
+# reading uptime never floods the event stream the way a per-tick
+# behavior did. The boot_epoch anchor is seeded at device start and
+# re-set to "{{ now }}" by the reboot / factory-reset routes above.
+computed:
+  - { path: status.device.uptime, kind: elapsed, since: status.device.boot_epoch }
+
+# Autonomous, scheduled mutations. The simulator spawns one goroutine
+# per behavior and applies the listed mutations on each tick.
+# Phase 1 supports schedule.interval only; preconditions, probabilistic
+# triggers, and recovery actions land in later phases (omniglass-lab#52).
+behaviors:
+  - name: cpu_drift
+    schedule:
+      interval: 30s
+    mutations:
+      - path: status.dsp.cpu_load
+        value: "{{ sigfig 3 (clamp 15.0 65.0 (randStep 3.0 .State.status.dsp.cpu_load)) }}"
+
+  - name: temperature_drift
+    schedule:
+      interval: 60s
+    mutations:
+      - path: status.dsp.temperature
+        value: "{{ sigfig 3 (clamp 38.0 58.0 (randStep 1.0 .State.status.dsp.temperature)) }}"
+
+defaults:
+  status:
+    device:
+      # Anchor for the computed uptime field. 0 means "unset", the
+      # simulator seeds it to the device's start time on load.
+      boot_epoch: 0
+    dsp:
+      cpu_load: 22
+      active_channels: 8
+      temperature: 42
+      fan_rpm: 3800
+    # Sixteen discrete channels, indexed 0..15 so they address directly
+    # from the API ({"index": 0, "mute": true} writes channels[0].mute).
+    # Mutes and gains are the real source of truth; peak_db is a static
+    # placeholder until a signal-drift behavior is added.
+    channels:
+      - { index: 0,  name: "Table Mic 1",    gain: -6,  mute: false, peak_db: -42 }
+      - { index: 1,  name: "Table Mic 2",    gain: -6,  mute: false, peak_db: -38 }
+      - { index: 2,  name: "Ceiling Mic 1",  gain: -3,  mute: false, peak_db: -45 }
+      - { index: 3,  name: "Ceiling Mic 2",  gain: -3,  mute: false, peak_db: -50 }
+      - { index: 4,  name: "Wireless 1",     gain: 0,   mute: true,  peak_db: -90 }
+      - { index: 5,  name: "Wireless 2",     gain: 0,   mute: true,  peak_db: -90 }
+      - { index: 6,  name: "Program In L",   gain: -12, mute: false, peak_db: -20 }
+      - { index: 7,  name: "Program In R",   gain: -12, mute: false, peak_db: -22 }
+      - { index: 8,  name: "Aux In 1",       gain: 0,   mute: true,  peak_db: -90 }
+      - { index: 9,  name: "Aux In 2",       gain: 0,   mute: true,  peak_db: -90 }
+      - { index: 10, name: "Aux In 3",       gain: 0,   mute: true,  peak_db: -90 }
+      - { index: 11, name: "Aux In 4",       gain: 0,   mute: true,  peak_db: -90 }
+      - { index: 12, name: "Matrix Out A",   gain: 0,   mute: false, peak_db: -30 }
+      - { index: 13, name: "Matrix Out B",   gain: 0,   mute: false, peak_db: -32 }
+      - { index: 14, name: "Matrix Out C",   gain: 0,   mute: false, peak_db: -36 }
+      - { index: 15, name: "Matrix Out D",   gain: 0,   mute: false, peak_db: -35 }
+    network:
+      ipv4:
+        address: ""
+        mac: ""
+  configuration:
+    device:
+      serial: ""
+      model: "DSP 16"
+      manufacturer: "Polaris"
+    firmware:
+      version: "1.8.0"
+    network:
+      hostname: ""
