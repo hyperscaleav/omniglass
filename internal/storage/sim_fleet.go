@@ -60,3 +60,27 @@ func (p *PG) AuditSimOperation(ctx context.Context, actorID, componentID string,
 	}
 	return tx.Commit(ctx)
 }
+
+// simAddressLockKey names the advisory lock that serializes handing out
+// simulated addresses.
+const simAddressLockKey = "omniglass.sim_address"
+
+// WithSimAddressLock runs fn holding the lock every add of a simulated
+// device takes around reading the addresses in use and creating the
+// endpoint that claims one, so two adds at once cannot be handed the same
+// address. The lock is a session advisory lock on a connection of its own,
+// so fn's own writes run on their usual paths.
+func (p *PG) WithSimAddressLock(ctx context.Context, fn func() error) error {
+	conn, err := p.pool.Acquire(ctx)
+	if err != nil {
+		return fmt.Errorf("storage: acquire sim address lock: %w", err)
+	}
+	defer conn.Release()
+	if _, err := conn.Exec(ctx, `select pg_advisory_lock(hashtext($1))`, simAddressLockKey); err != nil {
+		return fmt.Errorf("storage: take sim address lock: %w", err)
+	}
+	defer func() {
+		_, _ = conn.Exec(context.WithoutCancel(ctx), `select pg_advisory_unlock(hashtext($1))`, simAddressLockKey)
+	}()
+	return fn()
+}

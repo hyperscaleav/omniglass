@@ -24,3 +24,12 @@ func TestAnswerRoutesToTheNamedDevice(t *testing.T) {
 		t.Fatalf("an unserved device answered %+v", res)
 	}
 }
+
+// Whatever an operation does inside the device, the simulator answers with
+// an error rather than dying.
+func TestAnswerSurvivesAPanic(t *testing.T) {
+	res := safeAnswer(func() collection.SimOperationResult { panic("boom") })
+	if res.Error == "" {
+		t.Fatalf("a panicking operation answered %+v", res)
+	}
+}

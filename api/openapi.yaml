@@ -2247,6 +2247,7 @@ components:
           type: string
         method:
           description: "HTTP: the method; GET when empty"
+          pattern: ^[A-Za-z]*$
           type: string
         oid:
           description: "SNMP: the OID to get"

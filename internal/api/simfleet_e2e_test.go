@@ -270,4 +270,38 @@ func TestSimulationFleetAPI(t *testing.T) {
 		t.Fatalf("an unsimulated product was refused with %s, want it to say why", out)
 	}
 	c.do(ownerTok, http.MethodPost, "/nodes/site-b/simulation/devices", map[string]any{"name": "panel-11", "product": panel}, http.StatusConflict)
+
+	// A component name repeats across places: the add wires the component it
+	// created, never a namesake elsewhere.
+	for _, l := range []string{"loc-a", "loc-b"} {
+		if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: l, LocationType: "campus"}, all); err != nil {
+			t.Fatal(err)
+		}
+	}
+	locA := "loc-a"
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "dup", ProductName: &panel, LocationName: &locA}, all, all, all, all); err != nil {
+		t.Fatal(err)
+	}
+	c.do(ownerTok, http.MethodPost, "/nodes/site-a/simulation/devices", map[string]any{"name": "dup", "product": panel, "location": "loc-b"}, http.StatusCreated)
+	var dupEndpoints map[string]int = map[string]int{}
+	rows, err := conn.Query(ctx, `select l.name, count(e.id) from component c join location l on l.id = c.location_id
+		left join endpoint e on e.component = c.id where c.name = 'dup' group by l.name`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for rows.Next() {
+		var l string
+		var n int
+		if err := rows.Scan(&l, &n); err != nil {
+			t.Fatal(err)
+		}
+		dupEndpoints[l] = n
+	}
+	rows.Close()
+	if dupEndpoints["loc-a"] != 0 || dupEndpoints["loc-b"] != 1 {
+		t.Fatalf("endpoints per dup = %v, want the new one at loc-b wired and loc-a's untouched", dupEndpoints)
+	}
+
+	// A method that is no HTTP method is refused at the door.
+	c.do(ownerTok, http.MethodPost, "/components/panel-1/simulation:fire", map[string]any{"surface": "http-api", "method": "GE T", "path": "/"}, http.StatusUnprocessableEntity)
 }

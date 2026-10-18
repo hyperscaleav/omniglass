@@ -1,12 +1,18 @@
 package sim
 
 import (
+	"encoding/hex"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
+	"regexp"
 	"strings"
 	"time"
 )
+
+// methodToken is an HTTP method an operator may fire: letters only.
+var methodToken = regexp.MustCompile(`^[A-Z]+$`)
 
 // operateBodyCap bounds an operation's answer: enough for any profile's
 // status document, small enough to cross the bus and render in a drawer.
@@ -65,10 +71,16 @@ func (d *Device) operateHTTP(op Operation) OperationResult {
 	if method == "" {
 		method = http.MethodGet
 	}
-	if !strings.HasPrefix(op.Path, "/") {
-		return OperationResult{Error: "an HTTP path starts with /"}
+	if !methodToken.MatchString(method) {
+		return OperationResult{Error: fmt.Sprintf("%q is not an HTTP method", op.Method)}
 	}
-	req := httptest.NewRequest(method, op.Path, strings.NewReader(op.Body))
+	// httptest.NewRequest panics on what it cannot parse, so the path is
+	// checked first: an operator's typo is an error, never a crash.
+	u, err := url.ParseRequestURI(op.Path)
+	if err != nil || !strings.HasPrefix(op.Path, "/") || strings.ContainsAny(op.Path, " \t\r\n") {
+		return OperationResult{Error: fmt.Sprintf("%q is not a request path", op.Path)}
+	}
+	req := httptest.NewRequest(method, u.RequestURI(), strings.NewReader(op.Body))
 	req.RemoteAddr = "console"
 	switch d.HTTPAuth.Mode {
 	case HTTPAuthBasic:
@@ -90,6 +102,15 @@ func (d *Device) operateHTTP(op Operation) OperationResult {
 
 func (d *Device) operateCommand(op Operation) OperationResult {
 	line := strings.TrimSpace(op.Command)
+	// A command matched by its bytes is listed, and fired, as "hex" and its
+	// pairs.
+	if pairs, ok := strings.CutPrefix(line, "hex "); ok {
+		b, err := hex.DecodeString(strings.Join(strings.Fields(pairs), ""))
+		if err != nil {
+			return OperationResult{Error: fmt.Sprintf("%q is not hex pairs", pairs)}
+		}
+		line = string(b)
+	}
 	r, ok, err := d.RunCommand(line)
 	status := 200
 	out := OperationResult{Body: r.Response}

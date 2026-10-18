@@ -122,3 +122,32 @@ func TestOperateCapsTheBody(t *testing.T) {
 		t.Fatalf("body %d bytes truncated=%v, want %d and truncated", len(res.Body), res.Truncated, operateBodyCap)
 	}
 }
+
+// A malformed request is the operator's typo, answered as an error, never a
+// panic: a panic here would take the whole simulator down.
+func TestOperateRefusesAMalformedRequest(t *testing.T) {
+	dev, _ := operateDevice(t)
+	for _, op := range []Operation{
+		{Kind: "http", Method: "GET", Path: "/a b"},
+		{Kind: "http", Method: "GET", Path: "/a\nb"},
+		{Kind: "http", Method: "GET", Path: "/%zz"},
+		{Kind: "http", Method: "GE T", Path: "/api/power"},
+		{Kind: "http", Method: "G(T", Path: "/api/power"},
+	} {
+		if res := dev.Operate(op); res.Error == "" {
+			t.Errorf("%+v answered %+v, want an error", op, res)
+		}
+	}
+}
+
+// A command a profile matches by its bytes (match_hex) is fired the way the
+// surface lists it: "hex" and the pairs.
+func TestOperateFiresAHexCommand(t *testing.T) {
+	dev, _ := operateDevice(t)
+	if err := dev.AddCommand("\x02S\x03", "h.gotempl", "ACK", nil); err != nil {
+		t.Fatal(err)
+	}
+	if res := dev.Operate(Operation{Kind: "command", Command: "hex 02 53 03"}); res.Error != "" || res.Body != "ACK" {
+		t.Fatalf("hex command answered %+v, want ACK", res)
+	}
+}

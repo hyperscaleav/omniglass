@@ -123,19 +123,19 @@ type componentSimOutput struct {
 		Summary     string                         `json:"summary,omitempty"`
 		Variants    []string                       `json:"variants,omitempty" doc:"The products the same profile simulates; changing among them keeps the device's endpoints valid."`
 		Impairments collection.SimImpairmentStatus `json:"impairments"`
-		Surface     []simSurfaceBody             `json:"surface,omitempty" doc:"Every protocol surface the device serves, from its profile."`
+		Surface     []simSurfaceBody               `json:"surface,omitempty" doc:"Every protocol surface the device serves, from its profile."`
 	}
 }
 
 type fireSimInput struct {
 	Name string `path:"name" doc:"The simulated component's name, or a dotted address"`
 	Body struct {
-		Surface   string `json:"surface" minLength:"1" doc:"The surface to fire on, by its name in the device's surface list"`
-		Method    string `json:"method,omitempty" required:"false" doc:"HTTP: the method; GET when empty"`
-		Path      string `json:"path,omitempty" required:"false" doc:"HTTP: the request path"`
-		Body      string `json:"body,omitempty" required:"false" doc:"HTTP: the request body"`
-		Command   string `json:"command,omitempty" required:"false" doc:"SSH, Telnet or TCP: the command line"`
-		OID       string `json:"oid,omitempty" required:"false" doc:"SNMP: the OID to get"`
+		Surface string `json:"surface" minLength:"1" doc:"The surface to fire on, by its name in the device's surface list"`
+		Method  string `json:"method,omitempty" required:"false" pattern:"^[A-Za-z]*$" doc:"HTTP: the method; GET when empty"`
+		Path    string `json:"path,omitempty" required:"false" doc:"HTTP: the request path"`
+		Body    string `json:"body,omitempty" required:"false" doc:"HTTP: the request body"`
+		Command string `json:"command,omitempty" required:"false" doc:"SSH, Telnet or TCP: the command line"`
+		OID     string `json:"oid,omitempty" required:"false" doc:"SNMP: the OID to get"`
 	}
 }
 
@@ -461,52 +461,67 @@ func registerSimFleetRoutes(api huma.API, a *authenticator, gw storage.Gateway, 
 			}
 			return false
 		}
-		used, err := gw.SimAddressesInUse(ctx)
-		if err != nil {
-			return nil, huma.Error500InternalServerError("plan simulated device")
-		}
-		product := in.Body.Product
-		c, err := gw.CreateComponent(ctx, actorID(ctx), storage.ComponentSpec{Name: in.Body.Name, ProductName: &product, LocationName: in.Body.Location},
-			a.scopeFor(ctx, "component", "create"), a.scopeFor(ctx, "location", "read"),
-			a.scopeFor(ctx, "system", "read"), a.scopeFor(ctx, "system", "update"))
-		if err != nil {
-			return nil, mapComponentErr(err)
-		}
-		plan, err := simfleet.Plan([]simfleet.Component{{ID: c.ID, Product: product}}, used, simfleet.Catalog{
-			ProfileFor: func(p string) (*profile.DeviceProfile, bool) {
-				name, _, ok := store.ForProduct(p)
-				return store.Devices[name], ok
-			},
-			DriverOf:   func(p string) string { return drivers[p] },
-			Attachable: attachable,
-			PortOffset: st.Capabilities.PortOffset,
-		})
-		// The component stands only with its endpoints: a plan or endpoint
-		// that fails takes the new component back out.
-		undo := func() {
-			all := scope.Set{All: true}
-			_ = gw.DeleteComponent(context.WithoutCancel(ctx), actorID(ctx), c.Name, all, all)
-		}
-		if err != nil || len(plan) != 1 {
-			undo()
-			return nil, huma.Error409Conflict("no address is free in the simulated block")
-		}
-		node, name := in.Name, c.Name
-		for _, e := range plan[0].Endpoints {
-			spec := storage.EndpointSpec{Component: &name, Node: &node, SecretRead: secretRead, CanAdmin: canAdmin}
-			if e.Driver != "" {
-				driver := e.Driver
-				spec.Driver, spec.Inputs = &driver, e.Inputs
-			} else {
-				spec.Transport, spec.Params = e.Transport, []byte(fmt.Sprintf(`{"target":%q}`, e.Target))
+		// Planning and creating hold the address lock, so two adds at once
+		// cannot be handed the same address.
+		var c *storage.Component
+		var plan []simfleet.Device
+		err = gw.WithSimAddressLock(ctx, func() error {
+			used, err := gw.SimAddressesInUse(ctx)
+			if err != nil {
+				return huma.Error500InternalServerError("plan simulated device")
 			}
-			if _, err := gw.CreateEndpoint(ctx, actorID(ctx), spec, a.scopeFor(ctx, "endpoint", "create")); err != nil {
+			product := in.Body.Product
+			c, err = gw.CreateComponent(ctx, actorID(ctx), storage.ComponentSpec{Name: in.Body.Name, ProductName: &product, LocationName: in.Body.Location},
+				a.scopeFor(ctx, "component", "create"), a.scopeFor(ctx, "location", "read"),
+				a.scopeFor(ctx, "system", "read"), a.scopeFor(ctx, "system", "update"))
+			if err != nil {
+				return mapComponentErr(err)
+			}
+			plan, err = simfleet.Plan([]simfleet.Component{{ID: c.ID, Product: product}}, used, simfleet.Catalog{
+				ProfileFor: func(p string) (*profile.DeviceProfile, bool) {
+					name, _, ok := store.ForProduct(p)
+					return store.Devices[name], ok
+				},
+				DriverOf:   func(p string) string { return drivers[p] },
+				Attachable: attachable,
+				PortOffset: st.Capabilities.PortOffset,
+			})
+			// The component stands only with its endpoints: a plan or endpoint
+			// that fails takes the new component back out. Both address it by
+			// id, since a name may repeat in another place.
+			undo := func() {
+				all := scope.Set{All: true}
+				_ = gw.DeleteComponent(context.WithoutCancel(ctx), actorID(ctx), c.ID, all, all)
+			}
+			if err != nil || len(plan) != 1 {
 				undo()
-				return nil, mapEndpointErr(err)
+				return huma.Error409Conflict("no address is free in the simulated block")
 			}
+			if len(plan[0].Endpoints) == 0 {
+				undo()
+				return huma.Error409Conflict(fmt.Sprintf("the collector has no way to reach a simulated %s: its profile serves no HTTP or TCP surface to probe", product))
+			}
+			node, id := in.Name, c.ID
+			for _, e := range plan[0].Endpoints {
+				spec := storage.EndpointSpec{Component: &id, Node: &node, SecretRead: secretRead, CanAdmin: canAdmin}
+				if e.Driver != "" {
+					driver := e.Driver
+					spec.Driver, spec.Inputs = &driver, e.Inputs
+				} else {
+					spec.Transport, spec.Params = e.Transport, []byte(fmt.Sprintf(`{"target":%q}`, e.Target))
+				}
+				if _, err := gw.CreateEndpoint(ctx, actorID(ctx), spec, a.scopeFor(ctx, "endpoint", "create")); err != nil {
+					undo()
+					return mapEndpointErr(err)
+				}
+			}
+			return nil
+		})
+		if err != nil {
+			return nil, err
 		}
 		out := &addSimDeviceOutput{}
-		out.Body.Component, out.Body.Node, out.Body.Address, out.Body.Endpoints = c.Name, node, plan[0].Address, len(plan[0].Endpoints)
+		out.Body.Component, out.Body.Node, out.Body.Address, out.Body.Endpoints = c.Name, in.Name, plan[0].Address, len(plan[0].Endpoints)
 		return out, nil
 	})
 }

@@ -559,6 +559,7 @@ type Gateway interface {
 	ComponentSimNode(ctx context.Context, componentID string) (string, error)
 	SimAddressesInUse(ctx context.Context) (map[string]bool, error)
 	AuditSimOperation(ctx context.Context, actorID, componentID string, op any) error
+	WithSimAddressLock(ctx context.Context, fn func() error) error
 	// ResolveTaskOwner binds a task's owner component and confines the node to its
 	// own tasks, for the telemetry ingest consumer.
 	ResolveTaskOwner(ctx context.Context, taskID, nodeName string) (TaskOwner, bool, error)

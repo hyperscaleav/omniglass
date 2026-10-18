@@ -2,6 +2,7 @@ package simnode
 
 import (
 	"encoding/json"
+	"fmt"
 
 	"github.com/nats-io/nats.go"
 
@@ -23,6 +24,18 @@ func answer(devices []*sim.Device, op collection.SimOperation) collection.SimOpe
 	return collection.SimOperationResult{Error: "the simulator is not serving this device; it may not have pulled it yet"}
 }
 
+// safeAnswer runs an operation so that a panic inside a device becomes an
+// error reply: nats runs this callback with no recover, and a panic would end
+// the simulator and every device it serves.
+func safeAnswer(run func() collection.SimOperationResult) (res collection.SimOperationResult) {
+	defer func() {
+		if r := recover(); r != nil {
+			res = collection.SimOperationResult{Error: fmt.Sprintf("the device failed answering: %v", r)}
+		}
+	}()
+	return run()
+}
+
 // subscribeOperations answers the server's operation requests for this
 // node's devices.
 func subscribeOperations(nc *nats.Conn, name string, engine *sim.Engine) (*nats.Subscription, error) {
@@ -30,7 +43,7 @@ func subscribeOperations(nc *nats.Conn, name string, engine *sim.Engine) (*nats.
 		var op collection.SimOperation
 		res := collection.SimOperationResult{Error: "a malformed operation"}
 		if json.Unmarshal(m.Data, &op) == nil {
-			res = answer(engine.Devices(), op)
+			res = safeAnswer(func() collection.SimOperationResult { return answer(engine.Devices(), op) })
 		}
 		b, err := json.Marshal(res)
 		if err != nil {

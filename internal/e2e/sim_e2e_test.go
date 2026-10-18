@@ -162,6 +162,13 @@ func TestSimulatorEndToEnd(t *testing.T) {
 	// the real simulator, through the server and the bus, and get the
 	// device's answer; the fire is itself a hit.
 	iface, path := e2eSimulatedRoute(t, product)
+	// A malformed path is the operator's typo: the device says so, and the
+	// simulator lives on to answer the next fire.
+	bad, code := cli("component", "simulation", "fire", "sim-dev", "--surface", iface, "--path", "/a b",
+		"--server", server, "--token", ownerTok)
+	if code != 0 || !strings.Contains(bad, "not a request path") {
+		t.Fatalf("a malformed fire exit %d:\n%s\nwant the device's error", code, bad)
+	}
 	out, code := cli("component", "simulation", "fire", "sim-dev", "--surface", iface, "--path", path,
 		"--server", server, "--token", ownerTok)
 	if code != 0 {

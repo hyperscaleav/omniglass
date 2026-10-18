@@ -85,9 +85,19 @@ func simulationBody(devices []storage.SimDevice, st simhub.Status, seen bool, no
 		out.Body.Capabilities = st.Capabilities
 		out.Body.Impairments = st.Impairments
 	}
+	// The simulator's impaired list covers its whole node: keep only the
+	// devices in this caller's view.
+	visible := make(map[string]bool, len(devices))
+	for _, d := range devices {
+		visible[d.ComponentID] = true
+	}
 	impaired := map[string]bool{}
+	out.Body.Impairments.Impaired = nil
 	for _, id := range st.Impairments.Impaired {
-		impaired[id] = true
+		if visible[id] {
+			impaired[id] = true
+			out.Body.Impairments.Impaired = append(out.Body.Impairments.Impaired, id)
+		}
 	}
 	out.Body.Devices = make([]simDeviceBody, 0, len(devices))
 	for _, d := range devices {

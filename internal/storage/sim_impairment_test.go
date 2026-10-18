@@ -3,7 +3,9 @@ package storage_test
 import (
 	"context"
 	"errors"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 
@@ -94,5 +96,43 @@ func TestSimImpairment(t *testing.T) {
 	}
 	if audits != 3 {
 		t.Fatalf("%d audit rows for three writes", audits)
+	}
+}
+
+// Two holders of the sim address lock run one after the other, never at
+// once: the second waits for the first to finish.
+func TestSimAddressLockSerializes(t *testing.T) {
+	if testing.Short() {
+		t.Skip("integration test needs Postgres")
+	}
+	ctx := context.Background()
+	gw, err := storage.NewPG(ctx, storagetest.NewDSN(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer gw.Close()
+	inside, overlap := make(chan struct{}, 2), false
+	var active int32
+	done := make(chan error, 2)
+	for i := 0; i < 2; i++ {
+		go func() {
+			done <- gw.WithSimAddressLock(ctx, func() error {
+				if atomic.AddInt32(&active, 1) > 1 {
+					overlap = true
+				}
+				inside <- struct{}{}
+				time.Sleep(150 * time.Millisecond)
+				atomic.AddInt32(&active, -1)
+				return nil
+			})
+		}()
+	}
+	for i := 0; i < 2; i++ {
+		if err := <-done; err != nil {
+			t.Fatal(err)
+		}
+	}
+	if overlap || len(inside) != 2 {
+		t.Fatalf("overlap %v, entered %d times", overlap, len(inside))
 	}
 }
