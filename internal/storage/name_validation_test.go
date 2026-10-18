@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/hyperscaleav/omniglass/internal/rules"
+	"github.com/hyperscaleav/omniglass/internal/scope"
 	"github.com/hyperscaleav/omniglass/internal/seed"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
@@ -36,6 +38,12 @@ import (
 func provedByCreate(ctx context.Context, gw *storage.PG) map[string]func(key string) error {
 	severityRank := 0
 	return map[string]func(key string) error{
+		"event_rule": func(s string) error {
+			v, _ := json.Marshal("down")
+			_, err := gw.CreateEventRule(ctx, "", storage.EventRuleSpec{Name: s, SampleKey: "endpoint-reachable",
+				Fire: rules.Criteria{Op: "eq", Value: v}, Severity: "high"}, scope.Set{All: true})
+			return err
+		},
 		"severity_level": func(s string) error {
 			// Each call takes a rank of its own, since ranks are unique.
 			severityRank++

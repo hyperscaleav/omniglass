@@ -1176,6 +1176,58 @@ export interface paths {
         patch: operations["update-endpoint"];
         trace?: never;
     };
+    "/event-rules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List event rules
+         * @description Lists the event rules, the authored config that raises alarms. Rules are fleet-wide: a caller without an all-scope grant lists none. Gated by rule:read.
+         */
+        get: operations["list-event-rule"];
+        put?: never;
+        /**
+         * Create an event rule
+         * @description Authors a rule that raises an alarm on each component it watches when its sample key meets the fire criteria for the fire sustain, and clears it when the clear criteria (or the negation of fire) holds for the clear sustain. The key must be a registered property or metric, the criteria evaluable on its lane, and the severity a level that exists (else 422); a name already taken is a 409. Audited. Gated by rule:create, with an all-scope grant.
+         */
+        post: operations["create-event-rule"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/event-rules/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get an event rule
+         * @description Returns one event rule by name. Gated by rule:read.
+         */
+        get: operations["get-event-rule"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete an event rule
+         * @description Removes an operator rule; an official rule is read-only (409). Audited. Gated by rule:delete, with an all-scope grant.
+         */
+        delete: operations["delete-event-rule"];
+        options?: never;
+        head?: never;
+        /**
+         * Update an event rule
+         * @description Patches a rule (an absent field is unchanged), bumping its version; disabling it stops new opens. Official rules are read-only (409). Audited. Gated by rule:update, with an all-scope grant.
+         */
+        patch: operations["update-event-rule"];
+        trace?: never;
+    };
     "/event-types": {
         parameters: {
             query?: never;
@@ -4788,6 +4840,38 @@ export interface components {
             /** @description A transport name from the code registry (GET /transports); the endpoint is named by it, unique within the component. Exactly one of transport (a bare probe endpoint) or driver (an attach) is set */
             transport?: string;
         };
+        CreateEventRuleInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/CreateEventRuleInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description The criteria that clears it: {op, value}; absent clears on the negation of fire_criteria */
+            clear_criteria?: components["schemas"]["CriteriaBody"];
+            /** @description A Go duration; empty is 0s */
+            clear_sustain?: string;
+            /** @description What the rule watches for and why */
+            description?: string;
+            /** @description Defaults to true */
+            enabled?: boolean;
+            /** @description The criteria that opens an alarm: {op, value} */
+            fire_criteria: components["schemas"]["CriteriaBody"];
+            /** @description A Go duration; empty is 0s */
+            fire_sustain?: string;
+            /** @description A human label; also the alarm message when message is empty */
+            label?: string;
+            /** @description The alarm message; empty uses the label or the name */
+            message?: string;
+            /** @description The rule's name (lowercase kebab) */
+            name: string;
+            /** @description The property or metric the rule reads */
+            sample_key: string;
+            /** @description The components the rule watches (component types and components); absent is every component */
+            selector?: components["schemas"]["SelectorBody"];
+            /** @description The severity level the alarm is raised at, by name */
+            severity: string;
+        };
         CreateEventTypeInputBody: {
             /**
              * Format: uri
@@ -5230,6 +5314,15 @@ export interface components {
             /** @description The vendor's website (http or https) */
             website?: string;
         };
+        CriteriaBody: {
+            /**
+             * @description The comparison: a property compares text with eq or ne; a metric compares numbers with any of them
+             * @enum {string}
+             */
+            op: "eq" | "ne" | "gt" | "ge" | "lt" | "le";
+            /** @description The threshold: text for a property, a number for a metric */
+            value: unknown;
+        };
         DownloadFileOutputBody: {
             /**
              * Format: uri
@@ -5531,6 +5624,48 @@ export interface components {
              * @description When the occurrence happened
              */
             ts: string;
+        };
+        EventRuleBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/EventRuleBody.json
+             */
+            readonly $schema?: string;
+            /** @description When the sample meets this for clear_sustain, the alarm clears; absent, the negation of fire_criteria */
+            clear_criteria?: components["schemas"]["CriteriaBody"];
+            /** @description How long the clear criteria must hold, a Go duration */
+            clear_sustain: string;
+            description?: string;
+            enabled: boolean;
+            /** @description When the sample meets this for fire_sustain, the rule opens an alarm */
+            fire_criteria: components["schemas"]["CriteriaBody"];
+            /** @description How long the fire criteria must hold, a Go duration (0s fires at once) */
+            fire_sustain: string;
+            /** @description The rule's uuid, the stable form of name */
+            id: string;
+            label?: string;
+            /** @description The alarm's message; empty uses the rule's label or name */
+            message?: string;
+            name: string;
+            /** @description Shipped with the platform and read-only */
+            official: boolean;
+            /** @description The property or metric the rule reads */
+            sample_key: string;
+            /**
+             * @description Which lane the key reads, derived from the registries
+             * @enum {string}
+             */
+            sample_lane: "property" | "metric";
+            /** @description The components the rule watches; both lists empty is every component */
+            selector: components["schemas"]["SelectorBody"];
+            /** @description The severity level the alarm is raised at, by name */
+            severity: string;
+            /**
+             * Format: int64
+             * @description Bumps on every update
+             */
+            version: number;
         };
         EventTypeBody: {
             /**
@@ -6015,6 +6150,15 @@ export interface components {
              */
             readonly $schema?: string;
             endpoints: components["schemas"]["EndpointBody"][] | null;
+        };
+        ListEventRulesOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/ListEventRulesOutputBody.json
+             */
+            readonly $schema?: string;
+            event_rules: components["schemas"]["EventRuleBody"][] | null;
         };
         ListEventTypesOutputBody: {
             /**
@@ -7353,6 +7497,12 @@ export interface components {
             secret: boolean;
             type: string;
         };
+        SelectorBody: {
+            /** @description Watch components whose type falls within one of these component types */
+            component_types?: string[] | null;
+            /** @description Watch these components (by name or id on write; ids on read) */
+            components?: string[] | null;
+        };
         SessionBody: {
             /** @description The IP address the credential was created from */
             client_ip?: string;
@@ -8248,6 +8398,38 @@ export interface components {
             node?: string;
             /** @description Replace the address/target settings (jsonb) */
             params?: unknown;
+        };
+        UpdateEventRuleInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/UpdateEventRuleInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description The criteria that clears it: {op, value}; absent clears on the negation of fire_criteria */
+            clear_criteria?: components["schemas"]["CriteriaBody"];
+            /** @description Drop the clear criteria, so the rule clears on the negation of its fire criteria */
+            clear_negates?: boolean;
+            /** @description How long the clear criteria must hold, a Go duration; empty is 0s */
+            clear_sustain?: string;
+            /** @description What the rule watches for and why */
+            description?: string;
+            /** @description Whether the rule evaluates; defaults to true on create */
+            enabled?: boolean;
+            /** @description The criteria that opens an alarm: {op, value} */
+            fire_criteria?: components["schemas"]["CriteriaBody"];
+            /** @description How long the fire criteria must hold, a Go duration (e.g. 30s); empty is 0s */
+            fire_sustain?: string;
+            /** @description A human label; also the alarm message when message is empty */
+            label?: string;
+            /** @description The alarm message; empty uses the label or the name */
+            message?: string;
+            /** @description The property or metric the rule reads */
+            sample_key?: string;
+            /** @description The components the rule watches (component types and components); absent is every component */
+            selector?: components["schemas"]["SelectorBody"];
+            /** @description The severity level the alarm is raised at, by name */
+            severity?: string;
         };
         UpdateEventTypeInputBody: {
             /**
@@ -10991,6 +11173,166 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EndpointBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "list-event-rule": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListEventRulesOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "create-event-rule": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateEventRuleInputBody"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EventRuleBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "get-event-rule": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The rule's name */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EventRuleBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "delete-event-rule": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The rule's name */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "update-event-rule": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The rule's name */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateEventRuleInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EventRuleBody"];
                 };
             };
             /** @description Error */

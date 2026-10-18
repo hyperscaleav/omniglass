@@ -866,3 +866,18 @@ func (UnimplementedGateway) UpdateSeverityLevel(context.Context, string, string,
 	return nil, nil
 }
 func (UnimplementedGateway) DeleteSeverityLevel(context.Context, string, string) error { return nil }
+func (UnimplementedGateway) ListEventRules(context.Context, scope.Set) ([]EventRule, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) GetEventRule(context.Context, string, scope.Set) (*EventRule, error) {
+	return nil, ErrEventRuleNotFound
+}
+func (UnimplementedGateway) CreateEventRule(context.Context, string, EventRuleSpec, scope.Set) (*EventRule, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) UpdateEventRule(context.Context, string, string, EventRulePatch, scope.Set, scope.Set) (*EventRule, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) DeleteEventRule(context.Context, string, string, scope.Set, scope.Set) error {
+	return nil
+}

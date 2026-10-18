@@ -3471,6 +3471,134 @@
      }
     ]
    },
+   "event_rule": {
+    "columns": [
+     {
+      "name": "id",
+      "type": "uuid",
+      "nullable": false,
+      "default": "uuidv7()",
+      "pk": true
+     },
+     {
+      "name": "name",
+      "type": "text",
+      "nullable": false
+     },
+     {
+      "name": "label",
+      "type": "text",
+      "nullable": true
+     },
+     {
+      "name": "description",
+      "type": "text",
+      "nullable": false,
+      "default": "''::text"
+     },
+     {
+      "name": "selector",
+      "type": "jsonb",
+      "nullable": false,
+      "default": "'{}'::jsonb"
+     },
+     {
+      "name": "sample_key",
+      "type": "text",
+      "nullable": false
+     },
+     {
+      "name": "sample_lane",
+      "type": "text",
+      "nullable": false
+     },
+     {
+      "name": "fire_criteria",
+      "type": "jsonb",
+      "nullable": false
+     },
+     {
+      "name": "clear_criteria",
+      "type": "jsonb",
+      "nullable": true
+     },
+     {
+      "name": "fire_sustain",
+      "type": "interval",
+      "nullable": false,
+      "default": "'00:00:00'::interval"
+     },
+     {
+      "name": "clear_sustain",
+      "type": "interval",
+      "nullable": false,
+      "default": "'00:00:00'::interval"
+     },
+     {
+      "name": "severity",
+      "type": "text",
+      "nullable": false,
+      "fk": true,
+      "fk_target": "severity_level.name"
+     },
+     {
+      "name": "message",
+      "type": "text",
+      "nullable": false,
+      "default": "''::text"
+     },
+     {
+      "name": "enabled",
+      "type": "boolean",
+      "nullable": false,
+      "default": "true"
+     },
+     {
+      "name": "official",
+      "type": "boolean",
+      "nullable": false,
+      "default": "false"
+     },
+     {
+      "name": "version",
+      "type": "integer",
+      "nullable": false,
+      "default": "1"
+     },
+     {
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+     },
+     {
+      "name": "updated_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+     }
+    ],
+    "checks": [
+     {
+      "name": "event_rule_clear_sustain_check",
+      "expr": "CHECK ((clear_sustain \u003e= '00:00:00'::interval))"
+     },
+     {
+      "name": "event_rule_fire_sustain_check",
+      "expr": "CHECK ((fire_sustain \u003e= '00:00:00'::interval))"
+     },
+     {
+      "name": "event_rule_sample_lane_check",
+      "expr": "CHECK ((sample_lane = ANY (ARRAY['property'::text, 'metric'::text])))"
+     }
+    ],
+    "uniques": [
+     {
+      "name": "event_rule_name_key",
+      "definition": "CREATE UNIQUE INDEX event_rule_name_key ON public.event_rule USING btree (name)"
+     }
+    ]
+   },
    "event_type": {
     "columns": [
      {

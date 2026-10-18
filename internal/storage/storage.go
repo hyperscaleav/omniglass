@@ -452,6 +452,13 @@ type Gateway interface {
 	// The event_type registry (ADR-0063 #395): the occurrence keyspace, the twin of
 	// property_type. Seeded official and operator-extensible; a registered event_type
 	// name routes an occurrence to the event sink.
+	// Event rules (#918): fleet-wide config, read and written with an
+	// all-scope grant; official rules read-only.
+	ListEventRules(ctx context.Context, read scope.Set) ([]EventRule, error)
+	GetEventRule(ctx context.Context, name string, read scope.Set) (*EventRule, error)
+	CreateEventRule(ctx context.Context, actorID string, spec EventRuleSpec, create scope.Set) (*EventRule, error)
+	UpdateEventRule(ctx context.Context, actorID, name string, patch EventRulePatch, read, action scope.Set) (*EventRule, error)
+	DeleteEventRule(ctx context.Context, actorID, name string, read, action scope.Set) error
 	// The severity level registry (#917): official levels from the boot seed,
 	// operator levels created, renamed, recolored, re-ranked and deleted.
 	UpsertSeverityLevel(ctx context.Context, l SeverityLevel) error

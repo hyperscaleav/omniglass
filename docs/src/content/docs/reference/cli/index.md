@@ -1448,6 +1448,120 @@ Example:
 omniglass endpoint update <id>
 ```
 
+## `omniglass event-rule`
+
+Commands for the event-rule resource
+
+### `omniglass event-rule create`
+
+Create an event rule
+
+```
+omniglass event-rule create [flags]
+```
+
+Authors a rule that raises an alarm on each component it watches when its sample key meets the fire criteria for the fire sustain, and clears it when the clear criteria (or the negation of fire) holds for the clear sustain. The key must be a registered property or metric, the criteria evaluable on its lane, and the severity a level that exists (else 422); a name already taken is a 409. Audited. Gated by rule:create, with an all-scope grant.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--clear-criteria` | string | (none) | The criteria that clears it: {op, value}; absent clears on the negation of fire_criteria |
+| `--clear-sustain` | string | (none) | A Go duration; empty is 0s |
+| `--description` | string | (none) | What the rule watches for and why |
+| `--enabled` | bool | `false` | Defaults to true |
+| `--fire-criteria` | string | (none) | The criteria that opens an alarm: {op, value} |
+| `--fire-sustain` | string | (none) | A Go duration; empty is 0s |
+| `--label` | string | (none) | A human label; also the alarm message when message is empty |
+| `--message` | string | (none) | The alarm message; empty uses the label or the name |
+| `--name` | string | (none) | The rule's name (lowercase kebab) |
+| `--sample-key` | string | (none) | The property or metric the rule reads |
+| `--selector` | string | (none) | The components the rule watches (component types and components); absent is every component |
+| `--severity` | string | (none) | The severity level the alarm is raised at, by name |
+
+Example:
+
+```sh
+omniglass event-rule create --fire-criteria <json> --name name --sample-key sample_key --severity severity
+```
+
+### `omniglass event-rule delete`
+
+Delete an event rule
+
+```
+omniglass event-rule delete <name>
+```
+
+Removes an operator rule; an official rule is read-only (409). Audited. Gated by rule:delete, with an all-scope grant.
+
+Example:
+
+```sh
+omniglass event-rule delete <name>
+```
+
+### `omniglass event-rule get`
+
+Get an event rule
+
+```
+omniglass event-rule get <name>
+```
+
+Returns one event rule by name. Gated by rule:read.
+
+Example:
+
+```sh
+omniglass event-rule get <name>
+```
+
+### `omniglass event-rule list`
+
+List event rules
+
+```
+omniglass event-rule list
+```
+
+Lists the event rules, the authored config that raises alarms. Rules are fleet-wide: a caller without an all-scope grant lists none. Gated by rule:read.
+
+Example:
+
+```sh
+omniglass event-rule list
+```
+
+### `omniglass event-rule update`
+
+Update an event rule
+
+```
+omniglass event-rule update <name> [flags]
+```
+
+Patches a rule (an absent field is unchanged), bumping its version; disabling it stops new opens. Official rules are read-only (409). Audited. Gated by rule:update, with an all-scope grant.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--clear-criteria` | string | (none) | The criteria that clears it: {op, value}; absent clears on the negation of fire_criteria |
+| `--clear-negates` | bool | `false` | Drop the clear criteria, so the rule clears on the negation of its fire criteria |
+| `--clear-sustain` | string | (none) | How long the clear criteria must hold, a Go duration; empty is 0s |
+| `--description` | string | (none) | What the rule watches for and why |
+| `--enabled` | bool | `false` | Whether the rule evaluates; defaults to true on create |
+| `--fire-criteria` | string | (none) | The criteria that opens an alarm: {op, value} |
+| `--fire-sustain` | string | (none) | How long the fire criteria must hold, a Go duration (e.g. 30s); empty is 0s |
+| `--label` | string | (none) | A human label; also the alarm message when message is empty |
+| `--message` | string | (none) | The alarm message; empty uses the label or the name |
+| `--sample-key` | string | (none) | The property or metric the rule reads |
+| `--selector` | string | (none) | The components the rule watches (component types and components); absent is every component |
+| `--severity` | string | (none) | The severity level the alarm is raised at, by name |
+
+Example:
+
+```sh
+omniglass event-rule update <name>
+```
+
 ## `omniglass event-type`
 
 Commands for the event-type resource

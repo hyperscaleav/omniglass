@@ -274,6 +274,11 @@ telemetry: {
     source_log_line_id: bigint {constraint: foreign_key}
     system_id: uuid {constraint: foreign_key}
   }
+  event_rule: {
+    shape: sql_table
+    id: uuid {constraint: primary_key}
+    severity: text {constraint: foreign_key}
+  }
   event_type: {
     shape: sql_table
     id: uuid {constraint: primary_key}
@@ -510,6 +515,7 @@ telemetry.event.node_id -> collection.node.principal_id
 telemetry.event.source_event_id -> telemetry.event.id
 telemetry.event.source_log_line_id -> telemetry.log_line.id
 telemetry.event.system_id -> fleet.system.id
+telemetry.event_rule.severity -> telemetry.severity_level.name
 telemetry.log_line.component_id -> fleet.component.id
 telemetry.metric.command_id -> telemetry.command.id
 telemetry.metric.component_id -> fleet.component.id

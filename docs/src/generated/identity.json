@@ -67,6 +67,12 @@
       "labelled": false
     },
     {
+      "table": "event_rule",
+      "shape": "key-bearing",
+      "reason": "reach-lost, a rule an alarm names as what raised it",
+      "labelled": true
+    },
+    {
       "table": "event_type",
       "shape": "keyspace",
       "reason": "call-started, an occurrence name",

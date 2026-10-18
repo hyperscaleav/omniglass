@@ -138,6 +138,7 @@ var IdentityShapes = map[string]TableIdentity{
 	"metric_type":    {Shape: ShapeKeyspace, Reason: "icmp-rtt-avg, a numeric-series name referenced from drivers and templates"},
 	"event_type":     {Shape: ShapeKeyspace, Reason: "call-started, an occurrence name"},
 	"severity_level": {Shape: ShapeKeyBearing, Reason: "high, a named level rules and alarms reference"},
+	"event_rule":     {Shape: ShapeKeyBearing, Reason: "reach-lost, a rule an alarm names as what raised it"},
 	"command_type":   {Shape: ShapeKeyspace, Reason: "set-input, a command name"},
 
 	// A human identifier that is not a name. These are the exceptions worth stating.
