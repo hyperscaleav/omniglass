@@ -16,41 +16,32 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT"
 
-NET=oge2e
-PWIMG=mcr.microsoft.com/playwright:v1.61.1-jammy
+# The stack (network, Postgres, server) is per run: names carry a run id and
+# teardown stops only this run's resources, so concurrent runs in different
+# worktrees cannot collide (#855). See web/e2e/lib/stack.sh.
+. web/e2e/lib/stack.sh
+
+PWIMG=$STACK_PWIMG
 APPIMG=debian:stable-slim
-DSN="postgres://omniglass:omniglass@oge2e-pg:5432/omniglass?sslmode=disable"
 E2E_USER="e2e"
 E2E_PASSWORD="e2e-password-Xy7"
 
-cleanup() {
-  docker stop oge2e-srv oge2e-pg >/dev/null 2>&1 || true
-  docker rm oge2e-srv oge2e-pg >/dev/null 2>&1 || true
-  docker network rm "$NET" >/dev/null 2>&1 || true
-}
-cleanup
-trap cleanup EXIT
+stack_init oge2e
 
 make build-web
 
-docker network create "$NET" >/dev/null
-docker run -d --name oge2e-pg --network "$NET" \
-  -e POSTGRES_USER=omniglass -e POSTGRES_PASSWORD=omniglass -e POSTGRES_DB=omniglass postgres:18 >/dev/null
-until docker exec oge2e-pg pg_isready -U omniglass -d omniglass >/dev/null 2>&1; do sleep 1; done
-sleep 2
+stack_up
 
-app() { docker run --rm --network "$NET" -v "$ROOT/bin/omniglass:/omniglass:ro" -e OMNIGLASS_DSN="$DSN" "$APPIMG" /omniglass "$@"; }
+app() { stack_run -v "$ROOT/bin/omniglass:/omniglass:ro" -e OMNIGLASS_DSN="$STACK_DSN" "$APPIMG" /omniglass "$@"; }
 
 app migrate
 # Idempotent per username: a fresh database creates the owner with this password.
 app bootstrap "$E2E_USER" --password "$E2E_PASSWORD" >/dev/null 2>&1 || true
 app set-password "$E2E_USER" "$E2E_PASSWORD" >/dev/null 2>&1 || true
 
-docker run -d --name oge2e-srv --network "$NET" -v "$ROOT/bin/omniglass:/omniglass:ro" \
-  -e OMNIGLASS_DSN="$DSN" "$APPIMG" /omniglass server >/dev/null
-until docker run --rm --network "$NET" "$PWIMG" bash -c 'curl -fsS http://oge2e-srv:8080/api/v1/healthz' >/dev/null 2>&1; do sleep 1; done
+stack_server -v "$ROOT/bin/omniglass:/omniglass:ro" -e OMNIGLASS_DSN="$STACK_DSN" "$APPIMG" /omniglass server
 
-docker run --rm --network "$NET" -v "$ROOT:/w" -w /w/web \
+stack_run -v "$ROOT:/w" -w /w/web \
   --user "$(id -u):$(id -g)" -e HOME=/tmp -e PLAYWRIGHT_BROWSERS_PATH=/ms-playwright \
-  -e OG_E2E_USER="$E2E_USER" -e OG_E2E_PASSWORD="$E2E_PASSWORD" -e OG_E2E_BASE="http://oge2e-srv:8080" \
+  -e OG_E2E_USER="$E2E_USER" -e OG_E2E_PASSWORD="$E2E_PASSWORD" -e OG_E2E_BASE="$STACK_SRV_URL" \
   "$PWIMG" npx playwright test "$@"

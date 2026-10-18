@@ -133,21 +133,28 @@ bench:
 # the full-stack test through the harness's OMNIGLASS_TEST_ADMIN_DSN. Packages
 # run one at a time (-p 1): they share the one network namespace, and the
 # simulator owns one firewall table and one qdisc in it. Docker is already a
-# requirement of make test.
+# requirement of make test. Names carry the recipe shell's pid, so concurrent
+# runs never share a network, and the traps stop this run's containers on every
+# exit path, interrupts included (the same contract as web/e2e/lib/stack.sh);
+# the test container is waited on in the background so a signal is handled at
+# once rather than after the tests finish. The two module/build cache volumes
+# are shared across runs on purpose.
 NETADMIN_IMG ?= golang:1.25
 NETADMIN_PKGS ?= ./internal/sim/impair/ ./internal/e2e/
 NETADMIN_RUN ?= Netlink|Impair|Validate|PlanFor
 test-netadmin:
-	@set -e; net=omniglass-netadmin-$$$$; pg=$$net-pg; \
-	trap 'docker stop $$pg >/dev/null 2>&1; docker network rm $$net >/dev/null 2>&1' EXIT; \
+	@set -e; net=omniglass-netadmin-$$$$; pg=$$net-pg; go=$$net-go; \
+	trap 'docker stop $$go $$pg >/dev/null 2>&1 || :; n=0; until docker network rm $$net >/dev/null 2>&1; do \
+		n=$$((n+1)); [ $$n -lt 10 ] || { echo "network $$net could not be removed" >&2; break; }; sleep 1; done' EXIT; \
+	trap 'exit 130' INT; trap 'exit 143' TERM; trap 'exit 129' HUP; \
 	docker network create $$net >/dev/null; \
 	docker run -d --rm --name $$pg --network $$net -e POSTGRES_PASSWORD=netadmin postgres:18 >/dev/null; \
 	n=0; until docker exec $$pg pg_isready -h 127.0.0.1 -U postgres >/dev/null 2>&1; do \
 		n=$$((n+1)); [ $$n -lt 60 ] || { echo "postgres did not come up"; exit 1; }; sleep 1; done; \
-	docker run --rm --network $$net --cap-add NET_ADMIN --sysctl net.ipv4.ping_group_range="0 2147483647" \
+	docker run --rm --name $$go --network $$net --cap-add NET_ADMIN --sysctl net.ipv4.ping_group_range="0 2147483647" \
 		-v "$(CURDIR):/w" -w /w -v omniglass-netadmin-gomod:/go/pkg/mod -v omniglass-netadmin-gocache:/root/.cache/go-build \
 		-e GOFLAGS=-buildvcs=false -e OMNIGLASS_NETADMIN=1 -e OMNIGLASS_TEST_ADMIN_DSN="postgres://postgres:netadmin@$$pg:5432/postgres?sslmode=disable" \
-		$(NETADMIN_IMG) go test -tags netadmin -p 1 -count=1 -run '$(NETADMIN_RUN)' $(NETADMIN_PKGS)
+		$(NETADMIN_IMG) go test -tags netadmin -p 1 -count=1 -run '$(NETADMIN_RUN)' $(NETADMIN_PKGS) & wait $$!
 
 # One simulator process serving a 1,000-device fleet: startup time, goroutines
 # and heap while serving, and goroutines left behind after it stops.
