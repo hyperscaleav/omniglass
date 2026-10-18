@@ -1429,15 +1429,15 @@ func generatedCommands() []*cobra.Command {
 				cmd := func() *cobra.Command {
 					var fBody string
 					var fCommand string
-					var fInterface string
 					var fMethod string
 					var fOid string
 					var fPath string
+					var fSurface string
 					cmd := &cobra.Command{
 						Use:     "fire <name>",
 						Short:   "Fire an operation at a simulated device",
-						Long:    "Asks the simulator beside the component's node to run one operation against the device, from the interface named in its surface: an HTTP call, a command line (SSH, Telnet, TCP) or an SNMP get, and returns the device's answer. The device answers from its live state in process, as its listeners would, so a command's change sticks and the collector sees it; an impairment does not stop it. Audited. Gated by simulation:update, resolved on the component tier. A component that is not simulated is a 409, an interface it does not serve a 422, and no simulator answering a 503.",
-						Example: "  omniglass component simulation fire <name> --interface interface",
+						Long:    "Asks the simulator beside the component's node to run one operation against the device, on one of its protocol surfaces: an HTTP call, a command line (SSH, Telnet, TCP) or an SNMP get, and returns the device's answer. The device answers from its live state in process, as its listeners would, so a command's change sticks and the collector sees it; an impairment does not stop it. Audited. Gated by simulation:update, resolved on the component tier. A component that is not simulated is a 409, a surface it does not serve a 422, and no simulator answering a 503.",
+						Example: "  omniglass component simulation fire <name> --surface surface",
 						Args:    cobra.ExactArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
 							path := fmt.Sprintf("/api/v1/components/%s/simulation:fire", url.PathEscape(args[0]))
@@ -1448,9 +1448,6 @@ func generatedCommands() []*cobra.Command {
 							if cmd.Flags().Changed("command") {
 								body["command"] = fCommand
 							}
-							if cmd.Flags().Changed("interface") {
-								body["interface"] = fInterface
-							}
 							if cmd.Flags().Changed("method") {
 								body["method"] = fMethod
 							}
@@ -1460,16 +1457,19 @@ func generatedCommands() []*cobra.Command {
 							if cmd.Flags().Changed("path") {
 								body["path"] = fPath
 							}
+							if cmd.Flags().Changed("surface") {
+								body["surface"] = fSurface
+							}
 							return runAPICommand(cmd, "POST", path, body)
 						},
 					}
 					cmd.Flags().StringVar(&fBody, "body", "", "HTTP: the request body")
 					cmd.Flags().StringVar(&fCommand, "command", "", "SSH, Telnet or TCP: the command line")
-					cmd.Flags().StringVar(&fInterface, "interface", "", "The interface to fire on, by its name in the profile's surface")
-					_ = cmd.MarkFlagRequired("interface")
 					cmd.Flags().StringVar(&fMethod, "method", "", "HTTP: the method; GET when empty")
 					cmd.Flags().StringVar(&fOid, "oid", "", "SNMP: the OID to get")
 					cmd.Flags().StringVar(&fPath, "path", "", "HTTP: the request path")
+					cmd.Flags().StringVar(&fSurface, "surface", "", "The surface to fire on, by its name in the device's surface list")
+					_ = cmd.MarkFlagRequired("surface")
 					return cmd
 				}()
 				return cmd
@@ -1479,7 +1479,7 @@ func generatedCommands() []*cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "get <name>",
 						Short:   "Get a component's simulation",
-						Long:    "Whether a component is simulated (it has an endpoint on a node and a product a simulator profile simulates) and, when it is, its node, address, live hits and impairment, the products its profile simulates, and its full API surface: every interface, with its HTTP routes, commands and SNMP OIDs. A component that is not simulated reads simulated false. Gated by simulation:read; the component resolves within the caller's component read scope.",
+						Long:    "Whether a component is simulated (it has an endpoint on a node and a product a simulator profile simulates) and, when it is, its node, address, live hits and impairment, the products its profile simulates, and its full API surface: every protocol surface, with its HTTP routes, commands and SNMP OIDs. A component that is not simulated reads simulated false. Gated by simulation:read; the component resolves within the caller's component read scope.",
 						Example: "  omniglass component simulation get <name>",
 						Args:    cobra.ExactArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {

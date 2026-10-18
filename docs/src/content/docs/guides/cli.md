@@ -180,6 +180,11 @@ omniglass node simulation edge-hq   # connected?, capabilities, and hits per sim
 omniglass component impairment set panel-1 --unplugged       # break it: dark on every protocol
 omniglass component impairment set panel-1 --latency-ms 300  # or slow it
 omniglass component impairment set panel-1                   # repair it
+omniglass simulation get                                     # every simulator, its devices and their hits
+omniglass simulation profiles                                # the profile catalog and the products each simulates
+omniglass component simulation get panel-1                   # its API surface: protocols, routes, commands, OIDs
+omniglass component simulation fire panel-1 --surface nvp --command "SET INPUT hdmi2"   # the device answers
+omniglass simulation add-device edge-hq --name panel-9 --product newtron-panel-7          # served on the next pull
 ```
 
 A set replaces the whole impairment, so name every fault you want at once: `--latency-ms 300` on an

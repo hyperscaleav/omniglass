@@ -67,7 +67,7 @@ type simProfileBody struct {
 	DeviceType   string   `json:"device_type"`
 	Summary      string   `json:"summary"`
 	Products     []string `json:"products" doc:"The products this profile simulates, its own first, then its variants."`
-	Protocols    []string `json:"protocols" doc:"The protocols its interfaces speak."`
+	Protocols    []string `json:"protocols" doc:"The protocols its surfaces speak."`
 }
 
 type simProfilesOutput struct {
@@ -96,7 +96,7 @@ type simOIDBody struct {
 	Path string `json:"path" doc:"The state path the OID reads."`
 }
 
-type simInterfaceBody struct {
+type simSurfaceBody struct {
 	Name        string           `json:"name"`
 	Protocol    string           `json:"protocol"`
 	Port        int              `json:"port" doc:"The port the simulator binds, after any lift of ports below 1024."`
@@ -105,7 +105,7 @@ type simInterfaceBody struct {
 	Persistent  bool             `json:"persistent,omitempty" doc:"A session that stays open across commands and may push."`
 	AuthType    string           `json:"auth_type,omitempty"`
 	DefaultUser string           `json:"default_user,omitempty"`
-	Fireable    bool             `json:"fireable" doc:"Whether the console can fire an operation on this interface."`
+	Fireable    bool             `json:"fireable" doc:"Whether the console can fire an operation on this surface."`
 	Routes      []simRouteBody   `json:"routes,omitempty"`
 	Commands    []simCommandBody `json:"commands,omitempty"`
 	OIDs        []simOIDBody     `json:"oids,omitempty"`
@@ -123,14 +123,14 @@ type componentSimOutput struct {
 		Summary     string                         `json:"summary,omitempty"`
 		Variants    []string                       `json:"variants,omitempty" doc:"The products the same profile simulates; changing among them keeps the device's endpoints valid."`
 		Impairments collection.SimImpairmentStatus `json:"impairments"`
-		Surface     []simInterfaceBody             `json:"surface,omitempty" doc:"Every interface the device serves, from its profile."`
+		Surface     []simSurfaceBody             `json:"surface,omitempty" doc:"Every protocol surface the device serves, from its profile."`
 	}
 }
 
 type fireSimInput struct {
 	Name string `path:"name" doc:"The simulated component's name, or a dotted address"`
 	Body struct {
-		Interface string `json:"interface" minLength:"1" doc:"The interface to fire on, by its name in the profile's surface"`
+		Surface   string `json:"surface" minLength:"1" doc:"The surface to fire on, by its name in the device's surface list"`
 		Method    string `json:"method,omitempty" required:"false" doc:"HTTP: the method; GET when empty"`
 		Path      string `json:"path,omitempty" required:"false" doc:"HTTP: the request path"`
 		Body      string `json:"body,omitempty" required:"false" doc:"HTTP: the request body"`
@@ -161,7 +161,7 @@ type addSimDeviceOutput struct {
 	}
 }
 
-// fireKind maps an interface's protocol to the operation the simulator runs.
+// fireKind maps a surface's protocol to the operation the simulator runs.
 func fireKind(protocol string) (string, bool) {
 	switch protocol {
 	case "http":
@@ -174,18 +174,18 @@ func fireKind(protocol string) (string, bool) {
 	return "", false
 }
 
-// simSurface renders a profile's interfaces as the console lists them, with
+// simSurface renders a profile's protocol surfaces as the console lists them, with
 // each port as the simulator binds it.
-func simSurface(p *profile.DeviceProfile, portOffset int) []simInterfaceBody {
+func simSurface(p *profile.DeviceProfile, portOffset int) []simSurfaceBody {
 	shift := sim.PrivilegedPortShift(portOffset)
-	out := make([]simInterfaceBody, 0, len(p.Interfaces))
+	out := make([]simSurfaceBody, 0, len(p.Interfaces))
 	for _, iface := range p.Interfaces {
 		port := iface.Port
 		if shift != nil && port > 0 {
 			port = shift(port)
 		}
 		_, fireable := fireKind(iface.Protocol)
-		b := simInterfaceBody{Name: iface.Name, Protocol: iface.Protocol, Port: port, TLS: iface.TLS,
+		b := simSurfaceBody{Name: iface.Name, Protocol: iface.Protocol, Port: port, TLS: iface.TLS,
 			Summary: iface.Doc.Summary, Persistent: iface.Persistent, Fireable: fireable}
 		if iface.Auth.Type != "" {
 			b.AuthType, b.DefaultUser = iface.Auth.Type, iface.Auth.DefaultUser
@@ -344,7 +344,7 @@ func registerSimFleetRoutes(api huma.API, a *authenticator, gw storage.Gateway, 
 		Method:      http.MethodGet,
 		Path:        "/components/{name}/simulation",
 		Summary:     "Get a component's simulation",
-		Description: "Whether a component is simulated (it has an endpoint on a node and a product a simulator profile simulates) and, when it is, its node, address, live hits and impairment, the products its profile simulates, and its full API surface: every interface, with its HTTP routes, commands and SNMP OIDs. A component that is not simulated reads simulated false. Gated by simulation:read; the component resolves within the caller's component read scope.",
+		Description: "Whether a component is simulated (it has an endpoint on a node and a product a simulator profile simulates) and, when it is, its node, address, live hits and impairment, the products its profile simulates, and its full API surface: every protocol surface, with its HTTP routes, commands and SNMP OIDs. A component that is not simulated reads simulated false. Gated by simulation:read; the component resolves within the caller's component read scope.",
 	}, "simulation", "read"), func(ctx context.Context, in *impairmentPathInput) (*componentSimOutput, error) {
 		s, err := resolve(ctx, in.Name, a.scopeFor(ctx, "simulation", "read"))
 		if err != nil {
@@ -370,7 +370,7 @@ func registerSimFleetRoutes(api huma.API, a *authenticator, gw storage.Gateway, 
 		Method:      http.MethodPost,
 		Path:        "/components/{name}/simulation:fire",
 		Summary:     "Fire an operation at a simulated device",
-		Description: "Asks the simulator beside the component's node to run one operation against the device, from the interface named in its surface: an HTTP call, a command line (SSH, Telnet, TCP) or an SNMP get, and returns the device's answer. The device answers from its live state in process, as its listeners would, so a command's change sticks and the collector sees it; an impairment does not stop it. Audited. Gated by simulation:update, resolved on the component tier. A component that is not simulated is a 409, an interface it does not serve a 422, and no simulator answering a 503.",
+		Description: "Asks the simulator beside the component's node to run one operation against the device, on one of its protocol surfaces: an HTTP call, a command line (SSH, Telnet, TCP) or an SNMP get, and returns the device's answer. The device answers from its live state in process, as its listeners would, so a command's change sticks and the collector sees it; an impairment does not stop it. Audited. Gated by simulation:update, resolved on the component tier. A component that is not simulated is a 409, a surface it does not serve a 422, and no simulator answering a 503.",
 	}, "simulation", "update"), func(ctx context.Context, in *fireSimInput) (*fireSimOutput, error) {
 		s, err := resolve(ctx, in.Name, a.scopeFor(ctx, "simulation", "update"))
 		if err != nil {
@@ -381,16 +381,16 @@ func registerSimFleetRoutes(api huma.API, a *authenticator, gw storage.Gateway, 
 		}
 		var iface *profile.Interface
 		for i := range s.prof.Interfaces {
-			if s.prof.Interfaces[i].Name == in.Body.Interface {
+			if s.prof.Interfaces[i].Name == in.Body.Surface {
 				iface = &s.prof.Interfaces[i]
 			}
 		}
 		if iface == nil {
-			return nil, huma.Error422UnprocessableEntity(fmt.Sprintf("%s's profile has no interface %q", in.Name, in.Body.Interface))
+			return nil, huma.Error422UnprocessableEntity(fmt.Sprintf("%s serves no surface %q", in.Name, in.Body.Surface))
 		}
 		kind, ok := fireKind(iface.Protocol)
 		if !ok {
-			return nil, huma.Error422UnprocessableEntity(fmt.Sprintf("the console cannot fire on a %s interface", iface.Protocol))
+			return nil, huma.Error422UnprocessableEntity(fmt.Sprintf("the console cannot fire on a %s surface", iface.Protocol))
 		}
 		op := collection.SimOperation{ComponentID: s.id, Kind: kind, Method: in.Body.Method, Path: in.Body.Path,
 			Body: in.Body.Body, Command: in.Body.Command, Protocol: iface.Protocol, OID: in.Body.OID}

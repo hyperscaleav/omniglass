@@ -1093,21 +1093,21 @@ Fire an operation at a simulated device
 omniglass component simulation fire <name> [flags]
 ```
 
-Asks the simulator beside the component's node to run one operation against the device, from the interface named in its surface: an HTTP call, a command line (SSH, Telnet, TCP) or an SNMP get, and returns the device's answer. The device answers from its live state in process, as its listeners would, so a command's change sticks and the collector sees it; an impairment does not stop it. Audited. Gated by simulation:update, resolved on the component tier. A component that is not simulated is a 409, an interface it does not serve a 422, and no simulator answering a 503.
+Asks the simulator beside the component's node to run one operation against the device, on one of its protocol surfaces: an HTTP call, a command line (SSH, Telnet, TCP) or an SNMP get, and returns the device's answer. The device answers from its live state in process, as its listeners would, so a command's change sticks and the collector sees it; an impairment does not stop it. Audited. Gated by simulation:update, resolved on the component tier. A component that is not simulated is a 409, a surface it does not serve a 422, and no simulator answering a 503.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--body` | string | (none) | HTTP: the request body |
 | `--command` | string | (none) | SSH, Telnet or TCP: the command line |
-| `--interface` | string | (none) | The interface to fire on, by its name in the profile's surface |
 | `--method` | string | (none) | HTTP: the method; GET when empty |
 | `--oid` | string | (none) | SNMP: the OID to get |
 | `--path` | string | (none) | HTTP: the request path |
+| `--surface` | string | (none) | The surface to fire on, by its name in the device's surface list |
 
 Example:
 
 ```sh
-omniglass component simulation fire <name> --interface interface
+omniglass component simulation fire <name> --surface surface
 ```
 
 #### `omniglass component simulation get`
@@ -1118,7 +1118,7 @@ Get a component's simulation
 omniglass component simulation get <name>
 ```
 
-Whether a component is simulated (it has an endpoint on a node and a product a simulator profile simulates) and, when it is, its node, address, live hits and impairment, the products its profile simulates, and its full API surface: every interface, with its HTTP routes, commands and SNMP OIDs. A component that is not simulated reads simulated false. Gated by simulation:read; the component resolves within the caller's component read scope.
+Whether a component is simulated (it has an endpoint on a node and a product a simulator profile simulates) and, when it is, its node, address, live hits and impairment, the products its profile simulates, and its full API surface: every protocol surface, with its HTTP routes, commands and SNMP OIDs. A component that is not simulated reads simulated false. Gated by simulation:read; the component resolves within the caller's component read scope.
 
 Example:
 

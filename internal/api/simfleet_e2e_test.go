@@ -216,7 +216,7 @@ func TestSimulationFleetAPI(t *testing.T) {
 		TookMs int64  `json:"took_ms"`
 	}
 	if err := json.Unmarshal(c.do(ownerTok, http.MethodPost, "/components/panel-1/simulation:fire",
-		map[string]any{"interface": "nvp", "command": "SET INPUT hdmi2"}, http.StatusOK), &fired); err != nil {
+		map[string]any{"surface": "nvp", "command": "SET INPUT hdmi2"}, http.StatusOK), &fired); err != nil {
 		t.Fatal(err)
 	}
 	if fired.Body != "INPUT hdmi2" || len(hub.fired) != 1 || hub.fired[0].node != "site-a" ||
@@ -230,11 +230,11 @@ func TestSimulationFleetAPI(t *testing.T) {
 	if audits != 1 {
 		t.Fatalf("%d audit rows for one fire", audits)
 	}
-	c.do(viewer, http.MethodPost, "/components/panel-1/simulation:fire", map[string]any{"interface": "nvp", "command": "GET INPUT"}, http.StatusForbidden)
-	c.do(ownerTok, http.MethodPost, "/components/panel-1/simulation:fire", map[string]any{"interface": "nope", "command": "GET INPUT"}, http.StatusUnprocessableEntity)
-	c.do(ownerTok, http.MethodPost, "/components/loose/simulation:fire", map[string]any{"interface": "nvp", "command": "GET INPUT"}, http.StatusConflict)
+	c.do(viewer, http.MethodPost, "/components/panel-1/simulation:fire", map[string]any{"surface": "nvp", "command": "GET INPUT"}, http.StatusForbidden)
+	c.do(ownerTok, http.MethodPost, "/components/panel-1/simulation:fire", map[string]any{"surface": "nope", "command": "GET INPUT"}, http.StatusUnprocessableEntity)
+	c.do(ownerTok, http.MethodPost, "/components/loose/simulation:fire", map[string]any{"surface": "nvp", "command": "GET INPUT"}, http.StatusConflict)
 	hub.fireErr = collection.ErrNoSimulator
-	c.do(ownerTok, http.MethodPost, "/components/panel-1/simulation:fire", map[string]any{"interface": "nvp", "command": "GET INPUT"}, http.StatusServiceUnavailable)
+	c.do(ownerTok, http.MethodPost, "/components/panel-1/simulation:fire", map[string]any{"surface": "nvp", "command": "GET INPUT"}, http.StatusServiceUnavailable)
 
 	// Add a simulated device from a profile: a component of the product,
 	// at a free address in the simulated block, with the endpoint the

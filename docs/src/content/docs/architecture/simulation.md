@@ -28,8 +28,9 @@ at `GET /nodes/{name}/simulation`. Also built: the simulated dev fleet (#888), w
 component a profile serves gets an address and endpoints on the dev node, so `make dev-sim`
 collects for real. Also built: impairments (#889), an operator unplugging, slowing or degrading a
 simulated device through the API and CLI, applied by a simulator run with `--impairments` and
-`NET_ADMIN`, with ping made truthful. Still `Design`: the Helm sidecar (#892), and the console
-surfaces (#890).
+`NET_ADMIN`, with ping made truthful. Also built: the console surfaces (#890): the fleet view, a
+device's API surface and firing any operation at it, adding a device, and the Simulation page,
+drawer and component section over them. Still `Design`: the Helm sidecar (#892).
 :::
 
 ## The catalog
@@ -178,8 +179,42 @@ collector reads plausible but wrong data (#909). And an unplugged device's **sys
 move on its own: a component's condition is its active alarms, and raising one from reachability is
 the event rule tier (#819).
 
-:::design[Target design: the console, tracked in #890]
-A Simulation page lists every simulated device and blinks a device when the collector reaches it.
-A simulated device's drawer shows its API surface and lets the operator fire any operation, and
-the fleet can be edited from the console.
-:::
+## Exercising a device
+
+Every simulated device publishes its whole API surface, read from its profile:
+`GET /components/{name}/simulation` lists each protocol surface (its protocol, the port the simulator binds,
+whether it holds a session open) with its HTTP routes, its commands and its SNMP OIDs, the same
+surface the device's listeners serve. An operator fires any of them with
+`POST /components/{name}/simulation:fire` (or `omniglass component simulation fire <component>
+--surface nvp --command "SET INPUT hdmi2"`): the server forwards the operation over the bus to
+the simulator beside the component's node, on a subject of that node's own grant, and the
+simulator answers it from the device.
+
+The device answers **in process**, from its live state, through the same routes, commands and OID
+map its listeners use: a command's change sticks, so the collector reads it on its next poll, and
+the operation counts as a hit, so the device blinks. Because it runs beside the listeners rather
+than through the network, an impairment does not stop it: the console can still inspect a device
+it unplugged. A device that enforces HTTP authentication is called with its own credentials, as an
+authorized client would.
+
+## Adding a device
+
+A simulated device is a component, so adding one is adding a component the simulator can serve:
+`POST /nodes/{name}/simulation/devices` (`omniglass simulation add-device <node> --name panel-9
+--product newtron-panel-7`) creates a component of a simulated product and the endpoint the
+collector reaches it through, placed on the node. The plan is the dev seed's, made a primitive
+(`internal/simfleet`): the lowest address in `127.60.0.0/16` no endpoint already targets, a driver
+attach where the driver's inputs are known (an SNMP attach only when the `sim-community` secret
+exists for it to reference), otherwise a reachability probe on a port the profile serves, lifted
+as that node's simulator lifts its ports. The simulator serves the device from its next pull, with
+no restart. Changing a device's product among the products its profile simulates keeps its
+endpoints valid (they share a driver), and deleting the component removes the device.
+
+## In the console
+
+Everything above has a console surface, shown only while a simulator is connected: the
+**Simulation** page lists every simulated device by node and blinks a device when the collector
+reaches it; a device's drawer carries its status, its impairment controls and its API surface,
+with a form to fire any operation; and a simulated component's own page carries a Simulation
+section that opens the same drawer. The walk-through is the
+[simulation guide](/guides/operator/simulation/).

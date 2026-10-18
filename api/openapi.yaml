@@ -594,9 +594,9 @@ components:
         summary:
           type: string
         surface:
-          description: Every interface the device serves, from its profile.
+          description: Every protocol surface the device serves, from its profile.
           items:
-            $ref: "#/components/schemas/SimInterfaceBody"
+            $ref: "#/components/schemas/SimSurfaceBody"
           type:
             - array
             - "null"
@@ -2245,10 +2245,6 @@ components:
         command:
           description: "SSH, Telnet or TCP: the command line"
           type: string
-        interface:
-          description: The interface to fire on, by its name in the profile's surface
-          minLength: 1
-          type: string
         method:
           description: "HTTP: the method; GET when empty"
           type: string
@@ -2258,8 +2254,12 @@ components:
         path:
           description: "HTTP: the request path"
           type: string
+        surface:
+          description: The surface to fire on, by its name in the device's surface list
+          minLength: 1
+          type: string
       required:
-        - interface
+        - surface
       type: object
     FleetDotBody:
       additionalProperties: false
@@ -5937,55 +5937,6 @@ components:
       required:
         - available
       type: object
-    SimInterfaceBody:
-      additionalProperties: false
-      properties:
-        auth_type:
-          type: string
-        commands:
-          items:
-            $ref: "#/components/schemas/SimCommandBody"
-          type:
-            - array
-            - "null"
-        default_user:
-          type: string
-        fireable:
-          description: Whether the console can fire an operation on this interface.
-          type: boolean
-        name:
-          type: string
-        oids:
-          items:
-            $ref: "#/components/schemas/SimOIDBody"
-          type:
-            - array
-            - "null"
-        persistent:
-          description: A session that stays open across commands and may push.
-          type: boolean
-        port:
-          description: The port the simulator binds, after any lift of ports below 1024.
-          format: int64
-          type: integer
-        protocol:
-          type: string
-        routes:
-          items:
-            $ref: "#/components/schemas/SimRouteBody"
-          type:
-            - array
-            - "null"
-        summary:
-          type: string
-        tls:
-          type: boolean
-      required:
-        - name
-        - protocol
-        - port
-        - fireable
-      type: object
     SimNodeBody:
       additionalProperties: false
       properties:
@@ -6071,7 +6022,7 @@ components:
             - array
             - "null"
         protocols:
-          description: The protocols its interfaces speak.
+          description: The protocols its surfaces speak.
           items:
             type: string
           type:
@@ -6124,6 +6075,55 @@ components:
       required:
         - method
         - path
+      type: object
+    SimSurfaceBody:
+      additionalProperties: false
+      properties:
+        auth_type:
+          type: string
+        commands:
+          items:
+            $ref: "#/components/schemas/SimCommandBody"
+          type:
+            - array
+            - "null"
+        default_user:
+          type: string
+        fireable:
+          description: Whether the console can fire an operation on this surface.
+          type: boolean
+        name:
+          type: string
+        oids:
+          items:
+            $ref: "#/components/schemas/SimOIDBody"
+          type:
+            - array
+            - "null"
+        persistent:
+          description: A session that stays open across commands and may push.
+          type: boolean
+        port:
+          description: The port the simulator binds, after any lift of ports below 1024.
+          format: int64
+          type: integer
+        protocol:
+          type: string
+        routes:
+          items:
+            $ref: "#/components/schemas/SimRouteBody"
+          type:
+            - array
+            - "null"
+        summary:
+          type: string
+        tls:
+          type: boolean
+      required:
+        - name
+        - protocol
+        - port
+        - fireable
       type: object
     SimulationOutputBody:
       additionalProperties: false
@@ -8922,7 +8922,7 @@ paths:
       x-omniglass-permission: component:read
   /components/{name}/simulation:
     get:
-      description: "Whether a component is simulated (it has an endpoint on a node and a product a simulator profile simulates) and, when it is, its node, address, live hits and impairment, the products its profile simulates, and its full API surface: every interface, with its HTTP routes, commands and SNMP OIDs. A component that is not simulated reads simulated false. Gated by simulation:read; the component resolves within the caller's component read scope."
+      description: "Whether a component is simulated (it has an endpoint on a node and a product a simulator profile simulates) and, when it is, its node, address, live hits and impairment, the products its profile simulates, and its full API surface: every protocol surface, with its HTTP routes, commands and SNMP OIDs. A component that is not simulated reads simulated false. Gated by simulation:read; the component resolves within the caller's component read scope."
       operationId: get-component-simulation
       parameters:
         - description: The simulated component's name, or a dotted address
@@ -8949,7 +8949,7 @@ paths:
       x-omniglass-permission: simulation:read
   /components/{name}/simulation:fire:
     post:
-      description: "Asks the simulator beside the component's node to run one operation against the device, from the interface named in its surface: an HTTP call, a command line (SSH, Telnet, TCP) or an SNMP get, and returns the device's answer. The device answers from its live state in process, as its listeners would, so a command's change sticks and the collector sees it; an impairment does not stop it. Audited. Gated by simulation:update, resolved on the component tier. A component that is not simulated is a 409, an interface it does not serve a 422, and no simulator answering a 503."
+      description: "Asks the simulator beside the component's node to run one operation against the device, on one of its protocol surfaces: an HTTP call, a command line (SSH, Telnet, TCP) or an SNMP get, and returns the device's answer. The device answers from its live state in process, as its listeners would, so a command's change sticks and the collector sees it; an impairment does not stop it. Audited. Gated by simulation:update, resolved on the component tier. A component that is not simulated is a 409, a surface it does not serve a 422, and no simulator answering a 503."
       operationId: fire-component-simulation
       parameters:
         - description: The simulated component's name, or a dotted address

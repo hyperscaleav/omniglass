@@ -162,7 +162,7 @@ func TestSimulatorEndToEnd(t *testing.T) {
 	// the real simulator, through the server and the bus, and get the
 	// device's answer; the fire is itself a hit.
 	iface, path := e2eSimulatedRoute(t, product)
-	out, code := cli("component", "simulation", "fire", "sim-dev", "--interface", iface, "--path", path,
+	out, code := cli("component", "simulation", "fire", "sim-dev", "--surface", iface, "--path", path,
 		"--server", server, "--token", ownerTok)
 	if code != 0 {
 		t.Fatalf("fire exit %d:\n%s", code, out)
@@ -200,7 +200,7 @@ func TestSimulatorEndToEnd(t *testing.T) {
 	})
 }
 
-// e2eSimulatedRoute is a plain-HTTP interface of the product's profile and
+// e2eSimulatedRoute is a plain-HTTP surface of the product's profile and
 // a GET route it serves.
 func e2eSimulatedRoute(t *testing.T, product string) (string, string) {
 	t.Helper()
