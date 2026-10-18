@@ -130,7 +130,8 @@ a privilege.
 
 `make dev-sim`, run beside `make dev`, runs the simulator and the node side by side as `edge-hq`, so
 the whole loop is local: the node polls the simulated devices, the samples land on the seeded
-components, and a command issued to a panel (`omniglass component command issue <panel>
+components (the worked reachability check's boardroom DSP among them, re-aimed at a simulated DSP so a
+live node finds it up), and a command issued to a panel (`omniglass component command issue <panel>
 --command-type set-input --value hdmi3`) changes the simulated device.
 
 :::design[Target design: the simulator as a sidecar, tracked in #892]

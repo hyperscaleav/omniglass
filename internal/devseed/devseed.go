@@ -915,6 +915,9 @@ const (
 	reachNodeLocation = "west"
 	reachNode         = "edge-hq"
 	reachHost         = "10.20.4.12"
+	// reachProduct is what the demo DSP becomes with the simulated fleet: the
+	// simulated DSP it was modeled on (HTTP 80, the line protocol on 1710).
+	reachProduct = "polaris-dsp-16"
 )
 
 // reachChecks are the DSP's endpoints: each named by the transport it speaks and

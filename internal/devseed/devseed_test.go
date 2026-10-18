@@ -1691,3 +1691,63 @@ func TestSeededFleetIsSimulated(t *testing.T) {
 		t.Fatalf("a second run changed the simulated endpoints: %d to %d", before, after)
 	}
 }
+
+// TestReachabilityDemoIsSimulatedWithTheFleet proves the worked reachability
+// check stays truthful under a live node: with the simulated fleet, the demo
+// DSP is a simulated polaris-dsp-16 whose endpoints target its simulated
+// address (HTTP at the lifted port, the line protocol as declared); without
+// it (the docs screenshots), the demo is untouched.
+func TestReachabilityDemoIsSimulatedWithTheFleet(t *testing.T) {
+	targets := func(ctx context.Context, conn *pgx.Conn) (product string, got map[string]string) {
+		t.Helper()
+		got = map[string]string{}
+		rows, err := conn.Query(ctx, `
+			select p.name, e.name, e.params->>'target'
+			from component c join product p on p.id = c.product_id join endpoint e on e.component = c.id
+			where c.name = 'dsp' and c.label = 'Boardroom DSP'`)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var name, target string
+			if err := rows.Scan(&product, &name, &target); err != nil {
+				t.Fatal(err)
+			}
+			got[name] = target
+		}
+		return product, got
+	}
+
+	ctx, conn, _ := seededFleet(t)
+	product, got := targets(ctx, conn)
+	if product != "polaris-dsp-16" {
+		t.Errorf("demo DSP product = %q, want the simulated polaris-dsp-16", product)
+	}
+	host, _, _ := strings.Cut(got["http"], ":")
+	if !strings.HasPrefix(host, "127.60.") || got["http"] != host+":10080" || got["tcp"] != host+":1710" {
+		t.Errorf("demo DSP endpoints = %v, want one simulated address, HTTP lifted and 1710 as declared", got)
+	}
+
+	// Without the simulated fleet the demo keeps its fixed address.
+	dsn := storagetest.NewDSN(t)
+	gw, err := storage.NewPG(ctx, dsn, storage.WithSecretProvider(secret.NewStaticProvider(bytes.Repeat([]byte{0x7}, 32))))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer gw.Close()
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatal(err)
+	}
+	if err := devseed.RunWith(ctx, gw, "", devseed.Options{SimFleet: false}); err != nil {
+		t.Fatal(err)
+	}
+	plain, err := pgx.Connect(ctx, dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer plain.Close(ctx)
+	if _, got := targets(ctx, plain); got["http"] != "10.20.4.12:80" {
+		t.Errorf("without the simulated fleet the demo moved: %v", got)
+	}
+}

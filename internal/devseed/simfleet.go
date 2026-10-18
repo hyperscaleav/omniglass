@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
 	"sort"
 	"strconv"
 
@@ -174,22 +175,31 @@ func seedSimFleet(ctx context.Context, gw storage.Gateway, actorID string) error
 	}
 	// Components already wired keep their endpoints; every address any
 	// endpoint targets is taken.
+	endpoints, err := gw.ListEndpoints(ctx, all)
+	if err != nil {
+		return fmt.Errorf("devseed: list endpoints: %w", err)
+	}
 	used := map[string]bool{}
+	wired := map[string]bool{}
+	var demo []storage.Endpoint
+	for _, e := range endpoints {
+		target := endpointTarget(e.Params)
+		if target != "" {
+			used[storage.TargetHost(target)] = true
+		}
+		if e.ComponentID != nil {
+			wired[*e.ComponentID] = true
+		}
+		if storage.TargetHost(target) == reachHost && e.ComponentID != nil {
+			demo = append(demo, e)
+		}
+	}
+	if err := simulateReachabilityDemo(ctx, gw, actorID, demo, used); err != nil {
+		return err
+	}
 	var unwired []simComponent
 	for _, c := range cands {
-		existing, err := gw.ListComponentEndpoints(ctx, c.ID)
-		if err != nil {
-			return fmt.Errorf("devseed: check simulated endpoints: %w", err)
-		}
-		for _, e := range existing {
-			var params struct {
-				Target string `json:"target"`
-			}
-			if json.Unmarshal(e.Params, &params) == nil && params.Target != "" {
-				used[storage.TargetHost(params.Target)] = true
-			}
-		}
-		if len(existing) == 0 {
+		if !wired[c.ID] {
 			unwired = append(unwired, c)
 		}
 	}
@@ -211,6 +221,59 @@ func seedSimFleet(ctx context.Context, gw storage.Gateway, actorID string) error
 			if _, err := gw.CreateEndpoint(ctx, actorID, spec, all); err != nil {
 				return fmt.Errorf("devseed: create simulated endpoint on %s: %w", dev.ComponentID, err)
 			}
+		}
+	}
+	return nil
+}
+
+func endpointTarget(params []byte) string {
+	var p struct {
+		Target string `json:"target"`
+	}
+	_ = json.Unmarshal(params, &p)
+	return p.Target
+}
+
+// simulateReachabilityDemo re-aims the worked reachability check at a
+// simulated device. The demo DSP targets a fixed address nothing answers,
+// which reads as down the moment make dev-sim runs a real node; with the
+// simulated fleet it becomes the simulated DSP it was modeled on (HTTP 80
+// and the line protocol on 1710), at a free simulated address, so a live
+// node finds it up. Its seeded history stays, as history. Without the
+// simulated fleet (the docs screenshots) this never runs.
+func simulateReachabilityDemo(ctx context.Context, gw storage.Gateway, actorID string, demo []storage.Endpoint, used map[string]bool) error {
+	if len(demo) == 0 {
+		return nil // already simulated on an earlier run, or no demo
+	}
+	all := scope.Set{All: true}
+	addr := ""
+	for i := 0; i < simAddressCap; i++ {
+		if !used[simAddress(i)] {
+			addr = simAddress(i)
+			break
+		}
+	}
+	if addr == "" {
+		return fmt.Errorf("devseed: the simulated block is full; no address for the reachability demo")
+	}
+	used[addr] = true
+	product := reachProduct
+	if _, err := gw.UpdateComponent(ctx, actorID, *demo[0].ComponentID, storage.ComponentPatch{ProductName: &product}, all, all); err != nil {
+		return fmt.Errorf("devseed: make the reachability demo a simulated DSP: %w", err)
+	}
+	shift := sim.PrivilegedPortShift(SimPortOffset)
+	for _, e := range demo {
+		_, portText, err := net.SplitHostPort(endpointTarget(e.Params))
+		if err != nil {
+			return fmt.Errorf("devseed: reachability demo endpoint %s: %w", e.Name, err)
+		}
+		port, err := strconv.Atoi(portText)
+		if err != nil {
+			return fmt.Errorf("devseed: reachability demo endpoint %s port: %w", e.Name, err)
+		}
+		params := []byte(fmt.Sprintf(`{"target":"%s:%d"}`, addr, shift(port)))
+		if _, err := gw.UpdateEndpoint(ctx, actorID, e.ID, storage.EndpointPatch{Params: params}, all, all); err != nil {
+			return fmt.Errorf("devseed: re-aim reachability demo endpoint %s: %w", e.Name, err)
 		}
 	}
 	return nil
