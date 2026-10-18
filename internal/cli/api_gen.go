@@ -858,6 +858,73 @@ func generatedCommands() []*cobra.Command {
 			return cmd
 		}())
 		parent.AddCommand(func() *cobra.Command {
+			parent := &cobra.Command{
+				Use:   "impairment",
+				Short: "Commands for the impairment resource",
+			}
+			parent.AddCommand(func() *cobra.Command {
+				cmd := func() *cobra.Command {
+					cmd := &cobra.Command{
+						Use:     "get <name>",
+						Short:   "Get what is broken on a simulated device",
+						Long:    "The impairment an operator set on a simulated component (unplugged, or a degraded link), applied by the simulator beside its node when that simulator runs with impairments and NET_ADMIN. A healthy device reads all zero. Gated by simulation:read; the component resolves within the caller's component read scope.",
+						Example: "  omniglass component impairment get <name>",
+						Args:    cobra.ExactArgs(1),
+						RunE: func(cmd *cobra.Command, args []string) error {
+							path := fmt.Sprintf("/api/v1/components/%s/impairment", url.PathEscape(args[0]))
+							return runAPICommand(cmd, "GET", path, nil)
+						},
+					}
+					return cmd
+				}()
+				return cmd
+			}())
+			parent.AddCommand(func() *cobra.Command {
+				cmd := func() *cobra.Command {
+					var fJitterMs int
+					var fLatencyMs int
+					var fLossPct float64
+					var fRateKbit int
+					var fUnplugged bool
+					cmd := &cobra.Command{
+						Use:     "set <name>",
+						Short:   "Break or repair a simulated device",
+						Long:    "Sets what is broken on a simulated component: unplugged, or a link with added latency, jitter, loss or a rate limit. It replaces the whole impairment, so a field left out reads as zero (setting a latency on an unplugged device plugs it back in); an empty body repairs it. Returns the impairment as stored, loss rounded to hundredths. Audited. The simulator beside the component's node applies it on its next pull. Gated by simulation:update, whose scope is resolved on the component tier; a component outside the caller's component:read is a non-disclosing 404, and one it can read but not impair is a 403. Jitter above latency, or a value outside its range, is a 422.",
+						Example: "  omniglass component impairment set <name>",
+						Args:    cobra.ExactArgs(1),
+						RunE: func(cmd *cobra.Command, args []string) error {
+							path := fmt.Sprintf("/api/v1/components/%s/impairment", url.PathEscape(args[0]))
+							body := map[string]any{}
+							if cmd.Flags().Changed("jitter-ms") {
+								body["jitter_ms"] = fJitterMs
+							}
+							if cmd.Flags().Changed("latency-ms") {
+								body["latency_ms"] = fLatencyMs
+							}
+							if cmd.Flags().Changed("loss-pct") {
+								body["loss_pct"] = fLossPct
+							}
+							if cmd.Flags().Changed("rate-kbit") {
+								body["rate_kbit"] = fRateKbit
+							}
+							if cmd.Flags().Changed("unplugged") {
+								body["unplugged"] = fUnplugged
+							}
+							return runAPICommand(cmd, "PUT", path, body)
+						},
+					}
+					cmd.Flags().IntVar(&fJitterMs, "jitter-ms", 0, "Variation on the delay, in milliseconds; at most the latency")
+					cmd.Flags().IntVar(&fLatencyMs, "latency-ms", 0, "Delay added to traffic toward the device, in milliseconds")
+					cmd.Flags().Float64Var(&fLossPct, "loss-pct", 0, "Share of packets toward the device dropped, in percent, to hundredths")
+					cmd.Flags().IntVar(&fRateKbit, "rate-kbit", 0, "Bandwidth limit on the device's link, both ways, in kilobits per second; 0 is unlimited")
+					cmd.Flags().BoolVar(&fUnplugged, "unplugged", false, "Dark on every protocol: connects time out, datagrams and pings go unanswered")
+					return cmd
+				}()
+				return cmd
+			}())
+			return parent
+		}())
+		parent.AddCommand(func() *cobra.Command {
 			cmd := func() *cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "list",
@@ -1352,6 +1419,79 @@ func generatedCommands() []*cobra.Command {
 				return cmd
 			}()
 			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			parent := &cobra.Command{
+				Use:   "simulation",
+				Short: "Commands for the simulation resource",
+			}
+			parent.AddCommand(func() *cobra.Command {
+				cmd := func() *cobra.Command {
+					var fBody string
+					var fCommand string
+					var fMethod string
+					var fOid string
+					var fPath string
+					var fSurface string
+					cmd := &cobra.Command{
+						Use:     "fire <name>",
+						Short:   "Fire an operation at a simulated component",
+						Long:    "Asks the simulator beside the component's node to run one operation against the simulated component, on one of its protocol surfaces: an HTTP call, a command line (SSH, Telnet, TCP) or an SNMP get, and returns its answer. The simulator answers from the component's live state in process, as its listeners would, so a command's change sticks and the collector sees it; an impairment does not stop it. Audited. Gated by simulation:update, resolved on the component tier. A component that is not simulated is a 409, a surface it does not serve a 422, and no simulator answering a 503.",
+						Example: "  omniglass component simulation fire <name> --surface surface",
+						Args:    cobra.ExactArgs(1),
+						RunE: func(cmd *cobra.Command, args []string) error {
+							path := fmt.Sprintf("/api/v1/components/%s/simulation:fire", url.PathEscape(args[0]))
+							body := map[string]any{}
+							if cmd.Flags().Changed("body") {
+								body["body"] = fBody
+							}
+							if cmd.Flags().Changed("command") {
+								body["command"] = fCommand
+							}
+							if cmd.Flags().Changed("method") {
+								body["method"] = fMethod
+							}
+							if cmd.Flags().Changed("oid") {
+								body["oid"] = fOid
+							}
+							if cmd.Flags().Changed("path") {
+								body["path"] = fPath
+							}
+							if cmd.Flags().Changed("surface") {
+								body["surface"] = fSurface
+							}
+							return runAPICommand(cmd, "POST", path, body)
+						},
+					}
+					cmd.Flags().StringVar(&fBody, "body", "", "HTTP: the request body")
+					cmd.Flags().StringVar(&fCommand, "command", "", "SSH, Telnet or TCP: the command line")
+					cmd.Flags().StringVar(&fMethod, "method", "", "HTTP: the method; GET when empty")
+					cmd.Flags().StringVar(&fOid, "oid", "", "SNMP: the OID to get")
+					cmd.Flags().StringVar(&fPath, "path", "", "HTTP: the request path")
+					cmd.Flags().StringVar(&fSurface, "surface", "", "The surface to fire on, by its name in the component's surface list")
+					_ = cmd.MarkFlagRequired("surface")
+					return cmd
+				}()
+				return cmd
+			}())
+			parent.AddCommand(func() *cobra.Command {
+				cmd := func() *cobra.Command {
+					cmd := &cobra.Command{
+						Use:     "get <name>",
+						Short:   "Get a component's simulation",
+						Long:    "Whether a component is simulated (it has an endpoint on a node and a product a simulator profile simulates) and, when it is, its node, address, live hits and impairment, the products its profile simulates, and its full API surface: every protocol surface, with its HTTP routes, commands and SNMP OIDs. A component that is not simulated reads simulated false. Gated by simulation:read; the component resolves within the caller's component read scope.",
+						Example: "  omniglass component simulation get <name>",
+						Args:    cobra.ExactArgs(1),
+						RunE: func(cmd *cobra.Command, args []string) error {
+							path := fmt.Sprintf("/api/v1/components/%s/simulation", url.PathEscape(args[0]))
+							return runAPICommand(cmd, "GET", path, nil)
+						},
+					}
+					return cmd
+				}()
+				return cmd
+			}())
+			return parent
 		}())
 		parent.AddCommand(func() *cobra.Command {
 			cmd := func() *cobra.Command {
@@ -4866,6 +5006,82 @@ func generatedCommands() []*cobra.Command {
 					RunE: func(cmd *cobra.Command, args []string) error {
 						path := fmt.Sprintf("/api/v1/settings/%s", url.PathEscape(args[0]))
 						return runAPICommand(cmd, "PATCH", path, nil)
+					},
+				}
+				return cmd
+			}()
+			return cmd
+		}())
+		return parent
+	}())
+	roots = append(roots, func() *cobra.Command {
+		parent := &cobra.Command{
+			Use:   "simulation",
+			Short: "Commands for the simulation resource",
+		}
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				var fLocation string
+				var fName string
+				var fProduct string
+				cmd := &cobra.Command{
+					Use:     "add-component <name>",
+					Short:   "Add a simulated component",
+					Long:    "Creates a component of a simulated product, at the lowest free address in the simulated block (127.60.0.0/16), with the endpoint the collector reaches it through placed on the node: a driver attach where the driver's inputs are known (an SNMP attach needs the sim-community secret, else it falls back), otherwise a reachability probe on a port the profile serves, lifted as the node's simulator lifts its ports. The simulator serves it from its next pull, with no restart. Gated by simulation:update, and also needs component:create and endpoint:create, each in the caller's own scope. A node with no simulator connected is a 409, and a product no profile simulates a 422.",
+					Example: "  omniglass simulation add-component <name> --name name --product product",
+					Args:    cobra.ExactArgs(1),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/nodes/%s/simulation/components", url.PathEscape(args[0]))
+						body := map[string]any{}
+						if cmd.Flags().Changed("location") {
+							body["location"] = fLocation
+						}
+						if cmd.Flags().Changed("name") {
+							body["name"] = fName
+						}
+						if cmd.Flags().Changed("product") {
+							body["product"] = fProduct
+						}
+						return runAPICommand(cmd, "POST", path, body)
+					},
+				}
+				cmd.Flags().StringVar(&fLocation, "location", "", "Where the component sits, by name or dotted path")
+				cmd.Flags().StringVar(&fName, "name", "", "The new component's name")
+				_ = cmd.MarkFlagRequired("name")
+				cmd.Flags().StringVar(&fProduct, "product", "", "A product a simulator profile simulates")
+				_ = cmd.MarkFlagRequired("product")
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				cmd := &cobra.Command{
+					Use:     "get",
+					Short:   "Get the simulated fleet",
+					Long:    "Every node a simulator has pulled for since the server started, each with its capabilities, its account of impairments, and the components it simulates within the caller's component read scope, joined to their live hits. A caller sees a node's simulator when its component read scope holds at least one component the node simulates (an all-scope reader sees all of them); no node read is needed. Connected is true when any listed simulator pulled recently. Hits are per server process, not stored. Gated by simulation:read.",
+					Example: "  omniglass simulation get",
+					Args:    cobra.ExactArgs(0),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/simulation")
+						return runAPICommand(cmd, "GET", path, nil)
+					},
+				}
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				cmd := &cobra.Command{
+					Use:     "profiles",
+					Short:   "List the simulator's profiles",
+					Long:    "The simulator's profile catalog, embedded in the binary: each profile with the products it simulates and the protocols it speaks. Adding a simulated component names one of these products. Gated by simulation:read.",
+					Example: "  omniglass simulation profiles",
+					Args:    cobra.ExactArgs(0),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/simulation/profiles")
+						return runAPICommand(cmd, "GET", path, nil)
 					},
 				}
 				return cmd

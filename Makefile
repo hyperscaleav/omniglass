@@ -1,7 +1,7 @@
 # Local dev loop + the build/run flow for the single binary. Production deploy
 # is BYO Postgres; tests use ephemeral testcontainer Postgres.
 
-.PHONY: build build-web web image gen gen-proto gen-web test test-web test-short test-e2e bench clean-testcontainers tidy up down dev release-plan release-apply release-snapshot docs-shots docs-shots-check docs-shots-verify dev-sim bench-sim
+.PHONY: build build-web web image gen gen-proto gen-web test test-web test-short test-e2e bench clean-testcontainers tidy up down dev release-plan release-apply release-snapshot docs-shots docs-shots-check docs-shots-verify dev-sim bench-sim test-netadmin
 
 # Build the single binary (no console embedded; serves the build-the-console
 # placeholder under /web).
@@ -80,6 +80,7 @@ gen-web:
 TEST_PARALLEL ?= 1
 test: test-web
 	go test -p $(TEST_PARALLEL) ./...
+	$(MAKE) test-netadmin
 
 # The SPA typecheck + unit and theming-ban tests. Part of the local gate so
 # web-only regressions (an illegible badge class, a broken page descriptor, a
@@ -124,6 +125,29 @@ test-short:
 # another worktree moves these numbers more than most regressions would.
 bench:
 	go test -run '^$$' -bench . -benchmem -count=5 ./internal/storage/...
+
+# The tests that need NET_ADMIN (impairments rewrite the firewall and tc of the
+# network they run in) run in a container of their own, never on the host:
+# NET_ADMIN, its own network namespace, and the ping sysctl the collector's
+# unprivileged pinger needs. A Postgres container on a private network serves
+# the full-stack test through the harness's OMNIGLASS_TEST_ADMIN_DSN. Packages
+# run one at a time (-p 1): they share the one network namespace, and the
+# simulator owns one firewall table and one qdisc in it. Docker is already a
+# requirement of make test.
+NETADMIN_IMG ?= golang:1.25
+NETADMIN_PKGS ?= ./internal/sim/impair/ ./internal/e2e/
+NETADMIN_RUN ?= Netlink|Impair|Validate|PlanFor
+test-netadmin:
+	@set -e; net=omniglass-netadmin-$$$$; pg=$$net-pg; \
+	trap 'docker stop $$pg >/dev/null 2>&1; docker network rm $$net >/dev/null 2>&1' EXIT; \
+	docker network create $$net >/dev/null; \
+	docker run -d --rm --name $$pg --network $$net -e POSTGRES_PASSWORD=netadmin postgres:18 >/dev/null; \
+	n=0; until docker exec $$pg pg_isready -h 127.0.0.1 -U postgres >/dev/null 2>&1; do \
+		n=$$((n+1)); [ $$n -lt 60 ] || { echo "postgres did not come up"; exit 1; }; sleep 1; done; \
+	docker run --rm --network $$net --cap-add NET_ADMIN --sysctl net.ipv4.ping_group_range="0 2147483647" \
+		-v "$(CURDIR):/w" -w /w -v omniglass-netadmin-gomod:/go/pkg/mod -v omniglass-netadmin-gocache:/root/.cache/go-build \
+		-e GOFLAGS=-buildvcs=false -e OMNIGLASS_NETADMIN=1 -e OMNIGLASS_TEST_ADMIN_DSN="postgres://postgres:netadmin@$$pg:5432/postgres?sslmode=disable" \
+		$(NETADMIN_IMG) go test -tags netadmin -p 1 -count=1 -run '$(NETADMIN_RUN)' $(NETADMIN_PKGS)
 
 # One simulator process serving a 1,000-device fleet: startup time, goroutines
 # and heap while serving, and goroutines left behind after it stops.

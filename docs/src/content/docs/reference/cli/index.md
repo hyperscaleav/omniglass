@@ -645,6 +645,50 @@ Example:
 omniglass component get <name>
 ```
 
+### `omniglass component impairment`
+
+Commands for the impairment resource
+
+#### `omniglass component impairment get`
+
+Get what is broken on a simulated device
+
+```
+omniglass component impairment get <name>
+```
+
+The impairment an operator set on a simulated component (unplugged, or a degraded link), applied by the simulator beside its node when that simulator runs with impairments and NET_ADMIN. A healthy device reads all zero. Gated by simulation:read; the component resolves within the caller's component read scope.
+
+Example:
+
+```sh
+omniglass component impairment get <name>
+```
+
+#### `omniglass component impairment set`
+
+Break or repair a simulated device
+
+```
+omniglass component impairment set <name> [flags]
+```
+
+Sets what is broken on a simulated component: unplugged, or a link with added latency, jitter, loss or a rate limit. It replaces the whole impairment, so a field left out reads as zero (setting a latency on an unplugged device plugs it back in); an empty body repairs it. Returns the impairment as stored, loss rounded to hundredths. Audited. The simulator beside the component's node applies it on its next pull. Gated by simulation:update, whose scope is resolved on the component tier; a component outside the caller's component:read is a non-disclosing 404, and one it can read but not impair is a 403. Jitter above latency, or a value outside its range, is a 422.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--jitter-ms` | int | `0` | Variation on the delay, in milliseconds; at most the latency |
+| `--latency-ms` | int | `0` | Delay added to traffic toward the device, in milliseconds |
+| `--loss-pct` | float64 | `0` | Share of packets toward the device dropped, in percent, to hundredths |
+| `--rate-kbit` | int | `0` | Bandwidth limit on the device's link, both ways, in kilobits per second; 0 is unlimited |
+| `--unplugged` | bool | `false` | Dark on every protocol: connects time out, datagrams and pings go unanswered |
+
+Example:
+
+```sh
+omniglass component impairment set <name>
+```
+
 ### `omniglass component list`
 
 List components in scope
@@ -1035,6 +1079,51 @@ Example:
 
 ```sh
 omniglass component setTag <name> --key key --value value
+```
+
+### `omniglass component simulation`
+
+Commands for the simulation resource
+
+#### `omniglass component simulation fire`
+
+Fire an operation at a simulated component
+
+```
+omniglass component simulation fire <name> [flags]
+```
+
+Asks the simulator beside the component's node to run one operation against the simulated component, on one of its protocol surfaces: an HTTP call, a command line (SSH, Telnet, TCP) or an SNMP get, and returns its answer. The simulator answers from the component's live state in process, as its listeners would, so a command's change sticks and the collector sees it; an impairment does not stop it. Audited. Gated by simulation:update, resolved on the component tier. A component that is not simulated is a 409, a surface it does not serve a 422, and no simulator answering a 503.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--body` | string | (none) | HTTP: the request body |
+| `--command` | string | (none) | SSH, Telnet or TCP: the command line |
+| `--method` | string | (none) | HTTP: the method; GET when empty |
+| `--oid` | string | (none) | SNMP: the OID to get |
+| `--path` | string | (none) | HTTP: the request path |
+| `--surface` | string | (none) | The surface to fire on, by its name in the component's surface list |
+
+Example:
+
+```sh
+omniglass component simulation fire <name> --surface surface
+```
+
+#### `omniglass component simulation get`
+
+Get a component's simulation
+
+```
+omniglass component simulation get <name>
+```
+
+Whether a component is simulated (it has an endpoint on a node and a product a simulator profile simulates) and, when it is, its node, address, live hits and impairment, the products its profile simulates, and its full API surface: every protocol surface, with its HTTP routes, commands and SNMP OIDs. A component that is not simulated reads simulated false. Gated by simulation:read; the component resolves within the caller's component read scope.
+
+Example:
+
+```sh
+omniglass component simulation get <name>
 ```
 
 ### `omniglass component update`
@@ -3770,15 +3859,74 @@ Serve the node's simulated devices and follow changes until interrupted
 omniglass sim run [flags]
 ```
 
-Serves each component placed on the node whose product has a simulator profile and whose interfaces target a loopback address, on that address, and reports every request it answers to the server. Re-pulls the device list on an interval, so devices added or removed on the server start or stop without a restart.
+Serves each component placed on the node whose product has a simulator profile and whose endpoints target a loopback address, on that address, and reports every request it answers to the server. Re-pulls the device list on an interval, so devices added or removed on the server start or stop without a restart.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
+| `--impairments` | bool | `false` | apply impairments (unplug, latency, loss) and truthful ping by rewriting the firewall and traffic shaping of this network namespace; needs NET_ADMIN, and is meant for a namespace of the simulator's own (a pod or container) |
 | `--name` | string | (none) | the node this simulator runs beside (env OMNIGLASS_NODE_NAME) |
 | `--poll` | duration | `10s` | how often to re-pull the device list |
 | `--port-offset` | int | `0` | lift the simulated ports below 1024 by this much, to serve without the privilege to bind them |
 | `--server` | string | (none) | Omniglass server base URL (env OMNIGLASS_SERVER) |
 | `--token` | string | (none) | that node's enrollment token (env OMNIGLASS_NODE_TOKEN) |
+
+## `omniglass simulation`
+
+Commands for the simulation resource
+
+### `omniglass simulation add-component`
+
+Add a simulated component
+
+```
+omniglass simulation add-component <name> [flags]
+```
+
+Creates a component of a simulated product, at the lowest free address in the simulated block (127.60.0.0/16), with the endpoint the collector reaches it through placed on the node: a driver attach where the driver's inputs are known (an SNMP attach needs the sim-community secret, else it falls back), otherwise a reachability probe on a port the profile serves, lifted as the node's simulator lifts its ports. The simulator serves it from its next pull, with no restart. Gated by simulation:update, and also needs component:create and endpoint:create, each in the caller's own scope. A node with no simulator connected is a 409, and a product no profile simulates a 422.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--location` | string | (none) | Where the component sits, by name or dotted path |
+| `--name` | string | (none) | The new component's name |
+| `--product` | string | (none) | A product a simulator profile simulates |
+
+Example:
+
+```sh
+omniglass simulation add-component <name> --name name --product product
+```
+
+### `omniglass simulation get`
+
+Get the simulated fleet
+
+```
+omniglass simulation get
+```
+
+Every node a simulator has pulled for since the server started, each with its capabilities, its account of impairments, and the components it simulates within the caller's component read scope, joined to their live hits. A caller sees a node's simulator when its component read scope holds at least one component the node simulates (an all-scope reader sees all of them); no node read is needed. Connected is true when any listed simulator pulled recently. Hits are per server process, not stored. Gated by simulation:read.
+
+Example:
+
+```sh
+omniglass simulation get
+```
+
+### `omniglass simulation profiles`
+
+List the simulator's profiles
+
+```
+omniglass simulation profiles
+```
+
+The simulator's profile catalog, embedded in the binary: each profile with the products it simulates and the protocols it speaks. Adding a simulated component names one of these products. Gated by simulation:read.
+
+Example:
+
+```sh
+omniglass simulation profiles
+```
 
 ## `omniglass standard`
 

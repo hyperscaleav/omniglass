@@ -3,6 +3,7 @@ package bus_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"testing"
 	"time"
 
@@ -137,5 +138,73 @@ func TestSimRoundTrip(t *testing.T) {
 		if !awaitPermissionViolation(permErrs, 3*time.Second) {
 			t.Fatalf("no permissions violation publishing on %s", subj)
 		}
+	}
+}
+
+// TestSimOperationRoundTrip proves the console's way into a simulator: the
+// server asks the simulator beside a node to run an operation and gets its
+// answer back; the simulator holding node-a's credential may answer only
+// node-a's operations (subscribing to node-b's is refused by the grant);
+// and with no simulator listening, the server says so at once rather than
+// waiting out a timeout.
+func TestSimOperationRoundTrip(t *testing.T) {
+	if testing.Short() {
+		t.Skip("integration test needs Postgres + nats-server")
+	}
+	ctx := context.Background()
+	gw, err := storage.NewPG(ctx, storagetest.NewDSN(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer gw.Close()
+	all := scope.Set{All: true}
+	if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "node-a"}, all, all); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := gw.SetEnrollmentToken(ctx, "", "node-a", hashHex("secret-a"), all); err != nil {
+		t.Fatal(err)
+	}
+	srv, err := bus.New(bus.Config{Host: "127.0.0.1", Port: -1}, gw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer srv.Shutdown()
+
+	if _, err := srv.FireSimOperation(ctx, "node-a", collection.SimOperation{ComponentID: "c1", Kind: "snmp"}); !errors.Is(err, bus.ErrNoSimulator) {
+		t.Fatalf("with no simulator: err = %v, want ErrNoSimulator", err)
+	}
+
+	permErrs := make(chan error, 16)
+	nc, err := nats.Connect(srv.ClientURL(), nats.UserInfo("node-a", "secret-a"),
+		nats.CustomInboxPrefix(collection.InboxPrefix("node-a")),
+		nats.ErrorHandler(func(_ *nats.Conn, _ *nats.Subscription, e error) { permErrs <- e }))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer nc.Close()
+	if _, err := nc.Subscribe(collection.SimopSubject("node-a"), func(m *nats.Msg) {
+		var op collection.SimOperation
+		_ = json.Unmarshal(m.Data, &op)
+		b, _ := json.Marshal(collection.SimOperationResult{Body: "answered " + op.ComponentID + " " + op.OID})
+		_ = m.Respond(b)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	_ = nc.Flush()
+
+	res, err := srv.FireSimOperation(ctx, "node-a", collection.SimOperation{ComponentID: "c1", Kind: "snmp", OID: "1.3.6"})
+	if err != nil {
+		t.Fatalf("fire: %v", err)
+	}
+	if res.Body != "answered c1 1.3.6" {
+		t.Fatalf("result = %+v, want the simulator's answer", res)
+	}
+
+	if _, err := nc.Subscribe(collection.SimopSubject("node-b"), func(*nats.Msg) {}); err != nil {
+		t.Fatal(err)
+	}
+	_ = nc.Flush()
+	if !awaitPermissionViolation(permErrs, 3*time.Second) {
+		t.Fatal("node-a subscribed to node-b's operations without a permissions violation")
 	}
 }

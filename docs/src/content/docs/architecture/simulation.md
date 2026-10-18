@@ -26,8 +26,11 @@ connection and request it answers on one hit stream. Also built: the `sim run` m
 (#887), which pulls the devices placed on the node, serves them, and reports hits the server shows
 at `GET /nodes/{name}/simulation`. Also built: the simulated dev fleet (#888), where every dev-seed
 component a profile serves gets an address and endpoints on the dev node, so `make dev-sim`
-collects for real. Still `Design`: the Helm sidecar (#892), impairments (#889), and the console
-surfaces (#890).
+collects for real. Also built: impairments (#889), an operator unplugging, slowing or degrading a
+simulated device through the API and CLI, applied by a simulator run with `--impairments` and
+`NET_ADMIN`, with ping made truthful. Also built: the console surfaces (#890): the fleet view, a
+device's API surface and firing any operation at it, adding a device, and the Simulation page,
+drawer and component section over them. Still `Design`: the Helm sidecar (#892).
 :::
 
 ## The catalog
@@ -99,8 +102,9 @@ Two facts shape where the simulator runs:
 The simulator is its own run mode, `omniglass sim run`, that runs beside a node and shares its
 loopback, holding that node's credential: it reads the same `OMNIGLASS_SERVER`,
 `OMNIGLASS_NODE_NAME` and `OMNIGLASS_NODE_TOKEN` as `node run`, so the node's subject grant is its
-grant too. It can pull the devices behind its own node and report hits on them, never another
-node's.
+grant too. It can pull the devices behind its own node, report hits on them, and answer the
+operations the server asks of its node's simulator, never another node's
+([ADR-0142](/architecture/decisions/#adr-0142-the-simulator-is-a-run-mode-beside-its-node-holding-that-nodes-identity)).
 
 On every pull (every ten seconds by default) it asks the server for each component with an
 endpoint placed on the node, with the component's product and the host its endpoints target, and
@@ -139,15 +143,79 @@ In a deployment the simulator is a sidecar container in the node's pod, granted 
 unprivileged-port sysctl, so it binds the profiles' real ports and can make ping tell the truth.
 :::
 
-:::design[Target design: impairments, tracked in #889]
-An impairment is a fault set on a simulated device: dark (no answer on any protocol, ping
-included), latency, loss, a protocol refusing, a value pinned. Impairments live on the simulated
-device and are applied through the firewall and traffic-control rules the run mode holds
-`NET_ADMIN` for, so the collector sees exactly what a failing device would show.
-:::
+## Breaking a device on purpose
 
-:::design[Target design: the console, tracked in #890]
-A Simulation page lists every simulated device and blinks a device when the collector reaches it.
-A simulated device's drawer shows its API surface and lets the operator fire any operation, and
-the fleet can be edited from the console.
-:::
+An **impairment** is what an operator has broken on a simulated device, recorded on the component and
+applied by the simulator beside its node, so a collector sees exactly what a failing device would
+show:
+
+- **unplugged**: dark on every protocol. A connect times out (not refused), a datagram vanishes, a
+  ping goes unanswered;
+- **latency** and **jitter**: a delay, with variation, on traffic toward the device, which shows in
+  the collector's connect times and round trips;
+- **loss**: a share of packets toward the device dropped (to hundredths of a percent);
+- **rate**: a bandwidth limit on the device's link, both ways, so it slows what a collector
+  downloads as well as what it sends. The return path is limited but not delayed, so a latency
+  still counts once per round trip.
+
+`PUT /components/{name}/impairment` sets it (`omniglass component impairment set <component>
+--unplugged`, `--latency-ms 300`, ...) and `GET` reads it back. A set replaces the whole
+impairment: a field left out reads as zero, so setting a latency on an unplugged device plugs it
+back in, and an empty set repairs it. Both
+are gated (`simulation:update`, which operators hold, and `simulation:read`), resolve the component
+in the caller's component scope, and the write is audited. The node's simulation view shows each
+device's impairment and the simulator's account of applying it.
+
+The simulator applies impairments only when started with `--impairments` and holding `NET_ADMIN`,
+in a network namespace of its own (a pod or container): it rewrites that namespace's firewall and
+traffic shaping, through netlink with no `nft` or `tc` binary. It owns one nftables table and one
+root qdisc on loopback and touches nothing else, though while any device is degraded all loopback
+traffic passes that root (unclassified traffic unshaped). It clears both when it stops, and sweeps
+any a killed run left behind when it starts. Without the flag or the capability it applies
+nothing and says why, in the simulation view. With them, **ping tells the truth**: an ICMP echo to
+a loopback address that is no device is dropped, so only devices answer.
+
+What the simulator cannot do yet is break one protocol while the others answer, or pin a value so a
+collector reads plausible but wrong data (#909). And an unplugged device's **system verdict** does not
+move on its own: a component's condition is its active alarms, and raising one from reachability is
+the event rule tier (#819).
+
+## Exercising a simulated component
+
+Every simulated component publishes its whole API surface, read from its profile:
+`GET /components/{name}/simulation` lists each protocol surface (its protocol, the port the simulator binds,
+whether it holds a session open) with its HTTP routes, its commands and its SNMP OIDs, the same
+surface its listeners serve. An operator fires any of them with
+`POST /components/{name}/simulation:fire` (or `omniglass component simulation fire <component>
+--surface nvp --command "SET INPUT hdmi2"`): the server forwards the operation over the bus to
+the simulator beside the component's node, on a subject of that node's own grant, and the
+simulator answers it.
+
+The simulator answers **in process**, from the component's live state, through the same routes,
+commands and OID map its listeners use: a command's change sticks, so the collector reads it on its
+next poll, and the operation counts as a hit, so its row lights up. Because it runs beside the
+listeners rather than through the network, an impairment does not stop it: the console can still
+inspect a component it unplugged. A profile that enforces HTTP authentication is called with its
+own credentials, as an authorized client would.
+
+## Adding a simulated component
+
+Adding a simulated component is adding a component the simulator can serve:
+`POST /nodes/{name}/simulation/components` (`omniglass simulation add-component <node> --name panel-9
+--product newtron-panel-7`) creates a component of a simulated product and the endpoint the
+collector reaches it through, placed on the node. The plan is the dev seed's, made a primitive
+(`internal/simfleet`): the lowest address in `127.60.0.0/16` no endpoint already targets, a driver
+attach where the driver's inputs are known (an SNMP attach only when the `sim-community` secret
+exists for it to reference), otherwise a reachability probe on a port the profile serves, lifted
+as that node's simulator lifts its ports. The simulator serves it from its next pull, with no
+restart. Changing its product among the products its profile simulates keeps its endpoints valid
+(they share a driver), and deleting the component removes it from the simulation.
+
+## In the console
+
+Everything above has a console surface, shown only while a simulator is connected: the
+**Simulation** page lists every simulated component in a table, a row lighting up when the
+collector reaches it; the simulation drawer carries its status, its impairment controls and its
+API surface, with a form to fire any operation; and a simulated component's own page carries a
+Simulation section that opens the same drawer. The walk-through is the
+[simulation guide](/guides/operator/simulation/).

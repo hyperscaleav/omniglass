@@ -27,23 +27,26 @@ func WithSimStatus(f SimStatusFunc) Option {
 const simConnectedWindow = 90 * time.Second
 
 type simDeviceBody struct {
-	ComponentID    string         `json:"component_id"`
-	Component      string         `json:"component" doc:"The component's name."`
-	Product        string         `json:"product" doc:"The component's product; its name selects the simulator profile."`
-	Address        string         `json:"address" doc:"The host the component's endpoints target."`
-	Serving        bool           `json:"serving" doc:"Whether the simulator reported serving this device in its latest batch."`
-	Hits           int            `json:"hits" doc:"Connections and requests the simulated device has answered since the server started."`
-	HitsByProtocol map[string]int `json:"hits_by_protocol"`
-	LastHitAt      *time.Time     `json:"last_hit_at,omitempty"`
-	LastProtocol   string         `json:"last_protocol,omitempty"`
+	ComponentID    string            `json:"component_id"`
+	Component      string            `json:"component" doc:"The component's name."`
+	Product        string            `json:"product" doc:"The component's product; its name selects the simulator profile."`
+	Address        string            `json:"address" doc:"The host the component's endpoints target."`
+	Serving        bool              `json:"serving" doc:"Whether the simulator reported serving this device in its latest batch."`
+	Hits           int               `json:"hits" doc:"Connections and requests the simulated device has answered since the server started."`
+	HitsByProtocol map[string]int    `json:"hits_by_protocol"`
+	LastHitAt      *time.Time        `json:"last_hit_at,omitempty"`
+	LastProtocol   string            `json:"last_protocol,omitempty"`
+	Impairment     *impairmentFields `json:"impairment,omitempty" doc:"What an operator has broken on the device; absent when healthy."`
+	Impaired       bool              `json:"impaired" doc:"Whether the simulator reported applying an impairment to the device in its latest batch."`
 }
 
 type simulationOutput struct {
 	Body struct {
-		Connected    bool                       `json:"connected" doc:"A simulator beside this node pulled its device list recently."`
-		LastSeen     *time.Time                 `json:"last_seen,omitempty"`
-		Capabilities collection.SimCapabilities `json:"capabilities"`
-		Devices      []simDeviceBody            `json:"devices"`
+		Connected    bool                           `json:"connected" doc:"A simulator beside this node pulled its device list recently."`
+		LastSeen     *time.Time                     `json:"last_seen,omitempty"`
+		Capabilities collection.SimCapabilities     `json:"capabilities"`
+		Impairments  collection.SimImpairmentStatus `json:"impairments" doc:"Whether the simulator can apply impairments (and why not), its last apply error, and the devices it impairs."`
+		Devices      []simDeviceBody                `json:"devices"`
 	}
 }
 
@@ -80,11 +83,30 @@ func simulationBody(devices []storage.SimDevice, st simhub.Status, seen bool, no
 		out.Body.LastSeen = &ls
 		out.Body.Connected = now.Sub(st.LastSeen) <= simConnectedWindow
 		out.Body.Capabilities = st.Capabilities
+		out.Body.Impairments = st.Impairments
+	}
+	// The simulator's impaired list covers its whole node: keep only the
+	// devices in this caller's view.
+	visible := make(map[string]bool, len(devices))
+	for _, d := range devices {
+		visible[d.ComponentID] = true
+	}
+	impaired := map[string]bool{}
+	out.Body.Impairments.Impaired = nil
+	for _, id := range st.Impairments.Impaired {
+		if visible[id] {
+			impaired[id] = true
+			out.Body.Impairments.Impaired = append(out.Body.Impairments.Impaired, id)
+		}
 	}
 	out.Body.Devices = make([]simDeviceBody, 0, len(devices))
 	for _, d := range devices {
 		b := simDeviceBody{ComponentID: d.ComponentID, Component: d.Name, Product: d.Product, Address: d.Address,
-			Serving: st.Serving[d.ComponentID], HitsByProtocol: map[string]int{}}
+			Serving: st.Serving[d.ComponentID], HitsByProtocol: map[string]int{}, Impaired: impaired[d.ComponentID]}
+		if d.Impairment != nil {
+			f := impairmentFields(*d.Impairment)
+			b.Impairment = &f
+		}
 		if h, ok := st.Devices[d.ComponentID]; ok {
 			b.Hits = h.Count
 			for k, v := range h.ByProtocol {

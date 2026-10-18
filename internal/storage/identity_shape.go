@@ -172,7 +172,9 @@ var IdentityShapes = map[string]TableIdentity{
 	"setting_override": {Shape: ShapeIDOnly}, "standard_metric": {Shape: ShapeIDOnly},
 	"standard_property": {Shape: ShapeIDOnly}, "system_member": {Shape: ShapeIDOnly},
 	"system_role_assignment": {Shape: ShapeIDOnly},
-	"system_role_product":    {Shape: ShapeIDOnly}, "system_role_type": {Shape: ShapeIDOnly},
+	// One row per impaired simulated component, keyed by that component's uuid.
+	"sim_impairment":      {Shape: ShapeIDOnly},
+	"system_role_product": {Shape: ShapeIDOnly}, "system_role_type": {Shape: ShapeIDOnly},
 	"tag_binding": {Shape: ShapeIDOnly},
 	// registry_shadow holds an operator's version of a shipped registry row
 	// (#655, ADR-0095). Nobody names it: it is addressed by the row it shadows,

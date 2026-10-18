@@ -207,7 +207,7 @@ interfaces:
   - name: snmp
     protocol: snmp
     port: 161
-    doc: { summary: "SNMP monitoring interface (MIB-2 only, teaching case)", tags: [monitoring] }
+    doc: { summary: "SNMP monitoring (MIB-2 only, teaching case)", tags: [monitoring] }
     api_surface: newtron-panel
     auth:
       community: "public"

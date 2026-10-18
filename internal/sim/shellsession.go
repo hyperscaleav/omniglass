@@ -160,28 +160,32 @@ func runShellSession(d *Device, sess *Session, rd *bufio.Reader, w io.Writer, po
 			sess.queueLine([]byte(cfg.WrapOutbound("-ERR " + rerr.Error())))
 			status = 500
 		default:
-			if result.Response != "" {
+			// Register a subscribe (or drop an unsubscribe) BEFORE the
+			// reply is queued: a client that reads the reply and at once
+			// changes the subscribed state must get that change's push,
+			// so the subscription has to exist by the time the reply can
+			// reach the wire. Pushes stay held until the reply is queued,
+			// so the reply still lands first (interval pumps emit their
+			// first push immediately on the next tick; on-change fires
+			// only on subsequent state mutations).
+			var subErr error
+			if result.Action == ActionSubscribe {
+				subErr = sess.Subscribe(result.Subject, result.Token, result.IntervalMs)
+			} else if result.Action == ActionUnsubscribe {
+				sess.Unsubscribe(result.Subject)
+			}
+			status = 200
+			switch {
+			case subErr != nil:
+				sess.queueLine([]byte(cfg.WrapOutbound("-ERR " + subErr.Error())))
+				status = 500
+			case result.Response != "":
 				// Profile templates render the bare payload;
 				// WrapOutbound adds FrameStart/FrameEnd/LineEnding.
 				// Strip a trailing LineEnding the template may
 				// have appended itself so we don't double up.
 				payload := strings.TrimSuffix(result.Response, cfg.LineEnding)
 				sess.queueLine([]byte(cfg.WrapOutbound(payload)))
-			}
-			status = 200
-
-			// Apply subscribe / unsubscribe AFTER queueing the
-			// response so the +OK lands on the wire before any push
-			// the registration triggers (interval pumps emit their
-			// first push immediately on the next tick; on-change
-			// fires only on subsequent state mutations).
-			if result.Action == ActionSubscribe {
-				if subErr := sess.Subscribe(result.Subject, result.Token, result.IntervalMs); subErr != nil {
-					sess.queueLine([]byte(cfg.WrapOutbound("-ERR " + subErr.Error())))
-					status = 500
-				}
-			} else if result.Action == ActionUnsubscribe {
-				sess.Unsubscribe(result.Subject)
 			}
 		}
 		sess.releasePushes()

@@ -43,6 +43,12 @@ jobs:
       - name: Test
         run: go test ./...
 
+      # The NET_ADMIN tier (impairments rewrite the firewall and tc of the network
+      # they run in): run in a container with its own network namespace, never on
+      # the runner's own network.
+      - name: Test the NET_ADMIN tier (in a container)
+        run: make test-netadmin
+
   # The browser e2e tier (#761): the console driven as an operator would, against
   # the real binary, fully containerized (web/e2e/run.sh: Postgres, the server,
   # and Playwright on one private network, no host ports). Covers the CRUD

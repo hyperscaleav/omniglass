@@ -180,6 +180,7 @@ below from the project's history. From here it grows one slice at a time.
 | [ADR-0139](#adr-0139-a-detail-view-is-one-per-system-its-place-a-card-of-context) | 2026-10-05 | Accepted | Systems are the unit Omniglass monitors; places are folders and metadata; components are pieces of systems. A detail view is one per system, its place a card of context above the system card and its tabs; a place holding exactly one system lands on it, and a place holding none or several keeps its own view (a brief card per system, then the outline rooted there). The side panel is the glance (verdict, why, context, identity and tags), configuration staying on Configure, revising #826's one-form panel. The shipped system label rule leads with the place, and healthy is grey on every health pill (#872) |
 | [ADR-0140](#adr-0140-a-system-is-what-the-business-groups-a-location-is-where-things-sit-and-a-room-is-one-thing) | 2026-10-11 | Accepted | A system is the logical grouping the business cares about and support troubleshoots through; a location is the physical grouping that finds the box on site; operators add components to a system. Every system has a place, which bounds its components (checked against the primary system only) and its subsystems; a component's place is inherited from its primary system unless set, derived at read time; systems group into systems (a divisible hall and its rooms); a place holding one system is one thing with it. The cross-tier scope expansion is decided separately (#10) |
 | [ADR-0141](#adr-0141-a-command-settles-when-its-evidence-arrives-from-its-reply-first-and-observation-second) | 2026-10-18 | Accepted | A command settles as soon as its evidence arrives: a matching observation taken after the intent, or the device's reply when its driver binding says the reply carries it. Each binding declares its source (`from: response` with a value `extract` or a `success` match, or `from: observe`, the default); the window bounds the wait, not the settling; a sweep times out what nothing settles. Revises ADR-0063's pending-until-the-window-passes rule |
+| [ADR-0142](#adr-0142-the-simulator-is-a-run-mode-beside-its-node-holding-that-nodes-identity) | 2026-10-18 | Accepted | The simulator is `omniglass sim run`, a run mode beside its node that holds the node's identity and simulates the components placed on it; impairments are opt-in (`--impairments` and `NET_ADMIN`), the console's operations run in process, a rate limit holds both ways, hits are live, not stored, and `simulation:read` (with component scope) is the whole gate on the simulated fleet |
 
 ## Entries
 
@@ -6436,3 +6437,41 @@ interface create form, since that name is the platform's to mint.
   response first and the next observation second, configured per command binding. The window
   stays the driver's fact about actuation time; what changes is that it bounds the wait rather
   than delaying a verdict already in hand.
+
+### ADR-0142: The simulator is a run mode beside its node, holding that node's identity
+
+- **Date:** 2026-10-18 | **Status:** Accepted | **Pages:** [simulation](/architecture/simulation/), [API](/architecture/api/)
+- **Decision:** Omniglass simulates its own fleet with `omniglass sim run`, a run mode of the one
+  binary that runs beside a collection node and shares its loopback (the same host, or the same
+  container or pod network namespace). It holds the node's identity and rides the node's subject
+  grant, so it can only pull the devices placed on its node, report hits on them, and answer the
+  operations the server asks of that node's simulator. Its fleet is the inventory: it pulls each
+  component placed on the node whose product a profile simulates and follows changes without a
+  restart, so adding a simulated device is adding a component (through a planner shared with the
+  dev seed). Four rulings bound it:
+  1. **Impairments are opt-in.** A simulator rewrites its namespace's firewall and traffic shaping
+     only when started with `--impairments` and holding `NET_ADMIN`; holding the capability alone is
+     not consent, because a simulator run as root on a workstation would otherwise rewrite the host's
+     loopback rules.
+  2. **The console's operations run in process.** An operation fired from the console is forwarded
+     over the bus and answered by the device from its live state through the same routes, commands
+     and OID map its listeners use, not by a client dialing the device, so an unplugged device can
+     still be inspected and every protocol (SSH and Telnet included) is reachable without a client
+     per protocol.
+  3. **A rate limit holds both ways; latency and loss toward the device only.** The return path is
+     limited but not delayed, so a latency still counts once per round trip.
+  4. **Hits are live, not stored.** The server keeps them in memory per process, as a signal that
+     the collector is reaching the device, not as telemetry.
+  5. **`simulation:read` is the whole gate on the simulated fleet.** A caller sees a node's
+     simulator when its component scope holds at least one component that node simulates, and
+     only those components; no node read is required, so a location-scoped technician sees the
+     simulation of their own places, and learns the simulator's node name and capabilities.
+- **Context:** omniglass-lab simulated devices as a second platform (its own director, Postgres,
+  gRPC edge plane and console). Epic #885 brought the simulation core home, and the architect took
+  the recommended option on each open decision: the simulator pulls its device list from the server
+  as a node-like principal, impairments live on the simulated device, a pod's simulator container
+  gets `NET_ADMIN` and the unprivileged-port sysctl, and the Simulation page is a sidebar entry shown
+  only while a simulator is connected. The opt-in flag and the in-process operations were settled
+  while building it (#889, #890): the first after seeing what `NET_ADMIN` on a host namespace would
+  do, the second because a per-protocol client would have bypassed nothing an operator needs and
+  could not reach a device that is broken on purpose.

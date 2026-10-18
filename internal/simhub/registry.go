@@ -5,6 +5,7 @@
 package simhub
 
 import (
+	"sort"
 	"sync"
 	"time"
 
@@ -34,10 +35,14 @@ type Status struct {
 	Capabilities collection.SimCapabilities
 	Serving      map[string]bool
 	Devices      map[string]DeviceHits
+	// Impairments is the simulator's latest account of impairments: whether
+	// it can apply them, its last error, and what it impairs now.
+	Impairments collection.SimImpairmentStatus
 }
 
 type nodeState struct {
 	lastSeen time.Time
+	impairs  collection.SimImpairmentStatus
 	caps     collection.SimCapabilities
 	listed   map[string]bool
 	serving  map[string]bool
@@ -98,6 +103,10 @@ func (r *Registry) Report(node string, b collection.SimHitBatch) (accepted, reje
 	if st == nil {
 		return 0, len(b.Hits)
 	}
+	if b.Impairments != nil {
+		st.impairs = *b.Impairments
+		st.impairs.Impaired = filterListed(st.listed, b.Impairments.Impaired)
+	}
 	st.serving = map[string]bool{}
 	for _, id := range b.Serving {
 		if st.listed[id] {
@@ -123,6 +132,18 @@ func (r *Registry) Report(node string, b collection.SimHitBatch) (accepted, reje
 	return accepted, rejected
 }
 
+// Nodes lists the nodes whose simulator has pulled, sorted.
+func (r *Registry) Nodes() []string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	out := make([]string, 0, len(r.nodes))
+	for n := range r.nodes {
+		out = append(out, n)
+	}
+	sort.Strings(out)
+	return out
+}
+
 // Status returns a copy of a node's simulator status, or false when no
 // simulator has pulled for that node since the server started.
 func (r *Registry) Status(node string) (Status, bool) {
@@ -136,6 +157,7 @@ func (r *Registry) Status(node string) (Status, bool) {
 		LastSeen:     st.lastSeen,
 		Capabilities: st.caps,
 		Serving:      make(map[string]bool, len(st.serving)),
+		Impairments:  st.impairs,
 		Devices:      make(map[string]DeviceHits, len(st.devices)),
 	}
 	for id := range st.serving {
@@ -150,4 +172,16 @@ func (r *Registry) Status(node string) (Status, bool) {
 		out.Devices[id] = cp
 	}
 	return out, true
+}
+
+// filterListed keeps only the components the node was handed: a simulator
+// reports on its own devices, never others.
+func filterListed(listed map[string]bool, ids []string) []string {
+	var out []string
+	for _, id := range ids {
+		if listed[id] {
+			out = append(out, id)
+		}
+	}
+	return out
 }

@@ -8,6 +8,7 @@ import Systems from "./pages/Systems";
 import Components from "./pages/Components";
 import Profile from "./pages/Profile";
 import Nodes from "./pages/Nodes";
+import Simulation from "./pages/Simulation";
 import Users from "./pages/Users";
 import Roles from "./pages/Roles";
 import Groups from "./pages/Groups";
@@ -48,6 +49,7 @@ export const PAGES: Record<string, Component> = {
   Components,
   Profile,
   Nodes,
+  Simulation,
   Users,
   Roles,
   Groups,

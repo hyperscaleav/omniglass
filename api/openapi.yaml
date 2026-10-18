@@ -38,6 +38,58 @@ components:
       required:
         - principal_id
       type: object
+    AddSimComponentInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/AddSimComponentInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        location:
+          description: Where the component sits, by name or dotted path
+          type: string
+        name:
+          description: The new component's name
+          minLength: 1
+          type: string
+        product:
+          description: A product a simulator profile simulates
+          minLength: 1
+          type: string
+      required:
+        - name
+        - product
+      type: object
+    AddSimComponentOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/AddSimComponentOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        address:
+          description: The loopback address the simulated component answers on.
+          type: string
+        component:
+          type: string
+        endpoints:
+          description: How many endpoints were created for the collector to reach it.
+          format: int64
+          type: integer
+        node:
+          type: string
+      required:
+        - component
+        - node
+        - address
+        - endpoints
+      type: object
     AlarmBody:
       additionalProperties: false
       properties:
@@ -510,6 +562,56 @@ components:
         - property_type_id
         - value
         - value_id
+      type: object
+    ComponentSimOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/ComponentSimOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        activity:
+          $ref: "#/components/schemas/SimDeviceBody"
+          description: "What the simulator reports for the component: serving, hits, and its impairment."
+        address:
+          type: string
+        connected:
+          description: The node's simulator pulled recently.
+          type: boolean
+        impairments:
+          $ref: "#/components/schemas/SimImpairmentStatus"
+        node:
+          type: string
+        product:
+          type: string
+        profile:
+          type: string
+        simulated:
+          description: The component has an endpoint on a node and a product a profile simulates.
+          type: boolean
+        summary:
+          type: string
+        surface:
+          description: Every protocol surface the simulated component serves, from its profile.
+          items:
+            $ref: "#/components/schemas/SimSurfaceBody"
+          type:
+            - array
+            - "null"
+        variants:
+          description: The products the same profile simulates; changing among them keeps the component's endpoints valid.
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+      required:
+        - simulated
+        - connected
+        - impairments
       type: object
     ComponentTypeBody:
       additionalProperties: false
@@ -2128,6 +2230,39 @@ components:
         - sensitive
         - created_at
       type: object
+    FireSimInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/FireSimInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        body:
+          description: "HTTP: the request body"
+          type: string
+        command:
+          description: "SSH, Telnet or TCP: the command line"
+          type: string
+        method:
+          description: "HTTP: the method; GET when empty"
+          pattern: ^[A-Za-z]*$
+          type: string
+        oid:
+          description: "SNMP: the OID to get"
+          type: string
+        path:
+          description: "HTTP: the request path"
+          type: string
+        surface:
+          description: The surface to fire on, by its name in the component's surface list
+          minLength: 1
+          type: string
+      required:
+        - surface
+      type: object
     FleetDotBody:
       additionalProperties: false
       properties:
@@ -2513,6 +2648,43 @@ components:
           type: string
       required:
         - username
+      type: object
+    ImpairmentFields:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/ImpairmentFields.json
+          format: uri
+          readOnly: true
+          type: string
+        jitter_ms:
+          description: Variation on the delay, in milliseconds; at most the latency
+          format: int64
+          minimum: 0
+          type: integer
+        latency_ms:
+          description: Delay added to traffic toward the device, in milliseconds
+          format: int64
+          maximum: 10000
+          minimum: 0
+          type: integer
+        loss_pct:
+          description: Share of packets toward the device dropped, in percent, to hundredths
+          format: double
+          maximum: 100
+          minimum: 0
+          type: number
+        rate_kbit:
+          description: Bandwidth limit on the device's link, both ways, in kilobits per second; 0 is unlimited
+          format: int64
+          maximum: 10000000
+          minimum: 0
+          type: integer
+        unplugged:
+          description: "Dark on every protocol: connects time out, datagrams and pings go unanswered"
+          type: boolean
       type: object
     ImpersonateInputBody:
       additionalProperties: false
@@ -5663,6 +5835,21 @@ components:
         - net_admin
         - port_offset
       type: object
+    SimCommandBody:
+      additionalProperties: false
+      properties:
+        action:
+          description: subscribe or unsubscribe on a persistent session; empty for a request and its answer.
+          type: string
+        example:
+          type: string
+        match:
+          type: string
+        summary:
+          type: string
+      required:
+        - match
+      type: object
     SimDeviceBody:
       additionalProperties: false
       properties:
@@ -5683,6 +5870,12 @@ components:
             format: int64
             type: integer
           type: object
+        impaired:
+          description: Whether the simulator reported applying an impairment to the device in its latest batch.
+          type: boolean
+        impairment:
+          $ref: "#/components/schemas/ImpairmentFields"
+          description: What an operator has broken on the device; absent when healthy.
         last_hit_at:
           format: date-time
           type: string
@@ -5702,6 +5895,238 @@ components:
         - serving
         - hits
         - hits_by_protocol
+        - impaired
+      type: object
+    SimFleetOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/SimFleetOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        connected:
+          description: Any simulator pulled its device list recently; the console shows its Simulation page only then.
+          type: boolean
+        nodes:
+          description: Each node a simulator has pulled for since the server started, whose simulated components the caller's scope reaches.
+          items:
+            $ref: "#/components/schemas/SimNodeBody"
+          type:
+            - array
+            - "null"
+      required:
+        - connected
+        - nodes
+      type: object
+    SimImpairmentStatus:
+      additionalProperties: false
+      properties:
+        available:
+          type: boolean
+        error:
+          type: string
+        impaired:
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+        reason:
+          type: string
+      required:
+        - available
+      type: object
+    SimNodeBody:
+      additionalProperties: false
+      properties:
+        capabilities:
+          $ref: "#/components/schemas/SimCapabilities"
+        components:
+          description: The components the simulator serves, in the caller's component read scope, with their live hits.
+          items:
+            $ref: "#/components/schemas/SimDeviceBody"
+          type:
+            - array
+            - "null"
+        connected:
+          type: boolean
+        impairments:
+          $ref: "#/components/schemas/SimImpairmentStatus"
+        last_seen:
+          format: date-time
+          type: string
+        node:
+          type: string
+      required:
+        - node
+        - connected
+        - last_seen
+        - capabilities
+        - impairments
+        - components
+      type: object
+    SimOIDBody:
+      additionalProperties: false
+      properties:
+        oid:
+          type: string
+        path:
+          description: The state path the OID reads.
+          type: string
+      required:
+        - oid
+        - path
+      type: object
+    SimOperationResult:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/SimOperationResult.json
+          format: uri
+          readOnly: true
+          type: string
+        body:
+          type: string
+        error:
+          type: string
+        status:
+          format: int64
+          type: integer
+        took_ms:
+          format: int64
+          type: integer
+        truncated:
+          type: boolean
+      required:
+        - body
+        - took_ms
+      type: object
+    SimProfileBody:
+      additionalProperties: false
+      properties:
+        device_type:
+          type: string
+        manufacturer:
+          type: string
+        model:
+          type: string
+        name:
+          type: string
+        products:
+          description: The products this profile simulates, its own first, then its variants.
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+        protocols:
+          description: The protocols its surfaces speak.
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+        summary:
+          type: string
+      required:
+        - name
+        - manufacturer
+        - model
+        - device_type
+        - summary
+        - products
+        - protocols
+      type: object
+    SimProfilesOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/SimProfilesOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        profiles:
+          items:
+            $ref: "#/components/schemas/SimProfileBody"
+          type:
+            - array
+            - "null"
+      required:
+        - profiles
+      type: object
+    SimRouteBody:
+      additionalProperties: false
+      properties:
+        example:
+          type: string
+        method:
+          type: string
+        path:
+          type: string
+        private:
+          description: A route the product's own web UI calls but does not advertise.
+          type: boolean
+        summary:
+          type: string
+      required:
+        - method
+        - path
+      type: object
+    SimSurfaceBody:
+      additionalProperties: false
+      properties:
+        auth_type:
+          type: string
+        commands:
+          items:
+            $ref: "#/components/schemas/SimCommandBody"
+          type:
+            - array
+            - "null"
+        default_user:
+          type: string
+        fireable:
+          description: Whether the console can fire an operation on this surface.
+          type: boolean
+        name:
+          type: string
+        oids:
+          items:
+            $ref: "#/components/schemas/SimOIDBody"
+          type:
+            - array
+            - "null"
+        persistent:
+          description: A session that stays open across commands and may push.
+          type: boolean
+        port:
+          description: The port the simulator binds, after any lift of ports below 1024.
+          format: int64
+          type: integer
+        protocol:
+          type: string
+        routes:
+          items:
+            $ref: "#/components/schemas/SimRouteBody"
+          type:
+            - array
+            - "null"
+        summary:
+          type: string
+        tls:
+          type: boolean
+      required:
+        - name
+        - protocol
+        - port
+        - fireable
       type: object
     SimulationOutputBody:
       additionalProperties: false
@@ -5724,12 +6149,16 @@ components:
           type:
             - array
             - "null"
+        impairments:
+          $ref: "#/components/schemas/SimImpairmentStatus"
+          description: Whether the simulator can apply impairments (and why not), its last apply error, and the devices it impairs.
         last_seen:
           format: date-time
           type: string
       required:
         - connected
         - capabilities
+        - impairments
         - devices
       type: object
     StandardBody:
@@ -8096,6 +8525,65 @@ paths:
           description: Error
       summary: List a component's recent events
       x-omniglass-permission: component:read
+  /components/{name}/impairment:
+    get:
+      description: The impairment an operator set on a simulated component (unplugged, or a degraded link), applied by the simulator beside its node when that simulator runs with impairments and NET_ADMIN. A healthy device reads all zero. Gated by simulation:read; the component resolves within the caller's component read scope.
+      operationId: get-component-impairment
+      parameters:
+        - description: The simulated component's name, or a dotted address
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The simulated component's name, or a dotted address
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ImpairmentFields"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Get what is broken on a simulated device
+      x-omniglass-permission: simulation:read
+    put:
+      description: "Sets what is broken on a simulated component: unplugged, or a link with added latency, jitter, loss or a rate limit. It replaces the whole impairment, so a field left out reads as zero (setting a latency on an unplugged device plugs it back in); an empty body repairs it. Returns the impairment as stored, loss rounded to hundredths. Audited. The simulator beside the component's node applies it on its next pull. Gated by simulation:update, whose scope is resolved on the component tier; a component outside the caller's component:read is a non-disclosing 404, and one it can read but not impair is a 403. Jitter above latency, or a value outside its range, is a 422."
+      operationId: set-component-impairment
+      parameters:
+        - description: The simulated component's name, or a dotted address
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The simulated component's name, or a dotted address
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ImpairmentFields"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ImpairmentFields"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Break or repair a simulated device
+      x-omniglass-permission: simulation:update
   /components/{name}/logs:
     get:
       description: Returns the component's recent raw log lines (the ingest lane of ADR-0066, distinct from typed events), newest first, bounded to the last 24 hours. Gated by component:read; an out-of-scope component is a non-disclosing 404.
@@ -8435,6 +8923,66 @@ paths:
           description: Error
       summary: Read a component's property reconciliation (want/told/is)
       x-omniglass-permission: component:read
+  /components/{name}/simulation:
+    get:
+      description: "Whether a component is simulated (it has an endpoint on a node and a product a simulator profile simulates) and, when it is, its node, address, live hits and impairment, the products its profile simulates, and its full API surface: every protocol surface, with its HTTP routes, commands and SNMP OIDs. A component that is not simulated reads simulated false. Gated by simulation:read; the component resolves within the caller's component read scope."
+      operationId: get-component-simulation
+      parameters:
+        - description: The simulated component's name, or a dotted address
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The simulated component's name, or a dotted address
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ComponentSimOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Get a component's simulation
+      x-omniglass-permission: simulation:read
+  /components/{name}/simulation:fire:
+    post:
+      description: "Asks the simulator beside the component's node to run one operation against the simulated component, on one of its protocol surfaces: an HTTP call, a command line (SSH, Telnet, TCP) or an SNMP get, and returns its answer. The simulator answers from the component's live state in process, as its listeners would, so a command's change sticks and the collector sees it; an impairment does not stop it. Audited. Gated by simulation:update, resolved on the component tier. A component that is not simulated is a 409, a surface it does not serve a 422, and no simulator answering a 503."
+      operationId: fire-component-simulation
+      parameters:
+        - description: The simulated component's name, or a dotted address
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The simulated component's name, or a dotted address
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FireSimInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SimOperationResult"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Fire an operation at a simulated component
+      x-omniglass-permission: simulation:update
   /components/{name}:listTags:
     get:
       description: Lists the tags bound directly on a component (not the resolved cascade). Gated by component:read.
@@ -10370,6 +10918,39 @@ paths:
           description: Error
       summary: Get a node's simulator
       x-omniglass-permission: node:read
+  /nodes/{name}/simulation/components:
+    post:
+      description: "Creates a component of a simulated product, at the lowest free address in the simulated block (127.60.0.0/16), with the endpoint the collector reaches it through placed on the node: a driver attach where the driver's inputs are known (an SNMP attach needs the sim-community secret, else it falls back), otherwise a reachability probe on a port the profile serves, lifted as the node's simulator lifts its ports. The simulator serves it from its next pull, with no restart. Gated by simulation:update, and also needs component:create and endpoint:create, each in the caller's own scope. A node with no simulator connected is a 409, and a product no profile simulates a 422."
+      operationId: add-node-simulation-component
+      parameters:
+        - description: The node whose simulator serves the new component
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The node whose simulator serves the new component
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AddSimComponentInputBody"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AddSimComponentOutputBody"
+          description: Created
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Add a simulated component
+      x-omniglass-permission: simulation:update
   /nodes/{name}:enroll:
     post:
       description: Mints (or re-mints) the node's enrollment token and returns it once. The token is stored only as a hash; it is never logged. Gated by node:enroll.
@@ -12197,6 +12778,44 @@ paths:
       summary: Restore all settings to defaults
       x-omniglass-permission: settings:update
       x-omniglass-platform-permission: platform:update
+  /simulation:
+    get:
+      description: Every node a simulator has pulled for since the server started, each with its capabilities, its account of impairments, and the components it simulates within the caller's component read scope, joined to their live hits. A caller sees a node's simulator when its component read scope holds at least one component the node simulates (an all-scope reader sees all of them); no node read is needed. Connected is true when any listed simulator pulled recently. Hits are per server process, not stored. Gated by simulation:read.
+      operationId: get-simulation
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SimFleetOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Get the simulated fleet
+      x-omniglass-permission: simulation:read
+  /simulation/profiles:
+    get:
+      description: "The simulator's profile catalog, embedded in the binary: each profile with the products it simulates and the protocols it speaks. Adding a simulated component names one of these products. Gated by simulation:read."
+      operationId: list-simulation-profiles
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SimProfilesOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: List the simulator's profiles
+      x-omniglass-permission: simulation:read
   /standards:
     get:
       description: Lists the standard catalog, ordered alphabetically by label. A standard is the blueprint a system conforms to. Gated by standard:read.

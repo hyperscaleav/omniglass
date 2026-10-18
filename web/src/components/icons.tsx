@@ -144,6 +144,18 @@ export const Check: Component<P> = (p) => (
 export const Server: Component<P> = (p) => (
   <Svg size={p.size}><rect x="3" y="4" width="18" height="7" rx="1.5" /><rect x="3" y="13" width="18" height="7" rx="1.5" /><path d="M7 7.5h.01M7 16.5h.01" /></Svg>
 );
+// A lab flask: the simulated fleet (#890).
+export const FlaskConical: Component<P> = (p) => (
+  <Svg size={p.size}><path d="M10 2v7.3" /><path d="M14 9.3V2" /><path d="M8.5 2h7" /><path d="M14 9.3a6.5 6.5 0 1 1-4 0" /><path d="M5.5 16h13" /></Svg>
+);
+// A bolt: fire one operation at a simulated component.
+export const Zap: Component<P> = (p) => (
+  <Svg size={p.size}><path d="M13 2 4 14h7l-1 8 9-12h-7z" /></Svg>
+);
+// A plug: a simulated component's link, unplugged or degraded.
+export const Plug: Component<P> = (p) => (
+  <Svg size={p.size}><path d="M12 22v-5" /><path d="M9 8V2" /><path d="M15 8V2" /><path d="M18 8v5a4 4 0 0 1-4 4h-4a4 4 0 0 1-4-4V8z" /></Svg>
+);
 export const Columns: Component<P> = (p) => (
   <Svg size={p.size}><rect x="3" y="3" width="18" height="18" rx="2" /><path d="M12 3v18" /></Svg>
 );

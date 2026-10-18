@@ -45,6 +45,9 @@ type options struct {
 	// simStatus reports the simulators beside the server's nodes. Nil reads
 	// as no simulator anywhere.
 	simStatus SimStatusFunc
+	// simHub is the server's line to its simulators: the fleet view and
+	// firing operations. Nil reads as no simulator anywhere.
+	simHub SimHub
 }
 
 // Option configures NewHandler.
@@ -281,6 +284,8 @@ func registerRoutes(api huma.API, gw storage.Gateway, svc *settings.Service, o o
 	registerSeriesRoutes(api, a, gw)
 	registerTelemetryRoutes(api, a, gw, o.telemetryPub)
 	registerSimulationRoutes(api, a, gw, o.simStatus)
+	registerSimFleetRoutes(api, a, gw, o.simHub)
+	registerImpairmentRoutes(api, a, gw)
 	registerEventTypeRoutes(api, a, gw)
 	registerCommandTypeRoutes(api, a, gw)
 	registerCommandRoutes(api, a, gw)

@@ -14,6 +14,7 @@ import Eyebrow from "../components/Eyebrow";
 import DetailGate from "../components/DetailGate";
 import PlaceCard from "../components/PlaceCard";
 import AcknowledgeButton from "../components/AcknowledgeButton";
+import SimulationSection from "../components/SimulationSection";
 import { FLEET_VIEW_KEY, fleetView } from "../lib/fleet";
 import { COMPONENTS_KEY, listComponents, type Component as FleetComponent } from "../lib/components";
 import { componentSystemsKey, componentSystems } from "../lib/members";
@@ -344,6 +345,8 @@ export default function ComponentLeaf() {
                 </ul>
               </Show>
             </section>
+            {/* A simulated component says so, with its live hits (#890). */}
+            <Show when={component()}>{(c) => <SimulationSection componentId={c().id} />}</Show>
               </div>
             </Show>
           </section>

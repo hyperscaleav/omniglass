@@ -624,6 +624,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/components/{name}/impairment": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get what is broken on a simulated device
+         * @description The impairment an operator set on a simulated component (unplugged, or a degraded link), applied by the simulator beside its node when that simulator runs with impairments and NET_ADMIN. A healthy device reads all zero. Gated by simulation:read; the component resolves within the caller's component read scope.
+         */
+        get: operations["get-component-impairment"];
+        /**
+         * Break or repair a simulated device
+         * @description Sets what is broken on a simulated component: unplugged, or a link with added latency, jitter, loss or a rate limit. It replaces the whole impairment, so a field left out reads as zero (setting a latency on an unplugged device plugs it back in); an empty body repairs it. Returns the impairment as stored, loss rounded to hundredths. Audited. The simulator beside the component's node applies it on its next pull. Gated by simulation:update, whose scope is resolved on the component tier; a component outside the caller's component:read is a non-disclosing 404, and one it can read but not impair is a 403. Jitter above latency, or a value outside its range, is a 422.
+         */
+        put: operations["set-component-impairment"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/components/{name}/logs": {
         parameters: {
             query?: never;
@@ -802,6 +826,46 @@ export interface paths {
         get: operations["get-component-reconciliation"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/components/{name}/simulation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get a component's simulation
+         * @description Whether a component is simulated (it has an endpoint on a node and a product a simulator profile simulates) and, when it is, its node, address, live hits and impairment, the products its profile simulates, and its full API surface: every protocol surface, with its HTTP routes, commands and SNMP OIDs. A component that is not simulated reads simulated false. Gated by simulation:read; the component resolves within the caller's component read scope.
+         */
+        get: operations["get-component-simulation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/components/{name}/simulation:fire": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Fire an operation at a simulated component
+         * @description Asks the simulator beside the component's node to run one operation against the simulated component, on one of its protocol surfaces: an HTTP call, a command line (SSH, Telnet, TCP) or an SNMP get, and returns its answer. The simulator answers from the component's live state in process, as its listeners would, so a command's change sticks and the collector sees it; an impairment does not stop it. Audited. Gated by simulation:update, resolved on the component tier. A component that is not simulated is a 409, a surface it does not serve a 422, and no simulator answering a 503.
+         */
+        post: operations["fire-component-simulation"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1888,6 +1952,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/nodes/{name}/simulation/components": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add a simulated component
+         * @description Creates a component of a simulated product, at the lowest free address in the simulated block (127.60.0.0/16), with the endpoint the collector reaches it through placed on the node: a driver attach where the driver's inputs are known (an SNMP attach needs the sim-community secret, else it falls back), otherwise a reachability probe on a port the profile serves, lifted as the node's simulator lifts its ports. The simulator serves it from its next pull, with no restart. Gated by simulation:update, and also needs component:create and endpoint:create, each in the caller's own scope. A node with no simulator connected is a 409, and a product no profile simulates a 422.
+         */
+        post: operations["add-node-simulation-component"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/nodes/{name}:enroll": {
         parameters: {
             query?: never;
@@ -2894,6 +2978,46 @@ export interface paths {
          * @description Removes every platform override (a factory reset). Gated by settings:update and platform:update.
          */
         post: operations["restore-settings-defaults"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/simulation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get the simulated fleet
+         * @description Every node a simulator has pulled for since the server started, each with its capabilities, its account of impairments, and the components it simulates within the caller's component read scope, joined to their live hits. A caller sees a node's simulator when its component read scope holds at least one component the node simulates (an all-scope reader sees all of them); no node read is needed. Connected is true when any listed simulator pulled recently. Hits are per server process, not stored. Gated by simulation:read.
+         */
+        get: operations["get-simulation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/simulation/profiles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the simulator's profiles
+         * @description The simulator's profile catalog, embedded in the binary: each profile with the products it simulates and the protocols it speaks. Adding a simulated component names one of these products. Gated by simulation:read.
+         */
+        get: operations["list-simulation-profiles"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -4052,6 +4176,37 @@ export interface components {
             /** @description The principal to add to the group */
             principal_id: string;
         };
+        AddSimComponentInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/AddSimComponentInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description Where the component sits, by name or dotted path */
+            location?: string;
+            /** @description The new component's name */
+            name: string;
+            /** @description A product a simulator profile simulates */
+            product: string;
+        };
+        AddSimComponentOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/AddSimComponentOutputBody.json
+             */
+            readonly $schema?: string;
+            /** @description The loopback address the simulated component answers on. */
+            address: string;
+            component: string;
+            /**
+             * Format: int64
+             * @description How many endpoints were created for the collector to reach it.
+             */
+            endpoints: number;
+            node: string;
+        };
         AlarmBody: {
             /**
              * Format: uri
@@ -4322,6 +4477,30 @@ export interface components {
             value: unknown;
             /** @description The stored value's id */
             value_id: string;
+        };
+        ComponentSimOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/ComponentSimOutputBody.json
+             */
+            readonly $schema?: string;
+            /** @description What the simulator reports for the component: serving, hits, and its impairment. */
+            activity?: components["schemas"]["SimDeviceBody"];
+            address?: string;
+            /** @description The node's simulator pulled recently. */
+            connected: boolean;
+            impairments: components["schemas"]["SimImpairmentStatus"];
+            node?: string;
+            product?: string;
+            profile?: string;
+            /** @description The component has an endpoint on a node and a product a profile simulates. */
+            simulated: boolean;
+            summary?: string;
+            /** @description Every protocol surface the simulated component serves, from its profile. */
+            surface?: components["schemas"]["SimSurfaceBody"][] | null;
+            /** @description The products the same profile simulates; changing among them keeps the component's endpoints valid. */
+            variants?: string[] | null;
         };
         ComponentTypeBody: {
             /**
@@ -5248,6 +5427,26 @@ export interface components {
             /** Format: int64 */
             size: number;
         };
+        FireSimInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/FireSimInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description HTTP: the request body */
+            body?: string;
+            /** @description SSH, Telnet or TCP: the command line */
+            command?: string;
+            /** @description HTTP: the method; GET when empty */
+            method?: string;
+            /** @description SNMP: the OID to get */
+            oid?: string;
+            /** @description HTTP: the request path */
+            path?: string;
+            /** @description The surface to fire on, by its name in the component's surface list */
+            surface: string;
+        };
         FleetDotBody: {
             /** @description The component's uuid: what a renderer navigates to when a dot is clicked */
             component: string;
@@ -5438,6 +5637,36 @@ export interface components {
             /** @description True when an admin reset the password and the user must change it before doing anything else; the console gates every route to the change-password form until it clears. */
             must_change_password?: boolean;
             username: string;
+        };
+        ImpairmentFields: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/ImpairmentFields.json
+             */
+            readonly $schema?: string;
+            /**
+             * Format: int64
+             * @description Variation on the delay, in milliseconds; at most the latency
+             */
+            jitter_ms?: number;
+            /**
+             * Format: int64
+             * @description Delay added to traffic toward the device, in milliseconds
+             */
+            latency_ms?: number;
+            /**
+             * Format: double
+             * @description Share of packets toward the device dropped, in percent, to hundredths
+             */
+            loss_pct?: number;
+            /**
+             * Format: int64
+             * @description Bandwidth limit on the device's link, both ways, in kilobits per second; 0 is unlimited
+             */
+            rate_kbit?: number;
+            /** @description Dark on every protocol: connects time out, datagrams and pings go unanswered */
+            unplugged?: boolean;
         };
         ImpersonateInputBody: {
             /**
@@ -7152,6 +7381,13 @@ export interface components {
             /** Format: int64 */
             port_offset: number;
         };
+        SimCommandBody: {
+            /** @description subscribe or unsubscribe on a persistent session; empty for a request and its answer. */
+            action?: string;
+            example?: string;
+            match: string;
+            summary?: string;
+        };
         SimDeviceBody: {
             /** @description The host the component's endpoints target. */
             address: string;
@@ -7166,6 +7402,10 @@ export interface components {
             hits_by_protocol: {
                 [key: string]: number;
             };
+            /** @description Whether the simulator reported applying an impairment to the device in its latest batch. */
+            impaired: boolean;
+            /** @description What an operator has broken on the device; absent when healthy. */
+            impairment?: components["schemas"]["ImpairmentFields"];
             /** Format: date-time */
             last_hit_at?: string;
             last_protocol?: string;
@@ -7173,6 +7413,102 @@ export interface components {
             product: string;
             /** @description Whether the simulator reported serving this device in its latest batch. */
             serving: boolean;
+        };
+        SimFleetOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/SimFleetOutputBody.json
+             */
+            readonly $schema?: string;
+            /** @description Any simulator pulled its device list recently; the console shows its Simulation page only then. */
+            connected: boolean;
+            /** @description Each node a simulator has pulled for since the server started, whose simulated components the caller's scope reaches. */
+            nodes: components["schemas"]["SimNodeBody"][] | null;
+        };
+        SimImpairmentStatus: {
+            available: boolean;
+            error?: string;
+            impaired?: string[] | null;
+            reason?: string;
+        };
+        SimNodeBody: {
+            capabilities: components["schemas"]["SimCapabilities"];
+            /** @description The components the simulator serves, in the caller's component read scope, with their live hits. */
+            components: components["schemas"]["SimDeviceBody"][] | null;
+            connected: boolean;
+            impairments: components["schemas"]["SimImpairmentStatus"];
+            /** Format: date-time */
+            last_seen: string;
+            node: string;
+        };
+        SimOIDBody: {
+            oid: string;
+            /** @description The state path the OID reads. */
+            path: string;
+        };
+        SimOperationResult: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/SimOperationResult.json
+             */
+            readonly $schema?: string;
+            body: string;
+            error?: string;
+            /** Format: int64 */
+            status?: number;
+            /** Format: int64 */
+            took_ms: number;
+            truncated?: boolean;
+        };
+        SimProfileBody: {
+            device_type: string;
+            manufacturer: string;
+            model: string;
+            name: string;
+            /** @description The products this profile simulates, its own first, then its variants. */
+            products: string[] | null;
+            /** @description The protocols its surfaces speak. */
+            protocols: string[] | null;
+            summary: string;
+        };
+        SimProfilesOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/SimProfilesOutputBody.json
+             */
+            readonly $schema?: string;
+            profiles: components["schemas"]["SimProfileBody"][] | null;
+        };
+        SimRouteBody: {
+            example?: string;
+            method: string;
+            path: string;
+            /** @description A route the product's own web UI calls but does not advertise. */
+            private?: boolean;
+            summary?: string;
+        };
+        SimSurfaceBody: {
+            auth_type?: string;
+            commands?: components["schemas"]["SimCommandBody"][] | null;
+            default_user?: string;
+            /** @description Whether the console can fire an operation on this surface. */
+            fireable: boolean;
+            name: string;
+            oids?: components["schemas"]["SimOIDBody"][] | null;
+            /** @description A session that stays open across commands and may push. */
+            persistent?: boolean;
+            /**
+             * Format: int64
+             * @description The port the simulator binds, after any lift of ports below 1024.
+             */
+            port: number;
+            protocol: string;
+            routes?: components["schemas"]["SimRouteBody"][] | null;
+            summary?: string;
+            tls?: boolean;
         };
         SimulationOutputBody: {
             /**
@@ -7185,6 +7521,8 @@ export interface components {
             /** @description A simulator beside this node pulled its device list recently. */
             connected: boolean;
             devices: components["schemas"]["SimDeviceBody"][] | null;
+            /** @description Whether the simulator can apply impairments (and why not), its last apply error, and the devices it impairs. */
+            impairments: components["schemas"]["SimImpairmentStatus"];
             /** Format: date-time */
             last_seen?: string;
         };
@@ -9298,6 +9636,74 @@ export interface operations {
             };
         };
     };
+    "get-component-impairment": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The simulated component's name, or a dotted address */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImpairmentFields"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "set-component-impairment": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The simulated component's name, or a dotted address */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImpairmentFields"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImpairmentFields"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     "list-component-logs": {
         parameters: {
             query?: never;
@@ -9625,6 +10031,74 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ReconciliationOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "get-component-simulation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The simulated component's name, or a dotted address */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ComponentSimOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "fire-component-simulation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The simulated component's name, or a dotted address */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FireSimInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SimOperationResult"];
                 };
             };
             /** @description Error */
@@ -12033,6 +12507,42 @@ export interface operations {
             };
         };
     };
+    "add-node-simulation-component": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The node whose simulator serves the new component */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AddSimComponentInputBody"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AddSimComponentOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     "enroll-node": {
         parameters: {
             query?: never;
@@ -14253,6 +14763,64 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "get-simulation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SimFleetOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "list-simulation-profiles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SimProfilesOutputBody"];
+                };
             };
             /** @description Error */
             default: {

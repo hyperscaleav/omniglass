@@ -343,7 +343,7 @@ interfaces:
   - name: snmp
     protocol: snmp
     port: 161
-    doc: { summary: "SNMP monitoring interface", tags: [monitoring] }
+    doc: { summary: "SNMP monitoring", tags: [monitoring] }
     api_surface: polaris-dsp
     auth:
       community: "public"

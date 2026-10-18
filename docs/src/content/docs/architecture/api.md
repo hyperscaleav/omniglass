@@ -288,12 +288,38 @@ password). It is the surface's **one public route**, unauthenticated because the
 authentication, and an invalid token is a **401** (a claim must not disclose which nodes exist). A node
 is fleet-wide, so `node:read` and `node:create` require an **all-scope** grant.
 
+**A simulated device can be broken on purpose.** `GET` and `PUT /components/{name}/impairment`
+(gated `simulation:read` and `simulation:update`, component-scoped, the write audited) read and set
+what is broken on a simulated component: unplugged, or latency, jitter and loss toward it and a rate
+limit both ways. A set replaces the whole impairment (a field left out is zero, an empty body repairs
+the device) and returns it as stored; jitter above latency or a value out of range is a 422. The
+simulator beside the component's node applies it ([simulation](/architecture/simulation/)).
+
 **A node's simulator is a read beside it.** `GET /nodes/{name}/simulation` (gated `node:read`, all-scope)
 lists the components a [simulator](/architecture/simulation/) beside the node serves (each component with an
 endpoint placed on the node and inside the caller's component read scope, its product and target host),
 joined to the simulator's stated capabilities
 and the hits the server has seen per device. Hits are a live signal kept in the server's memory, not
 stored, so they start from zero when the server restarts; a node with no simulator reads `connected: false`.
+
+**The simulated fleet has its own reads and two writes.** `GET /simulation` (gated `simulation:read`)
+is every node whose simulator has pulled since the server started and simulates a component in the caller's
+scope (an all-scope reader sees every one; no node read is needed), each
+with its capabilities, its account of impairments and its simulated components in the caller's component scope;
+`connected` is true when any of them pulled recently, which is what shows the console's Simulation page.
+`GET /simulation/profiles` is the simulator's embedded profile catalog, each profile with the products it
+simulates. `GET /components/{name}/simulation` says whether a component is simulated and, when it is,
+gives its node, address, live hits, impairment, the products its profile simulates, and its full API
+surface from the profile (every protocol surface, with its HTTP routes, commands and SNMP OIDs, each port as the
+simulator binds it). `POST /components/{name}/simulation:fire` (gated `simulation:update`, audited) asks
+the simulator beside the component's node, over the bus, to run one operation from that surface (an HTTP
+call, a command line or an SNMP get) and returns the component's answer: a component that is not simulated
+is a 409, a surface it does not serve a 422, and no simulator answering a 503.
+`POST /nodes/{name}/simulation/components` (gated `simulation:update`, and also needing `component:create`
+and `endpoint:create`, each in the caller's own scope) adds a simulated component: a component of a
+simulated product at the lowest free address in `127.60.0.0/16`, with the endpoint the collector reaches
+it through placed on the node; a node with no simulator connected is a 409, a product no profile
+simulates a 422.
 
 **The endpoint is authored; the task is derived.** An endpoint is addressed by a surrogate `id` and
 **named by its protocol**: `name` derives from `transport`, unique **within its component**

@@ -399,6 +399,10 @@ var operatorStrings = []string{
 	filepath.Join("..", "..", "web", "src", "components", "ReachabilityPanel.tsx"),
 	filepath.Join("..", "..", "web", "src", "components", "endpointBlades.tsx"),
 	filepath.Join("..", "..", "web", "src", "pages", "ComponentLeaf.tsx"),
+	// The simulation surfaces, which show a profile's protocol surfaces.
+	filepath.Join("..", "..", "web", "src", "pages", "Simulation.tsx"),
+	filepath.Join("..", "..", "web", "src", "components", "SimComponentDrawer.tsx"),
+	filepath.Join("..", "..", "web", "src", "components", "SimulationSection.tsx"),
 	filepath.Join("..", "..", "README.md"),
 	// The generated OpenAPI document carries every Huma operation and field
 	// description (#451): the doc: tags flow to the spec, the CLI reference,

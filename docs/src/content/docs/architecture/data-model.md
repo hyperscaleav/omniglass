@@ -325,6 +325,10 @@ collection: {
     id: bigint {constraint: primary_key}
     node_id: uuid {constraint: foreign_key}
   }
+  sim_impairment: {
+    shape: sql_table
+    component_id: uuid {constraint: primary_key}
+  }
   task: {
     shape: sql_table
     id: text {constraint: primary_key}
@@ -421,6 +425,7 @@ catalog.system_type.parent_id -> catalog.system_type.id
 collection.node.location_id -> fleet.location.id
 collection.node.principal_id -> identity.principal.id
 collection.node_log.node_id -> collection.node.principal_id
+collection.sim_impairment.component_id -> fleet.component.id
 collection.task.endpoint_id -> fleet.endpoint.id
 config.credential.principal_id -> identity.principal.id
 config.secret.component_id -> fleet.component.id

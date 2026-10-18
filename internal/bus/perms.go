@@ -9,14 +9,20 @@
 package bus
 
 import (
+	"time"
+
 	"github.com/hyperscaleav/omniglass/internal/collection"
 	"github.com/nats-io/nats-server/v2/server"
 )
 
+// simopTimeout is how long the server waits for a simulator's answer to an
+// operation, and so how long the simulator's one reply stays permitted.
+const simopTimeout = 5 * time.Second
+
 // nodePermissions is the subject grant for one node: it may publish only its own
 // worklist request, heartbeat, telemetry, and simulator subjects, and subscribe
-// only to its own worklist-changed signal and its own request-reply inbox
-// namespace. This is the per-node credential isolation, expressed as subject
+// only to its own worklist-changed signal, its own request-reply inbox
+// namespace, and the operations the server asks of its simulator. This is the per-node credential isolation, expressed as subject
 // permissions. Pure: no I/O, unit-testable.
 func nodePermissions(node string) *server.Permissions {
 	return &server.Permissions{
@@ -33,7 +39,13 @@ func nodePermissions(node string) *server.Permissions {
 		Subscribe: &server.SubjectPermission{Allow: []string{
 			collection.WorklistChangedSubject(node),
 			collection.InboxPrefix(node) + ".>",
+			// The simulator beside the node takes the server's operation
+			// requests for it.
+			collection.SimopSubject(node),
 		}},
+		// One reply to each request the node received, so the simulator
+		// can answer an operation without a grant to publish anywhere else.
+		Response: &server.ResponsePermission{MaxMsgs: 1, Expires: simopTimeout},
 	}
 }
 

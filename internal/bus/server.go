@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/hyperscaleav/omniglass/internal/scope"
 	"log/slog"
@@ -294,6 +295,37 @@ type SimStatus = simhub.Status
 // pulled since this server started.
 func (s *Server) SimStatus(node string) (SimStatus, bool) { return s.sims.Status(node) }
 
+// ErrNoSimulator is FireSimOperation's answer when no simulator beside the
+// node is listening (or none answered in time).
+var ErrNoSimulator = collection.ErrNoSimulator
+
+// Nodes lists the nodes whose simulator has pulled since the server
+// started.
+func (s *Server) Nodes() []string { return s.sims.Nodes() }
+
+// FireSimOperation asks the simulator beside node to run op against one of
+// its devices and returns the device's answer.
+func (s *Server) FireSimOperation(ctx context.Context, node string, op collection.SimOperation) (collection.SimOperationResult, error) {
+	var res collection.SimOperationResult
+	b, err := json.Marshal(op)
+	if err != nil {
+		return res, err
+	}
+	ctx, cancel := context.WithTimeout(ctx, simopTimeout)
+	defer cancel()
+	msg, err := s.nc.RequestWithContext(ctx, collection.SimopSubject(node), b)
+	if errors.Is(err, nats.ErrNoResponders) || errors.Is(err, context.DeadlineExceeded) || errors.Is(err, nats.ErrTimeout) {
+		return res, ErrNoSimulator
+	}
+	if err != nil {
+		return res, fmt.Errorf("bus: sim operation: %w", err)
+	}
+	if err := json.Unmarshal(msg.Data, &res); err != nil {
+		return res, fmt.Errorf("bus: sim operation reply: %w", err)
+	}
+	return res, nil
+}
+
 // subscribeSim answers simulators' device-list pulls and records their hits.
 // Both ride the node's subject grant, so the node name taken from the
 // subject is the simulator's own.
@@ -315,9 +347,12 @@ func (s *Server) subscribeSim() error {
 		reply := collection.SimlistReply{Devices: make([]collection.SimDevice, 0, len(devices))}
 		ids := make([]string, 0, len(devices))
 		for _, d := range devices {
-			reply.Devices = append(reply.Devices, collection.SimDevice{
-				ComponentID: d.ComponentID, Name: d.Name, Product: d.Product, Address: d.Address,
-			})
+			sd := collection.SimDevice{ComponentID: d.ComponentID, Name: d.Name, Product: d.Product, Address: d.Address}
+			if d.Impairment != nil {
+				imp := collection.SimImpairment(*d.Impairment)
+				sd.Impairment = &imp
+			}
+			reply.Devices = append(reply.Devices, sd)
 			ids = append(ids, d.ComponentID)
 		}
 		s.sims.Pulled(node, req.Capabilities, ids)

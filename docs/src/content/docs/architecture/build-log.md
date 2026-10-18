@@ -6223,3 +6223,39 @@ binding, recording a property target's value as a validated, transition-only obs
 check runs when an observation lands; and a server sweep times out what nothing settles. A command
 with no instance is judged on its dispatched endpoint's series. `newtron-nvp`'s `set-input` settles
 from its reply, and the simulator end-to-end test now asserts the command settles.
+
+### Simulated devices can be broken on purpose (#885 rollup 2, slice #889)
+
+An operator unplugs, slows, or degrades a simulated device through `PUT /components/{name}/impairment`
+(`simulation:update`, audited), and the simulator beside its node, started with `--impairments` and
+`NET_ADMIN`, applies it through netlink: an nftables table drops traffic to unplugged devices and
+ICMP echoes to loopback addresses that are no device (so ping tells the truth), and a netem class per
+degraded device adds its delay, jitter, loss and rate. The release image is distroless, so no `nft`
+or `tc` binary is involved. The real applier and the whole loop are tested in a `NET_ADMIN`
+container (`make test-netadmin`, part of `make test` and CI), never on the host: unplugging fails the
+collector's ping and TCP checks and both endpoints read down, replugging recovers, a 300 ms delay
+shows in the connect time, and a rate limit holds both ways (the review caught it shaping only
+the requests; a second, rate-only class now takes the device's replies, so the latency still counts
+once). Two findings came out of it. Impairments are opt-in, because a simulator
+run as root on a workstation would otherwise rewrite the host's firewall. And an unplugged device's
+system verdict does not move: a component's condition is its active alarms, and nothing raises one
+from reachability yet (#819).
+
+### The simulated fleet in the console, and the simulator documented (#885 rollup 2, slices #890 and #891)
+
+The simulated fleet gets its surfaces. `GET /simulation` is every simulator and its devices,
+`GET /simulation/profiles` the catalog, and `GET /components/{name}/simulation` a device's API surface
+read from its profile (every protocol surface with its routes, commands and OIDs, ports as the
+simulator binds them). `POST /components/{name}/simulation:fire` sends one operation over the bus to the
+simulator beside the component's node, on a new subject of the node's own grant (answered under a
+one-reply response permission), and the device answers in process from its live state, so a command's
+change sticks and the fire lights up its row; the real-simulator e2e fires through the CLI and sees the
+answer and the hit. `POST /nodes/{name}/simulation/components` adds a simulated component through the dev seed's planner,
+promoted to `internal/simfleet`, and the simulator serves it on its next pull. The console shows a
+Simulation page (a card per simulator, a table of its simulated components whose rows light up on a hit), a simulation drawer (status,
+impairment controls, the API surface and a fire form), and a Simulation section on a simulated
+component's page, all hidden while no simulator is connected. The docs gain the operator's guide
+(simulate a fleet), the install guide's simulator privileges (ports below 1024, ping, `NET_ADMIN`, macOS
+aliases), and ADR-0142 for the run mode. The profile vocabulary meets ADR-0134 on the way: a profile's
+"interfaces" are its protocol surfaces wherever an operator reads them, and the fire body names a
+`surface`.

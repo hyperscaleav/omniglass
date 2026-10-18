@@ -35,6 +35,9 @@ var Subsystems = []Cluster{
 	}},
 	{Name: "collection", Tables: []string{
 		"node", "task", "node_log",
+		// sim_impairment is what an operator broke on a simulated device (#889),
+		// applied by the simulator beside its node.
+		"sim_impairment",
 	}},
 	{Name: "config", Tables: []string{
 		"setting_override", "variable",

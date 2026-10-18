@@ -177,7 +177,21 @@ devices placed on it, and the node's simulation view shows what it serves and wh
 ```sh
 omniglass sim run --server https://omniglass.example --name edge-hq --token ogp_... --port-offset 10000   # serve edge-hq's simulated devices
 omniglass node simulation edge-hq   # connected?, capabilities, and hits per simulated device
+omniglass component impairment set panel-1 --unplugged       # break it: dark on every protocol
+omniglass component impairment set panel-1 --latency-ms 300  # or slow it
+omniglass component impairment set panel-1                   # repair it
+omniglass simulation get                                     # every simulator, its devices and their hits
+omniglass simulation profiles                                # the profile catalog and the products each simulates
+omniglass component simulation get panel-1                   # its API surface: protocols, routes, commands, OIDs
+omniglass component simulation fire panel-1 --surface nvp --command "SET INPUT hdmi2"   # the device answers
+omniglass simulation add-component edge-hq --name panel-9 --product newtron-panel-7       # served on the next pull
 ```
+
+A set replaces the whole impairment, so name every fault you want at once: `--latency-ms 300` on an
+unplugged device plugs it back in.
+
+Impairments apply only on a simulator started with `--impairments` and `NET_ADMIN`, in a namespace
+of its own, since it rewrites that namespace's firewall.
 
 Locally, `make dev-sim` (beside `make dev`) enrolls the dev fleet's node once, keeps its token in
 `bin/edge-hq.token`, and runs the simulator and the node side by side, so the seeded fleet is

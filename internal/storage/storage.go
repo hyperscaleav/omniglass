@@ -22,6 +22,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/scope"
 	"github.com/hyperscaleav/omniglass/internal/secret"
 	"github.com/hyperscaleav/omniglass/internal/settings"
+	"github.com/hyperscaleav/omniglass/internal/sim/impair"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -547,6 +548,18 @@ type Gateway interface {
 	// NodeSimDevices lists the components a simulator beside the node serves,
 	// within the component read scope.
 	NodeSimDevices(ctx context.Context, name string, read scope.Set) ([]SimDevice, error)
+	// GetSimImpairment and SetSimImpairment read and record what is broken on
+	// a simulated component (by resolved id; the caller checks scope).
+	GetSimImpairment(ctx context.Context, componentID string) (impair.Impairment, error)
+	SetSimImpairment(ctx context.Context, actorID, componentID string, imp impair.Impairment) (impair.Impairment, error)
+	// ComponentSimNode, SimAddressesInUse and AuditSimOperation back the
+	// console's simulation surfaces: the node whose simulator serves a
+	// component, the addresses a new simulated device must avoid, and the
+	// audit row for an operation fired at one.
+	ComponentSimNode(ctx context.Context, componentID string) (string, error)
+	SimAddressesInUse(ctx context.Context) (map[string]bool, error)
+	AuditSimOperation(ctx context.Context, actorID, componentID string, op any) error
+	WithSimAddressLock(ctx context.Context, fn func() error) error
 	// ResolveTaskOwner binds a task's owner component and confines the node to its
 	// own tasks, for the telemetry ingest consumer.
 	ResolveTaskOwner(ctx context.Context, taskID, nodeName string) (TaskOwner, bool, error)

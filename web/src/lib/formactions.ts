@@ -10,16 +10,28 @@ import { type Component, type Context, createContext, createSignal, onCleanup, u
 // bar.
 //
 // Deliberately smaller than BladeEdit. There is no read -> Edit -> Save cycle here
-// (a create form is always "editing"), and no secondary or destructive slot, because
-// no create form has ever wanted one. Add them when a caller does, not before.
+// (a create form is always "editing"). The destructive and secondary slots arrived
+// with their first caller, the simulated component drawer (#890): Remove at the
+// rail's left like a blade's Delete, Repair as a quiet sibling of Save. A body that
+// only offers a destructive action (a reader who may remove but not edit) binds
+// no submit, and the rail draws without one.
+
+// An extra rail action: a label, an optional icon component, and what it does.
+export type FormAside = {
+  label: string;
+  icon?: Component<{ size?: number }>;
+  onClick: () => void;
+  disabled?: boolean;
+};
 
 export type FormBinding = {
-  submitLabel: string;
+  submitLabel?: string;
   // The icon COMPONENT (Button sizes it), not an element. No default: an explicit
   // Plus on a create and an explicit Check on a confirm beats a magic one that is
   // silently wrong on the surface that is not creating anything.
   submitIcon?: Component<{ size?: number }>;
-  submit: () => void;
+  // Absent -> no submit button (see the destructive-only case above).
+  submit?: () => void;
   // In flight: the submit button spins and both buttons disable.
   busy?: () => boolean;
   // The form is incomplete or invalid, so submit is not offered.
@@ -28,6 +40,10 @@ export type FormBinding = {
   // is the only way out, which is right for a one-button create.
   cancel?: () => void;
   cancelLabel?: string;
+  // A destructive action drawn at the rail's left, apart from the rest.
+  destructive?: () => FormAside | undefined;
+  // A quiet action drawn just before submit.
+  secondary?: () => FormAside | undefined;
 };
 
 export type FormActions = {
