@@ -7492,10 +7492,10 @@ export interface components {
             /** @description Whether the simulator reported serving this component in its latest batch. */
             serving: boolean;
             /**
-             * @description The simulated component's state, most urgent first: offline (its simulator stopped reporting), pending (added since the simulator's last pull), failed (handed to the simulator but not served), serving.
+             * @description What the simulator is doing with the component, most urgent first: offline (its simulator stopped reporting), starting (added since the simulator's last pull, or handed over moments ago), failed (handed to the simulator but not started), running.
              * @enum {string}
              */
-            state: "serving" | "pending" | "failed" | "offline";
+            state: "running" | "starting" | "failed" | "offline";
         };
         SimFleetOutputBody: {
             /**

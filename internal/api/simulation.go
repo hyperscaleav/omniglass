@@ -32,7 +32,7 @@ type simDeviceBody struct {
 	Product        string            `json:"product" doc:"The component's product; its name selects the simulator profile."`
 	Address        string            `json:"address" doc:"The host the component's endpoints target."`
 	Serving        bool              `json:"serving" doc:"Whether the simulator reported serving this component in its latest batch."`
-	State          string            `json:"state" enum:"serving,pending,failed,offline" doc:"The simulated component's state, most urgent first: offline (its simulator stopped reporting), pending (added since the simulator's last pull), failed (handed to the simulator but not served), serving."`
+	State          string            `json:"state" enum:"running,starting,failed,offline" doc:"What the simulator is doing with the component, most urgent first: offline (its simulator stopped reporting), starting (added since the simulator's last pull, or handed over moments ago), failed (handed to the simulator but not started), running."`
 	Hits           int               `json:"hits" doc:"Connections and requests the simulated device has answered since the server started."`
 	HitsByProtocol map[string]int    `json:"hits_by_protocol"`
 	LastHitAt      *time.Time        `json:"last_hit_at,omitempty"`
@@ -134,9 +134,9 @@ func simState(connected, listed, serving bool, handedFor time.Duration) string {
 	case !connected:
 		return "offline"
 	case serving:
-		return "serving"
+		return "running"
 	case !listed || handedFor < simStartGrace:
-		return "pending"
+		return "starting"
 	}
 	return "failed"
 }

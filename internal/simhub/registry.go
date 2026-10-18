@@ -39,7 +39,7 @@ type Status struct {
 	// listed was added since.
 	Listed map[string]bool
 	// ListedSince is when each listed component was first handed over, so
-	// one handed over a moment ago reads as pending, not failed, until the
+	// one handed over a moment ago reads as starting, not failed, until the
 	// simulator's next report.
 	ListedSince map[string]time.Time
 	Devices     map[string]DeviceHits

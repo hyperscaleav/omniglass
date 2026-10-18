@@ -76,8 +76,8 @@ func TestSimSurfaceSpeaksTheVocabulary(t *testing.T) {
 }
 
 // A simulated component's state, most urgent first: offline when its
-// simulator stopped reporting, pending when added since the simulator's last
-// pull, failed when handed over but not served, serving otherwise.
+// simulator stopped reporting, starting when added since the simulator's
+// last pull, failed when handed over but not started, running otherwise.
 func TestSimulationBodyStates(t *testing.T) {
 	now := time.Unix(1_800_000_000, 0)
 	devs := []storage.SimDevice{{ComponentID: "on", Name: "a"}, {ComponentID: "new", Name: "b"}, {ComponentID: "broken", Name: "c"}, {ComponentID: "fresh", Name: "d"}}
@@ -89,8 +89,8 @@ func TestSimulationBodyStates(t *testing.T) {
 	for _, d := range simulationBody(devs, st, true, now).Body.Devices {
 		got[d.ComponentID] = d.State
 	}
-	// Just handed over and not yet reported: still pending, not failed.
-	if got["on"] != "serving" || got["new"] != "pending" || got["broken"] != "failed" || got["fresh"] != "pending" {
+	// Just handed over and not yet reported: still starting, not failed.
+	if got["on"] != "running" || got["new"] != "starting" || got["broken"] != "failed" || got["fresh"] != "starting" {
 		t.Fatalf("states = %v", got)
 	}
 	stale := simulationBody(devs, st, true, now.Add(10*time.Minute)).Body.Devices
