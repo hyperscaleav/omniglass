@@ -45,8 +45,16 @@ export type NavItem = {
   // entries), a single resource would silently lock a reader of only one kind
   // out of the whole page; the faces inside permission-filter themselves.
   anyResource?: string[];
+  // A runtime condition the entry also waits on, beyond its permission: the
+  // sidebar shows the entry only while the condition holds (filterWhen). The
+  // route itself stays registered and gated as usual, so a bookmark still
+  // resolves; only the door hides. "simulator" is a simulator connected to the
+  // server (GET /simulation reports connected).
+  when?: NavCondition;
   children?: NavChild[];
 };
+
+export type NavCondition = "simulator";
 
 export const navItems: NavItem[] = [
   { label: "Home", path: "/", icon: Icons.Home, live: true, hint: "Your environment at a glance, and what needs attention right now." },
@@ -66,6 +74,10 @@ export const navItems: NavItem[] = [
   // (#608). Nodes is infrastructure, not fleet inventory, so it keeps its own
   // door.
   { label: "Nodes", path: "/nodes", icon: Icons.Server, live: true, resource: "node", hint: "Collection daemons: their health, enrollment, and the collection tasks assigned to each." },
+  // Simulation (#890): the simulated fleet a simulator beside a node serves,
+  // its live hits, impairments and each device's API surface. A lab and demo
+  // surface, so its door shows only while a simulator is connected.
+  { label: "Simulation", path: "/simulation", icon: Icons.FlaskConical, live: true, resource: "simulation", when: "simulator", hint: "The simulated devices a simulator serves beside a node: the hits collection lands on them, what is broken, and each device's API surface." },
   {
     label: "Values", icon: Icons.Sliders, hint: "Operator-set values and content: interpolation variables, encrypted secrets, and reconciled component config, each resolved down the scope cascade, plus the files kept with the fleet.",
     children: [
@@ -123,6 +135,13 @@ export function filterNav(items: NavItem[], allow: (tokens: string[]) => boolean
     }
   }
   return out;
+}
+
+// filterWhen drops the entries whose runtime condition does not hold. Separate
+// from filterNav because a condition is not a permission: the route guard reads
+// permissions only, so a hidden-by-condition entry's address still resolves.
+export function filterWhen(items: NavItem[], holds: (c: NavCondition) => boolean): NavItem[] {
+  return items.filter((i) => !i.when || holds(i.when));
 }
 
 // Off-rail pages: routed surfaces with no rail entry of their own. The Catalog

@@ -51,6 +51,10 @@ export const ROUTE_MANIFEST: RouteEntry[] = [
   { path: "/components", shell: "protected", page: "FleetRedirect", smoke: "/components" },
   { path: "/components/:id", shell: "protected", page: "Components", smoke: `/components/${UNKNOWN_UUID}` },
   { path: "/nodes", shell: "protected", page: "Nodes", smoke: "/nodes" },
+  // The simulated fleet (#890); its sidebar door shows only while a simulator
+  // is connected, but the route is always registered (and smoked, so its
+  // disconnected face renders without a console error too).
+  { path: "/simulation", shell: "protected", page: "Simulation", smoke: "/simulation" },
   { path: "/files", shell: "protected", page: "Files", smoke: "/files" },
   { path: "/files/:id", shell: "protected", page: "Files", smoke: `/files/${UNKNOWN_UUID}` },
   { path: "/profile", shell: "protected", page: "Profile", smoke: "/profile" },

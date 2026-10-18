@@ -289,6 +289,16 @@ html[data-density="compact"] { --og-row-h: 2.1rem; --og-pad-card: 0.9rem; --og-g
 @keyframes ogp { 0% { transform: scale(1); opacity: .7 } 70% { transform: scale(2.6); opacity: 0 } 100% { opacity: 0 } }
 @media (prefers-reduced-motion: reduce) { .og-pulse::after { animation: none } }
 
+/* a hit landing on a simulated device (#890): one brief flash of the brand teal
+   on the tile, re-armed by the page each time the device's hit count rises.
+   Reduced motion keeps the signal as a still teal edge for the same moment. */
+.og-blink { animation: og-blink .7s ease-out; }
+@keyframes og-blink {
+  0% { border-color: var(--color-primary); box-shadow: 0 0 0 2px color-mix(in oklab, var(--color-primary) 55%, transparent); background-color: color-mix(in oklab, var(--color-primary) 14%, var(--color-base-100)); }
+  100% { box-shadow: 0 0 0 0 transparent; }
+}
+@media (prefers-reduced-motion: reduce) { .og-blink { animation: none; border-color: var(--color-primary); } }
+
 /* the page/section enter transition (used by the list and detail surfaces). */
 .fade-in { animation: og-fade-in .18s ease both; }
 @keyframes og-fade-in { from { opacity: 0; transform: translateY(2px) } to { opacity: 1; transform: none } }

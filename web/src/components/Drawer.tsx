@@ -1,6 +1,6 @@
 import { type JSX, Show } from "solid-js";
 import { Dialog } from "@kobalte/core/dialog";
-import { X } from "./icons";
+import { Trash, X } from "./icons";
 import Button from "./Button";
 import PanelFooter from "./PanelFooter";
 import { FormActionsContext, createFormActions } from "../lib/formactions";
@@ -19,6 +19,9 @@ export default function Drawer(props: {
   onClose: () => void;
   title: JSX.Element;
   headerExtra?: JSX.Element;
+  // A wider panel for a body that reads more than a form (the simulated
+  // device's API surface and its answers, #890).
+  wide?: boolean;
   children: JSX.Element;
 }) {
   const actions = createFormActions();
@@ -26,7 +29,10 @@ export default function Drawer(props: {
     <Dialog open={props.open} onOpenChange={(o) => !o && props.onClose()}>
       <Dialog.Portal>
         <Dialog.Overlay class="fixed inset-0 z-60 bg-black/45" />
-        <Dialog.Content class="fixed inset-y-0 right-0 z-60 flex w-full max-w-md flex-col border-l border-base-300 bg-base-100 shadow-2xl sm:max-w-md">
+        <Dialog.Content
+          class="fixed inset-y-0 right-0 z-60 flex w-full flex-col border-l border-base-300 bg-base-100 shadow-2xl"
+          classList={{ "max-w-md": !props.wide, "max-w-2xl": !!props.wide }}
+        >
           <header class="flex items-center justify-between gap-3 border-b border-base-300 px-4 py-3">
             <Dialog.Title class="min-w-0 flex-1 truncate text-sm font-semibold">{props.title}</Dialog.Title>
             <div class="flex flex-none items-center gap-1">
@@ -41,6 +47,13 @@ export default function Drawer(props: {
             <Show when={actions.binding()}>
               {(b) => (
                 <PanelFooter>
+                  <Show when={b().destructive?.()}>
+                    {(d) => (
+                      <Button intent="danger" icon={d().icon ?? Trash} onClick={() => d().onClick()} disabled={d().disabled || b().busy?.()}>
+                        {d().label}
+                      </Button>
+                    )}
+                  </Show>
                   <div class="ml-auto flex items-center gap-2">
                     <Show when={b().cancel}>
                       {(c) => (
@@ -49,15 +62,26 @@ export default function Drawer(props: {
                         </Button>
                       )}
                     </Show>
-                    <Button
-                      intent="action"
-                      icon={b().submitIcon}
-                      onClick={() => b().submit()}
-                      loading={b().busy?.()}
-                      disabled={b().disabled?.()}
-                    >
-                      {b().submitLabel}
-                    </Button>
+                    <Show when={b().secondary?.()}>
+                      {(s) => (
+                        <Button icon={s().icon} onClick={() => s().onClick()} disabled={s().disabled || b().busy?.()}>
+                          {s().label}
+                        </Button>
+                      )}
+                    </Show>
+                    <Show when={b().submit}>
+                      {(submit) => (
+                        <Button
+                          intent="action"
+                          icon={b().submitIcon}
+                          onClick={() => submit()()}
+                          loading={b().busy?.()}
+                          disabled={b().disabled?.()}
+                        >
+                          {b().submitLabel}
+                        </Button>
+                      )}
+                    </Show>
                   </div>
                 </PanelFooter>
               )}

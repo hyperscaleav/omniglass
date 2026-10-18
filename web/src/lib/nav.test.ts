@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { filterNav, lookupNav, navItems, OFF_RAIL, routeAllowed, routeTokens, sectionLabel, STUBS, type NavItem } from "./nav";
+import { filterNav, filterWhen, lookupNav, navItems, OFF_RAIL, routeAllowed, routeTokens, sectionLabel, STUBS, type NavItem } from "./nav";
 import { can, type Me } from "./auth";
 
 const Dummy = () => null;
@@ -348,5 +348,14 @@ describe("the fleet any-of gate", () => {
   it("keeps Explore in the rail for a system-only reader and drops it for neither", () => {
     expect(filterNav(navItems, (t) => t[0] === "system").map((i) => i.label)).toContain("Explore");
     expect(filterNav(navItems, (t) => t[0] === "node").map((i) => i.label)).not.toContain("Explore");
+  });
+});
+
+describe("filterWhen", () => {
+  it("hides the Simulation door until a simulator is connected, while its route stays gated and reachable (#890)", () => {
+    const labels = (holds: boolean) => filterWhen(filterNav(navItems, () => true), () => holds).map((i) => i.label);
+    expect(labels(false)).not.toContain("Simulation");
+    expect(labels(true)).toContain("Simulation");
+    expect(routeTokens("/simulation")).toEqual(["simulation", "read"]);
   });
 });
