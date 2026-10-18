@@ -3,8 +3,14 @@
 # holds every other such product to a profile, so a new seeded product
 # either gains one or is listed here.
 unsimulated:
-  boreal-cast-m1: "#893: a media player on http-json, unlike the Boreal display profile"
+  boreal-beam-340: "#899: a projector, not a display"
+  boreal-cast-m1: "#893: a media player on http-json"
+  kestrel-gaze-p2: "#897: a PTZ camera, not a video bar"
+  kestrel-relay-c1: "#897: a codec, not a video bar"
   lyra-arc-a2: "#894: no Lyra profile yet"
   lyra-hx-1: "#894: no Lyra profile yet"
   meridian-mx-84: "#895: no Meridian profile yet"
   meridian-xl-1: "#895: no Meridian profile yet"
+  newtron-core-3: "#896: a control processor; the panel's surface is a subset of it"
+  newtron-slate-5: "#896: a scheduling panel, not a touch panel"
+  polaris-amp-4100: "#898: an amplifier, not a DSP"

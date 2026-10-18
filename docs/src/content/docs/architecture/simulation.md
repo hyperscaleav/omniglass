@@ -43,9 +43,11 @@ the binary needs nothing on disk:
 - **templates** render responses from live state, so a device's HTTP status route and its CLI
   `show channels` read the same values.
 
-A device profile is named for the product it simulates, and may list other products of its family
-that speak the same driver, each with its own identity (a model name) over the profile's defaults:
-the Boreal Edge line shares one display profile, the Newtron panels and processor share one. Every
+A device profile is named for the product it simulates, and may list other products that are the
+same kind of device (the same component type), each with its own identity (a model name) over the
+profile's defaults: the Boreal Edge displays in every size share one profile. A different kind of
+device never stands in, even on the same driver: a touch panel's surface is a subset of a control
+processor's, so each has its own. Every
 seeded product on the network is served by a profile or listed, with its issue, in the catalog's
 `coverage.yaml`, and a test holds the two catalogs to that. Products with no driver (a passive speaker,
 an analog microphone) are not on the network and are not simulated.

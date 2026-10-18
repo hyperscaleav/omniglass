@@ -23,16 +23,19 @@ func TestEveryDeviceProfileNamesASeededProduct(t *testing.T) {
 	}
 	var facts struct {
 		Products []struct {
-			ID       string `json:"id"`
-			DriverID string `json:"driver_id"`
+			ID            string `json:"id"`
+			DriverID      string `json:"driver_id"`
+			ComponentType string `json:"component_type"`
 		} `json:"products"`
 	}
 	if err := json.Unmarshal(raw, &facts); err != nil {
 		t.Fatal(err)
 	}
 	seeded := map[string]bool{}
+	typeOf := map[string]string{}
 	for _, p := range facts.Products {
 		seeded[p.ID] = true
+		typeOf[p.ID] = p.ComponentType
 	}
 	store, err := profile.LoadStoreFS(profiles.FS)
 	if err != nil {
@@ -50,6 +53,13 @@ func TestEveryDeviceProfileNamesASeededProduct(t *testing.T) {
 		for _, v := range p.Products {
 			if !seeded[v.Name] {
 				t.Errorf("device profile %q lists %q, which the seed does not ship", name, v.Name)
+			}
+			// A shared profile is one device in variants (a display line in
+			// sizes), never a different device: a touch panel's surface is a
+			// subset of a control processor's, so one cannot stand in for
+			// the other.
+			if typeOf[v.Name] != typeOf[name] {
+				t.Errorf("device profile %q (component type %s) lists %q (component type %s); a profile serves variants of one kind of device", name, typeOf[name], v.Name, typeOf[v.Name])
 			}
 		}
 	}

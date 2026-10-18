@@ -147,6 +147,7 @@ type factsProduct struct {
 	Label           string                 `json:"label"`
 	VendorID        string                 `json:"vendor_id,omitempty"`
 	DriverID        string                 `json:"driver_id,omitempty"`
+	ComponentType   string                 `json:"component_type,omitempty"`
 	Kind            string                 `json:"kind,omitempty"`
 	ParentProductID string                 `json:"parent_product_id,omitempty"`
 	Properties      []factsProductProperty `json:"properties,omitempty"`
@@ -370,7 +371,7 @@ func FactsJSON() ([]byte, error) {
 	for _, p := range ps.Products {
 		fp := factsProduct{
 			ID: p.ID, Label: p.Label, VendorID: p.VendorID, DriverID: p.DriverID,
-			Kind: p.Kind, ParentProductID: p.ParentProductID,
+			ComponentType: p.ComponentType, Kind: p.Kind, ParentProductID: p.ParentProductID,
 		}
 		for _, pp := range p.Properties {
 			fp.Properties = append(fp.Properties, factsProductProperty{Name: pp.Name, Default: pp.Default, Required: pp.Required})

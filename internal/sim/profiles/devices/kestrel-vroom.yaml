@@ -199,17 +199,6 @@ interfaces:
 computed:
   - { path: status.device.uptime, kind: elapsed, since: status.device.boot_epoch }
 
-
-# Products this profile also simulates: the other Kestrel products on kestrel-api, so the wire a
-# collector speaks matches. Each keeps its own model name.
-products:
-  - name: kestrel-relay-c1
-    defaults:
-      configuration: { device: { model: "Relay C1" } }
-  - name: kestrel-gaze-p2
-    defaults:
-      configuration: { device: { model: "Gaze P2" } }
-
 defaults:
   status:
     device:
