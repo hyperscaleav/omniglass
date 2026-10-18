@@ -2,10 +2,10 @@ package bus
 
 import (
 	"context"
-	"errors"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/hyperscaleav/omniglass/internal/scope"
 	"log/slog"
