@@ -4,7 +4,7 @@ import { Router, Route } from "@solidjs/router";
 import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
 import Simulation from "./Simulation";
 import Sidebar from "../components/Sidebar";
-import SimDeviceDrawer from "../components/SimDeviceDrawer";
+import SimComponentDrawer from "../components/SimComponentDrawer";
 import SimulationSection from "../components/SimulationSection";
 import { ME_KEY, type Me } from "../lib/auth";
 import { COMPONENTS_KEY, type Component } from "../lib/components";
@@ -15,14 +15,14 @@ import {
   componentSimKey,
   impairmentKey,
   type ComponentSim,
-  type SimDevice,
+  type SimComponent,
   type SimFleet,
 } from "../lib/simulation";
 import { uuidFor } from "../lib/testids";
 import type { SimProfile } from "../lib/simulation";
 
 // The simulation console (#890): the sidebar door that follows a connected
-// simulator, the live grid and its flash, the device drawer's fire and
+// simulator, the live table and its highlight, the simulated component drawer's fire and
 // impairment paths, the component page's section, and what a reader without
 // simulation:update is shown. The query cache is seeded directly; fetch is
 // stubbed so the page's polls read the same fixtures back, and each write's
@@ -34,7 +34,7 @@ const viewer: Me = { principal: { id: "u-view", kind: "human" }, human: { userna
 const DISPLAY = uuidFor("sim-display");
 const DSP = uuidFor("sim-dsp");
 
-const device = (id: string, name: string, hits: number, extra: Partial<SimDevice> = {}): SimDevice => ({
+const simRow = (id: string, name: string, hits: number, extra: Partial<SimComponent> = {}): SimComponent => ({
   component_id: id, component: name, product: "boreal-edge-55", address: "127.60.0.2", serving: true,
   hits, hits_by_protocol: hits ? { snmp: hits } : {}, impaired: false, last_protocol: hits ? "snmp" : undefined, ...extra,
 });
@@ -45,9 +45,9 @@ const fleet = (hits: [number, number], connected = true): SimFleet => ({
     node: "edge-hq", connected, last_seen: new Date().toISOString(),
     capabilities: { low_ports: false, net_admin: false, port_offset: 10000 },
     impairments: { available: false, reason: "impairments are off; run the simulator with --impairments" },
-    devices: [
-      device(DISPLAY, "display-1", hits[0]),
-      device(DSP, "dsp-1", hits[1], { address: "127.60.0.3", product: "polaris-dsp-8", impaired: true, impairment: { unplugged: true } }),
+    components: [
+      simRow(DISPLAY, "display-1", hits[0]),
+      simRow(DSP, "dsp-1", hits[1], { address: "127.60.0.3", product: "polaris-dsp-8", impaired: true, impairment: { unplugged: true } }),
     ],
   }],
 });
@@ -60,10 +60,10 @@ const components: Component[] = [
 const componentSim: ComponentSim = {
   simulated: true, node: "edge-hq", connected: true, address: "127.60.0.2", product: "boreal-edge-55", profile: "boreal-edge-86",
   summary: "Boreal Edge 86-inch 4K commercial display", variants: ["boreal-edge-86", "boreal-edge-55"],
-  device: device(DISPLAY, "display-1", 7),
+  activity: simRow(DISPLAY, "display-1", 7),
   impairments: { available: false, reason: "impairments are off; run the simulator with --impairments" },
   surface: [
-    { name: "web-admin", protocol: "http", port: 10080, summary: "Web management", fireable: true, routes: [{ method: "GET", path: "/api/status", summary: "Device identity" }] },
+    { name: "web-admin", protocol: "http", port: 10080, summary: "Web management", fireable: true, routes: [{ method: "GET", path: "/api/status", summary: "Identity" }] },
     { name: "snmp", protocol: "snmp", port: 10161, fireable: true, oids: [{ oid: "1.3.6.1.2.1.1.3.0", path: "status.device.uptime" }] },
     { name: "icmp", protocol: "icmp", port: 0, fireable: false },
   ],
@@ -148,40 +148,83 @@ describe("the Simulation sidebar door", () => {
 });
 
 describe("the Simulation page", () => {
-  it("renders the node card and a tile per device, the impaired one marked", async () => {
+  it("renders the node card and a table row per simulated component, the impaired one marked", async () => {
     current = { fleet: fleet([3, 0]) };
     stubFetch();
     mount(() => <Simulation />);
-    const tiles = await screen.findAllByTestId("sim-tile");
-    expect(tiles).toHaveLength(2);
-    expect(within(tiles[0]).getByText("Display 1")).toBeTruthy();
-    expect(within(tiles[0]).getByTestId("tile-hits").textContent).toBe("3");
-    expect(within(tiles[1]).getByTestId("impaired-marker").textContent).toContain("unplugged");
+    const rows = await screen.findAllByTestId("sim-row");
+    expect(rows).toHaveLength(2);
+    expect(rows[0].tagName).toBe("TR");
+    expect(within(rows[0]).getByText("Display 1")).toBeTruthy();
+    expect(within(rows[0]).getByText("boardroom-a")).toBeTruthy();
+    expect(within(rows[0]).getByText("127.60.0.2")).toBeTruthy();
+    expect(within(rows[0]).getByTestId("row-hits").textContent).toBe("3");
+    expect(within(rows[0]).queryByTestId("impaired-pill")).toBeNull();
+    expect(within(rows[1]).getByTestId("impaired-pill").textContent).toContain("unplugged");
     expect(screen.getByTestId("node-hits").textContent).toBe("3");
     expect(screen.getByText("unavailable")).toBeTruthy();
-    expect(screen.getByRole("button", { name: /Add simulated device/ })).toBeTruthy();
+    // One node: no Node column.
+    expect(within(screen.getByTestId("sim-table")).queryByRole("columnheader", { name: "Node" })).toBeNull();
+    expect(screen.getByRole("button", { name: /Add simulated component/ })).toBeTruthy();
   });
 
-  it("flashes a tile when its hit count rises between reads, and only that tile", async () => {
+  it("adds a Node column when more than one node serves", async () => {
+    const west = { ...fleet([0, 0]).nodes![0], node: "edge-west", components: [simRow(uuidFor("sim-west"), "display-9", 0)] };
+    current = { fleet: { connected: true, nodes: [fleet([0, 0]).nodes![0], west] } };
+    stubFetch();
+    mount(() => <Simulation />);
+    const rows = await screen.findAllByTestId("sim-row");
+    expect(rows).toHaveLength(3);
+    expect(within(screen.getByTestId("sim-table")).getByRole("columnheader", { name: "Node" })).toBeTruthy();
+    expect(screen.getAllByTestId("sim-node")).toHaveLength(2);
+  });
+
+  it("highlights a row when its hit count rises between reads, only that row, and not on first load", async () => {
     stubFetch();
     const { qc } = mount(() => <Simulation />);
-    const tiles = await screen.findAllByTestId("sim-tile");
-    expect(tiles.some((t) => t.classList.contains("og-blink"))).toBe(false);
+    const rows = await screen.findAllByTestId("sim-row");
+    expect(rows.some((t) => t.classList.contains("og-blink"))).toBe(false);
     current = { fleet: fleet([5, 0]) };
     qc.setQueryData([...SIMULATION_KEY], current.fleet);
-    await waitFor(() => expect(screen.getAllByTestId("sim-tile")[0].classList.contains("og-blink")).toBe(true));
-    expect(screen.getAllByTestId("sim-tile")[1].classList.contains("og-blink")).toBe(false);
-    // The same element, not a rebuilt one: a poll must not recreate the tiles.
-    expect(screen.getAllByTestId("sim-tile")[0]).toBe(tiles[0]);
+    await waitFor(() => expect(screen.getAllByTestId("sim-row")[0].classList.contains("og-blink")).toBe(true));
+    expect(screen.getAllByTestId("sim-row")[1].classList.contains("og-blink")).toBe(false);
+  });
+
+  it("keeps the same row elements across polls", async () => {
+    stubFetch();
+    const { qc } = mount(() => <Simulation />);
+    const rows = await screen.findAllByTestId("sim-row");
+    qc.setQueryData([...SIMULATION_KEY], fleet([5, 2]));
+    await waitFor(() => expect(within(screen.getAllByTestId("sim-row")[1]).getByTestId("row-hits").textContent).toBe("2"));
+    const after = screen.getAllByTestId("sim-row");
+    expect(after[0]).toBe(rows[0]);
+    expect(after[1]).toBe(rows[1]);
+  });
+
+  it("opens the simulated component drawer on a row click", async () => {
+    stubFetch();
+    mount(() => <Simulation />);
+    const rows = await screen.findAllByTestId("sim-row");
+    fireEvent.click(rows[0]);
+    expect(await screen.findByTestId("sim-status")).toBeTruthy();
+  });
+
+  it("opens the drawer from the keyboard: a focused row and Enter", async () => {
+    stubFetch();
+    mount(() => <Simulation />);
+    const rows = await screen.findAllByTestId("sim-row");
+    expect(rows[0].getAttribute("tabindex")).toBe("0");
+    fireEvent.keyDown(rows[0], { key: "Enter" });
+    expect(await screen.findByTestId("sim-status")).toBeTruthy();
   });
 
   it("teaches and offers the add path when a simulator serves nothing yet", async () => {
-    current = { fleet: { connected: true, nodes: [{ ...fleet([0, 0]).nodes![0], devices: [] }] } };
+    current = { fleet: { connected: true, nodes: [{ ...fleet([0, 0]).nodes![0], components: [] }] } };
     stubFetch();
     mount(() => <Simulation />);
     const empty = await screen.findByTestId("sim-empty");
-    expect(within(empty).getByText("No simulated devices yet")).toBeTruthy();
-    expect(within(empty).getByRole("button", { name: /Add simulated device/ })).toBeTruthy();
+    expect(within(empty).getByText("No simulated components yet")).toBeTruthy();
+    expect(within(empty).getByRole("button", { name: /Add simulated component/ })).toBeTruthy();
   });
 
   it("alerts with a retry when the fleet cannot be read", async () => {
@@ -202,15 +245,15 @@ describe("the Simulation page", () => {
   it("hides Add from a reader without simulation:update", async () => {
     stubFetch();
     mount(() => <Simulation />, viewer);
-    await screen.findAllByTestId("sim-tile");
-    expect(screen.queryByRole("button", { name: /Add simulated device/ })).toBeNull();
+    await screen.findAllByTestId("sim-row");
+    expect(screen.queryByRole("button", { name: /Add simulated component/ })).toBeNull();
   });
 });
 
-describe("the simulated device drawer", () => {
-  it("fires a chosen operation and renders the device's answer", async () => {
+describe("the simulated component drawer", () => {
+  it("fires a chosen operation and renders the component's answer", async () => {
     stubFetch({ [`POST /components/${DISPLAY}/simulation:fire`]: { status: 200, body: "{\"device\":{\"model\":\"Edge 55\"}}", took_ms: 3 } });
-    mount(() => <SimDeviceDrawer id={DISPLAY} onClose={() => {}} />);
+    mount(() => <SimComponentDrawer id={DISPLAY} onClose={() => {}} />);
     fireEvent.click(await screen.findByRole("button", { name: /\/api\/status/ }));
     const panel = await screen.findByTestId("fire-panel");
     fireEvent.click(within(panel).getByRole("button", { name: "Fire" }));
@@ -225,7 +268,7 @@ describe("the simulated device drawer", () => {
   it("saves the whole impairment, the fields left alone sent as zero", async () => {
     const saved = { unplugged: false, latency_ms: 120, jitter_ms: 10, loss_pct: 0, rate_kbit: 0 };
     stubFetch({ [`PUT /components/${DISPLAY}/impairment`]: saved });
-    mount(() => <SimDeviceDrawer id={DISPLAY} onClose={() => {}} />);
+    mount(() => <SimComponentDrawer id={DISPLAY} onClose={() => {}} />);
     const latency = await screen.findByLabelText("Latency (ms)");
     fireEvent.input(latency, { target: { value: "120" } });
     fireEvent.input(screen.getByLabelText("Jitter (ms)"), { target: { value: "10" } });
@@ -240,7 +283,7 @@ describe("the simulated device drawer", () => {
 
   it("refuses jitter above latency before it is sent", async () => {
     stubFetch();
-    mount(() => <SimDeviceDrawer id={DISPLAY} onClose={() => {}} />);
+    mount(() => <SimComponentDrawer id={DISPLAY} onClose={() => {}} />);
     fireEvent.input(await screen.findByLabelText("Jitter (ms)"), { target: { value: "50" } });
     expect(await screen.findByText("At most the latency.")).toBeTruthy();
     expect((screen.getByRole("button", { name: "Save impairment" }) as HTMLButtonElement).disabled).toBe(true);
@@ -248,7 +291,7 @@ describe("the simulated device drawer", () => {
 
   it("gives a reader the facts and no controls", async () => {
     stubFetch();
-    mount(() => <SimDeviceDrawer id={DISPLAY} onClose={() => {}} />, viewer);
+    mount(() => <SimComponentDrawer id={DISPLAY} onClose={() => {}} />, viewer);
     await screen.findByTestId("sim-impairment");
     expect(screen.queryByRole("button", { name: "Save impairment" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Remove" })).toBeNull();
@@ -275,13 +318,13 @@ describe("the component page's Simulation section", () => {
     const section = await screen.findByTestId("leaf-simulation");
     expect(section.textContent).toContain("127.60.0.2");
     expect(section.textContent).toContain("edge-hq");
-    fireEvent.click(within(section).getByRole("button", { name: /Open device/ }));
+    fireEvent.click(within(section).getByRole("button", { name: /Open simulation/ }));
     expect(await screen.findByTestId("sim-status")).toBeTruthy();
   });
 });
 
 // A principal who may remove a component but not impair one, and one who may add
-// devices but not read places.
+// simulated components but not read places.
 const remover: Me = { principal: { id: "u-rm", kind: "human" }, human: { username: "remover" }, permissions: ["*:read", "component:delete"], grants: [] };
 const placeless: Me = {
   principal: { id: "u-np", kind: "human" }, human: { username: "placeless" },
@@ -297,17 +340,17 @@ function failNext(detail: string) {
     new Response(JSON.stringify({ title: "Internal Server Error", status: 500, detail }), { status: 500, headers: { "Content-Type": "application/json" } }));
 }
 
-describe("the device drawer's writes", () => {
+describe("the simulated component drawer's writes", () => {
   it("keeps the operator's product pick when a poll lands with only hits changed", async () => {
     stubFetch();
-    const { qc } = mount(() => <SimDeviceDrawer id={DISPLAY} onClose={() => {}} />);
+    const { qc } = mount(() => <SimComponentDrawer id={DISPLAY} onClose={() => {}} />);
     await screen.findByTestId("sim-status");
     const sel = screen.getByLabelText("Product") as HTMLSelectElement;
     expect(sel.value).toBe("boreal-edge-55");
     fireEvent.change(sel, { target: { value: "boreal-edge-86" } });
     const change = screen.getByRole("button", { name: "Change" }) as HTMLButtonElement;
     await waitFor(() => expect(change.disabled).toBe(false));
-    qc.setQueryData([...componentSimKey(DISPLAY)], { ...componentSim, device: device(DISPLAY, "display-1", 9) });
+    qc.setQueryData([...componentSimKey(DISPLAY)], { ...componentSim, activity: simRow(DISPLAY, "display-1", 9) });
     await waitFor(() => expect(screen.getByTestId("sim-status").textContent).toContain("9"));
     expect(sel.value).toBe("boreal-edge-86");
     expect(change.disabled).toBe(false);
@@ -315,7 +358,7 @@ describe("the device drawer's writes", () => {
 
   it("follows a product the server changed", async () => {
     stubFetch();
-    const { qc } = mount(() => <SimDeviceDrawer id={DISPLAY} onClose={() => {}} />);
+    const { qc } = mount(() => <SimComponentDrawer id={DISPLAY} onClose={() => {}} />);
     await screen.findByTestId("sim-status");
     qc.setQueryData([...componentSimKey(DISPLAY)], { ...componentSim, product: "boreal-edge-86" });
     await waitFor(() => expect((screen.getByLabelText("Product") as HTMLSelectElement).value).toBe("boreal-edge-86"));
@@ -323,7 +366,7 @@ describe("the device drawer's writes", () => {
 
   it("changes the product with a PATCH by uuid", async () => {
     stubFetch({ [`PATCH /components/${DISPLAY}`]: components[0] });
-    mount(() => <SimDeviceDrawer id={DISPLAY} onClose={() => {}} />);
+    mount(() => <SimComponentDrawer id={DISPLAY} onClose={() => {}} />);
     await screen.findByTestId("sim-status");
     fireEvent.change(screen.getByLabelText("Product"), { target: { value: "boreal-edge-86" } });
     fireEvent.click(screen.getByRole("button", { name: "Change" }));
@@ -335,7 +378,7 @@ describe("the device drawer's writes", () => {
 
   it("repairs with a PUT of the all-zero impairment", async () => {
     stubFetch({ [`PUT /components/${DISPLAY}/impairment`]: { unplugged: false, latency_ms: 0, jitter_ms: 0, loss_pct: 0, rate_kbit: 0 } });
-    const { qc } = mount(() => <SimDeviceDrawer id={DISPLAY} onClose={() => {}} />);
+    const { qc } = mount(() => <SimComponentDrawer id={DISPLAY} onClose={() => {}} />);
     qc.setQueryData([...impairmentKey(DISPLAY)], { unplugged: true, latency_ms: 120, jitter_ms: 0, loss_pct: 0, rate_kbit: 0 });
     const repair = (await screen.findByRole("button", { name: "Repair" })) as HTMLButtonElement;
     await waitFor(() => expect(repair.disabled).toBe(false));
@@ -350,7 +393,7 @@ describe("the device drawer's writes", () => {
     stubFetch({ [`DELETE /components/${DISPLAY}`]: {} });
     const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
     const onClose = vi.fn();
-    const { qc } = mount(() => <SimDeviceDrawer id={DISPLAY} onClose={onClose} />);
+    const { qc } = mount(() => <SimComponentDrawer id={DISPLAY} onClose={onClose} />);
     const invalidate = vi.spyOn(qc, "invalidateQueries");
     fireEvent.click(await screen.findByRole("button", { name: "Remove" }));
     await waitFor(() => expect(onClose).toHaveBeenCalled());
@@ -367,7 +410,7 @@ describe("the device drawer's writes", () => {
     stubFetch();
     vi.spyOn(window, "confirm").mockReturnValue(false);
     const onClose = vi.fn();
-    mount(() => <SimDeviceDrawer id={DISPLAY} onClose={onClose} />);
+    mount(() => <SimComponentDrawer id={DISPLAY} onClose={onClose} />);
     fireEvent.click(await screen.findByRole("button", { name: "Remove" }));
     expect(calls.some((c) => c.method === "DELETE")).toBe(false);
     expect(onClose).not.toHaveBeenCalled();
@@ -375,7 +418,7 @@ describe("the device drawer's writes", () => {
 
   it("gives a user who may remove but not impair a Remove-only rail", async () => {
     stubFetch();
-    mount(() => <SimDeviceDrawer id={DISPLAY} onClose={() => {}} />, remover);
+    mount(() => <SimComponentDrawer id={DISPLAY} onClose={() => {}} />, remover);
     expect(await screen.findByRole("button", { name: "Remove" })).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Save impairment" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Repair" })).toBeNull();
@@ -384,7 +427,7 @@ describe("the device drawer's writes", () => {
 
   it("warns that the state is the last known one when a poll fails after a read", async () => {
     stubFetch();
-    const { qc } = mount(() => <SimDeviceDrawer id={DISPLAY} onClose={() => {}} />);
+    const { qc } = mount(() => <SimComponentDrawer id={DISPLAY} onClose={() => {}} />);
     await screen.findByTestId("sim-status");
     failNext("simulator gone");
     await qc.refetchQueries({ queryKey: componentSimKey(DISPLAY) });
@@ -396,63 +439,63 @@ describe("the device drawer's writes", () => {
 });
 
 describe("the Simulation page's writes and stale state", () => {
-  it("warns that the grid is the last known state when a poll fails after a read", async () => {
+  it("warns that the table is the last known state when a poll fails after a read", async () => {
     current = { fleet: fleet([3, 0]) };
     stubFetch();
     const { qc } = mount(() => <Simulation />);
-    await screen.findAllByTestId("sim-tile");
+    await screen.findAllByTestId("sim-row");
     failNext("connection refused");
     await qc.refetchQueries({ queryKey: SIMULATION_KEY, exact: true });
     const warn = await screen.findByTestId("sim-stale");
     expect(warn.textContent).toContain("connection refused");
     expect(warn.textContent).toContain("last known");
-    expect(screen.getAllByTestId("sim-tile")).toHaveLength(2);
+    expect(screen.getAllByTestId("sim-row")).toHaveLength(2);
   });
 
-  it("restarts a tile's flash when a second rise lands before the first ends", async () => {
+  it("restarts a row's highlight when a second rise lands before the first ends", async () => {
     stubFetch();
     const { qc } = mount(() => <Simulation />);
-    await screen.findAllByTestId("sim-tile");
+    await screen.findAllByTestId("sim-row");
     const reflow = vi.spyOn(HTMLElement.prototype, "offsetWidth", "get");
     qc.setQueryData([...SIMULATION_KEY], fleet([5, 0]));
-    await waitFor(() => expect(screen.getAllByTestId("sim-tile")[0].classList.contains("og-blink")).toBe(true));
+    await waitFor(() => expect(screen.getAllByTestId("sim-row")[0].classList.contains("og-blink")).toBe(true));
     const before = reflow.mock.calls.length;
     qc.setQueryData([...SIMULATION_KEY], fleet([6, 0]));
     await waitFor(() => expect(reflow.mock.calls.length).toBeGreaterThan(before));
-    expect(screen.getAllByTestId("sim-tile")[0].classList.contains("og-blink")).toBe(true);
+    expect(screen.getAllByTestId("sim-row")[0].classList.contains("og-blink")).toBe(true);
   });
 
   async function openAdd(me: Me = admin) {
     const r = mount(() => <Simulation />, me);
     r.qc.setQueryData([...SIM_PROFILES_KEY], profiles);
     r.qc.removeQueries({ queryKey: LOCATIONS_KEY });
-    fireEvent.click(await screen.findByRole("button", { name: /Add simulated device/ }));
+    fireEvent.click(await screen.findByRole("button", { name: /Add simulated component/ }));
     return r;
   }
 
-  it("adds a device with a POST to the node, then closes", async () => {
-    stubFetch({ "POST /nodes/edge-hq/simulation/devices": { component: "lab-display-1", address: "127.60.0.4" } });
+  it("adds a simulated component with a POST to the node, then closes", async () => {
+    stubFetch({ "POST /nodes/edge-hq/simulation/components": { component: "lab-display-1", address: "127.60.0.4" } });
     await openAdd();
     fireEvent.change(await screen.findByLabelText("Product"), { target: { value: "boreal-edge-55" } });
     fireEvent.input(screen.getByLabelText("Name"), { target: { value: "lab-display-1" } });
-    const add = screen.getByRole("button", { name: "Add device" }) as HTMLButtonElement;
+    const add = screen.getByRole("button", { name: "Add component" }) as HTMLButtonElement;
     await waitFor(() => expect(add.disabled).toBe(false));
     fireEvent.click(add);
     await waitFor(() => expect(calls.some((c) => c.method === "POST")).toBe(true));
     expect(calls.find((c) => c.method === "POST")!.body).toEqual({ name: "lab-display-1", product: "boreal-edge-55" });
-    await waitFor(() => expect(screen.queryByRole("button", { name: "Add device" })).toBeNull());
+    await waitFor(() => expect(screen.queryByRole("button", { name: "Add component" })).toBeNull());
   });
 
   it("surfaces the server's refusal of an add and keeps the form open", async () => {
-    stubFetch({ "POST /nodes/edge-hq/simulation/devices": new Answer(409, { title: "Conflict", status: 409, detail: "component lab-display-1 already exists" }) });
+    stubFetch({ "POST /nodes/edge-hq/simulation/components": new Answer(409, { title: "Conflict", status: 409, detail: "component lab-display-1 already exists" }) });
     await openAdd();
     fireEvent.change(await screen.findByLabelText("Product"), { target: { value: "boreal-edge-55" } });
     fireEvent.input(screen.getByLabelText("Name"), { target: { value: "lab-display-1" } });
-    const add = screen.getByRole("button", { name: "Add device" }) as HTMLButtonElement;
+    const add = screen.getByRole("button", { name: "Add component" }) as HTMLButtonElement;
     await waitFor(() => expect(add.disabled).toBe(false));
     fireEvent.click(add);
     expect((await screen.findByText(/already exists/)).closest("[role=alert]")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Add device" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Add component" })).toBeTruthy();
   });
 
   it("shows every field's hint when an incomplete form is submitted", async () => {
@@ -492,7 +535,7 @@ describe("removing from the component page", () => {
       </QueryClientProvider>
     ));
     const section = await screen.findByTestId("leaf-simulation");
-    fireEvent.click(within(section).getByRole("button", { name: /Open device/ }));
+    fireEvent.click(within(section).getByRole("button", { name: /Open simulation/ }));
     fireEvent.click(await screen.findByRole("button", { name: "Remove" }));
     expect(await screen.findByTestId("sim-page")).toBeTruthy();
     expect(window.location.pathname).toBe("/simulation");

@@ -11,7 +11,7 @@ import { type Component, type Context, createContext, createSignal, onCleanup, u
 //
 // Deliberately smaller than BladeEdit. There is no read -> Edit -> Save cycle here
 // (a create form is always "editing"). The destructive and secondary slots arrived
-// with their first caller, the simulated device's drawer (#890): Remove at the
+// with their first caller, the simulated component drawer (#890): Remove at the
 // rail's left like a blade's Delete, Repair as a quiet sibling of Save. A body that
 // only offers a destructive action (a reader who may remove but not edit) binds
 // no submit, and the rail draws without one.

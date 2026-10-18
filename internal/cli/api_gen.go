@@ -1435,8 +1435,8 @@ func generatedCommands() []*cobra.Command {
 					var fSurface string
 					cmd := &cobra.Command{
 						Use:     "fire <name>",
-						Short:   "Fire an operation at a simulated device",
-						Long:    "Asks the simulator beside the component's node to run one operation against the device, on one of its protocol surfaces: an HTTP call, a command line (SSH, Telnet, TCP) or an SNMP get, and returns the device's answer. The device answers from its live state in process, as its listeners would, so a command's change sticks and the collector sees it; an impairment does not stop it. Audited. Gated by simulation:update, resolved on the component tier. A component that is not simulated is a 409, a surface it does not serve a 422, and no simulator answering a 503.",
+						Short:   "Fire an operation at a simulated component",
+						Long:    "Asks the simulator beside the component's node to run one operation against the simulated component, on one of its protocol surfaces: an HTTP call, a command line (SSH, Telnet, TCP) or an SNMP get, and returns its answer. The simulator answers from the component's live state in process, as its listeners would, so a command's change sticks and the collector sees it; an impairment does not stop it. Audited. Gated by simulation:update, resolved on the component tier. A component that is not simulated is a 409, a surface it does not serve a 422, and no simulator answering a 503.",
 						Example: "  omniglass component simulation fire <name> --surface surface",
 						Args:    cobra.ExactArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
@@ -1468,7 +1468,7 @@ func generatedCommands() []*cobra.Command {
 					cmd.Flags().StringVar(&fMethod, "method", "", "HTTP: the method; GET when empty")
 					cmd.Flags().StringVar(&fOid, "oid", "", "SNMP: the OID to get")
 					cmd.Flags().StringVar(&fPath, "path", "", "HTTP: the request path")
-					cmd.Flags().StringVar(&fSurface, "surface", "", "The surface to fire on, by its name in the device's surface list")
+					cmd.Flags().StringVar(&fSurface, "surface", "", "The surface to fire on, by its name in the component's surface list")
 					_ = cmd.MarkFlagRequired("surface")
 					return cmd
 				}()
@@ -5025,13 +5025,13 @@ func generatedCommands() []*cobra.Command {
 				var fName string
 				var fProduct string
 				cmd := &cobra.Command{
-					Use:     "add-device <name>",
-					Short:   "Add a simulated device",
+					Use:     "add-component <name>",
+					Short:   "Add a simulated component",
 					Long:    "Creates a component of a simulated product, at the lowest free address in the simulated block (127.60.0.0/16), with the endpoint the collector reaches it through placed on the node: a driver attach where the driver's inputs are known (an SNMP attach needs the sim-community secret, else it falls back), otherwise a reachability probe on a port the profile serves, lifted as the node's simulator lifts its ports. The simulator serves it from its next pull, with no restart. Gated by simulation:update, and also needs component:create and endpoint:create, each in the caller's own scope. A node with no simulator connected is a 409, and a product no profile simulates a 422.",
-					Example: "  omniglass simulation add-device <name> --name name --product product",
+					Example: "  omniglass simulation add-component <name> --name name --product product",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/nodes/%s/simulation/devices", url.PathEscape(args[0]))
+						path := fmt.Sprintf("/api/v1/nodes/%s/simulation/components", url.PathEscape(args[0]))
 						body := map[string]any{}
 						if cmd.Flags().Changed("location") {
 							body["location"] = fLocation
@@ -5059,7 +5059,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "get",
 					Short:   "Get the simulated fleet",
-					Long:    "Every node a simulator has pulled for since the server started (that the caller may read), each with its capabilities, its account of impairments, and the devices it serves within the caller's component read scope, joined to their live hits. Connected is true when any simulator pulled recently. Hits are per server process, not stored. Gated by simulation:read.",
+					Long:    "Every node a simulator has pulled for since the server started (that the caller may read), each with its capabilities, its account of impairments, and the components it simulates within the caller's component read scope, joined to their live hits. Connected is true when any simulator pulled recently. Hits are per server process, not stored. Gated by simulation:read.",
 					Example: "  omniglass simulation get",
 					Args:    cobra.ExactArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -5076,7 +5076,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "profiles",
 					Short:   "List the simulator's profiles",
-					Long:    "The simulator's profile catalog, embedded in the binary: each profile with the products it simulates and the protocols it speaks. Adding a simulated device names one of these products. Gated by simulation:read.",
+					Long:    "The simulator's profile catalog, embedded in the binary: each profile with the products it simulates and the protocols it speaks. Adding a simulated component names one of these products. Gated by simulation:read.",
 					Example: "  omniglass simulation profiles",
 					Args:    cobra.ExactArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {

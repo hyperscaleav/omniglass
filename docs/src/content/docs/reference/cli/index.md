@@ -1087,13 +1087,13 @@ Commands for the simulation resource
 
 #### `omniglass component simulation fire`
 
-Fire an operation at a simulated device
+Fire an operation at a simulated component
 
 ```
 omniglass component simulation fire <name> [flags]
 ```
 
-Asks the simulator beside the component's node to run one operation against the device, on one of its protocol surfaces: an HTTP call, a command line (SSH, Telnet, TCP) or an SNMP get, and returns the device's answer. The device answers from its live state in process, as its listeners would, so a command's change sticks and the collector sees it; an impairment does not stop it. Audited. Gated by simulation:update, resolved on the component tier. A component that is not simulated is a 409, a surface it does not serve a 422, and no simulator answering a 503.
+Asks the simulator beside the component's node to run one operation against the simulated component, on one of its protocol surfaces: an HTTP call, a command line (SSH, Telnet, TCP) or an SNMP get, and returns its answer. The simulator answers from the component's live state in process, as its listeners would, so a command's change sticks and the collector sees it; an impairment does not stop it. Audited. Gated by simulation:update, resolved on the component tier. A component that is not simulated is a 409, a surface it does not serve a 422, and no simulator answering a 503.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -1102,7 +1102,7 @@ Asks the simulator beside the component's node to run one operation against the 
 | `--method` | string | (none) | HTTP: the method; GET when empty |
 | `--oid` | string | (none) | SNMP: the OID to get |
 | `--path` | string | (none) | HTTP: the request path |
-| `--surface` | string | (none) | The surface to fire on, by its name in the device's surface list |
+| `--surface` | string | (none) | The surface to fire on, by its name in the component's surface list |
 
 Example:
 
@@ -3874,12 +3874,12 @@ Serves each component placed on the node whose product has a simulator profile a
 
 Commands for the simulation resource
 
-### `omniglass simulation add-device`
+### `omniglass simulation add-component`
 
-Add a simulated device
+Add a simulated component
 
 ```
-omniglass simulation add-device <name> [flags]
+omniglass simulation add-component <name> [flags]
 ```
 
 Creates a component of a simulated product, at the lowest free address in the simulated block (127.60.0.0/16), with the endpoint the collector reaches it through placed on the node: a driver attach where the driver's inputs are known (an SNMP attach needs the sim-community secret, else it falls back), otherwise a reachability probe on a port the profile serves, lifted as the node's simulator lifts its ports. The simulator serves it from its next pull, with no restart. Gated by simulation:update, and also needs component:create and endpoint:create, each in the caller's own scope. A node with no simulator connected is a 409, and a product no profile simulates a 422.
@@ -3893,7 +3893,7 @@ Creates a component of a simulated product, at the lowest free address in the si
 Example:
 
 ```sh
-omniglass simulation add-device <name> --name name --product product
+omniglass simulation add-component <name> --name name --product product
 ```
 
 ### `omniglass simulation get`
@@ -3904,7 +3904,7 @@ Get the simulated fleet
 omniglass simulation get
 ```
 
-Every node a simulator has pulled for since the server started (that the caller may read), each with its capabilities, its account of impairments, and the devices it serves within the caller's component read scope, joined to their live hits. Connected is true when any simulator pulled recently. Hits are per server process, not stored. Gated by simulation:read.
+Every node a simulator has pulled for since the server started (that the caller may read), each with its capabilities, its account of impairments, and the components it simulates within the caller's component read scope, joined to their live hits. Connected is true when any simulator pulled recently. Hits are per server process, not stored. Gated by simulation:read.
 
 Example:
 
@@ -3920,7 +3920,7 @@ List the simulator's profiles
 omniglass simulation profiles
 ```
 
-The simulator's profile catalog, embedded in the binary: each profile with the products it simulates and the protocols it speaks. Adding a simulated device names one of these products. Gated by simulation:read.
+The simulator's profile catalog, embedded in the binary: each profile with the products it simulates and the protocols it speaks. Adding a simulated component names one of these products. Gated by simulation:read.
 
 Example:
 

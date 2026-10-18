@@ -862,8 +862,8 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Fire an operation at a simulated device
-         * @description Asks the simulator beside the component's node to run one operation against the device, on one of its protocol surfaces: an HTTP call, a command line (SSH, Telnet, TCP) or an SNMP get, and returns the device's answer. The device answers from its live state in process, as its listeners would, so a command's change sticks and the collector sees it; an impairment does not stop it. Audited. Gated by simulation:update, resolved on the component tier. A component that is not simulated is a 409, a surface it does not serve a 422, and no simulator answering a 503.
+         * Fire an operation at a simulated component
+         * @description Asks the simulator beside the component's node to run one operation against the simulated component, on one of its protocol surfaces: an HTTP call, a command line (SSH, Telnet, TCP) or an SNMP get, and returns its answer. The simulator answers from the component's live state in process, as its listeners would, so a command's change sticks and the collector sees it; an impairment does not stop it. Audited. Gated by simulation:update, resolved on the component tier. A component that is not simulated is a 409, a surface it does not serve a 422, and no simulator answering a 503.
          */
         post: operations["fire-component-simulation"];
         delete?: never;
@@ -1952,7 +1952,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/nodes/{name}/simulation/devices": {
+    "/nodes/{name}/simulation/components": {
         parameters: {
             query?: never;
             header?: never;
@@ -1962,10 +1962,10 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Add a simulated device
+         * Add a simulated component
          * @description Creates a component of a simulated product, at the lowest free address in the simulated block (127.60.0.0/16), with the endpoint the collector reaches it through placed on the node: a driver attach where the driver's inputs are known (an SNMP attach needs the sim-community secret, else it falls back), otherwise a reachability probe on a port the profile serves, lifted as the node's simulator lifts its ports. The simulator serves it from its next pull, with no restart. Gated by simulation:update, and also needs component:create and endpoint:create, each in the caller's own scope. A node with no simulator connected is a 409, and a product no profile simulates a 422.
          */
-        post: operations["add-node-simulation-device"];
+        post: operations["add-node-simulation-component"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2993,7 +2993,7 @@ export interface paths {
         };
         /**
          * Get the simulated fleet
-         * @description Every node a simulator has pulled for since the server started (that the caller may read), each with its capabilities, its account of impairments, and the devices it serves within the caller's component read scope, joined to their live hits. Connected is true when any simulator pulled recently. Hits are per server process, not stored. Gated by simulation:read.
+         * @description Every node a simulator has pulled for since the server started (that the caller may read), each with its capabilities, its account of impairments, and the components it simulates within the caller's component read scope, joined to their live hits. Connected is true when any simulator pulled recently. Hits are per server process, not stored. Gated by simulation:read.
          */
         get: operations["get-simulation"];
         put?: never;
@@ -3013,7 +3013,7 @@ export interface paths {
         };
         /**
          * List the simulator's profiles
-         * @description The simulator's profile catalog, embedded in the binary: each profile with the products it simulates and the protocols it speaks. Adding a simulated device names one of these products. Gated by simulation:read.
+         * @description The simulator's profile catalog, embedded in the binary: each profile with the products it simulates and the protocols it speaks. Adding a simulated component names one of these products. Gated by simulation:read.
          */
         get: operations["list-simulation-profiles"];
         put?: never;
@@ -4176,11 +4176,11 @@ export interface components {
             /** @description The principal to add to the group */
             principal_id: string;
         };
-        AddSimDeviceInputBody: {
+        AddSimComponentInputBody: {
             /**
              * Format: uri
              * @description A URL to the JSON Schema for this object.
-             * @example /api/v1/schemas/AddSimDeviceInputBody.json
+             * @example /api/v1/schemas/AddSimComponentInputBody.json
              */
             readonly $schema?: string;
             /** @description Where the component sits, by name or dotted path */
@@ -4190,14 +4190,14 @@ export interface components {
             /** @description A product a simulator profile simulates */
             product: string;
         };
-        AddSimDeviceOutputBody: {
+        AddSimComponentOutputBody: {
             /**
              * Format: uri
              * @description A URL to the JSON Schema for this object.
-             * @example /api/v1/schemas/AddSimDeviceOutputBody.json
+             * @example /api/v1/schemas/AddSimComponentOutputBody.json
              */
             readonly $schema?: string;
-            /** @description The loopback address the simulated device answers on. */
+            /** @description The loopback address the simulated component answers on. */
             address: string;
             component: string;
             /**
@@ -4485,10 +4485,11 @@ export interface components {
              * @example /api/v1/schemas/ComponentSimOutputBody.json
              */
             readonly $schema?: string;
+            /** @description What the simulator reports for the component: serving, hits, and its impairment. */
+            activity?: components["schemas"]["SimDeviceBody"];
             address?: string;
             /** @description The node's simulator pulled recently. */
             connected: boolean;
-            device?: components["schemas"]["SimDeviceBody"];
             impairments: components["schemas"]["SimImpairmentStatus"];
             node?: string;
             product?: string;
@@ -4496,9 +4497,9 @@ export interface components {
             /** @description The component has an endpoint on a node and a product a profile simulates. */
             simulated: boolean;
             summary?: string;
-            /** @description Every protocol surface the device serves, from its profile. */
+            /** @description Every protocol surface the simulated component serves, from its profile. */
             surface?: components["schemas"]["SimSurfaceBody"][] | null;
-            /** @description The products the same profile simulates; changing among them keeps the device's endpoints valid. */
+            /** @description The products the same profile simulates; changing among them keeps the component's endpoints valid. */
             variants?: string[] | null;
         };
         ComponentTypeBody: {
@@ -5443,7 +5444,7 @@ export interface components {
             oid?: string;
             /** @description HTTP: the request path */
             path?: string;
-            /** @description The surface to fire on, by its name in the device's surface list */
+            /** @description The surface to fire on, by its name in the component's surface list */
             surface: string;
         };
         FleetDotBody: {
@@ -7433,8 +7434,9 @@ export interface components {
         };
         SimNodeBody: {
             capabilities: components["schemas"]["SimCapabilities"];
+            /** @description The components the simulator serves, in the caller's component read scope, with their live hits. */
+            components: components["schemas"]["SimDeviceBody"][] | null;
             connected: boolean;
-            devices: components["schemas"]["SimDeviceBody"][] | null;
             impairments: components["schemas"]["SimImpairmentStatus"];
             /** Format: date-time */
             last_seen: string;
@@ -7484,7 +7486,7 @@ export interface components {
             example?: string;
             method: string;
             path: string;
-            /** @description A route the device's own web UI calls but does not advertise. */
+            /** @description A route the product's own web UI calls but does not advertise. */
             private?: boolean;
             summary?: string;
         };
@@ -12505,19 +12507,19 @@ export interface operations {
             };
         };
     };
-    "add-node-simulation-device": {
+    "add-node-simulation-component": {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                /** @description The node whose simulator serves the new device */
+                /** @description The node whose simulator serves the new component */
                 name: string;
             };
             cookie?: never;
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["AddSimDeviceInputBody"];
+                "application/json": components["schemas"]["AddSimComponentInputBody"];
             };
         };
         responses: {
@@ -12527,7 +12529,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["AddSimDeviceOutputBody"];
+                    "application/json": components["schemas"]["AddSimComponentOutputBody"];
                 };
             };
             /** @description Error */

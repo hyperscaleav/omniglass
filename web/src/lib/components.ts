@@ -90,7 +90,7 @@ export async function createComponent(body: CreateComponent): Promise<Component>
 
 export type UpdateComponent = {
   label?: string;
-  // Reclassify to another product. The simulated device's drawer changes among
+  // Reclassify to another product. The simulated component drawer changes among
   // its profile's variants this way (#890); empty is refused by the API.
   product?: string;
 };

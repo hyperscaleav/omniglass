@@ -16,31 +16,31 @@ import {
   SIDEBAR_POLL_MS,
   SIDEBAR_IDLE_POLL_MS,
   surfaceKind,
-  validateAddDevice,
-  type SimDevice,
+  validateAddComponent,
+  type SimComponent,
   type SimSurface,
 } from "./simulation";
 
-const dev = (id: string, hits: number): SimDevice => ({
+const row = (id: string, hits: number): SimComponent => ({
   component_id: id, component: id, product: "p", address: "127.60.0.2", serving: true, hits, hits_by_protocol: {}, impaired: false,
 });
 
 describe("risenHits", () => {
-  it("seeds a device's first read without flashing it", () => {
+  it("seeds a component's first read without flashing it", () => {
     const seen = new Map<string, number>();
-    expect(risenHits(seen, [dev("a", 4)])).toEqual([]);
+    expect(risenHits(seen, [row("a", 4)])).toEqual([]);
     expect(seen.get("a")).toBe(4);
   });
 
-  it("flags exactly the devices whose count rose since the last read", () => {
+  it("flags exactly the components whose count rose since the last read", () => {
     const seen = new Map([["a", 4], ["b", 9]]);
-    expect(risenHits(seen, [dev("a", 5), dev("b", 9), dev("c", 1)])).toEqual(["a"]);
-    expect(risenHits(seen, [dev("a", 5), dev("b", 10), dev("c", 2)])).toEqual(["b", "c"]);
+    expect(risenHits(seen, [row("a", 5), row("b", 9), row("c", 1)])).toEqual(["a"]);
+    expect(risenHits(seen, [row("a", 5), row("b", 10), row("c", 2)])).toEqual(["b", "c"]);
   });
 
   it("does not flag a count that fell (a server restart resets hits)", () => {
     const seen = new Map([["a", 40]]);
-    expect(risenHits(seen, [dev("a", 2)])).toEqual([]);
+    expect(risenHits(seen, [row("a", 2)])).toEqual([]);
     expect(seen.get("a")).toBe(2);
   });
 });
@@ -71,12 +71,12 @@ describe("impairment words", () => {
   });
 });
 
-describe("the add-device rule", () => {
+describe("the add-component rule", () => {
   it("requires a node, a product and a well-formed name", () => {
-    expect(validateAddDevice({ node: "", product: "", name: "", location: "" })).toEqual({
+    expect(validateAddComponent({ node: "", product: "", name: "", location: "" })).toEqual({
       node: expect.any(String), product: expect.any(String), name: "Name the new component.",
     });
-    expect(validateAddDevice({ node: "edge-hq", product: "boreal-edge-55", name: "lab-display", location: "" })).toEqual({});
+    expect(validateAddComponent({ node: "edge-hq", product: "boreal-edge-55", name: "lab-display", location: "" })).toEqual({});
     expect(entityNameError("Lab.Display")).toMatch(/Lowercase/);
     expect(entityNameError("x".repeat(101))).toBe("At most 100 characters.");
   });
@@ -105,7 +105,7 @@ describe("catalog and counts", () => {
   it("groups products by profile and orders protocols busiest first", () => {
     expect(productGroups([{ name: "x", manufacturer: "Boreal", model: "Edge 86", device_type: "display", summary: "", products: ["a", "b"], protocols: [] }]))
       .toEqual([{ label: "Boreal Edge 86 (display)", products: ["a", "b"] }]);
-    expect(hitsByProtocol({ ...dev("a", 5), hits_by_protocol: { http: 1, snmp: 4 } }).map((p) => p.protocol)).toEqual(["snmp", "http"]);
+    expect(hitsByProtocol({ ...row("a", 5), hits_by_protocol: { http: 1, snmp: 4 } }).map((p) => p.protocol)).toEqual(["snmp", "http"]);
   });
 });
 

@@ -75,9 +75,9 @@ export const navItems: NavItem[] = [
   // door.
   { label: "Nodes", path: "/nodes", icon: Icons.Server, live: true, resource: "node", hint: "Collection daemons: their health, enrollment, and the collection tasks assigned to each." },
   // Simulation (#890): the simulated fleet a simulator beside a node serves,
-  // its live hits, impairments and each device's API surface. A lab and demo
+  // its live hits, impairments and each component's API surface. A lab and demo
   // surface, so its door shows only while a simulator is connected.
-  { label: "Simulation", path: "/simulation", icon: Icons.FlaskConical, live: true, resource: "simulation", when: "simulator", hint: "The simulated devices a simulator serves beside a node: the hits collection lands on them, what is broken, and each device's API surface." },
+  { label: "Simulation", path: "/simulation", icon: Icons.FlaskConical, live: true, resource: "simulation", when: "simulator", hint: "The simulated components a simulator serves beside a node: the hits collection lands on them, what is broken, and each one's API surface." },
   {
     label: "Values", icon: Icons.Sliders, hint: "Operator-set values and content: interpolation variables, encrypted secrets, and reconciled component config, each resolved down the scope cascade, plus the files kept with the fleet.",
     children: [

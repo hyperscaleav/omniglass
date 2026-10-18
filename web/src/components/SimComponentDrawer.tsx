@@ -35,21 +35,21 @@ import {
   type FireDraft,
   type Impairment,
   type ImpairmentDraft,
-  type SimDevice,
+  type SimComponent,
   type SimResult,
   type SimSurface,
 } from "../lib/simulation";
 
-// SimDeviceDrawer: one simulated device, opened from its Simulation tile or its
-// component's page (#890). Status first (where it is served and what has reached
+// SimComponentDrawer: one simulated component, opened from its Simulation row or
+// its component's page (#890). Status first (where it is served and what has reached
 // it), then what is broken (the impairment, with what a collector will see), then
-// its API surface, where choosing an operation loads a fire form and the device's
-// answer. The rail is the Drawer's: Save and Repair for the impairment, Remove at
+// its API surface, where choosing an operation loads a fire form and the
+// component's answer. The rail is the Drawer's: Save and Repair for the impairment, Remove at
 // the left. Every affordance is gated on the permission the server checks; a
 // reader gets the facts and no controls.
 //
 // Addressed by the component's uuid: the seeded fleet reuses names across places.
-export default function SimDeviceDrawer(props: {
+export default function SimComponentDrawer(props: {
   id: string | null;
   onClose: () => void;
   // After a Remove; defaults to onClose. A host page that IS the removed
@@ -61,7 +61,7 @@ export default function SimDeviceDrawer(props: {
   const components = useQuery(() => ({ queryKey: COMPONENTS_KEY, queryFn: listComponents, enabled: !!props.id }));
   const title = () => {
     const c = (components.data ?? []).find((x) => x.id === props.id);
-    return c ? entityLabel(c) : "Simulated device";
+    return c ? entityLabel(c) : "Simulated component";
   };
   return (
     <Drawer
@@ -82,7 +82,7 @@ export default function SimDeviceDrawer(props: {
       }
     >
       <Show when={props.id} keyed>
-        {(id) => <DeviceBody id={id} onRemoved={props.onRemoved ?? props.onClose} />}
+        {(id) => <ComponentBody id={id} onRemoved={props.onRemoved ?? props.onClose} />}
       </Show>
     </Drawer>
   );
@@ -90,7 +90,7 @@ export default function SimDeviceDrawer(props: {
 
 const KV_GRID = "grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-3";
 
-function DeviceBody(props: { id: string; onRemoved: () => void }): JSX.Element {
+function ComponentBody(props: { id: string; onRemoved: () => void }): JSX.Element {
   const qc = useQueryClient();
   const me = useMe();
   const canImpair = () => can(me.data, "simulation", "update");
@@ -142,7 +142,7 @@ function DeviceBody(props: { id: string; onRemoved: () => void }): JSX.Element {
   }
 
   async function remove() {
-    const label = sim.data?.device?.component ?? "this device";
+    const label = sim.data?.activity?.component ?? "this component";
     if (!confirm(`Remove "${label}"? The component and its endpoints are deleted, and the simulator stops serving it. This cannot be undone.`)) return;
     setBusy(true);
     setErr(null);
@@ -242,7 +242,7 @@ function StatusSection(props: {
   setErr: (e: string | null) => void;
 }) {
   const qc = useQueryClient();
-  const device = (): SimDevice | undefined => props.sim.device;
+  const activity = (): SimComponent | undefined => props.sim.activity;
   // The pick follows the server's product only when that product changes: every
   // poll hands back a fresh object, and re-seeding on each would undo the
   // operator's choice before they press Change. The memo dedupes by value.
@@ -272,31 +272,31 @@ function StatusSection(props: {
     <section class="flex flex-col gap-3" data-testid="sim-status">
       <Eyebrow
         label="Status"
-        hint="Where the simulator serves this device and what has reached it. Hits count every connection and request the device answered since the server started, collection's polls and your fired operations alike."
+        hint="Where the simulator serves this component and what has reached it. Hits count every connection and request it answered since the server started, collection's polls and your fired operations alike."
       />
       <div class={KV_GRID}>
         <KVStacked label="Node" value={<span class="font-data">{props.sim.node}</span>} />
         <KVStacked label="Address" value={<span class="font-data">{props.sim.address}</span>} />
-        <KVStacked label="Serving" value={<ServingPill serving={!!device()?.serving} />} />
-        <KVStacked label="Hits" value={<span class="font-data tnum">{(device()?.hits ?? 0).toLocaleString()}</span>} />
+        <KVStacked label="Serving" value={<ServingPill serving={!!activity()?.serving} />} />
+        <KVStacked label="Hits" value={<span class="font-data tnum">{(activity()?.hits ?? 0).toLocaleString()}</span>} />
         <KVStacked
           label="Last hit"
           value={
-            <Show when={device()?.last_hit_at} fallback={<span class="text-base-content/40">none yet</span>}>
-              <span class="tnum">{rel(device()!.last_hit_at!)}</span>
-              <Show when={device()?.last_protocol}>
-                <span class="ml-1.5 font-data text-xs text-base-content/60">{device()!.last_protocol}</span>
+            <Show when={activity()?.last_hit_at} fallback={<span class="text-base-content/40">none yet</span>}>
+              <span class="tnum">{rel(activity()!.last_hit_at!)}</span>
+              <Show when={activity()?.last_protocol}>
+                <span class="ml-1.5 font-data text-xs text-base-content/60">{activity()!.last_protocol}</span>
               </Show>
             </Show>
           }
         />
         <KVStacked label="Profile" value={<span class="font-data">{props.sim.profile}</span>} />
       </div>
-      <Show when={device() && hitsByProtocol(device()!).length > 0}>
+      <Show when={activity() && hitsByProtocol(activity()!).length > 0}>
         <div class="flex flex-col gap-1.5">
           <span class="eyebrow">Hits by protocol</span>
           <div class="flex flex-wrap gap-1.5" data-testid="hits-by-protocol">
-            <For each={hitsByProtocol(device()!)}>
+            <For each={hitsByProtocol(activity()!)}>
               {(p) => (
                 <span class="badge badge-sm badge-ghost gap-1.5">
                   <span class="font-data">{p.protocol}</span>
@@ -314,7 +314,7 @@ function StatusSection(props: {
         <FieldRow
           label="Product"
           eyebrow
-          info="The products this device's profile simulates. Changing among them keeps its endpoints valid; the simulator serves the new product's identity on its next pull."
+          info="The products this component's profile simulates. Changing among them keeps its endpoints valid; the simulator serves the new product's identity on its next pull."
           actions={
             <Button class="join-item" size="md" icon={Save} disabled={props.busy || !product() || product() === props.sim.product} onClick={() => void reclassify()}>
               Change
@@ -333,11 +333,11 @@ function StatusSection(props: {
 // What each impairment does, said as what a collector will see: the teaching
 // rides the (i) beside each field.
 const IMPAIRMENT_TIPS = {
-  unplugged: "Dark on every protocol: connections time out, datagrams and pings go unanswered. A collector sees the device down at every layer, the path included.",
-  latency_ms: "Delay added to traffic toward the device. A collector sees round-trip times climb, and a poll slower than its timeout fails as if the device were down.",
+  unplugged: "Dark on every protocol: connections time out, datagrams and pings go unanswered. A collector sees the component down at every layer, the path included.",
+  latency_ms: "Delay added to traffic toward the component. A collector sees round-trip times climb, and a poll slower than its timeout fails as if the component were down.",
   jitter_ms: "Variation on the delay, at most the latency. A collector sees round-trip times wander from sample to sample.",
-  loss_pct: "Share of packets toward the device dropped, to hundredths of a percent. A collector sees pings lost and polls retried or failed, intermittently.",
-  rate_kbit: "Bandwidth limit on the device's link, both ways, in kilobits per second; 0 is unlimited. A collector sees large answers (a web page, a walk) slow to arrive.",
+  loss_pct: "Share of packets toward the component dropped, to hundredths of a percent. A collector sees pings lost and polls retried or failed, intermittently.",
+  rate_kbit: "Bandwidth limit on the component's link, both ways, in kilobits per second; 0 is unlimited. A collector sees large answers (a web page, a walk) slow to arrive.",
 } as const;
 
 function ImpairmentSection(props: {
@@ -369,7 +369,7 @@ function ImpairmentSection(props: {
     <section class="flex flex-col gap-3" data-testid="sim-impairment">
       <Eyebrow
         label="Impairment"
-        hint="Break the device on purpose and watch monitoring notice. The simulator beside the node applies it on its next pull; Repair returns it to healthy."
+        hint="Break the component on purpose and watch monitoring notice. The simulator beside the node applies it on its next pull; Repair returns it to healthy."
         right={
           <span class={isImpaired(props.stored) ? "badge badge-sm badge-soft badge-warning" : "badge badge-sm badge-healthy"}>
             {isImpaired(props.stored) ? "impaired" : "healthy"}
@@ -434,7 +434,7 @@ function SurfaceSection(props: { sim: ComponentSim; canFire: boolean; id: string
     <section class="flex flex-col gap-3" data-testid="sim-surface">
       <Eyebrow
         label="API surface"
-        hint="Every protocol surface the device serves, from its profile: the HTTP routes, the command lines and the SNMP OIDs a driver can use. Choose one to fire it at the device and read its answer, exactly as a collector would."
+        hint="Every protocol surface the component serves, from its profile: the HTTP routes, the command lines and the SNMP OIDs a driver can use. Choose one to fire it at the component and read its answer, exactly as a collector would."
       />
       <div class="flex flex-col gap-2">
         <For each={surfaces()}>
@@ -544,7 +544,7 @@ function FirePanel(props: { id: string; initial: FireDraft }) {
     <div ref={reveal} class="flex scroll-mt-4 flex-col gap-3 rounded-box border border-base-300 bg-base-200/50 p-3" data-testid="fire-panel">
       <Eyebrow
         label={`Fire on ${d().surface}`}
-        hint="Runs one operation against the device from the server, as its listeners would answer it. A command's change sticks, and collection sees it on its next poll."
+        hint="Runs one operation against the component from the server, as its listeners would answer it. A command's change sticks, and collection sees it on its next poll."
       />
       <Show when={d().kind === "http"}>
         <div class="grid grid-cols-[7rem_1fr] gap-2">
@@ -562,7 +562,7 @@ function FirePanel(props: { id: string; initial: FireDraft }) {
         </FieldRow>
       </Show>
       <Show when={d().kind === "command"}>
-        <FieldRow label="Command" eyebrow info="The line sent, as typed at the device's prompt. A pattern with a placeholder needs a real value in its place.">
+        <FieldRow label="Command" eyebrow info="The line sent, as typed at the component's prompt. A pattern with a placeholder needs a real value in its place.">
           <input class="input input-bordered w-full font-data" autocomplete="off" value={d().command} onInput={(e) => patch({ command: e.currentTarget.value })} />
         </FieldRow>
       </Show>

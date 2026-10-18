@@ -19,8 +19,8 @@ export default function Drawer(props: {
   onClose: () => void;
   title: JSX.Element;
   headerExtra?: JSX.Element;
-  // A wider panel for a body that reads more than a form (the simulated
-  // device's API surface and its answers, #890).
+  // A wider panel for a body that reads more than a form (a simulated
+  // component's API surface and its answers, #890).
   wide?: boolean;
   children: JSX.Element;
 }) {

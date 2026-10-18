@@ -50,7 +50,7 @@ type simNodeBody struct {
 	LastSeen     time.Time                      `json:"last_seen"`
 	Capabilities collection.SimCapabilities     `json:"capabilities"`
 	Impairments  collection.SimImpairmentStatus `json:"impairments"`
-	Devices      []simDeviceBody                `json:"devices"`
+	Components   []simDeviceBody                `json:"components" doc:"The components the simulator serves, in the caller's component read scope, with their live hits."`
 }
 
 type simFleetOutput struct {
@@ -81,7 +81,7 @@ type simRouteBody struct {
 	Path    string `json:"path"`
 	Summary string `json:"summary,omitempty"`
 	Example string `json:"example,omitempty"`
-	Private bool   `json:"private,omitempty" doc:"A route the device's own web UI calls but does not advertise."`
+	Private bool   `json:"private,omitempty" doc:"A route the product's own web UI calls but does not advertise."`
 }
 
 type simCommandBody struct {
@@ -116,21 +116,21 @@ type componentSimOutput struct {
 		Simulated   bool                           `json:"simulated" doc:"The component has an endpoint on a node and a product a profile simulates."`
 		Node        string                         `json:"node,omitempty"`
 		Connected   bool                           `json:"connected" doc:"The node's simulator pulled recently."`
-		Device      *simDeviceBody                 `json:"device,omitempty"`
+		Activity    *simDeviceBody                 `json:"activity,omitempty" doc:"What the simulator reports for the component: serving, hits, and its impairment."`
 		Product     string                         `json:"product,omitempty"`
 		Profile     string                         `json:"profile,omitempty"`
 		Address     string                         `json:"address,omitempty"`
 		Summary     string                         `json:"summary,omitempty"`
-		Variants    []string                       `json:"variants,omitempty" doc:"The products the same profile simulates; changing among them keeps the device's endpoints valid."`
+		Variants    []string                       `json:"variants,omitempty" doc:"The products the same profile simulates; changing among them keeps the component's endpoints valid."`
 		Impairments collection.SimImpairmentStatus `json:"impairments"`
-		Surface     []simSurfaceBody               `json:"surface,omitempty" doc:"Every protocol surface the device serves, from its profile."`
+		Surface     []simSurfaceBody               `json:"surface,omitempty" doc:"Every protocol surface the simulated component serves, from its profile."`
 	}
 }
 
 type fireSimInput struct {
 	Name string `path:"name" doc:"The simulated component's name, or a dotted address"`
 	Body struct {
-		Surface string `json:"surface" minLength:"1" doc:"The surface to fire on, by its name in the device's surface list"`
+		Surface string `json:"surface" minLength:"1" doc:"The surface to fire on, by its name in the component's surface list"`
 		Method  string `json:"method,omitempty" required:"false" pattern:"^[A-Za-z]*$" doc:"HTTP: the method; GET when empty"`
 		Path    string `json:"path,omitempty" required:"false" doc:"HTTP: the request path"`
 		Body    string `json:"body,omitempty" required:"false" doc:"HTTP: the request body"`
@@ -143,8 +143,8 @@ type fireSimOutput struct {
 	Body collection.SimOperationResult
 }
 
-type addSimDeviceInput struct {
-	Name string `path:"name" doc:"The node whose simulator serves the new device"`
+type addSimComponentInput struct {
+	Name string `path:"name" doc:"The node whose simulator serves the new component"`
 	Body struct {
 		Name     string  `json:"name" minLength:"1" doc:"The new component's name"`
 		Product  string  `json:"product" minLength:"1" doc:"A product a simulator profile simulates"`
@@ -152,11 +152,11 @@ type addSimDeviceInput struct {
 	}
 }
 
-type addSimDeviceOutput struct {
+type addSimComponentOutput struct {
 	Body struct {
 		Component string `json:"component"`
 		Node      string `json:"node"`
-		Address   string `json:"address" doc:"The loopback address the simulated device answers on."`
+		Address   string `json:"address" doc:"The loopback address the simulated component answers on."`
 		Endpoints int    `json:"endpoints" doc:"How many endpoints were created for the collector to reach it."`
 	}
 }
@@ -250,7 +250,7 @@ func registerSimFleetRoutes(api huma.API, a *authenticator, gw storage.Gateway, 
 		Method:      http.MethodGet,
 		Path:        "/simulation",
 		Summary:     "Get the simulated fleet",
-		Description: "Every node a simulator has pulled for since the server started (that the caller may read), each with its capabilities, its account of impairments, and the devices it serves within the caller's component read scope, joined to their live hits. Connected is true when any simulator pulled recently. Hits are per server process, not stored. Gated by simulation:read.",
+		Description: "Every node a simulator has pulled for since the server started (that the caller may read), each with its capabilities, its account of impairments, and the components it simulates within the caller's component read scope, joined to their live hits. Connected is true when any simulator pulled recently. Hits are per server process, not stored. Gated by simulation:read.",
 	}, "simulation", "read"), func(ctx context.Context, _ *struct{}) (*simFleetOutput, error) {
 		out := &simFleetOutput{}
 		out.Body.Nodes = []simNodeBody{}
@@ -269,7 +269,7 @@ func registerSimFleetRoutes(api huma.API, a *authenticator, gw storage.Gateway, 
 			st, seen := status(node)
 			b := simulationBody(devices, st, seen, now).Body
 			out.Body.Nodes = append(out.Body.Nodes, simNodeBody{Node: node, Connected: b.Connected, LastSeen: st.LastSeen,
-				Capabilities: b.Capabilities, Impairments: b.Impairments, Devices: b.Devices})
+				Capabilities: b.Capabilities, Impairments: b.Impairments, Components: b.Devices})
 			out.Body.Connected = out.Body.Connected || b.Connected
 		}
 		return out, nil
@@ -280,7 +280,7 @@ func registerSimFleetRoutes(api huma.API, a *authenticator, gw storage.Gateway, 
 		Method:      http.MethodGet,
 		Path:        "/simulation/profiles",
 		Summary:     "List the simulator's profiles",
-		Description: "The simulator's profile catalog, embedded in the binary: each profile with the products it simulates and the protocols it speaks. Adding a simulated device names one of these products. Gated by simulation:read.",
+		Description: "The simulator's profile catalog, embedded in the binary: each profile with the products it simulates and the protocols it speaks. Adding a simulated component names one of these products. Gated by simulation:read.",
 	}, "simulation", "read"), func(ctx context.Context, _ *struct{}) (*simProfilesOutput, error) {
 		store, err := simCatalog()
 		if err != nil {
@@ -358,7 +358,7 @@ func registerSimFleetRoutes(api huma.API, a *authenticator, gw storage.Gateway, 
 		view := simulationBody([]storage.SimDevice{s.device}, st, seen, time.Now()).Body
 		b := &out.Body
 		b.Simulated, b.Node, b.Connected = true, s.node, view.Connected
-		b.Device = &view.Devices[0]
+		b.Activity = &view.Devices[0]
 		b.Product, b.Profile, b.Address, b.Summary = s.device.Product, s.prof.Name, s.device.Address, s.prof.Doc.Summary
 		b.Variants, b.Impairments = variantsOf(s.prof), view.Impairments
 		b.Surface = simSurface(s.prof, view.Capabilities.PortOffset)
@@ -369,8 +369,8 @@ func registerSimFleetRoutes(api huma.API, a *authenticator, gw storage.Gateway, 
 		OperationID: "fire-component-simulation",
 		Method:      http.MethodPost,
 		Path:        "/components/{name}/simulation:fire",
-		Summary:     "Fire an operation at a simulated device",
-		Description: "Asks the simulator beside the component's node to run one operation against the device, on one of its protocol surfaces: an HTTP call, a command line (SSH, Telnet, TCP) or an SNMP get, and returns the device's answer. The device answers from its live state in process, as its listeners would, so a command's change sticks and the collector sees it; an impairment does not stop it. Audited. Gated by simulation:update, resolved on the component tier. A component that is not simulated is a 409, a surface it does not serve a 422, and no simulator answering a 503.",
+		Summary:     "Fire an operation at a simulated component",
+		Description: "Asks the simulator beside the component's node to run one operation against the simulated component, on one of its protocol surfaces: an HTTP call, a command line (SSH, Telnet, TCP) or an SNMP get, and returns its answer. The simulator answers from the component's live state in process, as its listeners would, so a command's change sticks and the collector sees it; an impairment does not stop it. Audited. Gated by simulation:update, resolved on the component tier. A component that is not simulated is a 409, a surface it does not serve a 422, and no simulator answering a 503.",
 	}, "simulation", "update"), func(ctx context.Context, in *fireSimInput) (*fireSimOutput, error) {
 		s, err := resolve(ctx, in.Name, a.scopeFor(ctx, "simulation", "update"))
 		if err != nil {
@@ -411,15 +411,15 @@ func registerSimFleetRoutes(api huma.API, a *authenticator, gw storage.Gateway, 
 	})
 
 	huma.Register(api, a.gated(huma.Operation{
-		OperationID:   "add-node-simulation-device",
+		OperationID:   "add-node-simulation-component",
 		Method:        http.MethodPost,
-		Path:          "/nodes/{name}/simulation/devices",
+		Path:          "/nodes/{name}/simulation/components",
 		DefaultStatus: http.StatusCreated,
-		Summary:       "Add a simulated device",
+		Summary:       "Add a simulated component",
 		Description:   "Creates a component of a simulated product, at the lowest free address in the simulated block (127.60.0.0/16), with the endpoint the collector reaches it through placed on the node: a driver attach where the driver's inputs are known (an SNMP attach needs the sim-community secret, else it falls back), otherwise a reachability probe on a port the profile serves, lifted as the node's simulator lifts its ports. The simulator serves it from its next pull, with no restart. Gated by simulation:update, and also needs component:create and endpoint:create, each in the caller's own scope. A node with no simulator connected is a 409, and a product no profile simulates a 422.",
-	}, "simulation", "update"), func(ctx context.Context, in *addSimDeviceInput) (*addSimDeviceOutput, error) {
+	}, "simulation", "update"), func(ctx context.Context, in *addSimComponentInput) (*addSimComponentOutput, error) {
 		if !a.allows(ctx, "component", "create") || !a.allows(ctx, "endpoint", "create") {
-			return nil, huma.Error403Forbidden("adding a simulated device also needs component:create and endpoint:create")
+			return nil, huma.Error403Forbidden("adding a simulated component also needs component:create and endpoint:create")
 		}
 		if _, err := gw.GetNode(ctx, in.Name, a.scopeFor(ctx, "node", "read")); err != nil {
 			return nil, mapNodeErr(err)
@@ -468,7 +468,7 @@ func registerSimFleetRoutes(api huma.API, a *authenticator, gw storage.Gateway, 
 		err = gw.WithSimAddressLock(ctx, func() error {
 			used, err := gw.SimAddressesInUse(ctx)
 			if err != nil {
-				return huma.Error500InternalServerError("plan simulated device")
+				return huma.Error500InternalServerError("plan simulated component")
 			}
 			product := in.Body.Product
 			c, err = gw.CreateComponent(ctx, actorID(ctx), storage.ComponentSpec{Name: in.Body.Name, ProductName: &product, LocationName: in.Body.Location},
@@ -520,7 +520,7 @@ func registerSimFleetRoutes(api huma.API, a *authenticator, gw storage.Gateway, 
 		if err != nil {
 			return nil, err
 		}
-		out := &addSimDeviceOutput{}
+		out := &addSimComponentOutput{}
 		out.Body.Component, out.Body.Node, out.Body.Address, out.Body.Endpoints = c.Name, in.Name, plan[0].Address, len(plan[0].Endpoints)
 		return out, nil
 	})

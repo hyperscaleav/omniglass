@@ -180,42 +180,42 @@ collector reads plausible but wrong data (#909). And an unplugged device's **sys
 move on its own: a component's condition is its active alarms, and raising one from reachability is
 the event rule tier (#819).
 
-## Exercising a device
+## Exercising a simulated component
 
-Every simulated device publishes its whole API surface, read from its profile:
+Every simulated component publishes its whole API surface, read from its profile:
 `GET /components/{name}/simulation` lists each protocol surface (its protocol, the port the simulator binds,
 whether it holds a session open) with its HTTP routes, its commands and its SNMP OIDs, the same
-surface the device's listeners serve. An operator fires any of them with
+surface its listeners serve. An operator fires any of them with
 `POST /components/{name}/simulation:fire` (or `omniglass component simulation fire <component>
 --surface nvp --command "SET INPUT hdmi2"`): the server forwards the operation over the bus to
 the simulator beside the component's node, on a subject of that node's own grant, and the
-simulator answers it from the device.
+simulator answers it.
 
-The device answers **in process**, from its live state, through the same routes, commands and OID
-map its listeners use: a command's change sticks, so the collector reads it on its next poll, and
-the operation counts as a hit, so the device blinks. Because it runs beside the listeners rather
-than through the network, an impairment does not stop it: the console can still inspect a device
-it unplugged. A device that enforces HTTP authentication is called with its own credentials, as an
-authorized client would.
+The simulator answers **in process**, from the component's live state, through the same routes,
+commands and OID map its listeners use: a command's change sticks, so the collector reads it on its
+next poll, and the operation counts as a hit, so its row lights up. Because it runs beside the
+listeners rather than through the network, an impairment does not stop it: the console can still
+inspect a component it unplugged. A profile that enforces HTTP authentication is called with its
+own credentials, as an authorized client would.
 
-## Adding a device
+## Adding a simulated component
 
-A simulated device is a component, so adding one is adding a component the simulator can serve:
-`POST /nodes/{name}/simulation/devices` (`omniglass simulation add-device <node> --name panel-9
+Adding a simulated component is adding a component the simulator can serve:
+`POST /nodes/{name}/simulation/components` (`omniglass simulation add-component <node> --name panel-9
 --product newtron-panel-7`) creates a component of a simulated product and the endpoint the
 collector reaches it through, placed on the node. The plan is the dev seed's, made a primitive
 (`internal/simfleet`): the lowest address in `127.60.0.0/16` no endpoint already targets, a driver
 attach where the driver's inputs are known (an SNMP attach only when the `sim-community` secret
 exists for it to reference), otherwise a reachability probe on a port the profile serves, lifted
-as that node's simulator lifts its ports. The simulator serves the device from its next pull, with
-no restart. Changing a device's product among the products its profile simulates keeps its
-endpoints valid (they share a driver), and deleting the component removes the device.
+as that node's simulator lifts its ports. The simulator serves it from its next pull, with no
+restart. Changing its product among the products its profile simulates keeps its endpoints valid
+(they share a driver), and deleting the component removes it from the simulation.
 
 ## In the console
 
 Everything above has a console surface, shown only while a simulator is connected: the
-**Simulation** page lists every simulated device by node and blinks a device when the collector
-reaches it; a device's drawer carries its status, its impairment controls and its API surface,
-with a form to fire any operation; and a simulated component's own page carries a Simulation
-section that opens the same drawer. The walk-through is the
+**Simulation** page lists every simulated component in a table, a row lighting up when the
+collector reaches it; the simulation drawer carries its status, its impairment controls and its
+API surface, with a form to fire any operation; and a simulated component's own page carries a
+Simulation section that opens the same drawer. The walk-through is the
 [simulation guide](/guides/operator/simulation/).

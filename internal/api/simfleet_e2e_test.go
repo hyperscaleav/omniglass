@@ -52,12 +52,12 @@ func (h *fakeHub) FireSimOperation(_ context.Context, node string, op collection
 type fleetBody struct {
 	Connected bool `json:"connected"`
 	Nodes     []struct {
-		Node      string `json:"node"`
-		Connected bool   `json:"connected"`
-		Devices   []struct {
+		Node       string `json:"node"`
+		Connected  bool   `json:"connected"`
+		Components []struct {
 			Component string `json:"component"`
 			Address   string `json:"address"`
-		} `json:"devices"`
+		} `json:"components"`
 	} `json:"nodes"`
 }
 
@@ -160,7 +160,7 @@ func TestSimulationFleetAPI(t *testing.T) {
 	hub.Pulled("site-a", collection.SimCapabilities{PortOffset: 10000}, []string{panelID})
 	get(viewer, "/simulation", &fleet)
 	if !fleet.Connected || len(fleet.Nodes) != 1 || fleet.Nodes[0].Node != "site-a" || !fleet.Nodes[0].Connected ||
-		len(fleet.Nodes[0].Devices) != 1 || fleet.Nodes[0].Devices[0].Component != "panel-1" {
+		len(fleet.Nodes[0].Components) != 1 || fleet.Nodes[0].Components[0].Component != "panel-1" {
 		t.Fatalf("fleet = %+v, want site-a's simulator serving panel-1", fleet)
 	}
 	c.do("", http.MethodGet, "/simulation", nil, http.StatusUnauthorized)
@@ -263,7 +263,7 @@ func TestSimulationFleetAPI(t *testing.T) {
 		Address   string `json:"address"`
 		Endpoints int    `json:"endpoints"`
 	}
-	if err := json.Unmarshal(c.do(ownerTok, http.MethodPost, "/nodes/site-a/simulation/devices",
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodPost, "/nodes/site-a/simulation/components",
 		map[string]any{"name": "panel-9", "product": panel}, http.StatusCreated), &added); err != nil {
 		t.Fatal(err)
 	}
@@ -283,12 +283,12 @@ func TestSimulationFleetAPI(t *testing.T) {
 	if len(withNew.Devices) != 2 {
 		t.Fatalf("site-a lists %d devices after the add, want 2", len(withNew.Devices))
 	}
-	c.do(viewer, http.MethodPost, "/nodes/site-a/simulation/devices", map[string]any{"name": "panel-10", "product": panel}, http.StatusForbidden)
-	out := c.do(ownerTok, http.MethodPost, "/nodes/site-a/simulation/devices", map[string]any{"name": "panel-10", "product": "generic-device"}, http.StatusUnprocessableEntity)
+	c.do(viewer, http.MethodPost, "/nodes/site-a/simulation/components", map[string]any{"name": "panel-10", "product": panel}, http.StatusForbidden)
+	out := c.do(ownerTok, http.MethodPost, "/nodes/site-a/simulation/components", map[string]any{"name": "panel-10", "product": "generic-device"}, http.StatusUnprocessableEntity)
 	if !strings.Contains(string(out), "simulat") {
 		t.Fatalf("an unsimulated product was refused with %s, want it to say why", out)
 	}
-	c.do(ownerTok, http.MethodPost, "/nodes/site-b/simulation/devices", map[string]any{"name": "panel-11", "product": panel}, http.StatusConflict)
+	c.do(ownerTok, http.MethodPost, "/nodes/site-b/simulation/components", map[string]any{"name": "panel-11", "product": panel}, http.StatusConflict)
 
 	// A component name repeats across places: the add wires the component it
 	// created, never a namesake elsewhere.
@@ -301,7 +301,7 @@ func TestSimulationFleetAPI(t *testing.T) {
 	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "dup", ProductName: &panel, LocationName: &locA}, all, all, all, all); err != nil {
 		t.Fatal(err)
 	}
-	c.do(ownerTok, http.MethodPost, "/nodes/site-a/simulation/devices", map[string]any{"name": "dup", "product": panel, "location": "loc-b"}, http.StatusCreated)
+	c.do(ownerTok, http.MethodPost, "/nodes/site-a/simulation/components", map[string]any{"name": "dup", "product": panel, "location": "loc-b"}, http.StatusCreated)
 	var dupEndpoints map[string]int = map[string]int{}
 	rows, err := conn.Query(ctx, `select l.name, count(e.id) from component c join location l on l.id = c.location_id
 		left join endpoint e on e.component = c.id where c.name = 'dup' group by l.name`)

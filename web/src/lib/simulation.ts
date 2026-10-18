@@ -2,16 +2,18 @@ import { api } from "../api/client";
 import type { components } from "../api/schema.gen";
 
 // The simulation data layer (#890): thin typed wrappers over the generated client
-// plus the pure rules the Simulation page and the device drawer share. Shapes are
-// the generated ones (api/simfleet.go, api/impairment.go). A simulated device is
-// addressed by its component's uuid everywhere here, never its name: the seeded
+// plus the pure rules the Simulation page and the simulated component drawer share. Shapes are
+// the generated ones (api/simfleet.go, api/impairment.go). A simulated component
+// is addressed by its component's uuid everywhere here, never its name: the seeded
 // fleet reuses names across places (thirty rooms each hold a `display-1`), so a
 // name is ambiguous and the API answers it with a 409.
 
 type S = components["schemas"];
 export type SimFleet = S["SimFleetOutputBody"];
 export type SimNode = S["SimNodeBody"];
-export type SimDevice = S["SimDeviceBody"];
+// The generated schema keeps its old name for the row type; the console calls it
+// what it is, a simulated component.
+export type SimComponent = S["SimDeviceBody"];
 export type SimImpairmentStatus = S["SimImpairmentStatus"];
 export type SimProfile = S["SimProfileBody"];
 export type ComponentSim = S["ComponentSimOutputBody"];
@@ -21,8 +23,8 @@ export type SimCommand = S["SimCommandBody"];
 export type SimOID = S["SimOIDBody"];
 export type SimResult = S["SimOperationResult"];
 export type FireInput = Omit<S["FireSimInputBody"], "$schema">;
-export type AddSimDevice = Omit<S["AddSimDeviceInputBody"], "$schema">;
-export type AddSimDeviceResult = S["AddSimDeviceOutputBody"];
+export type AddSimComponent = Omit<S["AddSimComponentInputBody"], "$schema">;
+export type AddSimComponentResult = S["AddSimComponentOutputBody"];
 
 // The impairment as the console holds it: every field present, since a PUT
 // replaces the whole impairment and a field left out reads as zero.
@@ -48,8 +50,8 @@ export const SIDEBAR_POLL_MS = 10_000;
 // installs never run one, and the door only needs to appear eventually.
 export const SIDEBAR_IDLE_POLL_MS = 60_000;
 export const PAGE_POLL_MS = 1_000;
-// How long a tile's flash lasts; shorter than the page poll so a device hit on
-// every poll flashes once per poll instead of glowing steadily.
+// How long a row's flash lasts; shorter than the page poll so a component hit
+// on every poll flashes once per poll instead of glowing steadily.
 export const BLINK_MS = 700;
 
 // sidebarPollMs: the sidebar's interval for the fleet it last read.
@@ -81,10 +83,10 @@ export async function fireSim(id: string, body: FireInput): Promise<SimResult> {
   return data as SimResult;
 }
 
-export async function addSimDevice(node: string, body: AddSimDevice): Promise<AddSimDeviceResult> {
-  const { data, error } = await api.POST("/nodes/{name}/simulation/devices", { params: { path: { name: node } }, body });
+export async function addSimComponent(node: string, body: AddSimComponent): Promise<AddSimComponentResult> {
+  const { data, error } = await api.POST("/nodes/{name}/simulation/components", { params: { path: { name: node } }, body });
   if (error) throw error;
-  return data as AddSimDeviceResult;
+  return data as AddSimComponentResult;
 }
 
 export async function getImpairment(id: string): Promise<Impairment> {
@@ -111,14 +113,14 @@ export function toImpairment(f: Partial<Impairment> | null | undefined): Impairm
   };
 }
 
-// isImpaired: anything broken at all. A healthy device reads all zero.
+// isImpaired: anything broken at all. A healthy component reads all zero.
 export function isImpaired(i: Partial<Impairment> | null | undefined): boolean {
   const f = toImpairment(i);
   return f.unplugged || f.latency_ms > 0 || f.jitter_ms > 0 || f.loss_pct > 0 || f.rate_kbit > 0;
 }
 
-// impairmentSummary says what is broken in a few words, for a tile's marker
-// title and the component page's fact.
+// impairmentSummary says what is broken in a few words, for a row's impairment
+// pill and the component page's fact.
 export function impairmentSummary(i: Partial<Impairment> | null | undefined): string {
   const f = toImpairment(i);
   if (f.unplugged) return "unplugged";
@@ -194,11 +196,11 @@ export function sameImpairment(a: Impairment, b: Impairment): boolean {
 }
 
 // risenHits compares a fresh read against the hit counts last seen and returns
-// the devices whose count rose, then remembers the fresh counts. The first read
-// of a device seeds it without flashing: arriving on the page is not a hit.
-export function risenHits(seen: Map<string, number>, devices: readonly SimDevice[]): string[] {
+// the components whose count rose, then remembers the fresh counts. The first
+// read of a component seeds it without flashing: arriving on the page is not a hit.
+export function risenHits(seen: Map<string, number>, rows: readonly SimComponent[]): string[] {
   const risen: string[] = [];
-  for (const d of devices) {
+  for (const d of rows) {
     const before = seen.get(d.component_id);
     if (before !== undefined && d.hits > before) risen.push(d.component_id);
     seen.set(d.component_id, d.hits);
@@ -207,27 +209,27 @@ export function risenHits(seen: Map<string, number>, devices: readonly SimDevice
 }
 
 export function totalHits(n: SimNode): number {
-  return (n.devices ?? []).reduce((sum, d) => sum + d.hits, 0);
+  return (n.components ?? []).reduce((sum, d) => sum + d.hits, 0);
 }
 
-// The connected simulator nodes: where a device can be added.
+// The connected simulator nodes: where a simulated component can be added.
 export function connectedNodes(f: SimFleet | undefined): string[] {
   return (f?.nodes ?? []).filter((n) => n.connected).map((n) => n.node);
 }
 
-// hitsByProtocol orders a device's per-protocol counts, busiest first.
-export function hitsByProtocol(d: SimDevice): { protocol: string; hits: number }[] {
+// hitsByProtocol orders a component's per-protocol counts, busiest first.
+export function hitsByProtocol(d: SimComponent): { protocol: string; hits: number }[] {
   return Object.entries(d.hits_by_protocol ?? {})
     .map(([protocol, hits]) => ({ protocol, hits }))
     .sort((a, b) => b.hits - a.hits || a.protocol.localeCompare(b.protocol));
 }
 
-// The add-device form's rule. The name mirrors storage's entity name rule
+// The add-component form's rule. The name mirrors storage's entity name rule
 // (lowercase letters, digits and hyphens, starting with a letter or digit, at
 // most 100 characters, never a dot); node and product must be chosen.
 export const ENTITY_NAME_RE = /^[a-z0-9][a-z0-9-]*$/;
-export type AddDeviceDraft = { node: string; product: string; name: string; location: string };
-export type AddDeviceErrors = Partial<Record<keyof AddDeviceDraft, string>>;
+export type AddComponentDraft = { node: string; product: string; name: string; location: string };
+export type AddComponentErrors = Partial<Record<keyof AddComponentDraft, string>>;
 
 export function entityNameError(name: string): string | null {
   if (!name) return null;
@@ -236,8 +238,8 @@ export function entityNameError(name: string): string | null {
   return null;
 }
 
-export function validateAddDevice(d: AddDeviceDraft): AddDeviceErrors {
-  const e: AddDeviceErrors = {};
+export function validateAddComponent(d: AddComponentDraft): AddComponentErrors {
+  const e: AddComponentErrors = {};
   if (!d.node) e.node = "Choose the node whose simulator serves it.";
   if (!d.product) e.product = "Choose a simulated product.";
   const nameErr = d.name.trim() ? entityNameError(d.name.trim()) : "Name the new component.";

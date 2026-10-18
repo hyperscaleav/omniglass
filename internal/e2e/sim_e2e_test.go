@@ -189,7 +189,7 @@ func TestSimulatorEndToEnd(t *testing.T) {
 
 	// Add a simulated device from the console's route: the simulator picks it
 	// up on its next pull and serves it, with no restart.
-	if out, code := cli("simulation", "add-device", "edge-e", "--name", "sim-added", "--product", product,
+	if out, code := cli("simulation", "add-component", "edge-e", "--name", "sim-added", "--product", product,
 		"--server", server, "--token", ownerTok); code != 0 {
 		t.Fatalf("add-device exit %d:\n%s", code, out)
 	}

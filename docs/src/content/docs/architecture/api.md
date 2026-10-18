@@ -304,7 +304,7 @@ stored, so they start from zero when the server restarts; a node with no simulat
 
 **The simulated fleet has its own reads and two writes.** `GET /simulation` (gated `simulation:read`)
 is every node whose simulator has pulled since the server started (the nodes the caller may read), each
-with its capabilities, its account of impairments and its devices in the caller's component scope;
+with its capabilities, its account of impairments and its simulated components in the caller's component scope;
 `connected` is true when any of them pulled recently, which is what shows the console's Simulation page.
 `GET /simulation/profiles` is the simulator's embedded profile catalog, each profile with the products it
 simulates. `GET /components/{name}/simulation` says whether a component is simulated and, when it is,
@@ -312,10 +312,10 @@ gives its node, address, live hits, impairment, the products its profile simulat
 surface from the profile (every protocol surface, with its HTTP routes, commands and SNMP OIDs, each port as the
 simulator binds it). `POST /components/{name}/simulation:fire` (gated `simulation:update`, audited) asks
 the simulator beside the component's node, over the bus, to run one operation from that surface (an HTTP
-call, a command line or an SNMP get) and returns the device's answer: a component that is not simulated
+call, a command line or an SNMP get) and returns the component's answer: a component that is not simulated
 is a 409, a surface it does not serve a 422, and no simulator answering a 503.
-`POST /nodes/{name}/simulation/devices` (gated `simulation:update`, and also needing `component:create`
-and `endpoint:create`, each in the caller's own scope) adds a simulated device: a component of a
+`POST /nodes/{name}/simulation/components` (gated `simulation:update`, and also needing `component:create`
+and `endpoint:create`, each in the caller's own scope) adds a simulated component: a component of a
 simulated product at the lowest free address in `127.60.0.0/16`, with the endpoint the collector reaches
 it through placed on the node; a node with no simulator connected is a 409, a product no profile
 simulates a 422.
