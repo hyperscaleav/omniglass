@@ -126,16 +126,27 @@ test-short:
 bench:
 	go test -run '^$$' -bench . -benchmem -count=5 ./internal/storage/...
 
-# The tests that need NET_ADMIN (impairments rewrite the firewall and tc of
-# the network they run in) run in a container of their own, never on the host:
+# The tests that need NET_ADMIN (impairments rewrite the firewall and tc of the
+# network they run in) run in a container of their own, never on the host:
 # NET_ADMIN, its own network namespace, and the ping sysctl the collector's
-# unprivileged pinger needs. Docker is already a requirement of make test.
+# unprivileged pinger needs. A Postgres container on a private network serves
+# the full-stack test through the harness's OMNIGLASS_TEST_ADMIN_DSN. Packages
+# run one at a time (-p 1): they share the one network namespace, and the
+# simulator owns one firewall table and one qdisc in it. Docker is already a
+# requirement of make test.
 NETADMIN_IMG ?= golang:1.25
-NETADMIN_PKGS ?= ./internal/sim/impair/
+NETADMIN_PKGS ?= ./internal/sim/impair/ ./internal/e2e/
+NETADMIN_RUN ?= Netlink|Impair|Validate|PlanFor
 test-netadmin:
-	docker run --rm --cap-add NET_ADMIN --sysctl net.ipv4.ping_group_range="0 2147483647" \
+	@set -e; net=omniglass-netadmin-$$$$; pg=$$net-pg; \
+	trap 'docker stop $$pg >/dev/null 2>&1; docker network rm $$net >/dev/null 2>&1' EXIT; \
+	docker network create $$net >/dev/null; \
+	docker run -d --rm --name $$pg --network $$net -e POSTGRES_PASSWORD=netadmin postgres:18 >/dev/null; \
+	until docker exec $$pg pg_isready -U postgres >/dev/null 2>&1; do sleep 1; done; \
+	docker run --rm --network $$net --cap-add NET_ADMIN --sysctl net.ipv4.ping_group_range="0 2147483647" \
 		-v "$(CURDIR):/w" -w /w -v omniglass-netadmin-gomod:/go/pkg/mod -v omniglass-netadmin-gocache:/root/.cache/go-build \
-		-e OMNIGLASS_NETADMIN=1 $(NETADMIN_IMG) go test -tags netadmin -count=1 $(NETADMIN_PKGS)
+		-e OMNIGLASS_NETADMIN=1 -e OMNIGLASS_TEST_ADMIN_DSN="postgres://postgres:netadmin@$$pg:5432/postgres?sslmode=disable" \
+		$(NETADMIN_IMG) go test -tags netadmin -p 1 -count=1 -run '$(NETADMIN_RUN)' $(NETADMIN_PKGS)
 
 # One simulator process serving a 1,000-device fleet: startup time, goroutines
 # and heap while serving, and goroutines left behind after it stops.

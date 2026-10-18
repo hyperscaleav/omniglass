@@ -864,16 +864,33 @@ func generatedCommands() []*cobra.Command {
 			}
 			parent.AddCommand(func() *cobra.Command {
 				cmd := func() *cobra.Command {
+					cmd := &cobra.Command{
+						Use:     "get <name>",
+						Short:   "Get what is broken on a simulated device",
+						Long:    "The impairment an operator set on a simulated component (unplugged, or a degraded link), applied by the simulator beside its node when that simulator runs with impairments and NET_ADMIN. A healthy device reads all zero. Gated by simulation:read; the component resolves within the caller's component read scope.",
+						Example: "  omniglass component impairment get <name>",
+						Args:    cobra.ExactArgs(1),
+						RunE: func(cmd *cobra.Command, args []string) error {
+							path := fmt.Sprintf("/api/v1/components/%s/impairment", url.PathEscape(args[0]))
+							return runAPICommand(cmd, "GET", path, nil)
+						},
+					}
+					return cmd
+				}()
+				return cmd
+			}())
+			parent.AddCommand(func() *cobra.Command {
+				cmd := func() *cobra.Command {
 					var fJitterMs int
 					var fLatencyMs int
 					var fLossPct float64
 					var fRateKbit int
 					var fUnplugged bool
 					cmd := &cobra.Command{
-						Use:     "list <name>",
+						Use:     "set <name>",
 						Short:   "Break or repair a simulated device",
 						Long:    "Sets what is broken on a simulated component: unplugged, or a link with added latency, jitter, loss or a rate limit. An all-zero body repairs it. Audited. The simulator beside the component's node applies it on its next pull. Gated by simulation:update, whose scope is resolved on the component tier; a component outside the caller's component:read is a non-disclosing 404, and one it can read but not impair is a 403. Jitter above latency, or a value outside its range, is a 422.",
-						Example: "  omniglass component impairment list <name>",
+						Example: "  omniglass component impairment set <name>",
 						Args:    cobra.ExactArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
 							path := fmt.Sprintf("/api/v1/components/%s/impairment", url.PathEscape(args[0]))

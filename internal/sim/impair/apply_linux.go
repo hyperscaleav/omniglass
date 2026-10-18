@@ -177,9 +177,9 @@ func applyShaping(shaped []Shape) error {
 	for i, s := range shaped {
 		minor := uint16(i + 1)
 		class := netlink.MakeHandle(qdiscMajr, minor)
-		rate := uint64(10_000_000_000 / 8) // unshaped: 10 Gbit/s
+		rate := uint64(10_000_000_000) // bits per second; unshaped: 10 Gbit/s
 		if s.RateKbit > 0 {
-			rate = uint64(s.RateKbit) * 1000 / 8
+			rate = uint64(s.RateKbit) * 1000
 		}
 		if err := netlink.ClassAdd(netlink.NewHtbClass(netlink.ClassAttrs{LinkIndex: idx, Parent: root, Handle: class},
 			netlink.HtbClassAttrs{Rate: rate, Ceil: rate})); err != nil {

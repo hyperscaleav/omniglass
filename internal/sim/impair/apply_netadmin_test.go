@@ -14,7 +14,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hyperscaleav/omniglass/internal/collection"
+	probing "github.com/prometheus-community/pro-bing"
 )
 
 func listen(t *testing.T, addr string) {
@@ -46,13 +46,19 @@ func dial(addr string) (time.Duration, error) {
 	return time.Since(start), err
 }
 
+// pings sends one unprivileged echo, as the collector's pinger does.
 func pings(t *testing.T, target string) bool {
 	t.Helper()
-	res, err := collection.NewICMPPinger().Ping(context.Background(), target, 1, time.Second)
+	p, err := probing.NewPinger(target)
 	if err != nil {
 		t.Fatalf("ping %s: %v", target, err)
 	}
-	return res.Received > 0
+	p.Count, p.Timeout = 1, time.Second
+	p.SetPrivileged(false)
+	if err := p.RunWithContext(context.Background()); err != nil {
+		t.Fatalf("ping %s: %v", target, err)
+	}
+	return p.Statistics().PacketsRecv > 0
 }
 
 func TestNetlinkApplierBreaksAndRestoresDevices(t *testing.T) {
