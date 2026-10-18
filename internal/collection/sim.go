@@ -19,6 +19,35 @@ func SimlistSubject(node string) string { return subjectPrefix + "simlist." + no
 // SimHitSubject is where a simulator publishes batches of hits.
 func SimHitSubject(node string) string { return subjectPrefix + "simhit." + node }
 
+// SimopSubject is where the server asks the simulator beside a node to run
+// an operation an operator fired from the console (request-reply, the
+// server requesting). The simulator subscribes with the node's grant and
+// answers each request once.
+func SimopSubject(node string) string { return subjectPrefix + "simop." + node }
+
+// SimOperation is one operation fired at a simulated device: an HTTP call
+// (Method, Path, Body), a command line (Command, on the interface Protocol),
+// or an SNMP get (OID).
+type SimOperation struct {
+	ComponentID string `json:"component_id"`
+	Kind        string `json:"kind"`
+	Method      string `json:"method,omitempty"`
+	Path        string `json:"path,omitempty"`
+	Body        string `json:"body,omitempty"`
+	Command     string `json:"command,omitempty"`
+	Protocol    string `json:"protocol,omitempty"`
+	OID         string `json:"oid,omitempty"`
+}
+
+// SimOperationResult is the simulated device's answer.
+type SimOperationResult struct {
+	Status    int    `json:"status,omitempty"`
+	Body      string `json:"body"`
+	Truncated bool   `json:"truncated,omitempty"`
+	Error     string `json:"error,omitempty"`
+	TookMs    int64  `json:"took_ms"`
+}
+
 // SimCapabilities is what a simulator can do where it runs: whether it may
 // bind ports below 1024, whether it holds NET_ADMIN (for firewall-backed
 // truthful ping and impairments), and the lift applied to its ports below 1024.

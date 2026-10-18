@@ -116,6 +116,11 @@ func Run(ctx context.Context, cfg Config) error {
 	defer engine.StopAll()
 	hits := &hitBuffer{}
 	engine.SetHitReporter(hits.add)
+	ops, err := subscribeOperations(nc, cfg.Name, engine)
+	if err != nil {
+		return fmt.Errorf("sim: subscribe operations: %w", err)
+	}
+	defer func() { _ = ops.Unsubscribe() }()
 
 	ap := cfg.Applier
 	if ap == nil {

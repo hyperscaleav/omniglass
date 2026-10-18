@@ -2,6 +2,7 @@ package bus
 
 import (
 	"context"
+	"errors"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
@@ -293,6 +294,33 @@ type SimStatus = simhub.Status
 // SimStatus reports the simulator beside a node, or false when none has
 // pulled since this server started.
 func (s *Server) SimStatus(node string) (SimStatus, bool) { return s.sims.Status(node) }
+
+// ErrNoSimulator is FireSimOperation's answer when no simulator beside the
+// node is listening (or none answered in time).
+var ErrNoSimulator = errors.New("bus: no simulator answered")
+
+// FireSimOperation asks the simulator beside node to run op against one of
+// its devices and returns the device's answer.
+func (s *Server) FireSimOperation(ctx context.Context, node string, op collection.SimOperation) (collection.SimOperationResult, error) {
+	var res collection.SimOperationResult
+	b, err := json.Marshal(op)
+	if err != nil {
+		return res, err
+	}
+	ctx, cancel := context.WithTimeout(ctx, simopTimeout)
+	defer cancel()
+	msg, err := s.nc.RequestWithContext(ctx, collection.SimopSubject(node), b)
+	if errors.Is(err, nats.ErrNoResponders) || errors.Is(err, context.DeadlineExceeded) || errors.Is(err, nats.ErrTimeout) {
+		return res, ErrNoSimulator
+	}
+	if err != nil {
+		return res, fmt.Errorf("bus: sim operation: %w", err)
+	}
+	if err := json.Unmarshal(msg.Data, &res); err != nil {
+		return res, fmt.Errorf("bus: sim operation reply: %w", err)
+	}
+	return res, nil
+}
 
 // subscribeSim answers simulators' device-list pulls and records their hits.
 // Both ride the node's subject grant, so the node name taken from the
