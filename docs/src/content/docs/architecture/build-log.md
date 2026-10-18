@@ -6205,5 +6205,7 @@ protocol), and `set-input` issued to a panel changed the simulated device. Profi
 between variants of one kind of device (the Boreal Edge sizes), held to that by the seed's
 component types; the touch panel gained the NVP port, the display and DSP answer `sysDescr`, and
 the port shift lifts only ports below 1024. The 1,000-device benchmark found a device with two line
-protocols serving both with one's config. Whether a command settles from its response or from the
-next observation is now a choice each command binding makes (#900).
+protocols serving both with one's config. Run live, `set-input` actuated but never settled: the panel is polled
+every 30 seconds against a 15-second settle window, and settlement is only checked at issue. The
+fix, settling from the command's response or the next observation as each binding chooses, is
+#900.

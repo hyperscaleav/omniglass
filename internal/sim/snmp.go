@@ -3,6 +3,7 @@ package sim
 import (
 	"fmt"
 	"log/slog"
+	"net"
 	"sort"
 	"strconv"
 	"strings"
@@ -36,23 +37,52 @@ func (d *Device) StartSNMP(port int, community string) error {
 		},
 	}
 
-	srv := GoSNMPServer.NewSNMPServer(handler)
-	if err := srv.ListenUDP("udp", addr); err != nil {
+	if err := handler.ReadyForWork(); err != nil {
+		return fmt.Errorf("snmp agent: %w", err)
+	}
+	udpAddr, err := net.ResolveUDPAddr("udp", addr)
+	if err != nil {
+		return fmt.Errorf("resolving %s: %w", addr, err)
+	}
+	conn, err := net.ListenUDP("udp", udpAddr)
+	if err != nil {
 		return fmt.Errorf("listening on %s: %w", addr, err)
 	}
-
+	// The read loop is ours, around the library's request handler: the
+	// library's own listener nils its socket on Shutdown while its serve
+	// loop reads it, a data race. Owning the socket, a stop only closes it.
+	loop := &snmpLoop{conn: conn}
+	d.snmpServer = loop
 	go func() {
 		slog.Debug("device SNMP started", "device", d.Hostname, "addr", addr)
-		if err := srv.ServeForever(); err != nil && !strings.Contains(err.Error(), "closed") {
-			slog.Error("device SNMP error", "device", d.Hostname, "error", err)
-		}
+		loop.serve(&handler)
 	}()
-	// GoSNMPServer does not expose its underlying PacketConn for us to
-	// stash on d.snmpConn, so StopSNMP calls its own Shutdown method via
-	// a captured reference on the device.
-	d.snmpServer = srv
 	return nil
 }
+
+// snmpLoop answers SNMP datagrams on one socket through the library's
+// request handler until the socket closes.
+type snmpLoop struct{ conn *net.UDPConn }
+
+func (l *snmpLoop) serve(agent *GoSNMPServer.MasterAgent) {
+	var buf [65535]byte
+	for {
+		n, from, err := l.conn.ReadFromUDP(buf[:])
+		if err != nil {
+			return // closed by Shutdown
+		}
+		reply, err := agent.ResponseForBuffer(append([]byte(nil), buf[:n]...))
+		if err != nil {
+			slog.Debug("snmp request refused", "from", from.String(), "error", err)
+		}
+		if len(reply) > 0 {
+			_, _ = l.conn.WriteToUDP(reply, from)
+		}
+	}
+}
+
+// Shutdown closes the socket, which ends the read loop.
+func (l *snmpLoop) Shutdown() { _ = l.conn.Close() }
 
 // StopSNMP shuts down the SNMP listener.
 func (d *Device) StopSNMP() {

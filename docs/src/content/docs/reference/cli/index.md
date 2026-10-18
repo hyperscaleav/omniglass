@@ -3772,7 +3772,7 @@ Serves each component placed on the node whose product has a simulator profile a
 |---|---|---|---|
 | `--name` | string | (none) | the node this simulator runs beside (env OMNIGLASS_NODE_NAME) |
 | `--poll` | duration | `10s` | how often to re-pull the device list |
-| `--port-offset` | int | `0` | shift every simulated port, to serve without the privilege to bind ports below 1024 |
+| `--port-offset` | int | `0` | lift the simulated ports below 1024 by this much, to serve without the privilege to bind them |
 | `--server` | string | (none) | Omniglass server base URL (env OMNIGLASS_SERVER) |
 | `--token` | string | (none) | that node's enrollment token (env OMNIGLASS_NODE_TOKEN) |
 

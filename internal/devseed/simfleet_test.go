@@ -1,9 +1,14 @@
 package devseed
 
 import (
+	"context"
 	"testing"
 
+	"github.com/hyperscaleav/omniglass/internal/seed"
 	"github.com/hyperscaleav/omniglass/internal/sim/profile"
+	"github.com/hyperscaleav/omniglass/internal/sim/profiles"
+	"github.com/hyperscaleav/omniglass/internal/storage"
+	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 )
 
 func TestPlanSimFleet(t *testing.T) {
@@ -16,13 +21,16 @@ func TestPlanSimFleet(t *testing.T) {
 	profileFor := func(p string) (*profile.DeviceProfile, bool) { d, ok := profiles[p]; return d, ok }
 	driverOf := map[string]string{"x-display": "snmp-generic", "x-panel": "newtron-nvp", "x-bar": "kestrel-api", "x-sensor": "http-json"}
 
-	got := planSimFleet([]simComponent{
+	got, err := planSimFleet([]simComponent{
 		{ID: "c3", Product: "x-panel"},
 		{ID: "c1", Product: "x-display"},
 		{ID: "c9", Product: "x-unsimulated"},
 		{ID: "c4", Product: "x-bar"},
 		{ID: "c5", Product: "x-sensor"},
-	}, profileFor, func(p string) string { return driverOf[p] })
+	}, nil, profileFor, func(p string) string { return driverOf[p] })
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	if len(got) != 4 {
 		t.Fatalf("planned %d devices, want the four the simulator serves: %+v", len(got), got)
@@ -57,5 +65,91 @@ func TestSimFleetAddressesStayInTheBlock(t *testing.T) {
 		if got := simAddress(i); got != want {
 			t.Errorf("simAddress(%d) = %s, want %s", i, got, want)
 		}
+	}
+}
+
+// An address already in use stays its owner's: a component wired on an
+// earlier run keeps its address, and a new one takes the lowest free one,
+// whatever was deleted or added in between.
+func TestPlanSimFleetNeverHandsOutAnAddressInUse(t *testing.T) {
+	prof := &profile.DeviceProfile{Interfaces: []profile.Interface{{Protocol: "http", Port: 80}}}
+	profileFor := func(string) (*profile.DeviceProfile, bool) { return prof, true }
+	driverOf := func(string) string { return "" }
+	// 01a and 01c were wired on an earlier run at .1 and .3; 01b (which held
+	// .2) was deleted; 02b is new.
+	used := map[string]bool{"127.60.0.1": true, "127.60.0.3": true}
+	got, err := planSimFleet([]simComponent{{ID: "02b", Product: "x"}}, used, profileFor, driverOf)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 || got[0].Address != "127.60.0.2" {
+		t.Fatalf("plan = %+v, want 02b at the free 127.60.0.2", got)
+	}
+}
+
+// The simulated block is finite; a plan past it says so rather than
+// wrapping into addresses outside the block.
+func TestPlanSimFleetRefusesPastTheBlock(t *testing.T) {
+	prof := &profile.DeviceProfile{}
+	used := map[string]bool{}
+	for i := 0; i < simAddressCap; i++ {
+		used[simAddress(i)] = true
+	}
+	_, err := planSimFleet([]simComponent{{ID: "late", Product: "x"}}, used,
+		func(string) (*profile.DeviceProfile, bool) { return prof, true }, func(string) string { return "" })
+	if err == nil {
+		t.Fatal("a full block planned an address")
+	}
+}
+
+// A driver that has a spec and simulated products is one the seed attaches,
+// not probes: when a stub driver gains its spec, this fails until simAttach
+// learns its inputs.
+func TestSpecdDriversWithSimulatedProductsAreAttached(t *testing.T) {
+	if testing.Short() {
+		t.Skip("needs Postgres")
+	}
+	ctx := context.Background()
+	gw, err := storage.NewPG(ctx, storagetest.NewDSN(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer gw.Close()
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatal(err)
+	}
+	store, err := profile.LoadStoreFS(profiles.FS)
+	if err != nil {
+		t.Fatal(err)
+	}
+	drivers, err := gw.ListDrivers(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	specd := map[string]bool{}
+	for _, d := range drivers {
+		if len(d.Spec) > 0 {
+			specd[d.Name] = true
+		}
+	}
+	products, err := gw.ListProducts(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	checked := 0
+	for _, p := range products {
+		if p.DriverName == nil || !specd[*p.DriverName] {
+			continue
+		}
+		if _, _, ok := store.ForProduct(p.Name); !ok {
+			continue
+		}
+		checked++
+		if _, ok := simAttach[*p.DriverName]; !ok {
+			t.Errorf("%s is simulated and its driver %s has a spec, but the dev seed would only probe it", p.Name, *p.DriverName)
+		}
+	}
+	if checked == 0 {
+		t.Fatal("no simulated product on a spec'd driver; the check checked nothing")
 	}
 }

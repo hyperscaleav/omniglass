@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/hyperscaleav/omniglass/internal/config"
 	"github.com/hyperscaleav/omniglass/internal/secret"
+	"os"
 
 	"github.com/hyperscaleav/omniglass/internal/devseed"
 	"github.com/hyperscaleav/omniglass/internal/migrate"
@@ -38,7 +39,7 @@ func runSeedDev(ctx context.Context) error {
 	}
 	// The same key the server loads, so the secrets the dev fleet seeds (the
 	// simulator's SNMP community) are ones the server can decrypt.
-	kek, _, err := secret.LoadKEK(config.Get, c.DataDir, func(string) {})
+	kek, _, err := secret.LoadKEK(config.Get, c.DataDir, func(msg string) { fmt.Fprintln(os.Stderr, "warning: "+msg) })
 	if err != nil {
 		return err
 	}

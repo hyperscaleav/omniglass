@@ -585,11 +585,6 @@ func Run(ctx context.Context, gw storage.Gateway, actorID string) error {
 	if err := seedReachability(ctx, gw, actorID, locIDs); err != nil {
 		return err
 	}
-	// The simulated fleet: addresses and endpoints on the dev node for every
-	// component the simulator serves, so make dev-sim collects for real.
-	if err := seedSimFleet(ctx, gw, actorID); err != nil {
-		return err
-	}
 	// A handful of native call-started events on a boardroom video bar, so the
 	// console's event panel comes up populated instead of empty. Addressed by the
 	// id its fixture key resolved to: the bar's name is the platform's.
@@ -633,7 +628,10 @@ func Run(ctx context.Context, gw storage.Gateway, actorID string) error {
 	if err := seedStandardMaps(ctx, gw, actorID); err != nil {
 		return err
 	}
-	return nil
+	// Last: the simulated fleet, addresses and endpoints on the dev node for
+	// every component the simulator serves, so make dev-sim collects for
+	// real. Last, so a failure here cannot skip the seeding before it.
+	return seedSimFleet(ctx, gw, actorID)
 }
 
 // standardMaps are the example rooms' layouts, drawn the way an integrator

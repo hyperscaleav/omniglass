@@ -203,6 +203,7 @@ type Device struct {
 	LoopbackIP  net.IP
 	Port        int // primary HTTP port, populated by StartHTTP
 	ProfileName string
+	Product     string // the product it simulates, when its profile serves several
 	Version     int64
 
 	// Logger receives one RequestLog per inbound request. Nil is safe.
@@ -276,7 +277,7 @@ type Device struct {
 	httpMu         sync.Mutex
 	httpServers    []*http.Server // one per declared http interface
 	httpAddrs      []net.Addr
-	snmpServer     snmpShutdowner // *GoSNMPServer.SNMPServer, kept as interface so device.go doesn't import the server package
+	snmpServer     snmpShutdowner // the SNMP read loop, kept as an interface so device.go doesn't import the server package
 	sshListener    net.Listener
 	telnetListener net.Listener
 	tcpMu          sync.Mutex

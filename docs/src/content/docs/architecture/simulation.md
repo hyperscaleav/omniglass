@@ -91,8 +91,8 @@ Two facts shape where the simulator runs:
 - **Every loopback address answers ping**, device or not, because the kernel answers ICMP. For
   ping to tell the truth, addresses without a device must be dropped by a firewall rule, which
   needs `NET_ADMIN`.
-- **Ports below 1024 need a privilege** (SNMP 161, SSH 22, HTTP 80 and 443). The engine can remap
-  every profile port at listen time, which is how the tests serve a fleet unprivileged.
+- **Ports below 1024 need a privilege** (SNMP 161, SSH 22, HTTP 80 and 443). The engine can lift
+  the ports below 1024 at listen time, which is how the tests and the dev fleet serve unprivileged.
 
 ## Beside a node
 
@@ -107,8 +107,8 @@ endpoint placed on the node, with the component's product and the host its endpo
 serves the ones it can: a product a profile serves, at a loopback address.
 The rest it logs and leaves alone. A device added on the server starts serving on the next pull
 and a device removed goes dark, with no restart and no disturbance to the others. Each pull states
-what the simulator can do where it runs (bind ports below 1024, hold `NET_ADMIN`, the shift it
-applies to every port with `--port-offset` when it can do neither), and about once a second it
+what the simulator can do where it runs (bind ports below 1024, hold `NET_ADMIN`, the lift it
+applies to ports below 1024 with `--port-offset` when it cannot bind them), and about once a second it
 publishes the hits it saw and the devices it is serving.
 
 The server accepts hits only for components it handed that node, keeps them in memory (a live
@@ -120,8 +120,8 @@ as `tcp`, beside the requests it answers.
 ## The dev fleet
 
 The dev seed simulates its own fleet. Every component whose product a profile serves gets an
-address in `127.60.0.0/16` (handed out in component order, so an added component takes the next
-address and the others keep theirs) and endpoints on the dev node, `edge-hq`. A product whose driver
+address in `127.60.0.0/16` (a component keeps the address it was given, and a new one takes the
+lowest address no endpoint already targets) and endpoints on the dev node, `edge-hq`. A product whose driver
 has a spec gets that driver attached: SNMP products through `snmp-generic` (with a seeded platform
 community secret), the Newtron panels through `newtron-nvp`'s line protocol. A product whose driver
 is still a stub gets a reachability probe on the port its profile serves. The endpoints target the

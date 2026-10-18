@@ -74,7 +74,7 @@ func parseCapEff(status string) (uint64, error) {
 
 // capabilitiesFrom states what the simulator can do: bind ports below 1024
 // (the bind capability, or the unprivileged-port sysctl lowered to 0, as a
-// container runtime does), hold NET_ADMIN, and the shift on every port.
+// container runtime does), hold NET_ADMIN, and the lift on ports below 1024.
 func capabilitiesFrom(capEff uint64, unprivPortStart, portOffset int) collection.SimCapabilities {
 	return collection.SimCapabilities{
 		LowPorts:   capEff&(1<<capNetBindService) != 0 || unprivPortStart == 0,

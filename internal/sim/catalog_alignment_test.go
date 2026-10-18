@@ -32,10 +32,11 @@ func TestEveryDeviceProfileNamesASeededProduct(t *testing.T) {
 		t.Fatal(err)
 	}
 	seeded := map[string]bool{}
-	typeOf := map[string]string{}
+	typeOf, driverOf := map[string]string{}, map[string]string{}
 	for _, p := range facts.Products {
 		seeded[p.ID] = true
 		typeOf[p.ID] = p.ComponentType
+		driverOf[p.ID] = p.DriverID
 	}
 	store, err := profile.LoadStoreFS(profiles.FS)
 	if err != nil {
@@ -58,6 +59,9 @@ func TestEveryDeviceProfileNamesASeededProduct(t *testing.T) {
 			// sizes), never a different device: a touch panel's surface is a
 			// subset of a control processor's, so one cannot stand in for
 			// the other.
+			if driverOf[v.Name] != driverOf[name] {
+				t.Errorf("device profile %q (driver %s) lists %q (driver %s); a variant is collected the same way", name, driverOf[name], v.Name, driverOf[v.Name])
+			}
 			if typeOf[v.Name] != typeOf[name] {
 				t.Errorf("device profile %q (component type %s) lists %q (component type %s); a profile serves variants of one kind of device", name, typeOf[name], v.Name, typeOf[v.Name])
 			}

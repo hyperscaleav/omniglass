@@ -91,7 +91,7 @@
     },
     "products": {
       "type": "array",
-      "description": "Other products this profile simulates: products of the same family on the same driver, so the wire a collector speaks matches. Each may overlay the profile's defaults with its own identity.",
+      "description": "Other products this profile simulates: variants of the same kind of device (the same component type) on the same driver. Each may overlay the profile's defaults with its own identity.",
       "items": {
         "type": "object",
         "required": [

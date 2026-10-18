@@ -143,6 +143,7 @@ func (e *Engine) buildDevice(snap DeviceSnapshot, peersByRoom map[roomKey]map[st
 		state = deepCopy(defaults)
 	}
 	dev := NewDevice(snap.DeviceID, snap.Hostname, ip, snap.ProfileName, snap.Version, state)
+	dev.Product = snap.Product
 	// Install the profile's defaults snapshot so templates and
 	// mutations on this device can read `{{ .Defaults.<path> }}` to
 	// reset state paths to their declared defaults (used by reboot
@@ -259,7 +260,8 @@ func (e *Engine) buildDevice(snap DeviceSnapshot, peersByRoom map[roomKey]map[st
 	return dev, nil
 }
 
-// SetPortMap remaps every profile port at listen time, so a fleet can
+// SetPortMap remaps profile ports at listen time (PrivilegedPortShift lifts
+// those below 1024), so a fleet can
 // serve unprivileged (shift ports below 1024 above it) without setcap.
 // Call before StartAll; nil restores the declared ports.
 func (e *Engine) SetPortMap(f func(int) int) { e.portMap = f }
@@ -317,8 +319,8 @@ func (e *Engine) startDevice(dev *Device) error {
 
 // Sync makes the served fleet match snapshots, the way a running simulator
 // follows the server: a new device is built and started, a device no longer
-// listed is stopped, and a device whose address or profile changed is
-// restarted. A device unchanged on both sides keeps serving with its live
+// listed is stopped, and a device whose address, profile or product changed
+// is restarted. A device unchanged on both sides keeps serving with its live
 // state. Every departing device stops before any arriving one starts, so an
 // address handed from one device to another (or swapped between two) is
 // free when it is bound. A device that fails to start is stopped and left
@@ -341,7 +343,8 @@ func (e *Engine) Sync(snapshots []DeviceSnapshot) error {
 	kept := make(map[string]*Device, len(snapshots))
 	var arriving []DeviceSnapshot
 	for _, snap := range snapshots {
-		if d, ok := current[snap.DeviceID]; ok && d.LoopbackIP.String() == snap.LoopbackIP && d.ProfileName == snap.ProfileName {
+		if d, ok := current[snap.DeviceID]; ok && d.LoopbackIP.String() == snap.LoopbackIP &&
+			d.ProfileName == snap.ProfileName && d.Product == snap.Product {
 			kept[snap.DeviceID] = d
 			continue
 		}

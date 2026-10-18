@@ -21,7 +21,7 @@ func SimHitSubject(node string) string { return subjectPrefix + "simhit." + node
 
 // SimCapabilities is what a simulator can do where it runs: whether it may
 // bind ports below 1024, whether it holds NET_ADMIN (for firewall-backed
-// truthful ping and impairments), and any shift applied to every port.
+// truthful ping and impairments), and the lift applied to its ports below 1024.
 type SimCapabilities struct {
 	LowPorts   bool `json:"low_ports"`
 	NetAdmin   bool `json:"net_admin"`

@@ -143,6 +143,10 @@ func runShellSession(d *Device, sess *Session, rd *bufio.Reader, w io.Writer, po
 			continue
 		}
 
+		// Hold this session's pushes while its command runs: the change
+		// the command makes fans out to every subscriber, this session
+		// included, and its reply must reach the wire first.
+		sess.holdPushes()
 		start := time.Now()
 		result, ok, rerr := d.RunCommand(cmd)
 		elapsed := time.Since(start)
@@ -180,6 +184,7 @@ func runShellSession(d *Device, sess *Session, rd *bufio.Reader, w io.Writer, po
 				sess.Unsubscribe(result.Subject)
 			}
 		}
+		sess.releasePushes()
 
 		if d.Logger != nil {
 			d.Logger(RequestLog{

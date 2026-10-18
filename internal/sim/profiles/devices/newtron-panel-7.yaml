@@ -170,7 +170,7 @@ interfaces:
       - match: "status.video.input"
         path: "status.video.input"
         publish_token: "INPUT"
-        push_format: "EVT INPUT {{ .Value }}"
+        push_format: "EVT INPUT {{ .Raw }}"
     commands:
       - match: "GET INPUT"
         response: 'INPUT {{ .State | get "status" | get "video" | get "input" }}'

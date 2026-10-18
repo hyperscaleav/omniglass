@@ -23,6 +23,7 @@ func TestValidateInterfaces(t *testing.T) {
 		{"two http", ifaces("http", "http"), false},
 		{"two ssh", ifaces("ssh", "ssh"), true},
 		{"two telnet", ifaces("telnet", "telnet"), true},
+		{"two snmp", ifaces("snmp", "snmp"), true},
 	} {
 		if err := validateInterfaces(&tc.p); (err != nil) != tc.wantErr {
 			t.Errorf("%s: err = %v, wantErr %v", tc.name, err, tc.wantErr)

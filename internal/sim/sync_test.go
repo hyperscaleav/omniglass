@@ -340,3 +340,23 @@ func TestPrivilegedPortShift(t *testing.T) {
 		t.Error("a zero shift should leave the declared ports (nil map)")
 	}
 }
+
+// A device whose product changes within its family (one size of display to
+// another) is rebuilt with the new product's identity.
+func TestEngineSyncRebuildsADeviceWhoseProductChanged(t *testing.T) {
+	e := newCatalogEngine(t)
+	ip := "127.88.8.2"
+	snap := func(product string) DeviceSnapshot {
+		return DeviceSnapshot{DeviceID: "panel", Hostname: "panel", LoopbackIP: ip, ProfileName: "boreal-edge-86", Product: product, Version: 1}
+	}
+	if err := e.Sync([]DeviceSnapshot{snap("boreal-edge-55")}); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.Sync([]DeviceSnapshot{snap("boreal-edge-65")}); err != nil {
+		t.Fatal(err)
+	}
+	model := e.Devices()[0].State()["configuration"].(map[string]any)["device"].(map[string]any)["model"]
+	if model != "Edge 65" {
+		t.Fatalf("model after the product changed = %v, want Edge 65", model)
+	}
+}

@@ -25,9 +25,10 @@ type DeviceProfile struct {
 	Overrides    []Override     `yaml:"overrides"`
 	Defaults     map[string]any `yaml:"defaults"`
 	DocFixture   map[string]any `yaml:"doc_fixture"`
-	// Products are the other products this profile simulates: products of
-	// the same family on the same driver, so the wire a collector speaks
-	// matches. Each may overlay the profile's defaults with its own identity.
+	// Products are the other products this profile simulates: variants of
+	// the same kind of device (the same component type) on the same driver,
+	// a display line in its sizes. Each may overlay the profile's defaults
+	// with its own identity. The catalog alignment test holds both rules.
 	Products []ProductVariant `yaml:"products"`
 }
 
@@ -592,12 +593,12 @@ func (s *Store) loadDevices(fsys fs.FS, dir string) error {
 }
 
 // validateInterfaces rejects what the simulator cannot serve faithfully: a
-// device has one SSH and one Telnet listener, so a second interface of
-// either would silently go unserved.
+// device has one SSH, one Telnet and one SNMP listener, so a second
+// interface of any of them would silently go unserved.
 func validateInterfaces(p *DeviceProfile) error {
 	seen := map[string]string{}
 	for _, iface := range p.Interfaces {
-		if iface.Protocol != "ssh" && iface.Protocol != "telnet" {
+		if iface.Protocol != "ssh" && iface.Protocol != "telnet" && iface.Protocol != "snmp" {
 			continue
 		}
 		if prev, dup := seen[iface.Protocol]; dup {

@@ -2,6 +2,7 @@ package devseed
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"sort"
@@ -47,44 +48,68 @@ type simDevice struct {
 	Endpoints   []simEndpoint
 }
 
+// simAddressCap is how many addresses the block holds: 256 third octets of
+// 250 hosts each.
+const simAddressCap = 256 * 250
+
 // simAddress is the i-th address of the simulated block, 127.60.0.1 onward.
 func simAddress(i int) string {
 	return fmt.Sprintf("127.60.%d.%d", i/250, i%250+1)
 }
 
-// planSimFleet decides each simulated component's address and endpoints.
-// Components are taken in id order, so a component added later takes the
-// next address and existing ones keep theirs. A product on a driver with a
-// spec gets that driver attached with the inputs it declares; a product
-// whose driver is still a stub gets a reachability probe on the port its
-// profile serves.
-func planSimFleet(comps []simComponent, profileFor func(string) (*profile.DeviceProfile, bool), driverOf func(string) string) []simDevice {
+// planSimFleet decides the address and endpoints of each component not yet
+// wired, taken in id order. An address in used (one an existing endpoint
+// already targets) is never handed out: each component takes the lowest
+// free one, so a deletion or a component gaining a product later cannot put
+// two devices on one address. A product on a driver whose inputs the seed
+// knows (simAttach) gets that driver attached; any other gets a
+// reachability probe on the port its profile serves.
+func planSimFleet(comps []simComponent, used map[string]bool, profileFor func(string) (*profile.DeviceProfile, bool), driverOf func(string) string) ([]simDevice, error) {
 	sorted := append([]simComponent(nil), comps...)
 	sort.Slice(sorted, func(i, j int) bool { return sorted[i].ID < sorted[j].ID })
 	shift := sim.PrivilegedPortShift(SimPortOffset)
+	taken := make(map[string]bool, len(used))
+	for a := range used {
+		taken[a] = true
+	}
+	next := 0
 	var out []simDevice
 	for _, c := range sorted {
 		prof, ok := profileFor(c.Product)
 		if !ok {
 			continue
 		}
-		addr := simAddress(len(out))
+		for next < simAddressCap && taken[simAddress(next)] {
+			next++
+		}
+		if next == simAddressCap {
+			return nil, fmt.Errorf("devseed: the simulated block 127.60.0.0/16 is full (%d addresses)", simAddressCap)
+		}
+		addr := simAddress(next)
+		taken[addr] = true
 		dev := simDevice{ComponentID: c.ID, Address: addr}
-		switch driverOf(c.Product) {
-		case "snmp-generic":
-			dev.Endpoints = append(dev.Endpoints, simEndpoint{Driver: "snmp-generic", Inputs: map[string]string{
-				"host": addr, "port": strconv.Itoa(shift(161)), "community": simCommunitySecret,
-			}})
-		case "newtron-nvp":
-			dev.Endpoints = append(dev.Endpoints, simEndpoint{Driver: "newtron-nvp", Inputs: map[string]string{"host": addr}})
-		default:
-			if e, ok := probeFor(prof, addr, shift); ok {
-				dev.Endpoints = append(dev.Endpoints, e)
-			}
+		driver := driverOf(c.Product)
+		if inputs, ok := simAttach[driver]; ok {
+			dev.Endpoints = append(dev.Endpoints, simEndpoint{Driver: driver, Inputs: inputs(addr, shift)})
+		} else if e, ok := probeFor(prof, addr, shift); ok {
+			dev.Endpoints = append(dev.Endpoints, e)
 		}
 		out = append(out, dev)
 	}
-	return out
+	return out, nil
+}
+
+// simAttach is the inputs the seed supplies for each driver it attaches,
+// keyed by driver name. A driver that gains a spec joins here; until then
+// its products get a probe, and the dev seed's test fails for a spec'd
+// driver with simulated products that is missing.
+var simAttach = map[string]func(addr string, shift func(int) int) map[string]string{
+	"snmp-generic": func(addr string, shift func(int) int) map[string]string {
+		return map[string]string{"host": addr, "port": strconv.Itoa(shift(161)), "community": simCommunitySecret}
+	},
+	"newtron-nvp": func(addr string, _ func(int) int) map[string]string {
+		return map[string]string{"host": addr} // 51325, the spec's default, needs no privilege
+	},
 }
 
 // probeFor picks a reachability probe from what the profile serves: HTTP
@@ -147,15 +172,33 @@ func seedSimFleet(ctx context.Context, gw storage.Gateway, actorID string) error
 		}
 		return store.Devices[name], true
 	}
-	node := reachNode
-	for _, dev := range planSimFleet(cands, profileFor, func(p string) string { return drivers[p] }) {
-		existing, err := gw.ListComponentEndpoints(ctx, dev.ComponentID)
+	// Components already wired keep their endpoints; every address any
+	// endpoint targets is taken.
+	used := map[string]bool{}
+	var unwired []simComponent
+	for _, c := range cands {
+		existing, err := gw.ListComponentEndpoints(ctx, c.ID)
 		if err != nil {
 			return fmt.Errorf("devseed: check simulated endpoints: %w", err)
 		}
-		if len(existing) > 0 {
-			continue
+		for _, e := range existing {
+			var params struct {
+				Target string `json:"target"`
+			}
+			if json.Unmarshal(e.Params, &params) == nil && params.Target != "" {
+				used[storage.TargetHost(params.Target)] = true
+			}
 		}
+		if len(existing) == 0 {
+			unwired = append(unwired, c)
+		}
+	}
+	plan, err := planSimFleet(unwired, used, profileFor, func(p string) string { return drivers[p] })
+	if err != nil {
+		return err
+	}
+	node := reachNode
+	for _, dev := range plan {
 		comp := dev.ComponentID
 		for _, e := range dev.Endpoints {
 			spec := storage.EndpointSpec{Component: &comp, Node: &node, SecretRead: all, CanAdmin: true}

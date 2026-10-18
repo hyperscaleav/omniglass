@@ -399,6 +399,19 @@ type Session struct {
 
 	subsMu sync.RWMutex
 	Subs   map[string]*Subscription
+
+	// holdMu guards a hold on this session's pushes, taken while a command
+	// the session sent is running, so its reply reaches the wire before the
+	// push the command's own change causes.
+	holdMu  sync.Mutex
+	holding bool
+	held    []heldPush
+}
+
+type heldPush struct {
+	line  []byte
+	sub   *Subscription
+	value any
 }
 
 // Subscription is one live subject watch on a session.
@@ -516,6 +529,36 @@ func (s *Session) publish(sub *Subscription, value any) {
 	if err != nil {
 		return
 	}
+	s.holdMu.Lock()
+	if s.holding {
+		s.held = append(s.held, heldPush{line: line, sub: sub, value: value})
+		s.holdMu.Unlock()
+		return
+	}
+	s.holdMu.Unlock()
+	s.emit(line, sub, value)
+}
+
+// holdPushes defers this session's pushes until releasePushes.
+func (s *Session) holdPushes() {
+	s.holdMu.Lock()
+	s.holding = true
+	s.holdMu.Unlock()
+}
+
+// releasePushes sends the pushes held since holdPushes, in order.
+func (s *Session) releasePushes() {
+	s.holdMu.Lock()
+	held := s.held
+	s.held, s.holding = nil, false
+	s.holdMu.Unlock()
+	for _, h := range held {
+		s.emit(h.line, h.sub, h.value)
+	}
+}
+
+// emit enqueues a rendered push and reports it.
+func (s *Session) emit(line []byte, sub *Subscription, value any) {
 	select {
 	case s.Out <- line:
 		if pub := s.registry.bus; pub != nil {
@@ -541,7 +584,8 @@ func (s *Session) renderPush(sub *Subscription, value any) ([]byte, error) {
 		Subject  string
 		Path     string
 		Token    string
-		Value    string
+		Value    string // JSON-encoded: typed and unambiguous
+		Raw      string // the bare value, for line protocols that print it as is
 		Hostname string
 		DeviceID string
 	}{
@@ -549,6 +593,7 @@ func (s *Session) renderPush(sub *Subscription, value any) ([]byte, error) {
 		Path:     sub.path,
 		Token:    sub.token,
 		Value:    encodePushValue(value),
+		Raw:      rawPushValue(value),
 		Hostname: s.registry.device.Hostname,
 		DeviceID: s.registry.device.DeviceID,
 	}
@@ -569,6 +614,15 @@ func (s *Session) renderPush(sub *Subscription, value any) ([]byte, error) {
 // everything so numbers, booleans, and strings all come out
 // unambiguously typed; callers that want to embed quoted strings
 // directly can do so without a separate quote step.
+// rawPushValue renders a value bare: a string as itself, anything else as
+// its JSON form.
+func rawPushValue(v any) string {
+	if s, ok := v.(string); ok {
+		return s
+	}
+	return encodePushValue(v)
+}
+
 func encodePushValue(v any) string {
 	if v == nil {
 		return "null"

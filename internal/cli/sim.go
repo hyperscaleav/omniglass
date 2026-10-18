@@ -60,7 +60,7 @@ func newSimCmd() *cobra.Command {
 	run.Flags().StringVar(&serverURL, "server", "", "Omniglass server base URL (env OMNIGLASS_SERVER)")
 	run.Flags().StringVar(&name, "name", "", "the node this simulator runs beside (env OMNIGLASS_NODE_NAME)")
 	run.Flags().StringVar(&token, "token", "", "that node's enrollment token (env OMNIGLASS_NODE_TOKEN)")
-	run.Flags().IntVar(&portOffset, "port-offset", 0, "shift every simulated port, to serve without the privilege to bind ports below 1024")
+	run.Flags().IntVar(&portOffset, "port-offset", 0, "lift the simulated ports below 1024 by this much, to serve without the privilege to bind them")
 	run.Flags().DurationVar(&poll, "poll", 10*time.Second, "how often to re-pull the device list")
 	group.AddCommand(run)
 	return group

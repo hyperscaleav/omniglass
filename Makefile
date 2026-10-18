@@ -252,7 +252,9 @@ dev-sim: build
 			| sed -n 's/.*"token": *"\([^"]*\)".*/\1/p' > bin/edge-hq.token; \
 	fi; \
 	test -s bin/edge-hq.token || { echo "dev-sim: could not enroll edge-hq; is make dev serving?"; exit 1; }; \
+	test "$(SIM_PORT_OFFSET)" = "10000" || echo "dev-sim: SIM_PORT_OFFSET=$(SIM_PORT_OFFSET), but the dev seed aims its endpoints at ports lifted by 10000; the node will not reach the devices"; \
 	tok=$$(cat bin/edge-hq.token); \
 	./bin/omniglass node run --server http://localhost:8080 --name edge-hq --token "$$tok" & node=$$!; \
 	trap 'kill $$node 2>/dev/null' EXIT INT TERM; \
+	sleep 2; kill -0 $$node 2>/dev/null || { echo "dev-sim: the node exited at startup (see above); empty bin/edge-hq.token to enroll afresh"; exit 1; }; \
 	./bin/omniglass sim run --server http://localhost:8080 --name edge-hq --token "$$tok" --port-offset $(SIM_PORT_OFFSET)
