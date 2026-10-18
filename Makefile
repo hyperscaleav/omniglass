@@ -235,14 +235,16 @@ dev: up build-web
 	@./bin/omniglass token dev --description "dev login token"
 	./bin/omniglass server
 
-# The simulator beside the dev fleet's node: run it in a second terminal while
-# `make dev` serves. The first run enrolls edge-hq with the dev owner's token
+# The simulated dev fleet, collected for real: run it in a second terminal while
+# `make dev` serves. It runs the simulator and the node side by side as edge-hq,
+# the dev node the seed placed every simulated device's endpoints on, so samples
+# land across the fleet. The first run enrolls edge-hq with the dev owner's token
 # (the dev seed keeps no node secret) and keeps the node token in
-# bin/edge-hq.token; later runs reuse it, so a `node run` sharing that token is
-# not cut off. Empty the file to enroll afresh. Ports below 1024 need a
-# privilege an unprivileged host lacks: grant the binary cap_net_bind_service,
-# or shift every port with SIM_PORT_OFFSET.
-SIM_PORT_OFFSET ?= 0
+# bin/edge-hq.token; later runs reuse it. Empty the file to enroll afresh.
+# SIM_PORT_OFFSET lifts the simulated devices' ports below 1024 so this runs
+# unprivileged; the dev seed aims its endpoints at the lifted ports, and a test
+# holds this default to devseed.SimPortOffset.
+SIM_PORT_OFFSET ?= 10000
 dev-sim: build
 	@if [ ! -s bin/edge-hq.token ]; then \
 		owner=$$(./bin/omniglass token dev --description "dev sim enroll" | sed -n 's/^  \([^ ][^ ]*\)$$/\1/p'); \
@@ -250,5 +252,7 @@ dev-sim: build
 			| sed -n 's/.*"token": *"\([^"]*\)".*/\1/p' > bin/edge-hq.token; \
 	fi; \
 	test -s bin/edge-hq.token || { echo "dev-sim: could not enroll edge-hq; is make dev serving?"; exit 1; }; \
-	echo "edge-hq's node token is in bin/edge-hq.token (node run --name edge-hq --token \$$(cat bin/edge-hq.token))"; \
-	exec ./bin/omniglass sim run --server http://localhost:8080 --name edge-hq --token "$$(cat bin/edge-hq.token)" --port-offset $(SIM_PORT_OFFSET)
+	tok=$$(cat bin/edge-hq.token); \
+	./bin/omniglass node run --server http://localhost:8080 --name edge-hq --token "$$tok" & node=$$!; \
+	trap 'kill $$node 2>/dev/null' EXIT INT TERM; \
+	./bin/omniglass sim run --server http://localhost:8080 --name edge-hq --token "$$tok" --port-offset $(SIM_PORT_OFFSET)

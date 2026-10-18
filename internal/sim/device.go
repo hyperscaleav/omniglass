@@ -1285,11 +1285,16 @@ func (d *Device) StartHTTP(port int, tlsCert *tls.Certificate) error {
 	}
 	d.Port = port
 
-	srv := &http.Server{Handler: d, ConnState: func(c net.Conn, s http.ConnState) {
-		if s == http.StateNew {
-			d.logConnect(c)
-		}
-	}}
+	srv := &http.Server{Handler: d,
+		// The server's own complaints (a TLS port check that never shakes
+		// hands, a client gone mid-request) are routine for a device a
+		// collector probes: debug, not a line per probe.
+		ErrorLog: slog.NewLogLogger(slog.Default().Handler(), slog.LevelDebug),
+		ConnState: func(c net.Conn, s http.ConnState) {
+			if s == http.StateNew {
+				d.logConnect(c)
+			}
+		}}
 	d.httpMu.Lock()
 	d.httpServers = append(d.httpServers, srv)
 	d.httpAddrs = append(d.httpAddrs, lis.Addr())

@@ -6193,3 +6193,17 @@ keeps hits in memory, accepting them only for components it handed that node, an
 collector's reachability probe never registered, since it connects and closes without a request;
 an accepted connection now counts as a hit. The Helm chart has no node to put a sidecar beside
 yet (#892).
+
+The third slice simulates the seeded inventory, so the dev fleet is collected for real. The dev
+seed gives every component a simulator profile serves an address and endpoints on the dev node:
+the SNMP products attach `snmp-generic` (a seeded community secret, which meant `seed-dev` now
+loads the server's secret key), the Newtron panels attach `newtron-nvp`, and products whose drivers
+are still stubs get a reachability probe. `make dev-sim` runs the simulator and the node together.
+Run live, all 122 simulated components were served and reached, each landing what its driver
+collects (uptime and an observed model number over SNMP, the observed video input over the line
+protocol), and `set-input` issued to a panel changed the simulated device. Profiles share only
+between variants of one kind of device (the Boreal Edge sizes), held to that by the seed's
+component types; the touch panel gained the NVP port, the display and DSP answer `sysDescr`, and
+the port shift lifts only ports below 1024. The 1,000-device benchmark found a device with two line
+protocols serving both with one's config. Whether a command settles from its response or from the
+next observation is now a choice each command binding makes (#900).

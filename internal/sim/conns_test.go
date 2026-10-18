@@ -1,8 +1,13 @@
 package sim
 
 import (
+	"bytes"
 	"io"
+	"log"
+	"log/slog"
 	"net"
+	"os"
+	"strings"
 	"testing"
 	"time"
 )
@@ -76,5 +81,36 @@ func TestStopEndsEstablishedStreamConns(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// A collector's TCP port check on an HTTPS device connects and closes
+// without a handshake; that is a hit, not an error worth a log line per
+// probe.
+func TestTLSPortCheckLogsNothing(t *testing.T) {
+	var buf bytes.Buffer
+	prior := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelInfo})))
+	defer slog.SetDefault(prior)
+	log.SetOutput(&buf)
+	defer log.SetOutput(os.Stderr)
+
+	d := NewDevice("d", "h", net.ParseIP("127.0.0.1"), "p", 1, map[string]any{})
+	cert, err := (&certCache{}).get()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := d.StartHTTP(0, cert); err != nil {
+		t.Fatal(err)
+	}
+	defer d.StopHTTP()
+	c, err := net.Dial("tcp", d.HTTPAddrs()[0].String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	c.Close()
+	time.Sleep(200 * time.Millisecond)
+	if strings.Contains(buf.String(), "handshake") {
+		t.Fatalf("a port check logged: %s", buf.String())
 	}
 }

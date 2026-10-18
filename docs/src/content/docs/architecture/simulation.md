@@ -24,8 +24,10 @@ addresses; and the engine, which serves every protocol surface a device declares
 computed fields over shared state, follows a changing fleet in place, and reports every
 connection and request it answers on one hit stream. Also built: the `sim run` mode beside a node
 (#887), which pulls the devices placed on the node, serves them, and reports hits the server shows
-at `GET /nodes/{name}/simulation`, locally as `make dev-sim`. Still `Design`: the Helm sidecar
-(#892), simulating the seeded inventory (#888), impairments (#889), and the console surfaces (#890).
+at `GET /nodes/{name}/simulation`. Also built: the simulated dev fleet (#888), where every dev-seed
+component a profile serves gets an address and endpoints on the dev node, so `make dev-sim`
+collects for real. Still `Design`: the Helm sidecar (#892), impairments (#889), and the console
+surfaces (#890).
 :::
 
 ## The catalog
@@ -113,8 +115,23 @@ The server accepts hits only for components it handed that node, keeps them in m
 signal, not stored history), and joins them to the node's devices at
 `GET /nodes/{name}/simulation`, which the CLI reads as `omniglass node simulation <node>`. A
 connection a device accepts counts as a hit, so a collector's bare reachability probe shows there
-as `tcp`, beside the requests it answers. Locally, `make dev-sim` runs the simulator beside
-`make dev`'s fleet.
+as `tcp`, beside the requests it answers.
+
+## The dev fleet
+
+The dev seed simulates its own fleet. Every component whose product a profile serves gets an
+address in `127.60.0.0/16` (handed out in component order, so an added component takes the next
+address and the others keep theirs) and endpoints on the dev node, `edge-hq`. A product whose driver
+has a spec gets that driver attached: SNMP products through `snmp-generic` (with a seeded platform
+community secret), the Newtron panels through `newtron-nvp`'s line protocol. A product whose driver
+is still a stub gets a reachability probe on the port its profile serves. The endpoints target the
+devices' ports below 1024 lifted by 10000 (`devseed.SimPortOffset`), so the simulator runs without
+a privilege.
+
+`make dev-sim`, run beside `make dev`, runs the simulator and the node side by side as `edge-hq`, so
+the whole loop is local: the node polls the simulated devices, the samples land on the seeded
+components, and a command issued to a panel (`omniglass component command issue <panel>
+--command-type set-input --value hdmi3`) changes the simulated device.
 
 :::design[Target design: the simulator as a sidecar, tracked in #892]
 In a deployment the simulator is a sidecar container in the node's pod, granted `NET_ADMIN` and the

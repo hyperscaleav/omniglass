@@ -3,6 +3,8 @@ package cli
 import (
 	"context"
 	"fmt"
+	"github.com/hyperscaleav/omniglass/internal/config"
+	"github.com/hyperscaleav/omniglass/internal/secret"
 
 	"github.com/hyperscaleav/omniglass/internal/devseed"
 	"github.com/hyperscaleav/omniglass/internal/migrate"
@@ -34,7 +36,13 @@ func runSeedDev(ctx context.Context) error {
 	if err := migrate.Run(c.DSN); err != nil {
 		return err
 	}
-	gw, err := storage.NewPG(ctx, c.DSN)
+	// The same key the server loads, so the secrets the dev fleet seeds (the
+	// simulator's SNMP community) are ones the server can decrypt.
+	kek, _, err := secret.LoadKEK(config.Get, c.DataDir, func(string) {})
+	if err != nil {
+		return err
+	}
+	gw, err := storage.NewPG(ctx, c.DSN, storage.WithSecretProvider(secret.NewStaticProvider(kek)))
 	if err != nil {
 		return err
 	}

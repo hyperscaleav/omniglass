@@ -180,8 +180,9 @@ omniglass node simulation edge-hq   # connected?, capabilities, and hits per sim
 ```
 
 Locally, `make dev-sim` (beside `make dev`) enrolls the dev fleet's node once, keeps its token in
-`bin/edge-hq.token` for a `node run` to share, and runs the simulator; set `SIM_PORT_OFFSET` on a host
-that cannot bind ports below 1024.
+`bin/edge-hq.token`, and runs the simulator and the node side by side, so the seeded fleet is
+collected for real; its devices' ports below 1024 are lifted by `SIM_PORT_OFFSET` (default 10000, where
+the dev seed aims its endpoints).
 
 The node-facing `claim` exchange is public (the enrollment token is the authentication), so
 a node presents its name and token to receive its NATS credential:

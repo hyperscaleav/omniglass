@@ -1,7 +1,9 @@
 package devseed_test
 
 import (
+	"bytes"
 	"context"
+	"github.com/hyperscaleav/omniglass/internal/secret"
 	"strconv"
 	"strings"
 	"testing"
@@ -9,6 +11,8 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/devseed"
 	"github.com/hyperscaleav/omniglass/internal/scope"
 	"github.com/hyperscaleav/omniglass/internal/seed"
+	"github.com/hyperscaleav/omniglass/internal/sim/profile"
+	"github.com/hyperscaleav/omniglass/internal/sim/profiles"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 	"github.com/jackc/pgx/v5"
@@ -330,7 +334,7 @@ func TestRunIdempotent(t *testing.T) {
 	dsn := storagetest.NewDSN(t)
 	ctx := context.Background()
 
-	gw, err := storage.NewPG(ctx, dsn)
+	gw, err := storage.NewPG(ctx, dsn, storage.WithSecretProvider(secret.NewStaticProvider(bytes.Repeat([]byte{0x7}, 32))))
 	if err != nil {
 		t.Fatalf("open gateway: %v", err)
 	}
@@ -1167,7 +1171,7 @@ func seededFleet(t *testing.T) (context.Context, *pgx.Conn, storage.Gateway) {
 	dsn := storagetest.NewDSN(t)
 	ctx := context.Background()
 
-	gw, err := storage.NewPG(ctx, dsn)
+	gw, err := storage.NewPG(ctx, dsn, storage.WithSecretProvider(secret.NewStaticProvider(bytes.Repeat([]byte{0x7}, 32))))
 	if err != nil {
 		t.Fatalf("open gateway: %v", err)
 	}
@@ -1403,7 +1407,7 @@ func TestSeededFleetShowsEveryVerdict(t *testing.T) {
 	}
 	ctx := context.Background()
 	dsn := storagetest.NewDSN(t)
-	gw, err := storage.NewPG(ctx, dsn)
+	gw, err := storage.NewPG(ctx, dsn, storage.WithSecretProvider(secret.NewStaticProvider(bytes.Repeat([]byte{0x7}, 32))))
 	if err != nil {
 		t.Fatalf("open gateway: %v", err)
 	}
@@ -1625,5 +1629,65 @@ func TestSeededStandardsDeclareTheRoomKPIs(t *testing.T) {
 		if m.MetricTypeName == "room-temperature" {
 			t.Errorf("the signage bay declares room-temperature; a display board measures neither room metric (#796)")
 		}
+	}
+}
+
+// TestSeededFleetIsSimulated proves the dev fleet is wired for the
+// simulator: every component whose product a simulator profile serves has
+// an endpoint on the dev node at an address in the simulated block, the SNMP
+// and line-protocol products through their drivers, and a second run adds
+// nothing.
+func TestSeededFleetIsSimulated(t *testing.T) {
+	ctx, conn, gw := seededFleet(t)
+	count := func() int {
+		var n int
+		if err := conn.QueryRow(ctx, `select count(*) from endpoint where params->>'target' like '127.60.%'`).Scan(&n); err != nil {
+			t.Fatal(err)
+		}
+		return n
+	}
+	before := count()
+	if before == 0 {
+		t.Fatal("no simulated endpoints were seeded")
+	}
+	var unwired []string
+	rows, err := conn.Query(ctx, `
+		select c.id, p.name from component c join product p on p.id = c.product_id
+		where not exists (select 1 from endpoint e where e.component = c.id
+			and e.node_name = (select principal_id from node where name = 'edge-hq')
+			and e.params->>'target' like '127.60.%')`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	store, err := profile.LoadStoreFS(profiles.FS)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for rows.Next() {
+		var id, product string
+		if err := rows.Scan(&id, &product); err != nil {
+			t.Fatal(err)
+		}
+		if _, _, ok := store.ForProduct(product); ok {
+			unwired = append(unwired, product+" "+id)
+		}
+	}
+	rows.Close()
+	if len(unwired) > 0 {
+		t.Fatalf("simulated components with no endpoint on edge-hq: %v", unwired)
+	}
+	for driver, n := range map[string]int{"snmp-generic": 0, "newtron-nvp": 0} {
+		if err := conn.QueryRow(ctx, `select count(*) from endpoint e join driver d on d.id = e.driver_id where d.name = $1 and e.params->>'target' like '127.60.%'`, driver).Scan(&n); err != nil {
+			t.Fatal(err)
+		}
+		if n == 0 {
+			t.Errorf("no %s attach in the simulated fleet", driver)
+		}
+	}
+	if err := devseed.Run(ctx, gw, ""); err != nil {
+		t.Fatalf("second run: %v", err)
+	}
+	if after := count(); after != before {
+		t.Fatalf("a second run changed the simulated endpoints: %d to %d", before, after)
 	}
 }
