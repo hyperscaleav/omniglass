@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/collection"
@@ -39,7 +40,10 @@ type Server struct {
 	consumeCtx    jetstream.ConsumeContext // the telemetry durable consumer's pull loop
 	internalToken string
 	sims          *simhub.Registry // the simulators beside this server's nodes
-	ownStoreDir   string           // non-empty when the Server created (and must clean) it
+	stopSweep     chan struct{}    // ends the settlement sweep
+	sweepStop     sync.Once
+	sweepDone     sync.WaitGroup
+	ownStoreDir   string // non-empty when the Server created (and must clean) it
 }
 
 // New starts an in-process NATS server (JetStream on) with the per-node auth
@@ -173,7 +177,7 @@ func (s *Server) subscribe() error {
 		// different node, or already stamped) is logged, never silently
 		// dropped: it is either a race or a misbehaving node, and both want a
 		// trail.
-		if err := s.store.RecordCommandExecution(context.Background(), node, st.ID, st.Error); err != nil {
+		if err := s.store.RecordCommandExecution(context.Background(), node, st.ID, st.Error, st.Reply); err != nil {
 			slog.Warn("command execution report rejected", "facility", "command", "node", node, "command", st.ID, "error", err.Error())
 		}
 	})
@@ -185,6 +189,7 @@ func (s *Server) subscribe() error {
 	if err := s.subscribeSim(); err != nil {
 		return err
 	}
+	s.startSettlementSweep()
 
 	// The telemetry ingest path: a JetStream stream + durable consumer over the
 	// same internal client. It carries the node -> server sample flow.
@@ -221,6 +226,12 @@ func (s *Server) ClientURL() string { return s.ns.ClientURL() }
 // Shutdown drains the internal client and stops the server, then removes an
 // owned JetStream store dir. Idempotent enough to defer.
 func (s *Server) Shutdown() {
+	// Stop the sweep once, and wait for a sweep in flight, before closing
+	// what it reads through.
+	if s.stopSweep != nil {
+		s.sweepStop.Do(func() { close(s.stopSweep) })
+		s.sweepDone.Wait()
+	}
 	for _, sub := range s.subs {
 		_ = sub.Unsubscribe()
 	}
@@ -331,4 +342,33 @@ func (s *Server) subscribeSim() error {
 	}
 	s.subs = append(s.subs, list, hits)
 	return nil
+}
+
+// settlementSweepEvery is how often the server judges commands whose settle
+// window has passed: often enough that a timed-out command reads timed-out
+// within seconds of its window.
+const settlementSweepEvery = 5 * time.Second
+
+// startSettlementSweep judges past-window commands on an interval, so a
+// command no reply and no observation settles still reaches a terminal
+// status (ADR-0141).
+func (s *Server) startSettlementSweep() {
+	s.stopSweep = make(chan struct{})
+	stop := s.stopSweep
+	s.sweepDone.Add(1)
+	go func() {
+		defer s.sweepDone.Done()
+		t := time.NewTicker(settlementSweepEvery)
+		defer t.Stop()
+		for {
+			select {
+			case <-stop:
+				return
+			case <-t.C:
+				if err := s.store.SweepCommandSettlements(context.Background()); err != nil {
+					slog.Warn("settlement sweep failed", "facility", "command", "error", err.Error())
+				}
+			}
+		}
+	}()
 }

@@ -23,7 +23,11 @@ func TestSettle(t *testing.T) {
 	}{
 		{"no intended is none", nil, cv(`"HDMI1"`, now), 30, storage.SettlementNone},
 		{"within window is pending", cv(`"HDMI1"`, now.Add(-10*time.Second)), cv(`"HDMI2"`, now), 30, storage.SettlementPending},
-		{"within window pending even if matched", cv(`"HDMI1"`, now.Add(-10*time.Second)), cv(`"HDMI1"`, now), 30, storage.SettlementPending},
+		// A command settles when its evidence arrives (ADR-0141): a matching
+		// observation taken after the intent settles it inside the window.
+		{"within window a match observed after the intent settles", cv(`"HDMI1"`, now.Add(-10*time.Second)), cv(`"HDMI1"`, now), 30, storage.SettlementSettled},
+		// A match from before the intent is not evidence the command took.
+		{"within window a match observed before the intent is pending", cv(`"HDMI1"`, now.Add(-10*time.Second)), cv(`"HDMI1"`, now.Add(-20*time.Second)), 30, storage.SettlementPending},
 		{"past window matched is settled", cv(`"HDMI1"`, now.Add(-60*time.Second)), cv(`"HDMI1"`, now), 30, storage.SettlementSettled},
 		{"past window mismatched is failed", cv(`"HDMI1"`, now.Add(-60*time.Second)), cv(`"HDMI2"`, now), 30, storage.SettlementFailed},
 		{"past window absent observed is failed", cv(`"HDMI1"`, now.Add(-60*time.Second)), nil, 30, storage.SettlementFailed},

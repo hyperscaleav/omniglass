@@ -26,7 +26,10 @@ func (f fakeStore) AuthenticateNode(_ context.Context, name, hashHex string) (bo
 func (f fakeStore) PendingNodeCommands(context.Context, string) ([]storage.CommandDelivery, error) {
 	return nil, nil
 }
-func (f fakeStore) RecordCommandExecution(context.Context, string, int64, string) error { return nil }
+func (f fakeStore) RecordCommandExecution(context.Context, string, int64, string, string) error {
+	return nil
+}
+func (f fakeStore) SweepCommandSettlements(context.Context) error { return nil }
 func (f fakeStore) NodeSimDevices(context.Context, string, scope.Set) ([]storage.SimDevice, error) {
 	return nil, nil
 }

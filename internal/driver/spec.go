@@ -142,10 +142,100 @@ type Listener struct {
 	Emits []Emit   `json:"emits"`
 }
 
-// CommandBinding declares how one command type actuates over this protocol.
+// CommandBinding declares how one command type actuates over this protocol,
+// and how a command of it settles.
 type CommandBinding struct {
 	CommandType string  `json:"command_type"`
 	Request     Request `json:"request"`
+	Settle      *Settle `json:"settle,omitempty"`
+}
+
+// Settle declares what settles a command: the device's reply to it
+// (from: response), or the next observation of the command type's target
+// (from: observe, the default). A response settle reads the reply with
+// exactly one of Extract (the reply carries the new value, compared to the
+// intended one) or Success (the reply only confirms).
+type Settle struct {
+	From    string   `json:"from,omitempty"`
+	Extract *Extract `json:"extract,omitempty"`
+	Success *Match   `json:"success,omitempty"`
+}
+
+// The settle sources.
+const (
+	SettleFromObserve  = "observe"
+	SettleFromResponse = "response"
+)
+
+// ReplyVerdict is a binding's reading of a device's reply. Judged is false
+// when the binding settles on observation, so the reply decides nothing.
+type ReplyVerdict struct {
+	Judged    bool
+	Succeeded bool
+	HasValue  bool
+	Value     string
+}
+
+// JudgeReply reads a device's reply to a command the way the binding's
+// settle declares: a value extracted (Succeeded when it is found), or a
+// confirmation matched.
+func (b CommandBinding) JudgeReply(reply string) ReplyVerdict {
+	st := b.Settle
+	if st == nil || st.From != SettleFromResponse {
+		return ReplyVerdict{}
+	}
+	if st.Extract != nil {
+		v, err := locate(*st.Extract, Payload{Text: reply})
+		if err != nil {
+			return ReplyVerdict{Judged: true}
+		}
+		return ReplyVerdict{Judged: true, Succeeded: true, HasValue: true, Value: v}
+	}
+	if st.Success != nil {
+		return ReplyVerdict{Judged: true, Succeeded: matches(*st.Success, reply)}
+	}
+	return ReplyVerdict{Judged: true}
+}
+
+// matches applies a Match rule to a line.
+func matches(m Match, line string) bool {
+	if m.Prefix != "" {
+		return strings.HasPrefix(line, m.Prefix)
+	}
+	re, err := regexp.Compile(m.Regex)
+	return err == nil && re.MatchString(line)
+}
+
+// validateSettle refuses a malformed settle declaration.
+func validateSettle(c CommandBinding) error {
+	st := c.Settle
+	if st == nil {
+		return nil
+	}
+	switch st.From {
+	case "", SettleFromObserve:
+		if st.Extract != nil || st.Success != nil {
+			return fmt.Errorf("driver: command binding %q settles on observe, which reads no reply (drop extract and success)", c.CommandType)
+		}
+		return nil
+	case SettleFromResponse:
+	default:
+		return fmt.Errorf("driver: command binding %q settles from %q; want response or observe", c.CommandType, st.From)
+	}
+	if (st.Extract == nil) == (st.Success == nil) {
+		return fmt.Errorf("driver: command binding %q settles from its response and needs exactly one of extract or success", c.CommandType)
+	}
+	if st.Extract != nil {
+		// A reply is a line of text, so a regex is the extractor that applies.
+		if st.Extract.Regex == "" || st.Extract.OID != "" || st.Extract.JSONPath != "" || st.Extract.Key != "" {
+			return fmt.Errorf("driver: command binding %q extracts its reply's value with a regex", c.CommandType)
+		}
+		if _, err := regexp.Compile(st.Extract.Regex); err != nil {
+			return fmt.Errorf("driver: command binding %q has an uncompilable reply regex: %v", c.CommandType, err)
+		}
+		return nil
+	}
+	return validateMatch(fmt.Sprintf("command binding %q settle", c.CommandType), *st.Success)
 }
 
 // Parse decodes a spec, refusing unknown fields: a typo authors nothing
@@ -241,7 +331,7 @@ func (s *Spec) Validate(cat Catalog) error {
 			return fmt.Errorf("driver: duplicate function name %q", l.Name)
 		}
 		functions[l.Name] = true
-		if err := validateMatch(l.Name, l.Match); err != nil {
+		if err := validateMatch(fmt.Sprintf("listener %q", l.Name), l.Match); err != nil {
 			return err
 		}
 		if err := validateEmits("listener", l.Name, l.Emits, cat); err != nil {
@@ -272,6 +362,9 @@ func (s *Spec) Validate(cat Catalog) error {
 		}
 		if c.Request.Line == "" {
 			return fmt.Errorf("driver: command binding %q on tcp needs a line request", c.CommandType)
+		}
+		if err := validateSettle(c); err != nil {
+			return err
 		}
 		// Template references are checked at write: only ${value} (the
 		// intended value) and ${arg.key} (an issue param) render, so a typo
@@ -378,7 +471,7 @@ func checkPollShape(tr string, p Poll) error {
 	return nil
 }
 
-func validateMatch(fn string, m Match) error {
+func validateMatch(what string, m Match) error {
 	set := 0
 	if m.Prefix != "" {
 		set++
@@ -386,11 +479,11 @@ func validateMatch(fn string, m Match) error {
 	if m.Regex != "" {
 		set++
 		if _, err := regexp.Compile(m.Regex); err != nil {
-			return fmt.Errorf("driver: listener %q has an uncompilable match regex: %v", fn, err)
+			return fmt.Errorf("driver: %s has an uncompilable match regex: %v", what, err)
 		}
 	}
 	if set != 1 {
-		return fmt.Errorf("driver: listener %q needs exactly one match rule, has %d", fn, set)
+		return fmt.Errorf("driver: %s needs exactly one match rule, has %d", what, set)
 	}
 	return nil
 }

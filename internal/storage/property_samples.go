@@ -52,6 +52,16 @@ func (p *PG) InsertPropertySamples(ctx context.Context, evs []PropertySampleWrit
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
+	// Settlement only cares about properties a command type targets; learn
+	// which once per batch, and read the transaction's clock once.
+	now, err := dbNow(ctx, tx)
+	if err != nil {
+		return err
+	}
+	targeted, err := commandTargetedProperties(ctx, tx)
+	if err != nil {
+		return err
+	}
 	for _, ev := range evs {
 		col, err := ownerColumn(ev.OwnerKind)
 		if err != nil {
@@ -77,6 +87,12 @@ func (p *PG) InsertPropertySamples(ctx context.Context, evs []PropertySampleWrit
 			values ($1, $2, $3, (select id from property_type where name = $4), $5, to_jsonb($6::text), 'observed', $7)`, col)
 		if _, err := tx.Exec(ctx, sql, ts, ev.OwnerKind, arc, ev.Key, ev.Instance, ev.Value, ev.Source); err != nil {
 			return fmt.Errorf("storage: insert property sample %s/%s: %w", ev.OwnerID, ev.Key, err)
+		}
+		// An observation may be what a pending command was waiting on.
+		if targeted[ev.Key] {
+			if err := p.settleOnObservation(ctx, tx, ev.OwnerKind, arc, ev.Key, ev.Instance, now); err != nil {
+				return err
+			}
 		}
 	}
 	if err := tx.Commit(ctx); err != nil {
