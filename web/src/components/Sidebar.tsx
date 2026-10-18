@@ -2,7 +2,7 @@ import { For, Show, createMemo, createResource } from "solid-js";
 import { A, useLocation, useNavigate } from "@solidjs/router";
 import { useQuery } from "@tanstack/solid-query";
 import { navItems, filterNav, filterWhen, type NavItem } from "../lib/nav";
-import { SIMULATION_KEY, SIDEBAR_POLL_MS, getSimulation } from "../lib/simulation";
+import { SIMULATION_KEY, getSimulation, sidebarPollMs } from "../lib/simulation";
 import { useMe, useLogout, can, fetchMyAvatar } from "../lib/auth";
 import { principalName } from "../lib/principals";
 import { PanelLeft, LogOut } from "./icons";
@@ -43,13 +43,14 @@ export default function Sidebar(props: { collapsed: boolean; onToggle: () => voi
   // the still-stubbed sections) plus those whose required permission it holds (a
   // bare <resource>:read, or an explicit tier like audit:read:admin).
   // The Simulation door also waits on a simulator being connected (#890): the
-  // rail asks every SIDEBAR_POLL_MS, and the page, sharing the key, asks faster
-  // while it is open. A principal who cannot read simulation never asks.
+  // rail asks every SIDEBAR_POLL_MS while one is, backing off to
+  // SIDEBAR_IDLE_POLL_MS while none is, and the page, sharing the key, asks
+  // faster while it is open. A principal who cannot read simulation never asks.
   const sim = useQuery(() => ({
     queryKey: SIMULATION_KEY,
     queryFn: getSimulation,
     enabled: can(me.data, "simulation", "read"),
-    refetchInterval: SIDEBAR_POLL_MS,
+    refetchInterval: (q) => sidebarPollMs(q.state.data),
     retry: false,
   }));
   const items = createMemo(() =>

@@ -125,6 +125,12 @@ export default function Simulation(): JSX.Element {
         </div>
       </Show>
 
+      <Show when={sim.error && sim.data}>
+        <div role="alert" class="alert alert-warning alert-soft mb-4 text-sm" data-testid="sim-stale">
+          <span>The last read failed ({describeError(sim.error)}); the fleet below is the last known state.</span>
+        </div>
+      </Show>
+
       <Show when={sim.data && nodeNames().length === 0}>
         <EmptyState
           title="No simulator connected"
@@ -243,7 +249,7 @@ function NodeCard(props: {
         <For each={ids()}>
           {(id) => (
             <Show when={device(id)}>
-              {(d) => <DeviceTile device={d()} component={props.byId.get(id)} blinking={props.blink.has(id)} onOpen={() => props.onOpen(id)} />}
+              {(d) => <DeviceTile device={d()} component={props.byId.get(id)} blink={props.blink.get(id)} onOpen={() => props.onOpen(id)} />}
             </Show>
           )}
         </For>
@@ -262,16 +268,32 @@ function Fact(props: { label: string; hint: string; children: JSX.Element }) {
   );
 }
 
-function DeviceTile(props: { device: SimDevice; component?: FleetComponent; blinking: boolean; onOpen: () => void }) {
+function DeviceTile(props: { device: SimDevice; component?: FleetComponent; blink?: number; onOpen: () => void }) {
   const d = () => props.device;
   const impaired = () => d().impaired || !!d().impairment;
+  // The flash is driven by its token, not a boolean: a second rise landing
+  // inside the first flash brings a new token, and the animation restarts
+  // (class off, a forced reflow, class on) instead of being swallowed by a
+  // class that never left.
+  let el!: HTMLButtonElement;
+  createEffect(on(() => props.blink, (t, prev) => {
+    if (t === undefined) {
+      el.classList.remove("og-blink");
+      return;
+    }
+    if (prev !== undefined && prev !== t) {
+      el.classList.remove("og-blink");
+      void el.offsetWidth;
+    }
+    el.classList.add("og-blink");
+  }));
   return (
     <button
+      ref={el}
       type="button"
       data-testid="sim-tile"
       data-component={d().component_id}
       class="flex min-w-0 cursor-pointer flex-col gap-1 rounded-box border border-base-300 bg-base-100 px-3 py-2.5 text-left transition-colors hover:border-base-content/30 focus-visible:outline-2 focus-visible:outline-primary"
-      classList={{ "og-blink": props.blinking }}
       onClick={() => props.onOpen()}
     >
       <span class="flex min-w-0 items-start gap-2">
@@ -317,8 +339,12 @@ function DeviceTile(props: { device: SimDevice; component?: FleetComponent; blin
 // served, what it is, and its name.
 function AddDeviceForm(props: { nodes: string[]; close: () => void }) {
   const qc = useQueryClient();
+  const me = useMe();
+  // Placing is optional, so a user who cannot read places adds unplaced devices
+  // and is never shown (or sent for) a list it would be refused.
+  const canPlace = () => can(me.data, "location", "read");
   const profiles = useQuery(() => ({ queryKey: SIM_PROFILES_KEY, queryFn: listSimProfiles }));
-  const locations = useQuery(() => ({ queryKey: LOCATIONS_KEY, queryFn: listLocations }));
+  const locations = useQuery(() => ({ queryKey: LOCATIONS_KEY, queryFn: listLocations, enabled: canPlace() }));
   const [draft, setDraft] = createSignal<AddDeviceDraft>({ node: props.nodes.length === 1 ? props.nodes[0] : "", product: "", name: "", location: "" });
   const [touched, setTouched] = createSignal<Partial<Record<keyof AddDeviceDraft, boolean>>>({});
   const [busy, setBusy] = createSignal(false);
@@ -341,7 +367,11 @@ function AddDeviceForm(props: { nodes: string[]; close: () => void }) {
   });
 
   async function submit() {
-    if (Object.keys(errors()).length) return;
+    if (Object.keys(errors()).length) {
+      // An attempt shows every field's hint, not only the ones already touched.
+      setTouched({ node: true, product: true, name: true, location: true });
+      return;
+    }
     setBusy(true);
     setErr(null);
     const d = draft();
@@ -394,12 +424,14 @@ function AddDeviceForm(props: { nodes: string[]; close: () => void }) {
           disabled={busy()}
         />
       </FieldRow>
-      <FieldRow label="Location" info="Where the component sits. Optional: an unplaced device is still served and collected.">
-        <select class="select select-bordered w-full" value={draft().location} onChange={(e) => set("location", e.currentTarget.value)} disabled={busy()}>
-          <option value="">(unplaced)</option>
-          <For each={locations.data ?? []}>{(l) => <option value={l.path || l.name}>{entityLabel(l)}{l.path ? ` (${l.path})` : ""}</option>}</For>
-        </select>
-      </FieldRow>
+      <Show when={canPlace()}>
+        <FieldRow label="Location" info="Where the component sits. Optional: an unplaced device is still served and collected.">
+          <select class="select select-bordered w-full" value={draft().location} onChange={(e) => set("location", e.currentTarget.value)} disabled={busy()}>
+            <option value="">(unplaced)</option>
+            <For each={locations.data ?? []}>{(l) => <option value={l.path || l.name}>{entityLabel(l)}{l.path ? ` (${l.path})` : ""}</option>}</For>
+          </select>
+        </FieldRow>
+      </Show>
     </form>
   );
 }

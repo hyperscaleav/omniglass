@@ -49,7 +49,14 @@ import {
 // reader gets the facts and no controls.
 //
 // Addressed by the component's uuid: the seeded fleet reuses names across places.
-export default function SimDeviceDrawer(props: { id: string | null; onClose: () => void; showOpen?: boolean }): JSX.Element {
+export default function SimDeviceDrawer(props: {
+  id: string | null;
+  onClose: () => void;
+  // After a Remove; defaults to onClose. A host page that IS the removed
+  // component leaves instead of closing onto a deleted thing.
+  onRemoved?: () => void;
+  showOpen?: boolean;
+}): JSX.Element {
   const navigate = useNavigate();
   const components = useQuery(() => ({ queryKey: COMPONENTS_KEY, queryFn: listComponents, enabled: !!props.id }));
   const title = () => {
@@ -75,7 +82,7 @@ export default function SimDeviceDrawer(props: { id: string | null; onClose: () 
       }
     >
       <Show when={props.id} keyed>
-        {(id) => <DeviceBody id={id} onRemoved={props.onClose} />}
+        {(id) => <DeviceBody id={id} onRemoved={props.onRemoved ?? props.onClose} />}
       </Show>
     </Drawer>
   );
@@ -144,6 +151,9 @@ function DeviceBody(props: { id: string; onRemoved: () => void }): JSX.Element {
       await Promise.all([
         qc.invalidateQueries({ queryKey: SIMULATION_KEY, exact: true }),
         qc.invalidateQueries({ queryKey: COMPONENTS_KEY }),
+        // Marked stale, not refetched: the component is gone, and a read now
+        // would only 404 under a page that is about to close or leave.
+        qc.invalidateQueries({ queryKey: componentSimKey(props.id), refetchType: "none" }),
       ]);
       props.onRemoved();
     } catch (e) {
@@ -189,6 +199,11 @@ function DeviceBody(props: { id: string; onRemoved: () => void }): JSX.Element {
           <Button icon={RotateCcw} onClick={() => void sim.refetch()}>Retry</Button>
         </div>
       </Show>
+      <Show when={sim.error && sim.data}>
+        <div role="alert" class="alert alert-warning alert-soft text-sm" data-testid="sim-stale">
+          <span>The last read failed ({describeError(sim.error)}); this is the last known state.</span>
+        </div>
+      </Show>
       <Show when={sim.isPending}>
         <div class="flex flex-col gap-3" aria-busy="true">
           <div class="skeleton h-4 w-40" />
@@ -228,8 +243,12 @@ function StatusSection(props: {
 }) {
   const qc = useQueryClient();
   const device = (): SimDevice | undefined => props.sim.device;
+  // The pick follows the server's product only when that product changes: every
+  // poll hands back a fresh object, and re-seeding on each would undo the
+  // operator's choice before they press Change. The memo dedupes by value.
   const [product, setProduct] = createSignal(props.sim.product ?? "");
-  createEffect(on(() => props.sim.product, (p) => setProduct(p ?? "")));
+  const serverProduct = createMemo(() => props.sim.product);
+  createEffect(on(serverProduct, (p) => setProduct(p ?? ""), { defer: true }));
   const variants = () => props.sim.variants ?? [];
 
   async function reclassify() {

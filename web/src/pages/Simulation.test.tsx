@@ -19,6 +19,7 @@ import {
   type SimFleet,
 } from "../lib/simulation";
 import { uuidFor } from "../lib/testids";
+import type { SimProfile } from "../lib/simulation";
 
 // The simulation console (#890): the sidebar door that follows a connected
 // simulator, the live grid and its flash, the device drawer's fire and
@@ -68,6 +69,11 @@ const componentSim: ComponentSim = {
   ],
 };
 
+// Answer: a stubbed reply with a status other than 200.
+class Answer {
+  constructor(public status: number, public body: unknown) {}
+}
+
 type Call = { method: string; path: string; body: unknown };
 let calls: Call[] = [];
 let current: { fleet: SimFleet } = { fleet: fleet([0, 0]) };
@@ -82,7 +88,11 @@ function stubFetch(answers: Record<string, unknown> = {}) {
     calls.push({ method: req.method, path, body: text ? JSON.parse(text) : undefined });
     const key = `${req.method} ${path}`;
     const json = (b: unknown, status = 200) => new Response(JSON.stringify(b), { status, headers: { "Content-Type": "application/json" } });
-    if (key in answers) return json(answers[key]);
+    if (key in answers) {
+      const a = answers[key];
+      if (a instanceof Answer) return json(a.body, a.status);
+      return json(a);
+    }
     if (key === "GET /simulation") return json(current.fleet);
     if (path.endsWith("/simulation") && req.method === "GET") return json(componentSim);
     return json({ title: "Not Found", status: 404, detail: "unexpected request" }, 404);
@@ -267,5 +277,224 @@ describe("the component page's Simulation section", () => {
     expect(section.textContent).toContain("edge-hq");
     fireEvent.click(within(section).getByRole("button", { name: /Open device/ }));
     expect(await screen.findByTestId("sim-status")).toBeTruthy();
+  });
+});
+
+// A principal who may remove a component but not impair one, and one who may add
+// devices but not read places.
+const remover: Me = { principal: { id: "u-rm", kind: "human" }, human: { username: "remover" }, permissions: ["*:read", "component:delete"], grants: [] };
+const placeless: Me = {
+  principal: { id: "u-np", kind: "human" }, human: { username: "placeless" },
+  permissions: ["simulation:read", "simulation:update", "component:read", "component:create", "endpoint:create"], grants: [],
+};
+
+const profiles: SimProfile[] = [
+  { name: "boreal-edge-86", manufacturer: "Boreal", model: "Edge 86", device_type: "display", products: ["boreal-edge-86", "boreal-edge-55"], protocols: ["http"], summary: "a display" },
+];
+
+function failNext(detail: string) {
+  vi.mocked(globalThis.fetch).mockImplementation(async () =>
+    new Response(JSON.stringify({ title: "Internal Server Error", status: 500, detail }), { status: 500, headers: { "Content-Type": "application/json" } }));
+}
+
+describe("the device drawer's writes", () => {
+  it("keeps the operator's product pick when a poll lands with only hits changed", async () => {
+    stubFetch();
+    const { qc } = mount(() => <SimDeviceDrawer id={DISPLAY} onClose={() => {}} />);
+    await screen.findByTestId("sim-status");
+    const sel = screen.getByLabelText("Product") as HTMLSelectElement;
+    expect(sel.value).toBe("boreal-edge-55");
+    fireEvent.change(sel, { target: { value: "boreal-edge-86" } });
+    const change = screen.getByRole("button", { name: "Change" }) as HTMLButtonElement;
+    await waitFor(() => expect(change.disabled).toBe(false));
+    qc.setQueryData([...componentSimKey(DISPLAY)], { ...componentSim, device: device(DISPLAY, "display-1", 9) });
+    await waitFor(() => expect(screen.getByTestId("sim-status").textContent).toContain("9"));
+    expect(sel.value).toBe("boreal-edge-86");
+    expect(change.disabled).toBe(false);
+  });
+
+  it("follows a product the server changed", async () => {
+    stubFetch();
+    const { qc } = mount(() => <SimDeviceDrawer id={DISPLAY} onClose={() => {}} />);
+    await screen.findByTestId("sim-status");
+    qc.setQueryData([...componentSimKey(DISPLAY)], { ...componentSim, product: "boreal-edge-86" });
+    await waitFor(() => expect((screen.getByLabelText("Product") as HTMLSelectElement).value).toBe("boreal-edge-86"));
+  });
+
+  it("changes the product with a PATCH by uuid", async () => {
+    stubFetch({ [`PATCH /components/${DISPLAY}`]: components[0] });
+    mount(() => <SimDeviceDrawer id={DISPLAY} onClose={() => {}} />);
+    await screen.findByTestId("sim-status");
+    fireEvent.change(screen.getByLabelText("Product"), { target: { value: "boreal-edge-86" } });
+    fireEvent.click(screen.getByRole("button", { name: "Change" }));
+    await waitFor(() => expect(calls.some((c) => c.method === "PATCH")).toBe(true));
+    const patch = calls.find((c) => c.method === "PATCH")!;
+    expect(patch.path).toBe(`/components/${DISPLAY}`);
+    expect(patch.body).toEqual({ product: "boreal-edge-86" });
+  });
+
+  it("repairs with a PUT of the all-zero impairment", async () => {
+    stubFetch({ [`PUT /components/${DISPLAY}/impairment`]: { unplugged: false, latency_ms: 0, jitter_ms: 0, loss_pct: 0, rate_kbit: 0 } });
+    const { qc } = mount(() => <SimDeviceDrawer id={DISPLAY} onClose={() => {}} />);
+    qc.setQueryData([...impairmentKey(DISPLAY)], { unplugged: true, latency_ms: 120, jitter_ms: 0, loss_pct: 0, rate_kbit: 0 });
+    const repair = (await screen.findByRole("button", { name: "Repair" })) as HTMLButtonElement;
+    await waitFor(() => expect(repair.disabled).toBe(false));
+    fireEvent.click(repair);
+    await waitFor(() => expect(calls.some((c) => c.method === "PUT")).toBe(true));
+    const put = calls.find((c) => c.method === "PUT")!;
+    expect(put.path).toBe(`/components/${DISPLAY}/impairment`);
+    expect(put.body).toEqual({ unplugged: false, latency_ms: 0, jitter_ms: 0, loss_pct: 0, rate_kbit: 0 });
+  });
+
+  it("removes after a confirm: DELETE by uuid, the fleet invalidated, the drawer closed", async () => {
+    stubFetch({ [`DELETE /components/${DISPLAY}`]: {} });
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
+    const onClose = vi.fn();
+    const { qc } = mount(() => <SimDeviceDrawer id={DISPLAY} onClose={onClose} />);
+    const invalidate = vi.spyOn(qc, "invalidateQueries");
+    fireEvent.click(await screen.findByRole("button", { name: "Remove" }));
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
+    expect(confirm).toHaveBeenCalled();
+    const del = calls.find((c) => c.method === "DELETE")!;
+    expect(del.path).toBe(`/components/${DISPLAY}`);
+    const keys = invalidate.mock.calls.map((c) => JSON.stringify(c[0]?.queryKey));
+    expect(keys).toContain(JSON.stringify(SIMULATION_KEY));
+    expect(keys).toContain(JSON.stringify(COMPONENTS_KEY));
+    expect(keys).toContain(JSON.stringify(componentSimKey(DISPLAY)));
+  });
+
+  it("sends nothing when the remove is not confirmed", async () => {
+    stubFetch();
+    vi.spyOn(window, "confirm").mockReturnValue(false);
+    const onClose = vi.fn();
+    mount(() => <SimDeviceDrawer id={DISPLAY} onClose={onClose} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Remove" }));
+    expect(calls.some((c) => c.method === "DELETE")).toBe(false);
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it("gives a user who may remove but not impair a Remove-only rail", async () => {
+    stubFetch();
+    mount(() => <SimDeviceDrawer id={DISPLAY} onClose={() => {}} />, remover);
+    expect(await screen.findByRole("button", { name: "Remove" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Save impairment" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Repair" })).toBeNull();
+    expect(screen.queryByLabelText("Latency (ms)")).toBeNull();
+  });
+
+  it("warns that the state is the last known one when a poll fails after a read", async () => {
+    stubFetch();
+    const { qc } = mount(() => <SimDeviceDrawer id={DISPLAY} onClose={() => {}} />);
+    await screen.findByTestId("sim-status");
+    failNext("simulator gone");
+    await qc.refetchQueries({ queryKey: componentSimKey(DISPLAY) });
+    const warn = await screen.findByTestId("sim-stale");
+    expect(warn.textContent).toContain("simulator gone");
+    expect(warn.textContent).toContain("last known");
+    expect(screen.getByTestId("sim-status")).toBeTruthy();
+  });
+});
+
+describe("the Simulation page's writes and stale state", () => {
+  it("warns that the grid is the last known state when a poll fails after a read", async () => {
+    current = { fleet: fleet([3, 0]) };
+    stubFetch();
+    const { qc } = mount(() => <Simulation />);
+    await screen.findAllByTestId("sim-tile");
+    failNext("connection refused");
+    await qc.refetchQueries({ queryKey: SIMULATION_KEY, exact: true });
+    const warn = await screen.findByTestId("sim-stale");
+    expect(warn.textContent).toContain("connection refused");
+    expect(warn.textContent).toContain("last known");
+    expect(screen.getAllByTestId("sim-tile")).toHaveLength(2);
+  });
+
+  it("restarts a tile's flash when a second rise lands before the first ends", async () => {
+    stubFetch();
+    const { qc } = mount(() => <Simulation />);
+    await screen.findAllByTestId("sim-tile");
+    const reflow = vi.spyOn(HTMLElement.prototype, "offsetWidth", "get");
+    qc.setQueryData([...SIMULATION_KEY], fleet([5, 0]));
+    await waitFor(() => expect(screen.getAllByTestId("sim-tile")[0].classList.contains("og-blink")).toBe(true));
+    const before = reflow.mock.calls.length;
+    qc.setQueryData([...SIMULATION_KEY], fleet([6, 0]));
+    await waitFor(() => expect(reflow.mock.calls.length).toBeGreaterThan(before));
+    expect(screen.getAllByTestId("sim-tile")[0].classList.contains("og-blink")).toBe(true);
+  });
+
+  async function openAdd(me: Me = admin) {
+    const r = mount(() => <Simulation />, me);
+    r.qc.setQueryData([...SIM_PROFILES_KEY], profiles);
+    r.qc.removeQueries({ queryKey: LOCATIONS_KEY });
+    fireEvent.click(await screen.findByRole("button", { name: /Add simulated device/ }));
+    return r;
+  }
+
+  it("adds a device with a POST to the node, then closes", async () => {
+    stubFetch({ "POST /nodes/edge-hq/simulation/devices": { component: "lab-display-1", address: "127.60.0.4" } });
+    await openAdd();
+    fireEvent.change(await screen.findByLabelText("Product"), { target: { value: "boreal-edge-55" } });
+    fireEvent.input(screen.getByLabelText("Name"), { target: { value: "lab-display-1" } });
+    const add = screen.getByRole("button", { name: "Add device" }) as HTMLButtonElement;
+    await waitFor(() => expect(add.disabled).toBe(false));
+    fireEvent.click(add);
+    await waitFor(() => expect(calls.some((c) => c.method === "POST")).toBe(true));
+    expect(calls.find((c) => c.method === "POST")!.body).toEqual({ name: "lab-display-1", product: "boreal-edge-55" });
+    await waitFor(() => expect(screen.queryByRole("button", { name: "Add device" })).toBeNull());
+  });
+
+  it("surfaces the server's refusal of an add and keeps the form open", async () => {
+    stubFetch({ "POST /nodes/edge-hq/simulation/devices": new Answer(409, { title: "Conflict", status: 409, detail: "component lab-display-1 already exists" }) });
+    await openAdd();
+    fireEvent.change(await screen.findByLabelText("Product"), { target: { value: "boreal-edge-55" } });
+    fireEvent.input(screen.getByLabelText("Name"), { target: { value: "lab-display-1" } });
+    const add = screen.getByRole("button", { name: "Add device" }) as HTMLButtonElement;
+    await waitFor(() => expect(add.disabled).toBe(false));
+    fireEvent.click(add);
+    expect((await screen.findByText(/already exists/)).closest("[role=alert]")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Add device" })).toBeTruthy();
+  });
+
+  it("shows every field's hint when an incomplete form is submitted", async () => {
+    current = { fleet: { connected: true, nodes: [fleet([0, 0]).nodes![0], { ...fleet([0, 0]).nodes![0], node: "edge-west" }] } };
+    stubFetch();
+    await openAdd();
+    const name = await screen.findByLabelText("Name");
+    expect(screen.queryByText("Name the new component.")).toBeNull();
+    fireEvent.submit(name.closest("form")!);
+    expect(await screen.findByText("Name the new component.")).toBeTruthy();
+    expect(screen.getByText("Choose a simulated product.")).toBeTruthy();
+    expect(screen.getByText("Choose the node whose simulator serves it.")).toBeTruthy();
+    expect(calls.some((c) => c.method === "POST")).toBe(false);
+  });
+
+  it("offers no Location to a user who cannot read places, and never asks for them", async () => {
+    stubFetch();
+    await openAdd(placeless);
+    await screen.findByLabelText("Name");
+    expect(screen.queryByLabelText("Location")).toBeNull();
+    expect(calls.some((c) => c.path.startsWith("/locations"))).toBe(false);
+  });
+});
+
+describe("removing from the component page", () => {
+  it("leaves for the Simulation page once the component is gone", async () => {
+    stubFetch({ [`DELETE /components/${DISPLAY}`]: {} });
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    const qc = client(admin);
+    window.history.pushState({}, "", `/components/${DISPLAY}`);
+    render(() => (
+      <QueryClientProvider client={qc}>
+        <Router>
+          <Route path="/components/:id" component={() => <SimulationSection componentId={DISPLAY} />} />
+          <Route path="/simulation" component={() => <p data-testid="sim-page">simulation page</p>} />
+        </Router>
+      </QueryClientProvider>
+    ));
+    const section = await screen.findByTestId("leaf-simulation");
+    fireEvent.click(within(section).getByRole("button", { name: /Open device/ }));
+    fireEvent.click(await screen.findByRole("button", { name: "Remove" }));
+    expect(await screen.findByTestId("sim-page")).toBeTruthy();
+    expect(window.location.pathname).toBe("/simulation");
   });
 });

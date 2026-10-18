@@ -1,4 +1,5 @@
 import { Show, createSignal, type JSX } from "solid-js";
+import { useNavigate } from "@solidjs/router";
 import { useQuery } from "@tanstack/solid-query";
 import Eyebrow from "./Eyebrow";
 import Button from "./Button";
@@ -23,6 +24,7 @@ export default function SimulationSection(props: { componentId: string }): JSX.E
     retry: false,
   }));
   const [open, setOpen] = createSignal(false);
+  const navigate = useNavigate();
   return (
     <Show when={sim.data?.simulated ? sim.data : undefined}>
       {(s) => (
@@ -57,7 +59,7 @@ export default function SimulationSection(props: { componentId: string }): JSX.E
               </span>
             </dd>
           </dl>
-          <SimDeviceDrawer id={open() ? props.componentId : null} onClose={() => setOpen(false)} showOpen={false} />
+          <SimDeviceDrawer id={open() ? props.componentId : null} onClose={() => setOpen(false)} onRemoved={() => navigate("/simulation")} showOpen={false} />
         </section>
       )}
     </Show>

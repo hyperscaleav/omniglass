@@ -12,6 +12,9 @@ import {
   parseImpairment,
   productGroups,
   risenHits,
+  sidebarPollMs,
+  SIDEBAR_POLL_MS,
+  SIDEBAR_IDLE_POLL_MS,
   surfaceKind,
   validateAddDevice,
   type SimDevice,
@@ -103,5 +106,14 @@ describe("catalog and counts", () => {
     expect(productGroups([{ name: "x", manufacturer: "Boreal", model: "Edge 86", device_type: "display", summary: "", products: ["a", "b"], protocols: [] }]))
       .toEqual([{ label: "Boreal Edge 86 (display)", products: ["a", "b"] }]);
     expect(hitsByProtocol({ ...dev("a", 5), hits_by_protocol: { http: 1, snmp: 4 } }).map((p) => p.protocol)).toEqual(["snmp", "http"]);
+  });
+});
+
+describe("the sidebar's poll", () => {
+  it("asks every SIDEBAR_POLL_MS while a simulator is connected, and backs off otherwise", () => {
+    expect(sidebarPollMs({ connected: true, nodes: [] })).toBe(SIDEBAR_POLL_MS);
+    expect(sidebarPollMs({ connected: false, nodes: [] })).toBe(SIDEBAR_IDLE_POLL_MS);
+    expect(sidebarPollMs(undefined)).toBe(SIDEBAR_IDLE_POLL_MS);
+    expect(SIDEBAR_IDLE_POLL_MS).toBeGreaterThan(SIDEBAR_POLL_MS);
   });
 });

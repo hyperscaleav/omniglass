@@ -44,10 +44,18 @@ export const impairmentKey = (id: string) => ["simulation", "impairment", id] as
 // How often each surface reads the fleet: the sidebar only needs to know a
 // simulator is there, the page wants hits as they land.
 export const SIDEBAR_POLL_MS = 10_000;
+// While no simulator is connected the sidebar asks far less often: most
+// installs never run one, and the door only needs to appear eventually.
+export const SIDEBAR_IDLE_POLL_MS = 60_000;
 export const PAGE_POLL_MS = 1_000;
 // How long a tile's flash lasts; shorter than the page poll so a device hit on
 // every poll flashes once per poll instead of glowing steadily.
 export const BLINK_MS = 700;
+
+// sidebarPollMs: the sidebar's interval for the fleet it last read.
+export function sidebarPollMs(f: SimFleet | undefined): number {
+  return f?.connected ? SIDEBAR_POLL_MS : SIDEBAR_IDLE_POLL_MS;
+}
 
 export async function getSimulation(): Promise<SimFleet> {
   const { data, error } = await api.GET("/simulation");
