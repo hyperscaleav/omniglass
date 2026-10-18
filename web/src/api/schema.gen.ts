@@ -1877,7 +1877,7 @@ export interface paths {
         };
         /**
          * Get a node's simulator
-         * @description The devices a simulator beside the node serves (each component with an interface placed on the node, within the caller's component read scope), joined to the hits the server has seen and the simulator's capabilities. Hits are live and per server process, not stored. Requires an all-scope node read. Gated by node:read.
+         * @description The devices a simulator beside the node serves (each component with an endpoint placed on the node, within the caller's component read scope), joined to the hits the server has seen and the simulator's capabilities. Hits are live and per server process, not stored. Requires an all-scope node read. Gated by node:read.
          */
         get: operations["get-node-simulation"];
         put?: never;
@@ -7153,7 +7153,7 @@ export interface components {
             port_offset: number;
         };
         SimDeviceBody: {
-            /** @description The host the component's interfaces target. */
+            /** @description The host the component's endpoints target. */
             address: string;
             /** @description The component's name. */
             component: string;

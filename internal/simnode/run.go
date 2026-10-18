@@ -29,7 +29,7 @@ type Config struct {
 	Token     string
 	// PortOffset shifts every profile port, so a simulator without the
 	// privilege to bind ports below 1024 can still serve (the node's
-	// interfaces must target the shifted ports).
+	// endpoints must target the shifted ports).
 	PortOffset int
 	// Poll is how often the simulator re-pulls its device list; FlushEvery
 	// how often it publishes the hits it saw. Zero takes the defaults.

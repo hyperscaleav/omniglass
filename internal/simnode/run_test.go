@@ -127,7 +127,7 @@ func TestRunServesTheNodesDevicesAndFollowsChanges(t *testing.T) {
 			t.Fatal(err)
 		}
 		target := net.JoinHostPort(ip, fmt.Sprint(port+runPortShift))
-		if _, err := conn.Exec(ctx, `insert into interface (name, type, component, node_name, params) values ($1, (select id from interface_type where name = 'tcp'), (select id from component where name = $2), (select principal_id from node where name = 'edge-s'), jsonb_build_object('target', $3::text))`, name+"-tcp", name, target); err != nil {
+		if _, err := conn.Exec(ctx, `insert into endpoint (name, transport, component, node_name, params) values ($1, 'tcp', (select id from component where name = $2), (select principal_id from node where name = 'edge-s'), jsonb_build_object('target', $3::text))`, name+"-tcp", name, target); err != nil {
 			t.Fatal(err)
 		}
 		return target
@@ -168,7 +168,7 @@ func TestRunServesTheNodesDevicesAndFollowsChanges(t *testing.T) {
 	second := addDevice("sim-two", "127.31.0.11")
 	eventually(t, "the added device to answer without a restart", func() bool { return answers(second) })
 
-	if _, err := conn.Exec(ctx, `delete from interface where name = 'sim-one-tcp'`); err != nil {
+	if _, err := conn.Exec(ctx, `delete from endpoint where name = 'sim-one-tcp'`); err != nil {
 		t.Fatal(err)
 	}
 	eventually(t, "the removed device to go dark", func() bool { return !answers(first) })

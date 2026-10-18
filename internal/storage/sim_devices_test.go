@@ -55,21 +55,21 @@ func TestNodeSimDevices(t *testing.T) {
 	// product's name, whichever product that is.
 	prod := storagetest.MintProduct(t, ctx, gw, "")
 	exec(`update component set product_id = (select id from product where name = '` + prod.Name + `') where name = 'dsp-1'`)
-	iface := func(name, typ, comp, node, target string) {
+	endpoint := func(name, typ, comp, node, target string) {
 		t.Helper()
 		nodeExpr := "null"
 		if node != "" {
 			nodeExpr = "(select principal_id from node where name = '" + node + "')"
 		}
-		exec(`insert into interface (name, type, component, node_name, params) values ('` + name + `',
-			(select id from interface_type where name = '` + typ + `'),
+		exec(`insert into endpoint (name, transport, component, node_name, params) values ('` + name + `',
+			'` + typ + `',
 			(select id from component where name = '` + comp + `'), ` + nodeExpr + `,
 			'{"target":"` + target + `"}'::jsonb)`)
 	}
-	iface("dsp-1-http", "tcp", "dsp-1", "sim-a", "127.20.0.5:80")
-	iface("dsp-1-icmp", "icmp", "dsp-1", "sim-a", "127.20.0.5")
-	iface("dsp-2-http", "tcp", "dsp-2", "sim-b", "127.20.0.6:80")
-	iface("loose-http", "tcp", "loose", "", "127.20.0.7:80")
+	endpoint("dsp-1-http", "tcp", "dsp-1", "sim-a", "127.20.0.5:80")
+	endpoint("dsp-1-icmp", "icmp", "dsp-1", "sim-a", "127.20.0.5")
+	endpoint("dsp-2-http", "tcp", "dsp-2", "sim-b", "127.20.0.6:80")
+	endpoint("loose-http", "tcp", "loose", "", "127.20.0.7:80")
 
 	got, err := gw.NodeSimDevices(ctx, "sim-a", all)
 	if err != nil {

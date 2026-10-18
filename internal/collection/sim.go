@@ -35,8 +35,8 @@ type SimlistRequest struct {
 }
 
 // SimDevice is one component the simulator may serve: a component with an
-// interface placed on the node, its product (whose name selects the
-// simulator profile), and the host its interfaces target.
+// endpoint placed on the node, its product (whose name selects the
+// simulator profile), and the host its endpoints target.
 type SimDevice struct {
 	ComponentID string `json:"component_id"`
 	Name        string `json:"name"`

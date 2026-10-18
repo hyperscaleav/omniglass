@@ -20,7 +20,7 @@ monitoring loop work against a fleet they can break on purpose.
 Built: the engine in `internal/sim` (ported from the retired omniglass-lab project, #886): the
 embedded catalog of device and system profiles, response templates and fleet manifests; the
 fleet compiler, which expands a manifest into devices with stable hostnames, serials and
-addresses; and the engine, which serves every device's declared interfaces with behaviors and
+addresses; and the engine, which serves every protocol surface a device declares, with behaviors and
 computed fields over shared state, follows a changing fleet in place, and reports every
 connection and request it answers on one hit stream. Also built: the `sim run` mode beside a node
 (#887), which pulls the devices placed on the node, serves them, and reports hits the server shows
@@ -33,7 +33,7 @@ at `GET /nodes/{name}/simulation`, locally as `make dev-sim`. Still `Design`: th
 Everything a simulated device is comes from the embedded catalog (`internal/sim/profiles`), so
 the binary needs nothing on disk:
 
-- a **device profile** declares a model's identity, its interfaces (protocol, port, auth, the
+- a **device profile** declares a model's identity, its protocol surfaces (protocol, port, auth, the
   routes, commands, OIDs and subscription subjects each one answers), its behaviors (values that
   drift on an interval), its computed fields (values derived on read, such as uptime from a boot
   epoch) and its default state;
@@ -64,7 +64,7 @@ simulated device keeps its identity across restarts.
 
 ## One device, every protocol, one state
 
-The engine gives each device a listener per declared interface on the device's own address, and
+The engine gives each device a listener per declared protocol surface on the device's own address, and
 every listener reads and writes the same state tree. The DSP's HTTP gain route writes
 `status.channels.0.gain`; the SSH `show channels` renders it; a line-protocol session subscribed to
 that path receives a push; SNMP answers its mapped OIDs from the same tree. Routes and commands
@@ -101,7 +101,7 @@ grant too. It can pull the devices behind its own node and report hits on them, 
 node's.
 
 On every pull (every ten seconds by default) it asks the server for each component with an
-interface placed on the node, with the component's product and the host its interfaces target, and
+endpoint placed on the node, with the component's product and the host its endpoints target, and
 serves the ones it can: a product a profile serves, at a loopback address.
 The rest it logs and leaves alone. A device added on the server starts serving on the next pull
 and a device removed goes dark, with no restart and no disturbance to the others. Each pull states

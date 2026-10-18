@@ -10,7 +10,7 @@ import (
 
 // SimDevice is one component a simulator beside a node may serve: the
 // component, its product's name (which selects the simulator profile), and
-// the host its interfaces target.
+// the host its endpoints target.
 type SimDevice struct {
 	ComponentID string
 	Name        string
@@ -18,11 +18,11 @@ type SimDevice struct {
 	Address     string
 }
 
-// NodeSimDevices lists each component with an interface placed on the node,
+// NodeSimDevices lists each component with an endpoint placed on the node,
 // once, within the read scope: all-scope for the node's own simulator (the
 // subject grant has already confined it to its node), the caller's component
 // scope for an operator. The address is the host of the component's first
-// interface, by name, that targets one. An unknown node lists nothing.
+// endpoint, by name, that targets one. An unknown node lists nothing.
 func (p *PG) NodeSimDevices(ctx context.Context, name string, read scope.Set) ([]SimDevice, error) {
 	if read.Empty() {
 		return nil, nil
@@ -42,7 +42,7 @@ func (p *PG) NodeSimDevices(ctx context.Context, name string, read scope.Set) ([
 	}
 	rows, err := p.pool.Query(ctx, `
 		select c.id, c.name, pr.name, coalesce(i.params->>'target', '')
-		from interface i
+		from endpoint i
 		join component c on c.id = i.component
 		join product pr on pr.id = c.product_id
 		where i.node_name = (select principal_id from node where name = $1)
@@ -76,7 +76,7 @@ func (p *PG) NodeSimDevices(ctx context.Context, name string, read scope.Set) ([
 	return out, nil
 }
 
-// TargetHost is the host part of an interface target: "10.0.0.5:80" and
+// TargetHost is the host part of an endpoint target: "10.0.0.5:80" and
 // "10.0.0.5" are both 10.0.0.5, and "[::1]:80" is ::1.
 func TargetHost(target string) string {
 	if host, _, err := net.SplitHostPort(target); err == nil {

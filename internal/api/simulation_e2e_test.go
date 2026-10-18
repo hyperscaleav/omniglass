@@ -74,7 +74,7 @@ func TestNodeSimulationAPI(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := conn.Exec(ctx, `insert into interface (name, type, component, node_name, params) values ('dsp-1-tcp', (select id from interface_type where name = 'tcp'), (select id from component where name = 'dsp-1'), (select principal_id from node where name = 'site-a'), '{"target":"127.22.0.5:80"}'::jsonb)`); err != nil {
+	if _, err := conn.Exec(ctx, `insert into endpoint (name, transport, component, node_name, params) values ('dsp-1-tcp', 'tcp', (select id from component where name = 'dsp-1'), (select principal_id from node where name = 'site-a'), '{"target":"127.22.0.5:80"}'::jsonb)`); err != nil {
 		t.Fatal(err)
 	}
 	var dsp1 string

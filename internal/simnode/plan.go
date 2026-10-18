@@ -37,7 +37,7 @@ func plan(devices []collection.SimDevice, profileFor func(string) (string, bool)
 		case !served:
 			reason = fmt.Sprintf("no simulator profile for product %q", d.Product)
 		case d.Address == "":
-			reason = "no address: no interface targets a host"
+			reason = "no address: no endpoint targets a host"
 		case ip == nil:
 			reason = fmt.Sprintf("%q is not an IP address", d.Address)
 		case !ip.IsLoopback():
