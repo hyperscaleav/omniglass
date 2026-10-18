@@ -1,5 +1,6 @@
 import { For, Show, createEffect, createMemo, createSignal, on, onCleanup, type JSX } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
+import { A } from "@solidjs/router";
 import Page from "../components/Page";
 import Button from "../components/Button";
 import Drawer from "../components/Drawer";
@@ -70,12 +71,19 @@ export default function Simulation(): JSX.Element {
   const byId = createMemo(() => new Map((components.data ?? []).map((c) => [c.id, c])));
 
   const canAdd = () => can(me.data, "simulation", "update") && can(me.data, "component", "create") && can(me.data, "endpoint", "create");
+  // Adding a system writes the system, its components and their endpoints; the
+  // form reads the standards and system types its selects offer, and the server
+  // reads the node and assigns the roles under system:read.
   const canAddSystem = () =>
     can(me.data, "simulation", "update") &&
     can(me.data, "system", "create") &&
     can(me.data, "system", "update") &&
     can(me.data, "component", "create") &&
-    can(me.data, "endpoint", "create");
+    can(me.data, "endpoint", "create") &&
+    can(me.data, "standard", "read") &&
+    can(me.data, "system_type", "read") &&
+    can(me.data, "system", "read") &&
+    can(me.data, "node", "read");
   const [adding, setAdding] = createSignal(false);
   const [addingSystem, setAddingSystem] = createSignal(false);
   const [added, setAdded] = createSignal<AddSimSystemResult | null>(null);
@@ -214,18 +222,19 @@ export default function Simulation(): JSX.Element {
 type SimRowData = { node: string; sim: SimComponent };
 
 // AddedNote: what the last add-simulated-system created, until dismissed. The
-// new components are already in the table below; this names the system they
-// belong to and the roles it was left short.
+// new components are already in the table below; this links the system they
+// belong to and names the roles it was left short, each with why.
 function AddedNote(props: { result: AddSimSystemResult; onDismiss: () => void }) {
   const n = () => (props.result.components ?? []).length;
   const short = () => props.result.unstaffed ?? [];
   return (
     <div role="status" class="alert alert-success alert-soft flex items-center justify-between text-sm" data-testid="sim-system-added">
       <span>
-        Added simulated system <span class="font-data font-semibold">{props.result.system}</span> on{" "}
+        Added simulated system{" "}
+        <A href={`/systems/${props.result.system_id}`} class="font-data font-semibold hover:underline">{props.result.system}</A> on{" "}
         <span class="font-data">{props.result.node}</span>: {n()} {n() === 1 ? "component" : "components"}
         <Show when={short().length > 0}>
-          , short <span title={short().map((r) => `${r.role}: ${r.reason ?? "nothing simulated fits"}`).join("\n")}>{short().map((r) => r.role).join(", ")}</span>
+          , short <span data-testid="sim-system-short">{short().map((r) => `${r.role} (${r.reason ?? "nothing simulated fits"})`).join(", ")}</span>
         </Show>
         .
       </span>

@@ -94,6 +94,7 @@ function stubFetch(answers: Record<string, unknown> = {}) {
     const json = (b: unknown, status = 200) => new Response(JSON.stringify(b), { status, headers: { "Content-Type": "application/json" } });
     if (key in answers) {
       const a = answers[key];
+      if (typeof a === "function") return (a as () => Promise<Response>)();
       if (a instanceof Answer) return json(a.body, a.status);
       return json(a);
     }
@@ -544,7 +545,7 @@ const meetingPlan: SimSystemPlan = {
 };
 const systemMaker: Me = {
   principal: { id: "u-sm", kind: "human" }, human: { username: "system-maker" },
-  permissions: ["simulation:read", "simulation:update", "system:create", "system:update", "component:read", "component:create", "endpoint:create", "standard:read", "system_type:read"], grants: [],
+  permissions: ["simulation:read", "simulation:update", "system:create", "system:update", "component:read", "component:create", "endpoint:create", "standard:read", "system_type:read", "system:read", "node:read"], grants: [],
 };
 const noSystemUpdate: Me = {
   principal: { id: "u-ns", kind: "human" }, human: { username: "no-system-update" },
@@ -575,12 +576,44 @@ describe("adding a simulated system", () => {
     expect(screen.getByRole("button", { name: /Add simulated component/ }).classList.contains("btn-action")).toBe(true);
   });
 
-  it("hides the action from a principal missing any one of the permissions", async () => {
+  it("hides the action from a principal missing system:update, though it may add a component", async () => {
     stubFetch();
     mount(() => <Simulation />, noSystemUpdate);
     await screen.findAllByTestId("sim-row");
     expect(screen.getByRole("button", { name: /Add simulated component/ })).toBeTruthy();
     expect(screen.queryByRole("button", { name: /Add simulated system/ })).toBeNull();
+  });
+
+  it("offers the action to a principal holding exactly the permissions it needs", async () => {
+    stubFetch();
+    mount(() => <Simulation />, systemMaker);
+    expect(await screen.findByRole("button", { name: /Add simulated system/ })).toBeTruthy();
+  });
+
+  // Each permission the add needs, the writes and the reads its form and the
+  // server depend on: without any one, the action is not offered. system:read is
+  // gated too, but can() reads any system:<action> grant as including it, so a
+  // principal holding system:create is never without it and it has no row here.
+  for (const perm of [
+    "simulation:update", "system:create", "system:update", "component:create", "endpoint:create",
+    "standard:read", "system_type:read", "node:read",
+  ]) {
+    it(`hides the action from a principal missing ${perm}`, async () => {
+      stubFetch();
+      const me: Me = { ...systemMaker, permissions: systemMaker.permissions.filter((p) => p !== perm) };
+      mount(() => <Simulation />, me);
+      await screen.findAllByTestId("sim-row");
+      expect(screen.queryByRole("button", { name: /Add simulated system/ })).toBeNull();
+    });
+  }
+
+  it("disables the action, saying why, while no simulator is connected", async () => {
+    current = { fleet: fleet([0, 0], false) };
+    stubFetch();
+    mount(() => <Simulation />);
+    const sys = (await screen.findByRole("button", { name: /Add simulated system/ })) as HTMLButtonElement;
+    expect(sys.disabled).toBe(true);
+    expect(sys.getAttribute("title")).toBe("No simulator is connected");
   });
 
   it("hides the action from a reader", async () => {
@@ -627,7 +660,7 @@ describe("adding a simulated system", () => {
   it("sends the standard, the type and only what was filled, then closes, refreshes the fleet and names the system", async () => {
     stubFetch({
       "POST /nodes/edge-hq/simulation/systems": new Answer(201, {
-        system: "room-system-7", node: "edge-hq",
+        system: "room-system-7", system_id: uuidFor("sys-room-7"), node: "edge-hq",
         components: [
           { component: "display-1", role: "display", product: "boreal-edge-55", address: "127.60.0.4" },
           { component: "display-2", role: "display", product: "boreal-edge-55", address: "127.60.0.5" },
@@ -651,6 +684,11 @@ describe("adding a simulated system", () => {
     expect(note.textContent).toContain("room-system-7");
     expect(note.textContent).toContain("3 components");
     expect(note.textContent).toContain("camera");
+    // The short role's reason reads as text, not only on hover.
+    expect(note.textContent).toContain("no simulated product is a camera");
+    // The system's name links to its page, by id.
+    const link = within(note).getByRole("link", { name: "room-system-7" });
+    expect(link.getAttribute("href")).toBe(`/systems/${uuidFor("sys-room-7")}`);
     const keys = invalidate.mock.calls.map((c) => JSON.stringify(c[0]?.queryKey));
     expect(keys).toContain(JSON.stringify(SIMULATION_KEY));
     expect(keys).toContain(JSON.stringify(COMPONENTS_KEY));
@@ -659,7 +697,7 @@ describe("adding a simulated system", () => {
   });
 
   it("sends a typed name and a chosen place", async () => {
-    stubFetch({ "POST /nodes/edge-hq/simulation/systems": new Answer(201, { system: "lab-room", node: "edge-hq", components: [], unstaffed: [] }) });
+    stubFetch({ "POST /nodes/edge-hq/simulation/systems": new Answer(201, { system: "lab-room", system_id: uuidFor("sys-lab"), node: "edge-hq", components: [], unstaffed: [] }) });
     const { qc } = await openAddSystem();
     qc.setQueryData([...LOCATIONS_KEY], [{ id: uuidFor("loc-a"), name: "boardroom-a", label: "Boardroom A", path: "hq.boardroom-a" }]);
     await fill();
@@ -698,6 +736,110 @@ describe("adding a simulated system", () => {
     fireEvent.input(screen.getByLabelText("Name"), { target: { value: "Lab Room" } });
     expect(await screen.findByText(/Lowercase letters, digits and hyphens/)).toBeTruthy();
     expect((screen.getByRole("button", { name: "Add system" }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("shows the plan error with a retry, and keeps submit disabled, when the plan cannot be read", async () => {
+    stubFetch();
+    await openAddSystem();
+    await fill("huddle-space");
+    const preview = await screen.findByTestId("sim-plan");
+    const alert = await within(preview).findByRole("alert");
+    expect(alert.textContent).toContain("Could not plan the system");
+    expect((screen.getByRole("button", { name: "Add system" }) as HTMLButtonElement).disabled).toBe(true);
+    const planGets = () => calls.filter((c) => c.method === "GET" && c.path === "/simulation/standards/huddle-space:plan").length;
+    expect(planGets()).toBe(1);
+    fireEvent.click(within(alert).getByRole("button", { name: "Retry" }));
+    await waitFor(() => expect(planGets()).toBe(2));
+  });
+
+  it("keeps submit disabled while the plan is loading", async () => {
+    stubFetch({ "GET /simulation/standards/huddle-space:plan": () => new Promise<Response>(() => {}) });
+    await openAddSystem();
+    await fill("huddle-space");
+    const preview = await screen.findByTestId("sim-plan");
+    expect(preview.querySelector("[aria-busy='true']")).toBeTruthy();
+    expect((screen.getByRole("button", { name: "Add system" }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("never lets a stale plan enable submit or fill the preview: A answered, B pending", async () => {
+    stubFetch({ "GET /simulation/standards/huddle-space:plan": () => new Promise<Response>(() => {}) });
+    await openAddSystem();
+    await fill("meeting-room");
+    const add = screen.getByRole("button", { name: "Add system" }) as HTMLButtonElement;
+    await waitFor(() => expect(add.disabled).toBe(false));
+    fireEvent.change(screen.getByLabelText("Standard"), { target: { value: "huddle-space" } });
+    await waitFor(() => expect(add.disabled).toBe(true));
+    const preview = screen.getByTestId("sim-plan");
+    expect(within(preview).queryAllByTestId("plan-role")).toHaveLength(0);
+    expect(within(preview).queryByTestId("plan-total")).toBeNull();
+  });
+
+  // The cache switches keys with the standard, so the A-then-B case above never
+  // hands the form A's answer; the guard it relies on is that a plan counts only
+  // when it answers for the chosen standard. Pin that directly: B's slot holding
+  // an answer for A is neither previewed nor submittable.
+  it("trusts a plan only when it answers for the chosen standard", async () => {
+    stubFetch();
+    const r = await openAddSystem();
+    r.qc.setQueryData([...simPlanKey("huddle-space")], meetingPlan);
+    await fill("huddle-space");
+    const preview = await screen.findByTestId("sim-plan");
+    expect(within(preview).queryAllByTestId("plan-role")).toHaveLength(0);
+    expect((screen.getByRole("button", { name: "Add system" }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("names the plan table and announces the preview's updates", async () => {
+    stubFetch();
+    await openAddSystem();
+    await fill();
+    const preview = await screen.findByTestId("sim-plan");
+    expect(preview.getAttribute("aria-live")).toBe("polite");
+    expect(within(preview).getByRole("table", { name: /plan/i })).toBeTruthy();
+  });
+
+  it("alerts with a retry when the standards cannot be read", async () => {
+    stubFetch();
+    const r = mount(() => <Simulation />);
+    r.qc.setQueryData([...SYSTEM_TYPES_KEY], systemTypes);
+    fireEvent.click(await screen.findByRole("button", { name: /Add simulated system/ }));
+    const alert = await screen.findByTestId("standards-error");
+    expect(alert.getAttribute("role")).toBe("alert");
+    const gets = () => calls.filter((c) => c.method === "GET" && c.path === "/standards").length;
+    expect(gets()).toBe(1);
+    fireEvent.click(within(alert).getByRole("button", { name: "Retry" }));
+    await waitFor(() => expect(gets()).toBe(2));
+  });
+
+  it("alerts with a retry when the system types cannot be read", async () => {
+    stubFetch();
+    const r = mount(() => <Simulation />);
+    r.qc.setQueryData([...STANDARDS_KEY], standards);
+    fireEvent.click(await screen.findByRole("button", { name: /Add simulated system/ }));
+    const alert = await screen.findByTestId("system-types-error");
+    const gets = () => calls.filter((c) => c.method === "GET" && c.path === "/system-types").length;
+    expect(gets()).toBe(1);
+    fireEvent.click(within(alert).getByRole("button", { name: "Retry" }));
+    await waitFor(() => expect(gets()).toBe(2));
+  });
+
+  it("alerts with a retry when the places cannot be read, instead of offering only unplaced", async () => {
+    stubFetch();
+    await openAddSystem();
+    const alert = await screen.findByTestId("locations-error");
+    const gets = () => calls.filter((c) => c.method === "GET" && c.path === "/locations").length;
+    expect(gets()).toBe(1);
+    fireEvent.click(within(alert).getByRole("button", { name: "Retry" }));
+    await waitFor(() => expect(gets()).toBe(2));
+  });
+
+  it("hints where to define a standard or a type when there are none", async () => {
+    stubFetch();
+    const r = mount(() => <Simulation />);
+    r.qc.setQueryData([...STANDARDS_KEY], []);
+    r.qc.setQueryData([...SYSTEM_TYPES_KEY], []);
+    fireEvent.click(await screen.findByRole("button", { name: /Add simulated system/ }));
+    expect(await screen.findByText(/No standards yet/)).toBeTruthy();
+    expect(screen.getByText(/No system types yet/)).toBeTruthy();
   });
 
   it("offers no Location to a principal who cannot read places, and never asks for them", async () => {

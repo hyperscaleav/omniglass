@@ -1,8 +1,9 @@
 import { For, Show, createMemo, createSignal, type JSX } from "solid-js";
-import { useQuery, useQueryClient } from "@tanstack/solid-query";
+import { useQuery, useQueryClient, type UseQueryResult } from "@tanstack/solid-query";
 import FieldRow from "./FieldRow";
 import Eyebrow from "./Eyebrow";
-import { Plus } from "./icons";
+import Button from "./Button";
+import { Plus, RotateCcw } from "./icons";
 import { useFormActions } from "../lib/formactions";
 import { can, useMe } from "../lib/auth";
 import { describeError } from "../lib/format";
@@ -110,10 +111,11 @@ export default function AddSimSystemForm(props: { nodes: string[]; close: () => 
           <For each={props.nodes}>{(n) => <option value={n}>{n}</option>}</For>
         </select>
       </FieldRow>
+      <LoadError what="the standards" query={standards} testid="standards-error" />
       <FieldRow
         label="Standard"
         info="The blueprint the system is built to. Its roles say which components a system of this standard holds and how many; each role is staffed with the first simulated product that fits it, and where the standard offers a choice, one alternate is taken."
-        hint={shown("standard") ?? (standards.error ? `Could not read the standards: ${describeError(standards.error)}` : undefined)}
+        hint={shown("standard") ?? (standards.data?.length === 0 ? "No standards yet: define one under Catalog, Standards." : undefined)}
       >
         <select class="select select-bordered w-full" aria-required="true" value={draft().standard} onChange={(e) => set("standard", e.currentTarget.value)} disabled={busy() || standards.isPending}>
           <option value="" disabled>{standards.isPending ? "Loading standards..." : "Choose a standard..."}</option>
@@ -121,15 +123,27 @@ export default function AddSimSystemForm(props: { nodes: string[]; close: () => 
         </select>
       </FieldRow>
       <Show when={draft().standard}>
-        <PlanPreview plan={plan.data?.standard === draft().standard ? plan.data : undefined} pending={plan.isPending} error={plan.error} />
+        <PlanPreview
+          plan={plan.data?.standard === draft().standard ? plan.data : undefined}
+          pending={plan.isPending}
+          error={plan.error}
+          retrying={plan.isFetching}
+          onRetry={() => void plan.refetch()}
+        />
       </Show>
-      <FieldRow label="System type" info="What kind of system this is. The type also mints the system's name when none is given." hint={shown("system_type") ?? (types.error ? `Could not read the system types: ${describeError(types.error)}` : undefined)}>
+      <LoadError what="the system types" query={types} testid="system-types-error" />
+      <FieldRow
+        label="System type"
+        info="What kind of system this is. The type also mints the system's name when none is given."
+        hint={shown("system_type") ?? (types.data?.length === 0 ? "No system types yet: define one under Catalog, System types." : undefined)}
+      >
         <select class="select select-bordered w-full" aria-required="true" value={draft().system_type} onChange={(e) => set("system_type", e.currentTarget.value)} disabled={busy() || types.isPending}>
           <option value="" disabled>{types.isPending ? "Loading types..." : "Choose a type..."}</option>
           <For each={sortedTypes()}>{(t) => <option value={t.name}>{entityLabel(t)}</option>}</For>
         </select>
       </FieldRow>
       <Show when={canPlace()}>
+        <LoadError what="the places" query={locations} testid="locations-error" />
         <FieldRow label="Location" info="Where the system and its components sit. Optional: an unplaced system is still served and collected.">
           <select class="select select-bordered w-full" value={draft().location} onChange={(e) => set("location", e.currentTarget.value)} disabled={busy()}>
             <option value="">(unplaced)</option>
@@ -154,12 +168,25 @@ export default function AddSimSystemForm(props: { nodes: string[]; close: () => 
 
 const PILL_WARN = "badge badge-sm badge-soft badge-warning";
 
+// LoadError: a list a select depends on could not be read; says so, with a
+// retry, instead of leaving the select silently empty.
+function LoadError(props: { what: string; query: UseQueryResult<unknown>; testid: string }): JSX.Element {
+  return (
+    <Show when={props.query.error && !props.query.data}>
+      <div role="alert" class="alert alert-error alert-soft text-sm" data-testid={props.testid}>
+        <span class="flex-1">Could not read {props.what}: {describeError(props.query.error)}</span>
+        <Button size="xs" icon={RotateCcw} loading={props.query.isFetching} onClick={() => void props.query.refetch()}>Retry</Button>
+      </div>
+    </Show>
+  );
+}
+
 // PlanPreview: what the chosen standard's system will hold, role by role, read
 // from the plan before anything is created.
-function PlanPreview(props: { plan?: SimSystemPlan; pending: boolean; error: unknown }): JSX.Element {
+function PlanPreview(props: { plan?: SimSystemPlan; pending: boolean; error: unknown; retrying: boolean; onRetry: () => void }): JSX.Element {
   const short = () => planShortfall(props.plan);
   return (
-    <section class="rounded-box border border-base-300 bg-base-200" data-testid="sim-plan">
+    <section class="rounded-box border border-base-300 bg-base-200" data-testid="sim-plan" aria-live="polite">
       <div class="flex items-center gap-3 border-b border-base-300 px-3 py-2">
         <Eyebrow
           label="Plan"
@@ -178,7 +205,10 @@ function PlanPreview(props: { plan?: SimSystemPlan; pending: boolean; error: unk
         </Show>
       </div>
       <Show when={props.error && !props.plan}>
-        <div role="alert" class="alert alert-error alert-soft m-3 text-sm"><span>Could not plan the system: {describeError(props.error)}</span></div>
+        <div role="alert" class="alert alert-error alert-soft m-3 text-sm">
+          <span class="flex-1">Could not plan the system: {describeError(props.error)}</span>
+          <Button size="xs" icon={RotateCcw} loading={props.retrying} onClick={() => props.onRetry()}>Retry</Button>
+        </div>
       </Show>
       <Show when={!props.plan && props.pending && !props.error}>
         <div class="flex flex-col gap-2 p-3" aria-busy="true">
@@ -193,7 +223,7 @@ function PlanPreview(props: { plan?: SimSystemPlan; pending: boolean; error: unk
                 <span>Nothing in this standard can be simulated: no role has a simulated product that fits it.</span>
               </div>
             </Show>
-            <table class="table table-fixed table-sm" data-testid="plan-roles">
+            <table class="table table-fixed table-sm" data-testid="plan-roles" aria-label="Plan: each role, its simulated product and count">
               <colgroup>
                 <col style={{ width: "38%" }} />
                 <col />
