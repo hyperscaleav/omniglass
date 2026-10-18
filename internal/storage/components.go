@@ -339,6 +339,19 @@ func (p *PG) CreateComponent(ctx context.Context, actorID string, spec Component
 		return nil, fmt.Errorf("storage: begin create component: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
+	c, err := p.createComponentTx(ctx, tx, actorID, spec, create, locationRead, systemRead, systemUpdate)
+	if err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("storage: commit create component: %w", err)
+	}
+	return c, nil
+}
+
+// createComponentTx is CreateComponent inside a transaction the caller owns, so a composite write (adding
+// a simulated system) can create it alongside the rest and commit once.
+func (p *PG) createComponentTx(ctx context.Context, tx pgx.Tx, actorID string, spec ComponentSpec, create, locationRead, systemRead, systemUpdate scope.Set) (*Component, error) {
 
 	// An operator-typed name is validated now, before any other resolve, so a
 	// bad slug fails fast (the existing behavior). A generated name is
@@ -506,9 +519,6 @@ func (p *PG) CreateComponent(ctx context.Context, actorID string, spec Component
 	}
 	if err := writeAuditRes(ctx, tx, actorID, "create", "component", c.ID, nil, c); err != nil {
 		return nil, err
-	}
-	if err := tx.Commit(ctx); err != nil {
-		return nil, fmt.Errorf("storage: commit create component: %w", err)
 	}
 	return c, nil
 }

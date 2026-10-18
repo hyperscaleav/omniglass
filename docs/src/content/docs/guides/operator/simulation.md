@@ -43,8 +43,12 @@ viewers hold). You see each simulator that serves a component in your scope, and
 components: a technician scoped to a building sees that building's simulated components. The page has a card per node with a simulator, saying whether it is connected, its total
 hits and components, what it may do where it runs (**Low ports**: bind ports below 1024; **Port offset**:
 the lift it applies when it cannot; **NET_ADMIN**), and whether it can apply impairments (and if not,
-why). Under it, a table lists every simulated component with its product, address, hits, last hit
-and anything broken on it, and a row **lights up** each time the collector reaches the component: a
+why). Under it, a table lists every simulated component with its product, address, status, hits and
+last hit. The **status** says what the simulator is doing with it: **running**; **starting** (added since
+the simulator's last pull, so it begins within about ten seconds); **failed** (handed to the simulator,
+which could not start it: a port it cannot bind, or an address that is not loopback); or **offline** (the
+simulator stopped reporting). Anything you broke on it shows as a chip beside the status
+(**unplugged**, or the delay and loss you set), with a note when the simulator could not apply it, and a row **lights up** each time the collector reaches the component: a
 poll, a connect, a ping. A row that never lights up is a component nothing is collecting from.
 When no simulator is connected the entry is hidden, since there is nothing to show.
 
@@ -90,6 +94,26 @@ In the drawer, **Product** and **Change** move a component among the products it
 display line in its sizes, say), which keeps its endpoint valid (with `component:update`), and
 **Remove** deletes the component after a confirmation, which removes it from the simulation (with
 `component:delete`).
+
+## Add a whole system
+
+A simulated system is built to one of your **standards** (a meeting room, a huddle room, a digital
+sign). Omniglass staffs each of the standard's roles with a simulated product that fits it, and lists
+the roles it cannot fill yet, which stay short so the system honestly reads that way. On the
+Simulation page, **Add simulated system** asks for a node, a standard, a system type, and optionally a
+place and a name; choosing the standard previews its **plan** (each role, the product it gets and how
+many, and any short role with its reason) before anything is created. From a terminal, preview the plan,
+then add it:
+
+```sh
+omniglass simulation plan-system meeting-room
+omniglass simulation add-system edge-hq --standard meeting-room --system-type meeting --location boardroom-a
+```
+
+The system and its components land together or not at all (with `simulation:update`, plus
+`system:create`, `system:update`, `system:read`, `component:create`, `endpoint:create` and `node:read`; `component:create` must
+reach the whole fleet, since the components are created at the top level), named as any new system and
+component are named, and the simulator serves them from its next pull.
 
 ## Break it on purpose
 

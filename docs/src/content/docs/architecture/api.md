@@ -319,7 +319,13 @@ is a 409, a surface it does not serve a 422, and no simulator answering a 503.
 and `endpoint:create`, each in the caller's own scope) adds a simulated component: a component of a
 simulated product at the lowest free address in `127.60.0.0/16`, with the endpoint the collector reaches
 it through placed on the node; a node with no simulator connected is a 409, a product no profile
-simulates a 422.
+simulates a 422. A whole simulated system is built to a standard: `GET /simulation/standards/{standard}:plan`
+(gated `simulation:read`) previews each of the standard's roles staffed with a simulated product that fits
+(or left short, with why), and `POST /nodes/{name}/simulation/systems` (gated `simulation:update`, and also
+needing `system:create`, `system:update`, `system:read`, `component:create`, `endpoint:create` and
+`node:read`, plus `location:read` when it names a place) creates the system, a
+simulated component per staffed role at its own free address with its endpoint on the node, and each
+role assignment, in one transaction: it lands whole or not at all.
 
 **The endpoint is authored; the task is derived.** An endpoint is addressed by a surrogate `id` and
 **named by its protocol**: `name` derives from `transport`, unique **within its component**

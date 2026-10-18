@@ -25,6 +25,10 @@ export type SimResult = S["SimOperationResult"];
 export type FireInput = Omit<S["FireSimInputBody"], "$schema">;
 export type AddSimComponent = Omit<S["AddSimComponentInputBody"], "$schema">;
 export type AddSimComponentResult = S["AddSimComponentOutputBody"];
+export type SimSystemPlan = S["SimSystemPlanOutputBody"];
+export type SimRoleFill = S["SimRoleFillBody"];
+export type AddSimSystem = Omit<S["AddSimSystemInputBody"], "$schema">;
+export type AddSimSystemResult = S["AddSimSystemOutputBody"];
 
 // The impairment as the console holds it: every field present, since a PUT
 // replaces the whole impairment and a field left out reads as zero.
@@ -42,6 +46,7 @@ export const SIMULATION_KEY = ["simulation"] as const;
 export const SIM_PROFILES_KEY = ["simulation", "profiles"] as const;
 export const componentSimKey = (id: string) => ["simulation", "component", id] as const;
 export const impairmentKey = (id: string) => ["simulation", "impairment", id] as const;
+export const simPlanKey = (standard: string) => ["simulation", "plan", standard] as const;
 
 // How often each surface reads the fleet: the sidebar only needs to know a
 // simulator is there, the page wants hits as they land.
@@ -89,6 +94,18 @@ export async function addSimComponent(node: string, body: AddSimComponent): Prom
   return data as AddSimComponentResult;
 }
 
+export async function planSimSystem(standard: string): Promise<SimSystemPlan> {
+  const { data, error } = await api.GET("/simulation/standards/{standard}:plan", { params: { path: { standard } } });
+  if (error) throw error;
+  return data as SimSystemPlan;
+}
+
+export async function addSimSystem(node: string, body: AddSimSystem): Promise<AddSimSystemResult> {
+  const { data, error } = await api.POST("/nodes/{name}/simulation/systems", { params: { path: { name: node } }, body });
+  if (error) throw error;
+  return data as AddSimSystemResult;
+}
+
 export async function getImpairment(id: string): Promise<Impairment> {
   const { data, error } = await api.GET("/components/{name}/impairment", { params: { path: { name: id } } });
   if (error) throw error;
@@ -119,8 +136,8 @@ export function isImpaired(i: Partial<Impairment> | null | undefined): boolean {
   return f.unplugged || f.latency_ms > 0 || f.jitter_ms > 0 || f.loss_pct > 0 || f.rate_kbit > 0;
 }
 
-// impairmentSummary says what is broken in a few words, for a row's impairment
-// pill and the component page's fact.
+// impairmentSummary says what is broken in a few words, for the status badge's
+// line beneath a degraded or not-applied impairment.
 export function impairmentSummary(i: Partial<Impairment> | null | undefined): string {
   const f = toImpairment(i);
   if (f.unplugged) return "unplugged";
@@ -130,6 +147,37 @@ export function impairmentSummary(i: Partial<Impairment> | null | undefined): st
   if (f.loss_pct > 0) parts.push(`${f.loss_pct}% loss`);
   if (f.rate_kbit > 0) parts.push(`${f.rate_kbit} kbit/s`);
   return parts.length ? parts.join(", ") : "healthy";
+}
+
+// A simulated component's status is the server's state, most urgent first:
+// offline (its simulator stopped reporting), failed (handed over, not served),
+// starting (added since the simulator's last pull, or handed over moments ago),
+// running. What an operator broke on it is not a status; it rides beside the
+// status as its own fact.
+export type SimState = SimComponent["status"];
+export const SIM_STATES: readonly SimState[] = ["offline", "failed", "starting", "running"];
+export type SimStatus = {
+  state: SimState;
+  // The impairment set on the component, when one is.
+  impairment?: {
+    unplugged: boolean;
+    // A few words: "unplugged", or the shaped traffic ("150 ms, 2.5% loss").
+    summary: string;
+    // Whether the simulator applied it (it may not: impairments unavailable on
+    // the node, the change not yet reached it, or the component not served).
+    applied: boolean;
+  };
+};
+
+// simStatus derives the status and the impairment beside it. The state is the
+// server's, never altered by an impairment: an offline component with an
+// impairment set still reads offline.
+export function simStatus(d: Pick<SimComponent, "status" | "impairment" | "impaired">): SimStatus {
+  if (!isImpaired(d.impairment)) return { state: d.status };
+  return {
+    state: d.status,
+    impairment: { unplugged: toImpairment(d.impairment).unplugged, summary: impairmentSummary(d.impairment), applied: d.impaired },
+  };
 }
 
 // The impairment's ranges, as the API states them. A draft field is the text
@@ -245,6 +293,39 @@ export function validateAddComponent(d: AddComponentDraft): AddComponentErrors {
   const nameErr = d.name.trim() ? entityNameError(d.name.trim()) : "Name the new component.";
   if (nameErr) e.name = nameErr;
   return e;
+}
+
+// The add-system form's rule: node, standard and system type must be chosen;
+// the name is optional (the server mints one from the type) but, when typed,
+// follows the entity name rule.
+export type AddSystemDraft = { node: string; standard: string; system_type: string; name: string; location: string };
+export type AddSystemErrors = Partial<Record<keyof AddSystemDraft, string>>;
+
+export function validateAddSystem(d: AddSystemDraft): AddSystemErrors {
+  const e: AddSystemErrors = {};
+  if (!d.node) e.node = "Choose the node whose simulator serves it.";
+  if (!d.standard) e.standard = "Choose the standard the system is built to.";
+  if (!d.system_type) e.system_type = "Choose the system's type.";
+  const nameErr = entityNameError(d.name.trim());
+  if (nameErr) e.name = nameErr;
+  return e;
+}
+
+// addSystemBody turns a draft into the request, leaving out what was left empty.
+export function addSystemBody(d: AddSystemDraft): AddSimSystem {
+  const name = d.name.trim();
+  return {
+    standard: d.standard,
+    system_type: d.system_type,
+    ...(name ? { name } : {}),
+    ...(d.location ? { location: d.location } : {}),
+  };
+}
+
+// planShortfall: the roles a plan leaves short, and by how many in all.
+export function planShortfall(p: SimSystemPlan | undefined): { roles: SimRoleFill[]; missing: number } {
+  const roles = (p?.roles ?? []).filter((r) => (r.missing ?? 0) > 0 || !r.product);
+  return { roles, missing: roles.reduce((n, r) => n + (r.missing ?? 0), 0) };
 }
 
 // surfaceKind says which fire form a surface takes: an HTTP call, a command

@@ -469,6 +469,9 @@ func (UnimplementedGateway) SimAddressesInUse(context.Context) (map[string]bool,
 	return nil, nil
 }
 func (UnimplementedGateway) AuditSimOperation(context.Context, string, string, any) error { return nil }
+func (UnimplementedGateway) CreateSimSystem(context.Context, string, SimSystemSpec, SimSystemScopes) (*SimSystem, error) {
+	return nil, nil
+}
 func (UnimplementedGateway) WithSimAddressLock(_ context.Context, fn func() error) error {
 	return fn()
 }

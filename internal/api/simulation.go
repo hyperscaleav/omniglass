@@ -31,7 +31,8 @@ type simDeviceBody struct {
 	Component      string            `json:"component" doc:"The component's name."`
 	Product        string            `json:"product" doc:"The component's product; its name selects the simulator profile."`
 	Address        string            `json:"address" doc:"The host the component's endpoints target."`
-	Serving        bool              `json:"serving" doc:"Whether the simulator reported serving this device in its latest batch."`
+	Serving        bool              `json:"serving" doc:"Whether the simulator reported serving this component in its latest batch."`
+	Status         string            `json:"status" enum:"running,starting,failed,offline" doc:"What the simulator is doing with the component, most urgent first: offline (its simulator stopped reporting), starting (added since the simulator's last pull, or handed over moments ago), failed (handed to the simulator but not started), running."`
 	Hits           int               `json:"hits" doc:"Connections and requests the simulated device has answered since the server started."`
 	HitsByProtocol map[string]int    `json:"hits_by_protocol"`
 	LastHitAt      *time.Time        `json:"last_hit_at,omitempty"`
@@ -102,7 +103,8 @@ func simulationBody(devices []storage.SimDevice, st simhub.Status, seen bool, no
 	out.Body.Devices = make([]simDeviceBody, 0, len(devices))
 	for _, d := range devices {
 		b := simDeviceBody{ComponentID: d.ComponentID, Component: d.Name, Product: d.Product, Address: d.Address,
-			Serving: st.Serving[d.ComponentID], HitsByProtocol: map[string]int{}, Impaired: impaired[d.ComponentID]}
+			Serving: st.Serving[d.ComponentID], HitsByProtocol: map[string]int{}, Impaired: impaired[d.ComponentID],
+			Status: simState(out.Body.Connected, st.Listed[d.ComponentID], st.Serving[d.ComponentID], now.Sub(st.ListedSince[d.ComponentID]))}
 		if d.Impairment != nil {
 			f := impairmentFields(*d.Impairment)
 			b.Impairment = &f
@@ -119,4 +121,22 @@ func simulationBody(devices []storage.SimDevice, st simhub.Status, seen bool, no
 	}
 	sort.SliceStable(out.Body.Devices, func(i, j int) bool { return out.Body.Devices[i].Component < out.Body.Devices[j].Component })
 	return out
+}
+
+// simStartGrace is how long a component handed to the simulator may go
+// unconfirmed before it reads as failed: the simulator starts it and reports
+// it within about a second of its pull.
+const simStartGrace = 5 * time.Second
+
+// simState is a simulated component's status, most urgent first.
+func simState(connected, listed, serving bool, handedFor time.Duration) string {
+	switch {
+	case !connected:
+		return "offline"
+	case serving:
+		return "running"
+	case !listed || handedFor < simStartGrace:
+		return "starting"
+	}
+	return "failed"
 }

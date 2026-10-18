@@ -395,6 +395,18 @@ func (p *PG) AssignRole(ctx context.Context, actorID, systemName, roleName, comp
 		return fmt.Errorf("storage: begin assign role: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
+	if err := p.assignRoleTx(ctx, tx, actorID, systemName, roleName, componentName, read, action); err != nil {
+		return err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("storage: commit assign role: %w", err)
+	}
+	return nil
+}
+
+// assignRoleTx is AssignRole inside a transaction the caller owns, so a composite write (adding
+// a simulated system) can create it alongside the rest and commit once.
+func (p *PG) assignRoleTx(ctx context.Context, tx pgx.Tx, actorID, systemName, roleName, componentName string, read, action scope.Set) error {
 
 	// system and component are each resolved once here, inside this
 	// transaction, and their ids bound everywhere below: under scoped name
@@ -593,9 +605,6 @@ func (p *PG) AssignRole(ctx context.Context, actorID, systemName, roleName, comp
 	// and unassign take the same path.
 	if err := p.recomputeChain(ctx, tx, []ownerRef{{ID: component.ID, Name: component.Name}}, []ownerRef{{ID: sys.ID, Name: sys.Name}}, nil); err != nil {
 		return err
-	}
-	if err := tx.Commit(ctx); err != nil {
-		return fmt.Errorf("storage: commit assign role: %w", err)
 	}
 	return nil
 }

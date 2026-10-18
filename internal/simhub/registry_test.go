@@ -118,3 +118,21 @@ func TestRegistryBoundsWhatAReportCanDo(t *testing.T) {
 		t.Fatalf("oversized batch: accepted %d rejected %d, want the cap", acc, rej)
 	}
 }
+
+// A component keeps the time it was first handed over across pulls, and a
+// new one takes the time of the pull that first lists it.
+func TestListedSinceIsTheFirstHandover(t *testing.T) {
+	r := New()
+	r.now = func() time.Time { return at(0) }
+	r.Pulled("n", collection.SimCapabilities{}, []string{"a"})
+	r.now = func() time.Time { return at(10) }
+	r.Pulled("n", collection.SimCapabilities{}, []string{"a", "b"})
+	st, _ := r.Status("n")
+	if !st.ListedSince["a"].Equal(at(0)) || !st.ListedSince["b"].Equal(at(10)) || !st.Listed["b"] {
+		t.Fatalf("listed since = %v", st.ListedSince)
+	}
+	r.Pulled("n", collection.SimCapabilities{}, []string{"b"})
+	if st, _ := r.Status("n"); st.Listed["a"] {
+		t.Fatal("a component no longer handed over still reads listed")
+	}
+}

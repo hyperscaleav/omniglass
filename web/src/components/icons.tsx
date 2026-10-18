@@ -205,6 +205,11 @@ export const OctagonX: Component<P> = (p) => (
 export const CircleDashed: Component<P> = (p) => (
   <Svg size={p.size}><circle cx="12" cy="12" r="9" stroke-dasharray="3.6 3.2" /></Svg>
 );
+// WifiOff is a simulated component whose simulator stopped reporting: the link
+// is gone, which is not the same as the component failing (OctagonX).
+export const WifiOff: Component<P> = (p) => (
+  <Svg size={p.size}><path d="M12 20h.01" /><path d="M8.5 16.43a5 5 0 0 1 7 0" /><path d="M5 12.86a10 10 0 0 1 5.17-2.69" /><path d="M19 12.86a10 10 0 0 0-2-1.52" /><path d="M2 8.82a15 15 0 0 1 4.18-2.64" /><path d="M22 8.82a15 15 0 0 0-11.29-3.76" /><path d="m2 2 20 20" /></Svg>
+);
 export const Siren: Component<P> = (p) => (
   <Svg size={p.size}><path d="M7 18v-6a5 5 0 0 1 10 0v6" /><path d="M3 21h18" /><path d="M12 2v1M4.5 5.5l.7.7M19.5 5.5l-.7.7" /></Svg>
 );

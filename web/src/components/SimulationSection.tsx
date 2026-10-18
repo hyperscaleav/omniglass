@@ -4,10 +4,11 @@ import { useQuery } from "@tanstack/solid-query";
 import Eyebrow from "./Eyebrow";
 import Button from "./Button";
 import SimComponentDrawer from "./SimComponentDrawer";
+import SimStatusBadge from "./SimStatusBadge";
 import { FlaskConical } from "./icons";
 import { can, useMe } from "../lib/auth";
 import { rel } from "../lib/format";
-import { componentSimKey, getComponentSim, impairmentSummary, isImpaired } from "../lib/simulation";
+import { componentSimKey, getComponentSim } from "../lib/simulation";
 
 // SimulationSection: a component's own page says when the component is a
 // simulated component (#890), with where it is served, what has reached it and
@@ -39,11 +40,11 @@ export default function SimulationSection(props: { componentId: string }): JSX.E
             <dd class="font-data text-xs">{s().node}</dd>
             <dt class="text-base-content/50">Address</dt>
             <dd class="font-data text-xs">{s().address}</dd>
-            <dt class="text-base-content/50">Serving</dt>
+            <dt class="text-base-content/50">Status</dt>
             <dd>
-              <span class={s().activity?.serving ? "badge badge-sm badge-ghost" : "badge badge-sm badge-soft badge-warning"}>
-                {s().activity?.serving ? "serving" : "not serving"}
-              </span>
+              <Show when={s().activity} fallback={<span class="text-xs text-base-content/40">not reported</span>}>
+                {(a) => <SimStatusBadge sim={a()} />}
+              </Show>
             </dd>
             <dt class="text-base-content/50">Hits</dt>
             <dd class="font-data text-xs tnum">
@@ -51,12 +52,6 @@ export default function SimulationSection(props: { componentId: string }): JSX.E
               <Show when={s().activity?.last_hit_at}>
                 <span class="ml-2 text-base-content/50">last {rel(s().activity!.last_hit_at!)}{s().activity?.last_protocol ? ` via ${s().activity!.last_protocol}` : ""}</span>
               </Show>
-            </dd>
-            <dt class="text-base-content/50">Impairment</dt>
-            <dd>
-              <span class={isImpaired(s().activity?.impairment) ? "badge badge-sm badge-soft badge-warning" : "badge badge-sm badge-healthy"}>
-                {impairmentSummary(s().activity?.impairment)}
-              </span>
             </dd>
           </dl>
           <SimComponentDrawer id={open() ? props.componentId : null} onClose={() => setOpen(false)} onRemoved={() => navigate("/simulation")} showOpen={false} />

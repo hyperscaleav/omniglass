@@ -17,12 +17,16 @@ import {
   SIDEBAR_IDLE_POLL_MS,
   surfaceKind,
   validateAddComponent,
+  validateAddSystem,
+  addSystemBody,
+  planShortfall,
+  simStatus,
   type SimComponent,
   type SimSurface,
 } from "./simulation";
 
 const row = (id: string, hits: number): SimComponent => ({
-  component_id: id, component: id, product: "p", address: "127.60.0.2", serving: true, hits, hits_by_protocol: {}, impaired: false,
+  component_id: id, component: id, product: "p", address: "127.60.0.2", serving: true, status: "running", hits, hits_by_protocol: {}, impaired: false,
 });
 
 describe("risenHits", () => {
@@ -71,6 +75,53 @@ describe("impairment words", () => {
   });
 });
 
+// The status is the server's state, untouched by an impairment; the impairment
+// rides beside it as its own fact, with whether the simulator applied it.
+describe("a simulated component's status", () => {
+  const sim = (status: SimComponent["status"], impairment?: SimComponent["impairment"], impaired = false) => ({ status, impairment, impaired });
+
+  it("is each state as the server names it, with no impairment when none is set", () => {
+    for (const s of ["offline", "failed", "starting", "running"] as const) {
+      expect(simStatus(sim(s))).toEqual({ state: s });
+    }
+  });
+
+  it("keeps offline, failed and starting over any impairment set: the impairment rides beside, never replaces", () => {
+    for (const s of ["offline", "failed", "starting"] as const) {
+      expect(simStatus(sim(s, { unplugged: true })).state).toBe(s);
+    }
+    expect(simStatus(sim("offline", { latency_ms: 150 }))).toEqual({
+      state: "offline",
+      impairment: { unplugged: false, summary: "150 ms", applied: false },
+    });
+  });
+
+  it("names an applied unplug as unplugged, over any shaping set with it", () => {
+    expect(simStatus(sim("running", { unplugged: true, latency_ms: 50 }, true))).toEqual({
+      state: "running",
+      impairment: { unplugged: true, summary: "unplugged", applied: true },
+    });
+  });
+
+  it("summarises applied shaping in a few words", () => {
+    expect(simStatus(sim("running", { latency_ms: 150, loss_pct: 2.5 }, true))).toEqual({
+      state: "running",
+      impairment: { unplugged: false, summary: "150 ms, 2.5% loss", applied: true },
+    });
+  });
+
+  it("marks an impairment the simulator did not apply, and keeps the state", () => {
+    expect(simStatus(sim("running", { rate_kbit: 64 }, false))).toEqual({
+      state: "running",
+      impairment: { unplugged: false, summary: "64 kbit/s", applied: false },
+    });
+  });
+
+  it("treats an all-zero impairment as none, whatever impaired says", () => {
+    expect(simStatus(sim("running", HEALTHY, true))).toEqual({ state: "running" });
+  });
+});
+
 describe("the add-component rule", () => {
   it("requires a node, a product and a well-formed name", () => {
     expect(validateAddComponent({ node: "", product: "", name: "", location: "" })).toEqual({
@@ -115,5 +166,33 @@ describe("the sidebar's poll", () => {
     expect(sidebarPollMs({ connected: false, nodes: [] })).toBe(SIDEBAR_IDLE_POLL_MS);
     expect(sidebarPollMs(undefined)).toBe(SIDEBAR_IDLE_POLL_MS);
     expect(SIDEBAR_IDLE_POLL_MS).toBeGreaterThan(SIDEBAR_POLL_MS);
+  });
+});
+
+describe("validateAddSystem and addSystemBody", () => {
+  const d = { node: "edge-hq", standard: "meeting-room", system_type: "room-system", name: "", location: "" };
+  it("asks for node, standard and type, and lets the name be empty", () => {
+    expect(validateAddSystem(d)).toEqual({});
+    expect(Object.keys(validateAddSystem({ ...d, node: "", standard: "", system_type: "" })).sort()).toEqual(["node", "standard", "system_type"]);
+  });
+  it("holds a typed name to the entity name rule", () => {
+    expect(validateAddSystem({ ...d, name: "Lab Room" }).name).toBeTruthy();
+    expect(validateAddSystem({ ...d, name: "lab-room" }).name).toBeUndefined();
+  });
+  it("sends only what was filled", () => {
+    expect(addSystemBody(d)).toEqual({ standard: "meeting-room", system_type: "room-system" });
+    expect(addSystemBody({ ...d, name: " lab-room ", location: "hq" })).toEqual({ standard: "meeting-room", system_type: "room-system", name: "lab-room", location: "hq" });
+  });
+});
+
+describe("planShortfall", () => {
+  it("lists the roles nothing simulated fits and how many they are short", () => {
+    const s = planShortfall({ standard: "s", alternates: {}, components: 1, roles: [
+      { role: "display", product: "p", count: 1 },
+      { role: "camera", count: 0, missing: 2, reason: "none" },
+    ] });
+    expect(s.roles.map((r) => r.role)).toEqual(["camera"]);
+    expect(s.missing).toBe(2);
+    expect(planShortfall(undefined)).toEqual({ roles: [], missing: 0 });
   });
 });
