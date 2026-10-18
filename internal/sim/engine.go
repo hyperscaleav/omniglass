@@ -264,6 +264,21 @@ func (e *Engine) buildDevice(snap DeviceSnapshot, peersByRoom map[roomKey]map[st
 // Call before StartAll; nil restores the declared ports.
 func (e *Engine) SetPortMap(f func(int) int) { e.portMap = f }
 
+// PrivilegedPortShift lifts ports below 1024 (the ones binding needs a
+// privilege for) by offset and leaves the rest as declared. Zero offset is
+// nil, the declared ports.
+func PrivilegedPortShift(offset int) func(int) int {
+	if offset == 0 {
+		return nil
+	}
+	return func(p int) int {
+		if p < 1024 {
+			return p + offset
+		}
+		return p
+	}
+}
+
 func (e *Engine) port(declared int) int {
 	if e.portMap == nil {
 		return declared

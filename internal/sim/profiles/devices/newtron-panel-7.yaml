@@ -153,6 +153,57 @@ interfaces:
         doc: { summary: "Factory reset panel" }
         mutations: *newtron_factory_reset_mutations
 
+  # NVP: the newtron-nvp driver's line protocol (TCP 51325, CRLF lines, no
+  # banner). GET INPUT reports the video input; SET INPUT selects one of the
+  # inputs the video-input property allows (the sim matches whole lines, so
+  # each is listed); SUBSCRIBE INPUT pushes "EVT INPUT <input>" on change.
+  - name: nvp
+    protocol: tcp
+    port: 51325
+    doc:
+      summary: "NVP line protocol: video input status, selection and events"
+      tags: [control, persistent-session, raw-tcp]
+    api_surface: newtron-nvp
+    persistent: true
+    line_ending: "\r\n"
+    subjects:
+      - match: "status.video.input"
+        path: "status.video.input"
+        publish_token: "INPUT"
+        push_format: "EVT INPUT {{ .Value }}"
+    commands:
+      - match: "GET INPUT"
+        response: 'INPUT {{ .State | get "status" | get "video" | get "input" }}'
+      - match: "SET INPUT hdmi1"
+        response: "INPUT hdmi1"
+        mutations:
+          - { path: status.video.input, value: "hdmi1" }
+      - match: "SET INPUT hdmi2"
+        response: "INPUT hdmi2"
+        mutations:
+          - { path: status.video.input, value: "hdmi2" }
+      - match: "SET INPUT hdmi3"
+        response: "INPUT hdmi3"
+        mutations:
+          - { path: status.video.input, value: "hdmi3" }
+      - match: "SET INPUT dp1"
+        response: "INPUT dp1"
+        mutations:
+          - { path: status.video.input, value: "dp1" }
+      - match: "SET INPUT usbc"
+        response: "INPUT usbc"
+        mutations:
+          - { path: status.video.input, value: "usbc" }
+      - match: "SUBSCRIBE INPUT"
+        action: subscribe
+        subject: "status.video.input"
+        token: "INPUT"
+        response: "OK"
+      - match: "UNSUBSCRIBE INPUT"
+        action: unsubscribe
+        subject: "status.video.input"
+        response: "OK"
+
   - name: snmp
     protocol: snmp
     port: 161
@@ -197,6 +248,10 @@ defaults:
     room:
       scene: "idle"
       source: "none"
+    video:
+      # The selected video input, as the NVP line protocol reports and sets
+      # it; one of the video-input property's values.
+      input: "hdmi1"
     network:
       ipv4:
         address: ""

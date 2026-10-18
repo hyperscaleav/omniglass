@@ -25,7 +25,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/sim/profiles"
 )
 
-// acceptancePortShift lifts every profile port above 1024 so the whole
+// acceptancePortShift lifts the privileged profile ports above 1024 so the whole
 // fleet serves unprivileged. Each device owns a distinct 127.x address, so
 // a fixed shift cannot collide between devices.
 const acceptancePortShift = 20000
@@ -46,7 +46,7 @@ func startFleet(t *testing.T, name string) (*Engine, *profile.Store) {
 		t.Fatalf("compiling fleet: %v", err)
 	}
 	e := NewEngine(store, profiles.Templates())
-	e.SetPortMap(func(p int) int { return p + acceptancePortShift })
+	e.SetPortMap(PrivilegedPortShift(acceptancePortShift))
 	if err := e.LoadDevices(Snapshots(fl)); err != nil {
 		t.Fatalf("loading devices: %v", err)
 	}
@@ -80,7 +80,9 @@ func TestFleetServesSharedStateAcrossProtocols(t *testing.T) {
 	}
 	dsp := deviceByProfile(t, e, "polaris-dsp-16")
 	ip := dsp.LoopbackIP.String()
-	at := func(port int) string { return net.JoinHostPort(ip, fmt.Sprint(port+acceptancePortShift)) }
+	at := func(port int) string {
+		return net.JoinHostPort(ip, fmt.Sprint(PrivilegedPortShift(acceptancePortShift)(port)))
+	}
 
 	var hitsMu sync.Mutex
 	hits := map[string]bool{}
@@ -234,8 +236,8 @@ func TestFleetServesSharedStateAcrossProtocols(t *testing.T) {
 		t.Error("no session event for the line-protocol session")
 	}
 	for _, p := range sessionPorts {
-		if p != 1710+acceptancePortShift {
-			t.Errorf("session event port = %d, want the bound %d", p, 1710+acceptancePortShift)
+		if p != 1710 {
+			t.Errorf("session event port = %d, want the bound 1710", p)
 		}
 	}
 	for _, p := range []string{"http", "ssh", "snmp"} {

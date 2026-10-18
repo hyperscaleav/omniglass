@@ -54,7 +54,7 @@ func BenchmarkServeThousandDevices(b *testing.B) {
 		baseG := runtime.NumGoroutine()
 
 		e := NewEngine(store, profiles.Templates())
-		e.SetPortMap(func(p int) int { return p + benchPortShift })
+		e.SetPortMap(PrivilegedPortShift(benchPortShift))
 		start := time.Now()
 		if err := e.Sync(snaps); err != nil {
 			b.Fatalf("sync: %v", err)

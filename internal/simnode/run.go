@@ -102,7 +102,7 @@ func Run(ctx context.Context, cfg Config) error {
 
 	engine := sim.NewEngine(store, profiles.Templates())
 	if cfg.PortOffset != 0 {
-		engine.SetPortMap(func(p int) int { return p + cfg.PortOffset })
+		engine.SetPortMap(sim.PrivilegedPortShift(cfg.PortOffset))
 	}
 	defer engine.StopAll()
 	hits := &hitBuffer{}

@@ -27,7 +27,7 @@ func newCatalogEngine(t *testing.T) *Engine {
 		t.Fatalf("loading catalog: %v", err)
 	}
 	e := NewEngine(store, profiles.Templates())
-	e.SetPortMap(func(p int) int { return p + syncPortShift })
+	e.SetPortMap(PrivilegedPortShift(syncPortShift))
 	t.Cleanup(e.StopAll)
 	return e
 }
@@ -154,7 +154,7 @@ func TestEngineReportsHitsOnOneStream(t *testing.T) {
 	dspDo(t, http.MethodGet, dspURL(ip, "/api/status"), "")
 	// A reachability probe connects and closes without a request; that is a
 	// hit too.
-	probe, err := net.Dial("tcp", net.JoinHostPort(ip, fmt.Sprint(1710+syncPortShift)))
+	probe, err := net.Dial("tcp", net.JoinHostPort(ip, "1710"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -198,9 +198,9 @@ func TestEngineReportsHitsOnOneStream(t *testing.T) {
 			connects[h.Port] = true
 		}
 	}
-	for _, p := range []int{80, 1710, 22} {
-		if !connects[p+syncPortShift] {
-			t.Errorf("no CONNECT hit on port %d; got %v", p+syncPortShift, connects)
+	for _, p := range []int{80 + syncPortShift, 1710, 22 + syncPortShift} {
+		if !connects[p] {
+			t.Errorf("no CONNECT hit on port %d; got %v", p, connects)
 		}
 	}
 }
@@ -238,7 +238,7 @@ func TestEngineServesEachTCPInterfaceSeparately(t *testing.T) {
 		ProfileName: "tessellate-census-c1", Version: 1}}); err != nil {
 		t.Fatal(err)
 	}
-	ascii := net.JoinHostPort(ip, fmt.Sprint(5000+syncPortShift))
+	ascii := net.JoinHostPort(ip, "5000")
 	c, err := net.DialTimeout("tcp", ascii, time.Second)
 	if err != nil {
 		t.Fatal(err)
@@ -253,7 +253,7 @@ func TestEngineServesEachTCPInterfaceSeparately(t *testing.T) {
 
 	e.StopAll()
 	for _, p := range []int{5000, 5001} {
-		if c, err := net.DialTimeout("tcp", net.JoinHostPort(ip, fmt.Sprint(p+syncPortShift)), 300*time.Millisecond); err == nil {
+		if c, err := net.DialTimeout("tcp", net.JoinHostPort(ip, fmt.Sprint(p)), 300*time.Millisecond); err == nil {
 			c.Close()
 			t.Errorf("port %d still accepts after StopAll", p)
 		}
@@ -324,5 +324,19 @@ func TestEngineSyncAppliesAProductsOverlay(t *testing.T) {
 	model := e.Devices()[0].State()["configuration"].(map[string]any)["device"].(map[string]any)["model"]
 	if model != "Edge 55" {
 		t.Fatalf("model = %v, want the product's own", model)
+	}
+}
+
+// The run mode's port shift lifts only the ports that need a privilege:
+// ports at or above 1024 stay as the profile declares them.
+func TestPrivilegedPortShift(t *testing.T) {
+	shift := PrivilegedPortShift(10000)
+	for in, want := range map[int]int{22: 10022, 161: 10161, 1023: 11023, 1024: 1024, 1710: 1710, 51325: 51325} {
+		if got := shift(in); got != want {
+			t.Errorf("shift(%d) = %d, want %d", in, got, want)
+		}
+	}
+	if PrivilegedPortShift(0) != nil {
+		t.Error("a zero shift should leave the declared ports (nil map)")
 	}
 }

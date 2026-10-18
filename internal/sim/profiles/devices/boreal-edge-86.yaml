@@ -145,6 +145,7 @@ interfaces:
     # Boreal uses enterprise OID 1.3.6.1.4.1.55520 (fictional arc)
     oid_map:
       status.device.power:              "1.3.6.1.4.1.55520.1.1.1.0"
+      configuration.device.model:       "1.3.6.1.2.1.1.1.0"   # sysDescr, which every agent answers
       status.device.uptime:             "1.3.6.1.2.1.1.3.0"
       status.display.input:             "1.3.6.1.4.1.55520.2.2.0"
       status.display.brightness:        "1.3.6.1.4.1.55520.2.3.0"
