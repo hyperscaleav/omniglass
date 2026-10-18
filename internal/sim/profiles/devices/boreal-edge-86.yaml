@@ -33,7 +33,7 @@ interfaces:
     protocol: http
     port: 80
     doc:
-      summary: "Web-based management interface"
+      summary: "Web-based management"
       tags: [management, configuration]
     auth:
       type: basic
@@ -135,7 +135,7 @@ interfaces:
     protocol: snmp
     port: 161
     doc:
-      summary: "SNMP monitoring interface"
+      summary: "SNMP monitoring"
       tags: [monitoring]
     api_surface: boreal-edge
     auth:
