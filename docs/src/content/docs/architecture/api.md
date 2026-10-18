@@ -288,6 +288,12 @@ password). It is the surface's **one public route**, unauthenticated because the
 authentication, and an invalid token is a **401** (a claim must not disclose which nodes exist). A node
 is fleet-wide, so `node:read` and `node:create` require an **all-scope** grant.
 
+**A simulated device can be broken on purpose.** `GET` and `PUT /components/{name}/impairment`
+(gated `simulation:read` and `simulation:update`, component-scoped, the write audited) read and set
+what is broken on a simulated component: unplugged, or latency, jitter, loss and a rate limit toward
+it. An all-zero body repairs the device; jitter above latency or a value out of range is a 422. The
+simulator beside the component's node applies it ([simulation](/architecture/simulation/)).
+
 **A node's simulator is a read beside it.** `GET /nodes/{name}/simulation` (gated `node:read`, all-scope)
 lists the components a [simulator](/architecture/simulation/) beside the node serves (each component with an
 endpoint placed on the node and inside the caller's component read scope, its product and target host),

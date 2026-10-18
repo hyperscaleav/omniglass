@@ -6223,3 +6223,18 @@ binding, recording a property target's value as a validated, transition-only obs
 check runs when an observation lands; and a server sweep times out what nothing settles. A command
 with no instance is judged on its dispatched endpoint's series. `newtron-nvp`'s `set-input` settles
 from its reply, and the simulator end-to-end test now asserts the command settles.
+
+### Simulated devices can be broken on purpose (#885 rollup 2, slice #889)
+
+An operator unplugs, slows, or degrades a simulated device through `PUT /components/{name}/impairment`
+(`simulation:update`, audited), and the simulator beside its node, started with `--impairments` and
+`NET_ADMIN`, applies it through netlink: an nftables table drops traffic to unplugged devices and
+ICMP echoes to loopback addresses that are no device (so ping tells the truth), and a netem class per
+degraded device adds its delay, jitter, loss and rate. The release image is distroless, so no `nft`
+or `tc` binary is involved. The real applier and the whole loop are tested in a `NET_ADMIN`
+container (`make test-netadmin`, part of `make test` and CI), never on the host: unplugging fails the
+collector's ping and TCP checks and both endpoints read down, replugging recovers, a 300 ms delay
+shows in the connect time. Two findings came out of it. Impairments are opt-in, because a simulator
+run as root on a workstation would otherwise rewrite the host's firewall. And an unplugged device's
+system verdict does not move: a component's condition is its active alarms, and nothing raises one
+from reachability yet (#819).

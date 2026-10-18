@@ -26,7 +26,9 @@ connection and request it answers on one hit stream. Also built: the `sim run` m
 (#887), which pulls the devices placed on the node, serves them, and reports hits the server shows
 at `GET /nodes/{name}/simulation`. Also built: the simulated dev fleet (#888), where every dev-seed
 component a profile serves gets an address and endpoints on the dev node, so `make dev-sim`
-collects for real. Still `Design`: the Helm sidecar (#892), impairments (#889), and the console
+collects for real. Also built: impairments (#889), an operator unplugging, slowing or degrading a
+simulated device through the API and CLI, applied by a simulator run with `--impairments` and
+`NET_ADMIN`, with ping made truthful. Still `Design`: the Helm sidecar (#892), and the console
 surfaces (#890).
 :::
 
@@ -139,12 +141,36 @@ In a deployment the simulator is a sidecar container in the node's pod, granted 
 unprivileged-port sysctl, so it binds the profiles' real ports and can make ping tell the truth.
 :::
 
-:::design[Target design: impairments, tracked in #889]
-An impairment is a fault set on a simulated device: dark (no answer on any protocol, ping
-included), latency, loss, a protocol refusing, a value pinned. Impairments live on the simulated
-device and are applied through the firewall and traffic-control rules the run mode holds
-`NET_ADMIN` for, so the collector sees exactly what a failing device would show.
-:::
+## Breaking a device on purpose
+
+An **impairment** is what an operator has broken on a simulated device, recorded on the component and
+applied by the simulator beside its node, so a collector sees exactly what a failing device would
+show:
+
+- **unplugged**: dark on every protocol. A connect times out (not refused), a datagram vanishes, a
+  ping goes unanswered;
+- **latency** and **jitter**: a delay, with variation, on traffic toward the device, which shows in
+  the collector's connect times and round trips;
+- **loss**: a share of packets toward the device dropped;
+- **rate**: a bandwidth limit toward the device.
+
+`PUT /components/{name}/impairment` sets it (`omniglass component impairment set <component>
+--unplugged`, `--latency-ms 300`, ...), an all-zero body repairs it, and `GET` reads it back. Both
+are gated (`simulation:update`, which operators hold, and `simulation:read`), resolve the component
+in the caller's component scope, and the write is audited. The node's simulation view shows each
+device's impairment and the simulator's account of applying it.
+
+The simulator applies impairments only when started with `--impairments` and holding `NET_ADMIN`,
+in a network namespace of its own (a pod or container): it rewrites that namespace's firewall and
+traffic shaping, through netlink with no `nft` or `tc` binary. It owns one nftables table and one
+root qdisc on loopback and touches nothing else. Without the flag or the capability it applies
+nothing and says why, in the simulation view. With them, **ping tells the truth**: an ICMP echo to
+a loopback address that is no device is dropped, so only devices answer.
+
+What the simulator cannot do yet is break one protocol while the others answer, or pin a value so a
+collector reads plausible but wrong data (#909). And an unplugged device's **system verdict** does not
+move on its own: a component's condition is its active alarms, and raising one from reachability is
+the event rule tier (#819).
 
 :::design[Target design: the console, tracked in #890]
 A Simulation page lists every simulated device and blinks a device when the collector reaches it.
