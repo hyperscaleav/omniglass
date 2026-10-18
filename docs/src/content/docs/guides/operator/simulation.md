@@ -39,9 +39,10 @@ restart.
 ## See it
 
 While a simulator is connected, **Simulation** appears in the sidebar (with `simulation:read`, which
-viewers hold). The page has a card per node with a simulator, saying whether it is connected, what it
-may do where it runs (bind ports below 1024, hold `NET_ADMIN`, the lift it applies to its ports), and
-whether it can apply impairments (and if not, why). Under it, every simulated device is a tile with
+viewers hold). The page has a card per node with a simulator, saying whether it is connected, its total
+hits and devices, what it may do where it runs (**Low ports**: bind ports below 1024; **Port offset**:
+the lift it applies when it cannot; **NET_ADMIN**), and whether it can apply impairments (and if not,
+why). Under it, every simulated device is a tile with
 its name, product, address and hit count, and a tile **blinks** each time the collector reaches the
 device: a poll, a connect, a ping. A tile that never blinks is a device nothing is collecting from.
 When no simulator is connected the entry is hidden, since there is nothing to show.
@@ -50,7 +51,7 @@ From a terminal the same view is `omniglass simulation get`, and one node's is
 `omniglass node simulation <node>`.
 
 A simulated component's own page carries a **Simulation** section (its node, address, hits, and
-anything broken on it), so the device and its simulation are one place. Its button opens the
+anything broken on it), so the device and its simulation are one place. **Open device** opens the
 device's drawer, as a tile on the Simulation page does.
 
 ## Exercise a device
@@ -84,9 +85,10 @@ omniglass simulation profiles                                               # th
 omniglass simulation add-device edge-hq --name panel-9 --product newtron-panel-7
 ```
 
-In the drawer, **Product** changes a device among the products its profile simulates (a display line
-in its sizes, say), which keeps its endpoint valid, and **Remove** deletes the component, which
-removes the device.
+In the drawer, **Product** and **Change** move a device among the products its profile simulates (a
+display line in its sizes, say), which keeps its endpoint valid (with `component:update`), and
+**Remove** deletes the component after a confirmation, which removes the device (with
+`component:delete`).
 
 ## Break it on purpose
 
@@ -99,7 +101,8 @@ breaks:
 - **Loss**: a share of packets toward the device dropped.
 - **Rate**: a bandwidth limit on the device's link, both ways.
 
-**Save** sets the whole impairment at once (a field left empty is zero), and **Repair** clears it.
+**Save impairment** sets the whole impairment at once (a field left empty is zero), and **Repair**
+clears it.
 The simulator applies it on its next pull, and the device's Reachability panel shows the collector
 seeing it: unplug a device and its TCP and ping checks go down; plug it back and they recover.
 
