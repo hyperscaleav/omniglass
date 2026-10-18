@@ -164,7 +164,7 @@ describe("RolesPanel", () => {
       ...health,
       roles: health.roles!.map((r) =>
         r.name === "main-display"
-          ? { ...r, satisfying: 0, short: 1, impaired: true, down: ["disp-1"], alarms: [{ id: "a-1", severity: "high", message: "HDMI failed", component: "disp-1", raised_at: new Date().toISOString() }] }
+          ? { ...r, satisfying: 0, short: 1, impaired: true, down: ["disp-1"], alarms: [{ id: "a-1", severity: "high", message: "HDMI failed", component: "disp-1", component_id: uuidFor("disp-1"), raised_at: new Date().toISOString() }] }
           : r,
       ),
     };
@@ -214,7 +214,7 @@ describe("RolesPanel", () => {
       ...health,
       roles: health.roles!.map((r) =>
         r.name === "table-mic"
-          ? { ...r, active: false, choice: "conferencing", alternate: "component-built", down: ["mic-1"], alarms: [{ id: "a-2", severity: "high", message: "mic failed", component: "mic-1", raised_at: new Date().toISOString() }] }
+          ? { ...r, active: false, choice: "conferencing", alternate: "component-built", down: ["mic-1"], alarms: [{ id: "a-2", severity: "high", message: "mic failed", component: "mic-1", component_id: uuidFor("mic-1"), raised_at: new Date().toISOString() }] }
           : r,
       ),
     };

@@ -1117,7 +1117,7 @@ func TestRaiseAlarmWithoutCapabilities(t *testing.T) {
 	if err != nil {
 		t.Fatalf("raise alarm: %v", err)
 	}
-	if alarm.ComponentID != "bar-1" || alarm.Severity != "warning" ||
+	if alarm.ComponentName != "bar-1" || alarm.Severity != "warning" ||
 		alarm.Message != "mic array not responding" || alarm.DedupKey != "mic-fault" || !alarm.Active() {
 		t.Fatalf("alarm = %+v, want it to round-trip exactly what was raised", alarm)
 	}
@@ -1128,5 +1128,10 @@ func TestRaiseAlarmWithoutCapabilities(t *testing.T) {
 	}
 	if len(got) != 1 || got[0].ID != alarm.ID {
 		t.Fatalf("listed alarms = %+v, want the one just raised", got)
+	}
+	// #557: the winning raise and every read agree on the component, its uuid
+	// and its name, rather than the raise echoing the caller's reference.
+	if got[0].ComponentID != alarm.ComponentID || got[0].ComponentName != "bar-1" || alarm.ComponentID == "bar-1" {
+		t.Fatalf("raise said component %q (%q), the list %q (%q): want one uuid and one name", alarm.ComponentID, alarm.ComponentName, got[0].ComponentID, got[0].ComponentName)
 	}
 }

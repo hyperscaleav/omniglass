@@ -4411,13 +4411,20 @@ export interface components {
              * @description Null while the alarm is active
              */
             cleared_at?: string;
+            /** @description The component the alarm is on, by name */
             component: string;
+            /** @description The component's uuid, the stable form of component */
+            component_id: string;
             /** @description The condition identity: one open alarm per (component, dedup_key) */
             dedup_key: string;
             id: string;
             message: string;
             /** Format: date-time */
             raised_at: string;
+            /** @description The event rule that raised the alarm, by name; absent when an operator raised it */
+            raised_by_rule?: string;
+            /** @description The raising rule's uuid */
+            raised_by_rule_id?: string;
             /** @description The severity level the alarm was raised at, by name (see /severity-levels) */
             severity: string;
         };
@@ -5843,7 +5850,10 @@ export interface components {
             name: string;
         };
         HealthAlarmBody: {
+            /** @description The component the alarm is on, by name */
             component: string;
+            /** @description The component's uuid */
+            component_id: string;
             id: string;
             message: string;
             /** Format: date-time */

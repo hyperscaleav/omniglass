@@ -35,14 +35,18 @@ import (
 // caller is owed, which is the distinction #728 could not make and filed.
 
 type alarmBody struct {
-	ID        string     `json:"id"`
-	Component string     `json:"component"`
-	Severity  string     `json:"severity" doc:"The severity level the alarm was raised at, by name (see /severity-levels)"`
-	Message   string     `json:"message"`
-	DedupKey  string     `json:"dedup_key" doc:"The condition identity: one open alarm per (component, dedup_key)"`
-	RaisedAt  time.Time  `json:"raised_at"`
-	ClearedAt *time.Time `json:"cleared_at,omitempty" doc:"Null while the alarm is active"`
-	Active    bool       `json:"active"`
+	ID          string `json:"id"`
+	Component   string `json:"component" doc:"The component the alarm is on, by name"`
+	ComponentID string `json:"component_id" doc:"The component's uuid, the stable form of component"`
+	// The rule that raised the alarm (#919), absent on a hand-raised one.
+	RaisedByRule   string     `json:"raised_by_rule,omitempty" doc:"The event rule that raised the alarm, by name; absent when an operator raised it"`
+	RaisedByRuleID string     `json:"raised_by_rule_id,omitempty" doc:"The raising rule's uuid"`
+	Severity       string     `json:"severity" doc:"The severity level the alarm was raised at, by name (see /severity-levels)"`
+	Message        string     `json:"message"`
+	DedupKey       string     `json:"dedup_key" doc:"The condition identity: one open alarm per (component, dedup_key)"`
+	RaisedAt       time.Time  `json:"raised_at"`
+	ClearedAt      *time.Time `json:"cleared_at,omitempty" doc:"Null while the alarm is active"`
+	Active         bool       `json:"active"`
 	// The acknowledgement is orthogonal to cleared: an alarm can be acknowledged
 	// and still raised, raised and unacknowledged, or cleared having never been
 	// acknowledged.
@@ -54,7 +58,10 @@ type alarmBody struct {
 func toAlarmBody(a *storage.Alarm) alarmBody {
 	return alarmBody{
 		ID:             a.ID,
-		Component:      a.ComponentID,
+		Component:      a.ComponentName,
+		ComponentID:    a.ComponentID,
+		RaisedByRule:   derefStr(a.RaisedByRule),
+		RaisedByRuleID: derefStr(a.RaisedByRuleID),
 		Severity:       a.Severity,
 		Message:        a.Message,
 		DedupKey:       a.DedupKey,

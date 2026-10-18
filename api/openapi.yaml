@@ -200,6 +200,10 @@ components:
           format: date-time
           type: string
         component:
+          description: The component the alarm is on, by name
+          type: string
+        component_id:
+          description: The component's uuid, the stable form of component
           type: string
         dedup_key:
           description: "The condition identity: one open alarm per (component, dedup_key)"
@@ -211,12 +215,19 @@ components:
         raised_at:
           format: date-time
           type: string
+        raised_by_rule:
+          description: The event rule that raised the alarm, by name; absent when an operator raised it
+          type: string
+        raised_by_rule_id:
+          description: The raising rule's uuid
+          type: string
         severity:
           description: The severity level the alarm was raised at, by name (see /severity-levels)
           type: string
       required:
         - id
         - component
+        - component_id
         - severity
         - message
         - dedup_key
@@ -2751,6 +2762,10 @@ components:
       additionalProperties: false
       properties:
         component:
+          description: The component the alarm is on, by name
+          type: string
+        component_id:
+          description: The component's uuid
           type: string
         id:
           type: string
@@ -2764,6 +2779,7 @@ components:
       required:
         - id
         - component
+        - component_id
         - severity
         - message
         - raised_at

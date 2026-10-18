@@ -122,11 +122,11 @@ export default function OutlineWorkspace(props: { rootId?: string }) {
   const health = useQueries(() => ({
     queries: troubled().map((id) => ({ queryKey: systemHealthKey(id), queryFn: () => systemHealth(id), staleTime: 30_000, retry: false })),
   }));
-  // A report names an alarm's component by uuid.
+  // A report names an alarm's component by name and by uuid; the outline keys on the uuid.
   const alarms = createMemo(() => {
     const out = new Map<string, string>();
     for (const q of health) for (const role of q.data?.roles ?? []) for (const a of role.alarms ?? []) {
-      if (a.component && !out.has(a.component)) out.set(a.component, a.message);
+      if (a.component_id && !out.has(a.component_id)) out.set(a.component_id, a.message);
     }
     return out;
   });

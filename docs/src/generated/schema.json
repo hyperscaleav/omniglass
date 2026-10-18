@@ -3113,6 +3113,13 @@
       "nullable": true,
       "fk": true,
       "fk_target": "principal.id"
+     },
+     {
+      "name": "raised_by_rule_id",
+      "type": "uuid",
+      "nullable": true,
+      "fk": true,
+      "fk_target": "event_rule.id"
      }
     ],
     "uniques": [

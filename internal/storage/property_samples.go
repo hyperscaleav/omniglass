@@ -62,6 +62,12 @@ func (p *PG) InsertPropertySamples(ctx context.Context, evs []PropertySampleWrit
 	if err != nil {
 		return err
 	}
+	// The event rules reading this batch's keys judge each sample as it lands
+	// (#919), in this transaction.
+	eval, err := p.newRuleEvaluator(ctx, tx, sampleKeys(evs, func(e PropertySampleWrite) string { return e.Key }))
+	if err != nil {
+		return err
+	}
 	for _, ev := range evs {
 		col, err := ownerColumn(ev.OwnerKind)
 		if err != nil {
@@ -93,6 +99,9 @@ func (p *PG) InsertPropertySamples(ctx context.Context, evs []PropertySampleWrit
 			if err := p.settleOnObservation(ctx, tx, ev.OwnerKind, arc, ev.Key, ev.Instance, now); err != nil {
 				return err
 			}
+		}
+		if err := eval.observe(ctx, tx, ev.OwnerKind, arc, ev.Key, ev.Instance, ev.Value); err != nil {
+			return err
 		}
 	}
 	if err := tx.Commit(ctx); err != nil {

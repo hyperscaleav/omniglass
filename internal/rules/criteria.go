@@ -133,3 +133,40 @@ var negations = map[string]string{"eq": "ne", "ne": "eq", "gt": "le", "le": "gt"
 func (c Criteria) Negate() Criteria {
 	return Criteria{Op: negations[c.Op], Value: c.Value}
 }
+
+// Action is what one sample means for a rule's alarm on its owner.
+type Action int
+
+const (
+	// Hold changes nothing: the sample meets neither fire nor clear.
+	Hold Action = iota
+	// Fire opens the alarm (a no-op when it is already open).
+	Fire
+	// Clear clears the alarm (a no-op when none is open).
+	Clear
+)
+
+// Decide is what a sample means for a rule: Fire when it meets the fire
+// criteria, else Clear when it meets the clear criteria (nil: the negation
+// of fire), else Hold. Pure; sustains are the caller's concern.
+func Decide(fire Criteria, clear *Criteria, value any) (Action, error) {
+	fires, err := fire.Eval(value)
+	if err != nil {
+		return Hold, err
+	}
+	if fires {
+		return Fire, nil
+	}
+	c := fire.Negate()
+	if clear != nil {
+		c = *clear
+	}
+	clears, err := c.Eval(value)
+	if err != nil {
+		return Hold, err
+	}
+	if clears {
+		return Clear, nil
+	}
+	return Hold, nil
+}

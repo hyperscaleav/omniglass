@@ -1,3 +1,4 @@
+import { uuidFor } from "../lib/testids";
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, fireEvent, waitFor, within } from "@solidjs/testing-library";
 import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
@@ -16,6 +17,7 @@ const alarms: Alarm[] = [
   {
     id: "a-1",
     component: "disp-1",
+    component_id: uuidFor("disp-1"),
     severity: "warning",
     message: "Lamp hours exceeded",
     dedup_key: "test.condition",
@@ -28,6 +30,7 @@ const alarms: Alarm[] = [
   {
     id: "a-2",
     component: "disp-1",
+    component_id: uuidFor("disp-1"),
     severity: "high",
     message: "HDMI board failed",
     dedup_key: "test.condition",
@@ -38,6 +41,7 @@ const alarms: Alarm[] = [
   {
     id: "a-0",
     component: "disp-1",
+    component_id: uuidFor("disp-1"),
     severity: "info",
     message: "Firmware mismatch",
     dedup_key: "test.condition",
