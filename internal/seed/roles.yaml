@@ -15,8 +15,8 @@ roles:
     label: Operator
     description: >-
       Day-to-day operations: create or edit components, endpoints, secrets,
-      variables, and the property, metric, event, and command catalogs, and issue
-      commands in scope.
+      variables, and the property, metric, event, and command catalogs, issue
+      commands in scope, and impair simulated devices.
       Sees and reveals the device secrets in its scope (never the admin-sensitive
       platform credentials). Inherits Viewer.
     inherits: ["viewer"]
@@ -30,6 +30,7 @@ roles:
       - "event_type:create,update"
       - "command_type:create,update"
       - "command:issue"
+      - "simulation:update"
       # alarm:acknowledge records that a human has seen an alarm. The role that
       # runs the fleet is the role that acknowledges. The verb is spelled out
       # like every other seeded action; `alarm:ack` was only ever fixture and

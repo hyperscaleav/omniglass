@@ -6,6 +6,7 @@ import (
 	"net"
 
 	"github.com/hyperscaleav/omniglass/internal/scope"
+	"github.com/hyperscaleav/omniglass/internal/sim/impair"
 )
 
 // SimDevice is one component a simulator beside a node may serve: the
@@ -16,6 +17,8 @@ type SimDevice struct {
 	Name        string
 	Product     string
 	Address     string
+	// Impairment is what is broken on the device; nil when it is healthy.
+	Impairment *impair.Impairment
 }
 
 // NodeSimDevices lists each component with an endpoint placed on the node,
@@ -41,10 +44,12 @@ func (p *PG) NodeSimDevices(ctx context.Context, name string, read scope.Set) ([
 		}
 	}
 	rows, err := p.pool.Query(ctx, `
-		select c.id, c.name, pr.name, coalesce(i.params->>'target', '')
+		select c.id, c.name, pr.name, coalesce(i.params->>'target', ''),
+			si.unplugged, si.latency_ms, si.jitter_ms, si.loss_pct::float8, si.rate_kbit
 		from endpoint i
 		join component c on c.id = i.component
 		join product pr on pr.id = c.product_id
+		left join sim_impairment si on si.component_id = c.id
 		where i.node_name = (select principal_id from node where name = $1)
 		order by c.id, i.name`, name)
 	if err != nil {
@@ -55,8 +60,14 @@ func (p *PG) NodeSimDevices(ctx context.Context, name string, read scope.Set) ([
 	for rows.Next() {
 		var d SimDevice
 		var target string
-		if err := rows.Scan(&d.ComponentID, &d.Name, &d.Product, &target); err != nil {
+		var unplugged *bool
+		var latency, jitter, rate *int
+		var loss *float64
+		if err := rows.Scan(&d.ComponentID, &d.Name, &d.Product, &target, &unplugged, &latency, &jitter, &loss, &rate); err != nil {
 			return nil, fmt.Errorf("storage: scan sim device: %w", err)
+		}
+		if unplugged != nil {
+			d.Impairment = &impair.Impairment{Unplugged: *unplugged, LatencyMs: *latency, JitterMs: *jitter, LossPct: *loss, RateKbit: *rate}
 		}
 		if visible != nil && !visible[d.ComponentID] {
 			continue

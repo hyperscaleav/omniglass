@@ -645,6 +645,34 @@ Example:
 omniglass component get <name>
 ```
 
+### `omniglass component impairment`
+
+Commands for the impairment resource
+
+#### `omniglass component impairment list`
+
+Break or repair a simulated device
+
+```
+omniglass component impairment list <name> [flags]
+```
+
+Sets what is broken on a simulated component: unplugged, or a link with added latency, jitter, loss or a rate limit. An all-zero body repairs it. Audited. The simulator beside the component's node applies it on its next pull. Gated by simulation:update, whose scope is resolved on the component tier; a component outside the caller's component:read is a non-disclosing 404, and one it can read but not impair is a 403. Jitter above latency, or a value outside its range, is a 422.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--jitter-ms` | int | `0` | Variation on the delay, in milliseconds; at most the latency |
+| `--latency-ms` | int | `0` | Delay added to traffic toward the device, in milliseconds |
+| `--loss-pct` | float64 | `0` | Share of packets toward the device dropped, in percent |
+| `--rate-kbit` | int | `0` | Bandwidth limit toward the device, in kilobits per second; 0 is unlimited |
+| `--unplugged` | bool | `false` | Dark on every protocol: connects time out, datagrams and pings go unanswered |
+
+Example:
+
+```sh
+omniglass component impairment list <name>
+```
+
 ### `omniglass component list`
 
 List components in scope
@@ -3774,6 +3802,7 @@ Serves each component placed on the node whose product has a simulator profile a
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
+| `--impairments` | bool | `false` | apply impairments (unplug, latency, loss) and truthful ping by rewriting the firewall and traffic shaping of this network namespace; needs NET_ADMIN, and is meant for a namespace of the simulator's own (a pod or container) |
 | `--name` | string | (none) | the node this simulator runs beside (env OMNIGLASS_NODE_NAME) |
 | `--poll` | duration | `10s` | how often to re-pull the device list |
 | `--port-offset` | int | `0` | lift the simulated ports below 1024 by this much, to serve without the privilege to bind them |

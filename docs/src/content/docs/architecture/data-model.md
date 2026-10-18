@@ -401,6 +401,13 @@ audit: {
   }
 }
 
+unclustered: {
+  sim_impairment: {
+    shape: sql_table
+    component_id: uuid {constraint: primary_key}
+  }
+}
+
 audit.audit_log.actor_principal_id -> identity.principal.id
 audit.audit_log.real_actor_principal_id -> identity.principal.id
 catalog.component_type.parent_id -> catalog.component_type.id
@@ -514,6 +521,7 @@ telemetry.property.location_id -> fleet.location.id
 telemetry.property.node_id -> collection.node.principal_id
 telemetry.property.property_type_id -> telemetry.property_type.id
 telemetry.property.system_id -> fleet.system.id
+unclustered.sim_impairment.component_id -> fleet.component.id
 ```
 
 <!-- erd:end -->

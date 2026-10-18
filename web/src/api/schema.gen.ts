@@ -624,6 +624,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/components/{name}/impairment": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get what is broken on a simulated device
+         * @description The impairment an operator set on a simulated component (unplugged, or a degraded link), applied by the simulator beside its node when that simulator runs with impairments and NET_ADMIN. A healthy device reads all zero. Gated by simulation:read; the component resolves within the caller's component read scope.
+         */
+        get: operations["get-component-impairment"];
+        /**
+         * Break or repair a simulated device
+         * @description Sets what is broken on a simulated component: unplugged, or a link with added latency, jitter, loss or a rate limit. An all-zero body repairs it. Audited. The simulator beside the component's node applies it on its next pull. Gated by simulation:update, whose scope is resolved on the component tier; a component outside the caller's component:read is a non-disclosing 404, and one it can read but not impair is a 403. Jitter above latency, or a value outside its range, is a 422.
+         */
+        put: operations["set-component-impairment"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/components/{name}/logs": {
         parameters: {
             query?: never;
@@ -5439,6 +5463,36 @@ export interface components {
             must_change_password?: boolean;
             username: string;
         };
+        ImpairmentFields: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/ImpairmentFields.json
+             */
+            readonly $schema?: string;
+            /**
+             * Format: int64
+             * @description Variation on the delay, in milliseconds; at most the latency
+             */
+            jitter_ms?: number;
+            /**
+             * Format: int64
+             * @description Delay added to traffic toward the device, in milliseconds
+             */
+            latency_ms?: number;
+            /**
+             * Format: double
+             * @description Share of packets toward the device dropped, in percent
+             */
+            loss_pct?: number;
+            /**
+             * Format: int64
+             * @description Bandwidth limit toward the device, in kilobits per second; 0 is unlimited
+             */
+            rate_kbit?: number;
+            /** @description Dark on every protocol: connects time out, datagrams and pings go unanswered */
+            unplugged?: boolean;
+        };
         ImpersonateInputBody: {
             /**
              * Format: uri
@@ -7166,6 +7220,10 @@ export interface components {
             hits_by_protocol: {
                 [key: string]: number;
             };
+            /** @description Whether the simulator reported applying an impairment to the device in its latest batch. */
+            impaired: boolean;
+            /** @description What an operator has broken on the device; absent when healthy. */
+            impairment?: components["schemas"]["ImpairmentFields"];
             /** Format: date-time */
             last_hit_at?: string;
             last_protocol?: string;
@@ -7173,6 +7231,12 @@ export interface components {
             product: string;
             /** @description Whether the simulator reported serving this device in its latest batch. */
             serving: boolean;
+        };
+        SimImpairmentStatus: {
+            available: boolean;
+            error?: string;
+            impaired?: string[] | null;
+            reason?: string;
         };
         SimulationOutputBody: {
             /**
@@ -7185,6 +7249,8 @@ export interface components {
             /** @description A simulator beside this node pulled its device list recently. */
             connected: boolean;
             devices: components["schemas"]["SimDeviceBody"][] | null;
+            /** @description Whether the simulator can apply impairments (and why not), its last apply error, and the devices it impairs. */
+            impairments: components["schemas"]["SimImpairmentStatus"];
             /** Format: date-time */
             last_seen?: string;
         };
@@ -9285,6 +9351,74 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EventsOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "get-component-impairment": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The simulated component's name, or a dotted address */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImpairmentFields"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "set-component-impairment": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The simulated component's name, or a dotted address */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImpairmentFields"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImpairmentFields"];
                 };
             };
             /** @description Error */

@@ -858,6 +858,56 @@ func generatedCommands() []*cobra.Command {
 			return cmd
 		}())
 		parent.AddCommand(func() *cobra.Command {
+			parent := &cobra.Command{
+				Use:   "impairment",
+				Short: "Commands for the impairment resource",
+			}
+			parent.AddCommand(func() *cobra.Command {
+				cmd := func() *cobra.Command {
+					var fJitterMs int
+					var fLatencyMs int
+					var fLossPct float64
+					var fRateKbit int
+					var fUnplugged bool
+					cmd := &cobra.Command{
+						Use:     "list <name>",
+						Short:   "Break or repair a simulated device",
+						Long:    "Sets what is broken on a simulated component: unplugged, or a link with added latency, jitter, loss or a rate limit. An all-zero body repairs it. Audited. The simulator beside the component's node applies it on its next pull. Gated by simulation:update, whose scope is resolved on the component tier; a component outside the caller's component:read is a non-disclosing 404, and one it can read but not impair is a 403. Jitter above latency, or a value outside its range, is a 422.",
+						Example: "  omniglass component impairment list <name>",
+						Args:    cobra.ExactArgs(1),
+						RunE: func(cmd *cobra.Command, args []string) error {
+							path := fmt.Sprintf("/api/v1/components/%s/impairment", url.PathEscape(args[0]))
+							body := map[string]any{}
+							if cmd.Flags().Changed("jitter-ms") {
+								body["jitter_ms"] = fJitterMs
+							}
+							if cmd.Flags().Changed("latency-ms") {
+								body["latency_ms"] = fLatencyMs
+							}
+							if cmd.Flags().Changed("loss-pct") {
+								body["loss_pct"] = fLossPct
+							}
+							if cmd.Flags().Changed("rate-kbit") {
+								body["rate_kbit"] = fRateKbit
+							}
+							if cmd.Flags().Changed("unplugged") {
+								body["unplugged"] = fUnplugged
+							}
+							return runAPICommand(cmd, "PUT", path, body)
+						},
+					}
+					cmd.Flags().IntVar(&fJitterMs, "jitter-ms", 0, "Variation on the delay, in milliseconds; at most the latency")
+					cmd.Flags().IntVar(&fLatencyMs, "latency-ms", 0, "Delay added to traffic toward the device, in milliseconds")
+					cmd.Flags().Float64Var(&fLossPct, "loss-pct", 0, "Share of packets toward the device dropped, in percent")
+					cmd.Flags().IntVar(&fRateKbit, "rate-kbit", 0, "Bandwidth limit toward the device, in kilobits per second; 0 is unlimited")
+					cmd.Flags().BoolVar(&fUnplugged, "unplugged", false, "Dark on every protocol: connects time out, datagrams and pings go unanswered")
+					return cmd
+				}()
+				return cmd
+			}())
+			return parent
+		}())
+		parent.AddCommand(func() *cobra.Command {
 			cmd := func() *cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "list",

@@ -22,6 +22,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/scope"
 	"github.com/hyperscaleav/omniglass/internal/secret"
 	"github.com/hyperscaleav/omniglass/internal/settings"
+	"github.com/hyperscaleav/omniglass/internal/sim/impair"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -547,6 +548,10 @@ type Gateway interface {
 	// NodeSimDevices lists the components a simulator beside the node serves,
 	// within the component read scope.
 	NodeSimDevices(ctx context.Context, name string, read scope.Set) ([]SimDevice, error)
+	// GetSimImpairment and SetSimImpairment read and record what is broken on
+	// a simulated component (by resolved id; the caller checks scope).
+	GetSimImpairment(ctx context.Context, componentID string) (impair.Impairment, error)
+	SetSimImpairment(ctx context.Context, actorID, componentID string, imp impair.Impairment) error
 	// ResolveTaskOwner binds a task's owner component and confines the node to its
 	// own tasks, for the telemetry ingest consumer.
 	ResolveTaskOwner(ctx context.Context, taskID, nodeName string) (TaskOwner, bool, error)

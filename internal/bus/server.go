@@ -315,9 +315,12 @@ func (s *Server) subscribeSim() error {
 		reply := collection.SimlistReply{Devices: make([]collection.SimDevice, 0, len(devices))}
 		ids := make([]string, 0, len(devices))
 		for _, d := range devices {
-			reply.Devices = append(reply.Devices, collection.SimDevice{
-				ComponentID: d.ComponentID, Name: d.Name, Product: d.Product, Address: d.Address,
-			})
+			sd := collection.SimDevice{ComponentID: d.ComponentID, Name: d.Name, Product: d.Product, Address: d.Address}
+			if d.Impairment != nil {
+				imp := collection.SimImpairment(*d.Impairment)
+				sd.Impairment = &imp
+			}
+			reply.Devices = append(reply.Devices, sd)
 			ids = append(ids, d.ComponentID)
 		}
 		s.sims.Pulled(node, req.Capabilities, ids)

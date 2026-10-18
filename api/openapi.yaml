@@ -2514,6 +2514,42 @@ components:
       required:
         - username
       type: object
+    ImpairmentFields:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/ImpairmentFields.json
+          format: uri
+          readOnly: true
+          type: string
+        jitter_ms:
+          description: Variation on the delay, in milliseconds; at most the latency
+          format: int64
+          minimum: 0
+          type: integer
+        latency_ms:
+          description: Delay added to traffic toward the device, in milliseconds
+          format: int64
+          maximum: 10000
+          minimum: 0
+          type: integer
+        loss_pct:
+          description: Share of packets toward the device dropped, in percent
+          format: double
+          maximum: 100
+          minimum: 0
+          type: number
+        rate_kbit:
+          description: Bandwidth limit toward the device, in kilobits per second; 0 is unlimited
+          format: int64
+          minimum: 0
+          type: integer
+        unplugged:
+          description: "Dark on every protocol: connects time out, datagrams and pings go unanswered"
+          type: boolean
+      type: object
     ImpersonateInputBody:
       additionalProperties: false
       properties:
@@ -5683,6 +5719,12 @@ components:
             format: int64
             type: integer
           type: object
+        impaired:
+          description: Whether the simulator reported applying an impairment to the device in its latest batch.
+          type: boolean
+        impairment:
+          $ref: "#/components/schemas/ImpairmentFields"
+          description: What an operator has broken on the device; absent when healthy.
         last_hit_at:
           format: date-time
           type: string
@@ -5702,6 +5744,25 @@ components:
         - serving
         - hits
         - hits_by_protocol
+        - impaired
+      type: object
+    SimImpairmentStatus:
+      additionalProperties: false
+      properties:
+        available:
+          type: boolean
+        error:
+          type: string
+        impaired:
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+        reason:
+          type: string
+      required:
+        - available
       type: object
     SimulationOutputBody:
       additionalProperties: false
@@ -5724,12 +5785,16 @@ components:
           type:
             - array
             - "null"
+        impairments:
+          $ref: "#/components/schemas/SimImpairmentStatus"
+          description: Whether the simulator can apply impairments (and why not), its last apply error, and the devices it impairs.
         last_seen:
           format: date-time
           type: string
       required:
         - connected
         - capabilities
+        - impairments
         - devices
       type: object
     StandardBody:
@@ -8096,6 +8161,65 @@ paths:
           description: Error
       summary: List a component's recent events
       x-omniglass-permission: component:read
+  /components/{name}/impairment:
+    get:
+      description: The impairment an operator set on a simulated component (unplugged, or a degraded link), applied by the simulator beside its node when that simulator runs with impairments and NET_ADMIN. A healthy device reads all zero. Gated by simulation:read; the component resolves within the caller's component read scope.
+      operationId: get-component-impairment
+      parameters:
+        - description: The simulated component's name, or a dotted address
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The simulated component's name, or a dotted address
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ImpairmentFields"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Get what is broken on a simulated device
+      x-omniglass-permission: simulation:read
+    put:
+      description: "Sets what is broken on a simulated component: unplugged, or a link with added latency, jitter, loss or a rate limit. An all-zero body repairs it. Audited. The simulator beside the component's node applies it on its next pull. Gated by simulation:update, whose scope is resolved on the component tier; a component outside the caller's component:read is a non-disclosing 404, and one it can read but not impair is a 403. Jitter above latency, or a value outside its range, is a 422."
+      operationId: set-component-impairment
+      parameters:
+        - description: The simulated component's name, or a dotted address
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The simulated component's name, or a dotted address
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ImpairmentFields"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ImpairmentFields"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Break or repair a simulated device
+      x-omniglass-permission: simulation:update
   /components/{name}/logs:
     get:
       description: Returns the component's recent raw log lines (the ingest lane of ADR-0066, distinct from typed events), newest first, bounded to the last 24 hours. Gated by component:read; an out-of-scope component is a non-disclosing 404.
