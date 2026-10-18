@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/netip"
 	"os"
 	"strconv"
 	"strings"
@@ -17,6 +18,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/collection"
 	"github.com/hyperscaleav/omniglass/internal/node"
 	"github.com/hyperscaleav/omniglass/internal/sim"
+	"github.com/hyperscaleav/omniglass/internal/sim/impair"
 	"github.com/hyperscaleav/omniglass/internal/sim/profile"
 	"github.com/hyperscaleav/omniglass/internal/sim/profiles"
 )
@@ -35,6 +37,13 @@ type Config struct {
 	// how often it publishes the hits it saw. Zero takes the defaults.
 	Poll       time.Duration
 	FlushEvery time.Duration
+	// Impairments lets the simulator rewrite the firewall and traffic
+	// shaping of the network it runs in (it needs NET_ADMIN too). Off by
+	// default: run as root on a workstation, it would otherwise reach the
+	// host's own network.
+	Impairments bool
+	// Applier realizes impairments; nil is the kernel's (impair.Netlink).
+	Applier applier
 }
 
 const (
@@ -108,6 +117,16 @@ func Run(ctx context.Context, cfg Config) error {
 	hits := &hitBuffer{}
 	engine.SetHitReporter(hits.add)
 
+	ap := cfg.Applier
+	if ap == nil {
+		ap = impair.NewNetlink()
+	}
+	impairs := newImpairer(ap, cfg.Impairments && caps.NetAdmin)
+	if !cfg.Impairments {
+		impairs.st.Reason = "impairments are off; run the simulator with --impairments (and NET_ADMIN) to enable them"
+	}
+	defer impairs.clear()
+
 	profileFor := func(p string) (string, bool) { name, _, ok := store.ForProduct(p); return name, ok }
 	pull := func() {
 		devices, err := pullList(nc, cfg.Name, caps)
@@ -122,6 +141,22 @@ func Run(ctx context.Context, cfg Config) error {
 		if err := engine.Sync(snaps); err != nil {
 			log.Warn("some devices did not start", "error", err)
 		}
+		served := map[string]netip.Addr{}
+		for _, d := range engine.Devices() {
+			if a, ok := netip.AddrFromSlice(d.LoopbackIP.To4()); ok {
+				served[d.DeviceID] = a
+			}
+		}
+		wants := map[string]collection.SimImpairment{}
+		for _, d := range devices {
+			if d.Impairment != nil {
+				wants[d.ComponentID] = *d.Impairment
+			}
+		}
+		impairs.reconcile(served, wants)
+		if st := impairs.status(); st.Error != "" {
+			log.Warn("impairments did not apply", "error", st.Error)
+		}
 	}
 	pull()
 	pollT := time.NewTicker(cfg.Poll)
@@ -131,12 +166,12 @@ func Run(ctx context.Context, cfg Config) error {
 	for {
 		select {
 		case <-ctx.Done():
-			flush(nc, cfg.Name, engine, hits)
+			flush(nc, cfg.Name, engine, hits, impairs)
 			return nil
 		case <-pollT.C:
 			pull()
 		case <-flushT.C:
-			flush(nc, cfg.Name, engine, hits)
+			flush(nc, cfg.Name, engine, hits, impairs)
 		}
 	}
 }
@@ -160,12 +195,13 @@ func pullList(nc *nats.Conn, name string, caps collection.SimCapabilities) ([]co
 // flush publishes the hits seen since the last flush with the devices being
 // served now. It publishes even with no hits, so the server's view of what
 // is serving stays current.
-func flush(nc *nats.Conn, name string, engine *sim.Engine, hits *hitBuffer) {
+func flush(nc *nats.Conn, name string, engine *sim.Engine, hits *hitBuffer, impairs *impairer) {
 	drained, dropped := hits.drain()
 	if dropped > 0 {
 		slog.Warn("hits dropped between flushes", "sim", name, "dropped", dropped)
 	}
-	batch := collection.SimHitBatch{Hits: drained}
+	st := impairs.status()
+	batch := collection.SimHitBatch{Hits: drained, Impairments: &st}
 	for _, d := range engine.Devices() {
 		batch.Serving = append(batch.Serving, d.DeviceID)
 	}

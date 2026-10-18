@@ -23,11 +23,12 @@ func newSimCmd() *cobra.Command {
 		Short: "Simulate the devices placed on a node",
 	}
 	var (
-		serverURL  string
-		name       string
-		token      string
-		portOffset int
-		poll       time.Duration
+		serverURL   string
+		name        string
+		token       string
+		portOffset  int
+		poll        time.Duration
+		impairments bool
 	)
 	run := &cobra.Command{
 		Use:   "run",
@@ -53,7 +54,7 @@ func newSimCmd() *cobra.Command {
 			defer stop()
 			return simnode.Run(ctx, simnode.Config{
 				ServerURL: serverURL, Name: name, Token: token,
-				PortOffset: portOffset, Poll: poll,
+				PortOffset: portOffset, Poll: poll, Impairments: impairments,
 			})
 		},
 	}
@@ -62,6 +63,7 @@ func newSimCmd() *cobra.Command {
 	run.Flags().StringVar(&token, "token", "", "that node's enrollment token (env OMNIGLASS_NODE_TOKEN)")
 	run.Flags().IntVar(&portOffset, "port-offset", 0, "lift the simulated ports below 1024 by this much, to serve without the privilege to bind them")
 	run.Flags().DurationVar(&poll, "poll", 10*time.Second, "how often to re-pull the device list")
+	run.Flags().BoolVar(&impairments, "impairments", false, "apply impairments (unplug, latency, loss) and truthful ping by rewriting the firewall and traffic shaping of this network namespace; needs NET_ADMIN, and is meant for a namespace of the simulator's own (a pod or container)")
 	group.AddCommand(run)
 	return group
 }

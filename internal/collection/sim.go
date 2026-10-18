@@ -42,6 +42,28 @@ type SimDevice struct {
 	Name        string `json:"name"`
 	Product     string `json:"product"`
 	Address     string `json:"address"`
+	// Impairment is what the operator has broken on the device, if anything.
+	Impairment *SimImpairment `json:"impairment,omitempty"`
+}
+
+// SimImpairment is what is wrong with a simulated device: unplugged (dark
+// on every protocol), or a degraded link. internal/sim/impair applies it.
+type SimImpairment struct {
+	Unplugged bool    `json:"unplugged"`
+	LatencyMs int     `json:"latency_ms"`
+	JitterMs  int     `json:"jitter_ms"`
+	LossPct   float64 `json:"loss_pct"`
+	RateKbit  int     `json:"rate_kbit"`
+}
+
+// SimImpairmentStatus is the simulator's account of impairments: whether it
+// can apply them at all (and why not), the last apply's error, and the
+// devices it currently impairs.
+type SimImpairmentStatus struct {
+	Available bool     `json:"available"`
+	Reason    string   `json:"reason,omitempty"`
+	Error     string   `json:"error,omitempty"`
+	Impaired  []string `json:"impaired,omitempty"`
 }
 
 // SimlistReply is the server's answer: every candidate device on the node.
@@ -64,6 +86,7 @@ type SimHit struct {
 // SimHitBatch carries the hits a simulator saw since its last publish, and
 // the devices it is serving now.
 type SimHitBatch struct {
-	Serving []string `json:"serving"`
-	Hits    []SimHit `json:"hits"`
+	Serving     []string             `json:"serving"`
+	Hits        []SimHit             `json:"hits"`
+	Impairments *SimImpairmentStatus `json:"impairments,omitempty"`
 }
