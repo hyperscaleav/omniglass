@@ -1,0 +1,41 @@
+# Find a place and fix it (#927): drill Explore to a place, open the system it
+# holds, give the place the label the site uses, and see the label follow.
+title: Find a place and fix its label
+description: Drill Explore down to a place, open the system it holds, and rename the place from Configure. The new label follows everywhere the place is read.
+steps:
+  - goto: /explore
+    caption: Explore is the outline of every place in the fleet, with what each one holds.
+  - click: { role: button, name: Expand Service Depot }
+    caption: Open a building. Each place inside reads its type, and the standard its system is built to.
+  - click: { role: treeitem, name: Bay 3 }
+    caption: Bay 3 holds one system, so opening the place opens that system.
+  - wait: { role: dialog, name: Bay 3 }
+    caption: The system's panel names the place it sits in, above its own facts.
+  - click: { role: button, name: Expand, exact: true }
+    caption: Expand the panel to the system's full view.
+  - wait: { selector: '[data-testid="page-header"]:has(h1:text-is("Bay 3"))' }
+    caption: A place holding one system has no page of its own. The system's view is titled by it, with the place as a card below.
+  - click: { role: tab, name: Configure }
+    caption: Configure holds the place's form first, then the system's.
+  - wait: { selector: '[data-testid="configure-face-place"]' }
+    caption: The place's label was rendered by a label rule from its name.
+  - click: '[data-testid="configure-face-place"] >> role=button[name="Edit"]'
+    caption: Edit the place, apart from its system.
+  - click: '[data-testid="configure-face-place"] >> role=textbox[name="Label"]'
+    caption: Click the label to take it over from the rule.
+  - wait: { text: Labelled by you. }
+    caption: The label is yours now; the rule no longer rewrites it.
+  - type: { target: '[data-testid="configure-face-place"] >> role=textbox[name="Label"]', text: ' Loading Dock' }
+    caption: Say what the site calls it, so operators find it by that word.
+  - click: '[data-testid="configure-face-place"] >> role=button[name="Save changes"]'
+    caption: Save the place.
+  - click: { role: tab, name: Overview }
+    caption: Saved. Back to the system's overview.
+  - wait: { selector: '[data-testid="page-header"]:has(h1:text-is("Bay 3 Loading Dock"))' }
+    caption: The view's title follows the new label at once.
+  - click: { role: button, name: Explore, exact: true }
+    caption: Back to Explore, opened down to the place you were on.
+  - wait: { role: treeitem, name: Bay 3 Loading Dock }
+    caption: The outline reads the new label too. One place, one label, wherever it is read.
+    hold: 1500
+    poster: true

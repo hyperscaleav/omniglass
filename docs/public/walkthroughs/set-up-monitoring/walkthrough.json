@@ -1,0 +1,114 @@
+{
+  "id": "set-up-monitoring",
+  "title": "Set up monitoring on a component",
+  "description": "Add a reachability probe and attach the SNMP driver to a component, both collected by an edge node, and watch reachability and samples arrive.",
+  "steps": [
+    {
+      "n": 1,
+      "kind": "goto",
+      "caption": "A display mounted in Bay 2. Nothing collects from it yet, so Omniglass knows nothing of its health.",
+      "still": "step-01.png"
+    },
+    {
+      "n": 2,
+      "kind": "click",
+      "caption": "Endpoints are how a component is reached; they live under Configure.",
+      "still": "step-02.png"
+    },
+    {
+      "n": 3,
+      "kind": "click",
+      "caption": "First a probe, for one question: can the node reach it?",
+      "still": "step-03.png"
+    },
+    {
+      "n": 4,
+      "kind": "select",
+      "caption": "The node edge-hq sits on the display's network, so it runs the check.",
+      "still": "step-04.png"
+    },
+    {
+      "n": 5,
+      "kind": "type",
+      "caption": "An ICMP probe pings the display's address.",
+      "still": "step-05.png"
+    },
+    {
+      "n": 6,
+      "kind": "click",
+      "caption": "Create it. Its reachability task derives on its own.",
+      "still": "step-06.png"
+    },
+    {
+      "n": 7,
+      "kind": "press",
+      "caption": "The endpoint is placed. Close it; next, what the display itself reports.",
+      "still": "step-07.png"
+    },
+    {
+      "n": 8,
+      "kind": "click",
+      "caption": "A second endpoint, this time from a driver.",
+      "still": "step-08.png"
+    },
+    {
+      "n": 9,
+      "kind": "click",
+      "caption": "A driver knows how to talk to a product, and what to read from it.",
+      "still": "step-09.png"
+    },
+    {
+      "n": 10,
+      "kind": "select",
+      "caption": "The SNMP driver reads standard device data, such as uptime.",
+      "still": "step-10.png"
+    },
+    {
+      "n": 11,
+      "kind": "type",
+      "caption": "You supply only its inputs. The host is the display's address.",
+      "still": "step-11.png"
+    },
+    {
+      "n": 12,
+      "kind": "type",
+      "caption": "The community is a secret's name, never its value.",
+      "still": "step-12.png"
+    },
+    {
+      "n": 13,
+      "kind": "select",
+      "caption": "The same node collects it.",
+      "still": "step-13.png"
+    },
+    {
+      "n": 14,
+      "kind": "click",
+      "caption": "Attach it.",
+      "still": "step-14.png"
+    },
+    {
+      "n": 15,
+      "kind": "wait",
+      "caption": "The driver derived the endpoint, its SNMP transport and its polling.",
+      "still": "step-15.png"
+    },
+    {
+      "n": 16,
+      "kind": "goto",
+      "caption": "Back on the display's page, a few seconds on.",
+      "still": "step-16.png"
+    },
+    {
+      "n": 17,
+      "kind": "wait",
+      "caption": "Reachability and samples arrived. The ping answers, and the simulated display reports its uptime over SNMP.",
+      "still": "step-17.png"
+    }
+  ],
+  "poster": "step-17.png",
+  "budget": {
+    "seconds": 54.3,
+    "bytes": 1132034
+  }
+}

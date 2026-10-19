@@ -14,7 +14,7 @@ export default function Page(props: {
 }) {
   return (
     <section class="og-stack flex flex-col">
-      <div>
+      <div data-testid="page-header">
         <Show when={props.breadcrumb}>
           <div class="mb-1 min-h-[18px]">{props.breadcrumb}</div>
         </Show>

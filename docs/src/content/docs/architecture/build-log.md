@@ -6368,3 +6368,16 @@ declared, the budget mark, the stills and poster present, no drift between the c
 description, step count and captions, no orphan copies), the render and the scanner are unit-tested in
 `make test-web`, and [simulate a fleet](/guides/operator/simulation/#see-it) embeds the sample.
 [Walkthroughs](/contributing/walkthroughs/) teaches writing, recording, reviewing and embedding one.
+
+### The first walkthroughs: fix a place, set up monitoring (#884, slice 6: #927)
+
+Two walkthroughs record under `make walkthroughs` and pass as tests. Find a place and fix it drills
+Explore to a place, opens its system, renames the place from the system's Configure tab, and shows the
+label follow into the system's header and back on the outline; it is embedded in the
+[fleet guide](/guides/operator/fleet/). Set up monitoring adds an ICMP endpoint and attaches the generic
+SNMP driver to a simulated display, then shows reachability and samples arrive; it is embedded in the
+[collection guide](/guides/operator/collection/). Node enrollment runs on the node's host, so the
+walkthrough uses the node the stack enrolls and says so; the unplug, the rule's alarm and the health verdict
+follow with the event rule tier (#819). The walkthrough stack adds one simulated-product component with no
+endpoint (`bay-2-display`) so the monitoring walkthrough starts from nothing, and the page header carries a
+`page-header` test id as a stable wait target. Defects found on the way are filed: #931, #932, #933, #934.

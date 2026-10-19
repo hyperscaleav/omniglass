@@ -225,7 +225,8 @@ stack_server() {
 
 # ---- the walkthrough stack (#923) -------------------------------------------
 # Everything a walkthrough shows, all in Docker with nothing on a host port:
-# Postgres; the server, seeded with the dev fleet and the simulated fleet; the
+# Postgres; the server, seeded with the dev fleet and the simulated fleet (and
+# one component nothing collects from yet, for a walkthrough to monitor); the
 # dev node edge-hq, enrolled with a one-time token; and `omniglass sim run
 # --impairments` in the NODE's network namespace (--network container:<node>),
 # so the simulated components sit on the loopback the node collects from.
@@ -294,6 +295,13 @@ stack_walkthrough_up() {
 
   STACK_TOKEN=$(stack_cli token "$STACK_USER" --description "walkthrough stack" 2>/dev/null | grep -o 'ogp_[A-Za-z0-9_-]*')
   [ -n "$STACK_TOKEN" ] || { echo "stack $STACK_ID: could not mint an owner token" >&2; return 1; }
+
+  # A component nothing collects from yet: a simulated product placed in Bay 2
+  # with no endpoint, so the simulator serves it only once an endpoint names
+  # its address. The set-up-monitoring walkthrough adds them from the console.
+  stack_run "$STACK_IMG" component create --name bay-2-display --label "Bay 2 Display" \
+    --product boreal-edge-55 --location bay-2 --server "$STACK_SRV_URL" --token "$STACK_TOKEN" >/dev/null ||
+    { echo "stack $STACK_ID: could not place bay-2-display" >&2; return 1; }
 
   # Enroll edge-hq (the node the seed placed the simulated fleet on) the way
   # make dev-sim does: a one-time enrollment token from the API.

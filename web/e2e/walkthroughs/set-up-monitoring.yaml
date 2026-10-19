@@ -1,0 +1,47 @@
+# Set up monitoring (#927): give a component nothing collects from yet a
+# reachability probe and the SNMP driver, collected by the node edge-hq, and
+# watch reachability and samples arrive from the simulated component. The
+# walkthrough stack places the component (bay-2-display, a Boreal Edge 55 in
+# Bay 2) with no endpoint (web/e2e/lib/stack.sh). Enrolling a node is not
+# shown: its second half runs on the node's host (omniglass node run with the
+# one-time token), out of the console's reach; the stack enrolls edge-hq that
+# way. Unplugging it and watching the alarm open follows in #819.
+title: Set up monitoring on a component
+description: Add a reachability probe and attach the SNMP driver to a component, both collected by an edge node, and watch reachability and samples arrive.
+steps:
+  - goto: /components/bay-2-display
+    caption: A display mounted in Bay 2. Nothing collects from it yet, so Omniglass knows nothing of its health.
+  - click: { role: tab, name: Configure }
+    caption: Endpoints are how a component is reached; they live under Configure.
+  - click: { role: button, name: Add endpoint }
+    caption: "First a probe, for one question: can the node reach it?"
+  - select: { target: '#new-iface-node', value: edge-hq }
+    caption: The node edge-hq sits on the display's network, so it runs the check.
+  - type: { target: '#new-iface-target', text: 127.60.9.9 }
+    caption: An ICMP probe pings the display's address.
+  - click: { role: button, name: Create endpoint }
+    caption: Create it. Its reachability task derives on its own.
+  - press: Escape
+    caption: The endpoint is placed. Close it; next, what the display itself reports.
+  - click: { role: button, name: Add endpoint }
+    caption: A second endpoint, this time from a driver.
+  - click: { role: tab, name: Attach a driver }
+    caption: A driver knows how to talk to a product, and what to read from it.
+  - select: { target: '#new-iface-driver', value: snmp-generic }
+    caption: The SNMP driver reads standard device data, such as uptime.
+  - type: { target: '#new-iface-input-host', text: 127.60.9.9 }
+    caption: You supply only its inputs. The host is the display's address.
+  - type: { target: '#new-iface-input-community', text: sim-community }
+    caption: The community is a secret's name, never its value.
+  - select: { target: '#new-iface-node', value: edge-hq }
+    caption: The same node collects it.
+  - click: { role: button, name: Attach driver }
+    caption: Attach it.
+  - wait: { role: dialog, name: snmp }
+    caption: The driver derived the endpoint, its SNMP transport and its polling.
+  - goto: /components/bay-2-display
+    caption: Back on the display's page, a few seconds on.
+  - wait: { selector: '[data-testid="leaf-vitals"]:has-text("ICMP Reachable"):has-text("Uptime")', timeout: 20000 }
+    caption: Reachability and samples arrived. The ping answers, and the simulated display reports its uptime over SNMP.
+    hold: 1000
+    poster: true
