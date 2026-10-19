@@ -110,3 +110,31 @@ up without publishing anything and prints how a Playwright container on its netw
 `make test-walkthrough-stack` proves it (the node collects, and an impairment set through the API
 takes a component's reachability down and its repair brings it back). The recipe is
 `stack_walkthrough_up` in `web/e2e/lib/stack.sh`.
+
+#### Recording a walkthrough
+
+A walkthrough is a script, `web/e2e/walkthroughs/<id>.yaml`: a `title`, an optional `description`, and
+`steps`, each one kind (`goto` a console path, `click` a selector or an accessible `role` and `name`,
+`type` text into a target, `select` a value, `press` a key, or `wait` for a visible result by `text`,
+`selector` or `role`, with a `timeout`) and a `caption` shown while it runs. A step may `hold` a result
+longer, and one step may be the `poster`. The format is validated strictly: an unknown key or kind fails,
+naming the file and the step.
+
+```yaml
+title: Read a simulated component's status
+steps:
+  - goto: /simulation
+    caption: The Simulation page shows the simulated fleet, live.
+  - click: '[data-testid="sim-row"] >> nth=0'
+    caption: Open a simulated component.
+  - wait: { selector: '[data-testid="sim-status"]' }
+    caption: Its status says where it is served, and how often collection has reached it.
+    poster: true
+```
+
+`make walkthroughs` records every script on the walkthrough stack (`make walkthroughs ID=<id>` records
+one) into `web/e2e/walkthroughs/out/<id>/`: an mp4 opening on a title card, with a cursor that glides to
+each target and ripples where it clicks, a highlight on the target and a caption bar; `poster.png`; and a
+still per step. A walkthrough is a test: a step whose result never appears fails the run, naming the
+step, its kind and what it waited for, and keeps the stills taken so far; so does a recording of 60
+seconds or more, or of 10 MB or more. `make test-walkthroughs` proves both failures.

@@ -1,0 +1,10 @@
+# A deliberately broken walkthrough, used only by the recorder's own test
+# (make test-walkthroughs): step 2 waits for a result that never appears, so the
+# run must fail naming step 2, its kind, and what it waited for, and keep the
+# still from step 1.
+title: A walkthrough whose result never appears
+steps:
+  - goto: /simulation
+    caption: Open the Simulation page.
+  - wait: { text: "This text is never on the page", timeout: 2000 }
+    caption: Wait for something that never arrives.

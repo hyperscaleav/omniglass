@@ -28,6 +28,7 @@
     "@types/pngjs": "^6.0.5",
     "daisyui": "^5.0.0",
     "gray-matter": "^4.0.3",
+    "js-yaml": "^4.2.0",
     "jsdom": "^29.1.1",
     "openapi-typescript": "^7.13.0",
     "pixelmatch": "^7.2.0",

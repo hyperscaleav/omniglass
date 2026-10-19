@@ -1,7 +1,7 @@
 # Local dev loop + the build/run flow for the single binary. Production deploy
 # is BYO Postgres; tests use ephemeral testcontainer Postgres.
 
-.PHONY: build build-web web image gen gen-proto gen-web test test-web test-short test-e2e bench clean-testcontainers tidy up down dev release-plan release-apply release-snapshot docs-shots docs-shots-check docs-shots-verify dev-sim bench-sim test-netadmin walkthrough-stack dev-sim-container test-walkthrough-stack
+.PHONY: build build-web web image gen gen-proto gen-web test test-web test-short test-e2e bench clean-testcontainers tidy up down dev release-plan release-apply release-snapshot docs-shots docs-shots-check docs-shots-verify dev-sim bench-sim test-netadmin walkthrough-stack dev-sim-container test-walkthrough-stack walkthroughs test-walkthroughs
 
 # Build the single binary (no console embedded; serves the build-the-console
 # placeholder under /web).
@@ -188,6 +188,20 @@ dev-sim-container:
 
 test-walkthrough-stack:
 	bash web/e2e/walkthrough-stack.sh check
+
+# Walkthroughs (#924): web/e2e/walkthroughs/<id>.yaml, recorded on the
+# walkthrough stack with a visible cursor, captions and a title card, to
+# web/e2e/walkthroughs/out/<id>/ (an mp4, poster.png, a still per step;
+# gitignored). A walkthrough is a test: a step whose result never appears, or
+# a recording over the budget (under 60 seconds and 10 MB), fails the run.
+# make walkthroughs ID=<id> records one. test-walkthroughs is the recorder's own
+# test (the failure and budget paths). Neither is part of make test: both build
+# the release image.
+walkthroughs:
+	bash web/e2e/walkthroughs.sh record $(ID)
+
+test-walkthroughs:
+	bash web/e2e/walkthroughs.sh selftest
 
 # Backstop cleanup: force-remove any orphaned Postgres test containers left by
 # an interrupted run (a hard kill before the harness TestMain or the ryuk reaper

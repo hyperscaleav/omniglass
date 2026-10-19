@@ -47,6 +47,8 @@ coverage.txt
 /.playwright-mcp/
 /web/.playwright-mcp/
 /web/test-results/
+# walkthrough recordings (make walkthroughs)
+/web/e2e/walkthroughs/out/
 
 
 # stale embedded-postgres dev dir (no longer produced)
