@@ -40,8 +40,23 @@ type ruleOwner struct {
 
 // newRuleEvaluator loads the enabled rules reading any of keys; nil when no
 // rule reads them, so the caller skips evaluation entirely.
+//
+// It loads them FOR SHARE, holding each rule's row for the rest of the
+// ingest transaction, so a rule write (which takes the row FOR UPDATE)
+// serializes with every batch that judges by it: a disable, delete or
+// narrowing either commits before the load (and the batch judges by what it
+// left) or waits for the batch to commit (and its settle sees, and clears,
+// whatever the batch raised). The rules a batch judges by are therefore the
+// current version for the whole batch, with no re-check needed per sample.
+//
+// Lock order, the same on every path that acts on a rule's alarms: the
+// rule's row first (FOR SHARE here and in the sweep, FOR UPDATE in a rule
+// write), then the series lock (ruleSeriesLockKey), then the health locks a
+// raise or clear takes. The row lock is the first lock an ingest takes, so
+// it never waits on a rule while holding a series or health lock.
 func (p *PG) newRuleEvaluator(ctx context.Context, tx pgx.Tx, keys []string) (*ruleEvaluator, error) {
-	rows, err := tx.Query(ctx, `select `+eventRuleCols+` from event_rule where enabled and sample_key = any($1)`, keys)
+	rows, err := tx.Query(ctx, `select `+eventRuleCols+` from event_rule where enabled and sample_key = any($1)
+		order by id for share`, keys)
 	if err != nil {
 		return nil, fmt.Errorf("storage: load event rules: %w", err)
 	}
@@ -260,7 +275,9 @@ func (e *ruleEvaluator) judge(ctx context.Context, tx pgx.Tx, lane rules.Lane, o
 // It holds the series' rule lock for the rest of the transaction before it
 // reads the open alarm or the streak, so it serializes with the sweep and
 // any other writer of the same series: a reader never decides from an alarm
-// state a concurrent raise or clear is about to change.
+// state a concurrent raise or clear is about to change. The caller already
+// holds the rule's row (newRuleEvaluator's FOR SHARE, or a rule write's FOR
+// UPDATE), per the lock order newRuleEvaluator documents.
 func (p *PG) stepRule(ctx context.Context, tx pgx.Tx, r EventRule, comp *Component, instance string, action rules.Action, now time.Time) error {
 	if err := lockAdvisory(ctx, tx, ruleSeriesLockKey(r.ID, comp.ID, instance)); err != nil {
 		return err
@@ -451,13 +468,10 @@ func saveStreak(ctx context.Context, tx pgx.Tx, ruleID, componentID, instance st
 // outage never holds a lock set per streak at once and a failure (a
 // deadlock included) costs that one streak, retried on the next tick.
 //
-// Streaks of a disabled rule are pruned first: a rule write deletes them,
-// but an ingest that loaded the rule before a disable committed can still
-// write one after it.
+// A disabled rule has no streaks to sweep: its disable deletes them, and an
+// ingest judging by the rule holds its row, so the disable waits for that
+// batch's streaks to land before deleting them (newRuleEvaluator).
 func (p *PG) SweepEventRules(ctx context.Context, now time.Time) error {
-	if _, err := p.pool.Exec(ctx, `delete from event_rule_state s using event_rule r where r.id = s.rule_id and not r.enabled`); err != nil {
-		return fmt.Errorf("storage: rule sweep prune: %w", err)
-	}
 	rows, err := p.pool.Query(ctx, `select s.component_id::text, s.instance, s.pending, s.since, `+ruleCols("r.")+`
 		from event_rule_state s join event_rule r on r.id = s.rule_id
 		where r.enabled order by s.component_id, s.rule_id, s.instance`)
@@ -502,8 +516,10 @@ type dueStreak struct {
 	rule                EventRule
 }
 
-// sweepStreak acts on one due streak, in its own transaction, under the
-// series' rule lock. It claims the streak by deleting exactly the row it
+// sweepStreak acts on one due streak, in its own transaction, holding the
+// rule's row FOR SHARE and then the series' rule lock (the lock order
+// newRuleEvaluator documents), so it serializes with a rule write and with
+// an arriving sample. It claims the streak by deleting exactly the row it
 // read (same pending, same since): a row a sample, an edit, or another
 // sweep moved in the meantime comes back empty and the sweep does nothing.
 // It then acts only when the act still holds: the rule is still enabled and
@@ -515,6 +531,11 @@ func (p *PG) sweepStreak(ctx context.Context, d dueStreak) error {
 		return fmt.Errorf("storage: begin rule sweep: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
+	r, err := scanEventRule(tx.QueryRow(ctx, `select `+eventRuleCols+` from event_rule where id = $1 for share`, d.rule.ID))
+	live := err == nil && r.Enabled
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return fmt.Errorf("storage: rule sweep reread %s: %w", d.rule.Name, err)
+	}
 	if err := lockAdvisory(ctx, tx, ruleSeriesLockKey(d.rule.ID, d.component, d.instance)); err != nil {
 		return err
 	}
@@ -528,7 +549,10 @@ func (p *PG) sweepStreak(ctx context.Context, d dueStreak) error {
 	if err != nil {
 		return fmt.Errorf("storage: claim rule streak: %w", err)
 	}
-	act, comp, err := p.streakStillHolds(ctx, tx, d)
+	if !live {
+		return tx.Commit(ctx)
+	}
+	act, comp, err := p.streakStillHolds(ctx, tx, r, d)
 	if err != nil {
 		return err
 	}
@@ -540,17 +564,10 @@ func (p *PG) sweepStreak(ctx context.Context, d dueStreak) error {
 	return tx.Commit(ctx)
 }
 
-// streakStillHolds re-reads what a claimed streak's act depends on and
-// returns the rule to act as and the component to act on, or a nil rule
-// when the act no longer holds.
-func (p *PG) streakStillHolds(ctx context.Context, tx pgx.Tx, d dueStreak) (*EventRule, *Component, error) {
-	r, err := scanEventRule(tx.QueryRow(ctx, `select `+eventRuleCols+` from event_rule where id = $1 and enabled`, d.rule.ID))
-	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, nil, nil
-	}
-	if err != nil {
-		return nil, nil, fmt.Errorf("storage: rule sweep reread %s: %w", d.rule.Name, err)
-	}
+// streakStillHolds re-reads what a claimed streak's act depends on, judged
+// by r (the rule as the sweep locked it), and returns the rule to act as
+// and the component to act on, or a nil rule when the act no longer holds.
+func (p *PG) streakStillHolds(ctx context.Context, tx pgx.Tx, r EventRule, d dueStreak) (*EventRule, *Component, error) {
 	m := newRuleMatcher(p, nil)
 	o, err := m.ownerFacts(ctx, tx, d.component)
 	if err != nil {

@@ -270,3 +270,54 @@ func TestOfficialRuleSeedPrimes(t *testing.T) {
 		t.Fatalf("re-seeded to fire on up while the endpoint reads down: %d alarms, want the stale one cleared", n)
 	}
 }
+
+// A rule write serializes with the samples it judges: an ingest that read a
+// zero-sustain rule as enabled, and stalls mid-raise while the rule is
+// disabled, must not leave an alarm open on a rule that is off (nothing
+// would ever clear it). The test holds the rule's series lock on bar-1 so
+// the ingest stalls after it has loaded the rule and before it raises,
+// disables the rule meanwhile, then lets both go.
+func TestRuleDisableSerializesWithIngest(t *testing.T) {
+	r := newStreakRig(t, "gone", 0)
+	ctx, all := context.Background(), scope.Set{All: true}
+	var seriesKey string
+	if err := r.f.conn.QueryRow(ctx, `select 'event_rule/' || r.id || '/' || c.id || '/tcp' from event_rule r, component c
+		where r.name = 'gone' and c.name = 'bar-1'`).Scan(&seriesKey); err != nil {
+		t.Fatal(err)
+	}
+	lockConn, err := pgx.Connect(ctx, r.f.dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = lockConn.Close(ctx) }()
+	ltx, err := lockConn.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ltx.Exec(ctx, `select pg_advisory_xact_lock(hashtextextended($1, 0))`, seriesKey); err != nil {
+		t.Fatal(err)
+	}
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		if err := r.f.gw.InsertPropertySamples(ctx, []storage.PropertySampleWrite{{OwnerKind: "component", OwnerID: "bar-1",
+			Key: "endpoint-reachable", Instance: "tcp", Value: "down", TS: time.Now().UTC()}}); err != nil {
+			t.Error(err)
+		}
+	}()
+	time.Sleep(700 * time.Millisecond)
+	go func() {
+		defer wg.Done()
+		off := false
+		if _, err := r.f.gw.UpdateEventRule(ctx, "", "gone", storage.EventRulePatch{Enabled: &off}, all, all); err != nil {
+			t.Error(err)
+		}
+	}()
+	time.Sleep(700 * time.Millisecond)
+	_ = ltx.Rollback(ctx)
+	wg.Wait()
+	if n := r.open(t); n != 0 {
+		t.Errorf("the rule is disabled but holds %d alarms open", n)
+	}
+}

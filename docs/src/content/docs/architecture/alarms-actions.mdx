@@ -157,7 +157,9 @@ or on the server's **sweep** (every five seconds, beside the command settlement 
 lets a sustain work on an input that reports only on change, like `endpoint-reachable`. Before acting,
 the sweep re-judges the series' newest sample and checks the rule still selects the component, and it
 serializes with an arriving sample on the same series, so a recovery landing as the sustain runs out
-never leaves the alarm open. Sustains are timed by the **server's receipt** of each sample, never by the
+never leaves the alarm open. A rule write serializes with the samples judged by the rule too: an
+ingest holds the rule for its batch, so a disable, delete or narrowing waits for an in-flight batch and
+then clears whatever it raised. Sustains are timed by the **server's receipt** of each sample, never by the
 sample's own timestamp, so a node whose clock runs behind neither skips nor stretches a sustain (which
 sample is newest is still decided by that timestamp). Only a **material** edit restarts a rule's
 streaks (its key, criteria, clear criteria, selector or sustains); a label, description, message or

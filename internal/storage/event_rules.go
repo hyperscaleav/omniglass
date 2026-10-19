@@ -495,6 +495,11 @@ func (p *PG) DeleteEventRule(ctx context.Context, actorID, name string, read, ac
 // sends nothing further. A cosmetic edit (label, description, message,
 // severity) touches nothing: a sustain measured against the same judgment
 // is still one.
+//
+// The caller holds the rule's row (FOR UPDATE, or the insert's own lock)
+// before settle takes any series or health lock, the lock order
+// newRuleEvaluator documents; an ingest judging by the rule holds the row
+// FOR SHARE, so the write waits for it and then sees what it raised.
 func (p *PG) settleRuleWrite(ctx context.Context, tx pgx.Tx, actorID string, old *EventRule, updated EventRule) error {
 	wasOn := old != nil && old.Enabled
 	if !updated.Enabled {

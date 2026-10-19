@@ -6409,7 +6409,8 @@ acted on by a later sample or by a sweep on the settlement tick: the architect's
 the reachability verdict reports only on change. The adversarial review hardened the streak: the sweep
 and an arriving sample serialize on a per-series advisory lock, and the sweep claims a streak by
 compare-and-delete, re-judges the newest sample and acts in a transaction per streak, so a recovery that
-lands as the sustain runs out can no longer leave the alarm open; sustains are timed by the server's
+lands as the sustain runs out can no longer leave the alarm open; an ingest holds the rules it judges by
+(FOR SHARE) for its batch, so a disable or delete waits for an in-flight batch and clears what it raised; sustains are timed by the server's
 receipt, not the node's clock; only a material edit restarts a streak; and creating, enabling, materially
 editing or seeding a rule primes it from each series' newest sample, so a condition that already holds
 is not lost on a transition-only input. The boot seed ships `reachability-lost`, and the
