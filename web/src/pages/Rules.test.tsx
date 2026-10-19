@@ -2,7 +2,7 @@ import { describe, it, expect, afterEach, vi } from "vitest";
 import { render, fireEvent, screen, waitFor, within } from "@solidjs/testing-library";
 import { Router, Route } from "@solidjs/router";
 import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
-import Rules, { RULE_HINTS } from "./Rules";
+import Rules from "./Rules";
 import { EVENT_RULES_KEY, ruleStateKey, type EventRule } from "../lib/event_rules";
 import { severityLevelsKey, type SeverityLevel } from "../lib/severity";
 import { PROPERTIES_KEY, type PropertyRow } from "../lib/properties";
@@ -24,12 +24,19 @@ const reach: EventRule = {
   selector: { component_types: [], components: [] }, sample_key: "endpoint-reachable", sample_lane: "property",
   fire_criteria: { op: "eq", value: "down" }, clear_criteria: { op: "eq", value: "up" },
   fire_sustain: "15s", clear_sustain: "0s", severity: "high", enabled: true, official: true, version: 1,
+  open_alarms: 1, pending_streaks: 1,
 };
 const hot: EventRule = {
-  id: uuidFor("rule-room-too-hot"), name: "room-too-hot", label: "Too hot",
+  id: uuidFor("rule-too-hot"), name: "too-hot", label: "Too hot",
   selector: { component_types: ["display"], components: [] }, sample_key: "temperature-c", sample_lane: "metric",
   fire_criteria: { op: "gt", value: 40 }, clear_criteria: { op: "lt", value: 35 }, fire_sustain: "1m0s", clear_sustain: "30s",
-  severity: "average", enabled: false, official: false, version: 2,
+  severity: "average", enabled: false, official: false, version: 2, open_alarms: 0, pending_streaks: 0,
+};
+// A rule whose component type and component were deleted after it was written:
+// it matches nothing by them, and stays editable.
+const stale: EventRule = {
+  ...hot, id: uuidFor("rule-stale"), name: "stale-watch", label: "Stale watch", enabled: true,
+  selector: { component_types: ["gone-type"], components: [uuidFor("comp-gone")] },
 };
 
 const levels: SeverityLevel[] = [
@@ -40,9 +47,15 @@ const levels: SeverityLevel[] = [
 const properties: PropertyRow[] = [{ name: "endpoint-reachable", data_type: "string", label: "Endpoint reachable", official: true }];
 const metrics: MetricRow[] = [{ name: "temperature-c", data_type: "float", label: "Temperature", unit: "°C", official: true }];
 
-const admin: Me = { principal: { id: "u-root", kind: "human" }, human: { username: "root" }, permissions: [">"], grants: [] };
-const viewer: Me = { principal: { id: "u-view", kind: "human" }, human: { username: "viewer" }, permissions: ["*:read"], grants: [{ role: "viewer", scope_kind: "all" }] };
-const scoped: Me = { principal: { id: "u-hq", kind: "human" }, human: { username: "viewer-hq" }, permissions: ["*:read"], grants: [{ role: "viewer", scope_kind: "location", scope_id: uuidFor("loc-hq") }] };
+const admin: Me = { principal: { id: "u-root", kind: "human" }, human: { username: "root" }, permissions: [">"], fleet_permissions: [">"], grants: [{ role: "owner", scope_kind: "all" }] };
+const viewer: Me = { principal: { id: "u-view", kind: "human" }, human: { username: "viewer" }, permissions: ["*:read"], fleet_permissions: ["*:read"], grants: [{ role: "viewer", scope_kind: "all" }] };
+const scoped: Me = { principal: { id: "u-hq", kind: "human" }, human: { username: "viewer-hq" }, permissions: ["*:read"], fleet_permissions: [], grants: [{ role: "viewer", scope_kind: "location", scope_id: uuidFor("loc-hq") }] };
+// Owns one place, views the fleet: rule:create is in its flattened set, but a
+// fleet-wide rule needs it on an all-scope grant, so the server refuses it.
+const placeOwner: Me = {
+  principal: { id: "u-po", kind: "human" }, human: { username: "owner-hq" }, permissions: [">"], fleet_permissions: ["*:read"],
+  grants: [{ role: "owner", scope_kind: "location", scope_id: uuidFor("loc-hq") }, { role: "viewer", scope_kind: "all" }],
+};
 
 const display = uuidFor("comp-display-1");
 const reachState = {
@@ -62,11 +75,13 @@ function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
 }
 
-function mount(me: Me = admin, rules: EventRule[] = [reach, hot]) {
+function mount(me: Me = admin, rules: EventRule[] = [reach, hot], opts: { state?: boolean } = {}) {
   const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
   qc.setQueryData([...EVENT_RULES_KEY], rules);
-  qc.setQueryData([...ruleStateKey("reachability-lost")], reachState);
-  qc.setQueryData([...ruleStateKey("room-too-hot")], { open: [], pending: [] });
+  if (opts.state !== false) {
+    qc.setQueryData([...ruleStateKey("reachability-lost")], reachState);
+    for (const r of rules.filter((x) => x.name !== "reachability-lost")) qc.setQueryData([...ruleStateKey(r.name)], { open: [], pending: [] });
+  }
   qc.setQueryData([...severityLevelsKey], levels);
   qc.setQueryData([...PROPERTIES_KEY], properties);
   qc.setQueryData([...METRICS_KEY], metrics);
@@ -103,7 +118,13 @@ describe("Rules page", () => {
   afterEach(() => vi.restoreAllMocks());
 
   it("lists each rule with what it reads, its criteria in words, severity and live counts", () => {
-    mount();
+    // The counts ride on the list rows: no rule's /state is read for the list.
+    const gets: string[] = [];
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      gets.push((input as Request).url);
+      return json({ event_rules: [reach, hot] });
+    });
+    mount(admin, [reach, hot], { state: false });
     expect(screen.getByText("Reachability lost")).toBeTruthy();
     expect(screen.getByText("endpoint-reachable")).toBeTruthy();
     expect(screen.getByText("reads down for 15s")).toBeTruthy();
@@ -114,8 +135,9 @@ describe("Rules page", () => {
     expect(live.textContent).toContain("1 open");
     expect(live.textContent).toContain("1 pending");
     // A disabled rule says so before anything else.
-    expect((document.querySelector('[data-live="room-too-hot"]') as HTMLElement).textContent).toContain("disabled");
+    expect((document.querySelector('[data-live="too-hot"]') as HTMLElement).textContent).toContain("disabled");
     expect(document.querySelector('[data-severity="high"]')?.textContent).toBe("High");
+    expect(gets.filter((u) => u.endsWith("/state"))).toEqual([]);
   });
 
   it("shows a rule's open alarms, linked to their components by id, and its pending streaks", async () => {
@@ -167,7 +189,7 @@ describe("Rules page", () => {
     fireEvent.click(within(b).getByText("Enable"));
     await waitFor(() => expect(writes).toHaveLength(1));
     expect(writes[0].method).toBe("PATCH");
-    expect(writes[0].url).toMatch(/\/event-rules\/room-too-hot$/);
+    expect(writes[0].url).toMatch(/\/event-rules\/too-hot$/);
     expect(writes[0].body).toEqual({ enabled: true });
   });
 
@@ -180,6 +202,17 @@ describe("Rules page", () => {
     const editBtn = within(b).getByLabelText("Edit") as HTMLButtonElement;
     expect(editBtn.disabled).toBe(true);
     expect(editBtn.closest(".tooltip")?.getAttribute("data-tip")).toBe("Requires rule:update");
+  });
+
+  it("offers no rule write to a caller whose rule permissions stop at one place", async () => {
+    mount(placeOwner);
+    expect(screen.queryByText("New rule")).toBeNull();
+    fireEvent.click(screen.getByText("Too hot"));
+    const b = await blade();
+    expect(within(b).queryByText("Enable")).toBeNull();
+    expect(within(b).queryByText("Delete")?.closest("button")?.disabled ?? true).toBe(true);
+    const editBtn = within(b).getByLabelText("Edit") as HTMLButtonElement;
+    expect(editBtn.disabled).toBe(true);
   });
 
   it("tells a scoped caller that rules are fleet-wide instead of looking empty", () => {
@@ -231,7 +264,7 @@ describe("Rules page", () => {
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
-  it("edits a custom rule in a Drawer, dropping its clear criterion with clear_negates", async () => {
+  it("edits a custom rule in a Drawer, dropping its clear criterion with clear_negates alone", async () => {
     const writes = catchWrites();
     mount();
     fireEvent.click(screen.getByText("Too hot"));
@@ -245,22 +278,60 @@ describe("Rules page", () => {
     fireEvent.click(screen.getByText("Save rule").closest("button")!);
     await waitFor(() => expect(writes).toHaveLength(1));
     expect(writes[0].method).toBe("PATCH");
-    const body = writes[0].body as Record<string, unknown>;
-    expect(body.clear_negates).toBe(true);
-    expect(body.clear_criteria).toBeUndefined();
-    expect(body.fire_criteria).toEqual({ op: "gt", value: 40 });
-    expect(body.fire_sustain).toBe("1m");
-    expect(body.clear_sustain).toBe("30s");
-    expect(body.selector).toEqual({ component_types: ["display"], components: [] });
+    // Only what changed rides: an unchanged field restated would be judged afresh.
+    expect(writes[0].body).toEqual({ clear_negates: true });
     // Saving lands back on the rule's blade.
     await blade();
   });
 
+  async function editStale() {
+    const writes = catchWrites();
+    mount(admin, [reach, hot, stale]);
+    fireEvent.click(screen.getByText("Stale watch"));
+    const b = await blade();
+    fireEvent.click(within(b).getByText("Edit"));
+    await waitFor(() => screen.getByText("Save rule"));
+    return writes;
+  }
+
+  it("marks a selector entry the registries no longer have as deleted, with why", async () => {
+    await editStale();
+    const selected = screen.getByLabelText("Selected");
+    const chips = within(selected).getAllByText("deleted");
+    expect(chips).toHaveLength(2);
+    expect(within(selected).getByText("gone-type")).toBeTruthy();
+    const tip = within(selected).getByRole("button", { name: "More about deleted component type gone-type" });
+    fireEvent.keyDown(document.body, { key: "Tab" });
+    tip.focus();
+    expect(await screen.findByText(/matches nothing by it/)).toBeTruthy();
+  });
+
+  it("saves a label edit on a rule with a deleted selector entry, sending the label alone", async () => {
+    const writes = await editStale();
+    fireEvent.input(screen.getByLabelText("Label"), { target: { value: "Still watching" } });
+    fireEvent.click(screen.getByText("Save rule").closest("button")!);
+    await waitFor(() => expect(writes).toHaveLength(1));
+    expect(writes[0].body).toEqual({ label: "Still watching" });
+  });
+
+  it("lets the operator remove a deleted selector entry", async () => {
+    const writes = await editStale();
+    fireEvent.click(screen.getByLabelText(`Stop watching ${uuidFor("comp-gone")}`));
+    fireEvent.click(screen.getByText("Save rule").closest("button")!);
+    await waitFor(() => expect(writes).toHaveLength(1));
+    expect(writes[0].body).toEqual({ selector: { component_types: ["gone-type"], components: [] } });
+  });
+
   // Disabling clears what the rule holds open (storage settleRuleWrite), and the
   // hint beside Status says so.
-  it("teaches that disabling clears the alarms a rule holds open", () => {
-    expect(RULE_HINTS.enabled).toMatch(/clears the alarms it holds open/);
-    expect(RULE_HINTS.enabled).not.toMatch(/stays open/);
+  it("teaches beside Status that disabling clears the alarms a rule holds open", async () => {
+    mount();
+    fireEvent.click(screen.getByText("Too hot"));
+    const b = await blade();
+    const tip = within(b).getByRole("button", { name: "More about enabled" });
+    fireEvent.keyDown(document.body, { key: "Tab" });
+    tip.focus();
+    expect(await screen.findByText(/clears the alarms it holds open/)).toBeTruthy();
   });
 
   it("deletes a custom rule from the kebab after a confirmation", async () => {
@@ -276,6 +347,6 @@ describe("Rules page", () => {
     // alarms stay open.
     expect(ask.mock.calls[0][0]).toMatch(/clears the alarms it holds open/);
     expect(writes[0].method).toBe("DELETE");
-    expect(writes[0].url).toMatch(/\/event-rules\/room-too-hot$/);
+    expect(writes[0].url).toMatch(/\/event-rules\/too-hot$/);
   });
 });

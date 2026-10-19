@@ -286,4 +286,27 @@ func TestEventRuleState(t *testing.T) {
 	if _, err := gw.EventRuleState(ctx, "reach-lost", scope.Set{}); !errors.Is(err, storage.ErrEventRuleNotFound) {
 		t.Fatalf("a scoped reader: err %v, want not found", err)
 	}
+
+	// The list and a get carry the same state as counts, so a page of rules
+	// reads every rule's live state in one query instead of one per row.
+	list, err := gw.ListEventRules(ctx, all)
+	if err != nil {
+		t.Fatal(err)
+	}
+	counts := map[string][2]int{}
+	for _, r := range list {
+		counts[r.Name] = [2]int{r.OpenAlarms, r.PendingStreaks}
+	}
+	if counts["reach-lost"] != [2]int{1, 0} || counts["slow-hot"] != [2]int{0, 1} {
+		t.Fatalf("listed counts %v, want reach-lost 1 open, slow-hot 1 pending", counts)
+	}
+	got, err := gw.GetEventRule(ctx, "slow-hot", all)
+	if err != nil || got.OpenAlarms != 0 || got.PendingStreaks != 1 {
+		t.Fatalf("get slow-hot = %+v (%v), want 1 pending", got, err)
+	}
+	label := "Reach lost"
+	upd, err := gw.UpdateEventRule(ctx, "", "reach-lost", storage.EventRulePatch{Label: &label}, all, all)
+	if err != nil || upd.OpenAlarms != 1 {
+		t.Fatalf("updated reach-lost = %+v (%v), want its open alarm counted", upd, err)
+	}
 }

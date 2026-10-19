@@ -332,7 +332,13 @@ role assignment, in one transaction: it lands whole or not at all.
 each with whether an alarm at it puts a component in outage; official levels are read-only. `/event-rules`
 (gated `rule:*`, fleet-wide config, all-scope grants only) authors the rules that raise alarms: a sample
 key, fire and clear criteria, sustains, a severity level and a selector; an unknown key or level, or
-criteria its lane cannot evaluate, is a 422. An alarm body names its component by name and uuid, and a
+criteria its lane cannot evaluate, is a 422. A rule edit is judged on what it changes from the stored rule:
+a selector entry, key or criteria it restates unchanged is not re-resolved, so a rule whose component or
+type was deleted stays editable (it matches nothing by the stale entry), while an entry new to the rule must
+exist. The list and a get carry each rule's live state as counts (`open_alarms`, `pending_streaks`), read
+for the whole list in one query; `GET /event-rules/{name}/state` lists the alarms and streaks themselves.
+Because rules need an all-scope grant, `GET /auth/me` returns `fleet_permissions` beside `permissions`:
+the permissions held on an all-scope grant, which the console checks before offering a rule write. An alarm body names its component by name and uuid, and a
 rule-raised one its rule (`raised_by_rule`, `raised_by_rule_id`).
 
 **The endpoint is authored; the task is derived.** An endpoint is addressed by a surrogate `id` and

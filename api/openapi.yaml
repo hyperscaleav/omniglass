@@ -2380,6 +2380,14 @@ components:
         official:
           description: Shipped with the platform and read-only
           type: boolean
+        open_alarms:
+          description: How many alarms the rule raised are still open right now (its live state; GET /event-rules/{name}/state lists them)
+          format: int64
+          type: integer
+        pending_streaks:
+          description: How many of the rule's streaks are waiting out a sustain right now
+          format: int64
+          type: integer
         sample_key:
           description: The property or metric the rule reads
           type: string
@@ -2412,6 +2420,8 @@ components:
         - enabled
         - official
         - version
+        - open_alarms
+        - pending_streaks
       type: object
     EventRuleStateOutputBody:
       additionalProperties: false
@@ -4313,6 +4323,13 @@ components:
           format: uri
           readOnly: true
           type: string
+        fleet_permissions:
+          description: The permissions the caller holds on an all-scope grant, flattened like permissions. Fleet-wide config (event rules) needs its permission here; a grant bounded to a place or system does not reach it. A UI hint; the server is the authority.
+          items:
+            type: string
+          type:
+            - array
+            - "null"
         grants:
           items:
             $ref: "#/components/schemas/GrantBody"
@@ -4334,6 +4351,7 @@ components:
       required:
         - principal
         - permissions
+        - fleet_permissions
         - grants
       type: object
     MemberBody:
@@ -8213,7 +8231,7 @@ paths:
       summary: Log out the current session
   /auth/me:
     get:
-      description: Returns the caller's principal, flattened permissions (a UI hint and the fast-reject set), and grants. Requires authentication.
+      description: Returns the caller's principal, flattened permissions (a UI hint and the fast-reject set), the permissions held on an all-scope grant (fleet_permissions), and grants. Requires authentication.
       operationId: get-auth-me
       responses:
         "200":
@@ -10094,7 +10112,7 @@ paths:
       x-omniglass-permission: endpoint:update
   /event-rules:
     get:
-      description: "Lists the event rules, the authored config that raises alarms. Rules are fleet-wide: a caller without an all-scope grant lists none. Gated by rule:read."
+      description: "Lists the event rules, the authored config that raises alarms, each with its live state as counts (open_alarms, pending_streaks) read in the same query. Rules are fleet-wide: a caller without an all-scope grant lists none. Gated by rule:read."
       operationId: list-event-rule
       responses:
         "200":
@@ -10159,7 +10177,7 @@ paths:
       summary: Delete an event rule
       x-omniglass-permission: rule:delete
     get:
-      description: Returns one event rule by name. Gated by rule:read.
+      description: Returns one event rule by name, with its live state as counts. Gated by rule:read.
       operationId: get-event-rule
       parameters:
         - description: The rule's name

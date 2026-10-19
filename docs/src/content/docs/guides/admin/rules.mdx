@@ -16,8 +16,11 @@ How the evaluator works is on [alarms and actions](/architecture/alarms-actions/
 Beside it, **Catalog, under Actions: Severity** (with `severity_level:read`) lists the levels a rule
 raises at.
 
-Rules are **fleet-wide config**: reading and writing them takes a grant over the whole fleet. A
-caller whose grants are all scoped to part of the fleet sees an empty list, and the page says why.
+Rules are **fleet-wide config**: reading and writing them takes the permission on a grant over the
+whole fleet. A caller without an all-scope read sees an empty list, and the page says why; a caller who
+holds `rule:create` only on a grant bounded to a place or system is not offered **New rule** (nor Edit,
+Disable or Delete without the matching permission on an all-scope grant), since the server would
+refuse the write.
 
 ## The rule that ships
 
@@ -27,17 +30,19 @@ One rule ships with Omniglass, rendered here from the seed itself:
 
 It is **official**: it updates with Omniglass, so it is read-only, and the blade greys Edit and
 Delete with that reason. It is what makes an unplugged component move its system: unplug a
-simulated component ([simulate a fleet](/guides/operator/simulation/#break-it-on-purpose)) and,
-fifteen seconds after its endpoint first reads `down`, the rule's row on the Rules page shows **1
-open**, its blade lists the component and the endpoint, and the component and its system carry a
-**High** alarm saying **Reachability lost**. Plug it back in and the next `up` reading clears it.
+simulated component ([simulate a fleet](/guides/operator/simulation/#break-it-on-purpose)) and, once
+its endpoint has read `down` for the rule's fire sustain (above), the rule's row on the Rules page
+shows **1 open**, its blade lists the component and the endpoint, and the component and its system
+carry an alarm at the rule's severity with its label as the message. The sustain is timed from the
+server's receipt of the first `down` sample, and judged on the server's 5s sweep tick, so the alarm
+opens up to a tick after the sustain runs out. Plug it back in and the next `up` reading clears it.
 
 ## Read the list
 
 Each row is a rule: its **name** (label above), what it **reads** (the sample key and its lane),
-its **criteria** in words ("reads down for 15s", "clears on up"), its **severity** in the level's
-color, its **live** state, and its **origin** (official or custom). The live column refreshes every
-few seconds:
+its **criteria** in words ("reads above 40 °C for 1m", "clears on the opposite"), its **severity** in
+the level's color, its **live** state, and its **origin** (official or custom). The live column counts
+ride on the list itself, which refreshes every 10 seconds:
 
 - **N open**: alarms the rule raised that are still open, one per component and endpoint.
 - **N pending**: components whose samples point at fire (or clear) and are waiting out the sustain.
@@ -55,12 +60,15 @@ sample (#929).
 - **Name**: a lowercase kebab name (`input-moved`). It cannot change later.
 - **Label**: optional; it is also the alarm's message when **Message** is blank.
 - **Reads**: one property or metric from the catalogs. Its **lane** decides how it compares: a
-  property is text, compared with **is** or **is not**; a metric is a number, compared any way
-  (**is**, **is not**, **above**, **at least**, **below**, **at most**).
-- **Fires when it reads**: the comparison and the value that open an alarm.
-- **For at least**: the **fire sustain**, a duration (`15s`, `2m`). The value has to keep meeting the
-  criteria this long before the alarm opens; one sample that does not starts the wait over. Blank
-  acts at once.
+  property is text, compared only for equality; a metric is a number, compared any way. The
+  comparison list beside the value offers exactly what the chosen key's lane allows, in words.
+- **Fires when it reads**: the comparison and the value that open an alarm. The value is used exactly
+  as typed: a property value with leading or trailing spaces is refused rather than trimmed (it would
+  never match), and a metric value must be a plain decimal (`40`, `-2.5`).
+- **For at least**: the **fire sustain**, a duration (`30s`, `2m`). The value has to keep meeting the
+  criteria this long before the alarm opens; one sample that does not starts the wait over. The
+  sustain is timed from the server's receipt of the first sample that meets the criteria and judged
+  on the server's 5s sweep tick. Blank acts at once.
 - **Clears**: on the opposite of the fire criteria, or on criteria of their own (then **Clears when
   it reads** asks for them). A rule that fires above 40 and clears below 35 does not flap at 39.9.
 - **Clears after at least**: the **clear sustain**, set independently: a long clear sustain holds an
@@ -77,10 +85,11 @@ that already holds starts its sustain then rather than waiting for the next chan
 
 ### A worked example
 
-A touch panel reports its `video-input` property. To be told when one leaves `hdmi1`:
+A touch panel with two inputs reports the one it shows as its `video-input` property (`hdmi1` or
+`hdmi2`). To be told when one is switched to `hdmi2`, that is, off HDMI 1:
 
 1. **New rule**, name `input-moved`, label `Input moved off HDMI 1`.
-2. **Reads** Video Input (`video-input`); **Fires when it reads** is `hdmi2`; **Clears** on the
+2. **Reads** Video Input (`video-input`); **Fires when it reads** **is** `hdmi2`; **Clears** on the
    opposite.
 3. **Severity** a level that degrades rather than takes the panel out.
 4. **Create rule**.
@@ -88,12 +97,15 @@ A touch panel reports its `video-input` property. To be told when one leaves `hd
 Switch a simulated panel's input (`omniglass component simulation fire <panel> --surface nvp
 --command "SET INPUT hdmi2"`) and, on the next poll, the rule shows **1 open**, the panel's page
 shows the alarm in the level's color with the rule's label as its message, and the panel itself reads
-degraded (its system moves too if the panel fills one of its roles). Switch it back and it clears.
+degraded (its system moves too if the panel fills one of its roles). Switch it back and it clears. On
+a panel with more than two inputs, fire on **is not** `hdmi1` instead, so any other input counts.
 
 ## Edit, disable, delete
 
 On a custom rule's blade, **Edit** (with `rule:update`) reopens the drawer with everything but the
-name. Changing what the rule judges (its key, criteria, selector or sustains) starts its pending
+name. Saving sends only what you changed, so a rule that still watches a component or component type
+deleted since it was written stays editable: the form marks such an entry **deleted** (it matches
+nothing by it) and you can remove it or leave it. Changing what the rule judges (its key, criteria, selector or sustains) starts its pending
 streaks over and judges the newest samples again; changing its label, description, message or
 severity leaves them running. Narrowing what it watches clears its alarms on the components it no
 longer selects. **Disable** stops evaluation and clears the alarms the rule holds open (each stays in
@@ -107,15 +119,15 @@ longer naming it.
 **Catalog, under Actions: Severity** lists the levels worst first: each one's **rank** (higher is
 worse), how it **looks** (the chip every alarm at that level wears), its **effect** (whether an
 active alarm at it puts its component in **outage** or only **degrades** it), and its origin. The
-shipped levels:
+shipped levels, rendered from the seed:
 
 <SeededSet kind="severity_levels" />
 
-They are spaced ten apart, so a level of your own slots between two without renumbering, and
-anything at or above `high` is an outage. The page is a read view: author your own levels from the
+They are spaced apart, so a level of your own slots between two without renumbering; whether a level
+is an outage follows from its rank, against a fixed floor the table above marks. The page is a read view: author your own levels from the
 CLI or the API (#930), with `severity_level:create`. An official level is read-only; a level an alarm
 or a rule still names cannot be deleted; renaming a level carries every alarm at it; re-ranking one
-across `high` recomputes the health of every component with an open alarm at it.
+across the outage floor recomputes the health of every component with an open alarm at it.
 
 ```sh
 omniglass severity-level list
@@ -124,7 +136,8 @@ omniglass severity-level update major --label "P2"
 omniglass severity-level delete major
 ```
 
-The colors are `gray`, `blue`, `green`, `yellow`, `orange`, `red`, and `darkred`.
+The colors a level may take are listed under `--color` in the
+[CLI reference](/reference/cli/#omniglass-severity-level-create), generated from the API.
 
 ## From the CLI and the API
 
@@ -140,8 +153,8 @@ Every console action is the same API call, with the same checks
 | Edit, Disable, Enable | `omniglass event-rule update <name>` | `PATCH /event-rules/{name}` |
 | Delete | `omniglass event-rule delete <name>` | `DELETE /event-rules/{name}` |
 
-The worked example from a terminal, with criteria as JSON (`{op, value}`, where `op` is `eq`, `ne`,
-`gt`, `ge`, `lt` or `le`) and sustains as durations:
+The worked example from a terminal, with criteria as JSON (`{op, value}`, the comparisons the API
+reference lists for `op`) and sustains as durations:
 
 ```sh
 omniglass event-rule create --name input-moved --label "Input moved off HDMI 1" \

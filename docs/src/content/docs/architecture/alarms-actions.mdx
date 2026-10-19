@@ -194,7 +194,9 @@ by any all-scope reader; a version bumps on every change.
 A rule's **live state** is a read, not a stored column: `GET /event-rules/{name}/state` (`omniglass
 event-rule state list <rule>`, gated `rule:read`) returns the alarms it raised that are still open (component,
 endpoint instance, severity, when) and its streaks waiting out a sustain (component, instance, whether
-it points at fire or clear, since when). The console's **Catalog > Actions > Rules** page (#921) lists
+it points at fire or clear, since when). The list and a get carry the same state as counts
+(`open_alarms`, `pending_streaks`), aggregated for the whole list in one query, so a page of rules polls
+one list rather than a state read per rule. The console's **Catalog > Actions > Rules** page (#921) lists
 every rule with its criteria in words, its severity and those live counts, opens a rule's blade with
 both lists linked to their components, and authors, edits, disables and deletes operator rules in a
 drawer (official rules are read-only); the operator's walk-through is the
@@ -458,7 +460,7 @@ registry is **`severity_level`**.
   }}
 />
 
-<SchemaTable table="severity_level" notes={{ rank: 'Higher is worse; at or above high (40) an active alarm is an outage' }} />
+<SchemaTable table="severity_level" notes={{ rank: 'Higher is worse; at or above the health rule\'s outage floor an active alarm is an outage (the shipped levels, each marked, are on the rules guide)' }} />
 
 A command **is two real tables**: the `command_type` registry and the `command` invocation row with
 its computed settlement; see [commands](/architecture/commands/). The `action_rule` config row lives

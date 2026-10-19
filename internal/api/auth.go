@@ -554,10 +554,14 @@ type meOutput struct {
 			ID   string `json:"id"`
 			Kind string `json:"kind"`
 		} `json:"principal"`
-		Human       *humanBody  `json:"human,omitempty"`
-		Service     *svcBody    `json:"service,omitempty"`
-		Permissions []string    `json:"permissions"`
-		Grants      []grantBody `json:"grants"`
+		Human       *humanBody `json:"human,omitempty"`
+		Service     *svcBody   `json:"service,omitempty"`
+		Permissions []string   `json:"permissions"`
+		// FleetPermissions narrows Permissions to the grants over the whole
+		// fleet: what the caller may do to fleet-wide config (event rules, the
+		// registries), which a grant bounded to a place or system never reaches.
+		FleetPermissions []string    `json:"fleet_permissions" doc:"The permissions the caller holds on an all-scope grant, flattened like permissions. Fleet-wide config (event rules) needs its permission here; a grant bounded to a place or system does not reach it. A UI hint; the server is the authority."`
+		Grants           []grantBody `json:"grants"`
 	}
 }
 
@@ -587,7 +591,7 @@ type grantBody struct {
 	GroupName string `json:"group_name,omitempty" doc:"The source group's label, present when the grant is inherited."`
 }
 
-func meHandler(ctx context.Context, _ *struct{}) (*meOutput, error) {
+func (a *authenticator) meHandler(ctx context.Context, _ *struct{}) (*meOutput, error) {
 	pr, ok := principalFrom(ctx)
 	if !ok {
 		return nil, huma.Error401Unauthorized("unauthenticated")
@@ -610,6 +614,17 @@ func meHandler(ctx context.Context, _ *struct{}) (*meOutput, error) {
 		out.Body.Service = &svcBody{Name: pr.Service.Name}
 	}
 	out.Body.Permissions = perms.Strings()
+	idx, err := a.roleIndex(ctx)
+	if err != nil {
+		return nil, huma.Error500InternalServerError("resolve roles")
+	}
+	var fleetRoles []string
+	for _, g := range pr.Grants {
+		if g.ScopeKind == "all" {
+			fleetRoles = append(fleetRoles, g.Role)
+		}
+	}
+	out.Body.FleetPermissions = idx.Flatten(fleetRoles).Strings()
 	out.Body.Grants = make([]grantBody, 0, len(pr.Grants))
 	for i := range pr.Grants {
 		out.Body.Grants = append(out.Body.Grants, toGrantBody(&pr.Grants[i]))

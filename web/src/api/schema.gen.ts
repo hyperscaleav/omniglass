@@ -73,7 +73,7 @@ export interface paths {
         };
         /**
          * The authenticated principal, its permissions, and grants
-         * @description Returns the caller's principal, flattened permissions (a UI hint and the fast-reject set), and grants. Requires authentication.
+         * @description Returns the caller's principal, flattened permissions (a UI hint and the fast-reject set), the permissions held on an all-scope grant (fleet_permissions), and grants. Requires authentication.
          */
         get: operations["get-auth-me"];
         put?: never;
@@ -1185,7 +1185,7 @@ export interface paths {
         };
         /**
          * List event rules
-         * @description Lists the event rules, the authored config that raises alarms. Rules are fleet-wide: a caller without an all-scope grant lists none. Gated by rule:read.
+         * @description Lists the event rules, the authored config that raises alarms, each with its live state as counts (open_alarms, pending_streaks) read in the same query. Rules are fleet-wide: a caller without an all-scope grant lists none. Gated by rule:read.
          */
         get: operations["list-event-rule"];
         put?: never;
@@ -1209,7 +1209,7 @@ export interface paths {
         };
         /**
          * Get an event rule
-         * @description Returns one event rule by name. Gated by rule:read.
+         * @description Returns one event rule by name, with its live state as counts. Gated by rule:read.
          */
         get: operations["get-event-rule"];
         put?: never;
@@ -5677,6 +5677,16 @@ export interface components {
             name: string;
             /** @description Shipped with the platform and read-only */
             official: boolean;
+            /**
+             * Format: int64
+             * @description How many alarms the rule raised are still open right now (its live state; GET /event-rules/{name}/state lists them)
+             */
+            open_alarms: number;
+            /**
+             * Format: int64
+             * @description How many of the rule's streaks are waiting out a sustain right now
+             */
+            pending_streaks: number;
             /** @description The property or metric the rule reads */
             sample_key: string;
             /**
@@ -6688,6 +6698,8 @@ export interface components {
              * @example /api/v1/schemas/MeOutputBody.json
              */
             readonly $schema?: string;
+            /** @description The permissions the caller holds on an all-scope grant, flattened like permissions. Fleet-wide config (event rules) needs its permission here; a grant bounded to a place or system does not reach it. A UI hint; the server is the authority. */
+            fleet_permissions: string[] | null;
             grants: components["schemas"]["GrantBody"][] | null;
             human?: components["schemas"]["HumanBody"];
             permissions: string[] | null;

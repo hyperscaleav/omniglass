@@ -47,6 +47,11 @@ type EventRule struct {
 	Version       int
 	CreatedAt     time.Time
 	UpdatedAt     time.Time
+	// The rule's live state as counts, read beside it (never authored, never
+	// audited): the alarms it raised that are still open, and its streaks
+	// waiting out a sustain. EventRuleState lists them.
+	OpenAlarms     int `json:"-"`
+	PendingStreaks int `json:"-"`
 }
 
 // EventRuleSpec is a rule to create; its selector's components may be
@@ -113,13 +118,23 @@ func scanEventRule(row pgx.Row) (EventRule, error) {
 	return scanEventRuleWith(row)
 }
 
+// scanEventRuleTrailing scans a rule, then trailing columns into trail.
+func scanEventRuleTrailing(row pgx.Row, trail ...any) (EventRule, error) {
+	return scanEventRuleCols(row, nil, trail)
+}
+
 func scanEventRuleWith(row pgx.Row, lead ...any) (EventRule, error) {
+	return scanEventRuleCols(row, lead, nil)
+}
+
+func scanEventRuleCols(row pgx.Row, lead, trail []any) (EventRule, error) {
 	var r EventRule
 	var sel, fire, clear []byte
 	var lane string
 	var fireUs, clearUs int64
 	dest := append(lead, &r.ID, &r.Name, &r.Label, &r.Description, &sel, &r.SampleKey, &lane, &fire, &clear,
 		&fireUs, &clearUs, &r.Severity, &r.Message, &r.Enabled, &r.Official, &r.Version, &r.CreatedAt, &r.UpdatedAt)
+	dest = append(dest, trail...)
 	err := row.Scan(dest...)
 	if err != nil {
 		return r, err
@@ -151,11 +166,15 @@ func invalidRule(format string, a ...any) error {
 const maxSustain = 365 * 24 * time.Hour
 
 // ruleChecks says which of a rule's references to validate: all of them on
-// create; on update only what the patch changed, so a rule whose component
-// or key was deleted can still be edited (disabled, at least), and simply
-// matches nothing until it is pointed somewhere real.
+// create; on update only what the patch changed from the stored rule, so a
+// rule whose component, type or key was deleted can still be edited (relabelled,
+// disabled) by a client that restates every field, and simply matches nothing
+// by the stale reference until it is pointed somewhere real. kept is the
+// stored selector: an entry it already holds is carried over unresolved, and
+// only an entry new to the rule must exist.
 type ruleChecks struct {
 	key, criteria, selector bool
+	kept                    EventRuleSelector
 }
 
 var checkAll = ruleChecks{key: true, criteria: true, selector: true}
@@ -190,7 +209,7 @@ func prepareEventRule(ctx context.Context, q querier, r *EventRule, check ruleCh
 		}
 	}
 	if check.selector {
-		return resolveRuleSelector(ctx, q, r)
+		return resolveRuleSelector(ctx, q, r, check.kept)
 	}
 	return nil
 }
@@ -212,8 +231,19 @@ func resolveRuleLane(ctx context.Context, q querier, r *EventRule) error {
 	return nil
 }
 
-func resolveRuleSelector(ctx context.Context, q querier, r *EventRule) error {
+func resolveRuleSelector(ctx context.Context, q querier, r *EventRule, kept EventRuleSelector) error {
+	keptTypes := make(map[string]bool, len(kept.ComponentTypes))
+	for _, t := range kept.ComponentTypes {
+		keptTypes[t] = true
+	}
+	keptIDs := make(map[string]bool, len(kept.Components))
+	for _, id := range kept.Components {
+		keptIDs[id] = true
+	}
 	for _, t := range r.Selector.ComponentTypes {
+		if keptTypes[t] {
+			continue
+		}
 		var ok bool
 		if err := q.QueryRow(ctx, `select exists (select 1 from component_type where name = $1)`, t).Scan(&ok); err != nil {
 			return fmt.Errorf("storage: check rule component type: %w", err)
@@ -224,6 +254,10 @@ func resolveRuleSelector(ctx context.Context, q querier, r *EventRule) error {
 	}
 	ids := make([]string, 0, len(r.Selector.Components))
 	for _, ref := range r.Selector.Components {
+		if keptIDs[ref] {
+			ids = append(ids, ref)
+			continue
+		}
 		c, err := scopedByName(ctx, q, componentConfig, ref)
 		if err != nil {
 			return invalidRule("component %q: %v", ref, err)
@@ -266,29 +300,48 @@ func ruleArgs(r EventRule) ([]byte, []byte, any, error) {
 	return sel, fire, clear, nil
 }
 
-// ListEventRules lists every rule, by name; a reader without an all-scope
-// grant sees none, since rules are fleet-wide config.
+// ruleCountsJoin aggregates every rule's live state once, joined to the rule
+// rows by id: open alarms it raised, and its pending streaks.
+const ruleCountsJoin = ` left join (select raised_by_rule_id as rule_id, count(*) as n from alarm
+		where cleared_at is null and raised_by_rule_id is not null group by raised_by_rule_id) oa on oa.rule_id = r.id
+	left join (select rule_id, count(*) as n from event_rule_state group by rule_id) ps on ps.rule_id = r.id`
+
+// ListEventRules lists every rule, by name, each with its live state as
+// counts in the same query; a reader without an all-scope grant sees none,
+// since rules are fleet-wide config.
 func (p *PG) ListEventRules(ctx context.Context, read scope.Set) ([]EventRule, error) {
 	if !read.All {
 		return nil, nil
 	}
-	rows, err := p.pool.Query(ctx, `select `+eventRuleCols+` from event_rule order by name`)
+	rows, err := p.pool.Query(ctx, `select `+ruleCols("r.")+`, coalesce(oa.n, 0), coalesce(ps.n, 0)
+		from event_rule r`+ruleCountsJoin+` order by r.name`)
 	if err != nil {
 		return nil, fmt.Errorf("storage: list event rules: %w", err)
 	}
 	defer rows.Close()
 	var out []EventRule
 	for rows.Next() {
-		r, err := scanEventRule(rows)
+		var open, pending int
+		r, err := scanEventRuleTrailing(rows, &open, &pending)
 		if err != nil {
 			return nil, err
 		}
+		r.OpenAlarms, r.PendingStreaks = open, pending
 		out = append(out, r)
 	}
 	return out, rows.Err()
 }
 
-// GetEventRule reads one rule by name.
+// countRuleState reads one rule's live state as counts.
+func countRuleState(ctx context.Context, q querier, r *EventRule) error {
+	if err := q.QueryRow(ctx, `select (select count(*) from alarm where raised_by_rule_id = $1 and cleared_at is null),
+		(select count(*) from event_rule_state where rule_id = $1)`, r.ID).Scan(&r.OpenAlarms, &r.PendingStreaks); err != nil {
+		return fmt.Errorf("storage: count event rule %q state: %w", r.Name, err)
+	}
+	return nil
+}
+
+// GetEventRule reads one rule by name, with its live state as counts.
 func (p *PG) GetEventRule(ctx context.Context, name string, read scope.Set) (*EventRule, error) {
 	if !read.All {
 		return nil, ErrEventRuleNotFound
@@ -299,6 +352,9 @@ func (p *PG) GetEventRule(ctx context.Context, name string, read scope.Set) (*Ev
 	}
 	if err != nil {
 		return nil, fmt.Errorf("storage: get event rule %q: %w", name, err)
+	}
+	if err := countRuleState(ctx, p.pool, &r); err != nil {
+		return nil, err
 	}
 	return &r, nil
 }
@@ -340,6 +396,9 @@ func (p *PG) CreateEventRule(ctx context.Context, actorID string, spec EventRule
 		return nil, err
 	}
 	if err := writeAuditRes(ctx, tx, actorID, "create", "event_rule", created.ID, nil, created); err != nil {
+		return nil, err
+	}
+	if err := countRuleState(ctx, tx, &created); err != nil {
 		return nil, err
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -420,12 +479,24 @@ func (p *PG) UpdateEventRule(ctx context.Context, actorID, name string, patch Ev
 	if patch.Enabled != nil {
 		r.Enabled = *patch.Enabled
 	}
-	check := ruleChecks{key: patch.SampleKey != nil, criteria: patch.Fire != nil || patch.Clear != nil, selector: patch.Selector != nil}
+	// Judged on what changed from the stored rule, not on what the patch
+	// restates: an unchanged key keeps its lane, unchanged criteria were valid
+	// on it, and a selector entry the rule already held is kept as stored.
+	keyChanged := r.SampleKey != old.SampleKey
+	check := ruleChecks{
+		key:      keyChanged,
+		criteria: keyChanged || !sameRuleJSON(r.FireCriteria, old.FireCriteria) || !sameRuleJSON(r.ClearCriteria, old.ClearCriteria),
+		selector: patch.Selector != nil,
+		kept:     old.Selector,
+	}
 	if err := prepareEventRule(ctx, tx, &r, check); err != nil {
 		return nil, err
 	}
 	// A patch that changes nothing writes nothing: no version bump, no audit.
 	if sameAuthoredRule(old, r) {
+		if err := countRuleState(ctx, tx, &old); err != nil {
+			return nil, err
+		}
 		return &old, nil
 	}
 	sel, fire, clear, err := ruleArgs(r)
@@ -446,6 +517,9 @@ func (p *PG) UpdateEventRule(ctx context.Context, actorID, name string, patch Ev
 		return nil, err
 	}
 	if err := writeAuditRes(ctx, tx, actorID, "update", "event_rule", old.ID, old, updated); err != nil {
+		return nil, err
+	}
+	if err := countRuleState(ctx, tx, &updated); err != nil {
 		return nil, err
 	}
 	if err := tx.Commit(ctx); err != nil {

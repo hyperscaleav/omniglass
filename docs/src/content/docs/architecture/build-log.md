@@ -6436,3 +6436,12 @@ the alarms page and the new [rules guide](/guides/admin/rules/) no longer restat
 closed loop was walked on a simulated fleet with NET_ADMIN: unplugging a component opened the official
 rule's High alarm and degraded its system, replugging cleared both, and a rule created on `/rules` opened
 its alarm, in an operator level's label and color, when a simulated panel's input moved.
+
+Review hardening on the same slice. A rule edit is now judged on what it changes from the stored rule
+(a restated selector entry, key or criteria is not re-resolved), and the console PATCH sends only the
+fields an edit changed, so a rule watching a since-deleted component or type stays editable; the form
+marks such an entry **deleted**. The list and get carry `open_alarms` and `pending_streaks`, read for the
+whole list in one aggregate query, so the page polls the list every 10s instead of each row's `/state`.
+`GET /auth/me` gained `fleet_permissions` (the permissions on all-scope grants), and every rule write in
+the console is gated on it, so a caller holding `rule:create` only on a place is no longer offered one.
+Criteria values are kept exact (edge spaces refused, a metric a strict decimal).

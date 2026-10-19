@@ -12,7 +12,6 @@ import {
   listEventRules,
   readDuration,
   readValue,
-  scopedOnly,
   sustainWords,
   updateBody,
   updateEventRule,
@@ -26,13 +25,14 @@ const reach: EventRule = {
   selector: { component_types: [], components: [] }, sample_key: "endpoint-reachable", sample_lane: "property",
   fire_criteria: { op: "eq", value: "down" }, clear_criteria: { op: "eq", value: "up" },
   fire_sustain: "15s", clear_sustain: "0s", severity: "high", enabled: true, official: true, version: 1,
+  open_alarms: 0, pending_streaks: 0,
 };
 
 const hot: EventRule = {
-  id: uuidFor("rule-room-too-hot"), name: "room-too-hot",
+  id: uuidFor("rule-too-hot"), name: "too-hot",
   selector: { component_types: ["display"], components: [] }, sample_key: "temperature-c", sample_lane: "metric",
   fire_criteria: { op: "gt", value: 40 }, fire_sustain: "1m0s", clear_sustain: "30s",
-  severity: "average", enabled: true, official: false, version: 3,
+  severity: "average", enabled: true, official: false, version: 3, open_alarms: 0, pending_streaks: 0,
 };
 
 function jsonResponse(body: unknown, status = 200) {
@@ -81,8 +81,24 @@ describe("the form's rules", () => {
   it("types a value by lane", () => {
     expect(readValue("down", "property")).toEqual({ value: "down", error: null });
     expect(readValue("40.5", "metric")).toEqual({ value: 40.5, error: null });
+    expect(readValue("-3", "metric")).toEqual({ value: -3, error: null });
     expect(readValue("warm", "metric").error).toMatch(/not one/);
     expect(readValue(" ", "property").error).toBeTruthy();
+  });
+
+  it("keeps property text exact, refusing edge whitespace rather than trimming it", () => {
+    // A property compares text exactly, so " down" would never match "down":
+    // the form says so instead of silently sending something else.
+    expect(readValue(" down", "property").error).toMatch(/spaces/);
+    expect(readValue("down ", "property").error).toMatch(/spaces/);
+    expect(readValue("hdmi 1", "property")).toEqual({ value: "hdmi 1", error: null });
+  });
+
+  it("reads a metric as a strict decimal: no hex, exponent, blank or padding", () => {
+    for (const raw of ["0x10", "1e3", "", "  ", " 40", "40 ", "Infinity", "4_0", "."]) {
+      expect(readValue(raw, "metric").error, raw).toBeTruthy();
+    }
+    expect(readValue("0.25", "metric")).toEqual({ value: 0.25, error: null });
   });
 
   it("reads a Go duration, blank as none", () => {
@@ -122,10 +138,10 @@ describe("the form's rules", () => {
 
 describe("the bodies a draft sends", () => {
   it("creates with typed criteria, durations, and no clear criterion for the opposite", () => {
-    const d = { ...emptyDraft("average"), name: "room-too-hot", sampleKey: "temperature-c", lane: "metric" as const,
+    const d = { ...emptyDraft("average"), name: "too-hot", sampleKey: "temperature-c", lane: "metric" as const,
       fireOp: "gt" as const, fireValue: "40", fireSustain: "1m", componentTypes: ["display"] };
     expect(createBody(d)).toEqual({
-      name: "room-too-hot", sample_key: "temperature-c",
+      name: "too-hot", sample_key: "temperature-c",
       fire_criteria: { op: "gt", value: 40 }, fire_sustain: "1m", clear_sustain: "0s",
       severity: "average", enabled: true, selector: { component_types: ["display"], components: [] },
     });
@@ -139,29 +155,36 @@ describe("the bodies a draft sends", () => {
     expect(b.label).toBe("Reach");
   });
 
-  it("drops a clear criterion on edit with clear_negates", () => {
-    const d = { ...draftFromRule({ ...reach, official: false }), clearMode: "opposite" as const };
-    const b = updateBody(d, reach);
-    expect(b.clear_negates).toBe(true);
-    expect(b.clear_criteria).toBeUndefined();
-    expect(b.fire_sustain).toBe("15s");
-    expect(b.clear_sustain).toBe("0s");
+  it("drops a clear criterion on edit with clear_negates, sending nothing else", () => {
+    const was = { ...reach, official: false };
+    const d = { ...draftFromRule(was), clearMode: "opposite" as const };
+    expect(updateBody(d, was)).toEqual({ clear_negates: true });
   });
 
-  it("sends no clear_negates when the rule never had a clear criterion", () => {
-    const b = updateBody(draftFromRule(hot), hot);
-    expect(b.clear_negates).toBeUndefined();
-    expect(b.fire_criteria).toEqual({ op: "gt", value: 40 });
-    expect(b.selector).toEqual({ component_types: ["display"], components: [] });
+  it("sends nothing for an edit that changes nothing", () => {
+    expect(updateBody(draftFromRule(hot), hot)).toEqual({});
   });
-});
 
-describe("scopedOnly", () => {
-  it("is true only when every grant is bounded", () => {
-    expect(scopedOnly({ grants: [{ scope_kind: "location" }] })).toBe(true);
-    expect(scopedOnly({ grants: [{ scope_kind: "location" }, { scope_kind: "all" }] })).toBe(false);
-    expect(scopedOnly({ grants: [] })).toBe(false);
-    expect(scopedOnly(null)).toBe(false);
+  it("sends only the fields an edit changed", () => {
+    expect(updateBody({ ...draftFromRule(hot), label: "Too hot" }, hot)).toEqual({ label: "Too hot" });
+    expect(updateBody({ ...draftFromRule(hot), fireValue: "45", clearSustain: "1m" }, hot)).toEqual({
+      fire_criteria: { op: "gt", value: 45 }, clear_sustain: "1m",
+    });
+    // The selector replaces wholesale, so it rides whole once any entry moves.
+    expect(updateBody({ ...draftFromRule(hot), componentTypes: [] }, hot)).toEqual({
+      selector: { component_types: [], components: [] },
+    });
+    // A custom clear rides when it changed, and its value is typed by lane.
+    expect(updateBody({ ...draftFromRule(reach), clearValue: "degraded" }, reach)).toEqual({
+      clear_criteria: { op: "eq", value: "degraded" },
+    });
+  });
+
+  it("leaves a stale selector entry alone unless the edit touches the selector", () => {
+    // A rule watching a component that was since deleted: a label edit must not
+    // restate the selector, or the server would judge the stale id afresh.
+    const stale = { ...hot, selector: { component_types: ["gone-type"], components: [uuidFor("comp-gone")] } };
+    expect(updateBody({ ...draftFromRule(stale), label: "Renamed" }, stale)).toEqual({ label: "Renamed" });
   });
 });
 

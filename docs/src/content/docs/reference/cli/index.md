@@ -153,7 +153,7 @@ The authenticated principal, its permissions, and grants
 omniglass auth me
 ```
 
-Returns the caller's principal, flattened permissions (a UI hint and the fast-reject set), and grants. Requires authentication.
+Returns the caller's principal, flattened permissions (a UI hint and the fast-reject set), the permissions held on an all-scope grant (fleet_permissions), and grants. Requires authentication.
 
 Example:
 
@@ -1507,7 +1507,7 @@ Get an event rule
 omniglass event-rule get <name>
 ```
 
-Returns one event rule by name. Gated by rule:read.
+Returns one event rule by name, with its live state as counts. Gated by rule:read.
 
 Example:
 
@@ -1523,7 +1523,7 @@ List event rules
 omniglass event-rule list
 ```
 
-Lists the event rules, the authored config that raises alarms. Rules are fleet-wide: a caller without an all-scope grant lists none. Gated by rule:read.
+Lists the event rules, the authored config that raises alarms, each with its live state as counts (open_alarms, pending_streaks) read in the same query. Rules are fleet-wide: a caller without an all-scope grant lists none. Gated by rule:read.
 
 Example:
 

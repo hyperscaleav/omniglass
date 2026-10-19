@@ -208,13 +208,19 @@ export function readDuration(raw: string): string | null {
 
 // readValue types a criterion's value by lane: text for a property, a number
 // for a metric. The error is the inline verdict; the value is what is sent.
+// Nothing is trimmed: a property compares text exactly, so " down" would never
+// match "down", and the form refuses edge spaces with a reason rather than
+// sending something other than what was typed. A metric is a plain decimal
+// (40, -2.5): Number() would also take hex, exponents and blanks, which read
+// as something else to a person.
+const DECIMAL = /^-?\d+(\.\d+)?$/;
+
 export function readValue(raw: string, lane: RuleLane): { value?: string | number; error: string | null } {
-  const s = raw.trim();
-  if (s === "") return { error: lane === "metric" ? "A number to compare against." : "The value to compare against." };
-  if (lane === "property") return { value: s, error: null };
-  const n = Number(s);
-  if (!Number.isFinite(n)) return { error: "A metric compares numbers; this is not one." };
-  return { value: n, error: null };
+  if (raw.trim() === "") return { error: lane === "metric" ? "A number to compare against." : "The value to compare against." };
+  if (raw !== raw.trim()) return { error: "No leading or trailing spaces: the value is compared exactly as written." };
+  if (lane === "property") return { value: raw, error: null };
+  if (!DECIMAL.test(raw)) return { error: "A metric compares numbers; this is not one. Write a plain decimal, like 40 or -2.5." };
+  return { value: Number(raw), error: null };
 }
 
 const NAME = /^[a-z0-9]+(-[a-z0-9]+)*$/;
@@ -273,35 +279,36 @@ export function createBody(d: RuleDraft): CreateEventRule {
   return body;
 }
 
-// updateBody: the PATCH an edit sends. Every editable field rides (absent would
-// leave it unchanged, and the form shows them all), the selector replaces
-// wholesale, and choosing "the opposite" over a rule that had a clear criterion
-// says so with clear_negates, since an absent clear_criteria changes nothing.
+const sameCriteria = (a: RuleCriteria | undefined, b: RuleCriteria | undefined) =>
+  a?.op === b?.op && JSON.stringify(a?.value) === JSON.stringify(b?.value);
+const sameList = (a: string[], b: string[] | null | undefined) => a.length === (b ?? []).length && a.every((x, i) => x === b![i]);
+const sameSustain = (draft: string, stored: string | undefined) => sustainWords(sustainOut(draft)) === sustainWords(stored);
+
+// updateBody: the PATCH an edit sends, carrying only what the edit changed
+// (absent is unchanged on the server). Restating an unchanged field is not
+// harmless: the server judges what it is sent, so a rule whose selected
+// component was since deleted could not take a label edit if the selector rode
+// along. The selector replaces wholesale, so it rides whole once any entry
+// moves; choosing "the opposite" over a rule that had a clear criterion says so
+// with clear_negates, since an absent clear_criteria changes nothing.
 export function updateBody(d: RuleDraft, was: EventRule): UpdateEventRule {
-  const body: UpdateEventRule = {
-    label: d.label.trim(),
-    description: d.description.trim(),
-    sample_key: d.sampleKey,
-    fire_criteria: criteria(d.fireOp, d.fireValue, d.lane),
-    fire_sustain: sustainOut(d.fireSustain),
-    clear_sustain: sustainOut(d.clearSustain),
-    severity: d.severity,
-    message: d.message.trim(),
-    enabled: d.enabled,
-    selector: { component_types: d.componentTypes, components: d.components },
-  };
-  if (d.clearMode === "custom") body.clear_criteria = criteria(d.clearOp, d.clearValue, d.lane);
-  else if (was.clear_criteria) body.clear_negates = true;
+  const body: UpdateEventRule = {};
+  if (d.label.trim() !== (was.label ?? "")) body.label = d.label.trim();
+  if (d.description.trim() !== (was.description ?? "")) body.description = d.description.trim();
+  if (d.message.trim() !== (was.message ?? "")) body.message = d.message.trim();
+  if (d.sampleKey !== was.sample_key) body.sample_key = d.sampleKey;
+  const fire = criteria(d.fireOp, d.fireValue, d.lane);
+  if (!sameCriteria(fire, was.fire_criteria)) body.fire_criteria = fire;
+  if (!sameSustain(d.fireSustain, was.fire_sustain)) body.fire_sustain = sustainOut(d.fireSustain);
+  if (!sameSustain(d.clearSustain, was.clear_sustain)) body.clear_sustain = sustainOut(d.clearSustain);
+  if (d.severity !== was.severity) body.severity = d.severity;
+  if (d.enabled !== was.enabled) body.enabled = d.enabled;
+  if (!sameList(d.componentTypes, was.selector?.component_types) || !sameList(d.components, was.selector?.components)) {
+    body.selector = { component_types: d.componentTypes, components: d.components };
+  }
+  if (d.clearMode === "custom") {
+    const clear = criteria(d.clearOp, d.clearValue, d.lane);
+    if (!sameCriteria(clear, was.clear_criteria ?? undefined)) body.clear_criteria = clear;
+  } else if (was.clear_criteria) body.clear_negates = true;
   return body;
-}
-
-// ---- who may read rules ----------------------------------------------------
-
-// scopedOnly: a caller whose every grant is bounded to part of the fleet. Rules
-// are fleet-wide config, so such a caller lists none; the page says why rather
-// than looking empty. A caller with no grants listed (a bootstrap owner, a
-// token) is not judged scoped.
-export function scopedOnly(me: { grants?: { scope_kind: string }[] } | null | undefined): boolean {
-  const g = me?.grants ?? [];
-  return g.length > 0 && g.every((x) => x.scope_kind !== "all");
 }

@@ -25,22 +25,24 @@ type selectorBody struct {
 }
 
 type eventRuleBody struct {
-	ID            string        `json:"id" doc:"The rule's uuid, the stable form of name"`
-	Name          string        `json:"name"`
-	Label         string        `json:"label,omitempty"`
-	Description   string        `json:"description,omitempty"`
-	Selector      selectorBody  `json:"selector" doc:"The components the rule watches; both lists empty is every component"`
-	SampleKey     string        `json:"sample_key" doc:"The property or metric the rule reads"`
-	SampleLane    string        `json:"sample_lane" enum:"property,metric" doc:"Which lane the key reads, derived from the registries"`
-	FireCriteria  criteriaBody  `json:"fire_criteria" doc:"When the sample meets this for fire_sustain, the rule opens an alarm"`
-	ClearCriteria *criteriaBody `json:"clear_criteria,omitempty" doc:"When the sample meets this for clear_sustain, the alarm clears; absent, the negation of fire_criteria"`
-	FireSustain   string        `json:"fire_sustain" doc:"How long the fire criteria must hold, a Go duration (0s fires at once)"`
-	ClearSustain  string        `json:"clear_sustain" doc:"How long the clear criteria must hold, a Go duration"`
-	Severity      string        `json:"severity" doc:"The severity level the alarm is raised at, by name"`
-	Message       string        `json:"message,omitempty" doc:"The alarm's message; empty uses the rule's label or name"`
-	Enabled       bool          `json:"enabled"`
-	Official      bool          `json:"official" doc:"Shipped with the platform and read-only"`
-	Version       int           `json:"version" doc:"Bumps on every update"`
+	ID             string        `json:"id" doc:"The rule's uuid, the stable form of name"`
+	Name           string        `json:"name"`
+	Label          string        `json:"label,omitempty"`
+	Description    string        `json:"description,omitempty"`
+	Selector       selectorBody  `json:"selector" doc:"The components the rule watches; both lists empty is every component"`
+	SampleKey      string        `json:"sample_key" doc:"The property or metric the rule reads"`
+	SampleLane     string        `json:"sample_lane" enum:"property,metric" doc:"Which lane the key reads, derived from the registries"`
+	FireCriteria   criteriaBody  `json:"fire_criteria" doc:"When the sample meets this for fire_sustain, the rule opens an alarm"`
+	ClearCriteria  *criteriaBody `json:"clear_criteria,omitempty" doc:"When the sample meets this for clear_sustain, the alarm clears; absent, the negation of fire_criteria"`
+	FireSustain    string        `json:"fire_sustain" doc:"How long the fire criteria must hold, a Go duration (0s fires at once)"`
+	ClearSustain   string        `json:"clear_sustain" doc:"How long the clear criteria must hold, a Go duration"`
+	Severity       string        `json:"severity" doc:"The severity level the alarm is raised at, by name"`
+	Message        string        `json:"message,omitempty" doc:"The alarm's message; empty uses the rule's label or name"`
+	Enabled        bool          `json:"enabled"`
+	Official       bool          `json:"official" doc:"Shipped with the platform and read-only"`
+	Version        int           `json:"version" doc:"Bumps on every update"`
+	OpenAlarms     int           `json:"open_alarms" doc:"How many alarms the rule raised are still open right now (its live state; GET /event-rules/{name}/state lists them)"`
+	PendingStreaks int           `json:"pending_streaks" doc:"How many of the rule's streaks are waiting out a sustain right now"`
 }
 
 func toCriteriaBody(c rules.Criteria) criteriaBody {
@@ -62,7 +64,8 @@ func toEventRuleBody(r *storage.EventRule) eventRuleBody {
 		Selector:  selectorBody{ComponentTypes: r.Selector.ComponentTypes, Components: r.Selector.Components},
 		SampleKey: r.SampleKey, SampleLane: string(r.SampleLane), FireCriteria: toCriteriaBody(r.FireCriteria),
 		FireSustain: r.FireSustain.String(), ClearSustain: r.ClearSustain.String(), Severity: r.Severity,
-		Message: r.Message, Enabled: r.Enabled, Official: r.Official, Version: r.Version}
+		Message: r.Message, Enabled: r.Enabled, Official: r.Official, Version: r.Version,
+		OpenAlarms: r.OpenAlarms, PendingStreaks: r.PendingStreaks}
 	if r.ClearCriteria != nil {
 		c := toCriteriaBody(*r.ClearCriteria)
 		b.ClearCriteria = &c
@@ -138,7 +141,7 @@ func registerEventRuleRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 		Method:      http.MethodGet,
 		Path:        "/event-rules",
 		Summary:     "List event rules",
-		Description: "Lists the event rules, the authored config that raises alarms. Rules are fleet-wide: a caller without an all-scope grant lists none. Gated by rule:read.",
+		Description: "Lists the event rules, the authored config that raises alarms, each with its live state as counts (open_alarms, pending_streaks) read in the same query. Rules are fleet-wide: a caller without an all-scope grant lists none. Gated by rule:read.",
 	}, "rule", "read"), func(ctx context.Context, _ *struct{}) (*listEventRulesOutput, error) {
 		rs, err := gw.ListEventRules(ctx, a.scopeFor(ctx, "rule", "read"))
 		if err != nil {
@@ -157,7 +160,7 @@ func registerEventRuleRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 		Method:      http.MethodGet,
 		Path:        "/event-rules/{name}",
 		Summary:     "Get an event rule",
-		Description: "Returns one event rule by name. Gated by rule:read.",
+		Description: "Returns one event rule by name, with its live state as counts. Gated by rule:read.",
 	}, "rule", "read"), func(ctx context.Context, in *eventRuleNameInput) (*eventRuleOutput, error) {
 		r, err := gw.GetEventRule(ctx, in.Name, a.scopeFor(ctx, "rule", "read"))
 		if err != nil {

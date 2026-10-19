@@ -16,7 +16,7 @@ import { Pencil, Plus, Save, Trash, X } from "../components/icons";
 import { entityLabel } from "../lib/entities";
 import { useFormActions } from "../lib/formactions";
 import { bindSelectValue } from "../lib/selectvalue";
-import { useMe, can } from "../lib/auth";
+import { useMe, canFleet, fleetView } from "../lib/auth";
 import { OFFICIAL_LOCK, registryLock } from "../lib/catalog";
 import { describeError, fmtTime, rel } from "../lib/format";
 import { type BladeDef, createBladeController, useBlades, useBladeEdit } from "../lib/blades";
@@ -45,7 +45,6 @@ import {
   listEventRules,
   opLabel,
   ruleStateKey,
-  scopedOnly,
   updateBody,
   updateEventRule,
   validateDraft,
@@ -57,10 +56,12 @@ import {
 // severity when the value meets its fire criteria for the fire sustain; it
 // clears on its clear criteria (or the opposite) held for the clear sustain.
 // Each row shows what it reads, its criteria in words, and its live state (open
-// alarms and streaks waiting out a sustain), so the list is the teaching
+// alarms and streaks waiting out a sustain, counted on the list rows so the
+// page polls one list, not a query per rule), so the list is the teaching
 // surface: the official reachability rule's counts move while a simulated
 // component is unplugged. Official rules are read-only; rules are fleet-wide
-// config, so a scoped caller lists none and is told why.
+// config, so every write is judged on the caller's all-scope permissions
+// (fleetView), and a caller without an all-scope read lists none and is told why.
 
 // The hints, written once: each is the (i) beside the field or fact it explains,
 // on the form and the detail alike.
@@ -82,9 +83,11 @@ export const RULE_HINTS = {
   official: "Official rules ship with Omniglass and update with it, so they are read-only. Author your own beside them.",
   enabled: "A disabled rule evaluates nothing, and disabling it clears the alarms it holds open (each stays in its component's history). Enabling it again judges the newest samples at once.",
   message: "The alarm's message. Blank uses the rule's label, or its name.",
+  deleted:
+    "Deleted since the rule was written, so the rule matches nothing by it; the rest of what it watches still applies. Remove it to tidy the rule, or leave it: saving other changes keeps it as it is.",
 } as const;
 
-const ROW_POLL_MS = 10_000;
+const LIST_POLL_MS = 10_000;
 const DETAIL_POLL_MS = 5_000;
 
 function originBadge(official: boolean): JSX.Element {
@@ -109,17 +112,13 @@ function readsCell(r: EventRule): JSX.Element {
   );
 }
 
-// The live state at a glance: open alarms in the error hue, streaks in the
-// warning hue, and a quiet "clear" when the rule holds nothing right now. A
-// disabled rule says so first (disabling cleared what it held open).
-function RuleLive(p: { rule: EventRule; poll: number }): JSX.Element {
-  const state = useQuery(() => ({
-    queryKey: ruleStateKey(p.rule.name),
-    queryFn: () => getRuleState(p.rule.name),
-    refetchInterval: p.poll,
-  }));
-  const open = () => state.data?.open.length ?? 0;
-  const pending = () => state.data?.pending.length ?? 0;
+// The live state at a glance, from the counts on the list row: open alarms in
+// the error hue, streaks in the warning hue, and a quiet "clear" when the rule
+// holds nothing right now. A disabled rule says so first (disabling cleared
+// what it held open).
+function RuleLive(p: { rule: EventRule }): JSX.Element {
+  const open = () => p.rule.open_alarms;
+  const pending = () => p.rule.pending_streaks;
   return (
     <span class="inline-flex flex-wrap items-center gap-1" data-live={p.rule.name}>
       <Show when={!p.rule.enabled}>
@@ -131,7 +130,7 @@ function RuleLive(p: { rule: EventRule; poll: number }): JSX.Element {
       <Show when={pending() > 0}>
         <span class="badge badge-soft badge-warning badge-sm whitespace-nowrap tabular-nums" title={`${pending()} waiting out a sustain`}>{pending()} pending</span>
       </Show>
-      <Show when={p.rule.enabled && state.data && open() === 0 && pending() === 0}>
+      <Show when={p.rule.enabled && open() === 0 && pending() === 0}>
         <span class="text-[12px] text-base-content/40">clear</span>
       </Show>
     </span>
@@ -147,11 +146,11 @@ const RulesUiContext = createContext<RulesUi>();
 export default function Rules(): JSX.Element {
   const me = useMe();
   const qc = useQueryClient();
-  const rules = useQuery(() => ({ queryKey: EVENT_RULES_KEY, queryFn: listEventRules }));
+  const rules = useQuery(() => ({ queryKey: EVENT_RULES_KEY, queryFn: listEventRules, refetchInterval: LIST_POLL_MS }));
   const rows = () => (rules.data ?? []).slice().sort((a, b) => a.name.localeCompare(b.name));
   const unit = useMetricUnit();
-  const scoped = () => scopedOnly(me.data);
-  const canCreate = () => can(me.data, "rule", "create") && !scoped();
+  const fleetBlind = () => !!me.data && !canFleet(me.data, "rule", "read");
+  const canCreate = () => canFleet(me.data, "rule", "create");
   const blades = createBladeController();
   const [editing, setEditing] = createSignal<string | null>(null);
   const editRow = () => (rules.data ?? []).find((r) => r.name === editing());
@@ -175,7 +174,7 @@ export default function Rules(): JSX.Element {
       ),
     },
     { key: "severity", label: "Severity", width: "88px", sortVal: (r) => r.severity, cell: (r) => <SeverityBadge name={r.severity} /> },
-    { key: "live", label: "Live", width: "120px", cell: (r) => <RuleLive rule={r} poll={ROW_POLL_MS} /> },
+    { key: "live", label: "Live", width: "120px", cell: (r) => <RuleLive rule={r} /> },
     { key: "official", label: "Origin", width: "84px", sortVal: (r) => String(r.official), cell: (r) => originBadge(r.official) },
   ];
 
@@ -198,7 +197,7 @@ export default function Rules(): JSX.Element {
             ],
             filterPlaceholder: "filter rules by name, key, severity…",
             columns,
-            empty: scoped()
+            empty: fleetBlind()
               ? "Rules are fleet-wide config: reading them takes a grant over the whole fleet."
               : "No rules yet.",
             rowId: (r) => r.name,
@@ -329,8 +328,8 @@ function RuleBladeBody(p: { name: string }): JSX.Element {
     queryFn: () => getRuleState(p.name),
     refetchInterval: DETAIL_POLL_MS,
   }));
-  const canUpdate = () => can(me.data, "rule", "update");
-  const canDelete = () => can(me.data, "rule", "delete");
+  const canUpdate = () => canFleet(me.data, "rule", "update");
+  const canDelete = () => canFleet(me.data, "rule", "delete");
 
   async function toggleEnabled(r: EventRule) {
     setErr(null);
@@ -380,7 +379,7 @@ function RuleBladeBody(p: { name: string }): JSX.Element {
       if (!r) return null;
       if (r.official) return OFFICIAL_LOCK;
       // Only when the primary Edit is not bound (BladeStack refuses the pair).
-      return canUpdate() ? null : registryLock(r, me.data, "rule");
+      return canUpdate() ? null : registryLock(r, fleetView(me.data), "rule");
     },
   });
 
@@ -495,6 +494,17 @@ function RuleBladeBody(p: { name: string }): JSX.Element {
 
 // ---- the form ----------------------------------------------------------------
 
+// DeletedMark rides a selector chip whose entry no longer exists: the word, and
+// the (i) saying what that means for the rule.
+function DeletedMark(p: { what: string }): JSX.Element {
+  return (
+    <span class="inline-flex items-center gap-0.5 text-[10px] italic">
+      deleted
+      <InfoTip label={`deleted ${p.what}`} text={RULE_HINTS.deleted} />
+    </span>
+  );
+}
+
 // RuleForm authors a rule, on create and on edit alike; a Drawer hosts it and
 // draws its action rail. The name is create-only. The sample key picker spans
 // both registries and its lane decides the comparisons and the value's type;
@@ -530,6 +540,12 @@ export function RuleForm(p: { mode: "create" | "edit"; rule?: EventRule; onSaved
   const metricOptions = createMemo(() => [...(metrics.data ?? [])].sort(byLabel));
   const componentOptions = createMemo(() => [...(components.data ?? [])].filter((c) => !d.components.includes(c.id)).sort(byLabel));
   const componentById = createMemo(() => new Map((components.data ?? []).map((c) => [c.id, c])));
+  // A selector entry the registries no longer hold (deleted after the rule was
+  // written) is judged only once its list has landed, so nothing reads as
+  // deleted while loading.
+  const typeNames = createMemo(() => (componentTypes.data ? new Set(componentTypes.data.map((t) => t.name)) : undefined));
+  const typeGone = (t: string) => !!typeNames() && !typeNames()!.has(t);
+  const componentGone = (id: string) => !!components.data && !componentById().has(id);
   const keyValue = () => (d.sampleKey ? `${d.lane}:${d.sampleKey}` : "");
 
   function pickKey(v: string) {
@@ -725,8 +741,9 @@ export function RuleForm(p: { mode: "create" | "edit"; rule?: EventRule; onSaved
         <Show when={d.componentTypes.length + d.components.length > 0} fallback={<span class="text-[12px] text-base-content/50">Every component</span>}>
           <For each={d.componentTypes}>
             {(t) => (
-              <span class="badge badge-ghost badge-sm gap-1 font-data">
+              <span class="badge badge-ghost badge-sm gap-1 font-data" classList={{ "text-base-content/50": typeGone(t) }}>
                 {t}
+                <Show when={typeGone(t)}><DeletedMark what={`component type ${t}`} /></Show>
                 <button type="button" class="opacity-60 hover:opacity-100" aria-label={`Stop watching ${t}`} onClick={() => setD("componentTypes", d.componentTypes.filter((x) => x !== t))}>
                   <X size={11} />
                 </button>
@@ -735,8 +752,9 @@ export function RuleForm(p: { mode: "create" | "edit"; rule?: EventRule; onSaved
           </For>
           <For each={d.components}>
             {(id) => (
-              <span class="badge badge-outline badge-sm gap-1">
+              <span class="badge badge-outline badge-sm gap-1" classList={{ "badge-ghost font-data text-base-content/50": componentGone(id) }}>
                 {componentById().get(id) ? entityLabel(componentById().get(id)!) : id}
+                <Show when={componentGone(id)}><DeletedMark what={`component ${id}`} /></Show>
                 <button type="button" class="opacity-60 hover:opacity-100" aria-label={`Stop watching ${componentById().get(id)?.name ?? id}`} onClick={() => setD("components", d.components.filter((x) => x !== id))}>
                   <X size={11} />
                 </button>

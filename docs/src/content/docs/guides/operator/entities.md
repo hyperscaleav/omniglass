@@ -316,21 +316,25 @@ what was wrong underneath.
 
 Raising one takes two things:
 
-- a **severity**: one of the severity levels, listed with their rank and color under **Catalog, under
-  Actions: Severity** (`info`, `warning`, `average`, `high`, `disaster` ship, and your admin can add
-  more between them). Every alarm wears its level's label in its color. This is how loudly to treat it, and it sets the
-  **component's own** verdict (any active alarm makes the component degraded, one at `high` or above an
-  outage). Only an **outage** stops a component occupying a role it fills: an info or warning
+- a **severity**: one of the severity levels, listed with their rank, color and effect under **Catalog,
+  under Actions: Severity** (the [rules guide](/guides/admin/rules/#severity-levels) renders the shipped
+  set, and your admin can add more between them). Every alarm wears its level's label in its color. This is how loudly to treat it, and it sets the
+  **component's own** verdict (any active alarm makes the component degraded, one at a level marked
+  outage takes it out). Only an **outage** stops a component occupying a role it fills: an info or warning
   alarm still degrades it, but the component keeps its slot, so a quiet issue does not short-staff
   a system on its own;
 - a **message**, for whoever reads it later. Write it for the person who finds this at 8am, not for you.
 
 **Not every alarm is raised by hand.** An [event rule](/guides/admin/rules/) raises and clears its
 own as telemetry lands: such an alarm says **by rule** and the rule's name, and the rule clears it
-when the condition passes (the official **Reachability lost** rule does this for every endpoint that
-stops answering). You acknowledge it like any other. Clearing it by hand works too, but the rule opens
-a new alarm the next time a sample meets its criteria for its sustain, so a hand clear on a condition
-that still holds lasts only until the component reports again.
+when the condition passes (the official reachability rule does this for every endpoint that stops
+answering). You acknowledge it like any other. Clearing it by hand works too, but whether it stays
+cleared depends on the input, because a rule judges samples as they land and its sustain clock only
+finishes streaks that a sample already started. An input that keeps reporting while the condition holds
+(a metric sampled on every poll) starts a new streak with its next sample and reopens the alarm once
+that streak has held for the sustain. An input that reports only when its value changes sends nothing
+further, so a hand clear on a condition that still holds stays cleared until the value changes and the
+condition comes back. Fix the condition rather than clearing its alarm.
 
 **Clearing keeps the row.** The alarm moves to the history with the time it was cleared, so what was wrong
 and when survives the fix. Clearing one twice is a plain miss rather than a silent success.

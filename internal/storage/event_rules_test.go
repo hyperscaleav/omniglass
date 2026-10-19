@@ -156,6 +156,45 @@ func TestEventRuleEdgeCases(t *testing.T) {
 		t.Fatalf("a no-op patch moved the version from %d to %d (%v)", upd.Version, same.Version, err)
 	}
 
+	// A patch that restates the stored selector and key (a form that sends
+	// every field) is judged on what it changes: the stale references it
+	// carries over are not re-resolved, so a label edit saves. A selector
+	// entry or key the rule did not already hold must still exist.
+	if _, err := gw.CreateComponentType(ctx, "", storage.ComponentType{Name: "doomed-type", Label: "Doomed", Stem: strp("doomed")}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := gw.UpdateEventRule(ctx, "", "on-doomed", storage.EventRulePatch{Selector: &storage.EventRuleSelector{
+		ComponentTypes: []string{"doomed-type"}, Components: upd.Selector.Components}}, all, all); err != nil {
+		t.Fatalf("adding a component type that exists beside a stale component: %v", err)
+	}
+	if err := gw.DeleteComponentType(ctx, "", "doomed-type"); err != nil {
+		t.Fatal(err)
+	}
+	stored, err := gw.GetEventRule(ctx, "on-doomed", all)
+	if err != nil {
+		t.Fatal(err)
+	}
+	label := "Doomed, relabelled"
+	key := stored.SampleKey
+	fire := stored.FireCriteria
+	sel := stored.Selector
+	relabelled, err := gw.UpdateEventRule(ctx, "", "on-doomed", storage.EventRulePatch{Label: &label, Selector: &sel, SampleKey: &key, Fire: &fire}, all, all)
+	if err != nil || relabelled.Label != label || len(relabelled.Selector.Components) != 1 || len(relabelled.Selector.ComponentTypes) != 1 {
+		t.Fatalf("a label edit restating a stale selector and key: %+v (%v), want it saved with the selector kept", relabelled, err)
+	}
+	for name, bad := range map[string]storage.EventRuleSelector{
+		"a new component that does not exist":      {ComponentTypes: sel.ComponentTypes, Components: append([]string{"nobody"}, sel.Components...)},
+		"a new component type that does not exist": {ComponentTypes: append([]string{"no-such-type"}, sel.ComponentTypes...), Components: sel.Components},
+	} {
+		if _, err := gw.UpdateEventRule(ctx, "", "on-doomed", storage.EventRulePatch{Selector: &bad}, all, all); !errors.Is(err, storage.ErrEventRuleInvalid) {
+			t.Errorf("%s: err %v, want ErrEventRuleInvalid", name, err)
+		}
+	}
+	nokey := "no-such-key"
+	if _, err := gw.UpdateEventRule(ctx, "", "on-doomed", storage.EventRulePatch{SampleKey: &nokey}, all, all); !errors.Is(err, storage.ErrEventRuleInvalid) {
+		t.Errorf("a new sample key that does not exist: err %v, want ErrEventRuleInvalid", err)
+	}
+
 	clear := criteria("lt", 1)
 	if _, err := gw.UpdateEventRule(ctx, "", "on-doomed", storage.EventRulePatch{Clear: &clear, ClearNegates: true}, all, all); !errors.Is(err, storage.ErrEventRuleInvalid) {
 		t.Fatalf("a clear criterion and clear_negates together: err %v, want ErrEventRuleInvalid", err)

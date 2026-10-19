@@ -165,9 +165,9 @@ func registerRoutes(api huma.API, gw storage.Gateway, svc *settings.Service, o o
 		Method:      http.MethodGet,
 		Path:        "/auth/me",
 		Summary:     "The authenticated principal, its permissions, and grants",
-		Description: "Returns the caller's principal, flattened permissions (a UI hint and the fast-reject set), and grants. Requires authentication.",
+		Description: "Returns the caller's principal, flattened permissions (a UI hint and the fast-reject set), the permissions held on an all-scope grant (fleet_permissions), and grants. Requires authentication.",
 		Middlewares: huma.Middlewares{a.authn},
-	}, meHandler)
+	}, a.meHandler)
 
 	huma.Register(api, huma.Operation{
 		OperationID: "update-auth-me",
