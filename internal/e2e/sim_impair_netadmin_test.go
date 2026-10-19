@@ -239,6 +239,15 @@ func TestImpairingASimulatedDeviceShowsInCollection(t *testing.T) {
 
 	unplugged := time.Now()
 	as("component", "impairment", "set", "sim-dev", "--unplugged")
+	// The sustain is honored: the first down sample lands after the unplug,
+	// so the rule's 15s fire sustain keeps any alarm shut for at least 15s
+	// of it. Watching the first 10s leaves 5s of margin for a slow poll.
+	for time.Since(unplugged) < 10*time.Second {
+		if n := ruleAlarms(); n > 0 {
+			t.Fatalf("the reachability rule opened %d alarms %s after the unplug, inside its 15s sustain", n, time.Since(unplugged).Round(time.Millisecond))
+		}
+		time.Sleep(250 * time.Millisecond)
+	}
 	after("TCP to fail once unplugged", "tcp-open", unplugged, down)
 	after("ping to fail once unplugged", "icmp-reachable", unplugged, down)
 	waitFor(t, "both endpoints to read down", both("down"))

@@ -336,6 +336,9 @@ func (p *PG) CreateEventRule(ctx context.Context, actorID string, spec EventRule
 	if err != nil {
 		return nil, mapRuleWriteErr(err, r.Name)
 	}
+	if err := p.settleRuleWrite(ctx, tx, actorID, nil, created); err != nil {
+		return nil, err
+	}
 	if err := writeAuditRes(ctx, tx, actorID, "create", "event_rule", created.ID, nil, created); err != nil {
 		return nil, err
 	}
@@ -439,25 +442,8 @@ func (p *PG) UpdateEventRule(ctx context.Context, actorID, name string, patch Ev
 	if err != nil {
 		return nil, mapRuleWriteErr(err, name)
 	}
-	// A changed rule starts its streaks over: a sustain measured against the
-	// old criteria is not one measured against the new.
-	if _, err := tx.Exec(ctx, `delete from event_rule_state where rule_id = $1`, old.ID); err != nil {
-		return nil, fmt.Errorf("storage: reset rule streaks: %w", err)
-	}
-	// A rule disabled lets go of every alarm it holds open; one whose selector
-	// changed lets go of those on components it no longer watches.
-	switch {
-	case old.Enabled && !updated.Enabled:
-		if err := p.clearRuleAlarms(ctx, tx, actorID, updated, nil); err != nil {
-			return nil, err
-		}
-	case patch.Selector != nil:
-		m := newRuleMatcher(p, nil)
-		if err := p.clearRuleAlarms(ctx, tx, actorID, updated, func(o *ruleOwner) (bool, error) {
-			return m.selects(ctx, tx, updated, o)
-		}); err != nil {
-			return nil, err
-		}
+	if err := p.settleRuleWrite(ctx, tx, actorID, &old, updated); err != nil {
+		return nil, err
 	}
 	if err := writeAuditRes(ctx, tx, actorID, "update", "event_rule", old.ID, old, updated); err != nil {
 		return nil, err
@@ -499,6 +485,76 @@ func (p *PG) DeleteEventRule(ctx context.Context, actorID, name string, read, ac
 	return tx.Commit(ctx)
 }
 
+// settleRuleWrite brings a rule's live state in line with a write, in the
+// write's transaction; old is nil for a rule just inserted. A rule disabled
+// lets go of every alarm it holds open and every streak. A rule created,
+// enabled, or materially changed (what it reads, how it judges, which
+// components, how long) starts its streaks over, lets go of the alarms on
+// components it no longer selects, and primes from each series' newest
+// sample, so a condition that already holds is not lost on an input that
+// sends nothing further. A cosmetic edit (label, description, message,
+// severity) touches nothing: a sustain measured against the same judgment
+// is still one.
+func (p *PG) settleRuleWrite(ctx context.Context, tx pgx.Tx, actorID string, old *EventRule, updated EventRule) error {
+	wasOn := old != nil && old.Enabled
+	if !updated.Enabled {
+		if !wasOn {
+			return nil
+		}
+		if err := p.clearRuleAlarms(ctx, tx, actorID, updated, nil); err != nil {
+			return err
+		}
+		return resetRuleStreaks(ctx, tx, updated.ID)
+	}
+	if wasOn && !materialRuleChange(*old, updated) {
+		return nil
+	}
+	if old != nil {
+		if err := resetRuleStreaks(ctx, tx, updated.ID); err != nil {
+			return err
+		}
+		if wasOn && !sameRuleJSON(old.Selector, updated.Selector) {
+			m := newRuleMatcher(p, nil)
+			if err := p.clearRuleAlarms(ctx, tx, actorID, updated, func(o *ruleOwner) (bool, error) {
+				return m.selects(ctx, tx, updated, o)
+			}); err != nil {
+				return err
+			}
+		}
+	}
+	return p.primeRule(ctx, tx, updated)
+}
+
+func resetRuleStreaks(ctx context.Context, tx pgx.Tx, ruleID string) error {
+	if _, err := tx.Exec(ctx, `delete from event_rule_state where rule_id = $1`, ruleID); err != nil {
+		return fmt.Errorf("storage: reset rule streaks: %w", err)
+	}
+	return nil
+}
+
+// materialRuleChange reports whether a write changed how a rule judges:
+// its key or lane, its criteria, its selector, or its sustains.
+func materialRuleChange(a, b EventRule) bool {
+	type judgment struct {
+		SampleKey                 string
+		SampleLane                rules.Lane
+		Selector                  EventRuleSelector
+		Fire                      rules.Criteria
+		Clear                     *rules.Criteria
+		FireSustain, ClearSustain time.Duration
+	}
+	pick := func(r EventRule) judgment {
+		return judgment{r.SampleKey, r.SampleLane, r.Selector, r.FireCriteria, r.ClearCriteria, r.FireSustain, r.ClearSustain}
+	}
+	return !sameRuleJSON(pick(a), pick(b))
+}
+
+func sameRuleJSON(a, b any) bool {
+	ja, _ := json.Marshal(a)
+	jb, _ := json.Marshal(b)
+	return string(ja) == string(jb)
+}
+
 // sameAuthoredRule reports whether two versions of a rule say the same thing.
 func sameAuthoredRule(a, b EventRule) bool {
 	type authored struct {
@@ -521,7 +577,8 @@ func sameAuthoredRule(a, b EventRule) bool {
 // authoritative on conflict; an operator's rules keep distinct names and are
 // untouched. An official rule never takes over an operator's: a name an
 // operator rule already holds is refused, naming it. A re-seed that changes
-// nothing writes nothing (no version bump).
+// nothing writes nothing (no version bump); one that inserts or changes the
+// rule settles its live state as an operator's create or edit does.
 func (p *PG) UpsertEventRule(ctx context.Context, spec EventRuleSpec) error {
 	r := EventRule{Name: spec.Name, Label: spec.Label, Description: spec.Description, Selector: spec.Selector,
 		SampleKey: spec.SampleKey, FireCriteria: spec.Fire, ClearCriteria: spec.Clear, FireSustain: spec.FireSustain,
@@ -535,6 +592,7 @@ func (p *PG) UpsertEventRule(ctx context.Context, spec EventRuleSpec) error {
 		return fmt.Errorf("storage: official event rule %q: %w", r.Name, err)
 	}
 	existing, err := scanEventRule(tx.QueryRow(ctx, `select `+eventRuleCols+` from event_rule where name = $1 for update`, r.Name))
+	var old *EventRule
 	switch {
 	case errors.Is(err, pgx.ErrNoRows):
 	case err != nil:
@@ -545,21 +603,27 @@ func (p *PG) UpsertEventRule(ctx context.Context, spec EventRuleSpec) error {
 		if sameAuthoredRule(existing, r) {
 			return nil
 		}
+		old = &existing
 	}
 	sel, fire, clear, err := ruleArgs(r)
 	if err != nil {
 		return err
 	}
-	if _, err := tx.Exec(ctx, `insert into event_rule (name, label, description, selector, sample_key, sample_lane,
+	upserted, err := scanEventRule(tx.QueryRow(ctx, `insert into event_rule (name, label, description, selector, sample_key, sample_lane,
 		fire_criteria, clear_criteria, fire_sustain, clear_sustain, severity, message, enabled, official)
 		values ($1, $2, $3, $4, $5, $6, $7, $8, make_interval(secs => $9::float8 / 1000000), make_interval(secs => $10::float8 / 1000000), $11, $12, true, true)
 		on conflict (name) do update set label = excluded.label, description = excluded.description, selector = excluded.selector,
 			sample_key = excluded.sample_key, sample_lane = excluded.sample_lane, fire_criteria = excluded.fire_criteria,
 			clear_criteria = excluded.clear_criteria, fire_sustain = excluded.fire_sustain, clear_sustain = excluded.clear_sustain,
-			severity = excluded.severity, message = excluded.message, version = event_rule.version + 1, updated_at = now()`,
+			severity = excluded.severity, message = excluded.message, version = event_rule.version + 1, updated_at = now()
+		returning `+eventRuleCols,
 		r.Name, labelOrNull(r.Label), r.Description, sel, r.SampleKey, string(r.SampleLane), fire, clear,
-		r.FireSustain.Microseconds(), r.ClearSustain.Microseconds(), r.Severity, r.Message); err != nil {
+		r.FireSustain.Microseconds(), r.ClearSustain.Microseconds(), r.Severity, r.Message))
+	if err != nil {
 		return mapRuleWriteErr(err, r.Name)
+	}
+	if err := p.settleRuleWrite(ctx, tx, "", old, upserted); err != nil {
+		return err
 	}
 	return tx.Commit(ctx)
 }

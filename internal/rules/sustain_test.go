@@ -55,3 +55,18 @@ func TestStreakDue(t *testing.T) {
 		t.Error("no streak read due")
 	}
 }
+
+// Step is timed by the server's receipt clock: a continuing action keeps the
+// streak's start, and a start that reads later than now (the server clock
+// stepped back) restarts at now rather than holding a start in the future
+// that would stretch the sustain.
+func TestStepTimedByReceipt(t *testing.T) {
+	s, _ := Step(Streak{Pending: Fire, Since: at(0)}, Fire, at(5), 30*time.Second, 0)
+	if !s.Since.Equal(at(0)) {
+		t.Fatalf("a continuing fire moved its start to %v, want %v", s.Since, at(0))
+	}
+	s, _ = Step(Streak{Pending: Fire, Since: at(60)}, Fire, at(5), 30*time.Second, 0)
+	if !s.Since.Equal(at(5)) {
+		t.Fatalf("a start ahead of now held at %v, want restarted at %v", s.Since, at(5))
+	}
+}

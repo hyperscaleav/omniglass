@@ -27,6 +27,8 @@ type ruleEvaluator struct {
 	types map[string]uuid.UUID
 	// picks caches whether a rule selects an owner, per batch.
 	picks map[[2]string]bool
+	// now is the transaction's clock: the receipt time a streak starts at.
+	now time.Time
 }
 
 // ruleOwner is what a selector needs to know about a component.
@@ -59,7 +61,13 @@ func (p *PG) newRuleEvaluator(ctx context.Context, tx pgx.Tx, keys []string) (*r
 	if len(byKey) == 0 {
 		return nil, nil
 	}
-	return newRuleMatcher(p, byKey), nil
+	now, err := dbNow(ctx, tx)
+	if err != nil {
+		return nil, err
+	}
+	e := newRuleMatcher(p, byKey)
+	e.now = now
+	return e, nil
 }
 
 // newRuleMatcher is an evaluator's selector machinery, usable on its own to
@@ -205,7 +213,7 @@ func (e *ruleEvaluator) observe(ctx context.Context, tx pgx.Tx, lane rules.Lane,
 // older than its series' newest is history and decides nothing: a late or
 // redelivered down after an up must not reopen an incident nothing will
 // clear. A sample a rule cannot evaluate (the wrong type) is logged and
-// skipped.
+// breaks any streak it held, since nothing it says can continue one.
 func (e *ruleEvaluator) judge(ctx context.Context, tx pgx.Tx, lane rules.Lane, ownerID, key, instance string, ts time.Time, value any) error {
 	table, typeTable := "property", "property_type"
 	if lane == rules.LaneMetric {
@@ -235,9 +243,9 @@ func (e *ruleEvaluator) judge(ctx context.Context, tx pgx.Tx, lane rules.Lane, o
 		action, err := rules.Decide(r.FireCriteria, r.ClearCriteria, value)
 		if err != nil {
 			slog.Warn("event rule cannot evaluate a sample", "facility", "rules", "rule", r.Name, "component", o.comp.Name, "key", key, "error", err.Error())
-			continue
+			action = rules.Hold
 		}
-		if err := e.p.stepRule(ctx, tx, r, &o.comp, instance, action, ts); err != nil {
+		if err := e.p.stepRule(ctx, tx, r, &o.comp, instance, action, e.now); err != nil {
 			return err
 		}
 	}
@@ -245,28 +253,140 @@ func (e *ruleEvaluator) judge(ctx context.Context, tx pgx.Tx, lane rules.Lane, o
 }
 
 // stepRule advances a rule's streak on one component and instance by a
-// sample's decision and applies whatever takes effect (#920). An action
-// already in force (a fire with the alarm open, a clear with none) has
-// nothing to wait for and breaks any contrary streak.
-func (p *PG) stepRule(ctx context.Context, tx pgx.Tx, r EventRule, comp *Component, instance string, action rules.Action, ts time.Time) error {
+// decision received at now (the server's clock) and applies whatever takes
+// effect (#920). An action already in force (a fire with the alarm open, a
+// clear with none) has nothing to wait for and breaks any contrary streak.
+//
+// It holds the series' rule lock for the rest of the transaction before it
+// reads the open alarm or the streak, so it serializes with the sweep and
+// any other writer of the same series: a reader never decides from an alarm
+// state a concurrent raise or clear is about to change.
+func (p *PG) stepRule(ctx context.Context, tx pgx.Tx, r EventRule, comp *Component, instance string, action rules.Action, now time.Time) error {
+	if err := lockAdvisory(ctx, tx, ruleSeriesLockKey(r.ID, comp.ID, instance)); err != nil {
+		return err
+	}
 	dedup := ruleDedupKey(r.Name, instance)
-	var isOpen bool
-	if err := tx.QueryRow(ctx, `select exists (select 1 from alarm where component_id = $1::uuid and dedup_key = $2
-		and cleared_at is null and raised_by_rule_id = $3::uuid)`, comp.ID, dedup, r.ID).Scan(&isOpen); err != nil {
-		return fmt.Errorf("storage: rule %s open alarm: %w", r.Name, err)
+	isOpen, err := ruleAlarmOpen(ctx, tx, r, comp.ID, dedup)
+	if err != nil {
+		return err
 	}
-	if (action == rules.Fire && isOpen) || (action == rules.Clear && !isOpen) {
-		action = rules.Hold
-	}
+	action = unlessInForce(action, isOpen)
 	prev, err := loadStreak(ctx, tx, r.ID, comp.ID, instance)
 	if err != nil {
 		return err
 	}
-	next, effect := rules.Step(prev, action, ts, r.FireSustain, r.ClearSustain)
-	if err := saveStreak(ctx, tx, r.ID, comp.ID, instance, next); err != nil {
-		return err
+	next, effect := rules.Step(prev, action, now, r.FireSustain, r.ClearSustain)
+	if next.Pending != prev.Pending || !next.Since.Equal(prev.Since) {
+		if err := saveStreak(ctx, tx, r.ID, comp.ID, instance, next); err != nil {
+			return err
+		}
 	}
 	return p.applyRule(ctx, tx, r, comp, dedup, effect)
+}
+
+// ruleSeriesLockKey is the advisory-lock key one rule's series on one
+// component and instance serializes on: every path that reads its open
+// alarm or streak and then acts (an ingest, the sweep, a rule write's prime)
+// takes it first. Keyed by ids, the only keys guaranteed unique.
+func ruleSeriesLockKey(ruleID, componentID, instance string) string {
+	return "event_rule/" + ruleID + "/" + componentID + "/" + instance
+}
+
+// ruleAlarmOpen reports whether a rule holds its alarm open on a component.
+func ruleAlarmOpen(ctx context.Context, tx pgx.Tx, r EventRule, componentID, dedup string) (bool, error) {
+	var isOpen bool
+	if err := tx.QueryRow(ctx, `select exists (select 1 from alarm where component_id = $1::uuid and dedup_key = $2
+		and cleared_at is null and raised_by_rule_id = $3::uuid)`, componentID, dedup, r.ID).Scan(&isOpen); err != nil {
+		return false, fmt.Errorf("storage: rule %s open alarm: %w", r.Name, err)
+	}
+	return isOpen, nil
+}
+
+// unlessInForce turns an action already in force (a fire with the alarm
+// open, a clear with none) into a hold.
+func unlessInForce(action rules.Action, isOpen bool) rules.Action {
+	if (action == rules.Fire && isOpen) || (action == rules.Clear && !isOpen) {
+		return rules.Hold
+	}
+	return action
+}
+
+// seriesSample is the newest sample of one component's series.
+type seriesSample struct {
+	component, instance string
+	value               any
+}
+
+// newestSamples reads the newest sample (by its timestamp, the series'
+// order) of every component series of a key on a lane, or of one series
+// when componentID is set.
+func newestSamples(ctx context.Context, tx pgx.Tx, lane rules.Lane, key, componentID, instance string) ([]seriesSample, error) {
+	table, typeTable, value := "property", "property_type", `s.value #>> '{}'`
+	if lane == rules.LaneMetric {
+		table, typeTable, value = "metric", "metric_type", "s.value"
+	}
+	q := fmt.Sprintf(`select distinct on (s.component_id, s.instance) s.component_id::text, s.instance, %s
+		from %s s join %s t on t.id = s.%s_id
+		where t.name = $1 and s.component_id is not null`, value, table, typeTable, typeTable)
+	args := []any{key}
+	if componentID != "" {
+		q += ` and s.component_id = $2::uuid and s.instance = $3`
+		args = append(args, componentID, instance)
+	}
+	rows, err := tx.Query(ctx, q+` order by s.component_id, s.instance, s.ts desc, s.id desc`, args...)
+	if err != nil {
+		return nil, fmt.Errorf("storage: newest samples of %s: %w", key, err)
+	}
+	defer rows.Close()
+	var out []seriesSample
+	for rows.Next() {
+		var s seriesSample
+		if err := rows.Scan(&s.component, &s.instance, &s.value); err != nil {
+			return nil, err
+		}
+		out = append(out, s)
+	}
+	return out, rows.Err()
+}
+
+// primeRule judges the newest sample of every series a rule selects, at the
+// transaction's clock, as though each had just arrived: a rule created,
+// enabled, or materially changed while its condition already holds starts
+// its streak (or acts, with no sustain) rather than waiting on a sample a
+// transition-only input will never send. It runs in the rule write's
+// transaction, after the rule's streaks are reset.
+func (p *PG) primeRule(ctx context.Context, tx pgx.Tx, r EventRule) error {
+	now, err := dbNow(ctx, tx)
+	if err != nil {
+		return err
+	}
+	series, err := newestSamples(ctx, tx, r.SampleLane, r.SampleKey, "", "")
+	if err != nil {
+		return err
+	}
+	m := newRuleMatcher(p, nil)
+	for _, s := range series {
+		o, err := m.ownerFacts(ctx, tx, s.component)
+		if err != nil {
+			return err
+		}
+		picked, err := m.selects(ctx, tx, r, o)
+		if err != nil {
+			return err
+		}
+		if !picked {
+			continue
+		}
+		action, err := rules.Decide(r.FireCriteria, r.ClearCriteria, s.value)
+		if err != nil {
+			slog.Warn("event rule cannot evaluate a sample", "facility", "rules", "rule", r.Name, "component", o.comp.Name, "key", r.SampleKey, "error", err.Error())
+			continue
+		}
+		if err := p.stepRule(ctx, tx, r, &o.comp, s.instance, action, now); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // applyRule raises or clears a rule's alarm on a component.
@@ -326,31 +446,27 @@ func saveStreak(ctx context.Context, tx pgx.Tx, ruleID, componentID, instance st
 
 // SweepEventRules acts on every pending streak that has held for its rule's
 // sustain at now (#920): the clock for an input that sends no further sample
-// (a transition-only verdict that went down and stays down). A streak no
-// contrary sample broke is, by construction, still holding. Each streak acts
-// under a savepoint, so one failure does not stop the rest.
+// (a transition-only verdict that went down and stays down). Each due
+// streak acts in a transaction of its own, in component order, so one
+// outage never holds a lock set per streak at once and a failure (a
+// deadlock included) costs that one streak, retried on the next tick.
+//
+// Streaks of a disabled rule are pruned first: a rule write deletes them,
+// but an ingest that loaded the rule before a disable committed can still
+// write one after it.
 func (p *PG) SweepEventRules(ctx context.Context, now time.Time) error {
-	tx, err := p.pool.Begin(ctx)
-	if err != nil {
-		return fmt.Errorf("storage: begin rule sweep: %w", err)
-	}
-	defer func() { _ = tx.Rollback(ctx) }()
-	if _, err := tx.Exec(ctx, `delete from event_rule_state s using event_rule r where r.id = s.rule_id and not r.enabled`); err != nil {
+	if _, err := p.pool.Exec(ctx, `delete from event_rule_state s using event_rule r where r.id = s.rule_id and not r.enabled`); err != nil {
 		return fmt.Errorf("storage: rule sweep prune: %w", err)
 	}
-	rows, err := tx.Query(ctx, `select s.component_id::text, s.instance, s.pending, s.since, `+ruleCols("r.")+`
-		from event_rule_state s join event_rule r on r.id = s.rule_id`)
+	rows, err := p.pool.Query(ctx, `select s.component_id::text, s.instance, s.pending, s.since, `+ruleCols("r.")+`
+		from event_rule_state s join event_rule r on r.id = s.rule_id
+		where r.enabled order by s.component_id, s.rule_id, s.instance`)
 	if err != nil {
 		return fmt.Errorf("storage: rule sweep: %w", err)
 	}
-	type due struct {
-		component, instance string
-		streak              rules.Streak
-		rule                EventRule
-	}
-	var dues []due
+	var dues []dueStreak
 	for rows.Next() {
-		var d due
+		var d dueStreak
 		var pending string
 		var since time.Time
 		r, err := scanEventRuleAfter(rows, &d.component, &d.instance, &pending, &since)
@@ -371,32 +487,95 @@ func (p *PG) SweepEventRules(ctx context.Context, now time.Time) error {
 	if err := rows.Err(); err != nil {
 		return err
 	}
-	m := newRuleMatcher(p, nil)
 	for _, d := range dues {
-		sp, err := tx.Begin(ctx)
-		if err != nil {
-			return fmt.Errorf("storage: rule sweep savepoint: %w", err)
-		}
-		err = func() error {
-			o, err := m.ownerFacts(ctx, sp, d.component)
-			if err != nil {
-				return err
-			}
-			if err := saveStreak(ctx, sp, d.rule.ID, d.component, d.instance, rules.Streak{}); err != nil {
-				return err
-			}
-			return p.applyRule(ctx, sp, d.rule, &o.comp, ruleDedupKey(d.rule.Name, d.instance), d.streak.Pending)
-		}()
-		if err != nil {
-			_ = sp.Rollback(ctx)
+		if err := p.sweepStreak(ctx, d); err != nil {
 			slog.Warn("event rule sweep could not act on a streak", "facility", "rules", "rule", d.rule.Name, "component", d.component, "error", err.Error())
-			continue
 		}
-		if err := sp.Commit(ctx); err != nil {
+	}
+	return nil
+}
+
+// dueStreak is a streak the sweep found held past its sustain.
+type dueStreak struct {
+	component, instance string
+	streak              rules.Streak
+	rule                EventRule
+}
+
+// sweepStreak acts on one due streak, in its own transaction, under the
+// series' rule lock. It claims the streak by deleting exactly the row it
+// read (same pending, same since): a row a sample, an edit, or another
+// sweep moved in the meantime comes back empty and the sweep does nothing.
+// It then acts only when the act still holds: the rule is still enabled and
+// still selects the component, and the series' newest sample still decides
+// the streak's action; otherwise the claimed streak is simply dropped.
+func (p *PG) sweepStreak(ctx context.Context, d dueStreak) error {
+	tx, err := p.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("storage: begin rule sweep: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	if err := lockAdvisory(ctx, tx, ruleSeriesLockKey(d.rule.ID, d.component, d.instance)); err != nil {
+		return err
+	}
+	var claimed int
+	err = tx.QueryRow(ctx, `delete from event_rule_state where rule_id = $1::uuid and component_id = $2::uuid and instance = $3
+		and pending = $4 and since = $5 returning 1`,
+		d.rule.ID, d.component, d.instance, pendingWord(d.streak.Pending), d.streak.Since).Scan(&claimed)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("storage: claim rule streak: %w", err)
+	}
+	act, comp, err := p.streakStillHolds(ctx, tx, d)
+	if err != nil {
+		return err
+	}
+	if act != nil {
+		if err := p.applyRule(ctx, tx, *act, comp, ruleDedupKey(act.Name, d.instance), d.streak.Pending); err != nil {
 			return err
 		}
 	}
 	return tx.Commit(ctx)
+}
+
+// streakStillHolds re-reads what a claimed streak's act depends on and
+// returns the rule to act as and the component to act on, or a nil rule
+// when the act no longer holds.
+func (p *PG) streakStillHolds(ctx context.Context, tx pgx.Tx, d dueStreak) (*EventRule, *Component, error) {
+	r, err := scanEventRule(tx.QueryRow(ctx, `select `+eventRuleCols+` from event_rule where id = $1 and enabled`, d.rule.ID))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil, nil
+	}
+	if err != nil {
+		return nil, nil, fmt.Errorf("storage: rule sweep reread %s: %w", d.rule.Name, err)
+	}
+	m := newRuleMatcher(p, nil)
+	o, err := m.ownerFacts(ctx, tx, d.component)
+	if err != nil {
+		return nil, nil, err
+	}
+	picked, err := m.selects(ctx, tx, r, o)
+	if err != nil || !picked {
+		return nil, nil, err
+	}
+	newest, err := newestSamples(ctx, tx, r.SampleLane, r.SampleKey, d.component, d.instance)
+	if err != nil || len(newest) == 0 {
+		return nil, nil, err
+	}
+	action, err := rules.Decide(r.FireCriteria, r.ClearCriteria, newest[0].value)
+	if err != nil || action != d.streak.Pending {
+		return nil, nil, nil
+	}
+	isOpen, err := ruleAlarmOpen(ctx, tx, r, d.component, ruleDedupKey(r.Name, d.instance))
+	if err != nil {
+		return nil, nil, err
+	}
+	if unlessInForce(action, isOpen) == rules.Hold {
+		return nil, nil, nil
+	}
+	return &r, &o.comp, nil
 }
 
 // clearRuleAlarms clears a rule's open alarms on every component keep

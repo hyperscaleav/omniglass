@@ -6520,7 +6520,9 @@ interface create form, since that name is the platform's to mint.
      server sweep every five seconds. The definition's thin cut had sustains clocked by samples alone,
      but the official reachability rule reads a verdict the node emits only on change, so a condition
      that stays down sends no later sample; the sweep (like the command settlement sweep, ADR-0141) closes
-     that without the full durable timer (#419).
+     that without the full durable timer (#419). The streak's clock is the server's receipt time, not
+     the sample's timestamp, so the sample path and the sweep read one clock and a skewed node cannot
+     waive a sustain.
 
   Rules are fleet-wide config, read and written with an all-scope grant, until a rule can be owned at a
   location or system tier.
