@@ -194,8 +194,9 @@ test-walkthrough-stack:
 # web/e2e/walkthroughs/out/<id>/ (an mp4, poster.png, a still per step;
 # gitignored). A walkthrough is a test: a step whose result never appears, or
 # a recording over the budget (under 60 seconds and 10 MB), fails the run.
-# make walkthroughs ID=<id> records one. test-walkthroughs is the recorder's own
-# test (the failure and budget paths). Neither is part of make test: both build
+# make walkthroughs ID=<id> records one (ID="<a> <b>", several), listing any
+# that failed in out/failed.txt. test-walkthroughs is the recorder's own test
+# (the failure and budget paths). Neither is part of make test: both build
 # the release image.
 walkthroughs:
 	bash web/e2e/walkthroughs.sh record $(ID)

@@ -99,6 +99,34 @@ looked at. The rubric, each line pass or fail with a word of evidence:
 **Iterate.** Anything failing is a fix, not a note. Fix, recapture, regrade; the pass is
 clean only when every line passes on fresh captures.
 
+## Grade the walkthrough stills (an operator flow)
+
+A PR that adds or changes an operator flow carries a walkthrough (`/ship-slice` gate 10). You
+cannot watch the video, so the **per-step stills are the evidence**: `make walkthroughs
+ID=<id>` writes `web/e2e/walkthroughs/out/<id>/step-NN.png` (one per step, taken after the
+step's action settles, with the cursor, highlight ring and caption bar drawn in) and
+`poster.png`. Open every still in order, beside its caption in the script, and grade each line
+pass or fail with a word of evidence:
+
+1. **Each step lands.** The still shows the result its caption promises (the drawer open, the
+   value typed, the row selected), not the state before it. A still that shows nothing new is
+   a missing `wait` or a step that did nothing.
+2. **The eye can follow.** The cursor and highlight ring sit on the element the caption names;
+   the caption bar covers nothing the step is about (a result hidden under the bar is a failed
+   step, fix the layout or the target).
+3. **Captions teach.** Each caption says why the operator does the step, in the product's
+   vocabulary (component, place, system), and fits the bar on one or two lines.
+4. **The flow is the shortest honest path.** No detour, no repeated step, no step the operator
+   would not take; the order is the order the console invites.
+5. **The poster is the payoff.** `poster.png` is the moment the walkthrough builds to (the step
+   marked `poster: true`), legible on its own as the PR comment's lead image.
+6. **Every still passes the surface rubric above**, since each is a capture of the real
+   console (kinship, hierarchy, legibility and the rest).
+
+A failing line is a fix (to the surface or the script), then a re-record and a regrade. The
+same stills are what the `run:walkthrough` comment embeds, so a clean grade here is what the
+architect reviews there.
+
 ## Interaction proof (pixels are not behavior)
 
 - `make test-web` green: typecheck first (vitest never typechecks), then the component
@@ -130,6 +158,8 @@ Captures:  <n> states at 1320x860, dark (the console ships dark-only)
 Rubric:    kinship PASS (matches <sibling>) / hierarchy PASS / states PASS /
            density PASS / legibility PASS / affordances PASS (tab walk clean) /
            pedagogy PASS (hints: <fields>) / honesty PASS (seed fleet, fontguard green)
+Walkthrough: <id>: <n> stills graded, lands / follow / captions / path / poster PASS;
+           comment <run:walkthrough comment link> | n/a (no operator flow changed)
 First-pass failures fixed: <what the loop caught, one line each | none>
 Interaction: make test-web green; e2e <ran: routes+flows | n/a>
 Evidence:  <committed raw-SHA links>

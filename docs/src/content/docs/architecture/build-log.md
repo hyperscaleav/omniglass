@@ -6322,3 +6322,21 @@ naming the step, its kind and its wait, keeping the partial stills and the faili
 60 seconds or more, or 10 MB or more, fails naming which. The sample (`sample-simulation`, five steps)
 records to about 16 seconds and 0.6 MB. `make test-walkthroughs` pins both failure paths against the real
 stack with fixtures under `web/e2e/walkthroughs/fixtures/`.
+
+### Walkthroughs as PR evidence: the run:walkthrough comment and the gates (#884, slice 4: #925)
+
+Applying the `run:walkthrough` label runs `walkthrough.yml`: it records the walkthroughs the PR adds or
+changes (every one when it touches no script) on the walkthrough stack, exactly as `make walkthroughs`
+does locally (the simulator's `NET_ADMIN` is a container capability, which a hosted runner grants as it
+already does for `make test-netadmin`), uploads the mp4s as a workflow artifact, commits each passing
+walkthrough's poster and per-step stills to the PR branch under `.github/screenshots/<pr>/walkthroughs/<id>/`,
+and upserts one PR comment, found again by its marker as the preview comment is, embedding them by commit
+SHA and naming any walkthrough that failed (a failure also fails the job). The choices it makes (which
+walkthroughs, where stills go, the SHA-pinned URLs, the comment body, with script text escaped) are a
+dependency-free module (`web/e2e/walkthroughpr.mjs`) unit-tested in `make test-web`, and
+`walkthroughs.sh record` now takes several ids and lists the failed ones in `out/failed.txt`. It cannot
+loop: it runs only on `labeled`, and GitHub starts no workflow for the workflow token's push; fork PRs are
+skipped. `/ship-slice` gained the gate the architect ruled (a PR that adds or changes an operator flow is
+not `ready` without the walkthrough comment), `/assess-ui` grades the per-step stills with a walkthrough
+rubric (the agent cannot watch video), and the PR template's Visual confirmation carries a Walkthrough
+line. The workflow's run against a real PR is proven on this epic's rollup PR, not by a local test.

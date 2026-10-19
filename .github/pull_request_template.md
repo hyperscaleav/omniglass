@@ -46,6 +46,16 @@ $ make test
 
 ![](...)
 
+<!-- WALKTHROUGH: REQUIRED for a PR that adds or changes an operator flow (a form,
+     a multi-step path, a navigation change); a visual-only change keeps
+     screenshots alone. Add or update its script under web/e2e/walkthroughs/,
+     prove it locally with `make walkthroughs ID=<id>`, then apply the
+     `run:walkthrough` label: CI records it and posts the walkthrough comment
+     (poster, stills, video artifact). Link that comment here, or write
+     "n/a (no operator flow changed)". -->
+
+- **Walkthrough:**
+
 ## Docs and review
 
 - **Docs:** <!-- what shipped; architecture-of-record consistent, or a divergence note -->
@@ -64,6 +74,7 @@ $ make test
 
 - [ ] Tests failed before, pass after; `make test` green run fresh, **output pasted above**
 - [ ] **Screenshots** of any operator-facing change, driven live (or "n/a")
+- [ ] **Walkthrough** comment from `run:walkthrough` for any added or changed operator flow (or "n/a")
 - [ ] Docs ship in this PR (or `no-docs` label with justification); status build-progress noted
 - [ ] Operator-facing surface teaches its concept (learning-tool), if applicable
 - [ ] `make gen` clean; no em dashes; no AI attribution

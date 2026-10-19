@@ -2,9 +2,11 @@
 # Record walkthroughs (#924) on the walkthrough stack (#923). One stack per
 # invocation, torn down on every exit path.
 #
-#   walkthroughs.sh record [ID]   record web/e2e/walkthroughs/<ID>.yaml (default: every
+#   walkthroughs.sh record [ID...]  record web/e2e/walkthroughs/<ID>.yaml (default: every
 #                                 one) to web/e2e/walkthroughs/out/<ID>/: <ID>.mp4,
-#                                 poster.png, step-NN.png, walkthrough.json
+#                                 poster.png, step-NN.png, walkthrough.json; the ids
+#                                 that failed are listed in out/failed.txt (the
+#                                 run:walkthrough workflow reads it, #925)
 #   walkthroughs.sh selftest      the recorder's own test: a broken step fails naming the
 #                                 step and its wait, keeping its stills; an over-budget
 #                                 walkthrough fails naming which limit
@@ -39,9 +41,12 @@ valid_id() {
 
 case "$mode" in
 record)
-  if [ -n "${1:-}" ]; then
-    [ -f "$DIR/$1.yaml" ] || { echo "walkthroughs: no walkthrough $DIR/$1.yaml" >&2; exit 2; }
-    files=("$DIR/$1.yaml")
+  if [ $# -gt 0 ]; then
+    files=()
+    for id in "$@"; do
+      [ -f "$DIR/$id.yaml" ] || { echo "walkthroughs: no walkthrough $DIR/$id.yaml" >&2; exit 2; }
+      files+=("$DIR/$id.yaml")
+    done
   else
     mapfile -t files < <(ls "$DIR"/*.yaml)
     [ "${#files[@]}" -gt 0 ] || { echo "walkthroughs: none under $DIR" >&2; exit 2; }
@@ -49,7 +54,7 @@ record)
   ;;
 selftest) ;;
 *)
-  echo "usage: $0 record [ID] | selftest" >&2
+  echo "usage: $0 record [ID...] | selftest" >&2
   exit 2
   ;;
 esac
@@ -94,6 +99,13 @@ walkthrough_one() {
 }
 WT_ENV=()
 
+# Reset before the stack comes up, so a stack that never comes up leaves no
+# previous run's list behind.
+if [ "$mode" = record ]; then
+  mkdir -p "$OUT"
+  : >"$OUT/failed.txt"
+fi
+
 stack_init ogwalk
 stack_walkthrough_up
 
@@ -102,7 +114,7 @@ if [ "$mode" = record ]; then
   for f in "${files[@]}"; do
     id=$(basename "$f" .yaml)
     mkdir -p "$OUT/$id"
-    walkthrough_one "$f" "$OUT/$id" || failed+=("$id")
+    walkthrough_one "$f" "$OUT/$id" || { failed+=("$id"); echo "$id" >>"$OUT/failed.txt"; }
     stack_assert_intact
   done
   echo

@@ -46,11 +46,22 @@ promise: if a label runs automation it is named `run:<task>`, and if a label is 
 | Label | Applying it | Wired |
 | --- | --- | --- |
 | `run:preview` | spins up a live [PR preview environment](/guides/pr-previews/); removing it tears the preview down | yes |
+| `run:walkthrough` | records the PR's walkthroughs in CI and upserts a comment embedding their poster and stills, with the videos as a workflow artifact | yes |
 | `run:build` | rebuilds the release binaries and container image for the PR head on demand | reserved |
 | `run:test` | runs the full test suite on demand | reserved |
 
 `run:preview` is live today (the [PR previews guide](/guides/pr-previews/) covers it, and
-`preview-comment.yml` is the workflow behind it). `run:build` and `run:test` are reserved:
+`preview-comment.yml` is the workflow behind it). So is `run:walkthrough`
+(`walkthrough.yml`): applying it records the walkthroughs the PR adds or changes (every
+walkthrough, when it touches no script) on the walkthrough stack, commits each one's poster and
+per-step stills to the PR branch under `.github/screenshots/<pr>/walkthroughs/<id>/`, and keeps
+one comment on the PR embedding them by commit SHA, linking the mp4s as a workflow artifact and
+naming any walkthrough that failed (a walkthrough is a test, so a failure fails the job). The
+label stays on; re-run the job, or remove and re-add the label, to record the current head
+again, and the comment updates in place. Pull after a run: the stills commit lands on your
+branch, and since GitHub starts no workflow for a push made with the workflow token, the PR's
+other checks run again on your next push. Fork PRs are skipped (their token cannot push).
+`run:build` and `run:test` are reserved:
 the expensive build and test tiers run on every PR today, and
 [issue #78](https://github.com/hyperscaleav/omniglass/issues/78) tracks moving them behind
 these labels so they run only on demand. Wire the workflow in the same PR that first relies
