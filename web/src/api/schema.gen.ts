@@ -469,7 +469,7 @@ export interface paths {
         };
         /**
          * List a component's alarms
-         * @description What is currently wrong with this component, newest first. Pass include_cleared for the history rather than the active set. Gated by component:read; an out-of-scope component is a non-disclosing 404.
+         * @description What is currently wrong with this component, newest first, with the component's own verdict those alarms make. Pass include_cleared for the history rather than the active set. Gated by component:read; an out-of-scope component is a non-disclosing 404.
          */
         get: operations["list-component-alarms"];
         put?: never;
@@ -6157,6 +6157,8 @@ export interface components {
             readonly $schema?: string;
             alarms: components["schemas"]["AlarmBody"][] | null;
             component: string;
+            /** @description The component's own verdict, the one its active alarms make (healthy, degraded, or outage), whatever the filter: a component's view reads it here rather than off the whole fleet view */
+            verdict: string;
         };
         ListCommandTypesOutputBody: {
             /**

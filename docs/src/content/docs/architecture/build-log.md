@@ -6607,6 +6607,13 @@ and the replug and the clear would add about 12s to a recording that runs 53s to
 
 ### The component view's review follow-ups (#931 to #934)
 
+A component's view no longer polls anything that grows with the fleet. Its verdict rides on its alarms
+read (`GET /components/{name}/alarms` now carries the component's own `verdict`, the one its active
+alarms make, computed the way the health recompute records it), and the node behind each endpoint is
+read one by one (`GET /nodes/{name}`, every 10s), where it polled the whole fleet view and the whole node
+list for one verdict and one node. The API health test pins the verdict through an alarm's raise and
+clear, and the leaf's poll test counts no fleet view and no node list.
+
 Every age on a component's view, and in its Endpoints panel, now reads one ticking clock (a
 `createClock` primitive, a second's grain) rather than the time the data last changed: a poll that
 returns the same answer changes nothing a query can see, so a node that died would have left its

@@ -7,10 +7,10 @@ import { FLEET_VIEW_KEY, type FleetView } from "../lib/fleet";
 import { COMPONENTS_KEY, type Component } from "../lib/components";
 import { componentSystemsKey } from "../lib/members";
 import { REACHABILITY_KEY, type Reachability } from "../lib/reachability";
-import { componentAlarmsKey } from "../lib/alarms";
+import { componentAlarmsReadKey } from "../lib/alarms";
 import { effectivePropertiesKey } from "../lib/component_properties";
 import { effectiveMetricsKey } from "../lib/component_metrics";
-import { NODES_KEY, type Node } from "../lib/nodes";
+import { nodeKey, type Node } from "../lib/nodes";
 import { PRODUCTS_KEY } from "../lib/products";
 import { LOCATIONS_KEY } from "../lib/locations";
 import { LOCATION_TYPES_KEY } from "../lib/location_types";
@@ -75,7 +75,7 @@ function mount(path = `/web/components/${uuidFor("cf-c-bar")}`, memberships?: un
   qc.setQueryData([...FLEET_VIEW_KEY], view);
   qc.setQueryData([...COMPONENTS_KEY], [component]);
   qc.setQueryData([...PRODUCTS_KEY], [{ id: uuidFor("cf-p"), name: "kestrel-vroom", label: "Kestrel VRoom", vendor: "kestrel", driver: "kestrel-http" }]);
-  qc.setQueryData([...NODES_KEY], seed?.nodes ?? nodes);
+  for (const n of seed?.nodes ?? nodes) qc.setQueryData([...nodeKey(n.name)], n);
   qc.setQueryData([...LOCATIONS_KEY], []);
   qc.setQueryData([...LOCATION_TYPES_KEY], [{ id: uuidFor("cft-room"), name: "room", label: "Room", allowed_parent_types: [] }]);
   qc.setQueryData([...systemRolesKey(uuidFor("cf-s-a"))], [{ name: "conf-bar", label: "Conferencing Bar", assigned_to: ["videobar-1"] }]);
@@ -87,10 +87,10 @@ function mount(path = `/web/components/${uuidFor("cf-c-bar")}`, memberships?: un
     { component: "videobar-1", system: "overflow", primary: false, system_count: 2 },
   ]);
   qc.setQueryData([...REACHABILITY_KEY(uuidFor("cf-c-bar"))], seed?.reach ?? reach);
-  qc.setQueryData([...componentAlarmsKey(uuidFor("cf-c-bar"))], alarms ?? [
+  qc.setQueryData([...componentAlarmsReadKey(uuidFor("cf-c-bar"))], { alarms: alarms ?? [
     { id: "al-1", component: "videobar-1", component_id: uuidFor("cf-c-bar"), severity: "high", message: "No route to host", raised_at: iso(9600), active: true, acknowledged: false },
     { id: "al-0", component: "videobar-1", component_id: uuidFor("cf-c-bar"), severity: "warning", message: "Cleared last week", raised_at: iso(600000), active: false, acknowledged: true },
-  ]);
+  ] });
   qc.setQueryData([...effectivePropertiesKey(uuidFor("cf-c-bar"))], [
     { property_type_name: "serial-number", label: "Serial Number", value: "SN-1183", is_set: true, from_contract: true },
     { property_type_name: "firmware-version", value: "2.1.4", is_set: false, from_contract: true },
@@ -337,10 +337,11 @@ describe("the component leaf refreshes (#934)", () => {
         return json({ metrics: [{ metric_type_name: "uptime", label: "Uptime", data_type: "float", value: 77, is_sampled: true, from_contract: false, required: false }] });
       }
       if (url.includes("/alarms")) {
-        return json({ alarms: [{ id: "al-2", component: "videobar-1", component_id: uuidFor("cf-c-bar"), severity: "high", message: "Reachability lost", raised_at: later, active: true, acknowledged: false }] });
+        return json({ verdict: "degraded", alarms: [{ id: "al-2", component: "videobar-1", component_id: uuidFor("cf-c-bar"), severity: "warning", message: "Reachability lost", raised_at: later, active: true, acknowledged: false }] });
       }
       if (url.endsWith("/views/fleet")) return json(view);
       if (url.endsWith("/nodes")) return json({ nodes: [{ name: "edge-1", enrolled: true, last_heartbeat_at: later }] });
+      if (url.endsWith("/nodes/edge-1")) return json({ name: "edge-1", enrolled: true, last_heartbeat_at: later });
       return json({ simulated: false });
     });
     mount();
@@ -353,13 +354,17 @@ describe("the component leaf refreshes (#934)", () => {
     expect(screen.getByTestId("collection-ssh").textContent).toBe("collecting");
     expect(screen.getByTestId("leaf-vitals").textContent).toContain("Uptime");
     expect(screen.getByTestId("leaf-alarms").textContent).toContain("Reachability lost");
+    // The verdict is the component's own, off its alarms read.
+    expect(screen.getByTestId("leaf-header").textContent).toContain("degraded");
     const count = (p: string) => gets.filter((g) => g.endsWith(p)).length;
     // Each read polled, as one request, not one per endpoint or per series.
-    for (const p of ["/reachability", "/metrics", "/alarms"]) {
+    for (const p of ["/reachability", "/metrics", "/alarms", "/nodes/edge-1"]) {
       expect(count(p)).toBeGreaterThanOrEqual(1);
       expect(count(p)).toBeLessThanOrEqual(2);
     }
-    expect(count("/views/fleet")).toBe(1);
+    // Nothing the tab polls grows with the fleet: no fleet view, no node list.
+    expect(count("/views/fleet")).toBe(0);
+    expect(count("/nodes")).toBe(0);
   });
 
   it("holds the poll while the tab is hidden", async () => {

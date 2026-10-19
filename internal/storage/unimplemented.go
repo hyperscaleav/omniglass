@@ -412,6 +412,9 @@ func (UnimplementedGateway) PropertyTransitions(context.Context, string, string,
 func (UnimplementedGateway) StampEndpointsSeen(context.Context, []string) error {
 	return nil
 }
+func (UnimplementedGateway) ComponentVerdict(context.Context, string) (string, error) {
+	return "", nil
+}
 func (UnimplementedGateway) InsertEvents(context.Context, []EventWrite) error {
 	return nil
 }

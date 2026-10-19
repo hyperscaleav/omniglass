@@ -525,6 +525,9 @@ type Gateway interface {
 	// StampEndpointsSeen records that an ingest batch delivered by each
 	// endpoint landed, by the server's clock, coalesced (#933).
 	StampEndpointsSeen(ctx context.Context, endpointIDs []string) error
+	// ComponentVerdict is one component's own verdict, by its id, from its
+	// active alarms: what a component's view reads without the fleet (#934).
+	ComponentVerdict(ctx context.Context, componentID string) (string, error)
 
 	// The observed-log sink: the mirror of the metric and property sinks for log-kind
 	// occurrences. reject-not-project and owner-confinement are applied by the caller

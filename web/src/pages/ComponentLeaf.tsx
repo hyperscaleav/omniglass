@@ -21,13 +21,13 @@ import { FLEET_VIEW_KEY, fleetView } from "../lib/fleet";
 import { COMPONENTS_KEY, listComponents, type Component as FleetComponent } from "../lib/components";
 import { componentSystemsKey, componentSystems } from "../lib/members";
 import { REACHABILITY_KEY, getReachability, lastSeenAt, layerWord } from "../lib/reachability";
-import { componentAlarms, componentAlarmsKey, splitAlarms } from "../lib/alarms";
+import { componentAlarmsRead, componentAlarmsReadKey, splitAlarms } from "../lib/alarms";
 import { effectiveProperties, effectivePropertiesKey } from "../lib/component_properties";
 import { effectiveMetrics, effectiveMetricsKey } from "../lib/component_metrics";
 import { durationText } from "../lib/timeline";
-import { NODES_KEY, listNodes } from "../lib/nodes";
+import { getNode, nodeKey } from "../lib/nodes";
 import { PRODUCTS_KEY, listProducts } from "../lib/products";
-import { LEAF_FLEET_POLL_MS, LEAF_POLL_MS, collectionState, dotVerdict, identityRows, leafAlarmSince, membershipRows, vitalRows } from "../lib/component_leaf";
+import { LEAF_NODE_POLL_MS, LEAF_POLL_MS, collectionState, dotVerdict, identityRows, leafAlarmSince, membershipRows, vitalRows } from "../lib/component_leaf";
 import { entityLabel } from "../lib/entities";
 import { CLOCK_TICK_MS, createClock } from "../lib/clock";
 import { systemRoles, systemRolesKey } from "../lib/system_roles";
@@ -83,10 +83,9 @@ export default function ComponentLeaf() {
     return "overview";
   };
 
-  const view = useQuery(() => ({ queryKey: FLEET_VIEW_KEY, queryFn: fleetView, refetchInterval: LEAF_FLEET_POLL_MS }));
+  const view = useQuery(() => ({ queryKey: FLEET_VIEW_KEY, queryFn: fleetView }));
   const components = useQuery(() => ({ queryKey: COMPONENTS_KEY, queryFn: listComponents }));
   const products = useQuery(() => ({ queryKey: PRODUCTS_KEY, queryFn: listProducts }));
-  const nodes = useQuery(() => ({ queryKey: NODES_KEY, queryFn: listNodes, refetchInterval: LEAF_FLEET_POLL_MS }));
 
   const component = createMemo<FleetComponent | undefined>(() =>
     (components.data ?? []).find((c) => c.id === id() || c.name === id()),
@@ -112,8 +111,8 @@ export default function ComponentLeaf() {
     refetchInterval: LEAF_POLL_MS,
   }));
   const alarmsQ = useQuery(() => ({
-    queryKey: componentAlarmsKey(id()),
-    queryFn: () => componentAlarms(id()),
+    queryKey: componentAlarmsReadKey(id()),
+    queryFn: () => componentAlarmsRead(id()),
     enabled: !!component(),
     refetchInterval: LEAF_POLL_MS,
   }));
@@ -133,18 +132,28 @@ export default function ComponentLeaf() {
   // would keep reading fresh after its node died.
   const pageNow = createClock(CLOCK_TICK_MS);
   const scale = useSeverity();
-  const activeAlarms = createMemo(() => splitAlarms(alarmsQ.data ?? [], scale().levels).active);
+  const activeAlarms = createMemo(() => splitAlarms(alarmsQ.data?.alarms ?? [], scale().levels).active);
   // The strip reads red when any active alarm is at an outage level (the
   // registry's flag, #917), amber when they only degrade.
   const inOutage = createMemo(() => activeAlarms().some((a) => scale().outage(a.severity)));
-  const since = createMemo(() => leafAlarmSince(alarmsQ.data ?? [], pageNow(), scale().levels));
-  const verdict = createMemo(() => (view.data ? dotVerdict(view.data, component()?.id ?? "") : null));
+  const since = createMemo(() => leafAlarmSince(alarmsQ.data?.alarms ?? [], pageNow(), scale().levels));
+  // The component's own verdict rides on its alarms read, polled; the fleet
+  // view's dot (read once, for the place and the path) stands in until then.
+  const verdict = createMemo(() => alarmsQ.data?.verdict ?? (view.data ? dotVerdict(view.data, component()?.id ?? "") : null));
   const identity = createMemo(() => identityRows(propsQ.data ?? []));
   const vitals = createMemo(() => vitalRows(metricsQ.data ?? []));
 
   const product = createMemo(() => (products.data ?? []).find((p) => p.name === component()?.product));
   const rows = createMemo(() => (view.data && memberships.data ? membershipRows(memberships.data, view.data) : []));
-  const nodeByName = createMemo(() => new Map((nodes.data ?? []).map((n) => [n.name, n])));
+  // The node behind each endpoint, read one by one: a component has a node
+  // or two, the fleet has many, and only these are on the card.
+  const nodeNames = createMemo(() => [...new Set((reach.data?.endpoints ?? []).map((e) => e.node).filter((n): n is string => !!n))], undefined, {
+    equals: (a, b) => a.length === b.length && a.every((x, i) => x === b[i]),
+  });
+  const nodeReads = useQueries(() => ({
+    queries: nodeNames().map((n) => ({ queryKey: nodeKey(n), queryFn: () => getNode(n), refetchInterval: LEAF_NODE_POLL_MS })),
+  }));
+  const nodeByName = createMemo(() => new Map(nodeReads.filter((q) => q.data).map((q) => [q.data!.name, q.data!])));
   // The role this component fills in each system it serves: a membership
   // says THAT it belongs; the system's declared roles say what it does there.
   const roleReads = useQueries(() => ({

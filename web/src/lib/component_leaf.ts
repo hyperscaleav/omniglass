@@ -16,15 +16,14 @@ import { STALENESS_WINDOW_MS, endpointWord, lastSeenAt } from "./reachability";
 import { entityLabel } from "./entities";
 
 // The leaf's poll (#934): a monitoring console's component view moves as
-// collection arrives. The component's own reads (reachability, vitals,
-// alarms) poll at the cadence of the sibling live surfaces (a rule's detail,
-// the Simulation section); the fleet-wide reads it borrows (the verdict off
-// the fleet view, the nodes behind its Collection card) at the list cadence,
-// since each is the whole fleet in one request. Every read is one request
-// whatever the component's endpoint or series count, and TanStack holds an
-// interval while the tab is hidden.
+// collection arrives. The component's own reads (reachability, vitals, and
+// its alarms with the verdict they make) poll at the cadence of the sibling
+// live surfaces (a rule's detail, the Simulation section); the node behind
+// each endpoint (usually one) at a slower cadence, its heartbeat moving no
+// faster. Nothing it polls grows with the fleet: no fleet view, no node
+// list. TanStack holds an interval while the tab is hidden.
 export const LEAF_POLL_MS = 5_000;
-export const LEAF_FLEET_POLL_MS = 10_000;
+export const LEAF_NODE_POLL_MS = 10_000;
 
 export type CollectionState = {
   // collecting: fresh sample, node live. device-or-path: the sample went
