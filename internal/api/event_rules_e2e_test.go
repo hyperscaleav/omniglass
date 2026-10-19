@@ -35,6 +35,8 @@ type eventRuleBody struct {
 	Official    bool   `json:"official"`
 	OpenAlarms  *int   `json:"open_alarms"`
 	Pending     *int   `json:"pending_streaks"`
+	// LastJudged is when the rule last judged an ingested sample (#929).
+	LastJudged *time.Time `json:"last_judged_at"`
 }
 
 // TestEventRuleAPI drives rule authoring over HTTP: rules are listed by
@@ -78,14 +80,15 @@ func TestEventRuleAPI(t *testing.T) {
 	}
 	c.do(ownerTok, http.MethodPost, "/event-rules", rule, http.StatusConflict)
 	var state struct {
-		Open    []any `json:"open"`
-		Pending []any `json:"pending"`
+		Open       []any      `json:"open"`
+		Pending    []any      `json:"pending"`
+		LastJudged *time.Time `json:"last_judged_at"`
 	}
 	if err := json.Unmarshal(c.do(viewer, http.MethodGet, "/event-rules/reach-lost/state", nil, http.StatusOK), &state); err != nil {
 		t.Fatal(err)
 	}
-	if state.Open == nil || state.Pending == nil || len(state.Open) != 0 || len(state.Pending) != 0 {
-		t.Fatalf("a fresh rule's state = %+v, want empty lists", state)
+	if state.Open == nil || state.Pending == nil || len(state.Open) != 0 || len(state.Pending) != 0 || state.LastJudged != nil {
+		t.Fatalf("a fresh rule's state = %+v, want empty lists and never judged", state)
 	}
 	for _, bad := range []map[string]any{
 		{"name": "r1", "sample_key": "nope", "fire_criteria": map[string]any{"op": "eq", "value": "x"}, "severity": "high"},
@@ -130,6 +133,22 @@ func TestEventRuleAPI(t *testing.T) {
 	}
 	if one.OpenAlarms == nil || one.Pending == nil || *one.OpenAlarms != 0 || *one.Pending != 1 {
 		t.Fatalf("got reach-lost %+v, want 0 open and 1 pending", one)
+	}
+	// Judging the down stamped the rule, on the get, the list and the state.
+	if one.LastJudged == nil || time.Since(*one.LastJudged) > time.Minute {
+		t.Fatalf("got reach-lost last judged %v, want just now", one.LastJudged)
+	}
+	for _, r := range list.EventRules {
+		if r.Name == "reach-lost" && (r.LastJudged == nil || !r.LastJudged.Equal(*one.LastJudged)) {
+			t.Fatalf("listed reach-lost last judged %v, want %v", r.LastJudged, one.LastJudged)
+		}
+	}
+	state.LastJudged = nil
+	if err := json.Unmarshal(c.do(viewer, http.MethodGet, "/event-rules/reach-lost/state", nil, http.StatusOK), &state); err != nil {
+		t.Fatal(err)
+	}
+	if state.LastJudged == nil || !state.LastJudged.Equal(*one.LastJudged) {
+		t.Fatalf("the state says last judged %v, want %v", state.LastJudged, one.LastJudged)
 	}
 
 	// Rules read like a registry: a viewer scoped to one place lists and gets

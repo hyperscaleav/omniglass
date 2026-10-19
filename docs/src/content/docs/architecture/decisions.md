@@ -6526,11 +6526,18 @@ interface create form, since that name is the platform's to mint.
      took a sample since the pass before last and corrects a rule state that disagrees with its newest
      sample, healing a decision lost to an enable racing an in-flight batch or to a deadlock abort.
 
-  7. **A rule's live state is its open alarms and pending streaks** (ruled during #921). The
-     definition's "last evaluated" is deferred (#929): a per-sample write was kept off the ingest path
-     in the #920 review, and a read-time newest-sample has no supporting index on the property lane
-     and is not the same fact. The severity levels surface beside the rules as a read view; the console
-     does not author them yet (#930).
+  7. **A rule's live state is its open alarms, its pending streaks, and when it last judged a
+     sample** (ruled during #921, amended by #929). The definition's "last evaluated" first shipped
+     deferred: a per-sample write was kept off the ingest path in the #920 review, and a read-time
+     newest-sample has no supporting index on the property lane and is not the same fact (a disabled
+     rule, or a sample the rule cannot evaluate, has a newest sample and no judgment). #929 built it as
+     a coalesced stamp, `last_judged_at` in its own `event_rule_live` row: an ingest batch stamps each
+     rule it judged a sample by once, as its last statement, only when the stamp is at least 5 seconds
+     old, skipping (`SKIP LOCKED`) a row another batch is stamping. So the hot path pays nothing per
+     sample and at most one statement per batch, batches never queue on a stamp, the value is honest to
+     within 5 seconds on every replica (an in-memory per-replica value was rejected: it lies across
+     replicas), and the rule row every batch holds `FOR SHARE` is never written by ingest. The severity
+     levels surface beside the rules as a read view; the console does not author them yet (#930).
 
   Rules read like a registry (`rule:read`, any grant); writing one takes `rule:*` on an all-scope
   grant, since a rule's selector reaches the whole fleet, the same reasoning as a root create (ruled by

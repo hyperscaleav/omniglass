@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"sort"
 	"strings"
 	"time"
 
@@ -29,7 +30,16 @@ type ruleEvaluator struct {
 	picks map[[2]string]bool
 	// now is the transaction's clock: the receipt time a streak starts at.
 	now time.Time
+	// judged is the rules the batch judged a sample by, stamped once at the
+	// end of the batch (stampJudged).
+	judged map[string]bool
 }
+
+// ruleJudgedEvery bounds how often a rule's last-judged time is written
+// (#929): a batch judging a rule stamped less than this long ago leaves the
+// stamp alone, so a rule reading a busy key costs a write every few seconds,
+// not one per batch, and the stamp is honest to within this bound.
+const ruleJudgedEvery = 5 * time.Second
 
 // ruleOwner is what a selector needs to know about a component.
 type ruleOwner struct {
@@ -88,7 +98,8 @@ func (p *PG) newRuleEvaluator(ctx context.Context, tx pgx.Tx, keys []string) (*r
 // newRuleMatcher is an evaluator's selector machinery, usable on its own to
 // ask which components a rule watches.
 func newRuleMatcher(p *PG, byKey map[string][]EventRule) *ruleEvaluator {
-	return &ruleEvaluator{p: p, byKey: byKey, owner: map[string]*ruleOwner{}, types: map[string]uuid.UUID{}, picks: map[[2]string]bool{}}
+	return &ruleEvaluator{p: p, byKey: byKey, owner: map[string]*ruleOwner{}, types: map[string]uuid.UUID{}, picks: map[[2]string]bool{},
+		judged: map[string]bool{}}
 }
 
 func (e *ruleEvaluator) ownerFacts(ctx context.Context, tx pgx.Tx, componentID string) (*ruleOwner, error) {
@@ -215,13 +226,52 @@ func (e *ruleEvaluator) observe(ctx context.Context, tx pgx.Tx, lane rules.Lane,
 	if err != nil {
 		return fmt.Errorf("storage: rule savepoint: %w", err)
 	}
-	if err := e.judge(ctx, sp, lane, ownerID, key, instance, ts, value); err != nil {
+	judged, err := e.judge(ctx, sp, lane, ownerID, key, instance, ts, value)
+	if err != nil {
 		_ = sp.Rollback(ctx)
 		slog.Warn("event rule evaluation failed; the sample landed, the rule did not act", "facility", "rules",
 			"component", ownerID, "key", key, "instance", instance, "error", err.Error())
 		return nil
 	}
-	return sp.Commit(ctx)
+	if err := sp.Commit(ctx); err != nil {
+		return err
+	}
+	for _, id := range judged {
+		e.judged[id] = true
+	}
+	return nil
+}
+
+// stampJudged records, once per batch, that the batch judged a sample by
+// each rule it did (#929): one statement, the last the batch runs before it
+// commits. A rule stamped within ruleJudgedEvery is left alone, and a row
+// another batch is stamping right now is skipped rather than waited on
+// (SKIP LOCKED), so batches never queue on a rule's stamp; only a rule's very
+// first stamp inserts its row. Every lock a batch holds is already taken by
+// then, and a stamp row takes no other lock after it, so it adds no edge to
+// the lock order newRuleEvaluator documents.
+func (e *ruleEvaluator) stampJudged(ctx context.Context, tx pgx.Tx) error {
+	if e == nil || len(e.judged) == 0 {
+		return nil
+	}
+	ids := make([]string, 0, len(e.judged))
+	for id := range e.judged {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+	if _, err := tx.Exec(ctx, `with due as (
+			select rule_id from event_rule_live where rule_id = any($1::uuid[]) and last_judged_at <= $2::timestamptz - $3::interval
+			order by rule_id for update skip locked
+		), stamped as (
+			update event_rule_live l set last_judged_at = $2 from due where l.rule_id = due.rule_id
+		)
+		insert into event_rule_live (rule_id, last_judged_at)
+		select id, $2 from unnest($1::uuid[]) id
+		where not exists (select 1 from event_rule_live l where l.rule_id = id)
+		on conflict (rule_id) do nothing`, ids, e.now, ruleJudgedEvery); err != nil {
+		return fmt.Errorf("storage: stamp rules judged: %w", err)
+	}
+	return nil
 }
 
 // judge is observe's work. Only a component owns an alarm today. A sample
@@ -229,7 +279,9 @@ func (e *ruleEvaluator) observe(ctx context.Context, tx pgx.Tx, lane rules.Lane,
 // redelivered down after an up must not reopen an incident nothing will
 // clear. A sample a rule cannot evaluate (the wrong type) is logged and
 // breaks any streak it held, since nothing it says can continue one.
-func (e *ruleEvaluator) judge(ctx context.Context, tx pgx.Tx, lane rules.Lane, ownerID, key, instance string, ts time.Time, value any) error {
+//
+// It returns the ids of the rules that judged the sample.
+func (e *ruleEvaluator) judge(ctx context.Context, tx pgx.Tx, lane rules.Lane, ownerID, key, instance string, ts time.Time, value any) ([]string, error) {
 	table, typeTable := "property", "property_type"
 	if lane == rules.LaneMetric {
 		table, typeTable = "metric", "metric_type"
@@ -238,19 +290,20 @@ func (e *ruleEvaluator) judge(ctx context.Context, tx pgx.Tx, lane rules.Lane, o
 	if err := tx.QueryRow(ctx, fmt.Sprintf(`select exists (select 1 from %s s join %s t on t.id = s.%s_id
 		where s.component_id = $1::uuid and t.name = $2 and s.instance = $3 and s.ts > $4)`, table, typeTable, typeTable),
 		ownerID, key, instance, ts).Scan(&stale); err != nil {
-		return fmt.Errorf("storage: rule newest check: %w", err)
+		return nil, fmt.Errorf("storage: rule newest check: %w", err)
 	}
 	if stale {
-		return nil
+		return nil, nil
 	}
 	o, err := e.ownerFacts(ctx, tx, ownerID)
 	if err != nil {
-		return err
+		return nil, err
 	}
+	var judged []string
 	for _, r := range e.byKey[key] {
 		picked, err := e.selects(ctx, tx, r, o)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		if !picked {
 			continue
@@ -259,12 +312,14 @@ func (e *ruleEvaluator) judge(ctx context.Context, tx pgx.Tx, lane rules.Lane, o
 		if err != nil {
 			slog.Warn("event rule cannot evaluate a sample", "facility", "rules", "rule", r.Name, "component", o.comp.Name, "key", key, "error", err.Error())
 			action = rules.Hold
+		} else {
+			judged = append(judged, r.ID)
 		}
 		if err := e.p.stepRule(ctx, tx, r, &o.comp, instance, action, e.now); err != nil {
-			return err
+			return nil, err
 		}
 	}
-	return nil
+	return judged, nil
 }
 
 // stepRule advances a rule's streak on one component and instance by a
@@ -679,6 +734,9 @@ type RuleStreak struct {
 type EventRuleLive struct {
 	Open    []RuleOpenAlarm
 	Pending []RuleStreak
+	// LastJudgedAt is when the rule last judged a sample, to within
+	// ruleJudgedEvery; nil when it never has.
+	LastJudgedAt *time.Time
 }
 
 // EventRuleState reads a rule's live state by name. The rule reads like a
@@ -690,7 +748,7 @@ func (p *PG) EventRuleState(ctx context.Context, name string, visible scope.Set)
 		return nil, err
 	}
 	prefix := ruleDedupKey(r.Name, "")
-	out := &EventRuleLive{Open: []RuleOpenAlarm{}, Pending: []RuleStreak{}}
+	out := &EventRuleLive{Open: []RuleOpenAlarm{}, Pending: []RuleStreak{}, LastJudgedAt: r.LastJudgedAt}
 	f := newReadFilter(componentTable, visible, 2)
 	args := append([]any{r.ID}, f.Args...)
 	rows, err := p.pool.Query(ctx, f.With+`select a.id::text, a.component_id::text, c.name, a.dedup_key, a.severity, a.raised_at

@@ -3606,6 +3606,23 @@
      }
     ]
    },
+   "event_rule_live": {
+    "columns": [
+     {
+      "name": "rule_id",
+      "type": "uuid",
+      "nullable": false,
+      "pk": true,
+      "fk": true,
+      "fk_target": "event_rule.id"
+     },
+     {
+      "name": "last_judged_at",
+      "type": "timestamp with time zone",
+      "nullable": false
+     }
+    ]
+   },
    "event_rule_state": {
     "columns": [
      {

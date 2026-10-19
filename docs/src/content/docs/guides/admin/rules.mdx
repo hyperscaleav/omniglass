@@ -60,9 +60,16 @@ ride on the list itself, which refreshes every 10 seconds:
 - **disabled**: the rule evaluates nothing, and holds nothing open (disabling cleared it).
 - **clear**: enabled, and holding nothing right now.
 
-Pick a row to open its blade: the criteria, what it watches, and the two live lists, each component
-linked to its own page with where it sits. The list does not yet say when the rule last judged a
-sample (#929).
+Hover the live column to see when the rule **last judged a sample** ("Last judged a sample 12s ago"),
+or that it has not judged one yet. That is what tells a quiet rule from a deaf one: a rule reading
+**clear** that judged a sample seconds ago is watching a healthy fleet, while one that has not judged
+anything for an hour reads a key that has stopped arriving (a probe removed, a collector down) and
+would not notice a fault. The time is to within 5 seconds, since the server writes it at most once
+per rule every 5 seconds rather than on every sample.
+
+Pick a row to open its blade: the criteria, what it watches, when it last judged a sample (the
+**Last judged** fact), and the two live lists, each component linked to its own page with where it
+sits.
 
 ## Write a rule
 

@@ -9,6 +9,7 @@ import {
   emptyDraft,
   fireWords,
   getRuleState,
+  judgedWords,
   listEventRules,
   readDuration,
   readValue,
@@ -60,6 +61,14 @@ describe("reading a rule in words", () => {
     expect(sustainWords("5m0s")).toBe("5m");
     expect(sustainWords("1h0m0s")).toBe("1h");
     expect(sustainWords("1m30s")).toBe("1m30s");
+  });
+});
+
+describe("when a rule last judged a sample", () => {
+  it("says a rule that has judged nothing so, and otherwise how long ago, with the bound", () => {
+    expect(judgedWords(undefined)).toBe("Has not judged a sample yet");
+    const ago = new Date(Date.now() - 12_000).toISOString();
+    expect(judgedWords(ago)).toBe("Last judged a sample 12s ago (to within 5s)");
   });
 });
 

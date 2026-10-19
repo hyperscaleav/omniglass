@@ -215,8 +215,18 @@ every rule, but only the alarms and streaks it could already see. The console's 
 every rule with its criteria in words, its severity and those live counts, opens a rule's blade with
 both lists linked to their components, and authors, edits, disables and deletes operator rules in a
 drawer (official rules are read-only); the operator's walk-through is the
-[rules guide](/guides/admin/rules/). When a rule last judged a sample is not shown: a per-sample write
-was kept off the ingest path on purpose, and the honest cheap signal is still to come (#929).
+[rules guide](/guides/admin/rules/).
+
+The live state also says when the rule **last judged a sample** (`last_judged_at` on the list, a get
+and the state route; absent when it never has), which tells a quiet rule from one whose key has stopped
+arriving (#929). A per-sample write was kept off the ingest path on purpose, so the stamp is coalesced:
+an ingest batch that judged a sample by a rule stamps it once, as its last statement, and only when
+the rule's stamp is at least 5 seconds old; a stamp another batch holds is skipped rather than waited
+on. The time is honest to within those 5 seconds across every server replica, costs a rule reading a
+busy key one small write every 5 seconds, and lives in its own `event_rule_live` row, never on the rule
+row every batch holds. Only the judging of an arriving sample counts: a disabled rule, a component the
+rule does not watch, a sample older than its series' newest, or one the rule cannot evaluate stamps
+nothing. It names no component, so it is not fenced by the read scope.
 
 A rule does not declare a health verdict itself: the alarm it raises impairs its owner's own
 verdict (any active alarm degrades it, one at or above `high` is an outage). Only an outage owner stops

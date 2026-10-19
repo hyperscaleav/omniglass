@@ -24,7 +24,7 @@ const reach: EventRule = {
   selector: { component_types: [], components: [] }, sample_key: "endpoint-reachable", sample_lane: "property",
   fire_criteria: { op: "eq", value: "down" }, clear_criteria: { op: "eq", value: "up" },
   fire_sustain: "15s", clear_sustain: "0s", severity: "high", enabled: true, official: true, version: 1,
-  open_alarms: 1, pending_streaks: 1,
+  open_alarms: 1, pending_streaks: 1, last_judged_at: new Date(Date.now() - 30_000).toISOString(),
 };
 const hot: EventRule = {
   id: uuidFor("rule-too-hot"), name: "too-hot", label: "Too hot",
@@ -61,6 +61,7 @@ const display = uuidFor("comp-display-1");
 const reachState = {
   open: [{ alarm_id: uuidFor("alarm-1"), component: "display-1", component_id: display, instance: "icmp", severity: "high", raised_at: new Date(Date.now() - 60_000).toISOString() }],
   pending: [{ component: "codec-1", component_id: uuidFor("comp-codec-1"), instance: "http", pending: "fire" as const, since: new Date(Date.now() - 5_000).toISOString() }],
+  last_judged_at: new Date(Date.now() - 10_000).toISOString(),
 };
 
 const asides = () => document.querySelectorAll("aside[data-blade]");
@@ -134,6 +135,10 @@ describe("Rules page", () => {
     const live = document.querySelector('[data-live="reachability-lost"]') as HTMLElement;
     expect(live.textContent).toContain("1 open");
     expect(live.textContent).toContain("1 pending");
+    // When it last judged a sample rides the Live cell as its tooltip; a rule
+    // that never has says so.
+    expect(live.getAttribute("title")).toBe("Last judged a sample 30s ago (to within 5s)");
+    expect((document.querySelector('[data-live="too-hot"]') as HTMLElement).getAttribute("title")).toBe("Has not judged a sample yet");
     // A disabled rule says so before anything else.
     expect((document.querySelector('[data-live="too-hot"]') as HTMLElement).textContent).toContain("disabled");
     expect(document.querySelector('[data-severity="high"]')?.textContent).toBe("High");
@@ -153,9 +158,18 @@ describe("Rules page", () => {
     expect(within(pending).getByText("to fire")).toBeTruthy();
     expect(within(pending).getByText(/^held \d+s$/)).toBeTruthy();
     expect(within(b).getByTestId("rule-fire").textContent).toBe("reads down for 15s");
+    // The state's own stamp (polled faster than the list) says when it last judged.
+    expect(within(b).getByTestId("rule-judged").textContent).toBe("10s ago");
     expect(within(b).getByText("Every component")).toBeTruthy();
     // The level it raises at links to the severity registry beside the rules.
     expect(within(b).getByRole("link", { name: "All levels" }).getAttribute("href")).toBe("/severity-levels");
+  });
+
+  it("says a rule that has judged nothing so on its blade", async () => {
+    mount();
+    fireEvent.click(screen.getByText("Too hot"));
+    const b = await blade();
+    expect(within(b).getByTestId("rule-judged").textContent).toBe("never");
   });
 
   it("caps a long live list at eight rows and counts the rest", async () => {
