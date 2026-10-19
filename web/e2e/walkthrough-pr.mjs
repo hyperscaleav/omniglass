@@ -12,7 +12,8 @@
 //       the PR comment body, from env REPO, PR, SHA (the commit holding the
 //       stills), HEAD_SHA, RUN_URL, ARTIFACT_URL and IDS (the selected ids). A
 //       selected walkthrough counts as recorded only if walkthroughs.sh did not
-//       list it in out/failed.txt and its walkthrough.json exists; with no
+//       list it in out/failed.txt and its walkthrough.json carries the budget
+//       mark the recorder writes only on a pass; with no
 //       out/stack-up (walkthroughs.sh writes it once the stack is up), the
 //       comment says the stack never came up instead of blaming each one.
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
@@ -50,8 +51,10 @@ function main([cmd, ...args]) {
       const failed = [];
       for (const id of ids) {
         const manifest = join(OUT, id, 'walkthrough.json');
-        if (listed.includes(id) || !existsSync(manifest)) failed.push(id);
-        else recorded.push(JSON.parse(readFileSync(manifest, 'utf8')));
+        const m = !listed.includes(id) && existsSync(manifest) ? JSON.parse(readFileSync(manifest, 'utf8')) : null;
+        // Only a recording that passed its budget carries the mark (walkthrough.mjs budget).
+        if (m && m.budget) recorded.push(m);
+        else failed.push(id);
       }
       process.stdout.write(
         commentBody({
