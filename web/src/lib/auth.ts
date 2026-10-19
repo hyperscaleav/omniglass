@@ -11,6 +11,9 @@ export type Me = {
   human?: { username: string; email?: string; label?: string; must_change_password?: boolean; has_avatar?: boolean };
   service?: { name: string };
   permissions: string[];
+  // The permissions held on an all-scope grant: what reaches fleet-wide config
+  // (event rules), which a grant bounded to a place or system never does.
+  fleet_permissions?: string[];
   grants: { role: string; scope_kind: string; scope_id?: string }[];
 };
 
@@ -248,6 +251,21 @@ export function can(me: Me | null | undefined, ...tokens: string[]): boolean {
     }
   }
   return false;
+}
+
+// fleetView is the principal as fleet-wide config sees it: only the
+// permissions its all-scope grants carry. Pass it wherever a check takes a Me
+// (can, registryLock) to judge a fleet-wide resource on what the server will
+// actually admit, since the gateway refuses such a write without an all-scope
+// grant even when a bounded grant carries the permission.
+export function fleetView(me: Me | null | undefined): Me | null {
+  return me ? { ...me, permissions: me.fleet_permissions ?? [] } : null;
+}
+
+// canFleet is can() over fleetView: may the principal do this to fleet-wide
+// config (an event rule)?
+export function canFleet(me: Me | null | undefined, ...tokens: string[]): boolean {
+  return can(fleetView(me), ...tokens);
 }
 
 // A write at the `platform` tier, the cascade's least-specific rung, applies to the

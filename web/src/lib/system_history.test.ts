@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { incidentReasons, incidentRows, incidentsOf, markerX, uptimePct } from "./system_history";
 import type { Alarm } from "./alarms";
+import { SEEDED_LEVELS } from "./testseverity";
 
 // The history tab's pure core (#792): the verdict spans come from the health
 // read (timeline.spans, already proven); this file is the CAUSES: every
@@ -20,7 +21,7 @@ describe("incidentRows", () => {
     incidentRows(
       [
         alarms("videobar-1", "c-bar", [
-          { id: "a1", severity: "critical", message: "No route to host", raised_at: iso(3), active: true },
+          { id: "a1", severity: "high", message: "No route to host", raised_at: iso(3), active: true },
           { id: "a0", severity: "warning", message: "Fan speed high", raised_at: iso(200), cleared_at: iso(199), active: false },
         ]),
         alarms("display-1", "c-disp", [
@@ -29,6 +30,7 @@ describe("incidentRows", () => {
       ],
       now,
       30 * 24,
+      SEEDED_LEVELS,
     );
 
   it("merges every member's alarms, active first, then newest, each naming its component", () => {
@@ -40,15 +42,17 @@ describe("incidentRows", () => {
 
   it("keeps an alarm raised before the window when it was still active inside it", () => {
     const r = incidentRows(
-      [alarms("x", "cx", [{ id: "old", severity: "critical", message: "m", raised_at: iso(31 * 24), cleared_at: iso(29 * 24), active: false }])],
+      [alarms("x", "cx", [{ id: "old", severity: "high", message: "m", raised_at: iso(31 * 24), cleared_at: iso(29 * 24), active: false }])],
       now,
       30 * 24,
+      SEEDED_LEVELS,
     );
     expect(r).toHaveLength(1);
     const gone = incidentRows(
-      [alarms("x", "cx", [{ id: "gone", severity: "critical", message: "m", raised_at: iso(40 * 24), cleared_at: iso(35 * 24), active: false }])],
+      [alarms("x", "cx", [{ id: "gone", severity: "high", message: "m", raised_at: iso(40 * 24), cleared_at: iso(35 * 24), active: false }])],
       now,
       30 * 24,
+      SEEDED_LEVELS,
     );
     expect(gone).toHaveLength(0);
   });
@@ -107,12 +111,13 @@ describe("incidentReasons", () => {
   const rows = incidentRows(
     [
       alarms("videobar-1", "c-bar", [
-        { id: "a1", severity: "critical", message: "No route to host", raised_at: iso(195), cleared_at: iso(185), active: false },
+        { id: "a1", severity: "high", message: "No route to host", raised_at: iso(195), cleared_at: iso(185), active: false },
         { id: "a2", severity: "warning", message: "Unrelated, later", raised_at: iso(10), active: true },
       ]),
     ],
     now,
     30 * 24,
+    SEEDED_LEVELS,
   );
 
   it("keeps only the alarms overlapping the incident's stretch", () => {

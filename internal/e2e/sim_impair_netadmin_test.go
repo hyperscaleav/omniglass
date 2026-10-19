@@ -94,6 +94,21 @@ func TestImpairingASimulatedDeviceShowsInCollection(t *testing.T) {
 	if _, err := conn.Exec(ctx, `update component set product_id = (select id from product where name = $1) where name = 'sim-dev'`, product); err != nil {
 		t.Fatal(err)
 	}
+	// sim-dev is the one occupant of a role whose impairment takes its system
+	// out, so the official reachability rule's alarm moves the system.
+	if err := gw.UpsertStandard(ctx, storage.Standard{Name: "impair-std", Label: "Impair standard"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := gw.SetSystemRole(ctx, "", "standard", "impair-std", storage.SystemRoleSpec{Name: "target", Quorum: 1, Impact: "outage"}); err != nil {
+		t.Fatal(err)
+	}
+	std := "impair-std"
+	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "impair-sys", StandardID: &std}, all, all); err != nil {
+		t.Fatal(err)
+	}
+	if err := gw.AssignRole(ctx, "", "impair-sys", "target", "sim-dev", all, all); err != nil {
+		t.Fatal(err)
+	}
 
 	cli := runCLI(t, root, binPath, os.Environ())
 	as := func(args ...string) string {
@@ -192,17 +207,63 @@ func TestImpairingASimulatedDeviceShowsInCollection(t *testing.T) {
 	after("ping to answer", "icmp-reachable", start, up)
 	waitFor(t, "both endpoints to read up", both("up"))
 
+	// ruleAlarms counts sim-dev's open alarms raised by the official
+	// reachability rule; verdict reads its system's health.
+	ruleAlarms := func() int {
+		var out struct {
+			Alarms []struct {
+				RaisedByRule string `json:"raised_by_rule"`
+			} `json:"alarms"`
+		}
+		if !get("/components/sim-dev/alarms", &out) {
+			return -1
+		}
+		n := 0
+		for _, a := range out.Alarms {
+			if a.RaisedByRule == "reachability-lost" {
+				n++
+			}
+		}
+		return n
+	}
+	verdict := func() string {
+		var out struct {
+			Verdict string `json:"verdict"`
+		}
+		if !get("/systems/impair-sys/health", &out) {
+			return ""
+		}
+		return out.Verdict
+	}
+	waitFor(t, "the system to read healthy", func() bool { return verdict() == "healthy" })
+
 	unplugged := time.Now()
 	as("component", "impairment", "set", "sim-dev", "--unplugged")
+	// The sustain is honored: the first down sample lands after the unplug,
+	// so the rule's 15s fire sustain keeps any alarm shut for at least 15s
+	// of it. Watching the first 10s leaves 5s of margin for a slow poll.
+	for time.Since(unplugged) < 10*time.Second {
+		if n := ruleAlarms(); n > 0 {
+			t.Fatalf("the reachability rule opened %d alarms %s after the unplug, inside its 15s sustain", n, time.Since(unplugged).Round(time.Millisecond))
+		}
+		time.Sleep(250 * time.Millisecond)
+	}
 	after("TCP to fail once unplugged", "tcp-open", unplugged, down)
 	after("ping to fail once unplugged", "icmp-reachable", unplugged, down)
 	waitFor(t, "both endpoints to read down", both("down"))
+	// The loop closes with no hand-raised alarm: once the verdict has read
+	// down for the rule's sustain, the sweep opens the alarm and the system
+	// leaves healthy.
+	waitForWithin(t, 60*time.Second, "the reachability rule to open an alarm", func() bool { return ruleAlarms() > 0 })
+	waitFor(t, "the system to leave healthy", func() bool { v := verdict(); return v != "" && v != "healthy" })
 
 	replugged := time.Now()
 	as("component", "impairment", "set", "sim-dev")
 	after("TCP to recover once replugged", "tcp-open", replugged, up)
 	after("ping to recover once replugged", "icmp-reachable", replugged, up)
 	waitFor(t, "both endpoints to read up again", both("up"))
+	waitFor(t, "the reachability alarms to clear", func() bool { return ruleAlarms() == 0 })
+	waitFor(t, "the system to read healthy again", func() bool { return verdict() == "healthy" })
 
 	slowed := time.Now()
 	as("component", "impairment", "set", "sim-dev", "--latency-ms", "300")

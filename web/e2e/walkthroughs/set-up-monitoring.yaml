@@ -5,7 +5,8 @@
 # Bay 2) with no endpoint (web/e2e/lib/stack.sh). Enrolling a node is not
 # shown: its second half runs on the node's host (omniglass node run with the
 # one-time token), out of the console's reach; the stack enrolls edge-hq that
-# way. Unplugging it and watching the alarm open follows in #819.
+# way. Unplugging a component and watching the rule's alarm open is
+# watch-a-rule-raise-an-alarm.
 # The component view does not poll (#934), so every first sample must land
 # before the page is reopened: the driver goes first, with the probe steps as
 # its slack, and the probe's create holds 3.5s, which with the reopen outlasts

@@ -200,6 +200,10 @@ components:
           format: date-time
           type: string
         component:
+          description: The component the alarm is on, by name
+          type: string
+        component_id:
+          description: The component's uuid, the stable form of component
           type: string
         dedup_key:
           description: "The condition identity: one open alarm per (component, dedup_key)"
@@ -211,12 +215,19 @@ components:
         raised_at:
           format: date-time
           type: string
+        raised_by_rule:
+          description: The event rule that raised the alarm, by name; absent when an operator raised it
+          type: string
+        raised_by_rule_id:
+          description: The raising rule's uuid
+          type: string
         severity:
-          description: info, warning, or critical
+          description: The severity level the alarm was raised at, by name (see /severity-levels)
           type: string
       required:
         - id
         - component
+        - component_id
         - severity
         - message
         - dedup_key
@@ -960,6 +971,61 @@ components:
           description: A transport name from the code registry (GET /transports); the endpoint is named by it, unique within the component. Exactly one of transport (a bare probe endpoint) or driver (an attach) is set
           type: string
       type: object
+    CreateEventRuleInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/CreateEventRuleInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        clear_criteria:
+          $ref: "#/components/schemas/CriteriaBody"
+          description: "The criteria that clears it: {op, value}; absent clears on the negation of fire_criteria"
+        clear_sustain:
+          description: A Go duration; empty is 0s
+          type: string
+        description:
+          description: What the rule watches for and why
+          type: string
+        enabled:
+          description: Defaults to true
+          type: boolean
+        fire_criteria:
+          $ref: "#/components/schemas/CriteriaBody"
+          description: "The criteria that opens an alarm: {op, value}"
+        fire_sustain:
+          description: A Go duration; empty is 0s
+          type: string
+        label:
+          description: A human label; also the alarm message when message is empty
+          type: string
+        message:
+          description: The alarm message; empty uses the label or the name
+          type: string
+        name:
+          description: The rule's name (lowercase kebab)
+          minLength: 1
+          type: string
+        sample_key:
+          description: The property or metric the rule reads
+          minLength: 1
+          type: string
+        selector:
+          $ref: "#/components/schemas/SelectorBody"
+          description: The components the rule watches (component types and components); absent is every component
+        severity:
+          description: The severity level the alarm is raised at, by name
+          minLength: 1
+          type: string
+      required:
+        - name
+        - sample_key
+        - fire_criteria
+        - severity
+      type: object
     CreateEventTypeInputBody:
       additionalProperties: false
       properties:
@@ -1471,6 +1537,35 @@ components:
         - owner_kind
         - fields
       type: object
+    CreateSeverityLevelInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/CreateSeverityLevelInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        color:
+          description: One of gray, blue, green, yellow, orange, red, darkred
+          type: string
+        label:
+          description: A human label
+          type: string
+        name:
+          description: The level's name (lowercase kebab)
+          minLength: 1
+          type: string
+        rank:
+          description: "Its place among the levels: higher is more severe; unique"
+          format: int64
+          type: integer
+      required:
+        - name
+        - color
+        - rank
+      type: object
     CreateStandardInputBody:
       additionalProperties: false
       properties:
@@ -1706,6 +1801,25 @@ components:
       required:
         - name
         - label
+      type: object
+    CriteriaBody:
+      additionalProperties: false
+      properties:
+        op:
+          description: "The comparison: a property compares text with eq or ne; a metric compares numbers with any of them"
+          enum:
+            - eq
+            - ne
+            - gt
+            - ge
+            - lt
+            - le
+          type: string
+        value:
+          description: "The threshold: text for a property, a number for a metric"
+      required:
+        - op
+        - value
       type: object
     DownloadFileOutputBody:
       additionalProperties: false
@@ -2227,6 +2341,116 @@ components:
         - message
         - provenance
       type: object
+    EventRuleBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/EventRuleBody.json
+          format: uri
+          readOnly: true
+          type: string
+        clear_criteria:
+          $ref: "#/components/schemas/CriteriaBody"
+          description: When the sample meets this for clear_sustain, the alarm clears; absent, the negation of fire_criteria
+        clear_sustain:
+          description: How long the clear criteria must hold, a Go duration
+          type: string
+        description:
+          type: string
+        enabled:
+          type: boolean
+        fire_criteria:
+          $ref: "#/components/schemas/CriteriaBody"
+          description: When the sample meets this for fire_sustain, the rule opens an alarm
+        fire_sustain:
+          description: How long the fire criteria must hold, a Go duration (0s fires at once)
+          type: string
+        id:
+          description: The rule's uuid, the stable form of name
+          type: string
+        label:
+          type: string
+        message:
+          description: The alarm's message; empty uses the rule's label or name
+          type: string
+        name:
+          type: string
+        official:
+          description: Shipped with the platform and read-only
+          type: boolean
+        open_alarms:
+          description: How many alarms the rule raised are still open right now (its live state; GET /event-rules/{name}/state lists them)
+          format: int64
+          type: integer
+        pending_streaks:
+          description: How many of the rule's streaks are waiting out a sustain right now
+          format: int64
+          type: integer
+        sample_key:
+          description: The property or metric the rule reads
+          type: string
+        sample_lane:
+          description: Which lane the key reads, derived from the registries
+          enum:
+            - property
+            - metric
+          type: string
+        selector:
+          $ref: "#/components/schemas/SelectorBody"
+          description: The components the rule watches; both lists empty is every component
+        severity:
+          description: The severity level the alarm is raised at, by name
+          type: string
+        version:
+          description: Bumps on every update
+          format: int64
+          type: integer
+      required:
+        - id
+        - name
+        - selector
+        - sample_key
+        - sample_lane
+        - fire_criteria
+        - fire_sustain
+        - clear_sustain
+        - severity
+        - enabled
+        - official
+        - version
+        - open_alarms
+        - pending_streaks
+      type: object
+    EventRuleStateOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/EventRuleStateOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        open:
+          description: The alarms the rule raised that are still open
+          items:
+            $ref: "#/components/schemas/RuleOpenAlarmBody"
+          type:
+            - array
+            - "null"
+        pending:
+          description: The rule's streaks waiting out a sustain
+          items:
+            $ref: "#/components/schemas/RuleStreakBody"
+          type:
+            - array
+            - "null"
+      required:
+        - open
+        - pending
+      type: object
     EventTypeBody:
       additionalProperties: false
       properties:
@@ -2576,6 +2800,10 @@ components:
       additionalProperties: false
       properties:
         component:
+          description: The component the alarm is on, by name
+          type: string
+        component_id:
+          description: The component's uuid
           type: string
         id:
           type: string
@@ -2589,6 +2817,7 @@ components:
       required:
         - id
         - component
+        - component_id
         - severity
         - message
         - raised_at
@@ -3099,6 +3328,25 @@ components:
       required:
         - endpoints
       type: object
+    ListEventRulesOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/ListEventRulesOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        event_rules:
+          items:
+            $ref: "#/components/schemas/EventRuleBody"
+          type:
+            - array
+            - "null"
+      required:
+        - event_rules
+      type: object
     ListEventTypesOutputBody:
       additionalProperties: false
       properties:
@@ -3478,6 +3726,25 @@ components:
             - "null"
       required:
         - secrets
+      type: object
+    ListSeverityLevelsOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/ListSeverityLevelsOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        severity_levels:
+          items:
+            $ref: "#/components/schemas/SeverityLevelBody"
+          type:
+            - array
+            - "null"
+      required:
+        - severity_levels
       type: object
     ListStandardMetricsOutputBody:
       additionalProperties: false
@@ -4056,6 +4323,13 @@ components:
           format: uri
           readOnly: true
           type: string
+        fleet_permissions:
+          description: The permissions the caller holds on an all-scope grant, flattened like permissions. Writing fleet-wide config (an event rule) needs its permission here; a grant bounded to a place or system does not reach it. A UI hint; the server is the authority.
+          items:
+            type: string
+          type:
+            - array
+            - "null"
         grants:
           items:
             $ref: "#/components/schemas/GrantBody"
@@ -4077,6 +4351,7 @@ components:
       required:
         - principal
         - permissions
+        - fleet_permissions
         - grants
       type: object
     MemberBody:
@@ -4813,11 +5088,8 @@ components:
           description: What is wrong, for the operator reading it later
           type: string
         severity:
-          description: How bad it is; critical puts the component itself in outage
-          enum:
-            - info
-            - warning
-            - critical
+          description: "How bad it is: a severity level by name (see /severity-levels); a level at or above high puts the component itself in outage"
+          minLength: 1
           type: string
       required:
         - severity
@@ -5521,6 +5793,59 @@ components:
         - permission_universe
         - roles
       type: object
+    RuleOpenAlarmBody:
+      additionalProperties: false
+      properties:
+        alarm_id:
+          type: string
+        component:
+          description: The component, by name
+          type: string
+        component_id:
+          description: The component's uuid
+          type: string
+        instance:
+          description: The sample instance (an endpoint) the alarm is about
+          type: string
+        raised_at:
+          format: date-time
+          type: string
+        severity:
+          type: string
+      required:
+        - alarm_id
+        - component
+        - component_id
+        - severity
+        - raised_at
+      type: object
+    RuleStreakBody:
+      additionalProperties: false
+      properties:
+        component:
+          description: The component, by name
+          type: string
+        component_id:
+          description: The component's uuid
+          type: string
+        instance:
+          type: string
+        pending:
+          description: The action the rule's samples point at, waiting out its sustain
+          enum:
+            - fire
+            - clear
+          type: string
+        since:
+          description: When the streak began
+          format: date-time
+          type: string
+      required:
+        - component
+        - component_id
+        - pending
+        - since
+      type: object
     SecretBody:
       additionalProperties: false
       properties:
@@ -5631,6 +5956,24 @@ components:
         - type
         - secret
         - origin
+      type: object
+    SelectorBody:
+      additionalProperties: false
+      properties:
+        component_types:
+          description: Watch components whose type falls within one of these component types
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+        components:
+          description: Watch these components (by name or id on write; ids on read)
+          items:
+            type: string
+          type:
+            - array
+            - "null"
       type: object
     SessionBody:
       additionalProperties: false
@@ -5902,6 +6245,53 @@ components:
         - values
         - sources
         - locks
+      type: object
+    SeverityLevelBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/SeverityLevelBody.json
+          format: uri
+          readOnly: true
+          type: string
+        color:
+          description: The hue the console renders the level in
+          enum:
+            - gray
+            - blue
+            - green
+            - yellow
+            - orange
+            - red
+            - darkred
+          type: string
+        id:
+          description: The level's uuid, the stable form of name
+          type: string
+        label:
+          type: string
+        name:
+          description: The level's name; alarms and rules name it
+          type: string
+        official:
+          description: Shipped with the platform and read-only
+          type: boolean
+        outage:
+          description: Whether an active alarm at this level puts its component in outage (at or above the high level's rank); below it, an alarm degrades
+          type: boolean
+        rank:
+          description: "Compares levels: higher is more severe"
+          format: int64
+          type: integer
+      required:
+        - id
+        - name
+        - color
+        - rank
+        - official
+        - outage
       type: object
     SimCapabilities:
       additionalProperties: false
@@ -7177,6 +7567,53 @@ components:
         params:
           description: Replace the address/target settings (jsonb)
       type: object
+    UpdateEventRuleInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/UpdateEventRuleInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        clear_criteria:
+          $ref: "#/components/schemas/CriteriaBody"
+          description: "The criteria that clears it: {op, value}; absent clears on the negation of fire_criteria"
+        clear_negates:
+          description: Drop the clear criteria, so the rule clears on the negation of its fire criteria
+          type: boolean
+        clear_sustain:
+          description: How long the clear criteria must hold, a Go duration; empty is 0s
+          type: string
+        description:
+          description: What the rule watches for and why
+          type: string
+        enabled:
+          description: Whether the rule evaluates; defaults to true on create
+          type: boolean
+        fire_criteria:
+          $ref: "#/components/schemas/CriteriaBody"
+          description: "The criteria that opens an alarm: {op, value}"
+        fire_sustain:
+          description: How long the fire criteria must hold, a Go duration (e.g. 30s); empty is 0s
+          type: string
+        label:
+          description: A human label; also the alarm message when message is empty
+          type: string
+        message:
+          description: The alarm message; empty uses the label or the name
+          type: string
+        sample_key:
+          description: The property or metric the rule reads
+          type: string
+        selector:
+          $ref: "#/components/schemas/SelectorBody"
+          description: Replace the components the rule watches; absent leaves them unchanged, and an empty selector watches every component
+        severity:
+          description: The severity level the alarm is raised at, by name
+          type: string
+      type: object
     UpdateEventTypeInputBody:
       additionalProperties: false
       properties:
@@ -7428,6 +7865,30 @@ components:
           description: A new label; an empty string clears it, and the surface falls back to the name. Omit to leave it alone
           maxLength: 200
           type: string
+      type: object
+    UpdateSeverityLevelInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/UpdateSeverityLevelInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        color:
+          description: One of gray, blue, green, yellow, orange, red, darkred
+          type: string
+        label:
+          description: A human label
+          type: string
+        name:
+          description: A new name; every alarm at this level follows
+          type: string
+        rank:
+          description: Its place among the levels; unique
+          format: int64
+          type: integer
       type: object
     UpdateStandardInputBody:
       additionalProperties: false
@@ -7770,7 +8231,7 @@ paths:
       summary: Log out the current session
   /auth/me:
     get:
-      description: Returns the caller's principal, flattened permissions (a UI hint and the fast-reject set), and grants. Requires authentication.
+      description: Returns the caller's principal, flattened permissions (a UI hint and the fast-reject set), the permissions held on an all-scope grant (fleet_permissions), and grants. Requires authentication.
       operationId: get-auth-me
       responses:
         "200":
@@ -8433,7 +8894,7 @@ paths:
       summary: List a component's alarms
       x-omniglass-permission: component:read
     post:
-      description: "Records a condition on this component, then recomputes health in the same transaction: the component's own verdict moves, and if it is now outage (a critical alarm), any role it occupies loses it as an occupant while the alarm is active, which can move its system and location verdicts with it; a lesser (info or warning) alarm degrades the component but leaves it occupying its roles. Gated by component:update; read and update scopes drive the 404 versus 403 split."
+      description: "Records a condition on this component, then recomputes health in the same transaction: the component's own verdict moves, and if it is now outage (an alarm at or above the high level), any role it occupies loses it as an occupant while the alarm is active, which can move its system and location verdicts with it; a lesser alarm degrades the component but leaves it occupying its roles. Gated by component:update; read and update scopes drive the 404 versus 403 split."
       operationId: raise-component-alarm
       parameters:
         - description: The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
@@ -9649,6 +10110,157 @@ paths:
           description: Error
       summary: Update an endpoint
       x-omniglass-permission: endpoint:update
+  /event-rules:
+    get:
+      description: "Lists the event rules, the authored config that raises alarms, each with its live state as counts (open_alarms, pending_streaks) read in the same query. Rules read like a registry: every rule is listed whatever the caller's scope, while the counts cover only components the caller may read. Gated by rule:read."
+      operationId: list-event-rule
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListEventRulesOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: List event rules
+      x-omniglass-permission: rule:read
+    post:
+      description: Authors a rule that raises an alarm on each component it watches when its sample key meets the fire criteria for the fire sustain, and clears it when the clear criteria (or the negation of fire) holds for the clear sustain. The key must be a registered property or metric, the criteria evaluable on its lane, and the severity a level that exists (else 422); a name already taken is a 409. Audited. Gated by rule:create, with an all-scope grant.
+      operationId: create-event-rule
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateEventRuleInputBody"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EventRuleBody"
+          description: Created
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Create an event rule
+      x-omniglass-permission: rule:create
+  /event-rules/{name}:
+    delete:
+      description: Removes an operator rule; an official rule is read-only (409). Audited. Gated by rule:delete, with an all-scope grant.
+      operationId: delete-event-rule
+      parameters:
+        - description: The rule's name
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The rule's name
+            type: string
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Delete an event rule
+      x-omniglass-permission: rule:delete
+    get:
+      description: Returns one event rule by name, with its live state as counts over the components the caller may read. Gated by rule:read.
+      operationId: get-event-rule
+      parameters:
+        - description: The rule's name
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The rule's name
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EventRuleBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Get an event rule
+      x-omniglass-permission: rule:read
+    patch:
+      description: Patches a rule (an absent field is unchanged), bumping its version; disabling it stops new opens. Official rules are read-only (409). Audited. Gated by rule:update, with an all-scope grant.
+      operationId: update-event-rule
+      parameters:
+        - description: The rule's name
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The rule's name
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateEventRuleInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EventRuleBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Update an event rule
+      x-omniglass-permission: rule:update
+  /event-rules/{name}/state:
+    get:
+      description: "What a rule holds right now: the alarms it raised that are still open, each on a component and instance, and its streaks waiting out a sustain. Only those on components the caller may read are listed. Gated by rule:read."
+      operationId: get-event-rule-state
+      parameters:
+        - description: The rule's name
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The rule's name
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EventRuleStateOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Get an event rule's live state
+      x-omniglass-permission: rule:read
   /event-types:
     get:
       description: Lists every registered event type (official and custom). The catalog is fleet-wide reference data. Gated by event_type:read.
@@ -12962,6 +13574,130 @@ paths:
       summary: Restore all settings to defaults
       x-omniglass-permission: settings:update
       x-omniglass-platform-permission: platform:update
+  /severity-levels:
+    get:
+      description: Lists the severity levels, least to most severe, each with whether an active alarm at it puts a component in outage. Gated by severity_level:read.
+      operationId: list-severity-level
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListSeverityLevelsOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: List severity levels
+      x-omniglass-permission: severity_level:read
+    post:
+      description: Adds an operator severity level at a rank of its own, between two others without renumbering. A name or rank already taken is a 409; a color outside the palette is a 422. Audited. Gated by severity_level:create.
+      operationId: create-severity-level
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateSeverityLevelInputBody"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SeverityLevelBody"
+          description: Created
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Create a severity level
+      x-omniglass-permission: severity_level:create
+  /severity-levels/{name}:
+    delete:
+      description: Removes an operator level no alarm or event rule names; an official level or one in use is a 409. Audited. Gated by severity_level:delete.
+      operationId: delete-severity-level
+      parameters:
+        - description: The level's name
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The level's name
+            type: string
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Delete a severity level
+      x-omniglass-permission: severity_level:delete
+    get:
+      description: Returns one severity level by name. Gated by severity_level:read.
+      operationId: get-severity-level
+      parameters:
+        - description: The level's name
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The level's name
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SeverityLevelBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Get a severity level
+      x-omniglass-permission: severity_level:read
+    patch:
+      description: Patches an operator level's name, label, color or rank (an absent field is unchanged); a rename carries every alarm at the level with it. Official levels are read-only (409). Audited. Gated by severity_level:update.
+      operationId: update-severity-level
+      parameters:
+        - description: The level's name
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The level's name
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateSeverityLevelInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SeverityLevelBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Update a severity level
+      x-omniglass-permission: severity_level:update
   /simulation:
     get:
       description: Every node a simulator has pulled for since the server started, each with its capabilities, its account of impairments, and the components it simulates within the caller's component read scope, joined to their live hits. A caller sees a node's simulator when its component read scope holds at least one component the node simulates (an all-scope reader sees all of them); no node read is needed. Connected is true when any listed simulator pulled recently. Hits are per server process, not stored. Gated by simulation:read.

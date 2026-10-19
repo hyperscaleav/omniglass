@@ -13,7 +13,7 @@ func healthy(name string) health.Component {
 
 // down is a component an alarm has taken to the given verdict (Degraded or
 // Outage). Only Outage is "down" in the staffing sense: it stops occupying
-// every slot it fills, which is the whole mechanism by which a critical
+// every slot it fills, which is the whole mechanism by which a high-severity
 // alarm reaches a system now. Degraded still occupies; it exists as a
 // verdict a component can carry without costing it any slot.
 func down(name string, v health.Verdict) health.Component {
@@ -35,7 +35,7 @@ func TestOccupies(t *testing.T) {
 
 	t.Run("an outage component does not occupy its slot", func(t *testing.T) {
 		if down("a", health.Outage).Occupies() {
-			t.Fatal("an outage component must not count: this is how a critical alarm reaches a system")
+			t.Fatal("an outage component must not count: this is how a high-severity alarm reaches a system")
 		}
 	})
 }
@@ -65,7 +65,7 @@ func TestRoleQuorumBoundary(t *testing.T) {
 }
 
 // A down (outage) assignee stops counting toward quorum, which is the path
-// from a critical alarm on one component to a verdict on the system that
+// from a high-severity alarm on one component to a verdict on the system that
 // depends on it.
 func TestDownAssigneeDropsBelowQuorum(t *testing.T) {
 	a, b := healthy("a"), healthy("b")
@@ -183,11 +183,14 @@ func TestRollUpAndComponentVerdict(t *testing.T) {
 	if got := health.ComponentVerdict(nil); got != health.Healthy {
 		t.Fatalf("no alarms = %v, want healthy", got)
 	}
-	if got := health.ComponentVerdict([]string{"warning"}); got != health.Degraded {
-		t.Fatalf("a warning = %v, want degraded", got)
+	if got := health.ComponentVerdict([]int{20}); got != health.Degraded {
+		t.Fatalf("a warning (rank 20) = %v, want degraded", got)
 	}
-	if got := health.ComponentVerdict([]string{"warning", "critical"}); got != health.Outage {
-		t.Fatalf("a critical among others = %v, want outage", got)
+	if got := health.ComponentVerdict([]int{health.OutageRank - 1}); got != health.Degraded {
+		t.Fatalf("just below the outage floor = %v, want degraded", got)
+	}
+	if got := health.ComponentVerdict([]int{20, health.OutageRank}); got != health.Outage {
+		t.Fatalf("an alarm at the outage floor among others = %v, want outage", got)
 	}
 }
 

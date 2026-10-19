@@ -3,9 +3,12 @@ package storage_test
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"sort"
 	"testing"
 
+	"github.com/hyperscaleav/omniglass/internal/rules"
+	"github.com/hyperscaleav/omniglass/internal/scope"
 	"github.com/hyperscaleav/omniglass/internal/secret"
 	"github.com/hyperscaleav/omniglass/internal/seed"
 	"github.com/hyperscaleav/omniglass/internal/storage"
@@ -181,6 +184,20 @@ func TestEveryWritePathStoresNullForAnUnsetLabel(t *testing.T) {
 				t.Fatalf("create metric_type: %v", err)
 			}
 			return "name", "lbl-metric"
+		},
+		"event_rule": func(t *testing.T) (string, string) {
+			v, _ := json.Marshal("down")
+			if _, err := gw.CreateEventRule(ctx, "", storage.EventRuleSpec{Name: "lbl-rule", Label: blank, SampleKey: "endpoint-reachable",
+				Fire: rules.Criteria{Op: "eq", Value: v}, Severity: "high"}, scope.Set{All: true}); err != nil {
+				t.Fatalf("create event_rule: %v", err)
+			}
+			return "name", "lbl-rule"
+		},
+		"severity_level": func(t *testing.T) (string, string) {
+			if _, err := gw.CreateSeverityLevel(ctx, "", storage.SeverityLevel{Name: "lbl-severity", Label: blank, Color: "gray", Rank: 777}); err != nil {
+				t.Fatalf("create severity_level: %v", err)
+			}
+			return "name", "lbl-severity"
 		},
 		"event_type": func(t *testing.T) (string, string) {
 			if _, err := gw.CreateEventType(ctx, "", storage.EventTypeSpec{Name: "lbl-event", Label: blank}); err != nil {

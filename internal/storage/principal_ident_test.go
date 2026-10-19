@@ -217,7 +217,7 @@ func TestEverySurfaceNamesTheKindThatActed(t *testing.T) {
 				t.Fatalf("create the component: %v", err)
 			}
 			raised, err := gw.RaiseAlarm(ctx, "", comp, storage.AlarmSpec{
-				Severity: "critical", Message: "no signal", DedupKey: "no-signal",
+				Severity: "high", Message: "no signal", DedupKey: "no-signal",
 			})
 			if err != nil {
 				t.Fatalf("raise the alarm: %v", err)

@@ -73,7 +73,7 @@ export interface paths {
         };
         /**
          * The authenticated principal, its permissions, and grants
-         * @description Returns the caller's principal, flattened permissions (a UI hint and the fast-reject set), and grants. Requires authentication.
+         * @description Returns the caller's principal, flattened permissions (a UI hint and the fast-reject set), the permissions held on an all-scope grant (fleet_permissions), and grants. Requires authentication.
          */
         get: operations["get-auth-me"];
         put?: never;
@@ -475,7 +475,7 @@ export interface paths {
         put?: never;
         /**
          * Raise an alarm on a component
-         * @description Records a condition on this component, then recomputes health in the same transaction: the component's own verdict moves, and if it is now outage (a critical alarm), any role it occupies loses it as an occupant while the alarm is active, which can move its system and location verdicts with it; a lesser (info or warning) alarm degrades the component but leaves it occupying its roles. Gated by component:update; read and update scopes drive the 404 versus 403 split.
+         * @description Records a condition on this component, then recomputes health in the same transaction: the component's own verdict moves, and if it is now outage (an alarm at or above the high level), any role it occupies loses it as an occupant while the alarm is active, which can move its system and location verdicts with it; a lesser alarm degrades the component but leaves it occupying its roles. Gated by component:update; read and update scopes drive the 404 versus 403 split.
          */
         post: operations["raise-component-alarm"];
         delete?: never;
@@ -1174,6 +1174,78 @@ export interface paths {
          * @description Patches an endpoint's node placement, params or label; an empty label clears it and the surface falls back to the derived name. Gated by endpoint:update; read and update scopes (through the component) drive the 404 versus 403 split.
          */
         patch: operations["update-endpoint"];
+        trace?: never;
+    };
+    "/event-rules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List event rules
+         * @description Lists the event rules, the authored config that raises alarms, each with its live state as counts (open_alarms, pending_streaks) read in the same query. Rules read like a registry: every rule is listed whatever the caller's scope, while the counts cover only components the caller may read. Gated by rule:read.
+         */
+        get: operations["list-event-rule"];
+        put?: never;
+        /**
+         * Create an event rule
+         * @description Authors a rule that raises an alarm on each component it watches when its sample key meets the fire criteria for the fire sustain, and clears it when the clear criteria (or the negation of fire) holds for the clear sustain. The key must be a registered property or metric, the criteria evaluable on its lane, and the severity a level that exists (else 422); a name already taken is a 409. Audited. Gated by rule:create, with an all-scope grant.
+         */
+        post: operations["create-event-rule"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/event-rules/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get an event rule
+         * @description Returns one event rule by name, with its live state as counts over the components the caller may read. Gated by rule:read.
+         */
+        get: operations["get-event-rule"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete an event rule
+         * @description Removes an operator rule; an official rule is read-only (409). Audited. Gated by rule:delete, with an all-scope grant.
+         */
+        delete: operations["delete-event-rule"];
+        options?: never;
+        head?: never;
+        /**
+         * Update an event rule
+         * @description Patches a rule (an absent field is unchanged), bumping its version; disabling it stops new opens. Official rules are read-only (409). Audited. Gated by rule:update, with an all-scope grant.
+         */
+        patch: operations["update-event-rule"];
+        trace?: never;
+    };
+    "/event-rules/{name}/state": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get an event rule's live state
+         * @description What a rule holds right now: the alarms it raised that are still open, each on a component and instance, and its streaks waiting out a sustain. Only those on components the caller may read are listed. Gated by rule:read.
+         */
+        get: operations["get-event-rule-state"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/event-types": {
@@ -3004,6 +3076,58 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/severity-levels": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List severity levels
+         * @description Lists the severity levels, least to most severe, each with whether an active alarm at it puts a component in outage. Gated by severity_level:read.
+         */
+        get: operations["list-severity-level"];
+        put?: never;
+        /**
+         * Create a severity level
+         * @description Adds an operator severity level at a rank of its own, between two others without renumbering. A name or rank already taken is a 409; a color outside the palette is a 422. Audited. Gated by severity_level:create.
+         */
+        post: operations["create-severity-level"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/severity-levels/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get a severity level
+         * @description Returns one severity level by name. Gated by severity_level:read.
+         */
+        get: operations["get-severity-level"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete a severity level
+         * @description Removes an operator level no alarm or event rule names; an official level or one in use is a 409. Audited. Gated by severity_level:delete.
+         */
+        delete: operations["delete-severity-level"];
+        options?: never;
+        head?: never;
+        /**
+         * Update a severity level
+         * @description Patches an operator level's name, label, color or rank (an absent field is unchanged); a rename carries every alarm at the level with it. Official levels are read-only (409). Audited. Gated by severity_level:update.
+         */
+        patch: operations["update-severity-level"];
+        trace?: never;
+    };
     "/simulation": {
         parameters: {
             query?: never;
@@ -4307,14 +4431,21 @@ export interface components {
              * @description Null while the alarm is active
              */
             cleared_at?: string;
+            /** @description The component the alarm is on, by name */
             component: string;
+            /** @description The component's uuid, the stable form of component */
+            component_id: string;
             /** @description The condition identity: one open alarm per (component, dedup_key) */
             dedup_key: string;
             id: string;
             message: string;
             /** Format: date-time */
             raised_at: string;
-            /** @description info, warning, or critical */
+            /** @description The event rule that raised the alarm, by name; absent when an operator raised it */
+            raised_by_rule?: string;
+            /** @description The raising rule's uuid */
+            raised_by_rule_id?: string;
+            /** @description The severity level the alarm was raised at, by name (see /severity-levels) */
             severity: string;
         };
         AuditEventBody: {
@@ -4736,6 +4867,38 @@ export interface components {
             /** @description A transport name from the code registry (GET /transports); the endpoint is named by it, unique within the component. Exactly one of transport (a bare probe endpoint) or driver (an attach) is set */
             transport?: string;
         };
+        CreateEventRuleInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/CreateEventRuleInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description The criteria that clears it: {op, value}; absent clears on the negation of fire_criteria */
+            clear_criteria?: components["schemas"]["CriteriaBody"];
+            /** @description A Go duration; empty is 0s */
+            clear_sustain?: string;
+            /** @description What the rule watches for and why */
+            description?: string;
+            /** @description Defaults to true */
+            enabled?: boolean;
+            /** @description The criteria that opens an alarm: {op, value} */
+            fire_criteria: components["schemas"]["CriteriaBody"];
+            /** @description A Go duration; empty is 0s */
+            fire_sustain?: string;
+            /** @description A human label; also the alarm message when message is empty */
+            label?: string;
+            /** @description The alarm message; empty uses the label or the name */
+            message?: string;
+            /** @description The rule's name (lowercase kebab) */
+            name: string;
+            /** @description The property or metric the rule reads */
+            sample_key: string;
+            /** @description The components the rule watches (component types and components); absent is every component */
+            selector?: components["schemas"]["SelectorBody"];
+            /** @description The severity level the alarm is raised at, by name */
+            severity: string;
+        };
         CreateEventTypeInputBody: {
             /**
              * Format: uri
@@ -5033,6 +5196,25 @@ export interface components {
             /** @description A secret_type id */
             secret_type: string;
         };
+        CreateSeverityLevelInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/CreateSeverityLevelInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description One of gray, blue, green, yellow, orange, red, darkred */
+            color: string;
+            /** @description A human label */
+            label?: string;
+            /** @description The level's name (lowercase kebab) */
+            name: string;
+            /**
+             * Format: int64
+             * @description Its place among the levels: higher is more severe; unique
+             */
+            rank: number;
+        };
         CreateStandardInputBody: {
             /**
              * Format: uri
@@ -5158,6 +5340,15 @@ export interface components {
             support_phone?: string;
             /** @description The vendor's website (http or https) */
             website?: string;
+        };
+        CriteriaBody: {
+            /**
+             * @description The comparison: a property compares text with eq or ne; a metric compares numbers with any of them
+             * @enum {string}
+             */
+            op: "eq" | "ne" | "gt" | "ge" | "lt" | "le";
+            /** @description The threshold: text for a property, a number for a metric */
+            value: unknown;
         };
         DownloadFileOutputBody: {
             /**
@@ -5461,6 +5652,70 @@ export interface components {
              */
             ts: string;
         };
+        EventRuleBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/EventRuleBody.json
+             */
+            readonly $schema?: string;
+            /** @description When the sample meets this for clear_sustain, the alarm clears; absent, the negation of fire_criteria */
+            clear_criteria?: components["schemas"]["CriteriaBody"];
+            /** @description How long the clear criteria must hold, a Go duration */
+            clear_sustain: string;
+            description?: string;
+            enabled: boolean;
+            /** @description When the sample meets this for fire_sustain, the rule opens an alarm */
+            fire_criteria: components["schemas"]["CriteriaBody"];
+            /** @description How long the fire criteria must hold, a Go duration (0s fires at once) */
+            fire_sustain: string;
+            /** @description The rule's uuid, the stable form of name */
+            id: string;
+            label?: string;
+            /** @description The alarm's message; empty uses the rule's label or name */
+            message?: string;
+            name: string;
+            /** @description Shipped with the platform and read-only */
+            official: boolean;
+            /**
+             * Format: int64
+             * @description How many alarms the rule raised are still open right now (its live state; GET /event-rules/{name}/state lists them)
+             */
+            open_alarms: number;
+            /**
+             * Format: int64
+             * @description How many of the rule's streaks are waiting out a sustain right now
+             */
+            pending_streaks: number;
+            /** @description The property or metric the rule reads */
+            sample_key: string;
+            /**
+             * @description Which lane the key reads, derived from the registries
+             * @enum {string}
+             */
+            sample_lane: "property" | "metric";
+            /** @description The components the rule watches; both lists empty is every component */
+            selector: components["schemas"]["SelectorBody"];
+            /** @description The severity level the alarm is raised at, by name */
+            severity: string;
+            /**
+             * Format: int64
+             * @description Bumps on every update
+             */
+            version: number;
+        };
+        EventRuleStateOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/EventRuleStateOutputBody.json
+             */
+            readonly $schema?: string;
+            /** @description The alarms the rule raised that are still open */
+            open: components["schemas"]["RuleOpenAlarmBody"][] | null;
+            /** @description The rule's streaks waiting out a sustain */
+            pending: components["schemas"]["RuleStreakBody"][] | null;
+        };
         EventTypeBody: {
             /**
              * Format: uri
@@ -5637,7 +5892,10 @@ export interface components {
             name: string;
         };
         HealthAlarmBody: {
+            /** @description The component the alarm is on, by name */
             component: string;
+            /** @description The component's uuid */
+            component_id: string;
             id: string;
             message: string;
             /** Format: date-time */
@@ -5945,6 +6203,15 @@ export interface components {
             readonly $schema?: string;
             endpoints: components["schemas"]["EndpointBody"][] | null;
         };
+        ListEventRulesOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/ListEventRulesOutputBody.json
+             */
+            readonly $schema?: string;
+            event_rules: components["schemas"]["EventRuleBody"][] | null;
+        };
         ListEventTypesOutputBody: {
             /**
              * Format: uri
@@ -6124,6 +6391,15 @@ export interface components {
              */
             readonly $schema?: string;
             secrets: components["schemas"]["SecretBody"][] | null;
+        };
+        ListSeverityLevelsOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/ListSeverityLevelsOutputBody.json
+             */
+            readonly $schema?: string;
+            severity_levels: components["schemas"]["SeverityLevelBody"][] | null;
         };
         ListStandardMetricsOutputBody: {
             /**
@@ -6422,6 +6698,8 @@ export interface components {
              * @example /api/v1/schemas/MeOutputBody.json
              */
             readonly $schema?: string;
+            /** @description The permissions the caller holds on an all-scope grant, flattened like permissions. Writing fleet-wide config (an event rule) needs its permission here; a grant bounded to a place or system does not reach it. A UI hint; the server is the authority. */
+            fleet_permissions: string[] | null;
             grants: components["schemas"]["GrantBody"][] | null;
             human?: components["schemas"]["HumanBody"];
             permissions: string[] | null;
@@ -6839,11 +7117,8 @@ export interface components {
             dedup_key?: string;
             /** @description What is wrong, for the operator reading it later */
             message?: string;
-            /**
-             * @description How bad it is; critical puts the component itself in outage
-             * @enum {string}
-             */
-            severity: "info" | "warning" | "critical";
+            /** @description How bad it is: a severity level by name (see /severity-levels); a level at or above high puts the component itself in outage */
+            severity: string;
         };
         ReachEndpointBody: {
             /** @description The probed address (target[:port]) from the endpoint params */
@@ -7229,6 +7504,35 @@ export interface components {
             permission_universe: string[] | null;
             roles: components["schemas"]["RoleBody"][] | null;
         };
+        RuleOpenAlarmBody: {
+            alarm_id: string;
+            /** @description The component, by name */
+            component: string;
+            /** @description The component's uuid */
+            component_id: string;
+            /** @description The sample instance (an endpoint) the alarm is about */
+            instance?: string;
+            /** Format: date-time */
+            raised_at: string;
+            severity: string;
+        };
+        RuleStreakBody: {
+            /** @description The component, by name */
+            component: string;
+            /** @description The component's uuid */
+            component_id: string;
+            instance?: string;
+            /**
+             * @description The action the rule's samples point at, waiting out its sustain
+             * @enum {string}
+             */
+            pending: "fire" | "clear";
+            /**
+             * Format: date-time
+             * @description When the streak began
+             */
+            since: string;
+        };
         SecretBody: {
             /**
              * Format: uri
@@ -7275,6 +7579,12 @@ export interface components {
             origin: string;
             secret: boolean;
             type: string;
+        };
+        SelectorBody: {
+            /** @description Watch components whose type falls within one of these component types */
+            component_types?: string[] | null;
+            /** @description Watch these components (by name or id on write; ids on read) */
+            components?: string[] | null;
         };
         SessionBody: {
             /** @description The IP address the credential was created from */
@@ -7452,6 +7762,33 @@ export interface components {
                 [key: string]: string;
             };
             values: components["schemas"]["Settings"];
+        };
+        SeverityLevelBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/SeverityLevelBody.json
+             */
+            readonly $schema?: string;
+            /**
+             * @description The hue the console renders the level in
+             * @enum {string}
+             */
+            color: "gray" | "blue" | "green" | "yellow" | "orange" | "red" | "darkred";
+            /** @description The level's uuid, the stable form of name */
+            id: string;
+            label?: string;
+            /** @description The level's name; alarms and rules name it */
+            name: string;
+            /** @description Shipped with the platform and read-only */
+            official: boolean;
+            /** @description Whether an active alarm at this level puts its component in outage (at or above the high level's rank); below it, an alarm degrades */
+            outage: boolean;
+            /**
+             * Format: int64
+             * @description Compares levels: higher is more severe
+             */
+            rank: number;
         };
         SimCapabilities: {
             low_ports: boolean;
@@ -8145,6 +8482,38 @@ export interface components {
             /** @description Replace the address/target settings (jsonb) */
             params?: unknown;
         };
+        UpdateEventRuleInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/UpdateEventRuleInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description The criteria that clears it: {op, value}; absent clears on the negation of fire_criteria */
+            clear_criteria?: components["schemas"]["CriteriaBody"];
+            /** @description Drop the clear criteria, so the rule clears on the negation of its fire criteria */
+            clear_negates?: boolean;
+            /** @description How long the clear criteria must hold, a Go duration; empty is 0s */
+            clear_sustain?: string;
+            /** @description What the rule watches for and why */
+            description?: string;
+            /** @description Whether the rule evaluates; defaults to true on create */
+            enabled?: boolean;
+            /** @description The criteria that opens an alarm: {op, value} */
+            fire_criteria?: components["schemas"]["CriteriaBody"];
+            /** @description How long the fire criteria must hold, a Go duration (e.g. 30s); empty is 0s */
+            fire_sustain?: string;
+            /** @description A human label; also the alarm message when message is empty */
+            label?: string;
+            /** @description The alarm message; empty uses the label or the name */
+            message?: string;
+            /** @description The property or metric the rule reads */
+            sample_key?: string;
+            /** @description Replace the components the rule watches; absent leaves them unchanged, and an empty selector watches every component */
+            selector?: components["schemas"]["SelectorBody"];
+            /** @description The severity level the alarm is raised at, by name */
+            severity?: string;
+        };
         UpdateEventTypeInputBody: {
             /**
              * Format: uri
@@ -8314,6 +8683,25 @@ export interface components {
             };
             /** @description A new label; an empty string clears it, and the surface falls back to the name. Omit to leave it alone */
             label?: string;
+        };
+        UpdateSeverityLevelInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/UpdateSeverityLevelInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description One of gray, blue, green, yellow, orange, red, darkred */
+            color?: string;
+            /** @description A human label */
+            label?: string;
+            /** @description A new name; every alarm at this level follows */
+            name?: string;
+            /**
+             * Format: int64
+             * @description Its place among the levels; unique
+             */
+            rank?: number;
         };
         UpdateStandardInputBody: {
             /**
@@ -10868,6 +11256,198 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EndpointBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "list-event-rule": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListEventRulesOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "create-event-rule": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateEventRuleInputBody"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EventRuleBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "get-event-rule": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The rule's name */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EventRuleBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "delete-event-rule": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The rule's name */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "update-event-rule": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The rule's name */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateEventRuleInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EventRuleBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "get-event-rule-state": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The rule's name */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EventRuleStateOutputBody"];
                 };
             };
             /** @description Error */
@@ -14920,6 +15500,166 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "list-severity-level": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListSeverityLevelsOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "create-severity-level": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateSeverityLevelInputBody"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SeverityLevelBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "get-severity-level": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The level's name */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SeverityLevelBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "delete-severity-level": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The level's name */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "update-severity-level": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The level's name */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateSeverityLevelInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SeverityLevelBody"];
+                };
             };
             /** @description Error */
             default: {

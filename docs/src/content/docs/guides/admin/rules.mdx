@@ -1,0 +1,183 @@
+---
+title: Rules and severity
+description: "Writing an event rule: what it reads, when it opens and clears an alarm, how long a condition must hold, the severity level it raises at, and how to watch it work, from the console, the CLI, or the API."
+walkthroughs:
+  - id: watch-a-rule-raise-an-alarm
+---
+
+import SeededSet from '../../../../components/SeededSet.astro';
+
+**Catalog, under Actions: Rules** (with `rule:read`) is where alarms come from when nobody raises
+them by hand. An **event rule** watches one property or metric on the components it selects, opens
+an alarm on a component when the value meets its **fire criteria** for long enough, and clears it
+when the value meets its **clear criteria**. The alarm it opens is an ordinary alarm: it takes its
+component's verdict down, a system role the component fills stops counting it while it is out, and
+it can be acknowledged like any other ([alarms on a component](/guides/operator/entities/#alarms-on-a-component)).
+How the evaluator works is on [alarms and actions](/architecture/alarms-actions/#the-event_rule).
+
+Beside it, **Catalog, under Actions: Severity** (with `severity_level:read`) lists the levels a rule
+raises at.
+
+Rules **read like a registry**: any grant carrying `rule:read`, wherever it is scoped, lists every
+rule. The live counts and a rule's open alarms and streaks name components, so they cover only the
+components you may read. **Writing** a rule is fleet-wide, since its selector reaches every component:
+a caller who holds `rule:create` only on a grant bounded to a place or system is not offered **New
+rule** (nor Edit, Disable or Delete without the matching permission on an all-scope grant), since the
+server would refuse the write.
+
+## The rule that ships
+
+One rule ships with Omniglass, rendered here from the seed itself:
+
+<SeededSet kind="event_rules" />
+
+It is **official**: it updates with Omniglass, so it is read-only, and the blade greys Edit and
+Delete with that reason. It is what makes an unplugged component move its system: unplug a
+simulated component ([simulate a fleet](/guides/operator/simulation/#break-it-on-purpose)) and, once
+its endpoint has read `down` for the rule's fire sustain (above), the rule's row on the Rules page
+shows **1 open**, its blade lists the component and the endpoint, and the component and its system
+carry an alarm at the rule's severity with its label as the message. The sustain is timed from the
+server's receipt of the first `down` sample, and judged on the server's 5s sweep tick, so the alarm
+opens up to a tick after the sustain runs out. Opened from its system, the component's blade names the
+rule beside the alarm (**by rule** `reachability-lost`), so an alarm a rule raised is never mistaken
+for one a person raised. Plug it back in and the next `up` reading clears it.
+
+The walkthrough below unplugs a simulated touch panel and watches the rule's blade, live: the streak
+waiting out the sustain, then the open alarm, then the panel's system gone degraded. Plugging it back
+in is left out, since the wait for the alarm already fills most of the recording.
+
+::walkthrough{#watch-a-rule-raise-an-alarm}
+
+## Read the list
+
+Each row is a rule: its **name** (label above), what it **reads** (the sample key and its lane),
+its **criteria** in words ("reads above 40 °C for 1m", "clears on the opposite"), its **severity** in
+the level's color, its **live** state, and its **origin** (official or custom). The live column counts
+ride on the list itself, which refreshes every 10 seconds:
+
+- **N open**: alarms the rule raised that are still open, one per component and endpoint.
+- **N pending**: components whose samples point at fire (or clear) and are waiting out the sustain.
+- **disabled**: the rule evaluates nothing, and holds nothing open (disabling cleared it).
+- **clear**: enabled, and holding nothing right now.
+
+Pick a row to open its blade: the criteria, what it watches, and the two live lists, each component
+linked to its own page with where it sits. The list does not yet say when the rule last judged a
+sample (#929).
+
+## Write a rule
+
+**New rule** (with `rule:create`) opens a drawer. The fields, top to bottom:
+
+- **Name**: a lowercase kebab name (`input-moved`). It cannot change later.
+- **Label**: optional; it is also the alarm's message when **Message** is blank.
+- **Reads**: one property or metric from the catalogs. Its **lane** decides how it compares: a
+  property is text, compared only for equality; a metric is a number, compared any way. The
+  comparison list beside the value offers exactly what the chosen key's lane allows, in words.
+- **Fires when it reads**: the comparison and the value that open an alarm. The value is used exactly
+  as typed: a property value with leading or trailing spaces is refused rather than trimmed (it would
+  never match), and a metric value must be a plain decimal (`40`, `-2.5`).
+- **For at least**: the **fire sustain**, a duration (`30s`, `2m`). The value has to keep meeting the
+  criteria this long before the alarm opens; one sample that does not starts the wait over. The
+  sustain is timed from the server's receipt of the first sample that meets the criteria and judged
+  on the server's 5s sweep tick. Blank acts at once.
+- **Clears**: on the opposite of the fire criteria, or on criteria of their own (then **Clears when
+  it reads** asks for them). A rule that fires above 40 and clears below 35 does not flap at 39.9.
+- **Clears after at least**: the **clear sustain**, set independently: a long clear sustain holds an
+  incident through a noisy recovery without delaying the alarm.
+- **Severity**: the level the alarm is raised at, worst first. A level marked outage takes its
+  component out; any other degrades it.
+- **Watches component types** and **Watches components**: the components it selects. A type
+  includes every type beneath it. Leave both empty to watch every component.
+- **Message**, **Description**, **Enabled**.
+
+Every field is checked as you type and **Create rule** stays refused until the rule is whole. When it
+is created, the rule judges the newest sample of every series it selects at once, so a condition
+that already holds starts its sustain then rather than waiting for the next change.
+
+### A worked example
+
+A touch panel with two inputs reports the one it shows as its `video-input` property (`hdmi1` or
+`hdmi2`). To be told when one is switched to `hdmi2`, that is, off HDMI 1:
+
+1. **New rule**, name `input-moved`, label `Input moved off HDMI 1`.
+2. **Reads** Video Input (`video-input`); **Fires when it reads** **is** `hdmi2`; **Clears** on the
+   opposite.
+3. **Severity** a level that degrades rather than takes the panel out.
+4. **Create rule**.
+
+Switch a simulated panel's input (`omniglass component simulation fire <panel> --surface nvp
+--command "SET INPUT hdmi2"`) and, on the next poll, the rule shows **1 open**, the panel's page
+shows the alarm in the level's color with the rule's label as its message, and the panel itself reads
+degraded (its system moves too if the panel fills one of its roles). Switch it back and it clears. On
+a panel with more than two inputs, fire on **is not** `hdmi1` instead, so any other input counts.
+
+## Edit, disable, delete
+
+On a custom rule's blade, **Edit** (with `rule:update`) reopens the drawer with everything but the
+name. Saving sends only what you changed, so a rule that still watches a component or component type
+deleted since it was written stays editable: the form marks such an entry **deleted** (it matches
+nothing by it) and you can remove it or leave it. Changing what the rule judges (its key, criteria, selector or sustains) starts its pending
+streaks over and judges the newest samples again; changing its label, description, message or
+severity leaves them running. Narrowing what it watches clears its alarms on the components it no
+longer selects. **Disable** stops evaluation and clears the alarms the rule holds open (each stays in
+its component's history as cleared); **Enable** judges the newest samples at once, so a condition that
+still holds starts its sustain again. **Delete** (with `rule:delete`, behind a confirm) clears what the
+rule holds open the same way and removes it; its past alarms stay in each component's history, no
+longer naming it.
+
+## Severity levels
+
+**Catalog, under Actions: Severity** lists the levels worst first: each one's **rank** (higher is
+worse), how it **looks** (the chip every alarm at that level wears), its **effect** (whether an
+active alarm at it puts its component in **outage** or only **degrades** it), and its origin. The
+shipped levels, rendered from the seed:
+
+<SeededSet kind="severity_levels" />
+
+They are spaced apart, so a level of your own slots between two without renumbering; whether a level
+is an outage follows from its rank, against a fixed floor the table above marks. The page is a read view: author your own levels from the
+CLI or the API (#930), with `severity_level:create`. An official level is read-only; a level an alarm
+or a rule still names cannot be deleted; renaming a level carries every alarm at it; re-ranking one
+across the outage floor recomputes the health of every component with an open alarm at it.
+
+```sh
+omniglass severity-level list
+omniglass severity-level create --name major --label Major --color orange --rank 35
+omniglass severity-level update major --label "P2"
+omniglass severity-level delete major
+```
+
+The colors a level may take are listed under `--color` in the
+[CLI reference](/reference/cli/#omniglass-severity-level-create), generated from the API.
+
+## From the CLI and the API
+
+Every console action is the same API call, with the same checks
+(see the [CLI reference](/reference/cli/) and the API reference for the full flags and bodies):
+
+| Console | CLI | API |
+|---|---|---|
+| List | `omniglass event-rule list` | `GET /event-rules` |
+| Open a rule | `omniglass event-rule get <name>` | `GET /event-rules/{name}` |
+| Its live state | `omniglass event-rule state list <name>` | `GET /event-rules/{name}/state` |
+| New rule | `omniglass event-rule create` | `POST /event-rules` |
+| Edit, Disable, Enable | `omniglass event-rule update <name>` | `PATCH /event-rules/{name}` |
+| Delete | `omniglass event-rule delete <name>` | `DELETE /event-rules/{name}` |
+
+The worked example from a terminal, with criteria as JSON (`{op, value}`, the comparisons the API
+reference lists for `op`) and sustains as durations:
+
+```sh
+omniglass event-rule create --name input-moved --label "Input moved off HDMI 1" \
+  --sample-key video-input --fire-criteria '{"op":"eq","value":"hdmi2"}' --severity average
+omniglass event-rule create --name slow-to-answer --sample-key icmp-rtt-avg \
+  --fire-criteria '{"op":"gt","value":200}' --fire-sustain 2m \
+  --clear-criteria '{"op":"lt","value":100}' --clear-sustain 5m --severity warning \
+  --selector '{"component_types":["display"]}'
+omniglass event-rule update slow-to-answer --enabled=false
+omniglass event-rule state list input-moved
+```
+
+A key that is not a registered property or metric, criteria its lane cannot compare, or a severity
+level that does not exist is refused with a 422; a name already taken is a 409; an official rule
+refuses every write with a 409. Every write is audited.

@@ -18,6 +18,7 @@ import { LOCATION_TYPES_KEY } from "../lib/location_types";
 import { ME_KEY, type Me } from "../lib/auth";
 import { TAGS_KEY } from "../lib/tags";
 import { uuidFor } from "../lib/testids";
+import { seedSeverityLevels } from "../lib/testseverity";
 import type { EffectiveRole } from "../lib/system_zoom";
 
 // The system zoom's chrome (#636): one card per role with the server's own
@@ -73,7 +74,7 @@ const health: FleetHealth = {
     {
       name: "room-mic", label: "Room Microphone", impact: "degraded", quorum: 2, satisfying: 1, short: 1, spare: 1,
       impaired: true, active: true, assigned_to: ["videobar-1", "mic-1"], down: ["mic-1"],
-      alarms: [{ id: "al-1", component: uuidFor("szp-c-mic"), severity: "critical", message: "No route to host", raised_at: "2026-08-15T14:20:00Z" }],
+      alarms: [{ id: "al-1", component: "mic-1", component_id: uuidFor("szp-c-mic"), severity: "high", message: "No route to host", raised_at: "2026-08-15T14:20:00Z" }],
     },
     {
       name: "conf-bar", label: "Conferencing Bar", impact: "outage", quorum: 1, satisfying: 1, short: 0, spare: 0,
@@ -116,6 +117,7 @@ const declared = [
 
 function mount(path = `/web/systems/${uuidFor("szp-sys")}`, healthOverride: FleetHealth = health, metrics: unknown[] = [], standards: unknown[] = [], meOverride: Me = me) {
   const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
+  seedSeverityLevels(qc);
   qc.setQueryData([...FLEET_VIEW_KEY], view);
   qc.setQueryData([...ME_KEY], meOverride);
   qc.setQueryData([...SYSTEMS_KEY], [{ id: uuidFor("szp-sys"), name: "boardroom", label: "Boardroom", standard: "huddle-room" }]);
@@ -226,6 +228,30 @@ describe("the system zoom", () => {
     expect(within(strip).getByText("No route to host")).toBeTruthy();
     expect(within(strip).getByText(/Room Microphone/)).toBeTruthy();
     expect(within(strip).getByRole("button", { name: /mic-1/ })).toBeTruthy();
+  });
+
+  // The report names an alarm's component by name and by uuid (#557): the
+  // link and the card's message key on the uuid, the text is the name.
+  it("an alarm opens its component's blade by uuid, and its message rides that component's card", async () => {
+    mount();
+    expect(within(screen.getByTestId(`member-${uuidFor("szp-c-mic")}`)).getByText("No route to host")).toBeTruthy();
+    fireEvent.click(within(screen.getByTestId("alarm-strip")).getByRole("button", { name: "mic-1" }));
+    const blade = await screen.findByRole("dialog");
+    expect(blade.getAttribute("aria-labelledby")).toBe(`blade-title-component-${uuidFor("szp-c-mic")}`);
+  });
+
+  // The strip's tone and each marker's follow the registry's outage flag (#917).
+  it("tones the alarm strip red when an alarm on it is at an outage level, amber otherwise", () => {
+    mount();
+    const strip = screen.getByTestId("alarm-strip");
+    expect(strip.classList.contains("border-error/40")).toBe(true);
+    expect(within(strip).getByText("High").classList.contains("badge-error")).toBe(true);
+    cleanup();
+    const degrading = { ...health, roles: (health.roles ?? []).map((r) => ({ ...r, alarms: (r.alarms ?? []).map((a) => ({ ...a, severity: "average" })) })) } as FleetHealth;
+    mount(undefined, degrading);
+    const amber = screen.getByTestId("alarm-strip");
+    expect(amber.classList.contains("border-warning/40")).toBe(true);
+    expect(within(amber).getByText("Average").classList.contains("badge-average")).toBe(true);
   });
 
   // The history strip is Activity's (#872): Overview's header already says
@@ -376,10 +402,10 @@ describe("the history tab (#792)", () => {
 
   function seedAlarms(qc: QueryClient) {
     qc.setQueryData([...componentAlarmsKey(uuidFor("szp-c-mic"))], [
-      { id: "hal-1", component: uuidFor("szp-c-mic"), severity: "critical", message: "No route to host", raised_at: "2026-08-15T14:20:00Z", active: true, acknowledged: false },
+      { id: "hal-1", component: "mic-1", component_id: uuidFor("szp-c-mic"), severity: "high", message: "No route to host", raised_at: "2026-08-15T14:20:00Z", active: true, acknowledged: false },
     ]);
     qc.setQueryData([...componentAlarmsKey(uuidFor("szp-c-bar"))], [
-      { id: "hal-0", component: uuidFor("szp-c-bar"), severity: "warning", message: "Fan speed high", raised_at: "2026-08-09T09:12:00Z", cleared_at: "2026-08-09T09:53:00Z", active: false, acknowledged: true },
+      { id: "hal-0", component: "videobar-1", component_id: uuidFor("szp-c-bar"), severity: "warning", message: "Fan speed high", raised_at: "2026-08-09T09:12:00Z", cleared_at: "2026-08-09T09:53:00Z", active: false, acknowledged: true },
     ]);
     qc.setQueryData([...componentAlarmsKey(uuidFor("szp-c-power"))], []);
   }
@@ -427,6 +453,8 @@ describe("the history tab (#792)", () => {
     const r = mount(`/web/systems/${uuidFor("szp-sys")}?tab=history`);
     seedAlarms(r.qc);
     await waitFor(() => expect(screen.getAllByTestId(/^incident-marker-/)).toHaveLength(2));
+    expect(screen.getByTestId("incident-marker-hal-1").classList.contains("border-b-error")).toBe(true);
+    expect(screen.getByTestId("incident-marker-hal-0").classList.contains("border-b-warning")).toBe(true);
   });
 });
 

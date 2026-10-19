@@ -18,6 +18,7 @@ import (
 // a system in its deepest room, a standard that wants one table mic, and a room
 // bar staffing it. Everything below asserts on how an alarm travels this chain.
 type healthFixture struct {
+	dsn  string
 	gw   *storage.PG
 	conn *pgx.Conn
 	all  scope.Set
@@ -45,7 +46,7 @@ func newHealthFixture(t *testing.T) *healthFixture {
 	}
 	t.Cleanup(func() { _ = conn.Close(ctx) })
 
-	f := &healthFixture{gw: gw, conn: conn, all: scope.Set{All: true}}
+	f := &healthFixture{dsn: dsn, gw: gw, conn: conn, all: scope.Set{All: true}}
 
 	// hq (campus) > hq-b1 (building) > hq-r1 (room), with the system in the room,
 	// so the rollup has two ancestor hops to climb and a miss is visible.
@@ -182,10 +183,10 @@ func TestHealthTransitionsThroughTheChain(t *testing.T) {
 		before[o] = n
 	}
 
-	// The critical alarm takes bar-1 down, its only occupant, so the role drops
+	// The high alarm takes bar-1 down, its only occupant, so the role drops
 	// below quorum.
 	alarm, err := f.gw.RaiseAlarm(ctx, "", "bar-1", storage.AlarmSpec{
-		Severity: "critical", Message: "mic array not responding",
+		Severity: "high", Message: "mic array not responding",
 	})
 	if err != nil {
 		t.Fatalf("raise alarm: %v", err)
@@ -262,7 +263,7 @@ func TestHealthReportNamesTheCause(t *testing.T) {
 	ctx := context.Background()
 
 	alarm, err := f.gw.RaiseAlarm(ctx, "", "bar-1", storage.AlarmSpec{
-		Severity: "critical", Message: "mic array not responding",
+		Severity: "high", Message: "mic array not responding",
 	})
 	if err != nil {
 		t.Fatalf("raise alarm: %v", err)
@@ -326,7 +327,7 @@ func TestHealthImpactAndQuorum(t *testing.T) {
 	ctx := context.Background()
 
 	if _, err := f.gw.RaiseAlarm(ctx, "", "bar-1", storage.AlarmSpec{
-		Severity: "critical", Message: "mic dead",
+		Severity: "high", Message: "mic dead",
 	}); err != nil {
 		t.Fatalf("raise alarm: %v", err)
 	}
@@ -403,7 +404,7 @@ func TestHealthMovesOnUnassign(t *testing.T) {
 	// critical one stops it occupying the slot because its own verdict went to
 	// outage.
 	alarm, err := f.gw.RaiseAlarm(ctx, "", "bar-1", storage.AlarmSpec{
-		Severity: "critical", Message: "mic dead",
+		Severity: "high", Message: "mic dead",
 	})
 	if err != nil {
 		t.Fatalf("raise alarm: %v", err)
@@ -710,7 +711,7 @@ func TestHealthMovesOnRelocation(t *testing.T) {
 	f.mustLocation(t, ctx, "hq-r2", "room", ptrStr("hq-b2"))
 
 	if _, err := f.gw.RaiseAlarm(ctx, "", "bar-1", storage.AlarmSpec{
-		Severity: "critical", Message: "mic dead",
+		Severity: "high", Message: "mic dead",
 	}); err != nil {
 		t.Fatalf("raise alarm: %v", err)
 	}
@@ -905,7 +906,7 @@ func TestAlarmImpairsComponentImpairsSlot(t *testing.T) {
 	}
 
 	if _, err := f.gw.RaiseAlarm(ctx, "", "bar-1", storage.AlarmSpec{
-		Severity: "critical", Message: "mic array not responding",
+		Severity: "high", Message: "mic array not responding",
 	}); err != nil {
 		t.Fatalf("raise alarm: %v", err)
 	}
@@ -999,7 +1000,7 @@ func TestAlarmOnSpareDoesNotShort(t *testing.T) {
 	}
 
 	if _, err := f.gw.RaiseAlarm(ctx, "", "bar-1", storage.AlarmSpec{
-		Severity: "critical", Message: "mic array not responding",
+		Severity: "high", Message: "mic array not responding",
 	}); err != nil {
 		t.Fatalf("raise alarm: %v", err)
 	}
@@ -1073,7 +1074,7 @@ func TestShortAndUnderstaffedDivergeOnCriticalAlarm(t *testing.T) {
 		ctx := context.Background()
 
 		if _, err := f.gw.RaiseAlarm(ctx, "", "bar-1", storage.AlarmSpec{
-			Severity: "critical", Message: "mic array not responding",
+			Severity: "high", Message: "mic array not responding",
 		}); err != nil {
 			t.Fatalf("raise alarm: %v", err)
 		}
@@ -1117,7 +1118,7 @@ func TestRaiseAlarmWithoutCapabilities(t *testing.T) {
 	if err != nil {
 		t.Fatalf("raise alarm: %v", err)
 	}
-	if alarm.ComponentID != "bar-1" || alarm.Severity != "warning" ||
+	if alarm.ComponentName != "bar-1" || alarm.Severity != "warning" ||
 		alarm.Message != "mic array not responding" || alarm.DedupKey != "mic-fault" || !alarm.Active() {
 		t.Fatalf("alarm = %+v, want it to round-trip exactly what was raised", alarm)
 	}
@@ -1128,5 +1129,10 @@ func TestRaiseAlarmWithoutCapabilities(t *testing.T) {
 	}
 	if len(got) != 1 || got[0].ID != alarm.ID {
 		t.Fatalf("listed alarms = %+v, want the one just raised", got)
+	}
+	// #557: the winning raise and every read agree on the component, its uuid
+	// and its name, rather than the raise echoing the caller's reference.
+	if got[0].ComponentID != alarm.ComponentID || got[0].ComponentName != "bar-1" || alarm.ComponentID == "bar-1" {
+		t.Fatalf("raise said component %q (%q), the list %q (%q): want one uuid and one name", alarm.ComponentID, alarm.ComponentName, got[0].ComponentID, got[0].ComponentName)
 	}
 }

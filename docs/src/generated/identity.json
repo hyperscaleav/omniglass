@@ -67,6 +67,18 @@
       "labelled": false
     },
     {
+      "table": "event_rule",
+      "shape": "key-bearing",
+      "reason": "reach-lost, a rule an alarm names as what raised it",
+      "labelled": true
+    },
+    {
+      "table": "event_rule_state",
+      "shape": "id only",
+      "reason": "a rule's pending streak, keyed by rule, component and instance; nothing addresses it by name",
+      "labelled": false
+    },
+    {
       "table": "event_type",
       "shape": "keyspace",
       "reason": "call-started, an occurrence name",
@@ -228,6 +240,12 @@
       "table": "setting_override",
       "shape": "id only",
       "labelled": false
+    },
+    {
+      "table": "severity_level",
+      "shape": "key-bearing",
+      "reason": "high, a named level rules and alarms reference",
+      "labelled": true
     },
     {
       "table": "sim_impairment",

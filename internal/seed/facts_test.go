@@ -154,3 +154,36 @@ func TestSeedFactsMatchesCommitted(t *testing.T) {
 		t.Error("docs/src/generated/seed.json drifted from the embedded seed YAMLs: run make gen and commit the result")
 	}
 }
+
+// TestSeedFactsSeverityAndRules pins the severity registry and the official
+// event rules into the facts artifact (#921), so the alarms page and the rules
+// guide render the shipped levels and rules instead of restating them: each
+// level with its outage flag computed by the health rule's own floor.
+func TestSeedFactsSeverityAndRules(t *testing.T) {
+	raw, err := FactsJSON()
+	if err != nil {
+		t.Fatalf("FactsJSON: %v", err)
+	}
+	var doc struct {
+		SeverityLevels []factsSeverityLevel `json:"severity_levels"`
+		EventRules     []factsEventRule     `json:"event_rules"`
+	}
+	if err := json.Unmarshal(raw, &doc); err != nil {
+		t.Fatalf("facts JSON does not parse: %v", err)
+	}
+	got := map[string]factsSeverityLevel{}
+	for _, l := range doc.SeverityLevels {
+		got[l.Name] = l
+	}
+	if len(got) != 5 || got["high"].Rank != 40 || !got["high"].Outage || got["average"].Outage || got["disaster"].Color != "darkred" {
+		t.Errorf("severity_levels = %+v, want the five shipped levels with high and above an outage", doc.SeverityLevels)
+	}
+	if len(doc.EventRules) != 1 {
+		t.Fatalf("event_rules = %+v, want the one official rule", doc.EventRules)
+	}
+	r := doc.EventRules[0]
+	if r.Name != "reachability-lost" || r.SampleKey != "endpoint-reachable" || r.Fire != "eq down" || r.Clear != "eq up" ||
+		r.FireSustain != "15s" || r.Severity != "high" {
+		t.Errorf("event_rules[0] = %+v", r)
+	}
+}

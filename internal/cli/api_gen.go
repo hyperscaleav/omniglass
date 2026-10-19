@@ -195,7 +195,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "me",
 					Short:   "The authenticated principal, its permissions, and grants",
-					Long:    "Returns the caller's principal, flattened permissions (a UI hint and the fast-reject set), and grants. Requires authentication.",
+					Long:    "Returns the caller's principal, flattened permissions (a UI hint and the fast-reject set), the permissions held on an all-scope grant (fleet_permissions), and grants. Requires authentication.",
 					Example: "  omniglass auth me",
 					Args:    cobra.ExactArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -509,7 +509,7 @@ func generatedCommands() []*cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "create <name>",
 						Short:   "Raise an alarm on a component",
-						Long:    "Records a condition on this component, then recomputes health in the same transaction: the component's own verdict moves, and if it is now outage (a critical alarm), any role it occupies loses it as an occupant while the alarm is active, which can move its system and location verdicts with it; a lesser (info or warning) alarm degrades the component but leaves it occupying its roles. Gated by component:update; read and update scopes drive the 404 versus 403 split.",
+						Long:    "Records a condition on this component, then recomputes health in the same transaction: the component's own verdict moves, and if it is now outage (an alarm at or above the high level), any role it occupies loses it as an occupant while the alarm is active, which can move its system and location verdicts with it; a lesser alarm degrades the component but leaves it occupying its roles. Gated by component:update; read and update scopes drive the 404 versus 403 split.",
 						Example: "  omniglass component alarm create <name> --severity severity",
 						Args:    cobra.ExactArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
@@ -529,7 +529,7 @@ func generatedCommands() []*cobra.Command {
 					}
 					cmd.Flags().StringVar(&fDedupKey, "dedup-key", "", "The condition identity; defaults to the message. Raising an already-open (component, dedup_key) returns the existing open alarm instead of a duplicate")
 					cmd.Flags().StringVar(&fMessage, "message", "", "What is wrong, for the operator reading it later")
-					cmd.Flags().StringVar(&fSeverity, "severity", "", "How bad it is; critical puts the component itself in outage")
+					cmd.Flags().StringVar(&fSeverity, "severity", "", "How bad it is: a severity level by name (see /severity-levels); a level at or above high puts the component itself in outage")
 					_ = cmd.MarkFlagRequired("severity")
 					return cmd
 				}()
@@ -1958,6 +1958,248 @@ func generatedCommands() []*cobra.Command {
 				cmd.Flags().StringVar(&fLabel, "label", "", "A new label; an empty string clears it, and the surface falls back to the derived name. Omit to leave it alone")
 				cmd.Flags().StringVar(&fNode, "node", "", "Reassign the node placement, by name or id")
 				cmd.Flags().StringVar(&fParams, "params", "", "Replace the address/target settings (jsonb)")
+				return cmd
+			}()
+			return cmd
+		}())
+		return parent
+	}())
+	roots = append(roots, func() *cobra.Command {
+		parent := &cobra.Command{
+			Use:   "event-rule",
+			Short: "Commands for the event-rule resource",
+		}
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				var fClearCriteria string
+				var fClearSustain string
+				var fDescription string
+				var fEnabled bool
+				var fFireCriteria string
+				var fFireSustain string
+				var fLabel string
+				var fMessage string
+				var fName string
+				var fSampleKey string
+				var fSelector string
+				var fSeverity string
+				cmd := &cobra.Command{
+					Use:     "create",
+					Short:   "Create an event rule",
+					Long:    "Authors a rule that raises an alarm on each component it watches when its sample key meets the fire criteria for the fire sustain, and clears it when the clear criteria (or the negation of fire) holds for the clear sustain. The key must be a registered property or metric, the criteria evaluable on its lane, and the severity a level that exists (else 422); a name already taken is a 409. Audited. Gated by rule:create, with an all-scope grant.",
+					Example: "  omniglass event-rule create --fire-criteria <json> --name name --sample-key sample_key --severity severity",
+					Args:    cobra.ExactArgs(0),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/event-rules")
+						body := map[string]any{}
+						if cmd.Flags().Changed("clear-criteria") {
+							body["clear_criteria"] = jsonOrString(fClearCriteria)
+						}
+						if cmd.Flags().Changed("clear-sustain") {
+							body["clear_sustain"] = fClearSustain
+						}
+						if cmd.Flags().Changed("description") {
+							body["description"] = fDescription
+						}
+						if cmd.Flags().Changed("enabled") {
+							body["enabled"] = fEnabled
+						}
+						if cmd.Flags().Changed("fire-criteria") {
+							body["fire_criteria"] = jsonOrString(fFireCriteria)
+						}
+						if cmd.Flags().Changed("fire-sustain") {
+							body["fire_sustain"] = fFireSustain
+						}
+						if cmd.Flags().Changed("label") {
+							body["label"] = fLabel
+						}
+						if cmd.Flags().Changed("message") {
+							body["message"] = fMessage
+						}
+						if cmd.Flags().Changed("name") {
+							body["name"] = fName
+						}
+						if cmd.Flags().Changed("sample-key") {
+							body["sample_key"] = fSampleKey
+						}
+						if cmd.Flags().Changed("selector") {
+							body["selector"] = jsonOrString(fSelector)
+						}
+						if cmd.Flags().Changed("severity") {
+							body["severity"] = fSeverity
+						}
+						return runAPICommand(cmd, "POST", path, body)
+					},
+				}
+				cmd.Flags().StringVar(&fClearCriteria, "clear-criteria", "", "The criteria that clears it: {op, value}; absent clears on the negation of fire_criteria")
+				cmd.Flags().StringVar(&fClearSustain, "clear-sustain", "", "A Go duration; empty is 0s")
+				cmd.Flags().StringVar(&fDescription, "description", "", "What the rule watches for and why")
+				cmd.Flags().BoolVar(&fEnabled, "enabled", false, "Defaults to true")
+				cmd.Flags().StringVar(&fFireCriteria, "fire-criteria", "", "The criteria that opens an alarm: {op, value}")
+				_ = cmd.MarkFlagRequired("fire-criteria")
+				cmd.Flags().StringVar(&fFireSustain, "fire-sustain", "", "A Go duration; empty is 0s")
+				cmd.Flags().StringVar(&fLabel, "label", "", "A human label; also the alarm message when message is empty")
+				cmd.Flags().StringVar(&fMessage, "message", "", "The alarm message; empty uses the label or the name")
+				cmd.Flags().StringVar(&fName, "name", "", "The rule's name (lowercase kebab)")
+				_ = cmd.MarkFlagRequired("name")
+				cmd.Flags().StringVar(&fSampleKey, "sample-key", "", "The property or metric the rule reads")
+				_ = cmd.MarkFlagRequired("sample-key")
+				cmd.Flags().StringVar(&fSelector, "selector", "", "The components the rule watches (component types and components); absent is every component")
+				cmd.Flags().StringVar(&fSeverity, "severity", "", "The severity level the alarm is raised at, by name")
+				_ = cmd.MarkFlagRequired("severity")
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				cmd := &cobra.Command{
+					Use:     "delete <name>",
+					Short:   "Delete an event rule",
+					Long:    "Removes an operator rule; an official rule is read-only (409). Audited. Gated by rule:delete, with an all-scope grant.",
+					Example: "  omniglass event-rule delete <name>",
+					Args:    cobra.ExactArgs(1),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/event-rules/%s", url.PathEscape(args[0]))
+						return runAPICommand(cmd, "DELETE", path, nil)
+					},
+				}
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				cmd := &cobra.Command{
+					Use:     "get <name>",
+					Short:   "Get an event rule",
+					Long:    "Returns one event rule by name, with its live state as counts over the components the caller may read. Gated by rule:read.",
+					Example: "  omniglass event-rule get <name>",
+					Args:    cobra.ExactArgs(1),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/event-rules/%s", url.PathEscape(args[0]))
+						return runAPICommand(cmd, "GET", path, nil)
+					},
+				}
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				cmd := &cobra.Command{
+					Use:     "list",
+					Short:   "List event rules",
+					Long:    "Lists the event rules, the authored config that raises alarms, each with its live state as counts (open_alarms, pending_streaks) read in the same query. Rules read like a registry: every rule is listed whatever the caller's scope, while the counts cover only components the caller may read. Gated by rule:read.",
+					Example: "  omniglass event-rule list",
+					Args:    cobra.ExactArgs(0),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/event-rules")
+						return runAPICommand(cmd, "GET", path, nil)
+					},
+				}
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			parent := &cobra.Command{
+				Use:   "state",
+				Short: "Commands for the state resource",
+			}
+			parent.AddCommand(func() *cobra.Command {
+				cmd := func() *cobra.Command {
+					cmd := &cobra.Command{
+						Use:     "list <name>",
+						Short:   "Get an event rule's live state",
+						Long:    "What a rule holds right now: the alarms it raised that are still open, each on a component and instance, and its streaks waiting out a sustain. Only those on components the caller may read are listed. Gated by rule:read.",
+						Example: "  omniglass event-rule state list <name>",
+						Args:    cobra.ExactArgs(1),
+						RunE: func(cmd *cobra.Command, args []string) error {
+							path := fmt.Sprintf("/api/v1/event-rules/%s/state", url.PathEscape(args[0]))
+							return runAPICommand(cmd, "GET", path, nil)
+						},
+					}
+					return cmd
+				}()
+				return cmd
+			}())
+			return parent
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				var fClearCriteria string
+				var fClearNegates bool
+				var fClearSustain string
+				var fDescription string
+				var fEnabled bool
+				var fFireCriteria string
+				var fFireSustain string
+				var fLabel string
+				var fMessage string
+				var fSampleKey string
+				var fSelector string
+				var fSeverity string
+				cmd := &cobra.Command{
+					Use:     "update <name>",
+					Short:   "Update an event rule",
+					Long:    "Patches a rule (an absent field is unchanged), bumping its version; disabling it stops new opens. Official rules are read-only (409). Audited. Gated by rule:update, with an all-scope grant.",
+					Example: "  omniglass event-rule update <name>",
+					Args:    cobra.ExactArgs(1),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/event-rules/%s", url.PathEscape(args[0]))
+						body := map[string]any{}
+						if cmd.Flags().Changed("clear-criteria") {
+							body["clear_criteria"] = jsonOrString(fClearCriteria)
+						}
+						if cmd.Flags().Changed("clear-negates") {
+							body["clear_negates"] = fClearNegates
+						}
+						if cmd.Flags().Changed("clear-sustain") {
+							body["clear_sustain"] = fClearSustain
+						}
+						if cmd.Flags().Changed("description") {
+							body["description"] = fDescription
+						}
+						if cmd.Flags().Changed("enabled") {
+							body["enabled"] = fEnabled
+						}
+						if cmd.Flags().Changed("fire-criteria") {
+							body["fire_criteria"] = jsonOrString(fFireCriteria)
+						}
+						if cmd.Flags().Changed("fire-sustain") {
+							body["fire_sustain"] = fFireSustain
+						}
+						if cmd.Flags().Changed("label") {
+							body["label"] = fLabel
+						}
+						if cmd.Flags().Changed("message") {
+							body["message"] = fMessage
+						}
+						if cmd.Flags().Changed("sample-key") {
+							body["sample_key"] = fSampleKey
+						}
+						if cmd.Flags().Changed("selector") {
+							body["selector"] = jsonOrString(fSelector)
+						}
+						if cmd.Flags().Changed("severity") {
+							body["severity"] = fSeverity
+						}
+						return runAPICommand(cmd, "PATCH", path, body)
+					},
+				}
+				cmd.Flags().StringVar(&fClearCriteria, "clear-criteria", "", "The criteria that clears it: {op, value}; absent clears on the negation of fire_criteria")
+				cmd.Flags().BoolVar(&fClearNegates, "clear-negates", false, "Drop the clear criteria, so the rule clears on the negation of its fire criteria")
+				cmd.Flags().StringVar(&fClearSustain, "clear-sustain", "", "How long the clear criteria must hold, a Go duration; empty is 0s")
+				cmd.Flags().StringVar(&fDescription, "description", "", "What the rule watches for and why")
+				cmd.Flags().BoolVar(&fEnabled, "enabled", false, "Whether the rule evaluates; defaults to true on create")
+				cmd.Flags().StringVar(&fFireCriteria, "fire-criteria", "", "The criteria that opens an alarm: {op, value}")
+				cmd.Flags().StringVar(&fFireSustain, "fire-sustain", "", "How long the fire criteria must hold, a Go duration (e.g. 30s); empty is 0s")
+				cmd.Flags().StringVar(&fLabel, "label", "", "A human label; also the alarm message when message is empty")
+				cmd.Flags().StringVar(&fMessage, "message", "", "The alarm message; empty uses the label or the name")
+				cmd.Flags().StringVar(&fSampleKey, "sample-key", "", "The property or metric the rule reads")
+				cmd.Flags().StringVar(&fSelector, "selector", "", "Replace the components the rule watches; absent leaves them unchanged, and an empty selector watches every component")
+				cmd.Flags().StringVar(&fSeverity, "severity", "", "The severity level the alarm is raised at, by name")
 				return cmd
 			}()
 			return cmd
@@ -5008,6 +5250,143 @@ func generatedCommands() []*cobra.Command {
 						return runAPICommand(cmd, "PATCH", path, nil)
 					},
 				}
+				return cmd
+			}()
+			return cmd
+		}())
+		return parent
+	}())
+	roots = append(roots, func() *cobra.Command {
+		parent := &cobra.Command{
+			Use:   "severity-level",
+			Short: "Commands for the severity-level resource",
+		}
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				var fColor string
+				var fLabel string
+				var fName string
+				var fRank int
+				cmd := &cobra.Command{
+					Use:     "create",
+					Short:   "Create a severity level",
+					Long:    "Adds an operator severity level at a rank of its own, between two others without renumbering. A name or rank already taken is a 409; a color outside the palette is a 422. Audited. Gated by severity_level:create.",
+					Example: "  omniglass severity-level create --color color --name name --rank <int>",
+					Args:    cobra.ExactArgs(0),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/severity-levels")
+						body := map[string]any{}
+						if cmd.Flags().Changed("color") {
+							body["color"] = fColor
+						}
+						if cmd.Flags().Changed("label") {
+							body["label"] = fLabel
+						}
+						if cmd.Flags().Changed("name") {
+							body["name"] = fName
+						}
+						if cmd.Flags().Changed("rank") {
+							body["rank"] = fRank
+						}
+						return runAPICommand(cmd, "POST", path, body)
+					},
+				}
+				cmd.Flags().StringVar(&fColor, "color", "", "One of gray, blue, green, yellow, orange, red, darkred")
+				_ = cmd.MarkFlagRequired("color")
+				cmd.Flags().StringVar(&fLabel, "label", "", "A human label")
+				cmd.Flags().StringVar(&fName, "name", "", "The level's name (lowercase kebab)")
+				_ = cmd.MarkFlagRequired("name")
+				cmd.Flags().IntVar(&fRank, "rank", 0, "Its place among the levels: higher is more severe; unique")
+				_ = cmd.MarkFlagRequired("rank")
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				cmd := &cobra.Command{
+					Use:     "delete <name>",
+					Short:   "Delete a severity level",
+					Long:    "Removes an operator level no alarm or event rule names; an official level or one in use is a 409. Audited. Gated by severity_level:delete.",
+					Example: "  omniglass severity-level delete <name>",
+					Args:    cobra.ExactArgs(1),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/severity-levels/%s", url.PathEscape(args[0]))
+						return runAPICommand(cmd, "DELETE", path, nil)
+					},
+				}
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				cmd := &cobra.Command{
+					Use:     "get <name>",
+					Short:   "Get a severity level",
+					Long:    "Returns one severity level by name. Gated by severity_level:read.",
+					Example: "  omniglass severity-level get <name>",
+					Args:    cobra.ExactArgs(1),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/severity-levels/%s", url.PathEscape(args[0]))
+						return runAPICommand(cmd, "GET", path, nil)
+					},
+				}
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				cmd := &cobra.Command{
+					Use:     "list",
+					Short:   "List severity levels",
+					Long:    "Lists the severity levels, least to most severe, each with whether an active alarm at it puts a component in outage. Gated by severity_level:read.",
+					Example: "  omniglass severity-level list",
+					Args:    cobra.ExactArgs(0),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/severity-levels")
+						return runAPICommand(cmd, "GET", path, nil)
+					},
+				}
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				var fColor string
+				var fLabel string
+				var fName string
+				var fRank int
+				cmd := &cobra.Command{
+					Use:     "update <name>",
+					Short:   "Update a severity level",
+					Long:    "Patches an operator level's name, label, color or rank (an absent field is unchanged); a rename carries every alarm at the level with it. Official levels are read-only (409). Audited. Gated by severity_level:update.",
+					Example: "  omniglass severity-level update <name>",
+					Args:    cobra.ExactArgs(1),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/severity-levels/%s", url.PathEscape(args[0]))
+						body := map[string]any{}
+						if cmd.Flags().Changed("color") {
+							body["color"] = fColor
+						}
+						if cmd.Flags().Changed("label") {
+							body["label"] = fLabel
+						}
+						if cmd.Flags().Changed("name") {
+							body["name"] = fName
+						}
+						if cmd.Flags().Changed("rank") {
+							body["rank"] = fRank
+						}
+						return runAPICommand(cmd, "PATCH", path, body)
+					},
+				}
+				cmd.Flags().StringVar(&fColor, "color", "", "One of gray, blue, green, yellow, orange, red, darkred")
+				cmd.Flags().StringVar(&fLabel, "label", "", "A human label")
+				cmd.Flags().StringVar(&fName, "name", "", "A new name; every alarm at this level follows")
+				cmd.Flags().IntVar(&fRank, "rank", 0, "Its place among the levels; unique")
 				return cmd
 			}()
 			return cmd

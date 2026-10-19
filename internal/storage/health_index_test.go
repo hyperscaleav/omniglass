@@ -57,7 +57,7 @@ func TestHealthReadsReachTheSystemOwnerIndex(t *testing.T) {
 		t.Fatalf("SystemVerdicts: %v", err)
 	}
 	if _, err := gw.RaiseAlarm(ctx, "", "bar-0", storage.AlarmSpec{
-		Severity: "critical", Message: "index guard", DedupKey: "index-guard",
+		Severity: "high", Message: "index guard", DedupKey: "index-guard",
 	}); err != nil {
 		t.Fatalf("RaiseAlarm: %v", err)
 	}

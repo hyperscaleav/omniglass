@@ -369,7 +369,7 @@ func TestDuplicateNamesDoNotBreakGatewayReads(t *testing.T) {
 	compA, compB, sys := twoDisplayOnes(t, gw)
 
 	// Alarm create, by uuid: must not 21000, and must land on the right row.
-	alarm, err := gw.RaiseAlarm(ctx, "", compA.ID, storage.AlarmSpec{Severity: "critical", Message: "m", DedupKey: "k"})
+	alarm, err := gw.RaiseAlarm(ctx, "", compA.ID, storage.AlarmSpec{Severity: "high", Message: "m", DedupKey: "k"})
 	if err != nil {
 		t.Fatalf("raise alarm on compA by id: %v", err)
 	}
@@ -436,7 +436,7 @@ func TestDuplicateNamesDoNotBreakGatewayReads(t *testing.T) {
 	if len(rep.Roles) != 1 || len(rep.Roles[0].AssignedTo) != 1 {
 		t.Fatalf("system health roles = %+v, want one role with one assignee", rep.Roles)
 	}
-	crep, err := gw.RaiseAlarm(ctx, "", compB.ID, storage.AlarmSpec{Severity: "critical", Message: "m2", DedupKey: "k2"})
+	crep, err := gw.RaiseAlarm(ctx, "", compB.ID, storage.AlarmSpec{Severity: "high", Message: "m2", DedupKey: "k2"})
 	if err != nil {
 		t.Fatalf("raise alarm on compB by id: %v", err)
 	}

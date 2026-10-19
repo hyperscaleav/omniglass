@@ -18,6 +18,8 @@ import Metrics from "./pages/Metrics";
 import Properties from "./pages/Properties";
 import EventTypes from "./pages/EventTypes";
 import CommandTypes from "./pages/CommandTypes";
+import Rules from "./pages/Rules";
+import SeverityLevels from "./pages/SeverityLevels";
 import Tags from "./pages/Tags";
 import CatalogOverview from "./pages/CatalogOverview";
 import LocationTypes from "./pages/LocationTypes";
@@ -59,6 +61,8 @@ export const PAGES: Record<string, Component> = {
   Properties,
   EventTypes,
   CommandTypes,
+  Rules,
+  SeverityLevels,
   Tags,
   CatalogOverview,
   LocationTypes,

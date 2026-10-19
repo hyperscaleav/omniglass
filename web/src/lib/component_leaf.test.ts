@@ -4,6 +4,7 @@ import type { FleetView } from "./fleet";
 import type { Node } from "./nodes";
 import type { ReachEndpoint } from "./reachability";
 import { uuidFor } from "./testids";
+import { SEEDED_LEVELS } from "./testseverity";
 
 // The component leaf's derivations (#637). The collection card's one job is
 // the distinction the issue states plainly: a healthy node with a stale
@@ -137,13 +138,13 @@ describe("the leaf's dispatch facts (#786)", () => {
     const now = Date.parse("2026-08-15T17:00:00Z");
     const alarms = [
       { id: "a1", severity: "warning", message: "Fan speed high", raised_at: "2026-08-15T16:00:00Z", active: true },
-      { id: "a2", severity: "critical", message: "No route to host", raised_at: "2026-08-15T14:20:00Z", active: true },
-      { id: "a3", severity: "critical", message: "Old outage", raised_at: "2026-08-01T00:00:00Z", active: false },
+      { id: "a2", severity: "high", message: "No route to host", raised_at: "2026-08-15T14:20:00Z", active: true },
+      { id: "a3", severity: "high", message: "Old outage", raised_at: "2026-08-01T00:00:00Z", active: false },
     ] as never;
-    const s = leafAlarmSince(alarms, now)!;
+    const s = leafAlarmSince(alarms, now, SEEDED_LEVELS)!;
     expect(s.message).toBe("No route to host");
     expect(s.ms).toBe(now - Date.parse("2026-08-15T14:20:00Z"));
-    expect(leafAlarmSince([{ id: "a3", severity: "critical", message: "x", raised_at: "2026-08-01T00:00:00Z", active: false }] as never, now)).toBeNull();
+    expect(leafAlarmSince([{ id: "a3", severity: "high", message: "x", raised_at: "2026-08-01T00:00:00Z", active: false }] as never, now)).toBeNull();
   });
 
   it("dotVerdict reads the component's verdict off any system's dots", () => {

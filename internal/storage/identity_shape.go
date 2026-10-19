@@ -134,10 +134,12 @@ var IdentityShapes = map[string]TableIdentity{
 	// relationship component_type's root/child split already has.
 	"role_choice": {Shape: ShapeKeyBearing}, "choice_alternate": {Shape: ShapeKeyBearing},
 	// Keyspace: a name, on the other rule.
-	"property_type": {Shape: ShapeKeyspace, Reason: "serial-number, a signal name referenced from drivers and templates"},
-	"metric_type":   {Shape: ShapeKeyspace, Reason: "icmp-rtt-avg, a numeric-series name referenced from drivers and templates"},
-	"event_type":    {Shape: ShapeKeyspace, Reason: "call-started, an occurrence name"},
-	"command_type":  {Shape: ShapeKeyspace, Reason: "set-input, a command name"},
+	"property_type":  {Shape: ShapeKeyspace, Reason: "serial-number, a signal name referenced from drivers and templates"},
+	"metric_type":    {Shape: ShapeKeyspace, Reason: "icmp-rtt-avg, a numeric-series name referenced from drivers and templates"},
+	"event_type":     {Shape: ShapeKeyspace, Reason: "call-started, an occurrence name"},
+	"severity_level": {Shape: ShapeKeyBearing, Reason: "high, a named level rules and alarms reference"},
+	"event_rule":     {Shape: ShapeKeyBearing, Reason: "reach-lost, a rule an alarm names as what raised it"},
+	"command_type":   {Shape: ShapeKeyspace, Reason: "set-input, a command name"},
 
 	// A human identifier that is not a name. These are the exceptions worth stating.
 	"human": {Shape: ShapeHumanNotAKey, Reason: "a username: its own rule, its own uniqueness, and not an " +
@@ -174,6 +176,7 @@ var IdentityShapes = map[string]TableIdentity{
 	"system_role_assignment": {Shape: ShapeIDOnly},
 	// One row per impaired simulated component, keyed by that component's uuid.
 	"sim_impairment":      {Shape: ShapeIDOnly},
+	"event_rule_state":    {Shape: ShapeIDOnly, Reason: "a rule's pending streak, keyed by rule, component and instance; nothing addresses it by name"},
 	"system_role_product": {Shape: ShapeIDOnly}, "system_role_type": {Shape: ShapeIDOnly},
 	"tag_binding": {Shape: ShapeIDOnly},
 	// registry_shadow holds an operator's version of a shipped registry row

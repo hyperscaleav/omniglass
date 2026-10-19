@@ -316,12 +316,25 @@ what was wrong underneath.
 
 Raising one takes two things:
 
-- a **severity**: `info`, `warning`, or `critical`. This is how loudly to treat it, and it sets the
-  **component's own** verdict (any active alarm makes the component degraded, a critical one an
-  outage). Only an **outage** stops a component occupying a role it fills: an info or warning
+- a **severity**: one of the severity levels, listed with their rank, color and effect under **Catalog,
+  under Actions: Severity** (the [rules guide](/guides/admin/rules/#severity-levels) renders the shipped
+  set, and your admin can add more between them). Every alarm wears its level's label in its color. This is how loudly to treat it, and it sets the
+  **component's own** verdict (any active alarm makes the component degraded, one at a level marked
+  outage takes it out). Only an **outage** stops a component occupying a role it fills: an info or warning
   alarm still degrades it, but the component keeps its slot, so a quiet issue does not short-staff
   a system on its own;
 - a **message**, for whoever reads it later. Write it for the person who finds this at 8am, not for you.
+
+**Not every alarm is raised by hand.** An [event rule](/guides/admin/rules/) raises and clears its
+own as telemetry lands: such an alarm says **by rule** and the rule's name, and the rule clears it
+when the condition passes (the official reachability rule does this for every endpoint that stops
+answering). You acknowledge it like any other. Clearing it by hand works too, but whether it stays
+cleared depends on the input, because a rule judges samples as they land and its sustain clock only
+finishes streaks that a sample already started. An input that keeps reporting while the condition holds
+(a metric sampled on every poll) starts a new streak with its next sample and reopens the alarm once
+that streak has held for the sustain. An input that reports only when its value changes sends nothing
+further, so a hand clear on a condition that still holds stays cleared until the value changes and the
+condition comes back. Fix the condition rather than clearing its alarm.
 
 **Clearing keeps the row.** The alarm moves to the history with the time it was cleared, so what was wrong
 and when survives the fix. Clearing one twice is a plain miss rather than a silent success.
@@ -386,7 +399,7 @@ and the role it impairs, and the component rows beneath carry the arithmetic. Re
 chain:
 
 ```text
-alarm on mic-pod-2 (critical, "no audio on channel 1")
+alarm on mic-pod-2 (high, "no audio on channel 1")
   -> mic-pod-2 is down (its own verdict, from the alarm)
     -> role room-mic wants 2, and mic-pod-2 no longer occupies its slot
       -> only 1 assigned component still occupies it
@@ -419,7 +432,7 @@ Once, in order, on a real system:
 2. **Staff the system.** Assign components to each role from the system's **Roles** panel. A component
    of the wrong type is refused by name (`component "panel-1" is a display; role "Room Microphone"
    wants a video-bar`), so a wrong assignment never becomes a wrong verdict.
-3. **Raise an alarm.** On one of the mic pods, raise a `critical` alarm.
+3. **Raise an alarm.** On one of the mic pods, raise a `high` alarm.
 4. **Watch the system move.** The system goes **degraded** (the `room-mic` role now has one occupant
    against a quorum of 2, and its impact is `degraded`), and the location above it follows. Had
    the alarm been on the main display instead, the system would be an **outage**, because that role says so.

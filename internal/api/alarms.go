@@ -35,14 +35,18 @@ import (
 // caller is owed, which is the distinction #728 could not make and filed.
 
 type alarmBody struct {
-	ID        string     `json:"id"`
-	Component string     `json:"component"`
-	Severity  string     `json:"severity" doc:"info, warning, or critical"`
-	Message   string     `json:"message"`
-	DedupKey  string     `json:"dedup_key" doc:"The condition identity: one open alarm per (component, dedup_key)"`
-	RaisedAt  time.Time  `json:"raised_at"`
-	ClearedAt *time.Time `json:"cleared_at,omitempty" doc:"Null while the alarm is active"`
-	Active    bool       `json:"active"`
+	ID          string `json:"id"`
+	Component   string `json:"component" doc:"The component the alarm is on, by name"`
+	ComponentID string `json:"component_id" doc:"The component's uuid, the stable form of component"`
+	// The rule that raised the alarm (#919), absent on a hand-raised one.
+	RaisedByRule   string     `json:"raised_by_rule,omitempty" doc:"The event rule that raised the alarm, by name; absent when an operator raised it"`
+	RaisedByRuleID string     `json:"raised_by_rule_id,omitempty" doc:"The raising rule's uuid"`
+	Severity       string     `json:"severity" doc:"The severity level the alarm was raised at, by name (see /severity-levels)"`
+	Message        string     `json:"message"`
+	DedupKey       string     `json:"dedup_key" doc:"The condition identity: one open alarm per (component, dedup_key)"`
+	RaisedAt       time.Time  `json:"raised_at"`
+	ClearedAt      *time.Time `json:"cleared_at,omitempty" doc:"Null while the alarm is active"`
+	Active         bool       `json:"active"`
 	// The acknowledgement is orthogonal to cleared: an alarm can be acknowledged
 	// and still raised, raised and unacknowledged, or cleared having never been
 	// acknowledged.
@@ -54,7 +58,10 @@ type alarmBody struct {
 func toAlarmBody(a *storage.Alarm) alarmBody {
 	return alarmBody{
 		ID:             a.ID,
-		Component:      a.ComponentID,
+		Component:      a.ComponentName,
+		ComponentID:    a.ComponentID,
+		RaisedByRule:   derefStr(a.RaisedByRule),
+		RaisedByRuleID: derefStr(a.RaisedByRuleID),
 		Severity:       a.Severity,
 		Message:        a.Message,
 		DedupKey:       a.DedupKey,
@@ -83,7 +90,7 @@ type listAlarmsOutput struct {
 type raiseAlarmInput struct {
 	Name string `path:"name" doc:"The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)"`
 	Body struct {
-		Severity string `json:"severity" enum:"info,warning,critical" doc:"How bad it is; critical puts the component itself in outage"`
+		Severity string `json:"severity" minLength:"1" doc:"How bad it is: a severity level by name (see /severity-levels); a level at or above high puts the component itself in outage"`
 		Message  string `json:"message,omitempty" doc:"What is wrong, for the operator reading it later"`
 		DedupKey string `json:"dedup_key,omitempty" doc:"The condition identity; defaults to the message. Raising an already-open (component, dedup_key) returns the existing open alarm instead of a duplicate"`
 	}
@@ -133,7 +140,7 @@ func registerAlarmRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		Path:          "/components/{name}/alarms",
 		DefaultStatus: http.StatusCreated,
 		Summary:       "Raise an alarm on a component",
-		Description:   "Records a condition on this component, then recomputes health in the same transaction: the component's own verdict moves, and if it is now outage (a critical alarm), any role it occupies loses it as an occupant while the alarm is active, which can move its system and location verdicts with it; a lesser (info or warning) alarm degrades the component but leaves it occupying its roles. Gated by component:update; read and update scopes drive the 404 versus 403 split.",
+		Description:   "Records a condition on this component, then recomputes health in the same transaction: the component's own verdict moves, and if it is now outage (an alarm at or above the high level), any role it occupies loses it as an occupant while the alarm is active, which can move its system and location verdicts with it; a lesser alarm degrades the component but leaves it occupying its roles. Gated by component:update; read and update scopes drive the 404 versus 403 split.",
 	}, "component", "update"), func(ctx context.Context, in *raiseAlarmInput) (*alarmOutput, error) {
 		compID, err := requireComponentInScope(ctx, a, gw, in.Name, "update")
 		if err != nil {
@@ -208,7 +215,7 @@ func mapAlarmErr(err error) error {
 	case errors.Is(err, storage.ErrAlarmNotFound):
 		return huma.Error404NotFound("alarm not found")
 	case errors.Is(err, storage.ErrAlarmSeverity):
-		return huma.Error422UnprocessableEntity("severity must be info, warning, or critical")
+		return huma.Error422UnprocessableEntity("severity must name a severity level (see /severity-levels)")
 	case errors.Is(err, storage.ErrComponentNotFound):
 		return huma.Error404NotFound("component not found")
 	default:

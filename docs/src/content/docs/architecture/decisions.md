@@ -182,6 +182,7 @@ below from the project's history. From here it grows one slice at a time.
 | [ADR-0141](#adr-0141-a-command-settles-when-its-evidence-arrives-from-its-reply-first-and-observation-second) | 2026-10-18 | Accepted | A command settles as soon as its evidence arrives: a matching observation taken after the intent, or the device's reply when its driver binding says the reply carries it. Each binding declares its source (`from: response` with a value `extract` or a `success` match, or `from: observe`, the default); the window bounds the wait, not the settling; a sweep times out what nothing settles. Revises ADR-0063's pending-until-the-window-passes rule |
 | [ADR-0142](#adr-0142-the-simulator-is-a-run-mode-beside-its-node-holding-that-nodes-identity) | 2026-10-18 | Accepted | The simulator is `omniglass sim run`, a run mode beside its node that holds the node's identity and simulates the components placed on it; impairments are opt-in (`--impairments` and `NET_ADMIN`), the console's operations run in process, a rate limit holds both ways, hits are live, not stored, and `simulation:read` (with component scope) is the whole gate on the simulated fleet |
 | [ADR-0143](#adr-0143-a-simulated-system-is-built-to-a-standard-with-platform-minted-names) | 2026-10-18 | Accepted | A simulated system is built to a standard: each role staffed with a simulated product that fits, short roles listed, names platform-minted, all in one transaction; the lab archetypes are not an operator concept |
+| [ADR-0144](#adr-0144-alarms-are-raised-by-event-rules-at-a-severity-level-from-a-ranked-registry) | 2026-10-18 | Accepted | Alarms are raised by event rules (one table per rule kind, `rule:*` authoring, `raised_by_rule_id`, one alarm per endpoint) at a severity level from a ranked registry referenced by name; `critical` became `high`, the outage floor |
 
 ## Entries
 
@@ -6493,3 +6494,47 @@ interface create form, since that name is the platform's to mint.
   counterpart, display and DSP mixes no standard declares), so a mapping table would have kept two
   vocabularies for one idea. The architect ruled the standard is the archetype and names follow the
   platform's own minting.
+
+### ADR-0144: Alarms are raised by event rules, at a severity level from a ranked registry
+
+- **Date:** 2026-10-18 | **Status:** Accepted | **Pages:** [alarms and actions](/architecture/alarms-actions/), [health](/architecture/health/), [glossary](/architecture/glossary/)
+- **Decision:** The detection half of ADR-0050 is built (epic #819), on five rulings the architect took
+  at approval:
+  1. **One table per rule kind:** `event_rule` now; `calc_rule` and `action_rule` join as siblings.
+  2. **`rule:*` gates authoring**, one resource across kinds; reading raised alarms keeps its
+     component-tier gates.
+  3. **An alarm names the rule that raised it** in a nullable `raised_by_rule_id`, its `dedup_key`
+     taken from the rule.
+  4. **Severity is a registry of named, ranked levels**, referenced **by name** (a foreign key with
+     `ON UPDATE CASCADE`). The design's `order` column is named `rank` (a reserved word otherwise). The
+     three values ADR-0050 fixed map by meaning: `critical`, the outage word, becomes `high`, the outage
+     floor of the ranked levels, so no verdict moved; a component's own verdict now reads the rank
+     (`high` and above is an outage). The reference is added `NOT VALID` because the levels are
+     boot-seeded after migrations run; it is enforced on every write. An official level never takes
+     over an operator's (a clash stops the boot naming it), and re-ranking a level recomputes the
+     health of every component with an open alarm at it.
+  5. **One alarm per endpoint** for a per-endpoint input: the dedup key is the rule name plus the
+     sample's instance, so a component with several endpoints holds an alarm per endpoint.
+  6. **Sustains are clocked by samples and a sweep** (ruled 2026-10-19, during #920): a durable streak
+     per rule, component and instance acts once it has held for its sustain, on a later sample or on a
+     server sweep every five seconds. The definition's thin cut had sustains clocked by samples alone,
+     but the official reachability rule reads a verdict the node emits only on change, so a condition
+     that stays down sends no later sample; the sweep (like the command settlement sweep, ADR-0141) closes
+     that without the full durable timer (#419). The streak's clock is the server's receipt time, not
+     the sample's timestamp, so the sample path and the sweep read one clock and a skewed node cannot
+     waive a sustain.
+
+  7. **A rule's live state is its open alarms and pending streaks** (ruled during #921). The
+     definition's "last evaluated" is deferred (#929): a per-sample write was kept off the ingest path
+     in the #920 review, and a read-time newest-sample has no supporting index on the property lane
+     and is not the same fact. The severity levels surface beside the rules as a read view; the console
+     does not author them yet (#930).
+
+  Rules read like a registry (`rule:read`, any grant); writing one takes `rule:*` on an all-scope
+  grant, since a rule's selector reaches the whole fleet, the same reasoning as a root create (ruled by
+  the architect 2026-10-19). A rule's live state names components, so its counts, open alarms and
+  streaks cover only the components the caller's component read scope admits.
+- **Context:** #606 left the rules vocabulary to the definition that builds it; #819's definition
+  posed the five forks with the concrete DDL and the architect approved every recommendation
+  (2026-10-18). ADR-0050 had fixed severity at three values with a CHECK; the registry supersedes that
+  part of it.

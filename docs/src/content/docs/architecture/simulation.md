@@ -180,9 +180,9 @@ nothing and says why, in the simulation view. With them, **ping tells the truth*
 a loopback address that is no device is dropped, so only devices answer.
 
 What the simulator cannot do yet is break one protocol while the others answer, or pin a value so a
-collector reads plausible but wrong data (#909). And an unplugged device's **system verdict** does not
-move on its own: a component's condition is its active alarms, and raising one from reachability is
-the event rule tier (#819).
+collector reads plausible but wrong data (#909). An unplugged component's **system verdict** moves on its own: the official
+`reachability-lost` [event rule](/architecture/alarms-actions/#the-event_rule) opens a `high` alarm on it
+once its endpoint has read `down` for the sustain, and clears it when the endpoint reads `up` again.
 
 ## Exercising a simulated component
 

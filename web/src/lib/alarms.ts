@@ -1,12 +1,13 @@
 import { api } from "../api/client";
 import type { components } from "../api/schema.gen";
+import { compareSeverity, type SeverityLevel } from "./severity";
 
 // The alarms data layer: thin typed wrappers over the generated client, plus the
 // pure ordering and splitting the panel renders.
 //
 // An ALARM is a condition recorded on a COMPONENT, and it impairs that component's
-// own verdict wholesale (#626): any active alarm degrades it, a critical one is an
-// outage. A system role the component fills no longer counts it toward quorum
+// own verdict wholesale (#626): any active alarm degrades it, one at an outage
+// severity level (high and above, see lib/severity) is an outage. A system role the component fills no longer counts it toward quorum
 // while it is down, so the role can drop below quorum and its impact becomes the
 // system's verdict. That is the whole chain: alarm on a component, component down,
 // role below quorum, verdict.
@@ -15,7 +16,6 @@ import type { components } from "../api/schema.gen";
 // which is the point of the recorded history.
 
 export type Alarm = components["schemas"]["AlarmBody"];
-export type Severity = "info" | "warning" | "critical";
 
 // Both the active set and the recent history come from one route, so one cache
 // key covers both and clearing an alarm invalidates a single entry.
@@ -33,7 +33,8 @@ export async function componentAlarms(name: string): Promise<Alarm[]> {
 }
 
 export type RaiseAlarm = {
-  severity: Severity;
+  // A severity level by name, from the registry (GET /severity-levels).
+  severity: string;
   message?: string;
   dedup_key?: string;
 };
@@ -67,27 +68,20 @@ export function unacknowledgedCount(list: Alarm[]): number {
   return list.filter((a) => a.active && !a.acknowledged).length;
 }
 
-// How bad it is, worst first. Used to order a list and to pick the alarm that best
-// explains an impaired role.
-export const SEVERITY_RANK: Record<string, number> = { critical: 0, warning: 1, info: 2 };
-
-export function severityRank(severity: string): number {
-  return SEVERITY_RANK[severity] ?? 99;
-}
-
-// sortAlarms puts the worst first, and the most recent first within a severity, so
-// the line that explains the outage is the line the eye lands on.
-export function sortAlarms<T extends { severity: string; raised_at: string }>(list: T[]): T[] {
-  return [...list].sort(
-    (a, b) => severityRank(a.severity) - severityRank(b.severity) || b.raised_at.localeCompare(a.raised_at),
-  );
+// sortAlarms puts the worst first (by the registry's rank, unknown names last),
+// and the most recent first within a severity, so the line that explains the
+// outage is the line the eye lands on. The levels are passed in so the sort stays
+// pure; without them every alarm ties on severity and the order is by recency.
+export function sortAlarms<T extends { severity: string; raised_at: string }>(list: T[], levels?: SeverityLevel[] | null): T[] {
+  const bySeverity = compareSeverity(levels);
+  return [...list].sort((a, b) => bySeverity(a.severity, b.severity) || b.raised_at.localeCompare(a.raised_at));
 }
 
 // splitAlarms keeps what is wrong now apart from what was wrong: an active alarm is
 // one the server has not cleared. Both halves are ordered worst first.
-export function splitAlarms(list: Alarm[]): { active: Alarm[]; cleared: Alarm[] } {
+export function splitAlarms(list: Alarm[], levels?: SeverityLevel[] | null): { active: Alarm[]; cleared: Alarm[] } {
   return {
-    active: sortAlarms(list.filter((a) => a.active)),
-    cleared: sortAlarms(list.filter((a) => !a.active)),
+    active: sortAlarms(list.filter((a) => a.active), levels),
+    cleared: sortAlarms(list.filter((a) => !a.active), levels),
   };
 }

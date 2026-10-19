@@ -34,6 +34,7 @@ var referenceFields = map[string]string{
 	"system_id":          "system",
 	"owner_id":           "owner_name",
 	"component_id":       "component",
+	"raised_by_rule_id":  "raised_by_rule",
 	"node_id":            "node",
 	"product_id":         "product",
 	"parent_product_id":  "parent_product",

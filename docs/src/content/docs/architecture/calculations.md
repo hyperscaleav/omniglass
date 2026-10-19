@@ -7,6 +7,14 @@ sidebar:
     variant: caution
 ---
 
+:::note[The event rule is built; the calc rule is not]
+Of the three rule families below, the **`event_rule`** is built (#819,
+[ADR-0144](/architecture/decisions/#adr-0144-alarms-are-raised-by-event-rules-at-a-severity-level-from-a-ranked-registry)):
+its own table with typed columns, evaluated in the ingest transaction rather than on a JetStream
+consumer, and documented on [alarms and actions](/architecture/alarms-actions/#the-event_rule). The
+calc family this page owns, and the `action_rule`, are still design.
+:::
+
 :::design[Target design: the calc rule family, tracked in #525]
 
 Parsing a raw payload into samples is the **edge function** ([collection](/architecture/collection/)), not a server-side rule. The rules that run server-side over the typed samples are two derivation families plus a subscription; this page owns the calc family.
@@ -16,7 +24,7 @@ The rule families run as **JetStream consumers on the data lane**: confined samp
 ## Rules: calc, event, action
 
 - **calc_rule**: samples to sample (calculated); this page.
-- **event_rule**: sample change to event. Lives on [events](/architecture/events/) and [alarms and actions](/architecture/alarms-actions/): a required `fire_criteria` and an optional `clear_criteria`, the fire/clear pair opening and resolving an alarm.
+- **event_rule**: sample change to event. Lives on [events](/architecture/events/) and [alarms and actions](/architecture/alarms-actions/): a required `fire_criteria` and an optional `clear_criteria`, the fire/clear pair opening and resolving an alarm. Built (#819) as its own table, raising and clearing alarms directly; the paired `event` row is still design.
 - **action_rule**: a subscription wiring events and alarms to actions. Lives on [alarms and actions](/architecture/alarms-actions/).
 
 There is no `alarm_rule` and no `condition_rule`: an alarm is an event rule whose events are paired (open, close). Ownership for a templated function is stamped at the edge; shared-endpoint ingress is owner-bound server-side. A **`discovery_rule`** (observed data creates entities) rounds out the family.
@@ -41,5 +49,5 @@ The three rule families share one config shape; the physical layout lives on [st
 
 | Table | Key columns | Notes |
 |---|---|---|
-| `calc_rule` / `event_rule` / `action_rule` | **(id, version)**, scope, spec (jsonb: Expr + params) | config, named for function; versioned so a backtest can pin the rule version. `calc_rule` = cross-key/system-level derivation; `event_rule` = fire_criteria + optional clear_criteria ([events](/architecture/events/), [alarms and actions](/architecture/alarms-actions/)); `action_rule` = a subscription (an Expr predicate over events). Parsing is the edge function, not a rule; `discovery_rule` rounds out the family |
+| `calc_rule` / `event_rule` / `action_rule` | **(id, version)**, scope, spec (jsonb: Expr + params) | config, named for function; versioned so a backtest can pin the rule version. The built `event_rule` diverges where its rulings say: typed columns rather than one spec, and a single `version` integer that bumps on update, so the backtest key is a later additive widening ([alarms and actions](/architecture/alarms-actions/#storage)). `calc_rule` = cross-key/system-level derivation; `event_rule` = fire_criteria + optional clear_criteria ([events](/architecture/events/), [alarms and actions](/architecture/alarms-actions/)); `action_rule` = a subscription (an Expr predicate over events). Parsing is the edge function, not a rule; `discovery_rule` rounds out the family |
 :::

@@ -9,6 +9,8 @@ import { METRICS_KEY, listMetricTypes } from "./metric_types";
 import { PROPERTIES_KEY, listProperties } from "./properties";
 import { EVENT_TYPES_KEY, listEventTypes } from "./event_types";
 import { COMMAND_TYPES_KEY, listCommandTypes } from "./command_types";
+import { EVENT_RULES_KEY, listEventRules } from "./event_rules";
+import { severityLevelsKey, listSeverityLevels } from "./severity";
 import { TAGS_KEY, listTags } from "./tags";
 import { type Me, can } from "./auth";
 import { type BladeLock } from "./blades";
@@ -57,8 +59,7 @@ export type CatalogGroup = {
 
 // Each soon slot names its tracking issue (the no-bare-TODO rule): the
 // template registries are #615 (component), #616 (system), #617 (location);
-// notifications is #618, rules is #624 (its vocabulary is fenced separately
-// in #606). Group copy follows the direction axis: Telemetry is what you
+// notifications is #618. Rules went live with the event rules (#921). Group copy follows the direction axis: Telemetry is what you
 // receive, Actions is what you send or run.
 export const CATALOG_GROUPS: CatalogGroup[] = [
   {
@@ -72,10 +73,12 @@ export const CATALOG_GROUPS: CatalogGroup[] = [
   },
   {
     header: "Actions",
-    copy: "What you send or run: commands (the instructions you issue, with a target and a settle window), rules (soon), notifications (soon).",
+    copy: "What you send or run: commands (the instructions you issue, with a target and a settle window), rules (what opens an alarm, and when), severity (how bad that alarm is), notifications (soon).",
     entries: [
       { label: "Commands", path: "/command-types", gate: ["command_type", "read"], key: COMMAND_TYPES_KEY, list: listCommandTypes },
-      { label: "Rules", path: "/rules", soon: true, issue: 624 },
+      { label: "Rules", path: "/rules", gate: ["rule", "read"], key: EVENT_RULES_KEY, list: listEventRules },
+      // The levels a rule raises at, beside the rules (#921).
+      { label: "Severity", path: "/severity-levels", gate: ["severity_level", "read"], key: severityLevelsKey, list: listSeverityLevels },
       { label: "Notifications", path: "/notifications", soon: true, issue: 618 },
     ],
   },
@@ -211,7 +214,7 @@ export function visibleGroups(allow: (tokens: string[]) => boolean): CatalogGrou
   return out;
 }
 
-// The routed soon slots' paths (/rules, /notifications): the router mounts
+// The routed soon slots' paths (/notifications today): the router mounts
 // SectionStub for each INSIDE the shell, so the stub renders in the pane. The
 // route manifest carries them with shell "catalog", pinned by the guard test.
 export const CATALOG_STUB_PATHS: string[] = CATALOG_GROUPS.flatMap((g) =>

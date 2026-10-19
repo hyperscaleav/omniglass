@@ -8,6 +8,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 // The alarm write side. An alarm is component-local and impairs it wholesale
@@ -24,10 +25,11 @@ import (
 // is active; clearing keeps the row, so the record of what was wrong and when
 // survives the fix.
 type Alarm struct {
-	ID          string
-	ComponentID string
-	Severity    string
-	Message     string
+	ID            string
+	ComponentID   string
+	ComponentName string
+	Severity      string
+	Message       string
 	// DedupKey names WHICH condition this incident is about (ADR-0075): the
 	// one-open invariant is per (component, dedup_key), enforced by the partial
 	// unique index while the row is open.
@@ -46,6 +48,11 @@ type Alarm struct {
 	// audit_log keeps the identifier it denormalized.
 	AcknowledgedAt *time.Time
 	AcknowledgedBy string
+	// RaisedByRuleID is the event rule that raised the alarm (#919), nil for
+	// a hand-raised one or once its rule is deleted.
+	RaisedByRuleID *string
+	// RaisedByRule is that rule's name, carried beside its id.
+	RaisedByRule *string
 }
 
 // Active reports whether the alarm is still raised.
@@ -84,11 +91,6 @@ var (
 	ErrAlarmSeverity = errors.New("storage: unknown alarm severity")
 )
 
-// alarmSeverities is the severity domain, mirroring the table's CHECK. Validating
-// here turns an operator typo into a named refusal instead of a constraint
-// violation surfacing as a 500.
-var alarmSeverities = map[string]bool{"info": true, "warning": true, "critical": true}
-
 // alarmCols is the read shape. acknowledged_by surfaces the acting principal's
 // IDENTIFIER rather than its uuid, so every alarm read hands the API something
 // an operator recognises (ADR-0062); it reads empty once that principal is
@@ -100,14 +102,20 @@ var alarmSeverities = map[string]bool{"info": true, "warning": true, "critical":
 // statements reading this shape is an UPDATE ... RETURNING: RETURNING cannot
 // left-join, and giving the UPDATE a FROM clause would change which rows it
 // updates.
-var alarmCols = `a.id, a.component_id, a.severity, a.message, a.dedup_key, a.raised_at, a.cleared_at,
+//
+// The component's name comes the same way, as a scalar subquery rather than a
+// join, so every read path carries the component's uuid AND its name (#557: the
+// winning raise used to echo the caller's ref while the others scanned a uuid).
+var alarmCols = `a.id, a.component_id, (select c.name from component c where c.id = a.component_id),
+	a.severity, a.message, a.dedup_key, a.raised_at, a.cleared_at, a.raised_by_rule_id::text,
+	(select r.name from event_rule r where r.id = a.raised_by_rule_id),
 	a.acknowledged_at, ` + principalIdentCols("a.acknowledged_by")
 
 func scanAlarm(row pgx.Row) (*Alarm, error) {
 	var a Alarm
 	var ackUsername, ackServiceName, ackNodeName *string
-	if err := row.Scan(&a.ID, &a.ComponentID, &a.Severity, &a.Message,
-		&a.DedupKey, &a.RaisedAt, &a.ClearedAt, &a.AcknowledgedAt, &ackUsername, &ackServiceName, &ackNodeName); err != nil {
+	if err := row.Scan(&a.ID, &a.ComponentID, &a.ComponentName, &a.Severity, &a.Message,
+		&a.DedupKey, &a.RaisedAt, &a.ClearedAt, &a.RaisedByRuleID, &a.RaisedByRule, &a.AcknowledgedAt, &ackUsername, &ackServiceName, &ackNodeName); err != nil {
 		return nil, err
 	}
 	a.AcknowledgedBy = principalIdent(ackUsername, ackServiceName, ackNodeName)
@@ -117,9 +125,6 @@ func scanAlarm(row pgx.Row) (*Alarm, error) {
 // RaiseAlarm records a condition on a component, then recomputes the health
 // chain in the same transaction. An unknown component is ErrComponentNotFound.
 func (p *PG) RaiseAlarm(ctx context.Context, actorID, componentName string, spec AlarmSpec) (*Alarm, error) {
-	if !alarmSeverities[spec.Severity] {
-		return nil, ErrAlarmSeverity
-	}
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("storage: begin raise alarm: %w", err)
@@ -138,6 +143,22 @@ func (p *PG) RaiseAlarm(ctx context.Context, actorID, componentName string, spec
 		return nil, err
 	}
 
+	a, err := p.raiseAlarmTx(ctx, tx, actorID, component, spec, nil)
+	if err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("storage: commit raise alarm: %w", err)
+	}
+	return a, nil
+}
+
+// raiseAlarmTx is RaiseAlarm's body inside a transaction the caller owns: the
+// hand raise and the rule evaluator (#919) raise through the same guarded
+// conditional insert, audit row and health recompute. ruleID names the rule
+// that raised it, nil for a hand raise. A raise that lands on an open alarm
+// of the same condition returns that alarm and writes nothing.
+func (p *PG) raiseAlarmTx(ctx context.Context, tx pgx.Tx, actorID string, component *Component, spec AlarmSpec, ruleID *string) (*Alarm, error) {
 	if spec.DedupKey == "" {
 		// The message is the condition identity when the raiser supplies no
 		// explicit key (ADR-0075): the same condition text re-raised is the
@@ -151,32 +172,44 @@ func (p *PG) RaiseAlarm(ctx context.Context, actorID, componentName string, spec
 	// the existing open incident back instead of minting a duplicate. The
 	// no-op path writes no audit row and recomputes nothing: nothing changed.
 	//
-	// ComponentID is seeded from componentName (the caller's ref), not
-	// component.ID, on purpose: that already mismatched the DB-scanned shape
-	// alarmCols reads on the on-conflict re-read path below (a real uuid)
-	// before this refactor ever touched the file, and fixing the mismatch is
-	// a separate concern from this task's no-op mandate (TestRaiseAlarmWithoutCapabilities
-	// pins the existing, mismatched contract).
-	a := Alarm{ComponentID: componentName, Severity: spec.Severity, Message: spec.Message, DedupKey: spec.DedupKey}
-	err = tx.QueryRow(ctx, `
-		insert into alarm (component_id, severity, message, dedup_key)
-		values ($1::uuid, $2, $3, coalesce(nullif($4, ''), gen_random_uuid()::text))
+	// Every read path, this one included, carries the component's uuid and
+	// its name (#557).
+	a := Alarm{ComponentID: component.ID, ComponentName: component.Name, Severity: spec.Severity,
+		Message: spec.Message, DedupKey: spec.DedupKey, RaisedByRuleID: ruleID}
+	err := tx.QueryRow(ctx, `
+		insert into alarm (component_id, severity, message, dedup_key, raised_by_rule_id)
+		values ($1::uuid, $2, $3, coalesce(nullif($4, ''), gen_random_uuid()::text), $5::uuid)
 		on conflict (component_id, dedup_key) where cleared_at is null do nothing
 		returning id, raised_at, dedup_key`,
-		component.ID, spec.Severity, spec.Message, spec.DedupKey).Scan(&a.ID, &a.RaisedAt, &a.DedupKey)
+		component.ID, spec.Severity, spec.Message, spec.DedupKey, ruleID).Scan(&a.ID, &a.RaisedAt, &a.DedupKey)
 	if errors.Is(err, pgx.ErrNoRows) {
+		// The severity names a level in the registry (#917). A raise that
+		// lands on an open alarm's dedup key inserts nothing, so the foreign
+		// key never checks it: check here, on this path only, so the winning
+		// raise costs no extra statement.
+		var known bool
+		if err := tx.QueryRow(ctx, `select exists (select 1 from severity_level where name = $1)`, spec.Severity).Scan(&known); err != nil {
+			return nil, fmt.Errorf("storage: check alarm severity: %w", err)
+		}
+		if !known {
+			return nil, ErrAlarmSeverity
+		}
 		existing, gerr := scanAlarm(tx.QueryRow(ctx, `
 			select `+alarmCols+`
 			from alarm a
 			where a.component_id = $1::uuid
 			  and a.dedup_key = $2 and a.cleared_at is null`, component.ID, spec.DedupKey))
 		if gerr != nil {
-			return nil, fmt.Errorf("storage: read existing open alarm on %q: %w", componentName, gerr)
+			return nil, fmt.Errorf("storage: read existing open alarm on %q: %w", component.Name, gerr)
 		}
 		return existing, nil
 	}
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) && pgErr.Code == "23503" && pgErr.ConstraintName == "alarm_severity_fkey" {
+		return nil, ErrAlarmSeverity
+	}
 	if err != nil {
-		return nil, fmt.Errorf("storage: insert alarm on %q: %w", componentName, err)
+		return nil, fmt.Errorf("storage: insert alarm on %q: %w", component.Name, err)
 	}
 
 	if err := writeAuditRes(ctx, tx, actorID, "create", "alarm", a.ID, nil, a); err != nil {
@@ -184,9 +217,6 @@ func (p *PG) RaiseAlarm(ctx context.Context, actorID, componentName string, spec
 	}
 	if err := p.RecomputeHealth(ctx, tx, component.ID); err != nil {
 		return nil, err
-	}
-	if err := tx.Commit(ctx); err != nil {
-		return nil, fmt.Errorf("storage: commit raise alarm: %w", err)
 	}
 	return &a, nil
 }
@@ -374,4 +404,30 @@ func (p *PG) activeAlarms(ctx context.Context, q txQuerier, componentID string) 
 		out = append(out, *a)
 	}
 	return out, rows.Err()
+}
+
+// clearAlarmByDedupTx clears the open alarm of one condition on a component
+// raised by ruleID (the rule evaluator's clear, #919; a rule clears only its
+// own alarms), audited and with health recomputed in
+// the caller's transaction. No open alarm of that condition is not an error:
+// there is nothing to clear, and nothing is written.
+func (p *PG) clearAlarmByDedupTx(ctx context.Context, tx pgx.Tx, actorID string, component *Component, dedupKey string, ruleID *string) error {
+	var alarmID string
+	var cleared time.Time
+	err := tx.QueryRow(ctx, `
+		update alarm set cleared_at = now(), updated_at = now()
+		where component_id = $1::uuid and dedup_key = $2 and cleared_at is null
+		  and raised_by_rule_id is not distinct from $3::uuid
+		returning id, cleared_at`, component.ID, dedupKey, ruleID).Scan(&alarmID, &cleared)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("storage: clear alarm %s on %q: %w", dedupKey, component.Name, err)
+	}
+	if err := writeAuditRes(ctx, tx, actorID, "update", "alarm", alarmID, nil,
+		map[string]any{"component": component.Name, "dedup_key": dedupKey, "cleared_at": cleared, "raised_by_rule_id": ruleID}); err != nil {
+		return err
+	}
+	return p.RecomputeHealth(ctx, tx, component.ID)
 }

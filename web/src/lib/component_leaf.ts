@@ -6,6 +6,7 @@
 
 import { locationIndex, type FleetView } from "./fleet";
 import { sortAlarms, type Alarm } from "./alarms";
+import type { SeverityLevel } from "./severity";
 import type { components } from "../api/schema.gen";
 import type { Member } from "./members";
 import type { Node } from "./nodes";
@@ -108,8 +109,8 @@ export function vitalRows(metrics: components["schemas"]["EffectiveMetricBody"][
 // leafAlarmSince: the component has no transitions read, so since-when comes
 // from what took it down: the worst ACTIVE alarm and its age. Null when
 // nothing is actively wrong (a cleared alarm is history, not a state).
-export function leafAlarmSince(alarms: Alarm[], now: number): { message: string; severity: string; ts: string; ms: number } | null {
-  const active = sortAlarms((alarms ?? []).filter((a) => a.active));
+export function leafAlarmSince(alarms: Alarm[], now: number, levels?: SeverityLevel[] | null): { message: string; severity: string; ts: string; ms: number } | null {
+  const active = sortAlarms((alarms ?? []).filter((a) => a.active), levels);
   if (active.length === 0) return null;
   const worst = active[0];
   return { message: worst.message, severity: worst.severity, ts: worst.raised_at, ms: now - Date.parse(worst.raised_at) };

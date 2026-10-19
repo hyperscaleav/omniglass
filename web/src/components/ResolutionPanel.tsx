@@ -80,7 +80,7 @@ export default function ResolutionPanel(props: { component: string }): JSX.Eleme
         A value here is not set on the component, it is the survivor of a cascade: platform, then location,
         then system, then the component itself, nearest wins. The three kinds do not share the same rungs:
         a variable takes its system band from the primary membership, and a secret has no system band at
-        all, since a credential's owner is never the room a device happens to serve.
+        all, since a credential's owner is never the place a component happens to serve.
       </p>
 
       <Show when={shared() && hasTags()}>

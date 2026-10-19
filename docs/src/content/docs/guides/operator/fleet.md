@@ -39,7 +39,7 @@ screenshots:
     # The header's since-line ages with the capture.
     mask:
       - "[data-testid=since-line] >> xpath=ancestor::div[1]"
-  # The auditorium carries the fleet's live critical alarm, so the history
+  # The auditorium carries the fleet's live high-severity alarm, so the history
   # tab has something real to say. Its room holds that one system, so the
   # room's address lands on it.
   - id: fleet-history

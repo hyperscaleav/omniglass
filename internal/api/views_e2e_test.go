@@ -158,15 +158,15 @@ func TestFleetViewAPI(t *testing.T) {
 	// An alarm moves the dot and the verdicts above it, so the canvas reads the
 	// same rollup the detail page does rather than a second opinion.
 	c.do(ownerTok, http.MethodPost, "/components/bar-1/alarms", map[string]any{
-		"severity": "critical", "message": "no route to host",
+		"severity": "high", "message": "no route to host",
 	}, http.StatusCreated)
 
 	v = view(ownerTok)
 	if got := v.Systems[0].Dots[0].Verdict; got != "outage" {
-		t.Errorf("dot verdict after a critical alarm = %q, want outage", got)
+		t.Errorf("dot verdict after a high alarm = %q, want outage", got)
 	}
 	if got := v.Systems[0].Verdict; got != "outage" {
-		t.Errorf("system verdict after a critical alarm = %q, want outage", got)
+		t.Errorf("system verdict after a high alarm = %q, want outage", got)
 	}
 	for _, l := range v.Locations {
 		if l.Name == "hq" && l.Verdict != "outage" {

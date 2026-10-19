@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/hyperscaleav/omniglass/internal/rules"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -67,6 +68,12 @@ func (p *PG) InsertMetricSamples(ctx context.Context, evs []MetricSampleWrite) e
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
+	// The event rules reading this batch's keys judge each sample as it lands
+	// (#919), in this transaction.
+	eval, err := p.newRuleEvaluator(ctx, tx, sampleKeys(evs, func(e MetricSampleWrite) string { return e.Key }))
+	if err != nil {
+		return err
+	}
 	for _, ev := range evs {
 		col, err := ownerColumn(ev.OwnerKind)
 		if err != nil {
@@ -87,6 +94,9 @@ func (p *PG) InsertMetricSamples(ctx context.Context, evs []MetricSampleWrite) e
 			values ($1, $2, $3, (select id from metric_type where name = $4), $5, $6, 'observed', $7)`, col)
 		if _, err := tx.Exec(ctx, sql, ts, ev.OwnerKind, arc, ev.Key, ev.Instance, ev.Value, ev.Source); err != nil {
 			return fmt.Errorf("storage: insert sample %s/%s: %w", ev.OwnerID, ev.Key, err)
+		}
+		if err := eval.observe(ctx, tx, rules.LaneMetric, ev.OwnerKind, arc, ev.Key, ev.Instance, ts, ev.Value); err != nil {
+			return err
 		}
 	}
 	if err := tx.Commit(ctx); err != nil {

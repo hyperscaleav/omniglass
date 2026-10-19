@@ -176,6 +176,13 @@ carries a hue, on every health pill, strip and marker, and a known healthy verdi
 distinguishable from an unknown one in markup. The same reason keeps `type` values (endpoint/task
 `type`) as plain `font-data` text, not a `badge-neutral` chip.
 
+A **severity** wears its level's color, one map for the whole console (`SEVERITY_BADGE` beside
+`SeverityBadge`): gray is the `badge-ghost` neutral chip, blue `badge-info`, green `badge-success`,
+yellow `badge-warning`, red `badge-error`, and orange and darkred their own `badge-average` and
+`badge-disaster` (the `--og-average` and `--og-disaster` hues), so a disaster stays distinguishable
+from a high. The chip shows the level's label; whether it takes a component out is the level's
+`outage` flag, never a comparison against a level name.
+
 ## Primitives (the reuse target)
 
 `ListShell` (with its `FlatList` / `TreeList` bodies), `FilterBar`, `Drawer`, `PanelFooter`,

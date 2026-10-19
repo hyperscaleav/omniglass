@@ -70,8 +70,8 @@ func newAckFixture(t *testing.T) *ackFixture {
 	}
 	f.mineCompID = entityID(t, c, owner, "/components", f.mine)
 	f.theirsCompID = entityID(t, c, owner, "/components", f.theirs)
-	f.mineAlarm = raiseFor(t, c, owner, f.mine, "critical", "no-signal", "no signal")
-	f.theirsAlarm = raiseFor(t, c, owner, f.theirs, "critical", "no-signal", "no signal")
+	f.mineAlarm = raiseFor(t, c, owner, f.mine, "high", "no-signal", "no signal")
+	f.theirsAlarm = raiseFor(t, c, owner, f.theirs, "high", "no-signal", "no signal")
 
 	floor := grant{role: "viewer", scopeKind: "all"}
 	f.responder = principalWithGrants(t, ctx, dsn, "responder", []grant{

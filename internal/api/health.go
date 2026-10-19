@@ -31,11 +31,12 @@ import (
 const healthHistoryWindow = 30 * 24 * time.Hour
 
 type healthAlarmBody struct {
-	ID        string    `json:"id"`
-	Component string    `json:"component"`
-	Severity  string    `json:"severity"`
-	Message   string    `json:"message"`
-	RaisedAt  time.Time `json:"raised_at"`
+	ID          string    `json:"id"`
+	Component   string    `json:"component" doc:"The component the alarm is on, by name"`
+	ComponentID string    `json:"component_id" doc:"The component's uuid"`
+	Severity    string    `json:"severity"`
+	Message     string    `json:"message"`
+	RaisedAt    time.Time `json:"raised_at"`
 }
 
 type healthRoleBody struct {
@@ -132,11 +133,12 @@ func toHealthRoleBody(r *storage.HealthRole) healthRoleBody {
 	for i := range r.Alarms {
 		a := &r.Alarms[i]
 		body.Alarms = append(body.Alarms, healthAlarmBody{
-			ID:        a.ID,
-			Component: a.ComponentID,
-			Severity:  a.Severity,
-			Message:   a.Message,
-			RaisedAt:  a.RaisedAt,
+			ID:          a.ID,
+			Component:   a.ComponentName,
+			ComponentID: a.ComponentID,
+			Severity:    a.Severity,
+			Message:     a.Message,
+			RaisedAt:    a.RaisedAt,
 		})
 	}
 	return body

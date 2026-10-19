@@ -150,6 +150,9 @@ omniglass component impairment set panel-1 --latency-ms 300  # slow (and plugged
 omniglass component impairment set panel-1                   # repaired
 ```
 
-An unplugged component's reachability moves, but its system's health does not yet: health is a
-component's active alarms, and raising an alarm from reachability is the event rule tier
-([#819](https://github.com/hyperscaleav/omniglass/issues/819)).
+Unplugging closes the monitoring loop with nobody in between. Once the component's endpoint has
+read `down` for the official reachability rule's fire sustain ([the shipped rule](/guides/admin/rules/#the-rule-that-ships)),
+the rule opens an alarm at its severity on it, the component goes to outage and stops filling its roles, and its system's verdict follows (degraded or
+out, as the role's impact says). **Catalog > Actions > Rules** shows the rule's open alarm while it
+lasts. Repair it and the next `up` reading clears the alarm and the verdict recovers. The
+[rules guide](/guides/admin/rules/) walks the same loop with a rule of your own.

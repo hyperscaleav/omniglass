@@ -18,7 +18,11 @@ Built today: the **`alarm`** table (component-local, impairing its component who
 on a `system_role`, the **rollup** from component through system to location, and the **recorded
 transition history**. Three reads serve it: the two explanations
 (`GET /systems/{name}/health` and `GET /locations/{name}/health`) and the bulk verdict read
-(`GET /systems:health`, #653), alongside the alarm write surface on a component. The console
+(`GET /systems:health`, #653), alongside the alarm write surface on a component, and alarms are
+also raised and cleared by [event rules](/architecture/alarms-actions/#the-event_rule) (#819), the
+official `reachability-lost` among them, so an unplugged component moves its system with nobody
+writing anything. Severity is a [ranked registry](/architecture/alarms-actions/#severity-a-registry-of-named-levels):
+`high` and above is an outage, and every severity chip renders the level's label and color. The console
 ships **HealthBadge**, **HealthHistory**, and **AlarmsPanel** on the component, system, and
 place detail views; healthy reads grey there and in the outline, and only trouble carries a
 hue (#872). See [implementation status](/architecture/status/).
@@ -54,7 +58,7 @@ Health is a chain, every hop a thing an operator already models:
 ```text
 alarm on a component
   -> the component's own verdict moves (any active alarm; #626)
-    -> a critical alarm takes it to outage, and only then does it stop
+    -> an alarm at or above high takes it to outage, and only then does it stop
        occupying the roles it is assigned to (a lesser alarm still degrades
        it, but it keeps its slot)
       -> a role falls below its quorum and is impaired
@@ -64,7 +68,7 @@ alarm on a component
 ```
 
 - An **[alarm](#the-alarm-what-is-wrong-with-one-component)** is **component-local** and impairs its
-  component **wholesale**: any active alarm degrades it, a critical one is an outage. It no longer
+  component **wholesale**: any active alarm degrades it, one at or above `high` is an outage. It no longer
   names what it takes away (#626 retired the capability registry that used to route it).
 - A component **occupies** a [system role](/architecture/core-entities/#system-roles-the-slots-a-system-needs-filled)
   it is assigned to unless its own verdict is currently **outage**: a merely **degraded** component
@@ -129,7 +133,7 @@ included: the build the room was not made to is not outstanding work.
 
 Health is **distinct from severity**: severity is an alarm's alert importance
 ([alarms and actions](/architecture/alarms-actions/)), health an entity's operational state; a
-`critical` alarm on a component filling no role moves nothing above it.
+`high` alarm on a component filling no role moves nothing above it.
 
 ## The rollup is a pure function
 
@@ -241,7 +245,7 @@ Two reads, both scope-injected, both a non-disclosing 404 for an owner outside t
 ([API](/architecture/api/#health-the-verdict-and-why)).
 
 **A system's report** is the verdict, every role it needs filled, and for an impaired role the
-causing chain: "the `room-mic` role wants 2 and has 1, because `mic-pod-2` went down on a critical
+causing chain: "the `room-mic` role wants 2 and has 1, because `mic-pod-2` went down on a high
 alarm raised at 14:02" tells the operator where to walk. A role impaired with **no assigned component
 down** (nobody assigned, or fewer assigned than the quorum wants) names no alarm, distinguishing
 **short-staffed** from **broken**.
@@ -254,7 +258,7 @@ change, never a sample: the availability strip's data and the answer to "since w
 
 ## The alarm: what is wrong with one component
 
-An alarm is a row on a component with a **`severity`** (`info`, `warning`, or `critical`), a
+An alarm is a row on a component with a **`severity`** (a [severity level](/architecture/alarms-actions/#severity-a-registry-of-named-levels) by name, `info` to `disaster`), a
 **message**, a **`raised_at`**, and a **nullable `cleared_at`**. Clearing sets `cleared_at` and
 **keeps the row**; clearing an already-cleared alarm is an explicit miss, not a silent success.
 
@@ -265,22 +269,31 @@ room cannot be made to look healthy by somebody looking at it
 verdict answers "is this component out", which is a question about the condition; the
 acknowledgement answers "has anybody seen this", which is a question about a person.
 
-Severity drives the **component's own** verdict (any active alarm makes it `degraded`, a `critical`
+Severity drives the **component's own** verdict (any active alarm makes it `degraded`, one at or above `high`
 one an `outage`) and **nothing above it**: what reaches a role is only whether its occupant's
 verdict is `outage`, not the severity that produced it or whether it is merely `degraded`. Severity
 is how loudly to page somebody, impact is what the room lost. A component's verdict records on its
 own arc, so a component filling no role still carries accurate history.
 
-::::design[Target design (ADR-0050)]
-
 ## Where alarms come from
 
-Today an **operator or API caller** writes the alarm. The full model: an
-[`event_rule`](/architecture/alarms-actions/) watches samples, fires an event, and an alarm **opens**
-and stays open while its condition holds, closing on the paired clear event. A
-rule-opened alarm impairs its owner's own verdict exactly as a hand-raised one does (#626: it no
-longer names what it takes away; the component is impaired wholesale), and the
-acknowledgement-independence above holds for it identically.
+An alarm is written by an **operator or API caller**, or by an
+[**event rule**](/architecture/alarms-actions/#the-event_rule) (#819): a rule watches one sample key on
+the components it selects, opens an alarm when the value meets its fire criteria for its sustain, and
+clears it the same way, through the same guarded write and the same health recompute a hand-raised
+alarm uses. A rule-opened alarm impairs its owner's own verdict exactly as a hand-raised one does
+(#626: it names nothing it takes away; the component is impaired wholesale), and the
+acknowledgement-independence above holds for it identically. The official `reachability-lost` rule is
+what closes the monitoring loop with no operator in between: an endpoint whose verdict reads `down` for
+its sustain opens a `high` alarm, the component goes to outage and stops filling its roles, and the
+system reads whatever those roles' impact says; reading `up` clears it and the verdict recovers.
+
+::::design[Target design (ADR-0050)]
+
+## Where alarms come from, next
+
+In the full model a firing rule also writes the paired open and clear **events**, and alarms are
+owned on the same arc as samples, below.
 
 ### Alarms owned by a system or a location
 

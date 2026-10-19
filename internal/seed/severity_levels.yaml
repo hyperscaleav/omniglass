@@ -1,0 +1,27 @@
+# The official severity levels (#917, ADR-0050): named, labelled, colored,
+# and ranked for comparison, spaced so an operator inserts a level between
+# two without renumbering. high and above makes a component an outage (the
+# health rule's floor); anything lower degrades it. Authoritative: the boot
+# seed upserts these on every start, and an operator's own levels are left
+# alone.
+levels:
+  - name: info
+    label: Info
+    color: gray
+    rank: 10
+  - name: warning
+    label: Warning
+    color: yellow
+    rank: 20
+  - name: average
+    label: Average
+    color: orange
+    rank: 30
+  - name: high
+    label: High
+    color: red
+    rank: 40
+  - name: disaster
+    label: Disaster
+    color: darkred
+    rank: 50

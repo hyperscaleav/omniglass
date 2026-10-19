@@ -18,6 +18,7 @@ import type { components } from "../api/schema.gen";
 import type { FleetView } from "./fleet";
 import { entityLabel } from "./entities";
 import { sortAlarms } from "./alarms";
+import type { SeverityLevel } from "./severity";
 
 export type FleetHealth = components["schemas"]["FleetHealthOutputBody"];
 export type HealthRole = components["schemas"]["HealthRoleBody"];
@@ -168,7 +169,7 @@ export function systemZoomVM(health: FleetHealth, declared: EffectiveRole[], vie
 // read already carries every alarm on a down occupant per role; this flattens
 // the ACTIVE roles' alarms (an inactive alternate's alarms did not move the
 // verdict, and rendering one would contradict the header), joins the role's
-// label and the component's uuid (via the projection's dots, names repeat
+// label and the component's uuid (the wire's component_id; names repeat
 // across rooms), and orders worst first.
 export type AlarmRow = {
   id: string;
@@ -180,24 +181,20 @@ export type AlarmRow = {
   raisedAt: string;
 };
 
-export function alarmRows(health: FleetHealth, view: FleetView, systemId: string): AlarmRow[] {
-  const self = (view.systems ?? []).find((s) => s.id === systemId);
-  // The alarm wire names its component by UUID (healthAlarmBody carries
-  // a.ComponentID); the projection's dots translate it to the name an
-  // operator recognises. An alarm on a component the projection does not
-  // carry keeps the raw id as its text and renders unlinked.
-  const nameById = new Map((self?.dots ?? []).map((d) => [d.component, d.name]));
+export function alarmRows(health: FleetHealth, levels?: SeverityLevel[] | null): AlarmRow[] {
+  // The alarm wire names its component twice (healthAlarmBody): by name, the
+  // text an operator recognises, and by uuid (component_id), the identity the
+  // link opens. Names repeat across rooms, so nothing matches on the name.
   const rows: AlarmRow[] = [];
   for (const r of health.roles ?? []) {
     if (!r.active) continue;
     for (const a of r.alarms ?? []) {
-      const known = nameById.has(a.component);
       rows.push({
         id: a.id,
         severity: a.severity,
         message: a.message,
-        component: nameById.get(a.component) ?? a.component,
-        componentId: known ? a.component : null,
+        component: a.component,
+        componentId: a.component_id || null,
         roleLabel: entityLabel(r),
         raisedAt: a.raised_at,
       });
@@ -206,7 +203,7 @@ export function alarmRows(health: FleetHealth, view: FleetView, systemId: string
   // The wire repeats an alarm under every role its down component staffs;
   // the strip is a list of alarms, not of role pairings, so the first
   // occurrence after the worst-first sort wins.
-  const sorted = sortAlarms(rows.map((r) => ({ ...r, raised_at: r.raisedAt }))).map(({ raised_at: _, ...r }) => r as AlarmRow);
+  const sorted = sortAlarms(rows.map((r) => ({ ...r, raised_at: r.raisedAt })), levels).map(({ raised_at: _, ...r }) => r as AlarmRow);
   const seen = new Set<string>();
   return sorted.filter((r) => (seen.has(r.id) ? false : (seen.add(r.id), true)));
 }

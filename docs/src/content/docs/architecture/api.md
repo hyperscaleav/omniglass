@@ -327,6 +327,21 @@ needing `system:create`, `system:update`, `system:read`, `component:create`, `en
 simulated component per staffed role at its own free address with its endpoint on the node, and each
 role assignment, in one transaction: it lands whole or not at all.
 
+**Alarms are raised by rules and graded by a level registry.** `/severity-levels` (read with
+`severity_level:read`, written with `severity_level:*`) lists the severity levels least to most severe,
+each with whether an alarm at it puts a component in outage; official levels are read-only. `/event-rules`
+(gated `rule:*`; read like a registry, written only on an all-scope grant) authors the rules that raise alarms: a sample
+key, fire and clear criteria, sustains, a severity level and a selector; an unknown key or level, or
+criteria its lane cannot evaluate, is a 422. A rule edit is judged on what it changes from the stored rule:
+a selector entry, key or criteria it restates unchanged is not re-resolved, so a rule whose component or
+type was deleted stays editable (it matches nothing by the stale entry), while an entry new to the rule must
+exist. The list and a get carry each rule's live state as counts (`open_alarms`, `pending_streaks`), read
+for the whole list in one query; `GET /event-rules/{name}/state` lists the alarms and streaks themselves.
+Both are fenced to the caller's component read scope. Because writing a rule needs an all-scope grant,
+`GET /auth/me` returns `fleet_permissions` beside `permissions`:
+the permissions held on an all-scope grant, which the console checks before offering a rule write. An alarm body names its component by name and uuid, and a
+rule-raised one its rule (`raised_by_rule`, `raised_by_rule_id`).
+
 **The endpoint is authored; the task is derived.** An endpoint is addressed by a surrogate `id` and
 **named by its protocol**: `name` derives from `transport`, unique **within its component**
 (create takes a type, not a name; a duplicate protocol on one component is a **409**). Creating an
@@ -660,7 +675,7 @@ cost it the slot).
 
 **[Health](/architecture/health/)** is two shapes on this surface: the **alarm** (what is wrong with one
 component) and the **report** (what that means for a system or a location); an alarm is
-component-local, reaching a room only through the component's own verdict. Only a `critical` alarm
+component-local, reaching a room only through the component's own verdict. Only an alarm at or above `high`
 takes that verdict to outage and impairs every role the component occupies while it is active; an
 `info` or `warning` alarm degrades the component but leaves it occupying its roles.
 
@@ -671,8 +686,8 @@ An alarm hangs off its component and rides that component's gating:
   `unacknowledged` (on its own, raised and unacknowledged; with `include_cleared`, also the
   incidents that came and went unattended).
 - `POST /components/{name}/alarms` raises one from `{severity, message?, dedup_key?}` (201,
-  `component:update`). `severity` is `info` / `warning` / `critical`, driving the component's own
-  verdict (any active alarm degrades it, a critical one is an outage); `dedup_key` is the condition
+  `component:update`). `severity` names a [severity level](/architecture/alarms-actions/#severity-a-registry-of-named-levels) (`GET /severity-levels`, an unknown one a 422), driving the component's own
+  verdict (any active alarm degrades it, one at or above `high` is an outage); `dedup_key` is the condition
   identity, defaulting to the message. A bad severity is a **422**.
 - `DELETE /components/{name}/alarms/{id}` clears it (204, `component:update`). The row is **kept**, so
   the record of what was wrong outlives the fix; clearing one already cleared, or another

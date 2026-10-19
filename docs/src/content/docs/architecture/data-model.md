@@ -244,6 +244,8 @@ telemetry: {
     id: uuid {constraint: primary_key}
     acknowledged_by: uuid {constraint: foreign_key}
     component_id: uuid {constraint: foreign_key}
+    raised_by_rule_id: uuid {constraint: foreign_key}
+    severity: text {constraint: foreign_key}
   }
   command: {
     shape: sql_table
@@ -272,6 +274,17 @@ telemetry: {
     source_event_id: bigint {constraint: foreign_key}
     source_log_line_id: bigint {constraint: foreign_key}
     system_id: uuid {constraint: foreign_key}
+  }
+  event_rule: {
+    shape: sql_table
+    id: uuid {constraint: primary_key}
+    severity: text {constraint: foreign_key}
+  }
+  event_rule_state: {
+    shape: sql_table
+    component_id: uuid {constraint: primary_key}
+    instance: text {constraint: primary_key}
+    rule_id: uuid {constraint: primary_key}
   }
   event_type: {
     shape: sql_table
@@ -309,6 +322,10 @@ telemetry: {
     system_id: uuid {constraint: foreign_key}
   }
   property_type: {
+    shape: sql_table
+    id: uuid {constraint: primary_key}
+  }
+  severity_level: {
     shape: sql_table
     id: uuid {constraint: primary_key}
   }
@@ -488,6 +505,8 @@ identity.system_role_type.component_type_id -> catalog.component_type.id
 identity.system_role_type.role_id -> identity.system_role.id
 telemetry.alarm.acknowledged_by -> identity.principal.id
 telemetry.alarm.component_id -> fleet.component.id
+telemetry.alarm.raised_by_rule_id -> telemetry.event_rule.id
+telemetry.alarm.severity -> telemetry.severity_level.name
 telemetry.command.caused_event_id -> telemetry.event.id
 telemetry.command.command_type_id -> telemetry.command_type.id
 telemetry.command.component_id -> fleet.component.id
@@ -504,6 +523,9 @@ telemetry.event.node_id -> collection.node.principal_id
 telemetry.event.source_event_id -> telemetry.event.id
 telemetry.event.source_log_line_id -> telemetry.log_line.id
 telemetry.event.system_id -> fleet.system.id
+telemetry.event_rule.severity -> telemetry.severity_level.name
+telemetry.event_rule_state.component_id -> fleet.component.id
+telemetry.event_rule_state.rule_id -> telemetry.event_rule.id
 telemetry.log_line.component_id -> fleet.component.id
 telemetry.metric.command_id -> telemetry.command.id
 telemetry.metric.component_id -> fleet.component.id

@@ -82,6 +82,10 @@ export const ROUTE_MANIFEST: RouteEntry[] = [
   { path: "/properties", shell: "catalog", page: "Properties", smoke: "/properties" },
   { path: "/event-types", shell: "catalog", page: "EventTypes", smoke: "/event-types" },
   { path: "/command-types", shell: "catalog", page: "CommandTypes", smoke: "/command-types" },
+  // The event rule registry (#921), live since the rules epic (#819).
+  { path: "/rules", shell: "catalog", page: "Rules", smoke: "/rules" },
+  // The severity registry the rules raise at (#917, read view #921).
+  { path: "/severity-levels", shell: "catalog", page: "SeverityLevels", smoke: "/severity-levels" },
   { path: "/vendors", shell: "catalog", page: "Vendors", smoke: "/vendors" },
   { path: "/products", shell: "catalog", page: "Products", smoke: "/products" },
   { path: "/drivers", shell: "catalog", page: "Drivers", smoke: "/drivers" },
@@ -93,6 +97,5 @@ export const ROUTE_MANIFEST: RouteEntry[] = [
   { path: "/tags", shell: "catalog", page: "Tags", smoke: "/tags" },
   // The catalog's routed soon slots (catalog.ts's CATALOG_STUB_PATHS), rendering
   // their stub inside the pane.
-  { path: "/rules", shell: "catalog", page: "SectionStub", smoke: "/rules" },
   { path: "/notifications", shell: "catalog", page: "SectionStub", smoke: "/notifications" },
 ];

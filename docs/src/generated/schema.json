@@ -3057,7 +3057,9 @@
      {
       "name": "severity",
       "type": "text",
-      "nullable": false
+      "nullable": false,
+      "fk": true,
+      "fk_target": "severity_level.name"
      },
      {
       "name": "message",
@@ -3111,12 +3113,13 @@
       "nullable": true,
       "fk": true,
       "fk_target": "principal.id"
-     }
-    ],
-    "checks": [
+     },
      {
-      "name": "alarm_severity_check",
-      "expr": "CHECK ((severity = ANY (ARRAY['info'::text, 'warning'::text, 'critical'::text])))"
+      "name": "raised_by_rule_id",
+      "type": "uuid",
+      "nullable": true,
+      "fk": true,
+      "fk_target": "event_rule.id"
      }
     ],
     "uniques": [
@@ -3472,6 +3475,177 @@
      {
       "name": "event_provenance_check",
       "expr": "CHECK ((provenance = ANY (ARRAY['observed'::text, 'calculated'::text, 'intended'::text, 'declared'::text])))"
+     }
+    ]
+   },
+   "event_rule": {
+    "columns": [
+     {
+      "name": "id",
+      "type": "uuid",
+      "nullable": false,
+      "default": "uuidv7()",
+      "pk": true
+     },
+     {
+      "name": "name",
+      "type": "text",
+      "nullable": false
+     },
+     {
+      "name": "label",
+      "type": "text",
+      "nullable": true
+     },
+     {
+      "name": "description",
+      "type": "text",
+      "nullable": false,
+      "default": "''::text"
+     },
+     {
+      "name": "selector",
+      "type": "jsonb",
+      "nullable": false,
+      "default": "'{}'::jsonb"
+     },
+     {
+      "name": "sample_key",
+      "type": "text",
+      "nullable": false
+     },
+     {
+      "name": "sample_lane",
+      "type": "text",
+      "nullable": false
+     },
+     {
+      "name": "fire_criteria",
+      "type": "jsonb",
+      "nullable": false
+     },
+     {
+      "name": "clear_criteria",
+      "type": "jsonb",
+      "nullable": true
+     },
+     {
+      "name": "fire_sustain",
+      "type": "interval",
+      "nullable": false,
+      "default": "'00:00:00'::interval"
+     },
+     {
+      "name": "clear_sustain",
+      "type": "interval",
+      "nullable": false,
+      "default": "'00:00:00'::interval"
+     },
+     {
+      "name": "severity",
+      "type": "text",
+      "nullable": false,
+      "fk": true,
+      "fk_target": "severity_level.name"
+     },
+     {
+      "name": "message",
+      "type": "text",
+      "nullable": false,
+      "default": "''::text"
+     },
+     {
+      "name": "enabled",
+      "type": "boolean",
+      "nullable": false,
+      "default": "true"
+     },
+     {
+      "name": "official",
+      "type": "boolean",
+      "nullable": false,
+      "default": "false"
+     },
+     {
+      "name": "version",
+      "type": "integer",
+      "nullable": false,
+      "default": "1"
+     },
+     {
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+     },
+     {
+      "name": "updated_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+     }
+    ],
+    "checks": [
+     {
+      "name": "event_rule_clear_sustain_check",
+      "expr": "CHECK ((clear_sustain \u003e= '00:00:00'::interval))"
+     },
+     {
+      "name": "event_rule_fire_sustain_check",
+      "expr": "CHECK ((fire_sustain \u003e= '00:00:00'::interval))"
+     },
+     {
+      "name": "event_rule_sample_lane_check",
+      "expr": "CHECK ((sample_lane = ANY (ARRAY['property'::text, 'metric'::text])))"
+     }
+    ],
+    "uniques": [
+     {
+      "name": "event_rule_name_key",
+      "definition": "CREATE UNIQUE INDEX event_rule_name_key ON public.event_rule USING btree (name)"
+     }
+    ]
+   },
+   "event_rule_state": {
+    "columns": [
+     {
+      "name": "rule_id",
+      "type": "uuid",
+      "nullable": false,
+      "pk": true,
+      "fk": true,
+      "fk_target": "event_rule.id"
+     },
+     {
+      "name": "component_id",
+      "type": "uuid",
+      "nullable": false,
+      "pk": true,
+      "fk": true,
+      "fk_target": "component.id"
+     },
+     {
+      "name": "instance",
+      "type": "text",
+      "nullable": false,
+      "default": "''::text",
+      "pk": true
+     },
+     {
+      "name": "pending",
+      "type": "text",
+      "nullable": false
+     },
+     {
+      "name": "since",
+      "type": "timestamp with time zone",
+      "nullable": false
+     }
+    ],
+    "checks": [
+     {
+      "name": "event_rule_state_pending_check",
+      "expr": "CHECK ((pending = ANY (ARRAY['fire'::text, 'clear'::text])))"
      }
     ]
    },
@@ -3966,6 +4140,72 @@
      {
       "name": "property_type_handle_key",
       "definition": "CREATE UNIQUE INDEX property_type_handle_key ON public.property_type USING btree (name)"
+     }
+    ]
+   },
+   "severity_level": {
+    "columns": [
+     {
+      "name": "id",
+      "type": "uuid",
+      "nullable": false,
+      "default": "uuidv7()",
+      "pk": true
+     },
+     {
+      "name": "name",
+      "type": "text",
+      "nullable": false
+     },
+     {
+      "name": "label",
+      "type": "text",
+      "nullable": true
+     },
+     {
+      "name": "color",
+      "type": "text",
+      "nullable": false,
+      "default": "''::text"
+     },
+     {
+      "name": "rank",
+      "type": "integer",
+      "nullable": false
+     },
+     {
+      "name": "official",
+      "type": "boolean",
+      "nullable": false,
+      "default": "false"
+     },
+     {
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+     },
+     {
+      "name": "updated_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+     }
+    ],
+    "checks": [
+     {
+      "name": "severity_level_rank_check",
+      "expr": "CHECK ((rank \u003e 0))"
+     }
+    ],
+    "uniques": [
+     {
+      "name": "severity_level_name_key",
+      "definition": "CREATE UNIQUE INDEX severity_level_name_key ON public.severity_level USING btree (name)"
+     },
+     {
+      "name": "severity_level_rank_key",
+      "definition": "CREATE UNIQUE INDEX severity_level_rank_key ON public.severity_level USING btree (rank)"
      }
     ]
    }

@@ -153,7 +153,7 @@ The authenticated principal, its permissions, and grants
 omniglass auth me
 ```
 
-Returns the caller's principal, flattened permissions (a UI hint and the fast-reject set), and grants. Requires authentication.
+Returns the caller's principal, flattened permissions (a UI hint and the fast-reject set), the permissions held on an all-scope grant (fleet_permissions), and grants. Requires authentication.
 
 Example:
 
@@ -403,13 +403,13 @@ Raise an alarm on a component
 omniglass component alarm create <name> [flags]
 ```
 
-Records a condition on this component, then recomputes health in the same transaction: the component's own verdict moves, and if it is now outage (a critical alarm), any role it occupies loses it as an occupant while the alarm is active, which can move its system and location verdicts with it; a lesser (info or warning) alarm degrades the component but leaves it occupying its roles. Gated by component:update; read and update scopes drive the 404 versus 403 split.
+Records a condition on this component, then recomputes health in the same transaction: the component's own verdict moves, and if it is now outage (an alarm at or above the high level), any role it occupies loses it as an occupant while the alarm is active, which can move its system and location verdicts with it; a lesser alarm degrades the component but leaves it occupying its roles. Gated by component:update; read and update scopes drive the 404 versus 403 split.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--dedup-key` | string | (none) | The condition identity; defaults to the message. Raising an already-open (component, dedup_key) returns the existing open alarm instead of a duplicate |
 | `--message` | string | (none) | What is wrong, for the operator reading it later |
-| `--severity` | string | (none) | How bad it is; critical puts the component itself in outage |
+| `--severity` | string | (none) | How bad it is: a severity level by name (see /severity-levels); a level at or above high puts the component itself in outage |
 
 Example:
 
@@ -1446,6 +1446,140 @@ Example:
 
 ```sh
 omniglass endpoint update <id>
+```
+
+## `omniglass event-rule`
+
+Commands for the event-rule resource
+
+### `omniglass event-rule create`
+
+Create an event rule
+
+```
+omniglass event-rule create [flags]
+```
+
+Authors a rule that raises an alarm on each component it watches when its sample key meets the fire criteria for the fire sustain, and clears it when the clear criteria (or the negation of fire) holds for the clear sustain. The key must be a registered property or metric, the criteria evaluable on its lane, and the severity a level that exists (else 422); a name already taken is a 409. Audited. Gated by rule:create, with an all-scope grant.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--clear-criteria` | string | (none) | The criteria that clears it: {op, value}; absent clears on the negation of fire_criteria |
+| `--clear-sustain` | string | (none) | A Go duration; empty is 0s |
+| `--description` | string | (none) | What the rule watches for and why |
+| `--enabled` | bool | `false` | Defaults to true |
+| `--fire-criteria` | string | (none) | The criteria that opens an alarm: {op, value} |
+| `--fire-sustain` | string | (none) | A Go duration; empty is 0s |
+| `--label` | string | (none) | A human label; also the alarm message when message is empty |
+| `--message` | string | (none) | The alarm message; empty uses the label or the name |
+| `--name` | string | (none) | The rule's name (lowercase kebab) |
+| `--sample-key` | string | (none) | The property or metric the rule reads |
+| `--selector` | string | (none) | The components the rule watches (component types and components); absent is every component |
+| `--severity` | string | (none) | The severity level the alarm is raised at, by name |
+
+Example:
+
+```sh
+omniglass event-rule create --fire-criteria <json> --name name --sample-key sample_key --severity severity
+```
+
+### `omniglass event-rule delete`
+
+Delete an event rule
+
+```
+omniglass event-rule delete <name>
+```
+
+Removes an operator rule; an official rule is read-only (409). Audited. Gated by rule:delete, with an all-scope grant.
+
+Example:
+
+```sh
+omniglass event-rule delete <name>
+```
+
+### `omniglass event-rule get`
+
+Get an event rule
+
+```
+omniglass event-rule get <name>
+```
+
+Returns one event rule by name, with its live state as counts over the components the caller may read. Gated by rule:read.
+
+Example:
+
+```sh
+omniglass event-rule get <name>
+```
+
+### `omniglass event-rule list`
+
+List event rules
+
+```
+omniglass event-rule list
+```
+
+Lists the event rules, the authored config that raises alarms, each with its live state as counts (open_alarms, pending_streaks) read in the same query. Rules read like a registry: every rule is listed whatever the caller's scope, while the counts cover only components the caller may read. Gated by rule:read.
+
+Example:
+
+```sh
+omniglass event-rule list
+```
+
+### `omniglass event-rule state`
+
+Commands for the state resource
+
+#### `omniglass event-rule state list`
+
+Get an event rule's live state
+
+```
+omniglass event-rule state list <name>
+```
+
+What a rule holds right now: the alarms it raised that are still open, each on a component and instance, and its streaks waiting out a sustain. Only those on components the caller may read are listed. Gated by rule:read.
+
+Example:
+
+```sh
+omniglass event-rule state list <name>
+```
+
+### `omniglass event-rule update`
+
+Update an event rule
+
+```
+omniglass event-rule update <name> [flags]
+```
+
+Patches a rule (an absent field is unchanged), bumping its version; disabling it stops new opens. Official rules are read-only (409). Audited. Gated by rule:update, with an all-scope grant.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--clear-criteria` | string | (none) | The criteria that clears it: {op, value}; absent clears on the negation of fire_criteria |
+| `--clear-negates` | bool | `false` | Drop the clear criteria, so the rule clears on the negation of its fire criteria |
+| `--clear-sustain` | string | (none) | How long the clear criteria must hold, a Go duration; empty is 0s |
+| `--description` | string | (none) | What the rule watches for and why |
+| `--enabled` | bool | `false` | Whether the rule evaluates; defaults to true on create |
+| `--fire-criteria` | string | (none) | The criteria that opens an alarm: {op, value} |
+| `--fire-sustain` | string | (none) | How long the fire criteria must hold, a Go duration (e.g. 30s); empty is 0s |
+| `--label` | string | (none) | A human label; also the alarm message when message is empty |
+| `--message` | string | (none) | The alarm message; empty uses the label or the name |
+| `--sample-key` | string | (none) | The property or metric the rule reads |
+| `--selector` | string | (none) | Replace the components the rule watches; absent leaves them unchanged, and an empty selector watches every component |
+| `--severity` | string | (none) | The severity level the alarm is raised at, by name |
+
+Example:
+
+```sh
+omniglass event-rule update <name>
 ```
 
 ## `omniglass event-type`
@@ -3846,6 +3980,104 @@ Example:
 
 ```sh
 omniglass setting update <namespace>
+```
+
+## `omniglass severity-level`
+
+Commands for the severity-level resource
+
+### `omniglass severity-level create`
+
+Create a severity level
+
+```
+omniglass severity-level create [flags]
+```
+
+Adds an operator severity level at a rank of its own, between two others without renumbering. A name or rank already taken is a 409; a color outside the palette is a 422. Audited. Gated by severity_level:create.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--color` | string | (none) | One of gray, blue, green, yellow, orange, red, darkred |
+| `--label` | string | (none) | A human label |
+| `--name` | string | (none) | The level's name (lowercase kebab) |
+| `--rank` | int | `0` | Its place among the levels: higher is more severe; unique |
+
+Example:
+
+```sh
+omniglass severity-level create --color color --name name --rank <int>
+```
+
+### `omniglass severity-level delete`
+
+Delete a severity level
+
+```
+omniglass severity-level delete <name>
+```
+
+Removes an operator level no alarm or event rule names; an official level or one in use is a 409. Audited. Gated by severity_level:delete.
+
+Example:
+
+```sh
+omniglass severity-level delete <name>
+```
+
+### `omniglass severity-level get`
+
+Get a severity level
+
+```
+omniglass severity-level get <name>
+```
+
+Returns one severity level by name. Gated by severity_level:read.
+
+Example:
+
+```sh
+omniglass severity-level get <name>
+```
+
+### `omniglass severity-level list`
+
+List severity levels
+
+```
+omniglass severity-level list
+```
+
+Lists the severity levels, least to most severe, each with whether an active alarm at it puts a component in outage. Gated by severity_level:read.
+
+Example:
+
+```sh
+omniglass severity-level list
+```
+
+### `omniglass severity-level update`
+
+Update a severity level
+
+```
+omniglass severity-level update <name> [flags]
+```
+
+Patches an operator level's name, label, color or rank (an absent field is unchanged); a rename carries every alarm at the level with it. Official levels are read-only (409). Audited. Gated by severity_level:update.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--color` | string | (none) | One of gray, blue, green, yellow, orange, red, darkred |
+| `--label` | string | (none) | A human label |
+| `--name` | string | (none) | A new name; every alarm at this level follows |
+| `--rank` | int | `0` | Its place among the levels; unique |
+
+Example:
+
+```sh
+omniglass severity-level update <name>
 ```
 
 ## `omniglass sim`

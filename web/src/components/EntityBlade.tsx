@@ -4,6 +4,8 @@ import AcknowledgeButton from "./AcknowledgeButton";
 import { useNavigate } from "@solidjs/router";
 import { useQueries, useQuery, useQueryClient } from "@tanstack/solid-query";
 import HealthBadge from "./HealthBadge";
+import SeverityBadge from "./SeverityBadge";
+import { useSeverity } from "../lib/severity";
 import Button from "./Button";
 import EntityForm from "./EntityForm";
 import { Maximize } from "./icons";
@@ -100,8 +102,9 @@ function useDelete(opts: {
 }
 
 // Why, with the severity first: the reason beside the red light, each
-// naming the component when there is one to open.
-function Why(props: { rows: { severity: string; message: string; component?: string; onOpen?: () => void; ack?: JSX.Element }[] }) {
+// naming the component when there is one to open, and the event rule when
+// one raised it.
+function Why(props: { rows: { severity: string; message: string; component?: string; onOpen?: () => void; rule?: string; ack?: JSX.Element }[] }) {
   return (
     <Show when={props.rows.length > 0}>
       <div data-testid="blade-why" class={section}>
@@ -109,13 +112,16 @@ function Why(props: { rows: { severity: string; message: string; component?: str
         <For each={props.rows}>
           {(a) => (
             <div class="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-              <span class="badge badge-xs" classList={{ "badge-error badge-soft": a.severity === "critical", "badge-warning badge-soft": a.severity !== "critical" }}>{a.severity}</span>
+              <SeverityBadge name={a.severity} size="xs" />
               <Show when={a.component}>
                 <Show when={a.onOpen} fallback={<span class="font-data text-xs text-base-content/80">{a.component}</span>}>
                   <button type="button" class="cursor-pointer font-data text-xs text-base-content/80 hover:underline" onClick={() => a.onOpen!()}>{a.component}</button>
                 </Show>
               </Show>
               <span class="min-w-0 flex-1 text-xs text-base-content/70">{a.message}</span>
+              <Show when={a.rule}>
+                {(rule) => <span class="shrink-0 text-[11px] text-base-content/45">by rule <span class="font-data">{rule()}</span></span>}
+              </Show>
               {a.ack}
             </div>
           )}
@@ -135,7 +141,8 @@ function SystemBody(props: { id: string }) {
   const now = Date.now();
   const cluster = () => view.data?.systems?.find((s) => s.id === props.id);
   const row = () => (systems.data ?? []).find((s) => s.id === props.id);
-  const alarms = createMemo(() => (health.data && view.data ? alarmRows(health.data, view.data, props.id) : []));
+  const scale = useSeverity();
+  const alarms = createMemo(() => (health.data ? alarmRows(health.data, scale().levels) : []));
   const strip = createMemo(() => (health.data ? slotStrip(health.data) : undefined));
   const count = () => (cluster()?.dots ?? []).length;
 
@@ -185,7 +192,8 @@ function ComponentBody(props: { id: string }) {
   const now = Date.now();
   const row = () => (components.data ?? []).find((c) => c.id === props.id);
   const verdict = () => (view.data ? dotVerdict(view.data, props.id) : null);
-  const active = createMemo(() => splitAlarms(alarmsQ.data ?? []).active);
+  const scale = useSeverity();
+  const active = createMemo(() => splitAlarms(alarmsQ.data ?? [], scale().levels).active);
   // The systems it serves, by uuid, each with the role it fills there, the
   // primary first (the read orders by name, and the primary is the one whose
   // place stands in for a component with none of its own).
@@ -217,9 +225,9 @@ function ComponentBody(props: { id: string }) {
       </Show>
       <div class="flex flex-wrap items-center gap-2">
         <HealthBadge verdict={verdict() ?? undefined} size="sm" />
-        <SinceLine since={leafAlarmSince(alarmsQ.data ?? [], now)} />
+        <SinceLine since={leafAlarmSince(alarmsQ.data ?? [], now, scale().levels)} />
       </div>
-      <Why rows={active().map((a) => ({ severity: a.severity, message: a.message, ack: <AcknowledgeButton component={props.id} alarm={a} /> }))} />
+      <Why rows={active().map((a) => ({ severity: a.severity, message: a.message, rule: a.raised_by_rule, ack: <AcknowledgeButton component={props.id} alarm={a} /> }))} />
       {/* Where its place is the room a system it serves makes, Serves names
           that room already, so no place card says it again. */}
       <Show when={placeId() && !(view.data && isRoomOf(view.data, placeId(), served().map((s) => s.id)))}>

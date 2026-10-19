@@ -18,6 +18,7 @@ import { TAGS_KEY } from "../lib/tags";
 import { systemRolesKey } from "../lib/system_roles";
 import { ME_KEY, type Me } from "../lib/auth";
 import { uuidFor } from "../lib/testids";
+import { seedSeverityLevels } from "../lib/testseverity";
 
 const acked: string[] = [];
 vi.mock("../lib/alarms", async (orig) => {
@@ -68,8 +69,9 @@ const reach: Reachability = {
 
 const nodes: Node[] = [{ name: "edge-1", enrolled: true, last_heartbeat_at: iso(5), tags: {} } as Node];
 
-function mount(path = `/web/components/${uuidFor("cf-c-bar")}`, memberships?: unknown[], component: Component = bar, meOverride: Me = me) {
+function mount(path = `/web/components/${uuidFor("cf-c-bar")}`, memberships?: unknown[], component: Component = bar, meOverride: Me = me, alarms?: unknown[]) {
   const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
+  seedSeverityLevels(qc);
   qc.setQueryData([...FLEET_VIEW_KEY], view);
   qc.setQueryData([...COMPONENTS_KEY], [component]);
   qc.setQueryData([...PRODUCTS_KEY], [{ id: uuidFor("cf-p"), name: "kestrel-vroom", label: "Kestrel VRoom", vendor: "kestrel", driver: "kestrel-http" }]);
@@ -85,9 +87,9 @@ function mount(path = `/web/components/${uuidFor("cf-c-bar")}`, memberships?: un
     { component: "videobar-1", system: "overflow", primary: false, system_count: 2 },
   ]);
   qc.setQueryData([...REACHABILITY_KEY(uuidFor("cf-c-bar"))], reach);
-  qc.setQueryData([...componentAlarmsKey(uuidFor("cf-c-bar"))], [
-    { id: "al-1", component: "videobar-1", severity: "critical", message: "No route to host", raised_at: iso(9600), active: true, acknowledged: false },
-    { id: "al-0", component: "videobar-1", severity: "warning", message: "Cleared last week", raised_at: iso(600000), active: false, acknowledged: true },
+  qc.setQueryData([...componentAlarmsKey(uuidFor("cf-c-bar"))], alarms ?? [
+    { id: "al-1", component: "videobar-1", component_id: uuidFor("cf-c-bar"), severity: "high", message: "No route to host", raised_at: iso(9600), active: true, acknowledged: false },
+    { id: "al-0", component: "videobar-1", component_id: uuidFor("cf-c-bar"), severity: "warning", message: "Cleared last week", raised_at: iso(600000), active: false, acknowledged: true },
   ]);
   qc.setQueryData([...effectivePropertiesKey(uuidFor("cf-c-bar"))], [
     { property_type_name: "serial-number", label: "Serial Number", value: "SN-1183", is_set: true, from_contract: true },
@@ -205,6 +207,22 @@ describe("the leaf's dispatch facts (#786)", () => {
     expect(within(card).getByText("No route to host")).toBeTruthy();
     expect(within(card).getByText(/unacknowledged/)).toBeTruthy();
     expect(within(card).queryByText("Cleared last week")).toBeNull();
+  });
+
+  // The strip's tone follows the registry's outage flag (#917), not a level name:
+  // high and disaster take the component out and read red, average only degrades.
+  it.each([
+    ["high", "High", true],
+    ["disaster", "Disaster", true],
+    ["average", "Average", false],
+  ])("tones the Why strip by the outage flag of %s", (severity, label, outage) => {
+    mount(undefined, undefined, undefined, undefined, [
+      { id: "al-x", component: "videobar-1", component_id: uuidFor("cf-c-bar"), severity, message: "Something", raised_at: iso(60), active: true, acknowledged: false },
+    ]);
+    const card = screen.getByTestId("leaf-alarms");
+    expect(card.classList.contains("border-error/40")).toBe(outage);
+    expect(card.classList.contains("border-warning/40")).toBe(!outage);
+    expect(within(card).getByText(label)).toBeTruthy();
   });
 
   it("the identity panel carries the resolved properties: serial and firmware beside product, vendor, driver", () => {

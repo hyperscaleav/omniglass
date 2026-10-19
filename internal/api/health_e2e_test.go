@@ -114,17 +114,17 @@ func TestHealthAPI(t *testing.T) {
 		t.Fatalf("roles = %+v, want one table-mic at impact outage, not impaired", sys.Roles)
 	}
 
-	// Raise a critical alarm on the bar: it impairs the component wholesale
+	// Raise a high alarm on the bar: it impairs the component wholesale
 	// (#626), not a named capability, so bar-1 no longer occupies the slot it
 	// is assigned to.
 	var raised alarmWire
 	if err := json.Unmarshal(c.do(ownerTok, http.MethodPost, "/components/bar-1/alarms", map[string]any{
-		"severity": "critical", "message": "mic array not responding",
+		"severity": "high", "message": "mic array not responding",
 	}, http.StatusCreated), &raised); err != nil {
 		t.Fatalf("decode raised alarm: %v", err)
 	}
-	if !raised.Active || raised.Severity != "critical" {
-		t.Fatalf("raised alarm = %+v, want an active critical", raised)
+	if !raised.Active || raised.Severity != "high" {
+		t.Fatalf("raised alarm = %+v, want an active high", raised)
 	}
 
 	// The role's impact is outage, so the system is an outage the moment its

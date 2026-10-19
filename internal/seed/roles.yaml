@@ -116,6 +116,8 @@ roles:
       - "property_type:*"
       - "metric_type:*"
       - "event_type:*"
+      - "severity_level:*"
+      - "rule:*"
       - "command_type:*"
       - "command:*"
       - "location_type:create,update,delete"

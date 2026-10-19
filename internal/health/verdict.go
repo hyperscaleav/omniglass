@@ -95,7 +95,7 @@ type Component struct {
 // behind it. A Degraded component still occupies: severity is how loudly to
 // page somebody, not a second threshold for staffing, so an info or warning
 // alarm never shorts a role by itself. This is the mechanism by which a
-// critical alarm reaches a system: impair the component down to Outage, and
+// high-severity alarm reaches a system: impair the component down to Outage, and
 // every role it occupies loses one occupant.
 func (c Component) Occupies() bool {
 	return c.Verdict != Outage
@@ -303,14 +303,20 @@ func RollUp(children []Verdict) Verdict {
 	return v
 }
 
+// OutageRank is the severity rank at and above which an active alarm makes
+// its component an outage: the seeded high level (#917). Below it, any active
+// alarm degrades. Official levels are read-only, so the floor does not move.
+const OutageRank = 40
+
 // ComponentVerdict is a component's own health, independent of any role it
-// fills: degraded once any alarm is active against it, and an outage when an
-// active alarm is critical. A component that fills no role still shows what is
-// wrong with it.
-func ComponentVerdict(severities []string) Verdict {
+// fills, from the ranks of its active alarms' severity levels: degraded once
+// any alarm is active against it, and an outage when one is at or above
+// OutageRank. A component that fills no role still shows what is wrong with
+// it.
+func ComponentVerdict(ranks []int) Verdict {
 	v := Healthy
-	for _, s := range severities {
-		if s == "critical" {
+	for _, r := range ranks {
+		if r >= OutageRank {
 			v = Worse(v, Outage)
 			continue
 		}

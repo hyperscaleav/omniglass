@@ -348,7 +348,7 @@ func TestHealthRecordsEveryRealChange(t *testing.T) {
 	// A critical alarm takes the bar down, emptying the video-bar slot: a
 	// real change, so a real row.
 	alarm, err := f.gw.RaiseAlarm(ctx, "", "bar-a", storage.AlarmSpec{
-		Severity: "critical", Message: "bar not responding",
+		Severity: "high", Message: "bar not responding",
 	})
 	if err != nil {
 		t.Fatalf("raise alarm: %v", err)
@@ -475,7 +475,7 @@ func TestHealthConcurrentWritesRecordOneEdge(t *testing.T) {
 			component := c
 			writes = append(writes, func() error {
 				_, err := f.gw.RaiseAlarm(ctx, "", component, storage.AlarmSpec{
-					Severity: "critical", Message: "bar not responding",
+					Severity: "high", Message: "bar not responding",
 				})
 				return err
 			})
@@ -526,7 +526,7 @@ func TestHealthConcurrentOppositeWritesLeaveNoStaleRecord(t *testing.T) {
 		// the write that says degraded: run together, they disagree about what
 		// the fleet is.
 		standing, err := f.gw.RaiseAlarm(ctx, "", a, storage.AlarmSpec{
-			Severity: "critical", Message: "bar not responding",
+			Severity: "high", Message: "bar not responding",
 		})
 		if err != nil {
 			t.Fatalf("raise standing alarm: %v", err)
@@ -539,7 +539,7 @@ func TestHealthConcurrentOppositeWritesLeaveNoStaleRecord(t *testing.T) {
 			func() error { return f.gw.ClearAlarm(ctx, "", healed, id) },
 			func() error {
 				_, err := f.gw.RaiseAlarm(ctx, "", alarmed, storage.AlarmSpec{
-					Severity: "critical", Message: "speaker dead",
+					Severity: "high", Message: "speaker dead",
 				})
 				return err
 			})
@@ -582,13 +582,13 @@ func TestHealthInvariantAcrossEveryTrigger(t *testing.T) {
 	}{
 		{"raise a critical alarm that takes an occupant down", func() error {
 			a, err := f.gw.RaiseAlarm(ctx, "", "sweep-a", storage.AlarmSpec{
-				Severity: "critical", Message: "mic dead"})
+				Severity: "high", Message: "mic dead"})
 			alarm = a
 			return err
 		}},
 		{"raise a second critical alarm that decides nothing (worse-wins over the first)", func() error {
 			_, err := f.gw.RaiseAlarm(ctx, "", "sweep-a", storage.AlarmSpec{
-				Severity: "critical", Message: "fan noise"})
+				Severity: "high", Message: "fan noise"})
 			return err
 		}},
 		{"clear the first alarm, leaving the second one still holding it down", func() error {
@@ -596,7 +596,7 @@ func TestHealthInvariantAcrossEveryTrigger(t *testing.T) {
 		}},
 		{"take the spare down too, critically", func() error {
 			a, err := f.gw.RaiseAlarm(ctx, "", "sweep-b", storage.AlarmSpec{
-				Severity: "critical", Message: "spare dead"})
+				Severity: "high", Message: "spare dead"})
 			spareAlarm = a
 			return err
 		}},
@@ -674,7 +674,7 @@ func TestHealthRecordsDeleteRipple(t *testing.T) {
 	std := f.pairStandard(t, ctx, "ripple-standard")
 	f.staffPair(t, ctx, std, "ripple-sys", "ripple-a", "ripple-b")
 	if _, err := f.gw.RaiseAlarm(ctx, "", "ripple-a", storage.AlarmSpec{
-		Severity: "critical", Message: "mic dead"}); err != nil {
+		Severity: "high", Message: "mic dead"}); err != nil {
 		t.Fatalf("raise: %v", err)
 	}
 	if _, v := f.recorded(t, ctx, "location", "hq-r1"); v != "degraded" {

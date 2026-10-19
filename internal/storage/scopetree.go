@@ -245,3 +245,45 @@ func arcScopePredicate(alias string, self int) string {
 		or ` + arm("system_id", "sys") + `
 		or ` + arm("location_id", "loc") + `)`
 }
+
+// readFilter is a read scope over one tree tier rendered as SQL, for a query
+// that reads rows hanging off that tier (an alarm or a streak on a component)
+// rather than the tier's own rows. With is a leading recursive CTE (empty
+// when none is needed), Args its bind values in order, and Pred a WHERE
+// fragment over a column holding the tier's id. It is the same subtree plus
+// self-root semantics scopedListSQL applies; read never excludes a root.
+type readFilter struct {
+	With string
+	Args []any
+	pred func(col string) string
+}
+
+// Pred is the WHERE fragment admitting col when its row is in scope.
+func (f readFilter) Pred(col string) string { return f.pred(col) }
+
+// newReadFilter renders read over tbl, binding its roots from $first: an
+// all scope admits every row, a scope with no well-formed root admits none,
+// and a rooted scope admits each subtree root's descendants and each self
+// root.
+func newReadFilter(tbl scopeTable, read scope.Set, first int) readFilter {
+	if read.All {
+		return readFilter{pred: func(string) string { return "true" }}
+	}
+	roots, selfIDs := uuidRoots(read.IDs), uuidRoots(read.SelfIDs)
+	if len(roots) == 0 && len(selfIDs) == 0 {
+		return readFilter{pred: func(string) string { return "false" }}
+	}
+	t := string(tbl)
+	r, s := strconv.Itoa(first), strconv.Itoa(first+1)
+	return readFilter{
+		With: `with recursive vis(id) as (
+			select id from ` + t + ` where id = any($` + r + `::uuid[])
+			union all
+			select t.id from ` + t + ` t join vis on t.parent_id = vis.id
+		) cycle id set is_cycle using path `,
+		Args: []any{roots, selfIDs},
+		pred: func(col string) string {
+			return `(` + col + ` in (select id from vis) or ` + col + ` = any($` + s + `::uuid[]))`
+		},
+	}
+}

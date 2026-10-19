@@ -6,6 +6,7 @@ import (
 	"crypto/subtle"
 	"encoding/hex"
 	"github.com/hyperscaleav/omniglass/internal/scope"
+	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/storage"
 	"github.com/nats-io/nats-server/v2/server"
@@ -25,6 +26,8 @@ type Store interface {
 	PendingNodeCommands(ctx context.Context, name string) ([]storage.CommandDelivery, error)
 	RecordCommandExecution(ctx context.Context, name string, commandID int64, execErr, reply string) error
 	SweepCommandSettlements(ctx context.Context) error
+	// SweepEventRules acts on event rule streaks held for their sustain.
+	SweepEventRules(ctx context.Context, now time.Time) error
 	// The telemetry ingest consumer surface: resolve+confine a task's owner,
 	// snapshot the sample registry (reject-not-project), and write the typed
 	// metric rows through cp1's insert path. The catalog is two lanes (#587):

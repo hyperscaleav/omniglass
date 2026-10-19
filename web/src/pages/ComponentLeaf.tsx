@@ -14,6 +14,8 @@ import Eyebrow from "../components/Eyebrow";
 import DetailGate from "../components/DetailGate";
 import PlaceCard from "../components/PlaceCard";
 import AcknowledgeButton from "../components/AcknowledgeButton";
+import SeverityBadge from "../components/SeverityBadge";
+import { useSeverity } from "../lib/severity";
 import SimulationSection from "../components/SimulationSection";
 import { FLEET_VIEW_KEY, fleetView } from "../lib/fleet";
 import { COMPONENTS_KEY, listComponents, type Component as FleetComponent } from "../lib/components";
@@ -121,8 +123,12 @@ export default function ComponentLeaf() {
   }));
   // Pinned at setup: an age that re-ages on unrelated re-renders is churn.
   const pageNow = Date.now();
-  const activeAlarms = createMemo(() => splitAlarms(alarmsQ.data ?? []).active);
-  const since = createMemo(() => leafAlarmSince(alarmsQ.data ?? [], pageNow));
+  const scale = useSeverity();
+  const activeAlarms = createMemo(() => splitAlarms(alarmsQ.data ?? [], scale().levels).active);
+  // The strip reads red when any active alarm is at an outage level (the
+  // registry's flag, #917), amber when they only degrade.
+  const inOutage = createMemo(() => activeAlarms().some((a) => scale().outage(a.severity)));
+  const since = createMemo(() => leafAlarmSince(alarmsQ.data ?? [], pageNow, scale().levels));
   const verdict = createMemo(() => (view.data ? dotVerdict(view.data, component()?.id ?? "") : null));
   const identity = createMemo(() => identityRows(propsQ.data ?? []));
   const vitals = createMemo(() => vitalRows(metricsQ.data ?? []));
@@ -208,12 +214,12 @@ export default function ComponentLeaf() {
             <Show when={leafTab() === "overview"}>
               <div class="flex min-w-0 flex-1 flex-col gap-5 p-4">
                 <Show when={activeAlarms().length > 0}>
-                  <section data-testid="leaf-alarms" class="flex flex-col gap-1.5 rounded-box border p-3" classList={{ "border-error/40 bg-error/5": activeAlarms()[0].severity === "critical", "border-warning/40 bg-warning/5": activeAlarms()[0].severity !== "critical" }}>
+                  <section data-testid="leaf-alarms" class="flex flex-col gap-1.5 rounded-box border p-3" classList={{ "border-error/40 bg-error/5": inOutage(), "border-warning/40 bg-warning/5": !inOutage() }}>
                     <h2 class="eyebrow">Why</h2>
                     <For each={activeAlarms()}>
                       {(a) => (
                         <div class="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-sm">
-                          <span class="badge badge-sm" classList={{ "badge-error badge-soft": a.severity === "critical", "badge-warning badge-soft": a.severity !== "critical" }}>{a.severity}</span>
+                          <SeverityBadge name={a.severity} />
                           <span>{a.message}</span>
                           <span class="text-xs text-base-content/50">
                             {durationText(pageNow - Date.parse(a.raised_at))} · {a.acknowledged ? "acknowledged" : "unacknowledged"}
