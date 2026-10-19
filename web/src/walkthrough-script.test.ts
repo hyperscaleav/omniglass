@@ -5,7 +5,11 @@ import {
   MAX_BYTES,
   MAX_PREVIEW_BYTES,
   MAX_SECONDS,
+  PREVIEW_MIN_YMAX,
+  PREVIEW_SETTLE_MS,
   budgetLimits,
+  previewOpeningProblem,
+  previewStartSeconds,
   budgetProblems,
   idProblem,
   parseWalkthrough,
@@ -206,6 +210,24 @@ describe("walkthrough failure and budget messages", () => {
     for (const v of ["", "abc", "0", "-5", "Infinity"]) {
       expect(budgetLimits({ OG_WALKTHROUGH_MAX_SECONDS: v, OG_WALKTHROUGH_MAX_BYTES: v, OG_WALKTHROUGH_MAX_PREVIEW_BYTES: v })).toEqual(ruled);
     }
+  });
+
+  it("starts the preview once the title card is painted, a settle beat later, never on the blank lead-in", () => {
+    expect(PREVIEW_SETTLE_MS).toBe(500);
+    expect(previewStartSeconds(1_000, 1_000)).toBe(0.5);
+    expect(previewStartSeconds(10_000, 10_640)).toBe(1.14);
+    expect(() => previewStartSeconds(10_000, 9_000)).toThrow("painted before the video started");
+    expect(() => previewStartSeconds(NaN, 1)).toThrow("not measured");
+  });
+
+  it("refuses a preview that would open on a blank frame, naming its brightest pixel", () => {
+    expect(PREVIEW_MIN_YMAX).toBe(200);
+    expect(previewOpeningProblem("demo", 255)).toBeNull();
+    expect(previewOpeningProblem("demo", PREVIEW_MIN_YMAX)).toBeNull();
+    expect(previewOpeningProblem("demo", 26)).toBe(
+      "walkthrough demo: the preview opens on a blank frame (brightest luma 26, the title card's text reaches at least 200)",
+    );
+    expect(previewOpeningProblem("demo", NaN)).toBe("walkthrough demo: the preview's opening frame could not be measured");
   });
 
   it("names stills by zero-padded step number", () => {

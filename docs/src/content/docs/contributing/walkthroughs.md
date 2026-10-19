@@ -74,7 +74,9 @@ make test-walkthroughs                   # the recorder's own test: the failure 
 with a visible cursor, a highlight on each target and a caption bar, and writes
 `web/e2e/walkthroughs/out/<id>/` (gitignored): `<id>.mp4`; `preview.webp`, an animated preview
 encoded from the mp4 at a lower frame rate and width that loops forever, small enough to load
-inline on a PR or a docs page; `poster.png`; `step-NN.png` per step; and `walkthrough.json`, the
+inline on a PR or a docs page, and starting once the title card is painted (the recorder notes when
+it was, so the preview never opens on the video's blank lead-in, and the budget gate fails one whose
+opening frame is blank); `poster.png`; `step-NN.png` per step; and `walkthrough.json`, the
 manifest of the title, the captions and the still each step produced (with the budget mark and
 the preview's name added once the mp4 and the preview pass the budget). The preview's frame rate,
 width and quality are set at the top of
@@ -120,8 +122,8 @@ walkthroughs:
 
 The declaration is only the id. The title, captions and stills come from the recording's manifest,
 so the page never restates a caption that could drift from the video. The embed renders the
-animated preview (the poster step's still, for a recording whose manifest names no preview), the
-title and description, and every step's caption over its still, folded under a disclosure. [Simulate a fleet](/guides/operator/simulation/#see-it) carries the first one.
+animated preview (the poster step's still for a reader whose system asks for reduced motion, and for
+a recording whose manifest names no preview), the title and description, and every step's caption over its still, folded under a disclosure. [Simulate a fleet](/guides/operator/simulation/#see-it) carries the first one.
 
 The assets reach the site by a copy, committed like the screenshots:
 
@@ -142,8 +144,18 @@ whether the video exists. An unforced build after a re-copy serves the old rende
 `corepack pnpm astro build --force` from `docs/` (the copy prints this too); the post-build check
 below fails the build if a stale render slips through.
 
-**The video is not committed**: an mp4 per walkthrough would grow the repository with every
-re-recording. Its place is `docs/public/walkthroughs/<id>/<id>.mp4` (gitignored), and the embed
+**The video is not committed**: an mp4 per walkthrough (about 0.6 to 1.1 MB today) would grow the
+repository with every re-recording.
+
+**The preview is committed, and that is a cost.** Git keeps every version of a binary, so each
+re-copy of a walkthrough adds its new `preview.webp` (about 0.6 to 0.9 MB today) to the history
+beside its new stills, and that size never leaves the repository. The same holds on a PR: the
+`run:walkthrough` label commits each recorded walkthrough's preview with its stills under
+`.github/screenshots/<pr>/walkthroughs/`, and a squash-merge carries those files into main, so a PR
+that records four walkthroughs adds roughly 3 MB of previews on top of its stills. The trade is
+made on purpose: a preview is what lets a reviewer and a reader watch the flow inline, which no
+uncommitted file can do on GitHub or on a static docs site. Re-record and re-copy when a flow
+changes, not to refresh one that has not. Its place is `docs/public/walkthroughs/<id>/<id>.mp4` (gitignored), and the embed
 renders the video, with a link to it, only when that file is present at build time; without it
 the page shows the animated preview and the stills, and links nothing. Until the docs deploy carries
 the videos, the published pages show the preview and stills. To see the video in a local build, copy it

@@ -75,6 +75,18 @@ export const MAX_BYTES = 10_000_000;
 // load inline, so it is held well under the mp4's.
 export const MAX_PREVIEW_BYTES = 5_000_000;
 
+// Where the preview starts (#937). The video runs from the moment the page
+// opens, before the title card is painted (a blank or half-painted lead-in), so
+// the recorder notes when the card was painted and the preview starts a settle
+// beat after that, well inside the card's own 2.2s hold. The beat covers the
+// video lagging the page: on the recordings a frame 0.25s after the paint was
+// still half-painted, one 0.4s after it whole.
+export const PREVIEW_SETTLE_MS = 500;
+// The brightest luma (0 to 255) the preview's opening frame must reach: the
+// title card's text is near-white, while a blank or text-less frame (the
+// ground and the teal rule) stays well under it.
+export const PREVIEW_MIN_YMAX = 200;
+
 export const DEFAULT_WAIT_MS = 10_000;
 const MAX_WAIT_MS = 60_000;
 const MAX_HOLD_MS = 10_000;
@@ -361,4 +373,31 @@ export const stillName = (n) => `step-${String(n).padStart(2, '0')}.png`;
  */
 export function idProblem(id) {
   return /^[a-z0-9-]+$/.test(id) ? null : `walkthrough id ${JSON.stringify(id)} must be lowercase letters, digits and hyphens`;
+}
+
+// Seconds into the video at which the preview starts: when the title card was
+// painted, measured from when the video started (both wall-clock ms, taken by
+// the recorder), plus the settle beat.
+/**
+ * @param {number} videoStartMs
+ * @param {number} paintedMs
+ * @returns {number}
+ */
+export function previewStartSeconds(videoStartMs, paintedMs) {
+  if (!Number.isFinite(videoStartMs) || !Number.isFinite(paintedMs)) throw new Error('the title card timing was not measured');
+  if (paintedMs < videoStartMs) throw new Error('the title card painted before the video started');
+  return Math.round(paintedMs - videoStartMs + PREVIEW_SETTLE_MS) / 1000;
+}
+
+// Null when the preview's opening frame shows the painted title card, judged
+// by its brightest luma (ffmpeg signalstats YMAX), else why not.
+/**
+ * @param {string} id
+ * @param {number} ymax
+ * @returns {string | null}
+ */
+export function previewOpeningProblem(id, ymax) {
+  if (!Number.isFinite(ymax)) return `walkthrough ${id}: the preview's opening frame could not be measured`;
+  if (ymax >= PREVIEW_MIN_YMAX) return null;
+  return `walkthrough ${id}: the preview opens on a blank frame (brightest luma ${ymax}, the title card's text reaches at least ${PREVIEW_MIN_YMAX})`;
 }

@@ -177,7 +177,7 @@ type walkthroughManifest struct {
 		Still   string `json:"still"`
 	} `json:"steps"`
 	Poster  string           `json:"poster"`
-	Preview string           `json:"preview"`
+	Preview json.RawMessage  `json:"preview"`
 	Budget  *json.RawMessage `json:"budget"`
 }
 
@@ -269,13 +269,19 @@ func scanWalkthroughAssets(dir, scriptDir string, declared map[string]string) []
 		if !posterIsStill {
 			add(at("walkthrough.json") + " names poster " + strconvQuote(m.Poster) + ", which is none of its step stills")
 		}
+		// Absent is no preview; any present value but the recorder's name
+		// (empty and null included) is refused, as walkthroughcore.mjs refuses it.
+		var preview string
 		switch {
-		case m.Preview == "":
-		case m.Preview != walkthroughPreview:
-			add(at("walkthrough.json") + " names preview " + strconvQuote(m.Preview) + ", not the recorder's " + walkthroughPreview)
+		case len(m.Preview) == 0:
+			if _, err := os.Stat(filepath.Join(dir, id, walkthroughPreview)); err == nil {
+				add("walkthrough \"" + id + "\" has " + at(walkthroughPreview) + ", but its manifest names no preview (a stray from another recording)" + redo)
+			}
+		case json.Unmarshal(m.Preview, &preview) != nil || preview != walkthroughPreview:
+			add(at("walkthrough.json") + " names preview " + string(m.Preview) + ", not the recorder's " + walkthroughPreview)
 		default:
-			if _, err := os.Stat(filepath.Join(dir, id, m.Preview)); err != nil {
-				add("walkthrough \"" + id + "\" has no " + at(m.Preview) + redo)
+			if _, err := os.Stat(filepath.Join(dir, id, walkthroughPreview)); err != nil {
+				add("walkthrough \"" + id + "\" has no " + at(walkthroughPreview) + redo)
 			}
 		}
 		if script, err := os.ReadFile(filepath.Join(scriptDir, id+".yaml")); err == nil {

@@ -6461,7 +6461,7 @@ GitHub plays inline video only from a browser upload, which a workflow cannot ma
 now encodes an animated WebP preview (`preview.webp`, beside the poster) from each mp4 with the same
 pinned ffmpeg, as a labelled background one-shot like the mp4 encode: 8 frames a second, 960px wide,
 lossy quality 70, looping forever. Measured on the four shipped recordings (19 to 58 seconds), the
-previews land between 0.57 and 0.81 MB, about the size of their mp4s, with the caption bar and the
+previews land between 0.60 and 0.85 MB, about the size of their mp4s, with the caption bar and the
 console's text legible; 6 and 10 fps, quality 60 to 80 and the full 1320px width were measured too,
 and full width more than doubled both the size and the encode time for text already legible at
 960px. The budget gained `MAX_PREVIEW_BYTES` beside `MAX_SECONDS` and `MAX_BYTES`, measured
@@ -6476,3 +6476,14 @@ copies it, the post-build embed check re-renders it, and the docs lint fails a m
 preview that is not `preview.webp` or was not copied; the preview name is one constant in the shared
 manifest core (`web/e2e/walkthroughcore.mjs`). The four docs walkthroughs were re-recorded and
 re-copied, so every embed now plays.
+
+Review follow-ups on the same PR. The video starts before the title card is painted, so a preview cut
+from frame 0 opened on black or a half-painted card: the recorder now notes when the card is painted
+and the preview encode seeks a settle beat past it, and the budget gate measures the opening frame's
+brightest luma and fails one that is blank. The docs embed wraps the preview in a `<picture>` whose
+source applies only without a reduced-motion preference, so those readers get the poster step's still.
+The docs lint refuses any preview value but `preview.webp` (empty and null included, as the shared core
+does) and a stray `preview.webp` beside a manifest that names none, the selftest checks a failed
+preview budget also removes the preview's name, and the workflow job gained a 45 minute timeout.
+[Walkthroughs](/contributing/walkthroughs/) and [labels](/contributing/labels/) now state what the
+committed previews and stills cost the repository per re-recording and per PR.

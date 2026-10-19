@@ -1,8 +1,8 @@
 // check-walkthrough-embeds runs after `astro build` (#926) and holds every
 // built walkthrough embed to the files this build shipped:
 //
-//   - every walkthrough asset a built page references (a still, the video and
-//     its link) exists in the build output; and
+//   - every walkthrough asset a built page references (a still, the animated
+//     preview, the video and its link) exists in the build output; and
 //   - every embed is what the shipped manifest renders now, with the video if
 //     and only if the build ships the mp4 (compared in canonical form, since
 //     Astro's serializer rewrites the same markup: canonicalEmbed).
@@ -19,7 +19,7 @@ import { fileURLToPath } from 'node:url';
 import { BASE, canonicalEmbed, findEmbeds, renderWalkthrough, videoName } from '../src/plugins/walkthrough-embed.mjs';
 
 const dist = fileURLToPath(new URL('../dist', import.meta.url));
-const ref = /(?:src|href|poster)="(\/walkthroughs\/[^"]+)"/g;
+const ref = /(?:src|srcset|href|poster)="(\/walkthroughs\/[^"]+)"/g;
 
 function* html(dir) {
   for (const name of readdirSync(dir)) {

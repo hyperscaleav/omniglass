@@ -58,8 +58,9 @@ function esc(s) {
     .replace(/'/g, '&#39;');
 }
 
-// The embed: the animated preview when the manifest records one, else the
-// poster step's still (or, when the mp4 is present at build time, the video
+// The embed: the animated preview when the manifest records one (for a reader
+// who has not asked for reduced motion; the poster step's still for one who
+// has, and wherever a <source> is not honored), else the poster step's still (or, when the mp4 is present at build time, the video
 // over the poster step's still and a link to it), the title and description, then
 // every step's caption over its still, folded. `video` must be true only when
 // the mp4 exists, so the page never links a file that is not there.
@@ -74,7 +75,8 @@ export function renderWalkthrough(m, { video }) {
       `<img src="${poster}" alt="${title}: poster" />` +
       `</video>`
     : m.preview !== undefined
-      ? `<img src="${dir}/${PREVIEW}" alt="${title}: animated preview" loading="lazy" />`
+      ? `<picture><source media="(prefers-reduced-motion: no-preference)" srcset="${dir}/${PREVIEW}" />` +
+        `<img src="${poster}" alt="${title}: preview" loading="lazy" /></picture>`
       : `<img src="${poster}" alt="${title}: poster" loading="lazy" />`;
   const caption =
     `<strong>${title}</strong>` +

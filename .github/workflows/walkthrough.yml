@@ -53,6 +53,10 @@ jobs:
       github.event.pull_request.head.repo.full_name == github.repository &&
       github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
+    # Generous: building the image, the stack, and every walkthrough with its
+    # mp4 and preview encodes; a wedged container must not hold the runner
+    # for the default six hours.
+    timeout-minutes: 45
     permissions:
       contents: write
       pull-requests: write

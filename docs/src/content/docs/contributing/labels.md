@@ -65,6 +65,11 @@ and names any walkthrough that failed (a walkthrough is a
 test, so a failure fails the job; a stack that never came up is reported as that, not as every
 walkthrough failing).
 
+- **What it costs:** the committed evidence lands on main with the squash-merge. A preview is
+  about 0.6 to 0.9 MB and a walkthrough's poster and stills a further 0.8 to 1.6 MB, so each
+  walkthrough a PR records adds roughly 1.4 to 2.4 MB to the repository's history for good, and a re-run that
+  re-records adds it again. Apply the label when the PR changes a flow, not on every push.
+
 - **What it records:** the branch tip when the job runs, not the commit the label was applied
   at. The label stays on; re-run the job, or remove and re-add the label, to record the current
   head again, and the comment updates in place.

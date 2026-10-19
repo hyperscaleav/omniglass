@@ -61,6 +61,8 @@ describe("walkthroughAssets", () => {
 
   it("refuses a preview that is not the recorder's preview name", () => {
     expect(() => walkthroughAssets(manifest({ preview: "../poster.png" }))).toThrow(/preview\.webp/);
+    expect(() => walkthroughAssets(manifest({ preview: "" }))).toThrow(/preview\.webp/);
+    expect(() => walkthroughAssets(manifest({ preview: null as unknown as string }))).toThrow(/preview\.webp/);
   });
 
   it("refuses a manifest whose recording never passed the budget", () => {
@@ -92,10 +94,12 @@ describe("renderWalkthrough", () => {
     expect(html).toContain('poster="/walkthroughs/sample-simulation/step-02.png"');
   });
 
-  it("shows the animated preview in place of the poster step when the manifest records one", () => {
+  it("plays the animated preview when the manifest records one, the poster step for a reader who prefers reduced motion", () => {
     const html = renderWalkthrough(manifest({ preview: "preview.webp" }), { video: false });
-    expect(html).toContain('<img src="/walkthroughs/sample-simulation/preview.webp" alt="Read a simulated component&#39;s status: animated preview" loading="lazy" />');
-    expect(html).not.toContain(": poster");
+    expect(html).toContain(
+      '<picture><source media="(prefers-reduced-motion: no-preference)" srcset="/walkthroughs/sample-simulation/preview.webp" />' +
+        '<img src="/walkthroughs/sample-simulation/step-02.png" alt="Read a simulated component&#39;s status: preview" loading="lazy" /></picture>',
+    );
     expect(html).toContain('src="/walkthroughs/sample-simulation/step-02.png" alt="Step 2: ');
   });
 

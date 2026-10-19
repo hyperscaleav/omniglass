@@ -11,7 +11,8 @@
 #                                 run:walkthrough workflow reads both, #925)
 #   walkthroughs.sh selftest      the recorder's own test: a broken step fails naming the
 #                                 step and its wait, keeping its stills; an over-budget
-#                                 walkthrough (or preview) fails naming which limit
+#                                 walkthrough (or preview) fails naming which limit,
+#                                 and a preview opening on a blank frame fails
 #
 # Per walkthrough: the recorder (web/e2e/walkthrough.mjs) plays the script in a
 # Playwright container on the stack network and writes a webm; ffmpeg, in its
@@ -105,14 +106,41 @@ walkthrough_one() {
   ffmpeg_in "$out" "$FFMPEG_IMG" -hide_banner -loglevel error -y -i "/o/$id.webm" \
     -c:v libx264 -preset slow -crf 26 -pix_fmt yuv420p -movflags +faststart -an "/o/$id.mp4" || return 1
   rm -- "$out/$id.webm"
-  ffmpeg_in "$out" "$FFMPEG_IMG" -hide_banner -loglevel error -y -i "/o/$id.mp4" \
+  # The preview starts where the recorder saw the title card painted
+  # (preview-start.txt), past the video's blank lead-in.
+  local start
+  start=$(<"$out/preview-start.txt") || return 1
+  ffmpeg_in "$out" "$FFMPEG_IMG" -hide_banner -loglevel error -y -ss "$start" -i "/o/$id.mp4" \
     -vf "fps=$PREVIEW_FPS,scale=$PREVIEW_WIDTH:-2:flags=lanczos" \
     -c:v libwebp_anim -lossless 0 -quality "$PREVIEW_QUALITY" -compression_level 6 -loop 0 -an /o/preview.webp || return 1
-  local seconds
+  local seconds ymax
   seconds=$(ffmpeg_in "$out" --entrypoint ffprobe "$FFMPEG_IMG" -v error \
     -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "/o/$id.mp4") || return 1
-  stack_run -v "$ROOT:/w" -w /w/web --user "$(id -u):$(id -g)" -e HOME=/tmp "${WT_ENV[@]}" \
-    "$STACK_PWIMG" node e2e/walkthrough.mjs budget "${out#web/}/$id.mp4" "$seconds"
+  ymax=$(opening_ymax "$out" "$id" "$start") || return 1
+  budget_one "$out" "$id" "$seconds" "$ymax" "${WT_ENV[@]}"
+}
+
+# The brightest luma (ffmpeg signalstats YMAX) of the frame the preview opens
+# on: the mp4's frame at $3 seconds, the one the preview encode seeks to (an
+# animated WebP is not something this ffmpeg decodes). Empty if unmeasured,
+# which the budget gate fails.
+opening_ymax() {
+  local out=$1 id=$2 start=$3 y
+  ffmpeg_in "$out" "$FFMPEG_IMG" -hide_banner -loglevel error -ss "$start" -i "/o/$id.mp4" -frames:v 1 \
+    -vf "signalstats,metadata=mode=print:key=lavfi.signalstats.YMAX:file=/o/preview-opening.txt" -f null - || return 1
+  y=$(sed -n 's/^lavfi\.signalstats\.YMAX=//p' "$out/preview-opening.txt")
+  rm -- "$out/preview-opening.txt"
+  echo "${y:-NaN}"
+}
+
+# The budget gate on out dir $1's mp4 ($2) with its duration $3 and preview
+# opening luma $4; any further arguments are docker run flags (the lowered
+# limits the selftest passes).
+budget_one() {
+  local out=$1 id=$2 seconds=$3 ymax=$4
+  shift 4
+  stack_run -v "$ROOT:/w" -w /w/web --user "$(id -u):$(id -g)" -e HOME=/tmp "$@" \
+    "$STACK_PWIMG" node e2e/walkthrough.mjs budget "${out#web/}/$id.mp4" "$seconds" "$ymax"
 }
 WT_ENV=()
 
@@ -190,24 +218,31 @@ echo "ok: an over-budget walkthrough fails naming which limit"
 WT_ENV=()
 seconds=$(ffmpeg_in "$ST/tiny" --entrypoint ffprobe "$FFMPEG_IMG" -v error \
   -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 /o/tiny.mp4)
-budget() {
-  stack_run -v "$ROOT:/w" -w /w/web --user "$(id -u):$(id -g)" -e HOME=/tmp "$@" \
-    "$STACK_PWIMG" node e2e/walkthrough.mjs budget "${ST#web/}/tiny/tiny.mp4" "$seconds"
-}
-budget || fail "the tiny walkthrough failed the real budget"
+start=$(<"$ST/tiny/preview-start.txt")
+ymax=$(opening_ymax "$ST/tiny" tiny "$start")
+budget_one "$ST/tiny" tiny "$seconds" "$ymax" || fail "the tiny walkthrough failed the real budget"
 grep -qF '"budget"' "$ST/tiny/walkthrough.json" || fail "a recording that passed the budget has no budget mark in its manifest"
 grep -qF '"preview": "preview.webp"' "$ST/tiny/walkthrough.json" || fail "a recording that passed the budget does not name its preview"
-echo "ok: only a recording within budget carries the budget mark"
+echo "ok: only a recording within budget carries the budget mark (preview opens at ${start}s, luma ${ymax})"
 
 # 4. The mp4 within its budget is not enough: a preview over its own limit
 #    fails the same recording, naming the preview's limit, and takes back the
-#    mark the pass above wrote.
-log=$(budget -e OG_WALKTHROUGH_MAX_PREVIEW_BYTES=1000 2>&1) && fail "an over-budget preview passed"
+#    mark and the preview's name the pass above wrote.
+log=$(budget_one "$ST/tiny" tiny "$seconds" "$ymax" -e OG_WALKTHROUGH_MAX_PREVIEW_BYTES=1000 2>&1) && fail "an over-budget preview passed"
 echo "$log" | sed 's/^/  | /'
 grep -qF 'walkthrough tiny: over budget: preview' <<<"$log" || fail "the preview overrun was not named"
 grep -qF 'the limit is under 1000 bytes' <<<"$log" || fail "the preview overrun did not name its limit"
 grep -qF 'over budget: duration' <<<"$log" && fail "the mp4 was blamed for the preview"
 grep -qF '"budget"' "$ST/tiny/walkthrough.json" && fail "a recording whose preview is over budget kept the budget mark"
+grep -qF '"preview"' "$ST/tiny/walkthrough.json" && fail "a recording whose preview is over budget kept the preview's name"
 echo "ok: an over-budget preview fails naming its limit, and the mark needs both"
+
+# 5. A preview opening on a blank frame (the luma a blank lead-in measures)
+#    fails, naming it, and the mark stays off.
+log=$(budget_one "$ST/tiny" tiny "$seconds" 26 2>&1) && fail "a preview opening on a blank frame passed"
+echo "$log" | sed 's/^/  | /'
+grep -qF 'walkthrough tiny: the preview opens on a blank frame' <<<"$log" || fail "the blank opening frame was not named"
+grep -qF '"budget"' "$ST/tiny/walkthrough.json" && fail "a preview opening on a blank frame got the budget mark"
+echo "ok: a preview that opens on a blank frame fails"
 stack_assert_intact
 echo "walkthroughs selftest: passed"

@@ -95,7 +95,9 @@ func TestScanWalkthroughAssets(t *testing.T) {
 
 // TestScanWalkthroughPreview pins the animated preview (#937): a copied
 // manifest that records one must name the recorder's preview.webp and carry the
-// file beside it; a manifest that records none needs none.
+// file beside it, and any preview value other than that name (empty and null
+// included) is refused, as the shared JS core refuses it; a manifest that
+// records none needs none, and carries none.
 func TestScanWalkthroughPreview(t *testing.T) {
 	dir, scripts := t.TempDir(), t.TempDir()
 	write := func(root, rel, body string) {
@@ -112,18 +114,28 @@ func TestScanWalkthroughPreview(t *testing.T) {
 	manifest := func(id, preview string) string {
 		return `{"id":"` + id + `","title":"A",` + steps + `,"poster":"step-01.png",` + preview + `"budget":{"seconds":3,"bytes":9,"previewBytes":5}}`
 	}
-	for _, id := range []string{"ok", "none", "missing", "renamed"} {
+	ids := []string{"ok", "none", "missing", "renamed", "empty", "null", "number", "stray"}
+	declared := map[string]string{}
+	for _, id := range ids {
 		write(dir, id+"/step-01.png", "x")
 		write(scripts, id+".yaml", script)
+		declared[id] = "p.md"
 	}
 	write(dir, "ok/walkthrough.json", manifest("ok", `"preview":"preview.webp",`))
 	write(dir, "ok/preview.webp", "x")
 	write(dir, "none/walkthrough.json", manifest("none", ""))
 	write(dir, "missing/walkthrough.json", manifest("missing", `"preview":"preview.webp",`))
 	write(dir, "renamed/walkthrough.json", manifest("renamed", `"preview":"../poster.png",`))
+	write(dir, "empty/walkthrough.json", manifest("empty", `"preview":"",`))
+	write(dir, "null/walkthrough.json", manifest("null", `"preview":null,`))
+	write(dir, "number/walkthrough.json", manifest("number", `"preview":7,`))
+	write(dir, "stray/walkthrough.json", manifest("stray", ""))
+	write(dir, "stray/preview.webp", "x")
 
-	got := scanWalkthroughAssets(dir, scripts, map[string]string{"ok": "p.md", "none": "p.md", "missing": "p.md", "renamed": "p.md"})
-	want := []string{"missing/preview.webp", `names preview "../poster.png"`}
+	got := scanWalkthroughAssets(dir, scripts, declared)
+	// Sorted by id: empty, missing, null, number, renamed, stray.
+	want := []string{`empty/walkthrough.json names preview ""`, "missing/preview.webp", "null/walkthrough.json names preview null",
+		"number/walkthrough.json names preview 7", `names preview "../poster.png"`, "stray/preview.webp, but its manifest names no preview"}
 	if len(got) != len(want) {
 		t.Fatalf("findings = %v, want %d matching %v", got, len(want), want)
 	}
