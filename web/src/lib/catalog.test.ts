@@ -14,12 +14,11 @@ describe("the catalog table's soon slots", () => {
     expect(entry("Systems", "Templates").issue).toBe(616);
     expect(entry("Locations", "Templates").issue).toBe(617);
     expect(entry("Actions", "Notifications").issue).toBe(618);
-    expect(entry("Actions", "Rules").issue).toBe(624);
   });
 
   it("mirrors nav.ts on every routed soon slot, so the stub page shows the number the table names", () => {
     // A routed soon slot renders SectionStub, which resolves its issue through
-    // navByPath: the two tables must agree (Rules carries none in either).
+    // navByPath: the two tables must agree.
     for (const g of CATALOG_GROUPS)
       for (const e of g.entries)
         if (e.soon && e.path) expect(navByPath[e.path]?.issue, e.path).toBe(e.issue);
@@ -35,7 +34,7 @@ describe("visibleGroups", () => {
     const groups = visibleGroups(() => false);
     expect(groups.map((g) => g.header)).toEqual(["Actions", "Components", "Systems", "Locations"]);
     expect(groups.flatMap((g) => g.entries.map((e) => e.label))).toEqual([
-      "Rules", "Notifications", "Templates", "Templates", "Templates",
+      "Notifications", "Templates", "Templates", "Templates",
     ]);
   });
 

@@ -15,6 +15,7 @@ import { METRICS_KEY } from "../lib/metric_types";
 import { PROPERTIES_KEY } from "../lib/properties";
 import { EVENT_TYPES_KEY } from "../lib/event_types";
 import { COMMAND_TYPES_KEY } from "../lib/command_types";
+import { EVENT_RULES_KEY } from "../lib/event_rules";
 import { TAGS_KEY } from "../lib/tags";
 
 // The Catalog shell: a layout route wrapping every registry page in the
@@ -48,6 +49,7 @@ const PRIMED: [readonly string[], number][] = [
   [PROPERTIES_KEY, 7],
   [EVENT_TYPES_KEY, 15],
   [COMMAND_TYPES_KEY, 6],
+  [EVENT_RULES_KEY, 3],
   [TAGS_KEY, 9],
 ];
 
@@ -134,7 +136,7 @@ describe("CatalogShell", () => {
     expect(nav().querySelector('a[href="/drivers"]')!.textContent).toBe("Drivers");
   });
 
-  it("renders the pageless soon slots (Templates) disabled and non-navigable, the routed ones (Rules, Notifications) as links wearing soon", () => {
+  it("renders the pageless soon slots (Templates) disabled and non-navigable, the routed one (Notifications) as a link wearing soon", () => {
     mount();
     const soonButtons = [...nav().querySelectorAll<HTMLButtonElement>("button[disabled]")];
     expect(soonButtons).toHaveLength(3); // one Templates slot per Components / Systems / Locations
@@ -142,13 +144,15 @@ describe("CatalogShell", () => {
       expect(b.textContent).toContain("Templates");
       expect(b.textContent).toContain("soon");
     }
-    // Rules and Notifications have routed stub pages, so they LINK, wearing the
-    // same soon treatment; their counts stay absent (no registry exists).
-    for (const path of ["/rules", "/notifications"]) {
-      const a = nav().querySelector(`a[href="${path}"]`)!;
-      expect(a.textContent).toContain("soon");
-      expect(a.textContent).not.toMatch(/\d/);
-    }
+    // Notifications has a routed stub page, so it LINKS, wearing the same soon
+    // treatment; its count stays absent (no registry exists).
+    const a = nav().querySelector(`a[href="/notifications"]`)!;
+    expect(a.textContent).toContain("soon");
+    expect(a.textContent).not.toMatch(/\d/);
+    // Rules went live (#921): a plain link with its count, no soon treatment.
+    const rules = nav().querySelector(`a[href="/rules"]`)!;
+    expect(rules.textContent).toContain("3");
+    expect(rules.textContent).not.toContain("soon");
   });
 
   it("offers no secret-types entry, per the standing ruling", () => {
@@ -166,8 +170,8 @@ describe("CatalogShell", () => {
   it("drops a gated entry (and never creates its query) and drops an emptied group's header", () => {
     const { qc } = mount(meWith(["metric_type:read"]), { skip: [TAGS_KEY] });
     // Only the ungated Overview, the one readable registry, and the routed soon
-    // slots keep their links.
-    expect(hrefs()).toEqual(["/catalog", "/metrics", "/rules", "/notifications"]);
+    // slot keep their links (Rules is gated on rule:read since it went live).
+    expect(hrefs()).toEqual(["/catalog", "/metrics", "/notifications"]);
     // Metadata's only entry is gated away, so its header drops too; the groups
     // holding soon slots keep theirs.
     const headers = [...nav().querySelectorAll(".menu-title")].map((h) => h.textContent);

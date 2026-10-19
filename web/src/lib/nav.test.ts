@@ -256,7 +256,6 @@ describe("Catalog single entry", () => {
 
   it("surfaces each pending off-rail page's tracking issue on its stub", () => {
     expect(lookupNav("/web/notifications").issue).toBe(618);
-    expect(lookupNav("/web/rules").issue).toBe(624);
   });
 
   // The shell is presentation over existing routes: every pre-shell URL keeps
@@ -278,7 +277,7 @@ describe("Catalog single entry", () => {
       "/location-types": ["location_type", "read"],
       "/secret-types": ["secret", "read"],
       "/tags": ["tag", "read"],
-      "/rules": null,
+      "/rules": ["rule", "read"],
       "/notifications": null,
       "/templates": null,
       "/log-types": null,

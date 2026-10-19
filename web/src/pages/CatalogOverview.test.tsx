@@ -15,6 +15,7 @@ import { METRICS_KEY } from "../lib/metric_types";
 import { PROPERTIES_KEY } from "../lib/properties";
 import { EVENT_TYPES_KEY } from "../lib/event_types";
 import { COMMAND_TYPES_KEY } from "../lib/command_types";
+import { EVENT_RULES_KEY } from "../lib/event_rules";
 import { TAGS_KEY } from "../lib/tags";
 
 // The Catalog overview (/catalog): the landing the shell's Overview entry
@@ -24,8 +25,8 @@ import { TAGS_KEY } from "../lib/tags";
 // entries are all gated away renders no card. Counts ride the list pages' own
 // query keys (learning-tool doctrine: real rows, not decoration); each registry
 // is its own query, so one failing fetch marks its own row and nothing else
-// (#598). A soon entry reads soon without a count; a routed soon entry (Rules,
-// Notifications) links to its stub, a pageless one (Templates) does not link.
+// (#598). A soon entry reads soon without a count; a routed soon entry
+// (Notifications) links to its stub, a pageless one (Templates) does not link.
 
 const owner: Me = { principal: { id: "u-root", kind: "human" }, human: { username: "root" }, permissions: [">"], grants: [] };
 const viewer: Me = { principal: { id: "u-view", kind: "human" }, human: { username: "view" }, permissions: ["*:read"], grants: [] };
@@ -46,6 +47,7 @@ const PRIMED: [readonly string[], number][] = [
   [PROPERTIES_KEY, 7],
   [EVENT_TYPES_KEY, 15],
   [COMMAND_TYPES_KEY, 6],
+  [EVENT_RULES_KEY, 3],
   [TAGS_KEY, 9],
 ];
 
@@ -112,11 +114,15 @@ describe("CatalogOverview page", () => {
     mount();
     const act = card("Actions")!;
     expect(entry(act, "Commands").textContent).toContain("6");
+    // Rules went live (#921): its count, no soon.
     const rules = entry(act, "Rules");
-    expect(rules.textContent).toContain("soon");
-    expect(rules.textContent).not.toMatch(/\d/);
+    expect(rules.textContent).toContain("3");
+    expect(rules.textContent).not.toContain("soon");
     expect(rules.getAttribute("href")).toBe("/rules");
-    expect(entry(act, "Notifications").getAttribute("href")).toBe("/notifications");
+    const notifications = entry(act, "Notifications");
+    expect(notifications.textContent).toContain("soon");
+    expect(notifications.textContent).not.toMatch(/\d/);
+    expect(notifications.getAttribute("href")).toBe("/notifications");
     // A pageless soon slot (Templates) reads soon and is not an anchor.
     const templates = entry(card("Components")!, "Templates");
     expect(templates.textContent).toContain("soon");
