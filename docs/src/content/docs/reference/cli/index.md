@@ -3680,6 +3680,7 @@ Populate a fresh dev database with a small example fleet so `make dev` comes up 
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--sim-fleet` | bool | `true` | wire the simulated fleet: addresses and endpoints on the dev node for every component the simulator serves (make dev-sim collects from them) |
+| `--sim-port-offset` | int | `10000` | the lift the simulator applies to ports below 1024, which the simulated fleet's endpoints target: the default for make dev-sim's unprivileged simulator, 0 for one that binds the real ports (in a container) |
 
 ## `omniglass server`
 

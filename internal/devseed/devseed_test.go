@@ -1751,3 +1751,49 @@ func TestReachabilityDemoIsSimulatedWithTheFleet(t *testing.T) {
 		t.Errorf("without the simulated fleet the demo moved: %v", got)
 	}
 }
+
+// TestSimulatedFleetAtRealPorts proves a seed for a simulator that may bind
+// low ports (in a container, the walkthrough stack) aims the fleet at the
+// profiles' real ports: with no lift, the demo DSP's HTTP is 80 and every
+// probe below 1024 is served as declared, where make dev lifts them by 10000.
+func TestSimulatedFleetAtRealPorts(t *testing.T) {
+	ctx := context.Background()
+	dsn := storagetest.NewDSN(t)
+	gw, err := storage.NewPG(ctx, dsn, storage.WithSecretProvider(secret.NewStaticProvider(bytes.Repeat([]byte{0x7}, 32))))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer gw.Close()
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatal(err)
+	}
+	if err := devseed.RunWith(ctx, gw, "", devseed.Options{SimFleet: true, SimPortOffset: 0}); err != nil {
+		t.Fatal(err)
+	}
+	conn, err := pgx.Connect(ctx, dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close(ctx)
+	var http string
+	if err := conn.QueryRow(ctx, `
+		select e.params->>'target' from component c join endpoint e on e.component = c.id
+		where c.name = 'dsp' and c.label = 'Boardroom DSP' and e.name = 'http'`).Scan(&http); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasPrefix(http, "127.60.") || !strings.HasSuffix(http, ":80") {
+		t.Errorf("demo DSP http endpoint = %q, want a simulated address at port 80", http)
+	}
+	// Probe targets below 1024 are served as declared; a lift would have
+	// moved them into 10001..11023.
+	var lifted, low int
+	if err := conn.QueryRow(ctx, `
+		select count(*) filter (where port between 10001 and 11023), count(*) filter (where port < 1024)
+		from (select split_part(params->>'target', ':', 2)::int as port
+		      from endpoint where params->>'target' like '127.60.%') t`).Scan(&lifted, &low); err != nil {
+		t.Fatal(err)
+	}
+	if lifted != 0 || low == 0 {
+		t.Errorf("simulated probe targets: %d lifted, %d below 1024; want none lifted and some below 1024", lifted, low)
+	}
+}

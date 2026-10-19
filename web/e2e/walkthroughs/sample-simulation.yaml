@@ -1,0 +1,21 @@
+# The recorder's sample (#924): small and stable, it proves the format and the
+# recorder end to end. The real first walkthroughs are #927.
+title: Read a simulated component's status
+description: The Simulation page lists every component a simulator serves beside a node. Open one to see where it is served and what has reached it.
+steps:
+  - goto: /simulation
+    caption: The Simulation page shows the simulated fleet, live.
+  - wait: { selector: '[data-testid="sim-table"]', timeout: 15000 }
+    caption: One row per simulated component. Hits counts how often collection has reached it.
+  - click: '[data-testid="sim-row"] >> nth=0'
+    caption: Open a simulated component.
+  - wait: { selector: '[data-testid="sim-status"]' }
+    caption: Its status says where it is served, and how often collection has reached it.
+    hold: 1200
+    poster: true
+  - press: Escape
+    caption: Close the drawer to return to the fleet.
+  # The drawer is modal: while it is open the page behind it is hidden from the
+  # accessibility tree, so the table is found by role only once Escape closed it.
+  - wait: { role: table }
+    caption: Back on the fleet, every simulated component in view.

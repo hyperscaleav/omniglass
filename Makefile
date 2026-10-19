@@ -1,7 +1,7 @@
 # Local dev loop + the build/run flow for the single binary. Production deploy
 # is BYO Postgres; tests use ephemeral testcontainer Postgres.
 
-.PHONY: build build-web web image gen gen-proto gen-web test test-web test-short test-e2e bench clean-testcontainers tidy up down dev release-plan release-apply release-snapshot docs-shots docs-shots-check docs-shots-verify dev-sim bench-sim test-netadmin
+.PHONY: build build-web web image gen gen-proto gen-web test test-web test-short test-e2e bench clean-testcontainers tidy up down dev release-plan release-apply release-snapshot docs-shots docs-shots-check docs-shots-verify docs-walkthroughs dev-sim bench-sim test-netadmin walkthrough-stack dev-sim-container test-walkthrough-stack walkthroughs test-walkthroughs
 
 # Build the single binary (no console embedded; serves the build-the-console
 # placeholder under /web).
@@ -133,21 +133,28 @@ bench:
 # the full-stack test through the harness's OMNIGLASS_TEST_ADMIN_DSN. Packages
 # run one at a time (-p 1): they share the one network namespace, and the
 # simulator owns one firewall table and one qdisc in it. Docker is already a
-# requirement of make test.
+# requirement of make test. Names carry the recipe shell's pid, so concurrent
+# runs never share a network, and the traps stop this run's containers on every
+# exit path, interrupts included (the same contract as web/e2e/lib/stack.sh);
+# the test container is waited on in the background so a signal is handled at
+# once rather than after the tests finish. The two module/build cache volumes
+# are shared across runs on purpose.
 NETADMIN_IMG ?= golang:1.25
 NETADMIN_PKGS ?= ./internal/sim/impair/ ./internal/e2e/
 NETADMIN_RUN ?= Netlink|Impair|Validate|PlanFor
 test-netadmin:
-	@set -e; net=omniglass-netadmin-$$$$; pg=$$net-pg; \
-	trap 'docker stop $$pg >/dev/null 2>&1; docker network rm $$net >/dev/null 2>&1' EXIT; \
+	@set -e; net=omniglass-netadmin-$$$$; pg=$$net-pg; go=$$net-go; \
+	trap 'docker stop $$go $$pg >/dev/null 2>&1 || :; n=0; until docker network rm $$net >/dev/null 2>&1; do \
+		n=$$((n+1)); [ $$n -lt 10 ] || { echo "network $$net could not be removed" >&2; break; }; sleep 1; done' EXIT; \
+	trap 'exit 130' INT; trap 'exit 143' TERM; trap 'exit 129' HUP; \
 	docker network create $$net >/dev/null; \
 	docker run -d --rm --name $$pg --network $$net -e POSTGRES_PASSWORD=netadmin postgres:18 >/dev/null; \
 	n=0; until docker exec $$pg pg_isready -h 127.0.0.1 -U postgres >/dev/null 2>&1; do \
 		n=$$((n+1)); [ $$n -lt 60 ] || { echo "postgres did not come up"; exit 1; }; sleep 1; done; \
-	docker run --rm --network $$net --cap-add NET_ADMIN --sysctl net.ipv4.ping_group_range="0 2147483647" \
+	docker run --rm --name $$go --network $$net --cap-add NET_ADMIN --sysctl net.ipv4.ping_group_range="0 2147483647" \
 		-v "$(CURDIR):/w" -w /w -v omniglass-netadmin-gomod:/go/pkg/mod -v omniglass-netadmin-gocache:/root/.cache/go-build \
 		-e GOFLAGS=-buildvcs=false -e OMNIGLASS_NETADMIN=1 -e OMNIGLASS_TEST_ADMIN_DSN="postgres://postgres:netadmin@$$pg:5432/postgres?sslmode=disable" \
-		$(NETADMIN_IMG) go test -tags netadmin -p 1 -count=1 -run '$(NETADMIN_RUN)' $(NETADMIN_PKGS)
+		$(NETADMIN_IMG) go test -tags netadmin -p 1 -count=1 -run '$(NETADMIN_RUN)' $(NETADMIN_PKGS) & wait $$!
 
 # One simulator process serving a 1,000-device fleet: startup time, goroutines
 # and heap while serving, and goroutines left behind after it stops.
@@ -159,6 +166,43 @@ bench-sim:
 # Playwright. Needs the browser once: (cd web && npx playwright install chromium).
 test-e2e:
 	bash web/e2e/run.sh
+
+# The walkthrough stack (web/e2e/walkthrough-stack.sh, recipe in
+# web/e2e/lib/stack.sh): Postgres, the server seeded with the dev and simulated
+# fleets, the node edge-hq enrolled with a one-time token, and the simulator
+# with --impairments in the node's network namespace (NET_ADMIN there only).
+# All in Docker, built from this tree with the Dockerfile, nothing on a fixed
+# host port, unique per-run names, torn down on exit. walkthrough-stack holds
+# it up for authoring a walkthrough and prints how a Playwright container
+# reaches it; dev-sim-container is the same stack for exploring by hand, with
+# the console published on an ephemeral 127.0.0.1 port (make dev-sim, in
+# containers, impairments applied). test-walkthrough-stack proves the recipe:
+# the node collects, and an impairment set through the API applies and repairs.
+# Not part of make test: it builds the release image (minutes after a Go
+# change), and the impairment loop itself is gated there by test-netadmin.
+walkthrough-stack:
+	bash web/e2e/walkthrough-stack.sh up
+
+dev-sim-container:
+	STACK_PUBLISH=1 bash web/e2e/walkthrough-stack.sh up
+
+test-walkthrough-stack:
+	bash web/e2e/walkthrough-stack.sh check
+
+# Walkthroughs (#924): web/e2e/walkthroughs/<id>.yaml, recorded on the
+# walkthrough stack with a visible cursor, captions and a title card, to
+# web/e2e/walkthroughs/out/<id>/ (an mp4, poster.png, a still per step;
+# gitignored). A walkthrough is a test: a step whose result never appears, or
+# a recording over the budget (under 60 seconds and 10 MB), fails the run.
+# make walkthroughs ID=<id> records one (ID="<a> <b>", several), listing any
+# that failed in out/failed.txt. test-walkthroughs is the recorder's own test
+# (the failure and budget paths). Neither is part of make test: both build
+# the release image.
+walkthroughs:
+	bash web/e2e/walkthroughs.sh record $(ID)
+
+test-walkthroughs:
+	bash web/e2e/walkthroughs.sh selftest
 
 # Backstop cleanup: force-remove any orphaned Postgres test containers left by
 # an interrupted run (a hard kill before the harness TestMain or the ryuk reaper
@@ -245,6 +289,15 @@ docs-shots-check:
 # ids are unique. Fast enough to run on every PR (see .github/workflows/docs-shots.yml).
 docs-shots-verify:
 	node web/e2e/docs-shots-verify.mjs
+
+# Walkthroughs in the docs (#926): copy each walkthrough a page declares in its
+# `walkthroughs` frontmatter (manifest, poster, per-step stills) from
+# web/e2e/walkthroughs/out/<id>/ into docs/public/walkthroughs/<id>/, committed
+# like the screenshots. Record first (make walkthroughs ID=<id>). The mp4 stays
+# out of git; DOCS_WALKTHROUGH_VIDEO=1 copies it too, for a local build that
+# plays it (gitignored).
+docs-walkthroughs:
+	node docs/scripts/copy-walkthroughs.mjs
 
 # Full stack for a browser session: Postgres + the server with the console
 # embedded. Creates (idempotently) a dev owner with password "dev", also mints a

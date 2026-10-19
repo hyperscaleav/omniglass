@@ -161,3 +161,36 @@ aside.design-fence .design-fence-title::before {
   content: '\25A7  ';
   color: var(--sl-color-purple);
 }
+
+/* A walkthrough embed (::walkthrough{#id}, #926): the poster (or the video,
+   when the build carries it), its caption, then the captioned stills folded
+   under a disclosure so the page stays readable. */
+figure.walkthrough {
+  border: 1px solid var(--sl-color-gray-5);
+  border-radius: 0.5rem;
+  padding: 0.75rem;
+}
+figure.walkthrough > img,
+figure.walkthrough > video {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 0.25rem;
+}
+figure.walkthrough figcaption {
+  margin-top: 0.5rem;
+  font-size: var(--sl-text-sm);
+}
+figure.walkthrough details {
+  margin-top: 0.75rem;
+}
+figure.walkthrough details summary {
+  cursor: pointer;
+  font-size: var(--sl-text-sm);
+}
+figure.walkthrough details ol li img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 0.25rem;
+}

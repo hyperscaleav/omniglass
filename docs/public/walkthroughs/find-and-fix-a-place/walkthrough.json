@@ -1,0 +1,102 @@
+{
+  "id": "find-and-fix-a-place",
+  "title": "Find a place and fix its label",
+  "description": "Drill Explore down to a place, open the system it holds, and rename the place from Configure. The new label follows everywhere the place is read.",
+  "steps": [
+    {
+      "n": 1,
+      "kind": "goto",
+      "caption": "Explore is the outline of every place in the fleet, with what each one holds.",
+      "still": "step-01.png"
+    },
+    {
+      "n": 2,
+      "kind": "click",
+      "caption": "Open a building. Each place inside reads its type, and the standard its system is built to.",
+      "still": "step-02.png"
+    },
+    {
+      "n": 3,
+      "kind": "click",
+      "caption": "Bay 3 holds one system, so opening the place opens that system.",
+      "still": "step-03.png"
+    },
+    {
+      "n": 4,
+      "kind": "wait",
+      "caption": "The system's panel names the place it sits in, above its own facts.",
+      "still": "step-04.png"
+    },
+    {
+      "n": 5,
+      "kind": "click",
+      "caption": "Expand the panel to the system's full view.",
+      "still": "step-05.png"
+    },
+    {
+      "n": 6,
+      "kind": "wait",
+      "caption": "A place holding one system has no page of its own. The system's view is titled by it, with the place as a card below.",
+      "still": "step-06.png"
+    },
+    {
+      "n": 7,
+      "kind": "click",
+      "caption": "Configure holds the place's form first, then the system's.",
+      "still": "step-07.png"
+    },
+    {
+      "n": 8,
+      "kind": "click",
+      "caption": "Edit the place, apart from its system. Its label was rendered by a label rule from its name.",
+      "still": "step-08.png"
+    },
+    {
+      "n": 9,
+      "kind": "click",
+      "caption": "Click the label to take it over from the rule.",
+      "still": "step-09.png"
+    },
+    {
+      "n": 10,
+      "kind": "wait",
+      "caption": "The label is yours now; the rule no longer rewrites it.",
+      "still": "step-10.png"
+    },
+    {
+      "n": 11,
+      "kind": "type",
+      "caption": "Say what the site calls it, so operators find it by that word.",
+      "still": "step-11.png"
+    },
+    {
+      "n": 12,
+      "kind": "click",
+      "caption": "Save the place.",
+      "still": "step-12.png"
+    },
+    {
+      "n": 13,
+      "kind": "click",
+      "caption": "Saved. Back on the system's overview, its title already reads the new label.",
+      "still": "step-13.png"
+    },
+    {
+      "n": 14,
+      "kind": "click",
+      "caption": "Back to Explore, opened down to the place you were on.",
+      "still": "step-14.png"
+    },
+    {
+      "n": 15,
+      "kind": "wait",
+      "caption": "The outline reads the new label too. One place, one label, wherever it is read.",
+      "still": "step-15.png"
+    }
+  ],
+  "poster": "step-15.png",
+  "budget": {
+    "seconds": 47.1,
+    "bytes": 925946
+  }
+}

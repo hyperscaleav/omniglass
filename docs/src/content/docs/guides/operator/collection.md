@@ -1,6 +1,8 @@
 ---
 title: Nodes and reachability
 description: "Enrolling a collection node, adding a transport-named endpoint to a component, and reading the per-endpoint reachability and the log events a node reports."
+walkthroughs:
+  - id: set-up-monitoring
 ---
 
 Collection is how the fleet learns whether a device is reachable and what it reports. An **edge
@@ -77,6 +79,13 @@ without one reads its transport name exactly.
 - With `endpoint:update`, editing an endpoint changes only its **node placement** and its
   **target**; the transport (and so the name) is fixed at creation.
 - With `endpoint:delete`, deleting an endpoint removes it and **cascades its derived task**.
+
+Setting up monitoring on a component nothing collects from yet is both faces in turn: a probe
+for reachability, then the SNMP driver for what the device reports, each placed on a node, with
+reachability and samples arriving on the component's view seconds later. The walkthrough runs
+against a simulated component, so the node is really collecting.
+
+::walkthrough{#set-up-monitoring}
 
 Because an endpoint belongs to a component, it inherits that component's scope: an endpoint
 on a component outside your scope is not shown. A node **purge cascades** its endpoints and

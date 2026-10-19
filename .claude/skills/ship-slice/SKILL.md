@@ -1,6 +1,6 @@
 ---
 name: ship-slice
-description: Use when a vertical-slice PR is built and about to be proposed for merge. Runs the pre-ship validation (fresh make test, make gen drift check, em-dash and attribution scan, a reviewer pass, the docs-with-everything check) and emits the standard ship-review report the architect approves from. Invoke at PR-ready, before asking for approval; re-run after addressing review findings.
+description: Use when a vertical-slice PR is built and about to be proposed for merge. Runs the pre-ship validation (fresh make test, make gen drift check, em-dash and attribution scan, a reviewer pass, the docs-with-everything check, the walkthrough an operator-flow PR requires) and emits the standard ship-review report the architect approves from. Invoke at PR-ready, before asking for approval; re-run after addressing review findings.
 ---
 
 # Ship a slice
@@ -110,7 +110,40 @@ Each is a gate; a red one blocks the ship.
    `::screenshot{#id}` directive in the prose, not a code change. **PR bodies, comments, and
    issues embed the clean renders, never the baselines** (a masked strip teaches nothing);
    the baselines exist only for the gate.
-10. **Audit coverage.** Every privileged **mutation** and every **auth event** the slice adds
+10. **Walkthrough, for an operator flow.** A PR that **adds or changes an operator flow** (a
+   form, a multi-step path, a navigation change: anything an operator now does in a different
+   order or with different input) carries a **walkthrough**, ruled on #884. A visual-only change
+   (a restyle, a new column, a moved badge) keeps screenshots alone. Decide it from the diff,
+   not from intent: a changed form, dialog, drawer action, route, or the steps between them is a
+   flow. **The verdict cannot be `ready` for an operator-flow PR without the walkthrough
+   comment**; that is a red gate, not a note, exactly like a UI PR with no screenshots.
+
+   How:
+   - **Script it.** Add or update `web/e2e/walkthroughs/<id>.yaml` (steps of `goto`, `click`,
+     `type`, `select`, `press`, `wait`, a caption each; the format is documented at the top of
+     `web/e2e/walkthroughlib.mjs`). End each action on a `wait` for its visible result: a
+     walkthrough is a test, and a result that never appears fails the run naming the step.
+     `make test-web` validates every script in the tree.
+   - **Prove it locally.** `make walkthroughs ID=<id>` (Docker only) records it to
+     `web/e2e/walkthroughs/out/<id>/`: the mp4, `poster.png`, a still per step. Read the stills
+     with `/assess-ui` (its walkthrough rubric) before asking CI to record; the agent cannot
+     watch video, so the stills are what gets graded.
+   - **Record it on the PR.** Resolve any merge conflicts (GitHub runs no `pull_request`
+     workflow on a conflicted PR), push, then apply the `run:walkthrough` label. CI records the
+     branch tip: every walkthrough, or, when the PR changes nothing under `web/` but scripts,
+     just the scripts it adds or changes. It replaces the PR's stills under
+     `.github/screenshots/<pr>/walkthroughs/` on the branch and upserts one PR comment
+     embedding them by commit SHA, with the mp4s as a workflow artifact. A failed walkthrough
+     fails the job and is named in the comment (a stack that never came up says so instead);
+     fix it and re-run. **Pull after the run** (the stills commit is now on your branch). GitHub
+     starts no workflow for the workflow token's push, so if the stills commit is the head, run
+     the PR's other checks on it with an empty commit:
+     `git commit --allow-empty -m "chore: rerun checks"`, then push.
+   - **Link it.** The PR body's Visual confirmation carries the walkthrough comment's link on
+     its **Walkthrough** line, and the ship-review's Walkthrough line names it.
+
+   `n/a` when no operator flow changed; say why in one clause ("visual only", "no UI surface").
+11. **Audit coverage.** Every privileged **mutation** and every **auth event** the slice adds
    writes an `audit_log` row: a fleet or IAM mutation through `writeAuditRes` **in the same
    transaction** as the change (a committed change without its audit row is a red gate), and an
    auth event (login, logout, a denied sign-in) through `WriteAuthEvent` on the read/no-tx path.
@@ -118,7 +151,7 @@ Each is a gate; a red one blocks the ship.
    impersonation, carries the real actor via the request context). A new privileged write with no
    audit row, or an auth event that is silently unlogged, is a red gate. Reads are not audited
    (except secret decrypts, which always are).
-11. **Generate first.** Scan the diff for hand-written artifacts that restate a fact the code
+12. **Generate first.** Scan the diff for hand-written artifacts that restate a fact the code
    already knows: a table of routes, columns, env vars, or seeded rows; a copied schema; an
    asset a generator could emit. Each is either replaced by a generated render in this PR or
    has a filed issue named in the ship-review's Docs line. Hand-written narrative is fine;
@@ -144,6 +177,7 @@ Proof (ran fresh)
   Tiers:     unit X / integration Y / e2e Z
   make gen:  clean
 Visual:    <screenshots in the PR for any UI surface | n/a>
+Walkthrough: <the run:walkthrough comment link, per flow | n/a (why: visual only, no UI)>
 Dev seed:  <new-entity example rows added to internal/devseed | n/a>
 
 Docs:      <what shipped; arch-of-record consistent | divergence note; lint: green;
@@ -158,6 +192,10 @@ Decisions I need from you:           <open forks | none>
 Diff:      N files, ~M LOC   <PR link>
 Risk:      <outward-facing? invariant-changing? reversible?>
 ```
+
+`ready` is not available while a gate is red: an operator-flow PR whose Walkthrough line is
+empty, or `n/a` for a diff that changes a flow, ships as neither `ready` nor
+`ready-pending-your-call` until the walkthrough comment exists.
 
 The two lines the architect reads first are **Decisions I need from you** and **Risk**.
 Approval means squash-merge; a redirect adjusts the slice.

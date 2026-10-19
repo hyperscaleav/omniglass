@@ -4,19 +4,28 @@ import sitemap from '@astrojs/sitemap';
 import starlight from '@astrojs/starlight';
 import d2 from 'astro-d2';
 import { defineConfig } from 'astro/config';
+import { fileURLToPath } from 'node:url';
 import remarkDirective from 'remark-directive';
 import starlightOpenAPI, { openAPISidebarGroups } from 'starlight-openapi';
 import { remarkDesignFence } from './src/plugins/remark-design-fence.mjs';
 import { remarkScreenshots } from './src/plugins/remark-screenshots.mjs';
+import { remarkWalkthroughs } from './src/plugins/remark-walkthroughs.mjs';
 
 export default defineConfig({
   site: 'https://docs.omniglass.hyperscaleav.com',
-  // remark-directive parses `::screenshot{#id}` and the `:::design` container;
-  // remarkScreenshots renders the former into a figure from the page's
-  // screenshots frontmatter, remarkDesignFence renders the latter into the
-  // target-design aside the docs lint suite keys on.
+  // remark-directive parses `::screenshot{#id}`, `::walkthrough{#id}` and the
+  // `:::design` container; remarkScreenshots and remarkWalkthroughs render the
+  // embeds from the page's screenshots and walkthroughs frontmatter (the latter
+  // reading the recorder's manifest under public/walkthroughs/), and
+  // remarkDesignFence renders the fence into the target-design aside the docs
+  // lint suite keys on.
   markdown: {
-    remarkPlugins: [remarkDirective, remarkScreenshots, remarkDesignFence],
+    remarkPlugins: [
+      remarkDirective,
+      remarkScreenshots,
+      [remarkWalkthroughs, { publicDir: fileURLToPath(new URL('./public', import.meta.url)) }],
+      remarkDesignFence,
+    ],
   },
   // The monolithic "the console" guide was split into per-flow operator pages.
   // Keep its old URL alive for external links and bookmarks.
@@ -149,6 +158,7 @@ export default defineConfig({
             { label: 'Learning tool', slug: 'contributing/learning-tool' },
             { label: 'Primitive first', slug: 'contributing/primitive-first' },
             { label: 'Design system', slug: 'contributing/design-system' },
+            { label: 'Walkthroughs', slug: 'contributing/walkthroughs' },
             { label: 'Slice workflow', slug: 'contributing/slice-workflow' },
             { label: 'Feature loops', slug: 'contributing/feature-loops' },
             { label: 'Autopilot', slug: 'contributing/autopilot' },

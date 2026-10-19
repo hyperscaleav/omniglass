@@ -6274,3 +6274,111 @@ platform-minted; the lab's room archetypes stay only as the fleet compiler's inp
 real-simulator e2e adds a meeting room through the CLI and waits for the simulator to serve every
 component. The console's **Add simulated system** (#913) previews the plan as the standard is chosen
 and adds the system from the Simulation page.
+
+### The test and capture stacks run side by side (#884, slice 1: #855 and #771)
+
+`make test-e2e`, `make docs-shots` / `docs-shots-check` and `make test-netadmin` share one stack helper
+(`web/e2e/lib/stack.sh`): every container and network takes a per-run id and a label, teardown stops
+only its own on exit, interrupt or termination, and a run killed outright is swept by the next run with
+the same prefix once its owning process is gone. Two worktrees running the same target at once no longer
+destroy each other (both proven green at once), and a stack disturbed from outside mid-run fails saying
+so rather than reporting the resulting broken capture as pixel drift. The old recipes also leaked
+Postgres's anonymous volume on every run; containers now start with `--rm`. This is the stack the
+walkthroughs (#923) build on.
+
+### The walkthrough stack, with a node and the simulator (#884, slice 2: #923)
+
+`stack_walkthrough_up` in the shared stack helper brings up everything a walkthrough shows, all in Docker
+with no fixed host port: Postgres, the server seeded with the dev and simulated fleets, the node `edge-hq`
+enrolled through the API with a one-time token, and `omniglass sim run --impairments` sharing the node
+container's network namespace, with `NET_ADMIN` on the simulator only and the ping sysctl on the node. The
+binary is the release image built from the tree with the Dockerfile, tagged with the run id and untagged at
+teardown, so a clean checkout needs only Docker. The bus listens beyond loopback and advertises the
+server's container name, so the node claims and connects. In a container the simulator binds the real
+ports, so `seed-dev` gained `--sim-port-offset` (default 10000, as `make dev-sim` needs) and the stack seeds
+with 0; seeding with no lift had never been exercised and dereferenced a nil port shift, now fixed under a
+test. `make walkthrough-stack` holds it for authoring, `make dev-sim-container` publishes the console on an
+ephemeral loopback port for exploring by hand (it carries its own server: attaching to a host `make dev`
+would need the host's network, where `NET_ADMIN` reaches the host's firewall), and `make
+test-walkthrough-stack` proves it against the real stack (the node collects; an unplug set through the API
+takes a component's reachability down, and repair brings it back), proven with two copies of the tree at
+once and one killed mid-run. It stays out of `make test`: it builds the release image, and the impairment
+loop itself is gated there by `make test-netadmin`.
+
+### The walkthrough recorder: scripts as data, captions and a visible cursor (#884, slice 3: #924)
+
+A walkthrough is `web/e2e/walkthroughs/<id>.yaml`: a title, an optional description, and steps of six kinds
+(`goto`, `click`, `type`, `select`, `press`, `wait`), each with a caption. Validation is pure and strict
+(`web/e2e/walkthroughlib.mjs`, unit-tested, and every script in the tree is validated by `make test`), so a
+typo fails naming the file and the step before a browser starts. `make walkthroughs` plays each script on
+the walkthrough stack in a Playwright container: it signs in off camera, records with Playwright's video
+at 1320x860, and draws into the page, from a shadow root that never takes a click, a cursor that glides to
+each target before acting, a click ripple, a highlight ring on the target or the awaited result, and a
+caption bar; a title card opens the video, and the pace is a person's (a beat to read, the glide, the
+action, a beat to see it; typing keyed at about nine characters a second). The webm becomes an H.264 mp4 in
+a pinned ffmpeg container with no network (`jrottenberg/ffmpeg:7.1-alpine`, by digest), beside a poster (the
+step marked `poster`, else the last) and a still per step. A step whose result never appears fails the run
+naming the step, its kind and its wait, keeping the partial stills and the failing frame; a recording of
+60 seconds or more, or 10 MB or more, fails naming which. The sample (`sample-simulation`, five steps)
+records to about 16 seconds and 0.6 MB. `make test-walkthroughs` pins both failure paths against the real
+stack with fixtures under `web/e2e/walkthroughs/fixtures/`.
+
+### Walkthroughs as PR evidence: the run:walkthrough comment and the gates (#884, slice 4: #925)
+
+Applying the `run:walkthrough` label runs `walkthrough.yml`: it records the PR's walkthroughs on the
+walkthrough stack (every one, or just the scripts a PR that changes nothing else under `web/` adds or
+changes), exactly as `make walkthroughs` does locally (the simulator's `NET_ADMIN` is a container
+capability, which a hosted runner grants as it already does for `make test-netadmin`), uploads the mp4s as
+a workflow artifact, replaces the PR's stills on its branch with each passing walkthrough's poster and
+per-step stills under `.github/screenshots/<pr>/walkthroughs/<id>/`, and upserts one PR comment, found
+again by its marker and its bot author as the preview comment now is too, embedding them by commit SHA
+and naming any walkthrough that failed (a failure also fails the job; a stack that never came up is
+reported as that). The choices it makes (which walkthroughs, where stills go, the SHA-pinned URLs, the
+comment body, with script text escaped onto one line) are a dependency-free module
+(`web/e2e/walkthroughpr.mjs`) unit-tested in `make test-web`, and `walkthroughs.sh record` now takes
+several ids, lists the failed ones in `out/failed.txt` and marks a stack that came up with `out/stack-up`.
+It cannot loop: it runs only on `labeled`, and GitHub starts no workflow for the workflow token's push.
+Fork PRs are skipped, checkout persists no credential, and only the push step holds the write token.
+`/ship-slice` gained the gate the architect ruled (a PR that adds or changes an operator flow is not
+`ready` without the walkthrough comment), `/assess-ui` grades the per-step stills with a walkthrough
+rubric (the agent cannot watch video), and the PR template's Visual confirmation carries a Walkthrough
+line. The workflow's run against a real PR is proven on this epic's rollup PR, not by a local test.
+
+### Walkthroughs in the docs: the walkthrough directive (#884, slice 5: #926)
+
+A docs page embeds a walkthrough the way it embeds a screenshot: the id in `walkthroughs` frontmatter
+and `::walkthrough{#id}` alone on its line. The two directives share one resolver
+(`docs/src/plugins/frontmatter-directive.mjs`), one source scanner (`docs/scripts/lib/embed-scan.mjs`:
+a leaf directive alone on its line, never a text directive, a container, or a quote in code or an HTML
+comment) and one pre-build gate (`docs/scripts/check-embeds.mjs`, formerly the screenshots-only check).
+The declaration is only the id: the embed renders the recorder's manifest, so the title, captions, the
+poster step and the folded per-step stills come from the recording, never a restated caption; the
+manifest's types and id and still rules are one module the PR comment also reads
+(`web/e2e/walkthroughcore.mjs`). The recorder's budget gate now writes a budget mark into
+`walkthrough.json` on a pass, and `make docs-walkthroughs` copies the manifest and stills of every
+declared walkthrough into `docs/public/walkthroughs/<id>/` (committed, like the screenshots) only from a
+manifest carrying that mark, pruning files from an older recording. The mp4 is not committed: the embed
+renders the video and its link only when `docs/public/walkthroughs/<id>/<id>.mp4` is present at build
+time (gitignored; `DOCS_WALKTHROUGH_VIDEO=1` copies it for a local build). Astro caches a rendered page by
+its own content and cannot be told the embed depends on the manifest, so a post-build check
+(`docs/scripts/check-walkthrough-embeds.mjs`) re-renders every built embed from the shipped manifest and
+fails the build on any difference or dead reference; a re-copy is followed by a forced build. The docs lint
+suite gained the walkthrough lint (a script per declared id, every declaration embedded, every directive
+declared, the budget mark, the stills and poster present, no drift between the copy and its script's title,
+description, step count and captions, no orphan copies), the render and the scanner are unit-tested in
+`make test-web`, and [simulate a fleet](/guides/operator/simulation/#see-it) embeds the sample.
+[Walkthroughs](/contributing/walkthroughs/) teaches writing, recording, reviewing and embedding one.
+
+### The first walkthroughs: fix a place, set up monitoring (#884, slice 6: #927)
+
+Two walkthroughs record under `make walkthroughs` and pass as tests. Find a place and fix it drills
+Explore to a place, opens its system, renames the place from the system's Configure tab, and shows the
+label follow into the system's header and back on the outline; it is embedded in the
+[fleet guide](/guides/operator/fleet/). Set up monitoring attaches the generic SNMP driver and adds an
+ICMP endpoint to a simulated display, then reopens its page to show reachability and samples arrive (the
+view does not poll yet, #934, so the driver goes first and the probe holds past a node heartbeat); it is embedded in the
+[collection guide](/guides/operator/collection/). Node enrollment runs on the node's host, so the
+walkthrough uses the node the stack enrolls and says so; the unplug, the rule's alarm and the health verdict
+follow with the event rule tier (#819). The walkthrough stack adds one simulated-product component with no
+endpoint (`bay-2-display`) so the monitoring walkthrough starts from nothing, and the page header carries a
+`page-header` test id as a stable wait target. Defects found on the way are filed: #931, #932, #933, #934.

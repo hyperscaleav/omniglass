@@ -1,0 +1,13 @@
+# A small walkthrough, used only by the recorder's own test
+# (make test-walkthroughs) to prove the budget gate: recorded, then checked
+# against limits lowered below what it measures, it must fail naming which.
+# Its type step shows typing at the recorded pace, and the filtered list is
+# the result it waits for.
+title: A small walkthrough
+steps:
+  - goto: /simulation
+    caption: Open the Simulation page.
+  - type: { target: 'input[placeholder^="filter by name"]', text: display }
+    caption: Typing is keyed at a pace a person can follow.
+  - wait: { selector: '[data-testid="sim-row"]' }
+    caption: The list narrows to what matches.

@@ -1,6 +1,8 @@
 ---
 title: Simulate a fleet
 description: "Running the simulator beside a node, watching the collector reach its simulated components, exercising one's API, adding one, and breaking one on purpose to watch monitoring react."
+walkthroughs:
+  - id: sample-simulation
 ---
 
 Omniglass can simulate the components it monitors. The simulator ships in the same binary: beside a
@@ -18,6 +20,10 @@ console.
 its token in `bin/edge-hq.token`) and runs the node and the simulator side by side, so the seeded
 fleet is collected for real. Its components' ports below 1024 are lifted by 10000, so it needs no
 privilege.
+
+**In containers**, with nothing but Docker, run `make dev-sim-container`: its own server, node and
+simulator, with impairments applied, and the console on a local port it prints
+([the whole loop in Docker](/guides/install/#the-whole-loop-in-docker)).
 
 **Anywhere else**, the simulator is `omniglass sim run`, started beside a node with that node's
 identity:
@@ -51,6 +57,8 @@ simulator stopped reporting). Anything you broke on it shows as a chip beside th
 (**unplugged**, or the delay and loss you set), with a note when the simulator could not apply it, and a row **lights up** each time the collector reaches the component: a
 poll, a connect, a ping. A row that never lights up is a component nothing is collecting from.
 When no simulator is connected the entry is hidden, since there is nothing to show.
+
+::walkthrough{#sample-simulation}
 
 From a terminal the same view is `omniglass simulation get`, and one node's is
 `omniglass node simulation <node>`.

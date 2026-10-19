@@ -1,0 +1,102 @@
+{
+  "id": "set-up-monitoring",
+  "title": "Set up monitoring on a component",
+  "description": "Attach the SNMP driver and add a reachability probe to a component, both collected by an edge node, and watch reachability and samples arrive.",
+  "steps": [
+    {
+      "n": 1,
+      "kind": "goto",
+      "caption": "A display mounted in Bay 2. Endpoints are how it is reached, and it has none yet, so nothing collects from it.",
+      "still": "step-01.png"
+    },
+    {
+      "n": 2,
+      "kind": "click",
+      "caption": "Add an endpoint, the way a node reaches the display.",
+      "still": "step-02.png"
+    },
+    {
+      "n": 3,
+      "kind": "click",
+      "caption": "A driver knows how to talk to a product, and what to read from it.",
+      "still": "step-03.png"
+    },
+    {
+      "n": 4,
+      "kind": "select",
+      "caption": "The SNMP driver reads standard data any SNMP agent reports, such as uptime.",
+      "still": "step-04.png"
+    },
+    {
+      "n": 5,
+      "kind": "type",
+      "caption": "You supply only its inputs. The host is the display's address.",
+      "still": "step-05.png"
+    },
+    {
+      "n": 6,
+      "kind": "type",
+      "caption": "The community is a secret's name, never its value.",
+      "still": "step-06.png"
+    },
+    {
+      "n": 7,
+      "kind": "select",
+      "caption": "The node edge-hq sits on the display's network, so it collects it.",
+      "still": "step-07.png"
+    },
+    {
+      "n": 8,
+      "kind": "click",
+      "caption": "Attach it. The driver derived the endpoint, its SNMP transport and its target.",
+      "still": "step-08.png"
+    },
+    {
+      "n": 9,
+      "kind": "press",
+      "caption": "Close it. Next, a probe for one question: can the node reach it?",
+      "still": "step-09.png"
+    },
+    {
+      "n": 10,
+      "kind": "click",
+      "caption": "A second endpoint, a bare probe this time.",
+      "still": "step-10.png"
+    },
+    {
+      "n": 11,
+      "kind": "select",
+      "caption": "The same node runs it.",
+      "still": "step-11.png"
+    },
+    {
+      "n": 12,
+      "kind": "type",
+      "caption": "An ICMP probe pings the display's address.",
+      "still": "step-12.png"
+    },
+    {
+      "n": 13,
+      "kind": "click",
+      "caption": "Create it. The probe is placed on edge-hq, aimed at that address.",
+      "still": "step-13.png"
+    },
+    {
+      "n": 14,
+      "kind": "goto",
+      "caption": "Back on the display's page, a few seconds on.",
+      "still": "step-14.png"
+    },
+    {
+      "n": 15,
+      "kind": "wait",
+      "caption": "Samples arrived. Vitals reads the ping's reachability and round trip, and the uptime the display reports.",
+      "still": "step-15.png"
+    }
+  ],
+  "poster": "step-15.png",
+  "budget": {
+    "seconds": 52.4,
+    "bytes": 1068321
+  }
+}

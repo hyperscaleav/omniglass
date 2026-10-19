@@ -1,0 +1,47 @@
+# Set up monitoring (#927): give a component nothing collects from yet the
+# SNMP driver and a reachability probe, collected by the node edge-hq, and
+# watch reachability and samples arrive from the simulated component. The
+# walkthrough stack places the component (bay-2-display, a Boreal Edge 55 in
+# Bay 2) with no endpoint (web/e2e/lib/stack.sh). Enrolling a node is not
+# shown: its second half runs on the node's host (omniglass node run with the
+# one-time token), out of the console's reach; the stack enrolls edge-hq that
+# way. Unplugging it and watching the alarm open follows in #819.
+# The component view does not poll (#934), so every first sample must land
+# before the page is reopened: the driver goes first, with the probe steps as
+# its slack, and the probe's create holds 3.5s, which with the reopen outlasts
+# the node's 5s heartbeat in which it pulls the new task.
+title: Set up monitoring on a component
+description: Attach the SNMP driver and add a reachability probe to a component, both collected by an edge node, and watch reachability and samples arrive.
+steps:
+  - goto: /components/bay-2-display?tab=configure
+    caption: A display mounted in Bay 2. Endpoints are how it is reached, and it has none yet, so nothing collects from it.
+  - click: { role: button, name: Add endpoint }
+    caption: Add an endpoint, the way a node reaches the display.
+  - click: { role: tab, name: Attach a driver }
+    caption: A driver knows how to talk to a product, and what to read from it.
+  - select: { target: '#new-iface-driver', value: snmp-generic }
+    caption: The SNMP driver reads standard data any SNMP agent reports, such as uptime.
+  - type: { target: '#new-iface-input-host', text: 127.60.9.9 }
+    caption: You supply only its inputs. The host is the display's address.
+  - type: { target: '#new-iface-input-community', text: sim-community }
+    caption: The community is a secret's name, never its value.
+  - select: { target: '#new-iface-node', value: edge-hq }
+    caption: The node edge-hq sits on the display's network, so it collects it.
+  - click: { role: button, name: Attach driver }
+    caption: Attach it. The driver derived the endpoint, its SNMP transport and its target.
+  - press: Escape
+    caption: "Close it. Next, a probe for one question: can the node reach it?"
+  - click: { role: button, name: Add endpoint }
+    caption: A second endpoint, a bare probe this time.
+  - select: { target: '#new-iface-node', value: edge-hq }
+    caption: The same node runs it.
+  - type: { target: '#new-iface-target', text: 127.60.9.9 }
+    caption: An ICMP probe pings the display's address.
+  - click: { role: button, name: Create endpoint }
+    caption: Create it. The probe is placed on edge-hq, aimed at that address.
+    hold: 3500
+  - goto: /components/bay-2-display
+    caption: Back on the display's page, a few seconds on.
+  - wait: { selector: '[data-testid="leaf-vitals"]:has-text("ICMP Reachable"):has-text("Uptime")', timeout: 20000 }
+    caption: Samples arrived. Vitals reads the ping's reachability and round trip, and the uptime the display reports.
+    poster: true

@@ -32,35 +32,29 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT"
 
-NET=ogshots
-PWIMG=mcr.microsoft.com/playwright:v1.61.1-jammy
+# The stack (network, Postgres, server) is per run: names carry a run id and
+# teardown stops only this run's resources, so two captures on one machine
+# cannot collide, and a capture whose stack is disturbed from outside fails
+# saying so instead of reporting pixel drift (#771, #855). See web/e2e/lib/stack.sh.
+. web/e2e/lib/stack.sh
+
+PWIMG=$STACK_PWIMG
 APPIMG=debian:stable-slim
-DSN="postgres://omniglass:omniglass@ogshots-pg:5432/omniglass?sslmode=disable"
 OUT="${DOCS_SHOTS_OUT:-docs/public/screenshots}"
 BASELINE="${DOCS_SHOTS_BASELINE:-docs/screenshots/baseline}"
 
-cleanup() {
-  docker stop ogshots-srv ogshots-pg >/dev/null 2>&1 || true
-  docker rm ogshots-srv ogshots-pg >/dev/null 2>&1 || true
-  docker network rm "$NET" >/dev/null 2>&1 || true
-}
-cleanup
-trap cleanup EXIT
+stack_init ogshots
 
 # Build the console into the binary so the shots reflect the current UI.
 make build-web
 
-docker network create "$NET" >/dev/null
-docker run -d --name ogshots-pg --network "$NET" \
-  -e POSTGRES_USER=omniglass -e POSTGRES_PASSWORD=omniglass -e POSTGRES_DB=omniglass postgres:18 >/dev/null
-until docker exec ogshots-pg pg_isready -U omniglass -d omniglass >/dev/null 2>&1; do sleep 1; done
-sleep 2
+stack_up
 
 # One secret key for every container: seed-dev seeds a secret (the simulated
 # fleet's SNMP community) that the server must decrypt, and each throwaway
 # container would otherwise mint its own key. Fixed, since it guards nothing.
 KEY=$(printf 'omniglass-docs-shots-fixed-key!!' | base64)
-app() { docker run --rm --network "$NET" -v "$ROOT/bin/omniglass:/omniglass:ro" -e OMNIGLASS_DSN="$DSN" -e OMNIGLASS_SECRET_KEY="$KEY" "$APPIMG" /omniglass "$@"; }
+app() { stack_run -v "$ROOT/bin/omniglass:/omniglass:ro" -e OMNIGLASS_DSN="$STACK_DSN" -e OMNIGLASS_SECRET_KEY="$KEY" "$APPIMG" /omniglass "$@"; }
 
 app migrate
 # Idempotent by intent, but a swallowed TRANSIENT failure here drops audited
@@ -70,9 +64,8 @@ app bootstrap dev --password dev >/dev/null 2>&1 || true
 app set-password dev dev >/dev/null
 app seed-dev --sim-fleet=false
 
-docker run -d --name ogshots-srv --network "$NET" -v "$ROOT/bin/omniglass:/omniglass:ro" \
-  -e OMNIGLASS_DSN="$DSN" -e OMNIGLASS_SECRET_KEY="$KEY" "$APPIMG" /omniglass server >/dev/null
-until docker run --rm --network "$NET" "$PWIMG" bash -c 'curl -fsS http://ogshots-srv:8080/api/v1/healthz' >/dev/null 2>&1; do sleep 1; done
+stack_server -v "$ROOT/bin/omniglass:/omniglass:ro" \
+  -e OMNIGLASS_DSN="$STACK_DSN" -e OMNIGLASS_SECRET_KEY="$KEY" "$APPIMG" /omniglass server
 
 TOK=$(app token dev --description "docs capture" 2>/dev/null | grep -o 'ogp_[A-Za-z0-9_-]*')
 # A couple of secrets so the Secrets surface renders real rows. LOUD on
@@ -80,14 +73,17 @@ TOK=$(app token dev --description "docs capture" 2>/dev/null | grep -o 'ogp_[A-Z
 # failed shifts the audit page by one row and the zero-tolerance gate reads
 # the shift as UI drift (#780's audit flap was exactly this class). A capture
 # whose fixture writes did not all land is not a capture of the console.
-sec() { docker run --rm --network "$NET" -v "$ROOT/bin/omniglass:/omniglass:ro" \
-  -e OMNIGLASS_SERVER=http://ogshots-srv:8080 -e OMNIGLASS_TOKEN="$TOK" "$APPIMG" /omniglass "$@" >/dev/null; }
+sec() { stack_run -v "$ROOT/bin/omniglass:/omniglass:ro" \
+  -e OMNIGLASS_SERVER="$STACK_SRV_URL" -e OMNIGLASS_TOKEN="$TOK" "$APPIMG" /omniglass "$@" >/dev/null; }
 sec secret create --name device-basic --secret-type basic-auth --owner-kind platform --fields '{"username":"admin","password":"s3cret-pw"}'
 sec secret create --name core-snmp --secret-type snmp-community --owner-kind platform --fields '{"community":"public"}'
 
 mkdir -p "$OUT" "$BASELINE"
-docker run --rm --network "$NET" -v "$ROOT:/w" -w /w \
+stack_run -v "$ROOT:/w" -w /w \
   --user "$(id -u):$(id -g)" -e HOME=/tmp -e PLAYWRIGHT_BROWSERS_PATH=/ms-playwright \
-  -e OG_TOKEN="$TOK" -e OG_E2E_BASE="http://ogshots-srv:8080" -e DOCS_SHOTS_OUT="$OUT" -e DOCS_SHOTS_BASELINE="$BASELINE" \
+  -e OG_TOKEN="$TOK" -e OG_E2E_BASE="$STACK_SRV_URL" -e DOCS_SHOTS_OUT="$OUT" -e DOCS_SHOTS_BASELINE="$BASELINE" \
   -e DOCS_SHOTS_TZ="${DOCS_SHOTS_TZ:-}" \
   "$PWIMG" node web/e2e/docs-shots.mjs
+# The shots are only a capture of the console if the stack that served them
+# survived the whole capture; the freshness diff must not judge anything else.
+stack_assert_intact

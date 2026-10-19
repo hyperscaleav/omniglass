@@ -96,6 +96,8 @@ screenshots:
       - action: click
         selector: "role=button[name='Expand Huddle Room']"
     alt: "Explore: the outline of places, Headquarters and West Building folded into one row and opened down to the Huddle Room, which wears its system with the components beneath it; every collapsed place says what it holds and counts its systems by health."
+walkthroughs:
+  - id: find-and-fix-a-place
 ---
 
 The fleet has one door in the sidebar: **Explore**. It is an outline of every place you
@@ -319,6 +321,11 @@ component's views carry the same tab. The side panel carries the same form's ide
 properties and their cascade are configuration, and live here.
 
 ::screenshot{#fleet-configure}
+
+Finding a place and fixing its label runs the whole path: Explore down to the place, its system's
+view, the place's own section under Configure, and the new label read everywhere the place appears.
+
+::walkthrough{#find-and-fix-a-place}
 
 ## A component
 

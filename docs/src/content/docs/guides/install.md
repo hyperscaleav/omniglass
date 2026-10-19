@@ -88,3 +88,60 @@ It runs unprivileged, and each privilege it is given buys one thing:
 On **macOS**, loopback answers only `127.0.0.1` until an address is aliased, so a bare binary needs an
 alias for each simulated address it serves (the dev fleet uses `127.60.0.0/16`), for example
 `for i in $(seq 1 20); do sudo ifconfig lo0 alias 127.60.0.$i up; done`. Impairments are Linux only.
+
+### The whole loop in Docker
+
+From a checkout, with nothing but Docker, `make dev-sim-container` runs every piece of the above as
+containers on a private network of their own: Postgres, the server (seeded with the example fleet and
+its simulated components), the node `edge-hq` enrolled with a one-time token, and the simulator with
+`--impairments` in the node container's network namespace. Only the simulator holds `NET_ADMIN`, and it
+reaches only that namespace; only the node takes the ping sysctl. In a container the simulator binds the
+real ports, so the fleet is seeded unlifted (`omniglass seed-dev --sim-port-offset 0`). It prints the
+console's address, on a `127.0.0.1` port Docker picks so two copies never collide (sign in as
+`dev`/`dev`), and tears everything down on Ctrl-C. Breaking a component on purpose works there as in
+[simulate a fleet](/guides/operator/simulation/#break-it-on-purpose).
+
+It does not attach to a `make dev` already running on the host: that server's bus listens on the
+host's loopback only, so a containerized node could reach it only on the host's network, where the
+simulator's `NET_ADMIN` would rewrite the host's own firewall. The stack carries its own server instead.
+
+The same stack is what the console walkthroughs are recorded against: `make walkthrough-stack` holds it
+up without publishing anything and prints how a Playwright container on its network reaches it, and
+`make test-walkthrough-stack` proves it (the node collects, and an impairment set through the API
+takes a component's reachability down and its repair brings it back). The recipe is
+`stack_walkthrough_up` in `web/e2e/lib/stack.sh`.
+
+#### Recording a walkthrough
+
+A walkthrough is a script, `web/e2e/walkthroughs/<id>.yaml` (the id is lowercase letters, digits and
+hyphens): a `title`, an optional `description`, and `steps`, each one kind of action or a wait for a
+visible result, with a `caption` shown while it runs. The step kinds, their fields and the rules are
+defined, with an annotated example, at the top of
+[`web/e2e/walkthroughlib.mjs`](https://github.com/hyperscaleav/omniglass/blob/main/web/e2e/walkthroughlib.mjs).
+The format is validated strictly: an unknown key or kind fails, naming the file and the step, and so does a
+script that ends on an action rather than a wait for its result.
+
+```yaml
+title: Read a simulated component's status
+steps:
+  - goto: /simulation
+    caption: The Simulation page shows the simulated fleet, live.
+  - click: '[data-testid="sim-row"] >> nth=0'
+    caption: Open a simulated component.
+  - wait: { selector: '[data-testid="sim-status"]' }
+    caption: Its status says where it is served, and how often collection has reached it.
+    poster: true
+```
+
+The recording's ffmpeg image is pinned by digest to an amd64-only image (its tag publishes no
+multi-platform index), so recording on an arm64 host needs amd64 emulation registered with Docker.
+
+`make walkthroughs` records every script on the walkthrough stack (`make walkthroughs ID=<id>` records
+one) into `web/e2e/walkthroughs/out/<id>/`: an mp4 opening on a title card, with a cursor that glides to
+each target and ripples where it clicks, a highlight on the target and a caption bar; `poster.png`; and a
+still per step. A walkthrough is a test: a step whose result never appears fails the run, naming the
+step, its kind and what it waited for, and keeps the stills taken so far; so does a recording over
+the budget, whose limits on length and size are `MAX_SECONDS` and `MAX_BYTES` in
+[`web/e2e/walkthroughlib.mjs`](https://github.com/hyperscaleav/omniglass/blob/main/web/e2e/walkthroughlib.mjs). `make test-walkthroughs` proves both failures.
+When a PR needs a walkthrough, how to review its stills, and how a docs page embeds one are in
+[walkthroughs](/contributing/walkthroughs/).

@@ -215,8 +215,12 @@ func Fixtures() (Doc, error) {
 
 // Options tunes a Run. SimFleet wires the simulated fleet (addresses and
 // endpoints on the dev node for every component the simulator serves).
+// SimPortOffset is the lift the simulator applies to ports below 1024, which
+// the endpoints target: SimPortOffset for a simulator run unprivileged (make
+// dev-sim), 0 for one that binds the real ports (in a container).
 type Options struct {
-	SimFleet bool
+	SimFleet      bool
+	SimPortOffset int
 }
 
 // Run installs the example fleet idempotently through the Storage Gateway.
@@ -224,7 +228,7 @@ type Options struct {
 // trusted lane grants the all scope; callers are the direct-DB commands, never a
 // request handler.
 func Run(ctx context.Context, gw storage.Gateway, actorID string) error {
-	return RunWith(ctx, gw, actorID, Options{SimFleet: true})
+	return RunWith(ctx, gw, actorID, Options{SimFleet: true, SimPortOffset: SimPortOffset})
 }
 
 // RunWith is Run with options: the docs screenshot harness seeds without
@@ -647,7 +651,7 @@ func RunWith(ctx context.Context, gw storage.Gateway, actorID string, opts Optio
 	if !opts.SimFleet {
 		return nil
 	}
-	return seedSimFleet(ctx, gw, actorID)
+	return seedSimFleet(ctx, gw, actorID, opts.SimPortOffset)
 }
 
 // standardMaps are the example rooms' layouts, drawn the way an integrator

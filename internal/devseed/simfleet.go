@@ -22,15 +22,15 @@ import (
 const (
 	// SimPortOffset lifts the simulated devices' privileged ports (SNMP 161,
 	// HTTP 80, SSH 22) above 1024 so the dev simulator runs unprivileged; the
-	// endpoints target the lifted ports. `make dev-sim` passes the same value
-	// (a test holds the Makefile to it).
+	// endpoints target the lifted ports. It is seed-dev's default, and `make
+	// dev-sim` passes the same value (a test holds the Makefile to it).
 	SimPortOffset = 10000
 )
 
 // seedSimFleet lands the plan through the gateway: the community secret,
 // then each planned component's endpoints on the dev node. A component that
 // already has an endpoint is left alone, so a re-run changes nothing.
-func seedSimFleet(ctx context.Context, gw storage.Gateway, actorID string) error {
+func seedSimFleet(ctx context.Context, gw storage.Gateway, actorID string, portOffset int) error {
 	all := scope.Set{All: true}
 	store, err := profile.LoadStoreFS(profiles.FS)
 	if err != nil {
@@ -90,7 +90,7 @@ func seedSimFleet(ctx context.Context, gw storage.Gateway, actorID string) error
 			demo = append(demo, e)
 		}
 	}
-	if err := simulateReachabilityDemo(ctx, gw, actorID, demo, used); err != nil {
+	if err := simulateReachabilityDemo(ctx, gw, actorID, demo, used, portOffset); err != nil {
 		return err
 	}
 	var unwired []simfleet.Component
@@ -99,7 +99,7 @@ func seedSimFleet(ctx context.Context, gw storage.Gateway, actorID string) error
 			unwired = append(unwired, c)
 		}
 	}
-	plan, err := simfleet.Plan(unwired, used, simfleet.Catalog{ProfileFor: profileFor, DriverOf: func(p string) string { return drivers[p] }, PortOffset: SimPortOffset})
+	plan, err := simfleet.Plan(unwired, used, simfleet.Catalog{ProfileFor: profileFor, DriverOf: func(p string) string { return drivers[p] }, PortOffset: portOffset})
 	if err != nil {
 		return err
 	}
@@ -137,7 +137,7 @@ func endpointTarget(params []byte) string {
 // and the line protocol on 1710), at a free simulated address, so a live
 // node finds it up. Its seeded history stays, as history. Without the
 // simulated fleet (the docs screenshots) this never runs.
-func simulateReachabilityDemo(ctx context.Context, gw storage.Gateway, actorID string, demo []storage.Endpoint, used map[string]bool) error {
+func simulateReachabilityDemo(ctx context.Context, gw storage.Gateway, actorID string, demo []storage.Endpoint, used map[string]bool, portOffset int) error {
 	if len(demo) == 0 {
 		return nil // already simulated on an earlier run, or no demo
 	}
@@ -151,7 +151,10 @@ func simulateReachabilityDemo(ctx context.Context, gw storage.Gateway, actorID s
 	if _, err := gw.UpdateComponent(ctx, actorID, *demo[0].ComponentID, storage.ComponentPatch{ProductName: &product}, all, all); err != nil {
 		return fmt.Errorf("devseed: make the reachability demo a simulated DSP: %w", err)
 	}
-	shift := sim.PrivilegedPortShift(SimPortOffset)
+	shift := sim.PrivilegedPortShift(portOffset)
+	if shift == nil {
+		shift = func(p int) int { return p } // the simulator binds the profiles' own ports
+	}
 	for _, e := range demo {
 		_, portText, err := net.SplitHostPort(endpointTarget(e.Params))
 		if err != nil {

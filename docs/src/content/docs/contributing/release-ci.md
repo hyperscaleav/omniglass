@@ -33,9 +33,11 @@ Nine workflows carry it: `test`, `pr-title`, `image`, `docs-shots`, `gen-drift`,
   each page's frontmatter, so the pinned browser's captures are byte-stable and the
   tolerance is zero).
 
-Two more PR checks: **`image.yml`** builds the multi-arch container image (see
-[Container image](/guides/container-image/)), and **`preview-comment.yml`** reacts to the
-`run:preview` label (see [PR previews](/guides/pr-previews/)).
+Three more PR workflows: **`image.yml`** builds the multi-arch container image (see
+[Container image](/guides/container-image/)), **`preview-comment.yml`** reacts to the
+`run:preview` label (see [PR previews](/guides/pr-previews/)), and **`walkthrough.yml`**
+reacts to the `run:walkthrough` label, recording the PR's walkthroughs and keeping one comment
+with their poster and stills (see [Labels](/contributing/labels/)).
 
 ## Cutting a release (manual)
 
