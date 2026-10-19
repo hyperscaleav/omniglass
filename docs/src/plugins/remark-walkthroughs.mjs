@@ -7,7 +7,8 @@
 //
 // The video is not committed (size), so the embed renders it, and links it, only
 // when public/walkthroughs/<id>/<id>.mp4 is present when the page renders; a
-// build without it shows the poster step and the captioned stills.
+// build without it shows the animated preview (committed with the stills, #937),
+// or the poster step for a recording without one, and the captioned stills.
 //
 // What this plugin reads is invisible to Astro's content cache, which keys a
 // rendered page on the page's own content alone: after a re-copy, or a video

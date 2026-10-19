@@ -8,14 +8,16 @@
 //
 // - which walkthroughs a PR records: the scripts a scripts-only PR adds or
 //   changes, else all;
-// - where their stills are committed: .github/screenshots/<pr>/walkthroughs/<id>/
-//   (ruled on #884), so the evidence that matters for review renders inline and
-//   outlives the workflow artifact that carries the video;
+// - where their animated preview, poster and stills are committed:
+//   .github/screenshots/<pr>/walkthroughs/<id>/ (ruled on #884), so the evidence
+//   that matters for review renders inline and outlives the workflow artifact
+//   that carries the video (GitHub plays no inline video a workflow can attach,
+//   so the preview, an animated WebP, is what plays on the PR page, #937);
 // - the raw URL each still is embedded by: an immutable commit SHA, never a
 //   branch, so the link survives the branch being deleted on squash-merge;
 // - the one comment the workflow upserts, found again by its marker.
 
-import { checkId, checkStill, plural } from './walkthroughcore.mjs';
+import { PREVIEW, checkId, checkPreview, checkStill, plural } from './walkthroughcore.mjs';
 
 /** @typedef {import('./walkthroughcore.mjs').ManifestStep} ManifestStep */
 /** @typedef {import('./walkthroughcore.mjs').Manifest} Manifest */
@@ -82,17 +84,21 @@ function esc(s) {
     .replace(/([[\]])/g, '\\$1');
 }
 
-// One walkthrough's section: title, description, poster, then every step's
-// caption over its still, folded so the comment stays scannable.
+// One walkthrough's section: title, description, the animated preview when the
+// recording has one, the poster, then every step's caption over its still,
+// folded so the comment stays scannable.
 /** @param {string} repo @param {number} pr @param {string} sha @param {Manifest} m @returns {string[]} */
 function section(repo, pr, sha, m) {
   checkStill(m.id, m.poster);
   m.steps.forEach((s) => checkStill(m.id, s.still));
+  if (m.preview !== undefined) checkPreview(m.id, m.preview);
   const dir = stillsDir(pr, m.id);
   const url = (/** @type {string} */ f) => rawUrl(repo, sha, `${dir}/${f}`);
   const lines = [`#### ${esc(m.title)}`, ''];
   if (m.description) lines.push(esc(m.description), '');
-  lines.push(`\`${m.id}\`, ${plural(m.steps.length, 'step')}`, '', `![${esc(m.title)}: poster](${url('poster.png')})`, '');
+  lines.push(`\`${m.id}\`, ${plural(m.steps.length, 'step')}`, '');
+  if (m.preview !== undefined) lines.push(`![${esc(m.title)}: animated preview](${url(PREVIEW)})`, '');
+  lines.push(`![${esc(m.title)}: poster](${url('poster.png')})`, '');
   lines.push('<details><summary>Every step, as recorded</summary>', '');
   for (const s of m.steps) {
     lines.push(`${s.n}. ${esc(s.caption)}`, '', `   ![${m.id} step ${s.n}](${url(s.still)})`, '');
@@ -123,7 +129,7 @@ export function commentBody({ repo, pr, sha, headSha, runUrl, artifactUrl, recor
     '',
     `${tally} from \`${String(headSha).slice(0, 7)}\` in [this run](${runUrl}). ` +
       `The videos are a [workflow artifact](${artifactUrl}) (an mp4 per walkthrough, kept while the artifact lives); ` +
-      `the poster and stills are committed under \`.github/screenshots/${pr}/walkthroughs/\` and embedded by commit SHA.`,
+      `the animated preview, poster and stills are committed under \`.github/screenshots/${pr}/walkthroughs/\` and embedded by commit SHA.`,
     '',
   ];
   if (!stackUp) {

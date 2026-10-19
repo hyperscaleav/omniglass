@@ -55,6 +55,14 @@ describe("walkthroughAssets", () => {
     expect(() => walkthroughAssets(bad)).toThrow(/positive integer/);
   });
 
+  it("carries the animated preview when the manifest records one", () => {
+    expect(walkthroughAssets(manifest({ preview: "preview.webp" }))).toEqual(["walkthrough.json", "step-01.png", "step-02.png", "preview.webp"]);
+  });
+
+  it("refuses a preview that is not the recorder's preview name", () => {
+    expect(() => walkthroughAssets(manifest({ preview: "../poster.png" }))).toThrow(/preview\.webp/);
+  });
+
   it("refuses a manifest whose recording never passed the budget", () => {
     expect(() => walkthroughAssets(manifest({ budget: undefined }))).toThrow(/budget/);
   });
@@ -82,6 +90,13 @@ describe("renderWalkthrough", () => {
     expect(html).toContain("<video");
     expect(html).toContain('href="/walkthroughs/sample-simulation/sample-simulation.mp4"');
     expect(html).toContain('poster="/walkthroughs/sample-simulation/step-02.png"');
+  });
+
+  it("shows the animated preview in place of the poster step when the manifest records one", () => {
+    const html = renderWalkthrough(manifest({ preview: "preview.webp" }), { video: false });
+    expect(html).toContain('<img src="/walkthroughs/sample-simulation/preview.webp" alt="Read a simulated component&#39;s status: animated preview" loading="lazy" />');
+    expect(html).not.toContain(": poster");
+    expect(html).toContain('src="/walkthroughs/sample-simulation/step-02.png" alt="Step 2: ');
   });
 
   it("escapes script text, so a caption cannot inject markup", () => {
@@ -144,6 +159,10 @@ describe("canonicalEmbed", () => {
       { video: false },
     );
     expect(canonicalEmbed(stale)).not.toBe(canonicalEmbed(rendered));
+  });
+
+  it("tells a preview added apart", () => {
+    expect(canonicalEmbed(renderWalkthrough(manifest({ preview: "preview.webp" }), { video: false }))).not.toBe(canonicalEmbed(rendered));
   });
 
   it("tells a video added apart", () => {

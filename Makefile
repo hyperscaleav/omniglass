@@ -191,9 +191,10 @@ test-walkthrough-stack:
 
 # Walkthroughs (#924): web/e2e/walkthroughs/<id>.yaml, recorded on the
 # walkthrough stack with a visible cursor, captions and a title card, to
-# web/e2e/walkthroughs/out/<id>/ (an mp4, poster.png, a still per step;
-# gitignored). A walkthrough is a test: a step whose result never appears, or
-# a recording over the budget (under 60 seconds and 10 MB), fails the run.
+# web/e2e/walkthroughs/out/<id>/ (an mp4, an animated preview.webp, poster.png,
+# a still per step; gitignored). A walkthrough is a test: a step whose result
+# never appears, or a recording over the budget (walkthroughlib.mjs), fails the
+# run.
 # make walkthroughs ID=<id> records one (ID="<a> <b>", several), listing any
 # that failed in out/failed.txt. test-walkthroughs is the recorder's own test
 # (the failure and budget paths). Neither is part of make test: both build
@@ -291,7 +292,7 @@ docs-shots-verify:
 	node web/e2e/docs-shots-verify.mjs
 
 # Walkthroughs in the docs (#926): copy each walkthrough a page declares in its
-# `walkthroughs` frontmatter (manifest, poster, per-step stills) from
+# `walkthroughs` frontmatter (manifest, per-step stills, animated preview) from
 # web/e2e/walkthroughs/out/<id>/ into docs/public/walkthroughs/<id>/, committed
 # like the screenshots. Record first (make walkthroughs ID=<id>). The mp4 stays
 # out of git; DOCS_WALKTHROUGH_VIDEO=1 copies it too, for a local build that

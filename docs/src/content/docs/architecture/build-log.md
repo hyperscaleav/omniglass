@@ -6454,3 +6454,25 @@ rule's blade showing the streak wait out its 15s sustain and then the open High 
 system degraded with its Touch Control role short. It waits on the blade's own poll rather than holding
 for a fixed time, and it stops at the open alarm: the probe's detection, the sustain and the sweep tick
 take about 31s of the 60s budget, which leaves no room for the replug and the clear.
+
+### A walkthrough plays on the PR page and in the docs: the animated preview (#937)
+
+GitHub plays inline video only from a browser upload, which a workflow cannot make, so the recorder
+now encodes an animated WebP preview (`preview.webp`, beside the poster) from each mp4 with the same
+pinned ffmpeg, as a labelled background one-shot like the mp4 encode: 8 frames a second, 960px wide,
+lossy quality 70, looping forever. Measured on the four shipped recordings (19 to 58 seconds), the
+previews land between 0.57 and 0.81 MB, about the size of their mp4s, with the caption bar and the
+console's text legible; 6 and 10 fps, quality 60 to 80 and the full 1320px width were measured too,
+and full width more than doubled both the size and the encode time for text already legible at
+960px. The budget gained `MAX_PREVIEW_BYTES` beside `MAX_SECONDS` and `MAX_BYTES`, measured
+on the file: a missing or over-budget preview fails the recording naming the limit, and the budget
+mark, now carrying the preview's size, is written with the preview's name into `walkthrough.json` only
+when the mp4 and the preview both pass (a later failure takes an earlier mark back);
+`make test-walkthroughs` proves an over-budget preview fails a recording whose mp4 passes. The
+`run:walkthrough` comment leads each walkthrough with its preview, embedded by commit SHA, the poster
+and folded stills below, and the workflow commits the preview with the stills. The docs embed shows
+the preview in place of the poster step's still when the manifest names one, `make docs-walkthroughs`
+copies it, the post-build embed check re-renders it, and the docs lint fails a manifest naming a
+preview that is not `preview.webp` or was not copied; the preview name is one constant in the shared
+manifest core (`web/e2e/walkthroughcore.mjs`). The four docs walkthroughs were re-recorded and
+re-copied, so every embed now plays.

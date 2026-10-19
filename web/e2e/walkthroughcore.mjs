@@ -8,14 +8,18 @@
 
 /** @typedef {{ n: number, kind: string, caption: string, still: string }} ManifestStep */
 /**
- * `budget` is written by the recorder's budget gate only when the mp4 passed it,
- * so a manifest without it never came from a recording that passed.
+ * `budget` and `preview` are written by the recorder's budget gate only when the
+ * mp4 and its animated preview both passed it, so a manifest without the budget
+ * mark never came from a recording that passed, and `preview` names the
+ * preview only once it is known to be within its budget.
  * @typedef {{ id: string, title: string, description?: string, steps: ManifestStep[], poster: string,
- *   budget?: { seconds: number, bytes: number } }} Manifest
+ *   preview?: string, budget?: { seconds: number, bytes: number, previewBytes?: number } }} Manifest
  */
 
 export const ID = /^[a-z0-9][a-z0-9-]*$/;
 export const STILL = /^step-\d+\.png$/;
+// The animated preview the recorder encodes from the mp4, beside the poster.
+export const PREVIEW = 'preview.webp';
 
 /** @param {unknown} id @returns {string} */
 export function checkId(id) {
@@ -29,6 +33,13 @@ export function checkId(id) {
 export function checkStill(id, name) {
   if (typeof name !== 'string' || !STILL.test(name)) {
     throw new Error(`walkthrough ${id}: still "${name}" is not a recorder still name (step-NN.png)`);
+  }
+}
+
+/** @param {string} id @param {unknown} name */
+export function checkPreview(id, name) {
+  if (name !== PREVIEW) {
+    throw new Error(`walkthrough ${id}: preview "${name}" is not the recorder's preview name (${PREVIEW})`);
   }
 }
 

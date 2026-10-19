@@ -129,6 +129,23 @@ describe("the walkthrough comment", () => {
     expect(b).toContain("2 walkthroughs recorded");
   });
 
+  it("leads each walkthrough with its animated preview, by SHA, above the poster and the folded stills", () => {
+    const b = body([manifest("a", { preview: "preview.webp" })]);
+    const dir = `https://raw.githubusercontent.com/${REPO}/${SHA}/.github/screenshots/925/walkthroughs/a`;
+    const preview = b.indexOf(`![Title of a: animated preview](${dir}/preview.webp)`);
+    expect(preview).toBeGreaterThan(b.indexOf("#### Title of a"));
+    expect(preview).toBeLessThan(b.indexOf(`(${dir}/poster.png)`));
+    expect(b.indexOf(`(${dir}/poster.png)`)).toBeLessThan(b.indexOf("<details>"));
+  });
+
+  it("embeds no preview for a recording that has none", () => {
+    expect(body([manifest("a")])).not.toContain("preview.webp");
+  });
+
+  it("refuses a preview that is not the recorder's preview name", () => {
+    expect(() => body([manifest("a", { preview: "../../x.webp" })])).toThrow("preview");
+  });
+
   it("names every failed walkthrough, since a walkthrough is a test", () => {
     const b = body([manifest("a")], ["broken"]);
     expect(b).toContain("1 walkthrough recorded, 1 failed");

@@ -5,7 +5,7 @@
 //       the ids to record, space-separated: the scripts among the changed paths
 //       (one per line on stdin), else every walkthrough in the tree
 //   node web/e2e/walkthrough-pr.mjs dir <pr> <id>
-//       where that walkthrough's poster and stills are committed
+//       where that walkthrough's animated preview, poster and stills are committed
 //   node web/e2e/walkthrough-pr.mjs root <pr>
 //       the directory all of the PR's walkthrough stills sit under
 //   node web/e2e/walkthrough-pr.mjs comment

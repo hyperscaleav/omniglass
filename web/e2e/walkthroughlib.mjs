@@ -30,6 +30,7 @@
 // fail, naming the file and the step.
 
 import { load } from 'js-yaml';
+import { PREVIEW } from './walkthroughcore.mjs';
 
 /** @typedef {'goto' | 'click' | 'type' | 'select' | 'press' | 'wait'} Kind */
 /**
@@ -70,6 +71,9 @@ const KIND_NAMES = KINDS;
 // The budget the architect ruled (#884): under 60 seconds and 10 MB of mp4.
 export const MAX_SECONDS = 60;
 export const MAX_BYTES = 10_000_000;
+// The animated preview's ceiling (#937): it is what a PR comment and a docs page
+// load inline, so it is held well under the mp4's.
+export const MAX_PREVIEW_BYTES = 5_000_000;
 
 export const DEFAULT_WAIT_MS = 10_000;
 const MAX_WAIT_MS = 60_000;
@@ -298,12 +302,12 @@ export function stepFailure(id, step, phase, reason) {
 const size = (b) => (b >= 10_000 ? `${(b / 1e6).toFixed(2)} MB` : `${b} bytes`);
 
 // The limits the budget gate applies: the ruled ones, which the environment
-// (OG_WALKTHROUGH_MAX_SECONDS / OG_WALKTHROUGH_MAX_BYTES, for the recorder's own
-// test) may lower but never raise. A value that is not a positive number is
-// ignored.
+// (OG_WALKTHROUGH_MAX_SECONDS / OG_WALKTHROUGH_MAX_BYTES /
+// OG_WALKTHROUGH_MAX_PREVIEW_BYTES, for the recorder's own test) may lower but
+// never raise. A value that is not a positive number is ignored.
 /**
  * @param {Record<string, string | undefined>} env
- * @returns {{ maxSeconds: number, maxBytes: number }}
+ * @returns {{ maxSeconds: number, maxBytes: number, maxPreviewBytes: number }}
  */
 export function budgetLimits(env) {
   /** @type {(v: string | undefined, max: number) => number} */
@@ -311,24 +315,36 @@ export function budgetLimits(env) {
     const n = v === undefined || v.trim() === '' ? NaN : Number(v);
     return Number.isFinite(n) && n > 0 ? Math.min(n, max) : max;
   };
-  return { maxSeconds: lower(env.OG_WALKTHROUGH_MAX_SECONDS, MAX_SECONDS), maxBytes: lower(env.OG_WALKTHROUGH_MAX_BYTES, MAX_BYTES) };
+  return {
+    maxSeconds: lower(env.OG_WALKTHROUGH_MAX_SECONDS, MAX_SECONDS),
+    maxBytes: lower(env.OG_WALKTHROUGH_MAX_BYTES, MAX_BYTES),
+    maxPreviewBytes: lower(env.OG_WALKTHROUGH_MAX_PREVIEW_BYTES, MAX_PREVIEW_BYTES),
+  };
 }
 
-// The budget verdict for one recorded walkthrough: empty when it fits, else one
-// line per limit exceeded, naming which. A duration that is not a positive
-// number (ffprobe printed nothing) was never measured, and fails.
+// The budget verdict for one recorded walkthrough, its mp4 and the animated
+// preview encoded from it: empty when both fit, else one line per limit
+// exceeded, naming which. A duration that is not a positive number (ffprobe
+// printed nothing) was never measured, and fails; so does a preview that is
+// missing or empty (previewBytes undefined or 0), since the PR comment and the
+// docs lead with it.
 /**
  * @param {string} id
- * @param {{ seconds: number, bytes: number }} measured
- * @param {{ maxSeconds?: number, maxBytes?: number }} [limits]
+ * @param {{ seconds: number, bytes: number, previewBytes: number | undefined }} measured
+ * @param {{ maxSeconds?: number, maxBytes?: number, maxPreviewBytes?: number }} [limits]
  * @returns {string[]}
  */
-export function budgetProblems(id, { seconds, bytes }, { maxSeconds = MAX_SECONDS, maxBytes = MAX_BYTES } = {}) {
+export function budgetProblems(id, { seconds, bytes, previewBytes }, { maxSeconds = MAX_SECONDS, maxBytes = MAX_BYTES, maxPreviewBytes = MAX_PREVIEW_BYTES } = {}) {
   if (!(Number.isFinite(seconds) && seconds > 0)) return [`walkthrough ${id}: no duration measured (got ${seconds}): the recording could not be read`];
   const out = [];
   if (!(seconds < maxSeconds)) out.push(`walkthrough ${id}: over budget: duration ${seconds.toFixed(1)}s, the limit is under ${maxSeconds}s`);
   if (!(bytes < maxBytes)) {
     out.push(`walkthrough ${id}: over budget: size ${size(bytes)}, the limit is under ${size(maxBytes)}`);
+  }
+  if (!(typeof previewBytes === 'number' && previewBytes > 0)) {
+    out.push(`walkthrough ${id}: no preview (${PREVIEW}) was encoded`);
+  } else if (!(previewBytes < maxPreviewBytes)) {
+    out.push(`walkthrough ${id}: over budget: preview ${size(previewBytes)}, the limit is under ${size(maxPreviewBytes)}`);
   }
   return out;
 }

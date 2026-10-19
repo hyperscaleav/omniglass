@@ -5,12 +5,14 @@ name: walkthrough
 # exactly as `make walkthroughs` does locally, then:
 #
 # - uploads the videos (an mp4 per walkthrough) as a workflow artifact;
-# - commits each passing walkthrough's poster and per-step stills to the PR
-#   branch under .github/screenshots/<pr>/walkthroughs/<id>/ (ruled on #884), so
-#   they render inline by immutable commit SHA and outlive the artifact;
+# - commits each passing walkthrough's animated preview (preview.webp, #937),
+#   poster and per-step stills to the PR branch under
+#   .github/screenshots/<pr>/walkthroughs/<id>/ (ruled on #884), so they render
+#   inline by immutable commit SHA and outlive the artifact;
 # - upserts one PR comment (found again by its marker, the preview comment's
-#   pattern) embedding them, linking the run and the video artifact, and naming
-#   any walkthrough that failed. A failed walkthrough fails the job: a
+#   pattern) leading each walkthrough with its animated preview, then its poster
+#   and folded stills, linking the run and the video artifact, and naming any
+#   walkthrough that failed. A failed walkthrough fails the job: a
 #   walkthrough is a test.
 #
 # Which walkthroughs: for a PR that changes nothing under web/ but scripts, the
@@ -116,10 +118,11 @@ jobs:
           if-no-files-found: warn
 
       # The PR's walkthrough stills are cleared, then each passing walkthrough's
-      # poster and stills written, so a re-run leaves no removed step's still
-      # and no renamed or deleted script's stills behind. A push that races the
-      # author's is rebased (only the bot writes these paths). The token reaches
-      # git only here, as a per-command header, never written to .git/config.
+      # animated preview, poster and stills written, so a re-run leaves no
+      # removed step's still and no renamed or deleted script's stills behind.
+      # A push that races the author's is rebased (only the bot writes these
+      # paths). The token reaches git only here, as a per-command header, never
+      # written to .git/config.
       - name: Commit the stills
         id: commit
         if: ${{ !cancelled() && steps.select.outcome == 'success' }}
@@ -142,6 +145,7 @@ jobs:
             dest=$(node web/e2e/walkthrough-pr.mjs dir "$PR" "$id")
             mkdir -p "$dest"
             cp "$out/$id/poster.png" "$dest/"
+            [ ! -f "$out/$id/preview.webp" ] || cp "$out/$id/preview.webp" "$dest/"
             find "$out/$id" -maxdepth 1 -name 'step-*.png' ! -name '*-failed.png' -exec cp {} "$dest/" \;
             git add -- "$dest"
           done

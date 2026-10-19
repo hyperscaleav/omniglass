@@ -46,7 +46,7 @@ promise: if a label runs automation it is named `run:<task>`, and if a label is 
 | Label | Applying it | Wired |
 | --- | --- | --- |
 | `run:preview` | spins up a live [PR preview environment](/guides/pr-previews/); removing it tears the preview down | yes |
-| `run:walkthrough` | records the PR's walkthroughs in CI and upserts a comment embedding their poster and stills, with the videos as a workflow artifact | yes |
+| `run:walkthrough` | records the PR's walkthroughs in CI and upserts a comment that plays an animated preview of each, with its poster and stills below and the videos as a workflow artifact | yes |
 | `run:build` | rebuilds the release binaries and container image for the PR head on demand | reserved |
 | `run:test` | runs the full test suite on demand | reserved |
 
@@ -56,9 +56,12 @@ promise: if a label runs automation it is named `run:<task>`, and if a label is 
 changes nothing under `web/` but walkthrough scripts, just the scripts it adds or changes;
 otherwise every walkthrough, since any console change can move a flow. It then clears
 `.github/screenshots/<pr>/walkthroughs/` on the PR branch and commits each passing
-walkthrough's poster and per-step stills under `<id>/` there (so a renamed or deleted script
-leaves no stale stills), and keeps one comment on the PR embedding them by commit SHA, linking
-the mp4s as a workflow artifact and naming any walkthrough that failed (a walkthrough is a
+walkthrough's animated preview (`preview.webp`), poster and per-step stills under `<id>/` there
+(so a renamed or deleted script leaves no stale stills), and keeps one comment on the PR embedding
+them by commit SHA: each walkthrough leads with its preview, which plays on the PR page, then its
+poster and its captioned stills folded below. The comment links the full-quality mp4s as a
+workflow artifact (GitHub plays inline video only from a browser upload, which CI cannot make)
+and names any walkthrough that failed (a walkthrough is a
 test, so a failure fails the job; a stack that never came up is reported as that, not as every
 walkthrough failing).
 

@@ -3,6 +3,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import {
   MAX_BYTES,
+  MAX_PREVIEW_BYTES,
   MAX_SECONDS,
   budgetLimits,
   budgetProblems,
@@ -157,36 +158,53 @@ describe("walkthrough failure and budget messages", () => {
     expect(stepFailure("d", press, { name: "still", timeoutMs: null })).toBe("walkthrough d: step 5 (press) failed at still: could not take its still");
   });
 
-  it("holds the ruled budget: under 60 seconds and 10 MB", () => {
+  it("holds the ruled budget: under 60 seconds and 10 MB of mp4, under 5 MB of preview", () => {
     expect(MAX_SECONDS).toBe(60);
     expect(MAX_BYTES).toBe(10_000_000);
-    expect(budgetProblems("demo", { seconds: 59.9, bytes: 9_999_999 })).toEqual([]);
+    expect(MAX_PREVIEW_BYTES).toBe(5_000_000);
+    expect(budgetProblems("demo", { seconds: 59.9, bytes: 9_999_999, previewBytes: 4_999_999 })).toEqual([]);
   });
 
   it("names which limit an over-budget walkthrough breaks", () => {
-    expect(budgetProblems("demo", { seconds: 60, bytes: 1 })).toEqual(["walkthrough demo: over budget: duration 60.0s, the limit is under 60s"]);
-    expect(budgetProblems("demo", { seconds: 1, bytes: 12_500_000 })).toEqual([
+    expect(budgetProblems("demo", { seconds: 60, bytes: 1, previewBytes: 1 })).toEqual(["walkthrough demo: over budget: duration 60.0s, the limit is under 60s"]);
+    expect(budgetProblems("demo", { seconds: 1, bytes: 12_500_000, previewBytes: 1 })).toEqual([
       "walkthrough demo: over budget: size 12.50 MB, the limit is under 10.00 MB",
     ]);
-    expect(budgetProblems("demo", { seconds: 5, bytes: 340_000 }, { maxSeconds: 2, maxBytes: 1000 })).toEqual([
+    expect(budgetProblems("demo", { seconds: 1, bytes: 1, previewBytes: 5_000_000 })).toEqual([
+      "walkthrough demo: over budget: preview 5.00 MB, the limit is under 5.00 MB",
+    ]);
+    expect(budgetProblems("demo", { seconds: 5, bytes: 340_000, previewBytes: 120_000 }, { maxSeconds: 2, maxBytes: 1000, maxPreviewBytes: 1000 })).toEqual([
       "walkthrough demo: over budget: duration 5.0s, the limit is under 2s",
       "walkthrough demo: over budget: size 0.34 MB, the limit is under 1000 bytes",
+      "walkthrough demo: over budget: preview 0.12 MB, the limit is under 1000 bytes",
     ]);
   });
 
   it("refuses a duration that was never measured instead of passing it", () => {
-    expect(budgetProblems("demo", { seconds: Number(""), bytes: 1 })).toEqual(["walkthrough demo: no duration measured (got 0): the recording could not be read"]);
-    expect(budgetProblems("demo", { seconds: NaN, bytes: 1 })).toEqual(["walkthrough demo: no duration measured (got NaN): the recording could not be read"]);
-    expect(budgetProblems("demo", { seconds: Infinity, bytes: 1 })).toHaveLength(1);
-    expect(budgetProblems("demo", { seconds: -1, bytes: 1 })).toHaveLength(1);
+    expect(budgetProblems("demo", { seconds: Number(""), bytes: 1, previewBytes: 1 })).toEqual(["walkthrough demo: no duration measured (got 0): the recording could not be read"]);
+    expect(budgetProblems("demo", { seconds: NaN, bytes: 1, previewBytes: 1 })).toEqual(["walkthrough demo: no duration measured (got NaN): the recording could not be read"]);
+    expect(budgetProblems("demo", { seconds: Infinity, bytes: 1, previewBytes: 1 })).toHaveLength(1);
+    expect(budgetProblems("demo", { seconds: -1, bytes: 1, previewBytes: 1 })).toHaveLength(1);
+  });
+
+  it("refuses a recording with no preview, or an empty one, instead of passing it", () => {
+    expect(budgetProblems("demo", { seconds: 5, bytes: 1, previewBytes: undefined })).toEqual([
+      "walkthrough demo: no preview (preview.webp) was encoded",
+    ]);
+    expect(budgetProblems("demo", { seconds: 5, bytes: 1, previewBytes: 0 })).toEqual(["walkthrough demo: no preview (preview.webp) was encoded"]);
   });
 
   it("lets the environment lower the limits, never raise them, and ignores nonsense", () => {
-    expect(budgetLimits({})).toEqual({ maxSeconds: 60, maxBytes: 10_000_000 });
-    expect(budgetLimits({ OG_WALKTHROUGH_MAX_SECONDS: "1", OG_WALKTHROUGH_MAX_BYTES: "1000" })).toEqual({ maxSeconds: 1, maxBytes: 1000 });
-    expect(budgetLimits({ OG_WALKTHROUGH_MAX_SECONDS: "600", OG_WALKTHROUGH_MAX_BYTES: "1e12" })).toEqual({ maxSeconds: 60, maxBytes: 10_000_000 });
+    const ruled = { maxSeconds: 60, maxBytes: 10_000_000, maxPreviewBytes: 5_000_000 };
+    expect(budgetLimits({})).toEqual(ruled);
+    expect(budgetLimits({ OG_WALKTHROUGH_MAX_SECONDS: "1", OG_WALKTHROUGH_MAX_BYTES: "1000", OG_WALKTHROUGH_MAX_PREVIEW_BYTES: "500" })).toEqual({
+      maxSeconds: 1,
+      maxBytes: 1000,
+      maxPreviewBytes: 500,
+    });
+    expect(budgetLimits({ OG_WALKTHROUGH_MAX_SECONDS: "600", OG_WALKTHROUGH_MAX_BYTES: "1e12", OG_WALKTHROUGH_MAX_PREVIEW_BYTES: "1e12" })).toEqual(ruled);
     for (const v of ["", "abc", "0", "-5", "Infinity"]) {
-      expect(budgetLimits({ OG_WALKTHROUGH_MAX_SECONDS: v, OG_WALKTHROUGH_MAX_BYTES: v })).toEqual({ maxSeconds: 60, maxBytes: 10_000_000 });
+      expect(budgetLimits({ OG_WALKTHROUGH_MAX_SECONDS: v, OG_WALKTHROUGH_MAX_BYTES: v, OG_WALKTHROUGH_MAX_PREVIEW_BYTES: v })).toEqual(ruled);
     }
   });
 
