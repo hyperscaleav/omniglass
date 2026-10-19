@@ -47,68 +47,56 @@
     },
     {
       "n": 8,
-      "kind": "wait",
-      "caption": "The place's label was rendered by a label rule from its name.",
+      "kind": "click",
+      "caption": "Edit the place, apart from its system. Its label was rendered by a label rule from its name.",
       "still": "step-08.png"
     },
     {
       "n": 9,
       "kind": "click",
-      "caption": "Edit the place, apart from its system.",
+      "caption": "Click the label to take it over from the rule.",
       "still": "step-09.png"
     },
     {
       "n": 10,
-      "kind": "click",
-      "caption": "Click the label to take it over from the rule.",
+      "kind": "wait",
+      "caption": "The label is yours now; the rule no longer rewrites it.",
       "still": "step-10.png"
     },
     {
       "n": 11,
-      "kind": "wait",
-      "caption": "The label is yours now; the rule no longer rewrites it.",
+      "kind": "type",
+      "caption": "Say what the site calls it, so operators find it by that word.",
       "still": "step-11.png"
     },
     {
       "n": 12,
-      "kind": "type",
-      "caption": "Say what the site calls it, so operators find it by that word.",
+      "kind": "click",
+      "caption": "Save the place.",
       "still": "step-12.png"
     },
     {
       "n": 13,
       "kind": "click",
-      "caption": "Save the place.",
+      "caption": "Saved. Back on the system's overview, its title already reads the new label.",
       "still": "step-13.png"
     },
     {
       "n": 14,
       "kind": "click",
-      "caption": "Saved. Back to the system's overview.",
+      "caption": "Back to Explore, opened down to the place you were on.",
       "still": "step-14.png"
     },
     {
       "n": 15,
       "kind": "wait",
-      "caption": "The view's title follows the new label at once.",
-      "still": "step-15.png"
-    },
-    {
-      "n": 16,
-      "kind": "click",
-      "caption": "Back to Explore, opened down to the place you were on.",
-      "still": "step-16.png"
-    },
-    {
-      "n": 17,
-      "kind": "wait",
       "caption": "The outline reads the new label too. One place, one label, wherever it is read.",
-      "still": "step-17.png"
+      "still": "step-15.png"
     }
   ],
-  "poster": "step-17.png",
+  "poster": "step-15.png",
   "budget": {
-    "seconds": 52,
-    "bytes": 960902
+    "seconds": 47.1,
+    "bytes": 925946
   }
 }

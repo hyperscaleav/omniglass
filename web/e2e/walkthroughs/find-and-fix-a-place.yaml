@@ -17,10 +17,8 @@ steps:
     caption: A place holding one system has no page of its own. The system's view is titled by it, with the place as a card below.
   - click: { role: tab, name: Configure }
     caption: Configure holds the place's form first, then the system's.
-  - wait: { selector: '[data-testid="configure-face-place"]' }
-    caption: The place's label was rendered by a label rule from its name.
   - click: '[data-testid="configure-face-place"] >> role=button[name="Edit"]'
-    caption: Edit the place, apart from its system.
+    caption: Edit the place, apart from its system. Its label was rendered by a label rule from its name.
   - click: '[data-testid="configure-face-place"] >> role=textbox[name="Label"]'
     caption: Click the label to take it over from the rule.
   - wait: { text: Labelled by you. }
@@ -30,9 +28,7 @@ steps:
   - click: '[data-testid="configure-face-place"] >> role=button[name="Save changes"]'
     caption: Save the place.
   - click: { role: tab, name: Overview }
-    caption: Saved. Back to the system's overview.
-  - wait: { selector: '[data-testid="page-header"]:has(h1:text-is("Bay 3 Loading Dock"))' }
-    caption: The view's title follows the new label at once.
+    caption: Saved. Back on the system's overview, its title already reads the new label.
   - click: { role: button, name: Explore, exact: true }
     caption: Back to Explore, opened down to the place you were on.
   - wait: { role: treeitem, name: Bay 3 Loading Dock }

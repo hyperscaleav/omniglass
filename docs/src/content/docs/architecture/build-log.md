@@ -6374,8 +6374,9 @@ description, step count and captions, no orphan copies), the render and the scan
 Two walkthroughs record under `make walkthroughs` and pass as tests. Find a place and fix it drills
 Explore to a place, opens its system, renames the place from the system's Configure tab, and shows the
 label follow into the system's header and back on the outline; it is embedded in the
-[fleet guide](/guides/operator/fleet/). Set up monitoring adds an ICMP endpoint and attaches the generic
-SNMP driver to a simulated display, then shows reachability and samples arrive; it is embedded in the
+[fleet guide](/guides/operator/fleet/). Set up monitoring attaches the generic SNMP driver and adds an
+ICMP endpoint to a simulated display, then reopens its page to show reachability and samples arrive (the
+view does not poll yet, #934, so the driver goes first and the probe holds past a node heartbeat); it is embedded in the
 [collection guide](/guides/operator/collection/). Node enrollment runs on the node's host, so the
 walkthrough uses the node the stack enrolls and says so; the unplug, the rule's alarm and the health verdict
 follow with the event rule tier (#819). The walkthrough stack adds one simulated-product component with no
