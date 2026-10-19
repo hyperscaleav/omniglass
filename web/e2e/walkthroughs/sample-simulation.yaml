@@ -15,3 +15,7 @@ steps:
     poster: true
   - press: Escape
     caption: Close the drawer to return to the fleet.
+  # The drawer is modal: while it is open the page behind it is hidden from the
+  # accessibility tree, so the table is found by role only once Escape closed it.
+  - wait: { role: table }
+    caption: Back on the fleet, every simulated component in view.

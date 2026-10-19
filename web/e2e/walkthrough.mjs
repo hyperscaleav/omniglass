@@ -9,8 +9,9 @@
 //       taken so far (and the failing frame as step-NN-failed.png).
 //   node e2e/walkthrough.mjs budget <out-dir>/<id>.mp4 <seconds>
 //       the budget gate on the converted mp4: under 60 seconds and 10 MB, else
-//       fail naming which. OG_WALKTHROUGH_MAX_SECONDS / OG_WALKTHROUGH_MAX_BYTES
-//       lower the limits, for the recorder's own test only.
+//       fail naming which; a duration ffprobe never measured fails too.
+//       OG_WALKTHROUGH_MAX_SECONDS / OG_WALKTHROUGH_MAX_BYTES may lower the
+//       limits (never raise them), for the recorder's own test only.
 //
 // What the viewer sees is drawn into the page by an init script, in a shadow
 // root above everything (pointer-events none, so it never takes a click): a
@@ -24,7 +25,7 @@
 import { chromium } from '@playwright/test';
 import { copyFile, mkdir, readFile, readdir, rename, stat, unlink, writeFile } from 'node:fs/promises';
 import { basename, join } from 'node:path';
-import { MAX_BYTES, MAX_SECONDS, budgetProblems, describeTarget, parseWalkthrough, stepFailure, stillName } from './walkthroughlib.mjs';
+import { budgetLimits, budgetProblems, describeTarget, idProblem, parseWalkthrough, stepFailure, stillName } from './walkthroughlib.mjs';
 
 const VIEWPORT = { width: 1320, height: 860 };
 // The pace, in milliseconds.
@@ -43,10 +44,7 @@ const ACT_TIMEOUT = 10_000;
 async function budget(mp4, seconds) {
   const id = basename(mp4, '.mp4');
   const { size: bytes } = await stat(mp4);
-  const limits = {
-    maxSeconds: Number(process.env.OG_WALKTHROUGH_MAX_SECONDS) || MAX_SECONDS,
-    maxBytes: Number(process.env.OG_WALKTHROUGH_MAX_BYTES) || MAX_BYTES,
-  };
+  const limits = budgetLimits(process.env);
   const problems = budgetProblems(id, { seconds, bytes }, limits);
   for (const p of problems) console.error(p);
   if (problems.length) return 1;
@@ -56,6 +54,15 @@ async function budget(mp4, seconds) {
 
 async function record(file, out) {
   const id = basename(file, '.yaml');
+  const bad = idProblem(id);
+  if (bad) {
+    console.error(bad);
+    return 2;
+  }
+  // Cleared before anything can fail, so a refused script never leaves the
+  // previous run's recording standing as though it were this one's.
+  await mkdir(out, { recursive: true });
+  await clearOutputs(out);
   let w;
   try {
     w = parseWalkthrough(await readFile(file, 'utf8'), file);
@@ -70,8 +77,6 @@ async function record(file, out) {
     console.error('walkthrough: set OG_E2E_BASE, OG_E2E_USER and OG_E2E_PASSWORD (run via make walkthroughs)');
     return 2;
   }
-  await mkdir(out, { recursive: true });
-  await clearOutputs(out);
 
   const browser = await chromium.launch();
   try {
@@ -99,15 +104,19 @@ async function record(file, out) {
     let failure = null;
     const stills = [];
     for (const step of w.steps) {
+      // The phase the step is in, kept current by play(), so a failure names
+      // what was being waited on and that wait's own timeout.
+      const phase = { name: 'act', timeoutMs: ACT_TIMEOUT };
       try {
-        await play(page, base, step, w.steps.length, cursor);
+        await play(page, base, step, w.steps.length, cursor, phase);
+        Object.assign(phase, { name: 'still', timeoutMs: null });
         await page.waitForTimeout(PACE.after);
         const name = stillName(step.n);
         await page.screenshot({ path: join(out, name) });
         stills.push(name);
         await page.waitForTimeout(step.hold);
       } catch (e) {
-        failure = stepFailure(id, step, step.kind === 'wait' ? step.timeout : ACT_TIMEOUT, e?.message ?? e);
+        failure = stepFailure(id, step, phase, e?.message ?? e);
         await page.screenshot({ path: join(out, stillName(step.n).replace('.png', '-failed.png')) }).catch(() => {});
         break;
       }
@@ -170,23 +179,28 @@ function locate(page, t) {
 }
 
 // One step: the caption first, then the action with the cursor drawn to it.
-async function play(page, base, step, total, cursor) {
+// Each phase is recorded in `phase` (its name and timeout) before it starts.
+async function play(page, base, step, total, cursor, phase) {
+  const at = (name, timeoutMs) => Object.assign(phase, { name, timeoutMs });
   await overlay(page, 'ring', null);
   await overlay(page, 'caption', { text: step.caption, n: step.n, total });
   await page.waitForTimeout(PACE.read);
   switch (step.kind) {
     case 'goto':
+      at('load', ACT_TIMEOUT);
       await page.goto(`${base}/web${step.path}`, { waitUntil: 'load', timeout: ACT_TIMEOUT });
       await overlay(page, 'caption', { text: step.caption, n: step.n, total });
       await overlay(page, 'cursor', { ...cursor, ms: 0 });
       await page.waitForTimeout(PACE.load);
       return;
     case 'press':
+      at('act', null);
       await page.keyboard.press(step.key);
       return;
     case 'wait': {
       // Any visible match will do: a result can render in more than one place.
       const el = locate(page, step.target).filter({ visible: true }).first();
+      at('visible', step.timeout);
       await el.waitFor({ state: 'visible', timeout: step.timeout });
       await point(page, el, cursor);
       return;
@@ -194,7 +208,9 @@ async function play(page, base, step, total, cursor) {
   }
   // click, type, select: a single target (strict), visible, scrolled to, glided to.
   const el = locate(page, step.target);
+  at('visible', ACT_TIMEOUT);
   await el.waitFor({ state: 'visible', timeout: ACT_TIMEOUT });
+  at('scroll', ACT_TIMEOUT);
   await el.scrollIntoViewIfNeeded({ timeout: ACT_TIMEOUT });
   const box = await el.boundingBox();
   if (!box) throw new Error(`${describeTarget(step.target)} has no box on screen`);
@@ -206,6 +222,7 @@ async function play(page, base, step, total, cursor) {
   await page.waitForTimeout(PACE.glide + PACE.settle);
   Object.assign(cursor, to);
   await overlay(page, 'ripple', to);
+  at('act', ACT_TIMEOUT);
   if (step.kind === 'click') {
     await el.click({ timeout: ACT_TIMEOUT });
   } else if (step.kind === 'type') {
@@ -214,6 +231,7 @@ async function play(page, base, step, total, cursor) {
     Object.assign(cursor, { y: box.y + box.height + 18 });
     await overlay(page, 'cursor', { ...cursor, ms: PACE.aside });
     await page.waitForTimeout(PACE.aside);
+    at('act', ACT_TIMEOUT + step.text.length * PACE.key);
     await el.pressSequentially(step.text, { delay: PACE.key, timeout: ACT_TIMEOUT + step.text.length * PACE.key });
   } else {
     await el.selectOption(step.value, { timeout: ACT_TIMEOUT });

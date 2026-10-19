@@ -113,12 +113,13 @@ takes a component's reachability down and its repair brings it back). The recipe
 
 #### Recording a walkthrough
 
-A walkthrough is a script, `web/e2e/walkthroughs/<id>.yaml`: a `title`, an optional `description`, and
-`steps`, each one kind (`goto` a console path, `click` a selector or an accessible `role` and `name`,
-`type` text into a target, `select` a value, `press` a key, or `wait` for a visible result by `text`,
-`selector` or `role`, with a `timeout`) and a `caption` shown while it runs. A step may `hold` a result
-longer, and one step may be the `poster`. The format is validated strictly: an unknown key or kind fails,
-naming the file and the step.
+A walkthrough is a script, `web/e2e/walkthroughs/<id>.yaml` (the id is lowercase letters, digits and
+hyphens): a `title`, an optional `description`, and `steps`, each one kind of action or a wait for a
+visible result, with a `caption` shown while it runs. The step kinds, their fields and the rules are
+defined, with an annotated example, at the top of
+[`web/e2e/walkthroughlib.mjs`](https://github.com/hyperscaleav/omniglass/blob/main/web/e2e/walkthroughlib.mjs).
+The format is validated strictly: an unknown key or kind fails, naming the file and the step, and so does a
+script that ends on an action rather than a wait for its result.
 
 ```yaml
 title: Read a simulated component's status
@@ -131,6 +132,9 @@ steps:
     caption: Its status says where it is served, and how often collection has reached it.
     poster: true
 ```
+
+The recording's ffmpeg image is pinned by digest to an amd64-only image (its tag publishes no
+multi-platform index), so recording on an arm64 host needs amd64 emulation registered with Docker.
 
 `make walkthroughs` records every script on the walkthrough stack (`make walkthroughs ID=<id>` records
 one) into `web/e2e/walkthroughs/out/<id>/`: an mp4 opening on a title card, with a cursor that glides to

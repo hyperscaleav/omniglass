@@ -4,7 +4,9 @@ import { join } from "node:path";
 import {
   MAX_BYTES,
   MAX_SECONDS,
+  budgetLimits,
   budgetProblems,
+  idProblem,
   parseWalkthrough,
   stepFailure,
   stillName,
@@ -36,7 +38,7 @@ describe("walkthrough script validation", () => {
         { type: { target: "#q", text: "display" }, caption: "d" },
         { select: { target: { role: "combobox", name: "Product" }, value: "x" }, caption: "e" },
         { press: "Escape", caption: "f", hold: 500 },
-        { wait: { text: "Hits", timeout: 5000 }, caption: "g" },
+        { wait: { text: "Hits", timeout: 5000, exact: true }, caption: "g" },
         { wait: { selector: "[data-testid=sim-table]" }, caption: "h" },
       ],
       { description: "D" },
@@ -64,8 +66,8 @@ describe("walkthrough script validation", () => {
   });
 
   it("rejects an unknown key on a step, naming the step and its kind", () => {
-    expect(bad({ title: "T", steps: [{ click: "#x", caption: "a", timeout: 3 }] })).toBe('w.yaml: step 1 (click) has unknown key "timeout"');
-    expect(bad({ title: "T", steps: [{ type: { target: "#x", text: "a", delay: 9 }, caption: "a" }] })).toBe(
+    expect(bad({ title: "T", steps: [{ click: "#x", caption: "a", timeout: 3 }] })).toContain('w.yaml: step 1 (click) has unknown key "timeout"');
+    expect(bad({ title: "T", steps: [{ type: { target: "#x", text: "a", delay: 9 }, caption: "a" }] })).toContain(
       'w.yaml: step 1 (type) has unknown key "delay"',
     );
     expect(bad({ title: "T", steps: [{ click: { role: "row", label: "x" }, caption: "a" }] })).toContain(
@@ -75,7 +77,7 @@ describe("walkthrough script validation", () => {
 
   it("rejects two kinds on one step, a missing caption, and a bad wait", () => {
     expect(bad({ title: "T", steps: [{ click: "#x", press: "Enter", caption: "a" }] })).toBe("w.yaml: step 1 has more than one kind: click, press");
-    expect(bad({ title: "T", steps: [{ press: "Enter" }] })).toBe("w.yaml: step 1 (press) needs a caption");
+    expect(bad({ title: "T", steps: [{ press: "Enter" }] })).toContain("w.yaml: step 1 (press) needs a caption");
     expect(bad({ title: "T", steps: [{ wait: { timeout: 100 }, caption: "a" }] })).toContain("step 1 (wait) needs text, selector, or role");
     expect(bad({ title: "T", steps: [{ wait: { text: "x", timeout: 0 }, caption: "a" }] })).toContain("timeout must be whole milliseconds");
     expect(bad({ title: "T", steps: [{ goto: "simulation", caption: "a" }] })).toContain('must be a console path starting with "/"');
@@ -83,12 +85,30 @@ describe("walkthrough script validation", () => {
   });
 
   it("takes the poster from the step that asks, else the last, and only one", () => {
-    expect(ok([{ press: "a", caption: "a" }, { press: "b", caption: "b" }]).poster).toBe(2);
-    expect(ok([{ press: "a", caption: "a", poster: true }, { press: "b", caption: "b" }]).poster).toBe(1);
-    expect(bad({ title: "T", steps: [{ press: "a", caption: "a", poster: true }, { press: "b", caption: "b", poster: true }] })).toBe(
+    const done = { wait: { text: "x" }, caption: "c" };
+    expect(ok([{ press: "a", caption: "a" }, done]).poster).toBe(2);
+    expect(ok([{ press: "a", caption: "a", poster: true }, done]).poster).toBe(1);
+    expect(bad({ title: "T", steps: [{ press: "a", caption: "a", poster: true }, { ...done, poster: true }] })).toBe(
       "w.yaml: only one step may be the poster (steps 1, 2 are)",
     );
-    expect(bad({ title: "T", steps: [{ press: "a", caption: "a", poster: "yes" }] })).toBe("w.yaml: step 1 (press): poster is true or absent");
+    expect(bad({ title: "T", steps: [{ press: "a", caption: "a", poster: "yes" }, done] })).toBe("w.yaml: step 1 (press): poster is true or absent");
+  });
+
+  it("refuses exact on a selector target, where it means nothing", () => {
+    expect(bad({ title: "T", steps: [{ wait: { selector: "#x", exact: true }, caption: "a" }] })).toBe(
+      'w.yaml: step 1 (wait) has unknown key "exact"',
+    );
+  });
+
+  it("refuses a script that ends on an action, since nothing proves the action worked", () => {
+    for (const last of [{ click: "#x" }, { press: "Escape" }, { type: { target: "#q", text: "a" } }, { select: { target: "#p", value: "v" } }]) {
+      const kind = Object.keys(last)[0];
+      expect(bad({ title: "T", steps: [{ goto: "/a", caption: "a" }, { ...last, caption: "b" }] })).toBe(
+        `w.yaml: step 2 (${kind}) is the last step: end on a wait for the result it should produce, or the walkthrough proves nothing`,
+      );
+    }
+    expect(ok([{ goto: "/a", caption: "a" }]).steps).toHaveLength(1);
+    expect(ok([{ press: "Escape", caption: "a" }, { wait: { role: "table" }, caption: "b" }]).steps).toHaveLength(2);
   });
 
   it("names the file on a YAML syntax error", () => {
@@ -96,7 +116,7 @@ describe("walkthrough script validation", () => {
   });
 
   it("lists every problem at once", () => {
-    const m = bad({ title: "T", steps: [{ hover: 1 }, { click: "#x" }] });
+    const m = bad({ title: "T", steps: [{ hover: 1 }, { wait: { text: "x" } }] });
     expect(m.split("\n")).toHaveLength(2);
   });
 });
@@ -104,10 +124,37 @@ describe("walkthrough script validation", () => {
 describe("walkthrough failure and budget messages", () => {
   const step = validateWalkthrough({ title: "T", steps: [{ wait: { text: "Nope", timeout: 2000 }, caption: "c" }] }, F).steps[0];
 
-  it("names the walkthrough, the step number and kind, and what it waited for", () => {
-    expect(stepFailure("demo", step, 2000, "Timeout 2000ms exceeded.\n  call log...")).toBe(
-      'walkthrough demo: step 1 (wait) failed: waited 2s for text "Nope" to be visible (Timeout 2000ms exceeded.)',
+  it("names the walkthrough, the step number and kind, the phase, and what it waited for", () => {
+    expect(stepFailure("demo", step, { name: "visible", timeoutMs: 2000 }, "Timeout 2000ms exceeded.\n  call log...")).toBe(
+      'walkthrough demo: step 1 (wait) failed at visible: waited 2s for text "Nope" to be visible (Timeout 2000ms exceeded.)',
     );
+  });
+
+  it("names the phase that failed with that phase's own timeout", () => {
+    const w = validateWalkthrough(
+      {
+        title: "T",
+        steps: [
+          { goto: "/sim", caption: "a" },
+          { click: "#x", caption: "b" },
+          { type: { target: "#q", text: "ab" }, caption: "c" },
+          { select: { target: "#p", value: "v" }, caption: "d" },
+          { press: "Escape", caption: "e" },
+          { wait: { text: "y" }, caption: "f" },
+        ],
+      },
+      F,
+    );
+    const [go, click, type, select, press] = w.steps;
+    expect(stepFailure("d", go, { name: "load", timeoutMs: 10_000 })).toBe("walkthrough d: step 1 (goto) failed at load: waited 10s for the console path /sim to load");
+    expect(stepFailure("d", click, { name: "scroll", timeoutMs: 10_000 })).toBe('walkthrough d: step 2 (click) failed at scroll: waited 10s to scroll selector "#x" into view');
+    expect(stepFailure("d", click, { name: "act", timeoutMs: 10_000 })).toBe('walkthrough d: step 2 (click) failed at act: waited 10s to click selector "#x"');
+    expect(stepFailure("d", type, { name: "act", timeoutMs: 10_220 })).toBe('walkthrough d: step 3 (type) failed at act: waited 10.22s to type into selector "#q"');
+    expect(stepFailure("d", select, { name: "act", timeoutMs: 10_000 })).toBe('walkthrough d: step 4 (select) failed at act: waited 10s to select "v" in selector "#p"');
+    expect(stepFailure("d", press, { name: "act", timeoutMs: null }, 'Unknown key: "Escpe"')).toBe(
+      'walkthrough d: step 5 (press) failed at act: could not press the key Escape (Unknown key: "Escpe")',
+    );
+    expect(stepFailure("d", press, { name: "still", timeoutMs: null })).toBe("walkthrough d: step 5 (press) failed at still: could not take its still");
   });
 
   it("holds the ruled budget: under 60 seconds and 10 MB", () => {
@@ -127,9 +174,35 @@ describe("walkthrough failure and budget messages", () => {
     ]);
   });
 
+  it("refuses a duration that was never measured instead of passing it", () => {
+    expect(budgetProblems("demo", { seconds: Number(""), bytes: 1 })).toEqual(["walkthrough demo: no duration measured (got 0): the recording could not be read"]);
+    expect(budgetProblems("demo", { seconds: NaN, bytes: 1 })).toEqual(["walkthrough demo: no duration measured (got NaN): the recording could not be read"]);
+    expect(budgetProblems("demo", { seconds: Infinity, bytes: 1 })).toHaveLength(1);
+    expect(budgetProblems("demo", { seconds: -1, bytes: 1 })).toHaveLength(1);
+  });
+
+  it("lets the environment lower the limits, never raise them, and ignores nonsense", () => {
+    expect(budgetLimits({})).toEqual({ maxSeconds: 60, maxBytes: 10_000_000 });
+    expect(budgetLimits({ OG_WALKTHROUGH_MAX_SECONDS: "1", OG_WALKTHROUGH_MAX_BYTES: "1000" })).toEqual({ maxSeconds: 1, maxBytes: 1000 });
+    expect(budgetLimits({ OG_WALKTHROUGH_MAX_SECONDS: "600", OG_WALKTHROUGH_MAX_BYTES: "1e12" })).toEqual({ maxSeconds: 60, maxBytes: 10_000_000 });
+    for (const v of ["", "abc", "0", "-5", "Infinity"]) {
+      expect(budgetLimits({ OG_WALKTHROUGH_MAX_SECONDS: v, OG_WALKTHROUGH_MAX_BYTES: v })).toEqual({ maxSeconds: 60, maxBytes: 10_000_000 });
+    }
+  });
+
   it("names stills by zero-padded step number", () => {
     expect(stillName(3)).toBe("step-03.png");
     expect(stillName(12)).toBe("step-12.png");
+  });
+});
+
+describe("walkthrough ids", () => {
+  it("are lowercase letters, digits and hyphens, since they name a directory and a file", () => {
+    expect(idProblem("sample-simulation")).toBeNull();
+    expect(idProblem("broken-wait")).toBeNull();
+    for (const id of ["", "Sample", "a_b", "../x", "a/b", "a b", "fixtures/tiny"]) {
+      expect(idProblem(id)).toBe(`walkthrough id ${JSON.stringify(id)} must be lowercase letters, digits and hyphens`);
+    }
   });
 });
 
@@ -144,8 +217,9 @@ describe("the shipped walkthroughs", () => {
   ];
   it("exist", () => expect(files.length).toBeGreaterThan(0));
   for (const f of files) {
-    it(`${f.slice(dir.length + 1)} validates`, () => {
+    it(`${f.slice(dir.length + 1)} validates, with an id the recorder accepts`, () => {
       expect(() => parseWalkthrough(readFileSync(f, "utf8"), f)).not.toThrow();
+      expect(idProblem(f.slice(f.lastIndexOf("/") + 1, -".yaml".length))).toBeNull();
     });
   }
 });

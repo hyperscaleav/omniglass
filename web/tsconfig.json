@@ -11,7 +11,8 @@
     "noEmit": true,
     "isolatedModules": true,
     "esModuleInterop": true,
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    "allowJs": true
   },
-  "include": ["src", "vite.config.ts", "vitest.config.ts"]
+  "include": ["src", "vite.config.ts", "vitest.config.ts", "e2e/walkthroughlib.mjs"]
 }

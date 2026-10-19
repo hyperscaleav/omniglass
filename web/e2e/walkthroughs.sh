@@ -21,13 +21,21 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT"
 . web/e2e/lib/stack.sh
 
-# Static ffmpeg with libx264, pinned by digest.
+# Static ffmpeg with libx264, pinned by digest. The tag publishes one amd64
+# manifest and no multi-platform index, so this is amd64 only (an arm64 host
+# needs amd64 emulation registered with Docker).
 FFMPEG_IMG=jrottenberg/ffmpeg:7.1-alpine@sha256:8ec1ee1f6a0fcd37c97725827b6b7832795c9596e3439b8da56d7700d61ae778
 DIR=web/e2e/walkthroughs
 OUT=$DIR/out
 
 mode=${1:-record}
 [ $# -eq 0 ] || shift
+
+# A walkthrough id names its script, its out dir and its mp4: lowercase
+# letters, digits and hyphens only (the recorder holds the same rule).
+valid_id() {
+  [[ $1 =~ ^[a-z0-9-]+$ ]] || { echo "walkthroughs: walkthrough id \"$1\" must be lowercase letters, digits and hyphens" >&2; return 1; }
+}
 
 case "$mode" in
 record)
@@ -45,21 +53,34 @@ selftest) ;;
   exit 2
   ;;
 esac
+if [ "$mode" = record ]; then
+  for f in "${files[@]}"; do valid_id "$(basename "$f" .yaml)" || exit 2; done
+fi
 
 # The ffmpeg image (or ffprobe, with --entrypoint ffprobe) on directory $1,
-# mounted at /o, as this user, offline.
+# mounted at /o, as this user, offline. Labeled with the run id and run in the
+# background like stack_run, so a signal reaches the trap at once and teardown
+# (or the orphan reaper) finds and stops the container by label; not stack_run
+# itself, which joins the stack network.
 ffmpeg_in() {
-  local dir=$1
+  local dir=$1 rc=0 labels
   shift
-  docker run --rm --network none --user "$(id -u):$(id -g)" -v "$ROOT/$dir:/o" "$@"
+  mapfile -t labels < <(stack__labels)
+  docker run --rm "${labels[@]}" --network none --user "$(id -u):$(id -g)" -v "$ROOT/$dir:/o" "$@" &
+  STACK_FG_PID=$!
+  wait "$STACK_FG_PID" || rc=$?
+  STACK_FG_PID=""
+  return "$rc"
 }
 
-# Record $1 (a script) into $2 (an out dir, repo-relative): the webm, then the
-# mp4 and its budget. Env overrides for the recorder (the lowered budget) pass
+# Record $1 (a script, <dir>/<id>.yaml) into $2 (an out dir, repo-relative,
+# out/<id>/ for a shipped walkthrough): the webm, then the mp4 and its budget.
+# Env overrides for the recorder (the lowered budget) pass
 # through stack_walkthrough_pw's -e flags in $WT_ENV.
 walkthrough_one() {
   local file=$1 out=$2 id
   id=$(basename "$file" .yaml)
+  valid_id "$id" || return 1
   echo "walkthrough $id: recording" >&2
   stack_walkthrough_pw node e2e/walkthrough.mjs record "${file#web/}" "${out#web/}" || return 1
   ffmpeg_in "$out" "$FFMPEG_IMG" -hide_banner -loglevel error -y -i "/o/$id.webm" \
@@ -87,7 +108,8 @@ if [ "$mode" = record ]; then
   echo
   for f in "${files[@]}"; do
     id=$(basename "$f" .yaml)
-    [ -f "$OUT/$id/$id.mp4" ] && printf '  %s\n' "$OUT/$id/$id.mp4 ($(du -h "$OUT/$id/$id.mp4" | cut -f1))"
+    # Only the ones that passed: a failed walkthrough's leftovers are not output.
+    [[ " ${failed[*]} " == *" $id "* ]] || printf '  %s\n' "$OUT/$id/$id.mp4 ($(du -h "$OUT/$id/$id.mp4" | cut -f1))"
   done
   if [ "${#failed[@]}" -gt 0 ]; then
     echo "walkthroughs FAILED: ${failed[*]}" >&2
@@ -104,13 +126,14 @@ fail() {
   exit 1
 }
 ST=$OUT/_selftest
+FIX=$DIR/fixtures
 
 # 1. A broken step: the run fails, naming the walkthrough, step 2, its kind and
 #    what it waited for; step 1's still is kept, and the failing frame with it.
 mkdir -p "$ST/broken-wait"
-log=$(walkthrough_one "$DIR/fixtures/broken-wait.yaml" "$ST/broken-wait" 2>&1) && fail "the broken walkthrough passed"
+log=$(walkthrough_one "$FIX/broken-wait.yaml" "$ST/broken-wait" 2>&1) && fail "the broken walkthrough passed"
 echo "$log" | sed 's/^/  | /'
-want='walkthrough broken-wait: step 2 (wait) failed: waited 2s for text "This text is never on the page" to be visible'
+want='walkthrough broken-wait: step 2 (wait) failed at visible: waited 2s for text "This text is never on the page" to be visible'
 grep -qF "$want" <<<"$log" || fail "the failure did not say: $want"
 [ -f "$ST/broken-wait/step-01.png" ] || fail "the still from step 1 was not kept"
 [ -f "$ST/broken-wait/step-02-failed.png" ] || fail "the failing frame was not kept"
@@ -121,7 +144,7 @@ echo "ok: a broken step fails naming its step and wait, keeping the partial stil
 #    what it measures, fails naming both the duration and the size.
 mkdir -p "$ST/tiny"
 WT_ENV=(-e OG_WALKTHROUGH_MAX_SECONDS=1 -e OG_WALKTHROUGH_MAX_BYTES=1000)
-log=$(walkthrough_one "$DIR/fixtures/tiny.yaml" "$ST/tiny" 2>&1) && fail "the over-budget walkthrough passed"
+log=$(walkthrough_one "$FIX/tiny.yaml" "$ST/tiny" 2>&1) && fail "the over-budget walkthrough passed"
 echo "$log" | sed 's/^/  | /'
 grep -qF 'walkthrough tiny: over budget: duration' <<<"$log" || fail "the duration overrun was not named"
 grep -qF 'walkthrough tiny: over budget: size' <<<"$log" || fail "the size overrun was not named"
