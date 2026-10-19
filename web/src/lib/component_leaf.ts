@@ -1,7 +1,7 @@
 // The component leaf's derivations (#637): the membership rows the leaf lists
 // and the collection card's state. Pure, so the one distinction the card
 // exists to make is pinned with no DOM: a healthy node with a stale sample
-// means the device or the path, not collection, and that sentence is why
+// means the component or the path, not collection, and that sentence is why
 // nodes need no zoom of their own.
 
 import { locationIndex, type FleetView } from "./fleet";
@@ -26,12 +26,12 @@ export const LEAF_POLL_MS = 5_000;
 export const LEAF_NODE_POLL_MS = 10_000;
 
 export type CollectionState = {
-  // collecting: fresh sample, node live. device-or-path: the sample went
-  // stale while the node stayed live, so collection is fine and the device or
+  // collecting: fresh sample, node live. component-or-path: the sample went
+  // stale while the node stayed live, so collection is fine and the component or
   // the route to it is not. node-offline: the node itself stopped
-  // heartbeating, so staleness says nothing about the device. down: the
-  // device answered, badly, which is a device fact and not a collection one.
-  kind: "collecting" | "device-or-path" | "node-offline" | "down" | "unknown";
+  // heartbeating, so staleness says nothing about the component. down: the
+  // component answered, badly, which is a component fact and not a collection one.
+  kind: "collecting" | "component-or-path" | "node-offline" | "down" | "unknown";
   node?: string;
 };
 
@@ -45,7 +45,7 @@ export function collectionState(iface: ReachEndpoint, node: Node | undefined, no
   const nodeDown = !node || nodeStatus(node, now) !== "up";
   const last = lastSeenAt(iface) ?? iface.verdict?.ts ?? null;
   if (!last) return { kind: nodeDown ? "node-offline" : "unknown", node: iface.node };
-  if (now - new Date(last).getTime() > STALENESS_WINDOW_MS) return { kind: nodeDown ? "node-offline" : "device-or-path", node: iface.node };
+  if (now - new Date(last).getTime() > STALENESS_WINDOW_MS) return { kind: nodeDown ? "node-offline" : "component-or-path", node: iface.node };
   if (endpointWord(iface, now) === "down") return { kind: "down", node: iface.node };
   return { kind: "collecting", node: iface.node };
 }
@@ -114,7 +114,7 @@ export function identityRows(props: components["schemas"]["EffectivePropertyBody
 export type VitalRow = { name: string; label: string; value: unknown; sampled: boolean };
 
 // vitalRows is the same rule over the metric lane, with the live-series
-// marker: a sampled row is the device speaking, an unsampled one is the
+// marker: a sampled row is the component speaking, an unsampled one is the
 // contract's default standing in.
 export function vitalRows(metrics: components["schemas"]["EffectiveMetricBody"][]): VitalRow[] {
   return (metrics ?? [])

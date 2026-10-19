@@ -6619,3 +6619,6 @@ Every age on a component's view, and in its Endpoints panel, now reads one ticki
 returns the same answer changes nothing a query can see, so a node that died would have left its
 endpoint reading "collecting, 4 s ago" indefinitely. Tests hold every read in flight, advance the clock,
 and watch the card turn to node offline and the pill to stale.
+
+The Collection card and the Vitals hint say component where they said device ("check the component or
+the path", "component reports down"), the product's word for the thing collected from.

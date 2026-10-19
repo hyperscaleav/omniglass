@@ -8,7 +8,7 @@ import { SEEDED_LEVELS } from "./testseverity";
 
 // The component leaf's derivations (#637). The collection card's one job is
 // the distinction the issue states plainly: a healthy node with a stale
-// sample means the device or the path, not collection, which is why nodes do
+// sample means the component or the path, not collection, which is why nodes do
 // not need a zoom of their own.
 
 const now = Date.parse("2026-08-15T12:00:00Z");
@@ -25,9 +25,9 @@ describe("collectionState", () => {
     expect(collectionState(iface({ value: "up", ts: iso(10) }, "edge-1"), node(5), now).kind).toBe("collecting");
   });
 
-  it("a stale sample under a LIVE node blames the device or the path, never collection", () => {
+  it("a stale sample under a LIVE node blames the component or the path, never collection", () => {
     const s = collectionState(iface({ value: "up", ts: iso(600) }, "edge-1"), node(5), now);
-    expect(s.kind).toBe("device-or-path");
+    expect(s.kind).toBe("component-or-path");
   });
 
   it("a stale sample under a dead node blames the node", () => {
@@ -35,7 +35,7 @@ describe("collectionState", () => {
     expect(s.kind).toBe("node-offline");
   });
 
-  it("a fresh down verdict is the device answering badly, not a collection fault", () => {
+  it("a fresh down verdict is the component answering badly, not a collection fault", () => {
     expect(collectionState(iface({ value: "down", ts: iso(10) }, "edge-1"), node(5), now).kind).toBe("down");
   });
 
@@ -54,9 +54,9 @@ describe("collectionState", () => {
     expect(collectionState(e, node(5), now).kind).toBe("collecting");
   });
 
-  it("a driver endpoint whose samples stopped blames the device or the path", () => {
+  it("a driver endpoint whose samples stopped blames the component or the path", () => {
     const e = { ...iface(null, "edge-1"), last_seen: iso(600) } as ReachEndpoint;
-    expect(collectionState(e, node(5), now).kind).toBe("device-or-path");
+    expect(collectionState(e, node(5), now).kind).toBe("component-or-path");
   });
 
   it("no verdict yet is unknown", () => {

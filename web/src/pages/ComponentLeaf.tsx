@@ -42,7 +42,7 @@ import { describeError, fmtTime } from "../lib/format";
 // three tabs. Overview reads why, what it is, the systems it serves and the
 // role it fills in each, its vitals, and collection in context: the one place
 // a node appears to an operator, because the distinction that matters is
-// stated here plainly (a healthy node with a stale sample means the device or
+// stated here plainly (a healthy node with a stale sample means the component or
 // the path, not collection), which is why nodes need no view of their own.
 // ageWords renders a sample age in plain words, coarse on purpose: the card
 // answers "how stale", not "how many milliseconds".
@@ -307,7 +307,7 @@ export default function ComponentLeaf() {
                 </div>
             <Show when={vitals().length > 0}>
               <section data-testid="leaf-vitals" class="rounded-box border border-base-300 bg-base-100 p-3.5 text-sm">
-                <Eyebrow label="Vitals" hint="The latest sample per series; a dot marks the device speaking, not a contract default standing in." />
+                <Eyebrow label="Vitals" hint="The latest sample per series; a dot marks the component speaking, not a contract default standing in." />
                 <dl class="mt-2 grid grid-cols-[minmax(7rem,max-content)_1fr] gap-x-3 gap-y-1">
                   <For each={vitals()}>
                     {(row) => (
@@ -326,7 +326,7 @@ export default function ComponentLeaf() {
               </section>
             </Show>
             <section data-testid="leaf-collection" class="rounded-box border border-base-300 bg-base-100 p-3.5 text-sm">
-              <Eyebrow label="Collection" hint="How this component is read: each endpoint, the node collecting it, and the layers that answer. A stale sample under a healthy node points at the device or the path, not at collection." />
+              <Eyebrow label="Collection" hint="How this component is read: each endpoint, the node collecting it, and the layers that answer. A stale sample under a healthy node points at the component or the path, not at collection." />
               <Show when={reach.data && (reach.data.endpoints ?? []).length > 0} fallback={<p class="text-base-content/60">No endpoint declared yet, so nothing collects from this component.</p>}>
                 <ul class="flex flex-col gap-1">
                   <For each={reach.data!.endpoints}>
@@ -335,7 +335,7 @@ export default function ComponentLeaf() {
                       return (
                         <li class="flex flex-wrap items-center gap-2 text-xs">
                           <span class="font-medium">{iface.endpoint}</span>
-                          {/* The layer rungs, so device-versus-path reads at
+                          {/* The layer rungs, so component-versus-path reads at
                               a glance: ping answers the path, the port
                               answers the service. */}
                           <For each={iface.layers ?? []}>
@@ -355,9 +355,9 @@ export default function ComponentLeaf() {
                             {
                               {
                                 collecting: "collecting",
-                                "device-or-path": "stale sample; the node is healthy, so check the device or the path",
+                                "component-or-path": "stale sample; the node is healthy, so check the component or the path",
                                 "node-offline": "node offline",
-                                down: "device reports down",
+                                down: "component reports down",
                                 unknown: "no sample yet",
                               }[state().kind]
                             }

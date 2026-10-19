@@ -29,7 +29,7 @@ vi.mock("../lib/alarms", async (orig) => {
 // The component leaf (#637): direct arrival renders the breadcrumb from the
 // ancestor chain, memberships list with the primary marked, and the
 // collection card states the distinction plainly: a stale sample under a
-// healthy node blames the device or the path, never collection.
+// healthy node blames the component or the path, never collection.
 
 const me: Me = { principal: { id: "u-root", kind: "human" }, human: { username: "root" }, permissions: [">"], grants: [] };
 
@@ -183,7 +183,10 @@ describe("the component leaf", () => {
   it("distinguishes a stale sample under a healthy node from an offline node", () => {
     mount();
     const chip = screen.getByTestId("collection-ssh");
-    expect(chip.textContent).toContain("check the device or the path");
+    expect(chip.textContent).toContain("check the component or the path");
+    // A component that answers badly is a component fact, in the product's
+    // own word for it.
+    expect(screen.getByTestId("leaf-collection").textContent).not.toMatch(/device/);
   });
 
   it("a component filling no role renders without error", () => {
@@ -346,7 +349,7 @@ describe("the component leaf refreshes (#934)", () => {
     });
     mount();
     // Before the poll: the stale sample, no Uptime, the old alarm.
-    expect(screen.getByTestId("collection-ssh").textContent).toContain("check the device or the path");
+    expect(screen.getByTestId("collection-ssh").textContent).toContain("check the component or the path");
     expect(screen.getByTestId("leaf-vitals").textContent).not.toContain("Uptime");
 
     await vi.advanceTimersByTimeAsync(10_000);
