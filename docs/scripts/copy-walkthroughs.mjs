@@ -16,9 +16,9 @@
 // beside it.
 //
 // Astro caches each rendered page by the page's own content, not by the
-// manifest it renders, so after a copy the next docs build must be forced
-// (`corepack pnpm astro build --force` in docs/); check-walkthrough-embeds.mjs
-// fails a build that rendered from a stale cache.
+// manifest it renders; the docs build (`corepack pnpm build`) sees the copy
+// change its render stamp and forces itself (astro-build.mjs, #937), and
+// check-walkthrough-embeds.mjs fails any build that still rendered stale.
 //
 // Run via `make docs-walkthroughs`.
 import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, unlinkSync } from 'node:fs';
@@ -83,11 +83,9 @@ function copyOne(id) {
 }
 
 const errors = [];
-let copied = 0;
 for (const id of [...ids].sort()) {
   try {
     copyOne(id);
-    copied++;
   } catch (e) {
     errors.push(e instanceof Error ? e.message : String(e));
   }
@@ -104,6 +102,3 @@ if (errors.length) {
   process.exit(1);
 }
 console.log(`docs-walkthroughs: OK (${ids.size} walkthrough${ids.size === 1 ? '' : 's'})`);
-if (copied) {
-  console.log('docs-walkthroughs: Astro caches rendered pages by their own content, so force the next docs build: cd docs && corepack pnpm astro build --force');
-}

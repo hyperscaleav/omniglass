@@ -138,11 +138,16 @@ the animated preview from `web/e2e/walkthroughs/out/<id>/` into `docs/public/wal
 and fails on a declared walkthrough that is not recorded, whose recording failed, or whose manifest
 lacks the budget mark. Commit the copied files with the change.
 
-**Force the next docs build after every copy.** Astro caches each rendered page keyed on the page's
+**The docs build forces itself after a copy.** Astro caches each rendered page keyed on the page's
 own content, and it has no way to learn that the embed also depends on the copied manifest and on
-whether the video exists. An unforced build after a re-copy serves the old render, so build with
-`corepack pnpm astro build --force` from `docs/` (the copy prints this too); the post-build check
-below fails the build if a stale render slips through.
+whether the video exists, so a plain build after a re-copy would serve the old render. That cache
+also survives between deploys: a Cloudflare Pages build restores `docs/node_modules/.astro` from
+the last one. So `corepack pnpm build` runs Astro through `docs/scripts/astro-build.mjs`, which
+digests every `docs/public/walkthroughs/*/walkthrough.json`, the files beside each one, and the
+plugin sources that render the embed (`docs/scripts/lib/render-stamp.mjs`), compares the digest
+with the stamp it wrote beside Astro's cache after the last good build, and runs
+`astro build --force` only when they differ. Nothing to remember after a copy; only a bare
+`astro build` skips the stamp, and the post-build check below fails that build if it renders stale.
 
 **The video is not committed**: an mp4 per walkthrough (about 0.6 to 1.1 MB today) would grow the
 repository with every re-recording.
@@ -173,8 +178,8 @@ Three checks keep the embed true to its recording:
   directory no page declares.
 - **After the build**, `docs/scripts/check-walkthrough-embeds.mjs` re-renders every built embed
   from the manifest the build shipped, with the video only if the build shipped it, and fails on
-  any difference, and on any reference to a walkthrough file the build did not ship. That is what
-  catches a stale cached render; the fix is the forced build above.
+  any difference, and on any reference to a walkthrough file the build did not ship. Through `pnpm build` the
+  stamp above keeps it from firing for staleness; it is the backstop for any build that skips it.
 
 Only a leaf directive alone on its line embeds (`::walkthrough{#id}`, attributes allowed); a
 directive quoted in code or inside an HTML comment, an inline `:walkthrough`, or a `:::` container

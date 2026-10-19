@@ -10,9 +10,10 @@
 // Astro caches each rendered page keyed on the page's own content; it does not
 // know the embed depends on walkthrough.json or on whether the mp4 exists. So a
 // re-copied walkthrough (new captions, a new still count) or a video added or
-// removed leaves a cached render that says the old thing, and this check is
-// what turns that staleness into a failed build. The fix is a forced build:
-// `corepack pnpm astro build --force` in docs/.
+// removed leaves a cached render that says the old thing. `pnpm build` forces
+// Astro whenever those inputs change (astro-build.mjs, #937), so through it this
+// check should never fire for staleness; it is the backstop that turns a stale
+// render from any other path (a bare `astro build`) into a failed build.
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -55,7 +56,7 @@ for (const page of html(dist)) {
 }
 
 if (problems.length) {
-  console.error(`${problems.length} walkthrough embed problem(s); after copying walkthroughs, force the build (cd docs && corepack pnpm astro build --force):`);
+  console.error(`${problems.length} walkthrough embed problem(s); build through \`corepack pnpm build\` in docs/, which forces Astro when a walkthrough changes (or run \`corepack pnpm astro build --force\`):`);
   for (const p of [...new Set(problems)]) console.error('  ' + p);
   process.exit(1);
 }

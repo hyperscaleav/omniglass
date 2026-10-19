@@ -6487,3 +6487,13 @@ does) and a stray `preview.webp` beside a manifest that names none, the selftest
 preview budget also removes the preview's name, and the workflow job gained a 45 minute timeout.
 [Walkthroughs](/contributing/walkthroughs/) and [labels](/contributing/labels/) now state what the
 committed previews and stills cost the repository per re-recording and per PR.
+
+The Cloudflare Pages docs build failed on every commit of the PR while the GitHub build passed. Its logs
+were not reachable, but the cause reproduces locally: Pages restores Astro's content cache
+(`docs/node_modules/.astro`) from the last deploy, the cache keys a page render on the page's own
+content, and building main, then this branch on main's cache, keeps the pre-preview render of the
+three `.md` pages that embed a walkthrough, which the post-build embed check fails as stale. The docs build now runs Astro through
+`docs/scripts/astro-build.mjs`, which digests every copied `walkthrough.json`, each walkthrough's
+file listing (the video renders only when present) and the embed's plugin sources, compares the
+digest with a stamp written beside Astro's cache after the last good build, and forces the build
+only when they differ, so a copied walkthrough no longer needs a manual `astro build --force`.
