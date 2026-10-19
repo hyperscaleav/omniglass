@@ -28,6 +28,9 @@ type Store interface {
 	SweepCommandSettlements(ctx context.Context) error
 	// SweepEventRules acts on event rule streaks held for their sustain.
 	SweepEventRules(ctx context.Context, now time.Time) error
+	// ReconcileEventRules heals rule state that disagrees with a series'
+	// newest sample, reading samples past from.
+	ReconcileEventRules(ctx context.Context, from storage.RuleMark) (storage.RuleMark, error)
 	// The telemetry ingest consumer surface: resolve+confine a task's owner,
 	// snapshot the sample registry (reject-not-project), and write the typed
 	// metric rows through cp1's insert path. The catalog is two lanes (#587):

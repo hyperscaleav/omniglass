@@ -6497,3 +6497,16 @@ three `.md` pages that embed a walkthrough, which the post-build embed check fai
 file listing (the video renders only when present) and the embed's plugin sources, compares the
 digest with a stamp written beside Astro's cache after the last good build, and forces the build
 only when they differ, so a copied walkthrough no longer needs a manual `astro build --force`.
+### A reconcile pass heals a rule decision lost to a race (#928)
+
+The #920 review left two windows that could lose one decision on a transition-only input: a rule
+enabled while a batch carrying its key was uncommitted (the prime cannot see the batch's sample, and the
+batch loaded its rules before the enable), and a judgment aborted by a deadlock (the sample lands under
+its savepoint, the action does not). Both now heal within a minute: the settlement tick runs a reconcile
+pass that reads every series with a sample past the older of the last two passes' marks (a batch in
+flight at one pass may commit ids below its mark), judges each enabled rule's state against the newest
+sample in memory, and corrects only a series that drifted, in its own transaction under the documented
+lock order. A pass over agreement writes nothing and keeps every streak's clock; a failed correction
+rereads its range next time. Both windows are reproduced in testcontainer tests (the enable stalled
+behind an in-flight batch, and a real deadlock the batch detects and aborts), each leaving drift on the
+previous code and healed by one pass.

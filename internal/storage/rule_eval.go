@@ -729,3 +729,243 @@ func (p *PG) EventRuleState(ctx context.Context, name string, visible scope.Set)
 	}
 	return out, rows.Err()
 }
+
+// RuleMark is how far a reconcile pass has read each sample lane: the
+// highest sample id on each that it could see when it began.
+type RuleMark struct{ Property, Metric int64 }
+
+// Min is the lower of two marks, lane by lane: the mark that rereads
+// whatever either one would.
+func (m RuleMark) Min(o RuleMark) RuleMark {
+	return RuleMark{Property: min(m.Property, o.Property), Metric: min(m.Metric, o.Metric)}
+}
+
+// ruleCandidate is one rule's series a reconcile pass found touched, with
+// what its newest sample says and the rule state it holds.
+type ruleCandidate struct {
+	rule                EventRule
+	component, instance string
+	value               any
+	openDedups          []string
+	pending             *string
+}
+
+// drifted reports whether the rule's state on the series disagrees with
+// its newest sample. Every path that judges a sample leaves the series in
+// one shape: the streak pending is the newest sample's decision, unless that
+// decision is already in force (or decides nothing), and then no streak at
+// all. Pure, so the scan pays no query for a series that agrees.
+func (c ruleCandidate) drifted() bool {
+	action, err := rules.Decide(c.rule.FireCriteria, c.rule.ClearCriteria, c.value)
+	if err != nil {
+		action = rules.Hold // judge breaks a streak on a sample it cannot evaluate
+	}
+	isOpen := false
+	dedup := ruleDedupKey(c.rule.Name, c.instance)
+	for _, d := range c.openDedups {
+		if d == dedup {
+			isOpen = true
+			break
+		}
+	}
+	want := unlessInForce(action, isOpen)
+	have := rules.Hold
+	if c.pending != nil {
+		have = rules.Clear
+		if *c.pending == "fire" {
+			have = rules.Fire
+		}
+	}
+	return want != have
+}
+
+// ReconcileEventRules heals rule decisions lost to a race (#928): a rule
+// enabled while a batch carrying its key was uncommitted (the prime cannot
+// see the batch's sample, and the batch loaded its rules before the
+// enable), or a judgment rolled back by a deadlock (the sample lands, the
+// rule's action does not). Both leave a series whose newest sample landed
+// past the last pass and whose rule state disagrees with it, so a pass reads
+// only the series that took a sample past from, judges each enabled rule's
+// state against its newest sample in memory, and opens a transaction only
+// for one that drifted. When nothing drifted it costs two queries per lane
+// with an enabled rule; a series a rule's selector leaves out is not drift,
+// and costs a selector check only when its sample would have acted.
+//
+// It returns the marks it read up to. A correction that fails (a deadlock
+// again) is logged and the pass returns from, so its range is read again.
+// The caller reads past an older mark than the last pass's, since a batch
+// in flight when a pass begins may commit ids below that pass's mark.
+func (p *PG) ReconcileEventRules(ctx context.Context, from RuleMark) (RuleMark, error) {
+	var to RuleMark
+	if err := p.pool.QueryRow(ctx, `select coalesce((select max(id) from property), 0), coalesce((select max(id) from metric), 0)`).
+		Scan(&to.Property, &to.Metric); err != nil {
+		return from, fmt.Errorf("storage: rule reconcile marks: %w", err)
+	}
+	var drifted []ruleCandidate
+	for _, lane := range []struct {
+		lane     rules.Lane
+		from, to int64
+	}{{rules.LaneProperty, from.Property, to.Property}, {rules.LaneMetric, from.Metric, to.Metric}} {
+		if lane.to <= lane.from {
+			continue
+		}
+		cands, err := ruleCandidates(ctx, p.pool, lane.lane, lane.from, lane.to)
+		if err != nil {
+			return from, err
+		}
+		for _, c := range cands {
+			if c.drifted() {
+				drifted = append(drifted, c)
+			}
+		}
+	}
+	drifted, err := p.watched(ctx, drifted)
+	if err != nil {
+		return from, err
+	}
+	failed := false
+	for _, c := range drifted {
+		if err := p.reconcileSeries(ctx, c); err != nil {
+			failed = true
+			slog.Warn("event rule reconcile could not correct a series", "facility", "rules", "rule", c.rule.Name,
+				"component", c.component, "instance", c.instance, "error", err.Error())
+		}
+	}
+	if failed {
+		return from, nil
+	}
+	return to, nil
+}
+
+// ruleCandidates reads, in one statement, every enabled rule's series on a
+// lane that took a sample with an id in (from, to]: the newest sample of the
+// series, the rule's open alarms on the component, and its streak.
+func ruleCandidates(ctx context.Context, q querier, lane rules.Lane, from, to int64) ([]ruleCandidate, error) {
+	table, typeTable, value := "property", "property_type", `s.value #>> '{}'`
+	if lane == rules.LaneMetric {
+		table, typeTable, value = "metric", "metric_type", "s.value"
+	}
+	rows, err := q.Query(ctx, fmt.Sprintf(`with touched as (
+			select distinct s.component_id, s.%[2]s_id as type_id, s.instance
+			from %[1]s s
+			where s.id > $2 and s.id <= $3 and s.component_id is not null
+			and s.%[2]s_id in (select t.id from %[2]s t join event_rule r on r.sample_key = t.name
+				where r.enabled and r.sample_lane = $1)
+		)
+		select %[4]s, tc.component_id::text, tc.instance, n.value,
+			array(select a.dedup_key from alarm a where a.component_id = tc.component_id
+				and a.raised_by_rule_id = r.id and a.cleared_at is null),
+			st.pending
+		from touched tc
+		join %[2]s t on t.id = tc.type_id
+		join event_rule r on r.enabled and r.sample_lane = $1 and r.sample_key = t.name
+		cross join lateral (select %[3]s as value from %[1]s s
+			where s.component_id = tc.component_id and s.%[2]s_id = tc.type_id and s.instance = tc.instance
+			order by s.ts desc, s.id desc limit 1) n
+		left join event_rule_state st on st.rule_id = r.id and st.component_id = tc.component_id and st.instance = tc.instance`,
+		table, typeTable, value, ruleCols("r.")), string(lane), from, to)
+	if err != nil {
+		return nil, fmt.Errorf("storage: rule reconcile scan: %w", err)
+	}
+	defer rows.Close()
+	var out []ruleCandidate
+	for rows.Next() {
+		var c ruleCandidate
+		r, err := scanEventRuleTrailing(rows, &c.component, &c.instance, &c.value, &c.openDedups, &c.pending)
+		if err != nil {
+			return nil, err
+		}
+		c.rule = r
+		out = append(out, c)
+	}
+	return out, rows.Err()
+}
+
+// watched keeps the candidates whose rule selects their component, judged
+// in one read transaction with one matcher, so each component's facts and
+// each rule's type walk are read once.
+func (p *PG) watched(ctx context.Context, cands []ruleCandidate) ([]ruleCandidate, error) {
+	if len(cands) == 0 {
+		return nil, nil
+	}
+	tx, err := p.pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("storage: begin rule reconcile selection: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	m := newRuleMatcher(p, nil)
+	var out []ruleCandidate
+	for _, c := range cands {
+		o, err := m.ownerFacts(ctx, tx, c.component)
+		if errors.Is(err, pgx.ErrNoRows) {
+			continue
+		}
+		if err != nil {
+			return nil, err
+		}
+		picked, err := m.selects(ctx, tx, c.rule, o)
+		if err != nil {
+			return nil, err
+		}
+		if picked {
+			out = append(out, c)
+		}
+	}
+	return out, nil
+}
+
+// reconcileSeries re-judges one drifted series in its own transaction,
+// under the lock order newRuleEvaluator documents: the rule's row FOR SHARE,
+// then the series lock, then (in stepRule) the health locks a raise or clear
+// takes. It re-reads everything under those locks, since a sample, an edit
+// or a sweep may have moved the series since the scan, and judges the newest
+// sample as though it had just arrived; on a series that already agrees,
+// that changes nothing.
+func (p *PG) reconcileSeries(ctx context.Context, c ruleCandidate) error {
+	tx, err := p.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("storage: begin rule reconcile: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	r, err := scanEventRule(tx.QueryRow(ctx, `select `+eventRuleCols+` from event_rule where id = $1 for share`, c.rule.ID))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("storage: rule reconcile reread %s: %w", c.rule.Name, err)
+	}
+	if !r.Enabled {
+		return nil
+	}
+	if err := lockAdvisory(ctx, tx, ruleSeriesLockKey(r.ID, c.component, c.instance)); err != nil {
+		return err
+	}
+	m := newRuleMatcher(p, nil)
+	o, err := m.ownerFacts(ctx, tx, c.component)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil // the component is gone, and its series with it
+	}
+	if err != nil {
+		return err
+	}
+	picked, err := m.selects(ctx, tx, r, o)
+	if err != nil || !picked {
+		return err
+	}
+	newest, err := newestSamples(ctx, tx, r.SampleLane, r.SampleKey, c.component, c.instance)
+	if err != nil || len(newest) == 0 {
+		return err
+	}
+	action, err := rules.Decide(r.FireCriteria, r.ClearCriteria, newest[0].value)
+	if err != nil {
+		action = rules.Hold
+	}
+	now, err := dbNow(ctx, tx)
+	if err != nil {
+		return err
+	}
+	if err := p.stepRule(ctx, tx, r, &o.comp, c.instance, action, now); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}

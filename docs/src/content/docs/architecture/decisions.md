@@ -6522,7 +6522,9 @@ interface create form, since that name is the platform's to mint.
      that stays down sends no later sample; the sweep (like the command settlement sweep, ADR-0141) closes
      that without the full durable timer (#419). The streak's clock is the server's receipt time, not
      the sample's timestamp, so the sample path and the sweep read one clock and a skewed node cannot
-     waive a sustain.
+     waive a sustain. A reconcile pass once a minute on the same tick (#928) re-judges each series that
+     took a sample since the pass before last and corrects a rule state that disagrees with its newest
+     sample, healing a decision lost to an enable racing an in-flight batch or to a deadlock abort.
 
   7. **A rule's live state is its open alarms and pending streaks** (ruled during #921). The
      definition's "last evaluated" is deferred (#929): a per-sample write was kept off the ingest path
