@@ -1228,6 +1228,26 @@ export interface paths {
         patch: operations["update-event-rule"];
         trace?: never;
     };
+    "/event-rules/{name}/state": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get an event rule's live state
+         * @description What a rule holds right now: the alarms it raised that are still open, each on a component and instance, and its streaks waiting out a sustain. Gated by rule:read; fleet-wide, so an all-scope grant.
+         */
+        get: operations["get-event-rule-state"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/event-types": {
         parameters: {
             query?: never;
@@ -5674,6 +5694,18 @@ export interface components {
              */
             version: number;
         };
+        EventRuleStateOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/EventRuleStateOutputBody.json
+             */
+            readonly $schema?: string;
+            /** @description The alarms the rule raised that are still open */
+            open: components["schemas"]["RuleOpenAlarmBody"][] | null;
+            /** @description The rule's streaks waiting out a sustain */
+            pending: components["schemas"]["RuleStreakBody"][] | null;
+        };
         EventTypeBody: {
             /**
              * Format: uri
@@ -7459,6 +7491,35 @@ export interface components {
             readonly $schema?: string;
             permission_universe: string[] | null;
             roles: components["schemas"]["RoleBody"][] | null;
+        };
+        RuleOpenAlarmBody: {
+            alarm_id: string;
+            /** @description The component, by name */
+            component: string;
+            /** @description The component's uuid */
+            component_id: string;
+            /** @description The sample instance (an endpoint) the alarm is about */
+            instance?: string;
+            /** Format: date-time */
+            raised_at: string;
+            severity: string;
+        };
+        RuleStreakBody: {
+            /** @description The component, by name */
+            component: string;
+            /** @description The component's uuid */
+            component_id: string;
+            instance?: string;
+            /**
+             * @description The action the rule's samples point at, waiting out its sustain
+             * @enum {string}
+             */
+            pending: "fire" | "clear";
+            /**
+             * Format: date-time
+             * @description When the streak began
+             */
+            since: string;
         };
         SecretBody: {
             /**
@@ -11343,6 +11404,38 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EventRuleBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "get-event-rule-state": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The rule's name */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EventRuleStateOutputBody"];
                 };
             };
             /** @description Error */

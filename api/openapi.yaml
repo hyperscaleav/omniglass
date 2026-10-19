@@ -2413,6 +2413,34 @@ components:
         - official
         - version
       type: object
+    EventRuleStateOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/EventRuleStateOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        open:
+          description: The alarms the rule raised that are still open
+          items:
+            $ref: "#/components/schemas/RuleOpenAlarmBody"
+          type:
+            - array
+            - "null"
+        pending:
+          description: The rule's streaks waiting out a sustain
+          items:
+            $ref: "#/components/schemas/RuleStreakBody"
+          type:
+            - array
+            - "null"
+      required:
+        - open
+        - pending
+      type: object
     EventTypeBody:
       additionalProperties: false
       properties:
@@ -5746,6 +5774,59 @@ components:
       required:
         - permission_universe
         - roles
+      type: object
+    RuleOpenAlarmBody:
+      additionalProperties: false
+      properties:
+        alarm_id:
+          type: string
+        component:
+          description: The component, by name
+          type: string
+        component_id:
+          description: The component's uuid
+          type: string
+        instance:
+          description: The sample instance (an endpoint) the alarm is about
+          type: string
+        raised_at:
+          format: date-time
+          type: string
+        severity:
+          type: string
+      required:
+        - alarm_id
+        - component
+        - component_id
+        - severity
+        - raised_at
+      type: object
+    RuleStreakBody:
+      additionalProperties: false
+      properties:
+        component:
+          description: The component, by name
+          type: string
+        component_id:
+          description: The component's uuid
+          type: string
+        instance:
+          type: string
+        pending:
+          description: The action the rule's samples point at, waiting out its sustain
+          enum:
+            - fire
+            - clear
+          type: string
+        since:
+          description: When the streak began
+          format: date-time
+          type: string
+      required:
+        - component
+        - component_id
+        - pending
+        - since
       type: object
     SecretBody:
       additionalProperties: false
@@ -10135,6 +10216,33 @@ paths:
           description: Error
       summary: Update an event rule
       x-omniglass-permission: rule:update
+  /event-rules/{name}/state:
+    get:
+      description: "What a rule holds right now: the alarms it raised that are still open, each on a component and instance, and its streaks waiting out a sustain. Gated by rule:read; fleet-wide, so an all-scope grant."
+      operationId: get-event-rule-state
+      parameters:
+        - description: The rule's name
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The rule's name
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EventRuleStateOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Get an event rule's live state
+      x-omniglass-permission: rule:read
   /event-types:
     get:
       description: Lists every registered event type (official and custom). The catalog is fleet-wide reference data. Gated by event_type:read.

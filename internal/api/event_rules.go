@@ -128,7 +128,8 @@ type updateEventRuleInput struct {
 	}
 }
 
-// registerEventRuleRoutes wires event rule authoring (#918): the rules that
+// registerEventRuleRoutes wires event rule authoring (#918), and the rule's
+// live state (#921): the rules that
 // raise alarms, fleet-wide config read and written with an all-scope grant,
 // gated rule:* (ruling 2 on #819). Official rules are read-only.
 func registerEventRuleRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
@@ -263,6 +264,57 @@ func registerEventRuleRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 			return nil, mapEventRuleErr(err)
 		}
 		return nil, nil
+	})
+}
+
+type ruleOpenAlarmBody struct {
+	AlarmID     string    `json:"alarm_id"`
+	Component   string    `json:"component" doc:"The component, by name"`
+	ComponentID string    `json:"component_id" doc:"The component's uuid"`
+	Instance    string    `json:"instance,omitempty" doc:"The sample instance (an endpoint) the alarm is about"`
+	Severity    string    `json:"severity"`
+	RaisedAt    time.Time `json:"raised_at"`
+}
+
+type ruleStreakBody struct {
+	Component   string    `json:"component" doc:"The component, by name"`
+	ComponentID string    `json:"component_id" doc:"The component's uuid"`
+	Instance    string    `json:"instance,omitempty"`
+	Pending     string    `json:"pending" enum:"fire,clear" doc:"The action the rule's samples point at, waiting out its sustain"`
+	Since       time.Time `json:"since" doc:"When the streak began"`
+}
+
+type eventRuleStateOutput struct {
+	Body struct {
+		Open    []ruleOpenAlarmBody `json:"open" doc:"The alarms the rule raised that are still open"`
+		Pending []ruleStreakBody    `json:"pending" doc:"The rule's streaks waiting out a sustain"`
+	}
+}
+
+func registerEventRuleStateRoute(api huma.API, a *authenticator, gw storage.Gateway) {
+	huma.Register(api, a.gated(huma.Operation{
+		OperationID: "get-event-rule-state",
+		Method:      http.MethodGet,
+		Path:        "/event-rules/{name}/state",
+		Summary:     "Get an event rule's live state",
+		Description: "What a rule holds right now: the alarms it raised that are still open, each on a component and instance, and its streaks waiting out a sustain. Gated by rule:read; fleet-wide, so an all-scope grant.",
+	}, "rule", "read"), func(ctx context.Context, in *eventRuleNameInput) (*eventRuleStateOutput, error) {
+		st, err := gw.EventRuleState(ctx, in.Name, a.scopeFor(ctx, "rule", "read"))
+		if err != nil {
+			return nil, mapEventRuleErr(err)
+		}
+		out := &eventRuleStateOutput{}
+		out.Body.Open = make([]ruleOpenAlarmBody, 0, len(st.Open))
+		for _, o := range st.Open {
+			out.Body.Open = append(out.Body.Open, ruleOpenAlarmBody{AlarmID: o.AlarmID, Component: o.ComponentName,
+				ComponentID: o.ComponentID, Instance: o.Instance, Severity: o.Severity, RaisedAt: o.RaisedAt})
+		}
+		out.Body.Pending = make([]ruleStreakBody, 0, len(st.Pending))
+		for _, s := range st.Pending {
+			out.Body.Pending = append(out.Body.Pending, ruleStreakBody{Component: s.ComponentName, ComponentID: s.ComponentID,
+				Instance: s.Instance, Pending: s.Pending, Since: s.Since})
+		}
+		return out, nil
 	})
 }
 

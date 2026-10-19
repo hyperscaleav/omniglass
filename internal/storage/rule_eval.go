@@ -5,12 +5,14 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
 	"github.com/hyperscaleav/omniglass/internal/rules"
+	"github.com/hyperscaleav/omniglass/internal/scope"
 )
 
 // ruleEvaluator judges one ingest batch's samples against the enabled event
@@ -454,4 +456,77 @@ func sampleKeys[T any](evs []T, key func(T) string) []string {
 		}
 	}
 	return out
+}
+
+// RuleOpenAlarm is an open alarm a rule raised, on one component and
+// instance.
+type RuleOpenAlarm struct {
+	AlarmID       string
+	ComponentID   string
+	ComponentName string
+	Instance      string
+	Severity      string
+	RaisedAt      time.Time
+}
+
+// RuleStreak is a rule's pending streak on one component and instance.
+type RuleStreak struct {
+	ComponentID   string
+	ComponentName string
+	Instance      string
+	Pending       string // fire, clear
+	Since         time.Time
+}
+
+// EventRuleLive is a rule's live state: what it holds open and what it is
+// waiting on.
+type EventRuleLive struct {
+	Open    []RuleOpenAlarm
+	Pending []RuleStreak
+}
+
+// EventRuleState reads a rule's live state by name (fleet-wide config: an
+// all-scope reader only).
+func (p *PG) EventRuleState(ctx context.Context, name string, read scope.Set) (*EventRuleLive, error) {
+	r, err := p.GetEventRule(ctx, name, read)
+	if err != nil {
+		return nil, err
+	}
+	prefix := ruleDedupKey(r.Name, "")
+	out := &EventRuleLive{Open: []RuleOpenAlarm{}, Pending: []RuleStreak{}}
+	rows, err := p.pool.Query(ctx, `select a.id::text, a.component_id::text, c.name, a.dedup_key, a.severity, a.raised_at
+		from alarm a join component c on c.id = a.component_id
+		where a.raised_by_rule_id = $1 and a.cleared_at is null order by a.raised_at`, r.ID)
+	if err != nil {
+		return nil, fmt.Errorf("storage: rule %s open alarms: %w", name, err)
+	}
+	for rows.Next() {
+		var o RuleOpenAlarm
+		var dedup string
+		if err := rows.Scan(&o.AlarmID, &o.ComponentID, &o.ComponentName, &dedup, &o.Severity, &o.RaisedAt); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		o.Instance = strings.TrimPrefix(strings.TrimPrefix(dedup, prefix), ":")
+		out.Open = append(out.Open, o)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	rows, err = p.pool.Query(ctx, `select s.component_id::text, c.name, s.instance, s.pending, s.since
+		from event_rule_state s join component c on c.id = s.component_id
+		where s.rule_id = $1 order by s.since`, r.ID)
+	if err != nil {
+		return nil, fmt.Errorf("storage: rule %s streaks: %w", name, err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var s RuleStreak
+		if err := rows.Scan(&s.ComponentID, &s.ComponentName, &s.Instance, &s.Pending, &s.Since); err != nil {
+			return nil, err
+		}
+		out.Pending = append(out.Pending, s)
+	}
+	return out, rows.Err()
 }

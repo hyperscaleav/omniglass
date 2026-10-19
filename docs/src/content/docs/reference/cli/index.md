@@ -1531,6 +1531,26 @@ Example:
 omniglass event-rule list
 ```
 
+### `omniglass event-rule state`
+
+Commands for the state resource
+
+#### `omniglass event-rule state list`
+
+Get an event rule's live state
+
+```
+omniglass event-rule state list <name>
+```
+
+What a rule holds right now: the alarms it raised that are still open, each on a component and instance, and its streaks waiting out a sustain. Gated by rule:read; fleet-wide, so an all-scope grant.
+
+Example:
+
+```sh
+omniglass event-rule state list <name>
+```
+
 ### `omniglass event-rule update`
 
 Update an event rule

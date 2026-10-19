@@ -459,6 +459,8 @@ type Gateway interface {
 	CreateEventRule(ctx context.Context, actorID string, spec EventRuleSpec, create scope.Set) (*EventRule, error)
 	UpdateEventRule(ctx context.Context, actorID, name string, patch EventRulePatch, read, action scope.Set) (*EventRule, error)
 	DeleteEventRule(ctx context.Context, actorID, name string, read, action scope.Set) error
+	// EventRuleState reads a rule's live state: its open alarms and streaks.
+	EventRuleState(ctx context.Context, name string, read scope.Set) (*EventRuleLive, error)
 	// UpsertEventRule installs an official rule from the boot seed.
 	UpsertEventRule(ctx context.Context, spec EventRuleSpec) error
 	// SweepEventRules acts on every rule streak held for its sustain at now.

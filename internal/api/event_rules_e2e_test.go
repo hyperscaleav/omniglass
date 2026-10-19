@@ -71,6 +71,16 @@ func TestEventRuleAPI(t *testing.T) {
 		t.Fatalf("made = %+v", made)
 	}
 	c.do(ownerTok, http.MethodPost, "/event-rules", rule, http.StatusConflict)
+	var state struct {
+		Open    []any `json:"open"`
+		Pending []any `json:"pending"`
+	}
+	if err := json.Unmarshal(c.do(viewer, http.MethodGet, "/event-rules/reach-lost/state", nil, http.StatusOK), &state); err != nil {
+		t.Fatal(err)
+	}
+	if state.Open == nil || state.Pending == nil || len(state.Open) != 0 || len(state.Pending) != 0 {
+		t.Fatalf("a fresh rule's state = %+v, want empty lists", state)
+	}
 	for _, bad := range []map[string]any{
 		{"name": "r1", "sample_key": "nope", "fire_criteria": map[string]any{"op": "eq", "value": "x"}, "severity": "high"},
 		{"name": "r2", "sample_key": "room-temperature", "fire_criteria": map[string]any{"op": "gt", "value": "hot"}, "severity": "high"},

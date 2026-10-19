@@ -2,6 +2,7 @@ package storage_test
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -243,5 +244,46 @@ func TestRuleAlarmsBelongToTheirRule(t *testing.T) {
 	}
 	if got, _ := gw.ListAlarms(ctx, "bar-1", storage.AlarmFilter{}); len(got) != 1 || got[0].ID != hand.ID {
 		t.Fatalf("deleting the rule left %+v on bar-1, want only the hand-raised alarm", got)
+	}
+}
+
+// A rule's live state is what it holds open and what it is waiting on: the
+// alarms it raised that are still open, and its pending streaks.
+func TestEventRuleState(t *testing.T) {
+	f := newHealthFixture(t)
+	ctx := context.Background()
+	gw, all := f.gw, scope.Set{All: true}
+	if _, err := gw.CreateEventRule(ctx, "", storage.EventRuleSpec{Name: "reach-lost", SampleKey: "endpoint-reachable",
+		Fire: criteria("eq", "down"), Severity: "high"}, all); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := gw.CreateEventRule(ctx, "", storage.EventRuleSpec{Name: "slow-hot", SampleKey: "room-temperature",
+		Fire: criteria("gt", 30), FireSustain: time.Minute, Severity: "info"}, all); err != nil {
+		t.Fatal(err)
+	}
+	if err := gw.InsertPropertySamples(ctx, []storage.PropertySampleWrite{{OwnerKind: "component", OwnerID: "bar-1",
+		Key: "endpoint-reachable", Instance: "tcp", Value: "down", TS: time.Now()}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := gw.InsertMetricSamples(ctx, []storage.MetricSampleWrite{{OwnerKind: "component", OwnerID: "bar-1",
+		Key: "room-temperature", Value: 35, TS: time.Now()}}); err != nil {
+		t.Fatal(err)
+	}
+	st, err := gw.EventRuleState(ctx, "reach-lost", all)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(st.Open) != 1 || st.Open[0].ComponentName != "bar-1" || st.Open[0].Instance != "tcp" || len(st.Pending) != 0 {
+		t.Fatalf("reach-lost state = %+v, want one open alarm on bar-1/tcp and nothing pending", st)
+	}
+	st, err = gw.EventRuleState(ctx, "slow-hot", all)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(st.Open) != 0 || len(st.Pending) != 1 || st.Pending[0].Pending != "fire" || st.Pending[0].ComponentName != "bar-1" {
+		t.Fatalf("slow-hot state = %+v, want a pending fire on bar-1 and nothing open", st)
+	}
+	if _, err := gw.EventRuleState(ctx, "reach-lost", scope.Set{}); !errors.Is(err, storage.ErrEventRuleNotFound) {
+		t.Fatalf("a scoped reader: err %v, want not found", err)
 	}
 }
