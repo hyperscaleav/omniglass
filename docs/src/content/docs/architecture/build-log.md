@@ -6379,7 +6379,7 @@ ICMP endpoint to a simulated display, then reopens its page to show reachability
 view does not poll yet, #934, so the driver goes first and the probe holds past a node heartbeat); it is embedded in the
 [collection guide](/guides/operator/collection/). Node enrollment runs on the node's host, so the
 walkthrough uses the node the stack enrolls and says so; the unplug, the rule's alarm and the health verdict
-follow with the event rule tier (#819). The walkthrough stack adds one simulated-product component with no
+are their own walkthrough, Watch a rule raise an alarm, embedded in the [rules guide](/guides/admin/rules/) (#921). The walkthrough stack adds one simulated-product component with no
 endpoint (`bay-2-display`) so the monitoring walkthrough starts from nothing, and the page header carries a
 `page-header` test id as a stable wait target. Defects found on the way are filed: #931, #932, #933, #934.
 ### Severity becomes a ranked registry, and event rules are authored (#819, slices #917 and #918)
@@ -6447,3 +6447,10 @@ the console is gated on it, so a caller holding `rule:create` only on a place is
 Criteria values are kept exact (edge spaces refused, a metric a strict decimal). Rules now read like a registry
 (any `rule:read` lists them, with counts, open alarms and streaks fenced to the caller's component read
 scope), while writes keep an all-scope grant (ADR-0144, amended).
+
+The slice carries the epic's walkthrough, Watch a rule raise an alarm, embedded in the
+[rules guide](/guides/admin/rules/): a simulated touch panel unplugged from its page, the official
+rule's blade showing the streak wait out its 15s sustain and then the open High alarm, and the panel's
+system degraded with its Touch Control role short. It waits on the blade's own poll rather than holding
+for a fixed time, and it stops at the open alarm: the probe's detection, the sustain and the sweep tick
+take about 31s of the 60s budget, which leaves no room for the replug and the clear.

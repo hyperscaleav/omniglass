@@ -1,0 +1,47 @@
+# Watch a rule raise an alarm (#921): unplug a simulated component from its
+# own page, watch the official rule reachability-lost wait out its sustain and
+# open a High alarm on it, and see the alarm move the component's system. The
+# component is panel-2 (Touch Panel 2 in Media Lab, the only component by that
+# name in the seeded fleet), which fills the Touch Control role of the system
+# Media Lab Classroom 2, so the alarm takes that system to degraded.
+#
+# The wait is real time, and the 60s budget counts it. The node finds the
+# panel down 13 to 15s after the impairment is saved (the simulator's 2s pull,
+# the node's 5s tick, the probe's timeout); the rule then holds for its seeded
+# 15s fire sustain (internal/seed/event_rules.yaml) and opens the alarm on the
+# server's 5s sweep tick, 30 to 32s after the save; and the rule's blade shows
+# it on its next 5s poll. With the unplug before it, the open alarm is on
+# screen 43 to 51s in, and the whole recording runs 48 to 56s, so plugging the
+# panel back in and watching the alarm clear (three clicks, a reopen and the
+# clear, about 12s more) does not fit: the walkthrough ends on the open alarm
+# and the system it moved. The rule clears the alarm on the panel's next up
+# reading, which the rules guide says in words, as it does the panel's blade
+# naming the rule (opening it from the system is 5s more).
+#
+# The rule's blade is the live view: the pending streak and the open alarm
+# land in it by its own poll, so those steps wait rather than hold. The system
+# view does not poll (#934), so it is opened once the alarm is open.
+title: Watch a rule raise an alarm
+description: Unplug a simulated touch panel from its page, watch the official reachability rule wait out its sustain and open a High alarm, and see the panel's system go degraded because of it.
+steps:
+  - goto: /components/panel-2
+    caption: Touch Panel 2 fills the Touch Control role of Media Lab Classroom 2. It reads healthy.
+  - click: { role: button, name: Open simulation }
+    caption: The panel is simulated, so it can be broken on purpose from its own page.
+  - click: '#sim-unplugged'
+    caption: Unplug it. The simulated panel goes dark on every protocol, as if its cable were pulled.
+  - click: { role: button, name: Save impairment }
+    caption: Save. The panel is marked unplugged, and the simulator applies it on its next pull.
+  - goto: /rules
+    caption: Rules turn readings into alarms. The official rule fires when an endpoint reads down for 15s.
+  - click: 'tr:has-text("reachability-lost")'
+    caption: Open the rule to watch it work. It holds nothing yet.
+  - wait: { selector: 'section[aria-label="Pending streaks"] li:has-text("panel-2")', timeout: 30000 }
+    caption: The panel's endpoint read down. The rule waits out its sustain, so one failed probe never pages.
+  - wait: { selector: 'section[aria-label="Open alarms"] li:has-text("panel-2")', timeout: 30000 }
+    caption: The down held for the whole sustain, so the rule opened a High alarm on the panel.
+    poster: true
+  - goto: /systems/classroom-2
+    caption: The panel's system, Media Lab Classroom 2. Why names the rule's alarm on the panel.
+  - wait: { role: group, name: Touch Control }
+    caption: The alarm takes the panel out, so Touch Control is short and the system reads degraded.

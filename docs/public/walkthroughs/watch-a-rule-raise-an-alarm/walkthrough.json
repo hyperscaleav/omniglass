@@ -1,0 +1,72 @@
+{
+  "id": "watch-a-rule-raise-an-alarm",
+  "title": "Watch a rule raise an alarm",
+  "description": "Unplug a simulated touch panel from its page, watch the official reachability rule wait out its sustain and open a High alarm, and see the panel's system go degraded because of it.",
+  "steps": [
+    {
+      "n": 1,
+      "kind": "goto",
+      "caption": "Touch Panel 2 fills the Touch Control role of Media Lab Classroom 2. It reads healthy.",
+      "still": "step-01.png"
+    },
+    {
+      "n": 2,
+      "kind": "click",
+      "caption": "The panel is simulated, so it can be broken on purpose from its own page.",
+      "still": "step-02.png"
+    },
+    {
+      "n": 3,
+      "kind": "click",
+      "caption": "Unplug it. The simulated panel goes dark on every protocol, as if its cable were pulled.",
+      "still": "step-03.png"
+    },
+    {
+      "n": 4,
+      "kind": "click",
+      "caption": "Save. The panel is marked unplugged, and the simulator applies it on its next pull.",
+      "still": "step-04.png"
+    },
+    {
+      "n": 5,
+      "kind": "goto",
+      "caption": "Rules turn readings into alarms. The official rule fires when an endpoint reads down for 15s.",
+      "still": "step-05.png"
+    },
+    {
+      "n": 6,
+      "kind": "click",
+      "caption": "Open the rule to watch it work. It holds nothing yet.",
+      "still": "step-06.png"
+    },
+    {
+      "n": 7,
+      "kind": "wait",
+      "caption": "The panel's endpoint read down. The rule waits out its sustain, so one failed probe never pages.",
+      "still": "step-07.png"
+    },
+    {
+      "n": 8,
+      "kind": "wait",
+      "caption": "The down held for the whole sustain, so the rule opened a High alarm on the panel.",
+      "still": "step-08.png"
+    },
+    {
+      "n": 9,
+      "kind": "goto",
+      "caption": "The panel's system, Media Lab Classroom 2. Why names the rule's alarm on the panel.",
+      "still": "step-09.png"
+    },
+    {
+      "n": 10,
+      "kind": "wait",
+      "caption": "The alarm takes the panel out, so Touch Control is short and the system reads degraded.",
+      "still": "step-10.png"
+    }
+  ],
+  "poster": "step-08.png",
+  "budget": {
+    "seconds": 55.9,
+    "bytes": 1046813
+  }
+}

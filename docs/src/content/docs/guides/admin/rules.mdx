@@ -1,6 +1,8 @@
 ---
 title: Rules and severity
 description: "Writing an event rule: what it reads, when it opens and clears an alarm, how long a condition must hold, the severity level it raises at, and how to watch it work, from the console, the CLI, or the API."
+walkthroughs:
+  - id: watch-a-rule-raise-an-alarm
 ---
 
 import SeededSet from '../../../../components/SeededSet.astro';
@@ -36,7 +38,15 @@ its endpoint has read `down` for the rule's fire sustain (above), the rule's row
 shows **1 open**, its blade lists the component and the endpoint, and the component and its system
 carry an alarm at the rule's severity with its label as the message. The sustain is timed from the
 server's receipt of the first `down` sample, and judged on the server's 5s sweep tick, so the alarm
-opens up to a tick after the sustain runs out. Plug it back in and the next `up` reading clears it.
+opens up to a tick after the sustain runs out. Opened from its system, the component's blade names the
+rule beside the alarm (**by rule** `reachability-lost`), so an alarm a rule raised is never mistaken
+for one a person raised. Plug it back in and the next `up` reading clears it.
+
+The walkthrough below unplugs a simulated touch panel and watches the rule's blade, live: the streak
+waiting out the sustain, then the open alarm, then the panel's system gone degraded. Plugging it back
+in is left out, since the wait for the alarm already fills most of the recording.
+
+::walkthrough{#watch-a-rule-raise-an-alarm}
 
 ## Read the list
 
