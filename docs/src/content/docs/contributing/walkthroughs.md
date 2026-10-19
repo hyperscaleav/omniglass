@@ -141,7 +141,7 @@ lacks the budget mark. Commit the copied files with the change.
 **The docs build forces itself after a copy.** Astro caches each rendered page keyed on the page's
 own content, and it has no way to learn that the embed also depends on the copied manifest and on
 whether the video exists, so a plain build after a re-copy would serve the old render. That cache
-also survives between deploys: a Cloudflare Pages build restores `docs/node_modules/.astro` from
+also survives between deploys: a Cloudflare Pages build restores Astro's content cache (under the docs `node_modules`) from
 the last one. So `corepack pnpm build` runs Astro through `docs/scripts/astro-build.mjs`, which
 digests every `docs/public/walkthroughs/*/walkthrough.json`, the files beside each one, and the
 plugin sources that render the embed (`docs/scripts/lib/render-stamp.mjs`), compares the digest
