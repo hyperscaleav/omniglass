@@ -38,7 +38,7 @@ export default function SystemSummary(props: { systemId: string }) {
     return row ? entityLabel(row) : h ?? "";
   });
   const scale = useSeverity();
-  const why = createMemo(() => (health.data && view.data ? alarmRows(health.data, view.data, props.systemId, scale().levels) : []));
+  const why = createMemo(() => (health.data ? alarmRows(health.data, scale().levels) : []));
   const strip = createMemo(() => (health.data ? slotStrip(health.data) : undefined));
   const count = () => (system()?.dots ?? []).length;
   return (

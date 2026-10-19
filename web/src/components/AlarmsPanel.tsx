@@ -154,6 +154,10 @@ export default function AlarmsPanel(props: { component: string; canUpdate: boole
                   <span class="shrink-0 text-[11px] text-base-content/45" title={a.raised_at}>
                     raised {rel(a.raised_at)}
                   </span>
+                  {/* An event rule raised it, not a person: name the rule. */}
+                  <Show when={a.raised_by_rule}>
+                    {(rule) => <span class="shrink-0 text-[11px] text-base-content/45">by rule <span class="font-data">{rule()}</span></span>}
+                  </Show>
                   {/* Who has looked at this, if anybody. An unacknowledged alarm is
                       the one still waiting for a human, so it says so rather than
                       staying silent; an acknowledged one names the person and stays

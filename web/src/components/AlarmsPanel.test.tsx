@@ -26,6 +26,8 @@ const alarms: Alarm[] = [
     acknowledged: true,
     acknowledged_at: ago(90 * 60_000),
     acknowledged_by: "jordan",
+    raised_by_rule: "lamp-life",
+    raised_by_rule_id: uuidFor("rule-lamp-life"),
   },
   {
     id: "a-2",
@@ -81,6 +83,12 @@ describe("AlarmsPanel", () => {
     const row = alarmRow(getByText("HDMI board failed"));
     expect(within(row).getByText("High")).toBeTruthy();
     expect(within(row).getByText(/raised 1h ago/)).toBeTruthy();
+  });
+
+  it("names the event rule that raised an alarm, and says nothing for one an operator raised", () => {
+    const { getByText } = mount();
+    expect(within(alarmRow(getByText("Lamp hours exceeded"))).getByText(/by rule/).textContent).toContain("lamp-life");
+    expect(within(alarmRow(getByText("HDMI board failed"))).queryByText(/by rule/)).toBeNull();
   });
 
   it("puts the worst alarm first, since that is the one that explains the room", () => {

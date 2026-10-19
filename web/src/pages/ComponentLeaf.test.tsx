@@ -88,8 +88,8 @@ function mount(path = `/web/components/${uuidFor("cf-c-bar")}`, memberships?: un
   ]);
   qc.setQueryData([...REACHABILITY_KEY(uuidFor("cf-c-bar"))], reach);
   qc.setQueryData([...componentAlarmsKey(uuidFor("cf-c-bar"))], alarms ?? [
-    { id: "al-1", component: "videobar-1", severity: "high", message: "No route to host", raised_at: iso(9600), active: true, acknowledged: false },
-    { id: "al-0", component: "videobar-1", severity: "warning", message: "Cleared last week", raised_at: iso(600000), active: false, acknowledged: true },
+    { id: "al-1", component: "videobar-1", component_id: uuidFor("cf-c-bar"), severity: "high", message: "No route to host", raised_at: iso(9600), active: true, acknowledged: false },
+    { id: "al-0", component: "videobar-1", component_id: uuidFor("cf-c-bar"), severity: "warning", message: "Cleared last week", raised_at: iso(600000), active: false, acknowledged: true },
   ]);
   qc.setQueryData([...effectivePropertiesKey(uuidFor("cf-c-bar"))], [
     { property_type_name: "serial-number", label: "Serial Number", value: "SN-1183", is_set: true, from_contract: true },
@@ -217,7 +217,7 @@ describe("the leaf's dispatch facts (#786)", () => {
     ["average", "Average", false],
   ])("tones the Why strip by the outage flag of %s", (severity, label, outage) => {
     mount(undefined, undefined, undefined, undefined, [
-      { id: "al-x", component: "videobar-1", severity, message: "Something", raised_at: iso(60), active: true, acknowledged: false },
+      { id: "al-x", component: "videobar-1", component_id: uuidFor("cf-c-bar"), severity, message: "Something", raised_at: iso(60), active: true, acknowledged: false },
     ]);
     const card = screen.getByTestId("leaf-alarms");
     expect(card.classList.contains("border-error/40")).toBe(outage);

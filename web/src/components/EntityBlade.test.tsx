@@ -57,7 +57,7 @@ const health: FleetHealth = {
     {
       name: "room-mic", label: "Room Microphone", impact: "degraded", quorum: 1, satisfying: 0, short: 1, spare: 0,
       impaired: true, active: true, assigned_to: ["mic-1"], down: ["mic-1"],
-      alarms: [{ id: "al-1", component: uuidFor("eb-c-mic"), severity: "high", message: "No route to host", raised_at: "2026-08-15T14:20:00Z" }],
+      alarms: [{ id: "al-1", component: "mic-1", component_id: uuidFor("eb-c-mic"), severity: "high", message: "No route to host", raised_at: "2026-08-15T14:20:00Z" }],
     },
   ],
   systems: [],
@@ -96,7 +96,7 @@ function mountBlade(ref: { kind: string; id: string }) {
     { id: uuidFor("eb-c-bar"), name: "videobar-1", label: "", component_type: "video-bar", actions: [] },
   ]);
   qc.setQueryData([...componentAlarmsKey(uuidFor("eb-c-mic"))], [
-    { id: "al-1", severity: "high", message: "No route to host", raised_at: "2026-08-15T14:20:00Z", active: true },
+    { id: "al-1", component: "mic-1", component_id: uuidFor("eb-c-mic"), severity: "high", message: "No route to host", raised_at: "2026-08-15T14:20:00Z", active: true, raised_by_rule: "icmp-unreachable", raised_by_rule_id: uuidFor("eb-rule") },
   ]);
   qc.setQueryData([...componentSystemsKey(uuidFor("eb-c-mic"))], [{ system_id: uuidFor("eb-sys"), system: "boardroom", primary: true }]);
 
@@ -129,14 +129,16 @@ afterEach(cleanup);
 
 describe("the system blade", () => {
   it("leads with verdict and since, and says why with the severity and the component", async () => {
-    mountBlade({ kind: "system", id: uuidFor("eb-sys") });
+    const { controller } = mountBlade({ kind: "system", id: uuidFor("eb-sys") });
     const blade = await screen.findByRole("dialog");
     expect(within(blade).getAllByText("degraded").length).toBeGreaterThan(0);
     expect(within(blade).getByText(/since /)).toBeTruthy();
     const why = within(blade).getByTestId("blade-why");
     expect(within(why).getByText("High")).toBeTruthy();
     expect(within(why).getByText("No route to host")).toBeTruthy();
-    expect(within(why).getByRole("button", { name: "mic-1" })).toBeTruthy();
+    // The report names the component by name; the open action goes by its uuid.
+    fireEvent.click(within(why).getByRole("button", { name: "mic-1" }));
+    expect(controller().stack().at(-1)).toEqual({ kind: "component", id: uuidFor("eb-c-mic") });
   });
 
   // Each fact once (#872 drawer audit). The room's only system IS the room,
@@ -202,6 +204,7 @@ describe("the component blade", () => {
     const why = within(blade).getByTestId("blade-why");
     expect(within(why).getByText("High")).toBeTruthy();
     expect(within(why).getByText("No route to host")).toBeTruthy();
+    expect(within(why).getByText(/by rule/).textContent).toContain("icmp-unreachable");
     const serves = within(blade).getByTestId("blade-serves");
     expect(within(serves).getByText("Boardroom")).toBeTruthy();
     expect(await within(serves).findByText("Room Microphone")).toBeTruthy();

@@ -74,7 +74,7 @@ const health: FleetHealth = {
     {
       name: "room-mic", label: "Room Microphone", impact: "degraded", quorum: 2, satisfying: 1, short: 1, spare: 1,
       impaired: true, active: true, assigned_to: ["videobar-1", "mic-1"], down: ["mic-1"],
-      alarms: [{ id: "al-1", component: uuidFor("szp-c-mic"), severity: "high", message: "No route to host", raised_at: "2026-08-15T14:20:00Z" }],
+      alarms: [{ id: "al-1", component: "mic-1", component_id: uuidFor("szp-c-mic"), severity: "high", message: "No route to host", raised_at: "2026-08-15T14:20:00Z" }],
     },
     {
       name: "conf-bar", label: "Conferencing Bar", impact: "outage", quorum: 1, satisfying: 1, short: 0, spare: 0,
@@ -228,6 +228,16 @@ describe("the system zoom", () => {
     expect(within(strip).getByText("No route to host")).toBeTruthy();
     expect(within(strip).getByText(/Room Microphone/)).toBeTruthy();
     expect(within(strip).getByRole("button", { name: /mic-1/ })).toBeTruthy();
+  });
+
+  // The report names an alarm's component by name and by uuid (#557): the
+  // link and the card's message key on the uuid, the text is the name.
+  it("an alarm opens its component's blade by uuid, and its message rides that component's card", async () => {
+    mount();
+    expect(within(screen.getByTestId(`member-${uuidFor("szp-c-mic")}`)).getByText("No route to host")).toBeTruthy();
+    fireEvent.click(within(screen.getByTestId("alarm-strip")).getByRole("button", { name: "mic-1" }));
+    const blade = await screen.findByRole("dialog");
+    expect(blade.getAttribute("aria-labelledby")).toBe(`blade-title-component-${uuidFor("szp-c-mic")}`);
   });
 
   // The strip's tone and each marker's follow the registry's outage flag (#917).
@@ -392,10 +402,10 @@ describe("the history tab (#792)", () => {
 
   function seedAlarms(qc: QueryClient) {
     qc.setQueryData([...componentAlarmsKey(uuidFor("szp-c-mic"))], [
-      { id: "hal-1", component: uuidFor("szp-c-mic"), severity: "high", message: "No route to host", raised_at: "2026-08-15T14:20:00Z", active: true, acknowledged: false },
+      { id: "hal-1", component: "mic-1", component_id: uuidFor("szp-c-mic"), severity: "high", message: "No route to host", raised_at: "2026-08-15T14:20:00Z", active: true, acknowledged: false },
     ]);
     qc.setQueryData([...componentAlarmsKey(uuidFor("szp-c-bar"))], [
-      { id: "hal-0", component: uuidFor("szp-c-bar"), severity: "warning", message: "Fan speed high", raised_at: "2026-08-09T09:12:00Z", cleared_at: "2026-08-09T09:53:00Z", active: false, acknowledged: true },
+      { id: "hal-0", component: "videobar-1", component_id: uuidFor("szp-c-bar"), severity: "warning", message: "Fan speed high", raised_at: "2026-08-09T09:12:00Z", cleared_at: "2026-08-09T09:53:00Z", active: false, acknowledged: true },
     ]);
     qc.setQueryData([...componentAlarmsKey(uuidFor("szp-c-power"))], []);
   }

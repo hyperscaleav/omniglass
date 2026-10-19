@@ -102,8 +102,9 @@ function useDelete(opts: {
 }
 
 // Why, with the severity first: the reason beside the red light, each
-// naming the component when there is one to open.
-function Why(props: { rows: { severity: string; message: string; component?: string; onOpen?: () => void; ack?: JSX.Element }[] }) {
+// naming the component when there is one to open, and the event rule when
+// one raised it.
+function Why(props: { rows: { severity: string; message: string; component?: string; onOpen?: () => void; rule?: string; ack?: JSX.Element }[] }) {
   return (
     <Show when={props.rows.length > 0}>
       <div data-testid="blade-why" class={section}>
@@ -118,6 +119,9 @@ function Why(props: { rows: { severity: string; message: string; component?: str
                 </Show>
               </Show>
               <span class="min-w-0 flex-1 text-xs text-base-content/70">{a.message}</span>
+              <Show when={a.rule}>
+                {(rule) => <span class="shrink-0 text-[11px] text-base-content/45">by rule <span class="font-data">{rule()}</span></span>}
+              </Show>
               {a.ack}
             </div>
           )}
@@ -138,7 +142,7 @@ function SystemBody(props: { id: string }) {
   const cluster = () => view.data?.systems?.find((s) => s.id === props.id);
   const row = () => (systems.data ?? []).find((s) => s.id === props.id);
   const scale = useSeverity();
-  const alarms = createMemo(() => (health.data && view.data ? alarmRows(health.data, view.data, props.id, scale().levels) : []));
+  const alarms = createMemo(() => (health.data ? alarmRows(health.data, scale().levels) : []));
   const strip = createMemo(() => (health.data ? slotStrip(health.data) : undefined));
   const count = () => (cluster()?.dots ?? []).length;
 
@@ -223,7 +227,7 @@ function ComponentBody(props: { id: string }) {
         <HealthBadge verdict={verdict() ?? undefined} size="sm" />
         <SinceLine since={leafAlarmSince(alarmsQ.data ?? [], now, scale().levels)} />
       </div>
-      <Why rows={active().map((a) => ({ severity: a.severity, message: a.message, ack: <AcknowledgeButton component={props.id} alarm={a} /> }))} />
+      <Why rows={active().map((a) => ({ severity: a.severity, message: a.message, rule: a.raised_by_rule, ack: <AcknowledgeButton component={props.id} alarm={a} /> }))} />
       {/* Where its place is the room a system it serves makes, Serves names
           that room already, so no place card says it again. */}
       <Show when={placeId() && !(view.data && isRoomOf(view.data, placeId(), served().map((s) => s.id)))}>

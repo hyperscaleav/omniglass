@@ -95,7 +95,7 @@ export default function SystemZoom() {
   });
 
   const scale = useSeverity();
-  const alarms = createMemo(() => (view.data && health.data ? alarmRows(health.data, view.data, id(), scale().levels) : []));
+  const alarms = createMemo(() => (health.data ? alarmRows(health.data, scale().levels) : []));
   // The strip reads red when any alarm on it is at an outage level (the
   // registry's flag, #917), amber when they only degrade.
   const inOutage = createMemo(() => alarms().some((a) => scale().outage(a.severity)));

@@ -56,8 +56,8 @@ const health: FleetHealth = {
       name: "room-mic", label: "Room Microphone", impact: "degraded", quorum: 2, satisfying: 1, short: 1, spare: 0,
       impaired: true, active: true, assigned_to: ["videobar-1", "mic-1"], down: ["mic-1"],
       alarms: [
-        { id: "al-1", component: uuidFor("sz-c-mic"), severity: "high", message: "No route to host", raised_at: "2026-08-15T14:20:00Z" },
-        { id: "al-2", component: uuidFor("sz-c-mic"), severity: "warning", message: "Fan speed high", raised_at: "2026-08-15T13:00:00Z" },
+        { id: "al-1", component: "mic-1", component_id: uuidFor("sz-c-mic"), severity: "high", message: "No route to host", raised_at: "2026-08-15T14:20:00Z" },
+        { id: "al-2", component: "mic-1", component_id: uuidFor("sz-c-mic"), severity: "warning", message: "Fan speed high", raised_at: "2026-08-15T13:00:00Z" },
       ],
     },
     // Unconditional, nobody staffed: the commissioning gap.
@@ -75,7 +75,7 @@ const health: FleetHealth = {
     {
       name: "conf-codec", label: "conf-codec", impact: "outage", quorum: 1, satisfying: 0, short: 1, spare: 0,
       impaired: true, active: false, assigned_to: [], down: [],
-      alarms: [{ id: "al-ghost", component: uuidFor("sz-c-ghost"), severity: "high", message: "From the build not in use", raised_at: "2026-08-10T00:00:00Z" }],
+      alarms: [{ id: "al-ghost", component: "ghost-1", component_id: uuidFor("sz-c-ghost"), severity: "high", message: "From the build not in use", raised_at: "2026-08-10T00:00:00Z" }],
       choice: "conferencing", alternate: "component-system",
     },
   ],
@@ -166,7 +166,7 @@ describe("systemZoomVM", () => {
 describe("alarmRows", () => {
   const now = Date.parse("2026-08-15T17:00:00Z");
   it("flattens the active roles' alarms worst-first, joined to the role and the component's id", () => {
-    const rows = alarmRows(health, view, uuidFor("sz-sys"), SEEDED_LEVELS);
+    const rows = alarmRows(health, SEEDED_LEVELS);
     expect(rows.map((r) => r.severity)).toEqual(["high", "warning"]);
     expect(rows[0]).toMatchObject({
       message: "No route to host",
@@ -177,7 +177,7 @@ describe("alarmRows", () => {
   });
 
   it("never carries an alarm from a build not in use: an inactive role's alarms did not move the verdict", () => {
-    const rows = alarmRows(health, view, uuidFor("sz-sys"), SEEDED_LEVELS);
+    const rows = alarmRows(health, SEEDED_LEVELS);
     expect(rows.find((r) => r.message === "From the build not in use")).toBeUndefined();
   });
 
@@ -189,16 +189,28 @@ describe("alarmRows", () => {
         {
           name: "spare-mic", label: "Spare Microphone", impact: "none", quorum: 1, satisfying: 0, short: 1, spare: 0,
           impaired: true, active: true, assigned_to: ["mic-1"], down: ["mic-1"],
-          alarms: [{ id: "al-1", component: uuidFor("sz-c-mic"), severity: "high", message: "No route to host", raised_at: "2026-08-15T14:20:00Z" }],
+          alarms: [{ id: "al-1", component: "mic-1", component_id: uuidFor("sz-c-mic"), severity: "high", message: "No route to host", raised_at: "2026-08-15T14:20:00Z" }],
         },
       ],
     } as never;
-    const rows = alarmRows(doubled, view, uuidFor("sz-sys"), SEEDED_LEVELS);
+    const rows = alarmRows(doubled, SEEDED_LEVELS);
     expect(rows.filter((r) => r.id === "al-1")).toHaveLength(1);
   });
 
+  it("names the component by the wire's name and links it by component_id, even off the projection", () => {
+    const off = {
+      ...health,
+      roles: [{
+        name: "dsp", label: "DSP", impact: "none", quorum: 1, satisfying: 0, short: 1, spare: 0,
+        impaired: true, active: true, assigned_to: [], down: [],
+        alarms: [{ id: "al-dsp", component: "dsp-1", component_id: uuidFor("sz-c-dsp"), severity: "high", message: "No signal", raised_at: "2026-08-15T14:20:00Z" }],
+      }],
+    } as never;
+    expect(alarmRows(off, SEEDED_LEVELS)[0]).toMatchObject({ component: "dsp-1", componentId: uuidFor("sz-c-dsp") });
+  });
+
   it("is empty for a healthy report", () => {
-    expect(alarmRows({ ...health, roles: [] } as never, view, uuidFor("sz-sys"))).toEqual([]);
+    expect(alarmRows({ ...health, roles: [] } as never)).toEqual([]);
   });
   void now;
 });
