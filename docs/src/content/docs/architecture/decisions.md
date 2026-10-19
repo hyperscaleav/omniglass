@@ -6537,7 +6537,8 @@ interface create form, since that name is the platform's to mint.
      sample and at most one statement per batch, batches never queue on a stamp, the value is honest to
      within 5 seconds on every replica (an in-memory per-replica value was rejected: it lies across
      replicas), and the rule row every batch holds `FOR SHARE` is never written by ingest. The severity
-     levels surface beside the rules as a read view; the console does not author them yet (#930).
+     levels surface beside the rules, and the console authors operator levels as the CLI and the API
+     do (#930).
 
   Rules read like a registry (`rule:read`, any grant); writing one takes `rule:*` on an all-scope
   grant, since a rule's selector reaches the whole fleet, the same reasoning as a root create (ruled by

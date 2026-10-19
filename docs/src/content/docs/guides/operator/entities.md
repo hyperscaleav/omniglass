@@ -318,7 +318,7 @@ Raising one takes two things:
 
 - a **severity**: one of the severity levels, listed with their rank, color and effect under **Catalog,
   under Actions: Severity** (the [rules guide](/guides/admin/rules/#severity-levels) renders the shipped
-  set, and your admin can add more between them). Every alarm wears its level's label in its color. This is how loudly to treat it, and it sets the
+  set, and an admin can add more between them on that page). Every alarm wears its level's label in its color. This is how loudly to treat it, and it sets the
   **component's own** verdict (any active alarm makes the component degraded, one at a level marked
   outage takes it out). Only an **outage** stops a component occupying a role it fills: an info or warning
   alarm still degrades it, but the component keeps its slot, so a quiet issue does not short-staff

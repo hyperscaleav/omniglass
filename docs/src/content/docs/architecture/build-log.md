@@ -6523,3 +6523,14 @@ tests prove the stamp moves only on a judgment (not a disabled rule, an unwatche
 history sample), coalesces inside the bound, agrees across the list, get and state, and never makes a
 batch wait.
 
+
+### Severity levels are authored on the console (#930)
+
+**Catalog > Actions > Severity** went from a read view to a registry an operator writes: **New severity
+level** and a level's **Edit** open one form in a drawer (name, label, color, rank), and **Delete** sits
+behind a confirm; official levels stay read-only. Writes use the existing API and gate on
+`severity_level:*` like every registry (the server asks no all-scope grant, unlike a rule). The form
+teaches the rank as it is typed, against the live registry: where the rank sits ("Between Average (30)
+and High (40)."), whether an alarm at it takes its component out or degrades it, and the chip its
+alarms will wear; a name or rank another level holds is refused before anything is sent, and a delete
+the server refuses (a level an alarm or rule still names) says why on the blade.
