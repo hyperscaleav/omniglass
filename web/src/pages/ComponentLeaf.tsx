@@ -27,7 +27,7 @@ import { effectiveMetrics, effectiveMetricsKey } from "../lib/component_metrics"
 import { durationText } from "../lib/timeline";
 import { NODES_KEY, listNodes } from "../lib/nodes";
 import { PRODUCTS_KEY, listProducts } from "../lib/products";
-import { collectionState, dotVerdict, identityRows, leafAlarmSince, membershipRows, vitalRows } from "../lib/component_leaf";
+import { LEAF_FLEET_POLL_MS, LEAF_POLL_MS, collectionState, dotVerdict, identityRows, leafAlarmSince, membershipRows, vitalRows } from "../lib/component_leaf";
 import { entityLabel } from "../lib/entities";
 import { systemRoles, systemRolesKey } from "../lib/system_roles";
 import { componentCrumbs, isRoomOf, rolesOf } from "../lib/detail";
@@ -82,10 +82,10 @@ export default function ComponentLeaf() {
     return "overview";
   };
 
-  const view = useQuery(() => ({ queryKey: FLEET_VIEW_KEY, queryFn: fleetView }));
+  const view = useQuery(() => ({ queryKey: FLEET_VIEW_KEY, queryFn: fleetView, refetchInterval: LEAF_FLEET_POLL_MS }));
   const components = useQuery(() => ({ queryKey: COMPONENTS_KEY, queryFn: listComponents }));
   const products = useQuery(() => ({ queryKey: PRODUCTS_KEY, queryFn: listProducts }));
-  const nodes = useQuery(() => ({ queryKey: NODES_KEY, queryFn: listNodes }));
+  const nodes = useQuery(() => ({ queryKey: NODES_KEY, queryFn: listNodes, refetchInterval: LEAF_FLEET_POLL_MS }));
 
   const component = createMemo<FleetComponent | undefined>(() =>
     (components.data ?? []).find((c) => c.id === id() || c.name === id()),
@@ -108,11 +108,13 @@ export default function ComponentLeaf() {
     queryKey: REACHABILITY_KEY(id()),
     queryFn: () => getReachability(id()),
     enabled: !!component(),
+    refetchInterval: LEAF_POLL_MS,
   }));
   const alarmsQ = useQuery(() => ({
     queryKey: componentAlarmsKey(id()),
     queryFn: () => componentAlarms(id()),
     enabled: !!component(),
+    refetchInterval: LEAF_POLL_MS,
   }));
   const propsQ = useQuery(() => ({
     queryKey: effectivePropertiesKey(id()),
@@ -123,15 +125,18 @@ export default function ComponentLeaf() {
     queryKey: effectiveMetricsKey(id()),
     queryFn: () => effectiveMetrics(id()),
     enabled: !!component(),
+    refetchInterval: LEAF_POLL_MS,
   }));
-  // Pinned at setup: an age that re-ages on unrelated re-renders is churn.
-  const pageNow = Date.now();
+  // An age moves when the alarms are read again, not on unrelated
+  // re-renders (churn); before the poll it would also fall behind an alarm
+  // raised after the page opened, and read negative.
+  const pageNow = createMemo(() => Math.max(Date.now(), alarmsQ.dataUpdatedAt));
   const scale = useSeverity();
   const activeAlarms = createMemo(() => splitAlarms(alarmsQ.data ?? [], scale().levels).active);
   // The strip reads red when any active alarm is at an outage level (the
   // registry's flag, #917), amber when they only degrade.
   const inOutage = createMemo(() => activeAlarms().some((a) => scale().outage(a.severity)));
-  const since = createMemo(() => leafAlarmSince(alarmsQ.data ?? [], pageNow, scale().levels));
+  const since = createMemo(() => leafAlarmSince(alarmsQ.data ?? [], pageNow(), scale().levels));
   const verdict = createMemo(() => (view.data ? dotVerdict(view.data, component()?.id ?? "") : null));
   const identity = createMemo(() => identityRows(propsQ.data ?? []));
   const vitals = createMemo(() => vitalRows(metricsQ.data ?? []));
@@ -225,7 +230,7 @@ export default function ComponentLeaf() {
                           <SeverityBadge name={a.severity} />
                           <span>{a.message}</span>
                           <span class="text-xs text-base-content/50">
-                            {durationText(pageNow - Date.parse(a.raised_at))} · {a.acknowledged ? "acknowledged" : "unacknowledged"}
+                            {durationText(pageNow() - Date.parse(a.raised_at))} · {a.acknowledged ? "acknowledged" : "unacknowledged"}
                           </span>
                           <AcknowledgeButton component={component()?.id ?? id()} alarm={a} />
                         </div>

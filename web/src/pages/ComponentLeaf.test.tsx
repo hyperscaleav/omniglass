@@ -1,7 +1,7 @@
 import { describe, it, expect, afterEach, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@solidjs/testing-library";
 import { Router, Route } from "@solidjs/router";
-import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
+import { QueryClient, QueryClientProvider, focusManager } from "@tanstack/solid-query";
 import Components from "./Components";
 import { FLEET_VIEW_KEY, type FleetView } from "../lib/fleet";
 import { COMPONENTS_KEY, type Component } from "../lib/components";
@@ -309,5 +309,73 @@ describe("acknowledging from Why (#872)", () => {
     const readOnly: Me = { ...ackOnly, permissions: ["component:read", "system:read", "location:read"] };
     mount(undefined, undefined, bar, readOnly);
     expect(within(screen.getByTestId("leaf-alarms")).queryByRole("button", { name: "Acknowledge" })).toBeNull();
+  });
+});
+
+// A monitoring console's component view moves as collection arrives (#934):
+// its own reads poll, so a fresh sample, a vital and an alarm land without a
+// reload, each read one request however many endpoints the component has.
+describe("the component leaf refreshes (#934)", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  const json = (body: unknown) => new Response(JSON.stringify(body), { status: 200, headers: { "Content-Type": "application/json" } });
+
+  it("polls its reachability, vitals, alarms and verdict, one request per read", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "setInterval", "clearInterval"] });
+    const gets: string[] = [];
+    const later = new Date().toISOString();
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = (input as Request).url;
+      gets.push(new URL(url).pathname);
+      if (url.includes("/reachability")) {
+        return json({ component: "videobar-1", endpoints: [{ endpoint: "ssh", transport: "ssh", node: "edge-1", verdict: { value: "up", ts: iso(600) }, last_sample: later, layers: [], history: [] }] });
+      }
+      if (url.includes("/metrics")) {
+        return json({ metrics: [{ metric_type_name: "uptime", label: "Uptime", data_type: "float", value: 77, is_sampled: true, from_contract: false, required: false }] });
+      }
+      if (url.includes("/alarms")) {
+        return json({ alarms: [{ id: "al-2", component: "videobar-1", component_id: uuidFor("cf-c-bar"), severity: "high", message: "Reachability lost", raised_at: later, active: true, acknowledged: false }] });
+      }
+      if (url.endsWith("/views/fleet")) return json(view);
+      if (url.endsWith("/nodes")) return json({ nodes: [{ name: "edge-1", enrolled: true, last_heartbeat_at: later }] });
+      return json({ simulated: false });
+    });
+    mount();
+    // Before the poll: the stale sample, no Uptime, the old alarm.
+    expect(screen.getByTestId("collection-ssh").textContent).toContain("check the device or the path");
+    expect(screen.getByTestId("leaf-vitals").textContent).not.toContain("Uptime");
+
+    await vi.advanceTimersByTimeAsync(10_000);
+
+    expect(screen.getByTestId("collection-ssh").textContent).toBe("collecting");
+    expect(screen.getByTestId("leaf-vitals").textContent).toContain("Uptime");
+    expect(screen.getByTestId("leaf-alarms").textContent).toContain("Reachability lost");
+    const count = (p: string) => gets.filter((g) => g.endsWith(p)).length;
+    // Each read polled, as one request, not one per endpoint or per series.
+    for (const p of ["/reachability", "/metrics", "/alarms"]) {
+      expect(count(p)).toBeGreaterThanOrEqual(1);
+      expect(count(p)).toBeLessThanOrEqual(2);
+    }
+    expect(count("/views/fleet")).toBe(1);
+  });
+
+  it("holds the poll while the tab is hidden", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "setInterval", "clearInterval"] });
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(async () => json({}));
+    focusManager.setFocused(false);
+    try {
+      mount();
+      // The mount's own first reads (the simulation section is not seeded)
+      // are not a poll; nothing after them is.
+      await vi.advanceTimersByTimeAsync(0);
+      const atMount = fetchSpy.mock.calls.length;
+      await vi.advanceTimersByTimeAsync(20_000);
+      expect(fetchSpy.mock.calls.length).toBe(atMount);
+    } finally {
+      focusManager.setFocused(undefined);
+    }
   });
 });

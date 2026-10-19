@@ -20,7 +20,10 @@
 #
 # The rule's blade is the live view: the pending streak and the open alarm
 # land in it by its own poll, so those steps wait rather than hold. The system
-# view does not poll (#934), so it is opened once the alarm is open.
+# view does not poll, so it is opened once the alarm is open. The component's
+# own view does refresh (#934), but watching the clear there would not buy
+# the time back: the replug is still three clicks on the panel's page and a
+# poll, about 12s more on a recording that already runs 56s.
 title: Watch a rule raise an alarm
 description: Unplug a simulated touch panel from its page, watch the official reachability rule wait out its sustain and open a High alarm, and see the panel's system go degraded because of it.
 steps:

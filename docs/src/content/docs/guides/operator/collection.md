@@ -80,10 +80,11 @@ without one reads its transport name exactly.
   **target**; the transport (and so the name) is fixed at creation.
 - With `endpoint:delete`, deleting an endpoint removes it and **cascades its derived task**.
 
-Setting up monitoring on a component nothing collects from yet is both faces in turn: a probe
-for reachability, then the SNMP driver for what the device reports, each placed on a node, with
-reachability and samples arriving on the component's view seconds later. The walkthrough runs
-against a simulated component, so the node is really collecting.
+Setting up monitoring on a component nothing collects from yet is both faces in turn: the SNMP
+driver for what the component reports, then a probe for reachability, each placed on a node, with
+reachability and samples arriving on the component's view seconds later. The view refreshes on its
+own as they land, so there is nothing to reload. The walkthrough runs against a simulated
+component, so the node is really collecting.
 
 ::walkthrough{#set-up-monitoring}
 

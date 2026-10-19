@@ -353,6 +353,10 @@ what say it is collecting. A stale sample under a
 healthy node points at the device or the network path, not at collection. An offline node
 says nothing about the device. This card is the one place a node appears on these pages.
 
+The component's view refreshes on its own while it is open: its Collection, Vitals and alarms every
+5 seconds, its verdict and the node behind Collection every 10, so an endpoint you just added, or a
+component going down, shows up without a reload. The polling stops while the browser tab is hidden.
+
 ## Scope
 
 The page shows only what you can read. Without system read access you see the location
