@@ -558,9 +558,10 @@ type meOutput struct {
 		Service     *svcBody   `json:"service,omitempty"`
 		Permissions []string   `json:"permissions"`
 		// FleetPermissions narrows Permissions to the grants over the whole
-		// fleet: what the caller may do to fleet-wide config (event rules, the
-		// registries), which a grant bounded to a place or system never reaches.
-		FleetPermissions []string    `json:"fleet_permissions" doc:"The permissions the caller holds on an all-scope grant, flattened like permissions. Fleet-wide config (event rules) needs its permission here; a grant bounded to a place or system does not reach it. A UI hint; the server is the authority."`
+		// fleet: what the caller may write to fleet-wide config (an event rule,
+		// whose selector reaches every component), which a grant bounded to a
+		// place or system never reaches.
+		FleetPermissions []string    `json:"fleet_permissions" doc:"The permissions the caller holds on an all-scope grant, flattened like permissions. Writing fleet-wide config (an event rule) needs its permission here; a grant bounded to a place or system does not reach it. A UI hint; the server is the authority."`
 		Grants           []grantBody `json:"grants"`
 	}
 }

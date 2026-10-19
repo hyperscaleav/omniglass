@@ -143,7 +143,7 @@ func TestRuleStreakSurvivesCosmeticEdit(t *testing.T) {
 	now := time.Now().UTC()
 	r.observe(t, "tcp", "down", now)
 	lbl := "Renamed"
-	if _, err := r.f.gw.UpdateEventRule(ctx, "", "edit", storage.EventRulePatch{Label: &lbl}, all, all); err != nil {
+	if _, err := r.f.gw.UpdateEventRule(ctx, "", "edit", storage.EventRulePatch{Label: &lbl}, all); err != nil {
 		t.Fatal(err)
 	}
 	r.sweep(t, now.Add(5*time.Minute))
@@ -154,7 +154,7 @@ func TestRuleStreakSurvivesCosmeticEdit(t *testing.T) {
 	r.observe(t, "tcp", "up", now.Add(6*time.Minute))
 	r.observe(t, "icmp", "down", now.Add(6*time.Minute))
 	longer := time.Hour
-	if _, err := r.f.gw.UpdateEventRule(ctx, "", "edit", storage.EventRulePatch{FireSustain: &longer}, all, all); err != nil {
+	if _, err := r.f.gw.UpdateEventRule(ctx, "", "edit", storage.EventRulePatch{FireSustain: &longer}, all); err != nil {
 		t.Fatal(err)
 	}
 	r.sweep(t, time.Now().Add(30*time.Minute))
@@ -195,7 +195,7 @@ func TestRuleCreatedWhileConditionHolds(t *testing.T) {
 		t.Fatalf("a zero-sustain rule created on a down: %d alarms, want 1 at once", n)
 	}
 	on := true
-	if _, err := f.gw.UpdateEventRule(ctx, "", "dormant", storage.EventRulePatch{Enabled: &on}, all, all); err != nil {
+	if _, err := f.gw.UpdateEventRule(ctx, "", "dormant", storage.EventRulePatch{Enabled: &on}, all); err != nil {
 		t.Fatal(err)
 	}
 	if err := f.gw.SweepEventRules(ctx, time.Now().Add(11*time.Second)); err != nil {
@@ -310,7 +310,7 @@ func TestRuleDisableSerializesWithIngest(t *testing.T) {
 	go func() {
 		defer wg.Done()
 		off := false
-		if _, err := r.f.gw.UpdateEventRule(ctx, "", "gone", storage.EventRulePatch{Enabled: &off}, all, all); err != nil {
+		if _, err := r.f.gw.UpdateEventRule(ctx, "", "gone", storage.EventRulePatch{Enabled: &off}, all); err != nil {
 			t.Error(err)
 		}
 	}()

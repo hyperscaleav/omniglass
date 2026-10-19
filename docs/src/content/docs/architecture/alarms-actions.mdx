@@ -188,15 +188,18 @@ The **selector** picks the components a rule watches: those whose type falls wit
 type, and those listed by id; empty, every component. A rule outlives what it points at: deleting a
 component or a key it reads leaves it editable, and it simply matches nothing.
 
-Rules are **fleet-wide config**: authored at `/event-rules` with `rule:*` and an all-scope grant, read
-by any all-scope reader; a version bumps on every change.
+Rules **read like a registry**: any `rule:read` grant lists and gets every rule, wherever it is scoped.
+Writing one is fleet-wide: authored at `/event-rules` with `rule:*` on an all-scope grant, since a
+rule's selector reaches every component (ADR-0144). A version bumps on every change.
 
 A rule's **live state** is a read, not a stored column: `GET /event-rules/{name}/state` (`omniglass
 event-rule state list <rule>`, gated `rule:read`) returns the alarms it raised that are still open (component,
 endpoint instance, severity, when) and its streaks waiting out a sustain (component, instance, whether
 it points at fire or clear, since when). The list and a get carry the same state as counts
 (`open_alarms`, `pending_streaks`), aggregated for the whole list in one query, so a page of rules polls
-one list rather than a state read per rule. The console's **Catalog > Actions > Rules** page (#921) lists
+one list rather than a state read per rule. The state names components, so the lists and the counts
+cover only the components the caller's component read scope admits: a reader scoped to one place sees
+every rule, but only the alarms and streaks it could already see. The console's **Catalog > Actions > Rules** page (#921) lists
 every rule with its criteria in words, its severity and those live counts, opens a rule's blade with
 both lists linked to their components, and authors, edits, disables and deletes operator rules in a
 drawer (official rules are read-only); the operator's walk-through is the

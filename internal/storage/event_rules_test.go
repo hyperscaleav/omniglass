@@ -23,7 +23,7 @@ func criteria(op string, v any) rules.Criteria {
 // honest: it reads a registered sample key on its own lane, compares with
 // criteria that lane can evaluate, names a severity level that exists, and
 // selects component types and components that exist; an update bumps its
-// version; and rules are fleet-wide config, read and written only with an
+// version; and rules read like a registry, written only with an
 // all-scope grant.
 func TestEventRules(t *testing.T) {
 	if testing.Short() {
@@ -82,12 +82,23 @@ func TestEventRules(t *testing.T) {
 		t.Fatalf("a duplicate name: err %v, want ErrEventRuleExists", err)
 	}
 
-	// Rules are fleet-wide: only an all-scope grant reads or writes them.
+	// Rules read like a registry: a reader whose component scope admits
+	// nothing still lists and gets every rule. Writing one takes an all-scope
+	// grant, since its selector reaches the whole fleet.
 	if _, err := gw.CreateEventRule(ctx, "", storage.EventRuleSpec{Name: "scoped", SampleKey: "room-temperature", Fire: criteria("gt", 1), Severity: "high"}, none); !errors.Is(err, storage.ErrEventRuleForbidden) {
 		t.Fatalf("a scoped create: err %v, want ErrEventRuleForbidden", err)
 	}
-	if list, err := gw.ListEventRules(ctx, none); err != nil || len(list) != 0 {
-		t.Fatalf("a scoped reader lists %d rules (%v), want none", len(list), err)
+	if list, err := gw.ListEventRules(ctx, none); err != nil || len(list) != 3 {
+		t.Fatalf("a scoped reader lists %d rules (%v), want all 3", len(list), err)
+	}
+	if r, err := gw.GetEventRule(ctx, "reach-lost", none); err != nil || r.Name != "reach-lost" {
+		t.Fatalf("a scoped reader gets %+v (%v), want reach-lost", r, err)
+	}
+	if _, err := gw.UpdateEventRule(ctx, "", "reach-lost", storage.EventRulePatch{Label: ptrString("x")}, none); !errors.Is(err, storage.ErrEventRuleForbidden) {
+		t.Fatalf("a scoped update: err %v, want ErrEventRuleForbidden", err)
+	}
+	if err := gw.DeleteEventRule(ctx, "", "reach-lost", none); !errors.Is(err, storage.ErrEventRuleForbidden) {
+		t.Fatalf("a scoped delete: err %v, want ErrEventRuleForbidden", err)
 	}
 	if list, _ := gw.ListEventRules(ctx, all); len(list) != 3 {
 		t.Fatalf("an all-scope reader lists %d rules, want 3 (the two authored and the official reachability rule)", len(list))
@@ -96,11 +107,11 @@ func TestEventRules(t *testing.T) {
 	// An update bumps the version; disabling is an update.
 	off := false
 	clear := criteria("eq", "up")
-	upd, err := gw.UpdateEventRule(ctx, "", "reach-lost", storage.EventRulePatch{Enabled: &off, Clear: &clear}, all, all)
+	upd, err := gw.UpdateEventRule(ctx, "", "reach-lost", storage.EventRulePatch{Enabled: &off, Clear: &clear}, all)
 	if err != nil || upd.Version != 2 || upd.Enabled || upd.ClearCriteria == nil {
 		t.Fatalf("updated %+v (%v), want version 2, disabled, a clear criterion", upd, err)
 	}
-	if err := gw.DeleteEventRule(ctx, "", "room-hot", all, all); err != nil {
+	if err := gw.DeleteEventRule(ctx, "", "room-hot", all); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := gw.GetEventRule(ctx, "room-hot", all); !errors.Is(err, storage.ErrEventRuleNotFound) {
@@ -109,6 +120,8 @@ func TestEventRules(t *testing.T) {
 }
 
 func ptrCriteria(c rules.Criteria) *rules.Criteria { return &c }
+
+func ptrString(s string) *string { return &s }
 
 // A rule outlives what it points at: deleting a component it selects or the
 // sample key it reads leaves the rule editable (an operator can still
@@ -145,13 +158,13 @@ func TestEventRuleEdgeCases(t *testing.T) {
 		t.Fatal(err)
 	}
 	off := false
-	upd, err := gw.UpdateEventRule(ctx, "", "on-doomed", storage.EventRulePatch{Enabled: &off}, all, all)
+	upd, err := gw.UpdateEventRule(ctx, "", "on-doomed", storage.EventRulePatch{Enabled: &off}, all)
 	if err != nil || upd.Enabled {
 		t.Fatalf("disabling a rule whose component and key were deleted: %+v (%v), want it disabled", upd, err)
 	}
 
 	// A patch that changes nothing changes nothing, version included.
-	same, err := gw.UpdateEventRule(ctx, "", "on-doomed", storage.EventRulePatch{Enabled: &off}, all, all)
+	same, err := gw.UpdateEventRule(ctx, "", "on-doomed", storage.EventRulePatch{Enabled: &off}, all)
 	if err != nil || same.Version != upd.Version {
 		t.Fatalf("a no-op patch moved the version from %d to %d (%v)", upd.Version, same.Version, err)
 	}
@@ -164,7 +177,7 @@ func TestEventRuleEdgeCases(t *testing.T) {
 		t.Fatal(err)
 	}
 	if _, err := gw.UpdateEventRule(ctx, "", "on-doomed", storage.EventRulePatch{Selector: &storage.EventRuleSelector{
-		ComponentTypes: []string{"doomed-type"}, Components: upd.Selector.Components}}, all, all); err != nil {
+		ComponentTypes: []string{"doomed-type"}, Components: upd.Selector.Components}}, all); err != nil {
 		t.Fatalf("adding a component type that exists beside a stale component: %v", err)
 	}
 	if err := gw.DeleteComponentType(ctx, "", "doomed-type"); err != nil {
@@ -178,7 +191,7 @@ func TestEventRuleEdgeCases(t *testing.T) {
 	key := stored.SampleKey
 	fire := stored.FireCriteria
 	sel := stored.Selector
-	relabelled, err := gw.UpdateEventRule(ctx, "", "on-doomed", storage.EventRulePatch{Label: &label, Selector: &sel, SampleKey: &key, Fire: &fire}, all, all)
+	relabelled, err := gw.UpdateEventRule(ctx, "", "on-doomed", storage.EventRulePatch{Label: &label, Selector: &sel, SampleKey: &key, Fire: &fire}, all)
 	if err != nil || relabelled.Label != label || len(relabelled.Selector.Components) != 1 || len(relabelled.Selector.ComponentTypes) != 1 {
 		t.Fatalf("a label edit restating a stale selector and key: %+v (%v), want it saved with the selector kept", relabelled, err)
 	}
@@ -186,17 +199,17 @@ func TestEventRuleEdgeCases(t *testing.T) {
 		"a new component that does not exist":      {ComponentTypes: sel.ComponentTypes, Components: append([]string{"nobody"}, sel.Components...)},
 		"a new component type that does not exist": {ComponentTypes: append([]string{"no-such-type"}, sel.ComponentTypes...), Components: sel.Components},
 	} {
-		if _, err := gw.UpdateEventRule(ctx, "", "on-doomed", storage.EventRulePatch{Selector: &bad}, all, all); !errors.Is(err, storage.ErrEventRuleInvalid) {
+		if _, err := gw.UpdateEventRule(ctx, "", "on-doomed", storage.EventRulePatch{Selector: &bad}, all); !errors.Is(err, storage.ErrEventRuleInvalid) {
 			t.Errorf("%s: err %v, want ErrEventRuleInvalid", name, err)
 		}
 	}
 	nokey := "no-such-key"
-	if _, err := gw.UpdateEventRule(ctx, "", "on-doomed", storage.EventRulePatch{SampleKey: &nokey}, all, all); !errors.Is(err, storage.ErrEventRuleInvalid) {
+	if _, err := gw.UpdateEventRule(ctx, "", "on-doomed", storage.EventRulePatch{SampleKey: &nokey}, all); !errors.Is(err, storage.ErrEventRuleInvalid) {
 		t.Errorf("a new sample key that does not exist: err %v, want ErrEventRuleInvalid", err)
 	}
 
 	clear := criteria("lt", 1)
-	if _, err := gw.UpdateEventRule(ctx, "", "on-doomed", storage.EventRulePatch{Clear: &clear, ClearNegates: true}, all, all); !errors.Is(err, storage.ErrEventRuleInvalid) {
+	if _, err := gw.UpdateEventRule(ctx, "", "on-doomed", storage.EventRulePatch{Clear: &clear, ClearNegates: true}, all); !errors.Is(err, storage.ErrEventRuleInvalid) {
 		t.Fatalf("a clear criterion and clear_negates together: err %v, want ErrEventRuleInvalid", err)
 	}
 	for _, d := range []time.Duration{time.Nanosecond, 1500 * time.Nanosecond, 400 * 24 * time.Hour} {
@@ -237,7 +250,7 @@ func TestOfficialEventRules(t *testing.T) {
 		t.Fatalf("a re-seed moved the official rule's version from %d to %d", got.Version, again.Version)
 	}
 	off := false
-	if _, err := gw.UpdateEventRule(ctx, "", "reachability-lost", storage.EventRulePatch{Enabled: &off}, all, all); !errors.Is(err, storage.ErrEventRuleOfficial) {
+	if _, err := gw.UpdateEventRule(ctx, "", "reachability-lost", storage.EventRulePatch{Enabled: &off}, all); !errors.Is(err, storage.ErrEventRuleOfficial) {
 		t.Fatalf("editing the official rule: err %v, want ErrEventRuleOfficial", err)
 	}
 	if _, err := gw.CreateEventRule(ctx, "", storage.EventRuleSpec{Name: "mine", SampleKey: "room-temperature", Fire: criteria("gt", 1), Severity: "info"}, all); err != nil {

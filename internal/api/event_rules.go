@@ -132,18 +132,20 @@ type updateEventRuleInput struct {
 }
 
 // registerEventRuleRoutes wires event rule authoring (#918), and the rule's
-// live state (#921): the rules that
-// raise alarms, fleet-wide config read and written with an all-scope grant,
-// gated rule:* (ruling 2 on #819). Official rules are read-only.
+// live state (#921): the rules that raise alarms, gated rule:*. A rule reads
+// like a registry (rule:read from any grant), its live state fenced to the
+// caller's component read scope; writing one takes an all-scope grant, since
+// its selector reaches the whole fleet (ruling 2 on #819, amended #921).
+// Official rules are read-only.
 func registerEventRuleRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "list-event-rule",
 		Method:      http.MethodGet,
 		Path:        "/event-rules",
 		Summary:     "List event rules",
-		Description: "Lists the event rules, the authored config that raises alarms, each with its live state as counts (open_alarms, pending_streaks) read in the same query. Rules are fleet-wide: a caller without an all-scope grant lists none. Gated by rule:read.",
+		Description: "Lists the event rules, the authored config that raises alarms, each with its live state as counts (open_alarms, pending_streaks) read in the same query. Rules read like a registry: every rule is listed whatever the caller's scope, while the counts cover only components the caller may read. Gated by rule:read.",
 	}, "rule", "read"), func(ctx context.Context, _ *struct{}) (*listEventRulesOutput, error) {
-		rs, err := gw.ListEventRules(ctx, a.scopeFor(ctx, "rule", "read"))
+		rs, err := gw.ListEventRules(ctx, a.scopeFor(ctx, "component", "read"))
 		if err != nil {
 			return nil, mapEventRuleErr(err)
 		}
@@ -160,9 +162,9 @@ func registerEventRuleRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 		Method:      http.MethodGet,
 		Path:        "/event-rules/{name}",
 		Summary:     "Get an event rule",
-		Description: "Returns one event rule by name, with its live state as counts. Gated by rule:read.",
+		Description: "Returns one event rule by name, with its live state as counts over the components the caller may read. Gated by rule:read.",
 	}, "rule", "read"), func(ctx context.Context, in *eventRuleNameInput) (*eventRuleOutput, error) {
-		r, err := gw.GetEventRule(ctx, in.Name, a.scopeFor(ctx, "rule", "read"))
+		r, err := gw.GetEventRule(ctx, in.Name, a.scopeFor(ctx, "component", "read"))
 		if err != nil {
 			return nil, mapEventRuleErr(err)
 		}
@@ -204,7 +206,7 @@ func registerEventRuleRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 		if err != nil {
 			return nil, mapEventRuleErr(err)
 		}
-		return &eventRuleOutput{Body: toEventRuleBody(r)}, nil
+		return rereadEventRule(ctx, a, gw, r.Name)
 	})
 
 	huma.Register(api, a.gated(huma.Operation{
@@ -248,11 +250,11 @@ func registerEventRuleRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 			}
 			patch.ClearSustain = &d
 		}
-		r, err := gw.UpdateEventRule(ctx, actorID(ctx), in.Name, patch, a.scopeFor(ctx, "rule", "read"), a.scopeFor(ctx, "rule", "update"))
+		r, err := gw.UpdateEventRule(ctx, actorID(ctx), in.Name, patch, a.scopeFor(ctx, "rule", "update"))
 		if err != nil {
 			return nil, mapEventRuleErr(err)
 		}
-		return &eventRuleOutput{Body: toEventRuleBody(r)}, nil
+		return rereadEventRule(ctx, a, gw, r.Name)
 	})
 
 	huma.Register(api, a.gated(huma.Operation{
@@ -263,7 +265,7 @@ func registerEventRuleRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 		Summary:       "Delete an event rule",
 		Description:   "Removes an operator rule; an official rule is read-only (409). Audited. Gated by rule:delete, with an all-scope grant.",
 	}, "rule", "delete"), func(ctx context.Context, in *eventRuleNameInput) (*struct{}, error) {
-		if err := gw.DeleteEventRule(ctx, actorID(ctx), in.Name, a.scopeFor(ctx, "rule", "read"), a.scopeFor(ctx, "rule", "delete")); err != nil {
+		if err := gw.DeleteEventRule(ctx, actorID(ctx), in.Name, a.scopeFor(ctx, "rule", "delete")); err != nil {
 			return nil, mapEventRuleErr(err)
 		}
 		return nil, nil
@@ -300,9 +302,9 @@ func registerEventRuleStateRoute(api huma.API, a *authenticator, gw storage.Gate
 		Method:      http.MethodGet,
 		Path:        "/event-rules/{name}/state",
 		Summary:     "Get an event rule's live state",
-		Description: "What a rule holds right now: the alarms it raised that are still open, each on a component and instance, and its streaks waiting out a sustain. Gated by rule:read; fleet-wide, so an all-scope grant.",
+		Description: "What a rule holds right now: the alarms it raised that are still open, each on a component and instance, and its streaks waiting out a sustain. Only those on components the caller may read are listed. Gated by rule:read.",
 	}, "rule", "read"), func(ctx context.Context, in *eventRuleNameInput) (*eventRuleStateOutput, error) {
-		st, err := gw.EventRuleState(ctx, in.Name, a.scopeFor(ctx, "rule", "read"))
+		st, err := gw.EventRuleState(ctx, in.Name, a.scopeFor(ctx, "component", "read"))
 		if err != nil {
 			return nil, mapEventRuleErr(err)
 		}
@@ -321,6 +323,17 @@ func registerEventRuleStateRoute(api huma.API, a *authenticator, gw storage.Gate
 	})
 }
 
+// rereadEventRule answers a write with the rule as the caller reads it: the
+// write's own counts are fleet-wide, and the caller's component read scope may
+// be narrower than its all-scope rule grant.
+func rereadEventRule(ctx context.Context, a *authenticator, gw storage.Gateway, name string) (*eventRuleOutput, error) {
+	r, err := gw.GetEventRule(ctx, name, a.scopeFor(ctx, "component", "read"))
+	if err != nil {
+		return nil, mapEventRuleErr(err)
+	}
+	return &eventRuleOutput{Body: toEventRuleBody(r)}, nil
+}
+
 func mapEventRuleErr(err error) error {
 	if refErr, ok := mapRefErr(err); ok {
 		return refErr
@@ -333,7 +346,7 @@ func mapEventRuleErr(err error) error {
 	case errors.Is(err, storage.ErrEventRuleExists):
 		return huma.Error409Conflict("an event rule already has that name")
 	case errors.Is(err, storage.ErrEventRuleForbidden):
-		return huma.Error403Forbidden("event rules are fleet-wide config and need an all-scope grant")
+		return huma.Error403Forbidden("writing an event rule needs an all-scope grant: its selector reaches the whole fleet")
 	case errors.Is(err, storage.ErrEventRuleInvalid):
 		return huma.Error422UnprocessableEntity(err.Error())
 	}

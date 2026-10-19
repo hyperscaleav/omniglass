@@ -875,10 +875,10 @@ func (UnimplementedGateway) GetEventRule(context.Context, string, scope.Set) (*E
 func (UnimplementedGateway) CreateEventRule(context.Context, string, EventRuleSpec, scope.Set) (*EventRule, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) UpdateEventRule(context.Context, string, string, EventRulePatch, scope.Set, scope.Set) (*EventRule, error) {
+func (UnimplementedGateway) UpdateEventRule(context.Context, string, string, EventRulePatch, scope.Set) (*EventRule, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) DeleteEventRule(context.Context, string, string, scope.Set, scope.Set) error {
+func (UnimplementedGateway) DeleteEventRule(context.Context, string, string, scope.Set) error {
 	return nil
 }
 func (UnimplementedGateway) SweepEventRules(context.Context, time.Time) error     { return nil }

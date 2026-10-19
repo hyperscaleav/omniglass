@@ -38,7 +38,8 @@ type eventRuleBody struct {
 }
 
 // TestEventRuleAPI drives rule authoring over HTTP: rules are listed by
-// any all-scope reader and authored with rule:*; a rule refers to a
+// any rule:read holder, like a registry, and authored with rule:* on an
+// all-scope grant; a rule refers to a
 // registered sample key, criteria its lane can evaluate and a level that
 // exists; an update bumps its version.
 func TestEventRuleAPI(t *testing.T) {
@@ -131,6 +132,75 @@ func TestEventRuleAPI(t *testing.T) {
 		t.Fatalf("got reach-lost %+v, want 0 open and 1 pending", one)
 	}
 
+	// Rules read like a registry: a viewer scoped to one place lists and gets
+	// every rule. The live state names components, so it carries only the
+	// streaks on components the caller's component scope admits: a place
+	// scope reaches none today, a component scope reaches its own.
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "rule-other"}, all, all, all, all); err != nil {
+		t.Fatal(err)
+	}
+	if err := gw.InsertPropertySamples(ctx, []storage.PropertySampleWrite{{OwnerKind: "component", OwnerID: "rule-other",
+		Key: "endpoint-reachable", Instance: "tcp", Value: "down", TS: time.Now()}}); err != nil {
+		t.Fatal(err)
+	}
+	south := c.do(ownerTok, http.MethodPost, "/locations", map[string]any{"name": "south", "location_type": "campus"}, http.StatusCreated)
+	var southLoc struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(south, &southLoc); err != nil || southLoc.ID == "" {
+		t.Fatalf("created location %s (%v)", south, err)
+	}
+	placeViewer := setupScopedPrincipal(t, ctx, dsn, "south-viewer", grantSpec{role: "viewer", scopeKind: "location", scopeID: southLoc.ID})
+	target, err := gw.GetComponent(ctx, "rule-target", all)
+	if err != nil {
+		t.Fatal(err)
+	}
+	compViewer := setupScopedPrincipal(t, ctx, dsn, "target-viewer", grantSpec{role: "viewer", scopeKind: "component", scopeID: target.ID})
+	ruleState := func(tok string) []struct {
+		Component string `json:"component"`
+	} {
+		t.Helper()
+		var st struct {
+			Pending []struct {
+				Component string `json:"component"`
+			} `json:"pending"`
+		}
+		if err := json.Unmarshal(c.do(tok, http.MethodGet, "/event-rules/reach-lost/state", nil, http.StatusOK), &st); err != nil {
+			t.Fatal(err)
+		}
+		return st.Pending
+	}
+	if got := ruleState(viewer); len(got) != 2 {
+		t.Fatalf("the fleet viewer sees %d pending streaks, want 2", len(got))
+	}
+	for tok, want := range map[string][]string{placeViewer: {}, compViewer: {"rule-target"}} {
+		var list struct {
+			EventRules []eventRuleBody `json:"event_rules"`
+		}
+		if err := json.Unmarshal(c.do(tok, http.MethodGet, "/event-rules", nil, http.StatusOK), &list); err != nil {
+			t.Fatal(err)
+		}
+		if len(list.EventRules) != 2 {
+			t.Fatalf("a scoped viewer lists %d rules, want both", len(list.EventRules))
+		}
+		for _, r := range list.EventRules {
+			if r.Name == "reach-lost" && *r.Pending != len(want) {
+				t.Fatalf("a scoped viewer counts %d pending on reach-lost, want %d (its visible components only)", *r.Pending, len(want))
+			}
+		}
+		var one eventRuleBody
+		if err := json.Unmarshal(c.do(tok, http.MethodGet, "/event-rules/reach-lost", nil, http.StatusOK), &one); err != nil {
+			t.Fatal(err)
+		}
+		if one.Name != "reach-lost" || *one.Pending != len(want) {
+			t.Fatalf("a scoped viewer gets %+v, want reach-lost with %d pending", one, len(want))
+		}
+		got := ruleState(tok)
+		if len(got) != len(want) || (len(want) == 1 && got[0].Component != want[0]) {
+			t.Fatalf("a scoped viewer sees streaks %+v, want %v", got, want)
+		}
+	}
+
 	var upd eventRuleBody
 	if err := json.Unmarshal(c.do(ownerTok, http.MethodPatch, "/event-rules/reach-lost",
 		map[string]any{"enabled": false, "clear_criteria": map[string]any{"op": "eq", "value": "up"}}, http.StatusOK), &upd); err != nil {
@@ -168,6 +238,15 @@ func TestEventRuleAPI(t *testing.T) {
 	}
 	c.do(placeOwner, http.MethodPost, "/event-rules", map[string]any{"name": "north-only", "sample_key": "room-temperature",
 		"fire_criteria": map[string]any{"op": "gt", "value": 30}, "severity": "high"}, http.StatusForbidden)
+
+	// A holder of every rule permission on one place alone still writes no
+	// rule: a rule's selector reaches the whole fleet.
+	placeOnly := setupScopedPrincipal(t, ctx, dsn, "north-only-owner", grantSpec{role: "owner", scopeKind: "location", scopeID: loc.ID})
+	c.do(placeOnly, http.MethodGet, "/event-rules/reach-lost", nil, http.StatusOK)
+	c.do(placeOnly, http.MethodPost, "/event-rules", map[string]any{"name": "north-only", "sample_key": "room-temperature",
+		"fire_criteria": map[string]any{"op": "gt", "value": 30}, "severity": "high"}, http.StatusForbidden)
+	c.do(placeOnly, http.MethodPatch, "/event-rules/reach-lost", map[string]any{"label": "mine"}, http.StatusForbidden)
+	c.do(placeOnly, http.MethodDelete, "/event-rules/reach-lost", nil, http.StatusForbidden)
 
 	c.do(viewer, http.MethodDelete, "/event-rules/reach-lost", nil, http.StatusForbidden)
 	c.do(ownerTok, http.MethodDelete, "/event-rules/reach-lost", nil, http.StatusNoContent)

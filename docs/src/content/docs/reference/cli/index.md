@@ -1507,7 +1507,7 @@ Get an event rule
 omniglass event-rule get <name>
 ```
 
-Returns one event rule by name, with its live state as counts. Gated by rule:read.
+Returns one event rule by name, with its live state as counts over the components the caller may read. Gated by rule:read.
 
 Example:
 
@@ -1523,7 +1523,7 @@ List event rules
 omniglass event-rule list
 ```
 
-Lists the event rules, the authored config that raises alarms, each with its live state as counts (open_alarms, pending_streaks) read in the same query. Rules are fleet-wide: a caller without an all-scope grant lists none. Gated by rule:read.
+Lists the event rules, the authored config that raises alarms, each with its live state as counts (open_alarms, pending_streaks) read in the same query. Rules read like a registry: every rule is listed whatever the caller's scope, while the counts cover only components the caller may read. Gated by rule:read.
 
 Example:
 
@@ -1543,7 +1543,7 @@ Get an event rule's live state
 omniglass event-rule state list <name>
 ```
 
-What a rule holds right now: the alarms it raised that are still open, each on a component and instance, and its streaks waiting out a sustain. Gated by rule:read; fleet-wide, so an all-scope grant.
+What a rule holds right now: the alarms it raised that are still open, each on a component and instance, and its streaks waiting out a sustain. Only those on components the caller may read are listed. Gated by rule:read.
 
 Example:
 

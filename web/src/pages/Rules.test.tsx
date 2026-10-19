@@ -215,10 +215,16 @@ describe("Rules page", () => {
     expect(editBtn.disabled).toBe(true);
   });
 
-  it("tells a scoped caller that rules are fleet-wide instead of looking empty", () => {
-    mount(scoped, []);
-    expect(screen.getByText(/Rules are fleet-wide config/)).toBeTruthy();
+  it("lists every rule to a caller scoped to one place, like a registry, but offers it no write", () => {
+    mount(scoped);
+    expect(screen.getByText("Too hot")).toBeTruthy();
+    expect(screen.queryByText(/fleet-wide config/)).toBeNull();
     expect(screen.queryByText("New rule")).toBeNull();
+  });
+
+  it("says only that there are no rules when the list is empty, whoever reads it", () => {
+    mount(scoped, []);
+    expect(screen.getByText("No rules yet.")).toBeTruthy();
   });
 
   it("creates a property rule: eq/ne only, text value, the opposite as its clear", async () => {

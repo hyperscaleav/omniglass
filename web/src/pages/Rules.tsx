@@ -59,9 +59,10 @@ import {
 // alarms and streaks waiting out a sustain, counted on the list rows so the
 // page polls one list, not a query per rule), so the list is the teaching
 // surface: the official reachability rule's counts move while a simulated
-// component is unplugged. Official rules are read-only; rules are fleet-wide
-// config, so every write is judged on the caller's all-scope permissions
-// (fleetView), and a caller without an all-scope read lists none and is told why.
+// component is unplugged. Official rules are read-only. Rules read like a
+// registry, so any rule:read lists them all (the live counts cover only the
+// components the caller may read); a rule's selector reaches the whole fleet,
+// so every write is judged on the caller's all-scope permissions (fleetView).
 
 // The hints, written once: each is the (i) beside the field or fact it explains,
 // on the form and the detail alike.
@@ -149,7 +150,6 @@ export default function Rules(): JSX.Element {
   const rules = useQuery(() => ({ queryKey: EVENT_RULES_KEY, queryFn: listEventRules, refetchInterval: LIST_POLL_MS }));
   const rows = () => (rules.data ?? []).slice().sort((a, b) => a.name.localeCompare(b.name));
   const unit = useMetricUnit();
-  const fleetBlind = () => !!me.data && !canFleet(me.data, "rule", "read");
   const canCreate = () => canFleet(me.data, "rule", "create");
   const blades = createBladeController();
   const [editing, setEditing] = createSignal<string | null>(null);
@@ -197,9 +197,7 @@ export default function Rules(): JSX.Element {
             ],
             filterPlaceholder: "filter rules by name, key, severity…",
             columns,
-            empty: fleetBlind()
-              ? "Rules are fleet-wide config: reading them takes a grant over the whole fleet."
-              : "No rules yet.",
+            empty: "No rules yet.",
             rowId: (r) => r.name,
             blades: { registry: { rule: ruleBlade }, rootKind: "rule", controller: blades },
             railExtra: () => (

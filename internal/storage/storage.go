@@ -452,15 +452,17 @@ type Gateway interface {
 	// The event_type registry (ADR-0063 #395): the occurrence keyspace, the twin of
 	// property_type. Seeded official and operator-extensible; a registered event_type
 	// name routes an occurrence to the event sink.
-	// Event rules (#918): fleet-wide config, read and written with an
-	// all-scope grant; official rules read-only.
-	ListEventRules(ctx context.Context, read scope.Set) ([]EventRule, error)
-	GetEventRule(ctx context.Context, name string, read scope.Set) (*EventRule, error)
+	// Event rules (#918): read like a registry, written with an all-scope
+	// grant; official rules read-only. A read's visible set is the caller's
+	// component read scope, which fences the live state (counts, open alarms,
+	// streaks) to the components it admits.
+	ListEventRules(ctx context.Context, visible scope.Set) ([]EventRule, error)
+	GetEventRule(ctx context.Context, name string, visible scope.Set) (*EventRule, error)
 	CreateEventRule(ctx context.Context, actorID string, spec EventRuleSpec, create scope.Set) (*EventRule, error)
-	UpdateEventRule(ctx context.Context, actorID, name string, patch EventRulePatch, read, action scope.Set) (*EventRule, error)
-	DeleteEventRule(ctx context.Context, actorID, name string, read, action scope.Set) error
+	UpdateEventRule(ctx context.Context, actorID, name string, patch EventRulePatch, action scope.Set) (*EventRule, error)
+	DeleteEventRule(ctx context.Context, actorID, name string, action scope.Set) error
 	// EventRuleState reads a rule's live state: its open alarms and streaks.
-	EventRuleState(ctx context.Context, name string, read scope.Set) (*EventRuleLive, error)
+	EventRuleState(ctx context.Context, name string, visible scope.Set) (*EventRuleLive, error)
 	// UpsertEventRule installs an official rule from the boot seed.
 	UpsertEventRule(ctx context.Context, spec EventRuleSpec) error
 	// SweepEventRules acts on every rule streak held for its sustain at now.

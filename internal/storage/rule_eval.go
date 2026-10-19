@@ -681,18 +681,21 @@ type EventRuleLive struct {
 	Pending []RuleStreak
 }
 
-// EventRuleState reads a rule's live state by name (fleet-wide config: an
-// all-scope reader only).
-func (p *PG) EventRuleState(ctx context.Context, name string, read scope.Set) (*EventRuleLive, error) {
-	r, err := p.GetEventRule(ctx, name, read)
+// EventRuleState reads a rule's live state by name. The rule reads like a
+// registry, but its open alarms and streaks name components, so only those on
+// a component the visible component read scope admits are listed.
+func (p *PG) EventRuleState(ctx context.Context, name string, visible scope.Set) (*EventRuleLive, error) {
+	r, err := p.GetEventRule(ctx, name, visible)
 	if err != nil {
 		return nil, err
 	}
 	prefix := ruleDedupKey(r.Name, "")
 	out := &EventRuleLive{Open: []RuleOpenAlarm{}, Pending: []RuleStreak{}}
-	rows, err := p.pool.Query(ctx, `select a.id::text, a.component_id::text, c.name, a.dedup_key, a.severity, a.raised_at
+	f := newReadFilter(componentTable, visible, 2)
+	args := append([]any{r.ID}, f.Args...)
+	rows, err := p.pool.Query(ctx, f.With+`select a.id::text, a.component_id::text, c.name, a.dedup_key, a.severity, a.raised_at
 		from alarm a join component c on c.id = a.component_id
-		where a.raised_by_rule_id = $1 and a.cleared_at is null order by a.raised_at`, r.ID)
+		where a.raised_by_rule_id = $1 and a.cleared_at is null and `+f.Pred("a.component_id")+` order by a.raised_at`, args...)
 	if err != nil {
 		return nil, fmt.Errorf("storage: rule %s open alarms: %w", name, err)
 	}
@@ -710,9 +713,9 @@ func (p *PG) EventRuleState(ctx context.Context, name string, read scope.Set) (*
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
-	rows, err = p.pool.Query(ctx, `select s.component_id::text, c.name, s.instance, s.pending, s.since
+	rows, err = p.pool.Query(ctx, f.With+`select s.component_id::text, c.name, s.instance, s.pending, s.since
 		from event_rule_state s join component c on c.id = s.component_id
-		where s.rule_id = $1 order by s.since`, r.ID)
+		where s.rule_id = $1 and `+f.Pred("s.component_id")+` order by s.since`, args...)
 	if err != nil {
 		return nil, fmt.Errorf("storage: rule %s streaks: %w", name, err)
 	}

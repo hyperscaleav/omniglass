@@ -6530,8 +6530,10 @@ interface create form, since that name is the platform's to mint.
      and is not the same fact. The severity levels surface beside the rules as a read view; the console
      does not author them yet (#930).
 
-  Rules are fleet-wide config, read and written with an all-scope grant, until a rule can be owned at a
-  location or system tier.
+  Rules read like a registry (`rule:read`, any grant); writing one takes `rule:*` on an all-scope
+  grant, since a rule's selector reaches the whole fleet, the same reasoning as a root create (ruled by
+  the architect 2026-10-19). A rule's live state names components, so its counts, open alarms and
+  streaks cover only the components the caller's component read scope admits.
 - **Context:** #606 left the rules vocabulary to the definition that builds it; #819's definition
   posed the five forks with the concrete DDL and the architect approved every recommendation
   (2026-10-18). ADR-0050 had fixed severity at three values with a CHECK; the registry supersedes that

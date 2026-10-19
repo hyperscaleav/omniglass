@@ -1185,7 +1185,7 @@ export interface paths {
         };
         /**
          * List event rules
-         * @description Lists the event rules, the authored config that raises alarms, each with its live state as counts (open_alarms, pending_streaks) read in the same query. Rules are fleet-wide: a caller without an all-scope grant lists none. Gated by rule:read.
+         * @description Lists the event rules, the authored config that raises alarms, each with its live state as counts (open_alarms, pending_streaks) read in the same query. Rules read like a registry: every rule is listed whatever the caller's scope, while the counts cover only components the caller may read. Gated by rule:read.
          */
         get: operations["list-event-rule"];
         put?: never;
@@ -1209,7 +1209,7 @@ export interface paths {
         };
         /**
          * Get an event rule
-         * @description Returns one event rule by name, with its live state as counts. Gated by rule:read.
+         * @description Returns one event rule by name, with its live state as counts over the components the caller may read. Gated by rule:read.
          */
         get: operations["get-event-rule"];
         put?: never;
@@ -1237,7 +1237,7 @@ export interface paths {
         };
         /**
          * Get an event rule's live state
-         * @description What a rule holds right now: the alarms it raised that are still open, each on a component and instance, and its streaks waiting out a sustain. Gated by rule:read; fleet-wide, so an all-scope grant.
+         * @description What a rule holds right now: the alarms it raised that are still open, each on a component and instance, and its streaks waiting out a sustain. Only those on components the caller may read are listed. Gated by rule:read.
          */
         get: operations["get-event-rule-state"];
         put?: never;
@@ -6698,7 +6698,7 @@ export interface components {
              * @example /api/v1/schemas/MeOutputBody.json
              */
             readonly $schema?: string;
-            /** @description The permissions the caller holds on an all-scope grant, flattened like permissions. Fleet-wide config (event rules) needs its permission here; a grant bounded to a place or system does not reach it. A UI hint; the server is the authority. */
+            /** @description The permissions the caller holds on an all-scope grant, flattened like permissions. Writing fleet-wide config (an event rule) needs its permission here; a grant bounded to a place or system does not reach it. A UI hint; the server is the authority. */
             fleet_permissions: string[] | null;
             grants: components["schemas"]["GrantBody"][] | null;
             human?: components["schemas"]["HumanBody"];

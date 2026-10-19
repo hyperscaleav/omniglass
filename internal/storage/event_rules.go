@@ -95,7 +95,7 @@ var (
 	ErrEventRuleExists    = errors.New("storage: an event rule already has that name")
 	ErrEventRuleOfficial  = errors.New("storage: an official event rule is read-only")
 	ErrEventRuleInvalid   = errors.New("storage: event rule is invalid")
-	ErrEventRuleForbidden = errors.New("storage: event rules are fleet-wide config and need an all-scope grant")
+	ErrEventRuleForbidden = errors.New("storage: writing an event rule needs an all-scope grant")
 )
 
 // ruleCols is the rule read shape, its columns qualified by alias ("" for
@@ -301,20 +301,25 @@ func ruleArgs(r EventRule) ([]byte, []byte, any, error) {
 }
 
 // ruleCountsJoin aggregates every rule's live state once, joined to the rule
-// rows by id: open alarms it raised, and its pending streaks.
-const ruleCountsJoin = ` left join (select raised_by_rule_id as rule_id, count(*) as n from alarm
-		where cleared_at is null and raised_by_rule_id is not null group by raised_by_rule_id) oa on oa.rule_id = r.id
-	left join (select rule_id, count(*) as n from event_rule_state group by rule_id) ps on ps.rule_id = r.id`
+// rows by id: open alarms it raised, and its pending streaks, each counted
+// only on a component the filter admits.
+func ruleCountsJoin(f readFilter) string {
+	return ` left join (select raised_by_rule_id as rule_id, count(*) as n from alarm
+		where cleared_at is null and raised_by_rule_id is not null and ` + f.Pred("component_id") + `
+		group by raised_by_rule_id) oa on oa.rule_id = r.id
+	left join (select rule_id, count(*) as n from event_rule_state where ` + f.Pred("component_id") + `
+		group by rule_id) ps on ps.rule_id = r.id`
+}
 
 // ListEventRules lists every rule, by name, each with its live state as
-// counts in the same query; a reader without an all-scope grant sees none,
-// since rules are fleet-wide config.
-func (p *PG) ListEventRules(ctx context.Context, read scope.Set) ([]EventRule, error) {
-	if !read.All {
-		return nil, nil
-	}
-	rows, err := p.pool.Query(ctx, `select `+ruleCols("r.")+`, coalesce(oa.n, 0), coalesce(ps.n, 0)
-		from event_rule r`+ruleCountsJoin+` order by r.name`)
+// counts in the same query. Rules read like a registry, so every rule is
+// listed whatever the caller's scope; the counts are scoped, counting only
+// the alarms and streaks on components the visible component read scope
+// admits.
+func (p *PG) ListEventRules(ctx context.Context, visible scope.Set) ([]EventRule, error) {
+	f := newReadFilter(componentTable, visible, 1)
+	rows, err := p.pool.Query(ctx, f.With+`select `+ruleCols("r.")+`, coalesce(oa.n, 0), coalesce(ps.n, 0)
+		from event_rule r`+ruleCountsJoin(f)+` order by r.name`, f.Args...)
 	if err != nil {
 		return nil, fmt.Errorf("storage: list event rules: %w", err)
 	}
@@ -332,20 +337,23 @@ func (p *PG) ListEventRules(ctx context.Context, read scope.Set) ([]EventRule, e
 	return out, rows.Err()
 }
 
-// countRuleState reads one rule's live state as counts.
-func countRuleState(ctx context.Context, q querier, r *EventRule) error {
-	if err := q.QueryRow(ctx, `select (select count(*) from alarm where raised_by_rule_id = $1 and cleared_at is null),
-		(select count(*) from event_rule_state where rule_id = $1)`, r.ID).Scan(&r.OpenAlarms, &r.PendingStreaks); err != nil {
+// countRuleState reads one rule's live state as counts, over the components
+// the visible scope admits.
+func countRuleState(ctx context.Context, q querier, r *EventRule, visible scope.Set) error {
+	f := newReadFilter(componentTable, visible, 2)
+	args := append([]any{r.ID}, f.Args...)
+	if err := q.QueryRow(ctx, f.With+`select (select count(*) from alarm where raised_by_rule_id = $1 and cleared_at is null
+			and `+f.Pred("component_id")+`),
+		(select count(*) from event_rule_state where rule_id = $1 and `+f.Pred("component_id")+`)`,
+		args...).Scan(&r.OpenAlarms, &r.PendingStreaks); err != nil {
 		return fmt.Errorf("storage: count event rule %q state: %w", r.Name, err)
 	}
 	return nil
 }
 
-// GetEventRule reads one rule by name, with its live state as counts.
-func (p *PG) GetEventRule(ctx context.Context, name string, read scope.Set) (*EventRule, error) {
-	if !read.All {
-		return nil, ErrEventRuleNotFound
-	}
+// GetEventRule reads one rule by name, whatever the caller's scope, with its
+// live state as counts over the components the visible scope admits.
+func (p *PG) GetEventRule(ctx context.Context, name string, visible scope.Set) (*EventRule, error) {
 	r, err := scanEventRule(p.pool.QueryRow(ctx, `select `+eventRuleCols+` from event_rule where name = $1`, name))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrEventRuleNotFound
@@ -353,14 +361,15 @@ func (p *PG) GetEventRule(ctx context.Context, name string, read scope.Set) (*Ev
 	if err != nil {
 		return nil, fmt.Errorf("storage: get event rule %q: %w", name, err)
 	}
-	if err := countRuleState(ctx, p.pool, &r); err != nil {
+	if err := countRuleState(ctx, p.pool, &r, visible); err != nil {
 		return nil, err
 	}
 	return &r, nil
 }
 
 // CreateEventRule authors an operator rule, audited; it needs an all-scope
-// create grant.
+// create grant, since a rule's selector reaches the whole fleet. The counts
+// it returns are fleet-wide; a caller narrower than that re-reads the rule.
 func (p *PG) CreateEventRule(ctx context.Context, actorID string, spec EventRuleSpec, create scope.Set) (*EventRule, error) {
 	if !create.All {
 		return nil, ErrEventRuleForbidden
@@ -398,7 +407,7 @@ func (p *PG) CreateEventRule(ctx context.Context, actorID string, spec EventRule
 	if err := writeAuditRes(ctx, tx, actorID, "create", "event_rule", created.ID, nil, created); err != nil {
 		return nil, err
 	}
-	if err := countRuleState(ctx, tx, &created); err != nil {
+	if err := countRuleState(ctx, tx, &created, scope.Set{All: true}); err != nil {
 		return nil, err
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -421,11 +430,9 @@ func lockMutableEventRule(ctx context.Context, tx pgx.Tx, name string) (EventRul
 	return r, nil
 }
 
-// UpdateEventRule patches an operator rule, bumping its version, audited.
-func (p *PG) UpdateEventRule(ctx context.Context, actorID, name string, patch EventRulePatch, read, action scope.Set) (*EventRule, error) {
-	if !read.All {
-		return nil, ErrEventRuleNotFound
-	}
+// UpdateEventRule patches an operator rule, bumping its version, audited; it
+// needs an all-scope update grant. Its counts are fleet-wide, as on create.
+func (p *PG) UpdateEventRule(ctx context.Context, actorID, name string, patch EventRulePatch, action scope.Set) (*EventRule, error) {
 	if !action.All {
 		return nil, ErrEventRuleForbidden
 	}
@@ -494,7 +501,7 @@ func (p *PG) UpdateEventRule(ctx context.Context, actorID, name string, patch Ev
 	}
 	// A patch that changes nothing writes nothing: no version bump, no audit.
 	if sameAuthoredRule(old, r) {
-		if err := countRuleState(ctx, tx, &old); err != nil {
+		if err := countRuleState(ctx, tx, &old, scope.Set{All: true}); err != nil {
 			return nil, err
 		}
 		return &old, nil
@@ -519,7 +526,7 @@ func (p *PG) UpdateEventRule(ctx context.Context, actorID, name string, patch Ev
 	if err := writeAuditRes(ctx, tx, actorID, "update", "event_rule", old.ID, old, updated); err != nil {
 		return nil, err
 	}
-	if err := countRuleState(ctx, tx, &updated); err != nil {
+	if err := countRuleState(ctx, tx, &updated, scope.Set{All: true}); err != nil {
 		return nil, err
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -528,11 +535,9 @@ func (p *PG) UpdateEventRule(ctx context.Context, actorID, name string, patch Ev
 	return &updated, nil
 }
 
-// DeleteEventRule removes an operator rule, audited.
-func (p *PG) DeleteEventRule(ctx context.Context, actorID, name string, read, action scope.Set) error {
-	if !read.All {
-		return ErrEventRuleNotFound
-	}
+// DeleteEventRule removes an operator rule, audited; it needs an all-scope
+// delete grant.
+func (p *PG) DeleteEventRule(ctx context.Context, actorID, name string, action scope.Set) error {
 	if !action.All {
 		return ErrEventRuleForbidden
 	}

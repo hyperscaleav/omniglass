@@ -2073,7 +2073,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "get <name>",
 					Short:   "Get an event rule",
-					Long:    "Returns one event rule by name, with its live state as counts. Gated by rule:read.",
+					Long:    "Returns one event rule by name, with its live state as counts over the components the caller may read. Gated by rule:read.",
 					Example: "  omniglass event-rule get <name>",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -2090,7 +2090,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "list",
 					Short:   "List event rules",
-					Long:    "Lists the event rules, the authored config that raises alarms, each with its live state as counts (open_alarms, pending_streaks) read in the same query. Rules are fleet-wide: a caller without an all-scope grant lists none. Gated by rule:read.",
+					Long:    "Lists the event rules, the authored config that raises alarms, each with its live state as counts (open_alarms, pending_streaks) read in the same query. Rules read like a registry: every rule is listed whatever the caller's scope, while the counts cover only components the caller may read. Gated by rule:read.",
 					Example: "  omniglass event-rule list",
 					Args:    cobra.ExactArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -2112,7 +2112,7 @@ func generatedCommands() []*cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "list <name>",
 						Short:   "Get an event rule's live state",
-						Long:    "What a rule holds right now: the alarms it raised that are still open, each on a component and instance, and its streaks waiting out a sustain. Gated by rule:read; fleet-wide, so an all-scope grant.",
+						Long:    "What a rule holds right now: the alarms it raised that are still open, each on a component and instance, and its streaks waiting out a sustain. Only those on components the caller may read are listed. Gated by rule:read.",
 						Example: "  omniglass event-rule state list <name>",
 						Args:    cobra.ExactArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {

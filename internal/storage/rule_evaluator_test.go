@@ -2,7 +2,6 @@ package storage_test
 
 import (
 	"context"
-	"errors"
 	"testing"
 	"time"
 
@@ -76,14 +75,14 @@ func TestRuleEvaluator(t *testing.T) {
 
 	// A disabled rule evaluates nothing; re-enabled, it resumes.
 	off, on := false, true
-	if _, err := gw.UpdateEventRule(ctx, "", "reach-lost", storage.EventRulePatch{Enabled: &off}, all, all); err != nil {
+	if _, err := gw.UpdateEventRule(ctx, "", "reach-lost", storage.EventRulePatch{Enabled: &off}, all); err != nil {
 		t.Fatal(err)
 	}
 	prop("bar-1", "tcp", "down")
 	if n := len(open("bar-1")); n != 0 {
 		t.Fatalf("a disabled rule opened %d alarms", n)
 	}
-	if _, err := gw.UpdateEventRule(ctx, "", "reach-lost", storage.EventRulePatch{Enabled: &on}, all, all); err != nil {
+	if _, err := gw.UpdateEventRule(ctx, "", "reach-lost", storage.EventRulePatch{Enabled: &on}, all); err != nil {
 		t.Fatal(err)
 	}
 	prop("bar-1", "tcp", "down")
@@ -219,14 +218,14 @@ func TestRuleAlarmsBelongToTheirRule(t *testing.T) {
 	// watches; disabling clears the rest.
 	metric("bar-1", 35)
 	narrow := storage.EventRuleSelector{Components: []string{"bar-1"}}
-	if _, err := gw.UpdateEventRule(ctx, "", "hot", storage.EventRulePatch{Selector: &narrow}, all, all); err != nil {
+	if _, err := gw.UpdateEventRule(ctx, "", "hot", storage.EventRulePatch{Selector: &narrow}, all); err != nil {
 		t.Fatal(err)
 	}
 	if got, _ := gw.ListAlarms(ctx, "other-c", storage.AlarmFilter{}); len(got) != 0 {
 		t.Fatalf("narrowing the selector left %d alarms on other-c", len(got))
 	}
 	off := false
-	if _, err := gw.UpdateEventRule(ctx, "", "hot", storage.EventRulePatch{Enabled: &off}, all, all); err != nil {
+	if _, err := gw.UpdateEventRule(ctx, "", "hot", storage.EventRulePatch{Enabled: &off}, all); err != nil {
 		t.Fatal(err)
 	}
 	if got, _ := gw.ListAlarms(ctx, "bar-1", storage.AlarmFilter{}); len(got) != 1 || got[0].ID != hand.ID {
@@ -235,11 +234,11 @@ func TestRuleAlarmsBelongToTheirRule(t *testing.T) {
 
 	// Deleting a rule clears what it holds open.
 	on := true
-	if _, err := gw.UpdateEventRule(ctx, "", "hot", storage.EventRulePatch{Enabled: &on}, all, all); err != nil {
+	if _, err := gw.UpdateEventRule(ctx, "", "hot", storage.EventRulePatch{Enabled: &on}, all); err != nil {
 		t.Fatal(err)
 	}
 	metric("bar-1", 36)
-	if err := gw.DeleteEventRule(ctx, "", "hot", all, all); err != nil {
+	if err := gw.DeleteEventRule(ctx, "", "hot", all); err != nil {
 		t.Fatal(err)
 	}
 	if got, _ := gw.ListAlarms(ctx, "bar-1", storage.AlarmFilter{}); len(got) != 1 || got[0].ID != hand.ID {
@@ -283,8 +282,41 @@ func TestEventRuleState(t *testing.T) {
 	if len(st.Open) != 0 || len(st.Pending) != 1 || st.Pending[0].Pending != "fire" || st.Pending[0].ComponentName != "bar-1" {
 		t.Fatalf("slow-hot state = %+v, want a pending fire on bar-1 and nothing open", st)
 	}
-	if _, err := gw.EventRuleState(ctx, "reach-lost", scope.Set{}); !errors.Is(err, storage.ErrEventRuleNotFound) {
-		t.Fatalf("a scoped reader: err %v, want not found", err)
+	// The rule reads like a registry, but its state names components: a
+	// reader sees only the alarms and streaks on components its component
+	// read scope admits, and counts only those.
+	other, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "other-c"}, all, all, all, all)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := gw.InsertPropertySamples(ctx, []storage.PropertySampleWrite{{OwnerKind: "component", OwnerID: "other-c",
+		Key: "endpoint-reachable", Instance: "tcp", Value: "down", TS: time.Now()}}); err != nil {
+		t.Fatal(err)
+	}
+	blind, err := gw.EventRuleState(ctx, "reach-lost", scope.Set{})
+	if err != nil || len(blind.Open) != 0 || len(blind.Pending) != 0 {
+		t.Fatalf("a reader with no component scope: state %+v (%v), want the rule with nothing visible", blind, err)
+	}
+	onlyOther := scope.Set{IDs: []string{other.ID}}
+	st, err = gw.EventRuleState(ctx, "reach-lost", onlyOther)
+	if err != nil || len(st.Open) != 1 || st.Open[0].ComponentName != "other-c" {
+		t.Fatalf("a reader scoped to other-c: state %+v (%v), want only other-c's alarm", st, err)
+	}
+	if r, err := gw.GetEventRule(ctx, "reach-lost", onlyOther); err != nil || r.OpenAlarms != 1 {
+		t.Fatalf("a reader scoped to other-c gets %+v (%v), want 1 open alarm counted", r, err)
+	}
+	if r, err := gw.GetEventRule(ctx, "slow-hot", scope.Set{}); err != nil || r.OpenAlarms != 0 || r.PendingStreaks != 0 {
+		t.Fatalf("a reader with no component scope gets %+v (%v), want the rule with zero counts", r, err)
+	}
+	scoped, err := gw.ListEventRules(ctx, onlyOther)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, r := range scoped {
+		want, ours := map[string][2]int{"reach-lost": {1, 0}, "slow-hot": {0, 0}}[r.Name]
+		if ours && [2]int{r.OpenAlarms, r.PendingStreaks} != want {
+			t.Fatalf("a reader scoped to other-c lists %s with %d open, %d pending; want %v", r.Name, r.OpenAlarms, r.PendingStreaks, want)
+		}
 	}
 
 	// The list and a get carry the same state as counts, so a page of rules
@@ -297,16 +329,16 @@ func TestEventRuleState(t *testing.T) {
 	for _, r := range list {
 		counts[r.Name] = [2]int{r.OpenAlarms, r.PendingStreaks}
 	}
-	if counts["reach-lost"] != [2]int{1, 0} || counts["slow-hot"] != [2]int{0, 1} {
-		t.Fatalf("listed counts %v, want reach-lost 1 open, slow-hot 1 pending", counts)
+	if counts["reach-lost"] != [2]int{2, 0} || counts["slow-hot"] != [2]int{0, 1} {
+		t.Fatalf("listed counts %v, want reach-lost 2 open, slow-hot 1 pending", counts)
 	}
 	got, err := gw.GetEventRule(ctx, "slow-hot", all)
 	if err != nil || got.OpenAlarms != 0 || got.PendingStreaks != 1 {
 		t.Fatalf("get slow-hot = %+v (%v), want 1 pending", got, err)
 	}
 	label := "Reach lost"
-	upd, err := gw.UpdateEventRule(ctx, "", "reach-lost", storage.EventRulePatch{Label: &label}, all, all)
-	if err != nil || upd.OpenAlarms != 1 {
-		t.Fatalf("updated reach-lost = %+v (%v), want its open alarm counted", upd, err)
+	upd, err := gw.UpdateEventRule(ctx, "", "reach-lost", storage.EventRulePatch{Label: &label}, all)
+	if err != nil || upd.OpenAlarms != 2 {
+		t.Fatalf("updated reach-lost = %+v (%v), want its two open alarms counted", upd, err)
 	}
 }

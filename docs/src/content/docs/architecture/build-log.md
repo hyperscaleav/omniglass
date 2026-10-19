@@ -6426,7 +6426,7 @@ uuid again (the review caught stale fixtures hiding the break).
 severity in the level's color and its live state, read from `GET /event-rules/{name}/state` (the alarms
 it holds open and its streaks waiting out a sustain), with a blade listing both linked to their
 components and create, edit, disable and delete in a drawer, validated in TypeScript; official rules are
-read-only, and a scoped-only caller is told why the list is empty. **Catalog > Actions > Severity** sits
+read-only. **Catalog > Actions > Severity** sits
 beside it, a read view of the levels worst first with rank, color and effect (authoring stays CLI and
 API, #930), and every alarm chip in the console renders through the registry. "Last evaluated" did not
 ship (#929, ADR-0144 point 7). Writing the docs caught the console teaching the wrong thing: the
@@ -6444,4 +6444,6 @@ marks such an entry **deleted**. The list and get carry `open_alarms` and `pendi
 whole list in one aggregate query, so the page polls the list every 10s instead of each row's `/state`.
 `GET /auth/me` gained `fleet_permissions` (the permissions on all-scope grants), and every rule write in
 the console is gated on it, so a caller holding `rule:create` only on a place is no longer offered one.
-Criteria values are kept exact (edge spaces refused, a metric a strict decimal).
+Criteria values are kept exact (edge spaces refused, a metric a strict decimal). Rules now read like a registry
+(any `rule:read` lists them, with counts, open alarms and streaks fenced to the caller's component read
+scope), while writes keep an all-scope grant (ADR-0144, amended).

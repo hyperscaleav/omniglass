@@ -8,8 +8,9 @@ import type { SeverityLevel } from "./severity";
 // from the registries), opens an alarm at its severity when a sample meets its
 // fire criteria for the fire sustain, and clears it on its clear criteria (or,
 // absent one, the opposite of the fire criteria) held for the clear sustain.
-// Rules are fleet-wide config: an all-scope reader lists them, a scoped one
-// lists none. Official rules ship with the platform and are read-only.
+// Rules read like a registry: any rule:read lists them all, with live counts
+// over the components the caller may read; writing one takes an all-scope
+// grant. Official rules ship with the platform and are read-only.
 //
 // The pure half (the words a criterion reads as, the ops a lane allows, the
 // draft a form edits and the bodies it sends) takes plain values, so the form's

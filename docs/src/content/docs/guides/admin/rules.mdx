@@ -16,11 +16,12 @@ How the evaluator works is on [alarms and actions](/architecture/alarms-actions/
 Beside it, **Catalog, under Actions: Severity** (with `severity_level:read`) lists the levels a rule
 raises at.
 
-Rules are **fleet-wide config**: reading and writing them takes the permission on a grant over the
-whole fleet. A caller without an all-scope read sees an empty list, and the page says why; a caller who
-holds `rule:create` only on a grant bounded to a place or system is not offered **New rule** (nor Edit,
-Disable or Delete without the matching permission on an all-scope grant), since the server would
-refuse the write.
+Rules **read like a registry**: any grant carrying `rule:read`, wherever it is scoped, lists every
+rule. The live counts and a rule's open alarms and streaks name components, so they cover only the
+components you may read. **Writing** a rule is fleet-wide, since its selector reaches every component:
+a caller who holds `rule:create` only on a grant bounded to a place or system is not offered **New
+rule** (nor Edit, Disable or Delete without the matching permission on an all-scope grant), since the
+server would refuse the write.
 
 ## The rule that ships
 
