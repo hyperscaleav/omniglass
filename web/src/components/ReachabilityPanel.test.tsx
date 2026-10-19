@@ -64,6 +64,7 @@ describe("ReachabilityPanel", () => {
       endpoints: [{
         endpoint: "disp-2-tcp", transport: "tcp", node: "node-a",
         verdict: { value: "up", ts: old },
+        last_seen: ago(5_000),
         layers: [{ layer: "port", check: "tcp-open", value: 1, ts: ago(5_000) }],
         history: [{ ts: old, value: "up" }],
       }],
@@ -223,7 +224,7 @@ describe("the layer-7 rungs", () => {
       const t0 = new Date().toISOString();
       const { getByText, queryByText } = mount({
         component: "disp-3",
-        endpoints: [{ endpoint: "disp-3-tcp", transport: "tcp", node: "node-a", verdict: { value: "up", ts: t0 }, last_sample: t0, last_seen: t0, layers: [], history: [] }],
+        endpoints: [{ endpoint: "disp-3-tcp", transport: "tcp", node: "node-a", verdict: { value: "up", ts: t0 }, last_seen: t0, layers: [], history: [] }],
       } as unknown as Reachability);
       expect(getByText("responding")).toBeTruthy();
       await vi.advanceTimersByTimeAsync(200_000);

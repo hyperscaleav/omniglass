@@ -296,6 +296,15 @@ func (s *Server) land(ctx context.Context, ev *ogv1.TelemetryBatch, bind ingestB
 			return err
 		}
 	}
+	// The endpoint delivered this batch, whatever the sinks kept of it: an
+	// instanced series, an unchanged property the guard skipped, a sample a
+	// node's clock dated ahead. Its freshness is the server's receipt (#933).
+	// The push lane has no endpoint, so nothing is stamped there.
+	if id := bind.SampleOwner.EndpointID; id != "" {
+		if err := s.store.StampEndpointsSeen(ctx, []string{id}); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 

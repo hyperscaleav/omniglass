@@ -137,6 +137,10 @@ fleet: {
     driver_id: uuid {constraint: foreign_key}
     node_name: uuid {constraint: foreign_key}
   }
+  endpoint_live: {
+    shape: sql_table
+    endpoint_id: uuid {constraint: primary_key}
+  }
   location: {
     shape: sql_table
     id: uuid {constraint: primary_key}
@@ -468,6 +472,7 @@ fleet.component.product_id -> catalog.product.id
 fleet.endpoint.component -> fleet.component.id
 fleet.endpoint.driver_id -> catalog.driver.id
 fleet.endpoint.node_name -> collection.node.principal_id
+fleet.endpoint_live.endpoint_id -> fleet.endpoint.id
 fleet.location.location_type -> fleet.location_type.id
 fleet.location.parent_id -> fleet.location.id
 fleet.location_type_metric.location_type_id -> fleet.location_type.id

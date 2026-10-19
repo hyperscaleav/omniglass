@@ -5124,8 +5124,8 @@ components:
         label:
           description: The friendly string an operator reads; absent when unset, and the row then reads the derived name verbatim
           type: string
-        last_sample:
-          description: "When the endpoint last spoke: its newest observed sample on any lane and key (a probe's signal or verdict, a driver's metric or property); absent until one lands"
+        last_seen:
+          description: When the endpoint last delivered a batch, by the server's clock and to within a few seconds, whatever it carried (any lane, any series, an unchanged value); absent until one lands
           format: date-time
           type: string
         layers:
@@ -5196,7 +5196,7 @@ components:
       additionalProperties: false
       properties:
         ts:
-          description: "When the verdict last changed: one is stored only on a transition, so an endpoint's freshness is last_sample, not this"
+          description: "When the verdict last changed: one is stored only on a transition, so an endpoint's freshness is last_seen, not this"
           format: date-time
           type: string
         value:

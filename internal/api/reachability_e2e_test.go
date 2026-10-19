@@ -26,10 +26,11 @@ type reachResp struct {
 		Type     string `json:"transport"`
 		Address  string `json:"address"`
 		Node     string `json:"node"`
-		// LastSample is the endpoint's freshness: its newest sample on any
-		// lane, where the verdict's ts is its last transition (#931, #933).
-		LastSample *time.Time `json:"last_sample"`
-		Verdict    *struct {
+		// LastSeen is the endpoint's freshness: when ingest last landed a
+		// batch it delivered, where the verdict's ts is its last transition
+		// (#931, #933).
+		LastSeen *time.Time `json:"last_seen"`
+		Verdict  *struct {
 			Value string    `json:"value"`
 			TS    time.Time `json:"ts"`
 		} `json:"verdict"`
@@ -138,6 +139,16 @@ func TestReachabilityAPI(t *testing.T) {
 		t.Fatalf("insert snmp metric: %v", err)
 	}
 
+	// Ingest stamps an endpoint seen as it lands a batch (internal/bus);
+	// here the driver endpoint has delivered one and the icmp probe none.
+	var snmpID string
+	if err := conn.QueryRow(ctx, `select id from endpoint where name = 'disp-1-snmp'`).Scan(&snmpID); err != nil {
+		t.Fatalf("snmp id: %v", err)
+	}
+	if err := gw.StampEndpointsSeen(ctx, []string{snmpID}); err != nil {
+		t.Fatalf("stamp snmp seen: %v", err)
+	}
+
 	srv := httptest.NewServer(api.NewHandler(gw))
 	defer srv.Close()
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
@@ -179,20 +190,18 @@ func TestReachabilityAPI(t *testing.T) {
 		t.Fatalf("icmp history: want [up down], got %+v", icmp.History)
 	}
 
-	// last_sample is the newest sample attributed to the endpoint on any lane.
-	sameTime := func(name string, got *time.Time, want time.Time) {
-		t.Helper()
-		if got == nil || !got.Equal(want.Truncate(time.Microsecond)) {
-			t.Fatalf("%s last_sample: want %v, got %v", name, want, got)
-		}
+	// last_seen is the server's stamp, not a sample's time: absent on an
+	// endpoint ingest never landed a batch for, whatever rows it has.
+	if icmp.LastSeen != nil || tcp.LastSeen != nil {
+		t.Fatalf("unstamped endpoints carry last_seen: icmp %v, tcp %v", icmp.LastSeen, tcp.LastSeen)
 	}
-	sameTime("tcp", tcp.LastSample, t2)
-	sameTime("icmp", icmp.LastSample, t1)
 	// The driver endpoint: no verdict, no layers, yet it is collecting (#933).
 	if snmp.Verdict != nil || len(snmp.Layers) != 0 {
 		t.Fatalf("snmp: a driver endpoint has no verdict or layers, got %+v", snmp)
 	}
-	sameTime("snmp", snmp.LastSample, t3)
+	if snmp.LastSeen == nil || time.Since(*snmp.LastSeen) > time.Minute {
+		t.Fatalf("snmp last_seen: want the stamp's now, got %v", snmp.LastSeen)
+	}
 
 	// A viewer scoped to a different component (out of scope on disp-1) gets a
 	// non-disclosing 404: the permission passes (*:read) but scope injection hides

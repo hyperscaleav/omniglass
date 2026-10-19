@@ -7143,9 +7143,9 @@ export interface components {
             label?: string;
             /**
              * Format: date-time
-             * @description When the endpoint last spoke: its newest observed sample on any lane and key (a probe's signal or verdict, a driver's metric or property); absent until one lands
+             * @description When the endpoint last delivered a batch, by the server's clock and to within a few seconds, whatever it carried (any lane, any series, an unchanged value); absent until one lands
              */
-            last_sample?: string;
+            last_seen?: string;
             /** @description The per-layer probe signals that compose the verdict */
             layers: components["schemas"]["ReachLayerBody"][] | null;
             /** @description The node that probes this endpoint */
@@ -7183,7 +7183,7 @@ export interface components {
         ReachVerdictBody: {
             /**
              * Format: date-time
-             * @description When the verdict last changed: one is stored only on a transition, so an endpoint's freshness is last_sample, not this
+             * @description When the verdict last changed: one is stored only on a transition, so an endpoint's freshness is last_seen, not this
              */
             ts: string;
             /** @description The latest stored verdict value (up/down) */

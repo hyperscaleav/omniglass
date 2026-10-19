@@ -331,7 +331,7 @@ describe("the component leaf refreshes (#934)", () => {
       const url = (input as Request).url;
       gets.push(new URL(url).pathname);
       if (url.includes("/reachability")) {
-        return json({ component: "videobar-1", endpoints: [{ endpoint: "ssh", transport: "ssh", node: "edge-1", verdict: { value: "up", ts: iso(600) }, last_sample: later, layers: [], history: [] }] });
+        return json({ component: "videobar-1", endpoints: [{ endpoint: "ssh", transport: "ssh", node: "edge-1", verdict: { value: "up", ts: iso(600) }, last_seen: later, layers: [], history: [] }] });
       }
       if (url.includes("/metrics")) {
         return json({ metrics: [{ metric_type_name: "uptime", label: "Uptime", data_type: "float", value: 77, is_sampled: true, from_contract: false, required: false }] });
@@ -385,7 +385,7 @@ describe("the component leaf refreshes (#934)", () => {
   it("ages the card with the clock when the polled data stays the same", async () => {
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "setInterval", "clearInterval", "Date"] });
     const t0 = new Date().toISOString();
-    const frozen = { component: "videobar-1", endpoints: [{ endpoint: "ssh", transport: "ssh", node: "edge-1", verdict: { value: "up", ts: t0 }, last_sample: t0, last_seen: t0, layers: [], history: [] }] };
+    const frozen = { component: "videobar-1", endpoints: [{ endpoint: "ssh", transport: "ssh", node: "edge-1", verdict: { value: "up", ts: t0 }, last_seen: t0, layers: [], history: [] }] };
     // Every read stays in flight: nothing the queries hold ever changes, so
     // only a clock can move the card.
     vi.spyOn(globalThis, "fetch").mockImplementation(() => new Promise<Response>(() => {}));

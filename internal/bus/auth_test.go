@@ -51,6 +51,8 @@ func (f fakeStore) ListMetricTypes(context.Context) ([]storage.MetricType, error
 func (f fakeStore) ListPropertyTypes(context.Context) ([]storage.PropertyType, error) {
 	return nil, nil
 }
+func (f fakeStore) StampEndpointsSeen(context.Context, []string) error { return nil }
+
 func (f fakeStore) InsertMetricSamples(context.Context, []storage.MetricSampleWrite) error {
 	return nil
 }

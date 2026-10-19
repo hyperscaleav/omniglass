@@ -86,30 +86,4 @@ func TestReachabilityReads(t *testing.T) {
 	} else if none != nil {
 		t.Fatalf("icmp-reachable[disp-1-icmp]: want nil, got %+v", none)
 	}
-
-	// LatestEndpointSample is an endpoint's freshness: its newest observed
-	// sample on any lane and any key, so a driver endpoint (no verdict, no
-	// layer signal) still reads as collecting (#933). A property sample
-	// newer than every metric wins; an endpoint with none is nil.
-	newest := newer.Add(30 * time.Second)
-	if err := gw.InsertMetricSamples(ctx, []storage.MetricSampleWrite{
-		{OwnerKind: "component", OwnerID: "disp-1", Key: "uptime", Instance: "disp-1-tcp", Value: 9, Source: "snmp", TS: newer},
-	}); err != nil {
-		t.Fatalf("insert uptime: %v", err)
-	}
-	if err := gw.InsertPropertySamples(ctx, []storage.PropertySampleWrite{
-		{OwnerKind: "component", OwnerID: "disp-1", Key: "endpoint-reachable", Instance: "disp-1-tcp", Value: "up", Source: "tcp", TS: newest},
-	}); err != nil {
-		t.Fatalf("insert verdict: %v", err)
-	}
-	last, err := gw.LatestEndpointSample(ctx, "disp-1", "disp-1-tcp")
-	if err != nil {
-		t.Fatalf("latest endpoint sample: %v", err)
-	}
-	if last == nil || !last.Equal(newest.Truncate(time.Microsecond)) {
-		t.Fatalf("disp-1-tcp last sample: want %v, got %v", newest, last)
-	}
-	if none, err := gw.LatestEndpointSample(ctx, "disp-1", "nope"); err != nil || none != nil {
-		t.Fatalf("an endpoint with no sample: want nil, got %v (%v)", none, err)
-	}
 }

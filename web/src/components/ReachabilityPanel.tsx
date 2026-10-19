@@ -11,7 +11,7 @@ import {
   REACHABILITY_KEY,
   getReachability,
   endpointWord,
-  lastSampleAt,
+  lastSeenAt,
   segments,
   uptime,
   reason,
@@ -155,7 +155,7 @@ function EndpointRow(p: { iface: ReachEndpoint; manageId?: string; onManage?: (i
         <Show when={p.iface.node}>
           <div class="border-t border-base-300 bg-base-200/40 px-3 py-1.5 text-[11px] text-base-content/45">
             probed by <span class="font-data text-base-content/60">{p.iface.node}</span>
-            <Show when={lastSampleAt(p.iface)}>
+            <Show when={lastSeenAt(p.iface)}>
               {(ts) => <>{" "}· last checked {rel(ts(), now())}</>}
             </Show>
           </div>

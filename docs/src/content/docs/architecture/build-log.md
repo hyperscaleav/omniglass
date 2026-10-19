@@ -6563,24 +6563,28 @@ way. A component test follows the link from another page, the path a direct load
 The reachability verdict is stored only when it changes, so its timestamp is the last up/down
 transition, and the console aged it as though it were the last sample: an endpoint answering every
 probe read **stale** in the Endpoints panel, and "stale sample; the node is healthy" in a component's
-Collection card, a few minutes after its last change. The console now ages an endpoint by its newest
-sample (the newest of the verdict, its layer-7 rungs and its layer signals, which every probe
-writes), in the pill, the Collection state, its "last sample" age and the panel's "last checked".
-Pure tests pin an old transition with a fresh layer sample reading responding and collecting.
+Collection card, a few minutes after its last change. The console now ages an endpoint by when it was
+last seen (the server's stamp, #933 below), in the pill, the Collection state, its "last seen" age and
+the panel's "last checked". Pure tests pin an old transition with a fresh stamp reading responding and
+collecting.
 
 ### A driver endpoint reads collecting while its samples arrive (#933)
 
 A component's Collection card read **no sample yet** on a driver endpoint (an SNMP display, say) while
 its Vitals showed a live Uptime: the card judged collection by the reachability verdict, which only a
-probe endpoint gets. Ingest already stamps every sample a task collects with its endpoint's name, so the
-attribution was there; nothing read it. The reachability read now carries `last_sample` per endpoint,
-when it last spoke: its newest observed sample on any lane and key, read with one limit-1 probe of the
-owner index per catalog type rather than a max over the component's history. The verdict's `ts` is
-documented for what it is, the last change. The console judges collection by that freshness (a down
-verdict still reads as the component answering badly), so a driver endpoint reads collecting with its last
-sample's age, and stale once its samples stop. Proven by a storage test (the newest across lanes, nil
-for none), the reachability API test (a driver endpoint with no verdict and a fresh `last_sample`), and
-pure tests of the collection state.
+probe endpoint gets. No sample row can stand in for it: ingest stamps a sample with its endpoint's name
+only when the driver gave it no instance of its own, the property lane writes only a changed value, and
+a sample's time is the node's clock. So ingest now records it directly: as it lands a batch from a task,
+it stamps the task's endpoint seen in `endpoint_live`, by the server's clock, whatever the batch carried.
+The stamp is coalesced as `event_rule_live` is: one statement per batch, a row stamped within 5s left
+alone, a row another batch is stamping skipped (SKIP LOCKED), and a first sight inserted ON CONFLICT DO
+NOTHING so two batches seeing a new endpoint never abort each other. The reachability read carries it as
+`last_seen` per endpoint, and the verdict's `ts` is documented for what it is, the last change. The console
+judges collection by `last_seen` (a down verdict still reads as the component answering badly), so a
+driver endpoint reads collecting while its batches land and stale once they stop. Proven by a bus test
+through the one ingest write path (an instanced driver series, a property-only driver whose value never
+changes, a sample dated an hour ahead), a storage test (first sight, the coalescing bound, sixteen
+concurrent first sights), the reachability API test, and pure tests of the collection state.
 
 ### A component's view refreshes as collection arrives (#934)
 

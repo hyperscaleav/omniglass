@@ -1871,6 +1871,23 @@
      }
     ]
    },
+   "endpoint_live": {
+    "columns": [
+     {
+      "name": "endpoint_id",
+      "type": "uuid",
+      "nullable": false,
+      "pk": true,
+      "fk": true,
+      "fk_target": "endpoint.id"
+     },
+     {
+      "name": "last_seen_at",
+      "type": "timestamp with time zone",
+      "nullable": false
+     }
+    ]
+   },
    "location": {
     "columns": [
      {

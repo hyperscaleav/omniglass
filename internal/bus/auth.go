@@ -43,6 +43,9 @@ type Store interface {
 	// event, a trap) to the event sink (kind "event") as a caught event (ADR-0066).
 	ListEventTypes(ctx context.Context) ([]storage.EventType, error)
 	InsertMetricSamples(ctx context.Context, evs []storage.MetricSampleWrite) error
+	// StampEndpointsSeen records that a batch an endpoint's task delivered
+	// landed, whatever it carried: an endpoint's freshness (#933).
+	StampEndpointsSeen(ctx context.Context, endpointIDs []string) error
 	// The property sink and its transition-only guard: a state-kind sample
 	// routes here (by registry kind), and LatestProperty lets the consumer skip
 	// a write whose value equals the latest stored value for the series.

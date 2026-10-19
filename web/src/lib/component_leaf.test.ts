@@ -40,21 +40,22 @@ describe("collectionState", () => {
   });
 
   // An endpoint still answering reads collecting however long ago it last
-  // changed state: the transition is old, the newest sample is not (#931).
-  it("an old transition with fresh layer samples is collecting", () => {
-    const e = { ...iface({ value: "up", ts: iso(1260) }, "edge-1"), layers: [{ layer: "port", check: "tcp-open", value: 1, ts: iso(5) }] } as ReachEndpoint;
+  // changed state: the transition is old, the server's last-seen stamp is
+  // not (#931).
+  it("an old transition with a fresh last_seen is collecting", () => {
+    const e = { ...iface({ value: "up", ts: iso(1260) }, "edge-1"), last_seen: iso(5) } as ReachEndpoint;
     expect(collectionState(e, node(5), now).kind).toBe("collecting");
   });
 
-  // A driver endpoint never gets a reachability verdict; its own samples
-  // (uptime, say) are what say it is collecting (#933).
+  // A driver endpoint never gets a reachability verdict; the batches its
+  // task delivers (uptime, say) are what say it is collecting (#933).
   it("a driver endpoint with a fresh sample and no verdict is collecting", () => {
-    const e = { ...iface(null, "edge-1"), last_sample: iso(5) } as ReachEndpoint;
+    const e = { ...iface(null, "edge-1"), last_seen: iso(5) } as ReachEndpoint;
     expect(collectionState(e, node(5), now).kind).toBe("collecting");
   });
 
   it("a driver endpoint whose samples stopped blames the device or the path", () => {
-    const e = { ...iface(null, "edge-1"), last_sample: iso(600) } as ReachEndpoint;
+    const e = { ...iface(null, "edge-1"), last_seen: iso(600) } as ReachEndpoint;
     expect(collectionState(e, node(5), now).kind).toBe("device-or-path");
   });
 
