@@ -135,11 +135,28 @@ describe("a level draft", () => {
     for (const rank of ["0", "-5", "2.5", "1e2", " 3x"]) {
       expect(validateLevelDraft({ ...d, name: "p2", rank }, levels).rank).toBe("A whole number above zero.");
     }
-    expect(validateLevelDraft({ ...d, name: "Major Two" }, levels).name).toBe("Lowercase letters, digits and single hyphens, e.g. major.");
+    expect(validateLevelDraft({ ...d, name: "Major Two" }, levels).name).toMatch(/Lowercase/);
   });
 
   it("lets a level keep its own name and rank on edit", () => {
     expect(validateLevelDraft(draftFromLevel(MAJOR_LEVEL), levels, "major")).toEqual({});
+  });
+
+  it("judges a name on the server's entity name rule: a leading hyphen run, its length cap, never a uuid", () => {
+    const d = { name: "", label: "", color: "orange" as const, rank: "33" };
+    // The server's rule allows repeated and trailing hyphens; the form does too.
+    expect(validateLevelDraft({ ...d, name: "p2--high" }, levels).name).toBeUndefined();
+    expect(validateLevelDraft({ ...d, name: "p2-" }, levels).name).toBeUndefined();
+    expect(validateLevelDraft({ ...d, name: "-p2" }, levels).name).toMatch(/Lowercase/);
+    expect(validateLevelDraft({ ...d, name: "x".repeat(101) }, levels).name).toBe("At most 100 characters.");
+    expect(validateLevelDraft({ ...d, name: "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b" }, levels).name).toMatch(/uuid/);
+  });
+
+  it("only judges the name on edit when it changed", () => {
+    // A level stored before the rule tightened keeps saving its other fields.
+    const legacy = { ...MAJOR_LEVEL, name: "Legacy_Name" };
+    expect(validateLevelDraft(draftFromLevel(legacy), [...levels, legacy], "Legacy_Name").name).toBeUndefined();
+    expect(validateLevelDraft({ ...draftFromLevel(legacy), name: "Still_Bad" }, [...levels, legacy], "Legacy_Name").name).toMatch(/Lowercase/);
   });
 
   it("says where a rank sits: between two levels, above the worst, below the mildest", () => {

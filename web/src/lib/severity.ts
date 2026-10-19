@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/solid-query";
 import { api } from "../api/client";
 import type { components } from "../api/schema.gen";
 import { entityLabel } from "./entities";
+import { entityNameError } from "./names";
 
 // The severity registry (#917): how bad an alarm is, as a list of named levels the
 // server owns rather than a fixed set the console hardcodes. Each level carries a
@@ -152,7 +153,6 @@ export function draftFromLevel(l: SeverityLevel): LevelDraft {
   return { name: l.name, label: l.label ?? "", color: l.color, rank: String(l.rank) };
 }
 
-const LEVEL_NAME = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 const WHOLE = /^\d+$/;
 
 // readRank reads the rank field: a whole number above zero, or null.
@@ -172,8 +172,9 @@ export function validateLevelDraft(d: LevelDraft, levels: SeverityLevel[], editi
   const e: LevelErrors = {};
   const rest = others(levels, editing);
   const name = d.name.trim();
+  // On edit an unchanged name is the stored one: the server judges only a new name.
   if (!name) e.name = "A name for the level.";
-  else if (!LEVEL_NAME.test(name)) e.name = "Lowercase letters, digits and single hyphens, e.g. major.";
+  else if (name !== editing && entityNameError(name)) e.name = entityNameError(name)!;
   else if (rest.some((l) => l.name === name)) e.name = `A level is already named ${name}.`;
   if (!d.color) e.color = "The hue its alarms wear.";
   const rank = readRank(d.rank);

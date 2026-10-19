@@ -6547,3 +6547,9 @@ held up sustains and settlements; it now has a loop of its own, under a deadline
 And one series whose correction kept failing pinned the mark, widening every later pass: the marks now
 always advance, and a failed series is retried on its own a few times, then dropped with an error.
 
+On the severity page, the name is judged on the shared entity name rule (the length cap and the uuid-shape refusal included, and only when an edit changes it), a save
+refreshes the cached alarm, health and fleet views a rename or re-rank moves, and a level write now
+locks the rules naming the level before the level itself, the same order an ingest takes, so a rename
+concurrent with a batch raising at the level waits for it instead of deadlocking (a regression test
+reproduces the deadlock on the old order).
+

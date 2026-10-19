@@ -63,7 +63,9 @@ type ruleOwner struct {
 // rule's row first (FOR SHARE here and in the sweep, FOR UPDATE in a rule
 // write), then the series lock (ruleSeriesLockKey), then the health locks a
 // raise or clear takes. The row lock is the first lock an ingest takes, so
-// it never waits on a rule while holding a series or health lock.
+// it never waits on a rule while holding a series or health lock. A severity
+// level write (UpdateSeverityLevel) enters the same order at its top: the
+// rules naming the level FOR UPDATE, then the level's row, then health.
 func (p *PG) newRuleEvaluator(ctx context.Context, tx pgx.Tx, keys []string) (*ruleEvaluator, error) {
 	rows, err := tx.Query(ctx, `select `+eventRuleCols+` from event_rule where enabled and sample_key = any($1)
 		order by id for share`, keys)

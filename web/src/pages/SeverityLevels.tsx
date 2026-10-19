@@ -32,6 +32,10 @@ import {
   validateLevelDraft,
 } from "../lib/severity";
 import { EVENT_RULES_KEY } from "../lib/event_rules";
+import { LOCATION_HEALTH_PREFIX, SYSTEM_HEALTH_PREFIX, SYSTEM_VERDICTS_KEY } from "../lib/health";
+import { COMPONENT_ALARMS_PREFIX } from "../lib/alarms";
+import { FLEET_VIEW_KEY } from "../lib/fleet";
+import { COMPONENTS_KEY } from "../lib/components";
 import { useMe, can } from "../lib/auth";
 import { useFormActions } from "../lib/formactions";
 import { bindSelectValue } from "../lib/selectvalue";
@@ -236,6 +240,20 @@ function SeverityLevelBladeBody(p: { name: string }): JSX.Element {
 
 // ---- the form ----------------------------------------------------------------
 
+// The query prefixes a level write moves: the levels themselves, the rules
+// naming them, every component's alarms, every system's and place's health,
+// the fleet verdicts and the fleet view.
+const LEVEL_DEPENDENTS: readonly (readonly string[])[] = [
+  severityLevelsKey,
+  EVENT_RULES_KEY,
+  COMPONENT_ALARMS_PREFIX,
+  SYSTEM_HEALTH_PREFIX,
+  LOCATION_HEALTH_PREFIX,
+  SYSTEM_VERDICTS_KEY,
+  FLEET_VIEW_KEY,
+  COMPONENTS_KEY,
+];
+
 // LevelForm authors a level, on create and on edit alike; a Drawer hosts it and
 // draws its action rail. Every rule is judged in TypeScript (lib/severity), shown
 // beside its field once touched, and gates the submit. Beside the rank it says,
@@ -273,8 +291,10 @@ function LevelForm(p: { mode: "create" | "edit"; level?: SeverityLevel; onSaved:
     setFormErr(null);
     try {
       const saved = p.mode === "create" ? await createSeverityLevel(levelCreateBody(d)) : await updateSeverityLevel(p.level!.name, levelUpdateBody(d, p.level!));
-      // A rename or re-rank reaches the rules that name the level, too.
-      await Promise.all([qc.invalidateQueries({ queryKey: severityLevelsKey }), qc.invalidateQueries({ queryKey: EVENT_RULES_KEY })]);
+      // A rename moves the name every alarm chip and rule reads, and a re-rank
+      // can move a component across the outage line (the server recomputes
+      // its health): every view that caches either is stale now.
+      await Promise.all(LEVEL_DEPENDENTS.map((queryKey) => qc.invalidateQueries({ queryKey })));
       p.onSaved(saved);
     } catch (e) {
       setFormErr(describeError(e));

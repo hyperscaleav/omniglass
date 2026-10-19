@@ -19,7 +19,9 @@ export type Alarm = components["schemas"]["AlarmBody"];
 
 // Both the active set and the recent history come from one route, so one cache
 // key covers both and clearing an alarm invalidates a single entry.
-export const componentAlarmsKey = (name: string) => ["component-alarms", name] as const;
+// The prefix every component's alarms share, for a write that moves them all.
+export const COMPONENT_ALARMS_PREFIX = ["component-alarms"] as const;
+export const componentAlarmsKey = (name: string) => [...COMPONENT_ALARMS_PREFIX, name] as const;
 
 // componentAlarms reads every alarm on the component, cleared ones included: the
 // panel shows what is wrong now above what was recently wrong, and the cleared row

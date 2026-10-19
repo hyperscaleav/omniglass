@@ -1,5 +1,7 @@
 import { api } from "../api/client";
 import type { components } from "../api/schema.gen";
+import { entityNameError } from "./names";
+export { ENTITY_NAME_RE, entityNameError } from "./names";
 
 // The simulation data layer (#890): thin typed wrappers over the generated client
 // plus the pure rules the Simulation page and the simulated component drawer share. Shapes are
@@ -272,19 +274,10 @@ export function hitsByProtocol(d: SimComponent): { protocol: string; hits: numbe
     .sort((a, b) => b.hits - a.hits || a.protocol.localeCompare(b.protocol));
 }
 
-// The add-component form's rule. The name mirrors storage's entity name rule
-// (lowercase letters, digits and hyphens, starting with a letter or digit, at
-// most 100 characters, never a dot); node and product must be chosen.
-export const ENTITY_NAME_RE = /^[a-z0-9][a-z0-9-]*$/;
+// The add-component form's rule: the name on the shared entity name rule
+// (lib/names); node and product must be chosen.
 export type AddComponentDraft = { node: string; product: string; name: string; location: string };
 export type AddComponentErrors = Partial<Record<keyof AddComponentDraft, string>>;
-
-export function entityNameError(name: string): string | null {
-  if (!name) return null;
-  if (name.length > 100) return "At most 100 characters.";
-  if (!ENTITY_NAME_RE.test(name)) return "Lowercase letters, digits and hyphens, starting with a letter or digit.";
-  return null;
-}
 
 export function validateAddComponent(d: AddComponentDraft): AddComponentErrors {
   const e: AddComponentErrors = {};

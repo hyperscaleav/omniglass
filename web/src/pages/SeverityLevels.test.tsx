@@ -5,6 +5,11 @@ import SeverityLevels from "./SeverityLevels";
 import { ME_KEY, type Me } from "../lib/auth";
 import { OFFICIAL_LOCK } from "../lib/catalog";
 import { MAJOR_LEVEL, SEEDED_LEVELS, seedSeverityLevels } from "../lib/testseverity";
+import { componentAlarmsKey } from "../lib/alarms";
+import { SYSTEM_VERDICTS_KEY, locationHealthKey, systemHealthKey } from "../lib/health";
+import { FLEET_VIEW_KEY } from "../lib/fleet";
+import { COMPONENTS_KEY } from "../lib/components";
+import { EVENT_RULES_KEY } from "../lib/event_rules";
 
 // The severity levels page (#921, authored since #930): the registry an event
 // rule raises at, beside the rules. Each level shows its rank, its label in its
@@ -20,11 +25,14 @@ function mount(me: Me = owner, levels = [...SEEDED_LEVELS, MAJOR_LEVEL]) {
   const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
   qc.setQueryData([...ME_KEY], me);
   seedSeverityLevels(qc, levels);
-  return render(() => (
-    <QueryClientProvider client={qc}>
-      <SeverityLevels />
-    </QueryClientProvider>
-  ));
+  return Object.assign(
+    render(() => (
+      <QueryClientProvider client={qc}>
+        <SeverityLevels />
+      </QueryClientProvider>
+    )),
+    { qc },
+  );
 }
 
 function json(body: unknown, status = 200) {
@@ -162,6 +170,32 @@ describe("Severity levels page", () => {
     expect(writes[0].body).toEqual({ label: "P2" });
     // Saving lands back on the level's blade.
     await blade();
+  });
+
+  // A rename moves the name every alarm chip and rule reads, and a re-rank can
+  // move a component across the outage line: the alarm, health and fleet views
+  // already cached are stale the moment the write lands.
+  it("refreshes the alarm, health and fleet views on a save", async () => {
+    catchWrites();
+    const { qc } = mount();
+    const stale = [
+      componentAlarmsKey("display-1"),
+      systemHealthKey("huddle-1"),
+      locationHealthKey("hq"),
+      SYSTEM_VERDICTS_KEY,
+      FLEET_VIEW_KEY,
+      COMPONENTS_KEY,
+      EVENT_RULES_KEY,
+    ];
+    for (const k of stale) qc.setQueryData([...k], []);
+    openLevel("major");
+    const b = await blade();
+    fireEvent.click(within(b).getByText("Edit"));
+    const rank = await waitFor(() => screen.getByLabelText("Rank") as HTMLInputElement);
+    fireEvent.input(rank, { target: { value: "45" } });
+    fireEvent.click(screen.getByText("Save level").closest("button")!);
+    await blade();
+    for (const k of stale) expect(qc.getQueryState([...k])?.isInvalidated, k.join("/")).toBe(true);
   });
 
   it("keeps an official level read-only: the pair greys with the official reason", async () => {
