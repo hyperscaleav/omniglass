@@ -8,6 +8,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/scope"
 	"net"
 	"testing"
+	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/storage"
 	"github.com/nats-io/nats-server/v2/server"
@@ -29,7 +30,8 @@ func (f fakeStore) PendingNodeCommands(context.Context, string) ([]storage.Comma
 func (f fakeStore) RecordCommandExecution(context.Context, string, int64, string, string) error {
 	return nil
 }
-func (f fakeStore) SweepCommandSettlements(context.Context) error { return nil }
+func (f fakeStore) SweepCommandSettlements(context.Context) error    { return nil }
+func (f fakeStore) SweepEventRules(context.Context, time.Time) error { return nil }
 func (f fakeStore) NodeSimDevices(context.Context, string, scope.Set) ([]storage.SimDevice, error) {
 	return nil, nil
 }

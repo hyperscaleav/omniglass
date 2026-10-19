@@ -73,6 +73,12 @@
       "labelled": true
     },
     {
+      "table": "event_rule_state",
+      "shape": "id only",
+      "reason": "a rule's pending streak, keyed by rule, component and instance; nothing addresses it by name",
+      "labelled": false
+    },
+    {
       "table": "event_type",
       "shape": "keyspace",
       "reason": "call-started, an occurrence name",

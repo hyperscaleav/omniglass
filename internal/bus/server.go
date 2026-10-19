@@ -386,7 +386,8 @@ const settlementSweepEvery = 5 * time.Second
 
 // startSettlementSweep judges past-window commands on an interval, so a
 // command no reply and no observation settles still reaches a terminal
-// status (ADR-0141).
+// status (ADR-0141), and acts on event rule streaks held for their sustain
+// (#920).
 func (s *Server) startSettlementSweep() {
 	s.stopSweep = make(chan struct{})
 	stop := s.stopSweep
@@ -402,6 +403,12 @@ func (s *Server) startSettlementSweep() {
 			case <-t.C:
 				if err := s.store.SweepCommandSettlements(context.Background()); err != nil {
 					slog.Warn("settlement sweep failed", "facility", "command", "error", err.Error())
+				}
+				// The same tick acts on event rule streaks held for their
+				// sustain (#920): the clock for an input that sends no
+				// further sample.
+				if err := s.store.SweepEventRules(context.Background(), time.Now()); err != nil {
+					slog.Warn("event rule sweep failed", "facility", "rules", "error", err.Error())
 				}
 			}
 		}

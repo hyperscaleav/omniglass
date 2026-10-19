@@ -6396,3 +6396,18 @@ rules are authored at `/event-rules` (gated `rule:*`, fleet-wide config): a regi
 lane, fire and clear criteria (the placeholder comparison until the expression engine), sustains, a
 severity level, and a selector of component types and components; an update bumps the version. The five
 rulings are ADR-0144.
+
+### Rules raise alarms on their own, and the loop closes (#819, slices #919 and #920)
+
+The evaluator judges each landed sample against the enabled rules reading its key, in the sample's
+transaction and under a savepoint (a rule's failure is logged, the sample lands), through the same
+guarded raise and clear a hand raise uses. One alarm per component and instance, keyed `rule:<name>:<instance>`
+so a rule's conditions never share a hand raise's namespace; a sample older than its series' newest
+decides nothing, so a late or redelivered `down` cannot reopen an incident; disabling, deleting or
+narrowing a rule clears what it holds. Sustains run on a durable streak per rule, component and instance,
+acted on by a later sample or by a sweep on the settlement tick: the architect's ruling when it turned out
+the reachability verdict reports only on change. The boot seed ships `reachability-lost`, and the
+NET_ADMIN end-to-end now closes the loop with no hand-raised alarm: unplug a simulated component, the
+rule opens its alarm after 15 seconds and the system leaves healthy; plug it back and both recover. The
+#557 fix rode along: every alarm read carries the component's uuid and name, and the console links by the
+uuid again (the review caught stale fixtures hiding the break).

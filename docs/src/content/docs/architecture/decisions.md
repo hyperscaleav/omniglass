@@ -6515,6 +6515,12 @@ interface create form, since that name is the platform's to mint.
      health of every component with an open alarm at it.
   5. **One alarm per endpoint** for a per-endpoint input: the dedup key is the rule name plus the
      sample's instance, so a component with several endpoints holds an alarm per endpoint.
+  6. **Sustains are clocked by samples and a sweep** (ruled 2026-10-19, during #920): a durable streak
+     per rule, component and instance acts once it has held for its sustain, on a later sample or on a
+     server sweep every five seconds. The definition's thin cut had sustains clocked by samples alone,
+     but the official reachability rule reads a verdict the node emits only on change, so a condition
+     that stays down sends no later sample; the sweep (like the command settlement sweep, ADR-0141) closes
+     that without the full durable timer (#419).
 
   Rules are fleet-wide config, read and written with an all-scope grant, until a rule can be owned at a
   location or system tier.

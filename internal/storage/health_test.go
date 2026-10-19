@@ -18,6 +18,7 @@ import (
 // a system in its deepest room, a standard that wants one table mic, and a room
 // bar staffing it. Everything below asserts on how an alarm travels this chain.
 type healthFixture struct {
+	dsn  string
 	gw   *storage.PG
 	conn *pgx.Conn
 	all  scope.Set
@@ -45,7 +46,7 @@ func newHealthFixture(t *testing.T) *healthFixture {
 	}
 	t.Cleanup(func() { _ = conn.Close(ctx) })
 
-	f := &healthFixture{gw: gw, conn: conn, all: scope.Set{All: true}}
+	f := &healthFixture{dsn: dsn, gw: gw, conn: conn, all: scope.Set{All: true}}
 
 	// hq (campus) > hq-b1 (building) > hq-r1 (room), with the system in the room,
 	// so the rollup has two ancestor hops to climb and a miss is visible.

@@ -176,6 +176,7 @@ var IdentityShapes = map[string]TableIdentity{
 	"system_role_assignment": {Shape: ShapeIDOnly},
 	// One row per impaired simulated component, keyed by that component's uuid.
 	"sim_impairment":      {Shape: ShapeIDOnly},
+	"event_rule_state":    {Shape: ShapeIDOnly, Reason: "a rule's pending streak, keyed by rule, component and instance; nothing addresses it by name"},
 	"system_role_product": {Shape: ShapeIDOnly}, "system_role_type": {Shape: ShapeIDOnly},
 	"tag_binding": {Shape: ShapeIDOnly},
 	// registry_shadow holds an operator's version of a shipped registry row

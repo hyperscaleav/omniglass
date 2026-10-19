@@ -296,7 +296,14 @@ func e2eSimulatedProduct(t *testing.T, ctx context.Context, conn *pgx.Conn) (str
 
 func waitFor(t *testing.T, what string, cond func() bool) {
 	t.Helper()
-	deadline := time.Now().Add(20 * time.Second)
+	waitForWithin(t, 20*time.Second, what, cond)
+}
+
+// waitForWithin is waitFor with a deadline of its own, for a condition that
+// waits on a sustain.
+func waitForWithin(t *testing.T, within time.Duration, what string, cond func() bool) {
+	t.Helper()
+	deadline := time.Now().Add(within)
 	for time.Now().Before(deadline) {
 		if cond() {
 			return

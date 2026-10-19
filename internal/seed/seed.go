@@ -10,6 +10,8 @@ import (
 	_ "embed"
 	"encoding/json"
 	"fmt"
+	"github.com/hyperscaleav/omniglass/internal/rules"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/hyperscaleav/omniglass/internal/secret"
@@ -22,6 +24,9 @@ var rolesYAML []byte
 
 //go:embed severity_levels.yaml
 var severityLevelsYAML []byte
+
+//go:embed event_rules.yaml
+var eventRulesYAML []byte
 
 //go:embed location_types.yaml
 var locationTypesYAML []byte
@@ -270,6 +275,11 @@ func Run(ctx context.Context, gw storage.Gateway) error {
 	if err := seedCommandTypes(ctx, gw); err != nil {
 		return err
 	}
+	// The official event rules after the registries their keys and levels
+	// name.
+	if err := seedEventRules(ctx, gw); err != nil {
+		return err
+	}
 	if err := seedVendors(ctx, gw); err != nil {
 		return err
 	}
@@ -369,6 +379,65 @@ func seedMetricTypes(ctx context.Context, gw storage.Gateway) error {
 		}
 	}
 	return nil
+}
+
+// seedEventRules installs the official event rules, authoritative on
+// conflict; an operator's own rules are untouched.
+func seedEventRules(ctx context.Context, gw storage.Gateway) error {
+	var doc struct {
+		Rules []struct {
+			Name         string        `yaml:"name"`
+			Label        string        `yaml:"label"`
+			Description  string        `yaml:"description"`
+			SampleKey    string        `yaml:"sample_key"`
+			Fire         criteriaYAML  `yaml:"fire"`
+			Clear        *criteriaYAML `yaml:"clear"`
+			FireSustain  string        `yaml:"fire_sustain"`
+			ClearSustain string        `yaml:"clear_sustain"`
+			Severity     string        `yaml:"severity"`
+			Message      string        `yaml:"message"`
+		} `yaml:"rules"`
+	}
+	if err := yaml.Unmarshal(eventRulesYAML, &doc); err != nil {
+		return fmt.Errorf("seed: parse event_rules: %w", err)
+	}
+	for _, r := range doc.Rules {
+		spec := storage.EventRuleSpec{Name: r.Name, Label: r.Label, Description: r.Description, SampleKey: r.SampleKey,
+			Fire: r.Fire.criteria(), Severity: r.Severity, Message: r.Message}
+		if r.Clear != nil {
+			c := r.Clear.criteria()
+			spec.Clear = &c
+		}
+		var err error
+		if spec.FireSustain, err = parseSeedDuration(r.FireSustain); err != nil {
+			return fmt.Errorf("seed: event rule %s fire_sustain: %w", r.Name, err)
+		}
+		if spec.ClearSustain, err = parseSeedDuration(r.ClearSustain); err != nil {
+			return fmt.Errorf("seed: event rule %s clear_sustain: %w", r.Name, err)
+		}
+		if err := gw.UpsertEventRule(ctx, spec); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// criteriaYAML is a rule criterion as the seed YAML writes it.
+type criteriaYAML struct {
+	Op    string `yaml:"op"`
+	Value any    `yaml:"value"`
+}
+
+func (c criteriaYAML) criteria() rules.Criteria {
+	b, _ := json.Marshal(c.Value)
+	return rules.Criteria{Op: c.Op, Value: b}
+}
+
+func parseSeedDuration(s string) (time.Duration, error) {
+	if s == "" {
+		return 0, nil
+	}
+	return time.ParseDuration(s)
 }
 
 // seedSeverityLevels installs the official severity levels, authoritative on

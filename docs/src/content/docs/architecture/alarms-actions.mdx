@@ -131,7 +131,7 @@ event_rule:
   sample_key: endpoint-reachable       # a property (text) or a metric (number)
   fire_criteria: { op: eq, value: down }
   clear_criteria: { op: eq, value: up } # optional: absent, the negation of fire
-  fire_sustain: 30s                     # how long fire must hold (#920)
+  fire_sustain: 30s                     # how long fire must hold
   clear_sustain: 0s
   severity: high
   selector: { component_types: [display], components: [] }   # empty: every component
@@ -145,6 +145,18 @@ plus the sample's **instance**, so a per-endpoint input holds **one alarm per en
 whose SNMP and HTTP both fail carries two, and one recovering clears only its own. A repeated or
 redelivered sample changes nothing. A disabled rule evaluates nothing, and re-enabling it opens no
 duplicate against an alarm still open.
+
+**Sustains** hold an edge until it has lasted: `fire_sustain` before the alarm opens and
+`clear_sustain` before it clears, both defaulting to `0s`, set independently (a long clear sustain
+over a short fire sustain holds an incident through a noisy recovery without delaying the page). A
+sample pointing at an action starts or continues a **streak** (stored per rule, component and instance,
+so it survives a restart); any contrary sample breaks it; and once it has held for the sustain the action
+takes effect, either on a later sample or on the server's **sweep** (every five seconds, beside the
+command settlement sweep), which is what lets a sustain work on an input that reports only on change,
+like `endpoint-reachable`. The platform ships one official rule, **`reachability-lost`**: an endpoint
+whose verdict reads `down` for 15 seconds opens a `high` alarm on its component, and reading `up` clears
+it, so unplugging a simulated component takes its system out and plugging it back recovers it, with no
+operator in between.
 
 Criteria are, for now, one comparison of the arriving sample's value, `{op, value}`: a property
 compares text (`eq`, `ne`), a metric compares numbers (`eq` `ne` `gt` `ge` `lt` `le`); a sample of
@@ -170,8 +182,7 @@ a **window** (`window: { reduce: avg, over: 10m }`) aggregating the input before
 **suppressible by name through the cascade** ([cascade](/architecture/cascade/)), so a high-weight group
 removes a false-firing rule without editing it; and a rule scoped to whichever arc owns its sample,
 yielding **system-level** alarms with the same machinery (a system-scoped rule reads member data and
-fires a system-owned alarm). Sustains are clocked by samples, so a condition that goes silent mid-sustain
-waits for the next sample rather than a timer.
+fires a system-owned alarm).
 :::
 
 

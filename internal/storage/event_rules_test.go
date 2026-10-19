@@ -89,8 +89,8 @@ func TestEventRules(t *testing.T) {
 	if list, err := gw.ListEventRules(ctx, none); err != nil || len(list) != 0 {
 		t.Fatalf("a scoped reader lists %d rules (%v), want none", len(list), err)
 	}
-	if list, _ := gw.ListEventRules(ctx, all); len(list) != 2 {
-		t.Fatalf("an all-scope reader lists %d rules, want 2", len(list))
+	if list, _ := gw.ListEventRules(ctx, all); len(list) != 3 {
+		t.Fatalf("an all-scope reader lists %d rules, want 3 (the two authored and the official reachability rule)", len(list))
 	}
 
 	// An update bumps the version; disabling is an update.
@@ -165,5 +165,47 @@ func TestEventRuleEdgeCases(t *testing.T) {
 			Fire: criteria("gt", 1), FireSustain: d, Severity: "info"}, all); !errors.Is(err, storage.ErrEventRuleInvalid) {
 			t.Errorf("a sustain of %v: err %v, want ErrEventRuleInvalid", d, err)
 		}
+	}
+}
+
+// The boot seed's official rules are read-only, a re-seed changes nothing,
+// and an official rule never takes over an operator's rule of its name.
+func TestOfficialEventRules(t *testing.T) {
+	if testing.Short() {
+		t.Skip("integration test needs Postgres")
+	}
+	ctx := context.Background()
+	gw, err := storage.NewPG(ctx, storagetest.NewDSN(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer gw.Close()
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatal(err)
+	}
+	all := scope.Set{All: true}
+	got, err := gw.GetEventRule(ctx, "reachability-lost", all)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !got.Official || !got.Enabled || got.SampleKey != "endpoint-reachable" || got.Severity != "high" || got.FireSustain <= 0 {
+		t.Fatalf("the official reachability rule = %+v, want official, enabled, on endpoint-reachable at high, with a sustain", got)
+	}
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatal(err)
+	}
+	if again, _ := gw.GetEventRule(ctx, "reachability-lost", all); again.Version != got.Version {
+		t.Fatalf("a re-seed moved the official rule's version from %d to %d", got.Version, again.Version)
+	}
+	off := false
+	if _, err := gw.UpdateEventRule(ctx, "", "reachability-lost", storage.EventRulePatch{Enabled: &off}, all, all); !errors.Is(err, storage.ErrEventRuleOfficial) {
+		t.Fatalf("editing the official rule: err %v, want ErrEventRuleOfficial", err)
+	}
+	if _, err := gw.CreateEventRule(ctx, "", storage.EventRuleSpec{Name: "mine", SampleKey: "room-temperature", Fire: criteria("gt", 1), Severity: "info"}, all); err != nil {
+		t.Fatal(err)
+	}
+	err = gw.UpsertEventRule(ctx, storage.EventRuleSpec{Name: "mine", SampleKey: "room-temperature", Fire: criteria("gt", 2), Severity: "info"})
+	if !errors.Is(err, storage.ErrEventRuleExists) {
+		t.Fatalf("an official rule named like an operator's: err %v, want ErrEventRuleExists", err)
 	}
 }

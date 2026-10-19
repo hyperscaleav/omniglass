@@ -93,18 +93,34 @@ var (
 	ErrEventRuleForbidden = errors.New("storage: event rules are fleet-wide config and need an all-scope grant")
 )
 
-const eventRuleCols = `id, name, coalesce(label, ''), description, selector, sample_key, sample_lane,
-	fire_criteria, clear_criteria,
-	(extract(epoch from fire_sustain) * 1000000)::bigint, (extract(epoch from clear_sustain) * 1000000)::bigint,
-	severity, message, enabled, official, version, created_at, updated_at`
+// ruleCols is the rule read shape, its columns qualified by alias ("" for
+// none, "r." in a join).
+func ruleCols(a string) string {
+	return fmt.Sprintf(`%[1]sid, %[1]sname, coalesce(%[1]slabel, ''), %[1]sdescription, %[1]sselector, %[1]ssample_key, %[1]ssample_lane,
+	%[1]sfire_criteria, %[1]sclear_criteria,
+	(extract(epoch from %[1]sfire_sustain) * 1000000)::bigint, (extract(epoch from %[1]sclear_sustain) * 1000000)::bigint,
+	%[1]sseverity, %[1]smessage, %[1]senabled, %[1]sofficial, %[1]sversion, %[1]screated_at, %[1]supdated_at`, a)
+}
+
+var eventRuleCols = ruleCols("")
+
+// scanEventRuleAfter scans leading columns into lead, then a rule.
+func scanEventRuleAfter(row pgx.Row, lead ...any) (EventRule, error) {
+	return scanEventRuleWith(row, lead...)
+}
 
 func scanEventRule(row pgx.Row) (EventRule, error) {
+	return scanEventRuleWith(row)
+}
+
+func scanEventRuleWith(row pgx.Row, lead ...any) (EventRule, error) {
 	var r EventRule
 	var sel, fire, clear []byte
 	var lane string
 	var fireUs, clearUs int64
-	err := row.Scan(&r.ID, &r.Name, &r.Label, &r.Description, &sel, &r.SampleKey, &lane, &fire, &clear,
+	dest := append(lead, &r.ID, &r.Name, &r.Label, &r.Description, &sel, &r.SampleKey, &lane, &fire, &clear,
 		&fireUs, &clearUs, &r.Severity, &r.Message, &r.Enabled, &r.Official, &r.Version, &r.CreatedAt, &r.UpdatedAt)
+	err := row.Scan(dest...)
 	if err != nil {
 		return r, err
 	}
@@ -423,6 +439,11 @@ func (p *PG) UpdateEventRule(ctx context.Context, actorID, name string, patch Ev
 	if err != nil {
 		return nil, mapRuleWriteErr(err, name)
 	}
+	// A changed rule starts its streaks over: a sustain measured against the
+	// old criteria is not one measured against the new.
+	if _, err := tx.Exec(ctx, `delete from event_rule_state where rule_id = $1`, old.ID); err != nil {
+		return nil, fmt.Errorf("storage: reset rule streaks: %w", err)
+	}
 	// A rule disabled lets go of every alarm it holds open; one whose selector
 	// changed lets go of those on components it no longer watches.
 	switch {
@@ -494,4 +515,51 @@ func sameAuthoredRule(a, b EventRule) bool {
 		return string(j)
 	}
 	return pick(a) == pick(b)
+}
+
+// UpsertEventRule installs an official rule from the boot seed,
+// authoritative on conflict; an operator's rules keep distinct names and are
+// untouched. An official rule never takes over an operator's: a name an
+// operator rule already holds is refused, naming it. A re-seed that changes
+// nothing writes nothing (no version bump).
+func (p *PG) UpsertEventRule(ctx context.Context, spec EventRuleSpec) error {
+	r := EventRule{Name: spec.Name, Label: spec.Label, Description: spec.Description, Selector: spec.Selector,
+		SampleKey: spec.SampleKey, FireCriteria: spec.Fire, ClearCriteria: spec.Clear, FireSustain: spec.FireSustain,
+		ClearSustain: spec.ClearSustain, Severity: spec.Severity, Message: spec.Message, Enabled: true}
+	tx, err := p.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("storage: begin upsert event rule: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	if err := prepareEventRule(ctx, tx, &r, checkAll); err != nil {
+		return fmt.Errorf("storage: official event rule %q: %w", r.Name, err)
+	}
+	existing, err := scanEventRule(tx.QueryRow(ctx, `select `+eventRuleCols+` from event_rule where name = $1 for update`, r.Name))
+	switch {
+	case errors.Is(err, pgx.ErrNoRows):
+	case err != nil:
+		return fmt.Errorf("storage: read event rule %q: %w", r.Name, err)
+	case !existing.Official:
+		return fmt.Errorf("%w: the operator rule %q holds the name of an official rule; rename it", ErrEventRuleExists, r.Name)
+	default:
+		if sameAuthoredRule(existing, r) {
+			return nil
+		}
+	}
+	sel, fire, clear, err := ruleArgs(r)
+	if err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx, `insert into event_rule (name, label, description, selector, sample_key, sample_lane,
+		fire_criteria, clear_criteria, fire_sustain, clear_sustain, severity, message, enabled, official)
+		values ($1, $2, $3, $4, $5, $6, $7, $8, make_interval(secs => $9::float8 / 1000000), make_interval(secs => $10::float8 / 1000000), $11, $12, true, true)
+		on conflict (name) do update set label = excluded.label, description = excluded.description, selector = excluded.selector,
+			sample_key = excluded.sample_key, sample_lane = excluded.sample_lane, fire_criteria = excluded.fire_criteria,
+			clear_criteria = excluded.clear_criteria, fire_sustain = excluded.fire_sustain, clear_sustain = excluded.clear_sustain,
+			severity = excluded.severity, message = excluded.message, version = event_rule.version + 1, updated_at = now()`,
+		r.Name, labelOrNull(r.Label), r.Description, sel, r.SampleKey, string(r.SampleLane), fire, clear,
+		r.FireSustain.Microseconds(), r.ClearSustain.Microseconds(), r.Severity, r.Message); err != nil {
+		return mapRuleWriteErr(err, r.Name)
+	}
+	return tx.Commit(ctx)
 }

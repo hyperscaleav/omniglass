@@ -881,3 +881,5 @@ func (UnimplementedGateway) UpdateEventRule(context.Context, string, string, Eve
 func (UnimplementedGateway) DeleteEventRule(context.Context, string, string, scope.Set, scope.Set) error {
 	return nil
 }
+func (UnimplementedGateway) SweepEventRules(context.Context, time.Time) error     { return nil }
+func (UnimplementedGateway) UpsertEventRule(context.Context, EventRuleSpec) error { return nil }

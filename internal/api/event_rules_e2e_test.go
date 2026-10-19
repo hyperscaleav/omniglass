@@ -86,8 +86,8 @@ func TestEventRuleAPI(t *testing.T) {
 	if err := json.Unmarshal(c.do(viewer, http.MethodGet, "/event-rules", nil, http.StatusOK), &list); err != nil {
 		t.Fatal(err)
 	}
-	if len(list.EventRules) != 1 {
-		t.Fatalf("listed %d rules, want 1", len(list.EventRules))
+	if len(list.EventRules) != 2 {
+		t.Fatalf("listed %d rules, want 2 (the authored one and the official reachability rule)", len(list.EventRules))
 	}
 
 	var upd eventRuleBody

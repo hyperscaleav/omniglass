@@ -2,6 +2,7 @@ package storage
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"time"
@@ -234,20 +235,166 @@ func (e *ruleEvaluator) judge(ctx context.Context, tx pgx.Tx, lane rules.Lane, o
 			slog.Warn("event rule cannot evaluate a sample", "facility", "rules", "rule", r.Name, "component", o.comp.Name, "key", key, "error", err.Error())
 			continue
 		}
-		dedup := ruleDedupKey(r.Name, instance)
-		id := r.ID
-		switch action {
-		case rules.Fire:
-			if _, err := e.p.raiseAlarmTx(ctx, tx, "", &o.comp, AlarmSpec{Severity: r.Severity, Message: ruleMessage(r), DedupKey: dedup}, &id); err != nil {
-				return fmt.Errorf("storage: rule %s raise on %s: %w", r.Name, o.comp.Name, err)
-			}
-		case rules.Clear:
-			if err := e.p.clearAlarmByDedupTx(ctx, tx, "", &o.comp, dedup, &id); err != nil {
-				return fmt.Errorf("storage: rule %s clear on %s: %w", r.Name, o.comp.Name, err)
-			}
+		if err := e.p.stepRule(ctx, tx, r, &o.comp, instance, action, ts); err != nil {
+			return err
 		}
 	}
 	return nil
+}
+
+// stepRule advances a rule's streak on one component and instance by a
+// sample's decision and applies whatever takes effect (#920). An action
+// already in force (a fire with the alarm open, a clear with none) has
+// nothing to wait for and breaks any contrary streak.
+func (p *PG) stepRule(ctx context.Context, tx pgx.Tx, r EventRule, comp *Component, instance string, action rules.Action, ts time.Time) error {
+	dedup := ruleDedupKey(r.Name, instance)
+	var isOpen bool
+	if err := tx.QueryRow(ctx, `select exists (select 1 from alarm where component_id = $1::uuid and dedup_key = $2
+		and cleared_at is null and raised_by_rule_id = $3::uuid)`, comp.ID, dedup, r.ID).Scan(&isOpen); err != nil {
+		return fmt.Errorf("storage: rule %s open alarm: %w", r.Name, err)
+	}
+	if (action == rules.Fire && isOpen) || (action == rules.Clear && !isOpen) {
+		action = rules.Hold
+	}
+	prev, err := loadStreak(ctx, tx, r.ID, comp.ID, instance)
+	if err != nil {
+		return err
+	}
+	next, effect := rules.Step(prev, action, ts, r.FireSustain, r.ClearSustain)
+	if err := saveStreak(ctx, tx, r.ID, comp.ID, instance, next); err != nil {
+		return err
+	}
+	return p.applyRule(ctx, tx, r, comp, dedup, effect)
+}
+
+// applyRule raises or clears a rule's alarm on a component.
+func (p *PG) applyRule(ctx context.Context, tx pgx.Tx, r EventRule, comp *Component, dedup string, effect rules.Action) error {
+	id := r.ID
+	switch effect {
+	case rules.Fire:
+		if _, err := p.raiseAlarmTx(ctx, tx, "", comp, AlarmSpec{Severity: r.Severity, Message: ruleMessage(r), DedupKey: dedup}, &id); err != nil {
+			return fmt.Errorf("storage: rule %s raise on %s: %w", r.Name, comp.Name, err)
+		}
+	case rules.Clear:
+		if err := p.clearAlarmByDedupTx(ctx, tx, "", comp, dedup, &id); err != nil {
+			return fmt.Errorf("storage: rule %s clear on %s: %w", r.Name, comp.Name, err)
+		}
+	}
+	return nil
+}
+
+func pendingWord(a rules.Action) string {
+	if a == rules.Fire {
+		return "fire"
+	}
+	return "clear"
+}
+
+func loadStreak(ctx context.Context, tx pgx.Tx, ruleID, componentID, instance string) (rules.Streak, error) {
+	var pending string
+	var since time.Time
+	err := tx.QueryRow(ctx, `select pending, since from event_rule_state
+		where rule_id = $1::uuid and component_id = $2::uuid and instance = $3`, ruleID, componentID, instance).Scan(&pending, &since)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return rules.Streak{}, nil
+	}
+	if err != nil {
+		return rules.Streak{}, fmt.Errorf("storage: rule streak: %w", err)
+	}
+	s := rules.Streak{Pending: rules.Clear, Since: since}
+	if pending == "fire" {
+		s.Pending = rules.Fire
+	}
+	return s, nil
+}
+
+// saveStreak writes a pending streak, or removes the row when none is.
+func saveStreak(ctx context.Context, tx pgx.Tx, ruleID, componentID, instance string, s rules.Streak) error {
+	if s.Pending == rules.Hold {
+		_, err := tx.Exec(ctx, `delete from event_rule_state where rule_id = $1::uuid and component_id = $2::uuid and instance = $3`,
+			ruleID, componentID, instance)
+		return err
+	}
+	_, err := tx.Exec(ctx, `insert into event_rule_state (rule_id, component_id, instance, pending, since)
+		values ($1::uuid, $2::uuid, $3, $4, $5)
+		on conflict (rule_id, component_id, instance) do update set pending = excluded.pending, since = excluded.since`,
+		ruleID, componentID, instance, pendingWord(s.Pending), s.Since)
+	return err
+}
+
+// SweepEventRules acts on every pending streak that has held for its rule's
+// sustain at now (#920): the clock for an input that sends no further sample
+// (a transition-only verdict that went down and stays down). A streak no
+// contrary sample broke is, by construction, still holding. Each streak acts
+// under a savepoint, so one failure does not stop the rest.
+func (p *PG) SweepEventRules(ctx context.Context, now time.Time) error {
+	tx, err := p.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("storage: begin rule sweep: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	if _, err := tx.Exec(ctx, `delete from event_rule_state s using event_rule r where r.id = s.rule_id and not r.enabled`); err != nil {
+		return fmt.Errorf("storage: rule sweep prune: %w", err)
+	}
+	rows, err := tx.Query(ctx, `select s.component_id::text, s.instance, s.pending, s.since, `+ruleCols("r.")+`
+		from event_rule_state s join event_rule r on r.id = s.rule_id`)
+	if err != nil {
+		return fmt.Errorf("storage: rule sweep: %w", err)
+	}
+	type due struct {
+		component, instance string
+		streak              rules.Streak
+		rule                EventRule
+	}
+	var dues []due
+	for rows.Next() {
+		var d due
+		var pending string
+		var since time.Time
+		r, err := scanEventRuleAfter(rows, &d.component, &d.instance, &pending, &since)
+		if err != nil {
+			rows.Close()
+			return err
+		}
+		d.rule = r
+		d.streak = rules.Streak{Pending: rules.Clear, Since: since}
+		if pending == "fire" {
+			d.streak.Pending = rules.Fire
+		}
+		if d.streak.Due(now, r.FireSustain, r.ClearSustain) {
+			dues = append(dues, d)
+		}
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	m := newRuleMatcher(p, nil)
+	for _, d := range dues {
+		sp, err := tx.Begin(ctx)
+		if err != nil {
+			return fmt.Errorf("storage: rule sweep savepoint: %w", err)
+		}
+		err = func() error {
+			o, err := m.ownerFacts(ctx, sp, d.component)
+			if err != nil {
+				return err
+			}
+			if err := saveStreak(ctx, sp, d.rule.ID, d.component, d.instance, rules.Streak{}); err != nil {
+				return err
+			}
+			return p.applyRule(ctx, sp, d.rule, &o.comp, ruleDedupKey(d.rule.Name, d.instance), d.streak.Pending)
+		}()
+		if err != nil {
+			_ = sp.Rollback(ctx)
+			slog.Warn("event rule sweep could not act on a streak", "facility", "rules", "rule", d.rule.Name, "component", d.component, "error", err.Error())
+			continue
+		}
+		if err := sp.Commit(ctx); err != nil {
+			return err
+		}
+	}
+	return tx.Commit(ctx)
 }
 
 // clearRuleAlarms clears a rule's open alarms on every component keep
