@@ -55,6 +55,11 @@ describe("an endpoint's freshness is its newest sample (#931)", () => {
     const e = ep({ verdict: { value: "up", ts: ago(900_000) }, layers: [layer(STALENESS_WINDOW_MS + 1_000)] });
     expect(endpointWord(e, now)).toBe("stale");
   });
+  it("reads the API's last_sample, the newest on any lane (#933)", () => {
+    const e = ep({ verdict: { value: "up", ts: ago(900_000) }, last_sample: ago(3_000) });
+    expect(lastSampleAt(e)).toBe(ago(3_000));
+    expect(endpointWord(e, now)).toBe("responding");
+  });
   it("is unknown with no verdict, and has no sample time with no sample", () => {
     expect(endpointWord(ep({}), now)).toBe("unknown");
     expect(lastSampleAt(ep({}))).toBeNull();

@@ -12,7 +12,7 @@ import type { Member } from "./members";
 import type { Node } from "./nodes";
 import { nodeStatus } from "./nodes";
 import type { ReachEndpoint } from "./reachability";
-import { endpointWord } from "./reachability";
+import { STALENESS_WINDOW_MS, endpointWord, lastSampleAt } from "./reachability";
 import { entityLabel } from "./entities";
 
 export type CollectionState = {
@@ -25,12 +25,16 @@ export type CollectionState = {
   node?: string;
 };
 
+// Collection is judged by the endpoint's newest sample, not by its
+// reachability verdict: a driver endpoint never gets a verdict, yet its own
+// samples (uptime, say) say it is collecting (#933). Only a probe endpoint
+// carries a verdict, and only its down value says more than freshness does.
 export function collectionState(iface: ReachEndpoint, node: Node | undefined, now: number = Date.now()): CollectionState {
   const nodeDown = !node || nodeStatus(node, now) !== "up";
-  const word = endpointWord(iface, now);
-  if (word === "unknown") return { kind: nodeDown ? "node-offline" : "unknown", node: iface.node };
-  if (word === "stale") return { kind: nodeDown ? "node-offline" : "device-or-path", node: iface.node };
-  if (word === "down") return { kind: "down", node: iface.node };
+  const last = lastSampleAt(iface);
+  if (!last) return { kind: nodeDown ? "node-offline" : "unknown", node: iface.node };
+  if (now - new Date(last).getTime() > STALENESS_WINDOW_MS) return { kind: nodeDown ? "node-offline" : "device-or-path", node: iface.node };
+  if (endpointWord(iface, now) === "down") return { kind: "down", node: iface.node };
   return { kind: "collecting", node: iface.node };
 }
 

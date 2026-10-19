@@ -46,7 +46,7 @@ var reachLayers = []reachLayer{
 
 type reachVerdictBody struct {
 	Value string    `json:"value" doc:"The latest stored verdict value (up/down)"`
-	TS    time.Time `json:"ts" doc:"When the verdict was observed"`
+	TS    time.Time `json:"ts" doc:"When the verdict last changed: one is stored only on a transition, so an endpoint's freshness is last_sample, not this"`
 }
 
 type reachLayerBody struct {
@@ -68,6 +68,7 @@ type reachEndpointBody struct {
 	Transport     string             `json:"transport" doc:"The transport (icmp, tcp, ...)"`
 	Address       string             `json:"address,omitempty" doc:"The probed address (target[:port]) from the endpoint params"`
 	Node          string             `json:"node,omitempty" doc:"The node that probes this endpoint"`
+	LastSample    *time.Time         `json:"last_sample,omitempty" doc:"When the endpoint last spoke: its newest observed sample on any lane and key (a probe's signal or verdict, a driver's metric or property); absent until one lands"`
 	Verdict       *reachVerdictBody  `json:"verdict" doc:"The latest reachability verdict, or null if none yet"`
 	Responsive    *reachVerdictBody  `json:"responsive,omitempty" doc:"The layer-7 responds rung (the protocol itself answered), when a probe has climbed it"`
 	Authenticated *reachVerdictBody  `json:"authenticated,omitempty" doc:"The auth rung (the probe's credential was accepted), present only when a credential was tried"`
@@ -140,6 +141,12 @@ func composeEndpoint(ctx context.Context, gw storage.Gateway, comp string, it st
 		Layers:    []reachLayerBody{},
 		History:   []reachHistoryBody{},
 	}
+
+	last, err := gw.LatestEndpointSample(ctx, comp, it.Name)
+	if err != nil {
+		return row, err
+	}
+	row.LastSample = last
 
 	verdict, err := gw.LatestProperty(ctx, comp, verdictKey, it.Name)
 	if err != nil {

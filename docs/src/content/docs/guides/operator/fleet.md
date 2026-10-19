@@ -347,7 +347,9 @@ on its label's tooltip.
 
 **Collection** shows each endpoint with its layer rungs (ping answers the path, the port
 answers the service), the node, its state, and the age of its newest sample (not of its last
-up/down change, which may be hours old on an endpoint that never stopped answering). A stale sample under a
+up/down change, which may be hours old on an endpoint that never stopped answering). A driver
+endpoint (one attached to a driver, such as SNMP) has no reachability verdict, so its own samples are
+what say it is collecting. A stale sample under a
 healthy node points at the device or the network path, not at collection. An offline node
 says nothing about the device. This card is the one place a node appears on these pages.
 

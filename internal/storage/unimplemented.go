@@ -409,6 +409,9 @@ func (UnimplementedGateway) LatestProperty(context.Context, string, string, stri
 func (UnimplementedGateway) PropertyTransitions(context.Context, string, string, string, time.Duration) ([]PropertySample, error) {
 	return nil, nil
 }
+func (UnimplementedGateway) LatestEndpointSample(context.Context, string, string) (*time.Time, error) {
+	return nil, nil
+}
 func (UnimplementedGateway) InsertEvents(context.Context, []EventWrite) error {
 	return nil
 }

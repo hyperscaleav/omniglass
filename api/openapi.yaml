@@ -5124,6 +5124,10 @@ components:
         label:
           description: The friendly string an operator reads; absent when unset, and the row then reads the derived name verbatim
           type: string
+        last_sample:
+          description: "When the endpoint last spoke: its newest observed sample on any lane and key (a probe's signal or verdict, a driver's metric or property); absent until one lands"
+          format: date-time
+          type: string
         layers:
           description: The per-layer probe signals that compose the verdict
           items:
@@ -5192,7 +5196,7 @@ components:
       additionalProperties: false
       properties:
         ts:
-          description: When the verdict was observed
+          description: "When the verdict last changed: one is stored only on a transition, so an endpoint's freshness is last_sample, not this"
           format: date-time
           type: string
         value:

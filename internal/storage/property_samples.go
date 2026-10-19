@@ -198,6 +198,44 @@ func (p *PG) PropertyTransitions(ctx context.Context, componentRef, key, instanc
 	return out, nil
 }
 
+// LatestEndpointSample returns when an endpoint last spoke: the newest
+// observed sample stamped with the endpoint as its instance, on the metric or
+// the property lane and under any key. Ingest stamps every sample a task
+// collects with its endpoint's name (bus.laneInstance), so this covers a
+// probe's layer signals and verdicts and a driver's own metrics and
+// properties alike. It exists because neither the verdict nor the layer
+// signals can say it: a verdict is written only on a transition, and a driver
+// endpoint has neither (#931, #933). Nil when the endpoint has no sample.
+//
+// One index probe per catalog type (LATERAL over metric_type and
+// property_type, each a limit-1 walk of the owner index), not a max() over
+// the component's whole history: the owner index leads with the type, so a
+// type-blind max would read every row the component ever wrote. An unknown
+// component folds into nil, no error, as LatestProperty does.
+func (p *PG) LatestEndpointSample(ctx context.Context, componentRef, instance string) (*time.Time, error) {
+	c, err := scopedByName(ctx, p.pool, componentConfig, componentRef)
+	if errors.Is(err, ErrComponentNotFound) {
+		return nil, nil
+	} else if err != nil {
+		return nil, err
+	}
+	var ts *time.Time
+	err = p.pool.QueryRow(ctx, `
+		select greatest(
+			(select max(l.ts) from metric_type t cross join lateral (
+				select ts from metric
+				where component_id = $1::uuid and metric_type_id = t.id and instance = $2 and provenance = 'observed'
+				order by ts desc limit 1) l),
+			(select max(l.ts) from property_type t cross join lateral (
+				select ts from property
+				where component_id = $1::uuid and property_type_id = t.id and instance = $2 and provenance = 'observed'
+				order by ts desc limit 1) l))`, c.ID, instance).Scan(&ts)
+	if err != nil {
+		return nil, fmt.Errorf("storage: latest endpoint sample %s[%s]: %w", componentRef, instance, err)
+	}
+	return ts, nil
+}
+
 // ListPropertySeries returns one property series' change history newest
 // first: the samples behind the effective value (#794). Mirrors
 // ListMetricSeries over the property lane.

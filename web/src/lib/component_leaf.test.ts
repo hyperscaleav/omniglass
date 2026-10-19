@@ -46,6 +46,18 @@ describe("collectionState", () => {
     expect(collectionState(e, node(5), now).kind).toBe("collecting");
   });
 
+  // A driver endpoint never gets a reachability verdict; its own samples
+  // (uptime, say) are what say it is collecting (#933).
+  it("a driver endpoint with a fresh sample and no verdict is collecting", () => {
+    const e = { ...iface(null, "edge-1"), last_sample: iso(5) } as ReachEndpoint;
+    expect(collectionState(e, node(5), now).kind).toBe("collecting");
+  });
+
+  it("a driver endpoint whose samples stopped blames the device or the path", () => {
+    const e = { ...iface(null, "edge-1"), last_sample: iso(600) } as ReachEndpoint;
+    expect(collectionState(e, node(5), now).kind).toBe("device-or-path");
+  });
+
   it("no verdict yet is unknown", () => {
     expect(collectionState(iface(null, "edge-1"), node(5), now).kind).toBe("unknown");
   });

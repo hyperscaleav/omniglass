@@ -522,6 +522,9 @@ type Gateway interface {
 	InsertPropertySamples(ctx context.Context, evs []PropertySampleWrite) error
 	LatestProperty(ctx context.Context, componentName, key, instance string) (*PropertySample, error)
 	PropertyTransitions(ctx context.Context, componentName, key, instance string, window time.Duration) ([]PropertySample, error)
+	// LatestEndpointSample is an endpoint's freshness: the time of its newest
+	// observed sample on the metric or property lane, any key (#933).
+	LatestEndpointSample(ctx context.Context, componentName, instance string) (*time.Time, error)
 
 	// The observed-log sink: the mirror of the metric and property sinks for log-kind
 	// occurrences. reject-not-project and owner-confinement are applied by the caller

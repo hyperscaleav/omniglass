@@ -6567,3 +6567,17 @@ Collection card, a few minutes after its last change. The console now ages an en
 sample (the newest of the verdict, its layer-7 rungs and its layer signals, which every probe
 writes), in the pill, the Collection state, its "last sample" age and the panel's "last checked".
 Pure tests pin an old transition with a fresh layer sample reading responding and collecting.
+
+### A driver endpoint reads collecting while its samples arrive (#933)
+
+A component's Collection card read **no sample yet** on a driver endpoint (an SNMP display, say) while
+its Vitals showed a live Uptime: the card judged collection by the reachability verdict, which only a
+probe endpoint gets. Ingest already stamps every sample a task collects with its endpoint's name, so the
+attribution was there; nothing read it. The reachability read now carries `last_sample` per endpoint,
+when it last spoke: its newest observed sample on any lane and key, read with one limit-1 probe of the
+owner index per catalog type rather than a max over the component's history. The verdict's `ts` is
+documented for what it is, the last change. The console judges collection by that freshness (a down
+verdict still reads as the component answering badly), so a driver endpoint reads collecting with its last
+sample's age, and stale once its samples stop. Proven by a storage test (the newest across lanes, nil
+for none), the reachability API test (a driver endpoint with no verdict and a fresh `last_sample`), and
+pure tests of the collection state.

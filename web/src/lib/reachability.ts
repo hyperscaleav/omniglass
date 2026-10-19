@@ -28,6 +28,10 @@ export type ReachEndpoint = {
   transport: string;
   address?: string;
   node?: string;
+  // When the endpoint last spoke: its newest observed sample on any lane and
+  // key, the server's own read (#933). The one freshness a driver endpoint,
+  // which never gets a verdict, has.
+  last_sample?: string;
   verdict: ReachVerdict | null;
   // The layer-7 rungs (#812): responds (the protocol itself answered) and,
   // only when a credential was tried, auth. Absent until a probe climbs them.
@@ -58,14 +62,14 @@ export function verdictWord(v: ReachVerdict | null, now: number = Date.now()): V
   return v.value === "up" ? "responding" : "down";
 }
 
-// lastSampleAt is when the endpoint last spoke: the newest of its verdict, its
-// layer-7 rungs and its layer signals. The verdict alone will not do: the
+// lastSampleAt is when the endpoint last spoke: the newest of the server's
+// last_sample (any lane, any key: a driver's samples too, #933), its verdict,
+// its layer-7 rungs and its layer signals. The verdict alone will not do: the
 // write path stores a verdict only when it changes, so its ts is the last
 // TRANSITION, and an endpoint answering every probe for an hour would read an
-// hour old (#931). The layer signals are sampled every probe, so they carry
-// the time the endpoint last answered (or failed to). Null with no sample.
+// hour old (#931). Null with no sample.
 export function lastSampleAt(iface: ReachEndpoint): string | null {
-  const stamps = [iface.verdict?.ts, iface.responsive?.ts, iface.authenticated?.ts, ...(iface.layers ?? []).map((l) => l.ts)];
+  const stamps = [iface.last_sample, iface.verdict?.ts, iface.responsive?.ts, iface.authenticated?.ts, ...(iface.layers ?? []).map((l) => l.ts)];
   let newest: string | null = null;
   let newestMs = -Infinity;
   for (const ts of stamps) {

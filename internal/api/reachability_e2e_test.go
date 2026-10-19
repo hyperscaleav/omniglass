@@ -26,7 +26,10 @@ type reachResp struct {
 		Type     string `json:"transport"`
 		Address  string `json:"address"`
 		Node     string `json:"node"`
-		Verdict  *struct {
+		// LastSample is the endpoint's freshness: its newest sample on any
+		// lane, where the verdict's ts is its last transition (#931, #933).
+		LastSample *time.Time `json:"last_sample"`
+		Verdict    *struct {
 			Value string    `json:"value"`
 			TS    time.Time `json:"ts"`
 		} `json:"verdict"`
@@ -87,7 +90,8 @@ func TestReachabilityAPI(t *testing.T) {
 	defer conn.Close(ctx)
 	if _, err := conn.Exec(ctx, `insert into endpoint (name, transport, component, params) values
 		('disp-1-tcp', 'tcp', (select id from component where name = 'disp-1'), '{"target":"10.20.4.11","port":5000}'::jsonb),
-		('disp-1-icmp', 'icmp', (select id from component where name = 'disp-1'), '{"target":"10.20.4.11"}'::jsonb)`); err != nil {
+		('disp-1-icmp', 'icmp', (select id from component where name = 'disp-1'), '{"target":"10.20.4.11"}'::jsonb),
+		('disp-1-snmp', 'snmp', (select id from component where name = 'disp-1'), '{"target":"10.20.4.11","port":161}'::jsonb)`); err != nil {
 		t.Fatalf("insert endpoints: %v", err)
 	}
 
@@ -124,6 +128,16 @@ func TestReachabilityAPI(t *testing.T) {
 		t.Fatalf("insert icmp metric: %v", err)
 	}
 
+	// disp-1-snmp: a driver endpoint. Its samples are the driver's own
+	// metrics (uptime here), stamped with the endpoint as their instance; it
+	// never gets a reachability verdict or a layer signal (#933).
+	t3 := t2.Add(30 * time.Second)
+	if err := gw.InsertMetricSamples(ctx, []storage.MetricSampleWrite{
+		{OwnerKind: "component", OwnerID: "disp-1", Key: "uptime", Instance: "disp-1-snmp", Value: 42, Source: "snmp", TS: t3},
+	}); err != nil {
+		t.Fatalf("insert snmp metric: %v", err)
+	}
+
 	srv := httptest.NewServer(api.NewHandler(gw))
 	defer srv.Close()
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
@@ -133,12 +147,13 @@ func TestReachabilityAPI(t *testing.T) {
 	if err := json.Unmarshal(out, &r); err != nil {
 		t.Fatalf("decode reachability: %v", err)
 	}
-	if r.Component != "disp-1" || len(r.Endpoints) != 2 {
-		t.Fatalf("reachability: want disp-1 with 2 endpoints, got %+v", r)
+	if r.Component != "disp-1" || len(r.Endpoints) != 3 {
+		t.Fatalf("reachability: want disp-1 with 3 endpoints, got %+v", r)
 	}
-	// endpoints ordered by name: disp-1-icmp then disp-1-tcp.
+	// endpoints ordered by name: disp-1-icmp, disp-1-snmp, disp-1-tcp.
 	icmp := r.Endpoints[0]
-	tcp := r.Endpoints[1]
+	snmp := r.Endpoints[1]
+	tcp := r.Endpoints[2]
 	if icmp.Endpoint != "disp-1-icmp" || tcp.Endpoint != "disp-1-tcp" {
 		t.Fatalf("endpoint order: got %s, %s", icmp.Endpoint, tcp.Endpoint)
 	}
@@ -163,6 +178,21 @@ func TestReachabilityAPI(t *testing.T) {
 	if len(icmp.History) != 2 || icmp.History[0].Value != "up" || icmp.History[1].Value != "down" {
 		t.Fatalf("icmp history: want [up down], got %+v", icmp.History)
 	}
+
+	// last_sample is the newest sample attributed to the endpoint on any lane.
+	sameTime := func(name string, got *time.Time, want time.Time) {
+		t.Helper()
+		if got == nil || !got.Equal(want.Truncate(time.Microsecond)) {
+			t.Fatalf("%s last_sample: want %v, got %v", name, want, got)
+		}
+	}
+	sameTime("tcp", tcp.LastSample, t2)
+	sameTime("icmp", icmp.LastSample, t1)
+	// The driver endpoint: no verdict, no layers, yet it is collecting (#933).
+	if snmp.Verdict != nil || len(snmp.Layers) != 0 {
+		t.Fatalf("snmp: a driver endpoint has no verdict or layers, got %+v", snmp)
+	}
+	sameTime("snmp", snmp.LastSample, t3)
 
 	// A viewer scoped to a different component (out of scope on disp-1) gets a
 	// non-disclosing 404: the permission passes (*:read) but scope injection hides
