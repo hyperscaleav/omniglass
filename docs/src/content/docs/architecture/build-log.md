@@ -6557,3 +6557,13 @@ on the system's Overview: the redirect read the query off the window, which on a
 navigation still holds the page being left. It reads the router's own location now, the same
 fix for the three name-to-uuid redirects (place, system, component) that read the window the same
 way. A component test follows the link from another page, the path a direct load never took.
+
+### An endpoint still answering reads fresh (#931)
+
+The reachability verdict is stored only when it changes, so its timestamp is the last up/down
+transition, and the console aged it as though it were the last sample: an endpoint answering every
+probe read **stale** in the Endpoints panel, and "stale sample; the node is healthy" in a component's
+Collection card, a few minutes after its last change. The console now ages an endpoint by its newest
+sample (the newest of the verdict, its layer-7 rungs and its layer signals, which every probe
+writes), in the pill, the Collection state, its "last sample" age and the panel's "last checked".
+Pure tests pin an old transition with a fresh layer sample reading responding and collecting.

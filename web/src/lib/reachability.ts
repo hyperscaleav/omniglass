@@ -58,6 +58,34 @@ export function verdictWord(v: ReachVerdict | null, now: number = Date.now()): V
   return v.value === "up" ? "responding" : "down";
 }
 
+// lastSampleAt is when the endpoint last spoke: the newest of its verdict, its
+// layer-7 rungs and its layer signals. The verdict alone will not do: the
+// write path stores a verdict only when it changes, so its ts is the last
+// TRANSITION, and an endpoint answering every probe for an hour would read an
+// hour old (#931). The layer signals are sampled every probe, so they carry
+// the time the endpoint last answered (or failed to). Null with no sample.
+export function lastSampleAt(iface: ReachEndpoint): string | null {
+  const stamps = [iface.verdict?.ts, iface.responsive?.ts, iface.authenticated?.ts, ...(iface.layers ?? []).map((l) => l.ts)];
+  let newest: string | null = null;
+  let newestMs = -Infinity;
+  for (const ts of stamps) {
+    if (!ts) continue;
+    const ms = new Date(ts).getTime();
+    if (ms > newestMs) {
+      newest = ts;
+      newestMs = ms;
+    }
+  }
+  return newest;
+}
+
+// endpointWord is the pill's word for one endpoint: the verdict's value, aged
+// by the endpoint's newest sample rather than by the verdict's transition.
+export function endpointWord(iface: ReachEndpoint, now: number = Date.now()): VerdictWord {
+  if (!iface.verdict) return "unknown";
+  return verdictWord({ value: iface.verdict.value, ts: lastSampleAt(iface) ?? iface.verdict.ts }, now);
+}
+
 // A segment of the availability strip: one contiguous stretch in a single state,
 // with its share of the window (0..1) so the strip renders as flex weights.
 export type Segment = { value: string; weight: number };
@@ -81,7 +109,7 @@ export function uptime(history: ReachHistory[], verdict: ReachVerdict | null, no
 // fault on a live box; a host that fails ping is unreachable outright. Returns an
 // empty string when the interface is not down or the layers do not explain it.
 export function reason(iface: ReachEndpoint, now: number = Date.now()): string {
-  if (verdictWord(iface.verdict, now) !== "down") return "";
+  if (endpointWord(iface, now) !== "down") return "";
   const ping = iface.layers.find((l) => l.check === "icmp-reachable");
   const port = iface.layers.find((l) => l.check === "tcp-open");
   if (ping && ping.value >= 1 && port && port.value < 1) {

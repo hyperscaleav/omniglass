@@ -39,6 +39,13 @@ describe("collectionState", () => {
     expect(collectionState(iface({ value: "down", ts: iso(10) }, "edge-1"), node(5), now).kind).toBe("down");
   });
 
+  // An endpoint still answering reads collecting however long ago it last
+  // changed state: the transition is old, the newest sample is not (#931).
+  it("an old transition with fresh layer samples is collecting", () => {
+    const e = { ...iface({ value: "up", ts: iso(1260) }, "edge-1"), layers: [{ layer: "port", check: "tcp-open", value: 1, ts: iso(5) }] } as ReachEndpoint;
+    expect(collectionState(e, node(5), now).kind).toBe("collecting");
+  });
+
   it("no verdict yet is unknown", () => {
     expect(collectionState(iface(null, "edge-1"), node(5), now).kind).toBe("unknown");
   });

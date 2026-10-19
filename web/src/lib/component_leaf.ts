@@ -12,7 +12,7 @@ import type { Member } from "./members";
 import type { Node } from "./nodes";
 import { nodeStatus } from "./nodes";
 import type { ReachEndpoint } from "./reachability";
-import { verdictWord } from "./reachability";
+import { endpointWord } from "./reachability";
 import { entityLabel } from "./entities";
 
 export type CollectionState = {
@@ -27,7 +27,7 @@ export type CollectionState = {
 
 export function collectionState(iface: ReachEndpoint, node: Node | undefined, now: number = Date.now()): CollectionState {
   const nodeDown = !node || nodeStatus(node, now) !== "up";
-  const word = verdictWord(iface.verdict ?? null, now);
+  const word = endpointWord(iface, now);
   if (word === "unknown") return { kind: nodeDown ? "node-offline" : "unknown", node: iface.node };
   if (word === "stale") return { kind: nodeDown ? "node-offline" : "device-or-path", node: iface.node };
   if (word === "down") return { kind: "down", node: iface.node };

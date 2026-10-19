@@ -55,6 +55,25 @@ function mount(data: Reachability = seed) {
 }
 
 describe("ReachabilityPanel", () => {
+  // An endpoint answering every probe since an old transition (#931): the
+  // pill reads responding and "last checked" is its newest probe sample.
+  it("ages a long-up endpoint by its newest sample, not its last transition", () => {
+    const old = ago(21 * 60_000);
+    const { getByText, queryByText } = mount({
+      component: "disp-2",
+      endpoints: [{
+        endpoint: "disp-2-tcp", transport: "tcp", node: "node-a",
+        verdict: { value: "up", ts: old },
+        layers: [{ layer: "port", check: "tcp-open", value: 1, ts: ago(5_000) }],
+        history: [{ ts: old, value: "up" }],
+      }],
+    });
+    expect(getByText("responding")).toBeTruthy();
+    expect(queryByText("stale")).toBeNull();
+    fireEvent.click(getByText("disp-2-tcp"));
+    expect(getByText(/last checked/).textContent).not.toMatch(/21 ?m/);
+  });
+
   it("renders the endpoint count and a verdict pill per endpoint", () => {
     const { getByText, getAllByText } = mount();
     expect(getByText("2 endpoints")).toBeTruthy();

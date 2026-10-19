@@ -20,7 +20,7 @@ import SimulationSection from "../components/SimulationSection";
 import { FLEET_VIEW_KEY, fleetView } from "../lib/fleet";
 import { COMPONENTS_KEY, listComponents, type Component as FleetComponent } from "../lib/components";
 import { componentSystemsKey, componentSystems } from "../lib/members";
-import { REACHABILITY_KEY, getReachability, layerWord } from "../lib/reachability";
+import { REACHABILITY_KEY, getReachability, lastSampleAt, layerWord } from "../lib/reachability";
 import { componentAlarms, componentAlarmsKey, splitAlarms } from "../lib/alarms";
 import { effectiveProperties, effectivePropertiesKey } from "../lib/component_properties";
 import { effectiveMetrics, effectiveMetricsKey } from "../lib/component_metrics";
@@ -333,8 +333,8 @@ export default function ComponentLeaf() {
                           <Show when={iface.node}>
                             <span class="text-base-content/60">via {iface.node}</span>
                           </Show>
-                          <Show when={iface.verdict}>
-                            <span class="text-base-content/50">last sample {ageWords(iface.verdict!.ts)}</span>
+                          <Show when={lastSampleAt(iface)}>
+                            {(ts) => <span class="text-base-content/50">last sample {ageWords(ts())}</span>}
                           </Show>
                           <span data-testid={`collection-${iface.endpoint}`} class="rounded border border-base-content/20 px-1.5 py-0.5">
                             {

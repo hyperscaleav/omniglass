@@ -109,7 +109,9 @@ collects, add or remove the **endpoint**; there is no task create, edit, or dele
 Every component's detail carries an **Endpoints** panel showing composed reachability: is each
 of its endpoints reachable, and why. One row per endpoint shows the endpoint (its label, or its
 transport name where it has none) and its address, a **verdict
-pill** (responding, down, stale, or unknown), an **availability strip** drawn from the
+pill** (responding, down, stale, or unknown; a verdict is stored only when it changes, so the
+pill ages an endpoint by its newest probe sample, and an endpoint answering every probe stays
+responding however long ago it last changed state), an **availability strip** drawn from the
 verdict's up/down transitions over time, and an expandable **gate breakdown** with each probe's signal and timing, then the composed
 verdict (the endpoint is up only when every applicable probe passed). An `http` or `ssh`
 endpoint also wears its upper rungs as chips once a probe has climbed them: **responds** (the

@@ -1,6 +1,8 @@
 import { describe, it, expect } from "vitest";
 import {
   verdictWord,
+  endpointWord,
+  lastSampleAt,
   segments,
   uptime,
   reason,
@@ -24,6 +26,38 @@ describe("verdictWord", () => {
   });
   it("is unknown when there is no verdict", () => {
     expect(verdictWord(null, now)).toBe("unknown");
+  });
+});
+
+// The verdict is stored on change only, so its ts is the last TRANSITION;
+// an endpoint still answering every probe is as fresh as its newest sample,
+// which the layer signals (sampled every probe) carry (#931).
+describe("an endpoint's freshness is its newest sample (#931)", () => {
+  const ep = (over: Partial<ReachEndpoint>): ReachEndpoint =>
+    ({ endpoint: "tcp", transport: "tcp", verdict: null, layers: [], history: [], ...over }) as ReachEndpoint;
+  const layer = (msAgo: number) => ({ layer: "port", check: "tcp-open", value: 1, ts: ago(msAgo) });
+
+  it("ages an old transition by the newest layer sample, not the transition", () => {
+    const e = ep({ verdict: { value: "up", ts: ago(21 * 60_000) }, layers: [layer(5_000)] });
+    expect(lastSampleAt(e)).toBe(ago(5_000));
+    expect(endpointWord(e, now)).toBe("responding");
+  });
+  it("reads the newest of the verdict, its rungs and its layers", () => {
+    const e = ep({
+      verdict: { value: "down", ts: ago(400_000) },
+      responsive: { value: "down", ts: ago(300_000) },
+      layers: [layer(200_000), { ...layer(20_000), layer: "ping", check: "icmp-reachable" }],
+    });
+    expect(lastSampleAt(e)).toBe(ago(20_000));
+    expect(endpointWord(e, now)).toBe("down");
+  });
+  it("is stale when even the newest sample is past the window", () => {
+    const e = ep({ verdict: { value: "up", ts: ago(900_000) }, layers: [layer(STALENESS_WINDOW_MS + 1_000)] });
+    expect(endpointWord(e, now)).toBe("stale");
+  });
+  it("is unknown with no verdict, and has no sample time with no sample", () => {
+    expect(endpointWord(ep({}), now)).toBe("unknown");
+    expect(lastSampleAt(ep({}))).toBeNull();
   });
 });
 
