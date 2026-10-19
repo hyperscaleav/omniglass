@@ -6,7 +6,8 @@
 // web/e2e/walkthrough-pr.mjs is its command line. Its types are the JSDoc below,
 // checked by tsc (web/tsconfig.json).
 //
-// - which walkthroughs a PR records: the scripts it adds or changes, else all;
+// - which walkthroughs a PR records: the scripts a scripts-only PR adds or
+//   changes, else all;
 // - where their stills are committed: .github/screenshots/<pr>/walkthroughs/<id>/
 //   (ruled on #884), so the evidence that matters for review renders inline and
 //   outlives the workflow artifact that carries the video;
@@ -34,28 +35,37 @@ function checkId(id) {
 }
 
 // The ids to record, in the tree's order. `changed` is the PR's changed paths
-// (repo-relative), `all` every script's id in the tree. A script the PR adds or
-// changes is recorded alone; a PR that touches no script records every one,
-// since any console change can move a flow a walkthrough walks.
+// (repo-relative), `all` every script's id in the tree. A PR that changes
+// nothing under web/ but scripts records just the scripts it adds or changes;
+// any other change under web/ (the console, the recorder, a fixture) records
+// every one, since it can move a flow a walkthrough walks; so does a PR that
+// touches no existing script.
 /** @param {string[]} changed @param {string[]} all @returns {string[]} */
 export function selectWalkthroughs(changed, all) {
   all.forEach(checkId);
   if (all.length === 0) throw new Error(`walkthroughs: no walkthroughs under ${SCRIPT_DIR}`);
   const touched = new Set();
   for (const p of changed) {
-    if (!p.startsWith(SCRIPT_DIR) || !p.endsWith('.yaml')) continue;
-    const rest = p.slice(SCRIPT_DIR.length, -'.yaml'.length);
-    if (!rest.includes('/')) touched.add(rest);
+    const rest = p.startsWith(SCRIPT_DIR) && p.endsWith('.yaml') ? p.slice(SCRIPT_DIR.length, -'.yaml'.length) : null;
+    if (rest !== null && !rest.includes('/')) touched.add(rest);
+    else if (p.startsWith('web/')) return [...all];
   }
   const picked = all.filter((id) => touched.has(id));
   return picked.length ? picked : [...all];
 }
 
+// The directory every walkthrough still of PR `pr` sits under. A run clears it
+// before writing, so a renamed or deleted script leaves no stale stills.
+/** @param {number} pr @returns {string} */
+export function stillsRoot(pr) {
+  if (!Number.isInteger(pr) || pr < 1) throw new Error(`PR number "${pr}" must be a positive integer`);
+  return `.github/screenshots/${pr}/walkthroughs`;
+}
+
 // Where a walkthrough's poster and stills are committed for PR `pr`.
 /** @param {number} pr @param {string} id @returns {string} */
 export function stillsDir(pr, id) {
-  if (!Number.isInteger(pr) || pr < 1) throw new Error(`PR number "${pr}" must be a positive integer`);
-  return `.github/screenshots/${pr}/walkthroughs/${checkId(id)}`;
+  return `${stillsRoot(pr)}/${checkId(id)}`;
 }
 
 // The raw URL of `path` at commit `sha` of `repo` (owner/name).
@@ -66,10 +76,14 @@ export function rawUrl(repo, sha, path) {
   return `https://raw.githubusercontent.com/${repo}/${sha}/${path.split('/').map(encodeURIComponent).join('/')}`;
 }
 
-// Script text into Markdown: no HTML, and no brackets that could open a link.
+// Script text into Markdown, on one line: no HTML, no brackets that could open
+// a link (the backslash escaped first, so "\[" cannot turn back into "["), and
+// no newline that could start a heading or close the fold.
 /** @param {string} s @returns {string} */
 function esc(s) {
   return String(s)
+    .replace(/\r?\n|\r/g, ' ')
+    .replace(/\\/g, '\\\\')
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
@@ -108,13 +122,15 @@ function section(repo, pr, sha, m) {
 // The comment body. `sha` is the commit holding the stills (what they are
 // embedded by), `headSha` the PR head they were recorded from; `recorded` the
 // manifests (walkthrough.json) of the walkthroughs that passed, `failed` the ids
-// of those that did not.
+// of those that did not. `stackUp` false means the walkthrough stack never came
+// up, so no walkthrough ran: the comment says so instead of blaming each one.
 /**
  * @param {{ repo: string, pr: number, sha: string, headSha: string, runUrl: string,
- *   artifactUrl: string, recorded: Manifest[], failed: string[] }} args
+ *   artifactUrl: string, recorded: Manifest[], failed: string[], stackUp?: boolean }} args
  * @returns {string}
  */
-export function commentBody({ repo, pr, sha, headSha, runUrl, artifactUrl, recorded, failed }) {
+export function commentBody({ repo, pr, sha, headSha, runUrl, artifactUrl, recorded, failed: listed, stackUp = true }) {
+  const failed = stackUp ? listed : [];
   const total = recorded.length + failed.length;
   const tally = failed.length
     ? `${plural(recorded.length, 'walkthrough')} recorded, ${failed.length} failed`
@@ -128,6 +144,13 @@ export function commentBody({ repo, pr, sha, headSha, runUrl, artifactUrl, recor
       `the poster and stills are committed under \`.github/screenshots/${pr}/walkthroughs/\` and embedded by commit SHA.`,
     '',
   ];
+  if (!stackUp) {
+    lines.push(
+      `**The walkthrough stack never came up**, so no walkthrough ran (${listed.length} selected). ` +
+        'This is the stack, not a walkthrough: the Record step of the run log says why.',
+      '',
+    );
+  }
   if (failed.length) {
     lines.push(
       `**Failed** (a walkthrough is a test: a step whose result never appeared, or a recording over budget; the run log names the step, and the artifact keeps its partial stills):`,
@@ -137,7 +160,7 @@ export function commentBody({ repo, pr, sha, headSha, runUrl, artifactUrl, recor
     );
   }
   for (const m of recorded) lines.push(...section(repo, pr, sha, m));
-  if (total === 0) lines.push('Nothing was recorded.', '');
+  if (total === 0 && stackUp) lines.push('Nothing was recorded.', '');
   lines.push('Re-run the workflow, or remove and re-add the `run:walkthrough` label, to record the current head again; this comment is updated in place.');
   return lines.join('\n') + '\n';
 }

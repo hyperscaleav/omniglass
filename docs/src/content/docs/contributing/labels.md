@@ -52,15 +52,27 @@ promise: if a label runs automation it is named `run:<task>`, and if a label is 
 
 `run:preview` is live today (the [PR previews guide](/guides/pr-previews/) covers it, and
 `preview-comment.yml` is the workflow behind it). So is `run:walkthrough`
-(`walkthrough.yml`): applying it records the walkthroughs the PR adds or changes (every
-walkthrough, when it touches no script) on the walkthrough stack, commits each one's poster and
-per-step stills to the PR branch under `.github/screenshots/<pr>/walkthroughs/<id>/`, and keeps
-one comment on the PR embedding them by commit SHA, linking the mp4s as a workflow artifact and
-naming any walkthrough that failed (a walkthrough is a test, so a failure fails the job). The
-label stays on; re-run the job, or remove and re-add the label, to record the current head
-again, and the comment updates in place. Pull after a run: the stills commit lands on your
-branch, and since GitHub starts no workflow for a push made with the workflow token, the PR's
-other checks run again on your next push. Fork PRs are skipped (their token cannot push).
+(`walkthrough.yml`). Applying it records walkthroughs on the walkthrough stack: for a PR that
+changes nothing under `web/` but walkthrough scripts, just the scripts it adds or changes;
+otherwise every walkthrough, since any console change can move a flow. It then clears
+`.github/screenshots/<pr>/walkthroughs/` on the PR branch and commits each passing
+walkthrough's poster and per-step stills under `<id>/` there (so a renamed or deleted script
+leaves no stale stills), and keeps one comment on the PR embedding them by commit SHA, linking
+the mp4s as a workflow artifact and naming any walkthrough that failed (a walkthrough is a
+test, so a failure fails the job; a stack that never came up is reported as that, not as every
+walkthrough failing).
+
+- **What it records:** the branch tip when the job runs, not the commit the label was applied
+  at. The label stays on; re-run the job, or remove and re-add the label, to record the current
+  head again, and the comment updates in place.
+- **Merge conflicts:** GitHub runs no `pull_request` workflow on a PR with merge conflicts, so
+  the label does nothing until they are resolved.
+- **After a run:** pull, since the stills commit lands on your branch. GitHub starts no workflow
+  for a push made with the workflow token, so the PR's other checks have not run on that
+  commit; if it is the head, push an empty commit to run them
+  (`git commit --allow-empty -m "chore: rerun checks"`, then push).
+- **Forks:** fork PRs are skipped (their token cannot push).
+
 `run:build` and `run:test` are reserved:
 the expensive build and test tiers run on every PR today, and
 [issue #78](https://github.com/hyperscaleav/omniglass/issues/78) tracks moving them behind

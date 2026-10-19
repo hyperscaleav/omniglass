@@ -13,15 +13,23 @@ name: walkthrough
 #   any walkthrough that failed. A failed walkthrough fails the job: a
 #   walkthrough is a test.
 #
-# Which walkthroughs: the scripts the PR adds or changes, else every one
-# (web/e2e/walkthroughpr.mjs, unit-tested). Re-run the job, or remove and re-add
-# the label, to record the current head again; the comment updates in place.
+# Which walkthroughs: for a PR that changes nothing under web/ but scripts, the
+# scripts it adds or changes; otherwise every one (web/e2e/walkthroughpr.mjs,
+# unit-tested). The run records the branch tip at run time. Re-run the job, or
+# remove and re-add the label, to record the current head again; the comment
+# updates in place. GitHub runs no pull_request workflow on a PR with merge
+# conflicts, so resolve them first.
 #
 # No loop: the workflow runs only on the `labeled` event, never on a push, and
 # GitHub starts no workflow for a push made with the workflow token, so the
 # stills commit triggers nothing (including the other checks: the author's next
 # push runs them). Fork PRs are skipped: their token is read-only, and this job
 # pushes. No untrusted input reaches a shell: event fields pass through env.
+#
+# The write token stays close: checkout persists no credential, so neither npm
+# install scripts nor the containers that mount the repo can read one, and only
+# the push step is handed the token. The upsert edits only a comment the
+# workflow's own bot wrote.
 
 on:
   pull_request:
@@ -30,12 +38,14 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  group: walkthrough-${{ github.event.pull_request.number }}
-  cancel-in-progress: true
-
 jobs:
   record:
+    # On the job, not the workflow: every label applied starts this workflow,
+    # and a workflow-level group would let an unrelated label's skipped run
+    # cancel a recording in flight.
+    concurrency:
+      group: walkthrough-${{ github.event.pull_request.number }}
+      cancel-in-progress: true
     if: >-
       github.event.label.name == 'run:walkthrough' &&
       github.event.pull_request.head.repo.full_name == github.repository &&
@@ -57,6 +67,7 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.ref }}
           fetch-depth: 0
+          persist-credentials: false
 
       - uses: actions/setup-node@v4
         with:
@@ -104,24 +115,31 @@ jobs:
             !web/e2e/walkthroughs/out/_selftest/
           if-no-files-found: warn
 
-      # Each passing walkthrough's poster and stills replace its previous ones,
-      # so a re-run never leaves a removed step's still behind. A push that
-      # races the author's is rebased (only the bot writes these paths).
+      # The PR's walkthrough stills are cleared, then each passing walkthrough's
+      # poster and stills written, so a re-run leaves no removed step's still
+      # and no renamed or deleted script's stills behind. A push that races the
+      # author's is rebased (only the bot writes these paths). The token reaches
+      # git only here, as a per-command header, never written to .git/config.
       - name: Commit the stills
         id: commit
         if: ${{ !cancelled() && steps.select.outcome == 'success' }}
         env:
           IDS: ${{ steps.select.outputs.ids }}
           HEAD_SHA: ${{ steps.select.outputs.head }}
+          PUSH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           out=web/e2e/walkthroughs/out
+          auth="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$PUSH_TOKEN" | base64 -w0)"
+          echo "::add-mask::$auth"
+          authed() { git -c "http.https://github.com/.extraheader=$auth" "$@"; }
+          root=$(node web/e2e/walkthrough-pr.mjs root "$PR")
+          git rm -r -q --ignore-unmatch -- "$root"
           for id in $IDS; do
             if grep -qx "$id" "$out/failed.txt" 2>/dev/null || [ ! -f "$out/$id/walkthrough.json" ]; then
               continue
             fi
             dest=$(node web/e2e/walkthrough-pr.mjs dir "$PR" "$id")
-            git rm -r -q --ignore-unmatch -- "$dest"
             mkdir -p "$dest"
             cp "$out/$id/poster.png" "$dest/"
             find "$out/$id" -maxdepth 1 -name 'step-*.png' ! -name '*-failed.png' -exec cp {} "$dest/" \;
@@ -134,11 +152,11 @@ jobs:
             git config user.email github-actions@users.noreply.github.com
             git commit -q -m "ci: walkthrough stills for #${PR} at ${HEAD_SHA:0:7}"
             for attempt in 1 2 3; do
-              if git push -q origin "HEAD:refs/heads/${HEAD_REF}"; then
+              if authed push -q origin "HEAD:refs/heads/${HEAD_REF}"; then
                 break
               fi
               [ "$attempt" -lt 3 ] || { echo "could not push the stills to ${HEAD_REF}" >&2; exit 1; }
-              git pull -q --rebase origin "${HEAD_REF}"
+              authed pull -q --rebase origin "${HEAD_REF}"
             done
           fi
           echo "sha=$(git rev-parse HEAD)" >>"$GITHUB_OUTPUT"
@@ -156,9 +174,10 @@ jobs:
           MARKER='<!-- omniglass-walkthrough -->'
           node web/e2e/walkthrough-pr.mjs comment >"$RUNNER_TEMP/body.md"
           # Slurp every page into one array and match the marker through a jq
-          # --arg, so it is never interpolated into the filter.
+          # --arg, so it is never interpolated into the filter. Only the bot's
+          # own comment counts: anyone can paste the marker into theirs.
           cid=$(gh api "repos/${REPO}/issues/${PR}/comments" --paginate \
-                | jq -rs --arg m "$MARKER" 'add | map(select(.body | contains($m)))[0].id // empty')
+                | jq -rs --arg m "$MARKER" 'add | map(select(.user.login == "github-actions[bot]" and (.body | contains($m))))[0].id // empty')
           if [ -n "$cid" ]; then
             gh api "repos/${REPO}/issues/comments/${cid}" -X PATCH -F body=@"$RUNNER_TEMP/body.md" >/dev/null
             echo "updated comment $cid"
@@ -170,5 +189,12 @@ jobs:
       - name: Fail on a failed walkthrough
         if: ${{ steps.record.outputs.failed == '1' }}
         run: |
-          echo "walkthroughs failed: $(tr '\n' ' ' <web/e2e/walkthroughs/out/failed.txt)" >&2
+          out=web/e2e/walkthroughs/out
+          if [ ! -f "$out/stack-up" ]; then
+            echo "the walkthrough stack never came up, so no walkthrough ran (see the Record step)" >&2
+          elif [ -s "$out/failed.txt" ]; then
+            echo "walkthroughs failed: $(tr '\n' ' ' <"$out/failed.txt")" >&2
+          else
+            echo "the recording failed after the walkthroughs (see the Record step)" >&2
+          fi
           exit 1

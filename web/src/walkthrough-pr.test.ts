@@ -5,6 +5,7 @@ import {
   rawUrl,
   selectWalkthroughs,
   stillsDir,
+  stillsRoot,
   type Manifest,
 } from "../e2e/walkthroughpr.mjs";
 
@@ -31,29 +32,31 @@ const manifest = (id: string, extra: Partial<Manifest> = {}): Manifest => ({
   ...extra,
 });
 
-const body = (recorded: Manifest[], failed: string[] = []) =>
-  commentBody({ repo: REPO, pr: 925, sha: SHA, headSha: HEAD, runUrl: RUN, artifactUrl: ARTIFACT, recorded, failed });
+const body = (recorded: Manifest[], failed: string[] = [], stackUp = true) =>
+  commentBody({ repo: REPO, pr: 925, sha: SHA, headSha: HEAD, runUrl: RUN, artifactUrl: ARTIFACT, recorded, failed, stackUp });
 
 describe("which walkthroughs a PR records", () => {
   const all = ["find-a-place", "monitoring", "sample-simulation"];
 
-  it("records the walkthroughs whose scripts the PR adds or changes", () => {
-    const changed = ["web/src/pages/Explore.tsx", "web/e2e/walkthroughs/find-a-place.yaml", "docs/x.md"];
+  it("records only the scripts a scripts-only PR adds or changes", () => {
+    const changed = ["web/e2e/walkthroughs/find-a-place.yaml", "docs/x.md"];
     expect(selectWalkthroughs(changed, all)).toEqual(["find-a-place"]);
   });
 
-  it("records every walkthrough when the PR touches no script, since any console change can move a flow", () => {
+  it("records every walkthrough when the PR changes anything else under web/, even beside a script", () => {
+    expect(selectWalkthroughs(["web/src/pages/Explore.tsx", "web/e2e/walkthroughs/find-a-place.yaml"], all)).toEqual(all);
     expect(selectWalkthroughs(["web/src/pages/Explore.tsx"], all)).toEqual(all);
+    expect(selectWalkthroughs(["web/e2e/walkthrough.mjs"], all)).toEqual(all);
+    expect(selectWalkthroughs(["web/e2e/walkthroughs/fixtures/tiny.yaml"], all)).toEqual(all);
+  });
+
+  it("records every walkthrough when the PR touches no script", () => {
+    expect(selectWalkthroughs(["internal/api/x.go"], all)).toEqual(all);
     expect(selectWalkthroughs([], all)).toEqual(all);
   });
 
-  it("ignores fixtures, recorder files, and a script the PR deleted", () => {
-    const changed = [
-      "web/e2e/walkthroughs/fixtures/tiny.yaml",
-      "web/e2e/walkthrough.mjs",
-      "web/e2e/walkthroughs/retired.yaml",
-    ];
-    expect(selectWalkthroughs(changed, all)).toEqual(all);
+  it("records every walkthrough when the only script the PR touched is one it deleted", () => {
+    expect(selectWalkthroughs(["web/e2e/walkthroughs/retired.yaml"], all)).toEqual(all);
   });
 
   it("keeps the tree's order and drops duplicates", () => {
@@ -73,6 +76,12 @@ describe("which walkthroughs a PR records", () => {
 describe("where a PR's stills are committed", () => {
   it("is .github/screenshots/<pr>/walkthroughs/<id>", () => {
     expect(stillsDir(925, "find-a-place")).toBe(".github/screenshots/925/walkthroughs/find-a-place");
+  });
+
+  it("all sit under one per-PR root, which a run clears before writing", () => {
+    expect(stillsRoot(925)).toBe(".github/screenshots/925/walkthroughs");
+    expect(stillsDir(925, "a").startsWith(`${stillsRoot(925)}/`)).toBe(true);
+    expect(() => stillsRoot(-1)).toThrow("PR number");
   });
 
   it("refuses a PR number or id that could escape the directory", () => {
@@ -139,6 +148,29 @@ describe("the walkthrough comment", () => {
     expect(b).not.toContain("<img src=x>");
     expect(b).toContain("&lt;img src=x&gt;");
     expect(b).toContain("A &lt;b&gt;bold&lt;/b&gt; \\[link\\]");
+  });
+
+  it("escapes a backslash before a bracket, so an escaped link cannot come back alive", () => {
+    const b = body([manifest("a", { steps: [{ n: 1, kind: "goto", caption: "\\[x\\](https://evil)", still: "step-01.png" }], poster: "step-01.png" })]);
+    expect(b).toContain("1. \\\\\\[x\\\\\\](https://evil)");
+  });
+
+  it("folds newlines to a space, so a script cannot forge a heading or break the fold", () => {
+    const b = body([manifest("a", { title: "T\n### forged", description: "line one\r\n</details>\n# h", steps: [{ n: 1, kind: "goto", caption: "a\n\n## b", still: "step-01.png" }], poster: "step-01.png" })]);
+    expect(b).toContain("#### T ### forged");
+    expect(b).toContain("line one &lt;/details&gt; # h");
+    expect(b).toContain("1. a  ## b");
+    expect(b).not.toMatch(/^#{1,2} /m);
+    expect(b).not.toMatch(/^### forged/m);
+    expect(b.match(/<\/details>/g)).toHaveLength(1);
+  });
+
+  it("says the stack never came up, rather than blaming every walkthrough", () => {
+    const b = body([], ["a", "b"], false);
+    expect(b).toContain("The walkthrough stack never came up");
+    expect(b).not.toContain("failed:");
+    expect(b).not.toContain("`a`");
+    expect(b).toContain("0 walkthroughs recorded");
   });
 
   it("refuses a manifest whose stills are not the recorder's names", () => {

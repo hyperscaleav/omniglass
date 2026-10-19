@@ -5,8 +5,9 @@
 #   walkthroughs.sh record [ID...]  record web/e2e/walkthroughs/<ID>.yaml (default: every
 #                                 one) to web/e2e/walkthroughs/out/<ID>/: <ID>.mp4,
 #                                 poster.png, step-NN.png, walkthrough.json; the ids
-#                                 that failed are listed in out/failed.txt (the
-#                                 run:walkthrough workflow reads it, #925)
+#                                 that failed are listed in out/failed.txt, and
+#                                 out/stack-up marks that the stack came up (the
+#                                 run:walkthrough workflow reads both, #925)
 #   walkthroughs.sh selftest      the recorder's own test: a broken step fails naming the
 #                                 step and its wait, keeping its stills; an over-budget
 #                                 walkthrough fails naming which limit
@@ -104,10 +105,12 @@ WT_ENV=()
 if [ "$mode" = record ]; then
   mkdir -p "$OUT"
   : >"$OUT/failed.txt"
+  [ ! -e "$OUT/stack-up" ] || rm -- "$OUT/stack-up"
 fi
 
 stack_init ogwalk
 stack_walkthrough_up
+[ "$mode" != record ] || : >"$OUT/stack-up"
 
 if [ "$mode" = record ]; then
   failed=()

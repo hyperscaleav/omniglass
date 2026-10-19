@@ -6,15 +6,19 @@
 //       (one per line on stdin), else every walkthrough in the tree
 //   node web/e2e/walkthrough-pr.mjs dir <pr> <id>
 //       where that walkthrough's poster and stills are committed
+//   node web/e2e/walkthrough-pr.mjs root <pr>
+//       the directory all of the PR's walkthrough stills sit under
 //   node web/e2e/walkthrough-pr.mjs comment
 //       the PR comment body, from env REPO, PR, SHA (the commit holding the
 //       stills), HEAD_SHA, RUN_URL, ARTIFACT_URL and IDS (the selected ids). A
 //       selected walkthrough counts as recorded only if walkthroughs.sh did not
-//       list it in out/failed.txt and its walkthrough.json exists.
+//       list it in out/failed.txt and its walkthrough.json exists; with no
+//       out/stack-up (walkthroughs.sh writes it once the stack is up), the
+//       comment says the stack never came up instead of blaming each one.
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { commentBody, selectWalkthroughs, stillsDir } from './walkthroughpr.mjs';
+import { commentBody, selectWalkthroughs, stillsDir, stillsRoot } from './walkthroughpr.mjs';
 
 const DIR = join(dirname(fileURLToPath(import.meta.url)), 'walkthroughs');
 const OUT = join(DIR, 'out');
@@ -29,6 +33,9 @@ function main([cmd, ...args]) {
     }
     case 'dir':
       console.log(stillsDir(Number(args[0]), args[1]));
+      return 0;
+    case 'root':
+      console.log(stillsRoot(Number(args[0])));
       return 0;
     case 'comment': {
       const env = (k) => {
@@ -56,12 +63,13 @@ function main([cmd, ...args]) {
           artifactUrl: env('ARTIFACT_URL'),
           recorded,
           failed,
+          stackUp: existsSync(join(OUT, 'stack-up')),
         }),
       );
       return 0;
     }
     default:
-      console.error('usage: walkthrough-pr.mjs select | dir <pr> <id> | comment');
+      console.error('usage: walkthrough-pr.mjs select | dir <pr> <id> | root <pr> | comment');
       return 2;
   }
 }

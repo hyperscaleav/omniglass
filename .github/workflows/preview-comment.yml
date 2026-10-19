@@ -55,9 +55,10 @@ jobs:
 
           # Find an existing sticky comment by its marker, then update or create.
           # Slurp all pages into one array (add) and match with a jq --arg so the
-          # marker is never string-interpolated into the filter.
+          # marker is never string-interpolated into the filter. Only the bot's
+          # own comment counts: anyone can paste the marker into theirs.
           cid=$(gh api "repos/${REPO}/issues/${PR}/comments" --paginate \
-                | jq -rs --arg m "$MARKER" 'add | map(select(.body | contains($m)))[0].id // empty')
+                | jq -rs --arg m "$MARKER" 'add | map(select(.user.login == "github-actions[bot]" and (.body | contains($m))))[0].id // empty')
           if [ -n "$cid" ]; then
             gh api "repos/${REPO}/issues/comments/${cid}" -X PATCH -f body="$body" >/dev/null
             echo "updated comment $cid"
