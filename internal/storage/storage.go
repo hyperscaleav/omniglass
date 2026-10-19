@@ -470,7 +470,7 @@ type Gateway interface {
 	// ReconcileEventRules re-judges the newest sample of every series that
 	// took a sample past from, and corrects any rule state that disagrees
 	// with it; it returns the mark to read past next.
-	ReconcileEventRules(ctx context.Context, from RuleMark) (RuleMark, error)
+	ReconcileEventRules(ctx context.Context, st *RuleReconcileState) error
 	// The severity level registry (#917): official levels from the boot seed,
 	// operator levels created, renamed, recolored, re-ranked and deleted.
 	UpsertSeverityLevel(ctx context.Context, l SeverityLevel) error

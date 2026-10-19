@@ -176,13 +176,17 @@ Two narrow races can still cost one decision on an input that reports only on ch
 (or re-keyed) while an ingest batch carrying its key is uncommitted primes from committed samples only,
 so the batch's sample is judged by neither side; and a judgment Postgres aborts on a deadlock rolls back
 its savepoint, so the sample lands and the rule does not act. A **reconcile pass** heals both (#928):
-once a minute, on the settlement tick, the server reads every series that took a sample since the pass
+once a minute, on a loop of its own beside the sweep (so a slow pass never delays a sustain or a
+settlement) and under a deadline, the server reads every series that took a sample since the pass
 before last, re-judges each enabled rule's newest sample against the alarm and streak it holds, and
 corrects only what disagrees (fires, clears, or starts the streak), each corrected series in a
 transaction of its own under the same lock order as an ingest (the rule's row, the series lock, the
-health locks). Agreement is the common case and costs no write: the series, their newest samples, the
-open alarms and the streaks are read in one statement per lane and judged in memory, and a streak that
-agrees keeps its clock. The platform ships one official rule, rendered here from the seed itself:
+health locks). Agreement is the common case and costs no write: the series, their newest samples (an
+index probe per series on either lane), the open alarms and the streaks are read in one statement per
+lane and judged in memory, and a streak that agrees keeps its clock. A restarted server's first pass
+reads back a bounded number of recent samples, not the whole history, since the race it could have lost
+was in flight around its own start; a series whose correction fails is retried on its own for a few
+passes and then dropped with an error logged, while the pass moves on. The platform ships one official rule, rendered here from the seed itself:
 
 <SeededSet kind="event_rules" />
 

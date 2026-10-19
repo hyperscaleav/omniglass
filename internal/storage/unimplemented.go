@@ -882,8 +882,8 @@ func (UnimplementedGateway) DeleteEventRule(context.Context, string, string, sco
 	return nil
 }
 func (UnimplementedGateway) SweepEventRules(context.Context, time.Time) error { return nil }
-func (UnimplementedGateway) ReconcileEventRules(_ context.Context, from RuleMark) (RuleMark, error) {
-	return from, nil
+func (UnimplementedGateway) ReconcileEventRules(context.Context, *RuleReconcileState) error {
+	return nil
 }
 func (UnimplementedGateway) UpsertEventRule(context.Context, EventRuleSpec) error { return nil }
 func (UnimplementedGateway) EventRuleState(context.Context, string, scope.Set) (*EventRuleLive, error) {

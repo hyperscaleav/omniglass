@@ -2,45 +2,70 @@ package bus
 
 import (
 	"context"
-	"errors"
+	"sync"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/storage"
 )
 
-// markStore records the from mark of each reconcile pass and answers with
-// the next scripted result.
-type markStore struct {
+// stuckStore's reconcile pass blocks until its context ends, and records
+// whether that context carried a deadline; its sweeps are counted.
+type stuckStore struct {
 	fakeStore
-	froms   []storage.RuleMark
-	results []storage.RuleMark
-	errs    []error
+	entered     chan struct{}
+	once        sync.Once
+	hadDeadline atomic.Bool
+	sweeps      atomic.Int64
 }
 
-func (m *markStore) ReconcileEventRules(_ context.Context, from storage.RuleMark) (storage.RuleMark, error) {
-	i := len(m.froms)
-	m.froms = append(m.froms, from)
-	return m.results[i], m.errs[i]
+func (s *stuckStore) ReconcileEventRules(ctx context.Context, _ *storage.RuleReconcileState) error {
+	_, ok := ctx.Deadline()
+	s.hadDeadline.Store(ok)
+	s.once.Do(func() { close(s.entered) })
+	<-ctx.Done()
+	return ctx.Err()
 }
 
-// A reconcile pass reads past the older of the last two marks (a batch in
-// flight at one pass may commit ids below its mark), a failed correction
-// (the store answers its own from) rereads that range, and an error keeps
-// the marks.
-func TestReconcileRulesLagsAPass(t *testing.T) {
-	mk := func(p int64) storage.RuleMark { return storage.RuleMark{Property: p, Metric: p} }
-	s := &markStore{
-		results: []storage.RuleMark{mk(10), mk(20), mk(10), mk(40), {}, mk(50)},
-		errs:    []error{nil, nil, nil, nil, errors.New("down"), nil},
+func (s *stuckStore) SweepEventRules(context.Context, time.Time) error {
+	s.sweeps.Add(1)
+	return nil
+}
+
+// The reconcile pass (#928) never holds up the settlement sweep: it runs on
+// a goroutine of its own, under a deadline, and a shutdown ends a pass in
+// flight rather than waiting on it. A pass stuck on the database leaves the
+// sweep acting on sustains and settlements every tick.
+func TestReconcileRunsBesideTheSweep(t *testing.T) {
+	st := &stuckStore{entered: make(chan struct{})}
+	srv, err := New(Config{Host: "127.0.0.1", Port: -1}, st)
+	if err != nil {
+		t.Fatal(err)
 	}
-	var m ruleMarks
-	for range s.results {
-		_ = reconcileRules(context.Background(), s, &m)
+	select {
+	case <-st.entered:
+	case <-time.After(12 * time.Second):
+		srv.Shutdown()
+		t.Fatal("no reconcile pass began")
 	}
-	want := []storage.RuleMark{mk(0), mk(0), mk(10), mk(10), mk(10), mk(10)}
-	for i, w := range want {
-		if s.froms[i] != w {
-			t.Errorf("pass %d read past %+v, want %+v (all: %+v)", i, s.froms[i], w, s.froms)
-		}
+	before := st.sweeps.Load()
+	deadline := time.Now().Add(2*settlementSweepEvery + time.Second)
+	for st.sweeps.Load() == before && time.Now().Before(deadline) {
+		time.Sleep(100 * time.Millisecond)
+	}
+	swept := st.sweeps.Load() > before
+	done := make(chan struct{})
+	go func() { srv.Shutdown(); close(done) }()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("shutdown waited on a stuck reconcile pass")
+	}
+	if !swept {
+		t.Error("the sweep stopped while a reconcile pass was stuck")
+	}
+	if !st.hadDeadline.Load() {
+		t.Error("the reconcile pass ran with no deadline")
 	}
 }

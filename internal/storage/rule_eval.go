@@ -389,22 +389,39 @@ type seriesSample struct {
 	value               any
 }
 
+// laneTables names a lane's sample table, its type registry, and the
+// expression its value reads as.
+func laneTables(lane rules.Lane) (table, typeTable, value string) {
+	if lane == rules.LaneMetric {
+		return "metric", "metric_type", "s.value"
+	}
+	return "property", "property_type", `s.value #>> '{}'`
+}
+
+// seriesNewestSQL reads one series' newest sample value on a lane: the
+// component, type id and instance are SQL expressions (parameters, or a
+// lateral's columns). It is an index probe on each lane, the series' own
+// (component, type, instance, ts desc) index, never a scan of the key's
+// history (TestSeriesNewestIsAnIndexProbe).
+func seriesNewestSQL(lane rules.Lane, component, typeID, instance string) string {
+	table, typeTable, value := laneTables(lane)
+	return fmt.Sprintf(`select %[3]s as value from %[1]s s
+		where s.component_id = %[4]s and s.%[2]s_id = %[5]s and s.instance = %[6]s
+		order by s.ts desc, s.id desc limit 1`, table, typeTable, value, component, typeID, instance)
+}
+
 // newestSamples reads the newest sample (by its timestamp, the series'
 // order) of every component series of a key on a lane, or of one series
 // when componentID is set.
 func newestSamples(ctx context.Context, tx pgx.Tx, lane rules.Lane, key, componentID, instance string) ([]seriesSample, error) {
-	table, typeTable, value := "property", "property_type", `s.value #>> '{}'`
-	if lane == rules.LaneMetric {
-		table, typeTable, value = "metric", "metric_type", "s.value"
+	if componentID != "" {
+		return newestOfSeries(ctx, tx, lane, key, componentID, instance)
 	}
+	table, typeTable, value := laneTables(lane)
 	q := fmt.Sprintf(`select distinct on (s.component_id, s.instance) s.component_id::text, s.instance, %s
 		from %s s join %s t on t.id = s.%s_id
 		where t.name = $1 and s.component_id is not null`, value, table, typeTable, typeTable)
 	args := []any{key}
-	if componentID != "" {
-		q += ` and s.component_id = $2::uuid and s.instance = $3`
-		args = append(args, componentID, instance)
-	}
 	rows, err := tx.Query(ctx, q+` order by s.component_id, s.instance, s.ts desc, s.id desc`, args...)
 	if err != nil {
 		return nil, fmt.Errorf("storage: newest samples of %s: %w", key, err)
@@ -419,6 +436,29 @@ func newestSamples(ctx context.Context, tx pgx.Tx, lane rules.Lane, key, compone
 		out = append(out, s)
 	}
 	return out, rows.Err()
+}
+
+// newestOfSeries reads one series' newest sample: an index probe
+// (seriesNewestSQL), none when the series has no sample or the key is gone.
+func newestOfSeries(ctx context.Context, tx pgx.Tx, lane rules.Lane, key, componentID, instance string) ([]seriesSample, error) {
+	_, typeTable, _ := laneTables(lane)
+	var typeID string
+	err := tx.QueryRow(ctx, `select id::text from `+typeTable+` where name = $1`, key).Scan(&typeID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("storage: newest sample of %s: %w", key, err)
+	}
+	s := seriesSample{component: componentID, instance: instance}
+	err = tx.QueryRow(ctx, seriesNewestSQL(lane, "$1::uuid", "$2::uuid", "$3"), componentID, typeID, instance).Scan(&s.value)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("storage: newest sample of %s: %w", key, err)
+	}
+	return []seriesSample{s}, nil
 }
 
 // primeRule judges the newest sample of every series a rule selects, at the
@@ -837,28 +877,89 @@ func (c ruleCandidate) drifted() bool {
 	return want != have
 }
 
+// Reconcile bounds (#928).
+const (
+	// RuleReconcileLookback is how many sample ids per lane a fresh state's
+	// first pass reads back from the newest, rather than the whole history: a
+	// restarted server can only have lost a race inside work that was in
+	// flight around its start, which is far fewer samples than this.
+	RuleReconcileLookback = 10_000
+	// RuleReconcileRetries is how many passes a series whose correction keeps
+	// failing is tried before it is dropped (and logged at error).
+	RuleReconcileRetries = 3
+	// ruleReconcileRetryCap bounds the series held for a retry at once; past
+	// it, a new failure is logged and not held.
+	ruleReconcileRetryCap = 1_000
+)
+
+// ruleSeries names one rule's series on one component and instance.
+type ruleSeries struct{ ruleID, rule, component, instance string }
+
+// RuleReconcileState is a reconcile loop's memory across passes: the marks
+// the last two passes read up to (a pass reads past the lower one, since a
+// batch in flight when a pass began may commit ids below that pass's mark),
+// and the series whose correction failed, with their failed tries. The zero
+// value is a fresh loop. Not safe for concurrent passes; one loop owns it.
+type RuleReconcileState struct {
+	marks   [2]RuleMark
+	started bool
+	retry   map[ruleSeries]int
+}
+
+// lookback is the mark a fresh state's first pass reads past.
+func lookback(to RuleMark) RuleMark {
+	return RuleMark{Property: max(0, to.Property-RuleReconcileLookback), Metric: max(0, to.Metric-RuleReconcileLookback)}
+}
+
+// settle records one series' outcome: a success forgets it, a failure counts
+// a try and drops the series (reported) once it has failed every retry or
+// the retry set is full.
+func (st *RuleReconcileState) settle(k ruleSeries, err error) (dropped bool) {
+	if err == nil {
+		delete(st.retry, k)
+		return false
+	}
+	if st.retry == nil {
+		st.retry = map[ruleSeries]int{}
+	}
+	tries := st.retry[k] + 1
+	if tries >= RuleReconcileRetries || (st.retry[k] == 0 && len(st.retry) >= ruleReconcileRetryCap) {
+		delete(st.retry, k)
+		return true
+	}
+	st.retry[k] = tries
+	return false
+}
+
 // ReconcileEventRules heals rule decisions lost to a race (#928): a rule
 // enabled while a batch carrying its key was uncommitted (the prime cannot
 // see the batch's sample, and the batch loaded its rules before the
 // enable), or a judgment rolled back by a deadlock (the sample lands, the
 // rule's action does not). Both leave a series whose newest sample landed
 // past the last pass and whose rule state disagrees with it, so a pass reads
-// only the series that took a sample past from, judges each enabled rule's
-// state against its newest sample in memory, and opens a transaction only
-// for one that drifted. When nothing drifted it costs two queries per lane
-// with an enabled rule; a series a rule's selector leaves out is not drift,
-// and costs a selector check only when its sample would have acted.
+// only the series that took a sample past its mark, judges each enabled
+// rule's state against its newest sample in memory, and opens a transaction
+// only for one that drifted, plus any series held for a retry. When nothing
+// drifted it costs two statements per lane with an enabled rule; a series a
+// rule's selector leaves out is not drift.
 //
-// It returns the marks it read up to. A correction that fails (a deadlock
-// again) is logged and the pass returns from, so its range is read again.
-// The caller reads past an older mark than the last pass's, since a batch
-// in flight when a pass begins may commit ids below that pass's mark.
-func (p *PG) ReconcileEventRules(ctx context.Context, from RuleMark) (RuleMark, error) {
+// A fresh state starts RuleReconcileLookback ids back from the newest
+// sample, not at the start of history. The marks always advance: a series
+// whose correction fails is held in a bounded retry set and tried on its own
+// for RuleReconcileRetries passes, never by rereading its range, so one
+// series that keeps failing cannot widen every later pass.
+func (p *PG) ReconcileEventRules(ctx context.Context, st *RuleReconcileState) error {
 	var to RuleMark
 	if err := p.pool.QueryRow(ctx, `select coalesce((select max(id) from property), 0), coalesce((select max(id) from metric), 0)`).
 		Scan(&to.Property, &to.Metric); err != nil {
-		return from, fmt.Errorf("storage: rule reconcile marks: %w", err)
+		return fmt.Errorf("storage: rule reconcile marks: %w", err)
 	}
+	if !st.started {
+		start := lookback(to)
+		st.marks = [2]RuleMark{start, start}
+		st.started = true
+	}
+	from := st.marks[0].Min(st.marks[1])
 	var drifted []ruleCandidate
 	for _, lane := range []struct {
 		lane     rules.Lane
@@ -869,7 +970,7 @@ func (p *PG) ReconcileEventRules(ctx context.Context, from RuleMark) (RuleMark, 
 		}
 		cands, err := ruleCandidates(ctx, p.pool, lane.lane, lane.from, lane.to)
 		if err != nil {
-			return from, err
+			return err
 		}
 		for _, c := range cands {
 			if c.drifted() {
@@ -879,30 +980,38 @@ func (p *PG) ReconcileEventRules(ctx context.Context, from RuleMark) (RuleMark, 
 	}
 	drifted, err := p.watched(ctx, drifted)
 	if err != nil {
-		return from, err
+		return err
 	}
-	failed := false
+	work := map[ruleSeries]ruleCandidate{}
+	for k := range st.retry {
+		work[k] = ruleCandidate{rule: EventRule{ID: k.ruleID, Name: k.rule}, component: k.component, instance: k.instance}
+	}
 	for _, c := range drifted {
-		if err := p.reconcileSeries(ctx, c); err != nil {
-			failed = true
-			slog.Warn("event rule reconcile could not correct a series", "facility", "rules", "rule", c.rule.Name,
-				"component", c.component, "instance", c.instance, "error", err.Error())
+		work[ruleSeries{c.rule.ID, c.rule.Name, c.component, c.instance}] = c
+	}
+	for k, c := range work {
+		if ctx.Err() != nil {
+			break // the pass's deadline: the retry set and the marks keep what is left
+		}
+		err := p.reconcileSeries(ctx, c)
+		if err != nil {
+			slog.Warn("event rule reconcile could not correct a series; it will be retried", "facility", "rules", "rule", k.rule,
+				"component", k.component, "instance", k.instance, "error", err.Error())
+		}
+		if st.settle(k, err) {
+			slog.Error("event rule reconcile gave up on a series after its retries", "facility", "rules", "rule", k.rule,
+				"component", k.component, "instance", k.instance, "tries", RuleReconcileRetries)
 		}
 	}
-	if failed {
-		return from, nil
-	}
-	return to, nil
+	st.marks = [2]RuleMark{st.marks[1], to}
+	return nil
 }
 
 // ruleCandidates reads, in one statement, every enabled rule's series on a
 // lane that took a sample with an id in (from, to]: the newest sample of the
 // series, the rule's open alarms on the component, and its streak.
 func ruleCandidates(ctx context.Context, q querier, lane rules.Lane, from, to int64) ([]ruleCandidate, error) {
-	table, typeTable, value := "property", "property_type", `s.value #>> '{}'`
-	if lane == rules.LaneMetric {
-		table, typeTable, value = "metric", "metric_type", "s.value"
-	}
+	table, typeTable, _ := laneTables(lane)
 	rows, err := q.Query(ctx, fmt.Sprintf(`with touched as (
 			select distinct s.component_id, s.%[2]s_id as type_id, s.instance
 			from %[1]s s
@@ -910,18 +1019,16 @@ func ruleCandidates(ctx context.Context, q querier, lane rules.Lane, from, to in
 			and s.%[2]s_id in (select t.id from %[2]s t join event_rule r on r.sample_key = t.name
 				where r.enabled and r.sample_lane = $1)
 		)
-		select %[4]s, tc.component_id::text, tc.instance, n.value,
+		select %[3]s, tc.component_id::text, tc.instance, n.value,
 			array(select a.dedup_key from alarm a where a.component_id = tc.component_id
 				and a.raised_by_rule_id = r.id and a.cleared_at is null),
 			st.pending
 		from touched tc
 		join %[2]s t on t.id = tc.type_id
 		join event_rule r on r.enabled and r.sample_lane = $1 and r.sample_key = t.name
-		cross join lateral (select %[3]s as value from %[1]s s
-			where s.component_id = tc.component_id and s.%[2]s_id = tc.type_id and s.instance = tc.instance
-			order by s.ts desc, s.id desc limit 1) n
+		cross join lateral (%[4]s) n
 		left join event_rule_state st on st.rule_id = r.id and st.component_id = tc.component_id and st.instance = tc.instance`,
-		table, typeTable, value, ruleCols("r.")), string(lane), from, to)
+		table, typeTable, ruleCols("r."), seriesNewestSQL(lane, "tc.component_id", "tc.type_id", "tc.instance")), string(lane), from, to)
 	if err != nil {
 		return nil, fmt.Errorf("storage: rule reconcile scan: %w", err)
 	}
@@ -985,6 +1092,9 @@ func (p *PG) reconcileSeries(ctx context.Context, c ruleCandidate) error {
 		return fmt.Errorf("storage: begin rule reconcile: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
+	if _, err := tx.Exec(ctx, `set local lock_timeout = '2s'`); err != nil {
+		return err
+	}
 	r, err := scanEventRule(tx.QueryRow(ctx, `select `+eventRuleCols+` from event_rule where id = $1 for share`, c.rule.ID))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil

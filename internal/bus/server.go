@@ -41,8 +41,9 @@ type Server struct {
 	subs          []*nats.Subscription
 	consumeCtx    jetstream.ConsumeContext // the telemetry durable consumer's pull loop
 	internalToken string
-	sims          *simhub.Registry // the simulators beside this server's nodes
-	stopSweep     chan struct{}    // ends the settlement sweep
+	sims          *simhub.Registry   // the simulators beside this server's nodes
+	stopSweep     chan struct{}      // ends the settlement sweep
+	stopReconcile context.CancelFunc // ends the rule reconcile loop
 	sweepStop     sync.Once
 	sweepDone     sync.WaitGroup
 	ownStoreDir   string // non-empty when the Server created (and must clean) it
@@ -192,6 +193,7 @@ func (s *Server) subscribe() error {
 		return err
 	}
 	s.startSettlementSweep()
+	s.startRuleReconcile()
 
 	// The telemetry ingest path: a JetStream stream + durable consumer over the
 	// same internal client. It carries the node -> server sample flow.
@@ -230,6 +232,9 @@ func (s *Server) ClientURL() string { return s.ns.ClientURL() }
 func (s *Server) Shutdown() {
 	// Stop the sweep once, and wait for a sweep in flight, before closing
 	// what it reads through.
+	if s.stopReconcile != nil {
+		s.stopReconcile()
+	}
 	if s.stopSweep != nil {
 		s.sweepStop.Do(func() { close(s.stopSweep) })
 		s.sweepDone.Wait()
@@ -387,33 +392,17 @@ const settlementSweepEvery = 5 * time.Second
 
 // ruleReconcileEvery is how often the server reconciles event rule state
 // with the newest samples (#928): a slower cadence than the sweep, since it
-// heals only rare races and each pass re-reads every series touched since
-// the last.
-const ruleReconcileEvery = time.Minute
-
-// ruleMarks is the reconcile pass's memory: the marks the last two passes
-// returned. A pass reads past the lower of them, not just the last, because
-// a batch in flight when a pass begins can commit sample ids below that
-// pass's mark; an ingest transaction never spans a whole reconcile interval.
-// A pass that fails returns its own from mark (or an error, which keeps the
-// marks), so its range is read again.
-type ruleMarks [2]storage.RuleMark
-
-// reconcileRules runs one reconcile pass and advances the marks.
-func reconcileRules(ctx context.Context, store Store, m *ruleMarks) error {
-	next, err := store.ReconcileEventRules(ctx, m[0].Min(m[1]))
-	if err != nil {
-		return err
-	}
-	m[0], m[1] = m[1], next
-	return nil
-}
+// heals only rare races. ruleReconcileTimeout bounds one pass, short of the
+// interval, so a pass stuck on the database gives up before the next.
+const (
+	ruleReconcileEvery   = time.Minute
+	ruleReconcileTimeout = 50 * time.Second
+)
 
 // startSettlementSweep judges past-window commands on an interval, so a
 // command no reply and no observation settles still reaches a terminal
-// status (ADR-0141), acts on event rule streaks held for their sustain
-// (#920), and every ruleReconcileEvery reconciles rule state (#928), the
-// first pass on the first tick so a restart heals what it inherited.
+// status (ADR-0141), and acts on event rule streaks held for their sustain
+// (#920).
 func (s *Server) startSettlementSweep() {
 	s.stopSweep = make(chan struct{})
 	stop := s.stopSweep
@@ -422,9 +411,6 @@ func (s *Server) startSettlementSweep() {
 		defer s.sweepDone.Done()
 		t := time.NewTicker(settlementSweepEvery)
 		defer t.Stop()
-		var marks ruleMarks
-		reconcileEvery := int(ruleReconcileEvery / settlementSweepEvery)
-		tick := 0
 		for {
 			select {
 			case <-stop:
@@ -439,12 +425,36 @@ func (s *Server) startSettlementSweep() {
 				if err := s.store.SweepEventRules(context.Background(), time.Now()); err != nil {
 					slog.Warn("event rule sweep failed", "facility", "rules", "error", err.Error())
 				}
-				if tick%reconcileEvery == 0 {
-					if err := reconcileRules(context.Background(), s.store, &marks); err != nil {
-						slog.Warn("event rule reconcile failed", "facility", "rules", "error", err.Error())
-					}
-				}
-				tick++
+			}
+		}
+	}()
+}
+
+// startRuleReconcile reconciles event rule state (#928) on a goroutine of
+// its own, so a slow pass never delays a sustain's fire or a command's
+// settlement on the sweep: once at start (a restart heals what it
+// inherited) and every ruleReconcileEvery after, each pass under
+// ruleReconcileTimeout. Shutdown cancels a pass in flight.
+func (s *Server) startRuleReconcile() {
+	ctx, cancel := context.WithCancel(context.Background())
+	s.stopReconcile = cancel
+	s.sweepDone.Add(1)
+	go func() {
+		defer s.sweepDone.Done()
+		t := time.NewTicker(ruleReconcileEvery)
+		defer t.Stop()
+		var st storage.RuleReconcileState
+		for {
+			pass, done := context.WithTimeout(ctx, ruleReconcileTimeout)
+			err := s.store.ReconcileEventRules(pass, &st)
+			done()
+			if err != nil && ctx.Err() == nil {
+				slog.Warn("event rule reconcile failed", "facility", "rules", "error", err.Error())
+			}
+			select {
+			case <-ctx.Done():
+				return
+			case <-t.C:
 			}
 		}
 	}()

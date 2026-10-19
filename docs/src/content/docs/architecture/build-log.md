@@ -6534,3 +6534,16 @@ teaches the rank as it is typed, against the live registry: where the rank sits 
 and High (40)."), whether an alarm at it takes its component out or degrades it, and the chip its
 alarms will wear; a name or rank another level holds is refused before anything is sent, and a delete
 the server refuses (a level an alarm or rule still names) says why on the blade.
+
+### The rule follow-ups' review hardening (#928, #930)
+
+The review of the three follow-ups caught the reconcile pass costing more than it healed at the edges.
+A restart read the whole sample history (twice, through the two-pass lag), and the property lane had no
+per-series index, so each newest-sample lookup read a series' whole history: a fresh pass now starts a
+bounded lookback from the newest sample, and `property_series_idx` (component, type, instance, ts desc)
+replaces `property_component_idx`, the twin of the metric lane's `metric_owner_idx`, asserted by an
+EXPLAIN test on both lanes. The pass ran inside the sweep's goroutine without a deadline, so a slow pass
+held up sustains and settlements; it now has a loop of its own, under a deadline, cancelled on shutdown.
+And one series whose correction kept failing pinned the mark, widening every later pass: the marks now
+always advance, and a failed series is retried on its own a few times, then dropped with an error.
+
