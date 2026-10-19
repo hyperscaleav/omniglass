@@ -1,5 +1,5 @@
 import { For, Show, createEffect, createMemo } from "solid-js";
-import { useNavigate, useParams, useSearchParams } from "@solidjs/router";
+import { useLocation, useNavigate, useParams, useSearchParams } from "@solidjs/router";
 import { useQueries, useQuery } from "@tanstack/solid-query";
 import Page from "../components/Page";
 import Breadcrumb from "../components/Breadcrumb";
@@ -58,6 +58,9 @@ function ageWords(ts: string, now: number = Date.now()): string {
 export default function ComponentLeaf() {
   const params = useParams<{ id: string }>();
   const navigate = useNavigate();
+  // The router's location, not the window's: on a client-side navigation the
+  // window's query lags the route being rendered (#932).
+  const location = useLocation();
   const id = () => params.id;
   const me = useMe();
   const blades = createBladeController();
@@ -93,7 +96,7 @@ export default function ComponentLeaf() {
   createEffect(() => {
     if (!components.data) return;
     const c = component();
-    if (c && c.id !== id()) navigate(`/components/${c.id}${window.location.search}`, { replace: true });
+    if (c && c.id !== id()) navigate(`/components/${c.id}${location.search}`, { replace: true });
   });
 
   const memberships = useQuery(() => ({

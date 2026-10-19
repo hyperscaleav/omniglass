@@ -2350,7 +2350,6 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   table with none or with more than one, so a new table is a failing test until somebody classifies
   it. Proved non-vacuous in both directions: removing a table fails, and declaring one twice fails.
 
-
 - **The identity triad, on every surface** ([#545](https://github.com/hyperscaleav/omniglass/issues/545)).
   The vocabulary above is reversed, and this entry records why rather than quietly replacing it. The
   columns have always been `id` / `name` / `display_name`; what drifted was the console, which had been
@@ -2450,7 +2449,6 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   name at all, where the name IS the operator-facing string: a secret, a variable, a tag, an interface.
   Verifying that claim corrected it: `display_name` on `SecretType` had been read as `display_name` on
   `Secret`, and a secret has none.
-
 
 - **Five telemetry lanes, and property stops being the genus**
   ([#584](https://github.com/hyperscaleav/omniglass/issues/584),
@@ -5830,7 +5828,6 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   nothing stored to lose. Every test drives the gap by hand, delivering the collection between two
   assertions rather than sleeping on a race (ADR-0133, #398, #772, #782).
 
-
 - **Transport becomes code, and the entity an API is reached through is an endpoint.** ADR-0073
   executes and #603's naming ruling rides it (ADR-0134): the six wires (icmp, tcp, udp, ssh, http,
   snmp) are a code registry the binary ships (`internal/transport`, a leaf package so the storage
@@ -6523,7 +6520,6 @@ tests prove the stamp moves only on a judgment (not a disabled rule, an unwatche
 history sample), coalesces inside the bound, agrees across the list, get and state, and never makes a
 batch wait.
 
-
 ### Severity levels are authored on the console (#930)
 
 **Catalog > Actions > Severity** went from a read view to a registry an operator writes: **New severity
@@ -6553,3 +6549,11 @@ locks the rules naming the level before the level itself, the same order an inge
 concurrent with a batch raising at the level waits for it instead of deadlocking (a regression test
 reproduces the deadlock on the old order).
 
+### Configure place lands on Configure, followed in the console (#932)
+
+**Configure place** on a sole system's place card links to the place with `?tab=configure`, and the
+place's view hands its address on to the system, query kept. Followed inside the console it landed
+on the system's Overview: the redirect read the query off the window, which on a client-side
+navigation still holds the page being left. It reads the router's own location now, the same
+fix for the three name-to-uuid redirects (place, system, component) that read the window the same
+way. A component test follows the link from another page, the path a direct load never took.
