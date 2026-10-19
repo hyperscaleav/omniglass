@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/hyperscaleav/omniglass/internal/rules"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -94,7 +95,7 @@ func (p *PG) InsertMetricSamples(ctx context.Context, evs []MetricSampleWrite) e
 		if _, err := tx.Exec(ctx, sql, ts, ev.OwnerKind, arc, ev.Key, ev.Instance, ev.Value, ev.Source); err != nil {
 			return fmt.Errorf("storage: insert sample %s/%s: %w", ev.OwnerID, ev.Key, err)
 		}
-		if err := eval.observe(ctx, tx, ev.OwnerKind, arc, ev.Key, ev.Instance, ev.Value); err != nil {
+		if err := eval.observe(ctx, tx, rules.LaneMetric, ev.OwnerKind, arc, ev.Key, ev.Instance, ts, ev.Value); err != nil {
 			return err
 		}
 	}

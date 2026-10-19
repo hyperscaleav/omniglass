@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/hyperscaleav/omniglass/internal/rules"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -100,7 +101,7 @@ func (p *PG) InsertPropertySamples(ctx context.Context, evs []PropertySampleWrit
 				return err
 			}
 		}
-		if err := eval.observe(ctx, tx, ev.OwnerKind, arc, ev.Key, ev.Instance, ev.Value); err != nil {
+		if err := eval.observe(ctx, tx, rules.LaneProperty, ev.OwnerKind, arc, ev.Key, ev.Instance, ts, ev.Value); err != nil {
 			return err
 		}
 	}

@@ -45,9 +45,9 @@ func TestRuleEvaluator(t *testing.T) {
 
 	prop("bar-1", "tcp", "down")
 	got := open("bar-1")
-	if len(got) != 1 || got[0].Severity != "high" || got[0].DedupKey != "reach-lost:tcp" || got[0].RaisedByRuleID == nil ||
+	if len(got) != 1 || got[0].Severity != "high" || got[0].DedupKey != "rule:reach-lost:tcp" || got[0].RaisedByRuleID == nil ||
 		*got[0].RaisedByRuleID != reach.ID || got[0].Message != "Reachability lost" {
-		t.Fatalf("after down on tcp: %+v, want one high alarm keyed reach-lost:tcp, raised by the rule, messaged with its label", got)
+		t.Fatalf("after down on tcp: %+v, want one high alarm keyed rule:reach-lost:tcp, raised by the rule, messaged with its label", got)
 	}
 	if _, v := f.recorded(t, ctx, "component", "bar-1"); v != "outage" {
 		t.Fatalf("a rule-raised high alarm left bar-1 %q, want outage", v)
@@ -62,7 +62,7 @@ func TestRuleEvaluator(t *testing.T) {
 	}
 	prop("bar-1", "tcp", "up") // the negation of fire clears tcp, not icmp
 	got = open("bar-1")
-	if len(got) != 1 || got[0].DedupKey != "reach-lost:icmp" {
+	if len(got) != 1 || got[0].DedupKey != "rule:reach-lost:icmp" {
 		t.Fatalf("after up on tcp: %+v, want only icmp's alarm open", got)
 	}
 	prop("bar-1", "icmp", "up")
@@ -143,5 +143,105 @@ func TestRuleEvaluator(t *testing.T) {
 	metric("wall-1", 45)
 	if n := len(open("wall-1")); n != 1 {
 		t.Fatalf("a display rule raised %d alarms on a display, want 1", n)
+	}
+}
+
+// A sample older than the series' newest is history, not the present: a
+// late or redelivered down after an up opens nothing, in another batch or
+// the same one.
+func TestRuleEvaluatorJudgesOnlyTheNewestSample(t *testing.T) {
+	f := newHealthFixture(t)
+	ctx := context.Background()
+	gw, all := f.gw, scope.Set{All: true}
+	if _, err := gw.CreateEventRule(ctx, "", storage.EventRuleSpec{Name: "reach-lost", SampleKey: "endpoint-reachable",
+		Fire: criteria("eq", "down"), Severity: "high"}, all); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now()
+	w := func(v string, at time.Time) storage.PropertySampleWrite {
+		return storage.PropertySampleWrite{OwnerKind: "component", OwnerID: "bar-1", Key: "endpoint-reachable", Instance: "tcp", Value: v, TS: at}
+	}
+	if err := gw.InsertPropertySamples(ctx, []storage.PropertySampleWrite{w("up", now)}); err != nil {
+		t.Fatal(err)
+	}
+	if err := gw.InsertPropertySamples(ctx, []storage.PropertySampleWrite{w("down", now.Add(-time.Minute))}); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := gw.ListAlarms(ctx, "bar-1", storage.AlarmFilter{}); len(got) != 0 {
+		t.Fatalf("a late down opened %d alarms", len(got))
+	}
+	if err := gw.InsertPropertySamples(ctx, []storage.PropertySampleWrite{w("up", now.Add(time.Minute)), w("down", now.Add(30*time.Second))}); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := gw.ListAlarms(ctx, "bar-1", storage.AlarmFilter{}); len(got) != 0 {
+		t.Fatalf("an out-of-order down in one batch opened %d alarms", len(got))
+	}
+}
+
+// A rule's alarms are its own: they never collide with a hand-raised alarm
+// whose message matches the rule's name, and a rule disabled, deleted or
+// narrowed clears the open alarms it no longer watches.
+func TestRuleAlarmsBelongToTheirRule(t *testing.T) {
+	f := newHealthFixture(t)
+	ctx := context.Background()
+	gw, all := f.gw, scope.Set{All: true}
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "other-c"}, all, all, all, all); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := gw.CreateEventRule(ctx, "", storage.EventRuleSpec{Name: "hot", SampleKey: "room-temperature",
+		Fire: criteria("gt", 30), Severity: "warning"}, all); err != nil {
+		t.Fatal(err)
+	}
+	hand, err := gw.RaiseAlarm(ctx, "", "bar-1", storage.AlarmSpec{Severity: "info", Message: "hot"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	metric := func(component string, v float64) {
+		t.Helper()
+		if err := gw.InsertMetricSamples(ctx, []storage.MetricSampleWrite{{OwnerKind: "component", OwnerID: component, Key: "room-temperature", Value: v, TS: time.Now()}}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	metric("bar-1", 35)
+	metric("other-c", 35)
+	got, _ := gw.ListAlarms(ctx, "bar-1", storage.AlarmFilter{})
+	if len(got) != 2 {
+		t.Fatalf("bar-1 holds %d alarms, want the hand one and the rule's", len(got))
+	}
+	metric("bar-1", 20) // the rule clears its own, not the operator's
+	got, _ = gw.ListAlarms(ctx, "bar-1", storage.AlarmFilter{})
+	if len(got) != 1 || got[0].ID != hand.ID {
+		t.Fatalf("after the rule's clear bar-1 holds %+v, want only the hand-raised alarm", got)
+	}
+
+	// Narrowing the selector clears the alarm on a component it no longer
+	// watches; disabling clears the rest.
+	metric("bar-1", 35)
+	narrow := storage.EventRuleSelector{Components: []string{"bar-1"}}
+	if _, err := gw.UpdateEventRule(ctx, "", "hot", storage.EventRulePatch{Selector: &narrow}, all, all); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := gw.ListAlarms(ctx, "other-c", storage.AlarmFilter{}); len(got) != 0 {
+		t.Fatalf("narrowing the selector left %d alarms on other-c", len(got))
+	}
+	off := false
+	if _, err := gw.UpdateEventRule(ctx, "", "hot", storage.EventRulePatch{Enabled: &off}, all, all); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := gw.ListAlarms(ctx, "bar-1", storage.AlarmFilter{}); len(got) != 1 || got[0].ID != hand.ID {
+		t.Fatalf("disabling the rule left %+v on bar-1, want only the hand-raised alarm", got)
+	}
+
+	// Deleting a rule clears what it holds open.
+	on := true
+	if _, err := gw.UpdateEventRule(ctx, "", "hot", storage.EventRulePatch{Enabled: &on}, all, all); err != nil {
+		t.Fatal(err)
+	}
+	metric("bar-1", 36)
+	if err := gw.DeleteEventRule(ctx, "", "hot", all, all); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := gw.ListAlarms(ctx, "bar-1", storage.AlarmFilter{}); len(got) != 1 || got[0].ID != hand.ID {
+		t.Fatalf("deleting the rule left %+v on bar-1, want only the hand-raised alarm", got)
 	}
 }

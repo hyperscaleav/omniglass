@@ -423,6 +423,21 @@ func (p *PG) UpdateEventRule(ctx context.Context, actorID, name string, patch Ev
 	if err != nil {
 		return nil, mapRuleWriteErr(err, name)
 	}
+	// A rule disabled lets go of every alarm it holds open; one whose selector
+	// changed lets go of those on components it no longer watches.
+	switch {
+	case old.Enabled && !updated.Enabled:
+		if err := p.clearRuleAlarms(ctx, tx, actorID, updated, nil); err != nil {
+			return nil, err
+		}
+	case patch.Selector != nil:
+		m := newRuleMatcher(p, nil)
+		if err := p.clearRuleAlarms(ctx, tx, actorID, updated, func(o *ruleOwner) (bool, error) {
+			return m.selects(ctx, tx, updated, o)
+		}); err != nil {
+			return nil, err
+		}
+	}
 	if err := writeAuditRes(ctx, tx, actorID, "update", "event_rule", old.ID, old, updated); err != nil {
 		return nil, err
 	}
@@ -447,6 +462,11 @@ func (p *PG) DeleteEventRule(ctx context.Context, actorID, name string, read, ac
 	defer func() { _ = tx.Rollback(ctx) }()
 	old, err := lockMutableEventRule(ctx, tx, name)
 	if err != nil {
+		return err
+	}
+	// A rule deleted lets go of every alarm it holds open first: once it is
+	// gone nothing would ever clear them.
+	if err := p.clearRuleAlarms(ctx, tx, actorID, old, nil); err != nil {
 		return err
 	}
 	if _, err := tx.Exec(ctx, `delete from event_rule where id = $1`, old.ID); err != nil {
