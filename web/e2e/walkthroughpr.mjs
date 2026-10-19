@@ -15,24 +15,16 @@
 //   branch, so the link survives the branch being deleted on squash-merge;
 // - the one comment the workflow upserts, found again by its marker.
 
-/** @typedef {{ n: number, kind: string, caption: string, still: string }} ManifestStep */
-/** @typedef {{ id: string, title: string, description?: string, steps: ManifestStep[], poster: string }} Manifest */
+import { checkId, checkStill, plural } from './walkthroughcore.mjs';
+
+/** @typedef {import('./walkthroughcore.mjs').ManifestStep} ManifestStep */
+/** @typedef {import('./walkthroughcore.mjs').Manifest} Manifest */
 
 export const WALKTHROUGH_MARKER = '<!-- omniglass-walkthrough -->';
 
 const SCRIPT_DIR = 'web/e2e/walkthroughs/';
-const ID = /^[a-z0-9][a-z0-9-]*$/;
 const SHA = /^[0-9a-f]{40}$/;
 const REPO = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
-const STILL = /^step-\d+\.png$/;
-
-/** @param {unknown} id @returns {string} */
-function checkId(id) {
-  if (typeof id !== 'string' || !ID.test(id)) {
-    throw new Error(`walkthrough id "${id}" must be lowercase letters, digits and dashes (it names a directory)`);
-  }
-  return id;
-}
 
 // The ids to record, in the tree's order. `changed` is the PR's changed paths
 // (repo-relative), `all` every script's id in the tree. A PR that changes
@@ -88,16 +80,6 @@ function esc(s) {
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/([[\]])/g, '\\$1');
-}
-
-/** @type {(n: number, word: string) => string} */
-const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
-
-/** @param {string} id @param {string} name */
-function checkStill(id, name) {
-  if (typeof name !== 'string' || !STILL.test(name)) {
-    throw new Error(`walkthrough ${id}: still "${name}" is not a recorder still name (step-NN.png)`);
-  }
 }
 
 // One walkthrough's section: title, description, poster, then every step's

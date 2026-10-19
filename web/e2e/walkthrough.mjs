@@ -9,7 +9,9 @@
 //       taken so far (and the failing frame as step-NN-failed.png).
 //   node e2e/walkthrough.mjs budget <out-dir>/<id>.mp4 <seconds>
 //       the budget gate on the converted mp4: under 60 seconds and 10 MB, else
-//       fail naming which; a duration ffprobe never measured fails too.
+//       fail naming which; a duration ffprobe never measured fails too. A
+//       pass adds a budget mark ({ seconds, bytes }) to walkthrough.json, so a
+//       manifest without one never passed.
 //       OG_WALKTHROUGH_MAX_SECONDS / OG_WALKTHROUGH_MAX_BYTES may lower the
 //       limits (never raise them), for the recorder's own test only.
 //
@@ -24,7 +26,7 @@
 // Env: OG_E2E_BASE, OG_E2E_USER, OG_E2E_PASSWORD (set by stack_walkthrough_pw).
 import { chromium } from '@playwright/test';
 import { copyFile, mkdir, readFile, readdir, rename, stat, unlink, writeFile } from 'node:fs/promises';
-import { basename, join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import { budgetLimits, budgetProblems, describeTarget, idProblem, parseWalkthrough, stepFailure, stillName } from './walkthroughlib.mjs';
 
 const VIEWPORT = { width: 1320, height: 860 };
@@ -48,6 +50,13 @@ async function budget(mp4, seconds) {
   const problems = budgetProblems(id, { seconds, bytes }, limits);
   for (const p of problems) console.error(p);
   if (problems.length) return 1;
+  // The pass is recorded in the manifest, and only here: a manifest with no
+  // budget mark never came from a recording that passed, so the docs copy
+  // (docs/scripts/copy-walkthroughs.mjs) refuses it whatever failed.txt says.
+  const manifest = join(dirname(mp4), 'walkthrough.json');
+  const m = JSON.parse(await readFile(manifest, 'utf8'));
+  m.budget = { seconds: Number(seconds.toFixed(1)), bytes };
+  await writeFile(manifest, JSON.stringify(m, null, 2) + '\n');
   console.log(`walkthrough ${id}: ${seconds.toFixed(1)}s, ${(bytes / 1e6).toFixed(2)} MB (budget: under ${limits.maxSeconds}s, under ${(limits.maxBytes / 1e6).toFixed(0)} MB)`);
   return 0;
 }

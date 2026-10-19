@@ -51,9 +51,11 @@ starts.
 
 ## The budget
 
-A recording must run **under 60 seconds** and come to **under 10 MB** of mp4. The limits are
-`MAX_SECONDS` and `MAX_BYTES` in `web/e2e/walkthroughlib.mjs`; a recording over either fails,
-naming which. A walkthrough that will not fit is two flows: split it.
+A recording has a ceiling on its length and on the size of its mp4. The limits are defined once,
+as `MAX_SECONDS` and `MAX_BYTES` in [`web/e2e/walkthroughlib.mjs`](https://github.com/hyperscaleav/omniglass/blob/main/web/e2e/walkthroughlib.mjs), and are not restated here; a recording at or over
+either fails, naming which. Only a recording that passes carries the budget mark in its
+`walkthrough.json`, which is what lets the docs copy refuse one that did not. A walkthrough that
+will not fit is two flows: split it.
 
 ## Record it locally
 
@@ -67,7 +69,8 @@ make test-walkthroughs                   # the recorder's own test: the failure 
 `make walkthroughs` brings up the walkthrough stack, plays each script in a Playwright container
 with a visible cursor, a highlight on each target and a caption bar, and writes
 `web/e2e/walkthroughs/out/<id>/` (gitignored): `<id>.mp4`, `poster.png`, `step-NN.png` per step,
-and `walkthrough.json`, the manifest of the title, the captions and the still each step produced.
+and `walkthrough.json`, the manifest of the title, the captions and the still each step produced
+(with the budget mark added once the mp4 passes the budget).
 The ids that failed are listed in `out/failed.txt`. Recording details, including the amd64-only
 ffmpeg image, are in the [install guide](/guides/install/#recording-a-walkthrough).
 
@@ -107,8 +110,8 @@ walkthroughs:
 
 The declaration is only the id. The title, captions and stills come from the recording's manifest,
 so the page never restates a caption that could drift from the video. The embed renders the
-poster, the title and description, and every step's caption over its still, folded under a
-disclosure. [Simulate a fleet](/guides/operator/simulation/#see-it) carries the first one.
+poster step's still, the title and description, and every step's caption over its still, folded
+under a disclosure. [Simulate a fleet](/guides/operator/simulation/#see-it) carries the first one.
 
 The assets reach the site by a copy, committed like the screenshots:
 
@@ -117,10 +120,17 @@ make walkthroughs ID=sample-simulation   # record it
 make docs-walkthroughs                   # copy what the docs declare into docs/public/walkthroughs/<id>/
 ```
 
-`make docs-walkthroughs` copies, for every walkthrough a page declares, the manifest, the poster
-and the stills from `web/e2e/walkthroughs/out/<id>/` into `docs/public/walkthroughs/<id>/`, removes
-any still left from an older recording, and fails on a declared walkthrough that is not recorded or
-whose last recording failed. Commit the copied files with the change.
+`make docs-walkthroughs` copies, for every walkthrough a page declares, the manifest and the stills
+from `web/e2e/walkthroughs/out/<id>/` into `docs/public/walkthroughs/<id>/` (not the recorder's
+`poster.png`, a copy of the poster step's still), removes any file left from an older recording,
+and fails on a declared walkthrough that is not recorded, whose recording failed, or whose manifest
+lacks the budget mark. Commit the copied files with the change.
+
+**Force the next docs build after every copy.** Astro caches each rendered page keyed on the page's
+own content, and it has no way to learn that the embed also depends on the copied manifest and on
+whether the video exists. An unforced build after a re-copy serves the old render, so build with
+`corepack pnpm astro build --force` from `docs/` (the copy prints this too); the post-build check
+below fails the build if a stale render slips through.
 
 **The video is not committed**: an mp4 per walkthrough would grow the repository with every
 re-recording. Its place is `docs/public/walkthroughs/<id>/<id>.mp4` (gitignored), and the embed
@@ -129,14 +139,20 @@ the page shows the poster and the stills, and links nothing. Until the docs depl
 videos, the published pages show the poster and stills. To see the video in a local build, copy it
 too with `DOCS_WALKTHROUGH_VIDEO=1 make docs-walkthroughs`.
 
-Three checks hold the embed honest:
+Three checks keep the embed true to its recording:
 
 - **Before the build**, `docs/scripts/check-embeds.mjs` fails a `::walkthrough` with no id, an id
   its page does not declare, or a declared walkthrough with no copied manifest.
 - **In `make test`**, the docs lint suite (`internal/docslint/walkthroughs.go`) fails a declared
   id with no script under `web/e2e/walkthroughs/`, a declaration no directive on its page uses, a
-  missing poster or still, and a copied directory no page declares.
-- **After the build**, `docs/scripts/check-walkthrough-links.mjs` fails any built page that
-  references a walkthrough file the build did not ship. Astro caches rendered pages between
-  builds, so a page rendered while a local video existed would otherwise keep linking it after the
-  video is gone; when that check fires, rebuild with `npx astro build --force` (from `docs/`).
+  copied manifest with no budget mark, a missing still, a poster that is none of the stills, a copy
+  that has drifted from its script (title, description, step count or any caption), and a copied
+  directory no page declares.
+- **After the build**, `docs/scripts/check-walkthrough-embeds.mjs` re-renders every built embed
+  from the manifest the build shipped, with the video only if the build shipped it, and fails on
+  any difference, and on any reference to a walkthrough file the build did not ship. That is what
+  catches a stale cached render; the fix is the forced build above.
+
+Only a leaf directive alone on its line embeds (`::walkthrough{#id}`, attributes allowed); a
+directive quoted in code or inside an HTML comment, an inline `:walkthrough`, or a `:::` container
+is not counted as using the declaration.

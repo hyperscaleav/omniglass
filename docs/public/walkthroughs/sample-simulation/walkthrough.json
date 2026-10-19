@@ -40,5 +40,9 @@
       "still": "step-06.png"
     }
   ],
-  "poster": "step-04.png"
+  "poster": "step-04.png",
+  "budget": {
+    "seconds": 19.2,
+    "bytes": 616882
+  }
 }

@@ -20,15 +20,18 @@ import (
 //   - a declared id is embedded by a directive on its own page, and a directive
 //     names a declared id (docs/scripts/check-embeds.mjs gates the latter at
 //     build time too; here it is checked with the rest);
-//   - a declared id has its copied assets under docs/public/walkthroughs/<id>/
-//     (the manifest, the poster, and every still the manifest names), written
-//     by `make docs-walkthroughs`;
+//   - a declared id has its copied assets under docs/public/walkthroughs/<id>/,
+//     written by `make docs-walkthroughs`: the manifest, carrying the budget
+//     mark the recorder adds only when the recording passed, and every still it
+//     names, the poster one of them;
+//   - the copied manifest has not drifted from the script: the same title,
+//     description, step count and captions;
 //   - no copied directory outlives its declaration.
 //
-// Whether the stills are current is not checked: that is a re-recording, which
-// needs the walkthrough stack.
+// Whether the stills' pixels are current is not checked: that is a
+// re-recording, which needs the walkthrough stack.
 
-var walkthroughDirective = regexp.MustCompile(`::walkthrough(\{#([A-Za-z0-9_-]+)\})?`)
+var directiveID = regexp.MustCompile(`(?:^|\s)#([A-Za-z0-9_-]+)`)
 
 // walkthroughScriptDir and walkthroughAssetDir are repo-relative.
 var (
@@ -58,17 +61,21 @@ func pageWalkthroughIDs(content string) ([]string, error) {
 	return ids, nil
 }
 
-// directiveLines returns each `::walkthrough` directive outside code (a fenced
-// block or an inline span quotes the syntax, it does not embed), as id to
-// 1-indexed line; a directive with no id is keyed "".
-func directiveLines(content string) map[string]int {
+// directiveLines returns each embed of directive `name` as id to 1-indexed
+// line; a directive with no id is keyed "". An embed is a leaf directive alone
+// on its line, the shape remark-directive parses: an inline text directive, a
+// `:::` container, or a quote of the syntax in a fenced block, an inline span
+// or an HTML comment teaches the syntax, it does not embed. The docs build's
+// pre-build gate reads the same shape (docs/scripts/lib/embed-scan.mjs).
+func directiveLines(content, name string) map[string]int {
+	leaf := regexp.MustCompile(`^\s*::` + regexp.QuoteMeta(name) + `(?:\{([^}]*)\})?\s*$`)
 	found := map[string]int{}
 	start := 0
 	if end := frontmatterEnd(content); end >= 0 {
 		start = end
 	}
 	firstLine := strings.Count(content[:start], "\n") + 1
-	inCode, delim := false, ""
+	inCode, delim, inComment := false, "", false
 	for i, line := range strings.Split(content[start:], "\n") {
 		if inCode {
 			t := strings.TrimLeft(line, " \t")
@@ -77,15 +84,42 @@ func directiveLines(content string) map[string]int {
 			}
 			continue
 		}
-		if m := codeFenceDelim.FindStringSubmatch(line); m != nil {
-			inCode, delim = true, m[1]
+		if !inComment {
+			if m := codeFenceDelim.FindStringSubmatch(line); m != nil {
+				inCode, delim = true, m[1]
+				continue
+			}
+		}
+		var kept strings.Builder
+		for line != "" {
+			if inComment {
+				j := strings.Index(line, "-->")
+				if j < 0 {
+					line = ""
+					continue
+				}
+				line, inComment = line[j+3:], false
+				continue
+			}
+			j := strings.Index(line, "<!--")
+			if j < 0 {
+				kept.WriteString(line)
+				line = ""
+				continue
+			}
+			kept.WriteString(line[:j])
+			line, inComment = line[j+4:], true
+		}
+		m := leaf.FindStringSubmatch(inlineSpan.ReplaceAllString(kept.String(), ""))
+		if m == nil {
 			continue
 		}
-		prose := inlineSpan.ReplaceAllString(line, "")
-		for _, m := range walkthroughDirective.FindAllStringSubmatch(prose, -1) {
-			if _, seen := found[m[2]]; !seen {
-				found[m[2]] = firstLine + i
-			}
+		id := ""
+		if idm := directiveID.FindStringSubmatch(m[1]); idm != nil {
+			id = idm[1]
+		}
+		if _, seen := found[id]; !seen {
+			found[id] = firstLine + i
 		}
 	}
 	return found
@@ -103,7 +137,7 @@ func scanWalkthroughPage(content string, scripts map[string]bool) ([]string, []F
 		}
 		return nil, findings
 	}
-	directives := directiveLines(content)
+	directives := directiveLines(content, "walkthrough")
 	isDeclared := map[string]bool{}
 	for _, id := range declared {
 		isDeclared[id] = true
@@ -131,10 +165,66 @@ func scanWalkthroughPage(content string, scripts map[string]bool) ([]string, []F
 	return declared, findings
 }
 
+// walkthroughManifest is the part of a recorder manifest (walkthrough.json)
+// the lint reads.
+type walkthroughManifest struct {
+	ID          string `json:"id"`
+	Title       string `json:"title"`
+	Description string `json:"description"`
+	Steps       []struct {
+		Caption string `json:"caption"`
+		Still   string `json:"still"`
+	} `json:"steps"`
+	Poster string           `json:"poster"`
+	Budget *json.RawMessage `json:"budget"`
+}
+
+// walkthroughDrift compares a script (web/e2e/walkthroughs/<id>.yaml) with
+// the manifest copied from its last recording: the title, the description,
+// the step count and every caption must agree, or the docs show a recording
+// of a script that has since changed. One line per disagreement.
+func walkthroughDrift(script, manifest []byte) []string {
+	var sc struct {
+		Title       string `yaml:"title"`
+		Description string `yaml:"description"`
+		Steps       []struct {
+			Caption string `yaml:"caption"`
+		} `yaml:"steps"`
+	}
+	if err := yaml.Unmarshal(script, &sc); err != nil {
+		return []string{"the script does not parse: " + err.Error()}
+	}
+	var m walkthroughManifest
+	if err := json.Unmarshal(manifest, &m); err != nil {
+		return []string{"the copied manifest does not parse: " + err.Error()}
+	}
+	var out []string
+	if sc.Title != m.Title {
+		out = append(out, "the script's title is "+strconvQuote(sc.Title)+", the recording's "+strconvQuote(m.Title))
+	}
+	if sc.Description != m.Description {
+		out = append(out, "the script's description differs from the recording's")
+	}
+	if len(sc.Steps) != len(m.Steps) {
+		out = append(out, "the script has "+itoa(len(sc.Steps))+" steps, the recording "+itoa(len(m.Steps)))
+		return out
+	}
+	for i := range sc.Steps {
+		if sc.Steps[i].Caption != m.Steps[i].Caption {
+			out = append(out, "step "+itoa(i+1)+"'s caption is "+strconvQuote(sc.Steps[i].Caption)+" in the script, "+strconvQuote(m.Steps[i].Caption)+" in the recording")
+		}
+	}
+	return out
+}
+
+func strconvQuote(s string) string { b, _ := json.Marshal(s); return string(b) }
+
 // scanWalkthroughAssets checks the copied assets under dir against the
-// declared ids (id to the page declaring it): the manifest, the poster and
-// every still it names; then any directory no page declares.
-func scanWalkthroughAssets(dir string, declared map[string]string) []Finding {
+// declared ids (id to the page declaring it) and their scripts under
+// scriptDir: the manifest, carrying the budget mark the recorder writes only
+// when the recording passed; every still it names, its poster one of them;
+// and no drift from the script. Then any directory no page declares.
+func scanWalkthroughAssets(dir, scriptDir string, declared map[string]string) []Finding {
 	var findings []Finding
 	ids := make([]string, 0, len(declared))
 	for id := range declared {
@@ -144,34 +234,37 @@ func scanWalkthroughAssets(dir string, declared map[string]string) []Finding {
 	for _, id := range ids {
 		page := declared[id]
 		at := func(f string) string { return filepath.ToSlash(filepath.Join(walkthroughAssetDir, id, f)) }
-		missing := func(f string) Finding {
-			return Finding{File: page, Line: 1, Text: "walkthrough \"" + id + "\" has no " + at(f) + "; run make walkthroughs ID=" + id + " then make docs-walkthroughs"}
-		}
+		add := func(text string) { findings = append(findings, Finding{File: page, Line: 1, Text: text}) }
+		redo := "; run make walkthroughs ID=" + id + " then make docs-walkthroughs"
 		b, err := os.ReadFile(filepath.Join(dir, id, "walkthrough.json"))
 		if err != nil {
-			findings = append(findings, missing("walkthrough.json"))
+			add("walkthrough \"" + id + "\" has no " + at("walkthrough.json") + redo)
 			continue
 		}
-		var m struct {
-			ID    string `json:"id"`
-			Steps []struct {
-				Still string `json:"still"`
-			} `json:"steps"`
-		}
+		var m walkthroughManifest
 		if err := json.Unmarshal(b, &m); err != nil {
-			findings = append(findings, Finding{File: page, Line: 1, Text: at("walkthrough.json") + " does not parse: " + err.Error()})
+			add(at("walkthrough.json") + " does not parse: " + err.Error())
 			continue
 		}
 		if m.ID != id {
-			findings = append(findings, Finding{File: page, Line: 1, Text: at("walkthrough.json") + " is walkthrough \"" + m.ID + "\", not \"" + id + "\""})
+			add(at("walkthrough.json") + " is walkthrough \"" + m.ID + "\", not \"" + id + "\"")
 		}
-		files := []string{"poster.png"}
-		for _, s := range m.Steps {
-			files = append(files, s.Still)
+		if m.Budget == nil {
+			add(at("walkthrough.json") + " has no budget mark, so it was not copied from a recording that passed the budget gate" + redo)
 		}
-		for _, f := range files {
-			if _, err := os.Stat(filepath.Join(dir, id, f)); err != nil {
-				findings = append(findings, missing(f))
+		posterIsStill := false
+		for _, st := range m.Steps {
+			posterIsStill = posterIsStill || st.Still == m.Poster
+			if _, err := os.Stat(filepath.Join(dir, id, st.Still)); err != nil {
+				add("walkthrough \"" + id + "\" has no " + at(st.Still) + redo)
+			}
+		}
+		if !posterIsStill {
+			add(at("walkthrough.json") + " names poster " + strconvQuote(m.Poster) + ", which is none of its step stills")
+		}
+		if script, err := os.ReadFile(filepath.Join(scriptDir, id+".yaml")); err == nil {
+			for _, d := range walkthroughDrift(script, b) {
+				add("walkthrough \"" + id + "\" drifted from its script: " + d + redo)
 			}
 		}
 	}
@@ -215,5 +308,5 @@ func ScanWalkthroughs() ([]Finding, error) {
 	if err != nil {
 		return nil, err
 	}
-	return append(findings, scanWalkthroughAssets(filepath.Join(repoRoot, walkthroughAssetDir), declared)...), nil
+	return append(findings, scanWalkthroughAssets(filepath.Join(repoRoot, walkthroughAssetDir), filepath.Join(repoRoot, walkthroughScriptDir), declared)...), nil
 }

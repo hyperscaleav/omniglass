@@ -163,6 +163,7 @@ log=$(walkthrough_one "$FIX/tiny.yaml" "$ST/tiny" 2>&1) && fail "the over-budget
 echo "$log" | sed 's/^/  | /'
 grep -qF 'walkthrough tiny: over budget: duration' <<<"$log" || fail "the duration overrun was not named"
 grep -qF 'walkthrough tiny: over budget: size' <<<"$log" || fail "the size overrun was not named"
+grep -qF '"budget"' "$ST/tiny/walkthrough.json" && fail "an over-budget recording's manifest carries the budget mark"
 echo "ok: an over-budget walkthrough fails naming which limit"
 
 # 3. Within the real budget the same recording passes.
@@ -171,5 +172,7 @@ seconds=$(ffmpeg_in "$ST/tiny" --entrypoint ffprobe "$FFMPEG_IMG" -v error \
   -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 /o/tiny.mp4)
 stack_run -v "$ROOT:/w" -w /w/web --user "$(id -u):$(id -g)" -e HOME=/tmp \
   "$STACK_PWIMG" node e2e/walkthrough.mjs budget "${ST#web/}/tiny/tiny.mp4" "$seconds" || fail "the tiny walkthrough failed the real budget"
+grep -qF '"budget"' "$ST/tiny/walkthrough.json" || fail "a recording that passed the budget has no budget mark in its manifest"
+echo "ok: only a recording within budget carries the budget mark"
 stack_assert_intact
 echo "walkthroughs selftest: passed"

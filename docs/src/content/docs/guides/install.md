@@ -140,7 +140,8 @@ multi-platform index), so recording on an arm64 host needs amd64 emulation regis
 one) into `web/e2e/walkthroughs/out/<id>/`: an mp4 opening on a title card, with a cursor that glides to
 each target and ripples where it clicks, a highlight on the target and a caption bar; `poster.png`; and a
 still per step. A walkthrough is a test: a step whose result never appears fails the run, naming the
-step, its kind and what it waited for, and keeps the stills taken so far; so does a recording of 60
-seconds or more, or of 10 MB or more. `make test-walkthroughs` proves both failures.
+step, its kind and what it waited for, and keeps the stills taken so far; so does a recording over
+the budget, whose limits on length and size are `MAX_SECONDS` and `MAX_BYTES` in
+[`web/e2e/walkthroughlib.mjs`](https://github.com/hyperscaleav/omniglass/blob/main/web/e2e/walkthroughlib.mjs). `make test-walkthroughs` proves both failures.
 When a PR needs a walkthrough, how to review its stills, and how a docs page embeds one are in
 [walkthroughs](/contributing/walkthroughs/).

@@ -1,21 +1,31 @@
 // copy-walkthroughs brings the walkthroughs the docs declare into the site
 // (#926): for every id under a page's `walkthroughs` frontmatter, it copies the
-// recorder's manifest, poster and per-step stills from
-// web/e2e/walkthroughs/out/<id>/ (written by `make walkthroughs`) into
-// public/walkthroughs/<id>/, which is committed like public/screenshots/.
+// recorder's manifest and per-step stills from web/e2e/walkthroughs/out/<id>/
+// (written by `make walkthroughs`) into public/walkthroughs/<id>/, which is
+// committed like public/screenshots/. The recorder's poster.png is not copied:
+// it is a byte copy of the poster step's still, which the manifest names.
+//
+// Only a recording that passed is accepted: its manifest must carry the budget
+// mark the recorder writes after the budget gate passes, so a failed or
+// over-budget recording is refused even when out/failed.txt does not list it.
 //
 // The mp4 is not committed (size). DOCS_WALKTHROUGH_VIDEO=1 also copies it, for
 // a local build that plays the video; that copy is gitignored, and without the
 // flag a stale one is removed so the video never disagrees with the stills
-// beside it. A declared walkthrough that has not been recorded, or whose last
-// recording failed, fails the copy naming it.
+// beside it.
+//
+// Astro caches each rendered page by the page's own content, not by the
+// manifest it renders, so after a copy the next docs build must be forced
+// (`corepack pnpm astro build --force` in docs/); check-walkthrough-embeds.mjs
+// fails a build that rendered from a stale cache.
 //
 // Run via `make docs-walkthroughs`.
 import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, unlinkSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { declaredIds, walkPages } from './lib/frontmatter-ids.mjs';
+import { checkId } from '../../web/e2e/walkthroughcore.mjs';
 import { videoName, walkthroughAssets } from '../src/plugins/walkthrough-embed.mjs';
+import { declaredIds, walkPages } from './lib/frontmatter-ids.mjs';
 
 const OUT = fileURLToPath(new URL('../../web/e2e/walkthroughs/out', import.meta.url));
 const DEST = fileURLToPath(new URL('../public/walkthroughs', import.meta.url));
@@ -29,40 +39,57 @@ for (const path of walkPages()) {
 const failedFile = join(OUT, 'failed.txt');
 const failed = existsSync(failedFile) ? readFileSync(failedFile, 'utf8').split(/\s+/).filter(Boolean) : [];
 
-const errors = [];
-for (const id of [...ids].sort()) {
+// One walkthrough's copy; throws an Error whose message names what is wrong.
+/** @param {string} id */
+function copyOne(id) {
+  checkId(id);
   const src = join(OUT, id);
   const manifestPath = join(src, 'walkthrough.json');
   if (failed.includes(id)) {
-    errors.push(`walkthrough "${id}" failed its last recording (out/failed.txt); fix it and re-run make walkthroughs ID=${id}`);
-    continue;
+    throw new Error(`walkthrough "${id}" failed its last recording (out/failed.txt); fix it and re-run make walkthroughs ID=${id}`);
   }
   if (!existsSync(manifestPath)) {
-    errors.push(`walkthrough "${id}" is not recorded (no ${manifestPath}); run make walkthroughs ID=${id}`);
-    continue;
+    throw new Error(`walkthrough "${id}" is not recorded (no ${manifestPath}); run make walkthroughs ID=${id}`);
   }
-  const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
-  if (manifest.id !== id) {
-    errors.push(`${manifestPath} is walkthrough "${manifest.id}", not "${id}"`);
-    continue;
+  let manifest;
+  try {
+    manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
+  } catch (e) {
+    throw new Error(`${manifestPath} does not parse: ${e.message}`);
   }
+  if (manifest.id !== id) throw new Error(`${manifestPath} is walkthrough "${manifest.id}", not "${id}"`);
   const files = walkthroughAssets(manifest);
-  const video = videoName(id);
-  if (withVideo) files.push(video);
+  if (withVideo) files.push(videoName(id));
   const missing = files.filter((f) => !existsSync(join(src, f)));
   if (missing.length) {
-    errors.push(`walkthrough "${id}" is missing ${missing.join(', ')} under ${src}; re-run make walkthroughs ID=${id}`);
-    continue;
+    throw new Error(`walkthrough "${id}" is missing ${missing.join(', ')} under ${src}; re-run make walkthroughs ID=${id}`);
   }
   const dest = join(DEST, id);
   mkdirSync(dest, { recursive: true });
-  // A still from an older, longer recording, or a video the flag did not ask
-  // for, would outlive the recording it came from.
-  for (const f of readdirSync(dest)) {
-    if (!files.includes(f)) unlinkSync(join(dest, f));
+  // Nothing but the copy lives here: a directory is refused rather than
+  // deleted, and a file from an older, longer recording (or a video the flag
+  // did not ask for) is removed so it cannot outlive the recording it came from.
+  const stale = [];
+  for (const entry of readdirSync(dest, { withFileTypes: true })) {
+    if (entry.isDirectory()) {
+      throw new Error(`public/walkthroughs/${id}/${entry.name}/ is a directory, which a walkthrough copy never holds; move it out and re-run`);
+    }
+    if (!files.includes(entry.name)) stale.push(entry.name);
   }
+  for (const f of stale) unlinkSync(join(dest, f));
   for (const f of files) copyFileSync(join(src, f), join(dest, f));
   console.log(`docs-walkthroughs: ${id}: ${files.length} files into public/walkthroughs/${id}/${withVideo ? ' (with the video)' : ''}`);
+}
+
+const errors = [];
+let copied = 0;
+for (const id of [...ids].sort()) {
+  try {
+    copyOne(id);
+    copied++;
+  } catch (e) {
+    errors.push(e instanceof Error ? e.message : String(e));
+  }
 }
 
 const orphans = existsSync(DEST) ? readdirSync(DEST).filter((d) => !ids.has(d)) : [];
@@ -76,3 +103,6 @@ if (errors.length) {
   process.exit(1);
 }
 console.log(`docs-walkthroughs: OK (${ids.size} walkthrough${ids.size === 1 ? '' : 's'})`);
+if (copied) {
+  console.log('docs-walkthroughs: Astro caches rendered pages by their own content, so force the next docs build: cd docs && corepack pnpm astro build --force');
+}

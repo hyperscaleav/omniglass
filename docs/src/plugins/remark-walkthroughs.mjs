@@ -1,16 +1,21 @@
 // remarkWalkthroughs renders a `::walkthrough{#id}` leaf directive from the
 // page's `walkthroughs` frontmatter (#926), exactly as `::screenshot` resolves
 // against `screenshots` (the shared frontmatterDirective). The content comes from
-// the recorder's manifest, copied with the poster and stills into
-// public/walkthroughs/<id>/ by `make docs-walkthroughs`: the page never restates
-// a caption, so a re-recorded walkthrough changes the docs by a copy, not an edit.
+// the recorder's manifest, copied with the stills into public/walkthroughs/<id>/
+// by `make docs-walkthroughs`: the page never restates a caption, so a
+// re-recorded walkthrough reaches the docs by a copy, not an edit.
 //
 // The video is not committed (size), so the embed renders it, and links it, only
 // when public/walkthroughs/<id>/<id>.mp4 is present when the page renders; a
-// build without it shows the poster and the captioned stills. Rendered pages are
-// cached between builds, so scripts/check-walkthrough-links.mjs re-checks the
-// built HTML after `astro build`: a video link to a file the build did not ship
-// fails the build rather than publishing a dead link.
+// build without it shows the poster step and the captioned stills.
+//
+// What this plugin reads is invisible to Astro's content cache, which keys a
+// rendered page on the page's own content alone: after a re-copy, or a video
+// added or removed, an unforced build serves the old render. Astro offers a
+// remark plugin no way to declare the dependency, so the guarantee is
+// scripts/check-walkthrough-embeds.mjs, which re-renders every built embed from
+// the shipped manifest and fails the build on any difference; the remedy is
+// `corepack pnpm astro build --force`.
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { frontmatterDirective } from './frontmatter-directive.mjs';
