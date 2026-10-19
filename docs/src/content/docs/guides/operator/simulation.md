@@ -19,6 +19,10 @@ its token in `bin/edge-hq.token`) and runs the node and the simulator side by si
 fleet is collected for real. Its components' ports below 1024 are lifted by 10000, so it needs no
 privilege.
 
+**In containers**, with nothing but Docker, run `make dev-sim-container`: its own server, node and
+simulator, with impairments applied, and the console on a local port it prints
+([the whole loop in Docker](/guides/install/#the-whole-loop-in-docker)).
+
 **Anywhere else**, the simulator is `omniglass sim run`, started beside a node with that node's
 identity:
 

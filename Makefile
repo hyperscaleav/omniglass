@@ -1,7 +1,7 @@
 # Local dev loop + the build/run flow for the single binary. Production deploy
 # is BYO Postgres; tests use ephemeral testcontainer Postgres.
 
-.PHONY: build build-web web image gen gen-proto gen-web test test-web test-short test-e2e bench clean-testcontainers tidy up down dev release-plan release-apply release-snapshot docs-shots docs-shots-check docs-shots-verify dev-sim bench-sim test-netadmin
+.PHONY: build build-web web image gen gen-proto gen-web test test-web test-short test-e2e bench clean-testcontainers tidy up down dev release-plan release-apply release-snapshot docs-shots docs-shots-check docs-shots-verify dev-sim bench-sim test-netadmin walkthrough-stack dev-sim-container test-walkthrough-stack
 
 # Build the single binary (no console embedded; serves the build-the-console
 # placeholder under /web).
@@ -166,6 +166,28 @@ bench-sim:
 # Playwright. Needs the browser once: (cd web && npx playwright install chromium).
 test-e2e:
 	bash web/e2e/run.sh
+
+# The walkthrough stack (web/e2e/walkthrough-stack.sh, recipe in
+# web/e2e/lib/stack.sh): Postgres, the server seeded with the dev and simulated
+# fleets, the node edge-hq enrolled with a one-time token, and the simulator
+# with --impairments in the node's network namespace (NET_ADMIN there only).
+# All in Docker, built from this tree with the Dockerfile, nothing on a fixed
+# host port, unique per-run names, torn down on exit. walkthrough-stack holds
+# it up for authoring a walkthrough and prints how a Playwright container
+# reaches it; dev-sim-container is the same stack for exploring by hand, with
+# the console published on an ephemeral 127.0.0.1 port (make dev-sim, in
+# containers, impairments applied). test-walkthrough-stack proves the recipe:
+# the node collects, and an impairment set through the API applies and repairs.
+# Not part of make test: it builds the release image (minutes after a Go
+# change), and the impairment loop itself is gated there by test-netadmin.
+walkthrough-stack:
+	bash web/e2e/walkthrough-stack.sh up
+
+dev-sim-container:
+	STACK_PUBLISH=1 bash web/e2e/walkthrough-stack.sh up
+
+test-walkthrough-stack:
+	bash web/e2e/walkthrough-stack.sh check
 
 # Backstop cleanup: force-remove any orphaned Postgres test containers left by
 # an interrupted run (a hard kill before the harness TestMain or the ryuk reaper

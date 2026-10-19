@@ -88,3 +88,25 @@ It runs unprivileged, and each privilege it is given buys one thing:
 On **macOS**, loopback answers only `127.0.0.1` until an address is aliased, so a bare binary needs an
 alias for each simulated address it serves (the dev fleet uses `127.60.0.0/16`), for example
 `for i in $(seq 1 20); do sudo ifconfig lo0 alias 127.60.0.$i up; done`. Impairments are Linux only.
+
+### The whole loop in Docker
+
+From a checkout, with nothing but Docker, `make dev-sim-container` runs every piece of the above as
+containers on a private network of their own: Postgres, the server (seeded with the example fleet and
+its simulated components), the node `edge-hq` enrolled with a one-time token, and the simulator with
+`--impairments` in the node container's network namespace. Only the simulator holds `NET_ADMIN`, and it
+reaches only that namespace; only the node takes the ping sysctl. In a container the simulator binds the
+real ports, so the fleet is seeded unlifted (`omniglass seed-dev --sim-port-offset 0`). It prints the
+console's address, on a `127.0.0.1` port Docker picks so two copies never collide (sign in as
+`dev`/`dev`), and tears everything down on Ctrl-C. Breaking a component on purpose works there as in
+[simulate a fleet](/guides/operator/simulation/#break-it-on-purpose).
+
+It does not attach to a `make dev` already running on the host: that server's bus listens on the
+host's loopback only, so a containerized node could reach it only on the host's network, where the
+simulator's `NET_ADMIN` would rewrite the host's own firewall. The stack carries its own server instead.
+
+The same stack is what the console walkthroughs are recorded against: `make walkthrough-stack` holds it
+up without publishing anything and prints how a Playwright container on its network reaches it, and
+`make test-walkthrough-stack` proves it (the node collects, and an impairment set through the API
+takes a component's reachability down and its repair brings it back). The recipe is
+`stack_walkthrough_up` in `web/e2e/lib/stack.sh`.
