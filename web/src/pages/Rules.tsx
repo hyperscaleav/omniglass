@@ -119,13 +119,14 @@ function readsCell(r: EventRule): JSX.Element {
 // The live state at a glance, from the counts on the list row: open alarms in
 // the error hue, streaks in the warning hue, and a quiet "clear" when the rule
 // holds nothing right now. A disabled rule says so first (disabling cleared
-// what it held open). Hovering says when it last judged a sample, which tells
-// a quiet rule from one whose key has stopped arriving.
+// what it held open). Its (i) says when it last judged a sample, which tells
+// a quiet rule from one whose key has stopped arriving; the (i) stops its
+// click so opening the hint does not open the row.
 function RuleLive(p: { rule: EventRule }): JSX.Element {
   const open = () => p.rule.open_alarms;
   const pending = () => p.rule.pending_streaks;
   return (
-    <span class="inline-flex flex-wrap items-center gap-1" data-live={p.rule.name} title={judgedWords(p.rule.last_judged_at)}>
+    <span class="inline-flex flex-wrap items-center gap-1" data-live={p.rule.name}>
       <Show when={!p.rule.enabled}>
         <span class="badge badge-ghost badge-sm">disabled</span>
       </Show>
@@ -138,6 +139,9 @@ function RuleLive(p: { rule: EventRule }): JSX.Element {
       <Show when={p.rule.enabled && open() === 0 && pending() === 0}>
         <span class="text-[12px] text-base-content/40">clear</span>
       </Show>
+      <span class="inline-flex" onClick={(e) => e.stopPropagation()}>
+        <InfoTip label={`when ${p.rule.name} last judged a sample`} text={judgedWords(p.rule.last_judged_at)} />
+      </span>
     </span>
   );
 }

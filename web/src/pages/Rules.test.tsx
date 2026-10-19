@@ -135,14 +135,26 @@ describe("Rules page", () => {
     const live = document.querySelector('[data-live="reachability-lost"]') as HTMLElement;
     expect(live.textContent).toContain("1 open");
     expect(live.textContent).toContain("1 pending");
-    // When it last judged a sample rides the Live cell as its tooltip; a rule
-    // that never has says so.
-    expect(live.getAttribute("title")).toBe("Last judged a sample 30s ago (to within 5s)");
-    expect((document.querySelector('[data-live="too-hot"]') as HTMLElement).getAttribute("title")).toBe("Has not judged a sample yet");
     // A disabled rule says so before anything else.
     expect((document.querySelector('[data-live="too-hot"]') as HTMLElement).textContent).toContain("disabled");
     expect(document.querySelector('[data-severity="high"]')?.textContent).toBe("High");
     expect(gets.filter((u) => u.endsWith("/state"))).toEqual([]);
+  });
+
+  // When it last judged a sample rides the Live cell's (i), a keyboard-reachable
+  // tooltip like every hint (design system: a hover-only mark is not reachable),
+  // and opening it does not open the row.
+  it("says on the Live cell when a rule last judged a sample, or that it has not", async () => {
+    mount();
+    const tip = screen.getByRole("button", { name: "More about when reachability-lost last judged a sample" });
+    fireEvent.keyDown(document.body, { key: "Tab" });
+    tip.focus();
+    expect(await screen.findByText(/^Last judged a sample 3\ds ago \(to within 5s\)$/)).toBeTruthy();
+    fireEvent.click(tip);
+    expect(asides()).toHaveLength(0);
+    const never = screen.getByRole("button", { name: "More about when too-hot last judged a sample" });
+    never.focus();
+    expect(await screen.findByText("Has not judged a sample yet")).toBeTruthy();
   });
 
   it("shows a rule's open alarms, linked to their components by id, and its pending streaks", async () => {
@@ -159,7 +171,8 @@ describe("Rules page", () => {
     expect(within(pending).getByText(/^held \d+s$/)).toBeTruthy();
     expect(within(b).getByTestId("rule-fire").textContent).toBe("reads down for 15s");
     // The state's own stamp (polled faster than the list) says when it last judged.
-    expect(within(b).getByTestId("rule-judged").textContent).toBe("10s ago");
+    // (fixtures are stamped at load, so the age is matched, not pinned)
+    expect(within(b).getByTestId("rule-judged").textContent).toMatch(/^1\ds ago$/);
     expect(within(b).getByText("Every component")).toBeTruthy();
     // The level it raises at links to the severity registry beside the rules.
     expect(within(b).getByRole("link", { name: "All levels" }).getAttribute("href")).toBe("/severity-levels");
