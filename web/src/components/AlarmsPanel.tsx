@@ -119,7 +119,7 @@ export default function AlarmsPanel(props: { component: string; canUpdate: boole
       <p class="text-[11px] text-base-content/50">
         An alarm records a condition on this component and takes its own verdict down (any active alarm degrades it,
         one at an outage level is an outage). Any role it fills stops counting it toward quorum while it stays down, which is
-        how a fault on a box becomes a verdict on a room.
+        how a fault on a box becomes a verdict on a system.
       </p>
       <p class="text-[11px] text-base-content/50">
         Acknowledging is separate from clearing: it records that a human has seen the alarm and changes nothing else,

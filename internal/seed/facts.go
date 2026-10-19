@@ -6,6 +6,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
+	"github.com/hyperscaleav/omniglass/internal/health"
 	"github.com/hyperscaleav/omniglass/internal/rbac"
 	"github.com/hyperscaleav/omniglass/internal/transport"
 )
@@ -167,23 +168,50 @@ type factsSecretType struct {
 	Fields                []factsSecretTypeField `json:"fields"`
 }
 
+// factsSeverityLevel is one shipped severity level (#917) as the docs render
+// it, with the outage flag computed by the health rule's own floor, so the
+// table cannot disagree with what a verdict does.
+type factsSeverityLevel struct {
+	Name   string `json:"name"`
+	Label  string `json:"label"`
+	Color  string `json:"color"`
+	Rank   int    `json:"rank"`
+	Outage bool   `json:"outage"`
+}
+
+// factsEventRule is one official event rule (#920) as the docs render it: the
+// criteria flattened to "op value" words.
+type factsEventRule struct {
+	Name         string `json:"name"`
+	Label        string `json:"label,omitempty"`
+	Description  string `json:"description,omitempty"`
+	SampleKey    string `json:"sample_key"`
+	Fire         string `json:"fire"`
+	Clear        string `json:"clear,omitempty"`
+	FireSustain  string `json:"fire_sustain,omitempty"`
+	ClearSustain string `json:"clear_sustain,omitempty"`
+	Severity     string `json:"severity"`
+}
+
 type seedFactsDoc struct {
-	Comment        string              `json:"//"`
-	Roles          []factsRole         `json:"roles"`
-	PropertyTypes  []factsProperty     `json:"property_types"`
-	MetricTypes    []factsMetricType   `json:"metric_types"`
-	EventTypes     []factsNamed        `json:"event_types"`
-	CommandTypes   []factsNamed        `json:"command_types"`
-	SecretTypes    []factsSecretType   `json:"secret_types"`
-	Transports     []factsTransport    `json:"transports"`
-	LocationTypes  []factsLocationType `json:"location_types"`
-	ComponentTypes []factsTypeNode     `json:"component_types"`
-	SystemTypes    []factsTypeNode     `json:"system_types"`
-	Standards      []factsStandard     `json:"standards"`
-	Vendors        []factsVendor       `json:"vendors"`
-	Drivers        []factsDriver       `json:"drivers"`
-	Products       []factsProduct      `json:"products"`
-	LabelRules     []factsLabelRule    `json:"label_rules"`
+	Comment        string               `json:"//"`
+	Roles          []factsRole          `json:"roles"`
+	PropertyTypes  []factsProperty      `json:"property_types"`
+	MetricTypes    []factsMetricType    `json:"metric_types"`
+	EventTypes     []factsNamed         `json:"event_types"`
+	CommandTypes   []factsNamed         `json:"command_types"`
+	SecretTypes    []factsSecretType    `json:"secret_types"`
+	Transports     []factsTransport     `json:"transports"`
+	LocationTypes  []factsLocationType  `json:"location_types"`
+	ComponentTypes []factsTypeNode      `json:"component_types"`
+	SystemTypes    []factsTypeNode      `json:"system_types"`
+	Standards      []factsStandard      `json:"standards"`
+	Vendors        []factsVendor        `json:"vendors"`
+	Drivers        []factsDriver        `json:"drivers"`
+	Products       []factsProduct       `json:"products"`
+	LabelRules     []factsLabelRule     `json:"label_rules"`
+	SeverityLevels []factsSeverityLevel `json:"severity_levels"`
+	EventRules     []factsEventRule     `json:"event_rules"`
 }
 
 // eventCommandDoc covers the shared name/display/description shape of the
@@ -377,6 +405,49 @@ func FactsJSON() ([]byte, error) {
 			fp.Properties = append(fp.Properties, factsProductProperty{Name: pp.Name, Default: pp.Default, Required: pp.Required})
 		}
 		doc.Products = append(doc.Products, fp)
+	}
+
+	var levels struct {
+		Levels []struct {
+			Name  string `yaml:"name"`
+			Label string `yaml:"label"`
+			Color string `yaml:"color"`
+			Rank  int    `yaml:"rank"`
+		} `yaml:"levels"`
+	}
+	if err := yaml.Unmarshal(severityLevelsYAML, &levels); err != nil {
+		return nil, fmt.Errorf("seed facts: severity levels: %w", err)
+	}
+	for _, l := range levels.Levels {
+		doc.SeverityLevels = append(doc.SeverityLevels, factsSeverityLevel{
+			Name: l.Name, Label: l.Label, Color: l.Color, Rank: l.Rank, Outage: l.Rank >= health.OutageRank,
+		})
+	}
+
+	var ers struct {
+		Rules []struct {
+			Name         string        `yaml:"name"`
+			Label        string        `yaml:"label"`
+			Description  string        `yaml:"description"`
+			SampleKey    string        `yaml:"sample_key"`
+			Fire         criteriaYAML  `yaml:"fire"`
+			Clear        *criteriaYAML `yaml:"clear"`
+			FireSustain  string        `yaml:"fire_sustain"`
+			ClearSustain string        `yaml:"clear_sustain"`
+			Severity     string        `yaml:"severity"`
+		} `yaml:"rules"`
+	}
+	if err := yaml.Unmarshal(eventRulesYAML, &ers); err != nil {
+		return nil, fmt.Errorf("seed facts: event rules: %w", err)
+	}
+	words := func(c criteriaYAML) string { return fmt.Sprintf("%s %v", c.Op, c.Value) }
+	for _, r := range ers.Rules {
+		fr := factsEventRule{Name: r.Name, Label: r.Label, Description: r.Description, SampleKey: r.SampleKey,
+			Fire: words(r.Fire), FireSustain: r.FireSustain, ClearSustain: r.ClearSustain, Severity: r.Severity}
+		if r.Clear != nil {
+			fr.Clear = words(*r.Clear)
+		}
+		doc.EventRules = append(doc.EventRules, fr)
 	}
 
 	out, err := json.MarshalIndent(doc, "", " ")

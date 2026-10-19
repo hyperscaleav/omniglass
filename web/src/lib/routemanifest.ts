@@ -84,6 +84,8 @@ export const ROUTE_MANIFEST: RouteEntry[] = [
   { path: "/command-types", shell: "catalog", page: "CommandTypes", smoke: "/command-types" },
   // The event rule registry (#921), live since the rules epic (#819).
   { path: "/rules", shell: "catalog", page: "Rules", smoke: "/rules" },
+  // The severity registry the rules raise at (#917, read view #921).
+  { path: "/severity-levels", shell: "catalog", page: "SeverityLevels", smoke: "/severity-levels" },
   { path: "/vendors", shell: "catalog", page: "Vendors", smoke: "/vendors" },
   { path: "/products", shell: "catalog", page: "Products", smoke: "/products" },
   { path: "/drivers", shell: "catalog", page: "Drivers", smoke: "/drivers" },

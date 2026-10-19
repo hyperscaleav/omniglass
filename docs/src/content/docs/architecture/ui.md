@@ -113,8 +113,9 @@ Live data is **query polling** (a refetch interval; slow-changing config uses a 
 
 ::::design[Views and the SSE live relay, tracked in #523; the unit registry is #430]
 A read can also **stream over the view layer (a server-side SSE relay)** where latency or fan-out
-earns it. Config-dependent presentation (a severity level's id to label and color) resolves
-client-side from the config view; a sample value converts on read to the operator's preferred
+earns it. Config-dependent presentation (a severity level's name to label and color) resolves
+client-side from the config view (built today over polling: every severity chip reads the
+`/severity-levels` registry, #917); a sample value converts on read to the operator's preferred
 display unit via a future unit registry keyed by the
 [property_type](/architecture/properties/)'s canonical unit, so storage stays single-unit.
 

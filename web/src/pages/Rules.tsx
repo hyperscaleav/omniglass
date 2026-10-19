@@ -80,7 +80,7 @@ export const RULE_HINTS = {
   pending:
     "A streak is a component waiting out a sustain: its samples point at fire or clear, and once the streak has held for the sustain the alarm opens or clears.",
   official: "Official rules ship with Omniglass and update with it, so they are read-only. Author your own beside them.",
-  enabled: "A disabled rule evaluates nothing. An alarm it already raised stays open until cleared, and enabling it again opens no duplicate.",
+  enabled: "A disabled rule evaluates nothing, and disabling it clears the alarms it holds open (each stays in its component's history). Enabling it again judges the newest samples at once.",
   message: "The alarm's message. Blank uses the rule's label, or its name.",
 } as const;
 
@@ -111,7 +111,7 @@ function readsCell(r: EventRule): JSX.Element {
 
 // The live state at a glance: open alarms in the error hue, streaks in the
 // warning hue, and a quiet "clear" when the rule holds nothing right now. A
-// disabled rule says so first; anything it raised before is still counted.
+// disabled rule says so first (disabling cleared what it held open).
 function RuleLive(p: { rule: EventRule; poll: number }): JSX.Element {
   const state = useQuery(() => ({
     queryKey: ruleStateKey(p.rule.name),
@@ -343,7 +343,7 @@ function RuleBladeBody(p: { name: string }): JSX.Element {
   }
 
   async function remove(r: EventRule) {
-    if (!confirm(`Delete rule "${r.name}"? Alarms it raised stay, and no longer name it.`)) return;
+    if (!confirm(`Delete rule "${r.name}"? Deleting it clears the alarms it holds open; its past alarms stay in each component's history, no longer naming it.`)) return;
     setErr(null);
     try {
       await deleteEventRule(r.name);
@@ -408,6 +408,7 @@ function RuleBladeBody(p: { name: string }): JSX.Element {
                 <span class="inline-flex items-center gap-1.5">
                   <SeverityBadge name={r().severity} />
                   <InfoTip label="severity" text={RULE_HINTS.severity} />
+                  <A href="/severity-levels" class="link text-[11px] text-base-content/50 hover:text-base-content">All levels</A>
                 </span>
               }
             />

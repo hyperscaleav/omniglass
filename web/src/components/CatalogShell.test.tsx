@@ -16,6 +16,7 @@ import { PROPERTIES_KEY } from "../lib/properties";
 import { EVENT_TYPES_KEY } from "../lib/event_types";
 import { COMMAND_TYPES_KEY } from "../lib/command_types";
 import { EVENT_RULES_KEY } from "../lib/event_rules";
+import { severityLevelsKey } from "../lib/severity";
 import { TAGS_KEY } from "../lib/tags";
 
 // The Catalog shell: a layout route wrapping every registry page in the
@@ -50,6 +51,7 @@ const PRIMED: [readonly string[], number][] = [
   [EVENT_TYPES_KEY, 15],
   [COMMAND_TYPES_KEY, 6],
   [EVENT_RULES_KEY, 3],
+  [severityLevelsKey, 5],
   [TAGS_KEY, 9],
 ];
 
@@ -97,7 +99,7 @@ describe("CatalogShell", () => {
     expect(hrefs()).toEqual([
       "/catalog",
       "/metrics", "/properties", "/event-types",
-      "/command-types", "/rules", "/notifications",
+      "/command-types", "/rules", "/severity-levels", "/notifications",
       "/vendors", "/products", "/drivers", "/component-types",
       "/standards", "/system-types",
       "/location-types",
@@ -163,7 +165,7 @@ describe("CatalogShell", () => {
 
   it("keeps every entry for a *:read floor viewer: nothing on the subrail is off the read floor", () => {
     mount(viewer);
-    expect(hrefs()).toHaveLength(15);
+    expect(hrefs()).toHaveLength(16);
     expect([...nav().querySelectorAll("button[disabled]")]).toHaveLength(3);
   });
 

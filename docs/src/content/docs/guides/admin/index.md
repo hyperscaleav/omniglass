@@ -48,6 +48,9 @@ Every task on these pages has two front doors, and they call the same API with t
   signal catalog is two lane pages: **[properties](/guides/admin/properties/)** for the canonical
   typed values and **[metrics](/guides/admin/metrics/)** for the numeric quantities, with their
   units and precision.
+- **[Rules and severity](/guides/admin/rules/)** is where alarms come from when nobody raises them:
+  writing an event rule (what it reads, when it fires and clears, how long a condition must hold),
+  watching its live state, and the ranked severity levels its alarms are raised at.
 - The classifier catalogs shape the fleet's entities:
   **[location types](/guides/admin/location-types/)** for locations, **[standards](/guides/admin/standards/)** for
   systems, and **[products](/guides/admin/products/)** for components, with

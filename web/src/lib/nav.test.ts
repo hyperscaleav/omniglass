@@ -278,6 +278,7 @@ describe("Catalog single entry", () => {
       "/secret-types": ["secret", "read"],
       "/tags": ["tag", "read"],
       "/rules": ["rule", "read"],
+      "/severity-levels": ["severity_level", "read"],
       "/notifications": null,
       "/templates": null,
       "/log-types": null,

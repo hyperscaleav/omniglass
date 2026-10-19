@@ -8,6 +8,7 @@ sidebar:
 ---
 
 import SchemaTable from '../../../components/SchemaTable.astro';
+import SeededSet from '../../../components/SeededSet.astro';
 
 An **alarm** detects a condition and holds it; an **action** does something about it. A simple
 action is a single step (a `notify`); a multi-step action is a **flow**. Both are **stateful
@@ -15,7 +16,8 @@ entities that hold their state directly** (not event-sourced). An action's crede
 in credentials; the Expr and Go-template machinery in [expressions](/architecture/expressions/).
 
 :::note[Partial]
-Built today: the **alarm as a held row**, raised on a **component** by a caller, carrying a `severity`
+Built today: the **alarm as a held row**, raised on a **component** by a caller or by an
+[event rule](#the-event_rule) (#819), carrying a `severity`
 (a level of the [severity registry](#severity-a-registry-of-named-levels), by name), a message, a
 `raised_at`, and a nullable `cleared_at` (clearing keeps the row). Any active alarm reaches a system
 through the component's own verdict (any active alarm degrades it, one at or above the `high` level
@@ -24,7 +26,9 @@ while it stays open, since only an outage
 component stops occupying its slots; a lesser alarm degrades the component but leaves it in place
 (#626: an alarm no longer names what it degrades).
 
-Also built: **acknowledgement** ([below](#acknowledgement-a-fact-about-a-person)), the record that a
+Also built: the **event rule** that raises and clears alarms on its own as samples land, with
+sustains held by a durable streak and a sweep, one official rule (`reachability-lost`), each rule's
+live state, and the console's **Rules** and **Severity** pages. **Acknowledgement** ([below](#acknowledgement-a-fact-about-a-person)), the record that a
 human has seen an incident, orthogonal to whether it is still raised. **Snooze** and **resolve** are
 not built, and the reasons are in that section.
 See [implementation status](/architecture/status/).
@@ -143,8 +147,9 @@ feeds health exactly as a hand-raised one does; it writes as the system actor. T
 (`raised_by_rule_id`, set null if the rule is deleted), and its condition identity is the rule's name
 plus the sample's **instance**, so a per-endpoint input holds **one alarm per endpoint**: a component
 whose SNMP and HTTP both fail carries two, and one recovering clears only its own. A repeated or
-redelivered sample changes nothing. A disabled rule evaluates nothing, and re-enabling it opens no
-duplicate against an alarm still open.
+redelivered sample changes nothing. A disabled rule evaluates nothing; disabling or deleting a rule clears
+the alarms it holds open (they stay in the history), and narrowing its selector clears those on the
+components it no longer watches.
 
 **Sustains** hold an edge until it has lasted: `fire_sustain` before the alarm opens and
 `clear_sustain` before it clears, both defaulting to `0s`, set independently (a long clear sustain
@@ -165,9 +170,12 @@ sample is newest is still decided by that timestamp). Only a **material** edit r
 streaks (its key, criteria, clear criteria, selector or sustains); a label, description, message or
 severity edit leaves them running. Creating a rule, enabling one, or a material edit **primes** it from
 each selected series' newest sample, so a condition that already holds starts its sustain then (or
-fires at once with no sustain) instead of waiting for a change the input may never send. The platform ships one official rule, **`reachability-lost`**: an endpoint
-whose verdict reads `down` for 15 seconds opens a `high` alarm on its component, and reading `up` clears
-it, so unplugging a simulated component takes its system out and plugging it back recovers it, with no
+fires at once with no sustain) instead of waiting for a change the input may never send. The platform ships one official rule, rendered here from the seed itself:
+
+<SeededSet kind="event_rules" />
+
+An endpoint whose verdict reads `down` for the sustain opens a `high` alarm on its component, and
+reading `up` clears it, so unplugging a simulated component takes its system out and plugging it back recovers it, with no
 operator in between. That takes the system out only when the component fills a role whose impact
 is `outage` and losing it drops the role below quorum; otherwise the system reads whatever the role's
 impact says, and a component that fills no role moves no system.
@@ -182,6 +190,16 @@ component or a key it reads leaves it editable, and it simply matches nothing.
 
 Rules are **fleet-wide config**: authored at `/event-rules` with `rule:*` and an all-scope grant, read
 by any all-scope reader; a version bumps on every change.
+
+A rule's **live state** is a read, not a stored column: `GET /event-rules/{name}/state` (`omniglass
+event-rule state list <rule>`, gated `rule:read`) returns the alarms it raised that are still open (component,
+endpoint instance, severity, when) and its streaks waiting out a sustain (component, instance, whether
+it points at fire or clear, since when). The console's **Catalog > Actions > Rules** page (#921) lists
+every rule with its criteria in words, its severity and those live counts, opens a rule's blade with
+both lists linked to their components, and authors, edits, disables and deletes operator rules in a
+drawer (official rules are read-only); the operator's walk-through is the
+[rules guide](/guides/admin/rules/). When a rule last judged a sample is not shown: a per-sample write
+was kept off the ingest path on purpose, and the honest cheap signal is still to come (#929).
 
 A rule does not declare a health verdict itself: the alarm it raises impairs its owner's own
 verdict (any active alarm degrades it, one at or above `high` is an outage). Only an outage owner stops
@@ -206,15 +224,10 @@ Severity is a **registry of named levels**, not a bare integer. It takes the ord
 triad, so it adds no fourth vocabulary: a **`name`** on the entity name rule, an optional
 **`label`**, and its uuid **`id`** like any other row, plus a **`color`** and an integer
 **`order`** used only for comparison. Rules reference a level **by name**; official defaults ship
-**spaced**, so a new level inserts between two others without renumbering:
+**spaced**, so a new level inserts between two others without renumbering. The shipped levels,
+rendered from the seed:
 
-| name | label | color | order |
-|---|---|---|---|
-| info | Info | gray | 10 |
-| warning | Warning | yellow | 20 |
-| average | Average | orange | 30 |
-| high | High | red | 40 |
-| disaster | Disaster | dark red | 50 |
+<SeededSet kind="severity_levels" />
 
 Severity is **distinct from health** ([health](/architecture/health/)); higher order is more severe.
 The set is **operator-customizable** (relabel to P1/P2/P3, recolor, insert, three levels or seven),
@@ -228,6 +241,11 @@ already taken is a 409, an official level is read-only). An alarm's `severity` r
 **by name** (a rename carries its alarms; a level an alarm names cannot be deleted). A component's
 own verdict reads the rank: **`high` and above is an outage**, anything lower degrades. The retired
 three values mapped by meaning: `critical` became `high`, `info` and `warning` kept their names.
+The console reads the registry everywhere a severity shows: every alarm chip (the component's
+alarms, a system's and a place's "why", a rule's open alarms) renders the level's label in its color
+and sorts by its rank, so an operator level renders like a shipped one with no console change, and
+**Catalog > Actions > Severity** (#921) lists the levels worst first with their rank, color and
+effect. That page is a read view; operator levels are authored from the CLI or the API (#930).
 
 :::caution[Open question]
 Whether a severity level is purely a label, color, and order, or also carries policy such as a
@@ -371,13 +389,16 @@ could re-open its alarm, lineage-bounded). A drag-and-drop editor edits flows. *
 multi-step are one model**: only the length of the step list distinguishes them.
 :::
 
-:::design[Registry namespacing for rules, actions, and severity levels (ADR-0050)]
-
 ## Namespacing
 
-Event rules, actions, and severity levels carry the same **`official` boolean** discipline as the
-rest of the registries, seeded through each registry's authoritative upsert (`UpsertPropertyType`
-and siblings): `official: true` ships vetted, `official: false` is operator-authored and central to
+Event rules and severity levels carry the same **`official` boolean** discipline as the rest of
+the registries (built, #917 and #920), seeded through each registry's authoritative upsert
+(`UpsertEventRule`, `UpsertSeverityLevel`, beside `UpsertPropertyType` and siblings): `official:
+true` ships vetted and is read-only, `official: false` is operator-authored. An official level never
+takes over an operator's: a clash stops the boot naming it.
+
+:::design[Actions under the same discipline (ADR-0050)]
+Actions take the same `official` column when they land (#618), and operator rows are central to
 component templates.
 :::
 
@@ -387,16 +408,17 @@ component templates.
 event-sourced); the physical layout (the owner arc, partitioning) lives on
 [storage](/architecture/storage/).
 
-The built `alarm` row is component-local: no owner arc and no `event_rule`. It **does** carry its
+The built `alarm` row is component-local: no owner arc. It names the rule that raised it, if any, in
+a nullable `raised_by_rule_id` (set null when the rule is deleted), and it carries its
 acknowledgement (#728), as two nullable columns rather than a `status` enum, because an enum would
 force acknowledged and cleared into one column and make them mutually exclusive, which they are
-not. The **target design shape** adds `event_rule`, the owner arc, `status`, `opened_at`, and
-`resolved_at`.
+not. The **target design shape** adds the owner arc, `status`, `opened_at`, and `resolved_at`.
 
 <SchemaTable
   table="alarm"
   notes={{
-    severity: 'How bad; the rollup and the console sort on it',
+    severity: 'A severity level by name (FK, ON UPDATE CASCADE); the rollup and the console sort on its rank',
+    raised_by_rule_id: 'The event rule that raised it; NULL for a hand-raised alarm or once the rule is deleted',
     dedup_key: 'The condition identity (ADR-0075): one open alarm per (component, dedup_key), enforced by the partial unique index while open',
     raised_at: 'When the incident opened',
     cleared_at: 'NULL while open; the one-open index keys on it',
@@ -412,9 +434,35 @@ notify/command/wait/branch, `status`, `current_step`), driven by events and alar
 table exists today.
 :::
 
+The event rule is two tables: the authored **`event_rule`** row and the durable streak each rule
+holds per component and instance while it waits out a sustain, **`event_rule_state`**. The severity
+registry is **`severity_level`**.
+
+<SchemaTable
+  table="event_rule"
+  notes={{
+    sample_key: 'The property or metric it reads, by name; sample_lane records which registry',
+    fire_criteria: 'The comparison that opens an alarm ({op, value}); jsonb so the expression leaf drops in (#524)',
+    clear_criteria: 'NULL: clears on the negation of fire_criteria',
+    selector: 'Component types and components it watches; empty, every component',
+    severity: 'The level its alarms are raised at, by name',
+    version: 'Bumps on every change',
+  }}
+/>
+
+<SchemaTable
+  table="event_rule_state"
+  notes={{
+    pending: 'fire or clear: the action the samples point at',
+    since: 'The server receipt time the streak began; the sustain is measured from here',
+  }}
+/>
+
+<SchemaTable table="severity_level" notes={{ rank: 'Higher is worse; at or above high (40) an active alarm is an outage' }} />
+
 A command **is two real tables**: the `command_type` registry and the `command` invocation row with
-its computed settlement; see [commands](/architecture/commands/). The `event_rule` / `action_rule`
-config rows live with the [rule families](/architecture/calculations/).
+its computed settlement; see [commands](/architecture/commands/). The `action_rule` config row lives
+with the [rule families](/architecture/calculations/).
 
 ## Model-keyed command cascade
 

@@ -2007,5 +2007,54 @@
    "entity_kind": "location",
    "template": "{{title (words .Name)}}"
   }
+ ],
+ "severity_levels": [
+  {
+   "name": "info",
+   "label": "Info",
+   "color": "gray",
+   "rank": 10,
+   "outage": false
+  },
+  {
+   "name": "warning",
+   "label": "Warning",
+   "color": "yellow",
+   "rank": 20,
+   "outage": false
+  },
+  {
+   "name": "average",
+   "label": "Average",
+   "color": "orange",
+   "rank": 30,
+   "outage": false
+  },
+  {
+   "name": "high",
+   "label": "High",
+   "color": "red",
+   "rank": 40,
+   "outage": true
+  },
+  {
+   "name": "disaster",
+   "label": "Disaster",
+   "color": "darkred",
+   "rank": 50,
+   "outage": true
+  }
+ ],
+ "event_rules": [
+  {
+   "name": "reachability-lost",
+   "label": "Reachability lost",
+   "description": "An endpoint stopped answering its reachability probe.",
+   "sample_key": "endpoint-reachable",
+   "fire": "eq down",
+   "clear": "eq up",
+   "fire_sustain": "15s",
+   "severity": "high"
+  }
  ]
 }

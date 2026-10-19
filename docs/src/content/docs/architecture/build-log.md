@@ -6419,3 +6419,20 @@ rule opens its alarm after 15 seconds (the test asserts none opens in the first 
 whose one outage-impact role at quorum 1 the component fills, leaves healthy; plug it back and both recover. The
 #557 fix rode along: every alarm read carries the component's uuid and name, and the console links by the
 uuid again (the review caught stale fixtures hiding the break).
+
+### The rules page, the severity levels beside it, and the epic's docs (#819, slice #921)
+
+`/rules` went from a stub to the event rule registry: each rule's key, its criteria in words, its
+severity in the level's color and its live state, read from `GET /event-rules/{name}/state` (the alarms
+it holds open and its streaks waiting out a sustain), with a blade listing both linked to their
+components and create, edit, disable and delete in a drawer, validated in TypeScript; official rules are
+read-only, and a scoped-only caller is told why the list is empty. **Catalog > Actions > Severity** sits
+beside it, a read view of the levels worst first with rank, color and effect (authoring stays CLI and
+API, #930), and every alarm chip in the console renders through the registry. "Last evaluated" did not
+ship (#929, ADR-0144 point 7). Writing the docs caught the console teaching the wrong thing: the
+disable hint and the delete confirmation said a rule's open alarms stay open, where the server clears
+them; both now say so, under a test. The seed facts render the shipped levels and the official rule, so
+the alarms page and the new [rules guide](/guides/admin/rules/) no longer restate them by hand. The
+closed loop was walked on a simulated fleet with NET_ADMIN: unplugging a component opened the official
+rule's High alarm and degraded its system, replugging cleared both, and a rule created on `/rules` opened
+its alarm, in an operator level's label and color, when a simulated panel's input moved.

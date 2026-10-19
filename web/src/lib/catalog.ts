@@ -10,6 +10,7 @@ import { PROPERTIES_KEY, listProperties } from "./properties";
 import { EVENT_TYPES_KEY, listEventTypes } from "./event_types";
 import { COMMAND_TYPES_KEY, listCommandTypes } from "./command_types";
 import { EVENT_RULES_KEY, listEventRules } from "./event_rules";
+import { severityLevelsKey, listSeverityLevels } from "./severity";
 import { TAGS_KEY, listTags } from "./tags";
 import { type Me, can } from "./auth";
 import { type BladeLock } from "./blades";
@@ -72,10 +73,12 @@ export const CATALOG_GROUPS: CatalogGroup[] = [
   },
   {
     header: "Actions",
-    copy: "What you send or run: commands (the instructions you issue, with a target and a settle window), rules (what opens an alarm, and when), notifications (soon).",
+    copy: "What you send or run: commands (the instructions you issue, with a target and a settle window), rules (what opens an alarm, and when), severity (how bad that alarm is), notifications (soon).",
     entries: [
       { label: "Commands", path: "/command-types", gate: ["command_type", "read"], key: COMMAND_TYPES_KEY, list: listCommandTypes },
       { label: "Rules", path: "/rules", gate: ["rule", "read"], key: EVENT_RULES_KEY, list: listEventRules },
+      // The levels a rule raises at, beside the rules (#921).
+      { label: "Severity", path: "/severity-levels", gate: ["severity_level", "read"], key: severityLevelsKey, list: listSeverityLevels },
       { label: "Notifications", path: "/notifications", soon: true, issue: 618 },
     ],
   },

@@ -6524,6 +6524,12 @@ interface create form, since that name is the platform's to mint.
      the sample's timestamp, so the sample path and the sweep read one clock and a skewed node cannot
      waive a sustain.
 
+  7. **A rule's live state is its open alarms and pending streaks** (ruled during #921). The
+     definition's "last evaluated" is deferred (#929): a per-sample write was kept off the ingest path
+     in the #920 review, and a read-time newest-sample has no supporting index on the property lane
+     and is not the same fact. The severity levels surface beside the rules as a read view; the console
+     does not author them yet (#930).
+
   Rules are fleet-wide config, read and written with an all-scope grant, until a rule can be owned at a
   location or system tier.
 - **Context:** #606 left the rules vocabulary to the definition that builds it; #819's definition

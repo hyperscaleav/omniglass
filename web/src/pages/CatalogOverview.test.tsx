@@ -16,6 +16,7 @@ import { PROPERTIES_KEY } from "../lib/properties";
 import { EVENT_TYPES_KEY } from "../lib/event_types";
 import { COMMAND_TYPES_KEY } from "../lib/command_types";
 import { EVENT_RULES_KEY } from "../lib/event_rules";
+import { severityLevelsKey } from "../lib/severity";
 import { TAGS_KEY } from "../lib/tags";
 
 // The Catalog overview (/catalog): the landing the shell's Overview entry
@@ -48,6 +49,7 @@ const PRIMED: [readonly string[], number][] = [
   [EVENT_TYPES_KEY, 15],
   [COMMAND_TYPES_KEY, 6],
   [EVENT_RULES_KEY, 3],
+  [severityLevelsKey, 5],
   [TAGS_KEY, 9],
 ];
 
@@ -119,6 +121,10 @@ describe("CatalogOverview page", () => {
     expect(rules.textContent).toContain("3");
     expect(rules.textContent).not.toContain("soon");
     expect(rules.getAttribute("href")).toBe("/rules");
+    // The severity levels sit beside the rules that raise at them (#921).
+    const severity = entry(act, "Severity");
+    expect(severity.textContent).toContain("5");
+    expect(severity.getAttribute("href")).toBe("/severity-levels");
     const notifications = entry(act, "Notifications");
     expect(notifications.textContent).toContain("soon");
     expect(notifications.textContent).not.toMatch(/\d/);

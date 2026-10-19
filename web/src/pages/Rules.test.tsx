@@ -2,7 +2,7 @@ import { describe, it, expect, afterEach, vi } from "vitest";
 import { render, fireEvent, screen, waitFor, within } from "@solidjs/testing-library";
 import { Router, Route } from "@solidjs/router";
 import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
-import Rules from "./Rules";
+import Rules, { RULE_HINTS } from "./Rules";
 import { EVENT_RULES_KEY, ruleStateKey, type EventRule } from "../lib/event_rules";
 import { severityLevelsKey, type SeverityLevel } from "../lib/severity";
 import { PROPERTIES_KEY, type PropertyRow } from "../lib/properties";
@@ -132,6 +132,8 @@ describe("Rules page", () => {
     expect(within(pending).getByText(/^held \d+s$/)).toBeTruthy();
     expect(within(b).getByTestId("rule-fire").textContent).toBe("reads down for 15s");
     expect(within(b).getByText("Every component")).toBeTruthy();
+    // The level it raises at links to the severity registry beside the rules.
+    expect(within(b).getByRole("link", { name: "All levels" }).getAttribute("href")).toBe("/severity-levels");
   });
 
   it("caps a long live list at eight rows and counts the rest", async () => {
@@ -254,14 +256,25 @@ describe("Rules page", () => {
     await blade();
   });
 
+  // Disabling clears what the rule holds open (storage settleRuleWrite), and the
+  // hint beside Status says so.
+  it("teaches that disabling clears the alarms a rule holds open", () => {
+    expect(RULE_HINTS.enabled).toMatch(/clears the alarms it holds open/);
+    expect(RULE_HINTS.enabled).not.toMatch(/stays open/);
+  });
+
   it("deletes a custom rule from the kebab after a confirmation", async () => {
     const writes = catchWrites();
-    vi.spyOn(window, "confirm").mockReturnValue(true);
+    const ask = vi.spyOn(window, "confirm").mockReturnValue(true);
     mount();
     fireEvent.click(screen.getByText("Too hot"));
     const b = await blade();
     fireEvent.click(within(b).getByText("Delete"));
     await waitFor(() => expect(writes).toHaveLength(1));
+    // The server clears what the rule holds open before it goes (storage
+    // DeleteEventRule), so the confirmation says so rather than promising the
+    // alarms stay open.
+    expect(ask.mock.calls[0][0]).toMatch(/clears the alarms it holds open/);
     expect(writes[0].method).toBe("DELETE");
     expect(writes[0].url).toMatch(/\/event-rules\/room-too-hot$/);
   });

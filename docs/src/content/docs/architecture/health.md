@@ -18,7 +18,11 @@ Built today: the **`alarm`** table (component-local, impairing its component who
 on a `system_role`, the **rollup** from component through system to location, and the **recorded
 transition history**. Three reads serve it: the two explanations
 (`GET /systems/{name}/health` and `GET /locations/{name}/health`) and the bulk verdict read
-(`GET /systems:health`, #653), alongside the alarm write surface on a component. The console
+(`GET /systems:health`, #653), alongside the alarm write surface on a component, and alarms are
+also raised and cleared by [event rules](/architecture/alarms-actions/#the-event_rule) (#819), the
+official `reachability-lost` among them, so an unplugged component moves its system with nobody
+writing anything. Severity is a [ranked registry](/architecture/alarms-actions/#severity-a-registry-of-named-levels):
+`high` and above is an outage, and every severity chip renders the level's label and color. The console
 ships **HealthBadge**, **HealthHistory**, and **AlarmsPanel** on the component, system, and
 place detail views; healthy reads grey there and in the outline, and only trouble carries a
 hue (#872). See [implementation status](/architecture/status/).
@@ -271,16 +275,25 @@ verdict is `outage`, not the severity that produced it or whether it is merely `
 is how loudly to page somebody, impact is what the room lost. A component's verdict records on its
 own arc, so a component filling no role still carries accurate history.
 
-::::design[Target design (ADR-0050)]
-
 ## Where alarms come from
 
-Today an **operator or API caller** writes the alarm. The full model: an
-[`event_rule`](/architecture/alarms-actions/) watches samples, fires an event, and an alarm **opens**
-and stays open while its condition holds, closing on the paired clear event. A
-rule-opened alarm impairs its owner's own verdict exactly as a hand-raised one does (#626: it no
-longer names what it takes away; the component is impaired wholesale), and the
-acknowledgement-independence above holds for it identically.
+An alarm is written by an **operator or API caller**, or by an
+[**event rule**](/architecture/alarms-actions/#the-event_rule) (#819): a rule watches one sample key on
+the components it selects, opens an alarm when the value meets its fire criteria for its sustain, and
+clears it the same way, through the same guarded write and the same health recompute a hand-raised
+alarm uses. A rule-opened alarm impairs its owner's own verdict exactly as a hand-raised one does
+(#626: it names nothing it takes away; the component is impaired wholesale), and the
+acknowledgement-independence above holds for it identically. The official `reachability-lost` rule is
+what closes the monitoring loop with no operator in between: an endpoint whose verdict reads `down` for
+its sustain opens a `high` alarm, the component goes to outage and stops filling its roles, and the
+system reads whatever those roles' impact says; reading `up` clears it and the verdict recovers.
+
+::::design[Target design (ADR-0050)]
+
+## Where alarms come from, next
+
+In the full model a firing rule also writes the paired open and clear **events**, and alarms are
+owned on the same arc as samples, below.
 
 ### Alarms owned by a system or a location
 
