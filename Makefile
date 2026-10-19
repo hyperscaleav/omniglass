@@ -1,7 +1,7 @@
 # Local dev loop + the build/run flow for the single binary. Production deploy
 # is BYO Postgres; tests use ephemeral testcontainer Postgres.
 
-.PHONY: build build-web web image gen gen-proto gen-web test test-web test-short test-e2e bench clean-testcontainers tidy up down dev release-plan release-apply release-snapshot docs-shots docs-shots-check docs-shots-verify dev-sim bench-sim test-netadmin walkthrough-stack dev-sim-container test-walkthrough-stack walkthroughs test-walkthroughs
+.PHONY: build build-web web image gen gen-proto gen-web test test-web test-short test-e2e bench clean-testcontainers tidy up down dev release-plan release-apply release-snapshot docs-shots docs-shots-check docs-shots-verify docs-walkthroughs dev-sim bench-sim test-netadmin walkthrough-stack dev-sim-container test-walkthrough-stack walkthroughs test-walkthroughs
 
 # Build the single binary (no console embedded; serves the build-the-console
 # placeholder under /web).
@@ -289,6 +289,15 @@ docs-shots-check:
 # ids are unique. Fast enough to run on every PR (see .github/workflows/docs-shots.yml).
 docs-shots-verify:
 	node web/e2e/docs-shots-verify.mjs
+
+# Walkthroughs in the docs (#926): copy each walkthrough a page declares in its
+# `walkthroughs` frontmatter (manifest, poster, per-step stills) from
+# web/e2e/walkthroughs/out/<id>/ into docs/public/walkthroughs/<id>/, committed
+# like the screenshots. Record first (make walkthroughs ID=<id>). The mp4 stays
+# out of git; DOCS_WALKTHROUGH_VIDEO=1 copies it too, for a local build that
+# plays it (gitignored).
+docs-walkthroughs:
+	node docs/scripts/copy-walkthroughs.mjs
 
 # Full stack for a browser session: Postgres + the server with the console
 # embedded. Creates (idempotently) a dev owner with password "dev", also mints a

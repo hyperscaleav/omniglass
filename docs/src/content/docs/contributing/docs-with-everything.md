@@ -176,6 +176,16 @@ reach. Every capture logs what each mask resolved to (`mask 59x td 190x37 <- tex
 mask that lands on the wrong element shows up in the capture output rather than in a raster
 nobody diffs by hand.
 
+## Walkthroughs embed the same way
+
+A page that teaches an operator flow can embed its **walkthrough** (the recorded, captioned flow a
+PR carries as evidence) exactly as it embeds a screenshot: the id in `walkthroughs` frontmatter and
+`::walkthrough{#id}` where it belongs. The page declares only the id; the title, captions, poster and
+stills come from the recording, copied into `docs/public/walkthroughs/<id>/` by
+`make docs-walkthroughs`, so a re-recorded flow updates the docs by a copy, never by an edit. The
+video is not committed, and the embed renders it only when it is present at build time. Writing,
+recording, reviewing and embedding one is [walkthroughs](/contributing/walkthroughs/).
+
 ## Style
 
 - No em dashes. Use commas, colons, periods, or parentheses.

@@ -1,0 +1,44 @@
+{
+  "id": "sample-simulation",
+  "title": "Read a simulated component's status",
+  "description": "The Simulation page lists every component a simulator serves beside a node. Open one to see where it is served and what has reached it.",
+  "steps": [
+    {
+      "n": 1,
+      "kind": "goto",
+      "caption": "The Simulation page shows the simulated fleet, live.",
+      "still": "step-01.png"
+    },
+    {
+      "n": 2,
+      "kind": "wait",
+      "caption": "One row per simulated component. Hits counts how often collection has reached it.",
+      "still": "step-02.png"
+    },
+    {
+      "n": 3,
+      "kind": "click",
+      "caption": "Open a simulated component.",
+      "still": "step-03.png"
+    },
+    {
+      "n": 4,
+      "kind": "wait",
+      "caption": "Its status says where it is served, and how often collection has reached it.",
+      "still": "step-04.png"
+    },
+    {
+      "n": 5,
+      "kind": "press",
+      "caption": "Close the drawer to return to the fleet.",
+      "still": "step-05.png"
+    },
+    {
+      "n": 6,
+      "kind": "wait",
+      "caption": "Back on the fleet, every simulated component in view.",
+      "still": "step-06.png"
+    }
+  ],
+  "poster": "step-04.png"
+}

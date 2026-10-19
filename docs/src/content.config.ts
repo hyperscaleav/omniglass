@@ -30,11 +30,22 @@ const screenshot = z.object({
   mask: z.array(z.string()).default([]),
 });
 
+// A page declares the walkthroughs it embeds the same way (#926). The script is
+// web/e2e/walkthroughs/<id>.yaml and everything the embed shows (title,
+// captions, poster, stills) comes from the recorder's manifest, copied into
+// public/walkthroughs/<id>/ by `make docs-walkthroughs`, so the declaration is
+// only the id: restating a caption here would drift from the recording.
+const walkthrough = z.object({
+  // The walkthrough's id: its script, its out dir, and ::walkthrough{#<id>}.
+  id: z.string().regex(/^[a-z0-9][a-z0-9-]*$/),
+});
+
 const docs = defineCollection({
   loader: docsLoader(),
   schema: docsSchema({
     extend: z.object({
       screenshots: z.array(screenshot).optional(),
+      walkthroughs: z.array(walkthrough).optional(),
     }),
   }),
 });

@@ -6343,3 +6343,22 @@ Fork PRs are skipped, checkout persists no credential, and only the push step ho
 `ready` without the walkthrough comment), `/assess-ui` grades the per-step stills with a walkthrough
 rubric (the agent cannot watch video), and the PR template's Visual confirmation carries a Walkthrough
 line. The workflow's run against a real PR is proven on this epic's rollup PR, not by a local test.
+
+### Walkthroughs in the docs: the walkthrough directive (#884, slice 5: #926)
+
+A docs page embeds a walkthrough the way it embeds a screenshot: the id in `walkthroughs` frontmatter
+and `::walkthrough{#id}` in the prose. The two directives now share one resolver
+(`docs/src/plugins/frontmatter-directive.mjs`) and one pre-build gate (`docs/scripts/check-embeds.mjs`,
+formerly the screenshots-only check). The declaration is only the id: the embed renders the recorder's
+manifest, so the title, captions, poster and the folded per-step stills come from the recording, never a
+restated caption. `make docs-walkthroughs` copies the manifest, poster and stills of every declared
+walkthrough from `web/e2e/walkthroughs/out/<id>/` into `docs/public/walkthroughs/<id>/` (committed, like
+the screenshots), pruning stills from an older recording and failing on one that is unrecorded or failed.
+The mp4 is not committed: the embed renders the video and its link only when
+`docs/public/walkthroughs/<id>/<id>.mp4` is present at build time (gitignored; `DOCS_WALKTHROUGH_VIDEO=1`
+copies it for a local build), and a post-build check (`docs/scripts/check-walkthrough-links.mjs`) fails any
+built page referencing a walkthrough file the build did not ship, which catches a cached render that
+outlived its video. The docs lint suite gained the walkthrough lint (a script per declared id, every
+declaration embedded, every directive declared, the copied assets present, no orphan copies), the render
+is unit-tested in `make test-web`, and [simulate a fleet](/guides/operator/simulation/#see-it) embeds the
+sample. [Walkthroughs](/contributing/walkthroughs/) teaches writing, recording, reviewing and embedding one.

@@ -49,6 +49,9 @@ coverage.txt
 /web/test-results/
 # walkthrough recordings (make walkthroughs)
 /web/e2e/walkthroughs/out/
+# a walkthrough's video copied into the docs for a local build
+# (DOCS_WALKTHROUGH_VIDEO=1 make docs-walkthroughs); too large to commit
+/docs/public/walkthroughs/*/*.mp4
 
 
 # stale embedded-postgres dev dir (no longer produced)

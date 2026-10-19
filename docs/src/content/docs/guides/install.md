@@ -142,3 +142,5 @@ each target and ripples where it clicks, a highlight on the target and a caption
 still per step. A walkthrough is a test: a step whose result never appears fails the run, naming the
 step, its kind and what it waited for, and keeps the stills taken so far; so does a recording of 60
 seconds or more, or of 10 MB or more. `make test-walkthroughs` proves both failures.
+When a PR needs a walkthrough, how to review its stills, and how a docs page embeds one are in
+[walkthroughs](/contributing/walkthroughs/).

@@ -1,6 +1,8 @@
 ---
 title: Simulate a fleet
 description: "Running the simulator beside a node, watching the collector reach its simulated components, exercising one's API, adding one, and breaking one on purpose to watch monitoring react."
+walkthroughs:
+  - id: sample-simulation
 ---
 
 Omniglass can simulate the components it monitors. The simulator ships in the same binary: beside a
@@ -55,6 +57,8 @@ simulator stopped reporting). Anything you broke on it shows as a chip beside th
 (**unplugged**, or the delay and loss you set), with a note when the simulator could not apply it, and a row **lights up** each time the collector reaches the component: a
 poll, a connect, a ping. A row that never lights up is a component nothing is collecting from.
 When no simulator is connected the entry is hidden, since there is nothing to show.
+
+::walkthrough{#sample-simulation}
 
 From a terminal the same view is `omniglass simulation get`, and one node's is
 `omniglass node simulation <node>`.
