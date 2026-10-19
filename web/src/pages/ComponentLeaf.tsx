@@ -29,6 +29,7 @@ import { NODES_KEY, listNodes } from "../lib/nodes";
 import { PRODUCTS_KEY, listProducts } from "../lib/products";
 import { LEAF_FLEET_POLL_MS, LEAF_POLL_MS, collectionState, dotVerdict, identityRows, leafAlarmSince, membershipRows, vitalRows } from "../lib/component_leaf";
 import { entityLabel } from "../lib/entities";
+import { CLOCK_TICK_MS, createClock } from "../lib/clock";
 import { systemRoles, systemRolesKey } from "../lib/system_roles";
 import { componentCrumbs, isRoomOf, rolesOf } from "../lib/detail";
 import { can, useMe } from "../lib/auth";
@@ -127,10 +128,10 @@ export default function ComponentLeaf() {
     enabled: !!component(),
     refetchInterval: LEAF_POLL_MS,
   }));
-  // An age moves when the alarms are read again, not on unrelated
-  // re-renders (churn); before the poll it would also fall behind an alarm
-  // raised after the page opened, and read negative.
-  const pageNow = createMemo(() => Math.max(Date.now(), alarmsQ.dataUpdatedAt));
+  // Every age on the card reads one ticking clock: a poll that returns the
+  // same data changes nothing a query can see, so an age pinned to the data
+  // would keep reading fresh after its node died.
+  const pageNow = createClock(CLOCK_TICK_MS);
   const scale = useSeverity();
   const activeAlarms = createMemo(() => splitAlarms(alarmsQ.data ?? [], scale().levels).active);
   // The strip reads red when any active alarm is at an outage level (the
@@ -321,7 +322,7 @@ export default function ComponentLeaf() {
                 <ul class="flex flex-col gap-1">
                   <For each={reach.data!.endpoints}>
                     {(iface) => {
-                      const state = () => collectionState(iface, iface.node ? nodeByName().get(iface.node) : undefined);
+                      const state = () => collectionState(iface, iface.node ? nodeByName().get(iface.node) : undefined, pageNow());
                       return (
                         <li class="flex flex-wrap items-center gap-2 text-xs">
                           <span class="font-medium">{iface.endpoint}</span>
@@ -339,7 +340,7 @@ export default function ComponentLeaf() {
                             <span class="text-base-content/60">via {iface.node}</span>
                           </Show>
                           <Show when={lastSampleAt(iface)}>
-                            {(ts) => <span class="text-base-content/50">last sample {ageWords(ts())}</span>}
+                            {(ts) => <span class="text-base-content/50">last sample {ageWords(ts(), pageNow())}</span>}
                           </Show>
                           <span data-testid={`collection-${iface.endpoint}`} class="rounded border border-base-content/20 px-1.5 py-0.5">
                             {

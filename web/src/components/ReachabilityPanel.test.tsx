@@ -214,4 +214,23 @@ describe("the layer-7 rungs", () => {
     expect(screen.queryByText("no response")).toBeNull();
     expect(screen.queryByText("auth ok")).toBeNull();
   });
+
+  // The pill ages with a clock of its own, not with the data (#934): a poll
+  // returning the same answer must still let it go stale.
+  it("lets the pill go stale as time passes with the data unchanged", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "setInterval", "clearInterval", "Date"] });
+    try {
+      const t0 = new Date().toISOString();
+      const { getByText, queryByText } = mount({
+        component: "disp-3",
+        endpoints: [{ endpoint: "disp-3-tcp", transport: "tcp", node: "node-a", verdict: { value: "up", ts: t0 }, last_sample: t0, last_seen: t0, layers: [], history: [] }],
+      } as unknown as Reachability);
+      expect(getByText("responding")).toBeTruthy();
+      await vi.advanceTimersByTimeAsync(200_000);
+      expect(queryByText("responding")).toBeNull();
+      expect(getByText("stale")).toBeTruthy();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

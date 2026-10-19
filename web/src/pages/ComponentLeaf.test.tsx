@@ -69,13 +69,13 @@ const reach: Reachability = {
 
 const nodes: Node[] = [{ name: "edge-1", enrolled: true, last_heartbeat_at: iso(5), tags: {} } as Node];
 
-function mount(path = `/web/components/${uuidFor("cf-c-bar")}`, memberships?: unknown[], component: Component = bar, meOverride: Me = me, alarms?: unknown[]) {
+function mount(path = `/web/components/${uuidFor("cf-c-bar")}`, memberships?: unknown[], component: Component = bar, meOverride: Me = me, alarms?: unknown[], seed?: { reach?: Reachability; nodes?: Node[] }) {
   const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
   seedSeverityLevels(qc);
   qc.setQueryData([...FLEET_VIEW_KEY], view);
   qc.setQueryData([...COMPONENTS_KEY], [component]);
   qc.setQueryData([...PRODUCTS_KEY], [{ id: uuidFor("cf-p"), name: "kestrel-vroom", label: "Kestrel VRoom", vendor: "kestrel", driver: "kestrel-http" }]);
-  qc.setQueryData([...NODES_KEY], nodes);
+  qc.setQueryData([...NODES_KEY], seed?.nodes ?? nodes);
   qc.setQueryData([...LOCATIONS_KEY], []);
   qc.setQueryData([...LOCATION_TYPES_KEY], [{ id: uuidFor("cft-room"), name: "room", label: "Room", allowed_parent_types: [] }]);
   qc.setQueryData([...systemRolesKey(uuidFor("cf-s-a"))], [{ name: "conf-bar", label: "Conferencing Bar", assigned_to: ["videobar-1"] }]);
@@ -86,7 +86,7 @@ function mount(path = `/web/components/${uuidFor("cf-c-bar")}`, memberships?: un
     { component: "videobar-1", system: "boardroom", primary: true, system_count: 2 },
     { component: "videobar-1", system: "overflow", primary: false, system_count: 2 },
   ]);
-  qc.setQueryData([...REACHABILITY_KEY(uuidFor("cf-c-bar"))], reach);
+  qc.setQueryData([...REACHABILITY_KEY(uuidFor("cf-c-bar"))], seed?.reach ?? reach);
   qc.setQueryData([...componentAlarmsKey(uuidFor("cf-c-bar"))], alarms ?? [
     { id: "al-1", component: "videobar-1", component_id: uuidFor("cf-c-bar"), severity: "high", message: "No route to host", raised_at: iso(9600), active: true, acknowledged: false },
     { id: "al-0", component: "videobar-1", component_id: uuidFor("cf-c-bar"), severity: "warning", message: "Cleared last week", raised_at: iso(600000), active: false, acknowledged: true },
@@ -377,5 +377,22 @@ describe("the component leaf refreshes (#934)", () => {
     } finally {
       focusManager.setFocused(undefined);
     }
+  });
+
+  // A poll that returns the same data changes nothing TanStack can see, so
+  // the card's ages must move with a clock of their own: a node that dies
+  // leaves the last answer standing, and only time says it is old.
+  it("ages the card with the clock when the polled data stays the same", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "setInterval", "clearInterval", "Date"] });
+    const t0 = new Date().toISOString();
+    const frozen = { component: "videobar-1", endpoints: [{ endpoint: "ssh", transport: "ssh", node: "edge-1", verdict: { value: "up", ts: t0 }, last_sample: t0, last_seen: t0, layers: [], history: [] }] };
+    // Every read stays in flight: nothing the queries hold ever changes, so
+    // only a clock can move the card.
+    vi.spyOn(globalThis, "fetch").mockImplementation(() => new Promise<Response>(() => {}));
+    // Seeded with exactly what every poll returns, so no read ever changes.
+    mount(undefined, undefined, undefined, undefined, [], { reach: frozen as unknown as Reachability, nodes: [{ name: "edge-1", enrolled: true, last_heartbeat_at: t0, tags: {} } as Node] });
+    expect(screen.getByTestId("collection-ssh").textContent).toBe("collecting");
+    await vi.advanceTimersByTimeAsync(200_000);
+    expect(screen.getByTestId("collection-ssh").textContent).toBe("node offline");
   });
 });

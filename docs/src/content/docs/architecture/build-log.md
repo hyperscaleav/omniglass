@@ -6600,3 +6600,11 @@ turns to Overview and waits there for the samples, and its poster now shows both
 (#933). It records in 51s to 56s. Watch a rule raise an alarm still ends on the open alarm and the
 system it moved: its wait is the probe's detection, the sustain and the sweep, not the component's view,
 and the replug and the clear would add about 12s to a recording that runs 53s to 56s.
+
+### The component view's review follow-ups (#931 to #934)
+
+Every age on a component's view, and in its Endpoints panel, now reads one ticking clock (a
+`createClock` primitive, a second's grain) rather than the time the data last changed: a poll that
+returns the same answer changes nothing a query can see, so a node that died would have left its
+endpoint reading "collecting, 4 s ago" indefinitely. Tests hold every read in flight, advance the clock,
+and watch the card turn to node offline and the pill to stale.

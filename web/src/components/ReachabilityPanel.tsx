@@ -4,6 +4,7 @@ import { ChevronRight, Plus, Sliders } from "./icons";
 import Button from "./Button";
 import StateStrip from "./StateStrip";
 import { rel } from "../lib/format";
+import { CLOCK_TICK_MS, createClock } from "../lib/clock";
 import { entityLabel } from "../lib/entities";
 import { ENDPOINTS_KEY, listEndpoints } from "../lib/endpoints";
 import {
@@ -48,9 +49,9 @@ function segClass(value: string): string {
 // hint. A single-value strip (or none) still reads correctly. The bar itself is the
 // shared StateStrip primitive, the same one the health history draws.
 function AvailabilityStrip(p: { iface: ReachEndpoint }) {
-  const now = Date.now();
-  const segs = createMemo(() => segments(p.iface.history, p.iface.verdict, now));
-  const up = createMemo(() => uptime(p.iface.history, p.iface.verdict, now));
+  const now = createClock(CLOCK_TICK_MS);
+  const segs = createMemo(() => segments(p.iface.history, p.iface.verdict, now()));
+  const up = createMemo(() => uptime(p.iface.history, p.iface.verdict, now()));
   return (
     <StateStrip segments={segs()} tone={segClass} title="Availability over the recent window">
       <Show when={up() !== null} fallback={<span class="text-[11px] text-base-content/40">no data</span>}>
@@ -64,8 +65,8 @@ function AvailabilityStrip(p: { iface: ReachEndpoint }) {
 // the "why" reason line for a down endpoint. It is the pedagogical payoff: the
 // verdict is the AND of the layers, shown as the layers.
 function GateBreakdown(p: { iface: ReachEndpoint }) {
-  const now = Date.now();
-  const why = createMemo(() => reason(p.iface, now));
+  const now = createClock(CLOCK_TICK_MS);
+  const why = createMemo(() => reason(p.iface, now()));
   const verdictOk = createMemo(() => p.iface.verdict?.value === "up");
   return (
     <div class="flex flex-col gap-1.5 border-t border-base-300 bg-base-200/40 px-3 py-2.5 text-[12px]">
@@ -99,7 +100,8 @@ function GateBreakdown(p: { iface: ReachEndpoint }) {
 
 function EndpointRow(p: { iface: ReachEndpoint; manageId?: string; onManage?: (id: string) => void }) {
   const [open, setOpen] = createSignal(false);
-  const word = createMemo(() => endpointWord(p.iface));
+  const now = createClock(CLOCK_TICK_MS);
+  const word = createMemo(() => endpointWord(p.iface, now()));
   const pill = createMemo(() => PILL[word()]);
   const canManage = () => !!(p.manageId && p.onManage);
   return (
@@ -154,7 +156,7 @@ function EndpointRow(p: { iface: ReachEndpoint; manageId?: string; onManage?: (i
           <div class="border-t border-base-300 bg-base-200/40 px-3 py-1.5 text-[11px] text-base-content/45">
             probed by <span class="font-data text-base-content/60">{p.iface.node}</span>
             <Show when={lastSampleAt(p.iface)}>
-              {(ts) => <>{" "}· last checked {rel(ts())}</>}
+              {(ts) => <>{" "}· last checked {rel(ts(), now())}</>}
             </Show>
           </div>
         </Show>
