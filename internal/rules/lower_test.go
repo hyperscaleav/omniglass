@@ -40,7 +40,16 @@ func TestLowerForms(t *testing.T) {
 		{LaneMetric, "float", short(t, "ge", 80), `value >= 80.0`},
 		{LaneMetric, "int", short(t, "gt", 0.5), `value > 0.5`},
 		{LaneMetric, "float", short(t, "lt", -5), `value < -5.0`},
-		{LaneMetric, "float", short(t, "le", 1e21), `value <= 1e+21`},
+		{LaneMetric, "float", short(t, "le", 1e21), `value <= 1000000000000000000000.0`},
+		{LaneMetric, "float", Criteria{Op: "gt", Value: []byte("2.5e-7")}, `value > 0.00000025`},
+		{LaneMetric, "float", Criteria{Op: "gt", Value: []byte("1.50E1")}, `value > 15.0`},
+		{LaneMetric, "float", Criteria{Op: "gt", Value: []byte("1.50e-1")}, `value > 0.150`},
+		{LaneMetric, "float", Criteria{Op: "gt", Value: []byte("80.50")}, `value > 80.50`},
+		{LaneMetric, "float", Criteria{Op: "gt", Value: []byte("-0")}, `value > 0.0`},
+		{LaneMetric, "float", Criteria{Op: "gt", Value: []byte("-0.00")}, `value > 0.00`},
+		{LaneMetric, "float", Criteria{Op: "gt", Value: []byte("0.5")}, `value > 0.5`},
+		{LaneProperty, "string", short(t, "eq", "line\u2028sep\u2029para"), "value == \"line\u2028sep\u2029para\""},
+		{LaneProperty, "string", short(t, "eq", "c\x01t\x1f<&>"), `value == "c\u0001t\u001f<&>"`},
 		{LaneMetric, "float", short(t, "eq", 0), `value == 0.0`},
 		{LaneMetric, "float", Criteria{Op: "ne", Value: []byte("12345678901234567890")}, `value != 12345678901234567890.0`},
 	} {
@@ -104,6 +113,9 @@ func TestLoweringDecidesIdentically(t *testing.T) {
 		{LaneProperty, "string", []string{"eq", "ne"}, hs, hs},
 		{LaneProperty, "json", []string{"eq", "ne"}, hs, hs},
 		{LaneProperty, "bool", []string{"eq", "ne"}, []any{"true", "false", "on", ""}, []any{"true", "false"}},
+		// The one divergence (definition decision 3): a bool property sample
+		// that is not exactly true or false holds, where the old evaluator
+		// compared it as text. TestBoolDivergence pins it.
 		{LaneMetric, "float", []string{"eq", "ne", "gt", "ge", "lt", "le"}, nums, samples},
 		{LaneMetric, "int", []string{"eq", "ne", "gt", "ge", "lt", "le"}, nums, samples},
 	}
@@ -142,6 +154,43 @@ func TestLoweringDecidesIdentically(t *testing.T) {
 		}
 	}
 	t.Logf("%d decisions compared", n)
+}
+
+// The approved divergence, pinned: a bool property's sample that is not
+// exactly "true" or "false" holds the rule (an error the caller holds on),
+// where the old evaluator compared its text.
+func TestBoolDivergence(t *testing.T) {
+	for _, op := range []string{"eq", "ne"} {
+		for _, v := range []string{"true", "false", "on"} {
+			j, err := Compile(LaneProperty, "bool", short(t, op, v), nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, s := range []string{"on", "1", "", "TRUE", "True", "yes"} {
+				if _, err := j.Decide(Sample{Value: s}); err == nil {
+					t.Errorf("bool %s %q, sample %q decided; it holds", op, v, s)
+				}
+				if _, oldErr := legacyDecide(legacyCriteria{Op: op, Value: short(t, op, v).Value}, nil, s); oldErr != nil {
+					t.Errorf("the old evaluator refused %q; the divergence is only that the new one holds", s)
+				}
+			}
+		}
+	}
+}
+
+// A compile error says whether the criterion was given as an expression or
+// as the short form, so the API locates it at the expr or at the criteria.
+func TestCriteriaErrorKnowsTheForm(t *testing.T) {
+	_, err := Compile(LaneMetric, "float", Criteria{Op: "gt", Value: []byte("1")}, &Criteria{Expr: "value +"})
+	var ce *CriteriaError
+	if !errors.As(err, &ce) || ce.Field != "clear_criteria" || ce.Short {
+		t.Errorf("an expression's error: %+v", ce)
+	}
+	big := strings.Repeat("x", 4090)
+	_, err = Compile(LaneProperty, "string", short(t, "eq", big), nil)
+	if !errors.As(err, &ce) || ce.Field != "fire_criteria" || !ce.Short || !errors.Is(err, expression.ErrSourceTooLong) {
+		t.Errorf("an over-cap short form's error: %+v (%v)", ce, err)
+	}
 }
 
 // A non-bool expression, an unknown binding, or a parse error is refused at

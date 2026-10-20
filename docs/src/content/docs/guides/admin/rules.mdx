@@ -98,7 +98,9 @@ sits.
   never match), and a metric value must be a plain decimal (`40`, `-2.5`). The comparison is stored
   as the expression it means (`value == "down"`, `value > 40.0`); a rule whose criteria were written
   as a richer expression over the API or CLI shows that expression here instead, and saving the form
-  keeps it as written.
+  keeps it as written. A rule whose criteria no longer compile (its key's data type changed, say)
+  reads **criteria do not compile** in the list, and its blade says which criteria, where, and why;
+  it judges nothing until they are rewritten.
 - **For at least**: the **fire sustain**, a duration (`30s`, `2m`). The value has to keep meeting the
   criteria this long before the alarm opens; one sample that does not starts the wait over. The
   sustain is timed from the server's receipt of the first sample that meets the criteria and judged

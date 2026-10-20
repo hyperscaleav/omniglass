@@ -1876,6 +1876,29 @@ components:
       required:
         - expr
       type: object
+    CriteriaErrorBody:
+      additionalProperties: false
+      properties:
+        column:
+          description: The 1-based column of the fault, when it has one
+          format: int64
+          type: integer
+        field:
+          description: Which criteria
+          enum:
+            - fire_criteria
+            - clear_criteria
+          type: string
+        line:
+          description: The 1-based line of the fault, when it has one
+          format: int64
+          type: integer
+        message:
+          type: string
+      required:
+        - field
+        - message
+      type: object
     CriteriaInput:
       additionalProperties: false
       properties:
@@ -2447,6 +2470,9 @@ components:
           description: How many conditions the rule holds in force right now, one per component and instance, whether or not it raises an alarm (GET /event-rules/{name}/state lists them)
           format: int64
           type: integer
+        criteria_error:
+          $ref: "#/components/schemas/CriteriaErrorBody"
+          description: "Why the rule's stored criteria do not compile (its key's data type changed under them, or a row the backfill left in short form); absent when they compile. While present the rule holds: it judges nothing"
         description:
           type: string
         enabled:
@@ -2538,6 +2564,9 @@ components:
           type:
             - array
             - "null"
+        criteria_error:
+          $ref: "#/components/schemas/CriteriaErrorBody"
+          description: Why the rule's stored criteria do not compile; absent when they compile. While present the rule holds
         last_judged_at:
           description: When an ingested sample was last judged by the rule, to within 5s; absent when it never has been
           format: date-time

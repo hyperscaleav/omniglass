@@ -36,6 +36,7 @@ import {
   EVENT_RULES_KEY,
   OPS_BY_LANE,
   clearWords,
+  criteriaErrorWords,
   createBody,
   createEventRule,
   defaultSeverity,
@@ -225,10 +226,21 @@ export default function Rules(): JSX.Element {
       label: "Criteria",
       width: "230px",
       cell: (r) => (
-        <span class="flex min-w-0 max-w-44 flex-col text-[12px] leading-snug" title={`${fireWords(r, unit(r))}, ${clearWords(r, unit(r))}`}>
-          <span class="truncate">{fireWords(r, unit(r))}</span>
-          <span class="truncate text-base-content/50">{clearWords(r, unit(r))}</span>
-        </span>
+        <Show
+          when={r.criteria_error}
+          fallback={
+            <span class="flex min-w-0 max-w-44 flex-col text-[12px] leading-snug" title={`${fireWords(r, unit(r))}, ${clearWords(r, unit(r))}`}>
+              <span class="truncate">{fireWords(r, unit(r))}</span>
+              <span class="truncate text-base-content/50">{clearWords(r, unit(r))}</span>
+            </span>
+          }
+        >
+          {(e) => (
+            <span data-criteria-error={r.name} class="text-[12px] leading-snug text-error" title={`${criteriaErrorWords(e())}: ${e().message}`}>
+              criteria do not compile
+            </span>
+          )}
+        </Show>
       ),
     },
     { key: "severity", label: "Severity", width: "88px", sortVal: (r) => r.severity ?? "", cell: (r) => severityCell(r.severity) },
@@ -541,6 +553,16 @@ function RuleBladeBody(p: { name: string }): JSX.Element {
 
           <section class="flex flex-col gap-2">
             <Eyebrow label="Criteria" hint={RULE_HINTS.criteria} />
+            <Show when={r().criteria_error}>
+              {(e) => (
+                <div role="alert" data-testid="rule-criteria-error" class="alert alert-error alert-soft text-sm">
+                  <span>
+                    The criteria do not compile ({criteriaErrorWords(e())}): <span class="font-data">{e().message}</span>. The rule
+                    holds, judging nothing, until they are rewritten.
+                  </span>
+                </div>
+              )}
+            </Show>
             <div class="grid grid-cols-[auto_1fr] items-baseline gap-x-3 gap-y-1 text-sm">
               <span class="text-[12px] text-base-content/50">Fires</span>
               <span data-testid="rule-fire">{fireWords(r(), unit(r()))}</span>

@@ -1001,6 +1001,9 @@ type EventRuleLive struct {
 	// LastJudgedAt is when the rule last judged a sample, to within
 	// ruleJudgedEvery; nil when it never has.
 	LastJudgedAt *time.Time
+	// CriteriaError is why the rule's criteria do not compile; nil when
+	// they do.
+	CriteriaError *CriteriaFault
 }
 
 // EventRuleState reads a rule's live state by name. The rule reads like a
@@ -1012,7 +1015,8 @@ func (p *PG) EventRuleState(ctx context.Context, name string, visible scope.Set)
 		return nil, err
 	}
 	prefix := ruleDedupKey(r.Name, "")
-	out := &EventRuleLive{Conditions: []RuleCondition{}, Open: []RuleOpenAlarm{}, Pending: []RuleStreak{}, LastJudgedAt: r.LastJudgedAt}
+	out := &EventRuleLive{Conditions: []RuleCondition{}, Open: []RuleOpenAlarm{}, Pending: []RuleStreak{}, LastJudgedAt: r.LastJudgedAt,
+		CriteriaError: r.CriteriaError}
 	f := newReadFilter(componentTable, visible, 2)
 	args := append([]any{r.ID}, f.Args...)
 	rows, err := p.pool.Query(ctx, f.With+`select a.id::text, a.component_id::text, c.name, a.dedup_key, a.severity, a.raised_at

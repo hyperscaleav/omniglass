@@ -5403,6 +5403,24 @@ export interface components {
             /** @description The criterion, an expression over the sample (value, key, instance, component.name, component.type) that yields true or false, e.g. value > 80 && instance != "aux" */
             expr: string;
         };
+        CriteriaErrorBody: {
+            /**
+             * Format: int64
+             * @description The 1-based column of the fault, when it has one
+             */
+            column?: number;
+            /**
+             * @description Which criteria
+             * @enum {string}
+             */
+            field: "fire_criteria" | "clear_criteria";
+            /**
+             * Format: int64
+             * @description The 1-based line of the fault, when it has one
+             */
+            line?: number;
+            message: string;
+        };
         CriteriaInput: {
             /** @description The criterion as an expression over the sample (value, key, instance, component.name, component.type), yielding true or false; give this or op and value */
             expr?: string;
@@ -5740,6 +5758,8 @@ export interface components {
              * @description How many conditions the rule holds in force right now, one per component and instance, whether or not it raises an alarm (GET /event-rules/{name}/state lists them)
              */
             conditions_in_force: number;
+            /** @description Why the rule's stored criteria do not compile (its key's data type changed under them, or a row the backfill left in short form); absent when they compile. While present the rule holds: it judges nothing */
+            criteria_error?: components["schemas"]["CriteriaErrorBody"];
             description?: string;
             enabled: boolean;
             /** @description When the sample meets this for fire_sustain, the rule's condition starts (and it opens an alarm when it names a severity) */
@@ -5797,6 +5817,8 @@ export interface components {
             readonly $schema?: string;
             /** @description The conditions the rule holds in force, informational or not */
             conditions: components["schemas"]["RuleConditionBody"][] | null;
+            /** @description Why the rule's stored criteria do not compile; absent when they compile. While present the rule holds */
+            criteria_error?: components["schemas"]["CriteriaErrorBody"];
             /**
              * Format: date-time
              * @description When an ingested sample was last judged by the rule, to within 5s; absent when it never has been

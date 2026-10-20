@@ -212,6 +212,8 @@ func TestCriteriaBackfill(t *testing.T) {
 		name, key, lane, dataType string
 		fire, clear               string
 	}
+	// Its lowering is past the source cap: left in short form.
+	overCap := map[string]bool{"over-cap": true}
 	olds := []old{
 		{"reach", "endpoint-reachable", "property", "string", `{"op":"eq","value":"down"}`, `{"op":"eq","value":"up"}`},
 		{"hot", "room-temperature", "metric", "float", `{"op":"gt","value":40}`, ``},
@@ -220,6 +222,10 @@ func TestCriteriaBackfill(t *testing.T) {
 		{"door", "door-open", "property", "bool", `{"op":"eq","value":"true"}`, `{"op":"ne","value":"on"}`},
 		{"blob", "doc", "property", "json", `{"op":"eq","value":"{\"a\":1}"}`, ``},
 		{"gone-key", "no-such-key", "property", "", `{"op":"eq","value":"x"}`, ``},
+		{"exp-big", "room-temperature", "metric", "float", `{"op":"gt","value":1e21}`, `{"op":"lt","value":1.50E1}`},
+		{"exp-small", "room-temperature", "metric", "float", `{"op":"le","value":2.5e-7}`, `{"op":"ge","value":-0}`},
+		{"line-sep", "endpoint-reachable", "property", "string", "{\"op\":\"eq\",\"value\":\"a\u2028b\u2029c\"}", ``},
+		{"over-cap", "endpoint-reachable", "property", "string", `{"op":"eq","value":"` + strings.Repeat("x", 4090) + `"}`, ``},
 	}
 	for _, o := range olds {
 		mustExec(t, conn, `insert into event_rule (name, sample_key, sample_lane, fire_criteria, clear_criteria, severity, fire_event_type_id)
@@ -259,6 +265,14 @@ func TestCriteriaBackfill(t *testing.T) {
 	check := func(when string) {
 		t.Helper()
 		for _, o := range olds {
+			if overCap[o.name] {
+				// Left as it was: the migration does not fail, and the rule
+				// shows its criteria error (below).
+				if got := stored(o.name, "fire_criteria"); got == nil || got.Op != "eq" || got.Expr != "" {
+					t.Errorf("%s: the over-cap rule's fire was rewritten (op %q, expr of %d bytes), want its short form kept", when, got.Op, len(got.Expr))
+				}
+				continue
+			}
 			if got := stored(o.name, "fire_criteria"); got == nil || !eqC(*got, want(o, o.fire)) {
 				t.Errorf("%s: %s fire %+v, want %+v", when, o.name, got, want(o, o.fire))
 			}
@@ -310,6 +324,16 @@ func TestCriteriaBackfill(t *testing.T) {
 	if err != nil || again.Version != official.Version || !eqC(again.FireCriteria, official.FireCriteria) {
 		t.Fatalf("re-seeding moved the official rule: %+v (%v), was version %d", again, err, official.Version)
 	}
+	over, err := gw.GetEventRule(ctx, "over-cap", all)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if over.CriteriaError == nil || over.CriteriaError.Field != "fire_criteria" || !strings.Contains(over.CriteriaError.Message, "4096") {
+		t.Fatalf("the over-cap rule's criteria error = %+v, want fire_criteria past the 4096-byte cap", over.CriteriaError)
+	}
+	if reach, err := gw.GetEventRule(ctx, "reach", all); err != nil || reach.CriteriaError != nil {
+		t.Fatalf("a rule that compiles shows a criteria error %+v (%v)", reach.CriteriaError, err)
+	}
 	product := "generic-device"
 	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "up-1", ProductName: &product}, all, all, all, all); err != nil {
 		t.Fatal(err)
@@ -359,3 +383,69 @@ func eqC(a, b rules.Criteria) bool {
 }
 
 func ptrBool(b bool) *bool { return &b }
+
+// TestCriteriaThatCannotCompileAreVisible proves a stored criterion that no
+// longer compiles (here, its property's data type changed under it) is
+// visible and cheap: the rule's list entry, get and state carry the error
+// (field, line, column, message), the rule holds, and the failed compile is
+// cached per rule version like a success, not retried per sample.
+func TestCriteriaThatCannotCompileAreVisible(t *testing.T) {
+	f := newHealthFixture(t)
+	ctx := context.Background()
+	if _, err := f.gw.CreateEventRule(ctx, "", storage.EventRuleSpec{Name: "was-text", SampleKey: "endpoint-reachable",
+		Fire: criteria("eq", "down"), Severity: "high", FireEventType: "condition-started"}, f.all); err != nil {
+		t.Fatal(err)
+	}
+	mustExec(t, f.conn, `update property_type set data_type = 'bool' where name = 'endpoint-reachable'`)
+
+	// The official reachability rule reads the same key, so two rules'
+	// criteria stop compiling: the first batch compiles each once, at most.
+	var before int64
+	for i := 0; i < 2; i++ {
+		if i == 1 {
+			before = rules.CompileCount()
+		}
+		var ws []storage.PropertySampleWrite
+		for j := 0; j < 20; j++ {
+			ws = append(ws, storage.PropertySampleWrite{OwnerKind: "component", OwnerID: "bar-1", Key: "endpoint-reachable",
+				Instance: "tcp", Value: "true", TS: time.Now().Add(time.Duration(j) * time.Millisecond)})
+		}
+		if err := f.gw.InsertPropertySamples(ctx, ws); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if n := rules.CompileCount() - before; n != 0 {
+		t.Fatalf("a second batch of 20 samples against rules that cannot compile compiled %d times, want 0 (the error is cached)", n)
+	}
+	if n := count(t, f.conn, `select count(*) from alarm a join event_rule r on r.id = a.raised_by_rule_id where r.name = 'was-text'`); n != 0 {
+		t.Fatalf("a rule that cannot compile opened %d alarms", n)
+	}
+
+	got, err := f.gw.GetEventRule(ctx, "was-text", f.all)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ce := got.CriteriaError
+	if ce == nil || ce.Field != "fire_criteria" || ce.Line != 1 || ce.Column == 0 || ce.Message == "" {
+		t.Fatalf("get: criteria error %+v, want fire_criteria with its line, column and message", ce)
+	}
+	list, err := f.gw.ListEventRules(ctx, f.all)
+	if err != nil {
+		t.Fatal(err)
+	}
+	seen := false
+	for _, r := range list {
+		if r.Name == "was-text" {
+			seen = r.CriteriaError != nil && *r.CriteriaError == *ce
+		} else if r.CriteriaError != nil && r.Name != "reachability-lost" {
+			t.Errorf("%s lists a criteria error %+v", r.Name, r.CriteriaError)
+		}
+	}
+	if !seen {
+		t.Fatal("the list does not carry the rule's criteria error")
+	}
+	st, err := f.gw.EventRuleState(ctx, "was-text", f.all)
+	if err != nil || st.CriteriaError == nil || *st.CriteriaError != *ce {
+		t.Fatalf("state: criteria error %+v (%v), want %+v", st, err, ce)
+	}
+}

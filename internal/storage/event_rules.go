@@ -64,12 +64,26 @@ type EventRule struct {
 	// to within ruleJudgedEvery; nil when it never has. A fact about the
 	// rule, naming no component.
 	LastJudgedAt *time.Time `json:"-"`
+	// CriteriaError is why the rule's stored criteria do not compile (a
+	// property's data type changed under them, a row the backfill left in
+	// short form); nil when they compile. Read beside the rule, never stored.
+	CriteriaError *CriteriaFault `json:"-"`
 	// The event types' ids, resolved from their names on a write.
 	fireTypeID, clearTypeID string
 	// dataType is the sample key's property data type (string, bool, json)
 	// on the property lane, "" on the metric lane or for a key that is gone:
 	// it types the value the criteria read (#957).
 	dataType string
+}
+
+// CriteriaFault is a rule's criteria compile error as a reader sees it:
+// which criteria, the 1-based line and column (0 when it has none), and
+// the message.
+type CriteriaFault struct {
+	Field   string
+	Line    int
+	Column  int
+	Message string
 }
 
 // EventRuleSpec is a rule to create; its selector's components may be
@@ -444,6 +458,7 @@ func (p *PG) ListEventRules(ctx context.Context, visible scope.Set) ([]EventRule
 			return nil, err
 		}
 		r.OpenAlarms, r.PendingStreaks, r.ConditionsInForce, r.LastJudgedAt = open, pending, inForce, judged
+		r.CriteriaError = p.criteriaFault(r)
 		out = append(out, r)
 	}
 	return out, rows.Err()
@@ -477,6 +492,7 @@ func (p *PG) GetEventRule(ctx context.Context, name string, visible scope.Set) (
 		return nil, fmt.Errorf("storage: get event rule %q: %w", name, err)
 	}
 	r.LastJudgedAt = judged
+	r.CriteriaError = p.criteriaFault(r)
 	if err := countRuleState(ctx, p.pool, &r, visible); err != nil {
 		return nil, err
 	}

@@ -116,13 +116,22 @@ export function shortForm(c: RuleCriteria | null | undefined): ShortForm | null 
   if (!m) return null;
   const lit = m[2];
   if (lit === "true" || lit === "false") return { op: SYMBOL_OP[m[1]], value: lit };
-  if (!/^("(?:[^"\\]|\\.)*"|-?\d+(\.\d+)?([eE][+-]?\d+)?)$/.test(lit)) return null;
+  // A plain decimal only: the lowering writes numbers as Postgres does, with
+  // no exponent, so a literal with one is an author's expression.
+  if (!/^("(?:[^"\\]|\\.)*"|-?\d+(\.\d+)?)$/.test(lit)) return null;
   try {
     const v: unknown = JSON.parse(lit);
     return typeof v === "string" || typeof v === "number" ? { op: SYMBOL_OP[m[1]], value: v } : null;
   } catch {
     return null;
   }
+}
+
+// criteriaErrorWords says where a rule's criteria failed to compile: "fire
+// criteria, line 1, column 7", the position only when it has one.
+export function criteriaErrorWords(e: NonNullable<EventRule["criteria_error"]>): string {
+  const where = e.field === "clear_criteria" ? "clear criteria" : "fire criteria";
+  return e.line ? `${where}, line ${e.line}, column ${e.column}` : where;
 }
 
 // criteriaPhrase is the value half of a criterion: "down", "anything but up",
@@ -224,11 +233,12 @@ export function draftFromRule(r: EventRule): RuleDraft {
     lane: r.sample_lane,
     fireOp: fire?.op ?? "eq",
     fireValue: fire ? valueText(fire.value) : "",
-    fireExpr: fire ? null : r.fire_criteria.expr,
+    // An empty expression is no expression: the builder owns it.
+    fireExpr: fire ? null : r.fire_criteria.expr || null,
     clearMode: r.clear_criteria ? "custom" : "opposite",
     clearOp: clear?.op ?? "eq",
     clearValue: clear ? valueText(clear.value) : "",
-    clearExpr: r.clear_criteria && !clear ? r.clear_criteria.expr : null,
+    clearExpr: r.clear_criteria && !clear ? r.clear_criteria.expr || null : null,
     fireSustain: sustainWords(r.fire_sustain),
     clearSustain: sustainWords(r.clear_sustain),
     severity: r.severity ?? "",

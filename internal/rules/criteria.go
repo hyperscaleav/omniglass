@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 )
 
@@ -37,17 +38,23 @@ var symbols = map[string]string{"eq": "==", "ne": "!=", "gt": ">", "ge": ">=", "
 
 // Lower turns a criterion into its expression form; an expression is
 // returned as it is. Pure, and mirrored by the backfill migration that
-// rewrote the stored rules (db/migrations/20261021040000), so the two
-// produce the same source for every stored short form:
+// rewrote the stored rules (db/migrations/20261021040000): the two write
+// byte-identical source for every stored short form (TestCriteriaBackfill).
 //
-//   - a property compares text, eq or ne, against a JSON-quoted string
-//     (value == "down"), which Expr reads back exactly;
-//   - a bool property compares against true or false; a threshold that is
+//   - A property compares text, eq or ne, against a JSON-quoted string
+//     (value == "down") escaped exactly as Postgres's to_json escapes it,
+//     which Expr reads back exactly.
+//   - A bool property compares against true or false; a threshold that is
 //     neither could never equal a parseable value, so eq lowers to false
-//     and ne to true;
-//   - a metric compares a number with any operator, against its JSON text
-//     made a float literal (80 becomes 80.0), so Expr parses it with the same
-//     correctly rounded ParseFloat the short form's json.Unmarshal used.
+//     and ne to true. This is the lowering's one divergence from the
+//     short form's old evaluator, by decision (definition decision 3 on
+//     #524): a bool sample that is not exactly true or false now holds the
+//     rule, where the old evaluator compared its text.
+//   - A metric compares a number with any operator, against its JSON text
+//     written as Postgres writes a jsonb number (plain decimal, no exponent:
+//     1e21 is 1000000000000000000000) and made a float literal (80 is 80.0),
+//     so Expr parses the exact decimal with the same correctly rounded
+//     ParseFloat the short form's json.Unmarshal used.
 func Lower(c Criteria, lane Lane, dataType string) (Criteria, error) {
 	if c.Expr != "" {
 		if c.Op != "" || len(c.Value) > 0 {
@@ -84,8 +91,8 @@ func Lower(c Criteria, lane Lane, dataType string) (Criteria, error) {
 		if raw[0] == '"' || json.Unmarshal(raw, &f) != nil {
 			return Criteria{Expr: ""}, errors.New("a metric criterion compares against a number")
 		}
-		num := string(raw)
-		if !strings.ContainsAny(num, ".eE") {
+		num := decimal(string(raw))
+		if !strings.Contains(num, ".") {
 			num += ".0"
 		}
 		return Criteria{Expr: "value " + sym + " " + num}, nil
@@ -93,14 +100,86 @@ func Lower(c Criteria, lane Lane, dataType string) (Criteria, error) {
 	return Criteria{}, fmt.Errorf("unknown lane %q", lane)
 }
 
-// quote is s as a JSON string literal, which Expr reads back as s: every
-// escape JSON writes (\" \\ \n \r \t \b \f \uXXXX) is one Expr reads.
+// quote is s as Postgres's to_json writes it (escape_json): \" and \\, the
+// short escapes \b \f \n \r \t, any other control character as \u00xx,
+// and everything else as itself (U+2028 included). Every escape is one Expr
+// reads, so Expr reads back s.
 func quote(s string) string {
-	var b bytes.Buffer
-	enc := json.NewEncoder(&b)
-	enc.SetEscapeHTML(false)
-	_ = enc.Encode(s)
-	return strings.TrimSuffix(b.String(), "\n")
+	var b strings.Builder
+	b.WriteByte('"')
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		switch c {
+		case '"':
+			b.WriteString(`\"`)
+		case '\\':
+			b.WriteString(`\\`)
+		case '\b':
+			b.WriteString(`\b`)
+		case '\f':
+			b.WriteString(`\f`)
+		case '\n':
+			b.WriteString(`\n`)
+		case '\r':
+			b.WriteString(`\r`)
+		case '\t':
+			b.WriteString(`\t`)
+		default:
+			if c < 0x20 {
+				fmt.Fprintf(&b, `\u%04x`, c)
+			} else {
+				b.WriteByte(c)
+			}
+		}
+	}
+	b.WriteByte('"')
+	return b.String()
+}
+
+// decimal writes a JSON number as Postgres writes it once it is a jsonb
+// number (numeric_out after numeric_in): a plain decimal with no exponent,
+// keeping the input's scale less its exponent (1.50e-1 is 0.150, 1.50E1 is
+// 15.0 before the float suffix, 80.50 stays 80.50), no sign on zero.
+func decimal(num string) string {
+	sign := ""
+	if strings.HasPrefix(num, "-") {
+		sign, num = "-", num[1:]
+	}
+	exp := 0
+	if i := strings.IndexAny(num, "eE"); i >= 0 {
+		e, err := strconv.Atoi(strings.TrimPrefix(num[i+1:], "+"))
+		if err != nil {
+			return sign + num
+		}
+		exp, num = e, num[:i]
+	}
+	intPart, frac, _ := strings.Cut(num, ".")
+	digits := intPart + frac
+	point := len(intPart) + exp
+	scale := max(0, len(frac)-exp)
+	var whole, fraction string
+	switch {
+	case point <= 0:
+		whole, fraction = "0", strings.Repeat("0", -point)+digits
+	case point >= len(digits):
+		whole = digits + strings.Repeat("0", point-len(digits))
+	default:
+		whole, fraction = digits[:point], digits[point:]
+	}
+	if len(fraction) > scale {
+		fraction = fraction[:scale]
+	}
+	whole = strings.TrimLeft(whole, "0")
+	if whole == "" {
+		whole = "0"
+	}
+	if strings.Trim(whole+fraction, "0") == "" {
+		sign = ""
+	}
+	if fraction == "" {
+		return sign + whole
+	}
+	return sign + whole + "." + fraction
 }
 
 // Action is what one sample means for a rule's alarm on its owner.

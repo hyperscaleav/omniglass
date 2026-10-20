@@ -279,10 +279,19 @@ The short form a rule could only be written in before, one comparison `{op, valu
 compares text with `eq` or `ne`, a metric compares numbers with any of `eq` `ne` `gt` `ge` `lt` `le`),
 is still accepted on input and lowered to its expression (`eq "down"` is `value == "down"`, `ge 80`
 is `value >= 80.0`), and the API always answers with the expression. A one-time backfill rewrote every
-stored short form the same way, and every such rule decides every sample as it did before. A sample
-the criteria cannot read (a number that is no number, a `bool` property reading neither `true` nor
-`false`), or a run over its budget, holds the rule for that sample and is logged once per rule
-version; the sample still lands. A rule's criteria compile once per rule version, never per sample.
+stored short form to the same text the gateway's lowering writes, and such a rule decides every sample
+as it did before with one deliberate exception: a `bool` property's sample that is not exactly `true`
+or `false` now holds the rule, where the short form compared its text (the definition's decision on
+#524). A sample the criteria cannot read (that `bool` case, or a number that is no number), or a run
+over its budget, holds the rule for that sample and is logged once per rule version per process; the
+sample still lands.
+
+A rule's criteria compile once per rule version, never per sample, and a compile that fails is held
+the same way. Criteria that stop compiling (a key's `data_type` changed under them, or a short form
+the backfill left as it was because its expression would pass the engine's source cap) hold the rule,
+and the rule says so: its list entry, a get and its state carry **`criteria_error`** (which criteria,
+the line and column, the message), and the console shows the rule as one whose criteria do not
+compile until an operator rewrites them.
 The **selector** picks the components a rule watches: those whose type falls within a listed component
 type, and those listed by id; empty, every component. A rule outlives what it points at: deleting a
 component or a key it reads leaves it editable, and it simply matches nothing.

@@ -164,6 +164,22 @@ describe("Rules page", () => {
     expect(gets.filter((u) => u.endsWith("/state"))).toEqual([]);
   });
 
+  it("says when a rule's criteria do not compile, on its row and its blade, with the message", async () => {
+    const broken: EventRule = { ...hot, name: "broken", label: "Broken", enabled: true,
+      criteria_error: { field: "fire_criteria", line: 1, column: 7, message: "invalid operation: > (mismatched types bool and float64)" } };
+    mount(admin, [reach, broken]);
+    const row = document.querySelector('[data-criteria-error="broken"]') as HTMLElement;
+    expect(row?.textContent).toContain("criteria do not compile");
+    expect(row?.getAttribute("title")).toContain("mismatched types");
+    expect(document.querySelector('[data-criteria-error="reachability-lost"]')).toBeNull();
+    fireEvent.click(screen.getByText("Broken"));
+    const b = await blade();
+    const alert = within(b).getByTestId("rule-criteria-error");
+    expect(alert.textContent).toContain("criteria do not compile");
+    expect(alert.textContent).toContain("fire criteria, line 1, column 7");
+    expect(alert.textContent).toContain("mismatched types");
+  });
+
   // When it last judged a sample rides the Live cell's (i), a keyboard-reachable
   // tooltip like every hint (design system: a hover-only mark is not reachable),
   // and opening it does not open the row.

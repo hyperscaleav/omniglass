@@ -162,9 +162,18 @@ describe("the short form an expression lowers from", () => {
   });
 
   it("has none for an expression the builder cannot say", () => {
-    for (const expr of ['value == "down" && instance != "aux"', "value > 40 || value < 0", "false", "value matches 'x'", "upper(value) == \"X\""]) {
+    // The lowering never writes an exponent, so one is an author's expression.
+    for (const expr of ['value == "down" && instance != "aux"', "value > 40 || value < 0", "false", "value matches 'x'", "upper(value) == \"X\"",
+      "value > 1e21", "value > 2.5E-7", "value > 1.0e+3"]) {
       expect(shortForm({ expr })).toBeNull();
     }
+  });
+
+  it("treats an empty expression as no expression: the builder owns it and an edit is sent", () => {
+    const was = { ...reach, official: false, fire_criteria: { expr: "" }, clear_criteria: undefined };
+    const d = draftFromRule(was);
+    expect(d.fireExpr).toBeNull();
+    expect(updateBody({ ...d, fireValue: "down" }, was)).toEqual({ fire_criteria: { op: "eq", value: "down" } });
   });
 
   it("keeps an expression the builder cannot say: an edit never overwrites it", () => {

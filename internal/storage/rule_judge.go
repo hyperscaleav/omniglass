@@ -1,9 +1,11 @@
 package storage
 
 import (
+	"errors"
 	"log/slog"
 	"sync"
 
+	"github.com/hyperscaleav/omniglass/internal/expression"
 	"github.com/hyperscaleav/omniglass/internal/rules"
 )
 
@@ -17,8 +19,17 @@ import (
 // a recompile is cheap). The zero value is ready; safe for concurrent use.
 type ruleJudges struct {
 	mu     sync.Mutex
-	judges map[ruleJudgeKey]*rules.Judge
+	judges map[ruleJudgeKey]compiled
 	logged map[ruleJudgeKey]bool
+}
+
+// compiled is one rule version's compile: its judge, or the error that
+// stopped it. A failure is held like a success, so a rule whose criteria
+// cannot compile (a data type changed under them, a row the backfill left
+// in short form) costs one compile per version, not one per sample.
+type compiled struct {
+	judge *rules.Judge
+	err   error
 }
 
 type ruleJudgeKey struct {
@@ -31,34 +42,53 @@ const ruleJudgeCap = 4096
 
 func judgeKey(r EventRule) ruleJudgeKey { return ruleJudgeKey{r.ID, r.Version, r.dataType} }
 
-// judge is the rule's compiled criteria, compiled on its version's first use.
+// judge is the rule's compiled criteria, compiled on its version's first
+// use; a compile error is cached and returned the same way.
 func (j *ruleJudges) judge(r EventRule) (*rules.Judge, error) {
 	k := judgeKey(r)
 	j.mu.Lock()
-	if jj, ok := j.judges[k]; ok {
+	if c, ok := j.judges[k]; ok {
 		j.mu.Unlock()
-		return jj, nil
+		return c.judge, c.err
 	}
 	j.mu.Unlock()
 	jj, err := rules.Compile(r.SampleLane, r.dataType, r.FireCriteria, r.ClearCriteria)
-	if err != nil {
-		return nil, err
-	}
 	j.mu.Lock()
 	defer j.mu.Unlock()
 	if j.judges == nil || len(j.judges) >= ruleJudgeCap {
-		j.judges = map[ruleJudgeKey]*rules.Judge{}
+		j.judges = map[ruleJudgeKey]compiled{}
 	}
 	if have, ok := j.judges[k]; ok {
-		return have, nil
+		return have.judge, have.err
 	}
-	j.judges[k] = jj
-	return jj, nil
+	j.judges[k] = compiled{judge: jj, err: err}
+	return jj, err
+}
+
+// criteriaFault is why a rule's stored criteria do not compile, as a reader
+// sees it, or nil when they compile (by the same cached compile the
+// evaluator judges with).
+func (p *PG) criteriaFault(r EventRule) *CriteriaFault {
+	_, err := p.judges.judge(r)
+	if err == nil {
+		return nil
+	}
+	f := &CriteriaFault{Message: err.Error()}
+	var ce *rules.CriteriaError
+	if errors.As(err, &ce) {
+		f.Field, f.Message = ce.Field, ce.Err.Error()
+	}
+	var ee *expression.Error
+	if errors.As(err, &ee) {
+		f.Line, f.Column, f.Message = ee.Line, ee.Column, ee.Message
+	}
+	return f
 }
 
 // firstFault reports whether this is the first fault logged for the rule's
-// version, so a rule that cannot judge its samples (a run over its budget, a
-// value its lane cannot read) logs once, not once per sample.
+// version in this process, so a rule that cannot judge its samples (a run
+// over its budget, a value its lane cannot read, criteria that do not
+// compile) logs once per rule version per process, not once per sample.
 func (j *ruleJudges) firstFault(r EventRule) bool {
 	k := judgeKey(r)
 	j.mu.Lock()
@@ -83,7 +113,7 @@ func (p *PG) decide(r EventRule, o *ruleOwner, instance string, value any) (rule
 	action, err := p.decideSample(r, s)
 	if err != nil {
 		if p.judges.firstFault(r) {
-			slog.Warn("event rule cannot evaluate a sample; it holds (logged once per rule version)", "facility", "rules",
+			slog.Warn("event rule cannot evaluate a sample; it holds (logged once per rule version per process)", "facility", "rules",
 				"rule", r.Name, "version", r.Version, "component", o.comp.Name, "key", r.SampleKey, "error", err.Error())
 		}
 		return rules.Hold, false

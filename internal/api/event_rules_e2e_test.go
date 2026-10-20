@@ -9,6 +9,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5"
+
 	"github.com/hyperscaleav/omniglass/internal/api"
 	"github.com/hyperscaleav/omniglass/internal/auth"
 	"github.com/hyperscaleav/omniglass/internal/rbac"
@@ -661,6 +663,63 @@ func TestEventRuleExpressionAPI(t *testing.T) {
 		http.StatusUnprocessableEntity), "body.fire_criteria.expr", 2, 3)
 	check(c.do(ownerTok, http.MethodPatch, "/event-rules/hot", map[string]any{"clear_criteria": map[string]any{"expr": "value + 1"}},
 		http.StatusUnprocessableEntity), "body.clear_criteria.expr", 1, 1)
+	// A short form is located at the criteria, not at an expr it never had.
+	big := strings.Repeat("x", 4090)
+	var sp problem
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodPost, "/event-rules", map[string]any{"name": "long", "sample_key": "endpoint-reachable",
+		"fire_criteria": map[string]any{"op": "eq", "value": big}, "fire_event_type": "condition-started"},
+		http.StatusUnprocessableEntity), &sp); err != nil {
+		t.Fatal(err)
+	}
+	if len(sp.Errors) != 1 || sp.Errors[0].Location != "body.fire_criteria" {
+		t.Fatalf("a short form's 422 errors %+v, want one at body.fire_criteria", sp.Errors)
+	}
+
+	// A stored rule whose criteria stop compiling (its key's data type changed
+	// under it) says so on the list, a get and its state.
+	conn, err := pgx.Connect(ctx, dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = conn.Close(ctx) }()
+	if _, err := conn.Exec(ctx, `update property_type set data_type = 'bool' where name = 'endpoint-reachable'`); err != nil {
+		t.Fatal(err)
+	}
+	type withErr struct {
+		Name          string `json:"name"`
+		CriteriaError *struct {
+			Field   string `json:"field"`
+			Line    int    `json:"line"`
+			Column  int    `json:"column"`
+			Message string `json:"message"`
+		} `json:"criteria_error"`
+	}
+	var got withErr
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/event-rules/reachability-lost", nil, http.StatusOK), &got); err != nil {
+		t.Fatal(err)
+	}
+	if got.CriteriaError == nil || got.CriteriaError.Field != "fire_criteria" || got.CriteriaError.Line != 1 || got.CriteriaError.Message == "" {
+		t.Fatalf("get: criteria_error %+v, want fire_criteria at line 1 with a message", got.CriteriaError)
+	}
+	var list struct {
+		EventRules []withErr `json:"event_rules"`
+	}
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/event-rules", nil, http.StatusOK), &list); err != nil {
+		t.Fatal(err)
+	}
+	for _, r := range list.EventRules {
+		if (r.Name == "reachability-lost") != (r.CriteriaError != nil) {
+			t.Errorf("list: %s criteria_error %+v", r.Name, r.CriteriaError)
+		}
+	}
+	var st withErr
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/event-rules/reachability-lost/state", nil, http.StatusOK), &st); err != nil {
+		t.Fatal(err)
+	}
+	if st.CriteriaError == nil || *st.CriteriaError != *got.CriteriaError {
+		t.Fatalf("state: criteria_error %+v, want %+v", st.CriteriaError, got.CriteriaError)
+	}
+
 	c.do(ownerTok, http.MethodPost, "/event-rules", map[string]any{"name": "both", "sample_key": "room-temperature",
 		"fire_criteria": map[string]any{"expr": "value > 1", "op": "gt", "value": 1}, "fire_event_type": "condition-started"},
 		http.StatusUnprocessableEntity)

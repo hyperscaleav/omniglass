@@ -74,6 +74,9 @@ type Sample struct {
 // its line and column, when the expression is what failed.
 type CriteriaError struct {
 	Field string
+	// Short is true when the criterion was given as the short form {op,
+	// value}, so the fault is the criteria's, not an expression's text.
+	Short bool
 	Err   error
 }
 
@@ -115,13 +118,14 @@ func Compile(lane Lane, dataType string, fire Criteria, clear *Criteria) (*Judge
 }
 
 func compileOne(c Criteria, lane Lane, dataType string, env expression.Env, field string) (Criteria, *expression.Program, error) {
+	short := c.Expr == ""
 	low, err := Lower(c, lane, dataType)
 	if err != nil {
-		return Criteria{}, nil, &CriteriaError{Field: field, Err: err}
+		return Criteria{}, nil, &CriteriaError{Field: field, Short: short, Err: err}
 	}
 	p, err := expression.Compile(low.Expr, env)
 	if err != nil {
-		return Criteria{}, nil, &CriteriaError{Field: field, Err: err}
+		return Criteria{}, nil, &CriteriaError{Field: field, Short: short, Err: err}
 	}
 	return low, p, nil
 }
