@@ -6878,10 +6878,10 @@ never by its Go type. A binding's doc reads the same for every value type, which
 The fourth slice of the expression engine (#524). `POST /event-rules:preview` (gated `rule:read`,
 `omniglass event-rule preview`) takes a candidate rule (sample key, selector, fire and optional clear
 criteria; sustains accepted and ignored) and answers what it would have done, writing nothing: the
-gateway's `PreviewEventRule` runs in a read-only transaction, compiles the criteria once, and reads
-the key's lane twice, both fenced by the caller's component read scope and both capped at
-`RulePreviewRowCap` (5,000) rows: the newest sample before the window of every series, and every
-sample in the window (`RulePreviewWindow`, 24h) in series and time order. Each selected series is
+gateway's `PreviewEventRule` runs in a read-only transaction and compiles the criteria once. As first
+built it read the key's lane twice, the newest sample before the window of every series and every
+sample in it, capped at `RulePreviewRowCap` (5,000) rows each. A review proved that read wrong at scale
+and in four ways, and it was rebuilt before the rollup merged (below). Each selected series is
 walked as the ingest would walk it with no sustains, from the state its pre-window sample sets: a fire
 out of force is a fire edge, a clear in force a clear edge. The answer carries the edges, the series in
 force now (with the window's fire that brought each in, absent when it was in force before the
@@ -6908,4 +6908,22 @@ blade keep #957's criteria-do-not-compile display. The decision record is ADR-01
 page stays Partial (functions, `convert`, the other sites and the function-run bindings are design).
 A walkthrough, `write-a-rule-as-an-expression`, is embedded in the rules guide, and the screenshots
 are under `.github/screenshots/960/`.
+
+### A rule preview reads only the series it judges, as ingest would (#959)
+
+A review of the preview, with EXPLAIN ANALYZE on 200,000 rows, found its seed read scanned the key's
+whole history and its window read sorted every window row before the cap; the selector ran in Go after
+the capped read, so unselected rows spent the cap; a series seeded from its newest sample before the
+window missed a hysteresis rule's state (fire above 80, clear below 70: 85, then 75, then 60); the cap
+cut series in half; a late sample was judged though the ingest skips it; and a selector name resolved
+fleet-wide said whether a component outside the caller's scope existed. Now the selection is SQL
+(the named components and the type subtrees, within the read scope), each selected component's
+instances are found by a loose index skip on the series index, and each series is two index probes: its
+starting state from the newest deciding sample within `RulePreviewSeedLookback` (7 days, probing at most
+`RulePreviewSeedProbe` samples; none, and the series is listed in `state_unknown`), and its window. A
+window sample older than one that arrived before it decides nothing, the ingest's stale check. The cap
+takes whole series, reported as `series_judged` of `series_total`; selector names resolve in the
+caller's scope, so a hidden component is the same 422 as a missing one. The console's preview panel
+counts the series it judged and those that started unknown. Tests cover each case, and an EXPLAIN test
+asserts every per-series read on both lanes is an index probe on its series index with no seq scan.
 

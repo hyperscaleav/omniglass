@@ -1107,8 +1107,20 @@ function RulePreviewPanel(p: { draft: RuleDraft; ready: boolean }): JSX.Element 
           <div data-testid="preview-result" class="flex flex-col gap-2 text-sm">
             <Show when={r().truncated}>
               <div data-testid="preview-truncated" class="alert alert-warning alert-soft text-[12px]">
-                <span>Cut short at {r().row_cap.toLocaleString("en-US")} samples: this covers part of the window.</span>
+                <span>
+                  Judged {r().series_judged} of {r().series_total} series: the rest would pass the{" "}
+                  {r().row_cap.toLocaleString("en-US")}-sample cap.
+                </span>
               </div>
+            </Show>
+            <Show when={(r().state_unknown ?? []).length > 0}>
+              <span data-testid="preview-unknown" class="inline-flex items-center gap-1 text-[11px] text-base-content/60">
+                {r().state_unknown!.length} series started unknown
+                <InfoTip
+                  label="series that started unknown"
+                  text={`No sample in the week before the window fired or cleared, so where they started is not known: their first one in the window set their state without an edge. ${(r().state_unknown ?? []).map((s) => `${s.component}${s.instance ? ` ${s.instance}` : ""}`).join(", ")}`}
+                />
+              </span>
             </Show>
             <Eyebrow label={`In force now (${r().in_force_now?.length ?? 0})`} />
             <Show when={(r().in_force_now ?? []).length > 0} fallback={<span class="text-[12px] text-base-content/50">Nothing in force.</span>}>

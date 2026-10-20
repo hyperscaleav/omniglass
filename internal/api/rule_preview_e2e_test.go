@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -34,6 +35,11 @@ type previewOut struct {
 	RowCap          int       `json:"row_cap"`
 	Truncated       bool      `json:"truncated"`
 	SustainsIgnored bool      `json:"sustains_ignored"`
+	SeriesJudged    int       `json:"series_judged"`
+	SeriesTotal     int       `json:"series_total"`
+	StateUnknown    []struct {
+		Component string `json:"component"`
+	} `json:"state_unknown"`
 }
 
 // TestPreviewEventRuleAPI drives POST /event-rules:preview (#959): a
@@ -96,32 +102,49 @@ func TestPreviewEventRuleAPI(t *testing.T) {
 
 	body := map[string]any{"sample_key": "endpoint-reachable", "fire_criteria": map[string]any{"expr": `value == "down"`},
 		"selector": map[string]any{"components": []string{"pa-1", "pa-2"}}, "fire_sustain": "15s"}
-	preview := func(tok string) previewOut {
+	preview := func(tok string, b map[string]any) previewOut {
 		t.Helper()
 		var out previewOut
-		if err := json.Unmarshal(c.do(tok, http.MethodPost, "/event-rules:preview", body, http.StatusOK), &out); err != nil {
+		if err := json.Unmarshal(c.do(tok, http.MethodPost, "/event-rules:preview", b, http.StatusOK), &out); err != nil {
 			t.Fatal(err)
 		}
 		return out
 	}
-	got := preview(viewer)
-	if !got.SustainsIgnored || got.Truncated || got.RowCap != storage.RulePreviewRowCap || got.Window != "24h0m0s" {
+	got := preview(viewer, body)
+	if !got.SustainsIgnored || got.Truncated || got.RowCap != storage.RulePreviewRowCap || got.Window != "24h0m0s" ||
+		got.SeriesJudged != 2 || got.SeriesTotal != 2 || len(got.StateUnknown) != 2 {
 		t.Fatalf("bounds %+v", got)
 	}
-	if len(got.Edges) != 3 || got.Edges[0].Component != "pa-1" || got.Edges[0].Kind != "fire" || got.Edges[1].Kind != "clear" ||
-		got.Edges[2].Component != "pa-2" || got.Edges[2].Kind != "fire" {
-		t.Fatalf("edges %+v, want pa-1 fire, pa-1 clear, pa-2 fire", got.Edges)
+	// Neither series has a deciding sample before the window, so each starts
+	// unknown: pa-1's down sets its state and its up is a clear edge; pa-2's
+	// down sets it in force, with no edge to say since when.
+	if len(got.Edges) != 1 || got.Edges[0].Component != "pa-1" || got.Edges[0].Kind != "clear" {
+		t.Fatalf("edges %+v, want pa-1's clear", got.Edges)
 	}
-	if len(got.InForceNow) != 1 || got.InForceNow[0].Component != "pa-2" || got.InForceNow[0].Since == nil {
-		t.Fatalf("in force now %+v, want pa-2 since its fire", got.InForceNow)
+	if len(got.InForceNow) != 1 || got.InForceNow[0].Component != "pa-2" || got.InForceNow[0].Since != nil {
+		t.Fatalf("in force now %+v, want pa-2 with no since", got.InForceNow)
 	}
 
-	// The caller's component read scope fences the preview.
-	if mine := preview(compViewer); len(mine.Edges) != 2 || mine.Edges[0].Component != "pa-1" || len(mine.InForceNow) != 0 {
-		t.Fatalf("a viewer of pa-1 sees %+v, want only pa-1's edges", mine)
+	// The caller's component read scope fences the preview: watching every
+	// component, a viewer of pa-1 previews pa-1 alone, and a viewer of an
+	// empty place previews nothing.
+	everyone := map[string]any{"sample_key": "endpoint-reachable", "fire_criteria": map[string]any{"expr": `value == "down"`}}
+	if mine := preview(compViewer, everyone); len(mine.Edges) != 1 || mine.Edges[0].Component != "pa-1" || len(mine.InForceNow) != 0 {
+		t.Fatalf("a viewer of pa-1 sees %+v, want only pa-1's clear", mine)
 	}
-	if none := preview(placeViewer); len(none.Edges) != 0 || len(none.InForceNow) != 0 {
+	if none := preview(placeViewer, everyone); len(none.Edges) != 0 || len(none.InForceNow) != 0 || none.SeriesTotal != 0 {
 		t.Fatalf("a viewer of an empty place sees %+v, want nothing", none)
+	}
+	// Naming a component the caller cannot read is the same 422 as naming
+	// one that does not exist: the preview does not say it is there.
+	named := func(comp string) []byte {
+		return c.do(compViewer, http.MethodPost, "/event-rules:preview", map[string]any{"sample_key": "endpoint-reachable",
+			"fire_criteria": map[string]any{"expr": `value == "down"`}, "selector": map[string]any{"components": []string{comp}}},
+			http.StatusUnprocessableEntity)
+	}
+	hidden, missing := named("pa-2"), named("no-such-component")
+	if strings.ReplaceAll(string(hidden), "pa-2", "X") != strings.ReplaceAll(string(missing), "no-such-component", "X") {
+		t.Fatalf("an out-of-scope name answers %s, a missing one %s: they must read the same", hidden, missing)
 	}
 
 	// A bad criterion is a 422 at its position; rule:read gates it.

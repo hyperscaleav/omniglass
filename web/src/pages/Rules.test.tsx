@@ -343,7 +343,7 @@ describe("Rules page", () => {
   });
 
   // Answers the expression and preview routes, records every request.
-  function exprRoutes(preview: unknown = { in_force_now: [], edges: [], window: "24h0m0s", row_cap: 5000, truncated: false, sustains_ignored: true }) {
+  function exprRoutes(preview: unknown = { in_force_now: [], edges: [], state_unknown: [], window: "24h0m0s", row_cap: 5000, series_judged: 0, series_total: 0, truncated: false, sustains_ignored: true }) {
     const reqs: { method: string; url: string; body: unknown }[] = [];
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const req = input as Request;
@@ -425,6 +425,8 @@ describe("Rules page", () => {
         { component: "display-1", component_id: display, instance: "tcp", at: new Date(Date.now() - 5_400_000).toISOString(), kind: "clear" },
       ],
       window: "24h0m0s", row_cap: 5000, truncated: true, sustains_ignored: true,
+      series_judged: 1, series_total: 3,
+      state_unknown: [{ component: "codec-1", component_id: uuidFor("comp-codec-1"), instance: "tcp" }],
     });
     mount();
     fireEvent.click(screen.getByText("New rule"));
@@ -442,7 +444,8 @@ describe("Rules page", () => {
       expect.stringContaining("fire"), expect.stringContaining("clear"),
     ]);
     expect(within(panel).getByText(/Sustains are ignored/)).toBeTruthy();
-    expect(within(panel).getByTestId("preview-truncated")).toBeTruthy();
+    expect(within(panel).getByTestId("preview-truncated").textContent).toContain("Judged 1 of 3 series");
+    expect(within(panel).getByTestId("preview-unknown").textContent).toContain("1 series started unknown");
     const sent = reqs.find((r) => r.url.endsWith("/event-rules:preview"))!;
     expect(sent.body).toEqual({ sample_key: "endpoint-reachable", selector: { component_types: [], components: [] }, fire_criteria: { op: "eq", value: "down" } });
   });

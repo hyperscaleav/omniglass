@@ -1279,7 +1279,7 @@ export interface paths {
         put?: never;
         /**
          * Preview an event rule
-         * @description Judges a candidate rule (sample key, selector, criteria) without writing anything: over each series it selects, the newest sample before the last 24 hours and then every sample in them, in order, each alone (sustains are ignored, and the answer says so). Answers the edges it would have written and the series it would hold in force now, only on components the caller may read. Each of its two reads is bounded by a row cap, and a preview cut short says truncated. Criteria take {expr} or {op, value}; one that does not compile is a 422 naming the criteria, line and column. Gated by rule:read.
+         * @description Judges a candidate rule (sample key, selector, criteria) without writing anything, as the ingest would have with no sustains (the answer says they are ignored): over each series it selects on components the caller may read, from the state its newest deciding sample in the 7 days before the window set (state_unknown when there is none), through every sample in the last 24 hours that the ingest would have judged (a late sample older than one before it decides nothing). Answers the edges it would have written and the series it would hold in force now. Its reads are index probes per series, capped at row_cap window samples taken a whole series at a time: series_judged of series_total, and truncated when the cap stopped it. A selector naming a component the caller cannot read is the same 422 as one that does not exist. Criteria take {expr} or {op, value}; one that does not compile is a 422 naming the criteria, line and column. Gated by rule:read.
          */
         post: operations["preview-event-rule"];
         delete?: never;
@@ -7111,12 +7111,24 @@ export interface components {
             in_force_now: components["schemas"]["PreviewSeriesBody"][] | null;
             /**
              * Format: int64
-             * @description The most rows each of its two reads may take
+             * @description The most window samples it reads, a whole series at a time
              */
             row_cap: number;
+            /**
+             * Format: int64
+             * @description How many of the selected series it judged whole
+             */
+            series_judged: number;
+            /**
+             * Format: int64
+             * @description How many series the candidate selects, on components the caller may read
+             */
+            series_total: number;
+            /** @description The series with no sample that fires or clears in the 7 days before the window: their first such sample in the window set their state without an edge, since whether it moved anything is not known */
+            state_unknown: components["schemas"]["PreviewSeriesBody"][] | null;
             /** @description Always true: each sample is judged alone, so a sustain that would have held an edge back is not applied */
             sustains_ignored: boolean;
-            /** @description A read hit the row cap: the preview covers only part of the window */
+            /** @description The row cap stopped it before every series: series_judged of series_total were judged */
             truncated: boolean;
             /** @description How far back it judged, a Go duration */
             window: string;

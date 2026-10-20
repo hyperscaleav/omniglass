@@ -295,10 +295,13 @@ compile until an operator rewrites them.
 
 Before a rule is saved it can be **previewed** (`POST /event-rules:preview`, gated `rule:read`, #959):
 the candidate (its key, selector and criteria) is judged over the last 24 hours of its key's samples,
-on the components the caller may read, and the answer is the edges it would have written and the
-series it would hold in force now. It writes nothing. Each sample is judged alone, as if the rule
-had no sustains, and the answer says so; a fleet with more samples than the row cap is previewed in
-part, flagged `truncated`. The console authors criteria either way: the rule drawer's comparison
+on the components the caller may read, as the ingest would have judged them with no sustains (the
+answer says so): each series starts from the state its newest deciding sample in the week before set,
+and a late sample older than one before it decides nothing. The answer is the edges it would have
+written and the series it would hold in force now, and a series with no deciding sample in that week
+is reported as having started unknown rather than guessed at. It writes nothing. Its reads are index
+probes per selected series, capped at a row count taken a whole series at a time: a preview that hits
+the cap says how many series it judged of how many, flagged `truncated`. The console authors criteria either way: the rule drawer's comparison
 builder shows the expression it is stored as, **Write as an expression** opens an expression field
 checked as it is typed (diagnostics under their line and column, the site's bindings and functions
 beneath), and its **Preview** runs the draft; the rule's blade shows its criteria as code (#960). The

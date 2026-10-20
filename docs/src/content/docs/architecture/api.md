@@ -350,11 +350,15 @@ the value and result types, `diagnostics` with line, column and phase, and the s
 `builtins` and `budget`, generated from the site's declaration; it compiles without the engine's
 program cache, stores and runs nothing, and an unknown site or a missing or unknown key is a 422. `POST /event-rules:preview` (gated `rule:read`; `omniglass event-rule
 preview`) judges a candidate rule (sample key, selector, criteria) without writing anything, in a
-read-only transaction: over the series it selects among the components the caller's component read
-scope admits, the newest sample before the last 24 hours and then each sample in them, alone
-(`sustains_ignored` is always true), it answers `edges` (fire or clear, on a component and instance,
-at the sample) and `in_force_now`. Each of its two reads is capped at `row_cap` rows, with `truncated`
-when one hit it; a criterion that does not compile is a 422 at its line and column. A rule edit is judged on what it changes from the stored rule:
+read-only transaction, as the ingest would with no sustains (`sustains_ignored` is always true): over
+each series it selects among the components the caller's component read scope admits, from the state
+its newest deciding sample in the 7 days before the window set (listed in `state_unknown` when there
+is none), through every sample of the last 24 hours the ingest would have judged (a late sample older
+than one before it decides nothing). It answers `edges` (fire or clear, on a component and instance,
+at the sample) and `in_force_now`. Its reads are index probes per series; the window's are capped at
+`row_cap` samples a whole series at a time, reported as `series_judged` of `series_total` with
+`truncated`. A selector naming a component the caller cannot read is the same 422 as one that does
+not exist, and a criterion that does not compile is a 422 at its line and column. A rule edit is judged on what it changes from the stored rule:
 a selector entry, key or criteria it restates unchanged is not re-resolved, so a rule whose component or
 type was deleted stays editable (it matches nothing by the stale entry), while an entry new to the rule must
 exist. The list and a get carry each rule's live state as counts (`conditions_in_force`, `open_alarms`,

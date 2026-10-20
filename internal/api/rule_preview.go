@@ -43,8 +43,11 @@ type previewEventRuleOutput struct {
 		Window          string              `json:"window" doc:"How far back it judged, a Go duration"`
 		WindowSince     time.Time           `json:"window_since"`
 		WindowUntil     time.Time           `json:"window_until"`
-		RowCap          int                 `json:"row_cap" doc:"The most rows each of its two reads may take"`
-		Truncated       bool                `json:"truncated" doc:"A read hit the row cap: the preview covers only part of the window"`
+		StateUnknown    []previewSeriesBody `json:"state_unknown" doc:"The series with no sample that fires or clears in the 7 days before the window: their first such sample in the window set their state without an edge, since whether it moved anything is not known"`
+		RowCap          int                 `json:"row_cap" doc:"The most window samples it reads, a whole series at a time"`
+		SeriesJudged    int                 `json:"series_judged" doc:"How many of the selected series it judged whole"`
+		SeriesTotal     int                 `json:"series_total" doc:"How many series the candidate selects, on components the caller may read"`
+		Truncated       bool                `json:"truncated" doc:"The row cap stopped it before every series: series_judged of series_total were judged"`
 		SustainsIgnored bool                `json:"sustains_ignored" doc:"Always true: each sample is judged alone, so a sustain that would have held an edge back is not applied"`
 	}
 }
@@ -55,7 +58,7 @@ func registerEventRulePreviewRoute(api huma.API, a *authenticator, gw storage.Ga
 		Method:      http.MethodPost,
 		Path:        "/event-rules:preview",
 		Summary:     "Preview an event rule",
-		Description: "Judges a candidate rule (sample key, selector, criteria) without writing anything: over each series it selects, the newest sample before the last 24 hours and then every sample in them, in order, each alone (sustains are ignored, and the answer says so). Answers the edges it would have written and the series it would hold in force now, only on components the caller may read. Each of its two reads is bounded by a row cap, and a preview cut short says truncated. Criteria take {expr} or {op, value}; one that does not compile is a 422 naming the criteria, line and column. Gated by rule:read.",
+		Description: "Judges a candidate rule (sample key, selector, criteria) without writing anything, as the ingest would have with no sustains (the answer says they are ignored): over each series it selects on components the caller may read, from the state its newest deciding sample in the 7 days before the window set (state_unknown when there is none), through every sample in the last 24 hours that the ingest would have judged (a late sample older than one before it decides nothing). Answers the edges it would have written and the series it would hold in force now. Its reads are index probes per series, capped at row_cap window samples taken a whole series at a time: series_judged of series_total, and truncated when the cap stopped it. A selector naming a component the caller cannot read is the same 422 as one that does not exist. Criteria take {expr} or {op, value}; one that does not compile is a 422 naming the criteria, line and column. Gated by rule:read.",
 	}, "rule", "read"), func(ctx context.Context, in *previewEventRuleInput) (*previewEventRuleOutput, error) {
 		b := in.Body
 		fire, err := fromCriteriaBody(b.FireCriteria)
@@ -81,6 +84,11 @@ func registerEventRulePreviewRoute(api huma.API, a *authenticator, gw storage.Ga
 		o := &out.Body
 		o.Window, o.WindowSince, o.WindowUntil = p.Window.String(), p.Since, p.Until
 		o.RowCap, o.Truncated, o.SustainsIgnored = p.RowCap, p.Truncated, p.SustainsIgnored
+		o.SeriesJudged, o.SeriesTotal = p.SeriesJudged, p.SeriesTotal
+		o.StateUnknown = make([]previewSeriesBody, 0, len(p.StateUnknown))
+		for _, s := range p.StateUnknown {
+			o.StateUnknown = append(o.StateUnknown, previewSeriesBody{Component: s.ComponentName, ComponentID: s.ComponentID, Instance: s.Instance})
+		}
 		o.InForceNow = make([]previewSeriesBody, 0, len(p.InForce))
 		for _, s := range p.InForce {
 			o.InForceNow = append(o.InForceNow, previewSeriesBody{Component: s.ComponentName, ComponentID: s.ComponentID, Instance: s.Instance, Since: s.Since})
