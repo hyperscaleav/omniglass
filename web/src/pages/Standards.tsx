@@ -103,7 +103,8 @@ function useStandardRow(id: string): () => Standard | undefined {
 }
 
 function StandardBladeTitle(p: { id: string }): JSX.Element {
-  return <BladeTitle row={useStandardRow(p.id)} fallback={p.id} />;
+  const row = useStandardRow(p.id);
+  return <BladeTitle row={row} fallback={p.id} />;
 }
 
 function StandardBladeBody(p: { id: string }): JSX.Element {

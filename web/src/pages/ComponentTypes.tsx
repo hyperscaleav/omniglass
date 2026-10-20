@@ -163,7 +163,8 @@ function useComponentTypeRow(id: string): () => ComponentType | undefined {
 }
 
 function ComponentTypeBladeTitle(p: { id: string }): JSX.Element {
-  return <BladeTitle row={useComponentTypeRow(p.id)} fallback={p.id} />;
+  const row = useComponentTypeRow(p.id);
+  return <BladeTitle row={row} fallback={p.id} />;
 }
 
 function ComponentTypeBladeBody(p: { id: string }): JSX.Element {

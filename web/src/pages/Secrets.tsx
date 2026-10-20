@@ -114,7 +114,8 @@ function useSecretById(id: string): () => Secret | undefined {
 // the one blade-heading primitive. It was a bare span until the entity gained a
 // label (#613), which is the moment #581 said to switch.
 function SecretBladeTitle(p: { id: string }): JSX.Element {
-  return <BladeTitle row={useSecretById(p.id)} fallback="secret" />;
+  const row = useSecretById(p.id);
+  return <BladeTitle row={row} fallback="secret" />;
 }
 
 function SecretBladeBody(p: { id: string }): JSX.Element {

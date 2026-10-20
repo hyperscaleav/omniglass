@@ -89,7 +89,8 @@ function useDriverRow(id: string): () => Driver | undefined {
 }
 
 function DriverBladeTitle(p: { id: string }): JSX.Element {
-  return <BladeTitle row={useDriverRow(p.id)} fallback={p.id} />;
+  const row = useDriverRow(p.id);
+  return <BladeTitle row={row} fallback={p.id} />;
 }
 
 function DriverBladeBody(p: { id: string }): JSX.Element {

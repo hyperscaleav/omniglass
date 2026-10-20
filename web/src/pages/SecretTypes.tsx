@@ -76,7 +76,8 @@ function useSecretTypeRow(id: string): () => SecretType | undefined {
 }
 
 function SecretTypeBladeTitle(p: { id: string }): JSX.Element {
-  return <BladeTitle row={useSecretTypeRow(p.id)} fallback={p.id} />;
+  const row = useSecretTypeRow(p.id);
+  return <BladeTitle row={row} fallback={p.id} />;
 }
 
 function SecretTypeBladeBody(p: { id: string }): JSX.Element {

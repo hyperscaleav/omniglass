@@ -84,7 +84,8 @@ export const eventTypeBlade: BladeDef = {
 // lands on the same words the row showed. It rendered the bare name before, so
 // clicking "ICMP RTT (avg)" opened a panel headed icmp.rtt-avg.
 function EventTypeBladeTitle(p: { name: string }): JSX.Element {
-  return <BladeTitle row={useEventTypeRow(p.name)} fallback={p.name} />;
+  const row = useEventTypeRow(p.name);
+  return <BladeTitle row={row} fallback={p.name} />;
 }
 
 function useEventTypeRow(name: string): () => EventTypeRow | undefined {

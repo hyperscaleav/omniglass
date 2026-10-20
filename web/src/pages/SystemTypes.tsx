@@ -145,7 +145,8 @@ function useSystemTypeRow(id: string): () => SystemType | undefined {
 }
 
 function SystemTypeBladeTitle(p: { id: string }): JSX.Element {
-  return <BladeTitle row={useSystemTypeRow(p.id)} fallback={p.id} />;
+  const row = useSystemTypeRow(p.id);
+  return <BladeTitle row={row} fallback={p.id} />;
 }
 
 function SystemTypeBladeBody(p: { id: string }): JSX.Element {
