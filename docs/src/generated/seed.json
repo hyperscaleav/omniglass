@@ -384,6 +384,16 @@
    "name": "collection-failed",
    "label": "Collection Failed",
    "description": "A collection task could not use what it had: an unusable config or a payload that did not parse. Carries the task identity in its payload, so the failure names its work; the alternative is a silent skip nobody sees."
+  },
+  {
+   "name": "condition-started",
+   "label": "Condition Started",
+   "description": "An event rule's condition came into force on a component: the generic fire event for a rule that needs no semantic type of its own. Written once at the edge, after the rule's fire sustain, never per sample while the condition holds."
+  },
+  {
+   "name": "condition-ended",
+   "label": "Condition Ended",
+   "description": "An event rule's condition left force: condition-started's closing half, written once when the rule's clear criteria has held for its clear sustain. The pair brackets how long the condition held."
   }
  ],
  "command_types": [
@@ -2054,7 +2064,9 @@
    "fire": "eq down",
    "clear": "eq up",
    "fire_sustain": "15s",
-   "severity": "high"
+   "severity": "high",
+   "fire_event_type": "condition-started",
+   "clear_event_type": "condition-ended"
   }
  ]
 }

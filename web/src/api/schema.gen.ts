@@ -1191,7 +1191,7 @@ export interface paths {
         put?: never;
         /**
          * Create an event rule
-         * @description Authors a rule that raises an alarm on each component it watches when its sample key meets the fire criteria for the fire sustain, and clears it when the clear criteria (or the negation of fire) holds for the clear sustain. The key must be a registered property or metric, the criteria evaluable on its lane, and the severity a level that exists (else 422); a name already taken is a 409. Audited. Gated by rule:create, with an all-scope grant.
+         * @description Authors a rule whose condition starts on each component it watches when its sample key meets the fire criteria for the fire sustain, and ends when the clear criteria (or the negation of fire) holds for the clear sustain. It names the event type it writes when the condition starts (required) and, optionally, when it ends; with a severity it also raises an alarm while the condition holds, and without one it is informational. The key must be a registered property or metric, the criteria evaluable on its lane, the event types registered and the severity, when given, a level that exists (else 422); a name already taken is a 409. Audited. Gated by rule:create, with an all-scope grant.
          */
         post: operations["create-event-rule"];
         delete?: never;
@@ -1223,7 +1223,7 @@ export interface paths {
         head?: never;
         /**
          * Update an event rule
-         * @description Patches a rule (an absent field is unchanged), bumping its version; disabling it stops new opens. Official rules are read-only (409). Audited. Gated by rule:update, with an all-scope grant.
+         * @description Patches a rule (an absent field is unchanged), bumping its version; disabling it stops new opens. An empty severity makes the rule informational and an empty clear_event_type drops its clear event; the fire event type cannot be emptied (422). Official rules are read-only (409). Audited. Gated by rule:update, with an all-scope grant.
          */
         patch: operations["update-event-rule"];
         trace?: never;
@@ -4876,6 +4876,8 @@ export interface components {
             readonly $schema?: string;
             /** @description The criteria that clears it: {op, value}; absent clears on the negation of fire_criteria */
             clear_criteria?: components["schemas"]["CriteriaBody"];
+            /** @description The event type the rule writes when its condition ends, by name (condition-ended is the generic one); absent, it writes none */
+            clear_event_type?: string;
             /** @description A Go duration; empty is 0s */
             clear_sustain?: string;
             /** @description What the rule watches for and why */
@@ -4884,6 +4886,8 @@ export interface components {
             enabled?: boolean;
             /** @description The criteria that opens an alarm: {op, value} */
             fire_criteria: components["schemas"]["CriteriaBody"];
+            /** @description The event type the rule writes when its condition starts, by name (condition-started is the generic one) */
+            fire_event_type: string;
             /** @description A Go duration; empty is 0s */
             fire_sustain?: string;
             /** @description A human label; also the alarm message when message is empty */
@@ -4896,8 +4900,8 @@ export interface components {
             sample_key: string;
             /** @description The components the rule watches (component types and components); absent is every component */
             selector?: components["schemas"]["SelectorBody"];
-            /** @description The severity level the alarm is raised at, by name */
-            severity: string;
+            /** @description The severity level the alarm is raised at, by name; absent or empty, the rule is informational and raises no alarm */
+            severity?: string;
         };
         CreateEventTypeInputBody: {
             /**
@@ -5659,14 +5663,18 @@ export interface components {
              * @example /api/v1/schemas/EventRuleBody.json
              */
             readonly $schema?: string;
-            /** @description When the sample meets this for clear_sustain, the alarm clears; absent, the negation of fire_criteria */
+            /** @description When the sample meets this for clear_sustain, the condition ends (and the alarm clears); absent, the negation of fire_criteria */
             clear_criteria?: components["schemas"]["CriteriaBody"];
+            /** @description The event type the rule writes when its condition ends, by name; absent, it writes none */
+            clear_event_type?: string;
             /** @description How long the clear criteria must hold, a Go duration */
             clear_sustain: string;
             description?: string;
             enabled: boolean;
-            /** @description When the sample meets this for fire_sustain, the rule opens an alarm */
+            /** @description When the sample meets this for fire_sustain, the rule's condition starts (and it opens an alarm when it names a severity) */
             fire_criteria: components["schemas"]["CriteriaBody"];
+            /** @description The event type the rule writes when its condition starts, by name */
+            fire_event_type: string;
             /** @description How long the fire criteria must hold, a Go duration (0s fires at once) */
             fire_sustain: string;
             /** @description The rule's uuid, the stable form of name */
@@ -5701,8 +5709,8 @@ export interface components {
             sample_lane: "property" | "metric";
             /** @description The components the rule watches; both lists empty is every component */
             selector: components["schemas"]["SelectorBody"];
-            /** @description The severity level the alarm is raised at, by name */
-            severity: string;
+            /** @description The severity level the alarm is raised at, by name; absent, the rule is informational and raises no alarm */
+            severity?: string;
             /**
              * Format: int64
              * @description Bumps on every update
@@ -8501,6 +8509,8 @@ export interface components {
             readonly $schema?: string;
             /** @description The criteria that clears it: {op, value}; absent clears on the negation of fire_criteria */
             clear_criteria?: components["schemas"]["CriteriaBody"];
+            /** @description The event type the rule writes when its condition ends, by name; empty writes none */
+            clear_event_type?: string;
             /** @description Drop the clear criteria, so the rule clears on the negation of its fire criteria */
             clear_negates?: boolean;
             /** @description How long the clear criteria must hold, a Go duration; empty is 0s */
@@ -8511,6 +8521,8 @@ export interface components {
             enabled?: boolean;
             /** @description The criteria that opens an alarm: {op, value} */
             fire_criteria?: components["schemas"]["CriteriaBody"];
+            /** @description The event type the rule writes when its condition starts, by name; it cannot be emptied */
+            fire_event_type?: string;
             /** @description How long the fire criteria must hold, a Go duration (e.g. 30s); empty is 0s */
             fire_sustain?: string;
             /** @description A human label; also the alarm message when message is empty */
@@ -8521,7 +8533,7 @@ export interface components {
             sample_key?: string;
             /** @description Replace the components the rule watches; absent leaves them unchanged, and an empty selector watches every component */
             selector?: components["schemas"]["SelectorBody"];
-            /** @description The severity level the alarm is raised at, by name */
+            /** @description The severity level the alarm is raised at, by name; empty makes the rule informational (no alarm) */
             severity?: string;
         };
         UpdateEventTypeInputBody: {

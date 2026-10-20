@@ -175,10 +175,11 @@ var IdentityShapes = map[string]TableIdentity{
 	"standard_property": {Shape: ShapeIDOnly}, "system_member": {Shape: ShapeIDOnly},
 	"system_role_assignment": {Shape: ShapeIDOnly},
 	// One row per impaired simulated component, keyed by that component's uuid.
-	"sim_impairment":      {Shape: ShapeIDOnly},
-	"event_rule_state":    {Shape: ShapeIDOnly, Reason: "a rule's pending streak, keyed by rule, component and instance; nothing addresses it by name"},
-	"event_rule_live":     {Shape: ShapeIDOnly, Reason: "when a rule last judged a sample, keyed by the rule's uuid; nothing addresses it by name"},
-	"system_role_product": {Shape: ShapeIDOnly}, "system_role_type": {Shape: ShapeIDOnly},
+	"sim_impairment":       {Shape: ShapeIDOnly},
+	"event_rule_state":     {Shape: ShapeIDOnly, Reason: "a rule's pending streak, keyed by rule, component and instance; nothing addresses it by name"},
+	"event_rule_live":      {Shape: ShapeIDOnly, Reason: "when a rule last judged a sample, keyed by the rule's uuid; nothing addresses it by name"},
+	"event_rule_condition": {Shape: ShapeIDOnly, Reason: "a rule's condition in force, keyed by rule, component and instance; nothing addresses it by name"},
+	"system_role_product":  {Shape: ShapeIDOnly}, "system_role_type": {Shape: ShapeIDOnly},
 	"tag_binding": {Shape: ShapeIDOnly},
 	// registry_shadow holds an operator's version of a shipped registry row
 	// (#655, ADR-0095). Nobody names it: it is addressed by the row it shadows,

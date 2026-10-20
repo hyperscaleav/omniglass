@@ -40,7 +40,7 @@ func provedByCreate(ctx context.Context, gw *storage.PG) map[string]func(key str
 	return map[string]func(key string) error{
 		"event_rule": func(s string) error {
 			v, _ := json.Marshal("down")
-			_, err := gw.CreateEventRule(ctx, "", storage.EventRuleSpec{Name: s, SampleKey: "endpoint-reachable",
+			_, err := gw.CreateEventRule(ctx, "", storage.EventRuleSpec{FireEventType: "condition-started", Name: s, SampleKey: "endpoint-reachable",
 				Fire: rules.Criteria{Op: "eq", Value: v}, Severity: "high"}, scope.Set{All: true})
 			return err
 		},

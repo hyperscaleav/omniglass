@@ -32,11 +32,13 @@ type eventRuleBody struct {
 	Selector       selectorBody  `json:"selector" doc:"The components the rule watches; both lists empty is every component"`
 	SampleKey      string        `json:"sample_key" doc:"The property or metric the rule reads"`
 	SampleLane     string        `json:"sample_lane" enum:"property,metric" doc:"Which lane the key reads, derived from the registries"`
-	FireCriteria   criteriaBody  `json:"fire_criteria" doc:"When the sample meets this for fire_sustain, the rule opens an alarm"`
-	ClearCriteria  *criteriaBody `json:"clear_criteria,omitempty" doc:"When the sample meets this for clear_sustain, the alarm clears; absent, the negation of fire_criteria"`
+	FireCriteria   criteriaBody  `json:"fire_criteria" doc:"When the sample meets this for fire_sustain, the rule's condition starts (and it opens an alarm when it names a severity)"`
+	ClearCriteria  *criteriaBody `json:"clear_criteria,omitempty" doc:"When the sample meets this for clear_sustain, the condition ends (and the alarm clears); absent, the negation of fire_criteria"`
 	FireSustain    string        `json:"fire_sustain" doc:"How long the fire criteria must hold, a Go duration (0s fires at once)"`
 	ClearSustain   string        `json:"clear_sustain" doc:"How long the clear criteria must hold, a Go duration"`
-	Severity       string        `json:"severity" doc:"The severity level the alarm is raised at, by name"`
+	Severity       string        `json:"severity,omitempty" doc:"The severity level the alarm is raised at, by name; absent, the rule is informational and raises no alarm"`
+	FireEventType  string        `json:"fire_event_type" doc:"The event type the rule writes when its condition starts, by name"`
+	ClearEventType string        `json:"clear_event_type,omitempty" doc:"The event type the rule writes when its condition ends, by name; absent, it writes none"`
 	Message        string        `json:"message,omitempty" doc:"The alarm's message; empty uses the rule's label or name"`
 	Enabled        bool          `json:"enabled"`
 	Official       bool          `json:"official" doc:"Shipped with the platform and read-only"`
@@ -65,7 +67,7 @@ func toEventRuleBody(r *storage.EventRule) eventRuleBody {
 		Selector:  selectorBody{ComponentTypes: r.Selector.ComponentTypes, Components: r.Selector.Components},
 		SampleKey: r.SampleKey, SampleLane: string(r.SampleLane), FireCriteria: toCriteriaBody(r.FireCriteria),
 		FireSustain: r.FireSustain.String(), ClearSustain: r.ClearSustain.String(), Severity: r.Severity,
-		Message: r.Message, Enabled: r.Enabled, Official: r.Official, Version: r.Version,
+		FireEventType: r.FireEventType, ClearEventType: r.ClearEventType, Message: r.Message, Enabled: r.Enabled, Official: r.Official, Version: r.Version,
 		OpenAlarms: r.OpenAlarms, PendingStreaks: r.PendingStreaks, LastJudgedAt: r.LastJudgedAt}
 	if r.ClearCriteria != nil {
 		c := toCriteriaBody(*r.ClearCriteria)
@@ -99,36 +101,40 @@ type eventRuleNameInput struct {
 
 type createEventRuleInput struct {
 	Body struct {
-		Name          string        `json:"name" minLength:"1" doc:"The rule's name (lowercase kebab)"`
-		Label         string        `json:"label,omitempty" required:"false" doc:"A human label; also the alarm message when message is empty"`
-		Description   string        `json:"description,omitempty" required:"false" doc:"What the rule watches for and why"`
-		Selector      *selectorBody `json:"selector,omitempty" required:"false" doc:"The components the rule watches (component types and components); absent is every component"`
-		SampleKey     string        `json:"sample_key" minLength:"1" doc:"The property or metric the rule reads"`
-		FireCriteria  criteriaBody  `json:"fire_criteria" doc:"The criteria that opens an alarm: {op, value}"`
-		ClearCriteria *criteriaBody `json:"clear_criteria,omitempty" required:"false" doc:"The criteria that clears it: {op, value}; absent clears on the negation of fire_criteria"`
-		FireSustain   string        `json:"fire_sustain,omitempty" required:"false" doc:"A Go duration; empty is 0s"`
-		ClearSustain  string        `json:"clear_sustain,omitempty" required:"false" doc:"A Go duration; empty is 0s"`
-		Severity      string        `json:"severity" minLength:"1" doc:"The severity level the alarm is raised at, by name"`
-		Message       string        `json:"message,omitempty" required:"false" doc:"The alarm message; empty uses the label or the name"`
-		Enabled       *bool         `json:"enabled,omitempty" required:"false" doc:"Defaults to true"`
+		Name           string        `json:"name" minLength:"1" doc:"The rule's name (lowercase kebab)"`
+		Label          string        `json:"label,omitempty" required:"false" doc:"A human label; also the alarm message when message is empty"`
+		Description    string        `json:"description,omitempty" required:"false" doc:"What the rule watches for and why"`
+		Selector       *selectorBody `json:"selector,omitempty" required:"false" doc:"The components the rule watches (component types and components); absent is every component"`
+		SampleKey      string        `json:"sample_key" minLength:"1" doc:"The property or metric the rule reads"`
+		FireCriteria   criteriaBody  `json:"fire_criteria" doc:"The criteria that opens an alarm: {op, value}"`
+		ClearCriteria  *criteriaBody `json:"clear_criteria,omitempty" required:"false" doc:"The criteria that clears it: {op, value}; absent clears on the negation of fire_criteria"`
+		FireSustain    string        `json:"fire_sustain,omitempty" required:"false" doc:"A Go duration; empty is 0s"`
+		ClearSustain   string        `json:"clear_sustain,omitempty" required:"false" doc:"A Go duration; empty is 0s"`
+		Severity       string        `json:"severity,omitempty" required:"false" doc:"The severity level the alarm is raised at, by name; absent or empty, the rule is informational and raises no alarm"`
+		FireEventType  string        `json:"fire_event_type" minLength:"1" doc:"The event type the rule writes when its condition starts, by name (condition-started is the generic one)"`
+		ClearEventType string        `json:"clear_event_type,omitempty" required:"false" doc:"The event type the rule writes when its condition ends, by name (condition-ended is the generic one); absent, it writes none"`
+		Message        string        `json:"message,omitempty" required:"false" doc:"The alarm message; empty uses the label or the name"`
+		Enabled        *bool         `json:"enabled,omitempty" required:"false" doc:"Defaults to true"`
 	}
 }
 
 type updateEventRuleInput struct {
 	Name string `path:"name" doc:"The rule's name"`
 	Body struct {
-		Label         *string       `json:"label,omitempty" required:"false" doc:"A human label; also the alarm message when message is empty"`
-		Description   *string       `json:"description,omitempty" required:"false" doc:"What the rule watches for and why"`
-		Selector      *selectorBody `json:"selector,omitempty" required:"false" doc:"Replace the components the rule watches; absent leaves them unchanged, and an empty selector watches every component"`
-		SampleKey     *string       `json:"sample_key,omitempty" required:"false" doc:"The property or metric the rule reads"`
-		FireCriteria  *criteriaBody `json:"fire_criteria,omitempty" required:"false" doc:"The criteria that opens an alarm: {op, value}"`
-		ClearCriteria *criteriaBody `json:"clear_criteria,omitempty" required:"false" doc:"The criteria that clears it: {op, value}; absent clears on the negation of fire_criteria"`
-		ClearNegates  bool          `json:"clear_negates,omitempty" required:"false" doc:"Drop the clear criteria, so the rule clears on the negation of its fire criteria"`
-		FireSustain   *string       `json:"fire_sustain,omitempty" required:"false" doc:"How long the fire criteria must hold, a Go duration (e.g. 30s); empty is 0s"`
-		ClearSustain  *string       `json:"clear_sustain,omitempty" required:"false" doc:"How long the clear criteria must hold, a Go duration; empty is 0s"`
-		Severity      *string       `json:"severity,omitempty" required:"false" doc:"The severity level the alarm is raised at, by name"`
-		Message       *string       `json:"message,omitempty" required:"false" doc:"The alarm message; empty uses the label or the name"`
-		Enabled       *bool         `json:"enabled,omitempty" required:"false" doc:"Whether the rule evaluates; defaults to true on create"`
+		Label          *string       `json:"label,omitempty" required:"false" doc:"A human label; also the alarm message when message is empty"`
+		Description    *string       `json:"description,omitempty" required:"false" doc:"What the rule watches for and why"`
+		Selector       *selectorBody `json:"selector,omitempty" required:"false" doc:"Replace the components the rule watches; absent leaves them unchanged, and an empty selector watches every component"`
+		SampleKey      *string       `json:"sample_key,omitempty" required:"false" doc:"The property or metric the rule reads"`
+		FireCriteria   *criteriaBody `json:"fire_criteria,omitempty" required:"false" doc:"The criteria that opens an alarm: {op, value}"`
+		ClearCriteria  *criteriaBody `json:"clear_criteria,omitempty" required:"false" doc:"The criteria that clears it: {op, value}; absent clears on the negation of fire_criteria"`
+		ClearNegates   bool          `json:"clear_negates,omitempty" required:"false" doc:"Drop the clear criteria, so the rule clears on the negation of its fire criteria"`
+		FireSustain    *string       `json:"fire_sustain,omitempty" required:"false" doc:"How long the fire criteria must hold, a Go duration (e.g. 30s); empty is 0s"`
+		ClearSustain   *string       `json:"clear_sustain,omitempty" required:"false" doc:"How long the clear criteria must hold, a Go duration; empty is 0s"`
+		Severity       *string       `json:"severity,omitempty" required:"false" doc:"The severity level the alarm is raised at, by name; empty makes the rule informational (no alarm)"`
+		FireEventType  *string       `json:"fire_event_type,omitempty" required:"false" doc:"The event type the rule writes when its condition starts, by name; it cannot be emptied"`
+		ClearEventType *string       `json:"clear_event_type,omitempty" required:"false" doc:"The event type the rule writes when its condition ends, by name; empty writes none"`
+		Message        *string       `json:"message,omitempty" required:"false" doc:"The alarm message; empty uses the label or the name"`
+		Enabled        *bool         `json:"enabled,omitempty" required:"false" doc:"Whether the rule evaluates; defaults to true on create"`
 	}
 }
 
@@ -178,7 +184,7 @@ func registerEventRuleRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 		Path:          "/event-rules",
 		DefaultStatus: http.StatusCreated,
 		Summary:       "Create an event rule",
-		Description:   "Authors a rule that raises an alarm on each component it watches when its sample key meets the fire criteria for the fire sustain, and clears it when the clear criteria (or the negation of fire) holds for the clear sustain. The key must be a registered property or metric, the criteria evaluable on its lane, and the severity a level that exists (else 422); a name already taken is a 409. Audited. Gated by rule:create, with an all-scope grant.",
+		Description:   "Authors a rule whose condition starts on each component it watches when its sample key meets the fire criteria for the fire sustain, and ends when the clear criteria (or the negation of fire) holds for the clear sustain. It names the event type it writes when the condition starts (required) and, optionally, when it ends; with a severity it also raises an alarm while the condition holds, and without one it is informational. The key must be a registered property or metric, the criteria evaluable on its lane, the event types registered and the severity, when given, a level that exists (else 422); a name already taken is a 409. Audited. Gated by rule:create, with an all-scope grant.",
 	}, "rule", "create"), func(ctx context.Context, in *createEventRuleInput) (*eventRuleOutput, error) {
 		b := in.Body
 		fire, err := fromCriteriaBody(b.FireCriteria)
@@ -186,7 +192,8 @@ func registerEventRuleRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 			return nil, err
 		}
 		spec := storage.EventRuleSpec{Name: b.Name, Label: b.Label, Description: b.Description, SampleKey: b.SampleKey,
-			Fire: fire, Severity: b.Severity, Message: b.Message, Enabled: b.Enabled}
+			Fire: fire, Severity: b.Severity, Message: b.Message, Enabled: b.Enabled,
+			FireEventType: b.FireEventType, ClearEventType: b.ClearEventType}
 		if b.Selector != nil {
 			spec.Selector = storage.EventRuleSelector{ComponentTypes: b.Selector.ComponentTypes, Components: b.Selector.Components}
 		}
@@ -215,11 +222,12 @@ func registerEventRuleRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 		Method:      http.MethodPatch,
 		Path:        "/event-rules/{name}",
 		Summary:     "Update an event rule",
-		Description: "Patches a rule (an absent field is unchanged), bumping its version; disabling it stops new opens. Official rules are read-only (409). Audited. Gated by rule:update, with an all-scope grant.",
+		Description: "Patches a rule (an absent field is unchanged), bumping its version; disabling it stops new opens. An empty severity makes the rule informational and an empty clear_event_type drops its clear event; the fire event type cannot be emptied (422). Official rules are read-only (409). Audited. Gated by rule:update, with an all-scope grant.",
 	}, "rule", "update"), func(ctx context.Context, in *updateEventRuleInput) (*eventRuleOutput, error) {
 		b := in.Body
 		patch := storage.EventRulePatch{Label: b.Label, Description: b.Description, SampleKey: b.SampleKey,
-			ClearNegates: b.ClearNegates, Severity: b.Severity, Message: b.Message, Enabled: b.Enabled}
+			ClearNegates: b.ClearNegates, Severity: b.Severity, Message: b.Message, Enabled: b.Enabled,
+			FireEventType: b.FireEventType, ClearEventType: b.ClearEventType}
 		if b.Selector != nil {
 			patch.Selector = &storage.EventRuleSelector{ComponentTypes: b.Selector.ComponentTypes, Components: b.Selector.Components}
 		}

@@ -331,8 +331,12 @@ role assignment, in one transaction: it lands whole or not at all.
 `severity_level:read`, written with `severity_level:*`) lists the severity levels least to most severe,
 each with whether an alarm at it puts a component in outage; official levels are read-only. `/event-rules`
 (gated `rule:*`; read like a registry, written only on an all-scope grant) authors the rules that raise alarms: a sample
-key, fire and clear criteria, sustains, a severity level and a selector; an unknown key or level, or
-criteria its lane cannot evaluate, is a 422. A rule edit is judged on what it changes from the stored rule:
+key, fire and clear criteria, sustains, a selector, the event types it writes when its condition starts
+(`fire_event_type`, required) and ends (`clear_event_type`, optional), and a severity level, which is
+optional: a rule without one is informational and raises no alarm, and a PATCH with an empty `severity`
+makes a rule informational (an empty `clear_event_type` drops the clear event; the fire type cannot be
+emptied). An unknown key, level or event type, a missing fire event type, or criteria its lane cannot
+evaluate, is a 422. A rule edit is judged on what it changes from the stored rule:
 a selector entry, key or criteria it restates unchanged is not re-resolved, so a rule whose component or
 type was deleted stays editable (it matches nothing by the stale entry), while an entry new to the rule must
 exist. The list and a get carry each rule's live state as counts (`open_alarms`, `pending_streaks`), read

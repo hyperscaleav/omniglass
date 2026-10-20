@@ -384,26 +384,14 @@ func seedMetricTypes(ctx context.Context, gw storage.Gateway) error {
 // seedEventRules installs the official event rules, authoritative on
 // conflict; an operator's own rules are untouched.
 func seedEventRules(ctx context.Context, gw storage.Gateway) error {
-	var doc struct {
-		Rules []struct {
-			Name         string        `yaml:"name"`
-			Label        string        `yaml:"label"`
-			Description  string        `yaml:"description"`
-			SampleKey    string        `yaml:"sample_key"`
-			Fire         criteriaYAML  `yaml:"fire"`
-			Clear        *criteriaYAML `yaml:"clear"`
-			FireSustain  string        `yaml:"fire_sustain"`
-			ClearSustain string        `yaml:"clear_sustain"`
-			Severity     string        `yaml:"severity"`
-			Message      string        `yaml:"message"`
-		} `yaml:"rules"`
-	}
+	var doc eventRulesDoc
 	if err := yaml.Unmarshal(eventRulesYAML, &doc); err != nil {
 		return fmt.Errorf("seed: parse event_rules: %w", err)
 	}
 	for _, r := range doc.Rules {
 		spec := storage.EventRuleSpec{Name: r.Name, Label: r.Label, Description: r.Description, SampleKey: r.SampleKey,
-			Fire: r.Fire.criteria(), Severity: r.Severity, Message: r.Message}
+			Fire: r.Fire.criteria(), Severity: r.Severity, Message: r.Message,
+			FireEventType: r.FireEventType, ClearEventType: r.ClearEventType}
 		if r.Clear != nil {
 			c := r.Clear.criteria()
 			spec.Clear = &c
@@ -420,6 +408,24 @@ func seedEventRules(ctx context.Context, gw storage.Gateway) error {
 		}
 	}
 	return nil
+}
+
+// eventRulesDoc is event_rules.yaml, read by the seeder and the facts render.
+type eventRulesDoc struct {
+	Rules []struct {
+		Name           string        `yaml:"name"`
+		Label          string        `yaml:"label"`
+		Description    string        `yaml:"description"`
+		SampleKey      string        `yaml:"sample_key"`
+		Fire           criteriaYAML  `yaml:"fire"`
+		Clear          *criteriaYAML `yaml:"clear"`
+		FireSustain    string        `yaml:"fire_sustain"`
+		ClearSustain   string        `yaml:"clear_sustain"`
+		Severity       string        `yaml:"severity"`
+		Message        string        `yaml:"message"`
+		FireEventType  string        `yaml:"fire_event_type"`
+		ClearEventType string        `yaml:"clear_event_type"`
+	} `yaml:"rules"`
 }
 
 // criteriaYAML is a rule criterion as the seed YAML writes it.

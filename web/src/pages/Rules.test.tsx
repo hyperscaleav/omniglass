@@ -23,14 +23,15 @@ const reach: EventRule = {
   id: uuidFor("rule-reachability-lost"), name: "reachability-lost", label: "Reachability lost",
   selector: { component_types: [], components: [] }, sample_key: "endpoint-reachable", sample_lane: "property",
   fire_criteria: { op: "eq", value: "down" }, clear_criteria: { op: "eq", value: "up" },
-  fire_sustain: "15s", clear_sustain: "0s", severity: "high", enabled: true, official: true, version: 1,
+  fire_sustain: "15s", clear_sustain: "0s", severity: "high",
+  fire_event_type: "condition-started", clear_event_type: "condition-ended", enabled: true, official: true, version: 1,
   open_alarms: 1, pending_streaks: 1, last_judged_at: new Date(Date.now() - 30_000).toISOString(),
 };
 const hot: EventRule = {
   id: uuidFor("rule-too-hot"), name: "too-hot", label: "Too hot",
   selector: { component_types: ["display"], components: [] }, sample_key: "temperature-c", sample_lane: "metric",
   fire_criteria: { op: "gt", value: 40 }, clear_criteria: { op: "lt", value: 35 }, fire_sustain: "1m0s", clear_sustain: "30s",
-  severity: "average", enabled: false, official: false, version: 2, open_alarms: 0, pending_streaks: 0,
+  severity: "average", fire_event_type: "condition-started", enabled: false, official: false, version: 2, open_alarms: 0, pending_streaks: 0,
 };
 // A rule whose component type and component were deleted after it was written:
 // it matches nothing by them, and stays editable.
@@ -275,7 +276,7 @@ describe("Rules page", () => {
       name: "reach-flap", sample_key: "endpoint-reachable",
       fire_criteria: { op: "ne", value: "up" }, fire_sustain: "45s", clear_sustain: "0s",
       // The default level: the worst that does not take its component out.
-      severity: "average", enabled: true, selector: { component_types: [], components: [] },
+      severity: "average", fire_event_type: "condition-started", clear_event_type: "condition-ended", enabled: true, selector: { component_types: [], components: [] },
     });
   });
 

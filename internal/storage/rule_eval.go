@@ -503,11 +503,20 @@ func (p *PG) primeRule(ctx context.Context, tx pgx.Tx, r EventRule) error {
 	return nil
 }
 
-// applyRule raises or clears a rule's alarm on a component.
+// applyRule raises or clears a rule's alarm on a component. An
+// informational rule (no severity) raises no alarm; a clear still resolves
+// one it holds open, so an alarm left by the rule's alarm-raising past is
+// never stranded.
+//
+// TODO(#949): write the rule's fire and clear events here, at the edge, with
+// the condition row and the alarm they carry.
 func (p *PG) applyRule(ctx context.Context, tx pgx.Tx, r EventRule, comp *Component, dedup string, effect rules.Action) error {
 	id := r.ID
 	switch effect {
 	case rules.Fire:
+		if r.Severity == "" {
+			return nil
+		}
 		if _, err := p.raiseAlarmTx(ctx, tx, "", comp, AlarmSpec{Severity: r.Severity, Message: ruleMessage(r), DedupKey: dedup}, &id); err != nil {
 			return fmt.Errorf("storage: rule %s raise on %s: %w", r.Name, comp.Name, err)
 		}

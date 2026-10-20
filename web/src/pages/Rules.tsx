@@ -181,7 +181,7 @@ export default function Rules(): JSX.Element {
         </span>
       ),
     },
-    { key: "severity", label: "Severity", width: "88px", sortVal: (r) => r.severity, cell: (r) => <SeverityBadge name={r.severity} /> },
+    { key: "severity", label: "Severity", width: "88px", sortVal: (r) => r.severity ?? "", cell: (r) => <SeverityBadge name={r.severity ?? ""} /> },
     { key: "live", label: "Live", width: "120px", cell: (r) => <RuleLive rule={r} /> },
     { key: "official", label: "Origin", width: "84px", sortVal: (r) => String(r.official), cell: (r) => originBadge(r.official) },
   ];
@@ -199,7 +199,7 @@ export default function Rules(): JSX.Element {
               { key: "name", type: "string", hint: "substring", get: (r) => `${entityLabel(r)} ${r.name}`, values: () => [] },
               { key: "reads", type: "string", hint: "exact", get: (r) => r.sample_key, values: () => [...new Set(rows().map((r) => r.sample_key))] },
               { key: "lane", type: "string", hint: "exact", get: (r) => r.sample_lane, values: () => ["property", "metric"] },
-              { key: "severity", type: "string", hint: "exact", get: (r) => r.severity, values: () => [...new Set(rows().map((r) => r.severity))] },
+              { key: "severity", type: "string", hint: "exact", get: (r) => r.severity ?? "", values: () => [...new Set(rows().map((r) => r.severity ?? ""))] },
               { key: "enabled", type: "string", hint: "exact", get: (r) => (r.enabled ? "enabled" : "disabled"), values: () => ["enabled", "disabled"] },
               { key: "official", type: "string", hint: "exact", get: (r) => (r.official ? "official" : "custom"), values: () => ["official", "custom"] },
             ],
@@ -411,7 +411,7 @@ function RuleBladeBody(p: { name: string }): JSX.Element {
               label="Severity"
               value={
                 <span class="inline-flex items-center gap-1.5">
-                  <SeverityBadge name={r().severity} />
+                  <SeverityBadge name={r().severity ?? ""} />
                   <InfoTip label="severity" text={RULE_HINTS.severity} />
                   <A href="/severity-levels" class="link text-[11px] text-base-content/50 hover:text-base-content">All levels</A>
                 </span>

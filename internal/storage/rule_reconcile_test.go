@@ -76,7 +76,7 @@ func TestReconcileHealsEnableDuringBatch(t *testing.T) {
 	f := newHealthFixture(t)
 	ctx, all := context.Background(), scope.Set{All: true}
 	off := false
-	if _, err := f.gw.CreateEventRule(ctx, "", storage.EventRuleSpec{Name: "late-on", SampleKey: "endpoint-reachable",
+	if _, err := f.gw.CreateEventRule(ctx, "", storage.EventRuleSpec{FireEventType: "condition-started", Name: "late-on", SampleKey: "endpoint-reachable",
 		Fire: criteria("eq", "down"), Clear: ptrCriteria(criteria("eq", "up")), Severity: "high", Enabled: &off}, all); err != nil {
 		t.Fatal(err)
 	}
@@ -117,7 +117,7 @@ func TestReconcileHealsEnableDuringBatch(t *testing.T) {
 func TestReconcileHealsDeadlockAbort(t *testing.T) {
 	f := newHealthFixture(t)
 	ctx, all := context.Background(), scope.Set{All: true}
-	if _, err := f.gw.CreateEventRule(ctx, "", storage.EventRuleSpec{Name: "dl", SampleKey: "endpoint-reachable",
+	if _, err := f.gw.CreateEventRule(ctx, "", storage.EventRuleSpec{FireEventType: "condition-started", Name: "dl", SampleKey: "endpoint-reachable",
 		Fire: criteria("eq", "down"), Clear: ptrCriteria(criteria("eq", "up")), Severity: "high"}, all); err != nil {
 		t.Fatal(err)
 	}
@@ -272,7 +272,7 @@ func TestReconcileFirstPassIsBounded(t *testing.T) {
 func TestReconcileRetriesAFailedSeriesWithoutPinningTheMark(t *testing.T) {
 	f := newHealthFixture(t)
 	ctx, all := context.Background(), scope.Set{All: true}
-	if _, err := f.gw.CreateEventRule(ctx, "", storage.EventRuleSpec{Name: "pin", SampleKey: "endpoint-reachable",
+	if _, err := f.gw.CreateEventRule(ctx, "", storage.EventRuleSpec{FireEventType: "condition-started", Name: "pin", SampleKey: "endpoint-reachable",
 		Fire: criteria("eq", "down"), Clear: ptrCriteria(criteria("eq", "up")), Severity: "high"}, all); err != nil {
 		t.Fatal(err)
 	}
@@ -329,7 +329,7 @@ func TestReconcileMetricLaneAndSelector(t *testing.T) {
 	if _, err := f.gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "other-c"}, all, all, all, all); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := f.gw.CreateEventRule(ctx, "", storage.EventRuleSpec{Name: "slow", SampleKey: "http-response-time",
+	if _, err := f.gw.CreateEventRule(ctx, "", storage.EventRuleSpec{FireEventType: "condition-started", Name: "slow", SampleKey: "http-response-time",
 		Fire: criteria("gt", 30), FireSustain: time.Minute, Severity: "warning",
 		Selector: storage.EventRuleSelector{Components: []string{"bar-1"}}}, all); err != nil {
 		t.Fatal(err)

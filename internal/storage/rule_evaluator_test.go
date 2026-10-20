@@ -22,7 +22,7 @@ func TestRuleEvaluator(t *testing.T) {
 	ctx := context.Background()
 	gw, all := f.gw, scope.Set{All: true}
 
-	reach, err := gw.CreateEventRule(ctx, "", storage.EventRuleSpec{Name: "reach-lost", Label: "Reachability lost",
+	reach, err := gw.CreateEventRule(ctx, "", storage.EventRuleSpec{FireEventType: "condition-started", Name: "reach-lost", Label: "Reachability lost",
 		SampleKey: "endpoint-reachable", Fire: criteria("eq", "down"), Severity: "high"}, all)
 	if err != nil {
 		t.Fatal(err)
@@ -97,7 +97,7 @@ func TestRuleEvaluator(t *testing.T) {
 		t.Fatal(err)
 	}
 	clear := criteria("lt", 28)
-	if _, err := gw.CreateEventRule(ctx, "", storage.EventRuleSpec{Name: "too-hot", SampleKey: "room-temperature",
+	if _, err := gw.CreateEventRule(ctx, "", storage.EventRuleSpec{FireEventType: "condition-started", Name: "too-hot", SampleKey: "room-temperature",
 		Fire: criteria("gt", 30), Clear: &clear, Severity: "warning", Message: "Running hot",
 		Selector: storage.EventRuleSelector{Components: []string{"bar-1"}}}, all); err != nil {
 		t.Fatal(err)
@@ -132,7 +132,7 @@ func TestRuleEvaluator(t *testing.T) {
 	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "wall-1", ProductName: &disp.Name}, all, all, all, all); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := gw.CreateEventRule(ctx, "", storage.EventRuleSpec{Name: "display-hot", SampleKey: "room-temperature",
+	if _, err := gw.CreateEventRule(ctx, "", storage.EventRuleSpec{FireEventType: "condition-started", Name: "display-hot", SampleKey: "room-temperature",
 		Fire: criteria("gt", 40), Severity: "info", Selector: storage.EventRuleSelector{ComponentTypes: []string{"display"}}}, all); err != nil {
 		t.Fatal(err)
 	}
@@ -153,7 +153,7 @@ func TestRuleEvaluatorJudgesOnlyTheNewestSample(t *testing.T) {
 	f := newHealthFixture(t)
 	ctx := context.Background()
 	gw, all := f.gw, scope.Set{All: true}
-	if _, err := gw.CreateEventRule(ctx, "", storage.EventRuleSpec{Name: "reach-lost", SampleKey: "endpoint-reachable",
+	if _, err := gw.CreateEventRule(ctx, "", storage.EventRuleSpec{FireEventType: "condition-started", Name: "reach-lost", SampleKey: "endpoint-reachable",
 		Fire: criteria("eq", "down"), Severity: "high"}, all); err != nil {
 		t.Fatal(err)
 	}
@@ -188,7 +188,7 @@ func TestRuleAlarmsBelongToTheirRule(t *testing.T) {
 	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "other-c"}, all, all, all, all); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := gw.CreateEventRule(ctx, "", storage.EventRuleSpec{Name: "hot", SampleKey: "room-temperature",
+	if _, err := gw.CreateEventRule(ctx, "", storage.EventRuleSpec{FireEventType: "condition-started", Name: "hot", SampleKey: "room-temperature",
 		Fire: criteria("gt", 30), Severity: "warning"}, all); err != nil {
 		t.Fatal(err)
 	}
@@ -252,11 +252,11 @@ func TestEventRuleState(t *testing.T) {
 	f := newHealthFixture(t)
 	ctx := context.Background()
 	gw, all := f.gw, scope.Set{All: true}
-	if _, err := gw.CreateEventRule(ctx, "", storage.EventRuleSpec{Name: "reach-lost", SampleKey: "endpoint-reachable",
+	if _, err := gw.CreateEventRule(ctx, "", storage.EventRuleSpec{FireEventType: "condition-started", Name: "reach-lost", SampleKey: "endpoint-reachable",
 		Fire: criteria("eq", "down"), Severity: "high"}, all); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := gw.CreateEventRule(ctx, "", storage.EventRuleSpec{Name: "slow-hot", SampleKey: "room-temperature",
+	if _, err := gw.CreateEventRule(ctx, "", storage.EventRuleSpec{FireEventType: "condition-started", Name: "slow-hot", SampleKey: "room-temperature",
 		Fire: criteria("gt", 30), FireSustain: time.Minute, Severity: "info"}, all); err != nil {
 		t.Fatal(err)
 	}

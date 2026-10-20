@@ -25,7 +25,8 @@ const reach: EventRule = {
   id: uuidFor("rule-reachability-lost"), name: "reachability-lost", label: "Reachability lost",
   selector: { component_types: [], components: [] }, sample_key: "endpoint-reachable", sample_lane: "property",
   fire_criteria: { op: "eq", value: "down" }, clear_criteria: { op: "eq", value: "up" },
-  fire_sustain: "15s", clear_sustain: "0s", severity: "high", enabled: true, official: true, version: 1,
+  fire_sustain: "15s", clear_sustain: "0s", severity: "high",
+  fire_event_type: "condition-started", clear_event_type: "condition-ended", enabled: true, official: true, version: 1,
   open_alarms: 0, pending_streaks: 0,
 };
 
@@ -33,7 +34,7 @@ const hot: EventRule = {
   id: uuidFor("rule-too-hot"), name: "too-hot",
   selector: { component_types: ["display"], components: [] }, sample_key: "temperature-c", sample_lane: "metric",
   fire_criteria: { op: "gt", value: 40 }, fire_sustain: "1m0s", clear_sustain: "30s",
-  severity: "average", enabled: true, official: false, version: 3, open_alarms: 0, pending_streaks: 0,
+  severity: "average", fire_event_type: "condition-started", enabled: true, official: false, version: 3, open_alarms: 0, pending_streaks: 0,
 };
 
 function jsonResponse(body: unknown, status = 200) {
@@ -152,7 +153,7 @@ describe("the bodies a draft sends", () => {
     expect(createBody(d)).toEqual({
       name: "too-hot", sample_key: "temperature-c",
       fire_criteria: { op: "gt", value: 40 }, fire_sustain: "1m", clear_sustain: "0s",
-      severity: "average", enabled: true, selector: { component_types: ["display"], components: [] },
+      severity: "average", fire_event_type: "condition-started", clear_event_type: "condition-ended", enabled: true, selector: { component_types: ["display"], components: [] },
     });
   });
 

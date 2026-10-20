@@ -146,6 +146,8 @@ export type RuleDraft = {
   fireSustain: string;
   clearSustain: string;
   severity: string;
+  fireEventType: string;
+  clearEventType: string;
   message: string;
   enabled: boolean;
   componentTypes: string[];
@@ -161,11 +163,18 @@ export function defaultSeverity(levels: SeverityLevel[] | undefined): string {
   return (degrading[degrading.length - 1] ?? sorted[0])?.name ?? "";
 }
 
+// The official generic event types a rule writes when it needs no semantic
+// type of its own (#948): a new rule starts on them until the form offers the
+// registry (#951).
+export const GENERIC_FIRE_EVENT_TYPE = "condition-started";
+export const GENERIC_CLEAR_EVENT_TYPE = "condition-ended";
+
 export function emptyDraft(severity = ""): RuleDraft {
   return {
     name: "", label: "", description: "", sampleKey: "", lane: "property",
     fireOp: "eq", fireValue: "", clearMode: "opposite", clearOp: "eq", clearValue: "",
-    fireSustain: "", clearSustain: "", severity, message: "", enabled: true,
+    fireSustain: "", clearSustain: "", severity, fireEventType: GENERIC_FIRE_EVENT_TYPE,
+    clearEventType: GENERIC_CLEAR_EVENT_TYPE, message: "", enabled: true,
     componentTypes: [], components: [],
   };
 }
@@ -184,7 +193,9 @@ export function draftFromRule(r: EventRule): RuleDraft {
     clearValue: r.clear_criteria ? valueText(r.clear_criteria.value) : "",
     fireSustain: sustainWords(r.fire_sustain),
     clearSustain: sustainWords(r.clear_sustain),
-    severity: r.severity,
+    severity: r.severity ?? "",
+    fireEventType: r.fire_event_type,
+    clearEventType: r.clear_event_type ?? "",
     message: r.message ?? "",
     enabled: r.enabled,
     componentTypes: [...(r.selector?.component_types ?? [])],
@@ -278,9 +289,11 @@ export function createBody(d: RuleDraft): CreateEventRule {
     fire_sustain: sustainOut(d.fireSustain),
     clear_sustain: sustainOut(d.clearSustain),
     severity: d.severity,
+    fire_event_type: d.fireEventType,
     enabled: d.enabled,
     selector: { component_types: d.componentTypes, components: d.components },
   };
+  if (d.clearEventType) body.clear_event_type = d.clearEventType;
   if (d.label.trim()) body.label = d.label.trim();
   if (d.description.trim()) body.description = d.description.trim();
   if (d.message.trim()) body.message = d.message.trim();
@@ -310,7 +323,9 @@ export function updateBody(d: RuleDraft, was: EventRule): UpdateEventRule {
   if (!sameCriteria(fire, was.fire_criteria)) body.fire_criteria = fire;
   if (!sameSustain(d.fireSustain, was.fire_sustain)) body.fire_sustain = sustainOut(d.fireSustain);
   if (!sameSustain(d.clearSustain, was.clear_sustain)) body.clear_sustain = sustainOut(d.clearSustain);
-  if (d.severity !== was.severity) body.severity = d.severity;
+  if (d.severity !== (was.severity ?? "")) body.severity = d.severity;
+  if (d.fireEventType !== was.fire_event_type) body.fire_event_type = d.fireEventType;
+  if (d.clearEventType !== (was.clear_event_type ?? "")) body.clear_event_type = d.clearEventType;
   if (d.enabled !== was.enabled) body.enabled = d.enabled;
   if (!sameList(d.componentTypes, was.selector?.component_types) || !sameList(d.components, was.selector?.components)) {
     body.selector = { component_types: d.componentTypes, components: d.components };

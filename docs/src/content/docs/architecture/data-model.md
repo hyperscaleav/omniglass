@@ -267,6 +267,7 @@ telemetry: {
   event: {
     shape: sql_table
     id: bigint {constraint: primary_key}
+    alarm_id: uuid {constraint: foreign_key}
     component_id: uuid {constraint: foreign_key}
     event_type_id: uuid {constraint: foreign_key}
     location_id: uuid {constraint: foreign_key}
@@ -278,7 +279,15 @@ telemetry: {
   event_rule: {
     shape: sql_table
     id: uuid {constraint: primary_key}
+    clear_event_type_id: uuid {constraint: foreign_key}
+    fire_event_type_id: uuid {constraint: foreign_key}
     severity: text {constraint: foreign_key}
+  }
+  event_rule_condition: {
+    shape: sql_table
+    component_id: uuid {constraint: primary_key}
+    instance: text {constraint: primary_key}
+    rule_id: uuid {constraint: primary_key}
   }
   event_rule_live: {
     shape: sql_table
@@ -520,6 +529,7 @@ telemetry.command.node_id -> collection.node.principal_id
 telemetry.command.system_id -> fleet.system.id
 telemetry.command_type.target_metric_type_id -> telemetry.metric_type.id
 telemetry.command_type.target_property_type_id -> telemetry.property_type.id
+telemetry.event.alarm_id -> telemetry.alarm.id
 telemetry.event.component_id -> fleet.component.id
 telemetry.event.event_type_id -> telemetry.event_type.id
 telemetry.event.location_id -> fleet.location.id
@@ -527,7 +537,11 @@ telemetry.event.node_id -> collection.node.principal_id
 telemetry.event.source_event_id -> telemetry.event.id
 telemetry.event.source_log_line_id -> telemetry.log_line.id
 telemetry.event.system_id -> fleet.system.id
+telemetry.event_rule.clear_event_type_id -> telemetry.event_type.id
+telemetry.event_rule.fire_event_type_id -> telemetry.event_type.id
 telemetry.event_rule.severity -> telemetry.severity_level.name
+telemetry.event_rule_condition.component_id -> fleet.component.id
+telemetry.event_rule_condition.rule_id -> telemetry.event_rule.id
 telemetry.event_rule_live.rule_id -> telemetry.event_rule.id
 telemetry.event_rule_state.component_id -> fleet.component.id
 telemetry.event_rule_state.rule_id -> telemetry.event_rule.id

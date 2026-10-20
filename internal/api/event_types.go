@@ -178,6 +178,8 @@ func mapEventTypeErr(err error) error {
 		return huma.Error409Conflict("an event type with this name already exists")
 	case errors.Is(err, storage.ErrEventTypeOfficial):
 		return huma.Error409Conflict("an official event type is read-only")
+	case errors.Is(err, storage.ErrEventTypeInUse):
+		return huma.Error409Conflict("the event type is still in use: recorded events or event rules name it")
 	case errors.Is(err, storage.ErrEventTypeInvalid):
 		return huma.Error422UnprocessableEntity(err.Error())
 	default:

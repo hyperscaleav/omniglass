@@ -22,31 +22,36 @@ type EventRuleSelector struct {
 	Components     []string `json:"components,omitempty"`
 }
 
-// EventRule is the authored config that raises alarms (#918, #819): it
-// reads one sample key on its lane, fires when FireCriteria holds for
-// FireSustain, clears when ClearCriteria (or, when nil, the negation of
-// FireCriteria) holds for ClearSustain, at a severity level by name. Version
-// bumps on every update. Official rules ship with the boot seed and are
-// read-only.
+// EventRule is the authored config that records what happened and raises
+// alarms (#918, #819, #948): it reads one sample key on its lane, fires when
+// FireCriteria holds for FireSustain, clears when ClearCriteria (or, when
+// nil, the negation of FireCriteria) holds for ClearSustain. It names the
+// event type it writes when its condition starts (FireEventType, required)
+// and, optionally, when it ends (ClearEventType, "" for none), both by name
+// from the event_type registry. Severity is the level its alarm is raised at,
+// by name; "" is an informational rule, which raises no alarm. Version bumps
+// on every update. Official rules ship with the boot seed and are read-only.
 type EventRule struct {
-	ID            string
-	Name          string
-	Label         string
-	Description   string
-	Selector      EventRuleSelector
-	SampleKey     string
-	SampleLane    rules.Lane
-	FireCriteria  rules.Criteria
-	ClearCriteria *rules.Criteria
-	FireSustain   time.Duration
-	ClearSustain  time.Duration
-	Severity      string
-	Message       string
-	Enabled       bool
-	Official      bool
-	Version       int
-	CreatedAt     time.Time
-	UpdatedAt     time.Time
+	ID             string
+	Name           string
+	Label          string
+	Description    string
+	Selector       EventRuleSelector
+	SampleKey      string
+	SampleLane     rules.Lane
+	FireCriteria   rules.Criteria
+	ClearCriteria  *rules.Criteria
+	FireSustain    time.Duration
+	ClearSustain   time.Duration
+	Severity       string
+	FireEventType  string
+	ClearEventType string
+	Message        string
+	Enabled        bool
+	Official       bool
+	Version        int
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
 	// The rule's live state as counts, read beside it (never authored, never
 	// audited): the alarms it raised that are still open, and its streaks
 	// waiting out a sustain. EventRuleState lists them.
@@ -56,10 +61,13 @@ type EventRule struct {
 	// to within ruleJudgedEvery; nil when it never has. A fact about the
 	// rule, naming no component.
 	LastJudgedAt *time.Time `json:"-"`
+	// The event types' ids, resolved from their names on a write.
+	fireTypeID, clearTypeID string
 }
 
 // EventRuleSpec is a rule to create; its selector's components may be
-// given by name or id.
+// given by name or id. An empty Severity is an informational rule; an empty
+// ClearEventType writes no clear event.
 type EventRuleSpec struct {
 	Name         string
 	Label        string
@@ -73,11 +81,14 @@ type EventRuleSpec struct {
 	Severity     string
 	Message      string
 	Enabled      *bool
+
+	FireEventType, ClearEventType string
 }
 
 // EventRulePatch carries an update; nil is unchanged. ClearNegates, when
 // true, drops the clear criterion so the rule clears on the negation of its
-// fire criterion.
+// fire criterion. An empty Severity makes the rule informational and an empty
+// ClearEventType drops the clear event; an empty FireEventType is refused.
 type EventRulePatch struct {
 	Label        *string
 	Description  *string
@@ -91,6 +102,8 @@ type EventRulePatch struct {
 	Severity     *string
 	Message      *string
 	Enabled      *bool
+
+	FireEventType, ClearEventType *string
 }
 
 // Event rule sentinels.
@@ -108,7 +121,8 @@ func ruleCols(a string) string {
 	return fmt.Sprintf(`%[1]sid, %[1]sname, coalesce(%[1]slabel, ''), %[1]sdescription, %[1]sselector, %[1]ssample_key, %[1]ssample_lane,
 	%[1]sfire_criteria, %[1]sclear_criteria,
 	(extract(epoch from %[1]sfire_sustain) * 1000000)::bigint, (extract(epoch from %[1]sclear_sustain) * 1000000)::bigint,
-	%[1]sseverity, %[1]smessage, %[1]senabled, %[1]sofficial, %[1]sversion, %[1]screated_at, %[1]supdated_at`, a)
+	coalesce(%[1]sseverity, ''), (select name from event_type where id = %[1]sfire_event_type_id),
+	coalesce((select name from event_type where id = %[1]sclear_event_type_id), ''), %[1]smessage, %[1]senabled, %[1]sofficial, %[1]sversion, %[1]screated_at, %[1]supdated_at`, a)
 }
 
 var eventRuleCols = ruleCols("")
@@ -137,7 +151,7 @@ func scanEventRuleCols(row pgx.Row, lead, trail []any) (EventRule, error) {
 	var lane string
 	var fireUs, clearUs int64
 	dest := append(lead, &r.ID, &r.Name, &r.Label, &r.Description, &sel, &r.SampleKey, &lane, &fire, &clear,
-		&fireUs, &clearUs, &r.Severity, &r.Message, &r.Enabled, &r.Official, &r.Version, &r.CreatedAt, &r.UpdatedAt)
+		&fireUs, &clearUs, &r.Severity, &r.FireEventType, &r.ClearEventType, &r.Message, &r.Enabled, &r.Official, &r.Version, &r.CreatedAt, &r.UpdatedAt)
 	dest = append(dest, trail...)
 	err := row.Scan(dest...)
 	if err != nil {
@@ -212,8 +226,43 @@ func prepareEventRule(ctx context.Context, q querier, r *EventRule, check ruleCh
 			}
 		}
 	}
+	if err := resolveRuleEventTypes(ctx, q, r); err != nil {
+		return err
+	}
 	if check.selector {
 		return resolveRuleSelector(ctx, q, r, check.kept)
+	}
+	return nil
+}
+
+// resolveRuleEventTypes resolves a rule's event types by name: the fire type
+// is required, the clear type optional, and each must be registered. A type
+// a rule names cannot be deleted (the reference restricts it), so a stored
+// name always resolves and an unchanged one never blocks an edit.
+func resolveRuleEventTypes(ctx context.Context, q querier, r *EventRule) error {
+	if r.FireEventType == "" {
+		return invalidRule("a rule names the event type it writes when its condition starts (fire_event_type)")
+	}
+	resolve := func(field, name string) (string, error) {
+		var id string
+		err := q.QueryRow(ctx, `select id::text from event_type where name = $1`, name).Scan(&id)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return "", invalidRule("%s %q is not a registered event type", field, name)
+		}
+		if err != nil {
+			return "", fmt.Errorf("storage: check rule %s: %w", field, err)
+		}
+		return id, nil
+	}
+	var err error
+	if r.fireTypeID, err = resolve("fire_event_type", r.FireEventType); err != nil {
+		return err
+	}
+	r.clearTypeID = ""
+	if r.ClearEventType != "" {
+		if r.clearTypeID, err = resolve("clear_event_type", r.ClearEventType); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -279,9 +328,21 @@ func mapRuleWriteErr(err error, name string) error {
 	}
 	var pgErr *pgconn.PgError
 	if errors.As(err, &pgErr) && pgErr.Code == "23503" {
-		return invalidRule("severity level does not exist")
+		if pgErr.ConstraintName == "event_rule_severity_fkey" {
+			return invalidRule("severity level does not exist")
+		}
+		return invalidRule("event type does not exist")
 	}
 	return fmt.Errorf("storage: write event rule %q: %w", name, err)
+}
+
+// nullIfEmpty writes "" as SQL NULL: an informational rule's severity, a
+// rule's absent clear event type.
+func nullIfEmpty(s string) any {
+	if s == "" {
+		return nil
+	}
+	return s
 }
 
 func ruleArgs(r EventRule) ([]byte, []byte, any, error) {
@@ -384,7 +445,8 @@ func (p *PG) CreateEventRule(ctx context.Context, actorID string, spec EventRule
 	}
 	r := EventRule{Name: spec.Name, Label: spec.Label, Description: spec.Description, Selector: spec.Selector,
 		SampleKey: spec.SampleKey, FireCriteria: spec.Fire, ClearCriteria: spec.Clear, FireSustain: spec.FireSustain,
-		ClearSustain: spec.ClearSustain, Severity: spec.Severity, Message: spec.Message, Enabled: true}
+		ClearSustain: spec.ClearSustain, Severity: spec.Severity, FireEventType: spec.FireEventType,
+		ClearEventType: spec.ClearEventType, Message: spec.Message, Enabled: true}
 	if spec.Enabled != nil {
 		r.Enabled = *spec.Enabled
 	}
@@ -401,11 +463,14 @@ func (p *PG) CreateEventRule(ctx context.Context, actorID string, spec EventRule
 		return nil, err
 	}
 	created, err := scanEventRule(tx.QueryRow(ctx, `insert into event_rule (name, label, description, selector,
-		sample_key, sample_lane, fire_criteria, clear_criteria, fire_sustain, clear_sustain, severity, message, enabled, official)
-		values ($1, $2, $3, $4, $5, $6, $7, $8, make_interval(secs => $9::float8 / 1000000), make_interval(secs => $10::float8 / 1000000), $11, $12, $13, false)
+		sample_key, sample_lane, fire_criteria, clear_criteria, fire_sustain, clear_sustain, severity, message, enabled, official,
+		fire_event_type_id, clear_event_type_id)
+		values ($1, $2, $3, $4, $5, $6, $7, $8, make_interval(secs => $9::float8 / 1000000), make_interval(secs => $10::float8 / 1000000), $11, $12, $13, false,
+		$14::uuid, $15::uuid)
 		returning `+eventRuleCols,
 		r.Name, labelOrNull(r.Label), r.Description, sel, r.SampleKey, string(r.SampleLane), fire, clear,
-		r.FireSustain.Microseconds(), r.ClearSustain.Microseconds(), r.Severity, r.Message, r.Enabled))
+		r.FireSustain.Microseconds(), r.ClearSustain.Microseconds(), nullIfEmpty(r.Severity), r.Message, r.Enabled,
+		r.fireTypeID, nullIfEmpty(r.clearTypeID)))
 	if err != nil {
 		return nil, mapRuleWriteErr(err, r.Name)
 	}
@@ -488,6 +553,12 @@ func (p *PG) UpdateEventRule(ctx context.Context, actorID, name string, patch Ev
 	if patch.Severity != nil {
 		r.Severity = *patch.Severity
 	}
+	if patch.FireEventType != nil {
+		r.FireEventType = *patch.FireEventType
+	}
+	if patch.ClearEventType != nil {
+		r.ClearEventType = *patch.ClearEventType
+	}
 	if patch.Message != nil {
 		r.Message = *patch.Message
 	}
@@ -521,10 +592,12 @@ func (p *PG) UpdateEventRule(ctx context.Context, actorID, name string, patch Ev
 	updated, err := scanEventRule(tx.QueryRow(ctx, `update event_rule set label = $2, description = $3, selector = $4,
 		sample_key = $5, sample_lane = $6, fire_criteria = $7, clear_criteria = $8,
 		fire_sustain = make_interval(secs => $9::float8 / 1000000), clear_sustain = make_interval(secs => $10::float8 / 1000000),
-		severity = $11, message = $12, enabled = $13, version = version + 1, updated_at = now()
+		severity = $11, message = $12, enabled = $13, fire_event_type_id = $14::uuid, clear_event_type_id = $15::uuid,
+		version = version + 1, updated_at = now()
 		where id = $1 returning `+eventRuleCols,
 		old.ID, labelOrNull(r.Label), r.Description, sel, r.SampleKey, string(r.SampleLane), fire, clear,
-		r.FireSustain.Microseconds(), r.ClearSustain.Microseconds(), r.Severity, r.Message, r.Enabled))
+		r.FireSustain.Microseconds(), r.ClearSustain.Microseconds(), nullIfEmpty(r.Severity), r.Message, r.Enabled,
+		r.fireTypeID, nullIfEmpty(r.clearTypeID)))
 	if err != nil {
 		return nil, mapRuleWriteErr(err, name)
 	}
@@ -580,8 +653,8 @@ func (p *PG) DeleteEventRule(ctx context.Context, actorID, name string, action s
 // components it no longer selects, and primes from each series' newest
 // sample, so a condition that already holds is not lost on an input that
 // sends nothing further. A cosmetic edit (label, description, message,
-// severity) touches nothing: a sustain measured against the same judgment
-// is still one.
+// severity, event types) touches nothing: a sustain measured against the
+// same judgment is still one.
 //
 // The caller holds the rule's row (FOR UPDATE, or the insert's own lock)
 // before settle takes any series or health lock, the lock order
@@ -625,7 +698,10 @@ func resetRuleStreaks(ctx context.Context, tx pgx.Tx, ruleID string) error {
 }
 
 // materialRuleChange reports whether a write changed how a rule judges:
-// its key or lane, its criteria, its selector, or its sustains.
+// its key or lane, its criteria, its selector, or its sustains. Its event
+// types are not material (#948): they change what the rule writes at an
+// edge, not when the edge falls, so a streak measured against the same
+// judgment keeps running.
 func materialRuleChange(a, b EventRule) bool {
 	type judgment struct {
 		SampleKey                 string
@@ -651,6 +727,7 @@ func sameRuleJSON(a, b any) bool {
 func sameAuthoredRule(a, b EventRule) bool {
 	type authored struct {
 		Label, Description, SampleKey, Severity, Message string
+		FireEventType, ClearEventType                    string
 		Selector                                         EventRuleSelector
 		Fire                                             rules.Criteria
 		Clear                                            *rules.Criteria
@@ -658,7 +735,7 @@ func sameAuthoredRule(a, b EventRule) bool {
 		Enabled                                          bool
 	}
 	pick := func(r EventRule) string {
-		j, _ := json.Marshal(authored{r.Label, r.Description, r.SampleKey, r.Severity, r.Message, r.Selector,
+		j, _ := json.Marshal(authored{r.Label, r.Description, r.SampleKey, r.Severity, r.Message, r.FireEventType, r.ClearEventType, r.Selector,
 			r.FireCriteria, r.ClearCriteria, r.FireSustain, r.ClearSustain, r.Enabled})
 		return string(j)
 	}
@@ -674,7 +751,8 @@ func sameAuthoredRule(a, b EventRule) bool {
 func (p *PG) UpsertEventRule(ctx context.Context, spec EventRuleSpec) error {
 	r := EventRule{Name: spec.Name, Label: spec.Label, Description: spec.Description, Selector: spec.Selector,
 		SampleKey: spec.SampleKey, FireCriteria: spec.Fire, ClearCriteria: spec.Clear, FireSustain: spec.FireSustain,
-		ClearSustain: spec.ClearSustain, Severity: spec.Severity, Message: spec.Message, Enabled: true}
+		ClearSustain: spec.ClearSustain, Severity: spec.Severity, FireEventType: spec.FireEventType,
+		ClearEventType: spec.ClearEventType, Message: spec.Message, Enabled: true}
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("storage: begin upsert event rule: %w", err)
@@ -702,15 +780,19 @@ func (p *PG) UpsertEventRule(ctx context.Context, spec EventRuleSpec) error {
 		return err
 	}
 	upserted, err := scanEventRule(tx.QueryRow(ctx, `insert into event_rule (name, label, description, selector, sample_key, sample_lane,
-		fire_criteria, clear_criteria, fire_sustain, clear_sustain, severity, message, enabled, official)
-		values ($1, $2, $3, $4, $5, $6, $7, $8, make_interval(secs => $9::float8 / 1000000), make_interval(secs => $10::float8 / 1000000), $11, $12, true, true)
+		fire_criteria, clear_criteria, fire_sustain, clear_sustain, severity, message, enabled, official,
+		fire_event_type_id, clear_event_type_id)
+		values ($1, $2, $3, $4, $5, $6, $7, $8, make_interval(secs => $9::float8 / 1000000), make_interval(secs => $10::float8 / 1000000), $11, $12, true, true,
+		$13::uuid, $14::uuid)
 		on conflict (name) do update set label = excluded.label, description = excluded.description, selector = excluded.selector,
 			sample_key = excluded.sample_key, sample_lane = excluded.sample_lane, fire_criteria = excluded.fire_criteria,
 			clear_criteria = excluded.clear_criteria, fire_sustain = excluded.fire_sustain, clear_sustain = excluded.clear_sustain,
-			severity = excluded.severity, message = excluded.message, version = event_rule.version + 1, updated_at = now()
+			severity = excluded.severity, message = excluded.message, fire_event_type_id = excluded.fire_event_type_id,
+			clear_event_type_id = excluded.clear_event_type_id, version = event_rule.version + 1, updated_at = now()
 		returning `+eventRuleCols,
 		r.Name, labelOrNull(r.Label), r.Description, sel, r.SampleKey, string(r.SampleLane), fire, clear,
-		r.FireSustain.Microseconds(), r.ClearSustain.Microseconds(), r.Severity, r.Message))
+		r.FireSustain.Microseconds(), r.ClearSustain.Microseconds(), nullIfEmpty(r.Severity), r.Message,
+		r.fireTypeID, nullIfEmpty(r.clearTypeID)))
 	if err != nil {
 		return mapRuleWriteErr(err, r.Name)
 	}

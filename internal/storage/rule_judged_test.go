@@ -23,7 +23,7 @@ func TestRuleLastJudged(t *testing.T) {
 	if _, err := f.gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "other-c"}, all, all, all, all); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := f.gw.CreateEventRule(ctx, "", storage.EventRuleSpec{Name: "judge", SampleKey: "endpoint-reachable",
+	if _, err := f.gw.CreateEventRule(ctx, "", storage.EventRuleSpec{FireEventType: "condition-started", Name: "judge", SampleKey: "endpoint-reachable",
 		Fire: criteria("eq", "down"), Severity: "high", Selector: storage.EventRuleSelector{Components: []string{"bar-1"}}}, all); err != nil {
 		t.Fatal(err)
 	}

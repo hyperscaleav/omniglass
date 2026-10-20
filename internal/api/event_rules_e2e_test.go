@@ -28,13 +28,15 @@ type eventRuleBody struct {
 	ClearCriteria *struct {
 		Op string `json:"op"`
 	} `json:"clear_criteria"`
-	FireSustain string `json:"fire_sustain"`
-	Severity    string `json:"severity"`
-	Enabled     bool   `json:"enabled"`
-	Version     int    `json:"version"`
-	Official    bool   `json:"official"`
-	OpenAlarms  *int   `json:"open_alarms"`
-	Pending     *int   `json:"pending_streaks"`
+	FireSustain    string  `json:"fire_sustain"`
+	Severity       *string `json:"severity"`
+	FireEventType  string  `json:"fire_event_type"`
+	ClearEventType *string `json:"clear_event_type"`
+	Enabled        bool    `json:"enabled"`
+	Version        int     `json:"version"`
+	Official       bool    `json:"official"`
+	OpenAlarms     *int    `json:"open_alarms"`
+	Pending        *int    `json:"pending_streaks"`
 	// LastJudged is when the rule last judged an ingested sample (#929).
 	LastJudged *time.Time `json:"last_judged_at"`
 }
@@ -68,7 +70,8 @@ func TestEventRuleAPI(t *testing.T) {
 	viewer := setupAllViewer(t, ctx, dsn, "rule-viewer")
 
 	rule := map[string]any{"name": "reach-lost", "label": "Reachability lost", "sample_key": "endpoint-reachable",
-		"fire_criteria": map[string]any{"op": "eq", "value": "down"}, "fire_sustain": "30s", "severity": "high"}
+		"fire_criteria": map[string]any{"op": "eq", "value": "down"}, "fire_sustain": "30s", "severity": "high",
+		"fire_event_type": "condition-started"}
 	c.do(viewer, http.MethodPost, "/event-rules", rule, http.StatusForbidden)
 	var made eventRuleBody
 	if err := json.Unmarshal(c.do(ownerTok, http.MethodPost, "/event-rules", rule, http.StatusCreated), &made); err != nil {
@@ -91,10 +94,10 @@ func TestEventRuleAPI(t *testing.T) {
 		t.Fatalf("a fresh rule's state = %+v, want empty lists and never judged", state)
 	}
 	for _, bad := range []map[string]any{
-		{"name": "r1", "sample_key": "nope", "fire_criteria": map[string]any{"op": "eq", "value": "x"}, "severity": "high"},
-		{"name": "r2", "sample_key": "room-temperature", "fire_criteria": map[string]any{"op": "gt", "value": "hot"}, "severity": "high"},
-		{"name": "r3", "sample_key": "room-temperature", "fire_criteria": map[string]any{"op": "gt", "value": 30}, "severity": "critical"},
-		{"name": "r4", "sample_key": "room-temperature", "fire_criteria": map[string]any{"op": "gt", "value": 30}, "fire_sustain": "soon", "severity": "high"},
+		{"name": "r1", "sample_key": "nope", "fire_criteria": map[string]any{"op": "eq", "value": "x"}, "severity": "high", "fire_event_type": "condition-started"},
+		{"name": "r2", "sample_key": "room-temperature", "fire_criteria": map[string]any{"op": "gt", "value": "hot"}, "severity": "high", "fire_event_type": "condition-started"},
+		{"name": "r3", "sample_key": "room-temperature", "fire_criteria": map[string]any{"op": "gt", "value": 30}, "severity": "critical", "fire_event_type": "condition-started"},
+		{"name": "r4", "sample_key": "room-temperature", "fire_criteria": map[string]any{"op": "gt", "value": 30}, "fire_sustain": "soon", "severity": "high", "fire_event_type": "condition-started"},
 	} {
 		c.do(ownerTok, http.MethodPost, "/event-rules", bad, http.StatusUnprocessableEntity)
 	}
@@ -256,18 +259,94 @@ func TestEventRuleAPI(t *testing.T) {
 		t.Fatalf("fleet permissions %v, want the all-scope viewer's rule:read", me.FleetPermissions)
 	}
 	c.do(placeOwner, http.MethodPost, "/event-rules", map[string]any{"name": "north-only", "sample_key": "room-temperature",
-		"fire_criteria": map[string]any{"op": "gt", "value": 30}, "severity": "high"}, http.StatusForbidden)
+		"fire_criteria": map[string]any{"op": "gt", "value": 30}, "severity": "high", "fire_event_type": "condition-started"}, http.StatusForbidden)
 
 	// A holder of every rule permission on one place alone still writes no
 	// rule: a rule's selector reaches the whole fleet.
 	placeOnly := setupScopedPrincipal(t, ctx, dsn, "north-only-owner", grantSpec{role: "owner", scopeKind: "location", scopeID: loc.ID})
 	c.do(placeOnly, http.MethodGet, "/event-rules/reach-lost", nil, http.StatusOK)
 	c.do(placeOnly, http.MethodPost, "/event-rules", map[string]any{"name": "north-only", "sample_key": "room-temperature",
-		"fire_criteria": map[string]any{"op": "gt", "value": 30}, "severity": "high"}, http.StatusForbidden)
+		"fire_criteria": map[string]any{"op": "gt", "value": 30}, "severity": "high", "fire_event_type": "condition-started"}, http.StatusForbidden)
 	c.do(placeOnly, http.MethodPatch, "/event-rules/reach-lost", map[string]any{"label": "mine"}, http.StatusForbidden)
 	c.do(placeOnly, http.MethodDelete, "/event-rules/reach-lost", nil, http.StatusForbidden)
 
 	c.do(viewer, http.MethodDelete, "/event-rules/reach-lost", nil, http.StatusForbidden)
 	c.do(ownerTok, http.MethodDelete, "/event-rules/reach-lost", nil, http.StatusNoContent)
 	c.do(ownerTok, http.MethodGet, "/event-rules/reach-lost", nil, http.StatusNotFound)
+}
+
+// TestEventRuleTypesAPI drives #948 over HTTP: a rule saves with no severity
+// (informational, the field absent on read), a fire event type is required
+// and must exist, a clear type must exist when given, a PATCH with an empty
+// severity makes a rule informational, and the official rule carries the
+// generic pair.
+func TestEventRuleTypesAPI(t *testing.T) {
+	dsn := storagetest.NewDSN(t)
+	ctx := context.Background()
+	gw, err := storage.NewPG(ctx, dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer gw.Close()
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatal(err)
+	}
+	ownerTok, hash, prefix, err := auth.NewBearerToken()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := gw.BootstrapOwner(ctx, storage.OwnerSpec{Username: "root", SecretHash: hash, Prefix: prefix}); err != nil {
+		t.Fatal(err)
+	}
+	srv := httptest.NewServer(api.NewHandler(gw))
+	defer srv.Close()
+	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
+
+	var info eventRuleBody
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodPost, "/event-rules", map[string]any{"name": "hot-note",
+		"sample_key": "room-temperature", "fire_criteria": map[string]any{"op": "gt", "value": 30},
+		"fire_event_type": "condition-started"}, http.StatusCreated), &info); err != nil {
+		t.Fatal(err)
+	}
+	if info.Severity != nil || info.FireEventType != "condition-started" || info.ClearEventType != nil {
+		t.Fatalf("an informational rule reads %+v, want no severity, fire condition-started, no clear type", info)
+	}
+	for name, bad := range map[string]map[string]any{
+		"no fire type":      {"name": "t1", "sample_key": "room-temperature", "fire_criteria": map[string]any{"op": "gt", "value": 1}},
+		"unknown fire type": {"name": "t2", "sample_key": "room-temperature", "fire_criteria": map[string]any{"op": "gt", "value": 1}, "fire_event_type": "nope"},
+		"unknown clear":     {"name": "t3", "sample_key": "room-temperature", "fire_criteria": map[string]any{"op": "gt", "value": 1}, "fire_event_type": "condition-started", "clear_event_type": "nope"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			c.t = t
+			c.do(ownerTok, http.MethodPost, "/event-rules", bad, http.StatusUnprocessableEntity)
+		})
+	}
+	c.t = t
+
+	var paged eventRuleBody
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodPost, "/event-rules", map[string]any{"name": "hot-page",
+		"sample_key": "room-temperature", "fire_criteria": map[string]any{"op": "gt", "value": 40}, "severity": "high",
+		"fire_event_type": "condition-started", "clear_event_type": "condition-ended"}, http.StatusCreated), &paged); err != nil {
+		t.Fatal(err)
+	}
+	if paged.Severity == nil || *paged.Severity != "high" || paged.ClearEventType == nil || *paged.ClearEventType != "condition-ended" {
+		t.Fatalf("an alarm-raising rule reads %+v", paged)
+	}
+	var upd eventRuleBody
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodPatch, "/event-rules/hot-page", map[string]any{"severity": "",
+		"clear_event_type": ""}, http.StatusOK), &upd); err != nil {
+		t.Fatal(err)
+	}
+	if upd.Severity != nil || upd.ClearEventType != nil || upd.Version != 2 {
+		t.Fatalf("patched %+v, want informational with no clear type, version 2", upd)
+	}
+	c.do(ownerTok, http.MethodPatch, "/event-rules/hot-page", map[string]any{"fire_event_type": ""}, http.StatusUnprocessableEntity)
+
+	var official eventRuleBody
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/event-rules/reachability-lost", nil, http.StatusOK), &official); err != nil {
+		t.Fatal(err)
+	}
+	if official.FireEventType != "condition-started" || official.ClearEventType == nil || *official.ClearEventType != "condition-ended" {
+		t.Fatalf("the official rule reads %+v, want the generic pair", official)
+	}
 }

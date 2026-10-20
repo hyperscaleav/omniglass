@@ -129,6 +129,17 @@ When a landed sample meets the fire criteria the rule opens an alarm on the samp
 one meets the clear criteria it clears it; a rule with no clear criteria clears on the **negation** of
 its fire criteria. There is no separate `alarm_rule`.
 
+The alarm is **optional** (#948): a rule with no severity is **informational** and raises no alarm. A
+rule also names the [event types](/architecture/events/) it records: a required **`fire_event_type`**,
+written when its condition starts, and an optional **`clear_event_type`**, written when it ends, both by
+name from the `event_type` registry (an unknown one is refused, and a type a rule names cannot be
+deleted). The platform seeds a generic pair for rules that need no semantic type of their own,
+`condition-started` and `condition-ended`; a rule can name a bracketing pair the registry already
+models instead (`call-started` / `call-ended`). Built today: the fields, their validation, and an
+informational rule that opens nothing; writing the events themselves, once at each edge and carrying
+the alarm they opened or resolved, is the next slice of the event-to-alarm edge (#949), over the
+`event_rule_condition` table below.
+
 ```yaml
 event_rule:
   name: reach-lost
@@ -137,7 +148,9 @@ event_rule:
   clear_criteria: { op: eq, value: up } # optional: absent, the negation of fire
   fire_sustain: 30s                     # how long fire must hold
   clear_sustain: 0s
-  severity: high
+  severity: high                        # optional: absent, informational (no alarm)
+  fire_event_type: condition-started    # the event written when the condition starts
+  clear_event_type: condition-ended     # optional: the event written when it ends
   selector: { component_types: [display], components: [] }   # empty: every component
 ```
 
@@ -167,8 +180,9 @@ ingest holds the rule for its batch, so a disable, delete or narrowing waits for
 then clears whatever it raised. Sustains are timed by the **server's receipt** of each sample, never by the
 sample's own timestamp, so a node whose clock runs behind neither skips nor stretches a sustain (which
 sample is newest is still decided by that timestamp). Only a **material** edit restarts a rule's
-streaks (its key, criteria, clear criteria, selector or sustains); a label, description, message or
-severity edit leaves them running. Creating a rule, enabling one, or a material edit **primes** it from
+streaks (its key, criteria, clear criteria, selector or sustains); a label, description, message,
+severity or event type edit leaves them running, since the event types change what the rule writes at
+an edge, not when the edge falls. Creating a rule, enabling one, or a material edit **primes** it from
 each selected series' newest sample, so a condition that already holds starts its sustain then (or
 fires at once with no sustain) instead of waiting for a change the input may never send.
 
@@ -468,9 +482,10 @@ notify/command/wait/branch, `status`, `current_step`), driven by events and alar
 table exists today.
 :::
 
-The event rule is two tables: the authored **`event_rule`** row and the durable streak each rule
-holds per component and instance while it waits out a sustain, **`event_rule_state`**. The severity
-registry is **`severity_level`**.
+The event rule is three tables: the authored **`event_rule`** row, the durable streak each rule
+holds per component and instance while it waits out a sustain, **`event_rule_state`**, and the
+condition each rule holds in force per component and instance, **`event_rule_condition`** (the table
+ships with #948; the evaluator writes it from #949). The severity registry is **`severity_level`**.
 
 <SchemaTable
   table="event_rule"
@@ -479,7 +494,9 @@ registry is **`severity_level`**.
     fire_criteria: 'The comparison that opens an alarm ({op, value}); jsonb so the expression leaf drops in (#524)',
     clear_criteria: 'NULL: clears on the negation of fire_criteria',
     selector: 'Component types and components it watches; empty, every component',
-    severity: 'The level its alarms are raised at, by name',
+    severity: 'The level its alarms are raised at, by name; NULL is an informational rule, which raises no alarm',
+    fire_event_type_id: 'The event type written when the condition starts (FK event_type, required)',
+    clear_event_type_id: 'The event type written when the condition ends; NULL writes none',
     version: 'Bumps on every change',
   }}
 />
@@ -489,6 +506,13 @@ registry is **`severity_level`**.
   notes={{
     pending: 'fire or clear: the action the samples point at',
     since: 'The server receipt time the streak began; the sustain is measured from here',
+  }}
+/>
+
+<SchemaTable
+  table="event_rule_condition"
+  notes={{
+    since: 'When the condition came into force; one row while it holds, for every rule',
   }}
 />
 
