@@ -14,6 +14,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/hyperscaleav/omniglass/internal/rules"
 	"time"
 
 	"github.com/google/uuid"
@@ -461,6 +462,9 @@ type Gateway interface {
 	CreateEventRule(ctx context.Context, actorID string, spec EventRuleSpec, create scope.Set) (*EventRule, error)
 	UpdateEventRule(ctx context.Context, actorID, name string, patch EventRulePatch, action scope.Set) (*EventRule, error)
 	DeleteEventRule(ctx context.Context, actorID, name string, action scope.Set) error
+	// SampleKeyType reads which lane a sample key reads and, for a property,
+	// its data type: what types an expression's value (#958).
+	SampleKeyType(ctx context.Context, key string) (rules.Lane, string, error)
 	// EventRuleState reads a rule's live state: its open alarms and streaks.
 	EventRuleState(ctx context.Context, name string, visible scope.Set) (*EventRuleLive, error)
 	// UpsertEventRule installs an official rule from the boot seed.

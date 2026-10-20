@@ -1699,6 +1699,32 @@ Example:
 omniglass event-type update <name>
 ```
 
+## `omniglass expression`
+
+Commands for the expression resource
+
+### `omniglass expression validate`
+
+Validate an expression
+
+```
+omniglass expression validate [flags]
+```
+
+Compiles an expression against a registered site's environment and answers whether it compiles, with positioned diagnostics, and the site's bindings, admitted builtins and run budget, all generated from the site's declaration. For criteria, an optional sample key types the value (a metric is a number; a property is text, or a bool for a bool property); absent, the value is text. Stores nothing and runs nothing. An unknown site or key is a 422. Gated by rule:read.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--key` | string | (none) | For criteria, the sample key the rule reads: its lane and data type type the value (a metric is a number; a property is text, or a bool for a bool property). Absent, the value is text |
+| `--site` | string | (none) | Where the expression is written: criteria, an event rule's fire_criteria or clear_criteria |
+| `--source` | string | (none) | The expression |
+
+Example:
+
+```sh
+omniglass expression validate --site site --source source
+```
+
 ## `omniglass file`
 
 Commands for the file resource

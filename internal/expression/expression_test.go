@@ -26,7 +26,7 @@ type sampleEnv struct {
 }
 
 type point struct {
-	X int `expr:"x"`
+	X int `expr:"x" doc:"the point's x"`
 }
 
 func boolEnv(t *testing.T) Env {
@@ -472,7 +472,9 @@ type methodful struct {
 func (methodful) Leak() string { return "side effect" }
 
 // The bindings list comes from the struct: names from the expr tag, types from
-// the field, docs from the doc tag, in declaration order.
+// the field, docs from the doc tag, in declaration order; a nested struct's
+// fields are listed by their dotted path (point.x), the way an expression
+// names them.
 func TestBindings(t *testing.T) {
 	got := boolEnv(t).Bindings()
 	want := []Binding{
@@ -484,7 +486,7 @@ func TestBindings(t *testing.T) {
 		{Name: "tags", Type: "map[string]int", Doc: "a map of counts"},
 		{Name: "n", Type: "int"},
 		{Name: "nested", Type: "[][]int"},
-		{Name: "point", Type: "expression.point"},
+		{Name: "point.x", Type: "int", Doc: "the point's x"},
 		{Name: "flags", Type: "[]bool"},
 	}
 	if fmt.Sprint(got) != fmt.Sprint(want) {

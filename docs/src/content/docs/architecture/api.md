@@ -342,7 +342,12 @@ type, a missing fire event type, or a criterion that does not compile against it
 criterion the problem's error is located at `body.fire_criteria.expr` (or `clear_criteria`), or at
 `body.fire_criteria` when the body gave the short form, and carries the `line` and `column` of the
 fault when it has one. A stored rule whose criteria no longer compile carries `criteria_error`
-(`field`, `line`, `column`, `message`) on the list, a get and its state, and holds until rewritten. A rule edit is judged on what it changes from the stored rule:
+(`field`, `line`, `column`, `message`) on the list, a get and its state, and holds until rewritten. `POST /expressions:validate` (gated `rule:read`; `omniglass expression validate`) compiles a
+`source` against a registered expression `site` (today `criteria`; for it, an optional sample `key`
+types the value, a metric a number and a property its data type, text when absent) and answers `ok`,
+the value and result types, `diagnostics` with line, column and phase, and the site's `bindings`,
+`builtins` and `budget`, generated from the site's declaration; it stores and runs nothing, and an
+unknown site or key is a 422. A rule edit is judged on what it changes from the stored rule:
 a selector entry, key or criteria it restates unchanged is not re-resolved, so a rule whose component or
 type was deleted stays editable (it matches nothing by the stale entry), while an entry new to the rule must
 exist. The list and a get carry each rule's live state as counts (`conditions_in_force`, `open_alarms`,

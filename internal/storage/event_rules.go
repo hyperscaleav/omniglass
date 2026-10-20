@@ -312,6 +312,24 @@ func resolveRuleLane(ctx context.Context, q querier, r *EventRule) error {
 	return nil
 }
 
+// ErrSampleKeyNotFound is a sample key that is no registered property or
+// metric.
+var ErrSampleKeyNotFound = errors.New("storage: sample key is not a registered property or metric")
+
+// SampleKeyType reads which lane a sample key reads and, for a property, its
+// data type ("" for a metric): what types the value an expression over its
+// samples reads (#958). A registry read: no scope, like the registries.
+func (p *PG) SampleKeyType(ctx context.Context, key string) (rules.Lane, string, error) {
+	r := EventRule{SampleKey: key}
+	if err := resolveRuleLane(ctx, p.pool, &r); err != nil {
+		if errors.Is(err, ErrEventRuleInvalid) {
+			return "", "", ErrSampleKeyNotFound
+		}
+		return "", "", err
+	}
+	return r.SampleLane, r.dataType, nil
+}
+
 // lowerStored rewrites a stored short-form criterion (one a row written
 // outside the gateway still holds) to its expression where it lowers; one
 // that does not is left for the judge to refuse, holding the rule.

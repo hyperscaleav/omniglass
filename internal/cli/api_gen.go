@@ -2375,6 +2375,48 @@ func generatedCommands() []*cobra.Command {
 	}())
 	roots = append(roots, func() *cobra.Command {
 		parent := &cobra.Command{
+			Use:   "expression",
+			Short: "Commands for the expression resource",
+		}
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				var fKey string
+				var fSite string
+				var fSource string
+				cmd := &cobra.Command{
+					Use:     "validate",
+					Short:   "Validate an expression",
+					Long:    "Compiles an expression against a registered site's environment and answers whether it compiles, with positioned diagnostics, and the site's bindings, admitted builtins and run budget, all generated from the site's declaration. For criteria, an optional sample key types the value (a metric is a number; a property is text, or a bool for a bool property); absent, the value is text. Stores nothing and runs nothing. An unknown site or key is a 422. Gated by rule:read.",
+					Example: "  omniglass expression validate --site site --source source",
+					Args:    cobra.ExactArgs(0),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/expressions:validate")
+						body := map[string]any{}
+						if cmd.Flags().Changed("key") {
+							body["key"] = fKey
+						}
+						if cmd.Flags().Changed("site") {
+							body["site"] = fSite
+						}
+						if cmd.Flags().Changed("source") {
+							body["source"] = fSource
+						}
+						return runAPICommand(cmd, "POST", path, body)
+					},
+				}
+				cmd.Flags().StringVar(&fKey, "key", "", "For criteria, the sample key the rule reads: its lane and data type type the value (a metric is a number; a property is text, or a bool for a bool property). Absent, the value is text")
+				cmd.Flags().StringVar(&fSite, "site", "", "Where the expression is written: criteria, an event rule's fire_criteria or clear_criteria")
+				_ = cmd.MarkFlagRequired("site")
+				cmd.Flags().StringVar(&fSource, "source", "", "The expression")
+				_ = cmd.MarkFlagRequired("source")
+				return cmd
+			}()
+			return cmd
+		}())
+		return parent
+	}())
+	roots = append(roots, func() *cobra.Command {
+		parent := &cobra.Command{
 			Use:   "file",
 			Short: "Commands for the file resource",
 		}

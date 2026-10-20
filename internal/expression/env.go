@@ -57,9 +57,9 @@ type Env struct {
 // struct: the name from the field's `expr` tag (the field name if absent),
 // the type from the field, the doc from its `doc` tag.
 type Binding struct {
-	Name string
-	Type string
-	Doc  string
+	Name string `json:"name"`
+	Type string `json:"type"`
+	Doc  string `json:"doc,omitempty"`
 }
 
 // EnvOf declares a site's environment as the struct type T and pins its
@@ -221,7 +221,8 @@ func CriteriaBuiltins() []string {
 var scalarOnly = map[string]bool{"min": true, "max": true, "abs": true, "ceil": true, "floor": true, "round": true}
 
 // Bindings lists the names an expression may use at this site, in field
-// declaration order (embedded structs flattened in place).
+// declaration order (embedded structs flattened in place, a nested struct's
+// fields by their dotted path).
 func (e Env) Bindings() []Binding {
 	if e.typ == nil {
 		return nil
@@ -229,12 +230,17 @@ func (e Env) Bindings() []Binding {
 	return bindings(e.typ)
 }
 
-func bindings(t reflect.Type) []Binding {
+func bindings(t reflect.Type) []Binding { return bindingsAt(t, "") }
+
+// bindingsAt lists t's fields under prefix: an embedded struct's in place, a
+// named struct field's by their dotted path (component.name), the way an
+// expression names them, and every other field as itself.
+func bindingsAt(t reflect.Type, prefix string) []Binding {
 	var out []Binding
 	for i := 0; i < t.NumField(); i++ {
 		f := t.Field(i)
 		if f.Anonymous && f.Type.Kind() == reflect.Struct {
-			out = append(out, bindings(f.Type)...)
+			out = append(out, bindingsAt(f.Type, prefix)...)
 			continue
 		}
 		if !f.IsExported() {
@@ -244,7 +250,11 @@ func bindings(t reflect.Type) []Binding {
 		if name == "" {
 			name = f.Name
 		}
-		out = append(out, Binding{Name: name, Type: f.Type.String(), Doc: f.Tag.Get("doc")})
+		if f.Type.Kind() == reflect.Struct {
+			out = append(out, bindingsAt(f.Type, prefix+name+".")...)
+			continue
+		}
+		out = append(out, Binding{Name: prefix + name, Type: f.Type.String(), Doc: f.Tag.Get("doc")})
 	}
 	return out
 }

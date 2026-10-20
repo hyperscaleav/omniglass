@@ -1320,6 +1320,26 @@ export interface paths {
         patch: operations["update-event-type"];
         trace?: never;
     };
+    "/expressions:validate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Validate an expression
+         * @description Compiles an expression against a registered site's environment and answers whether it compiles, with positioned diagnostics, and the site's bindings, admitted builtins and run budget, all generated from the site's declaration. For criteria, an optional sample key types the value (a metric is a number; a property is text, or a bool for a bool property); absent, the value is text. Stores nothing and runs nothing. An unknown site or key is a 422. Gated by rule:read.
+         */
+        post: operations["validate-expression"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/files": {
         parameters: {
             query?: never;
@@ -5855,6 +5875,46 @@ export interface components {
             component: string;
             events: components["schemas"]["EventBody"][] | null;
         };
+        ExpressionBinding: {
+            /** @description What it holds */
+            doc?: string;
+            /** @description The name an expression uses (component.name for a nested field) */
+            name: string;
+            /** @description Its Go type */
+            type: string;
+        };
+        ExpressionBudget: {
+            /** @description The wall-clock backstop on a run's charged work, a Go duration */
+            deadline: string;
+            /**
+             * Format: int64
+             * @description The most a run may walk: the summed length of what its builtins and operators read, at least one per step
+             */
+            iterations: number;
+            /**
+             * Format: int64
+             * @description The most a run may allocate, in Expr's memory units
+             */
+            memory: number;
+        };
+        ExpressionDiagnostic: {
+            /**
+             * Format: int64
+             * @description The 1-based column of the fault; 0 when it has none
+             */
+            column: number;
+            /**
+             * Format: int64
+             * @description The 1-based line of the fault; 0 when it has none (a length cap)
+             */
+            line: number;
+            message: string;
+            /**
+             * @description Where it failed: parse (syntax), type (an unknown name, a mismatched type, a result that is not the site's), or limit (a cap)
+             * @enum {string}
+             */
+            phase: "parse" | "type" | "limit";
+        };
         FileBody: {
             /**
              * Format: uri
@@ -8943,6 +9003,49 @@ export interface components {
             /** @description A new website (http or https) */
             website?: string;
         };
+        ValidateExpressionInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/ValidateExpressionInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description For criteria, the sample key the rule reads: its lane and data type type the value (a metric is a number; a property is text, or a bool for a bool property). Absent, the value is text */
+            key?: string;
+            /**
+             * @description Where the expression is written: criteria, an event rule's fire_criteria or clear_criteria
+             * @enum {string}
+             */
+            site: "criteria";
+            /** @description The expression */
+            source: string;
+        };
+        ValidateExpressionOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/ValidateExpressionOutputBody.json
+             */
+            readonly $schema?: string;
+            /** @description The names the expression may use at the site, generated from the site's environment */
+            bindings: components["schemas"]["ExpressionBinding"][] | null;
+            /** @description What one run at the site may spend */
+            budget: components["schemas"]["ExpressionBudget"];
+            /** @description The builtin functions the site admits */
+            builtins: string[] | null;
+            /** @description Why it does not compile, with line and column; empty when ok */
+            diagnostics: components["schemas"]["ExpressionDiagnostic"][] | null;
+            /** @description Whether the expression compiles at the site */
+            ok: boolean;
+            /** @description The type the site requires the expression to yield */
+            result_type: string;
+            site: string;
+            /**
+             * @description The value type the expression was checked against (criteria)
+             * @enum {string}
+             */
+            value_type: "number" | "text" | "bool";
+        };
         VariableBody: {
             /**
              * Format: uri
@@ -11787,6 +11890,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EventTypeBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "validate-expression": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ValidateExpressionInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidateExpressionOutputBody"];
                 };
             };
             /** @description Error */

@@ -3,9 +3,12 @@ title: Expressions
 description: "Omniglass expressions: one engine built on Expr and extended with Omniglass functions, behind every operator-authored expression leaf."
 sidebar:
   badge:
-    text: Design
-    variant: caution
+    text: Partial
+    variant: note
 ---
+
+import ExpressionSites from '../../../components/ExpressionSites.astro';
+
 
 :::design[Target design: the expression engine, tracked in #524]
 
@@ -94,3 +97,15 @@ into expression text, so a hostile value is evaluated literally and never execut
 fields rendered into a request are masked at interpolation time and never surface in a log
 line, error string, or property label.
 :::
+
+## Sites: the bindings, builtins and budget of each
+
+Each place an expression is written is a **site**, declared once in code with the environment it
+compiles against: the names it may use (from a Go struct, so a binding's name, type and doc are
+the struct's), the builtins it admits, the type it must yield and its run budget. The tables below
+are generated from those declarations (`make gen`), and **`POST /expressions:validate`**
+(`omniglass expression validate`, gated `rule:read`) answers from the same ones: given a site, a
+source and, for criteria, the sample key, it says whether the expression compiles, with each
+diagnostic's line and column, and returns the site's bindings, builtins and budget. Built today:
+
+<ExpressionSites />

@@ -6852,3 +6852,20 @@ criteria when the body gave the short form, with its line and column. The consol
 back into its comparison for the words and the form, and shows any other expression as written,
 keeping it on save (editing it in the console is #960).
 
+### Validate an expression, with the site's bindings generated (#958)
+
+The third slice of the expression engine (#524). Each place an expression is written is a **site**,
+declared once in `internal/rules` (`site.go`): its environment per value type (for criteria, a
+metric's number, a string or json property's text, a bool property's bool), the builtins it admits,
+the result it must yield and its budget. `Env.Bindings` now lists a nested struct's fields by their
+dotted path (`component.name`, `component.type`), the way an expression names them.
+
+`POST /expressions:validate` (gated `rule:read`, `omniglass expression validate`) takes a site, a
+source and, for criteria, an optional sample key (which types the value; text when absent), and
+answers whether it compiles, positioned diagnostics, and the site's bindings, builtins and budget,
+read from the declaration. It stores and runs nothing; an unknown site or key is a 422, and the
+site enum is checked against the registry by a test. `cmd/exprgen` (run by `make gen`) writes the
+same declaration to `docs/src/generated/expressions.json`, which the expressions page renders as its
+bindings and builtins table, so no binding is hand-listed; a drift test fails when the committed file
+is stale. The expressions page moves from Design to Partial: the criteria site is built.
+

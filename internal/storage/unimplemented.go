@@ -3,6 +3,7 @@ package storage
 import (
 	"context"
 	"encoding/json"
+	"github.com/hyperscaleav/omniglass/internal/rules"
 	"github.com/hyperscaleav/omniglass/internal/sim/impair"
 	"time"
 
@@ -897,6 +898,10 @@ func (UnimplementedGateway) ReconcileEventRules(context.Context, *RuleReconcileS
 	return nil
 }
 func (UnimplementedGateway) UpsertEventRule(context.Context, EventRuleSpec) error { return nil }
+func (UnimplementedGateway) SampleKeyType(context.Context, string) (rules.Lane, string, error) {
+	return "", "", ErrSampleKeyNotFound
+}
+
 func (UnimplementedGateway) EventRuleState(context.Context, string, scope.Set) (*EventRuleLive, error) {
 	return nil, ErrEventRuleNotFound
 }

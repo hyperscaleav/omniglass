@@ -2640,6 +2640,67 @@ components:
         - component
         - events
       type: object
+    ExpressionBinding:
+      additionalProperties: false
+      properties:
+        doc:
+          description: What it holds
+          type: string
+        name:
+          description: The name an expression uses (component.name for a nested field)
+          type: string
+        type:
+          description: Its Go type
+          type: string
+      required:
+        - name
+        - type
+      type: object
+    ExpressionBudget:
+      additionalProperties: false
+      properties:
+        deadline:
+          description: The wall-clock backstop on a run's charged work, a Go duration
+          type: string
+        iterations:
+          description: "The most a run may walk: the summed length of what its builtins and operators read, at least one per step"
+          format: int64
+          type: integer
+        memory:
+          description: The most a run may allocate, in Expr's memory units
+          format: int64
+          type: integer
+      required:
+        - iterations
+        - memory
+        - deadline
+      type: object
+    ExpressionDiagnostic:
+      additionalProperties: false
+      properties:
+        column:
+          description: The 1-based column of the fault; 0 when it has none
+          format: int64
+          type: integer
+        line:
+          description: The 1-based line of the fault; 0 when it has none (a length cap)
+          format: int64
+          type: integer
+        message:
+          type: string
+        phase:
+          description: "Where it failed: parse (syntax), type (an unknown name, a mismatched type, a result that is not the site's), or limit (a cap)"
+          enum:
+            - parse
+            - type
+            - limit
+          type: string
+      required:
+        - line
+        - column
+        - phase
+        - message
+      type: object
     FileBody:
       additionalProperties: false
       properties:
@@ -8223,6 +8284,90 @@ components:
           description: A new website (http or https)
           type: string
       type: object
+    ValidateExpressionInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/ValidateExpressionInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        key:
+          description: "For criteria, the sample key the rule reads: its lane and data type type the value (a metric is a number; a property is text, or a bool for a bool property). Absent, the value is text"
+          type: string
+        site:
+          description: "Where the expression is written: criteria, an event rule's fire_criteria or clear_criteria"
+          enum:
+            - criteria
+          type: string
+        source:
+          description: The expression
+          type: string
+      required:
+        - site
+        - source
+      type: object
+    ValidateExpressionOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/ValidateExpressionOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        bindings:
+          description: The names the expression may use at the site, generated from the site's environment
+          items:
+            $ref: "#/components/schemas/ExpressionBinding"
+          type:
+            - array
+            - "null"
+        budget:
+          $ref: "#/components/schemas/ExpressionBudget"
+          description: What one run at the site may spend
+        builtins:
+          description: The builtin functions the site admits
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+        diagnostics:
+          description: Why it does not compile, with line and column; empty when ok
+          items:
+            $ref: "#/components/schemas/ExpressionDiagnostic"
+          type:
+            - array
+            - "null"
+        ok:
+          description: Whether the expression compiles at the site
+          type: boolean
+        result_type:
+          description: The type the site requires the expression to yield
+          type: string
+        site:
+          type: string
+        value_type:
+          description: The value type the expression was checked against (criteria)
+          enum:
+            - number
+            - text
+            - bool
+          type: string
+      required:
+        - ok
+        - site
+        - value_type
+        - result_type
+        - diagnostics
+        - bindings
+        - builtins
+        - budget
+      type: object
     VariableBody:
       additionalProperties: false
       properties:
@@ -10606,6 +10751,31 @@ paths:
           description: Error
       summary: Update an event type
       x-omniglass-permission: event_type:update
+  /expressions:validate:
+    post:
+      description: Compiles an expression against a registered site's environment and answers whether it compiles, with positioned diagnostics, and the site's bindings, admitted builtins and run budget, all generated from the site's declaration. For criteria, an optional sample key types the value (a metric is a number; a property is text, or a bool for a bool property); absent, the value is text. Stores nothing and runs nothing. An unknown site or key is a 422. Gated by rule:read.
+      operationId: validate-expression
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ValidateExpressionInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidateExpressionOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Validate an expression
+      x-omniglass-permission: rule:read
   /files:
     get:
       description: Lists the file handles the caller may see (searchable metadata, no bytes). Sensitive files appear only to the admin tier. Gated by file:read.
