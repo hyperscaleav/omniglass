@@ -74,10 +74,12 @@ The engine pins Expr v1.17.8 and treats its builtins as an **allowlist**: every 
 and **each site declares the builtins it admits and its run budget**. A builtin is admitted only
 once vetted: its cost linear in what the run is charged for, its output no larger than its
 inputs. The criteria set is comparison, arithmetic, `in`, `contains` / `startsWith` /
-`endsWith`, `matches` with a constant pattern, `len`, `abs` / `ceil` / `floor` / `round` /
+`endsWith`, `matches` with a constant pattern (capped in compiled size, and charged its
+subject's length times that size), `len`, `abs` / `ceil` / `floor` / `round` /
 `min` / `max` on numbers only, `lower` / `upper` / `trim` / `trimPrefix` / `trimSuffix`, and
 `all` / `any` / `none` / `one` / `count` / `filter` over a bound list with no predicate nested
-in another. Builders and encoders (`map`, `reduce`, `repeat`, `replace`, `join`, `uniq`,
+in another. Equality and `in` take scalars and lists of scalars (and a key in a map), never a
+record, a map, or a list of lists, whose deep comparison no charge covers. Builders and encoders (`map`, `reduce`, `repeat`, `replace`, `join`, `uniq`,
 `flatten`, `toJSON`, the range `..`) are never admitted: their cost is native work that no input
 charge bounds. The clock and zone builtins (**`now`**, **`date`**, **`duration`**,
 **`timezone`**) can never be vetted; a time an expression needs is bound by its caller as data.

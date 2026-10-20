@@ -25,6 +25,11 @@ const (
 	// MaxLiteralElements is the most elements an array or map literal may
 	// have.
 	MaxLiteralElements = 64
+	// MaxPatternInsts is the most instructions a matches pattern may compile
+	// to. RE2 is linear in the subject times the program, so a run is
+	// charged len(subject) * instructions, and the cap keeps one match from
+	// being worth a whole budget on a short subject.
+	MaxPatternInsts = 256
 	// MaxRunMemory is the ceiling on a site's allocation budget, in Expr's
 	// memory units:
 	// every element a range, list or map literal, or a building builtin
@@ -49,12 +54,13 @@ const (
 // timezone database; timezone loads the timezone database; duration builds a
 // time.Duration whose methods compare against nothing but the clock it is
 // meant for. A time an expression needs is bound by the caller as data.
-var DisabledBuiltins = []string{"now", "date", "duration", "timezone"}
+func DisabledBuiltins() []string { return []string{"now", "date", "duration", "timezone"} }
 
 var (
-	ErrSourceTooLong = fmt.Errorf("the expression is longer than %d bytes", MaxSourceBytes)
-	ErrTooManyNodes  = fmt.Errorf("the expression has more than %d nodes", MaxNodes)
-	ErrRunBudget     = errors.New("the expression exceeded its run budget")
+	ErrSourceTooLong   = fmt.Errorf("the expression is longer than %d bytes", MaxSourceBytes)
+	ErrTooManyNodes    = fmt.Errorf("the expression has more than %d nodes", MaxNodes)
+	ErrRunBudget       = errors.New("the expression exceeded its run budget")
+	ErrPatternTooLarge = fmt.Errorf("a matches pattern compiles to more than %d regex instructions", MaxPatternInsts)
 )
 
 // Phase is where an expression failed: parse and type are compile-time
@@ -168,20 +174,34 @@ func inspect(source string, env Env) error {
 		return &Error{Phase: PhaseLimit, Message: ErrTooManyNodes.Error(), err: ErrTooManyNodes}
 	}
 	if w.fault != nil {
-		return fromExpr(PhaseType, w.fault.Bind(tree.Source))
+		e := fromExpr(w.phase, w.fault.Bind(tree.Source))
+		if w.sentinel != nil {
+			e.err = w.sentinel
+		}
+		return e
 	}
 	return nil
 }
 
 type walker struct {
-	env   Env
-	nodes int
-	fault *file.Error // the first refusal met
+	env      Env
+	nodes    int
+	fault    *file.Error // the first refusal met
+	phase    Phase
+	sentinel error
 }
 
 func (w *walker) refuse(n ast.Node, format string, args ...any) {
 	if w.fault == nil {
 		w.fault = &file.Error{Location: n.Location(), Message: fmt.Sprintf(format, args...)}
+		w.phase = PhaseType
+	}
+}
+
+func (w *walker) limit(n ast.Node, sentinel error) {
+	if w.fault == nil {
+		w.fault = &file.Error{Location: n.Location(), Message: sentinel.Error()}
+		w.phase, w.sentinel = PhaseLimit, sentinel
 	}
 }
 
@@ -204,8 +224,13 @@ func (w *walker) Visit(node *ast.Node) {
 		}
 		w.refuse(n, "%s is not a builtin function; an expression calls builtins only", name)
 	case *ast.BinaryNode:
-		if _, ok := n.Right.(*ast.StringNode); n.Operator == "matches" && !ok {
-			w.refuse(n.Right, "matches needs a constant pattern (a quoted string), not one computed when it runs")
+		if n.Operator == "matches" {
+			pat, ok := n.Right.(*ast.StringNode)
+			if !ok {
+				w.refuse(n.Right, "matches needs a constant pattern (a quoted string), not one computed when it runs")
+			} else if insts, err := patternInsts(pat.Value); err == nil && insts > MaxPatternInsts {
+				w.limit(n.Right, ErrPatternTooLarge)
+			}
 		}
 		if n.Operator == ".." {
 			w.refuse(n, "the range operator .. is not available in an expression")
@@ -244,21 +269,47 @@ func (f *nested) Visit(node *ast.Node) {
 	}
 }
 
-// scalarArgs refuses an array, map or unknown argument to a builtin that is
-// admitted for scalars only (min and max would otherwise walk it natively).
-// It runs on the checked tree, where every argument has its type.
-func scalarArgs(source string, root ast.Node) error {
+// typedChecks refuses, on the checked tree where every node has its type,
+// what the parse alone cannot see:
+//
+//   - an array, map or unknown argument to a builtin admitted for scalars
+//     only (min and max would otherwise walk it natively);
+//   - count without a predicate over a list that is not of bools;
+//   - ==, != and in on anything but scalars and lists of scalars (and a
+//     scalar key in a map): a struct, a map, or a list of lists falls to a
+//     deep comparison that its charge does not cover.
+func typedChecks(source string, root ast.Node) error {
 	var fault *file.Error
-	ast.Walk(&root, visitFunc(func(node *ast.Node) {
-		b, ok := (*node).(*ast.BuiltinNode)
-		if !ok || !scalarOnly[b.Name] || fault != nil {
-			return
+	fail := func(n ast.Node, format string, args ...any) {
+		if fault == nil {
+			fault = &file.Error{Location: n.Location(), Message: fmt.Sprintf(format, args...)}
 		}
-		for _, arg := range b.Arguments {
-			t := arg.Type()
-			if t == nil || t.Kind() == reflect.Slice || t.Kind() == reflect.Array || t.Kind() == reflect.Map || t.Kind() == reflect.Interface {
-				fault = &file.Error{Location: arg.Location(), Message: fmt.Sprintf("%s takes numbers only here, not a list", b.Name)}
-				return
+	}
+	ast.Walk(&root, visitFunc(func(node *ast.Node) {
+		switch n := (*node).(type) {
+		case *ast.BuiltinNode:
+			if scalarOnly[n.Name] {
+				for _, arg := range n.Arguments {
+					if !scalar(arg.Type()) {
+						fail(arg, "%s takes numbers only here, not a list", n.Name)
+					}
+				}
+			}
+			if n.Name == "count" && len(n.Arguments) == 1 {
+				if t := n.Arguments[0].Type(); t == nil || (t.Kind() != reflect.Slice && t.Kind() != reflect.Array) || t.Elem().Kind() != reflect.Bool {
+					fail(n.Arguments[0], "count without a predicate counts true elements, so its list must be of bools; give a predicate")
+				}
+			}
+		case *ast.BinaryNode:
+			switch n.Operator {
+			case "==", "!=":
+				if !flat(n.Left) || !flat(n.Right) {
+					fail(n, "%s compares scalars and lists of scalars only, not a struct, a map, or a list of lists", n.Operator)
+				}
+			case "in":
+				if !scalar(unwrapCharge(n.Left).Type()) || !(flat(n.Right) && !scalar(unwrapCharge(n.Right).Type()) || scalarKeyed(n.Right)) {
+					fail(n, "in looks for a scalar in a list of scalars or among a map's keys")
+				}
 			}
 		}
 	}))
@@ -266,6 +317,78 @@ func scalarArgs(source string, root ast.Node) error {
 		return fromExpr(PhaseType, fault.Bind(file.NewSource(source)))
 	}
 	return nil
+}
+
+// scalar is a type compared in constant time per byte: a bool, a number, a
+// string, or nil (a nil literal), through a pointer.
+func scalar(t reflect.Type) bool {
+	if t == nil {
+		return true
+	}
+	switch t.Kind() {
+	case reflect.Bool, reflect.String, reflect.Float32, reflect.Float64,
+		reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
+		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
+		return true
+	case reflect.Pointer:
+		return scalar(t.Elem())
+	}
+	return false
+}
+
+// flat is a scalar, or a list whose elements are scalars: a typed list, or a
+// list literal of scalar elements (Expr types a literal as []any, and its
+// optimizer folds a constant one into a ConstantNode).
+func flat(n ast.Node) bool {
+	n = unwrapCharge(n)
+	if c, ok := n.(*ast.ConstantNode); ok {
+		v := reflect.ValueOf(c.Value)
+		if !v.IsValid() || scalar(v.Type()) {
+			return true
+		}
+		if v.Kind() != reflect.Slice && v.Kind() != reflect.Array {
+			return false
+		}
+		for i := 0; i < v.Len(); i++ {
+			if el := v.Index(i); el.IsValid() && !(el.Kind() == reflect.Interface && el.IsNil()) && !scalar(reflect.TypeOf(el.Interface())) {
+				return false
+			}
+		}
+		return true
+	}
+	if a, ok := n.(*ast.ArrayNode); ok {
+		for _, el := range a.Nodes {
+			if !scalar(el.Type()) {
+				return false
+			}
+		}
+		return true
+	}
+	t := n.Type()
+	if scalar(t) {
+		return true
+	}
+	return (t.Kind() == reflect.Slice || t.Kind() == reflect.Array) && scalar(t.Elem())
+}
+
+func scalarKeyed(n ast.Node) bool {
+	n = unwrapCharge(n)
+	if c, ok := n.(*ast.ConstantNode); ok && c.Value != nil {
+		t := reflect.TypeOf(c.Value)
+		return t.Kind() == reflect.Map && scalar(t.Key())
+	}
+	t := n.Type()
+	return t != nil && t.Kind() == reflect.Map && scalar(t.Key())
+}
+
+// unwrapCharge is the node a charge wraps (budget.go), or n itself.
+func unwrapCharge(n ast.Node) ast.Node {
+	if call, ok := n.(*ast.CallNode); ok {
+		if id, ok := call.Callee.(*ast.IdentifierNode); ok && isCharge(id.Value) {
+			return call.Arguments[1]
+		}
+	}
+	return n
 }
 
 type visitFunc func(*ast.Node)
@@ -292,7 +415,7 @@ func compile(source string, env Env) (*Program, error) {
 	if err != nil {
 		return nil, fromExpr(PhaseType, err)
 	}
-	if err := scalarArgs(source, prog.Node()); err != nil {
+	if err := typedChecks(source, prog.Node()); err != nil {
 		return nil, err
 	}
 	if env.result != Any {

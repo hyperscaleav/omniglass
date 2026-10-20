@@ -69,7 +69,7 @@ type Binding struct {
 // reading as a number, not a time.Time).
 //
 // A site admits no builtin unless it names it (WithBuiltins), and runs on
-// CriteriaBudget unless it asks for another (WithBudget).
+// CriteriaBudget() unless it asks for another (WithBudget).
 func EnvOf[T any](result Result, opts ...Option) (Env, error) {
 	t := reflect.TypeFor[T]()
 	if t.Kind() != reflect.Struct {
@@ -85,7 +85,7 @@ func EnvOf[T any](result Result, opts ...Option) (Env, error) {
 	if err != nil {
 		return Env{}, err
 	}
-	env := Env{typ: t, run: run, result: result, budget: CriteriaBudget}
+	env := Env{typ: t, run: run, result: result, budget: CriteriaBudget()}
 	for _, opt := range opts {
 		if err := opt(&env); err != nil {
 			return Env{}, err
@@ -148,7 +148,7 @@ func WithBuiltins(names ...string) Option {
 // CeilingBudget.
 func WithBudget(b Budget) Option {
 	return func(e *Env) error {
-		c := CeilingBudget
+		c := CeilingBudget()
 		if b.Iterations <= 0 || b.Memory <= 0 || b.Deadline <= 0 ||
 			b.Iterations > c.Iterations || b.Memory > c.Memory || b.Deadline > c.Deadline {
 			return fmt.Errorf("a run budget is positive and within the ceiling %+v, not %+v", c, b)
@@ -168,14 +168,17 @@ type Budget struct {
 	Deadline   time.Duration
 }
 
-var (
-	// CriteriaBudget is the default: a criteria runs on the ingest path, per
-	// sample change, against a handful of bindings.
-	CriteriaBudget = Budget{Iterations: 10_000, Memory: 10_000, Deadline: 5 * time.Millisecond}
-	// CeilingBudget is the most any site may ask for (a calc reduce, off the
-	// ingest path).
-	CeilingBudget = Budget{Iterations: MaxRunIterations, Memory: MaxRunMemory, Deadline: MaxRunDuration}
-)
+// CriteriaBudget is the default: a criteria runs on the ingest path, per
+// sample change, against a handful of bindings. A fresh value each call.
+func CriteriaBudget() Budget {
+	return Budget{Iterations: 10_000, Memory: 10_000, Deadline: 5 * time.Millisecond}
+}
+
+// CeilingBudget is the most any site may ask for (a calc reduce, off the
+// ingest path), built from constants so it cannot be raised at run time.
+func CeilingBudget() Budget {
+	return Budget{Iterations: MaxRunIterations, Memory: MaxRunMemory, Deadline: MaxRunDuration}
+}
 
 // vetted is every builtin a site may admit, with the argument for why its
 // cost is bounded. Every other Expr builtin is refused at compile time,
@@ -205,11 +208,13 @@ var vetted = map[string]string{
 	"filter":     "one pass over the charged list, output no longer than it; a predicate may not nest another",
 }
 
-// CriteriaBuiltins are the builtins a criteria site admits: today, all of
-// vetted.
-var CriteriaBuiltins = []string{
-	"abs", "all", "any", "ceil", "count", "filter", "floor", "len", "lower", "max",
-	"min", "none", "one", "round", "trim", "trimPrefix", "trimSuffix", "upper",
+// CriteriaBuiltins are the builtins a criteria site admits (today, all of
+// vetted), as a fresh slice each call.
+func CriteriaBuiltins() []string {
+	return []string{
+		"abs", "all", "any", "ceil", "count", "filter", "floor", "len", "lower", "max",
+		"min", "none", "one", "round", "trim", "trimPrefix", "trimSuffix", "upper",
+	}
 }
 
 // scalarOnly are the vetted builtins Expr would also let walk an array.

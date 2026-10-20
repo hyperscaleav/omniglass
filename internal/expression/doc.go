@@ -19,7 +19,11 @@
 // never admitted: their cost is Go-native work that no input charge bounds
 // and no deadline can pre-empt. Predicates may not nest, and literals are
 // short. A later site vets a builtin deliberately, with its cost argument
-// and tests.
+// and tests. A matches pattern is a constant capped at MaxPatternInsts
+// compiled instructions and charged its subject's length times its size; ==,
+// != and in take scalars and lists of scalars only (and a scalar key in a
+// map), never a struct, a map or a list of lists, whose deep comparison no
+// charge covers.
 //
 // The engine is pure. It reads no clock, timezone database, randomness or
 // process environment (DisabledBuiltins can never be vetted), the
@@ -31,7 +35,9 @@
 //
 // A run is bounded by its site's deterministic budget: what it allocates
 // (Budget.Memory) and what it walks (Budget.Iterations); a criteria gets
-// CriteriaBudget, and no site more than CeilingBudget. The wall-clock
+// CriteriaBudget(), and no site more than CeilingBudget(), which is built
+// from constants. The settings are functions returning fresh copies, so no
+// caller can widen them for everyone. The wall-clock
 // Budget.Deadline is only a backstop for charged work: it is the one limit
 // that depends on the machine, and it cannot interrupt a native call, which
 // is why the allowlist exists.

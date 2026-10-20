@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"regexp/syntax"
 	"time"
 
 	"github.com/expr-lang/expr"
@@ -22,7 +23,9 @@ import (
 //   - every argument of a builtin that walks (all but len, type, get, first,
 //     last), except its predicate;
 //   - both operands of +, the comparisons, contains, startsWith, endsWith;
-//   - the subject of matches (the pattern is a constant, compiled once);
+//   - the subject of matches, times the pattern's compiled size (RE2 is
+//     linear in both; the pattern is a constant, compiled once, and capped
+//     at MaxPatternInsts);
 //   - the collection on the right of `in`, unless it is a map (a lookup).
 //
 // The charge returns its argument unchanged, so types and results do not
@@ -45,10 +48,29 @@ import (
 // the deterministic iteration budget is what bounds an expression.
 
 const (
-	chargeFn    = "$charge"    // charges a collection, map, or string
-	chargeSeqFn = "$chargeSeq" // as chargeFn, but a map is free (an `in` lookup)
-	meterField  = "$meter"
+	chargeFn      = "$charge"      // charges a collection, map, or string
+	chargeSeqFn   = "$chargeSeq"   // as chargeFn, but a map is free (an `in` lookup)
+	chargeTimesFn = "$chargeTimes" // as chargeFn, times a constant (a regex's size)
+	meterField    = "$meter"
 )
+
+func isCharge(name string) bool {
+	return name == chargeFn || name == chargeSeqFn || name == chargeTimesFn
+}
+
+// patternInsts is the size of the program RE2 runs for a matches pattern
+// (Expr compiles it with the same Perl syntax).
+func patternInsts(pattern string) (int, error) {
+	re, err := syntax.Parse(pattern, syntax.Perl)
+	if err != nil {
+		return 0, err
+	}
+	prog, err := syntax.Compile(re.Simplify())
+	if err != nil {
+		return 0, err
+	}
+	return len(prog.Inst), nil
+}
 
 // constantTime are the builtins that do not walk their arguments.
 var constantTime = map[string]bool{"len": true}
@@ -104,7 +126,7 @@ func runType(env reflect.Type) (t reflect.Type, err error) {
 	}), nil
 }
 
-func chargeFunc(mapsFree bool) func(args ...any) (any, error) {
+func chargeFunc(mapsFree, times bool) func(args ...any) (any, error) {
 	return func(args ...any) (any, error) {
 		m, ok := args[0].(*meter)
 		if !ok {
@@ -120,6 +142,9 @@ func chargeFunc(mapsFree bool) func(args ...any) (any, error) {
 				n = v.Len()
 			}
 		}
+		if times {
+			n *= args[2].(int)
+		}
 		if err := m.charge(n); err != nil {
 			return nil, err
 		}
@@ -128,8 +153,8 @@ func chargeFunc(mapsFree bool) func(args ...any) (any, error) {
 }
 
 func chargeValidate(args []reflect.Type) (reflect.Type, error) {
-	if len(args) != 2 {
-		return nil, errors.New("charge takes the meter and one argument")
+	if len(args) != 2 && len(args) != 3 {
+		return nil, errors.New("charge takes the meter, one argument, and an optional factor")
 	}
 	if args[1] == nil {
 		return reflect.TypeFor[any](), nil
@@ -139,8 +164,9 @@ func chargeValidate(args []reflect.Type) (reflect.Type, error) {
 
 func chargeOption() expr.Option {
 	return func(c *conf.Config) {
-		c.Functions[chargeFn] = &builtin.Function{Name: chargeFn, Func: chargeFunc(false), Validate: chargeValidate}
-		c.Functions[chargeSeqFn] = &builtin.Function{Name: chargeSeqFn, Func: chargeFunc(true), Validate: chargeValidate}
+		c.Functions[chargeFn] = &builtin.Function{Name: chargeFn, Func: chargeFunc(false, false), Validate: chargeValidate}
+		c.Functions[chargeSeqFn] = &builtin.Function{Name: chargeSeqFn, Func: chargeFunc(true, false), Validate: chargeValidate}
+		c.Functions[chargeTimesFn] = &builtin.Function{Name: chargeTimesFn, Func: chargeFunc(false, true), Validate: chargeValidate}
 		c.Visitors = append(c.Visitors, charger{})
 	}
 }
@@ -164,16 +190,22 @@ func (charger) Visit(node *ast.Node) {
 			wrap(&n.Left, chargeFn)
 			wrap(&n.Right, chargeFn)
 		case n.Operator == "matches":
-			wrap(&n.Left, chargeFn)
+			insts := 1
+			if pat, ok := n.Right.(*ast.StringNode); ok {
+				if k, err := patternInsts(pat.Value); err == nil {
+					insts = k
+				}
+			}
+			wrap(&n.Left, chargeTimesFn, &ast.IntegerNode{Value: insts})
 		case n.Operator == "in":
 			wrap(&n.Right, chargeSeqFn)
 		}
 	}
 }
 
-func wrap(arg *ast.Node, fn string) {
+func wrap(arg *ast.Node, fn string, extra ...ast.Node) {
 	if call, ok := (*arg).(*ast.CallNode); ok {
-		if id, ok := call.Callee.(*ast.IdentifierNode); ok && (id.Value == chargeFn || id.Value == chargeSeqFn) {
+		if id, ok := call.Callee.(*ast.IdentifierNode); ok && isCharge(id.Value) {
 			return
 		}
 	}
@@ -182,5 +214,8 @@ func wrap(arg *ast.Node, fn string) {
 	callee.SetLocation(loc)
 	m := &ast.IdentifierNode{Value: meterField}
 	m.SetLocation(loc)
-	ast.Patch(arg, &ast.CallNode{Callee: callee, Arguments: []ast.Node{m, *arg}})
+	for _, x := range extra {
+		x.SetLocation(loc)
+	}
+	ast.Patch(arg, &ast.CallNode{Callee: callee, Arguments: append([]ast.Node{m, *arg}, extra...)})
 }

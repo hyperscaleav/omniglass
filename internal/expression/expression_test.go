@@ -20,6 +20,13 @@ type sampleEnv struct {
 	Labels []string       `expr:"labels"`
 	Tags   map[string]int `expr:"tags" doc:"a map of counts"`
 	N      int            `expr:"n"`
+	Nested [][]int        `expr:"nested"`
+	Point  point          `expr:"point"`
+	Flags  []bool         `expr:"flags"`
+}
+
+type point struct {
+	X int `expr:"x"`
 }
 
 func boolEnv(t *testing.T) Env {
@@ -142,10 +149,16 @@ func TestResultKinds(t *testing.T) {
 	}
 }
 
-// mustEnv is the sample site with the criteria builtins and budget.
+// mustEnv is the sample site with the criteria builtins and the criteria
+// walk and memory budgets. Its deadline is the ceiling's, not the criteria's
+// 5ms: the deadline is a machine-dependent backstop, and a test asserting
+// honest work passes must not hang on how loaded the machine (or -race) is.
 func mustEnv(t *testing.T, r Result, opts ...Option) Env {
 	t.Helper()
-	env, err := EnvOf[sampleEnv](r, append([]Option{WithBuiltins(CriteriaBuiltins...)}, opts...)...)
+	b := CriteriaBudget()
+	b.Deadline = CeilingBudget().Deadline
+	base := []Option{WithBuiltins(CriteriaBuiltins()...), WithBudget(b)}
+	env, err := EnvOf[sampleEnv](r, append(base, opts...)...)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -220,7 +233,7 @@ func TestRunBudget(t *testing.T) {
 	if e.Phase != PhaseLimit || !errors.Is(e, ErrRunBudget) {
 		t.Errorf("got %v (phase %q), want ErrRunBudget", e, e.Phase)
 	}
-	p, err = Compile(src, mustEnv(t, Bool, WithBudget(CeilingBudget)))
+	p, err = Compile(src, mustEnv(t, Bool, WithBudget(CeilingBudget())))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -325,7 +338,7 @@ func TestSiteDeclaration(t *testing.T) {
 	for name, opt := range map[string]Option{
 		"unvetted builtin":   WithBuiltins("map"),
 		"unknown builtin":    WithBuiltins("nope"),
-		"over the ceiling":   WithBudget(Budget{Iterations: MaxRunIterations + 1, Memory: 1, Deadline: time.Millisecond}),
+		"over the ceiling":   WithBudget(Budget{Iterations: CeilingBudget().Iterations + 1, Memory: 1, Deadline: time.Millisecond}),
 		"zero budget":        WithBudget(Budget{}),
 		"deadline too large": WithBudget(Budget{Iterations: 1, Memory: 1, Deadline: time.Hour}),
 	} {
@@ -350,7 +363,7 @@ func TestDisabledBuiltins(t *testing.T) {
 			t.Errorf("%q: phase = %q, want %q (%v)", src, e.Phase, PhaseType, e)
 		}
 	}
-	for _, name := range DisabledBuiltins {
+	for _, name := range DisabledBuiltins() {
 		if _, err := Compile(name+"() != nil", boolEnv(t)); err == nil {
 			t.Errorf("disabled builtin %s compiled", name)
 		}
@@ -470,6 +483,9 @@ func TestBindings(t *testing.T) {
 		{Name: "labels", Type: "[]string"},
 		{Name: "tags", Type: "map[string]int", Doc: "a map of counts"},
 		{Name: "n", Type: "int"},
+		{Name: "nested", Type: "[][]int"},
+		{Name: "point", Type: "expression.point"},
+		{Name: "flags", Type: "[]bool"},
 	}
 	if fmt.Sprint(got) != fmt.Sprint(want) {
 		t.Errorf("Bindings() =\n%v\nwant\n%v", got, want)
@@ -479,6 +495,10 @@ func TestBindings(t *testing.T) {
 // Compiling the same source against the same env shape compiles once; another
 // shape or another result recompiles.
 func TestCacheReuse(t *testing.T) {
+	// A fresh cache, so the test holds when run repeatedly (-count).
+	saved := programs
+	programs = newCache(MaxCachedPrograms)
+	defer func() { programs = saved }()
 	src := "value > 12345.678 // cache reuse"
 	before := compileCount.Load()
 	p1, err := Compile(src, boolEnv(t))
@@ -693,4 +713,97 @@ func TestDeadlineBackstop(t *testing.T) {
 	}
 	_, err = p.Run(sampleEnv{Items: ints(10)})
 	budgetErr(t, "deadline", err)
+}
+
+// Review 3 #1: a regex costs its subject times its program. A pattern whose
+// compiled program is past the cap is refused, with its position; a run is
+// charged the subject's length times the program's size.
+func TestRegexCost(t *testing.T) {
+	e := asError(t, func() error {
+		_, err := Compile("value > 0 &&\n state matches '(a|aa|aaa|b){0,1000}z'", boolEnv(t))
+		return err
+	}())
+	if e.Phase != PhaseLimit || !errors.Is(e, ErrPatternTooLarge) || e.Line != 2 {
+		t.Errorf("got %v (phase %q, line %d), want ErrPatternTooLarge on line 2", e, e.Phase, e.Line)
+	}
+	src := "state matches '(a|b)+z'"
+	budgetErr(t, src, runOn(t, src, sampleEnv{State: strings.Repeat("a", 5000)}))
+	if err := runOn(t, src, sampleEnv{State: strings.Repeat("a", 50) + "z"}); err != nil {
+		t.Errorf("a short subject: %v", err)
+	}
+}
+
+// Review 3 #2: equality and membership on a struct, a map, or a list of
+// lists would fall to a deep comparison its charge does not cover; refused
+// at compile time. Scalars, lists of scalars, and a key in a map stay.
+func TestDeepEqualityRefused(t *testing.T) {
+	for _, src := range []string{
+		"tags == tags",
+		"tags != tags",
+		"nested == nested",
+		"point == point",
+		"point != point",
+		"items in nested",
+		"point in [point]",
+	} {
+		e := asError(t, func() error { _, err := Compile(src, boolEnv(t)); return err }())
+		if e.Phase != PhaseType || e.Line == 0 {
+			t.Errorf("%q: got %v (phase %q), want a positioned type error", src, e, e.Phase)
+		}
+	}
+	for _, src := range []string{
+		"items == items", "'k' in tags", "1 in items", "state == 'x'", "point.x == 1", "labels != labels",
+		"items == [1, 2]",
+	} {
+		if _, err := Compile(src, boolEnv(t)); err != nil {
+			t.Errorf("%q: %v", src, err)
+		}
+	}
+	// A list literal of scalars is the common criteria form.
+	p, err := Compile(`state in ["down", "fault"]`, boolEnv(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, err := p.Run(sampleEnv{State: "fault"}); err != nil || got != true {
+		t.Errorf(`state in ["down", "fault"] = %v, %v`, got, err)
+	}
+}
+
+// Review 3 #3: count without a predicate counts true elements, so its list
+// must be of bools, checked at compile time rather than failing at run time.
+func TestCountWithoutPredicateNeedsBools(t *testing.T) {
+	e := asError(t, func() error { _, err := Compile("count(items) > 0", boolEnv(t)); return err }())
+	if e.Phase != PhaseType || e.Line == 0 {
+		t.Errorf("got %v (phase %q), want a positioned type error", e, e.Phase)
+	}
+	p, err := Compile("count(flags) == 2", boolEnv(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, err := p.Run(sampleEnv{Flags: []bool{true, false, true}}); err != nil || got != true {
+		t.Errorf("count(flags) == 2 = %v, %v", got, err)
+	}
+}
+
+// Review 3 #4: the sandbox's settings are values handed out fresh, so no
+// caller can widen them for everyone.
+func TestSettingsAreCopies(t *testing.T) {
+	b := CriteriaBuiltins()
+	b[0] = "repeat"
+	if CriteriaBuiltins()[0] == "repeat" {
+		t.Error("CriteriaBuiltins is shared")
+	}
+	d := DisabledBuiltins()
+	d[0] = "len"
+	if DisabledBuiltins()[0] == "len" {
+		t.Error("DisabledBuiltins is shared")
+	}
+	c := CriteriaBudget()
+	c.Iterations = 1 << 40
+	if CriteriaBudget().Iterations == 1<<40 {
+		t.Error("CriteriaBudget is shared")
+	}
+	if _, err := EnvOf[sampleEnv](Bool, WithBuiltins("repeat")); err == nil {
+		t.Error("an unvetted builtin was admitted")
+	}
 }

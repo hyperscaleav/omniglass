@@ -6792,7 +6792,15 @@ comparison, arithmetic, `in`, `contains` / `startsWith` / `endsWith`, constant-p
 `len`, the numeric builtins on scalars only, the trim and case builtins, and `all` / `any` /
 `none` / `one` / `count` / `filter` with no nested predicate; the range `..`, the builders and
 encoders, and literals past 64 elements are refused at compile time, with a position. Each later
-site vets a builtin deliberately, with its cost argument and tests.
+site vets a builtin deliberately, with its cost argument and tests. A third pass found two costs
+the charge understated: RE2 is linear in the subject times the compiled pattern
+(`(a|aa|aaa|b){0,1000}z` over 1000 characters took 643ms on a charge of 1000), so a pattern is
+capped at 256 compiled instructions and a match charged length times size; and equality on a
+struct, a map, or a list of lists falls to a deep comparison (200ms for 2 units), so `==`, `!=`
+and `in` take scalars and lists of scalars only, checked on the typed tree. `count` without a
+predicate needs a list of bools at compile time, and the sandbox's settings (`CriteriaBudget`,
+`CeilingBudget`, `CriteriaBuiltins`, `DisabledBuiltins`) are functions returning fresh copies, the
+ceiling built from constants.
 
 The caps: a 4096-byte source, 1000 AST nodes (counted by walking the tree), and a per-site budget
 (criteria: 10,000 walked, 10,000 allocated, a 5ms deadline; ceiling: 1,000,000, 100,000, 250ms).
