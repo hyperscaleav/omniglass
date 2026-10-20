@@ -60,6 +60,8 @@ type updateSeverityLevelInput struct {
 // registerSeverityLevelRoutes wires the severity registry (#917): fleet-wide
 // reference data every reader lists, and operator levels an admin adds,
 // renames, recolors, re-ranks and deletes. Official levels are read-only.
+// Reads take any grant; a write takes an all-scope one (#930), since a
+// level's rank moves health fleet-wide.
 func registerSeverityLevelRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "list-severity-level",
@@ -100,10 +102,10 @@ func registerSeverityLevelRoutes(api huma.API, a *authenticator, gw storage.Gate
 		Path:          "/severity-levels",
 		DefaultStatus: http.StatusCreated,
 		Summary:       "Create a severity level",
-		Description:   "Adds an operator severity level at a rank of its own, between two others without renumbering. A name or rank already taken is a 409; a color outside the palette is a 422. Audited. Gated by severity_level:create.",
+		Description:   "Adds an operator severity level at a rank of its own, between two others without renumbering. A name or rank already taken is a 409; a color outside the palette is a 422. Audited. Gated by severity_level:create, with an all-scope grant: a level's rank moves health fleet-wide.",
 	}, "severity_level", "create"), func(ctx context.Context, in *createSeverityLevelInput) (*severityLevelOutput, error) {
 		l, err := gw.CreateSeverityLevel(ctx, actorID(ctx), storage.SeverityLevel{
-			Name: in.Body.Name, Label: in.Body.Label, Color: in.Body.Color, Rank: in.Body.Rank})
+			Name: in.Body.Name, Label: in.Body.Label, Color: in.Body.Color, Rank: in.Body.Rank}, a.scopeFor(ctx, "severity_level", "create"))
 		if err != nil {
 			return nil, mapSeverityLevelErr(err)
 		}
@@ -115,10 +117,10 @@ func registerSeverityLevelRoutes(api huma.API, a *authenticator, gw storage.Gate
 		Method:      http.MethodPatch,
 		Path:        "/severity-levels/{name}",
 		Summary:     "Update a severity level",
-		Description: "Patches an operator level's name, label, color or rank (an absent field is unchanged); a rename carries every alarm at the level with it. Official levels are read-only (409). Audited. Gated by severity_level:update.",
+		Description: "Patches an operator level's name, label, color or rank (an absent field is unchanged); a rename carries every alarm at the level with it. Official levels are read-only (409). Audited. Gated by severity_level:update, with an all-scope grant.",
 	}, "severity_level", "update"), func(ctx context.Context, in *updateSeverityLevelInput) (*severityLevelOutput, error) {
 		l, err := gw.UpdateSeverityLevel(ctx, actorID(ctx), in.Name, storage.SeverityLevelPatch{
-			Name: in.Body.Name, Label: in.Body.Label, Color: in.Body.Color, Rank: in.Body.Rank})
+			Name: in.Body.Name, Label: in.Body.Label, Color: in.Body.Color, Rank: in.Body.Rank}, a.scopeFor(ctx, "severity_level", "update"))
 		if err != nil {
 			return nil, mapSeverityLevelErr(err)
 		}
@@ -131,9 +133,9 @@ func registerSeverityLevelRoutes(api huma.API, a *authenticator, gw storage.Gate
 		Path:          "/severity-levels/{name}",
 		DefaultStatus: http.StatusNoContent,
 		Summary:       "Delete a severity level",
-		Description:   "Removes an operator level no alarm or event rule names; an official level or one in use is a 409. Audited. Gated by severity_level:delete.",
+		Description:   "Removes an operator level no alarm or event rule names; an official level or one in use is a 409. Audited. Gated by severity_level:delete, with an all-scope grant.",
 	}, "severity_level", "delete"), func(ctx context.Context, in *severityLevelNameInput) (*struct{}, error) {
-		if err := gw.DeleteSeverityLevel(ctx, actorID(ctx), in.Name); err != nil {
+		if err := gw.DeleteSeverityLevel(ctx, actorID(ctx), in.Name, a.scopeFor(ctx, "severity_level", "delete")); err != nil {
 			return nil, mapSeverityLevelErr(err)
 		}
 		return nil, nil
@@ -145,6 +147,8 @@ func mapSeverityLevelErr(err error) error {
 		return refErr
 	}
 	switch {
+	case errors.Is(err, storage.ErrSeverityLevelForbidden):
+		return huma.Error403Forbidden("writing a severity level needs an all-scope grant: its rank moves health fleet-wide")
 	case errors.Is(err, storage.ErrSeverityLevelNotFound):
 		return huma.Error404NotFound("severity level not found")
 	case errors.Is(err, storage.ErrSeverityLevelOfficial):

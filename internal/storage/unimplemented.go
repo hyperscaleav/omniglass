@@ -859,13 +859,15 @@ func (UnimplementedGateway) ListSeverityLevels(context.Context) ([]SeverityLevel
 func (UnimplementedGateway) GetSeverityLevel(context.Context, string) (*SeverityLevel, error) {
 	return nil, ErrSeverityLevelNotFound
 }
-func (UnimplementedGateway) CreateSeverityLevel(context.Context, string, SeverityLevel) (*SeverityLevel, error) {
+func (UnimplementedGateway) CreateSeverityLevel(context.Context, string, SeverityLevel, scope.Set) (*SeverityLevel, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) UpdateSeverityLevel(context.Context, string, string, SeverityLevelPatch) (*SeverityLevel, error) {
+func (UnimplementedGateway) UpdateSeverityLevel(context.Context, string, string, SeverityLevelPatch, scope.Set) (*SeverityLevel, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) DeleteSeverityLevel(context.Context, string, string) error { return nil }
+func (UnimplementedGateway) DeleteSeverityLevel(context.Context, string, string, scope.Set) error {
+	return nil
+}
 func (UnimplementedGateway) ListEventRules(context.Context, scope.Set) ([]EventRule, error) {
 	return nil, nil
 }

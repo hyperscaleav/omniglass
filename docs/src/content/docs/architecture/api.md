@@ -328,7 +328,8 @@ simulated component per staffed role at its own free address with its endpoint o
 role assignment, in one transaction: it lands whole or not at all.
 
 **Alarms are raised by rules and graded by a level registry.** `/severity-levels` (read with
-`severity_level:read`, written with `severity_level:*`) lists the severity levels least to most severe,
+`severity_level:read` on any grant, written with `severity_level:*` only on an all-scope grant, since a
+level's rank moves health fleet-wide) lists the severity levels least to most severe,
 each with whether an alarm at it puts a component in outage; official levels are read-only. `/event-rules`
 (gated `rule:*`; read like a registry, written only on an all-scope grant) authors the rules that raise alarms: a sample
 key, fire and clear criteria, sustains, a severity level and a selector; an unknown key or level, or

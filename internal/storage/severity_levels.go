@@ -8,6 +8,8 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+
+	"github.com/hyperscaleav/omniglass/internal/scope"
 )
 
 // SeverityLevel is one named level of the severity registry (#917,
@@ -36,11 +38,12 @@ type SeverityLevelPatch struct {
 
 // Severity level sentinels.
 var (
-	ErrSeverityLevelNotFound = errors.New("storage: severity level not found")
-	ErrSeverityLevelExists   = errors.New("storage: a severity level already has that name or rank")
-	ErrSeverityLevelOfficial = errors.New("storage: an official severity level is read-only")
-	ErrSeverityLevelInvalid  = errors.New("storage: severity level is invalid")
-	ErrSeverityLevelInUse    = errors.New("storage: severity level is in use by an alarm or an event rule")
+	ErrSeverityLevelNotFound  = errors.New("storage: severity level not found")
+	ErrSeverityLevelExists    = errors.New("storage: a severity level already has that name or rank")
+	ErrSeverityLevelOfficial  = errors.New("storage: an official severity level is read-only")
+	ErrSeverityLevelInvalid   = errors.New("storage: severity level is invalid")
+	ErrSeverityLevelInUse     = errors.New("storage: severity level is in use by an alarm or an event rule")
+	ErrSeverityLevelForbidden = errors.New("storage: writing a severity level needs an all-scope grant")
 )
 
 // SeverityColors is the palette a level's color is drawn from: the console
@@ -131,8 +134,12 @@ func (p *PG) GetSeverityLevel(ctx context.Context, name string) (*SeverityLevel,
 	return &l, nil
 }
 
-// CreateSeverityLevel adds an operator level, audited.
-func (p *PG) CreateSeverityLevel(ctx context.Context, actorID string, l SeverityLevel) (*SeverityLevel, error) {
+// CreateSeverityLevel adds an operator level, audited; it needs an all-scope
+// create grant, since a level's rank moves health fleet-wide.
+func (p *PG) CreateSeverityLevel(ctx context.Context, actorID string, l SeverityLevel, create scope.Set) (*SeverityLevel, error) {
+	if !create.All {
+		return nil, ErrSeverityLevelForbidden
+	}
 	if err := validateSeverityLevel(l.Name, l.Color, l.Rank); err != nil {
 		return nil, err
 	}
@@ -175,7 +182,7 @@ func lockMutableSeverityLevel(ctx context.Context, tx pgx.Tx, name string) (Seve
 }
 
 // UpdateSeverityLevel patches an operator level, audited. A rename cascades
-// to every alarm and rule naming it.
+// to every alarm and rule naming it. It needs an all-scope update grant.
 //
 // Lock order: the event rules naming the level FOR UPDATE, then the level's
 // row, then (a re-rank) the health locks. An ingest batch holds the rules it
@@ -184,7 +191,10 @@ func lockMutableSeverityLevel(ctx context.Context, tx pgx.Tx, name string) (Seve
 // against such a batch: the rename's cascade waits on the batch's rule rows
 // while the batch waits on the level. Taking the rules first waits the batch
 // out instead, and no batch judging by them starts until this commits.
-func (p *PG) UpdateSeverityLevel(ctx context.Context, actorID, name string, patch SeverityLevelPatch) (*SeverityLevel, error) {
+func (p *PG) UpdateSeverityLevel(ctx context.Context, actorID, name string, patch SeverityLevelPatch, action scope.Set) (*SeverityLevel, error) {
+	if !action.All {
+		return nil, ErrSeverityLevelForbidden
+	}
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("storage: begin update severity level: %w", err)
@@ -258,8 +268,12 @@ func (p *PG) UpdateSeverityLevel(ctx context.Context, actorID, name string, patc
 	return &updated, nil
 }
 
-// DeleteSeverityLevel removes an operator level no alarm or rule names, audited.
-func (p *PG) DeleteSeverityLevel(ctx context.Context, actorID, name string) error {
+// DeleteSeverityLevel removes an operator level no alarm or rule names,
+// audited; it needs an all-scope delete grant.
+func (p *PG) DeleteSeverityLevel(ctx context.Context, actorID, name string, action scope.Set) error {
+	if !action.All {
+		return ErrSeverityLevelForbidden
+	}
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("storage: begin delete severity level: %w", err)
