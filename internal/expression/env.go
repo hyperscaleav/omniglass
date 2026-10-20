@@ -3,6 +3,9 @@ package expression
 import (
 	"fmt"
 	"reflect"
+	"slices"
+	"strings"
+	"time"
 )
 
 // Result is the type a site pins for its expressions' value. A compiled
@@ -43,9 +46,11 @@ func (r Result) String() string {
 // identity (the Go type and the result) is the env shape the program cache
 // keys on. The zero Env is not a site.
 type Env struct {
-	typ    reflect.Type
-	run    reflect.Type // typ embedded with the run meter (budget.go)
-	result Result
+	typ      reflect.Type
+	run      reflect.Type // typ embedded with the run meter (budget.go)
+	result   Result
+	builtins string // the admitted builtins, sorted, comma-joined (comparable)
+	budget   Budget
 }
 
 // Binding is one name an expression may use at a site, read from the env
@@ -62,7 +67,10 @@ type Binding struct {
 // interface (any included) anywhere in it, and no type in it with methods (Expr lets an expression
 // call exported methods, and a method is behavior, not data; bind a clock
 // reading as a number, not a time.Time).
-func EnvOf[T any](result Result) (Env, error) {
+//
+// A site admits no builtin unless it names it (WithBuiltins), and runs on
+// CriteriaBudget unless it asks for another (WithBudget).
+func EnvOf[T any](result Result, opts ...Option) (Env, error) {
 	t := reflect.TypeFor[T]()
 	if t.Kind() != reflect.Struct {
 		return Env{}, fmt.Errorf("an expression environment is a struct, not %s", t)
@@ -77,13 +85,19 @@ func EnvOf[T any](result Result) (Env, error) {
 	if err != nil {
 		return Env{}, err
 	}
-	return Env{typ: t, run: run, result: result}, nil
+	env := Env{typ: t, run: run, result: result, budget: CriteriaBudget}
+	for _, opt := range opts {
+		if err := opt(&env); err != nil {
+			return Env{}, err
+		}
+	}
+	return env, nil
 }
 
 // MustEnv is EnvOf for a site declared at package init, where a bad
 // declaration is a programming error.
-func MustEnv[T any](result Result) Env {
-	env, err := EnvOf[T](result)
+func MustEnv[T any](result Result, opts ...Option) Env {
+	env, err := EnvOf[T](result, opts...)
 	if err != nil {
 		panic(err)
 	}
@@ -92,6 +106,114 @@ func MustEnv[T any](result Result) Env {
 
 // Result is the type this site's expressions must produce.
 func (e Env) Result() Result { return e.result }
+
+// Budget is what one run at this site may spend.
+func (e Env) Budget() Budget { return e.budget }
+
+// Builtins lists the builtins this site admits, sorted.
+func (e Env) Builtins() []string {
+	if e.builtins == "" {
+		return nil
+	}
+	return strings.Split(e.builtins, ",")
+}
+
+func (e Env) admits(name string) bool { return slices.Contains(e.Builtins(), name) }
+
+// Option declares one more thing about a site.
+type Option func(*Env) error
+
+// WithBuiltins admits the named builtins at a site. Each must be vetted
+// (listed in vetted): a builtin whose cost is linear in what the run is charged for and
+// whose output is no larger than its inputs. A builtin is vetted
+// deliberately, with its cost argument and its tests, when a site needs it.
+func WithBuiltins(names ...string) Option {
+	return func(e *Env) error {
+		set := e.Builtins()
+		for _, n := range names {
+			if _, ok := vetted[n]; !ok {
+				return fmt.Errorf("builtin %q is not vetted for expressions; vet it (a cost argument and tests) before a site admits it", n)
+			}
+			if !slices.Contains(set, n) {
+				set = append(set, n)
+			}
+		}
+		slices.Sort(set)
+		e.builtins = strings.Join(set, ",")
+		return nil
+	}
+}
+
+// WithBudget sets a site's run budget, each part positive and no larger than
+// CeilingBudget.
+func WithBudget(b Budget) Option {
+	return func(e *Env) error {
+		c := CeilingBudget
+		if b.Iterations <= 0 || b.Memory <= 0 || b.Deadline <= 0 ||
+			b.Iterations > c.Iterations || b.Memory > c.Memory || b.Deadline > c.Deadline {
+			return fmt.Errorf("a run budget is positive and within the ceiling %+v, not %+v", c, b)
+		}
+		e.budget = b
+		return nil
+	}
+}
+
+// Budget is what one run may spend: Iterations is the walk budget (the
+// summed length of everything a builtin or operator reads, at least one per
+// step; budget.go), Memory is Expr's allocation budget, and Deadline is the
+// wall-clock backstop on charged work.
+type Budget struct {
+	Iterations int
+	Memory     int
+	Deadline   time.Duration
+}
+
+var (
+	// CriteriaBudget is the default: a criteria runs on the ingest path, per
+	// sample change, against a handful of bindings.
+	CriteriaBudget = Budget{Iterations: 10_000, Memory: 10_000, Deadline: 5 * time.Millisecond}
+	// CeilingBudget is the most any site may ask for (a calc reduce, off the
+	// ingest path).
+	CeilingBudget = Budget{Iterations: MaxRunIterations, Memory: MaxRunMemory, Deadline: MaxRunDuration}
+)
+
+// vetted is every builtin a site may admit, with the argument for why its
+// cost is bounded. Every other Expr builtin is refused at compile time,
+// including the ones that build (map, reduce, sortBy, groupBy, concat,
+// flatten, uniq, repeat, replace, join, split, the range ..), encode (toJSON,
+// fromJSON, base64), or read the clock (DisabledBuiltins): their cost is
+// Go-native work that charging inputs cannot bound and the deadline cannot
+// pre-empt.
+var vetted = map[string]string{
+	"len":        "constant time",
+	"abs":        "a scalar in, a scalar out",
+	"ceil":       "a scalar in, a scalar out",
+	"floor":      "a scalar in, a scalar out",
+	"round":      "a scalar in, a scalar out",
+	"min":        "scalars only (an array argument is refused); linear in its arguments",
+	"max":        "scalars only (an array argument is refused); linear in its arguments",
+	"lower":      "linear in the charged string; output no longer than it",
+	"upper":      "linear in the charged string; output no longer than it",
+	"trim":       "linear in the charged string; output no longer than it",
+	"trimPrefix": "linear in the charged strings; output no longer than the first",
+	"trimSuffix": "linear in the charged strings; output no longer than the first",
+	"all":        "one pass over the charged list; a predicate may not nest another",
+	"any":        "one pass over the charged list; a predicate may not nest another",
+	"none":       "one pass over the charged list; a predicate may not nest another",
+	"one":        "one pass over the charged list; a predicate may not nest another",
+	"count":      "one pass over the charged list; a predicate may not nest another",
+	"filter":     "one pass over the charged list, output no longer than it; a predicate may not nest another",
+}
+
+// CriteriaBuiltins are the builtins a criteria site admits: today, all of
+// vetted.
+var CriteriaBuiltins = []string{
+	"abs", "all", "any", "ceil", "count", "filter", "floor", "len", "lower", "max",
+	"min", "none", "one", "round", "trim", "trimPrefix", "trimSuffix", "upper",
+}
+
+// scalarOnly are the vetted builtins Expr would also let walk an array.
+var scalarOnly = map[string]bool{"min": true, "max": true, "abs": true, "ceil": true, "floor": true, "round": true}
 
 // Bindings lists the names an expression may use at this site, in field
 // declaration order (embedded structs flattened in place).

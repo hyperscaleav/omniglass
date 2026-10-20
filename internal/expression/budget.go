@@ -17,7 +17,7 @@ import (
 // searched in a loop, or a string doubled by + charge it nothing. So the
 // program is patched (charger) to route every value a walk reads through a
 // charge on the run's meter, which adds the value's length (at least one) and
-// refuses past MaxRunIterations:
+// refuses past the site's Budget.Iterations:
 //
 //   - every argument of a builtin that walks (all but len, type, get, first,
 //     last), except its predicate;
@@ -30,11 +30,19 @@ import (
 // program is compiled against (the site's env embedded, plus the meter), so
 // a cached program shared across goroutines still counts each run on its own.
 //
-// The meter also holds a wall-clock deadline (MaxRunDuration) from the start
-// of the run, checked at every charge. It is a backstop, not the budget: the
-// iteration count is deterministic and is what bounds an expression; the
-// deadline is the one limit that depends on the machine, there only so a
-// walk a future Expr version adds without a charge is still bounded.
+// Charging bounds only what passes through a charge. A Go-native builtin
+// runs to completion once called (repeat, replace, join, uniq, toJSON and
+// flatten can each do work far beyond their charged inputs), so the real
+// bound is the allowlist (vetted, env.go): a site admits only builtins whose cost is
+// linear in what they are charged for and whose output is no larger than
+// their inputs, with no range operator, no nested predicate, and short
+// literals.
+//
+// The meter also holds the site's wall-clock deadline (Budget.Deadline) from
+// the start of the run, checked at charge points. It is a backstop for
+// charged work only: it cannot pre-empt a native call, which is why the
+// allowlist exists, and it is the one limit that depends on the machine, so
+// the deterministic iteration budget is what bounds an expression.
 
 const (
 	chargeFn    = "$charge"    // charges a collection, map, or string
@@ -42,11 +50,8 @@ const (
 	meterField  = "$meter"
 )
 
-// runDeadline is MaxRunDuration; a variable only so a test can force it.
-var runDeadline = MaxRunDuration
-
 // constantTime are the builtins that do not walk their arguments.
-var constantTime = map[string]bool{"len": true, "type": true, "get": true, "first": true, "last": true}
+var constantTime = map[string]bool{"len": true}
 
 // walksOperands are the binary operators whose cost grows with both operands.
 var walksOperands = map[string]bool{
@@ -59,21 +64,25 @@ var walksOperands = map[string]bool{
 type meter struct {
 	used     int
 	calls    int
+	limit    int
 	start    time.Time
 	deadline time.Duration
 }
 
-func newMeter() *meter { return &meter{start: time.Now(), deadline: runDeadline} }
+func newMeter(b Budget) *meter {
+	return &meter{limit: b.Iterations, start: time.Now(), deadline: b.Deadline}
+}
 
 // charge adds n, at least 1: each charged step is work even when the value
-// it reads is a number. The clock is read every clockEvery charges.
+// it reads is a number. The clock is read at the first charge and every
+// clockEvery after.
 func (m *meter) charge(n int) error {
 	m.used += max(n, 1)
 	m.calls++
-	if m.used > MaxRunIterations {
+	if m.used > m.limit {
 		return ErrRunBudget
 	}
-	if (m.calls%clockEvery == 0 || m.deadline <= 0) && time.Since(m.start) > m.deadline {
+	if m.calls%clockEvery == 1 && time.Since(m.start) > m.deadline {
 		return ErrRunBudget
 	}
 	return nil

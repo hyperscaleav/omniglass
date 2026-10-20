@@ -6779,20 +6779,27 @@ type (including one whose type is only known at run time), and any `$` name (Exp
 `$env` and the engine's own plumbing), each as an `*expression.Error` with a phase and a 1-based
 line and column. `Program.Run` takes one prepared input of the site's type.
 
-The caps are named constants: a 4096-byte source, 1000 AST nodes (counted by walking the tree),
-and a per-run budget in two halves. Expr's own memory budget (`MaxRunMemory`, 100,000) counts what
-a run allocates but not what it iterates, so `all(items, all(items, ...))` over a bound list ran
-unbudgeted; the engine patches every builtin's collection argument and every `in` through a
-charge on a per-run meter (`MaxRunIterations`, 1,000,000), and the nested case now stops with
-`ErrRunBudget`. A review then proved more uncharged walks and closed them: string `+` (a chain of
-lets doubling a string reached 1.5 GB), every argument of a variadic builtin (not only the first),
-and the comparisons, `contains`, `startsWith`, `endsWith` and `matches` subjects; every charge now
-costs at least one, so the budget counts steps as well as lengths, and `in` on a map is a free
-lookup. A `matches` pattern must be a constant (one regex compile, not one per run). A 250ms
-wall-clock deadline backs the budget, documented as the one nondeterministic limit. `now`, `date`,
-`duration` and `timezone` are disabled; an expression calls builtins only (no method, no bound
-value); and an environment type carrying a func, a channel, an interface (`any` included), or
-methods is refused when the site is declared, so a future JSON-payload site needs a dedicated
-data-only value type. Integer arithmetic wraps on overflow, as Go's does. Compiled programs
-are cached by (source, env type, result) in a 1024-entry LRU safe for concurrent use. The
-expressions page keeps its Design badge until the criteria entry point lands.
+A site also names the builtins it admits and its run budget (`WithBuiltins`, `WithBudget`).
+Builtins are an **allowlist**: every Expr builtin is off, and a site may admit only vetted ones,
+each linear in what the run is charged for with output no larger than its inputs. Two adversarial
+review passes shaped this. The first found walks the budget did not charge (string `+`, variadic
+arguments, comparisons, `contains` and `matches` subjects); those are charged, at least one per
+step. The second found the charging model cannot bound Go-native builtins at all: `repeat`
+allocates before any check, aliased `map` builds 10^9 leaves for a few units that `max`, `toJSON`
+and `flatten` walk natively for seconds, `uniq` is quadratic, `replace` and `join` output a product
+of their inputs, and the deadline cannot interrupt a native call. So the criteria set is
+comparison, arithmetic, `in`, `contains` / `startsWith` / `endsWith`, constant-pattern `matches`,
+`len`, the numeric builtins on scalars only, the trim and case builtins, and `all` / `any` /
+`none` / `one` / `count` / `filter` with no nested predicate; the range `..`, the builders and
+encoders, and literals past 64 elements are refused at compile time, with a position. Each later
+site vets a builtin deliberately, with its cost argument and tests.
+
+The caps: a 4096-byte source, 1000 AST nodes (counted by walking the tree), and a per-site budget
+(criteria: 10,000 walked, 10,000 allocated, a 5ms deadline; ceiling: 1,000,000, 100,000, 250ms).
+The deadline is a backstop for charged work and the one nondeterministic limit. `now`, `date`,
+`duration` and `timezone` can never be vetted; an expression calls builtins only (no method, no
+bound value); and an environment type carrying a func, a channel, an interface (`any` included),
+or methods is refused when the site is declared, so a future JSON-payload site needs a dedicated
+data-only value type. Integer arithmetic wraps on overflow, as Go's does. Compiled programs are
+cached by (source, env, including its builtins and budget) in a 1024-entry LRU safe for concurrent
+use. The expressions page keeps its Design badge until the criteria entry point lands.

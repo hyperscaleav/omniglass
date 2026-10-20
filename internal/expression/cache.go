@@ -2,7 +2,6 @@ package expression
 
 import (
 	"container/list"
-	"reflect"
 	"sync"
 )
 
@@ -12,8 +11,7 @@ const MaxCachedPrograms = 1024
 
 type cacheKey struct {
 	source string
-	env    reflect.Type
-	result Result
+	env    Env
 }
 
 type cacheEntry struct {

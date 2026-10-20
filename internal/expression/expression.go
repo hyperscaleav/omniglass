@@ -22,23 +22,29 @@ const (
 	MaxSourceBytes = 4096
 	// MaxNodes is the most AST nodes a parsed expression may have.
 	MaxNodes = 1000
-	// MaxRunMemory is one run's allocation budget in Expr's memory units:
+	// MaxLiteralElements is the most elements an array or map literal may
+	// have.
+	MaxLiteralElements = 64
+	// MaxRunMemory is the ceiling on a site's allocation budget, in Expr's
+	// memory units:
 	// every element a range, list or map literal, or a building builtin
 	// (map, filter, sort, repeat, ...) allocates.
 	MaxRunMemory = 100_000
-	// MaxRunIterations is one run's work budget: the summed length of every
+	// MaxRunIterations is the ceiling on a site's walk budget: the summed
+	// length of every
 	// collection or string a builtin or operator walks (budget.go). Expr has
 	// no loop construct beyond these, so this bounds a run's time.
 	MaxRunIterations = 1_000_000
-	// MaxRunDuration is a wall-clock backstop on one run, checked wherever
-	// the iteration budget is charged. It is the one limit that depends on the
+	// MaxRunDuration is the ceiling on a site's wall-clock backstop, checked
+	// where the walk budget is charged. It is the one limit that depends on the
 	// machine (so not deterministic); the iteration budget is what bounds an
 	// expression, and this is set well above the time that budget allows
 	// (a run spending the whole budget measured about 50ms).
 	MaxRunDuration = 250 * time.Millisecond
 )
 
-// DisabledBuiltins are the Expr builtins (as of v1.17.8) that are not pure:
+// DisabledBuiltins are the Expr builtins (as of v1.17.8) that are not pure,
+// and so can never be vetted (every builtin outside the vetted registry is refused anyway):
 // now reads the clock; date parses in the process's local zone and loads the
 // timezone database; timezone loads the timezone database; duration builds a
 // time.Duration whose methods compare against nothing but the clock it is
@@ -48,7 +54,7 @@ var DisabledBuiltins = []string{"now", "date", "duration", "timezone"}
 var (
 	ErrSourceTooLong = fmt.Errorf("the expression is longer than %d bytes", MaxSourceBytes)
 	ErrTooManyNodes  = fmt.Errorf("the expression has more than %d nodes", MaxNodes)
-	ErrRunBudget     = fmt.Errorf("the expression exceeded its run budget (%d allocated or %d iterated)", MaxRunMemory, MaxRunIterations)
+	ErrRunBudget     = errors.New("the expression exceeded its run budget")
 )
 
 // Phase is where an expression failed: parse and type are compile-time
@@ -127,11 +133,11 @@ func Compile(source string, env Env) (*Program, error) {
 	if len(source) > MaxSourceBytes {
 		return nil, &Error{Phase: PhaseLimit, Message: ErrSourceTooLong.Error(), err: ErrSourceTooLong}
 	}
-	key := cacheKey{source: source, env: env.typ, result: env.result}
+	key := cacheKey{source: source, env: env}
 	if p, ok := programs.get(key); ok {
 		return p, nil
 	}
-	if err := inspect(source); err != nil {
+	if err := inspect(source, env); err != nil {
 		return nil, err
 	}
 	p, err := compile(source, env)
@@ -146,15 +152,17 @@ func Compile(source string, env Env) (*Program, error) {
 // run plumbing) is refused, so the declared bindings are the whole namespace;
 // a call is refused unless it is a builtin (Expr parses a builtin as its own
 // node, so any call node is a method or a value being called); and a matches
-// pattern must be a constant, so its regex compiles once, not per run.
-func inspect(source string) error {
+// pattern must be a constant, so its regex compiles once, not per run. The
+// allowlist is enforced here too: a builtin the site does not admit, the
+// range operator, a predicate inside a predicate, and a long literal.
+func inspect(source string, env Env) error {
 	c := conf.CreateNew()
 	c.MaxNodes = 0
 	tree, err := parser.ParseWithConfig(source, c)
 	if err != nil {
 		return fromExpr(PhaseParse, err)
 	}
-	var w walker
+	w := walker{env: env}
 	ast.Walk(&tree.Node, &w)
 	if w.nodes > MaxNodes {
 		return &Error{Phase: PhaseLimit, Message: ErrTooManyNodes.Error(), err: ErrTooManyNodes}
@@ -166,6 +174,7 @@ func inspect(source string) error {
 }
 
 type walker struct {
+	env   Env
 	nodes int
 	fault *file.Error // the first refusal met
 }
@@ -198,14 +207,76 @@ func (w *walker) Visit(node *ast.Node) {
 		if _, ok := n.Right.(*ast.StringNode); n.Operator == "matches" && !ok {
 			w.refuse(n.Right, "matches needs a constant pattern (a quoted string), not one computed when it runs")
 		}
+		if n.Operator == ".." {
+			w.refuse(n, "the range operator .. is not available in an expression")
+		}
+	case *ast.BuiltinNode:
+		if !w.env.admits(n.Name) {
+			allowed := w.env.builtins
+			if allowed == "" {
+				allowed = "none"
+			}
+			w.refuse(n, "%s is not available here (this site admits: %s)", n.Name, strings.ReplaceAll(allowed, ",", ", "))
+		}
+	case *ast.PredicateNode:
+		var inner nested
+		ast.Walk(&n.Node, &inner)
+		if inner.at != nil {
+			w.refuse(inner.at, "a predicate inside a predicate is not allowed: its cost is the product of both lists")
+		}
+	case *ast.ArrayNode:
+		if len(n.Nodes) > MaxLiteralElements {
+			w.refuse(n, "a list literal has at most %d elements", MaxLiteralElements)
+		}
+	case *ast.MapNode:
+		if len(n.Pairs) > MaxLiteralElements {
+			w.refuse(n, "a map literal has at most %d entries", MaxLiteralElements)
+		}
 	}
 }
 
+// nested finds a predicate inside a predicate's body.
+type nested struct{ at ast.Node }
+
+func (f *nested) Visit(node *ast.Node) {
+	if p, ok := (*node).(*ast.PredicateNode); ok && f.at == nil {
+		f.at = p
+	}
+}
+
+// scalarArgs refuses an array, map or unknown argument to a builtin that is
+// admitted for scalars only (min and max would otherwise walk it natively).
+// It runs on the checked tree, where every argument has its type.
+func scalarArgs(source string, root ast.Node) error {
+	var fault *file.Error
+	ast.Walk(&root, visitFunc(func(node *ast.Node) {
+		b, ok := (*node).(*ast.BuiltinNode)
+		if !ok || !scalarOnly[b.Name] || fault != nil {
+			return
+		}
+		for _, arg := range b.Arguments {
+			t := arg.Type()
+			if t == nil || t.Kind() == reflect.Slice || t.Kind() == reflect.Array || t.Kind() == reflect.Map || t.Kind() == reflect.Interface {
+				fault = &file.Error{Location: arg.Location(), Message: fmt.Sprintf("%s takes numbers only here, not a list", b.Name)}
+				return
+			}
+		}
+	}))
+	if fault != nil {
+		return fromExpr(PhaseType, fault.Bind(file.NewSource(source)))
+	}
+	return nil
+}
+
+type visitFunc func(*ast.Node)
+
+func (f visitFunc) Visit(n *ast.Node) { f(n) }
+
 func compile(source string, env Env) (*Program, error) {
 	compileCount.Add(1)
-	opts := []expr.Option{expr.Env(reflect.New(env.run).Elem().Interface()), chargeOption()}
-	for _, name := range DisabledBuiltins {
-		opts = append(opts, expr.DisableBuiltin(name))
+	opts := []expr.Option{expr.Env(reflect.New(env.run).Elem().Interface()), chargeOption(), expr.DisableAllBuiltins()}
+	for _, name := range env.Builtins() {
+		opts = append(opts, expr.EnableBuiltin(name))
 	}
 	switch env.result {
 	case Bool:
@@ -220,6 +291,9 @@ func compile(source string, env Env) (*Program, error) {
 	prog, err := expr.Compile(source, opts...)
 	if err != nil {
 		return nil, fromExpr(PhaseType, err)
+	}
+	if err := scalarArgs(source, prog.Node()); err != nil {
+		return nil, err
 	}
 	if env.result != Any {
 		if t := prog.Node().Type(); t == nil || t.Kind() == reflect.Interface {
@@ -242,8 +316,8 @@ func (p *Program) Run(input any) (any, error) {
 	}
 	w := reflect.New(p.env.run).Elem()
 	w.Field(0).Set(v)
-	w.Field(1).Set(reflect.ValueOf(newMeter()))
-	machine := vm.VM{MemoryBudget: MaxRunMemory}
+	w.Field(1).Set(reflect.ValueOf(newMeter(p.env.budget)))
+	machine := vm.VM{MemoryBudget: uint(p.env.budget.Memory)}
 	out, err := machine.Run(p.prog, w.Interface())
 	if err != nil {
 		return nil, fromExpr(PhaseRun, err)

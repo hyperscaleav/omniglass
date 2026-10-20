@@ -70,13 +70,23 @@ either) keeps the pipeline's DAG acyclic.
 ## Safety
 
 Expressions are **sandboxed**: no I/O, no network, no unbounded loops, bounded execution.
-The engine pins Expr v1.17.8 and disables its builtins that are not pure: **`now`**, **`date`**,
-**`duration`**, and **`timezone`** (they read the clock, the process's local zone, or the
-timezone database); a time an expression needs is bound by its caller as data. An expression
-calls builtins only, never a method or a bound value, and a site's environment holds concrete
-data types (no interface, so no value whose behavior is chosen at run time). A run is bounded by
-what it allocates and what it walks, deterministically, with a wall-clock deadline behind both
-as a backstop. Integer arithmetic wraps on overflow, as Go's does, rather than failing.
+The engine pins Expr v1.17.8 and treats its builtins as an **allowlist**: every builtin is off,
+and **each site declares the builtins it admits and its run budget**. A builtin is admitted only
+once vetted: its cost linear in what the run is charged for, its output no larger than its
+inputs. The criteria set is comparison, arithmetic, `in`, `contains` / `startsWith` /
+`endsWith`, `matches` with a constant pattern, `len`, `abs` / `ceil` / `floor` / `round` /
+`min` / `max` on numbers only, `lower` / `upper` / `trim` / `trimPrefix` / `trimSuffix`, and
+`all` / `any` / `none` / `one` / `count` / `filter` over a bound list with no predicate nested
+in another. Builders and encoders (`map`, `reduce`, `repeat`, `replace`, `join`, `uniq`,
+`flatten`, `toJSON`, the range `..`) are never admitted: their cost is native work that no input
+charge bounds. The clock and zone builtins (**`now`**, **`date`**, **`duration`**,
+**`timezone`**) can never be vetted; a time an expression needs is bound by its caller as data.
+An expression calls builtins only, never a method or a bound value, and a site's environment
+holds concrete data types (no interface, so no value whose behavior is chosen at run time). A run
+is bounded by its site's budget of what it allocates and what it walks, deterministically; a
+criteria's is small, and no site's exceeds a fixed ceiling. A wall-clock deadline backs the
+budget for charged work only: it cannot interrupt a native call, which is why the allowlist
+exists. Integer arithmetic wraps on overflow, as Go's does, rather than failing.
 Operator-supplied configuration values are bound as **data in the environment**, never spliced
 into expression text, so a hostile value is evaluated literally and never executed. Secret
 fields rendered into a request are masked at interpolation time and never surface in a log

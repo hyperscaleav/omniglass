@@ -7,6 +7,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 )
 
 // sampleEnv is a site's declared environment: the bindings an expression may
@@ -23,11 +24,7 @@ type sampleEnv struct {
 
 func boolEnv(t *testing.T) Env {
 	t.Helper()
-	env, err := EnvOf[sampleEnv](Bool)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return env
+	return mustEnv(t, Bool)
 }
 
 // asError asserts err is a diagnostic and returns it.
@@ -113,11 +110,6 @@ func TestWrongResultType(t *testing.T) {
 			t.Errorf("%q: position = %d:%d, want 1:1", src, e.Line, e.Column)
 		}
 	}
-	// An expression whose type is unknown until run time is refused too: the
-	// site asked for a bool, and "maybe" is not one.
-	if _, err := Compile(`fromJSON(state)`, boolEnv(t)); err == nil {
-		t.Error("an expression of unknown type compiled against a bool site")
-	}
 }
 
 // Each pinned result kind accepts its own type.
@@ -133,11 +125,7 @@ func TestResultKinds(t *testing.T) {
 		{String, "upper(state)", "DOWN"},
 		{Any, "items", []int{1, 2, 3}},
 	} {
-		env, err := EnvOf[sampleEnv](tc.result)
-		if err != nil {
-			t.Fatal(err)
-		}
-		p, err := Compile(tc.src, env)
+		p, err := Compile(tc.src, mustEnv(t, tc.result))
 		if err != nil {
 			t.Fatalf("%q: %v", tc.src, err)
 		}
@@ -154,9 +142,10 @@ func TestResultKinds(t *testing.T) {
 	}
 }
 
-func mustEnv(t *testing.T, r Result) Env {
+// mustEnv is the sample site with the criteria builtins and budget.
+func mustEnv(t *testing.T, r Result, opts ...Option) Env {
 	t.Helper()
-	env, err := EnvOf[sampleEnv](r)
+	env, err := EnvOf[sampleEnv](r, append([]Option{WithBuiltins(CriteriaBuiltins...)}, opts...)...)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -216,48 +205,133 @@ func TestNodeCap(t *testing.T) {
 	}
 }
 
-// A run that allocates or iterates past the budget stops with an error rather
-// than exhausting memory or time.
+// A run that walks past its site's budget stops with an error rather than
+// running on: the criteria budget is small, a site may ask for more up to the
+// ceiling.
 func TestRunBudget(t *testing.T) {
-	for _, src := range []string{
-		"len(1..10000000) > 0",
-		"len(map(1..1000, map(1..1000, map(1..1000, #)))) > 0",
-		// Iteration over bound data allocates nothing; it is the work budget
-		// that stops these. (== -1, not > 0: Expr ends count early at a
-		// threshold it can see.)
-		"count(items, all(items, all(items, # > 0))) == -1",
-		"count(items, all(items, # in items)) == -1",
-		"count(items, sum(items) > 0 && sum(items) > 1 && sum(items) > 2) == -1",
+	src := "count(items, # > 0) == -1"
+	big := sampleEnv{Items: ints(20_000)}
+	p, err := Compile(src, boolEnv(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = p.Run(big)
+	e := asError(t, err)
+	if e.Phase != PhaseLimit || !errors.Is(e, ErrRunBudget) {
+		t.Errorf("got %v (phase %q), want ErrRunBudget", e, e.Phase)
+	}
+	p, err = Compile(src, mustEnv(t, Bool, WithBudget(CeilingBudget)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := p.Run(big); err != nil {
+		t.Errorf("at the ceiling budget: %v", err)
+	}
+}
+
+// The budget leaves room for honest criteria: a few passes over a bound list
+// of a few hundred.
+func TestRunBudgetAllowsHonestWork(t *testing.T) {
+	p, err := Compile("all(items, # > 0) && len(filter(items, # % 2 == 0)) == 250 && 250 in items && count(items, # > 400) == 100", boolEnv(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, err := p.Run(sampleEnv{Items: ints(500)}); err != nil || got != true {
+		t.Errorf("Run = %v, %v; want true, nil", got, err)
+	}
+}
+
+// A realistic criteria compiles and runs well under the criteria budget.
+func TestRealisticCriteria(t *testing.T) {
+	for _, tc := range []struct {
+		src  string
+		in   sampleEnv
+		want bool
+	}{
+		{`value > 90 && state == "down"`, sampleEnv{Value: 95, State: "down"}, true},
+		{`value > 90 && state == "down"`, sampleEnv{Value: 95, State: "up"}, false},
+		{`count(items, # > 90) >= 3 || any(labels, lower(#) startsWith "crit")`, sampleEnv{Items: ints(100), Labels: []string{"ok"}}, true},
+		{`none(labels, trim(#) == "") && abs(value - prior) < 5`, sampleEnv{Labels: []string{"a"}, Value: 10, Prior: 7}, true},
 	} {
-		p, err := Compile(src, boolEnv(t))
+		p, err := Compile(tc.src, boolEnv(t))
 		if err != nil {
-			t.Fatalf("%q: %v", src, err)
+			t.Fatalf("%q: %v", tc.src, err)
 		}
-		items := make([]int, 1000)
-		for i := range items {
-			items[i] = i + 1
-		}
-		_, err = p.Run(sampleEnv{Items: items})
-		e := asError(t, err)
-		if e.Phase != PhaseLimit || !errors.Is(e, ErrRunBudget) {
-			t.Errorf("%q: got %v (phase %q), want ErrRunBudget", src, e, e.Phase)
+		if got, err := p.Run(tc.in); err != nil || got != tc.want {
+			t.Errorf("%q = %v, %v; want %v", tc.src, got, err, tc.want)
 		}
 	}
 }
 
-// The budget leaves room for honest work: one pass, or a few, over a bound
-// list of a thousand runs fine.
-func TestRunBudgetAllowsHonestWork(t *testing.T) {
-	items := make([]int, 1000)
-	for i := range items {
-		items[i] = i + 1
+// Review 2: every repro is refused at compile time, with a position. The
+// builtins they use cannot be bounded by charging their inputs (Go-native
+// work the deadline cannot pre-empt), so no site admits them.
+func TestUnboundableRefused(t *testing.T) {
+	for _, src := range []string{
+		`len(repeat(repeat("a", 90000), 10000)) > 0`,
+		`let a = 1..10; let b = map(a, a); max(b) > 0`,
+		`len(toJSON(items)) > 0`,
+		`len(flatten([items, items])) > 0`,
+		`mean(items) > 0`,
+		`len(uniq(1..40000)) > 0`,
+		`len(replace(repeat("a", 10000), "", repeat("b", 10000))) > 0`,
+		`len(join(map(1..5000, "x"), repeat("y", 20000))) > 0`,
+		`len(1..10) > 0`,
+		`sum(items) > 0`,
+		`len(split(state, ",")) > 0`,
+		`fromJSON(state) != nil`,
+		`len(toBase64(state)) > 0`,
+		`reduce(items, #acc + #, 0) > 0`,
+		`len(sortBy(items, #)) > 0`,
+		`len(concat(items, items)) > 0`,
+		`int(state) > 0`,
+		`max(items) > 0`,
+		`min(0, items) < 0`,
+		`all(items, any(items, # > 0))`,
+		`count(items, len(filter(items, # > 1)) > 0) > 0`,
+		`len([` + strings.Repeat("1,", MaxLiteralElements) + `1]) > 0`,
+		`len({` + strings.Repeat("a: 1, ", MaxLiteralElements) + `b: 1}) > 0`,
+	} {
+		_, err := Compile(src, boolEnv(t))
+		if err == nil {
+			t.Errorf("%q compiled", src)
+			continue
+		}
+		var e *Error
+		if !errors.As(err, &e) || (e.Phase != PhaseType && e.Phase != PhaseLimit) || e.Line == 0 {
+			t.Errorf("%q: got %v, want a positioned compile refusal", src, err)
+		}
 	}
-	p, err := Compile("all(items, # > 0) && sum(items) > 0 && len(filter(items, # % 2 == 0)) == 500 && 500 in items", boolEnv(t))
+}
+
+// A site admits only builtins it names, and only from the vetted set; a
+// budget is per site and no larger than the ceiling.
+func TestSiteDeclaration(t *testing.T) {
+	bare, err := EnvOf[sampleEnv](Bool)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got, err := p.Run(sampleEnv{Items: items}); err != nil || got != true {
-		t.Errorf("Run = %v, %v; want true, nil", got, err)
+	if _, err := Compile("value > 1 && state == 'x'", bare); err != nil {
+		t.Errorf("operators refused at a site with no builtins: %v", err)
+	}
+	// Compiled at the criteria site first, so a cache keyed without the
+	// builtins would hand the bare site this program.
+	if _, err := Compile("len(items) > 0", boolEnv(t)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Compile("len(items) > 0", bare); err == nil {
+		t.Error("a site that names no builtins admitted len")
+	}
+	for name, opt := range map[string]Option{
+		"unvetted builtin":   WithBuiltins("map"),
+		"unknown builtin":    WithBuiltins("nope"),
+		"over the ceiling":   WithBudget(Budget{Iterations: MaxRunIterations + 1, Memory: 1, Deadline: time.Millisecond}),
+		"zero budget":        WithBudget(Budget{}),
+		"deadline too large": WithBudget(Budget{Iterations: 1, Memory: 1, Deadline: time.Hour}),
+	} {
+		if _, err := EnvOf[sampleEnv](Bool, opt); err == nil {
+			t.Errorf("%s: EnvOf accepted it", name)
+		}
 	}
 }
 
@@ -441,7 +515,7 @@ func TestCacheReuse(t *testing.T) {
 func TestCacheBound(t *testing.T) {
 	c := newCache(2)
 	env := boolEnv(t)
-	k := func(s string) cacheKey { return cacheKey{source: s, env: env.typ, result: env.result} }
+	k := func(s string) cacheKey { return cacheKey{source: s, env: env} }
 	c.put(k("a"), &Program{})
 	c.put(k("b"), &Program{})
 	if _, ok := c.get(k("a")); !ok { // a is now most recent
@@ -528,39 +602,33 @@ func ints(n int) []int {
 }
 
 // Review #1: string concatenation is charged, so doubling a string in a chain
-// of lets stops at the budget instead of allocating gigabytes.
+// of lets stops at the budget instead of allocating.
 func TestStringConcatCharged(t *testing.T) {
 	var b strings.Builder
-	b.WriteString("let a0 = repeat('x', 99999); ")
-	for i := 1; i <= 5; i++ {
+	b.WriteString("let a0 = state; ")
+	for i := 1; i <= 12; i++ {
 		fmt.Fprintf(&b, "let a%d = a%d + a%d; ", i, i-1, i-1)
 	}
-	b.WriteString("len(a5) > 0")
-	budgetErr(t, b.String(), runOn(t, b.String(), sampleEnv{}))
-}
-
-// Review #2: a variadic builtin is charged for every argument it walks, not
-// only its first.
-func TestVariadicArgumentsCharged(t *testing.T) {
-	src := "count(1..300, max(0, items, items, items, items, items) > 0) == -1"
-	budgetErr(t, src, runOn(t, src, sampleEnv{Items: ints(1000)}))
+	b.WriteString("len(a12) > 0")
+	budgetErr(t, b.String(), runOn(t, b.String(), sampleEnv{State: strings.Repeat("x", 2000)}))
 }
 
 // Review #3: binary operators that walk their operands are charged.
 func TestWalkingOperatorsCharged(t *testing.T) {
 	big := strings.Repeat("a", 100_000)
 	for _, src := range []string{
-		"count(1..50, state contains 'zz') == -1",
-		"count(1..50, state startsWith 'zz') == -1",
-		"count(1..50, state endsWith 'zz') == -1",
-		"count(1..50, state matches 'zz') == -1",
-		"count(1..50, state == labels[0]) == -1",
-		"count(1..50, state != labels[0]) == -1",
-		"count(1..50, state < labels[0]) == -1",
-		"count(1..50, state >= labels[0]) == -1",
-		"count(1..50, items == items) == -1",
+		"count(labels, state contains 'zz') == -1",
+		"count(labels, state startsWith 'zz') == -1",
+		"count(labels, state endsWith 'zz') == -1",
+		"count(labels, state matches 'zz') == -1",
+		"count(labels, state == #) == -1",
+		"count(labels, state != #) == -1",
+		"count(labels, state < #) == -1",
+		"count(labels, state >= #) == -1",
+		"count(labels, items == items) == -1",
+		"count(labels, upper(state) == '') == -1",
 	} {
-		budgetErr(t, src, runOn(t, src, sampleEnv{State: big, Labels: []string{big}, Items: ints(50_000)}))
+		budgetErr(t, src, runOn(t, src, sampleEnv{State: big, Labels: make([]string, 50), Items: ints(50_000)}))
 	}
 }
 
@@ -579,7 +647,7 @@ func TestDynamicMatchesRefused(t *testing.T) {
 // Review #4: an expression calls builtins only: no method, no value.
 func TestOnlyBuiltinsCalled(t *testing.T) {
 	for _, src := range []string{
-		"fromJSON(state).x() == 1",
+		"state.x() == 1",
 		"value() > 1",
 		"state.Len() > 1",
 	} {
@@ -596,8 +664,8 @@ func TestInOnMapNotCharged(t *testing.T) {
 	for i := 0; i < 100_000; i++ {
 		tags[fmt.Sprint(i)] = i
 	}
-	src := "count(1..50, 'k' in tags) == 0"
-	if err := runOn(t, src, sampleEnv{Tags: tags}); err != nil {
+	src := "count(labels, 'k' in tags) == 0"
+	if err := runOn(t, src, sampleEnv{Tags: tags, Labels: make([]string, 50)}); err != nil {
 		t.Errorf("%q: %v", src, err)
 	}
 }
@@ -615,12 +683,14 @@ func TestIntegerOverflowWraps(t *testing.T) {
 	}
 }
 
-// Review #7: the wall-clock deadline is a backstop. With it set to nothing,
-// any run that reaches a charge point stops on it.
+// Review #7: the wall-clock deadline is a backstop on charged work. With
+// it set to a nanosecond, a run stops at its first charge.
 func TestDeadlineBackstop(t *testing.T) {
-	saved := runDeadline
-	runDeadline = 0
-	defer func() { runDeadline = saved }()
-	src := "sum(items) > 0"
-	budgetErr(t, src, runOn(t, src, sampleEnv{Items: ints(10)}))
+	env := mustEnv(t, Bool, WithBudget(Budget{Iterations: 10_000, Memory: 10_000, Deadline: time.Nanosecond}))
+	p, err := Compile("count(items, # > 0) == -1", env)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = p.Run(sampleEnv{Items: ints(10)})
+	budgetErr(t, "deadline", err)
 }
