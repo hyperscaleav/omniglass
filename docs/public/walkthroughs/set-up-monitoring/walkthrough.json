@@ -83,22 +83,28 @@
     },
     {
       "n": 14,
-      "kind": "goto",
-      "caption": "Back on the display's page, a few seconds on.",
+      "kind": "press",
+      "caption": "Close it. Nothing has been collected yet.",
       "still": "step-14.png"
     },
     {
       "n": 15,
-      "kind": "wait",
-      "caption": "Samples arrived. Vitals reads the ping's reachability and round trip, and the uptime the display reports.",
+      "kind": "click",
+      "caption": "Overview reads the display as it is collected, and refreshes on its own as samples land.",
       "still": "step-15.png"
+    },
+    {
+      "n": 16,
+      "kind": "wait",
+      "caption": "Samples arrived. Vitals reads the ping and the uptime the display reports, and both endpoints read collecting.",
+      "still": "step-16.png"
     }
   ],
-  "poster": "step-15.png",
+  "poster": "step-16.png",
   "preview": "preview.webp",
   "budget": {
-    "seconds": 52.6,
-    "bytes": 1060330,
-    "previewBytes": 851046
+    "seconds": 48.2,
+    "bytes": 1107793,
+    "previewBytes": 961786
   }
 }

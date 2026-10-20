@@ -9,8 +9,9 @@
 # watch-a-rule-raise-an-alarm.
 # The component view refreshes on its own (#934), so the walkthrough stays on
 # the page: it turns to Overview and waits for the first samples to land
-# there, which takes the node's 5s heartbeat (when it pulls the new tasks)
-# and the next probe and poll.
+# there, which takes the node's next 2s check-in (the walkthrough stack's
+# setting, web/e2e/lib/stack.sh), when it pulls the new tasks, and the next
+# probe and poll. Recorded on the 2s check-in, it runs 48 to 51s.
 title: Set up monitoring on a component
 description: Attach the SNMP driver and add a reachability probe to a component, both collected by an edge node, and watch reachability and samples arrive.
 steps:
