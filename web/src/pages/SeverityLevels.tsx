@@ -152,8 +152,13 @@ function useLevelRow(name: string): () => SeverityLevel | undefined {
   return () => (levels.data ?? []).find((l) => l.name === name);
 }
 
+function SeverityLevelBladeTitle(p: { name: string }): JSX.Element {
+  const row = useLevelRow(p.name);
+  return <BladeTitle row={row} fallback={p.name} />;
+}
+
 export const severityLevelBlade: BladeDef = {
-  Title: (p) => <BladeTitle row={useLevelRow(p.id)} fallback={p.id} />,
+  Title: (p) => <SeverityLevelBladeTitle name={p.id} />,
   Body: (p) => <SeverityLevelBladeBody name={p.id} />,
 };
 

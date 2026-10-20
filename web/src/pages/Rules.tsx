@@ -246,8 +246,19 @@ function useRuleRow(name: string): () => EventRule | undefined {
   return () => (rules.data ?? []).find((r) => r.name === name);
 }
 
+// RuleBladeTitle reads the rule's row once. Written inline as
+// `row={useRuleRow(id)}`, the JSX prop compiles to a getter that called
+// useRuleRow on every read, and BladeTitle reads it inside a memo: each list
+// refetch re-ran the memo, minted a fresh query observer, and that observer
+// refetched at once, a request storm on /event-rules while any rule's blade
+// was open.
+function RuleBladeTitle(p: { name: string }): JSX.Element {
+  const row = useRuleRow(p.name);
+  return <BladeTitle row={row} fallback={p.name} />;
+}
+
 export const ruleBlade: BladeDef = {
-  Title: (p) => <BladeTitle row={useRuleRow(p.id)} fallback={p.id} />,
+  Title: (p) => <RuleBladeTitle name={p.id} />,
   Body: (p) => <RuleBladeBody name={p.id} />,
 };
 

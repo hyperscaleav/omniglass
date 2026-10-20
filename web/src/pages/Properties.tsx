@@ -96,7 +96,8 @@ export const propertyBlade: BladeDef = {
 // lands on the same words the row showed. It rendered the bare name before, so
 // clicking "ICMP RTT (avg)" opened a panel headed icmp.rtt-avg.
 function PropertyBladeTitle(p: { name: string }): JSX.Element {
-  return <BladeTitle row={usePropertyRow(p.name)} fallback={p.name} />;
+  const row = usePropertyRow(p.name);
+  return <BladeTitle row={row} fallback={p.name} />;
 }
 
 function usePropertyRow(name: string): () => PropertyRow | undefined {

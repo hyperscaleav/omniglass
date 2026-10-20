@@ -138,7 +138,8 @@ function useLocationTypeRow(id: string): () => LocationType | undefined {
 }
 
 function LocationTypeBladeTitle(p: { id: string }): JSX.Element {
-  return <BladeTitle row={useLocationTypeRow(p.id)} fallback={p.id} />;
+  const row = useLocationTypeRow(p.id);
+  return <BladeTitle row={row} fallback={p.id} />;
 }
 
 function LocationTypeBladeBody(p: { id: string }): JSX.Element {

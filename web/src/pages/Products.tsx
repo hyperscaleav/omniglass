@@ -120,7 +120,8 @@ function useProductRow(id: string): () => Product | undefined {
 }
 
 function ProductBladeTitle(p: { id: string }): JSX.Element {
-  return <BladeTitle row={useProductRow(p.id)} fallback={p.id} />;
+  const row = useProductRow(p.id);
+  return <BladeTitle row={row} fallback={p.id} />;
 }
 
 function ProductBladeBody(p: { id: string }): JSX.Element {
