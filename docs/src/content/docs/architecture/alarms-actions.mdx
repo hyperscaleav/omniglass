@@ -292,6 +292,13 @@ the backfill left as it was because its expression would pass the engine's sourc
 and the rule says so: its list entry, a get and its state carry **`criteria_error`** (which criteria,
 the line and column, the message), and the console shows the rule as one whose criteria do not
 compile until an operator rewrites them.
+
+Before a rule is saved it can be **previewed** (`POST /event-rules:preview`, gated `rule:read`, #959):
+the candidate (its key, selector and criteria) is judged over the last 24 hours of its key's samples,
+on the components the caller may read, and the answer is the edges it would have written and the
+series it would hold in force now. It writes nothing. Each sample is judged alone, as if the rule
+had no sustains, and the answer says so; a fleet with more samples than the row cap is previewed in
+part, flagged `truncated`.
 The **selector** picks the components a rule watches: those whose type falls within a listed component
 type, and those listed by id; empty, every component. A rule outlives what it points at: deleting a
 component or a key it reads leaves it editable, and it simply matches nothing.

@@ -2130,6 +2130,56 @@ func generatedCommands() []*cobra.Command {
 			return cmd
 		}())
 		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				var fClearCriteria string
+				var fClearSustain string
+				var fFireCriteria string
+				var fFireSustain string
+				var fSampleKey string
+				var fSelector string
+				cmd := &cobra.Command{
+					Use:     "preview",
+					Short:   "Preview an event rule",
+					Long:    "Judges a candidate rule (sample key, selector, criteria) without writing anything: over each series it selects, the newest sample before the last 24 hours and then every sample in them, in order, each alone (sustains are ignored, and the answer says so). Answers the edges it would have written and the series it would hold in force now, only on components the caller may read. Each of its two reads is bounded by a row cap, and a preview cut short says truncated. Criteria take {expr} or {op, value}; one that does not compile is a 422 naming the criteria, line and column. Gated by rule:read.",
+					Example: "  omniglass event-rule preview --fire-criteria <json> --sample-key sample_key",
+					Args:    cobra.ExactArgs(0),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/event-rules:preview")
+						body := map[string]any{}
+						if cmd.Flags().Changed("clear-criteria") {
+							body["clear_criteria"] = jsonOrString(fClearCriteria)
+						}
+						if cmd.Flags().Changed("clear-sustain") {
+							body["clear_sustain"] = fClearSustain
+						}
+						if cmd.Flags().Changed("fire-criteria") {
+							body["fire_criteria"] = jsonOrString(fFireCriteria)
+						}
+						if cmd.Flags().Changed("fire-sustain") {
+							body["fire_sustain"] = fFireSustain
+						}
+						if cmd.Flags().Changed("sample-key") {
+							body["sample_key"] = fSampleKey
+						}
+						if cmd.Flags().Changed("selector") {
+							body["selector"] = jsonOrString(fSelector)
+						}
+						return runAPICommand(cmd, "POST", path, body)
+					},
+				}
+				cmd.Flags().StringVar(&fClearCriteria, "clear-criteria", "", "The criteria it ends on; absent, the negation of fire_criteria")
+				cmd.Flags().StringVar(&fClearSustain, "clear-sustain", "", "Accepted and ignored, like fire_sustain")
+				cmd.Flags().StringVar(&fFireCriteria, "fire-criteria", "", "The criteria its condition starts on: {expr}, or the short form {op, value}")
+				_ = cmd.MarkFlagRequired("fire-criteria")
+				cmd.Flags().StringVar(&fFireSustain, "fire-sustain", "", "Accepted so a rule body previews as it is, and ignored: a preview judges each sample alone")
+				cmd.Flags().StringVar(&fSampleKey, "sample-key", "", "The property or metric the candidate rule reads")
+				_ = cmd.MarkFlagRequired("sample-key")
+				cmd.Flags().StringVar(&fSelector, "selector", "", "The components it watches; absent or empty, every component")
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
 			parent := &cobra.Command{
 				Use:   "state",
 				Short: "Commands for the state resource",

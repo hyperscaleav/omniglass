@@ -4838,6 +4838,140 @@ components:
       required:
         - value
       type: object
+    PreviewEdgeBody:
+      additionalProperties: false
+      properties:
+        at:
+          description: The sample that moved it
+          format: date-time
+          type: string
+        component:
+          description: The component, by name
+          type: string
+        component_id:
+          description: The component's uuid
+          type: string
+        instance:
+          description: The sample instance (an endpoint)
+          type: string
+        kind:
+          description: Which edge
+          enum:
+            - fire
+            - clear
+          type: string
+      required:
+        - component
+        - component_id
+        - at
+        - kind
+      type: object
+    PreviewEventRuleInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/PreviewEventRuleInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        clear_criteria:
+          $ref: "#/components/schemas/CriteriaInput"
+          description: The criteria it ends on; absent, the negation of fire_criteria
+        clear_sustain:
+          description: Accepted and ignored, like fire_sustain
+          type: string
+        fire_criteria:
+          $ref: "#/components/schemas/CriteriaInput"
+          description: "The criteria its condition starts on: {expr}, or the short form {op, value}"
+        fire_sustain:
+          description: "Accepted so a rule body previews as it is, and ignored: a preview judges each sample alone"
+          type: string
+        sample_key:
+          description: The property or metric the candidate rule reads
+          minLength: 1
+          type: string
+        selector:
+          $ref: "#/components/schemas/SelectorBody"
+          description: The components it watches; absent or empty, every component
+      required:
+        - sample_key
+        - fire_criteria
+      type: object
+    PreviewEventRuleOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/PreviewEventRuleOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        edges:
+          description: The edges it would have written over the window, in series and time order
+          items:
+            $ref: "#/components/schemas/PreviewEdgeBody"
+          type:
+            - array
+            - "null"
+        in_force_now:
+          description: The series the candidate would hold in force now
+          items:
+            $ref: "#/components/schemas/PreviewSeriesBody"
+          type:
+            - array
+            - "null"
+        row_cap:
+          description: The most rows each of its two reads may take
+          format: int64
+          type: integer
+        sustains_ignored:
+          description: "Always true: each sample is judged alone, so a sustain that would have held an edge back is not applied"
+          type: boolean
+        truncated:
+          description: "A read hit the row cap: the preview covers only part of the window"
+          type: boolean
+        window:
+          description: How far back it judged, a Go duration
+          type: string
+        window_since:
+          format: date-time
+          type: string
+        window_until:
+          format: date-time
+          type: string
+      required:
+        - in_force_now
+        - edges
+        - window
+        - window_since
+        - window_until
+        - row_cap
+        - truncated
+        - sustains_ignored
+      type: object
+    PreviewSeriesBody:
+      additionalProperties: false
+      properties:
+        component:
+          description: The component, by name
+          type: string
+        component_id:
+          description: The component's uuid
+          type: string
+        instance:
+          description: The sample instance (an endpoint)
+          type: string
+        since:
+          description: When the window's fire edge brought it into force; absent when it was in force before the window
+          format: date-time
+          type: string
+      required:
+        - component
+        - component_id
+      type: object
     PrincipalBody:
       additionalProperties: false
       properties:
@@ -10626,6 +10760,31 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Get an event rule's live state
+      x-omniglass-permission: rule:read
+  /event-rules:preview:
+    post:
+      description: "Judges a candidate rule (sample key, selector, criteria) without writing anything: over each series it selects, the newest sample before the last 24 hours and then every sample in them, in order, each alone (sustains are ignored, and the answer says so). Answers the edges it would have written and the series it would hold in force now, only on components the caller may read. Each of its two reads is bounded by a row cap, and a preview cut short says truncated. Criteria take {expr} or {op, value}; one that does not compile is a 422 naming the criteria, line and column. Gated by rule:read."
+      operationId: preview-event-rule
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PreviewEventRuleInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PreviewEventRuleOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Preview an event rule
       x-omniglass-permission: rule:read
   /event-types:
     get:

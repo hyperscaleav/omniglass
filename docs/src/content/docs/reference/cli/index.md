@@ -1549,6 +1549,31 @@ Example:
 omniglass event-rule list
 ```
 
+### `omniglass event-rule preview`
+
+Preview an event rule
+
+```
+omniglass event-rule preview [flags]
+```
+
+Judges a candidate rule (sample key, selector, criteria) without writing anything: over each series it selects, the newest sample before the last 24 hours and then every sample in them, in order, each alone (sustains are ignored, and the answer says so). Answers the edges it would have written and the series it would hold in force now, only on components the caller may read. Each of its two reads is bounded by a row cap, and a preview cut short says truncated. Criteria take {expr} or {op, value}; one that does not compile is a 422 naming the criteria, line and column. Gated by rule:read.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--clear-criteria` | string | (none) | The criteria it ends on; absent, the negation of fire_criteria |
+| `--clear-sustain` | string | (none) | Accepted and ignored, like fire_sustain |
+| `--fire-criteria` | string | (none) | The criteria its condition starts on: {expr}, or the short form {op, value} |
+| `--fire-sustain` | string | (none) | Accepted so a rule body previews as it is, and ignored: a preview judges each sample alone |
+| `--sample-key` | string | (none) | The property or metric the candidate rule reads |
+| `--selector` | string | (none) | The components it watches; absent or empty, every component |
+
+Example:
+
+```sh
+omniglass event-rule preview --fire-criteria <json> --sample-key sample_key
+```
+
 ### `omniglass event-rule state`
 
 Commands for the state resource

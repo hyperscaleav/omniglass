@@ -902,6 +902,10 @@ func (UnimplementedGateway) SampleKeyType(context.Context, string) (rules.Lane, 
 	return "", "", ErrSampleKeyNotFound
 }
 
+func (UnimplementedGateway) PreviewEventRule(context.Context, RulePreviewSpec, scope.Set) (*RulePreview, error) {
+	return nil, ErrEventRuleNotFound
+}
+
 func (UnimplementedGateway) EventRuleState(context.Context, string, scope.Set) (*EventRuleLive, error) {
 	return nil, ErrEventRuleNotFound
 }

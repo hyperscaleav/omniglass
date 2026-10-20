@@ -1268,6 +1268,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/event-rules:preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview an event rule
+         * @description Judges a candidate rule (sample key, selector, criteria) without writing anything: over each series it selects, the newest sample before the last 24 hours and then every sample in them, in order, each alone (sustains are ignored, and the answer says so). Answers the edges it would have written and the series it would hold in force now, only on components the caller may read. Each of its two reads is bounded by a row cap, and a preview cut short says truncated. Criteria take {expr} or {op, value}; one that does not compile is a 422 naming the criteria, line and column. Gated by rule:read.
+         */
+        post: operations["preview-event-rule"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/event-types": {
         parameters: {
             query?: never;
@@ -7040,6 +7060,84 @@ export interface components {
             /** @description The bound value */
             value: string;
         };
+        PreviewEdgeBody: {
+            /**
+             * Format: date-time
+             * @description The sample that moved it
+             */
+            at: string;
+            /** @description The component, by name */
+            component: string;
+            /** @description The component's uuid */
+            component_id: string;
+            /** @description The sample instance (an endpoint) */
+            instance?: string;
+            /**
+             * @description Which edge
+             * @enum {string}
+             */
+            kind: "fire" | "clear";
+        };
+        PreviewEventRuleInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/PreviewEventRuleInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description The criteria it ends on; absent, the negation of fire_criteria */
+            clear_criteria?: components["schemas"]["CriteriaInput"];
+            /** @description Accepted and ignored, like fire_sustain */
+            clear_sustain?: string;
+            /** @description The criteria its condition starts on: {expr}, or the short form {op, value} */
+            fire_criteria: components["schemas"]["CriteriaInput"];
+            /** @description Accepted so a rule body previews as it is, and ignored: a preview judges each sample alone */
+            fire_sustain?: string;
+            /** @description The property or metric the candidate rule reads */
+            sample_key: string;
+            /** @description The components it watches; absent or empty, every component */
+            selector?: components["schemas"]["SelectorBody"];
+        };
+        PreviewEventRuleOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/PreviewEventRuleOutputBody.json
+             */
+            readonly $schema?: string;
+            /** @description The edges it would have written over the window, in series and time order */
+            edges: components["schemas"]["PreviewEdgeBody"][] | null;
+            /** @description The series the candidate would hold in force now */
+            in_force_now: components["schemas"]["PreviewSeriesBody"][] | null;
+            /**
+             * Format: int64
+             * @description The most rows each of its two reads may take
+             */
+            row_cap: number;
+            /** @description Always true: each sample is judged alone, so a sustain that would have held an edge back is not applied */
+            sustains_ignored: boolean;
+            /** @description A read hit the row cap: the preview covers only part of the window */
+            truncated: boolean;
+            /** @description How far back it judged, a Go duration */
+            window: string;
+            /** Format: date-time */
+            window_since: string;
+            /** Format: date-time */
+            window_until: string;
+        };
+        PreviewSeriesBody: {
+            /** @description The component, by name */
+            component: string;
+            /** @description The component's uuid */
+            component_id: string;
+            /** @description The sample instance (an endpoint) */
+            instance?: string;
+            /**
+             * Format: date-time
+             * @description When the window's fire edge brought it into force; absent when it was in force before the window
+             */
+            since?: string;
+        };
         PrincipalBody: {
             /**
              * Format: uri
@@ -11730,6 +11828,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EventRuleStateOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "preview-event-rule": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PreviewEventRuleInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PreviewEventRuleOutputBody"];
                 };
             };
             /** @description Error */

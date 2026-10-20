@@ -347,7 +347,13 @@ fault when it has one. A stored rule whose criteria no longer compile carries `c
 types the value, a metric a number and a property its data type, text when absent) and answers `ok`,
 the value and result types, `diagnostics` with line, column and phase, and the site's `bindings`,
 `builtins` and `budget`, generated from the site's declaration; it stores and runs nothing, and an
-unknown site or key is a 422. A rule edit is judged on what it changes from the stored rule:
+unknown site or key is a 422. `POST /event-rules:preview` (gated `rule:read`; `omniglass event-rule
+preview`) judges a candidate rule (sample key, selector, criteria) without writing anything, in a
+read-only transaction: over the series it selects among the components the caller's component read
+scope admits, the newest sample before the last 24 hours and then each sample in them, alone
+(`sustains_ignored` is always true), it answers `edges` (fire or clear, on a component and instance,
+at the sample) and `in_force_now`. Each of its two reads is capped at `row_cap` rows, with `truncated`
+when one hit it; a criterion that does not compile is a 422 at its line and column. A rule edit is judged on what it changes from the stored rule:
 a selector entry, key or criteria it restates unchanged is not re-resolved, so a rule whose component or
 type was deleted stays editable (it matches nothing by the stale entry), while an entry new to the rule must
 exist. The list and a get carry each rule's live state as counts (`conditions_in_force`, `open_alarms`,
