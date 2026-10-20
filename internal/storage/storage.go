@@ -849,6 +849,8 @@ type PG struct {
 	settingsFile settings.Doc
 	settings     *settings.Service
 	labelEngines label.EngineCache
+	// judges is each event rule's compiled criteria, per rule version.
+	judges ruleJudges
 }
 
 // Option configures a PG at construction. The secret provider is optional so

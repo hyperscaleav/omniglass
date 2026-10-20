@@ -16,6 +16,7 @@ import {
   sustainWords,
   updateBody,
   updateEventRule,
+  shortForm,
   validateDraft,
   withLane,
 } from "./event_rules";
@@ -24,7 +25,7 @@ import { uuidFor } from "./testids";
 const reach: EventRule = {
   id: uuidFor("rule-reachability-lost"), name: "reachability-lost", label: "Reachability lost",
   selector: { component_types: [], components: [] }, sample_key: "endpoint-reachable", sample_lane: "property",
-  fire_criteria: { op: "eq", value: "down" }, clear_criteria: { op: "eq", value: "up" },
+  fire_criteria: { expr: 'value == "down"' }, clear_criteria: { expr: 'value == "up"' },
   fire_sustain: "15s", clear_sustain: "0s", severity: "high",
   fire_event_type: "condition-started", clear_event_type: "condition-ended", enabled: true, official: true, version: 1,
   open_alarms: 0, pending_streaks: 0, conditions_in_force: 0,
@@ -33,7 +34,7 @@ const reach: EventRule = {
 const hot: EventRule = {
   id: uuidFor("rule-too-hot"), name: "too-hot",
   selector: { component_types: ["display"], components: [] }, sample_key: "temperature-c", sample_lane: "metric",
-  fire_criteria: { op: "gt", value: 40 }, fire_sustain: "1m0s", clear_sustain: "30s",
+  fire_criteria: { expr: "value > 40.0" }, fire_sustain: "1m0s", clear_sustain: "30s",
   severity: "average", fire_event_type: "condition-started", enabled: true, official: false, version: 3, open_alarms: 0, pending_streaks: 0, conditions_in_force: 0,
 };
 
@@ -53,7 +54,12 @@ describe("reading a rule in words", () => {
   });
 
   it("says a ne criterion as anything but", () => {
-    expect(fireWords({ ...reach, fire_criteria: { op: "ne", value: "up" }, fire_sustain: "0s" })).toBe("reads anything but up");
+    expect(fireWords({ ...reach, fire_criteria: { expr: 'value != "up"' }, fire_sustain: "0s" })).toBe("reads anything but up");
+  });
+
+  it("reads an expression with no short form as the expression itself", () => {
+    const expr = 'value == "down" && instance != "aux"';
+    expect(fireWords({ ...reach, fire_criteria: { expr }, fire_sustain: "0s" })).toBe(`reads ${expr}`);
   });
 
   it("drops a zero sustain and trims Go's trailing zero units", () => {
@@ -143,6 +149,32 @@ describe("the form's rules", () => {
     ] as Parameters<typeof defaultSeverity>[0];
     expect(defaultSeverity(levels)).toBe("average");
     expect(defaultSeverity([])).toBe("");
+  });
+});
+
+describe("the short form an expression lowers from", () => {
+  it("reads back the comparisons the server lowers a short form to", () => {
+    expect(shortForm({ expr: 'value == "down"' })).toEqual({ op: "eq", value: "down" });
+    expect(shortForm({ expr: 'value != "say \\"hi\\""' })).toEqual({ op: "ne", value: 'say "hi"' });
+    expect(shortForm({ expr: "value >= 80.0" })).toEqual({ op: "ge", value: 80 });
+    expect(shortForm({ expr: "value < -0.5" })).toEqual({ op: "lt", value: -0.5 });
+    expect(shortForm({ expr: "value == true" })).toEqual({ op: "eq", value: "true" });
+  });
+
+  it("has none for an expression the builder cannot say", () => {
+    for (const expr of ['value == "down" && instance != "aux"', "value > 40 || value < 0", "false", "value matches 'x'", "upper(value) == \"X\""]) {
+      expect(shortForm({ expr })).toBeNull();
+    }
+  });
+
+  it("keeps an expression the builder cannot say: an edit never overwrites it", () => {
+    const expr = 'value == "down" && instance != "aux"';
+    const was = { ...reach, official: false, fire_criteria: { expr }, clear_criteria: undefined };
+    const d = draftFromRule(was);
+    expect(d.fireExpr).toBe(expr);
+    expect(validateDraft(d, "edit")).toEqual({});
+    expect(updateBody({ ...d, label: "Reach" }, was)).toEqual({ label: "Reach" });
+    expect(createBody({ ...d, name: "copy" }).fire_criteria).toEqual({ expr });
   });
 });
 

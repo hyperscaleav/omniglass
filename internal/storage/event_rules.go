@@ -66,6 +66,10 @@ type EventRule struct {
 	LastJudgedAt *time.Time `json:"-"`
 	// The event types' ids, resolved from their names on a write.
 	fireTypeID, clearTypeID string
+	// dataType is the sample key's property data type (string, bool, json)
+	// on the property lane, "" on the metric lane or for a key that is gone:
+	// it types the value the criteria read (#957).
+	dataType string
 }
 
 // EventRuleSpec is a rule to create; its selector's components may be
@@ -125,7 +129,8 @@ func ruleCols(a string) string {
 	%[1]sfire_criteria, %[1]sclear_criteria,
 	(extract(epoch from %[1]sfire_sustain) * 1000000)::bigint, (extract(epoch from %[1]sclear_sustain) * 1000000)::bigint,
 	coalesce(%[1]sseverity, ''), (select name from event_type where id = %[1]sfire_event_type_id),
-	coalesce((select name from event_type where id = %[1]sclear_event_type_id), ''), %[1]smessage, %[1]senabled, %[1]sofficial, %[1]sversion, %[1]screated_at, %[1]supdated_at`, a)
+	coalesce((select name from event_type where id = %[1]sclear_event_type_id), ''), %[1]smessage, %[1]senabled, %[1]sofficial, %[1]sversion, %[1]screated_at, %[1]supdated_at,
+	coalesce((select data_type from property_type where name = %[1]ssample_key and %[1]ssample_lane = 'property'), '')`, a)
 }
 
 var eventRuleCols = ruleCols("")
@@ -154,7 +159,7 @@ func scanEventRuleCols(row pgx.Row, lead, trail []any) (EventRule, error) {
 	var lane string
 	var fireUs, clearUs int64
 	dest := append(lead, &r.ID, &r.Name, &r.Label, &r.Description, &sel, &r.SampleKey, &lane, &fire, &clear,
-		&fireUs, &clearUs, &r.Severity, &r.FireEventType, &r.ClearEventType, &r.Message, &r.Enabled, &r.Official, &r.Version, &r.CreatedAt, &r.UpdatedAt)
+		&fireUs, &clearUs, &r.Severity, &r.FireEventType, &r.ClearEventType, &r.Message, &r.Enabled, &r.Official, &r.Version, &r.CreatedAt, &r.UpdatedAt, &r.dataType)
 	dest = append(dest, trail...)
 	err := row.Scan(dest...)
 	if err != nil {
@@ -220,14 +225,17 @@ func prepareEventRule(ctx context.Context, q querier, r *EventRule, check ruleCh
 		}
 	}
 	if check.key || check.criteria {
-		if err := r.FireCriteria.Validate(r.SampleLane); err != nil {
-			return invalidRule("fire criteria: %v", err)
+		// Compiled against the key's lane and data type: a criterion that
+		// does not compile (an unknown binding, a non-bool result, a bad
+		// short form) is refused with its field, line and column, and is
+		// never stored. The stored form is always the expression (#957).
+		j, err := rules.Compile(r.SampleLane, r.dataType, r.FireCriteria, r.ClearCriteria)
+		if err != nil {
+			return fmt.Errorf("%w: %w", ErrEventRuleInvalid, err)
 		}
-		if r.ClearCriteria != nil {
-			if err := r.ClearCriteria.Validate(r.SampleLane); err != nil {
-				return invalidRule("clear criteria: %v", err)
-			}
-		}
+		r.FireCriteria, r.ClearCriteria = j.Fire(), j.Clear()
+	} else {
+		lowerStored(r)
 	}
 	if err := resolveRuleEventTypes(ctx, q, r); err != nil {
 		return err
@@ -279,12 +287,29 @@ func resolveRuleLane(ctx context.Context, q querier, r *EventRule) error {
 	switch {
 	case isProperty:
 		r.SampleLane = rules.LaneProperty
+		if err := q.QueryRow(ctx, `select data_type from property_type where name = $1`, r.SampleKey).Scan(&r.dataType); err != nil {
+			return fmt.Errorf("storage: check rule sample key: %w", err)
+		}
 	case isMetric:
-		r.SampleLane = rules.LaneMetric
+		r.SampleLane, r.dataType = rules.LaneMetric, ""
 	default:
 		return invalidRule("sample key %q is not a registered property or metric", r.SampleKey)
 	}
 	return nil
+}
+
+// lowerStored rewrites a stored short-form criterion (one a row written
+// outside the gateway still holds) to its expression where it lowers; one
+// that does not is left for the judge to refuse, holding the rule.
+func lowerStored(r *EventRule) {
+	if low, err := rules.Lower(r.FireCriteria, r.SampleLane, r.dataType); err == nil {
+		r.FireCriteria = low
+	}
+	if r.ClearCriteria != nil {
+		if low, err := rules.Lower(*r.ClearCriteria, r.SampleLane, r.dataType); err == nil {
+			r.ClearCriteria = &low
+		}
+	}
 }
 
 func resolveRuleSelector(ctx context.Context, q querier, r *EventRule, kept EventRuleSelector) error {

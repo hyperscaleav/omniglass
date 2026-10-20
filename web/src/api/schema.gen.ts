@@ -1211,7 +1211,7 @@ export interface paths {
         put?: never;
         /**
          * Create an event rule
-         * @description Authors a rule whose condition starts on each component it watches when its sample key meets the fire criteria for the fire sustain, and ends when the clear criteria (or the negation of fire) holds for the clear sustain. It names the event type it writes when the condition starts (required) and, optionally, when it ends; with a severity it also raises an alarm while the condition holds, and without one it is informational. The key must be a registered property or metric, the criteria evaluable on its lane, the event types registered and the severity, when given, a level that exists (else 422); a name already taken is a 409. Audited. Gated by rule:create, with an all-scope grant.
+         * @description Authors a rule whose condition starts on each component it watches when its sample key meets the fire criteria for the fire sustain, and ends when the clear criteria (or the negation of fire) holds for the clear sustain. It names the event type it writes when the condition starts (required) and, optionally, when it ends; with a severity it also raises an alarm while the condition holds, and without one it is informational. Criteria are expressions over the sample (value, key, instance, component.name, component.type) yielding true or false; a body may give {expr} or the short form {op, value}, and the answer is always {expr}. The key must be a registered property or metric, the criteria must compile against its lane (an unknown name or a result that is not a bool is a 422 naming the criteria, line and column), the event types registered and the severity, when given, a level that exists (else 422); a name already taken is a 409. Audited. Gated by rule:create, with an all-scope grant.
          */
         post: operations["create-event-rule"];
         delete?: never;
@@ -1243,7 +1243,7 @@ export interface paths {
         head?: never;
         /**
          * Update an event rule
-         * @description Patches a rule (an absent field is unchanged), bumping its version; disabling it stops new opens. An empty severity makes the rule informational and an empty clear_event_type drops its clear event; the fire event type cannot be emptied (422). Official rules are read-only (409). Audited. Gated by rule:update, with an all-scope grant.
+         * @description Patches a rule (an absent field is unchanged), bumping its version; disabling it stops new opens. Criteria take {expr} or the short form {op, value}, compiled as on create (a 422 names the criteria, line and column). An empty severity makes the rule informational and an empty clear_event_type drops its clear event; the fire event type cannot be emptied (422). Official rules are read-only (409). Audited. Gated by rule:update, with an all-scope grant.
          */
         patch: operations["update-event-rule"];
         trace?: never;
@@ -4928,8 +4928,8 @@ export interface components {
              * @example /api/v1/schemas/CreateEventRuleInputBody.json
              */
             readonly $schema?: string;
-            /** @description The criteria that clears it: {op, value}; absent clears on the negation of fire_criteria */
-            clear_criteria?: components["schemas"]["CriteriaBody"];
+            /** @description The criteria that ends it: {expr} or {op, value}; absent clears on the negation of fire_criteria, !(fire) */
+            clear_criteria?: components["schemas"]["CriteriaInput"];
             /** @description The event type the rule writes when its condition ends, by name (condition-ended is the generic one); absent, it writes none */
             clear_event_type?: string;
             /** @description A Go duration; empty is 0s */
@@ -4938,8 +4938,8 @@ export interface components {
             description?: string;
             /** @description Defaults to true */
             enabled?: boolean;
-            /** @description The criteria that opens an alarm: {op, value} */
-            fire_criteria: components["schemas"]["CriteriaBody"];
+            /** @description The criteria that starts the condition: {expr}, or the short form {op, value} */
+            fire_criteria: components["schemas"]["CriteriaInput"];
             /** @description The event type the rule writes when its condition starts, by name (condition-started is the generic one) */
             fire_event_type: string;
             /** @description A Go duration; empty is 0s */
@@ -5400,13 +5400,19 @@ export interface components {
             website?: string;
         };
         CriteriaBody: {
+            /** @description The criterion, an expression over the sample (value, key, instance, component.name, component.type) that yields true or false, e.g. value > 80 && instance != "aux" */
+            expr: string;
+        };
+        CriteriaInput: {
+            /** @description The criterion as an expression over the sample (value, key, instance, component.name, component.type), yielding true or false; give this or op and value */
+            expr?: string;
             /**
-             * @description The comparison: a property compares text with eq or ne; a metric compares numbers with any of them
+             * @description The short form's comparison: a property compares text with eq or ne; a metric compares numbers with any of them
              * @enum {string}
              */
-            op: "eq" | "ne" | "gt" | "ge" | "lt" | "le";
-            /** @description The threshold: text for a property, a number for a metric */
-            value: unknown;
+            op?: "eq" | "ne" | "gt" | "ge" | "lt" | "le";
+            /** @description The short form's threshold: text for a property, a number for a metric */
+            value?: unknown;
         };
         DownloadFileOutputBody: {
             /**
@@ -8602,8 +8608,8 @@ export interface components {
              * @example /api/v1/schemas/UpdateEventRuleInputBody.json
              */
             readonly $schema?: string;
-            /** @description The criteria that clears it: {op, value}; absent clears on the negation of fire_criteria */
-            clear_criteria?: components["schemas"]["CriteriaBody"];
+            /** @description The criteria that ends it: {expr} or {op, value}; absent clears on the negation of fire_criteria, !(fire) */
+            clear_criteria?: components["schemas"]["CriteriaInput"];
             /** @description The event type the rule writes when its condition ends, by name; empty writes none */
             clear_event_type?: string;
             /** @description Drop the clear criteria, so the rule clears on the negation of its fire criteria */
@@ -8614,8 +8620,8 @@ export interface components {
             description?: string;
             /** @description Whether the rule evaluates; defaults to true on create */
             enabled?: boolean;
-            /** @description The criteria that opens an alarm: {op, value} */
-            fire_criteria?: components["schemas"]["CriteriaBody"];
+            /** @description The criteria that starts the condition: {expr}, or the short form {op, value} */
+            fire_criteria?: components["schemas"]["CriteriaInput"];
             /** @description The event type the rule writes when its condition starts, by name; it cannot be emptied */
             fire_event_type?: string;
             /** @description How long the fire criteria must hold, a Go duration (e.g. 30s); empty is 0s */

@@ -390,11 +390,10 @@ func seedEventRules(ctx context.Context, gw storage.Gateway) error {
 	}
 	for _, r := range doc.Rules {
 		spec := storage.EventRuleSpec{Name: r.Name, Label: r.Label, Description: r.Description, SampleKey: r.SampleKey,
-			Fire: r.Fire.criteria(), Severity: r.Severity, Message: r.Message,
+			Fire: rules.Criteria{Expr: r.Fire}, Severity: r.Severity, Message: r.Message,
 			FireEventType: r.FireEventType, ClearEventType: r.ClearEventType}
-		if r.Clear != nil {
-			c := r.Clear.criteria()
-			spec.Clear = &c
+		if r.Clear != "" {
+			spec.Clear = &rules.Criteria{Expr: r.Clear}
 		}
 		var err error
 		if spec.FireSustain, err = parseSeedDuration(r.FireSustain); err != nil {
@@ -413,30 +412,19 @@ func seedEventRules(ctx context.Context, gw storage.Gateway) error {
 // eventRulesDoc is event_rules.yaml, read by the seeder and the facts render.
 type eventRulesDoc struct {
 	Rules []struct {
-		Name           string        `yaml:"name"`
-		Label          string        `yaml:"label"`
-		Description    string        `yaml:"description"`
-		SampleKey      string        `yaml:"sample_key"`
-		Fire           criteriaYAML  `yaml:"fire"`
-		Clear          *criteriaYAML `yaml:"clear"`
-		FireSustain    string        `yaml:"fire_sustain"`
-		ClearSustain   string        `yaml:"clear_sustain"`
-		Severity       string        `yaml:"severity"`
-		Message        string        `yaml:"message"`
-		FireEventType  string        `yaml:"fire_event_type"`
-		ClearEventType string        `yaml:"clear_event_type"`
+		Name           string `yaml:"name"`
+		Label          string `yaml:"label"`
+		Description    string `yaml:"description"`
+		SampleKey      string `yaml:"sample_key"`
+		Fire           string `yaml:"fire"`
+		Clear          string `yaml:"clear"`
+		FireSustain    string `yaml:"fire_sustain"`
+		ClearSustain   string `yaml:"clear_sustain"`
+		Severity       string `yaml:"severity"`
+		Message        string `yaml:"message"`
+		FireEventType  string `yaml:"fire_event_type"`
+		ClearEventType string `yaml:"clear_event_type"`
 	} `yaml:"rules"`
-}
-
-// criteriaYAML is a rule criterion as the seed YAML writes it.
-type criteriaYAML struct {
-	Op    string `yaml:"op"`
-	Value any    `yaml:"value"`
-}
-
-func (c criteriaYAML) criteria() rules.Criteria {
-	b, _ := json.Marshal(c.Value)
-	return rules.Criteria{Op: c.Op, Value: b}
 }
 
 func parseSeedDuration(s string) (time.Duration, error) {

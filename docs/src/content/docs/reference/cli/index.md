@@ -1476,16 +1476,16 @@ Create an event rule
 omniglass event-rule create [flags]
 ```
 
-Authors a rule whose condition starts on each component it watches when its sample key meets the fire criteria for the fire sustain, and ends when the clear criteria (or the negation of fire) holds for the clear sustain. It names the event type it writes when the condition starts (required) and, optionally, when it ends; with a severity it also raises an alarm while the condition holds, and without one it is informational. The key must be a registered property or metric, the criteria evaluable on its lane, the event types registered and the severity, when given, a level that exists (else 422); a name already taken is a 409. Audited. Gated by rule:create, with an all-scope grant.
+Authors a rule whose condition starts on each component it watches when its sample key meets the fire criteria for the fire sustain, and ends when the clear criteria (or the negation of fire) holds for the clear sustain. It names the event type it writes when the condition starts (required) and, optionally, when it ends; with a severity it also raises an alarm while the condition holds, and without one it is informational. Criteria are expressions over the sample (value, key, instance, component.name, component.type) yielding true or false; a body may give {expr} or the short form {op, value}, and the answer is always {expr}. The key must be a registered property or metric, the criteria must compile against its lane (an unknown name or a result that is not a bool is a 422 naming the criteria, line and column), the event types registered and the severity, when given, a level that exists (else 422); a name already taken is a 409. Audited. Gated by rule:create, with an all-scope grant.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--clear-criteria` | string | (none) | The criteria that clears it: {op, value}; absent clears on the negation of fire_criteria |
+| `--clear-criteria` | string | (none) | The criteria that ends it: {expr} or {op, value}; absent clears on the negation of fire_criteria, !(fire) |
 | `--clear-event-type` | string | (none) | The event type the rule writes when its condition ends, by name (condition-ended is the generic one); absent, it writes none |
 | `--clear-sustain` | string | (none) | A Go duration; empty is 0s |
 | `--description` | string | (none) | What the rule watches for and why |
 | `--enabled` | bool | `false` | Defaults to true |
-| `--fire-criteria` | string | (none) | The criteria that opens an alarm: {op, value} |
+| `--fire-criteria` | string | (none) | The criteria that starts the condition: {expr}, or the short form {op, value} |
 | `--fire-event-type` | string | (none) | The event type the rule writes when its condition starts, by name (condition-started is the generic one) |
 | `--fire-sustain` | string | (none) | A Go duration; empty is 0s |
 | `--label` | string | (none) | A human label; also the alarm message when message is empty |
@@ -1577,17 +1577,17 @@ Update an event rule
 omniglass event-rule update <name> [flags]
 ```
 
-Patches a rule (an absent field is unchanged), bumping its version; disabling it stops new opens. An empty severity makes the rule informational and an empty clear_event_type drops its clear event; the fire event type cannot be emptied (422). Official rules are read-only (409). Audited. Gated by rule:update, with an all-scope grant.
+Patches a rule (an absent field is unchanged), bumping its version; disabling it stops new opens. Criteria take {expr} or the short form {op, value}, compiled as on create (a 422 names the criteria, line and column). An empty severity makes the rule informational and an empty clear_event_type drops its clear event; the fire event type cannot be emptied (422). Official rules are read-only (409). Audited. Gated by rule:update, with an all-scope grant.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--clear-criteria` | string | (none) | The criteria that clears it: {op, value}; absent clears on the negation of fire_criteria |
+| `--clear-criteria` | string | (none) | The criteria that ends it: {expr} or {op, value}; absent clears on the negation of fire_criteria, !(fire) |
 | `--clear-event-type` | string | (none) | The event type the rule writes when its condition ends, by name; empty writes none |
 | `--clear-negates` | bool | `false` | Drop the clear criteria, so the rule clears on the negation of its fire criteria |
 | `--clear-sustain` | string | (none) | How long the clear criteria must hold, a Go duration; empty is 0s |
 | `--description` | string | (none) | What the rule watches for and why |
 | `--enabled` | bool | `false` | Whether the rule evaluates; defaults to true on create |
-| `--fire-criteria` | string | (none) | The criteria that opens an alarm: {op, value} |
+| `--fire-criteria` | string | (none) | The criteria that starts the condition: {expr}, or the short form {op, value} |
 | `--fire-event-type` | string | (none) | The event type the rule writes when its condition starts, by name; it cannot be emptied |
 | `--fire-sustain` | string | (none) | How long the fire criteria must hold, a Go duration (e.g. 30s); empty is 0s |
 | `--label` | string | (none) | A human label; also the alarm message when message is empty |

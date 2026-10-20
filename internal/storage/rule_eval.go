@@ -47,6 +47,9 @@ type ruleOwner struct {
 	comp   Component
 	typeID uuid.UUID
 	hasTyp bool
+	// typeName is the component's type by name, "" when its product names
+	// none: the criteria's component.type (#957).
+	typeName string
 }
 
 // newRuleEvaluator loads the enabled rules reading any of keys; nil when no
@@ -111,8 +114,9 @@ func (e *ruleEvaluator) ownerFacts(ctx context.Context, tx pgx.Tx, componentID s
 	}
 	o := &ruleOwner{comp: Component{ID: componentID}}
 	var typeID *string
-	if err := tx.QueryRow(ctx, `select c.name, p.component_type_id::text from component c
-		left join product p on p.id = c.product_id where c.id = $1::uuid`, componentID).Scan(&o.comp.Name, &typeID); err != nil {
+	if err := tx.QueryRow(ctx, `select c.name, p.component_type_id::text, coalesce(ct.name, '') from component c
+		left join product p on p.id = c.product_id left join component_type ct on ct.id = p.component_type_id
+		where c.id = $1::uuid`, componentID).Scan(&o.comp.Name, &typeID, &o.typeName); err != nil {
 		return nil, fmt.Errorf("storage: rule owner %s: %w", componentID, err)
 	}
 	if typeID != nil {
@@ -311,11 +315,8 @@ func (e *ruleEvaluator) judge(ctx context.Context, tx pgx.Tx, lane rules.Lane, o
 		if !picked {
 			continue
 		}
-		action, err := rules.Decide(r.FireCriteria, r.ClearCriteria, value)
-		if err != nil {
-			slog.Warn("event rule cannot evaluate a sample", "facility", "rules", "rule", r.Name, "component", o.comp.Name, "key", key, "error", err.Error())
-			action = rules.Hold
-		} else {
+		action, ok := e.p.decide(r, o, instance, value)
+		if ok {
 			judged = append(judged, r.ID)
 		}
 		if err := e.p.stepRule(ctx, tx, r, &o.comp, instance, action, e.now, sampled(value)); err != nil {
@@ -501,9 +502,8 @@ func (p *PG) primeRule(ctx context.Context, tx pgx.Tx, r EventRule) error {
 		if !picked {
 			continue
 		}
-		action, err := rules.Decide(r.FireCriteria, r.ClearCriteria, s.value)
-		if err != nil {
-			slog.Warn("event rule cannot evaluate a sample", "facility", "rules", "rule", r.Name, "component", o.comp.Name, "key", r.SampleKey, "error", err.Error())
+		action, ok := p.decide(r, o, s.instance, s.value)
+		if !ok {
 			continue
 		}
 		if err := p.stepRule(ctx, tx, r, &o.comp, s.instance, action, now, sampled(s.value)); err != nil {
@@ -780,8 +780,8 @@ func (p *PG) streakStillHolds(ctx context.Context, tx pgx.Tx, r EventRule, d due
 	if err != nil || len(newest) == 0 {
 		return nil, nil, nil, err
 	}
-	action, err := rules.Decide(r.FireCriteria, r.ClearCriteria, newest[0].value)
-	if err != nil || action != d.streak.Pending {
+	action, ok := p.decide(r, o, d.instance, newest[0].value)
+	if !ok || action != d.streak.Pending {
 		return nil, nil, nil, nil
 	}
 	inForce, err := conditionInForce(ctx, tx, r, d.component, d.instance)
@@ -1088,15 +1088,19 @@ type ruleCandidate struct {
 	value               any
 	inForce             bool
 	pending             *string
+	// The component's name and type, which the criteria may read.
+	componentName, componentType string
 }
 
 // drifted reports whether the rule's state on the series disagrees with
 // its newest sample. Every path that judges a sample leaves the series in
 // one shape: the streak pending is the newest sample's decision, unless that
 // decision is already in force (or decides nothing), and then no streak at
-// all. Pure, so the scan pays no query for a series that agrees.
-func (c ruleCandidate) drifted() bool {
-	action, err := rules.Decide(c.rule.FireCriteria, c.rule.ClearCriteria, c.value)
+// all. No query, so the scan pays nothing for a series that agrees; the
+// rule's compiled criteria come from the gateway's per-version cache.
+func (p *PG) drifted(c ruleCandidate) bool {
+	action, err := p.decideSample(c.rule, rules.Sample{Value: c.value, Key: c.rule.SampleKey, Instance: c.instance,
+		Component: rules.Component{Name: c.componentName, Type: c.componentType}})
 	if err != nil {
 		action = rules.Hold // judge breaks a streak on a sample it cannot evaluate
 	}
@@ -1207,7 +1211,7 @@ func (p *PG) ReconcileEventRules(ctx context.Context, st *RuleReconcileState) er
 			return err
 		}
 		for _, c := range cands {
-			if c.drifted() {
+			if p.drifted(c) {
 				drifted = append(drifted, c)
 			}
 		}
@@ -1260,8 +1264,11 @@ func ruleCandidates(ctx context.Context, q querier, lane rules.Lane, from, to in
 			or exists (select 1 from alarm a where a.component_id = tc.component_id and a.raised_by_rule_id = r.id
 				and a.cleared_at is null
 				and a.dedup_key = 'rule:' || r.name || case when tc.instance = '' then '' else ':' || tc.instance end)),
-			st.pending
+			st.pending, comp.name, coalesce(ct.name, '')
 		from touched tc
+		join component comp on comp.id = tc.component_id
+		left join product pr on pr.id = comp.product_id
+		left join component_type ct on ct.id = pr.component_type_id
 		join %[2]s t on t.id = tc.type_id
 		join event_rule r on r.enabled and r.sample_lane = $1 and r.sample_key = t.name
 		cross join lateral (%[4]s) n
@@ -1274,7 +1281,7 @@ func ruleCandidates(ctx context.Context, q querier, lane rules.Lane, from, to in
 	var out []ruleCandidate
 	for rows.Next() {
 		var c ruleCandidate
-		r, err := scanEventRuleTrailing(rows, &c.component, &c.instance, &c.value, &c.inForce, &c.pending)
+		r, err := scanEventRuleTrailing(rows, &c.component, &c.instance, &c.value, &c.inForce, &c.pending, &c.componentName, &c.componentType)
 		if err != nil {
 			return nil, err
 		}
@@ -1362,10 +1369,7 @@ func (p *PG) reconcileSeries(ctx context.Context, c ruleCandidate) error {
 	if err != nil || len(newest) == 0 {
 		return err
 	}
-	action, err := rules.Decide(r.FireCriteria, r.ClearCriteria, newest[0].value)
-	if err != nil {
-		action = rules.Hold
-	}
+	action, _ := p.decide(r, o, c.instance, newest[0].value)
 	now, err := dbNow(ctx, tx)
 	if err != nil {
 		return err

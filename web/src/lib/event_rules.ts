@@ -18,8 +18,12 @@ import { rel } from "./format";
 // rules are unit-tested without a component.
 
 export type EventRule = components["schemas"]["EventRuleBody"];
+// A stored criterion is an expression (#957); a body may still send the short
+// form {op, value}, which the server lowers (eq "down" is value == "down").
 export type RuleCriteria = components["schemas"]["CriteriaBody"];
-export type RuleOp = RuleCriteria["op"];
+export type RuleCriteriaInput = components["schemas"]["CriteriaInput"];
+export type RuleOp = NonNullable<RuleCriteriaInput["op"]>;
+export type ShortForm = { op: RuleOp; value: string | number };
 export type RuleLane = EventRule["sample_lane"];
 export type RuleState = components["schemas"]["EventRuleStateOutputBody"];
 export type RuleOpenAlarm = components["schemas"]["RuleOpenAlarmBody"];
@@ -99,13 +103,38 @@ function valueText(v: unknown): string {
   return typeof v === "string" ? v : JSON.stringify(v);
 }
 
+// shortForm reads a stored expression back as the builder's {op, value}
+// when it is one the server's lowering writes: value, a comparison, and a
+// JSON string, a number, or true or false. Anything else (an expression an
+// author wrote) has no short form: the console shows it as written and never
+// overwrites it (editing it arrives with the expression field, #960).
+const SYMBOL_OP: Record<string, RuleOp> = { "==": "eq", "!=": "ne", ">": "gt", ">=": "ge", "<": "lt", "<=": "le" };
+const LOWERED = /^value (==|!=|>=|<=|>|<) (.+)$/;
+
+export function shortForm(c: RuleCriteria | null | undefined): ShortForm | null {
+  const m = c ? LOWERED.exec(c.expr) : null;
+  if (!m) return null;
+  const lit = m[2];
+  if (lit === "true" || lit === "false") return { op: SYMBOL_OP[m[1]], value: lit };
+  if (!/^("(?:[^"\\]|\\.)*"|-?\d+(\.\d+)?([eE][+-]?\d+)?)$/.test(lit)) return null;
+  try {
+    const v: unknown = JSON.parse(lit);
+    return typeof v === "string" || typeof v === "number" ? { op: SYMBOL_OP[m[1]], value: v } : null;
+  } catch {
+    return null;
+  }
+}
+
 // criteriaPhrase is the value half of a criterion: "down", "anything but up",
-// "above 40". A metric's unit rides after its number when the registry names one.
+// "above 40". A metric's unit rides after its number when the registry names
+// one; an expression with no short form reads as itself.
 export function criteriaPhrase(c: RuleCriteria, lane: RuleLane, unit?: string): string {
-  const v = valueText(c.value);
-  if (lane === "property") return c.op === "ne" ? `anything but ${v}` : v;
+  const sf = shortForm(c);
+  if (!sf) return c.expr;
+  const v = valueText(sf.value);
+  if (lane === "property") return sf.op === "ne" ? `anything but ${v}` : v;
   const n = unit ? `${v} ${unit}` : v;
-  switch (c.op) {
+  switch (sf.op) {
     case "gt": return `above ${n}`;
     case "ge": return `at or above ${n}`;
     case "lt": return `below ${n}`;
@@ -141,9 +170,13 @@ export type RuleDraft = {
   lane: RuleLane;
   fireOp: RuleOp;
   fireValue: string;
+  // fireExpr is a stored fire expression the builder cannot say (no short
+  // form), kept as written; null when the builder's op and value are it.
+  fireExpr: string | null;
   clearMode: ClearMode;
   clearOp: RuleOp;
   clearValue: string;
+  clearExpr: string | null;
   fireSustain: string;
   clearSustain: string;
   severity: string;
@@ -173,7 +206,7 @@ export const GENERIC_CLEAR_EVENT_TYPE = "condition-ended";
 export function emptyDraft(severity = ""): RuleDraft {
   return {
     name: "", label: "", description: "", sampleKey: "", lane: "property",
-    fireOp: "eq", fireValue: "", clearMode: "opposite", clearOp: "eq", clearValue: "",
+    fireOp: "eq", fireValue: "", fireExpr: null, clearMode: "opposite", clearOp: "eq", clearValue: "", clearExpr: null,
     fireSustain: "", clearSustain: "", severity, fireEventType: GENERIC_FIRE_EVENT_TYPE,
     clearEventType: GENERIC_CLEAR_EVENT_TYPE, message: "", enabled: true,
     componentTypes: [], components: [],
@@ -181,17 +214,21 @@ export function emptyDraft(severity = ""): RuleDraft {
 }
 
 export function draftFromRule(r: EventRule): RuleDraft {
+  const fire = shortForm(r.fire_criteria);
+  const clear = r.clear_criteria ? shortForm(r.clear_criteria) : null;
   return {
     name: r.name,
     label: r.label ?? "",
     description: r.description ?? "",
     sampleKey: r.sample_key,
     lane: r.sample_lane,
-    fireOp: r.fire_criteria.op,
-    fireValue: valueText(r.fire_criteria.value),
+    fireOp: fire?.op ?? "eq",
+    fireValue: fire ? valueText(fire.value) : "",
+    fireExpr: fire ? null : r.fire_criteria.expr,
     clearMode: r.clear_criteria ? "custom" : "opposite",
-    clearOp: r.clear_criteria?.op ?? "eq",
-    clearValue: r.clear_criteria ? valueText(r.clear_criteria.value) : "",
+    clearOp: clear?.op ?? "eq",
+    clearValue: clear ? valueText(clear.value) : "",
+    clearExpr: r.clear_criteria && !clear ? r.clear_criteria.expr : null,
     fireSustain: sustainWords(r.fire_sustain),
     clearSustain: sustainWords(r.clear_sustain),
     severity: r.severity ?? "",
@@ -261,8 +298,8 @@ export function validateDraft(d: RuleDraft, mode: "create" | "edit"): DraftError
   if (!d.sampleKey) e.sampleKey = "The property or metric the rule reads.";
   else {
     const f = readValue(d.fireValue, d.lane);
-    if (f.error) e.fireValue = f.error;
-    if (d.clearMode === "custom") {
+    if (f.error && d.fireExpr === null) e.fireValue = f.error;
+    if (d.clearMode === "custom" && d.clearExpr === null) {
       const c = readValue(d.clearValue, d.lane);
       if (c.error) e.clearValue = c.error;
     }
@@ -277,9 +314,12 @@ export function validateDraft(d: RuleDraft, mode: "create" | "edit"): DraftError
 
 const sustainOut = (s: string) => (s.trim() === "" || s.trim() === "0" ? "0s" : s.trim());
 
-function criteria(op: RuleOp, raw: string, lane: RuleLane): RuleCriteria {
+function criteria(op: RuleOp, raw: string, lane: RuleLane): RuleCriteriaInput {
   return { op, value: readValue(raw, lane).value };
 }
+
+const fireOut = (d: RuleDraft): RuleCriteriaInput => (d.fireExpr !== null ? { expr: d.fireExpr } : criteria(d.fireOp, d.fireValue, d.lane));
+const clearOut = (d: RuleDraft): RuleCriteriaInput => (d.clearExpr !== null ? { expr: d.clearExpr } : criteria(d.clearOp, d.clearValue, d.lane));
 
 // createBody: the POST a valid draft sends. Optional text is left off when blank;
 // a clear criterion rides only when the author chose one (absent clears on the
@@ -288,7 +328,7 @@ export function createBody(d: RuleDraft): CreateEventRule {
   const body: CreateEventRule = {
     name: d.name.trim(),
     sample_key: d.sampleKey,
-    fire_criteria: criteria(d.fireOp, d.fireValue, d.lane),
+    fire_criteria: fireOut(d),
     fire_sustain: sustainOut(d.fireSustain),
     clear_sustain: sustainOut(d.clearSustain),
     fire_event_type: d.fireEventType,
@@ -301,12 +341,16 @@ export function createBody(d: RuleDraft): CreateEventRule {
   if (d.label.trim()) body.label = d.label.trim();
   if (d.description.trim()) body.description = d.description.trim();
   if (d.message.trim()) body.message = d.message.trim();
-  if (d.clearMode === "custom") body.clear_criteria = criteria(d.clearOp, d.clearValue, d.lane);
+  if (d.clearMode === "custom") body.clear_criteria = clearOut(d);
   return body;
 }
 
-const sameCriteria = (a: RuleCriteria | undefined, b: RuleCriteria | undefined) =>
-  a?.op === b?.op && JSON.stringify(a?.value) === JSON.stringify(b?.value);
+// sameCriteria compares the builder's short form with a stored expression by
+// reading the expression back (shortForm), not by re-lowering it here.
+const sameCriteria = (a: RuleCriteriaInput, b: RuleCriteria | null | undefined) => {
+  const sf = shortForm(b);
+  return !!sf && sf.op === a.op && JSON.stringify(sf.value) === JSON.stringify(a.value);
+};
 const sameList = (a: string[], b: string[] | null | undefined) => a.length === (b ?? []).length && a.every((x, i) => x === b![i]);
 const sameSustain = (draft: string, stored: string | undefined) => sustainWords(sustainOut(draft)) === sustainWords(stored);
 
@@ -323,8 +367,11 @@ export function updateBody(d: RuleDraft, was: EventRule): UpdateEventRule {
   if (d.description.trim() !== (was.description ?? "")) body.description = d.description.trim();
   if (d.message.trim() !== (was.message ?? "")) body.message = d.message.trim();
   if (d.sampleKey !== was.sample_key) body.sample_key = d.sampleKey;
-  const fire = criteria(d.fireOp, d.fireValue, d.lane);
-  if (!sameCriteria(fire, was.fire_criteria)) body.fire_criteria = fire;
+  // An expression the builder cannot say is kept as stored: nothing to send.
+  if (d.fireExpr === null) {
+    const fire = criteria(d.fireOp, d.fireValue, d.lane);
+    if (!sameCriteria(fire, was.fire_criteria)) body.fire_criteria = fire;
+  }
   if (!sameSustain(d.fireSustain, was.fire_sustain)) body.fire_sustain = sustainOut(d.fireSustain);
   if (!sameSustain(d.clearSustain, was.clear_sustain)) body.clear_sustain = sustainOut(d.clearSustain);
   if (d.severity !== (was.severity ?? "")) body.severity = d.severity;
@@ -335,8 +382,10 @@ export function updateBody(d: RuleDraft, was: EventRule): UpdateEventRule {
     body.selector = { component_types: d.componentTypes, components: d.components };
   }
   if (d.clearMode === "custom") {
-    const clear = criteria(d.clearOp, d.clearValue, d.lane);
-    if (!sameCriteria(clear, was.clear_criteria ?? undefined)) body.clear_criteria = clear;
+    if (d.clearExpr === null) {
+      const clear = criteria(d.clearOp, d.clearValue, d.lane);
+      if (!sameCriteria(clear, was.clear_criteria)) body.clear_criteria = clear;
+    }
   } else if (was.clear_criteria) body.clear_negates = true;
   return body;
 }

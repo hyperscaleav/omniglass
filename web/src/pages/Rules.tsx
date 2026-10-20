@@ -787,6 +787,7 @@ export function RuleForm(p: { mode: "create" | "edit"; rule?: EventRule; onSaved
       </FieldRow>
 
       <FieldRow label="Fires when it reads" info={RULE_HINTS.criteria}>
+        <Show when={d.fireExpr} fallback={<>
         <div class="flex gap-2">
           <OpSelect label="Fire comparison" value={d.fireOp} onChange={(op) => setD("fireOp", op)} />
           <input
@@ -800,6 +801,7 @@ export function RuleForm(p: { mode: "create" | "edit"; rule?: EventRule; onSaved
           />
         </div>
         {err("fireValue")}
+        </>}>{(expr) => <KeptExpression expr={expr()} />}</Show>
       </FieldRow>
       <FieldRow label="For at least" info={RULE_HINTS.sustain}>
         <input
@@ -824,6 +826,7 @@ export function RuleForm(p: { mode: "create" | "edit"; rule?: EventRule; onSaved
       </FieldRow>
       <Show when={d.clearMode === "custom"}>
         <FieldRow label="Clears when it reads">
+          <Show when={d.clearExpr} fallback={<>
           <div class="flex gap-2">
             <OpSelect label="Clear comparison" value={d.clearOp} onChange={(op) => setD("clearOp", op)} />
             <input
@@ -837,6 +840,7 @@ export function RuleForm(p: { mode: "create" | "edit"; rule?: EventRule; onSaved
             />
           </div>
           {err("clearValue")}
+          </>}>{(expr) => <KeptExpression expr={expr()} />}</Show>
         </FieldRow>
       </Show>
       <FieldRow label="Clears after at least" info={RULE_HINTS.sustain}>
@@ -940,5 +944,17 @@ export function RuleForm(p: { mode: "create" | "edit"; rule?: EventRule; onSaved
         <input type="checkbox" class="toggle toggle-sm" checked={d.enabled} onChange={(e) => setD("enabled", e.currentTarget.checked)} />
       </FieldRow>
     </form>
+  );
+}
+
+// KeptExpression shows a criterion written as an expression the builder's
+// comparison cannot say (#957): the form keeps it as written and an edit
+// leaves it alone; editing it in the console arrives with #960.
+function KeptExpression(p: { expr: string }) {
+  return (
+    <div class="flex flex-col gap-1">
+      <code class="font-data text-sm break-all rounded bg-base-200 px-2 py-1">{p.expr}</code>
+      <p class="text-[11px] text-base-content/60">An expression. Saving keeps it as written.</p>
+    </div>
   );
 }

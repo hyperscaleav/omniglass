@@ -95,7 +95,10 @@ sits.
   comparison list beside the value offers exactly what the chosen key's lane allows, in words.
 - **Fires when it reads**: the comparison and the value that open an alarm. The value is used exactly
   as typed: a property value with leading or trailing spaces is refused rather than trimmed (it would
-  never match), and a metric value must be a plain decimal (`40`, `-2.5`).
+  never match), and a metric value must be a plain decimal (`40`, `-2.5`). The comparison is stored
+  as the expression it means (`value == "down"`, `value > 40.0`); a rule whose criteria were written
+  as a richer expression over the API or CLI shows that expression here instead, and saving the form
+  keeps it as written.
 - **For at least**: the **fire sustain**, a duration (`30s`, `2m`). The value has to keep meeting the
   criteria this long before the alarm opens; one sample that does not starts the wait over. The
   sustain is timed from the server's receipt of the first sample that meets the criteria and judged
@@ -241,20 +244,24 @@ Every console action is the same API call, with the same checks
 | Edit, Disable, Enable | `omniglass event-rule update <name>` | `PATCH /event-rules/{name}` |
 | Delete | `omniglass event-rule delete <name>` | `DELETE /event-rules/{name}` |
 
-The worked example from a terminal, with criteria as JSON (`{op, value}`, the comparisons the API
-reference lists for `op`) and sustains as durations:
+The worked example from a terminal, with criteria as JSON and sustains as durations. A criterion is
+an expression, `{"expr": "..."}`, over the sample: `value`, `key`, `instance`, and `component` with
+its `name` and `type` ([alarms and actions](/architecture/alarms-actions/#the-event_rule) names each). The
+short form `{op, value}`, the comparisons the API reference lists for `op`, still works and is stored
+as the expression it means; a rule always reads back as its expression.
 
 ```sh
 omniglass event-rule create --name input-moved --label "Input moved off HDMI 1" \
   --sample-key video-input --fire-criteria '{"op":"eq","value":"hdmi2"}' --severity average
 omniglass event-rule create --name slow-to-answer --sample-key icmp-rtt-avg \
-  --fire-criteria '{"op":"gt","value":200}' --fire-sustain 2m \
+  --fire-criteria '{"expr":"value > 200 && instance != \"aux\""}' --fire-sustain 2m \
   --clear-criteria '{"op":"lt","value":100}' --clear-sustain 5m --severity warning \
   --selector '{"component_types":["display"]}'
 omniglass event-rule update slow-to-answer --enabled=false
 omniglass event-rule state list input-moved
 ```
 
-A key that is not a registered property or metric, criteria its lane cannot compare, or a severity
-level that does not exist is refused with a 422; a name already taken is a 409; an official rule
+A key that is not a registered property or metric, a criterion that does not compile (an unknown
+name, or a result that is not true or false; the 422 names the criterion, line and column), or a
+severity level that does not exist is refused with a 422; a name already taken is a 409; an official rule
 refuses every write with a 409. Every write is audited.

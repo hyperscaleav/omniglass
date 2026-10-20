@@ -180,7 +180,7 @@ type factsSeverityLevel struct {
 }
 
 // factsEventRule is one official event rule (#920, #948) as the docs render
-// it: the criteria flattened to "op value" words, the severity absent for an
+// it: the criteria as their expressions (#957), the severity absent for an
 // informational rule.
 type factsEventRule struct {
 	Name           string `json:"name"`
@@ -431,14 +431,10 @@ func FactsJSON() ([]byte, error) {
 	if err := yaml.Unmarshal(eventRulesYAML, &ers); err != nil {
 		return nil, fmt.Errorf("seed facts: event rules: %w", err)
 	}
-	words := func(c criteriaYAML) string { return fmt.Sprintf("%s %v", c.Op, c.Value) }
 	for _, r := range ers.Rules {
 		fr := factsEventRule{Name: r.Name, Label: r.Label, Description: r.Description, SampleKey: r.SampleKey,
-			Fire: words(r.Fire), FireSustain: r.FireSustain, ClearSustain: r.ClearSustain, Severity: r.Severity,
+			Fire: r.Fire, Clear: r.Clear, FireSustain: r.FireSustain, ClearSustain: r.ClearSustain, Severity: r.Severity,
 			FireEventType: r.FireEventType, ClearEventType: r.ClearEventType}
-		if r.Clear != nil {
-			fr.Clear = words(*r.Clear)
-		}
 		doc.EventRules = append(doc.EventRules, fr)
 	}
 

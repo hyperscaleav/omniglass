@@ -336,8 +336,11 @@ key, fire and clear criteria, sustains, a selector, the event types it writes wh
 (`fire_event_type`, required) and ends (`clear_event_type`, optional), and a severity level, which is
 optional: a rule without one is informational and raises no alarm, and a PATCH with an empty `severity`
 makes a rule informational (an empty `clear_event_type` drops the clear event; the fire type cannot be
-emptied). An unknown key, level or event type, a missing fire event type, or criteria its lane cannot
-evaluate, is a 422. A rule edit is judged on what it changes from the stored rule:
+emptied). Criteria are expressions (#957): a body gives `{expr}` or the short form `{op, value}`, which is
+lowered to its expression, and a rule always reads back as `{expr}`. An unknown key, level or event
+type, a missing fire event type, or a criterion that does not compile against its lane is a 422; for a
+criterion the problem's error is located at `body.fire_criteria.expr` (or `clear_criteria`) and carries
+the `line` and `column` of the fault. A rule edit is judged on what it changes from the stored rule:
 a selector entry, key or criteria it restates unchanged is not re-resolved, so a rule whose component or
 type was deleted stays editable (it matches nothing by the stale entry), while an entry new to the rule must
 exist. The list and a get carry each rule's live state as counts (`conditions_in_force`, `open_alarms`,

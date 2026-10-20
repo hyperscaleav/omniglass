@@ -198,8 +198,8 @@ since no condition row ended.
 event_rule:
   name: reach-lost
   sample_key: endpoint-reachable       # a property (text) or a metric (number)
-  fire_criteria: { op: eq, value: down }
-  clear_criteria: { op: eq, value: up } # optional: absent, the negation of fire
+  fire_criteria: { expr: 'value == "down"' }
+  clear_criteria: { expr: 'value == "up"' } # optional: absent, the negation of fire, !(fire)
   fire_sustain: 30s                     # how long fire must hold
   clear_sustain: 0s
   severity: high                        # optional: absent, informational (no alarm)
@@ -264,10 +264,25 @@ operator in between. That takes the system out only when the component fills a r
 is `outage` and losing it drops the role below quorum; otherwise the system reads whatever the role's
 impact says, and a component that fills no role moves no system.
 
-Criteria are, for now, one comparison of the arriving sample's value, `{op, value}`: a property
-compares text (`eq`, `ne`), a metric compares numbers (`eq` `ne` `gt` `ge` `lt` `le`); a sample of
-the wrong type, or a number that is no number, decides nothing. The column is jsonb, so the
-[expression](/architecture/expressions/) leaf replaces the comparison without a schema change (#524).
+Criteria are [expressions](/architecture/expressions/) (#957), stored as `{"expr": "..."}` and
+evaluated against a prepared input of five bindings: **`value`** (a metric's number, or a property's
+value typed by its `data_type`: text for `string` and, for now, `json`, a true or false for `bool`),
+**`key`** (the property or metric the rule reads), **`instance`** (the sample's endpoint, empty when it
+has none) and **`component`**, the sample's component, with its `name` and its `type` (the component
+type, by name). So `value > 80 && instance != "aux"` or `value == "down" && component.type == "display"`. A
+criterion must yield true or false; one that names anything else, or yields another type, is refused
+when the rule is written (a 422 naming the criteria, line and column) and never stored. The criteria
+site admits a small vetted set of builtins and runs under a small budget (the expressions page lists
+both). A rule with no clear criteria clears on the negation of its fire criteria, `!(fire)`.
+
+The short form a rule could only be written in before, one comparison `{op, value}` (a property
+compares text with `eq` or `ne`, a metric compares numbers with any of `eq` `ne` `gt` `ge` `lt` `le`),
+is still accepted on input and lowered to its expression (`eq "down"` is `value == "down"`, `ge 80`
+is `value >= 80.0`), and the API always answers with the expression. A one-time backfill rewrote every
+stored short form the same way, and every such rule decides every sample as it did before. A sample
+the criteria cannot read (a number that is no number, a `bool` property reading neither `true` nor
+`false`), or a run over its budget, holds the rule for that sample and is logged once per rule
+version; the sample still lands. A rule's criteria compile once per rule version, never per sample.
 The **selector** picks the components a rule watches: those whose type falls within a listed component
 type, and those listed by id; empty, every component. A rule outlives what it points at: deleting a
 component or a key it reads leaves it editable, and it simply matches nothing.
@@ -308,7 +323,7 @@ it fills; a lesser alarm degrades it but leaves it in place. When it does drop o
 that matters is the role's **impact** ([health](/architecture/health/)).
 
 :::design[The rest of the event rule (ADR-0050)]
-Still design: **expression criteria** and an **expression selector** (`scope:
+Still design: an **expression selector** (`scope:
 'component.template == "polaris-dsp-16"'`, fan-out, one alarm per match) once the engine lands (#524);
 a **window** (`window: { reduce: avg, over: 10m }`) aggregating the input before the criteria; a rule
 **suppressible by name through the cascade** ([cascade](/architecture/cascade/)), so a high-weight group
@@ -549,8 +564,8 @@ upgrade backfilled from the rule-raised alarms open at the time. The severity re
   table="event_rule"
   notes={{
     sample_key: 'The property or metric it reads, by name; sample_lane records which registry',
-    fire_criteria: 'The comparison that opens an alarm ({op, value}); jsonb so the expression leaf drops in (#524)',
-    clear_criteria: 'NULL: clears on the negation of fire_criteria',
+    fire_criteria: 'The expression the condition starts on, {"expr": "..."} (#957); the short form {op, value} is lowered to it on input',
+    clear_criteria: 'The expression it ends on, {"expr": "..."}; NULL clears on the negation of fire_criteria',
     selector: 'Component types and components it watches; empty, every component',
     severity: 'The level its alarms are raised at, by name; NULL is an informational rule, which raises no alarm',
     fire_event_type_id: 'The event type written when the condition starts (FK event_type, required)',

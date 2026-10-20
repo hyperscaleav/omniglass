@@ -23,11 +23,13 @@ type eventRuleBody struct {
 	SampleKey    string `json:"sample_key"`
 	SampleLane   string `json:"sample_lane"`
 	FireCriteria struct {
+		Expr  string `json:"expr"`
 		Op    string `json:"op"`
 		Value any    `json:"value"`
 	} `json:"fire_criteria"`
 	ClearCriteria *struct {
-		Op string `json:"op"`
+		Expr string `json:"expr"`
+		Op   string `json:"op"`
 	} `json:"clear_criteria"`
 	FireSustain    string  `json:"fire_sustain"`
 	Severity       *string `json:"severity"`
@@ -79,7 +81,7 @@ func TestEventRuleAPI(t *testing.T) {
 		t.Fatal(err)
 	}
 	if made.SampleLane != "property" || made.FireSustain != "30s" || made.Version != 1 || !made.Enabled || made.ClearCriteria != nil ||
-		made.FireCriteria.Op != "eq" || made.FireCriteria.Value != "down" {
+		made.FireCriteria.Expr != `value == "down"` || made.FireCriteria.Op != "" || made.FireCriteria.Value != nil {
 		t.Fatalf("made = %+v", made)
 	}
 	c.do(ownerTok, http.MethodPost, "/event-rules", rule, http.StatusConflict)
@@ -229,7 +231,7 @@ func TestEventRuleAPI(t *testing.T) {
 		map[string]any{"enabled": false, "clear_criteria": map[string]any{"op": "eq", "value": "up"}}, http.StatusOK), &upd); err != nil {
 		t.Fatal(err)
 	}
-	if upd.Version != 2 || upd.Enabled || upd.ClearCriteria == nil {
+	if upd.Version != 2 || upd.Enabled || upd.ClearCriteria == nil || upd.ClearCriteria.Expr != `value == "up"` {
 		t.Fatalf("updated = %+v, want version 2, disabled, with a clear criterion", upd)
 	}
 	// A caller who owns one place but only views the fleet holds rule:create in
@@ -599,4 +601,70 @@ func TestAlarmTimelineAPI(t *testing.T) {
 	north := setupScopedPrincipal(t, ctx, dsn, "tl-north-viewer", grantSpec{role: "viewer", scopeKind: "location", scopeID: loc.ID})
 	c.do(north, http.MethodGet, "/components/tl-target/alarms/"+alarm+":timeline", nil, http.StatusNotFound)
 	c.do(viewer, http.MethodGet, "/components/tl-target/alarms/01a15700-0000-7000-8000-000000000000:timeline", nil, http.StatusNotFound)
+}
+
+// TestEventRuleExpressionAPI proves a rule's criteria are expressions over
+// HTTP (#957): a body may give {expr} or the short {op, value}, the answer is
+// always {expr}, and an expression that does not compile is a 422 naming the
+// criteria, line and column, on create and on update.
+func TestEventRuleExpressionAPI(t *testing.T) {
+	dsn := storagetest.NewDSN(t)
+	ctx := context.Background()
+	gw, err := storage.NewPG(ctx, dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer gw.Close()
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatal(err)
+	}
+	ownerTok, hash, prefix, err := auth.NewBearerToken()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := gw.BootstrapOwner(ctx, storage.OwnerSpec{Username: "root", SecretHash: hash, Prefix: prefix}); err != nil {
+		t.Fatal(err)
+	}
+	srv := httptest.NewServer(api.NewHandler(gw))
+	defer srv.Close()
+	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
+
+	var made eventRuleBody
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodPost, "/event-rules", map[string]any{"name": "hot", "sample_key": "room-temperature",
+		"fire_criteria": map[string]any{"expr": `value > 40 && instance != "aux"`}, "clear_criteria": map[string]any{"op": "lt", "value": 35},
+		"fire_event_type": "condition-started"}, http.StatusCreated), &made); err != nil {
+		t.Fatal(err)
+	}
+	if made.FireCriteria.Expr != `value > 40 && instance != "aux"` || made.ClearCriteria == nil || made.ClearCriteria.Expr != "value < 35.0" {
+		t.Fatalf("made = %+v / %+v, want both as expressions", made.FireCriteria, made.ClearCriteria)
+	}
+
+	type problem struct {
+		Errors []struct {
+			Location string         `json:"location"`
+			Message  string         `json:"message"`
+			Value    map[string]any `json:"value"`
+		} `json:"errors"`
+	}
+	check := func(body []byte, location string, line, column float64) {
+		t.Helper()
+		var p problem
+		if err := json.Unmarshal(body, &p); err != nil {
+			t.Fatal(err)
+		}
+		if len(p.Errors) != 1 || p.Errors[0].Location != location || p.Errors[0].Value["line"] != line || p.Errors[0].Value["column"] != column {
+			t.Fatalf("422 body %s, want one error at %s, line %v, column %v", body, location, line, column)
+		}
+	}
+	check(c.do(ownerTok, http.MethodPost, "/event-rules", map[string]any{"name": "bad", "sample_key": "room-temperature",
+		"fire_criteria": map[string]any{"expr": "value > 40 &&\n  humidity > 2"}, "fire_event_type": "condition-started"},
+		http.StatusUnprocessableEntity), "body.fire_criteria.expr", 2, 3)
+	check(c.do(ownerTok, http.MethodPatch, "/event-rules/hot", map[string]any{"clear_criteria": map[string]any{"expr": "value + 1"}},
+		http.StatusUnprocessableEntity), "body.clear_criteria.expr", 1, 1)
+	c.do(ownerTok, http.MethodPost, "/event-rules", map[string]any{"name": "both", "sample_key": "room-temperature",
+		"fire_criteria": map[string]any{"expr": "value > 1", "op": "gt", "value": 1}, "fire_event_type": "condition-started"},
+		http.StatusUnprocessableEntity)
+	c.do(ownerTok, http.MethodPost, "/event-rules", map[string]any{"name": "clock", "sample_key": "room-temperature",
+		"fire_criteria": map[string]any{"expr": "now() != nil"}, "fire_event_type": "condition-started"},
+		http.StatusUnprocessableEntity)
 }

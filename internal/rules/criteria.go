@@ -5,10 +5,11 @@
 package rules
 
 import (
+	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
-	"math"
-	"strconv"
+	"strings"
 )
 
 // Lane is which sample lane a rule's key reads: a property (a text value
@@ -20,125 +21,86 @@ const (
 	LaneMetric   Lane = "metric"
 )
 
-// Criteria is the placeholder criterion until the expression engine (#524)
-// lands: one comparison of the arriving sample's value against a threshold.
-// A property compares text (eq, ne); a metric compares numbers with any
-// operator. Stored as jsonb, so the expression string drops in later
-// without a schema change.
+// Criteria is when a rule fires or clears: an expression (#957) over the
+// criteria site's prepared input (judge.go), stored as {"expr": "..."}. The
+// short form {op, value}, one comparison of the sample's value against a
+// threshold, is still accepted on input (the API, the CLI, the console's
+// builder) and lowered to its expression before it is stored or judged.
 type Criteria struct {
-	Op    string          `json:"op"`
-	Value json.RawMessage `json:"value"`
+	Expr  string          `json:"expr,omitempty"`
+	Op    string          `json:"op,omitempty"`
+	Value json.RawMessage `json:"value,omitempty"`
 }
 
-var ops = map[string]bool{"eq": true, "ne": true, "gt": true, "ge": true, "lt": true, "le": true}
+// symbols is each short-form operator's expression operator.
+var symbols = map[string]string{"eq": "==", "ne": "!=", "gt": ">", "ge": ">=", "lt": "<", "le": "<="}
 
-// Validate refuses a criterion the lane cannot evaluate.
-func (c Criteria) Validate(lane Lane) error {
-	if !ops[c.Op] {
-		return fmt.Errorf("criteria op %q is not one of eq, ne, gt, ge, lt, le", c.Op)
+// Lower turns a criterion into its expression form; an expression is
+// returned as it is. Pure, and mirrored by the backfill migration that
+// rewrote the stored rules (db/migrations/20261021040000), so the two
+// produce the same source for every stored short form:
+//
+//   - a property compares text, eq or ne, against a JSON-quoted string
+//     (value == "down"), which Expr reads back exactly;
+//   - a bool property compares against true or false; a threshold that is
+//     neither could never equal a parseable value, so eq lowers to false
+//     and ne to true;
+//   - a metric compares a number with any operator, against its JSON text
+//     made a float literal (80 becomes 80.0), so Expr parses it with the same
+//     correctly rounded ParseFloat the short form's json.Unmarshal used.
+func Lower(c Criteria, lane Lane, dataType string) (Criteria, error) {
+	if c.Expr != "" {
+		if c.Op != "" || len(c.Value) > 0 {
+			return Criteria{}, errors.New("a criterion is an expression (expr) or a comparison (op and value), not both")
+		}
+		return Criteria{Expr: c.Expr}, nil
 	}
-	if len(c.Value) == 0 || string(c.Value) == "null" {
-		return fmt.Errorf("criteria needs a value to compare against")
+	sym, ok := symbols[c.Op]
+	if !ok {
+		return Criteria{}, fmt.Errorf("criteria op %q is not one of eq, ne, gt, ge, lt, le (or give an expression)", c.Op)
+	}
+	raw := bytes.TrimSpace(c.Value)
+	if len(raw) == 0 || string(raw) == "null" {
+		return Criteria{}, errors.New("criteria needs a value to compare against")
 	}
 	switch lane {
 	case LaneProperty:
 		if c.Op != "eq" && c.Op != "ne" {
-			return fmt.Errorf("a property compares text: only eq and ne, not %s", c.Op)
+			return Criteria{}, fmt.Errorf("a property compares text: only eq and ne, not %s", c.Op)
 		}
-		if _, ok := c.text(); !ok {
-			return fmt.Errorf("a property criterion compares against text")
+		var text string
+		if err := json.Unmarshal(raw, &text); err != nil {
+			return Criteria{}, errors.New("a property criterion compares against text")
 		}
+		if dataType == "bool" {
+			if text != "true" && text != "false" {
+				return Criteria{Expr: map[string]string{"eq": "false", "ne": "true"}[c.Op]}, nil
+			}
+			return Criteria{Expr: "value " + sym + " " + text}, nil
+		}
+		return Criteria{Expr: "value " + sym + " " + quote(text)}, nil
 	case LaneMetric:
-		if _, ok := c.number(); !ok {
-			return fmt.Errorf("a metric criterion compares against a number")
+		var f float64
+		if raw[0] == '"' || json.Unmarshal(raw, &f) != nil {
+			return Criteria{Expr: ""}, errors.New("a metric criterion compares against a number")
 		}
-	default:
-		return fmt.Errorf("unknown lane %q", lane)
+		num := string(raw)
+		if !strings.ContainsAny(num, ".eE") {
+			num += ".0"
+		}
+		return Criteria{Expr: "value " + sym + " " + num}, nil
 	}
-	return nil
+	return Criteria{}, fmt.Errorf("unknown lane %q", lane)
 }
 
-func (c Criteria) text() (string, bool) {
-	var s string
-	if err := json.Unmarshal(c.Value, &s); err != nil {
-		return "", false
-	}
-	return s, true
-}
-
-func (c Criteria) number() (float64, bool) {
-	var f float64
-	if err := json.Unmarshal(c.Value, &f); err != nil {
-		return 0, false
-	}
-	return f, true
-}
-
-// Eval reports whether a sample value meets the criterion, judging it by the
-// lane's type: a text criterion takes only a string (a property's value); a
-// numeric one takes a float64 (a metric's value) or numeric text. A number
-// that is no number (NaN, infinity) is refused: it would meet neither a
-// criterion nor its negation, so it could open nothing and clear nothing.
-func (c Criteria) Eval(value any) (bool, error) {
-	if want, ok := c.text(); ok {
-		got, isText := value.(string)
-		if !isText {
-			return false, fmt.Errorf("a text criterion compares text, not %T", value)
-		}
-		switch c.Op {
-		case "eq":
-			return got == want, nil
-		case "ne":
-			return got != want, nil
-		}
-		return false, fmt.Errorf("a text criterion has no %s", c.Op)
-	}
-	want, ok := c.number()
-	if !ok {
-		return false, fmt.Errorf("criteria value is neither text nor a number")
-	}
-	var got float64
-	switch v := value.(type) {
-	case float64:
-		got = v
-	case int:
-		got = float64(v)
-	case string:
-		f, err := strconv.ParseFloat(v, 64)
-		if err != nil {
-			return false, fmt.Errorf("sample value %q is not a number", v)
-		}
-		got = f
-	default:
-		return false, fmt.Errorf("sample value %v is not a number", value)
-	}
-	if math.IsNaN(got) || math.IsInf(got, 0) {
-		return false, fmt.Errorf("sample value %v is not a finite number", got)
-	}
-	switch c.Op {
-	case "eq":
-		return got == want, nil
-	case "ne":
-		return got != want, nil
-	case "gt":
-		return got > want, nil
-	case "ge":
-		return got >= want, nil
-	case "lt":
-		return got < want, nil
-	case "le":
-		return got <= want, nil
-	}
-	return false, fmt.Errorf("unknown op %q", c.Op)
-}
-
-// negations maps each operator to the one that holds exactly when it does not.
-var negations = map[string]string{"eq": "ne", "ne": "eq", "gt": "le", "le": "gt", "ge": "lt", "lt": "ge"}
-
-// Negate is the criterion that holds exactly when c does not: a rule with no
-// clear criterion clears on the negation of its fire criterion.
-func (c Criteria) Negate() Criteria {
-	return Criteria{Op: negations[c.Op], Value: c.Value}
+// quote is s as a JSON string literal, which Expr reads back as s: every
+// escape JSON writes (\" \\ \n \r \t \b \f \uXXXX) is one Expr reads.
+func quote(s string) string {
+	var b bytes.Buffer
+	enc := json.NewEncoder(&b)
+	enc.SetEscapeHTML(false)
+	_ = enc.Encode(s)
+	return strings.TrimSuffix(b.String(), "\n")
 }
 
 // Action is what one sample means for a rule's alarm on its owner.
@@ -152,28 +114,3 @@ const (
 	// Clear clears the alarm (a no-op when none is open).
 	Clear
 )
-
-// Decide is what a sample means for a rule: Fire when it meets the fire
-// criteria, else Clear when it meets the clear criteria (nil: the negation
-// of fire), else Hold. Pure; sustains are the caller's concern.
-func Decide(fire Criteria, clear *Criteria, value any) (Action, error) {
-	fires, err := fire.Eval(value)
-	if err != nil {
-		return Hold, err
-	}
-	if fires {
-		return Fire, nil
-	}
-	c := fire.Negate()
-	if clear != nil {
-		c = *clear
-	}
-	clears, err := c.Eval(value)
-	if err != nil {
-		return Hold, err
-	}
-	if clears {
-		return Clear, nil
-	}
-	return Hold, nil
-}
