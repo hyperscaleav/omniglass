@@ -2350,6 +2350,7 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   table with none or with more than one, so a new table is a failing test until somebody classifies
   it. Proved non-vacuous in both directions: removing a table fails, and declaring one twice fails.
 
+
 - **The identity triad, on every surface** ([#545](https://github.com/hyperscaleav/omniglass/issues/545)).
   The vocabulary above is reversed, and this entry records why rather than quietly replacing it. The
   columns have always been `id` / `name` / `display_name`; what drifted was the console, which had been
@@ -2449,6 +2450,7 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   name at all, where the name IS the operator-facing string: a secret, a variable, a tag, an interface.
   Verifying that claim corrected it: `display_name` on `SecretType` had been read as `display_name` on
   `Secret`, and a secret has none.
+
 
 - **Five telemetry lanes, and property stops being the genus**
   ([#584](https://github.com/hyperscaleav/omniglass/issues/584),
@@ -5828,6 +5830,7 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   nothing stored to lose. Every test drives the gap by hand, delivering the collection between two
   assertions rather than sleeping on a race (ADR-0133, #398, #772, #782).
 
+
 - **Transport becomes code, and the entity an API is reached through is an endpoint.** ADR-0073
   executes and #603's naming ruling rides it (ADR-0134): the six wires (icmp, tcp, udp, ssh, http,
   snmp) are a code registry the binary ships (`internal/transport`, a leaf package so the storage
@@ -6519,6 +6522,7 @@ holds, in a new `event_rule_live` table rather than on the rule row every batch 
 tests prove the stamp moves only on a judgment (not a disabled rule, an unwatched component or a
 history sample), coalesces inside the bound, agrees across the list, get and state, and never makes a
 batch wait.
+
 
 ### Severity levels are authored on the console (#930)
 
