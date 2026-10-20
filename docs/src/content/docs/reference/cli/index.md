@@ -4014,7 +4014,7 @@ Create a severity level
 omniglass severity-level create [flags]
 ```
 
-Adds an operator severity level at a rank of its own, between two others without renumbering. A name or rank already taken is a 409; a color outside the palette is a 422. Audited. Gated by severity_level:create.
+Adds an operator severity level at a rank of its own, between two others without renumbering. A name or rank already taken is a 409; a color outside the palette is a 422. Audited. Gated by severity_level:create, with an all-scope grant: a level's rank moves health fleet-wide.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -4037,7 +4037,7 @@ Delete a severity level
 omniglass severity-level delete <name>
 ```
 
-Removes an operator level no alarm or event rule names; an official level or one in use is a 409. Audited. Gated by severity_level:delete.
+Removes an operator level no alarm or event rule names; an official level or one in use is a 409. Audited. Gated by severity_level:delete, with an all-scope grant.
 
 Example:
 
@@ -4085,7 +4085,7 @@ Update a severity level
 omniglass severity-level update <name> [flags]
 ```
 
-Patches an operator level's name, label, color or rank (an absent field is unchanged); a rename carries every alarm at the level with it. Official levels are read-only (409). Audited. Gated by severity_level:update.
+Patches an operator level's name, label, color or rank (an absent field is unchanged); a rename carries every alarm at the level with it. Official levels are read-only (409). Audited. Gated by severity_level:update, with an all-scope grant.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|

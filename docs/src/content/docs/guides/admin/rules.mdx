@@ -19,7 +19,7 @@ it can be acknowledged like any other ([alarms on a component](/guides/operator/
 How the evaluator works is on [alarms and actions](/architecture/alarms-actions/#the-event_rule).
 
 Beside it, **Catalog, under Actions: Severity** (with `severity_level:read`) lists the levels a rule
-raises at, and is where you add your own (with `severity_level:create`).
+raises at, and is where you add your own (with `severity_level:create` on an all-scope grant).
 
 Rules **read like a registry**: any grant carrying `rule:read`, wherever it is scoped, lists every
 rule. The live counts and a rule's open alarms and streaks name components, so they cover only the
@@ -209,9 +209,10 @@ included: **renaming** a level carries every alarm at it and every rule that nam
 one across the outage floor recomputes the health of every component with an open alarm at it, so a
 level moved from 35 to 45 takes those components out at once. **Delete** (with `severity_level:delete`,
 behind a confirm) is refused while an alarm or a rule still names the level, and the blade says so.
-An official level is read-only: its blade greys Edit and Delete with that reason. Writing a level asks
-for the permission on any grant (it is reference data, like every registry), not the all-scope grant a
-rule needs.
+An official level is read-only: its blade greys Edit and Delete with that reason. Reading the levels
+takes the permission on any grant, but writing one takes it on an **all-scope grant**, like a rule: a
+level's rank moves the health of every component with an alarm at it, wherever it sits. A caller whose
+`severity_level` permissions stop at one place sees no New severity level, and Edit and Delete greyed.
 
 The same writes from a terminal:
 

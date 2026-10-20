@@ -3111,7 +3111,7 @@ export interface paths {
         put?: never;
         /**
          * Create a severity level
-         * @description Adds an operator severity level at a rank of its own, between two others without renumbering. A name or rank already taken is a 409; a color outside the palette is a 422. Audited. Gated by severity_level:create.
+         * @description Adds an operator severity level at a rank of its own, between two others without renumbering. A name or rank already taken is a 409; a color outside the palette is a 422. Audited. Gated by severity_level:create, with an all-scope grant: a level's rank moves health fleet-wide.
          */
         post: operations["create-severity-level"];
         delete?: never;
@@ -3136,14 +3136,14 @@ export interface paths {
         post?: never;
         /**
          * Delete a severity level
-         * @description Removes an operator level no alarm or event rule names; an official level or one in use is a 409. Audited. Gated by severity_level:delete.
+         * @description Removes an operator level no alarm or event rule names; an official level or one in use is a 409. Audited. Gated by severity_level:delete, with an all-scope grant.
          */
         delete: operations["delete-severity-level"];
         options?: never;
         head?: never;
         /**
          * Update a severity level
-         * @description Patches an operator level's name, label, color or rank (an absent field is unchanged); a rename carries every alarm at the level with it. Official levels are read-only (409). Audited. Gated by severity_level:update.
+         * @description Patches an operator level's name, label, color or rank (an absent field is unchanged); a rename carries every alarm at the level with it. Official levels are read-only (409). Audited. Gated by severity_level:update, with an all-scope grant.
          */
         patch: operations["update-severity-level"];
         trace?: never;

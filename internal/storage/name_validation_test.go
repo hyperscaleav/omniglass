@@ -47,7 +47,7 @@ func provedByCreate(ctx context.Context, gw *storage.PG) map[string]func(key str
 		"severity_level": func(s string) error {
 			// Each call takes a rank of its own, since ranks are unique.
 			severityRank++
-			_, err := gw.CreateSeverityLevel(ctx, "", storage.SeverityLevel{Name: s, Label: "X", Color: "gray", Rank: 1000 + severityRank})
+			_, err := gw.CreateSeverityLevel(ctx, "", storage.SeverityLevel{Name: s, Label: "X", Color: "gray", Rank: 1000 + severityRank}, all)
 			return err
 		},
 		"component": func(s string) error {

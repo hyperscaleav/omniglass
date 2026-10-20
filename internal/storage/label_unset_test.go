@@ -194,7 +194,7 @@ func TestEveryWritePathStoresNullForAnUnsetLabel(t *testing.T) {
 			return "name", "lbl-rule"
 		},
 		"severity_level": func(t *testing.T) (string, string) {
-			if _, err := gw.CreateSeverityLevel(ctx, "", storage.SeverityLevel{Name: "lbl-severity", Label: blank, Color: "gray", Rank: 777}); err != nil {
+			if _, err := gw.CreateSeverityLevel(ctx, "", storage.SeverityLevel{Name: "lbl-severity", Label: blank, Color: "gray", Rank: 777}, all); err != nil {
 				t.Fatalf("create severity_level: %v", err)
 			}
 			return "name", "lbl-severity"

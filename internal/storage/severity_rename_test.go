@@ -21,7 +21,7 @@ import (
 func TestSeverityRenameDuringARaisingBatch(t *testing.T) {
 	f := newHealthFixture(t)
 	ctx, all := context.Background(), scope.Set{All: true}
-	if _, err := f.gw.CreateSeverityLevel(ctx, "", storage.SeverityLevel{Name: "major", Label: "Major", Color: "orange", Rank: 35}); err != nil {
+	if _, err := f.gw.CreateSeverityLevel(ctx, "", storage.SeverityLevel{Name: "major", Label: "Major", Color: "orange", Rank: 35}, all); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := f.gw.CreateEventRule(ctx, "", storage.EventRuleSpec{FireEventType: "condition-started", Name: "at-major", SampleKey: "endpoint-reachable",
@@ -41,7 +41,7 @@ func TestSeverityRenameDuringARaisingBatch(t *testing.T) {
 	go func() {
 		defer wg.Done()
 		p2 := "p2"
-		_, renameErr = f.gw.UpdateSeverityLevel(ctx, "", "major", storage.SeverityLevelPatch{Name: &p2})
+		_, renameErr = f.gw.UpdateSeverityLevel(ctx, "", "major", storage.SeverityLevelPatch{Name: &p2}, all)
 	}()
 	time.Sleep(700 * time.Millisecond)
 	_ = stall.Rollback(ctx)

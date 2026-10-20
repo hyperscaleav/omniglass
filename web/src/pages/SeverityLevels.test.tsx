@@ -16,10 +16,18 @@ import { EVENT_RULES_KEY } from "../lib/event_rules";
 // own color (the same chip every alarm wears), whether it takes a component out,
 // and its origin; worst first, the order an operator triages in. An operator
 // level is created, edited and deleted in a Drawer; official levels stay
-// read-only. Data is seeded into the query cache; writes are caught at fetch.
+// read-only. A level's rank moves health fleet-wide, so a write is judged on the
+// caller's all-scope permissions (fleet_permissions), like an event rule's. Data
+// is seeded into the query cache; writes are caught at fetch.
 
-const owner: Me = { principal: { id: "u-root", kind: "human" }, human: { username: "root" }, permissions: [">"], grants: [] };
-const viewer: Me = { principal: { id: "u-view", kind: "human" }, human: { username: "viewer" }, permissions: ["*:read"], grants: [] };
+const owner: Me = { principal: { id: "u-root", kind: "human" }, human: { username: "root" }, permissions: [">"], fleet_permissions: [">"], grants: [{ role: "owner", scope_kind: "all" }] };
+const viewer: Me = { principal: { id: "u-view", kind: "human" }, human: { username: "viewer" }, permissions: ["*:read"], fleet_permissions: ["*:read"], grants: [{ role: "viewer", scope_kind: "all" }] };
+// Owns one place, views the fleet: severity_level:* is in its flattened set,
+// but writing a level needs it on an all-scope grant, so the server refuses it.
+const placeOwner: Me = {
+  principal: { id: "u-po", kind: "human" }, human: { username: "owner-hq" }, permissions: [">"], fleet_permissions: ["*:read"],
+  grants: [{ role: "owner", scope_kind: "location", scope_id: "loc-hq" }, { role: "viewer", scope_kind: "all" }],
+};
 
 function mount(me: Me = owner, levels = [...SEEDED_LEVELS, MAJOR_LEVEL]) {
   const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
@@ -112,6 +120,17 @@ describe("Severity levels page", () => {
   it("offers no create to a reader", () => {
     mount(viewer);
     expect(screen.queryByText("New severity level")).toBeNull();
+  });
+
+  it("offers no level write to a caller whose severity_level permissions stop at one place", async () => {
+    mount(placeOwner);
+    expect(screen.queryByText("New severity level")).toBeNull();
+    openLevel("major");
+    const b = await blade();
+    expect(within(b).queryByText("Delete")?.closest("button")?.disabled ?? true).toBe(true);
+    const editBtn = within(b).getByLabelText("Edit") as HTMLButtonElement;
+    expect(editBtn.disabled).toBe(true);
+    expect(editBtn.closest(".tooltip")?.getAttribute("data-tip")).toBe("Requires severity_level:update");
   });
 
   it("creates a level, teaching where its rank sits and what its alarms do", async () => {

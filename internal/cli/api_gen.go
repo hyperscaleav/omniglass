@@ -5307,7 +5307,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "create",
 					Short:   "Create a severity level",
-					Long:    "Adds an operator severity level at a rank of its own, between two others without renumbering. A name or rank already taken is a 409; a color outside the palette is a 422. Audited. Gated by severity_level:create.",
+					Long:    "Adds an operator severity level at a rank of its own, between two others without renumbering. A name or rank already taken is a 409; a color outside the palette is a 422. Audited. Gated by severity_level:create, with an all-scope grant: a level's rank moves health fleet-wide.",
 					Example: "  omniglass severity-level create --color color --name name --rank <int>",
 					Args:    cobra.ExactArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -5344,7 +5344,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "delete <name>",
 					Short:   "Delete a severity level",
-					Long:    "Removes an operator level no alarm or event rule names; an official level or one in use is a 409. Audited. Gated by severity_level:delete.",
+					Long:    "Removes an operator level no alarm or event rule names; an official level or one in use is a 409. Audited. Gated by severity_level:delete, with an all-scope grant.",
 					Example: "  omniglass severity-level delete <name>",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -5399,7 +5399,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "update <name>",
 					Short:   "Update a severity level",
-					Long:    "Patches an operator level's name, label, color or rank (an absent field is unchanged); a rename carries every alarm at the level with it. Official levels are read-only (409). Audited. Gated by severity_level:update.",
+					Long:    "Patches an operator level's name, label, color or rank (an absent field is unchanged); a rename carries every alarm at the level with it. Official levels are read-only (409). Audited. Gated by severity_level:update, with an all-scope grant.",
 					Example: "  omniglass severity-level update <name>",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {

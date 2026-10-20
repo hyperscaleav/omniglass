@@ -13769,7 +13769,7 @@ paths:
       summary: List severity levels
       x-omniglass-permission: severity_level:read
     post:
-      description: Adds an operator severity level at a rank of its own, between two others without renumbering. A name or rank already taken is a 409; a color outside the palette is a 422. Audited. Gated by severity_level:create.
+      description: "Adds an operator severity level at a rank of its own, between two others without renumbering. A name or rank already taken is a 409; a color outside the palette is a 422. Audited. Gated by severity_level:create, with an all-scope grant: a level's rank moves health fleet-wide."
       operationId: create-severity-level
       requestBody:
         content:
@@ -13794,7 +13794,7 @@ paths:
       x-omniglass-permission: severity_level:create
   /severity-levels/{name}:
     delete:
-      description: Removes an operator level no alarm or event rule names; an official level or one in use is a 409. Audited. Gated by severity_level:delete.
+      description: Removes an operator level no alarm or event rule names; an official level or one in use is a 409. Audited. Gated by severity_level:delete, with an all-scope grant.
       operationId: delete-severity-level
       parameters:
         - description: The level's name
@@ -13842,7 +13842,7 @@ paths:
       summary: Get a severity level
       x-omniglass-permission: severity_level:read
     patch:
-      description: Patches an operator level's name, label, color or rank (an absent field is unchanged); a rename carries every alarm at the level with it. Official levels are read-only (409). Audited. Gated by severity_level:update.
+      description: Patches an operator level's name, label, color or rank (an absent field is unchanged); a rename carries every alarm at the level with it. Official levels are read-only (409). Audited. Gated by severity_level:update, with an all-scope grant.
       operationId: update-severity-level
       parameters:
         - description: The level's name
