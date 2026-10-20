@@ -348,6 +348,22 @@ describe("Rules page", () => {
     expect(writes[0].body).toEqual({ label: "Still watching" });
   });
 
+  it("keeps an informational rule informational on a label edit, sending the label alone", async () => {
+    const writes = catchWrites();
+    const quiet: EventRule = { ...hot, id: uuidFor("rule-quiet"), name: "quiet-watch", label: "Quiet watch", enabled: true, severity: undefined };
+    mount(admin, [reach, hot, quiet]);
+    fireEvent.click(screen.getByText("Quiet watch"));
+    const b = await blade();
+    fireEvent.click(within(b).getByText("Edit"));
+    await waitFor(() => screen.getByText("Save rule"));
+    fireEvent.input(screen.getByLabelText("Label"), { target: { value: "Still quiet" } });
+    const save = screen.getByText("Save rule").closest("button") as HTMLButtonElement;
+    await waitFor(() => expect(save.disabled).toBe(false));
+    fireEvent.click(save);
+    await waitFor(() => expect(writes).toHaveLength(1));
+    expect(writes[0].body).toEqual({ label: "Still quiet" });
+  });
+
   it("lets the operator remove a deleted selector entry", async () => {
     const writes = await editStale();
     fireEvent.click(screen.getByLabelText(`Stop watching ${uuidFor("comp-gone")}`));

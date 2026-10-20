@@ -221,3 +221,30 @@ func TestEventRuleTypeBackfill(t *testing.T) {
 		t.Fatalf("%d condition rows outlived their component, want 0", n)
 	}
 }
+
+// TestEventRuleTypeBackfillDown proves rolling the slice back never turns an
+// informational rule into one that pages: the restored NOT NULL needs a
+// severity, so the rule takes the least severe level, and is disabled with it.
+func TestEventRuleTypeBackfillDown(t *testing.T) {
+	if testing.Short() {
+		t.Skip("integration test needs Postgres")
+	}
+	dsn := storagetest.NewDSN(t)
+	conn := connectDSN(t, dsn)
+	mustExec(t, conn, `insert into severity_level (name, rank) values ('info', 10), ('high', 40)`)
+	mustExec(t, conn, `insert into event_type (name) values ('cond-x')`)
+	for _, r := range []struct{ name, severity string }{{"quiet", ""}, {"loud", "high"}} {
+		mustExec(t, conn, `insert into event_rule (name, sample_key, sample_lane, fire_criteria, severity, fire_event_type_id)
+			values ($1, 'endpoint-reachable', 'property', '{"op":"eq","value":"down"}', nullif($2, ''), (select id from event_type where name = 'cond-x'))`,
+			r.name, r.severity)
+	}
+	if err := migrate.RollbackBelow(dsn, "20261020010100"); err != nil {
+		t.Fatal(err)
+	}
+	if got := scalar(t, conn, `select severity || ' ' || enabled from event_rule where name = 'quiet'`); got != "info false" {
+		t.Fatalf("the informational rule rolled back to %q, want the least severe level, disabled (info false)", got)
+	}
+	if got := scalar(t, conn, `select severity || ' ' || enabled from event_rule where name = 'loud'`); got != "high true" {
+		t.Fatalf("an alarm-raising rule rolled back to %q, want it untouched (high true)", got)
+	}
+}

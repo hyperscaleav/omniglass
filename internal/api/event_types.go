@@ -153,7 +153,7 @@ func registerEventTypeRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 		Path:          "/event-types/{name}",
 		DefaultStatus: http.StatusNoContent,
 		Summary:       "Delete an event type",
-		Description:   "Removes a custom event type by name. Official event types are read-only. Gated by event_type:delete.",
+		Description:   "Removes a custom event type by name. Official event types are read-only (409), and so is a type still in use: one that recorded events or an event rule's fire or clear event type names is a 409 until nothing names it. Gated by event_type:delete.",
 	}, "event_type", "delete"), func(ctx context.Context, in *eventTypeNameInput) (*struct{}, error) {
 		if err := gw.DeleteEventType(ctx, actorID(ctx), in.Name); err != nil {
 			return nil, mapEventTypeErr(err)

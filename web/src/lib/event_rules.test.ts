@@ -171,6 +171,13 @@ describe("the bodies a draft sends", () => {
     expect(updateBody(d, was)).toEqual({ clear_negates: true });
   });
 
+  it("accepts no severity only on an edit of a rule that has none", () => {
+    const quiet = { ...hot, severity: undefined };
+    expect(validateDraft(draftFromRule(quiet), "edit", quiet).severity).toBeUndefined();
+    expect(validateDraft({ ...draftFromRule(hot), severity: "" }, "edit", hot).severity).toBeTruthy();
+    expect(validateDraft({ ...emptyDraft(), name: "x" }, "create").severity).toBeTruthy();
+  });
+
   it("sends nothing for an edit that changes nothing", () => {
     expect(updateBody(draftFromRule(hot), hot)).toEqual({});
   });

@@ -1621,7 +1621,7 @@ Delete an event type
 omniglass event-type delete <name>
 ```
 
-Removes a custom event type by name. Official event types are read-only. Gated by event_type:delete.
+Removes a custom event type by name. Official event types are read-only (409), and so is a type still in use: one that recorded events or an event rule's fire or clear event type names is a 409 until nothing names it. Gated by event_type:delete.
 
 Example:
 

@@ -20,7 +20,9 @@ WHERE fire_event_type_id IS NULL;
 -- migrate:down
 
 -- Back to a schema where every rule raises an alarm: an informational rule
--- takes the least severe level, so the restored NOT NULL holds.
+-- takes the least severe level, so the restored NOT NULL holds, and is
+-- disabled with it, so a rule its author meant never to page does not start
+-- raising alarms on a rollback.
 UPDATE public.event_rule
-SET severity = (SELECT name FROM public.severity_level ORDER BY rank LIMIT 1)
+SET severity = (SELECT name FROM public.severity_level ORDER BY rank LIMIT 1), enabled = false
 WHERE severity IS NULL;

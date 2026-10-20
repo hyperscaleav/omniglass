@@ -2275,7 +2275,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "delete <name>",
 					Short:   "Delete an event type",
-					Long:    "Removes a custom event type by name. Official event types are read-only. Gated by event_type:delete.",
+					Long:    "Removes a custom event type by name. Official event types are read-only (409), and so is a type still in use: one that recorded events or an event rule's fire or clear event type names is a 409 until nothing names it. Gated by event_type:delete.",
 					Example: "  omniglass event-type delete <name>",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {

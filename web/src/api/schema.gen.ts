@@ -1288,7 +1288,7 @@ export interface paths {
         post?: never;
         /**
          * Delete an event type
-         * @description Removes a custom event type by name. Official event types are read-only. Gated by event_type:delete.
+         * @description Removes a custom event type by name. Official event types are read-only (409), and so is a type still in use: one that recorded events or an event rule's fire or clear event type names is a 409 until nothing names it. Gated by event_type:delete.
          */
         delete: operations["delete-event-type"];
         options?: never;

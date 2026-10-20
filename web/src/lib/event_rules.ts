@@ -248,8 +248,10 @@ const NAME = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 export type DraftErrors = Partial<Record<"name" | "sampleKey" | "fireValue" | "clearValue" | "fireSustain" | "clearSustain" | "severity", string>>;
 
 // validateDraft is the form's one judgement, shared by create and edit (the
-// name is create-only, so edit skips it).
-export function validateDraft(d: RuleDraft, mode: "create" | "edit"): DraftErrors {
+// name is create-only, so edit skips it). A severity is required, except on
+// an edit of a rule that has none: an informational rule stays informational
+// (#948; choosing "None" on any rule is #951).
+export function validateDraft(d: RuleDraft, mode: "create" | "edit", was?: EventRule): DraftErrors {
   const e: DraftErrors = {};
   if (mode === "create") {
     if (!d.name.trim()) e.name = "A name for the rule.";
@@ -268,7 +270,8 @@ export function validateDraft(d: RuleDraft, mode: "create" | "edit"): DraftError
   if (fs) e.fireSustain = fs;
   const cs = readDuration(d.clearSustain);
   if (cs) e.clearSustain = cs;
-  if (!d.severity) e.severity = "The level the alarm is raised at.";
+  const informational = mode === "edit" && !!was && !was.severity;
+  if (!d.severity && !informational) e.severity = "The level the alarm is raised at.";
   return e;
 }
 

@@ -543,14 +543,16 @@ export function RuleForm(p: { mode: "create" | "edit"; rule?: EventRule; onSaved
   const [formErr, setFormErr] = createSignal<string | null>(null);
 
   // A new rule starts at the registry's default level once the levels land.
+  // An edit never fills one in: an informational rule (no severity) stays
+  // informational unless its author picks a level.
   createEffect(() => {
-    if (!d.severity) {
+    if (p.mode === "create" && !d.severity) {
       const s = defaultSeverity(severity().levels);
       if (s) setD("severity", s);
     }
   });
 
-  const errors = createMemo<DraftErrors>(() => validateDraft(d, p.mode));
+  const errors = createMemo<DraftErrors>(() => validateDraft(d, p.mode, p.rule));
   const valid = () => Object.keys(errors()).length === 0;
   const shown = (k: keyof DraftErrors) => (touched[k] ? errors()[k] : undefined);
   const touch = (k: keyof DraftErrors) => setTouched(k, true);

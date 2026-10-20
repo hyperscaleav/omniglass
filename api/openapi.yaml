@@ -10332,7 +10332,7 @@ paths:
       x-omniglass-permission: event_type:create
   /event-types/{name}:
     delete:
-      description: Removes a custom event type by name. Official event types are read-only. Gated by event_type:delete.
+      description: "Removes a custom event type by name. Official event types are read-only (409), and so is a type still in use: one that recorded events or an event rule's fire or clear event type names is a 409 until nothing names it. Gated by event_type:delete."
       operationId: delete-event-type
       parameters:
         - description: The event type's name
