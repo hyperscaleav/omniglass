@@ -26,9 +26,11 @@ export default function ExpressionField(p: {
   placeholder?: string;
   // How long typing must pause before a check (ms).
   debounce?: number;
-  // Each answered check's verdict, so a form can refuse a source that does
-  // not compile.
-  onCheck?: (ok: boolean) => void;
+  // The verdict, so a form can refuse a source that does not compile: true
+  // when it compiles, false when it does not (or is empty, has no key to be
+  // checked against, or could not be checked), undefined while a check is
+  // pending.
+  onCheck?: (ok: boolean | undefined) => void;
 }): JSX.Element {
   const [check, setCheck] = createSignal<ExpressionCheck | null>(null);
   const [failed, setFailed] = createSignal<string | null>(null);
@@ -42,8 +44,11 @@ export default function ExpressionField(p: {
       const n = ++seq;
       if (!key || !source.trim()) {
         setCheck(null);
+        setFailed(null);
+        p.onCheck?.(false);
         return;
       }
+      p.onCheck?.(undefined);
       timer = setTimeout(async () => {
         try {
           const r = await validateExpression({ site: p.site, source, key });
@@ -52,7 +57,10 @@ export default function ExpressionField(p: {
           setCheck(r);
           p.onCheck?.(r.ok);
         } catch (e) {
-          if (n === seq) setFailed(describeError(e));
+          if (n !== seq) return;
+          setCheck(null);
+          setFailed(describeError(e));
+          p.onCheck?.(false);
         }
       }, p.debounce ?? 300);
     }),

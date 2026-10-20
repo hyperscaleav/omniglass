@@ -283,6 +283,9 @@ describe("the builder teaches the expression it lowers to", () => {
     expect(lowerShort("eq", "on", "property", "bool")).toBe("false");
     expect(lowerShort("ne", "on", "property", "bool")).toBe("true");
     expect(lowerShort("eq", undefined, "property", "string")).toBeNull();
+    // Plain decimals, as the server writes them: never an exponent.
+    expect(lowerShort("gt", 1e-7, "metric")).toBe("value > 0.0000001");
+    expect(lowerShort("lt", 1e21, "metric")).toBe("value < 1000000000000000000000.0");
   });
 });
 
@@ -311,5 +314,34 @@ describe("writing criteria as an expression", () => {
       sample_key: "temperature-c", selector: { component_types: ["display"], components: [] },
       fire_criteria: { expr: "value > 41" }, clear_criteria: undefined,
     });
+  });
+});
+
+describe("criteria that do not compile, and expressions the builder cannot say", () => {
+  const broken = { ...reach, official: false, sample_key: "door-state", fire_criteria: { expr: 'value == "open"' }, clear_criteria: undefined,
+    criteria_error: { field: "fire_criteria" as const, line: 1, column: 7, message: "invalid operation: == (mismatched types bool and string)" } };
+
+  it("opens a side whose criteria do not compile as an expression, with the stored source, though the builder could parse it", () => {
+    const d = draftFromRule(broken);
+    expect(d.fireExpr).toBe('value == "open"');
+  });
+
+  it("always sends a side that had an error, even unchanged, so a save repairs or re-judges it", () => {
+    const d = draftFromRule(broken);
+    expect(updateBody({ ...d, fireExpr: "value" }, broken).fire_criteria).toEqual({ expr: "value" });
+    expect(updateBody(d, broken).fire_criteria).toEqual({ expr: 'value == "open"' });
+    const viaBuilder = toBuilder(d, "fire");
+    expect(updateBody({ ...viaBuilder, fireValue: "open" }, broken).fire_criteria).toEqual({ op: "eq", value: "open" });
+  });
+
+  it("keeps an expression the builder cannot say across a switch to the builder and back", () => {
+    const rich = 'value > 40 && instance != "aux"';
+    const d = { ...draftFromRule(hot), fireExpr: rich };
+    const b = toBuilder(d, "fire");
+    expect(b.fireExpr).toBeNull();
+    expect(toExpression(b, "fire").fireExpr).toBe(rich);
+    // One the builder can say is the builder's: switching back lowers the comparison.
+    const simple = toBuilder({ ...d, fireExpr: "value >= 45.0" }, "fire");
+    expect(toExpression({ ...simple, fireValue: "50" }, "fire").fireExpr).toBe("value >= 50.0");
   });
 });

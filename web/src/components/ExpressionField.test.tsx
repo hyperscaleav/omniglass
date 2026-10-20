@@ -22,15 +22,16 @@ function answer(source: string) {
   };
 }
 
-function mount(initial: string, key = "temperature-c") {
+function mount(initial: string, key = "temperature-c", fail = false) {
   const calls: { source: string; key?: string }[] = [];
   vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
     const body = await (input as Request).clone().json();
     calls.push(body);
+    if (fail) return new Response(JSON.stringify({ detail: "down" }), { status: 500, headers: { "Content-Type": "application/json" } });
     return json(answer(body.source));
   });
   const [v, setV] = createSignal(initial);
-  const checks: boolean[] = [];
+  const checks: (boolean | undefined)[] = [];
   render(() => (
     <FieldRow label="Fires when">
       <ExpressionField site="criteria" sampleKey={key} value={v()} onInput={setV} label="Fires when" debounce={10} onCheck={(ok) => checks.push(ok)} />
@@ -62,7 +63,8 @@ describe("ExpressionField", () => {
     expect(pre.textContent).toBe("  humidity > 2\n  ^");
     expect(screen.getByLabelText("Fires when").getAttribute("aria-invalid")).toBe("true");
     expect(calls.at(-1)).toEqual({ site: "criteria", source: "value > 40 &&\n  humidity > 2", key: "temperature-c" });
-    expect(checks).toEqual([true, false]);
+    // Pending (undefined) while each check is in flight, then its verdict.
+    expect(checks).toEqual([undefined, true, undefined, false]);
   });
 
   it("lists the site's bindings and functions from the same answer, each name with its doc", async () => {
@@ -79,5 +81,28 @@ describe("ExpressionField", () => {
     await new Promise((r) => setTimeout(r, 40));
     expect(calls.length).toBe(0);
     expect(screen.getByText(/Choose what the rule reads/)).toBeTruthy();
+  });
+});
+
+describe("ExpressionField's verdict", () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it("is not ok for an empty source, a missing key, or a check that failed", async () => {
+    const empty = mount("");
+    expect(empty.checks).toEqual([false]);
+    vi.restoreAllMocks();
+    const nokey = mount("value > 1", "");
+    expect(nokey.checks).toEqual([false]);
+    vi.restoreAllMocks();
+    const failed = mount("value > 1", "temperature-c", true);
+    await waitFor(() => expect(failed.checks.at(-1)).toBe(false));
+  });
+
+  it("clears a failure when the source is emptied", async () => {
+    const m = mount("value > 1", "temperature-c", true);
+    await waitFor(() => expect(m.checks.at(-1)).toBe(false));
+    expect(document.querySelector(".text-error")).toBeTruthy();
+    m.setV("");
+    await waitFor(() => expect(document.querySelector(".text-error")).toBeNull());
   });
 });

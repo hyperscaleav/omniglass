@@ -409,6 +409,37 @@ describe("Rules page", () => {
     expect((screen.getByLabelText("Write the fire criteria as an expression") as HTMLInputElement).checked).toBe(true);
   });
 
+  it("opens a rule whose criteria do not compile on the broken side as an expression, and saves it repaired", async () => {
+    const reqs = exprRoutes();
+    const door: EventRule = { ...reach, official: false, name: "door-ajar", label: "Door ajar", sample_key: "door-state",
+      fire_criteria: { expr: 'value == "open"' }, clear_criteria: undefined,
+      criteria_error: { field: "fire_criteria", line: 1, column: 7, message: "invalid operation: == (mismatched types bool and string)" } };
+    mount(admin, [reach, door]);
+    fireEvent.click(screen.getByText("Door ajar"));
+    fireEvent.click(within(await blade()).getByText("Edit"));
+    const area = (await waitFor(() => screen.getByLabelText("Fire expression"))) as HTMLTextAreaElement;
+    expect(area.value).toBe('value == "open"');
+    fireEvent.input(area, { target: { value: "value" } });
+    const submit = screen.getByText("Save rule").closest("button") as HTMLButtonElement;
+    await waitFor(() => expect(submit.disabled).toBe(false), { timeout: 2000 });
+    fireEvent.click(submit);
+    await waitFor(() => expect(reqs.some((r) => r.method === "PATCH")).toBe(true));
+    expect((reqs.find((r) => r.method === "PATCH")!.body as { fire_criteria: unknown }).fire_criteria).toEqual({ expr: "value" });
+  });
+
+  it("drops a preview answer once the draft it answered changes", async () => {
+    exprRoutes({ in_force_now: [], edges: [], state_unknown: [], window: "24h0m0s", row_cap: 5000, series_judged: 1, series_total: 1, truncated: false, sustains_ignored: true });
+    mount();
+    fireEvent.click(screen.getByText("New rule"));
+    await waitFor(() => screen.getByLabelText("Name"));
+    fireEvent.change(screen.getByLabelText("Reads"), { target: { value: "property:endpoint-reachable" } });
+    fireEvent.input(screen.getByLabelText("Fire value"), { target: { value: "down" } });
+    fireEvent.click(screen.getByRole("button", { name: "Preview" }));
+    await screen.findByTestId("preview-result");
+    fireEvent.input(screen.getByLabelText("Fire value"), { target: { value: "up" } });
+    await waitFor(() => expect(screen.queryByTestId("preview-result")).toBeNull());
+  });
+
   it("shows a rule's criteria as the expressions it judges by, on its blade", async () => {
     mount();
     fireEvent.click(screen.getByText("Too hot"));

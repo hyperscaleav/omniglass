@@ -184,7 +184,7 @@ below from the project's history. From here it grows one slice at a time.
 | [ADR-0143](#adr-0143-a-simulated-system-is-built-to-a-standard-with-platform-minted-names) | 2026-10-18 | Accepted | A simulated system is built to a standard: each role staffed with a simulated product that fits, short roles listed, names platform-minted, all in one transaction; the lab archetypes are not an operator concept |
 | [ADR-0144](#adr-0144-alarms-are-raised-by-event-rules-at-a-severity-level-from-a-ranked-registry) | 2026-10-18 | Accepted | Alarms are raised by event rules (one table per rule kind, `rule:*` authoring, `raised_by_rule_id`, one alarm per endpoint) at a severity level from a ranked registry referenced by name; `critical` became `high`, the outage floor |
 | [ADR-0145](#adr-0145-a-rule-records-its-conditions-as-typed-events-and-its-alarm-is-optional) | 2026-10-20 | Accepted | An event rule's alarm is optional (an informational rule raises none); a rule names the event types it writes (a required fire type, an optional clear type); its in-force state is its own condition row; it writes one event per edge, carrying the alarm the edge moved, and a severity toggled on or off moves alarms with no condition event; a hand clear holds while the condition persists |
-| [ADR-0146](#adr-0146-expressions-run-on-pinned-expr-with-an-allowlist-and-per-site-budgets-and-rule-criteria-are-expressions) | 2026-10-21 | Accepted | Expressions run on pinned Expr behind a per-site allowlist of vetted builtins and a per-site budget (after three adversarial passes); event rule criteria are stored as `{expr}`, the short form lowered on input and by a one-time backfill, with one approved bool divergence; compile errors show on the rule; validate and preview answer from the same declarations |
+| [ADR-0146](#adr-0146-expressions-run-on-pinned-expr-with-an-allowlist-and-per-site-budgets-and-rule-criteria-are-expressions) | 2026-10-20 | Accepted | Expressions run on pinned Expr behind a per-site allowlist of vetted builtins and a per-site budget (after three adversarial passes); event rule criteria are stored as `{expr}`, the short form lowered on input and by a one-time backfill, with one approved bool divergence; compile errors show on the rule; validate and preview answer from the same declarations |
 
 ## Entries
 
@@ -6599,14 +6599,20 @@ interface create form, since that name is the platform's to mint.
 
 ### ADR-0146: Expressions run on pinned Expr with an allowlist and per-site budgets, and rule criteria are expressions
 
-- **Date:** 2026-10-21 | **Status:** Accepted | **Pages:** [expressions](/architecture/expressions/), [alarms and actions](/architecture/alarms-actions/), [API](/architecture/api/)
+- **Date:** 2026-10-20 | **Status:** Accepted | **Pages:** [expressions](/architecture/expressions/), [alarms and actions](/architecture/alarms-actions/), [API](/architecture/api/)
 - **Decision:** The expression engine (#524) is `internal/expression` on Expr, pinned at v1.17.8, and
   six choices define it:
   1. **An allowlist, not a denylist.** Every Expr builtin is off; a site admits only builtins vetted as
      linear in what a run is charged for, with output no larger than their inputs. The range operator,
      nested predicates, builders and encoders are refused at compile time, and the clock and zone
      builtins can never be vetted. A run is bounded by its site's budget (walk, allocation, and a
-     wall-clock backstop for charged work), no larger than a fixed ceiling; criteria get a small one.
+     wall-clock backstop for charged work), no larger than a fixed ceiling; criteria get a small one,
+     and the generated sites table on the [expressions](/architecture/expressions/) page carries each
+     site's numbers. Two costs a charge on the input understated are bounded where they arise: a
+     `matches` pattern must be a constant, is capped at 256 compiled regex instructions, and charges its
+     subject's length times its compiled size (RE2 is linear in both); `==`, `!=` and `in` take scalars
+     and lists of scalars only (and a scalar key in a map), refused at compile time on a struct, a map
+     or a list of lists, whose deep comparison no charge covers.
   2. **Each site is declared once** (`internal/rules/site.go`): its Go-struct environment per value
      type, its builtins, result type and budget. The validate route, the console's expression field and
      the docs' bindings table all read that declaration; nothing lists a binding by hand.

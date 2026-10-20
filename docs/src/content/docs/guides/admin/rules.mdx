@@ -105,7 +105,8 @@ sits.
   few functions (`value == "down" && instance != "aux"`). It is checked as you type: a mistake is
   pointed at under its line and column, and beneath the field are the names it may use and the
   functions it may call, each with what it means. A rule written as an expression opens in this
-  mode; switching back keeps the comparison when the expression still is one. A rule whose criteria no
+  mode. Switching back to the builder keeps the comparison when the expression still is one; an
+  expression the builder cannot say is kept, and comes back when you switch to an expression again. A rule whose criteria no
   longer compile (its key's data type changed, say) reads **criteria do not compile** in the list,
   and its blade says which criteria, where, and why; it judges nothing until they are rewritten.
 - **For at least**: the **fire sustain**, a duration (`30s`, `2m`). The value has to keep meeting the
@@ -134,7 +135,7 @@ Every field is checked as you type and **Create rule** stays refused until the r
 is created, the rule judges the newest sample of every series it selects at once, so a condition
 that already holds starts its sustain then rather than waiting for the next change.
 
-#**Preview**, at the foot of the drawer, runs the draft against the last day of its key's samples on
+**Preview**, at the foot of the drawer, runs the draft against the last day of its key's samples on
 the components you can read, without saving or writing anything: what it would hold **in force now**,
 each linked to its component, and the **edges** it would have written, fire and clear, newest last.
 Each sample is judged as the server judged it, but alone, so a sustain that would have held an edge
@@ -150,7 +151,7 @@ the expression itself, an unfinished line pointed at, the fix, a preview of the 
 
 ::walkthrough{#write-a-rule-as-an-expression}
 
-## A worked example
+### A worked example
 
 A touch panel with two inputs reports the one it shows as its `video-input` property (`hdmi1` or
 `hdmi2`). To be told when one is switched to `hdmi2`, that is, off HDMI 1:

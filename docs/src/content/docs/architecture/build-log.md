@@ -6907,7 +6907,11 @@ truncation notice and that sustains are ignored. The blade shows the criteria as
 blade keep #957's criteria-do-not-compile display. The decision record is ADR-0146; the expressions
 page stays Partial (functions, `convert`, the other sites and the function-run bindings are design).
 A walkthrough, `write-a-rule-as-an-expression`, is embedded in the rules guide, and the screenshots
-are under `.github/screenshots/960/`.
+are under `.github/screenshots/960/`. A review then fixed four gaps: a rule whose criteria do not compile
+opens that side as its stored expression (the builder would hide what is wrong) and always sends it,
+so a save repairs it; an expression the builder cannot say survives a switch to the builder and back;
+a preview answer is dropped once the draft it answered changes; and the save waits for every pending
+or failed check, with the "Stored as" line written in the server's plain decimals.
 
 ### A rule preview reads only the series it judges, as ingest would (#959)
 

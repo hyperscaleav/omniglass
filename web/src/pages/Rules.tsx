@@ -722,8 +722,10 @@ export function RuleForm(p: { mode: "create" | "edit"; rule?: EventRule; onSaved
   // The server's verdict on each criterion written as an expression (undefined
   // until a check answers): a source that does not compile refuses the submit.
   const [exprOk, setExprOk] = createStore<{ fire?: boolean; clear?: boolean }>({});
+  // A side written as an expression must have compiled: pending or failed
+  // checks both hold the save.
   const exprBad = () =>
-    (d.fireExpr !== null && exprOk.fire === false) || (d.clearMode === "custom" && d.clearExpr !== null && exprOk.clear === false);
+    (d.fireExpr !== null && exprOk.fire !== true) || (d.clearMode === "custom" && d.clearExpr !== null && exprOk.clear !== true);
   const valid = () => Object.keys(errors()).length === 0 && !exprBad();
   const shown = (k: keyof DraftErrors) => (touched[k] ? errors()[k] : undefined);
   const touch = (k: keyof DraftErrors) => setTouched(k, true);
@@ -750,7 +752,8 @@ export function RuleForm(p: { mode: "create" | "edit"; rule?: EventRule; onSaved
   const setMode = (side: "fire" | "clear", expression: boolean) => {
     setExprOk(side, undefined);
     const next = expression ? toExpression(d, side, dataType()) : toBuilder(d, side);
-    setD({ fireExpr: next.fireExpr, fireOp: next.fireOp, fireValue: next.fireValue, clearExpr: next.clearExpr, clearOp: next.clearOp, clearValue: next.clearValue });
+    setD({ fireExpr: next.fireExpr, fireOp: next.fireOp, fireValue: next.fireValue, fireKept: next.fireKept,
+      clearExpr: next.clearExpr, clearOp: next.clearOp, clearValue: next.clearValue, clearKept: next.clearKept });
   };
   const ModeToggle = (q: { side: "fire" | "clear" }) => (
     <label class="-mt-2 inline-flex w-fit cursor-pointer items-center gap-2 text-[12px] text-base-content/70">
@@ -1060,7 +1063,10 @@ export function RuleForm(p: { mode: "create" | "edit"; rule?: EventRule; onSaved
         <input type="checkbox" class="toggle toggle-sm" checked={d.enabled} onChange={(e) => setD("enabled", e.currentTarget.checked)} />
       </FieldRow>
 
-      <RulePreviewPanel draft={d} ready={!!d.sampleKey && !errors().fireValue && !errors().fireExpr && !exprBad()} />
+      <RulePreviewPanel
+        draft={d}
+        ready={!!d.sampleKey && !errors().fireValue && !errors().fireExpr && !errors().clearValue && !errors().clearExpr && !exprBad()}
+      />
     </form>
   );
 }
@@ -1075,6 +1081,8 @@ function RulePreviewPanel(p: { draft: RuleDraft; ready: boolean }): JSX.Element 
   const [busy, setBusy] = createSignal(false);
   const [failed, setFailed] = createSignal<string | null>(null);
   let section: HTMLElement | undefined;
+  // An answer is to the draft it was asked about: once that changes, it goes.
+  createEffect(on(() => JSON.stringify(previewBody(p.draft)), () => setResult(null), { defer: true }));
   async function run() {
     setBusy(true);
     setFailed(null);

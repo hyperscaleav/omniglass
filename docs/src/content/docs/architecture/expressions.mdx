@@ -63,7 +63,10 @@ Each place an expression is written is a **site**, declared once in code. The ta
 generated from those declarations (`make gen`), and **`POST /expressions:validate`** (`omniglass
 expression validate`, gated `rule:read`) answers from the same ones: given a site, a source and,
 for criteria, the sample key, it says whether the expression compiles, with each diagnostic's line
-and column, and returns the site's bindings, builtins and budget. Built today:
+and column, and returns the site's bindings, builtins and budget. The console's **expression field**
+(the rule drawer's **Write as an expression**, #960) is that route's face: the source in a monospace
+field checked as it is typed, each diagnostic pointed at under its line and column, and the site's
+bindings and functions listed beneath with their docs. Built today:
 
 <ExpressionSites />
 
