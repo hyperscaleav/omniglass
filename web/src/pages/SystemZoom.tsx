@@ -450,10 +450,10 @@ export default function SystemZoom() {
                           <span class="min-w-0 flex-1 truncate text-base-content/80">{e.message}</span>
                           {/* A rule's event names the rule and carries the alarm it moved (#951). */}
                           <Show when={e.derived_by_rule}>{(rule) => <RuleLink name={rule()} />}</Show>
-                          <Show when={e.alarm_id && e.owner_kind === "component" && e.owner_id}>{eventTimelines.button(e.alarm_id!)}</Show>
+                          <Show when={e.alarm_id && e.owner_kind === "component" && e.owner_id}>{eventTimelines.button(e.alarm_id!, e.message)}</Show>
                         </div>
                         <Show when={e.alarm_id && e.owner_kind === "component" && e.owner_id && eventTimelines.isOpen(e.alarm_id)}>
-                          <AlarmTimeline component={e.owner_id} alarmId={e.alarm_id!} />
+                          <AlarmTimeline component={e.owner_id} alarmId={e.alarm_id!} id={eventTimelines.panelId(e.alarm_id!)} label={eventTimelines.label(e.message)} />
                         </Show>
                       </li>
                     );
@@ -497,10 +497,10 @@ export default function SystemZoom() {
                                 {(cid) => <button type="button" class="cursor-pointer font-mono text-xs text-base-content/80 hover:underline" onClick={() => openComponent(cid())}>{a.component}</button>}
                               </Show>
                               <span class="text-xs text-base-content/50">impairs {a.roleLabel} · {durationText(pageNow - Date.parse(a.raisedAt))}</span>
-                              <Show when={a.componentId}>{timelines.button(a.id)}</Show>
+                              <Show when={a.componentId}>{timelines.button(a.id, a.message)}</Show>
                             </div>
                             <Show when={a.componentId && timelines.isOpen(a.id)}>
-                              <AlarmTimeline component={a.componentId!} alarmId={a.id} />
+                              <AlarmTimeline component={a.componentId!} alarmId={a.id} id={timelines.panelId(a.id)} label={timelines.label(a.message)} />
                             </Show>
                           </div>
                         )}

@@ -129,10 +129,15 @@ function Why(props: {
                   {(rule) => <span class="shrink-0 text-[11px] text-base-content/45">by rule <span class="font-data">{rule()}</span></span>}
                 </Show>
                 {a.ack}
-                <Show when={a.timeline}>{(tl) => timelines.button(tl().alarmId)}</Show>
+                <Show when={a.timeline}>{(tl) => timelines.button(tl().alarmId, a.message)}</Show>
               </div>
               <Show when={a.timeline && timelines.isOpen(a.timeline.alarmId)}>
-                <AlarmTimeline component={a.timeline!.component} alarmId={a.timeline!.alarmId} />
+                <AlarmTimeline
+                  component={a.timeline!.component}
+                  alarmId={a.timeline!.alarmId}
+                  id={timelines.panelId(a.timeline!.alarmId)}
+                  label={timelines.label(a.message)}
+                />
               </Show>
             </div>
           )}

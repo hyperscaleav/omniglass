@@ -40,26 +40,33 @@ func auditAlarmAction(verb string) string {
 	return verb
 }
 
-// AlarmTimeline reads one alarm's timeline on a component (by name or id):
-// its events and its audit rows merged by time, in two bounded statements
-// (the alarm, then both sources in one ordered union over their indexes). At
-// one instant an event comes before the audit row it caused, since a rule's
-// event and the alarm write it moves share the transaction's clock. An
-// alarm not on that component, or an id that names no alarm, is
-// ErrAlarmNotFound. The caller has already resolved the component in scope.
-func (p *PG) AlarmTimeline(ctx context.Context, componentName, alarmID string) ([]AlarmTimelineEntry, error) {
-	if _, err := uuid.Parse(alarmID); err != nil {
+// AlarmTimeline reads one alarm's timeline on a component, by the
+// component's uuid the caller already resolved in scope: its events and its
+// audit rows merged by time, in two bounded statements (the alarm, then both
+// sources in one ordered union over their indexes). At one instant an event
+// comes before the audit row it caused, since a rule's event and the alarm
+// write it moves share the transaction's clock. The alarm id may be any
+// form Postgres reads as a uuid (uppercase, braced); it is matched in its
+// canonical form, the form the audit rows key on. An alarm not on that
+// component, or an id that names no alarm, is ErrAlarmNotFound.
+//
+// The platform's audit lines name the rule as the alarm's events recorded it
+// (source_rule, which outlives the rule), so one timeline shows one name;
+// before any event (a hand-raised alarm has none), the rule's current name.
+func (p *PG) AlarmTimeline(ctx context.Context, componentID, alarmID string) ([]AlarmTimelineEntry, error) {
+	parsed, err := uuid.Parse(alarmID)
+	if err != nil {
 		return nil, ErrAlarmNotFound
 	}
-	component, err := scopedByName(ctx, p.pool, componentConfig, componentName)
-	if errors.Is(err, ErrComponentNotFound) {
+	alarmID = parsed.String()
+	if _, err := uuid.Parse(componentID); err != nil {
 		return nil, ErrAlarmNotFound
-	} else if err != nil {
-		return nil, err
 	}
 	var rule string
-	err = p.pool.QueryRow(ctx, `select coalesce((select r.name from event_rule r where r.id = a.raised_by_rule_id), '')
-		from alarm a where a.id = $1::uuid and a.component_id = $2::uuid`, alarmID, component.ID).Scan(&rule)
+	err = p.pool.QueryRow(ctx, `select coalesce(
+			(select e.source_rule from event e where e.alarm_id = a.id and e.source_rule is not null order by e.id limit 1),
+			(select r.name from event_rule r where r.id = a.raised_by_rule_id), '')
+		from alarm a where a.id = $1::uuid and a.component_id = $2::uuid`, alarmID, componentID).Scan(&rule)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrAlarmNotFound
 	}

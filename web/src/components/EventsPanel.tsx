@@ -34,7 +34,7 @@ function EventRow(p: { ev: ComponentEvent; component: string }) {
         <span class="badge badge-ghost badge-sm shrink-0 font-data text-[10px]">{p.ev.key}</span>
         <span class="min-w-0 flex-1 text-sm text-base-content/80">{p.ev.message}</span>
         <Show when={p.ev.derived_by_rule}>{(rule) => <RuleLink name={rule()} />}</Show>
-        <Show when={p.ev.alarm_id}>{(id) => timelines.button(id())}</Show>
+        <Show when={p.ev.alarm_id}>{(id) => timelines.button(id(), p.ev.message)}</Show>
       </div>
       <div class="flex flex-wrap items-center gap-2 pl-[4.5rem] text-[11px] text-base-content/45">
         <Show when={p.ev.source}>
@@ -62,7 +62,7 @@ function EventRow(p: { ev: ComponentEvent; component: string }) {
         <pre class="ml-[4.5rem] overflow-x-auto rounded-md bg-base-200/60 px-2 py-1.5 font-data text-[11px] text-base-content/70">{attrs()}</pre>
       </Show>
       <Show when={p.ev.alarm_id && timelines.isOpen(p.ev.alarm_id)}>
-        <div class="ml-[4.5rem]"><AlarmTimeline component={p.component} alarmId={p.ev.alarm_id!} /></div>
+        <div class="ml-[4.5rem]"><AlarmTimeline component={p.component} alarmId={p.ev.alarm_id!} id={timelines.panelId(p.ev.alarm_id!)} label={timelines.label(p.ev.message)} /></div>
       </Show>
     </div>
   );

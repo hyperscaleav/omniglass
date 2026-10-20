@@ -122,12 +122,12 @@ function readsCell(r: EventRule): JSX.Element {
   );
 }
 
-// The live state at a glance, from the counts on the list row: open alarms in
-// the error hue, streaks in the warning hue, and a quiet "clear" when the rule
-// holds nothing right now. A disabled rule says so first (disabling cleared
-// what it held open). Its (i) says when it last judged a sample, which tells
-// a quiet rule from one whose key has stopped arriving; the (i) stops its
-// click so opening the hint does not open the row.
+// alarmWords is the message a rule's alarm carries: its message, else its
+// label or name (the server's ruleMessage), through the one label renderer.
+function alarmWords(r: EventRule): string {
+  return r.message || entityLabel(r);
+}
+
 // severityCell is a rule's level, or the quiet neutral chip an informational
 // rule (no severity) wears: it raises no alarm, so there is no level to show.
 function severityCell(severity: string | undefined): JSX.Element {
@@ -136,6 +136,13 @@ function severityCell(severity: string | undefined): JSX.Element {
     : <span class="badge badge-ghost badge-sm" title="Records its events and raises no alarm">informational</span>;
 }
 
+// The live state at a glance, from the counts on the list row: conditions in
+// force in the info hue, open alarms in the error hue, streaks in the warning
+// hue, and a quiet "clear" when the rule holds nothing right now. A disabled
+// rule says so first (disabling ended what it held). Its (i) says when it
+// last judged a sample, which tells a quiet rule from one whose key has
+// stopped arriving; the (i) stops its click so opening the hint does not
+// open the row.
 function RuleLive(p: { rule: EventRule }): JSX.Element {
   const open = () => p.rule.open_alarms;
   const pending = () => p.rule.pending_streaks;
@@ -550,12 +557,12 @@ function RuleBladeBody(p: { name: string }): JSX.Element {
                   <>
                     <SeverityBadge name={a.severity} size="xs" />
                     <span class="w-16 text-right text-[11px] text-base-content/50" title={fmtTime(a.raised_at)}>{rel(a.raised_at)}</span>
-                    {timelines.button(a.alarm_id)}
+                    {timelines.button(a.alarm_id, alarmWords(r()))}
                   </>
                 )}
                 detail={(a) => (
                   <Show when={timelines.isOpen(a.alarm_id)}>
-                    <AlarmTimeline component={a.component_id} alarmId={a.alarm_id} />
+                    <AlarmTimeline component={a.component_id} alarmId={a.alarm_id} id={timelines.panelId(a.alarm_id)} label={timelines.label(alarmWords(r()))} />
                   </Show>
                 )}
               />

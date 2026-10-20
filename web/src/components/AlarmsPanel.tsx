@@ -5,6 +5,7 @@ import { Check, Eye, Siren } from "./icons";
 import AlarmTimeline, { createTimelineToggles } from "./AlarmTimeline";
 import { describeError, rel } from "../lib/format";
 import {
+  ALARM_TIMELINE_PREFIX,
   acknowledgeAlarm,
   clearAlarm,
   componentAlarms,
@@ -80,7 +81,8 @@ export default function AlarmsPanel(props: { component: string; canUpdate: boole
     setErr(null);
     try {
       await write();
-      await qc.invalidateQueries({ queryKey: key() });
+      // An open timeline shows the write at once (#950).
+      await Promise.all([qc.invalidateQueries({ queryKey: key() }), qc.invalidateQueries({ queryKey: [...ALARM_TIMELINE_PREFIX] })]);
       after?.();
     } catch (e) {
       setErr(describeError(e));
@@ -199,10 +201,10 @@ export default function AlarmsPanel(props: { component: string; canUpdate: boole
                       onClick={() => void clear(a.id)}
                     />
                   </Show>
-                  {timelines.button(a.id)}
+                  {timelines.button(a.id, a.message)}
                 </div>
                 <Show when={timelines.isOpen(a.id)}>
-                  <AlarmTimeline component={props.component} alarmId={a.id} />
+                  <AlarmTimeline component={props.component} alarmId={a.id} id={timelines.panelId(a.id)} label={timelines.label(a.message)} />
                 </Show>
               </div>
             )}
@@ -269,10 +271,10 @@ export default function AlarmsPanel(props: { component: string; canUpdate: boole
                         <Show when={!a.acknowledged}> · never acknowledged</Show>
                       </span>
                     </span>
-                    {timelines.button(a.id)}
+                    {timelines.button(a.id, a.message)}
                   </div>
                   <Show when={timelines.isOpen(a.id)}>
-                    <AlarmTimeline component={props.component} alarmId={a.id} />
+                    <AlarmTimeline component={props.component} alarmId={a.id} id={timelines.panelId(a.id)} label={timelines.label(a.message)} />
                   </Show>
                 </div>
               )}

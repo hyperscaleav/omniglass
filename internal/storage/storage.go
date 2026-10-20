@@ -753,8 +753,9 @@ type Gateway interface {
 	// and the raised state belongs to the condition, not to the person looking.
 	AcknowledgeAlarm(ctx context.Context, actorID, componentName, alarmID string) (*Alarm, error)
 	// AlarmTimeline reads one alarm's events and audit rows merged by time
-	// (#950); an alarm not on the component is ErrAlarmNotFound.
-	AlarmTimeline(ctx context.Context, componentName, alarmID string) ([]AlarmTimelineEntry, error)
+	// (#950), on a component by the uuid the caller resolved in scope; an
+	// alarm not on the component is ErrAlarmNotFound.
+	AlarmTimeline(ctx context.Context, componentID, alarmID string) ([]AlarmTimelineEntry, error)
 	ListAlarms(ctx context.Context, componentName string, filter AlarmFilter) ([]Alarm, error)
 	// The health reads: the current verdict, why it is what it is, and the
 	// recorded transitions at or after since (a zero since is the whole history).

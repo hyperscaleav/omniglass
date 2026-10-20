@@ -229,10 +229,10 @@ export default function ComponentLeaf() {
                               {durationText(pageNow - Date.parse(a.raised_at))} · {a.acknowledged ? "acknowledged" : "unacknowledged"}
                             </span>
                             <AcknowledgeButton component={component()?.id ?? id()} alarm={a} />
-                            {timelines.button(a.id)}
+                            {timelines.button(a.id, a.message)}
                           </div>
                           <Show when={timelines.isOpen(a.id)}>
-                            <AlarmTimeline component={component()?.id ?? id()} alarmId={a.id} />
+                            <AlarmTimeline component={component()?.id ?? id()} alarmId={a.id} id={timelines.panelId(a.id)} label={timelines.label(a.message)} />
                           </Show>
                         </div>
                       )}

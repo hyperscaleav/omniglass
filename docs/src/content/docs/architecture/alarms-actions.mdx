@@ -83,8 +83,12 @@ one list, oldest first. Each entry says when, whether it is an event or an audit
 type, or `raise` / `acknowledge` / `clear`), and who: the person who acted, or the rule the entry
 belongs to (the rule wrote the event, or the platform acted for it). At one instant an event comes
 before the audit row it caused, since a rule's event and the alarm write it moves share the
-transaction's clock. It is two bounded statements (the alarm, then both sources in one ordered union
-over `event.alarm_id` and an `audit_log (resource, resource_id)` index), never a read per entry.
+transaction's clock. It is two bounded statements over the component the route already resolved (the
+alarm, then both sources in one ordered union over `event.alarm_id` and a partial `audit_log` index on
+alarm rows), never a read per entry. The id may come in any form Postgres reads as a uuid (uppercase,
+braced) and is matched in its canonical form. The platform's audit lines name the rule as its events
+recorded it, so a deleted rule still names its lines. An open timeline refreshes with the alarm list,
+and an acknowledge or clear refreshes it at once.
 Hand-raised alarms write no events, so their timeline is their audit rows alone. In the console every
 alarm row carries a clock button that opens its timeline in place, under the row: the Why strip on a
 component's and a system's page and blade, the component's alarms panel (active and recently cleared),

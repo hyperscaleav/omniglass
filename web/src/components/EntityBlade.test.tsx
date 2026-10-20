@@ -139,7 +139,7 @@ describe("the system blade", () => {
     // The report names the component by name; the open action goes by its uuid.
     fireEvent.click(within(why).getByRole("button", { name: "mic-1" }));
     expect(controller().stack().at(-1)).toEqual({ kind: "component", id: uuidFor("eb-c-mic") });
-    expect(within(why).getAllByRole("button", { name: /^Timeline of alarm / }).length).toBeGreaterThan(0);
+    expect(within(why).getAllByRole("button", { name: /^Timeline of / }).length).toBeGreaterThan(0);
   });
 
   // Each fact once (#872 drawer audit). The room's only system IS the room,
@@ -207,7 +207,7 @@ describe("the component blade", () => {
     expect(within(why).getByText("No route to host")).toBeTruthy();
     expect(within(why).getByText(/by rule/).textContent).toContain("icmp-unreachable");
     // The component's alarm row opens its timeline in place (#950).
-    expect(within(why).getAllByRole("button", { name: /^Timeline of alarm / }).length).toBeGreaterThan(0);
+    expect(within(why).getAllByRole("button", { name: /^Timeline of / }).length).toBeGreaterThan(0);
     const serves = within(blade).getByTestId("blade-serves");
     expect(within(serves).getByText("Boardroom")).toBeTruthy();
     expect(await within(serves).findByText("Room Microphone")).toBeTruthy();

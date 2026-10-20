@@ -229,7 +229,7 @@ describe("the system zoom", () => {
     expect(within(strip).getByText(/Room Microphone/)).toBeTruthy();
     expect(within(strip).getByRole("button", { name: /mic-1/ })).toBeTruthy();
     // Each alarm row opens its timeline in place (#950).
-    expect(within(strip).getAllByRole("button", { name: /^Timeline of alarm / }).length).toBeGreaterThan(0);
+    expect(within(strip).getAllByRole("button", { name: /^Timeline of / }).length).toBeGreaterThan(0);
   });
 
   // The report names an alarm's component by name and by uuid (#557): the
@@ -495,7 +495,7 @@ describe("the events and logs tabs (#793)", () => {
     const tab = screen.getByTestId("events-tab");
     const link = (await within(tab).findByText("reachability-lost")).closest("a")!;
     expect(link.getAttribute("href")).toMatch(/\/rules\?rule=reachability-lost$/);
-    expect(within(tab).getByRole("button", { name: /^Timeline of alarm/ })).toBeTruthy();
+    expect(within(tab).getByRole("button", { name: /^Timeline of / })).toBeTruthy();
   });
 
   it("the logs tab renders the members' lines with severity colouring the row, and an empty room says so", async () => {

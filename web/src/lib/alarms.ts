@@ -92,7 +92,25 @@ export function splitAlarms(list: Alarm[], levels?: SeverityLevel[] | null): { a
 
 export type AlarmTimelineEntry = components["schemas"]["AlarmTimelineEntryBody"];
 
-export const alarmTimelineKey = (component: string, id: string) => ["alarm-timeline", component, id] as const;
+// Every alarm's timeline shares one prefix, so an acknowledge or a clear can
+// refresh whichever timeline is open.
+export const ALARM_TIMELINE_PREFIX = ["alarm-timeline"] as const;
+export const alarmTimelineKey = (component: string, id: string) => [...ALARM_TIMELINE_PREFIX, component, id] as const;
+// An open timeline refreshes on its alarm list's cadence.
+export const ALARM_TIMELINE_POLL_MS = 5_000;
+
+// ageWords says how long ago, to the second, against one clock (now): "14s
+// ago", "2m 14s ago", "2h 3m ago", "3d 4h ago". Seconds stay readable for the
+// lines of one incident, which often land seconds apart.
+export function ageWords(at: string, now: number): string {
+  const s = Math.max(0, Math.floor((now - Date.parse(at)) / 1000));
+  if (s < 60) return `${s}s ago`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m ${s % 60}s ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ${m % 60}m ago`;
+  return `${Math.floor(h / 24)}d ${h % 24}h ago`;
+}
 
 // alarmTimeline reads one alarm's history, oldest first: the events that carry
 // it (a rule's fire and clear events) merged by time with its audit rows (the

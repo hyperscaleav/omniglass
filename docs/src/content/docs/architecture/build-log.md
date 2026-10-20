@@ -6612,8 +6612,8 @@ component alarm timeline`) reads one alarm's history oldest first: the events th
 acknowledgement, the clear, and a rule edit's severity open or resolve, naming the editor). It is gated
 `alarm:read`, resolves the component in the caller's component read scope first (a component it cannot
 read, and an alarm not on the component, are the same non-disclosing 404), and costs two bounded
-statements: the alarm, then one ordered union of both sources. A new `audit_log (resource,
-resource_id)` index keeps the audit half a probe rather than a scan. At one instant an event sorts
+statements: the alarm, then one ordered union of both sources. A new partial `audit_log` index on
+alarm rows keeps the audit half a probe rather than a scan. At one instant an event sorts
 before the audit row it caused, since a rule's event and its alarm write share the transaction's clock;
 an audit row the platform wrote for a rule alarm names that rule. In the console every alarm row (the Why
 strip on a component's and a system's page and blade, the component's alarms panel, active and recently
@@ -6642,3 +6642,16 @@ persists; the rules guide teaches conditions and both behaviors; the glossary ga
 scheduled origin and the CDC publisher are still design). The watch-a-rule-raise-an-alarm walkthrough
 is unchanged: this branch predates the 2s simulator check-in (#945), so showing the derived event on
 the component's Activity would not fit its 60s budget.
+
+### An alarm's timeline reads every id form and stays fresh (#938, #950 follow-ups)
+
+Review follow-ups on #950: the timeline matches an alarm id in any form Postgres reads (uppercase,
+braced) by its canonical form, which the audit rows key on (an uppercase id had returned the events and
+none of the audit rows); the platform's audit lines name the rule as its events recorded it, so a
+deleted rule still names them; the gateway takes the component uuid the route resolved, so the read is
+the two statements it says; the audit index is partial on alarm rows, with its upgrade cost in the
+migration's header; an open timeline refreshes every 5s like its alarm list (paused while the tab is
+hidden), and an acknowledge or clear refreshes it at once; the toggle is a disclosure
+(`aria-expanded`, `aria-controls`) named by the alarm's message; each line shows its message and an age
+to the second, with the exact time on hover, every age from one clock. Identity and access now says the
+timeline shows an alarm's hand actors to `alarm:read` (the effective actor only) on purpose.

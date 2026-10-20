@@ -552,6 +552,17 @@ func TestAlarmTimelineAPI(t *testing.T) {
 		t.Fatalf("timeline of %s = %q, want %q", tl.AlarmID, got, want)
 	}
 
+	// Any form of the id reads the same history, audit rows included.
+	var upper struct {
+		Entries []struct{} `json:"entries"`
+	}
+	if err := json.Unmarshal(c.do(viewer, http.MethodGet, "/components/tl-target/alarms/"+strings.ToUpper(alarm)+":timeline", nil, http.StatusOK), &upper); err != nil {
+		t.Fatal(err)
+	}
+	if len(upper.Entries) != len(want) {
+		t.Fatalf("the timeline by an uppercase id has %d entries, want %d", len(upper.Entries), len(want))
+	}
+
 	// A caller who cannot read the component is told it is not there.
 	created := c.do(ownerTok, http.MethodPost, "/locations", map[string]any{"name": "tl-north", "location_type": "campus"}, http.StatusCreated)
 	var loc struct {

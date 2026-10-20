@@ -208,7 +208,7 @@ describe("the leaf's dispatch facts (#786)", () => {
     expect(within(card).getByText(/unacknowledged/)).toBeTruthy();
     expect(within(card).queryByText("Cleared last week")).toBeNull();
     // Each alarm row opens its timeline in place (#950).
-    expect(within(card).getAllByRole("button", { name: /^Timeline of alarm / }).length).toBeGreaterThan(0);
+    expect(within(card).getAllByRole("button", { name: /^Timeline of / }).length).toBeGreaterThan(0);
   });
 
   // The strip's tone follows the registry's outage flag (#917), not a level name:

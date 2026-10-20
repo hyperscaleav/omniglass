@@ -88,7 +88,7 @@ describe("EventsPanel", () => {
     const link = getByText("reachability-lost").closest("a")!;
     expect(link.getAttribute("href")).toBe("/rules?rule=reachability-lost");
     const row = link.closest("div.flex-col") as HTMLElement;
-    expect(within(row).getByRole("button", { name: /^Timeline of alarm/ })).toBeTruthy();
+    expect(within(row).getByRole("button", { name: /^Timeline of / })).toBeTruthy();
     void getByRole;
   });
 });

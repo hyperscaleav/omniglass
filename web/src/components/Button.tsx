@@ -50,6 +50,10 @@ export default function Button(props: {
   // setting that is on. Left undefined the button is a plain action and carries
   // no aria-pressed at all.
   pressed?: boolean;
+  // A disclosure's state, and the panel it shows: set them and the button
+  // announces itself as expanded or collapsed, pointing at what it opens.
+  expanded?: boolean;
+  controls?: string;
   tabindex?: number;
   class?: string;
   children?: JSX.Element;
@@ -77,6 +81,8 @@ export default function Button(props: {
       tabindex={props.tabindex}
       aria-label={props.label ?? (props.square ? props.title : undefined)}
       aria-pressed={props.pressed === undefined ? undefined : props.pressed}
+      aria-expanded={props.expanded === undefined ? undefined : props.expanded}
+      aria-controls={props.controls}
     >
       <Show when={!props.iconTrailing}>{iconEl}</Show>
       <Show when={!props.square}>{props.children}</Show>

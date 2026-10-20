@@ -217,8 +217,8 @@ describe("Rules page", () => {
     fireEvent.click(screen.getByText("Reachability lost"));
     const b = await blade();
     const open = within(b).getByRole("region", { name: "Open alarms" });
-    fireEvent.click(within(open).getByRole("button", { name: `Timeline of alarm ${uuidFor("alarm-1")}` }));
-    const list = await waitFor(() => within(open).getByRole("list", { name: `Timeline of alarm ${uuidFor("alarm-1")}` }));
+    fireEvent.click(within(open).getByRole("button", { name: "Timeline of Reachability lost" }));
+    const list = await waitFor(() => within(open).getByRole("list", { name: "Timeline of Reachability lost" }));
     const items = within(list).getAllByRole("listitem").map((li) => li.textContent ?? "");
     expect(items).toHaveLength(2);
     expect(items[0]).toContain("condition-started");

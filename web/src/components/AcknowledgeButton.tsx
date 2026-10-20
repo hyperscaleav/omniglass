@@ -1,7 +1,7 @@
 import { Show, createSignal } from "solid-js";
 import { useQueryClient } from "@tanstack/solid-query";
 import Button from "./Button";
-import { acknowledgeAlarm, componentAlarmsKey } from "../lib/alarms";
+import { ALARM_TIMELINE_PREFIX, acknowledgeAlarm, componentAlarmsKey } from "../lib/alarms";
 import { FLEET_VIEW_KEY } from "../lib/fleet";
 import { can, useMe } from "../lib/auth";
 import { describeError } from "../lib/format";
@@ -21,7 +21,11 @@ export default function AcknowledgeButton(props: { component: string; alarm: { i
     setErr(null);
     try {
       await acknowledgeAlarm(props.component, props.alarm.id);
-      await Promise.all([qc.invalidateQueries({ queryKey: [...componentAlarmsKey(props.component)] }), qc.invalidateQueries({ queryKey: [...FLEET_VIEW_KEY] })]);
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: [...componentAlarmsKey(props.component)] }),
+        qc.invalidateQueries({ queryKey: [...FLEET_VIEW_KEY] }),
+        qc.invalidateQueries({ queryKey: [...ALARM_TIMELINE_PREFIX] }),
+      ]);
     } catch (e) {
       setErr(describeError(e));
     } finally {
