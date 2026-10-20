@@ -101,7 +101,8 @@ function useVariableById(id: string): () => Variable | undefined {
 // the one blade-heading primitive. It was a bare span until the entity gained a
 // label (#613), which is the moment #581 said to switch.
 function VariableBladeTitle(p: { id: string }): JSX.Element {
-  return <BladeTitle row={useVariableById(p.id)} fallback="variable" />;
+  const row = useVariableById(p.id);
+  return <BladeTitle row={row} fallback="variable" />;
 }
 
 function VariableBladeBody(p: { id: string }): JSX.Element {

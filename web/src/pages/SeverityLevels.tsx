@@ -36,7 +36,7 @@ import { LOCATION_HEALTH_PREFIX, SYSTEM_HEALTH_PREFIX, SYSTEM_VERDICTS_KEY } fro
 import { COMPONENT_ALARMS_PREFIX } from "../lib/alarms";
 import { FLEET_VIEW_KEY } from "../lib/fleet";
 import { COMPONENTS_KEY } from "../lib/components";
-import { useMe, can } from "../lib/auth";
+import { useMe, canFleet, fleetView } from "../lib/auth";
 import { useFormActions } from "../lib/formactions";
 import { bindSelectValue } from "../lib/selectvalue";
 import { describeError } from "../lib/format";
@@ -48,9 +48,10 @@ import { OFFICIAL_LOCK, registryLock } from "../lib/catalog";
 // label in its own color (the chip every alarm at it wears), whether an active
 // alarm at it takes its component out, and its origin, worst first, the order an
 // operator triages in. An operator level is created, renamed, relabelled,
-// recolored, re-ranked and deleted here in a Drawer (#930), gated
-// severity_level:* like every registry (the server asks no all-scope grant);
-// official levels are read-only. The form teaches the rank: where the typed
+// recolored, re-ranked and deleted here in a Drawer (#930). Reads are
+// registry-shaped (any grant), but a level's rank moves health fleet-wide, so
+// every write is judged on the caller's all-scope permissions (fleetView), like
+// an event rule's; official levels are read-only. The form teaches the rank: where the typed
 // rank sits among the levels, and whether its alarms take a component out.
 
 export const SEVERITY_HINTS = {
@@ -98,7 +99,7 @@ export default function SeverityLevels(): JSX.Element {
   const levels = useQuery(() => ({ queryKey: severityLevelsKey, queryFn: listSeverityLevels }));
   // Worst first.
   const rows = () => [...(levels.data ?? [])].sort((a, b) => b.rank - a.rank);
-  const canCreate = () => can(me.data, "severity_level", "create");
+  const canCreate = () => canFleet(me.data, "severity_level", "create");
   const blades = createBladeController();
   const [editing, setEditing] = createSignal<string | null>(null);
   const editRow = () => (levels.data ?? []).find((l) => l.name === editing());
@@ -152,8 +153,13 @@ function useLevelRow(name: string): () => SeverityLevel | undefined {
   return () => (levels.data ?? []).find((l) => l.name === name);
 }
 
+function SeverityLevelBladeTitle(p: { name: string }): JSX.Element {
+  const row = useLevelRow(p.name);
+  return <BladeTitle row={row} fallback={p.name} />;
+}
+
 export const severityLevelBlade: BladeDef = {
-  Title: (p) => <BladeTitle row={useLevelRow(p.id)} fallback={p.id} />,
+  Title: (p) => <SeverityLevelBladeTitle name={p.id} />,
   Body: (p) => <SeverityLevelBladeBody name={p.id} />,
 };
 
@@ -164,8 +170,8 @@ function SeverityLevelBladeBody(p: { name: string }): JSX.Element {
   const ui = useContext(LevelsUiContext);
   const row = useLevelRow(p.name);
   const [err, setErr] = createSignal<string | null>(null);
-  const canUpdate = () => can(me.data, "severity_level", "update");
-  const canDelete = () => can(me.data, "severity_level", "delete");
+  const canUpdate = () => canFleet(me.data, "severity_level", "update");
+  const canDelete = () => canFleet(me.data, "severity_level", "delete");
 
   async function remove(l: SeverityLevel) {
     if (!confirm(`Delete severity level "${l.name}"? The server refuses it while an alarm or a rule still names it.`)) return;
@@ -197,7 +203,7 @@ function SeverityLevelBladeBody(p: { name: string }): JSX.Element {
       const l = row();
       if (!l) return null;
       if (l.official) return OFFICIAL_LOCK;
-      return canUpdate() ? null : registryLock(l, me.data, "severity_level");
+      return canUpdate() ? null : registryLock(l, fleetView(me.data), "severity_level");
     },
   });
 

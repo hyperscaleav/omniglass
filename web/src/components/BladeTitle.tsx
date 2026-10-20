@@ -19,14 +19,25 @@ import { entityLabel, labelIsName, type Labelled } from "../lib/entities";
 // fix is one character of placement, the accessor read inside the JSX, which is
 // exactly the kind of rule that survives in a component and does not survive
 // being retyped eight times.
+//
+// The accessor itself is read ONCE, in the body, and only its value is tracked
+// (#953). Written inline, `row={useXRow(id)}` compiles to a getter that calls
+// the hook on every read of `p.row`; read inside the memo, each list refetch
+// re-ran the memo, minted a fresh query observer, and that observer refetched
+// at once, a request storm on the list while the blade was open. Callers
+// create the accessor in their own component body (`const row = useXRow(id)`)
+// and pass the variable; a guard test forbids the inline hook call, and this
+// one read keeps the primitive safe even if one slips past it.
 export default function BladeTitle(p: {
   // The row this blade is about, as an accessor so the heading tracks it.
+  // Create it once in the caller's body; never call a hook in the prop.
   row: () => Labelled | undefined;
   // What to show before the row resolves: the id or name the blade was opened
   // with. Always an identifier, so it renders in the data face.
   fallback: string;
 }): JSX.Element {
-  const row = createMemo(() => p.row());
+  const source = p.row;
+  const row = createMemo(() => source());
   // The face follows the LABEL, through the primitive, not a second reading of
   // label here. The two agreed while every label was operator-typed and
   // would have parted the moment one of them learned about the pen (#683).

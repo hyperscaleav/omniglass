@@ -476,9 +476,11 @@ type Gateway interface {
 	UpsertSeverityLevel(ctx context.Context, l SeverityLevel) error
 	ListSeverityLevels(ctx context.Context) ([]SeverityLevel, error)
 	GetSeverityLevel(ctx context.Context, name string) (*SeverityLevel, error)
-	CreateSeverityLevel(ctx context.Context, actorID string, l SeverityLevel) (*SeverityLevel, error)
-	UpdateSeverityLevel(ctx context.Context, actorID, name string, patch SeverityLevelPatch) (*SeverityLevel, error)
-	DeleteSeverityLevel(ctx context.Context, actorID, name string) error
+	// Writing a level takes an all-scope grant (its rank moves health
+	// fleet-wide); else ErrSeverityLevelForbidden.
+	CreateSeverityLevel(ctx context.Context, actorID string, l SeverityLevel, create scope.Set) (*SeverityLevel, error)
+	UpdateSeverityLevel(ctx context.Context, actorID, name string, patch SeverityLevelPatch, action scope.Set) (*SeverityLevel, error)
+	DeleteSeverityLevel(ctx context.Context, actorID, name string, action scope.Set) error
 	UpsertEventType(ctx context.Context, et EventType) error
 	ListEventTypes(ctx context.Context) ([]EventType, error)
 	GetEventType(ctx context.Context, name string) (*EventType, error)

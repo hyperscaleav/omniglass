@@ -267,7 +267,8 @@ all config. Predicates compare **by level** through the order (`alarm.severity >
 
 Built (#917): the `severity_level` table (the order column is `rank`, since `order` is a reserved
 word), the five official levels above from the boot seed, and operator levels at
-`/severity-levels` (`omniglass severity-level create`, gated `severity_level:*`; a name or rank
+`/severity-levels` (`omniglass severity-level create`, gated `severity_level:*`, a write on an
+all-scope grant; a name or rank
 already taken is a 409, an official level is read-only). An alarm's `severity` references a level
 **by name** (a rename carries its alarms; a level an alarm names cannot be deleted). A component's
 own verdict reads the rank: **`high` and above is an outage**, anything lower degrades. The retired
@@ -277,8 +278,9 @@ alarms, a system's and a place's "why", a rule's open alarms) renders the level'
 and sorts by its rank, so an operator level renders like a shipped one with no console change, and
 **Catalog > Actions > Severity** (#921) lists the levels worst first with their rank, color and
 effect, and authors operator levels in a drawer (#930): create, rename, relabel, recolor, re-rank and
-delete, gated `severity_level:*` like every registry write (no all-scope grant, unlike a rule), with
-official levels read-only. Its form teaches the rank as it is typed: where the rank sits among the
+delete, gated `severity_level:*` on an all-scope grant like a rule write (ADR-0144, ruled
+2026-10-20): a level's rank moves health fleet-wide, so a holder whose grant stops at one place reads
+the levels but writes none (a 403). Official levels are read-only. Its form teaches the rank as it is typed: where the rank sits among the
 levels, and whether an alarm at it would take its component out or degrade it.
 
 :::caution[Open question]

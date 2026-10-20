@@ -92,7 +92,8 @@ export const metricBlade: BladeDef = {
 };
 
 function MetricBladeTitle(p: { name: string }): JSX.Element {
-  return <BladeTitle row={useMetricRow(p.name)} fallback={p.name} />;
+  const row = useMetricRow(p.name);
+  return <BladeTitle row={row} fallback={p.name} />;
 }
 
 function useMetricRow(name: string): () => MetricRow | undefined {

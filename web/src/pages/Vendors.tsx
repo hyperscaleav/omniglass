@@ -113,7 +113,8 @@ function useVendorRow(id: string): () => Vendor | undefined {
 }
 
 function VendorBladeTitle(p: { id: string }): JSX.Element {
-  return <BladeTitle row={useVendorRow(p.id)} fallback={p.id} />;
+  const row = useVendorRow(p.id);
+  return <BladeTitle row={row} fallback={p.id} />;
 }
 
 function VendorBladeBody(p: { id: string }): JSX.Element {

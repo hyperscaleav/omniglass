@@ -103,7 +103,8 @@ function useTagByName(name: string): () => Tag | undefined {
 // the one blade-heading primitive. It was a bare span until the entity gained a
 // label (#613), which is the moment #581 said to switch.
 function TagBladeTitle(p: { name: string }): JSX.Element {
-  return <BladeTitle row={useTagByName(p.name)} fallback={p.name} />;
+  const row = useTagByName(p.name);
+  return <BladeTitle row={row} fallback={p.name} />;
 }
 
 function TagBladeBody(p: { name: string }): JSX.Element {

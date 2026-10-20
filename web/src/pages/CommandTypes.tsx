@@ -202,7 +202,8 @@ export const commandTypeBlade: BladeDef = {
 // lands on the same words the row showed. It rendered the bare name before, so
 // clicking "ICMP RTT (avg)" opened a panel headed icmp.rtt-avg.
 function CommandTypeBladeTitle(p: { name: string }): JSX.Element {
-  return <BladeTitle row={useCommandTypeRow(p.name)} fallback={p.name} />;
+  const row = useCommandTypeRow(p.name);
+  return <BladeTitle row={row} fallback={p.name} />;
 }
 
 function useCommandTypeRow(name: string): () => CommandTypeRow | undefined {
