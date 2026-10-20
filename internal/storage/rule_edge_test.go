@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/migrate"
+	"github.com/hyperscaleav/omniglass/internal/scope"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 )
@@ -443,5 +444,42 @@ func TestRuleConditionBackfill(t *testing.T) {
 	}
 	if n := count(t, conn, `select count(*) from pg_constraint where conname = 'event_derived_by_rule_id_fkey' and contype = 'f'`); n != 1 {
 		t.Fatal("event.derived_by_rule_id does not reference event_rule")
+	}
+}
+
+// TestRuleConditionsInForceRead proves a rule's live state counts and lists
+// the conditions it holds in force (#951), fenced to the reader's component
+// scope like its alarms and streaks: an informational rule holding a
+// condition reads one in force and no open alarm.
+func TestRuleConditionsInForceRead(t *testing.T) {
+	r := newEdgeRig(t)
+	r.rule(storage.EventRuleSpec{Name: "watching"})
+	r.observe("tcp", "down")
+	none := scope.Set{}
+	list, err := r.f.gw.ListEventRules(r.ctx, r.f.all)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, x := range list {
+		if x.Name == "watching" && (x.ConditionsInForce != 1 || x.OpenAlarms != 0) {
+			t.Fatalf("listed %+v, want 1 condition in force and no open alarm", x)
+		}
+	}
+	got, err := r.f.gw.GetEventRule(r.ctx, "watching", r.f.all)
+	if err != nil || got.ConditionsInForce != 1 {
+		t.Fatalf("got %+v (%v), want 1 condition in force", got, err)
+	}
+	if got, _ := r.f.gw.GetEventRule(r.ctx, "watching", none); got.ConditionsInForce != 0 {
+		t.Fatalf("a reader who sees no component counts %d conditions, want 0", got.ConditionsInForce)
+	}
+	st, err := r.f.gw.EventRuleState(r.ctx, "watching", r.f.all)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(st.Conditions) != 1 || st.Conditions[0].ComponentName != "bar-1" || st.Conditions[0].Instance != "tcp" || st.Conditions[0].Since.IsZero() {
+		t.Fatalf("state conditions = %+v, want bar-1 on tcp with its since", st.Conditions)
+	}
+	if st, _ := r.f.gw.EventRuleState(r.ctx, "watching", none); len(st.Conditions) != 0 {
+		t.Fatalf("a reader who sees no component lists %+v, want none", st.Conditions)
 	}
 }

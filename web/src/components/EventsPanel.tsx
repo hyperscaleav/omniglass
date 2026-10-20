@@ -2,6 +2,8 @@ import { For, Match, Show, Switch, createMemo, createSignal } from "solid-js";
 import { useQuery } from "@tanstack/solid-query";
 import { rel } from "../lib/format";
 import { EVENTS_KEY, getEvents, formatAttributes, type ComponentEvent } from "../lib/events";
+import AlarmTimeline, { createTimelineToggles } from "./AlarmTimeline";
+import RuleLink from "./RuleLink";
 
 // EventsPanel: a component's recent events. Where the reachability strip above
 // renders sampled values (a metric or a state read on a cadence), the event sink
@@ -17,8 +19,13 @@ import { EVENTS_KEY, getEvents, formatAttributes, type ComponentEvent } from "..
 
 // EventRow renders one occurrence: the relative time, the log's key as a mono badge,
 // the message, then a secondary metadata line and an optional attributes disclosure.
-function EventRow(p: { ev: ComponentEvent }) {
+//
+// An event a rule derived (#951) names the rule, linking to it, and when it
+// opened or resolved an alarm it carries that alarm's timeline toggle, so the
+// row leads to both the rule that wrote it and the incident it moved.
+function EventRow(p: { ev: ComponentEvent; component: string }) {
   const [open, setOpen] = createSignal(false);
+  const timelines = createTimelineToggles();
   const attrs = createMemo(() => formatAttributes(p.ev.attributes));
   return (
     <div class="flex flex-col gap-1 px-3 py-2.5">
@@ -26,6 +33,8 @@ function EventRow(p: { ev: ComponentEvent }) {
         <span class="w-14 shrink-0 text-[11px] tabular-nums text-base-content/45" title={p.ev.ts}>{rel(p.ev.ts)}</span>
         <span class="badge badge-ghost badge-sm shrink-0 font-data text-[10px]">{p.ev.key}</span>
         <span class="min-w-0 flex-1 text-sm text-base-content/80">{p.ev.message}</span>
+        <Show when={p.ev.derived_by_rule}>{(rule) => <RuleLink name={rule()} />}</Show>
+        <Show when={p.ev.alarm_id}>{(id) => timelines.button(id())}</Show>
       </div>
       <div class="flex flex-wrap items-center gap-2 pl-[4.5rem] text-[11px] text-base-content/45">
         <Show when={p.ev.source}>
@@ -51,6 +60,9 @@ function EventRow(p: { ev: ComponentEvent }) {
       </div>
       <Show when={open() && attrs()}>
         <pre class="ml-[4.5rem] overflow-x-auto rounded-md bg-base-200/60 px-2 py-1.5 font-data text-[11px] text-base-content/70">{attrs()}</pre>
+      </Show>
+      <Show when={p.ev.alarm_id && timelines.isOpen(p.ev.alarm_id)}>
+        <div class="ml-[4.5rem]"><AlarmTimeline component={p.component} alarmId={p.ev.alarm_id!} /></div>
       </Show>
     </div>
   );
@@ -82,7 +94,7 @@ export default function EventsPanel(p: { name: string }) {
         }
       >
         <div class="divide-y divide-base-300 overflow-hidden rounded-box border border-base-300">
-          <For each={events()}>{(ev) => <EventRow ev={ev} />}</For>
+          <For each={events()}>{(ev) => <EventRow ev={ev} component={p.name} />}</For>
         </div>
       </Show>
     </div>

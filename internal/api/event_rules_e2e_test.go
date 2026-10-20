@@ -377,7 +377,8 @@ func TestRuleEventsOnTheEventsRead(t *testing.T) {
 	defer srv.Close()
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
 	all := scope.Set{All: true}
-	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "ev-target"}, all, all, all, all); err != nil {
+	target, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "ev-target"}, all, all, all, all)
+	if err != nil {
 		t.Fatal(err)
 	}
 	c.do(ownerTok, http.MethodPost, "/systems", map[string]any{"name": "ev-sys"}, http.StatusCreated)
@@ -409,11 +410,37 @@ func TestRuleEventsOnTheEventsRead(t *testing.T) {
 	if alarm == "" {
 		t.Fatalf("alarms = %+v, want one raised by ev-watch", alarms)
 	}
+	// The rule reads its condition in force as a count and in its state (#951).
+	var one struct {
+		ConditionsInForce *int `json:"conditions_in_force"`
+		OpenAlarms        int  `json:"open_alarms"`
+	}
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/event-rules/ev-watch", nil, http.StatusOK), &one); err != nil {
+		t.Fatal(err)
+	}
+	if one.ConditionsInForce == nil || *one.ConditionsInForce != 1 || one.OpenAlarms != 1 {
+		t.Fatalf("ev-watch reads %+v, want 1 condition in force and 1 open alarm", one)
+	}
+	var st struct {
+		Conditions []struct {
+			Component   string    `json:"component"`
+			ComponentID string    `json:"component_id"`
+			Instance    string    `json:"instance"`
+			Since       time.Time `json:"since"`
+		} `json:"conditions"`
+	}
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/event-rules/ev-watch/state", nil, http.StatusOK), &st); err != nil {
+		t.Fatal(err)
+	}
+	if len(st.Conditions) != 1 || st.Conditions[0].ComponentID != target.ID || st.Conditions[0].Instance != "tcp" {
+		t.Fatalf("ev-watch state conditions = %+v, want ev-target on tcp", st.Conditions)
+	}
 	type ev struct {
 		Key           string `json:"key"`
 		Origin        string `json:"origin"`
 		DerivedByRule string `json:"derived_by_rule"`
 		AlarmID       string `json:"alarm_id"`
+		OwnerID       string `json:"owner_id"`
 	}
 	for _, path := range []string{"/components/ev-target/events", "/systems/ev-sys/events"} {
 		var out struct {
@@ -425,7 +452,9 @@ func TestRuleEventsOnTheEventsRead(t *testing.T) {
 		found := false
 		for _, e := range out.Events {
 			if e.Key == "condition-started" && e.DerivedByRule == "ev-watch" {
-				found = e.Origin == "derived" && e.AlarmID == alarm
+				// The system list names each row's owner by uuid too, so a row
+				// can open its alarm on the right component (names repeat).
+				found = e.Origin == "derived" && e.AlarmID == alarm && (path == "/components/ev-target/events" || e.OwnerID == target.ID)
 			}
 		}
 		if !found {

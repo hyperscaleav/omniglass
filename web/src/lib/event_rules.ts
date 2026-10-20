@@ -24,6 +24,7 @@ export type RuleLane = EventRule["sample_lane"];
 export type RuleState = components["schemas"]["EventRuleStateOutputBody"];
 export type RuleOpenAlarm = components["schemas"]["RuleOpenAlarmBody"];
 export type RuleStreak = components["schemas"]["RuleStreakBody"];
+export type RuleCondition = components["schemas"]["RuleConditionBody"];
 export type CreateEventRule = components["schemas"]["CreateEventRuleInputBody"];
 export type UpdateEventRule = components["schemas"]["UpdateEventRuleInputBody"];
 
@@ -36,10 +37,10 @@ export async function listEventRules(): Promise<EventRule[]> {
   return (data?.event_rules ?? []) as EventRule[];
 }
 
-export async function getRuleState(name: string): Promise<{ open: RuleOpenAlarm[]; pending: RuleStreak[]; last_judged_at?: string }> {
+export async function getRuleState(name: string): Promise<{ conditions: RuleCondition[]; open: RuleOpenAlarm[]; pending: RuleStreak[]; last_judged_at?: string }> {
   const { data, error } = await api.GET("/event-rules/{name}/state", { params: { path: { name } } });
   if (error) throw error;
-  return { open: data?.open ?? [], pending: data?.pending ?? [], last_judged_at: data?.last_judged_at };
+  return { conditions: data?.conditions ?? [], open: data?.open ?? [], pending: data?.pending ?? [], last_judged_at: data?.last_judged_at };
 }
 
 // judgedWords says when a rule last judged an arriving sample (#929): the
@@ -245,13 +246,13 @@ export function readValue(raw: string, lane: RuleLane): { value?: string | numbe
 
 const NAME = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 
-export type DraftErrors = Partial<Record<"name" | "sampleKey" | "fireValue" | "clearValue" | "fireSustain" | "clearSustain" | "severity", string>>;
+export type DraftErrors = Partial<Record<"name" | "sampleKey" | "fireValue" | "clearValue" | "fireSustain" | "clearSustain" | "fireEventType", string>>;
 
 // validateDraft is the form's one judgement, shared by create and edit (the
-// name is create-only, so edit skips it). A severity is required, except on
-// an edit of a rule that has none: an informational rule stays informational
-// (#948; choosing "None" on any rule is #951).
-export function validateDraft(d: RuleDraft, mode: "create" | "edit", was?: EventRule): DraftErrors {
+// name is create-only, so edit skips it). No severity is a choice, not a gap:
+// "None (informational)" makes a rule that records its events and raises no
+// alarm (#951). The fire event type is required; the clear one is optional.
+export function validateDraft(d: RuleDraft, mode: "create" | "edit"): DraftErrors {
   const e: DraftErrors = {};
   if (mode === "create") {
     if (!d.name.trim()) e.name = "A name for the rule.";
@@ -270,8 +271,7 @@ export function validateDraft(d: RuleDraft, mode: "create" | "edit", was?: Event
   if (fs) e.fireSustain = fs;
   const cs = readDuration(d.clearSustain);
   if (cs) e.clearSustain = cs;
-  const informational = mode === "edit" && !!was && !was.severity;
-  if (!d.severity && !informational) e.severity = "The level the alarm is raised at.";
+  if (!d.fireEventType) e.fireEventType = "The event the rule writes when its condition starts.";
   return e;
 }
 
@@ -291,11 +291,12 @@ export function createBody(d: RuleDraft): CreateEventRule {
     fire_criteria: criteria(d.fireOp, d.fireValue, d.lane),
     fire_sustain: sustainOut(d.fireSustain),
     clear_sustain: sustainOut(d.clearSustain),
-    severity: d.severity,
     fire_event_type: d.fireEventType,
     enabled: d.enabled,
     selector: { component_types: d.componentTypes, components: d.components },
   };
+  // No severity is an informational rule: it records its events, raises no alarm.
+  if (d.severity) body.severity = d.severity;
   if (d.clearEventType) body.clear_event_type = d.clearEventType;
   if (d.label.trim()) body.label = d.label.trim();
   if (d.description.trim()) body.description = d.description.trim();

@@ -1541,7 +1541,7 @@ List event rules
 omniglass event-rule list
 ```
 
-Lists the event rules, the authored config that raises alarms, each with its live state as counts (open_alarms, pending_streaks) read in the same query. Rules read like a registry: every rule is listed whatever the caller's scope, while the counts cover only components the caller may read. Gated by rule:read.
+Lists the event rules, the authored config that raises alarms, each with its live state as counts (conditions_in_force, open_alarms, pending_streaks) read in the same query. Rules read like a registry: every rule is listed whatever the caller's scope, while the counts cover only components the caller may read. Gated by rule:read.
 
 Example:
 
@@ -1561,7 +1561,7 @@ Get an event rule's live state
 omniglass event-rule state list <name>
 ```
 
-What a rule holds right now: the alarms it raised that are still open, each on a component and instance, its streaks waiting out a sustain, and when it last judged an ingested sample. Only alarms and streaks on components the caller may read are listed. Gated by rule:read.
+What a rule holds right now: the conditions it holds in force (one per component and instance, whether or not it raises an alarm), the alarms it raised that are still open, each on a component and instance, its streaks waiting out a sustain, and when it last judged an ingested sample. Only conditions, alarms and streaks on components the caller may read are listed. Gated by rule:read.
 
 Example:
 

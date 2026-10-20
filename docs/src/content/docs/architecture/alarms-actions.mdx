@@ -28,7 +28,11 @@ component stops occupying its slots; a lesser alarm degrades the component but l
 
 Also built: the **event rule** that raises and clears alarms on its own as samples land, with
 sustains held by a durable streak and a sweep, one official rule (`reachability-lost`), each rule's
-live state, and the console's **Rules** and **Severity** pages. **Acknowledgement** ([below](#acknowledgement-a-fact-about-a-person)), the record that a
+live state, and the console's **Rules** and **Severity** pages. The **event-to-alarm edge** (#938,
+[ADR-0145](/architecture/decisions/#adr-0145-a-rule-records-its-conditions-as-typed-events-and-its-alarm-is-optional)):
+a rule's alarm is optional (an informational rule raises none), it writes typed events at each edge of
+its condition, carrying the alarm they opened or resolved, and an **alarm's timeline** merges those
+events with its audit rows. **Acknowledgement** ([below](#acknowledgement-a-fact-about-a-person)), the record that a
 human has seen an incident, orthogonal to whether it is still raised. **Snooze** and **resolve** are
 not built, and the reasons are in that section.
 See [implementation status](/architecture/status/).
@@ -266,10 +270,11 @@ Writing one is fleet-wide: authored at `/event-rules` with `rule:*` on an all-sc
 rule's selector reaches every component (ADR-0144). A version bumps on every change.
 
 A rule's **live state** is a read, not a stored column: `GET /event-rules/{name}/state` (`omniglass
-event-rule state list <rule>`, gated `rule:read`) returns the alarms it raised that are still open (component,
+event-rule state list <rule>`, gated `rule:read`) returns the conditions it holds in force (component,
+endpoint instance, since when; #951), the alarms it raised that are still open (component,
 endpoint instance, severity, when) and its streaks waiting out a sustain (component, instance, whether
 it points at fire or clear, since when). The list and a get carry the same state as counts
-(`open_alarms`, `pending_streaks`), aggregated for the whole list in one query, so a page of rules polls
+(`conditions_in_force`, `open_alarms`, `pending_streaks`), aggregated for the whole list in one query, so a page of rules polls
 one list rather than a state read per rule. The state names components, so the lists and the counts
 cover only the components the caller's component read scope admits: a reader scoped to one place sees
 every rule, but only the alarms and streaks it could already see. The console's **Catalog > Actions > Rules** page (#921) lists

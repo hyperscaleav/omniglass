@@ -486,6 +486,18 @@ describe("the events and logs tabs (#793)", () => {
     expect(within(tab).getByText("boardroom")).toBeTruthy();
   });
 
+  it("an event a rule derived names the rule, linking to it, and opens the alarm it carries on its component", async () => {
+    const r = mount(`/web/systems/${uuidFor("szp-sys")}?tab=events`);
+    r.qc.setQueryData([...systemEventsKey(uuidFor("szp-sys"))], [
+      { ts: "2026-08-18T15:53:00Z", key: "condition-started", event_type_id: "et-3", origin: "derived", message: "Reachability lost", provenance: "observed",
+        owner_kind: "component", owner: "videobar-1", owner_id: uuidFor("szp-c-bar"), derived_by_rule: "reachability-lost", alarm_id: uuidFor("szp-alarm") },
+    ]);
+    const tab = screen.getByTestId("events-tab");
+    const link = (await within(tab).findByText("reachability-lost")).closest("a")!;
+    expect(link.getAttribute("href")).toMatch(/\/rules\?rule=reachability-lost$/);
+    expect(within(tab).getByRole("button", { name: /^Timeline of alarm/ })).toBeTruthy();
+  });
+
   it("the logs tab renders the members' lines with severity colouring the row, and an empty room says so", async () => {
     const r = mount(`/web/systems/${uuidFor("szp-sys")}?tab=logs`);
     r.qc.setQueryData([...systemLogsKey(uuidFor("szp-sys"))], [

@@ -12,6 +12,7 @@ import { COMPONENTS_KEY } from "../lib/components";
 import { ME_KEY, type Me } from "../lib/auth";
 import { OFFICIAL_LOCK } from "../lib/catalog";
 import { uuidFor } from "../lib/testids";
+import { EVENT_TYPES_KEY, type EventTypeRow } from "../lib/event_types";
 
 // The Rules page (#921): a FlatList over /event-rules, each row reading its
 // criteria in words and its live state (open alarms, pending streaks); a row
@@ -25,13 +26,13 @@ const reach: EventRule = {
   fire_criteria: { op: "eq", value: "down" }, clear_criteria: { op: "eq", value: "up" },
   fire_sustain: "15s", clear_sustain: "0s", severity: "high",
   fire_event_type: "condition-started", clear_event_type: "condition-ended", enabled: true, official: true, version: 1,
-  open_alarms: 1, pending_streaks: 1, last_judged_at: new Date(Date.now() - 30_000).toISOString(),
+  open_alarms: 1, pending_streaks: 1, conditions_in_force: 1, last_judged_at: new Date(Date.now() - 30_000).toISOString(),
 };
 const hot: EventRule = {
   id: uuidFor("rule-too-hot"), name: "too-hot", label: "Too hot",
   selector: { component_types: ["display"], components: [] }, sample_key: "temperature-c", sample_lane: "metric",
   fire_criteria: { op: "gt", value: 40 }, clear_criteria: { op: "lt", value: 35 }, fire_sustain: "1m0s", clear_sustain: "30s",
-  severity: "average", fire_event_type: "condition-started", enabled: false, official: false, version: 2, open_alarms: 0, pending_streaks: 0,
+  severity: "average", fire_event_type: "condition-started", enabled: false, official: false, version: 2, open_alarms: 0, pending_streaks: 0, conditions_in_force: 0,
 };
 // A rule whose component type and component were deleted after it was written:
 // it matches nothing by them, and stays editable.
@@ -60,9 +61,29 @@ const placeOwner: Me = {
 
 const display = uuidFor("comp-display-1");
 const reachState = {
+  conditions: [{ component: "display-1", component_id: display, instance: "icmp", since: new Date(Date.now() - 60_000).toISOString() }],
   open: [{ alarm_id: uuidFor("alarm-1"), component: "display-1", component_id: display, instance: "icmp", severity: "high", raised_at: new Date(Date.now() - 60_000).toISOString() }],
   pending: [{ component: "codec-1", component_id: uuidFor("comp-codec-1"), instance: "http", pending: "fire" as const, since: new Date(Date.now() - 5_000).toISOString() }],
   last_judged_at: new Date(Date.now() - 10_000).toISOString(),
+};
+
+const eventTypes: EventTypeRow[] = [
+  { name: "condition-started", label: "Condition Started", official: true },
+  { name: "condition-ended", label: "Condition Ended", official: true },
+  { name: "call-started", label: "Call Started", official: true },
+];
+// An informational rule: no severity, so it raises no alarm; it holds one
+// condition in force.
+const watch: EventRule = {
+  id: uuidFor("rule-input-watch"), name: "input-watch", label: "Input watch",
+  selector: { component_types: [], components: [] }, sample_key: "endpoint-reachable", sample_lane: "property",
+  fire_criteria: { op: "eq", value: "down" }, fire_sustain: "0s", clear_sustain: "0s",
+  fire_event_type: "condition-started", clear_event_type: "condition-ended", enabled: true, official: false, version: 1,
+  open_alarms: 0, pending_streaks: 0, conditions_in_force: 1,
+};
+const watchState = {
+  conditions: [{ component: "display-1", component_id: display, instance: "tcp", since: new Date(Date.now() - 90_000).toISOString() }],
+  open: [], pending: [],
 };
 
 const asides = () => document.querySelectorAll("aside[data-blade]");
@@ -82,13 +103,14 @@ function mount(me: Me = admin, rules: EventRule[] = [reach, hot], opts: { state?
   qc.setQueryData([...EVENT_RULES_KEY], rules);
   if (opts.state !== false) {
     qc.setQueryData([...ruleStateKey("reachability-lost")], reachState);
-    for (const r of rules.filter((x) => x.name !== "reachability-lost")) qc.setQueryData([...ruleStateKey(r.name)], { open: [], pending: [] });
+    for (const r of rules.filter((x) => x.name !== "reachability-lost")) qc.setQueryData([...ruleStateKey(r.name)], { conditions: [], open: [], pending: [] });
   }
   qc.setQueryData([...severityLevelsKey], levels);
   qc.setQueryData([...PROPERTIES_KEY], properties);
   qc.setQueryData([...METRICS_KEY], metrics);
   qc.setQueryData([...COMPONENT_TYPES_KEY], []);
   qc.setQueryData([...COMPONENTS_KEY], []);
+  qc.setQueryData([...EVENT_TYPES_KEY], eventTypes);
   qc.setQueryData([...ME_KEY], me);
   return Object.assign(
     render(() => (
@@ -110,7 +132,7 @@ function catchWrites() {
       writes.push({ method: req.method, url: req.url, body });
       return req.method === "DELETE" ? new Response(null, { status: 204 }) : json({ ...hot, ...(body as object) });
     }
-    if (req.url.endsWith("/state")) return json({ open: [], pending: [] });
+    if (req.url.endsWith("/state")) return json({ conditions: [], open: [], pending: [] });
     return json({ event_rules: [reach, hot] });
   });
   return writes;
@@ -189,7 +211,7 @@ describe("Rules page", () => {
           { at: reachState.open[0].raised_at, kind: "audit", what: "raise", rule: "reachability-lost" },
         ] });
       }
-      return json({ open: [], pending: [] });
+      return json({ conditions: [], open: [], pending: [] });
     });
     mount();
     fireEvent.click(screen.getByText("Reachability lost"));
@@ -213,7 +235,7 @@ describe("Rules page", () => {
   it("caps a long live list at eight rows and counts the rest", async () => {
     const { qc } = mount();
     const open = Array.from({ length: 11 }, (_, i) => ({ ...reachState.open[0], alarm_id: uuidFor(`alarm-cap-${i}`) }));
-    qc.setQueryData([...ruleStateKey("reachability-lost")], { open, pending: [] });
+    qc.setQueryData([...ruleStateKey("reachability-lost")], { conditions: [], open, pending: [] });
     fireEvent.click(screen.getByText("Reachability lost"));
     const b = await blade();
     const region = within(b).getByRole("region", { name: "Open alarms" });
@@ -423,4 +445,92 @@ describe("Rules page", () => {
     expect(writes[0].method).toBe("DELETE");
     expect(writes[0].url).toMatch(/\/event-rules\/too-hot$/);
   });
+
+  it("authors an informational rule: severity None, the event type pickers from the registry, no clear event", async () => {
+    const writes = catchWrites();
+    mount();
+    fireEvent.click(screen.getByText("New rule"));
+    const name = await waitFor(() => screen.getByLabelText("Name") as HTMLInputElement);
+    fireEvent.input(name, { target: { value: "input-watch" } });
+    fireEvent.change(screen.getByLabelText("Reads"), { target: { value: "property:endpoint-reachable" } });
+    fireEvent.input(screen.getByLabelText("Fire value"), { target: { value: "down" } });
+    const sev = screen.getByLabelText("Severity") as HTMLSelectElement;
+    expect([...sev.options].map((o) => o.textContent)).toContain("None (informational)");
+    fireEvent.change(sev, { target: { value: "" } });
+    const fireType = screen.getByLabelText("Fire event type") as HTMLSelectElement;
+    expect(fireType.value).toBe("condition-started");
+    expect([...fireType.options].map((o) => o.value)).toEqual(["condition-started", "condition-ended", "call-started"]);
+    const clearType = screen.getByLabelText("Clear event type") as HTMLSelectElement;
+    expect(clearType.value).toBe("condition-ended");
+    expect([...clearType.options].map((o) => o.textContent)).toContain("No clear event");
+    fireEvent.change(clearType, { target: { value: "" } });
+    const submit = screen.getByText("Create rule").closest("button") as HTMLButtonElement;
+    await waitFor(() => expect(submit.disabled).toBe(false));
+    fireEvent.click(submit);
+    await waitFor(() => expect(writes).toHaveLength(1));
+    const body = writes[0].body as Record<string, unknown>;
+    expect(body.severity).toBeUndefined();
+    expect(body.clear_event_type).toBeUndefined();
+    expect(body.fire_event_type).toBe("condition-started");
+  });
+
+  it("shows an informational rule as such, with its condition in force, on the list and the blade", async () => {
+    mount(admin, [reach, hot, watch], { state: false });
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const req = input as Request;
+      if (req.url.endsWith("/event-rules/input-watch/state")) return json(watchState);
+      return json({ conditions: [], open: [], pending: [] });
+    });
+    const row = screen.getByText("Input watch").closest("tr") as HTMLElement;
+    expect(within(row).getByText("informational")).toBeTruthy();
+    expect(within(row).getByText("1 in force")).toBeTruthy();
+    fireEvent.click(screen.getByText("Input watch"));
+    const b = await blade();
+    expect(within(b).getByText("informational")).toBeTruthy();
+    const conds = within(b).getByRole("region", { name: "Conditions in force" });
+    expect(await within(conds).findByText("display-1")).toBeTruthy();
+    expect(within(conds).getByText("tcp")).toBeTruthy();
+  });
+
+  it("opens the rule a link names, so an event row can point at the rule that wrote it", async () => {
+    window.history.pushState({}, "", "/rules?rule=reachability-lost");
+    try {
+      mount();
+      const b = await blade();
+      expect(within(b).getByText("reachability-lost")).toBeTruthy();
+    } finally {
+      window.history.pushState({}, "", "/");
+    }
+  });
+
+  it("reads the rule list once per poll with a blade open, never a storm of refetches", async () => {
+    // The title once read its row through a JSX getter that minted a query
+    // observer on every read: with live (non-Infinity) staleness each new
+    // observer refetched the list at once, forever.
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    qc.setQueryData([...severityLevelsKey], levels);
+    qc.setQueryData([...ME_KEY], admin);
+    let lists = 0;
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const req = input as Request;
+      if (req.url.endsWith("/event-rules")) {
+        lists++;
+        return json({ event_rules: [reach, hot] });
+      }
+      if (req.url.endsWith("/state")) return json(reachState);
+      return json({});
+    });
+    render(() => (
+      <QueryClientProvider client={qc}>
+        <Router><Route path="*" component={Rules} /></Router>
+      </QueryClientProvider>
+    ));
+    fireEvent.click(await screen.findByText("Reachability lost"));
+    await blade();
+    const settled = lists;
+    await new Promise((r) => setTimeout(r, 400));
+    expect(lists - settled).toBeLessThanOrEqual(1);
+    expect(lists).toBeLessThan(10);
+  });
 });
+

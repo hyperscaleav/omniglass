@@ -2431,6 +2431,10 @@ components:
         clear_sustain:
           description: How long the clear criteria must hold, a Go duration
           type: string
+        conditions_in_force:
+          description: How many conditions the rule holds in force right now, one per component and instance, whether or not it raises an alarm (GET /event-rules/{name}/state lists them)
+          format: int64
+          type: integer
         description:
           type: string
         enabled:
@@ -2503,6 +2507,7 @@ components:
         - version
         - open_alarms
         - pending_streaks
+        - conditions_in_force
       type: object
     EventRuleStateOutputBody:
       additionalProperties: false
@@ -2514,6 +2519,13 @@ components:
           format: uri
           readOnly: true
           type: string
+        conditions:
+          description: The conditions the rule holds in force, informational or not
+          items:
+            $ref: "#/components/schemas/RuleConditionBody"
+          type:
+            - array
+            - "null"
         last_judged_at:
           description: When an ingested sample was last judged by the rule, to within 5s; absent when it never has been
           format: date-time
@@ -2533,6 +2545,7 @@ components:
             - array
             - "null"
       required:
+        - conditions
         - open
         - pending
       type: object
@@ -5878,6 +5891,27 @@ components:
         - permission_universe
         - roles
       type: object
+    RuleConditionBody:
+      additionalProperties: false
+      properties:
+        component:
+          description: The component, by name
+          type: string
+        component_id:
+          description: The component's uuid
+          type: string
+        instance:
+          description: The sample instance (an endpoint) the condition is on
+          type: string
+        since:
+          description: When the condition came into force
+          format: date-time
+          type: string
+      required:
+        - component
+        - component_id
+        - since
+      type: object
     RuleOpenAlarmBody:
       additionalProperties: false
       properties:
@@ -7017,6 +7051,9 @@ components:
         owner:
           description: The owning row's name (the system's, or the member component's)
           type: string
+        owner_id:
+          description: The owning row's uuid, the stable form of owner (names repeat across members)
+          type: string
         owner_kind:
           description: "Which arc raised the occurrence: system or component"
           type: string
@@ -7039,6 +7076,7 @@ components:
         - provenance
         - owner_kind
         - owner
+        - owner_id
       type: object
     SystemEventsOutputBody:
       additionalProperties: false
@@ -10243,7 +10281,7 @@ paths:
       x-omniglass-permission: endpoint:update
   /event-rules:
     get:
-      description: "Lists the event rules, the authored config that raises alarms, each with its live state as counts (open_alarms, pending_streaks) read in the same query. Rules read like a registry: every rule is listed whatever the caller's scope, while the counts cover only components the caller may read. Gated by rule:read."
+      description: "Lists the event rules, the authored config that raises alarms, each with its live state as counts (conditions_in_force, open_alarms, pending_streaks) read in the same query. Rules read like a registry: every rule is listed whatever the caller's scope, while the counts cover only components the caller may read. Gated by rule:read."
       operationId: list-event-rule
       responses:
         "200":
@@ -10367,7 +10405,7 @@ paths:
       x-omniglass-permission: rule:update
   /event-rules/{name}/state:
     get:
-      description: "What a rule holds right now: the alarms it raised that are still open, each on a component and instance, its streaks waiting out a sustain, and when it last judged an ingested sample. Only alarms and streaks on components the caller may read are listed. Gated by rule:read."
+      description: "What a rule holds right now: the conditions it holds in force (one per component and instance, whether or not it raises an alarm), the alarms it raised that are still open, each on a component and instance, its streaks waiting out a sustain, and when it last judged an ingested sample. Only conditions, alarms and streaks on components the caller may read are listed. Gated by rule:read."
       operationId: get-event-rule-state
       parameters:
         - description: The rule's name

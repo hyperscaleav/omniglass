@@ -1205,7 +1205,7 @@ export interface paths {
         };
         /**
          * List event rules
-         * @description Lists the event rules, the authored config that raises alarms, each with its live state as counts (open_alarms, pending_streaks) read in the same query. Rules read like a registry: every rule is listed whatever the caller's scope, while the counts cover only components the caller may read. Gated by rule:read.
+         * @description Lists the event rules, the authored config that raises alarms, each with its live state as counts (conditions_in_force, open_alarms, pending_streaks) read in the same query. Rules read like a registry: every rule is listed whatever the caller's scope, while the counts cover only components the caller may read. Gated by rule:read.
          */
         get: operations["list-event-rule"];
         put?: never;
@@ -1257,7 +1257,7 @@ export interface paths {
         };
         /**
          * Get an event rule's live state
-         * @description What a rule holds right now: the alarms it raised that are still open, each on a component and instance, its streaks waiting out a sustain, and when it last judged an ingested sample. Only alarms and streaks on components the caller may read are listed. Gated by rule:read.
+         * @description What a rule holds right now: the conditions it holds in force (one per component and instance, whether or not it raises an alarm), the alarms it raised that are still open, each on a component and instance, its streaks waiting out a sustain, and when it last judged an ingested sample. Only conditions, alarms and streaks on components the caller may read are listed. Gated by rule:read.
          */
         get: operations["get-event-rule-state"];
         put?: never;
@@ -5727,6 +5727,11 @@ export interface components {
             clear_event_type?: string;
             /** @description How long the clear criteria must hold, a Go duration */
             clear_sustain: string;
+            /**
+             * Format: int64
+             * @description How many conditions the rule holds in force right now, one per component and instance, whether or not it raises an alarm (GET /event-rules/{name}/state lists them)
+             */
+            conditions_in_force: number;
             description?: string;
             enabled: boolean;
             /** @description When the sample meets this for fire_sustain, the rule's condition starts (and it opens an alarm when it names a severity) */
@@ -5782,6 +5787,8 @@ export interface components {
              * @example /api/v1/schemas/EventRuleStateOutputBody.json
              */
             readonly $schema?: string;
+            /** @description The conditions the rule holds in force, informational or not */
+            conditions: components["schemas"]["RuleConditionBody"][] | null;
             /**
              * Format: date-time
              * @description When an ingested sample was last judged by the rule, to within 5s; absent when it never has been
@@ -7580,6 +7587,19 @@ export interface components {
             permission_universe: string[] | null;
             roles: components["schemas"]["RoleBody"][] | null;
         };
+        RuleConditionBody: {
+            /** @description The component, by name */
+            component: string;
+            /** @description The component's uuid */
+            component_id: string;
+            /** @description The sample instance (an endpoint) the condition is on */
+            instance?: string;
+            /**
+             * Format: date-time
+             * @description When the condition came into force
+             */
+            since: string;
+        };
         RuleOpenAlarmBody: {
             alarm_id: string;
             /** @description The component, by name */
@@ -8201,6 +8221,8 @@ export interface components {
             origin: string;
             /** @description The owning row's name (the system's, or the member component's) */
             owner: string;
+            /** @description The owning row's uuid, the stable form of owner (names repeat across members) */
+            owner_id: string;
             /** @description Which arc raised the occurrence: system or component */
             owner_kind: string;
             /** @description The lineage of the occurrence (observed for direct collection) */

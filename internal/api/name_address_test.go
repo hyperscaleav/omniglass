@@ -152,6 +152,13 @@ func TestReferencesCarryBothForms(t *testing.T) {
 					continue
 				}
 			}
+			// The system event log names a row's owner by name as `owner` (the
+			// mixed-owner read, #793) and by uuid as `owner_id` (#951).
+			if field == "owner_id" {
+				if _, hasOwner := sch.Properties["owner"]; hasOwner {
+					continue
+				}
+			}
 			if _, has := sch.Properties[pair]; !has {
 				t.Errorf("%s carries %q but not %q: a reference carries both, the id as the handle "+
 					"and the name as the label", name, field, pair)

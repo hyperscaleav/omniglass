@@ -50,6 +50,9 @@ type Event struct {
 	// opened or its clear event resolved, nil for most events.
 	DerivedByRule string
 	AlarmID       *string
+	// OwnerID is the owning row's uuid, populated beside Owner by the
+	// system-scoped read, where names repeat across one list's owners.
+	OwnerID string
 }
 
 // eventLineageCols reads an event's rule and alarm, the trailing columns
@@ -166,6 +169,7 @@ func (p *PG) ListSystemEvents(ctx context.Context, systemID string, window time.
 			coalesce(
 				(select s.name from system s where s.id = event.system_id),
 				(select c.name from component c where c.id = event.component_id), ''),
+			coalesce(event.system_id, event.component_id)::text,
 			(select et.name from event_type et where et.id = event.event_type_id), event.event_type_id,
 			instance, origin, message, attributes, provenance, source, `+eventLineageCols+`
 		from event
@@ -182,7 +186,8 @@ func (p *PG) ListSystemEvents(ctx context.Context, systemID string, window time.
 	for rows.Next() {
 		var e Event
 		var key, typeID, rule *string
-		if err := rows.Scan(&e.ID, &e.TS, &e.OwnerKind, &e.Owner, &key, &typeID, &e.Instance, &e.Origin, &e.Message, &e.Attributes, &e.Provenance, &e.Source,
+		var ownerID *string
+		if err := rows.Scan(&e.ID, &e.TS, &e.OwnerKind, &e.Owner, &ownerID, &key, &typeID, &e.Instance, &e.Origin, &e.Message, &e.Attributes, &e.Provenance, &e.Source,
 			&rule, &e.AlarmID); err != nil {
 			return nil, fmt.Errorf("storage: scan system event: %w", err)
 		}
@@ -194,6 +199,9 @@ func (p *PG) ListSystemEvents(ctx context.Context, systemID string, window time.
 		}
 		if rule != nil {
 			e.DerivedByRule = *rule
+		}
+		if ownerID != nil {
+			e.OwnerID = *ownerID
 		}
 		out = append(out, e)
 	}

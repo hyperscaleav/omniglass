@@ -98,6 +98,7 @@ type systemEventBody struct {
 	Source        string          `json:"source,omitempty" doc:"The transport that produced the occurrence"`
 	OwnerKind     string          `json:"owner_kind" doc:"Which arc raised the occurrence: system or component"`
 	Owner         string          `json:"owner" doc:"The owning row's name (the system's, or the member component's)"`
+	OwnerID       string          `json:"owner_id" doc:"The owning row's uuid, the stable form of owner (names repeat across members)"`
 	DerivedByRule string          `json:"derived_by_rule,omitempty" doc:"The event rule that derived the occurrence, by name; absent when no rule did"`
 	AlarmID       string          `json:"alarm_id,omitempty" doc:"The alarm a rule's fire event opened or its clear event resolved; absent for most events"`
 }
@@ -132,7 +133,7 @@ func registerSystemEventRoutes(api huma.API, a *authenticator, gw storage.Gatewa
 			out.Body.Events = append(out.Body.Events, systemEventBody{
 				TS: e.TS, Key: e.Key, EventTypeID: e.EventTypeID, Origin: e.Origin, Instance: e.Instance,
 				Message: e.Message, Attributes: e.Attributes, Provenance: e.Provenance, Source: e.Source,
-				OwnerKind: e.OwnerKind, Owner: e.Owner, DerivedByRule: e.DerivedByRule, AlarmID: derefOr(e.AlarmID),
+				OwnerKind: e.OwnerKind, Owner: e.Owner, OwnerID: e.OwnerID, DerivedByRule: e.DerivedByRule, AlarmID: derefOr(e.AlarmID),
 			})
 		}
 		return out, nil

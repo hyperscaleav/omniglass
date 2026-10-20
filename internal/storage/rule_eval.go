@@ -983,11 +983,21 @@ type RuleStreak struct {
 	Since         time.Time
 }
 
-// EventRuleLive is a rule's live state: what it holds open and what it is
-// waiting on.
+// RuleCondition is a condition a rule holds in force on one component and
+// instance, since it came into force (#951).
+type RuleCondition struct {
+	ComponentID   string
+	ComponentName string
+	Instance      string
+	Since         time.Time
+}
+
+// EventRuleLive is a rule's live state: the conditions it holds in force,
+// the alarms it holds open, and what it is waiting on.
 type EventRuleLive struct {
-	Open    []RuleOpenAlarm
-	Pending []RuleStreak
+	Conditions []RuleCondition
+	Open       []RuleOpenAlarm
+	Pending    []RuleStreak
 	// LastJudgedAt is when the rule last judged a sample, to within
 	// ruleJudgedEvery; nil when it never has.
 	LastJudgedAt *time.Time
@@ -1002,7 +1012,7 @@ func (p *PG) EventRuleState(ctx context.Context, name string, visible scope.Set)
 		return nil, err
 	}
 	prefix := ruleDedupKey(r.Name, "")
-	out := &EventRuleLive{Open: []RuleOpenAlarm{}, Pending: []RuleStreak{}, LastJudgedAt: r.LastJudgedAt}
+	out := &EventRuleLive{Conditions: []RuleCondition{}, Open: []RuleOpenAlarm{}, Pending: []RuleStreak{}, LastJudgedAt: r.LastJudgedAt}
 	f := newReadFilter(componentTable, visible, 2)
 	args := append([]any{r.ID}, f.Args...)
 	rows, err := p.pool.Query(ctx, f.With+`select a.id::text, a.component_id::text, c.name, a.dedup_key, a.severity, a.raised_at
@@ -1020,6 +1030,24 @@ func (p *PG) EventRuleState(ctx context.Context, name string, visible scope.Set)
 		}
 		o.Instance = strings.TrimPrefix(strings.TrimPrefix(dedup, prefix), ":")
 		out.Open = append(out.Open, o)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	rows, err = p.pool.Query(ctx, f.With+`select k.component_id::text, c.name, k.instance, k.since
+		from event_rule_condition k join component c on c.id = k.component_id
+		where k.rule_id = $1 and `+f.Pred("k.component_id")+` order by k.since`, args...)
+	if err != nil {
+		return nil, fmt.Errorf("storage: rule %s conditions: %w", name, err)
+	}
+	for rows.Next() {
+		var k RuleCondition
+		if err := rows.Scan(&k.ComponentID, &k.ComponentName, &k.Instance, &k.Since); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		out.Conditions = append(out.Conditions, k)
 	}
 	rows.Close()
 	if err := rows.Err(); err != nil {

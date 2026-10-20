@@ -1,6 +1,6 @@
 import { For, Show, createContext, createEffect, createMemo, createSignal, useContext, type JSX } from "solid-js";
 import { createStore } from "solid-js/store";
-import { A } from "@solidjs/router";
+import { A, useSearchParams } from "@solidjs/router";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import FlatList, { type FlatColumn } from "../components/FlatList";
 import Drawer from "../components/Drawer";
@@ -10,6 +10,7 @@ import KVStacked from "../components/KVStacked";
 import Eyebrow from "../components/Eyebrow";
 import InfoTip from "../components/InfoTip";
 import AlarmTimeline, { createTimelineToggles } from "../components/AlarmTimeline";
+import { EVENT_TYPES_KEY, listEventTypes } from "../lib/event_types";
 import SeverityBadge from "../components/SeverityBadge";
 import ComponentTypeSelect from "../components/ComponentTypeSelect";
 import { identityColumn } from "../components/IdentityCell";
@@ -78,7 +79,11 @@ export const RULE_HINTS = {
   sustain:
     "How long it must hold. A value has to keep meeting the criteria for this long before the alarm opens (or clears); one contrary sample starts the wait over. Blank acts at once.",
   severity:
-    "The level the alarm is raised at. A level marked outage takes its component out; any other degrades it.",
+    "The level the alarm is raised at. A level marked outage takes its component out; any other degrades it. None makes the rule informational: it records its events and raises no alarm.",
+  events:
+    "The events the rule writes: one when its condition comes into force (after the fire sustain), one when it leaves force (after the clear sustain), never one per sample. condition-started and condition-ended are the generic pair; a type of your own says what happened.",
+  conditions:
+    "A condition is in force on a component and endpoint from the moment the rule's fire criteria have held for the sustain until its clear criteria have. Every rule holds conditions, informational or not; a rule with a severity also holds an alarm open beside each.",
   open:
     "One alarm per endpoint: a component whose two endpoints both fail carries two alarms, and one recovering clears only its own.",
   pending:
@@ -123,13 +128,25 @@ function readsCell(r: EventRule): JSX.Element {
 // what it held open). Its (i) says when it last judged a sample, which tells
 // a quiet rule from one whose key has stopped arriving; the (i) stops its
 // click so opening the hint does not open the row.
+// severityCell is a rule's level, or the quiet neutral chip an informational
+// rule (no severity) wears: it raises no alarm, so there is no level to show.
+function severityCell(severity: string | undefined): JSX.Element {
+  return severity
+    ? <SeverityBadge name={severity} />
+    : <span class="badge badge-ghost badge-sm" title="Records its events and raises no alarm">informational</span>;
+}
+
 function RuleLive(p: { rule: EventRule }): JSX.Element {
   const open = () => p.rule.open_alarms;
   const pending = () => p.rule.pending_streaks;
+  const inForce = () => p.rule.conditions_in_force;
   return (
     <span class="inline-flex flex-wrap items-center gap-1" data-live={p.rule.name}>
       <Show when={!p.rule.enabled}>
         <span class="badge badge-ghost badge-sm">disabled</span>
+      </Show>
+      <Show when={inForce() > 0}>
+        <span class="badge badge-soft badge-info badge-sm whitespace-nowrap tabular-nums" title={`${inForce()} conditions in force`}>{inForce()} in force</span>
       </Show>
       <Show when={open() > 0}>
         <span class="badge badge-soft badge-error badge-sm whitespace-nowrap tabular-nums">{open()} open</span>
@@ -137,7 +154,7 @@ function RuleLive(p: { rule: EventRule }): JSX.Element {
       <Show when={pending() > 0}>
         <span class="badge badge-soft badge-warning badge-sm whitespace-nowrap tabular-nums" title={`${pending()} waiting out a sustain`}>{pending()} pending</span>
       </Show>
-      <Show when={p.rule.enabled && open() === 0 && pending() === 0}>
+      <Show when={p.rule.enabled && inForce() === 0 && open() === 0 && pending() === 0}>
         <span class="text-[12px] text-base-content/40">clear</span>
       </Show>
       <span class="inline-flex" onClick={(e) => e.stopPropagation()}>
@@ -167,6 +184,11 @@ export default function Rules(): JSX.Element {
     setEditing(null);
     blades.push({ kind: "rule", id: name });
   };
+  // A link may name a rule (/rules?rule=<name>): an event row on Activity
+  // points at the rule that wrote it, and lands on its blade.
+  const [search] = useSearchParams();
+  const linked = search.rule;
+  if (typeof linked === "string" && linked) blades.push({ kind: "rule", id: linked });
 
   const columns: FlatColumn<EventRule>[] = [
     identityColumn<EventRule>(),
@@ -182,7 +204,7 @@ export default function Rules(): JSX.Element {
         </span>
       ),
     },
-    { key: "severity", label: "Severity", width: "88px", sortVal: (r) => r.severity ?? "", cell: (r) => <SeverityBadge name={r.severity ?? ""} /> },
+    { key: "severity", label: "Severity", width: "88px", sortVal: (r) => r.severity ?? "", cell: (r) => severityCell(r.severity) },
     { key: "live", label: "Live", width: "120px", cell: (r) => <RuleLive rule={r} /> },
     { key: "official", label: "Origin", width: "84px", sortVal: (r) => String(r.official), cell: (r) => originBadge(r.official) },
   ];
@@ -200,7 +222,7 @@ export default function Rules(): JSX.Element {
               { key: "name", type: "string", hint: "substring", get: (r) => `${entityLabel(r)} ${r.name}`, values: () => [] },
               { key: "reads", type: "string", hint: "exact", get: (r) => r.sample_key, values: () => [...new Set(rows().map((r) => r.sample_key))] },
               { key: "lane", type: "string", hint: "exact", get: (r) => r.sample_lane, values: () => ["property", "metric"] },
-              { key: "severity", type: "string", hint: "exact", get: (r) => r.severity ?? "", values: () => [...new Set(rows().map((r) => r.severity ?? ""))] },
+              { key: "severity", type: "string", hint: "exact", get: (r) => r.severity ?? "informational", values: () => [...new Set(rows().map((r) => r.severity ?? "informational"))] },
               { key: "enabled", type: "string", hint: "exact", get: (r) => (r.enabled ? "enabled" : "disabled"), values: () => ["enabled", "disabled"] },
               { key: "official", type: "string", hint: "exact", get: (r) => (r.official ? "official" : "custom"), values: () => ["official", "custom"] },
             ],
@@ -214,7 +236,7 @@ export default function Rules(): JSX.Element {
                 What a rule does
                 <InfoTip
                   label="rules"
-                  text="A rule watches one property or metric on the components it selects, and opens an alarm at its severity when the value meets its fire criteria for its sustain. It clears the same way. Live counts refresh every few seconds."
+                  text="A rule watches one property or metric on the components it selects. When the value meets its fire criteria for its sustain, its condition comes into force: it writes an event and, when it has a severity, opens an alarm at it. It ends the same way. A rule with no severity is informational: events only, no alarm. Live counts refresh every few seconds."
                 />
               </span>
             ),
@@ -247,8 +269,19 @@ function useRuleRow(name: string): () => EventRule | undefined {
   return () => (rules.data ?? []).find((r) => r.name === name);
 }
 
+// RuleBladeTitle reads the rule's row once. Written inline as
+// `row={useRuleRow(id)}`, the JSX prop compiles to a getter that called
+// useRuleRow on every read, and BladeTitle reads it inside a memo: each list
+// refetch re-ran the memo, minted a fresh query observer, and that observer
+// refetched at once, a request storm on /event-rules while any rule's blade
+// was open.
+function RuleBladeTitle(p: { name: string }): JSX.Element {
+  const row = useRuleRow(p.name);
+  return <BladeTitle row={row} fallback={p.name} />;
+}
+
 export const ruleBlade: BladeDef = {
-  Title: (p) => <BladeTitle row={useRuleRow(p.id)} fallback={p.id} />,
+  Title: (p) => <RuleBladeTitle name={p.id} />,
   Body: (p) => <RuleBladeBody name={p.id} />,
 };
 
@@ -420,7 +453,7 @@ function RuleBladeBody(p: { name: string }): JSX.Element {
               label="Severity"
               value={
                 <span class="inline-flex items-center gap-1.5">
-                  <SeverityBadge name={r().severity ?? ""} />
+                  {severityCell(r().severity)}
                   <InfoTip label="severity" text={RULE_HINTS.severity} />
                   <A href="/severity-levels" class="link text-[11px] text-base-content/50 hover:text-base-content">All levels</A>
                 </span>
@@ -473,6 +506,34 @@ function RuleBladeBody(p: { name: string }): JSX.Element {
             </div>
             <Show when={r().message}>
               <KVStacked label="Message" value={<span class="text-base-content/80">{r().message}</span>} />
+            </Show>
+          </section>
+
+          <section class="flex flex-col gap-2" aria-label="Events it writes">
+            <Eyebrow label="Writes" hint={RULE_HINTS.events} />
+            <div class="grid grid-cols-[auto_1fr] items-baseline gap-x-3 gap-y-1 text-sm">
+              <span class="text-[12px] text-base-content/50">Starts</span>
+              <span class="font-data" data-testid="rule-fire-type">{r().fire_event_type}</span>
+              <span class="text-[12px] text-base-content/50">Ends</span>
+              <span data-testid="rule-clear-type">
+                {r().clear_event_type ? <span class="font-data">{r().clear_event_type}</span> : <span class="text-base-content/50">no clear event</span>}
+              </span>
+            </div>
+          </section>
+
+          <section class="flex flex-col gap-2" aria-label="Conditions in force">
+            <Eyebrow
+              label={`Conditions in force${state.data ? ` (${state.data.conditions.length})` : ""}`}
+              hint={RULE_HINTS.conditions}
+            />
+            <Show when={state.data} fallback={<span class="text-[12px] text-base-content/40">Loading…</span>}>
+              <StateList
+                items={state.data!.conditions}
+                empty="No condition in force."
+                trailing={(k) => (
+                  <span class="w-20 text-right text-[11px] text-base-content/50" title={fmtTime(k.since)}>since {rel(k.since)}</span>
+                )}
+              />
             </Show>
           </section>
 
@@ -552,22 +613,27 @@ export function RuleForm(p: { mode: "create" | "edit"; rule?: EventRule; onSaved
   const metrics = useQuery(() => ({ queryKey: METRICS_KEY, queryFn: listMetricTypes }));
   const componentTypes = useQuery(() => ({ queryKey: COMPONENT_TYPES_KEY, queryFn: listComponentTypes }));
   const components = useQuery(() => ({ queryKey: COMPONENTS_KEY, queryFn: listComponents }));
+  const eventTypes = useQuery(() => ({ queryKey: EVENT_TYPES_KEY, queryFn: listEventTypes }));
   const [d, setD] = createStore<RuleDraft>(p.rule ? draftFromRule(p.rule) : emptyDraft());
+  // Whether the author picked a severity, None included: the create default
+  // fills in only until they do.
+  const [severityChosen, setSeverityChosen] = createSignal(false);
   const [touched, setTouched] = createStore<Record<string, boolean>>({});
   const [busy, setBusy] = createSignal(false);
   const [formErr, setFormErr] = createSignal<string | null>(null);
 
-  // A new rule starts at the registry's default level once the levels land.
-  // An edit never fills one in: an informational rule (no severity) stays
-  // informational unless its author picks a level.
+  // A new rule starts at the registry's default level once the levels land,
+  // until its author picks one (None included). An edit never fills one in:
+  // an informational rule (no severity) stays informational unless its author
+  // picks a level.
   createEffect(() => {
-    if (p.mode === "create" && !d.severity) {
+    if (p.mode === "create" && !severityChosen() && !d.severity) {
       const s = defaultSeverity(severity().levels);
       if (s) setD("severity", s);
     }
   });
 
-  const errors = createMemo<DraftErrors>(() => validateDraft(d, p.mode, p.rule));
+  const errors = createMemo<DraftErrors>(() => validateDraft(d, p.mode));
   const valid = () => Object.keys(errors()).length === 0;
   const shown = (k: keyof DraftErrors) => (touched[k] ? errors()[k] : undefined);
   const touch = (k: keyof DraftErrors) => setTouched(k, true);
@@ -745,15 +811,35 @@ export function RuleForm(p: { mode: "create" | "edit"; rule?: EventRule; onSaved
         <select
           ref={bindSelectValue(() => d.severity, () => severity().levels)}
           class="select select-bordered w-full"
-          aria-required="true"
-          onChange={(e) => { setD("severity", e.currentTarget.value); touch("severity"); }}
+          onChange={(e) => { setSeverityChosen(true); setD("severity", e.currentTarget.value); }}
         >
-          <option value="" disabled>Choose a level…</option>
           <For each={[...severity().levels].reverse()}>
             {(l) => <option value={l.name}>{entityLabel(l)}{l.outage ? " (outage)" : ""}</option>}
           </For>
+          <option value="">None (informational)</option>
         </select>
-        {err("severity")}
+      </FieldRow>
+
+      <FieldRow label="Fire event type" info={RULE_HINTS.events}>
+        <select
+          ref={bindSelectValue(() => d.fireEventType, () => eventTypes.data)}
+          class="select select-bordered w-full font-data"
+          classList={{ "select-error": !!shown("fireEventType") }}
+          onChange={(e) => { setD("fireEventType", e.currentTarget.value); touch("fireEventType"); }}
+        >
+          <For each={eventTypes.data ?? []}>{(t) => <option value={t.name}>{t.name}</option>}</For>
+        </select>
+        {err("fireEventType")}
+      </FieldRow>
+      <FieldRow label="Clear event type" info={RULE_HINTS.events}>
+        <select
+          ref={bindSelectValue(() => d.clearEventType, () => eventTypes.data)}
+          class="select select-bordered w-full font-data"
+          onChange={(e) => setD("clearEventType", e.currentTarget.value)}
+        >
+          <For each={eventTypes.data ?? []}>{(t) => <option value={t.name}>{t.name}</option>}</For>
+          <option value="">No clear event</option>
+        </select>
       </FieldRow>
 
       <FieldRow label="Watches component types" info={RULE_HINTS.selector}>

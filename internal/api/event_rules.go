@@ -25,27 +25,28 @@ type selectorBody struct {
 }
 
 type eventRuleBody struct {
-	ID             string        `json:"id" doc:"The rule's uuid, the stable form of name"`
-	Name           string        `json:"name"`
-	Label          string        `json:"label,omitempty"`
-	Description    string        `json:"description,omitempty"`
-	Selector       selectorBody  `json:"selector" doc:"The components the rule watches; both lists empty is every component"`
-	SampleKey      string        `json:"sample_key" doc:"The property or metric the rule reads"`
-	SampleLane     string        `json:"sample_lane" enum:"property,metric" doc:"Which lane the key reads, derived from the registries"`
-	FireCriteria   criteriaBody  `json:"fire_criteria" doc:"When the sample meets this for fire_sustain, the rule's condition starts (and it opens an alarm when it names a severity)"`
-	ClearCriteria  *criteriaBody `json:"clear_criteria,omitempty" doc:"When the sample meets this for clear_sustain, the condition ends (and the alarm clears); absent, the negation of fire_criteria"`
-	FireSustain    string        `json:"fire_sustain" doc:"How long the fire criteria must hold, a Go duration (0s fires at once)"`
-	ClearSustain   string        `json:"clear_sustain" doc:"How long the clear criteria must hold, a Go duration"`
-	Severity       string        `json:"severity,omitempty" doc:"The severity level the alarm is raised at, by name; absent, the rule is informational and raises no alarm"`
-	FireEventType  string        `json:"fire_event_type" doc:"The event type the rule writes when its condition starts, by name"`
-	ClearEventType string        `json:"clear_event_type,omitempty" doc:"The event type the rule writes when its condition ends, by name; absent, it writes none"`
-	Message        string        `json:"message,omitempty" doc:"The alarm's message; empty uses the rule's label or name"`
-	Enabled        bool          `json:"enabled"`
-	Official       bool          `json:"official" doc:"Shipped with the platform and read-only"`
-	Version        int           `json:"version" doc:"Bumps on every update"`
-	OpenAlarms     int           `json:"open_alarms" doc:"How many alarms the rule raised are still open right now (its live state; GET /event-rules/{name}/state lists them)"`
-	PendingStreaks int           `json:"pending_streaks" doc:"How many of the rule's streaks are waiting out a sustain right now"`
-	LastJudgedAt   *time.Time    `json:"last_judged_at,omitempty" required:"false" doc:"When an ingested sample was last judged by the rule, to within 5s; absent when it never has been. A fleet-wide fact about the rule, naming no component"`
+	ID                string        `json:"id" doc:"The rule's uuid, the stable form of name"`
+	Name              string        `json:"name"`
+	Label             string        `json:"label,omitempty"`
+	Description       string        `json:"description,omitempty"`
+	Selector          selectorBody  `json:"selector" doc:"The components the rule watches; both lists empty is every component"`
+	SampleKey         string        `json:"sample_key" doc:"The property or metric the rule reads"`
+	SampleLane        string        `json:"sample_lane" enum:"property,metric" doc:"Which lane the key reads, derived from the registries"`
+	FireCriteria      criteriaBody  `json:"fire_criteria" doc:"When the sample meets this for fire_sustain, the rule's condition starts (and it opens an alarm when it names a severity)"`
+	ClearCriteria     *criteriaBody `json:"clear_criteria,omitempty" doc:"When the sample meets this for clear_sustain, the condition ends (and the alarm clears); absent, the negation of fire_criteria"`
+	FireSustain       string        `json:"fire_sustain" doc:"How long the fire criteria must hold, a Go duration (0s fires at once)"`
+	ClearSustain      string        `json:"clear_sustain" doc:"How long the clear criteria must hold, a Go duration"`
+	Severity          string        `json:"severity,omitempty" doc:"The severity level the alarm is raised at, by name; absent, the rule is informational and raises no alarm"`
+	FireEventType     string        `json:"fire_event_type" doc:"The event type the rule writes when its condition starts, by name"`
+	ClearEventType    string        `json:"clear_event_type,omitempty" doc:"The event type the rule writes when its condition ends, by name; absent, it writes none"`
+	Message           string        `json:"message,omitempty" doc:"The alarm's message; empty uses the rule's label or name"`
+	Enabled           bool          `json:"enabled"`
+	Official          bool          `json:"official" doc:"Shipped with the platform and read-only"`
+	Version           int           `json:"version" doc:"Bumps on every update"`
+	OpenAlarms        int           `json:"open_alarms" doc:"How many alarms the rule raised are still open right now (its live state; GET /event-rules/{name}/state lists them)"`
+	PendingStreaks    int           `json:"pending_streaks" doc:"How many of the rule's streaks are waiting out a sustain right now"`
+	ConditionsInForce int           `json:"conditions_in_force" doc:"How many conditions the rule holds in force right now, one per component and instance, whether or not it raises an alarm (GET /event-rules/{name}/state lists them)"`
+	LastJudgedAt      *time.Time    `json:"last_judged_at,omitempty" required:"false" doc:"When an ingested sample was last judged by the rule, to within 5s; absent when it never has been. A fleet-wide fact about the rule, naming no component"`
 }
 
 func toCriteriaBody(c rules.Criteria) criteriaBody {
@@ -68,7 +69,7 @@ func toEventRuleBody(r *storage.EventRule) eventRuleBody {
 		SampleKey: r.SampleKey, SampleLane: string(r.SampleLane), FireCriteria: toCriteriaBody(r.FireCriteria),
 		FireSustain: r.FireSustain.String(), ClearSustain: r.ClearSustain.String(), Severity: r.Severity,
 		FireEventType: r.FireEventType, ClearEventType: r.ClearEventType, Message: r.Message, Enabled: r.Enabled, Official: r.Official, Version: r.Version,
-		OpenAlarms: r.OpenAlarms, PendingStreaks: r.PendingStreaks, LastJudgedAt: r.LastJudgedAt}
+		OpenAlarms: r.OpenAlarms, PendingStreaks: r.PendingStreaks, ConditionsInForce: r.ConditionsInForce, LastJudgedAt: r.LastJudgedAt}
 	if r.ClearCriteria != nil {
 		c := toCriteriaBody(*r.ClearCriteria)
 		b.ClearCriteria = &c
@@ -150,7 +151,7 @@ func registerEventRuleRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 		Method:      http.MethodGet,
 		Path:        "/event-rules",
 		Summary:     "List event rules",
-		Description: "Lists the event rules, the authored config that raises alarms, each with its live state as counts (open_alarms, pending_streaks) read in the same query. Rules read like a registry: every rule is listed whatever the caller's scope, while the counts cover only components the caller may read. Gated by rule:read.",
+		Description: "Lists the event rules, the authored config that raises alarms, each with its live state as counts (conditions_in_force, open_alarms, pending_streaks) read in the same query. Rules read like a registry: every rule is listed whatever the caller's scope, while the counts cover only components the caller may read. Gated by rule:read.",
 	}, "rule", "read"), func(ctx context.Context, _ *struct{}) (*listEventRulesOutput, error) {
 		rs, err := gw.ListEventRules(ctx, a.scopeFor(ctx, "component", "read"))
 		if err != nil {
@@ -298,10 +299,18 @@ type ruleStreakBody struct {
 	Since       time.Time `json:"since" doc:"When the streak began"`
 }
 
+type ruleConditionBody struct {
+	Component   string    `json:"component" doc:"The component, by name"`
+	ComponentID string    `json:"component_id" doc:"The component's uuid"`
+	Instance    string    `json:"instance,omitempty" doc:"The sample instance (an endpoint) the condition is on"`
+	Since       time.Time `json:"since" doc:"When the condition came into force"`
+}
+
 type eventRuleStateOutput struct {
 	Body struct {
-		Open    []ruleOpenAlarmBody `json:"open" doc:"The alarms the rule raised that are still open"`
-		Pending []ruleStreakBody    `json:"pending" doc:"The rule's streaks waiting out a sustain"`
+		Conditions []ruleConditionBody `json:"conditions" doc:"The conditions the rule holds in force, informational or not"`
+		Open       []ruleOpenAlarmBody `json:"open" doc:"The alarms the rule raised that are still open"`
+		Pending    []ruleStreakBody    `json:"pending" doc:"The rule's streaks waiting out a sustain"`
 		// LastJudgedAt names no component, so it is not fenced by the read scope.
 		LastJudgedAt *time.Time `json:"last_judged_at,omitempty" required:"false" doc:"When an ingested sample was last judged by the rule, to within 5s; absent when it never has been"`
 	}
@@ -313,7 +322,7 @@ func registerEventRuleStateRoute(api huma.API, a *authenticator, gw storage.Gate
 		Method:      http.MethodGet,
 		Path:        "/event-rules/{name}/state",
 		Summary:     "Get an event rule's live state",
-		Description: "What a rule holds right now: the alarms it raised that are still open, each on a component and instance, its streaks waiting out a sustain, and when it last judged an ingested sample. Only alarms and streaks on components the caller may read are listed. Gated by rule:read.",
+		Description: "What a rule holds right now: the conditions it holds in force (one per component and instance, whether or not it raises an alarm), the alarms it raised that are still open, each on a component and instance, its streaks waiting out a sustain, and when it last judged an ingested sample. Only conditions, alarms and streaks on components the caller may read are listed. Gated by rule:read.",
 	}, "rule", "read"), func(ctx context.Context, in *eventRuleNameInput) (*eventRuleStateOutput, error) {
 		st, err := gw.EventRuleState(ctx, in.Name, a.scopeFor(ctx, "component", "read"))
 		if err != nil {
@@ -321,6 +330,11 @@ func registerEventRuleStateRoute(api huma.API, a *authenticator, gw storage.Gate
 		}
 		out := &eventRuleStateOutput{}
 		out.Body.LastJudgedAt = st.LastJudgedAt
+		out.Body.Conditions = make([]ruleConditionBody, 0, len(st.Conditions))
+		for _, k := range st.Conditions {
+			out.Body.Conditions = append(out.Body.Conditions, ruleConditionBody{Component: k.ComponentName, ComponentID: k.ComponentID,
+				Instance: k.Instance, Since: k.Since})
+		}
 		out.Body.Open = make([]ruleOpenAlarmBody, 0, len(st.Open))
 		for _, o := range st.Open {
 			out.Body.Open = append(out.Body.Open, ruleOpenAlarmBody{AlarmID: o.AlarmID, Component: o.ComponentName,

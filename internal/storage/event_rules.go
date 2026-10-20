@@ -57,6 +57,9 @@ type EventRule struct {
 	// waiting out a sustain. EventRuleState lists them.
 	OpenAlarms     int `json:"-"`
 	PendingStreaks int `json:"-"`
+	// ConditionsInForce counts the conditions the rule holds in force
+	// (#951), informational or not.
+	ConditionsInForce int `json:"-"`
 	// LastJudgedAt is when an ingest batch last judged a sample by the rule,
 	// to within ruleJudgedEvery; nil when it never has. A fact about the
 	// rule, naming no component.
@@ -366,14 +369,16 @@ func ruleArgs(r EventRule) ([]byte, []byte, any, error) {
 }
 
 // ruleCountsJoin aggregates every rule's live state once, joined to the rule
-// rows by id: open alarms it raised, and its pending streaks, each counted
-// only on a component the filter admits.
+// rows by id: open alarms it raised, its pending streaks, and its conditions
+// in force, each counted only on a component the filter admits.
 func ruleCountsJoin(f readFilter) string {
 	return ` left join (select raised_by_rule_id as rule_id, count(*) as n from alarm
 		where cleared_at is null and raised_by_rule_id is not null and ` + f.Pred("component_id") + `
 		group by raised_by_rule_id) oa on oa.rule_id = r.id
 	left join (select rule_id, count(*) as n from event_rule_state where ` + f.Pred("component_id") + `
-		group by rule_id) ps on ps.rule_id = r.id`
+		group by rule_id) ps on ps.rule_id = r.id
+	left join (select rule_id, count(*) as n from event_rule_condition where ` + f.Pred("component_id") + `
+		group by rule_id) ci on ci.rule_id = r.id`
 }
 
 // ListEventRules lists every rule, by name, each with its live state as
@@ -383,7 +388,7 @@ func ruleCountsJoin(f readFilter) string {
 // admits.
 func (p *PG) ListEventRules(ctx context.Context, visible scope.Set) ([]EventRule, error) {
 	f := newReadFilter(componentTable, visible, 1)
-	rows, err := p.pool.Query(ctx, f.With+`select `+ruleCols("r.")+`, coalesce(oa.n, 0), coalesce(ps.n, 0), lj.last_judged_at
+	rows, err := p.pool.Query(ctx, f.With+`select `+ruleCols("r.")+`, coalesce(oa.n, 0), coalesce(ps.n, 0), coalesce(ci.n, 0), lj.last_judged_at
 		from event_rule r`+ruleCountsJoin(f)+` left join event_rule_live lj on lj.rule_id = r.id order by r.name`, f.Args...)
 	if err != nil {
 		return nil, fmt.Errorf("storage: list event rules: %w", err)
@@ -391,13 +396,13 @@ func (p *PG) ListEventRules(ctx context.Context, visible scope.Set) ([]EventRule
 	defer rows.Close()
 	var out []EventRule
 	for rows.Next() {
-		var open, pending int
+		var open, pending, inForce int
 		var judged *time.Time
-		r, err := scanEventRuleTrailing(rows, &open, &pending, &judged)
+		r, err := scanEventRuleTrailing(rows, &open, &pending, &inForce, &judged)
 		if err != nil {
 			return nil, err
 		}
-		r.OpenAlarms, r.PendingStreaks, r.LastJudgedAt = open, pending, judged
+		r.OpenAlarms, r.PendingStreaks, r.ConditionsInForce, r.LastJudgedAt = open, pending, inForce, judged
 		out = append(out, r)
 	}
 	return out, rows.Err()
@@ -410,8 +415,9 @@ func countRuleState(ctx context.Context, q querier, r *EventRule, visible scope.
 	args := append([]any{r.ID}, f.Args...)
 	if err := q.QueryRow(ctx, f.With+`select (select count(*) from alarm where raised_by_rule_id = $1 and cleared_at is null
 			and `+f.Pred("component_id")+`),
-		(select count(*) from event_rule_state where rule_id = $1 and `+f.Pred("component_id")+`)`,
-		args...).Scan(&r.OpenAlarms, &r.PendingStreaks); err != nil {
+		(select count(*) from event_rule_state where rule_id = $1 and `+f.Pred("component_id")+`),
+		(select count(*) from event_rule_condition where rule_id = $1 and `+f.Pred("component_id")+`)`,
+		args...).Scan(&r.OpenAlarms, &r.PendingStreaks, &r.ConditionsInForce); err != nil {
 		return fmt.Errorf("storage: count event rule %q state: %w", r.Name, err)
 	}
 	return nil
