@@ -6767,3 +6767,24 @@ inline form calls the hook once; every title now calls its row hook in its own c
 passes the variable; and a guard test (`hook-in-prop-guard`) fails on any JSX prop that calls a hook.
 A regression test opens each of the seventeen blades against a stale cache and bounds the list
 fetches; before the fix every one of them stormed.
+
+### The expression primitive on Expr (#956)
+
+The first slice of the expression engine (#524): `internal/expression`, on Expr
+(`github.com/expr-lang/expr` v1.17.8, MIT). A site declares its environment as a Go struct and
+pins its result type (`EnvOf[T](expression.Bool)` for a criteria); the binding names, types and
+docs come from the struct's fields and `expr` / `doc` tags (`Env.Bindings()`), which is what the
+generated bindings list will read. `Compile` refuses an unknown binding, a result of the wrong
+type (including one whose type is only known at run time), and any `$` name (Expr's dynamic
+`$env` and the engine's own plumbing), each as an `*expression.Error` with a phase and a 1-based
+line and column. `Program.Run` takes one prepared input of the site's type.
+
+The caps are named constants: a 4096-byte source, 1000 AST nodes (counted by walking the tree),
+and a per-run budget in two halves. Expr's own memory budget (`MaxRunMemory`, 100,000) counts what
+a run allocates but not what it iterates, so `all(items, all(items, ...))` over a bound list ran
+unbudgeted; the engine patches every builtin's collection argument and every `in` through a
+charge on a per-run meter (`MaxRunIterations`, 1,000,000), and the nested case now stops with
+`ErrRunBudget`. `now`, `date`, `duration` and `timezone` are disabled, and an environment type
+carrying a func, a channel, or methods is refused when the site is declared. Compiled programs
+are cached by (source, env type, result) in a 1024-entry LRU safe for concurrent use. The
+expressions page keeps its Design badge until the criteria entry point lands.

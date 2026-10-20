@@ -70,6 +70,9 @@ either) keeps the pipeline's DAG acyclic.
 ## Safety
 
 Expressions are **sandboxed**: no I/O, no network, no unbounded loops, bounded execution.
+The engine pins Expr v1.17.8 and disables its builtins that are not pure: **`now`**, **`date`**,
+**`duration`**, and **`timezone`** (they read the clock, the process's local zone, or the
+timezone database); a time an expression needs is bound by its caller as data.
 Operator-supplied configuration values are bound as **data in the environment**, never spliced
 into expression text, so a hostile value is evaluated literally and never executed. Secret
 fields rendered into a request are masked at interpolation time and never surface in a log
