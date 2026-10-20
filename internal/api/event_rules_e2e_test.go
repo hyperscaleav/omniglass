@@ -350,3 +350,85 @@ func TestEventRuleTypesAPI(t *testing.T) {
 		t.Fatalf("the official rule reads %+v, want the generic pair", official)
 	}
 }
+
+// TestRuleEventsOnTheEventsRead proves a rule's derived events read back on
+// the component's and its system's event lists naming the rule and carrying
+// the alarm they opened (#949).
+func TestRuleEventsOnTheEventsRead(t *testing.T) {
+	dsn := storagetest.NewDSN(t)
+	ctx := context.Background()
+	gw, err := storage.NewPG(ctx, dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer gw.Close()
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatal(err)
+	}
+	ownerTok, hash, prefix, err := auth.NewBearerToken()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := gw.BootstrapOwner(ctx, storage.OwnerSpec{Username: "root", SecretHash: hash, Prefix: prefix}); err != nil {
+		t.Fatal(err)
+	}
+	srv := httptest.NewServer(api.NewHandler(gw))
+	defer srv.Close()
+	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
+	all := scope.Set{All: true}
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "ev-target"}, all, all, all, all); err != nil {
+		t.Fatal(err)
+	}
+	c.do(ownerTok, http.MethodPost, "/systems", map[string]any{"name": "ev-sys"}, http.StatusCreated)
+	if st, b := c.send(ownerTok, http.MethodPut, "/systems/ev-sys/members/ev-target", nil); st >= 300 {
+		t.Fatalf("add member = %d %s", st, b)
+	}
+	c.do(ownerTok, http.MethodPost, "/event-rules", map[string]any{"name": "ev-watch", "sample_key": "endpoint-reachable",
+		"fire_criteria": map[string]any{"op": "eq", "value": "down"}, "severity": "high", "fire_event_type": "condition-started",
+		"selector": map[string]any{"components": []string{"ev-target"}}}, http.StatusCreated)
+	if err := gw.InsertPropertySamples(ctx, []storage.PropertySampleWrite{{OwnerKind: "component", OwnerID: "ev-target",
+		Key: "endpoint-reachable", Instance: "tcp", Value: "down", TS: time.Now()}}); err != nil {
+		t.Fatal(err)
+	}
+	var alarms struct {
+		Alarms []struct {
+			ID           string `json:"id"`
+			RaisedByRule string `json:"raised_by_rule"`
+		} `json:"alarms"`
+	}
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/components/ev-target/alarms", nil, http.StatusOK), &alarms); err != nil {
+		t.Fatal(err)
+	}
+	alarm := ""
+	for _, a := range alarms.Alarms {
+		if a.RaisedByRule == "ev-watch" {
+			alarm = a.ID
+		}
+	}
+	if alarm == "" {
+		t.Fatalf("alarms = %+v, want one raised by ev-watch", alarms)
+	}
+	type ev struct {
+		Key           string `json:"key"`
+		Origin        string `json:"origin"`
+		DerivedByRule string `json:"derived_by_rule"`
+		AlarmID       string `json:"alarm_id"`
+	}
+	for _, path := range []string{"/components/ev-target/events", "/systems/ev-sys/events"} {
+		var out struct {
+			Events []ev `json:"events"`
+		}
+		if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, path, nil, http.StatusOK), &out); err != nil {
+			t.Fatal(err)
+		}
+		found := false
+		for _, e := range out.Events {
+			if e.Key == "condition-started" && e.DerivedByRule == "ev-watch" {
+				found = e.Origin == "derived" && e.AlarmID == alarm
+			}
+		}
+		if !found {
+			t.Fatalf("%s = %+v, want ev-watch's derived condition-started carrying alarm %s", path, out.Events, alarm)
+		}
+	}
+}

@@ -269,6 +269,7 @@ telemetry: {
     id: bigint {constraint: primary_key}
     alarm_id: uuid {constraint: foreign_key}
     component_id: uuid {constraint: foreign_key}
+    derived_by_rule_id: uuid {constraint: foreign_key}
     event_type_id: uuid {constraint: foreign_key}
     location_id: uuid {constraint: foreign_key}
     node_id: uuid {constraint: foreign_key}
@@ -531,6 +532,7 @@ telemetry.command_type.target_metric_type_id -> telemetry.metric_type.id
 telemetry.command_type.target_property_type_id -> telemetry.property_type.id
 telemetry.event.alarm_id -> telemetry.alarm.id
 telemetry.event.component_id -> fleet.component.id
+telemetry.event.derived_by_rule_id -> telemetry.event_rule.id
 telemetry.event.event_type_id -> telemetry.event_type.id
 telemetry.event.location_id -> fleet.location.id
 telemetry.event.node_id -> collection.node.principal_id

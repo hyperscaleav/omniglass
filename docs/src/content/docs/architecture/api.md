@@ -373,7 +373,9 @@ out-of-scope component is a non-disclosing 404 (a deliberate early exception to
   `event_type` name it is typed by (on the wire as `key`, e.g. `call-started`) with its
   `event_type_id` beside it, `origin` (caught/caused/derived/scheduled), `instance`,
   `message`, optional `attributes`, `provenance` (`observed` for direct collection), and the `source`
-  endpoint type.
+  endpoint type. An event a rule derived also carries `derived_by_rule` (the rule's name) and, when the
+  same transaction opened or resolved an alarm, its `alarm_id` (#949); `GET /systems/{name}/events`
+  carries both the same way.
 - `GET /components/{name}/reconciliation` pivots want/told/is over the series: per declared
   property, the **want** (the current declared value, with the contract default coalesced in), the
   **told** (the `intended` value a command

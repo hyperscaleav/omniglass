@@ -3456,7 +3456,9 @@
      {
       "name": "derived_by_rule_id",
       "type": "uuid",
-      "nullable": true
+      "nullable": true,
+      "fk": true,
+      "fk_target": "event_rule.id"
      },
      {
       "name": "alarm_id",

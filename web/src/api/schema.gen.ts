@@ -5634,8 +5634,12 @@ export interface components {
             type: string;
         };
         EventBody: {
+            /** @description The alarm a rule's fire event opened or its clear event resolved; absent for most events */
+            alarm_id?: string;
             /** @description Structured attributes, when the occurrence carried a JSON payload */
             attributes?: unknown;
+            /** @description The event rule that derived the occurrence, by name; absent when no rule did */
+            derived_by_rule?: string;
             /** @description The event_type's uuid, the stable form of key */
             event_type_id: string;
             /** @description The series discriminator (e.g. the endpoint), when set */
@@ -8125,8 +8129,12 @@ export interface components {
             system_type_id?: string;
         };
         SystemEventBody: {
+            /** @description The alarm a rule's fire event opened or its clear event resolved; absent for most events */
+            alarm_id?: string;
             /** @description Structured attributes, when the occurrence carried a JSON payload */
             attributes?: unknown;
+            /** @description The event rule that derived the occurrence, by name; absent when no rule did */
+            derived_by_rule?: string;
             /** @description The event_type's uuid, the stable form of key */
             event_type_id: string;
             /** @description The series discriminator (e.g. the endpoint), when set */

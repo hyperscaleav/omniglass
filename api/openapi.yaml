@@ -2312,8 +2312,14 @@ components:
     EventBody:
       additionalProperties: false
       properties:
+        alarm_id:
+          description: The alarm a rule's fire event opened or its clear event resolved; absent for most events
+          type: string
         attributes:
           description: Structured attributes, when the occurrence carried a JSON payload
+        derived_by_rule:
+          description: The event rule that derived the occurrence, by name; absent when no rule did
+          type: string
         event_type_id:
           description: The event_type's uuid, the stable form of key
           type: string
@@ -6926,8 +6932,14 @@ components:
     SystemEventBody:
       additionalProperties: false
       properties:
+        alarm_id:
+          description: The alarm a rule's fire event opened or its clear event resolved; absent for most events
+          type: string
         attributes:
           description: Structured attributes, when the occurrence carried a JSON payload
+        derived_by_rule:
+          description: The event rule that derived the occurrence, by name; absent when no rule did
+          type: string
         event_type_id:
           description: The event_type's uuid, the stable form of key
           type: string

@@ -631,9 +631,11 @@ func (p *PG) DeleteEventRule(ctx context.Context, actorID, name string, action s
 	if err != nil {
 		return err
 	}
-	// A rule deleted lets go of every alarm it holds open first: once it is
-	// gone nothing would ever clear them.
-	if err := p.clearRuleAlarms(ctx, tx, actorID, old, nil); err != nil {
+	// A rule deleted ends every condition it holds in force first, each with
+	// its clear event and the alarm it resolves: once it is gone nothing
+	// would ever end them. The events keep the rule's name once its id is set
+	// null by the delete.
+	if err := p.endRuleConditions(ctx, tx, actorID, old, nil); err != nil {
 		return err
 	}
 	if _, err := tx.Exec(ctx, `delete from event_rule where id = $1`, old.ID); err != nil {
@@ -647,14 +649,16 @@ func (p *PG) DeleteEventRule(ctx context.Context, actorID, name string, action s
 
 // settleRuleWrite brings a rule's live state in line with a write, in the
 // write's transaction; old is nil for a rule just inserted. A rule disabled
-// lets go of every alarm it holds open and every streak. A rule created,
-// enabled, or materially changed (what it reads, how it judges, which
-// components, how long) starts its streaks over, lets go of the alarms on
-// components it no longer selects, and primes from each series' newest
-// sample, so a condition that already holds is not lost on an input that
-// sends nothing further. A cosmetic edit (label, description, message,
-// severity, event types) touches nothing: a sustain measured against the
-// same judgment is still one.
+// ends every condition it holds in force (each with its clear event and the
+// alarm it resolves) and drops every streak. A rule created, enabled, or
+// materially changed (what it reads, how it judges, which components, how
+// long) starts its streaks over, ends its conditions on components it no
+// longer selects, and primes from each series' newest sample, so a
+// condition that already holds is not lost on an input that sends nothing
+// further. A cosmetic edit (label, description, message, severity, event
+// types) leaves streaks and conditions alone: a sustain measured against the
+// same judgment is still one. A severity turned on or off carries to the
+// conditions in force (settleSeverity), on a cosmetic or a material edit.
 //
 // The caller holds the rule's row (FOR UPDATE, or the insert's own lock)
 // before settle takes any series or health lock, the lock order
@@ -666,13 +670,13 @@ func (p *PG) settleRuleWrite(ctx context.Context, tx pgx.Tx, actorID string, old
 		if !wasOn {
 			return nil
 		}
-		if err := p.clearRuleAlarms(ctx, tx, actorID, updated, nil); err != nil {
+		if err := p.endRuleConditions(ctx, tx, actorID, updated, nil); err != nil {
 			return err
 		}
 		return resetRuleStreaks(ctx, tx, updated.ID)
 	}
 	if wasOn && !materialRuleChange(*old, updated) {
-		return nil
+		return p.settleSeverity(ctx, tx, actorID, *old, updated)
 	}
 	if old != nil {
 		if err := resetRuleStreaks(ctx, tx, updated.ID); err != nil {
@@ -680,9 +684,14 @@ func (p *PG) settleRuleWrite(ctx context.Context, tx pgx.Tx, actorID string, old
 		}
 		if wasOn && !sameRuleJSON(old.Selector, updated.Selector) {
 			m := newRuleMatcher(p, nil)
-			if err := p.clearRuleAlarms(ctx, tx, actorID, updated, func(o *ruleOwner) (bool, error) {
+			if err := p.endRuleConditions(ctx, tx, actorID, updated, func(o *ruleOwner) (bool, error) {
 				return m.selects(ctx, tx, updated, o)
 			}); err != nil {
+				return err
+			}
+		}
+		if wasOn {
+			if err := p.settleSeverity(ctx, tx, actorID, *old, updated); err != nil {
 				return err
 			}
 		}

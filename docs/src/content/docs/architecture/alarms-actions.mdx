@@ -135,10 +135,22 @@ written when its condition starts, and an optional **`clear_event_type`**, writt
 name from the `event_type` registry (an unknown one is refused, and a type a rule names cannot be
 deleted). The platform seeds a generic pair for rules that need no semantic type of their own,
 `condition-started` and `condition-ended`; a rule can name a bracketing pair the registry already
-models instead (`call-started` / `call-ended`). Built today: the fields, their validation, and an
-informational rule that opens nothing; writing the events themselves, once at each edge and carrying
-the alarm they opened or resolved, is the next slice of the event-to-alarm edge (#949), over the
-`event_rule_condition` table below.
+models instead (`call-started` / `call-ended`).
+
+**Edges, not samples** (#949). A rule's condition is in force on a component and instance while it
+holds a row in **`event_rule_condition`**, for every rule, informational or not. When the condition
+comes into force (after `fire_sustain`) the rule writes the condition row, opens its alarm when it has a
+severity, and writes its **fire event**; when it leaves force (after `clear_sustain`) it deletes the
+row, resolves the alarm, and writes its **clear event** when it has a clear type. Each is written
+once, never per sample while the condition holds, in one transaction with the alarm transition and
+the health recompute. The [event](/architecture/events/) is `origin = derived`, names its rule
+(`derived_by_rule_id`, and the rule's name and version in `source_rule`, which outlive a deleted
+rule), sits on the series' component and instance, carries the rule's message and the sample's key
+and value as attributes, and carries the alarm it opened or resolved in **`event.alarm_id`**. A rule
+with no clear type resolves its alarm with no clear event, and its condition still ends. Turning a
+severity on opens alarms for the conditions in force, each with a fire event carrying it; turning it
+off resolves them, each with a clear event carrying it, and the conditions stay in force, so an alarm's
+open and resolve are always events that carry it.
 
 ```yaml
 event_rule:
@@ -160,16 +172,16 @@ feeds health exactly as a hand-raised one does; it writes as the system actor. T
 (`raised_by_rule_id`, set null if the rule is deleted), and its condition identity is the rule's name
 plus the sample's **instance**, so a per-endpoint input holds **one alarm per endpoint**: a component
 whose SNMP and HTTP both fail carries two, and one recovering clears only its own. A repeated or
-redelivered sample changes nothing. A disabled rule evaluates nothing; disabling or deleting a rule clears
-the alarms it holds open (they stay in the history), and narrowing its selector clears those on the
-components it no longer watches.
+redelivered sample changes nothing. A disabled rule evaluates nothing; disabling or deleting a rule ends
+the conditions it holds in force, each with its clear event, resolving their alarms (they stay in the
+history), and narrowing its selector ends those on the components it no longer watches.
 
 **Sustains** hold an edge until it has lasted: `fire_sustain` before the alarm opens and
 `clear_sustain` before it clears, both defaulting to `0s`, set independently (a long clear sustain
 over a short fire sustain holds an incident through a noisy recovery without delaying the page). A
 sample pointing at an action starts or continues a **streak** (stored per rule, component and instance,
 so it survives a restart); a sample that points nowhere (neither criterion holds), or at an action
-already in force (a fire with the alarm open, a clear with none), breaks it, as does a sample the rule
+already in force (a fire with the condition in force, a clear with none), breaks it, as does a sample the rule
 cannot evaluate; and once it has held for the sustain the action takes effect, either on a later sample
 or on the server's **sweep** (every five seconds, beside the command settlement sweep), which is what
 lets a sustain work on an input that reports only on change, like `endpoint-reachable`. Before acting,
@@ -484,8 +496,9 @@ table exists today.
 
 The event rule is three tables: the authored **`event_rule`** row, the durable streak each rule
 holds per component and instance while it waits out a sustain, **`event_rule_state`**, and the
-condition each rule holds in force per component and instance, **`event_rule_condition`** (the table
-ships with #948; the evaluator writes it from #949). The severity registry is **`severity_level`**.
+condition each rule holds in force per component and instance, **`event_rule_condition`**, which an
+upgrade backfilled from the rule-raised alarms open at the time. The severity registry is
+**`severity_level`**.
 
 <SchemaTable
   table="event_rule"

@@ -43,7 +43,19 @@ type Event struct {
 	Attributes  []byte
 	Provenance  string
 	Source      string
+	// DerivedByRule names the event rule that derived the occurrence (#949),
+	// by its name (kept on the row, so it outlives the rule); "" for an
+	// occurrence no rule derived. AlarmID is the alarm a rule's fire event
+	// opened or its clear event resolved, nil for most events.
+	DerivedByRule string
+	AlarmID       *string
 }
+
+// eventLineageCols reads an event's rule and alarm, the trailing columns
+// both event reads scan into Event.DerivedByRule and Event.AlarmID.
+const eventLineageCols = `case when event.origin = 'derived'
+		then coalesce((select r.name from event_rule r where r.id = event.derived_by_rule_id), event.source_rule) end,
+	event.alarm_id::text`
 
 // InsertEvents writes observed occurrence rows in one transaction. Each row sets
 // exactly its owner arc column (the CHECK enforces the rest) and provenance
@@ -113,7 +125,8 @@ func (p *PG) ListComponentEvents(ctx context.Context, componentRef string, windo
 	bound, args := tsSince("ts", window, c.ID, limit)
 	rows, err := p.pool.Query(ctx, fmt.Sprintf(`
 		select id, ts, owner_kind,
-			(select et.name from event_type et where et.id = event.event_type_id), event.event_type_id, instance, origin, message, attributes, provenance, source
+			(select et.name from event_type et where et.id = event.event_type_id), event.event_type_id, instance, origin, message, attributes, provenance, source,
+			`+eventLineageCols+`
 		from event
 		where component_id = $1::uuid and %s
 		order by ts desc
@@ -126,8 +139,13 @@ func (p *PG) ListComponentEvents(ctx context.Context, componentRef string, windo
 	var out []Event
 	for rows.Next() {
 		var e Event
-		if err := rows.Scan(&e.ID, &e.TS, &e.OwnerKind, &e.Key, &e.EventTypeID, &e.Instance, &e.Origin, &e.Message, &e.Attributes, &e.Provenance, &e.Source); err != nil {
+		var rule *string
+		if err := rows.Scan(&e.ID, &e.TS, &e.OwnerKind, &e.Key, &e.EventTypeID, &e.Instance, &e.Origin, &e.Message, &e.Attributes, &e.Provenance, &e.Source,
+			&rule, &e.AlarmID); err != nil {
 			return nil, fmt.Errorf("storage: scan event %s: %w", componentRef, err)
+		}
+		if rule != nil {
+			e.DerivedByRule = *rule
 		}
 		out = append(out, e)
 	}
@@ -150,7 +168,7 @@ func (p *PG) ListSystemEvents(ctx context.Context, systemID string, window time.
 				(select s.name from system s where s.id = event.system_id),
 				(select c.name from component c where c.id = event.component_id), ''),
 			(select et.name from event_type et where et.id = event.event_type_id), event.event_type_id,
-			instance, origin, message, attributes, provenance, source
+			instance, origin, message, attributes, provenance, source, `+eventLineageCols+`
 		from event
 		where (event.system_id = $1::uuid
 		   or event.component_id in (select m.component_id from system_member m where m.system_id = $1::uuid))
@@ -164,8 +182,9 @@ func (p *PG) ListSystemEvents(ctx context.Context, systemID string, window time.
 	var out []Event
 	for rows.Next() {
 		var e Event
-		var key, typeID *string
-		if err := rows.Scan(&e.ID, &e.TS, &e.OwnerKind, &e.Owner, &key, &typeID, &e.Instance, &e.Origin, &e.Message, &e.Attributes, &e.Provenance, &e.Source); err != nil {
+		var key, typeID, rule *string
+		if err := rows.Scan(&e.ID, &e.TS, &e.OwnerKind, &e.Owner, &key, &typeID, &e.Instance, &e.Origin, &e.Message, &e.Attributes, &e.Provenance, &e.Source,
+			&rule, &e.AlarmID); err != nil {
 			return nil, fmt.Errorf("storage: scan system event: %w", err)
 		}
 		if key != nil {
@@ -173,6 +192,9 @@ func (p *PG) ListSystemEvents(ctx context.Context, systemID string, window time.
 		}
 		if typeID != nil {
 			e.EventTypeID = *typeID
+		}
+		if rule != nil {
+			e.DerivedByRule = *rule
 		}
 		out = append(out, e)
 	}
