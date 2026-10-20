@@ -503,6 +503,56 @@ describe("Rules page", () => {
     }
   });
 
+  it("follows the rule a link names as it changes (back and forward), and lets go of it when the blade closes", async () => {
+    window.history.pushState({}, "", "/rules?rule=reachability-lost");
+    try {
+      mount();
+      let b = await blade();
+      expect(within(b).getByText("reachability-lost")).toBeTruthy();
+      window.history.pushState({}, "", "/rules?rule=too-hot");
+      window.dispatchEvent(new PopStateEvent("popstate"));
+      await waitFor(() => expect(within(asides()[asides().length - 1] as HTMLElement).getByText("too-hot")).toBeTruthy());
+      b = asides()[asides().length - 1] as HTMLElement;
+      fireEvent.click(within(b).getByRole("button", { name: "Close" }));
+      await waitFor(() => expect(window.location.search).toBe(""));
+    } finally {
+      window.history.pushState({}, "", "/");
+    }
+  });
+
+  it("says a linked rule is not found only once the list has loaded, and reads no state for it", async () => {
+    window.history.pushState({}, "", "/rules?rule=no-such-rule");
+    try {
+      let release!: () => void;
+      const gate = new Promise<void>((r) => { release = r; });
+      const states: string[] = [];
+      vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+        const req = input as Request;
+        if (req.url.endsWith("/state")) states.push(req.url);
+        if (req.url.endsWith("/event-rules")) {
+          await gate;
+          return json({ event_rules: [reach, hot] });
+        }
+        return json({ conditions: [], open: [], pending: [] });
+      });
+      const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+      qc.setQueryData([...severityLevelsKey], levels);
+      qc.setQueryData([...ME_KEY], admin);
+      render(() => (
+        <QueryClientProvider client={qc}>
+          <Router><Route path="*" component={Rules} /></Router>
+        </QueryClientProvider>
+      ));
+      const b = await blade();
+      expect(within(b).queryByText("Rule not found.")).toBeNull();
+      release();
+      expect(await within(b).findByText("Rule not found.")).toBeTruthy();
+      expect(states).toEqual([]);
+    } finally {
+      window.history.pushState({}, "", "/");
+    }
+  });
+
   it("reads the rule list once per poll with a blade open, never a storm of refetches", async () => {
     // The title once read its row through a JSX getter that minted a query
     // observer on every read: with live (non-Infinity) staleness each new

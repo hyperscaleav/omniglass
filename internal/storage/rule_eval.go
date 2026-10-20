@@ -1036,7 +1036,7 @@ func (p *PG) EventRuleState(ctx context.Context, name string, visible scope.Set)
 		return nil, err
 	}
 	rows, err = p.pool.Query(ctx, f.With+`select k.component_id::text, c.name, k.instance, k.since
-		from event_rule_condition k join component c on c.id = k.component_id
+		from `+ruleInForceSQL+` k join component c on c.id = k.component_id
 		where k.rule_id = $1 and `+f.Pred("k.component_id")+` order by k.since`, args...)
 	if err != nil {
 		return nil, fmt.Errorf("storage: rule %s conditions: %w", name, err)

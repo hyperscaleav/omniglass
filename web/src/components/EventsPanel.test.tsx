@@ -68,7 +68,7 @@ describe("EventsPanel", () => {
   });
 
   it("names the rule that derived an event, linking to it, and opens the alarm it carries in place", () => {
-    const { getByText, getByRole } = mount({
+    const { getByText } = mount({
       component: "disp-1",
       events: [
         {
@@ -81,6 +81,7 @@ describe("EventsPanel", () => {
           source: "rule",
           instance: "tcp",
           derived_by_rule: "reachability-lost",
+          derived_by_rule_id: "0192a5f0-5555-7000-8000-0000000000a5",
           alarm_id: "0192a5f0-4444-7000-8000-0000000000a4",
         },
       ],
@@ -89,7 +90,26 @@ describe("EventsPanel", () => {
     expect(link.getAttribute("href")).toBe("/rules?rule=reachability-lost");
     const row = link.closest("div.flex-col") as HTMLElement;
     expect(within(row).getByRole("button", { name: /^Timeline of / })).toBeTruthy();
-    void getByRole;
+  });
+
+  it("names a deleted rule as recorded, as plain text that says it is gone, never as a dead link", () => {
+    const { getByText } = mount({
+      component: "disp-1",
+      events: [
+        {
+          ts: nowIso,
+          key: "condition-ended",
+          event_type_id: "0192a5f0-3333-7000-8000-0000000000a3",
+          origin: "derived",
+          message: "Old watch",
+          provenance: "observed",
+          source: "rule",
+          derived_by_rule: "old-watch",
+        },
+      ],
+    });
+    const name = getByText("old-watch");
+    expect(name.closest("a")).toBeNull();
+    expect(name.closest("[title]")?.getAttribute("title")).toMatch(/deleted/);
   });
 });
-

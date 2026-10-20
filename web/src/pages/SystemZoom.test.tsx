@@ -490,7 +490,7 @@ describe("the events and logs tabs (#793)", () => {
     const r = mount(`/web/systems/${uuidFor("szp-sys")}?tab=events`);
     r.qc.setQueryData([...systemEventsKey(uuidFor("szp-sys"))], [
       { ts: "2026-08-18T15:53:00Z", key: "condition-started", event_type_id: "et-3", origin: "derived", message: "Reachability lost", provenance: "observed",
-        owner_kind: "component", owner: "videobar-1", owner_id: uuidFor("szp-c-bar"), derived_by_rule: "reachability-lost", alarm_id: uuidFor("szp-alarm") },
+        owner_kind: "component", owner: "videobar-1", owner_id: uuidFor("szp-c-bar"), derived_by_rule: "reachability-lost", derived_by_rule_id: uuidFor("szp-rule"), alarm_id: uuidFor("szp-alarm") },
     ]);
     const tab = screen.getByTestId("events-tab");
     const link = (await within(tab).findByText("reachability-lost")).closest("a")!;

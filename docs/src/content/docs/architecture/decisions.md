@@ -6579,7 +6579,9 @@ interface create form, since that name is the platform's to mint.
      timeline reads both sources. A material edit that turns a severity on primes first.
   6. **A hand clear holds while the condition persists.** Since in force is the condition, an operator
      clearing a rule's alarm leaves the condition and its events untouched, and the next alarm opens only
-     on the next new edge, the same manual close a Zabbix trigger allows.
+     on the next new edge, the same manual close a Zabbix trigger allows. One exception: turning the
+     rule's severity off and back on reopens an alarm for every condition still in force, a hand-cleared
+     one included, since a severity turned on raises for each condition the rule holds (point 5).
 - **Context:** ADR-0144 built the alarm half, and in force was the open alarm: a rule could not exist
   without paging, and a hand clear on a polled input reopened on the next sample. Making the condition
   the rule's own state lets a rule record what happened without paging anyone, lets every path agree on

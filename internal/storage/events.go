@@ -49,7 +49,10 @@ type Event struct {
 	// occurrence no rule derived. AlarmID is the alarm a rule's fire event
 	// opened or its clear event resolved, nil for most events.
 	DerivedByRule string
-	AlarmID       *string
+	// DerivedByRuleID is the deriving rule's uuid while the rule exists; nil
+	// once it is deleted (the name above stays), and for any other event.
+	DerivedByRuleID *string
+	AlarmID         *string
 	// OwnerID is the owning row's uuid, populated beside Owner by the
 	// system-scoped read, where names repeat across one list's owners.
 	OwnerID string
@@ -57,7 +60,7 @@ type Event struct {
 
 // eventLineageCols reads an event's rule and alarm, the trailing columns
 // both event reads scan into Event.DerivedByRule and Event.AlarmID.
-const eventLineageCols = `case when event.origin = 'derived' then event.source_rule end, event.alarm_id::text`
+const eventLineageCols = `case when event.origin = 'derived' then event.source_rule end, event.derived_by_rule_id::text, event.alarm_id::text`
 
 // InsertEvents writes observed occurrence rows in one transaction. Each row sets
 // exactly its owner arc column (the CHECK enforces the rest) and provenance
@@ -143,7 +146,7 @@ func (p *PG) ListComponentEvents(ctx context.Context, componentRef string, windo
 		var e Event
 		var rule *string
 		if err := rows.Scan(&e.ID, &e.TS, &e.OwnerKind, &e.Key, &e.EventTypeID, &e.Instance, &e.Origin, &e.Message, &e.Attributes, &e.Provenance, &e.Source,
-			&rule, &e.AlarmID); err != nil {
+			&rule, &e.DerivedByRuleID, &e.AlarmID); err != nil {
 			return nil, fmt.Errorf("storage: scan event %s: %w", componentRef, err)
 		}
 		if rule != nil {
@@ -188,7 +191,7 @@ func (p *PG) ListSystemEvents(ctx context.Context, systemID string, window time.
 		var key, typeID, rule *string
 		var ownerID *string
 		if err := rows.Scan(&e.ID, &e.TS, &e.OwnerKind, &e.Owner, &ownerID, &key, &typeID, &e.Instance, &e.Origin, &e.Message, &e.Attributes, &e.Provenance, &e.Source,
-			&rule, &e.AlarmID); err != nil {
+			&rule, &e.DerivedByRuleID, &e.AlarmID); err != nil {
 			return nil, fmt.Errorf("storage: scan system event: %w", err)
 		}
 		if key != nil {

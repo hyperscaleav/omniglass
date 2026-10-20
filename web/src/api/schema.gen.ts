@@ -5694,6 +5694,8 @@ export interface components {
             attributes?: unknown;
             /** @description The event rule that derived the occurrence, by name; absent when no rule did */
             derived_by_rule?: string;
+            /** @description The deriving rule's uuid while the rule exists; absent once it is deleted (derived_by_rule keeps its name) */
+            derived_by_rule_id?: string;
             /** @description The event_type's uuid, the stable form of key */
             event_type_id: string;
             /** @description The series discriminator (e.g. the endpoint), when set */
@@ -8209,6 +8211,8 @@ export interface components {
             attributes?: unknown;
             /** @description The event rule that derived the occurrence, by name; absent when no rule did */
             derived_by_rule?: string;
+            /** @description The deriving rule's uuid while the rule exists; absent once it is deleted (derived_by_rule keeps its name) */
+            derived_by_rule_id?: string;
             /** @description The event_type's uuid, the stable form of key */
             event_type_id: string;
             /** @description The series discriminator (e.g. the endpoint), when set */

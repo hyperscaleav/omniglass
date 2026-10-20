@@ -436,11 +436,12 @@ func TestRuleEventsOnTheEventsRead(t *testing.T) {
 		t.Fatalf("ev-watch state conditions = %+v, want ev-target on tcp", st.Conditions)
 	}
 	type ev struct {
-		Key           string `json:"key"`
-		Origin        string `json:"origin"`
-		DerivedByRule string `json:"derived_by_rule"`
-		AlarmID       string `json:"alarm_id"`
-		OwnerID       string `json:"owner_id"`
+		Key             string `json:"key"`
+		Origin          string `json:"origin"`
+		DerivedByRule   string `json:"derived_by_rule"`
+		DerivedByRuleID string `json:"derived_by_rule_id"`
+		AlarmID         string `json:"alarm_id"`
+		OwnerID         string `json:"owner_id"`
 	}
 	for _, path := range []string{"/components/ev-target/events", "/systems/ev-sys/events"} {
 		var out struct {
@@ -460,6 +461,30 @@ func TestRuleEventsOnTheEventsRead(t *testing.T) {
 		if !found {
 			t.Fatalf("%s = %+v, want ev-watch's derived condition-started carrying alarm %s", path, out.Events, alarm)
 		}
+	}
+
+	// An event names its rule by id while the rule exists, so a console links
+	// it; once the rule is deleted the id goes and the recorded name stays.
+	ruleID := func() (string, string) {
+		var out struct {
+			Events []ev `json:"events"`
+		}
+		if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/components/ev-target/events", nil, http.StatusOK), &out); err != nil {
+			t.Fatal(err)
+		}
+		for _, e := range out.Events {
+			if e.Key == "condition-started" {
+				return e.DerivedByRule, e.DerivedByRuleID
+			}
+		}
+		return "", ""
+	}
+	if name, id := ruleID(); name != "ev-watch" || id == "" {
+		t.Fatalf("a live rule's event names %q by id %q, want ev-watch with its id", name, id)
+	}
+	c.do(ownerTok, http.MethodDelete, "/event-rules/ev-watch", nil, http.StatusNoContent)
+	if name, id := ruleID(); name != "ev-watch" || id != "" {
+		t.Fatalf("a deleted rule's event names %q by id %q, want ev-watch with no id", name, id)
 	}
 }
 

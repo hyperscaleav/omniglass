@@ -368,6 +368,22 @@ func ruleArgs(r EventRule) ([]byte, []byte, any, error) {
 	return sel, fire, clear, nil
 }
 
+// ruleInForceSQL is every condition a rule holds in force, as the evaluator
+// judges it (conditionInForce): its condition rows, and an alarm it holds
+// open on a series with no row behind it (an older binary's, mid-upgrade),
+// since the alarm opened. Columns: rule_id, component_id, instance, since.
+// The live state reads it, so open alarms never outnumber conditions.
+const ruleInForceSQL = `(select rule_id, component_id, instance, since from event_rule_condition
+	union all
+	select o.rule_id, o.component_id, o.instance, o.since from (
+		select a.raised_by_rule_id as rule_id, a.component_id, a.raised_at as since,
+			case when a.dedup_key = 'rule:' || r.name then '' else substr(a.dedup_key, length('rule:' || r.name || ':') + 1) end as instance
+		from alarm a join event_rule r on r.id = a.raised_by_rule_id
+		where a.cleared_at is null and (a.dedup_key = 'rule:' || r.name or a.dedup_key like 'rule:' || r.name || ':%')
+	) o
+	where not exists (select 1 from event_rule_condition c where c.rule_id = o.rule_id and c.component_id = o.component_id
+		and c.instance = o.instance))`
+
 // ruleCountsJoin aggregates every rule's live state once, joined to the rule
 // rows by id: open alarms it raised, its pending streaks, and its conditions
 // in force, each counted only on a component the filter admits.
@@ -377,8 +393,8 @@ func ruleCountsJoin(f readFilter) string {
 		group by raised_by_rule_id) oa on oa.rule_id = r.id
 	left join (select rule_id, count(*) as n from event_rule_state where ` + f.Pred("component_id") + `
 		group by rule_id) ps on ps.rule_id = r.id
-	left join (select rule_id, count(*) as n from event_rule_condition where ` + f.Pred("component_id") + `
-		group by rule_id) ci on ci.rule_id = r.id`
+	left join (select k.rule_id, count(*) as n from ` + ruleInForceSQL + ` k where ` + f.Pred("k.component_id") + `
+		group by k.rule_id) ci on ci.rule_id = r.id`
 }
 
 // ListEventRules lists every rule, by name, each with its live state as
@@ -416,7 +432,7 @@ func countRuleState(ctx context.Context, q querier, r *EventRule, visible scope.
 	if err := q.QueryRow(ctx, f.With+`select (select count(*) from alarm where raised_by_rule_id = $1 and cleared_at is null
 			and `+f.Pred("component_id")+`),
 		(select count(*) from event_rule_state where rule_id = $1 and `+f.Pred("component_id")+`),
-		(select count(*) from event_rule_condition where rule_id = $1 and `+f.Pred("component_id")+`)`,
+		(select count(*) from `+ruleInForceSQL+` k where k.rule_id = $1 and `+f.Pred("k.component_id")+`)`,
 		args...).Scan(&r.OpenAlarms, &r.PendingStreaks, &r.ConditionsInForce); err != nil {
 		return fmt.Errorf("storage: count event rule %q state: %w", r.Name, err)
 	}

@@ -1,6 +1,6 @@
 ---
 title: Rules and severity
-description: "Writing an event rule: what it reads, when it opens and clears an alarm, how long a condition must hold, the severity level it raises at, and how to watch it work, from the console, the CLI, or the API."
+description: "Writing an event rule: what it reads, when its condition comes into force and ends, the events it writes, how long a condition must hold, the severity level it raises an alarm at (or none, for an informational rule), and how to watch it work, from the console, the CLI, or the API."
 walkthroughs:
   - id: watch-a-rule-raise-an-alarm
 ---
@@ -8,9 +8,12 @@ walkthroughs:
 import SeededSet from '../../../../components/SeededSet.astro';
 
 **Catalog, under Actions: Rules** (with `rule:read`) is where alarms come from when nobody raises
-them by hand. An **event rule** watches one property or metric on the components it selects, opens
-an alarm on a component when the value meets its **fire criteria** for long enough, and clears it
-when the value meets its **clear criteria**. The alarm it opens is an ordinary alarm: it takes its
+them by hand, and where what happened is recorded when nobody needs paging. An **event rule** watches
+one property or metric on the components it selects. When the value meets its **fire criteria** for
+long enough, its **condition** comes into force on that component: it writes an event and, when it
+has a severity, opens an alarm; when the value meets its **clear criteria** the condition ends, with
+its own event, and the alarm clears. A rule with no severity is **informational**: it writes its
+events and pages nobody. The alarm it opens is an ordinary alarm: it takes its
 component's verdict down, a system role the component fills stops counting it while it is out, and
 it can be acknowledged like any other ([alarms on a component](/guides/operator/entities/#alarms-on-a-component)).
 How the evaluator works is on [alarms and actions](/architecture/alarms-actions/#the-event_rule).
@@ -142,7 +145,9 @@ component and endpoint once the fire criteria have held for the sustain, and lea
 clear criteria have; while it holds, the rule's blade lists it under **Conditions in force** with when
 it started. At each edge the rule writes one event, which shows on the component's and its system's
 **Activity**, naming the rule (a link to its blade) and, when the rule raised or resolved an alarm in
-the same moment, carrying that alarm (its timeline opens in place). A condition that holds across many
+the same moment, carrying that alarm (its timeline opens in place). An event outlives its rule: once a
+rule is deleted, its events keep the name it had, shown as plain text marked **(deleted)** rather than
+a link to a blade that is gone. A condition that holds across many
 samples writes one event, not one per sample.
 
 Two behaviors follow from acting on edges:
@@ -155,7 +160,8 @@ Two behaviors follow from acting on edges:
   severity opens alarms for the conditions it already holds; setting a rule to None resolves its open
   alarms and keeps the conditions in force. Neither writes a condition event, since the condition did
   not move; the alarm's own audit rows (on its timeline) record the open or resolve and who edited the
-  rule.
+  rule. One consequence: turning a severity off and back on reopens an alarm for every condition still
+  in force, including one whose alarm was cleared by hand.
 
 ## Edit, disable, delete
 

@@ -2379,6 +2379,9 @@ components:
         derived_by_rule:
           description: The event rule that derived the occurrence, by name; absent when no rule did
           type: string
+        derived_by_rule_id:
+          description: The deriving rule's uuid while the rule exists; absent once it is deleted (derived_by_rule keeps its name)
+          type: string
         event_type_id:
           description: The event_type's uuid, the stable form of key
           type: string
@@ -7032,6 +7035,9 @@ components:
           description: Structured attributes, when the occurrence carried a JSON payload
         derived_by_rule:
           description: The event rule that derived the occurrence, by name; absent when no rule did
+          type: string
+        derived_by_rule_id:
+          description: The deriving rule's uuid while the rule exists; absent once it is deleted (derived_by_rule keeps its name)
           type: string
         event_type_id:
           description: The event_type's uuid, the stable form of key

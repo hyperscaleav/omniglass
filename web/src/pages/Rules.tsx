@@ -1,4 +1,4 @@
-import { For, Show, createContext, createEffect, createMemo, createSignal, useContext, type JSX } from "solid-js";
+import { For, Show, createContext, createEffect, createMemo, createSignal, on, useContext, type JSX } from "solid-js";
 import { createStore } from "solid-js/store";
 import { A, useSearchParams } from "@solidjs/router";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
@@ -192,10 +192,30 @@ export default function Rules(): JSX.Element {
     blades.push({ kind: "rule", id: name });
   };
   // A link may name a rule (/rules?rule=<name>): an event row on Activity
-  // points at the rule that wrote it, and lands on its blade.
-  const [search] = useSearchParams();
-  const linked = search.rule;
-  if (typeof linked === "string" && linked) blades.push({ kind: "rule", id: linked });
+  // points at the rule that wrote it, and lands on its blade. The page follows
+  // the param as it changes (back and forward open the rule it names), and
+  // lets go of it when the blade stack closes, so a reload does not reopen a
+  // blade the operator closed.
+  const [search, setSearch] = useSearchParams();
+  const linked = () => (typeof search.rule === "string" && search.rule ? search.rule : undefined);
+  createEffect(
+    on(linked, (name) => {
+      if (!name) return;
+      const top = blades.stack().at(-1);
+      if (top?.kind === "rule" && top.id === name) return;
+      blades.close();
+      blades.push({ kind: "rule", id: name });
+    }),
+  );
+  createEffect(
+    on(
+      () => blades.stack().length,
+      (n, prev) => {
+        if (n === 0 && (prev ?? 0) > 0 && linked()) setSearch({ rule: undefined });
+      },
+      { defer: true },
+    ),
+  );
 
   const columns: FlatColumn<EventRule>[] = [
     identityColumn<EventRule>(),
@@ -272,8 +292,14 @@ export default function Rules(): JSX.Element {
 }
 
 function useRuleRow(name: string): () => EventRule | undefined {
+  return useRuleLookup(name).row;
+}
+
+// useRuleLookup reads one rule from the list, and whether the list has loaded,
+// so a blade says "not found" only once it knows (no flash on a cold load).
+function useRuleLookup(name: string): { row: () => EventRule | undefined; loaded: () => boolean } {
   const rules = useQuery(() => ({ queryKey: EVENT_RULES_KEY, queryFn: listEventRules }));
-  return () => (rules.data ?? []).find((r) => r.name === name);
+  return { row: () => (rules.data ?? []).find((r) => r.name === name), loaded: () => rules.isSuccess };
 }
 
 // RuleBladeTitle reads the rule's row once. Written inline as
@@ -373,15 +399,18 @@ function RuleBladeBody(p: { name: string }): JSX.Element {
   const blades = useBlades();
   const edit = useBladeEdit();
   const ui = useContext(RulesUiContext);
-  const row = useRuleRow(p.name);
+  const lookup = useRuleLookup(p.name);
+  const row = lookup.row;
   // An open alarm opens its timeline in place, as on the component (#950).
   const timelines = createTimelineToggles();
   const unit = useMetricUnit();
   const [err, setErr] = createSignal<string | null>(null);
+  // No row, no state to read: a link naming a rule that is gone reads nothing.
   const state = useQuery(() => ({
     queryKey: ruleStateKey(p.name),
     queryFn: () => getRuleState(p.name),
     refetchInterval: DETAIL_POLL_MS,
+    enabled: !!row(),
   }));
   const canUpdate = () => canFleet(me.data, "rule", "update");
   const canDelete = () => canFleet(me.data, "rule", "delete");
@@ -439,7 +468,14 @@ function RuleBladeBody(p: { name: string }): JSX.Element {
   });
 
   return (
-    <Show when={row()} fallback={<p class="text-sm text-base-content/50">Rule not found.</p>}>
+    <Show
+      when={row()}
+      fallback={
+        <Show when={lookup.loaded()} fallback={<p class="text-sm text-base-content/40">Loading…</p>}>
+          <p class="text-sm text-base-content/50">Rule not found.</p>
+        </Show>
+      }
+    >
       {(r) => (
         <div class="flex flex-col gap-5">
           <Show when={err()}>

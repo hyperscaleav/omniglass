@@ -449,7 +449,7 @@ export default function SystemZoom() {
                           <span class="font-mono text-xs">{e.key}</span>
                           <span class="min-w-0 flex-1 truncate text-base-content/80">{e.message}</span>
                           {/* A rule's event names the rule and carries the alarm it moved (#951). */}
-                          <Show when={e.derived_by_rule}>{(rule) => <RuleLink name={rule()} />}</Show>
+                          <Show when={e.derived_by_rule}>{(rule) => <RuleLink name={rule()} id={e.derived_by_rule_id} />}</Show>
                           <Show when={e.alarm_id && e.owner_kind === "component" && e.owner_id}>{eventTimelines.button(e.alarm_id!, e.message)}</Show>
                         </div>
                         <Show when={e.alarm_id && e.owner_kind === "component" && e.owner_id && eventTimelines.isOpen(e.alarm_id)}>

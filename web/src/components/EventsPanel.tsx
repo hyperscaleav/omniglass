@@ -33,7 +33,7 @@ function EventRow(p: { ev: ComponentEvent; component: string }) {
         <span class="w-14 shrink-0 text-[11px] tabular-nums text-base-content/45" title={p.ev.ts}>{rel(p.ev.ts)}</span>
         <span class="badge badge-ghost badge-sm shrink-0 font-data text-[10px]">{p.ev.key}</span>
         <span class="min-w-0 flex-1 text-sm text-base-content/80">{p.ev.message}</span>
-        <Show when={p.ev.derived_by_rule}>{(rule) => <RuleLink name={rule()} />}</Show>
+        <Show when={p.ev.derived_by_rule}>{(rule) => <RuleLink name={rule()} id={p.ev.derived_by_rule_id} />}</Show>
         <Show when={p.ev.alarm_id}>{(id) => timelines.button(id(), p.ev.message)}</Show>
       </div>
       <div class="flex flex-wrap items-center gap-2 pl-[4.5rem] text-[11px] text-base-content/45">

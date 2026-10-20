@@ -357,6 +357,21 @@ func TestRuleEdgeOrphanAlarmIsInForce(t *testing.T) {
 		t.Fatalf("a down over an orphan alarm: alarm %q (was %q), events %+v, %d conditions; want it untouched, nothing written",
 			r.openAlarm("tcp"), alarm, r.events(), r.conditions())
 	}
+	// The live state agrees with the evaluator: the orphan counts as a
+	// condition in force, so open alarms never outnumber conditions.
+	got, err := r.f.gw.GetEventRule(r.ctx, "orphan", r.f.all)
+	if err != nil || got.ConditionsInForce != 1 || got.OpenAlarms != 1 {
+		t.Fatalf("an orphan alarm reads %+v (%v), want 1 condition in force and 1 open", got, err)
+	}
+	for _, x := range mustList(t, r) {
+		if x.Name == "orphan" && x.ConditionsInForce != 1 {
+			t.Fatalf("the list counts %d conditions for the orphan, want 1", x.ConditionsInForce)
+		}
+	}
+	st, err := r.f.gw.EventRuleState(r.ctx, "orphan", r.f.all)
+	if err != nil || len(st.Conditions) != 1 || st.Conditions[0].Instance != "tcp" {
+		t.Fatalf("the state lists %+v (%v), want the orphan's condition on tcp", st, err)
+	}
 	r.observe("tcp", "up")
 	if r.openAlarm("tcp") != "" || len(r.events()) != 0 {
 		t.Fatalf("a recovery over an orphan alarm: alarm %q, events %+v; want it resolved with no event", r.openAlarm("tcp"), r.events())
@@ -482,4 +497,13 @@ func TestRuleConditionsInForceRead(t *testing.T) {
 	if st, _ := r.f.gw.EventRuleState(r.ctx, "watching", none); len(st.Conditions) != 0 {
 		t.Fatalf("a reader who sees no component lists %+v, want none", st.Conditions)
 	}
+}
+
+func mustList(t *testing.T, r *edgeRig) []storage.EventRule {
+	t.Helper()
+	list, err := r.f.gw.ListEventRules(r.ctx, r.f.all)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return list
 }
