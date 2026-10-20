@@ -110,4 +110,25 @@ func TestSeverityLevelAPI(t *testing.T) {
 		t.Fatalf("alarms = %+v, want the renamed level", alarms.Alarms)
 	}
 	c.do(ownerTok, http.MethodDelete, "/severity-levels/serious", nil, http.StatusConflict)
+
+	// A holder of every severity_level permission on one place alone still
+	// writes no level: a level's rank moves health fleet-wide. It still reads
+	// the registry; an all-scope holder writes.
+	created := c.do(ownerTok, http.MethodPost, "/locations", map[string]any{"name": "north", "location_type": "campus"}, http.StatusCreated)
+	var loc struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(created, &loc); err != nil || loc.ID == "" {
+		t.Fatalf("created location %s (%v)", created, err)
+	}
+	placeOnly := setupScopedPrincipal(t, ctx, dsn, "north-sev-owner", grantSpec{role: "owner", scopeKind: "location", scopeID: loc.ID})
+	c.do(placeOnly, http.MethodGet, "/severity-levels", nil, http.StatusOK)
+	c.do(placeOnly, http.MethodGet, "/severity-levels/serious", nil, http.StatusOK)
+	c.do(placeOnly, http.MethodPost, "/severity-levels", map[string]any{"name": "north-level", "color": "red", "rank": 37}, http.StatusForbidden)
+	c.do(placeOnly, http.MethodPatch, "/severity-levels/serious", map[string]any{"label": "mine"}, http.StatusForbidden)
+	c.do(placeOnly, http.MethodDelete, "/severity-levels/serious", nil, http.StatusForbidden)
+	fleetAdmin := setupScopedPrincipal(t, ctx, dsn, "fleet-sev-admin", grantSpec{role: "admin", scopeKind: "all"})
+	c.do(fleetAdmin, http.MethodPost, "/severity-levels", map[string]any{"name": "fleet-level", "color": "red", "rank": 37}, http.StatusCreated)
+	c.do(fleetAdmin, http.MethodPatch, "/severity-levels/fleet-level", map[string]any{"label": "Fleet"}, http.StatusOK)
+	c.do(fleetAdmin, http.MethodDelete, "/severity-levels/fleet-level", nil, http.StatusNoContent)
 }

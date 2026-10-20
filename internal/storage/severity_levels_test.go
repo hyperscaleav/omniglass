@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/hyperscaleav/omniglass/internal/scope"
 	"github.com/hyperscaleav/omniglass/internal/seed"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 )
@@ -45,7 +46,7 @@ func TestSeverityLevels(t *testing.T) {
 	}
 
 	// An operator level between average and high, without renumbering.
-	major, err := gw.CreateSeverityLevel(ctx, "", storage.SeverityLevel{Name: "major", Label: "Major", Color: "orange", Rank: 35})
+	major, err := gw.CreateSeverityLevel(ctx, "", storage.SeverityLevel{Name: "major", Label: "Major", Color: "orange", Rank: 35}, all)
 	if err != nil || major.Official {
 		t.Fatalf("create major: %+v (%v), want an operator level", major, err)
 	}
@@ -56,16 +57,32 @@ func TestSeverityLevels(t *testing.T) {
 		{Name: "bad-color", Rank: 36, Color: "chartreuse"},
 		{Name: "Bad Name", Rank: 37, Color: "red"},
 	} {
-		if _, err := gw.CreateSeverityLevel(ctx, "", bad); err == nil {
+		if _, err := gw.CreateSeverityLevel(ctx, "", bad, all); err == nil {
 			t.Errorf("level %+v was accepted", bad)
 		}
 	}
 	label := "Hijacked"
-	if _, err := gw.UpdateSeverityLevel(ctx, "", "high", storage.SeverityLevelPatch{Label: &label}); !errors.Is(err, storage.ErrSeverityLevelOfficial) {
+	if _, err := gw.UpdateSeverityLevel(ctx, "", "high", storage.SeverityLevelPatch{Label: &label}, all); !errors.Is(err, storage.ErrSeverityLevelOfficial) {
 		t.Fatalf("editing an official level: err %v, want ErrSeverityLevelOfficial", err)
 	}
-	if err := gw.DeleteSeverityLevel(ctx, "", "info"); !errors.Is(err, storage.ErrSeverityLevelOfficial) {
+	if err := gw.DeleteSeverityLevel(ctx, "", "info", all); !errors.Is(err, storage.ErrSeverityLevelOfficial) {
 		t.Fatalf("deleting an official level: err %v, want ErrSeverityLevelOfficial", err)
+	}
+
+	// Writing a level takes an all-scope grant, since its rank moves health
+	// fleet-wide; reading stays registry-shaped and takes no scope.
+	none := scope.Set{}
+	if _, err := gw.CreateSeverityLevel(ctx, "", storage.SeverityLevel{Name: "scoped", Color: "red", Rank: 36}, none); !errors.Is(err, storage.ErrSeverityLevelForbidden) {
+		t.Fatalf("a scoped create: err %v, want ErrSeverityLevelForbidden", err)
+	}
+	if _, err := gw.UpdateSeverityLevel(ctx, "", "major", storage.SeverityLevelPatch{Label: &label}, none); !errors.Is(err, storage.ErrSeverityLevelForbidden) {
+		t.Fatalf("a scoped update: err %v, want ErrSeverityLevelForbidden", err)
+	}
+	if err := gw.DeleteSeverityLevel(ctx, "", "major", none); !errors.Is(err, storage.ErrSeverityLevelForbidden) {
+		t.Fatalf("a scoped delete: err %v, want ErrSeverityLevelForbidden", err)
+	}
+	if l, err := gw.GetSeverityLevel(ctx, "major"); err != nil || l.Label != "Major" {
+		t.Fatalf("after the refused writes major reads %+v (%v), want it unchanged", l, err)
 	}
 
 	// An alarm names a level that exists.
@@ -83,14 +100,14 @@ func TestSeverityLevels(t *testing.T) {
 	}
 	// Renaming the operator level carries its open alarm with it.
 	renamed := "serious"
-	if _, err := gw.UpdateSeverityLevel(ctx, "", "major", storage.SeverityLevelPatch{Name: &renamed}); err != nil {
+	if _, err := gw.UpdateSeverityLevel(ctx, "", "major", storage.SeverityLevelPatch{Name: &renamed}, all); err != nil {
 		t.Fatal(err)
 	}
 	listed, err := gw.ListAlarms(ctx, "bar-1", storage.AlarmFilter{})
 	if err != nil || len(listed) != 1 || listed[0].Severity != "serious" {
 		t.Fatalf("after the rename the alarm reads %+v (%v), want serious", listed, err)
 	}
-	if err := gw.DeleteSeverityLevel(ctx, "", "serious"); !errors.Is(err, storage.ErrSeverityLevelInUse) {
+	if err := gw.DeleteSeverityLevel(ctx, "", "serious", all); !errors.Is(err, storage.ErrSeverityLevelInUse) {
 		t.Fatalf("deleting a level an alarm uses: err %v, want ErrSeverityLevelInUse", err)
 	}
 	if err := gw.ClearAlarm(ctx, "", "bar-1", a.ID); err != nil {
@@ -111,7 +128,7 @@ func TestSeverityLevels(t *testing.T) {
 func TestSeverityReRankMovesHealth(t *testing.T) {
 	f := newHealthFixture(t)
 	ctx := context.Background()
-	if _, err := f.gw.CreateSeverityLevel(ctx, "", storage.SeverityLevel{Name: "major", Color: "orange", Rank: 35}); err != nil {
+	if _, err := f.gw.CreateSeverityLevel(ctx, "", storage.SeverityLevel{Name: "major", Color: "orange", Rank: 35}, all); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := f.gw.RaiseAlarm(ctx, "", "bar-1", storage.AlarmSpec{Severity: "major", Message: "fan noise"}); err != nil {
@@ -122,7 +139,7 @@ func TestSeverityReRankMovesHealth(t *testing.T) {
 		want string
 	}{{45, "outage"}, {35, "degraded"}} {
 		r := step.rank
-		if _, err := f.gw.UpdateSeverityLevel(ctx, "", "major", storage.SeverityLevelPatch{Rank: &r}); err != nil {
+		if _, err := f.gw.UpdateSeverityLevel(ctx, "", "major", storage.SeverityLevelPatch{Rank: &r}, all); err != nil {
 			t.Fatal(err)
 		}
 		if _, v := f.recorded(t, ctx, "component", "bar-1"); v != step.want {
@@ -137,7 +154,7 @@ func TestSeverityReRankMovesHealth(t *testing.T) {
 func TestSeverityOfficialUpsertRefusesAnOperatorLevel(t *testing.T) {
 	f := newHealthFixture(t)
 	ctx := context.Background()
-	if _, err := f.gw.CreateSeverityLevel(ctx, "", storage.SeverityLevel{Name: "p1", Color: "red", Rank: 45}); err != nil {
+	if _, err := f.gw.CreateSeverityLevel(ctx, "", storage.SeverityLevel{Name: "p1", Color: "red", Rank: 45}, all); err != nil {
 		t.Fatal(err)
 	}
 	for _, l := range []storage.SeverityLevel{
