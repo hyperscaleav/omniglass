@@ -24,7 +24,7 @@ const reach: EventRule = {
   selector: { component_types: [], components: [] }, sample_key: "endpoint-reachable", sample_lane: "property",
   fire_criteria: { op: "eq", value: "down" }, clear_criteria: { op: "eq", value: "up" },
   fire_sustain: "15s", clear_sustain: "0s", severity: "high", enabled: true, official: true, version: 1,
-  open_alarms: 1, pending_streaks: 1,
+  open_alarms: 1, pending_streaks: 1, last_judged_at: new Date(Date.now() - 30_000).toISOString(),
 };
 const hot: EventRule = {
   id: uuidFor("rule-too-hot"), name: "too-hot", label: "Too hot",
@@ -61,6 +61,7 @@ const display = uuidFor("comp-display-1");
 const reachState = {
   open: [{ alarm_id: uuidFor("alarm-1"), component: "display-1", component_id: display, instance: "icmp", severity: "high", raised_at: new Date(Date.now() - 60_000).toISOString() }],
   pending: [{ component: "codec-1", component_id: uuidFor("comp-codec-1"), instance: "http", pending: "fire" as const, since: new Date(Date.now() - 5_000).toISOString() }],
+  last_judged_at: new Date(Date.now() - 10_000).toISOString(),
 };
 
 const asides = () => document.querySelectorAll("aside[data-blade]");
@@ -140,6 +141,22 @@ describe("Rules page", () => {
     expect(gets.filter((u) => u.endsWith("/state"))).toEqual([]);
   });
 
+  // When it last judged a sample rides the Live cell's (i), a keyboard-reachable
+  // tooltip like every hint (design system: a hover-only mark is not reachable),
+  // and opening it does not open the row.
+  it("says on the Live cell when a rule last judged a sample, or that it has not", async () => {
+    mount();
+    const tip = screen.getByRole("button", { name: "More about when reachability-lost last judged a sample" });
+    fireEvent.keyDown(document.body, { key: "Tab" });
+    tip.focus();
+    expect(await screen.findByText(/^Last judged a sample 3\ds ago \(to within 5s\)$/)).toBeTruthy();
+    fireEvent.click(tip);
+    expect(asides()).toHaveLength(0);
+    const never = screen.getByRole("button", { name: "More about when too-hot last judged a sample" });
+    never.focus();
+    expect(await screen.findByText("Has not judged a sample yet")).toBeTruthy();
+  });
+
   it("shows a rule's open alarms, linked to their components by id, and its pending streaks", async () => {
     mount();
     fireEvent.click(screen.getByText("Reachability lost"));
@@ -153,9 +170,19 @@ describe("Rules page", () => {
     expect(within(pending).getByText("to fire")).toBeTruthy();
     expect(within(pending).getByText(/^held \d+s$/)).toBeTruthy();
     expect(within(b).getByTestId("rule-fire").textContent).toBe("reads down for 15s");
+    // The state's own stamp (polled faster than the list) says when it last judged.
+    // (fixtures are stamped at load, so the age is matched, not pinned)
+    expect(within(b).getByTestId("rule-judged").textContent).toMatch(/^1\ds ago$/);
     expect(within(b).getByText("Every component")).toBeTruthy();
     // The level it raises at links to the severity registry beside the rules.
     expect(within(b).getByRole("link", { name: "All levels" }).getAttribute("href")).toBe("/severity-levels");
+  });
+
+  it("says a rule that has judged nothing so on its blade", async () => {
+    mount();
+    fireEvent.click(screen.getByText("Too hot"));
+    const b = await blade();
+    expect(within(b).getByTestId("rule-judged").textContent).toBe("never");
   });
 
   it("caps a long live list at eight rows and counts the rest", async () => {

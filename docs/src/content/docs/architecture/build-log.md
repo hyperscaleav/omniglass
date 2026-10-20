@@ -6497,3 +6497,59 @@ three `.md` pages that embed a walkthrough, which the post-build embed check fai
 file listing (the video renders only when present) and the embed's plugin sources, compares the
 digest with a stamp written beside Astro's cache after the last good build, and forces the build
 only when they differ, so a copied walkthrough no longer needs a manual `astro build --force`.
+### A reconcile pass heals a rule decision lost to a race (#928)
+
+The #920 review left two windows that could lose one decision on a transition-only input: a rule
+enabled while a batch carrying its key was uncommitted (the prime cannot see the batch's sample, and the
+batch loaded its rules before the enable), and a judgment aborted by a deadlock (the sample lands under
+its savepoint, the action does not). Both now heal within a minute: the settlement tick runs a reconcile
+pass that reads every series with a sample past the older of the last two passes' marks (a batch in
+flight at one pass may commit ids below its mark), judges each enabled rule's state against the newest
+sample in memory, and corrects only a series that drifted, in its own transaction under the documented
+lock order. A pass over agreement writes nothing and keeps every streak's clock; a failed correction
+rereads its range next time. Both windows are reproduced in testcontainer tests (the enable stalled
+behind an in-flight batch, and a real deadlock the batch detects and aborts), each leaving drift on the
+previous code and healed by one pass.
+
+### A rule says when it last judged a sample (#929)
+
+The rules page could not tell a quiet rule from one whose key had stopped arriving. Each rule now
+carries `last_judged_at` on the list, a get and the state route, shown as the Live column's tooltip and
+the blade's **Last judged** fact. The #920 review had kept a per-sample write off the ingest path, so the
+stamp is coalesced (ADR-0144 point 7, amended): an ingest batch stamps the rules it judged once, as its
+last statement, only when a rule's stamp is at least 5 seconds old, skipping a stamp row another batch
+holds, in a new `event_rule_live` table rather than on the rule row every batch holds. Testcontainer
+tests prove the stamp moves only on a judgment (not a disabled rule, an unwatched component or a
+history sample), coalesces inside the bound, agrees across the list, get and state, and never makes a
+batch wait.
+
+
+### Severity levels are authored on the console (#930)
+
+**Catalog > Actions > Severity** went from a read view to a registry an operator writes: **New severity
+level** and a level's **Edit** open one form in a drawer (name, label, color, rank), and **Delete** sits
+behind a confirm; official levels stay read-only. Writes use the existing API and gate on
+`severity_level:*` like every registry (the server asks no all-scope grant, unlike a rule). The form
+teaches the rank as it is typed, against the live registry: where the rank sits ("Between Average (30)
+and High (40)."), whether an alarm at it takes its component out or degrades it, and the chip its
+alarms will wear; a name or rank another level holds is refused before anything is sent, and a delete
+the server refuses (a level an alarm or rule still names) says why on the blade.
+
+### The rule follow-ups' review hardening (#928, #930)
+
+The review of the three follow-ups caught the reconcile pass costing more than it healed at the edges.
+A restart read the whole sample history (twice, through the two-pass lag), and the property lane had no
+per-series index, so each newest-sample lookup read a series' whole history: a fresh pass now starts a
+bounded lookback from the newest sample, and `property_series_idx` (component, type, instance, ts desc)
+replaces `property_component_idx`, the twin of the metric lane's `metric_owner_idx`, asserted by an
+EXPLAIN test on both lanes. The pass ran inside the sweep's goroutine without a deadline, so a slow pass
+held up sustains and settlements; it now has a loop of its own, under a deadline, cancelled on shutdown.
+And one series whose correction kept failing pinned the mark, widening every later pass: the marks now
+always advance, and a failed series is retried on its own a few times, then dropped with an error.
+
+On the severity page, the name is judged on the shared entity name rule (the length cap and the uuid-shape refusal included, and only when an edit changes it), a save
+refreshes the cached alarm, health and fleet views a rename or re-rank moves, and a level write now
+locks the rules naming the level before the level itself, the same order an ingest takes, so a rename
+concurrent with a batch raising at the level waits for it instead of deadlocking (a regression test
+reproduces the deadlock on the old order).
+

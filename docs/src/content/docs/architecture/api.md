@@ -337,7 +337,9 @@ a selector entry, key or criteria it restates unchanged is not re-resolved, so a
 type was deleted stays editable (it matches nothing by the stale entry), while an entry new to the rule must
 exist. The list and a get carry each rule's live state as counts (`open_alarms`, `pending_streaks`), read
 for the whole list in one query; `GET /event-rules/{name}/state` lists the alarms and streaks themselves.
-Both are fenced to the caller's component read scope. Because writing a rule needs an all-scope grant,
+Both are fenced to the caller's component read scope. The list, a get and the state also carry
+`last_judged_at`, when the rule last judged an arriving sample, to within 5s (absent when it never has);
+it names no component, so it is not fenced. Because writing a rule needs an all-scope grant,
 `GET /auth/me` returns `fleet_permissions` beside `permissions`:
 the permissions held on an all-scope grant, which the console checks before offering a rule write. An alarm body names its component by name and uuid, and a
 rule-raised one its rule (`raised_by_rule`, `raised_by_rule_id`).

@@ -35,8 +35,11 @@ export type FleetHealth = components["schemas"]["FleetHealthOutputBody"];
 
 // One cache namespace per arc, so a system and a location that share a name never
 // collide.
-export const systemHealthKey = (name: string) => ["system-health", name] as const;
-export const locationHealthKey = (name: string) => ["location-health", name] as const;
+// The prefixes every system's and place's health share, for a write that moves them all.
+export const SYSTEM_HEALTH_PREFIX = ["system-health"] as const;
+export const LOCATION_HEALTH_PREFIX = ["location-health"] as const;
+export const systemHealthKey = (name: string) => [...SYSTEM_HEALTH_PREFIX, name] as const;
+export const locationHealthKey = (name: string) => [...LOCATION_HEALTH_PREFIX, name] as const;
 
 export async function systemHealth(name: string): Promise<FleetHealth> {
   const { data, error } = await api.GET("/systems/{name}/health", { params: { path: { name } } });

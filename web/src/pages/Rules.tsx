@@ -42,6 +42,7 @@ import {
   emptyDraft,
   fireWords,
   getRuleState,
+  judgedWords,
   listEventRules,
   opLabel,
   ruleStateKey,
@@ -81,6 +82,8 @@ export const RULE_HINTS = {
     "One alarm per endpoint: a component whose two endpoints both fail carries two alarms, and one recovering clears only its own.",
   pending:
     "A streak is a component waiting out a sustain: its samples point at fire or clear, and once the streak has held for the sustain the alarm opens or clears.",
+  judged:
+    "When the rule last judged a sample of its key arriving from a component it watches, to within 5s. A rule whose key has stopped arriving goes quiet here while its alarms stay as they were; a disabled rule judges nothing.",
   official: "Official rules ship with Omniglass and update with it, so they are read-only. Author your own beside them.",
   enabled: "A disabled rule evaluates nothing, and disabling it clears the alarms it holds open (each stays in its component's history). Enabling it again judges the newest samples at once.",
   message: "The alarm's message. Blank uses the rule's label, or its name.",
@@ -116,7 +119,9 @@ function readsCell(r: EventRule): JSX.Element {
 // The live state at a glance, from the counts on the list row: open alarms in
 // the error hue, streaks in the warning hue, and a quiet "clear" when the rule
 // holds nothing right now. A disabled rule says so first (disabling cleared
-// what it held open).
+// what it held open). Its (i) says when it last judged a sample, which tells
+// a quiet rule from one whose key has stopped arriving; the (i) stops its
+// click so opening the hint does not open the row.
 function RuleLive(p: { rule: EventRule }): JSX.Element {
   const open = () => p.rule.open_alarms;
   const pending = () => p.rule.pending_streaks;
@@ -134,6 +139,9 @@ function RuleLive(p: { rule: EventRule }): JSX.Element {
       <Show when={p.rule.enabled && open() === 0 && pending() === 0}>
         <span class="text-[12px] text-base-content/40">clear</span>
       </Show>
+      <span class="inline-flex" onClick={(e) => e.stopPropagation()}>
+        <InfoTip label={`when ${p.rule.name} last judged a sample`} text={judgedWords(p.rule.last_judged_at)} />
+      </span>
     </span>
   );
 }
@@ -417,6 +425,20 @@ function RuleBladeBody(p: { name: string }): JSX.Element {
                     ? <span class="badge badge-soft badge-success badge-sm">enabled</span>
                     : <span class="badge badge-ghost badge-sm">disabled</span>}
                   <InfoTip label="enabled" text={RULE_HINTS.enabled} />
+                </span>
+              }
+            />
+            <KVStacked
+              label="Last judged"
+              value={
+                <span class="inline-flex items-center gap-1.5">
+                  <Show
+                    when={state.data?.last_judged_at ?? r().last_judged_at}
+                    fallback={<span class="text-base-content/50" data-testid="rule-judged">never</span>}
+                  >
+                    {(at) => <span class="tabular-nums" data-testid="rule-judged" title={fmtTime(at())}>{rel(at())}</span>}
+                  </Show>
+                  <InfoTip label="last judged" text={RULE_HINTS.judged} />
                 </span>
               }
             />

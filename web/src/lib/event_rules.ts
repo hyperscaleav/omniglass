@@ -1,6 +1,7 @@
 import { api } from "../api/client";
 import type { components } from "../api/schema.gen";
 import type { SeverityLevel } from "./severity";
+import { rel } from "./format";
 
 // The event rules data layer (#918, #921; ADR-0144): thin typed wrappers over
 // /event-rules plus the pure core the Rules page reads a rule through. A rule
@@ -35,10 +36,17 @@ export async function listEventRules(): Promise<EventRule[]> {
   return (data?.event_rules ?? []) as EventRule[];
 }
 
-export async function getRuleState(name: string): Promise<{ open: RuleOpenAlarm[]; pending: RuleStreak[] }> {
+export async function getRuleState(name: string): Promise<{ open: RuleOpenAlarm[]; pending: RuleStreak[]; last_judged_at?: string }> {
   const { data, error } = await api.GET("/event-rules/{name}/state", { params: { path: { name } } });
   if (error) throw error;
-  return { open: data?.open ?? [], pending: data?.pending ?? [] };
+  return { open: data?.open ?? [], pending: data?.pending ?? [], last_judged_at: data?.last_judged_at };
+}
+
+// judgedWords says when a rule last judged an arriving sample (#929): the
+// server stamps it at most once per rule every 5s, so the words carry that
+// bound. A rule that has judged nothing says so.
+export function judgedWords(at: string | undefined): string {
+  return at ? `Last judged a sample ${rel(at)} (to within 5s)` : "Has not judged a sample yet";
 }
 
 export async function createEventRule(body: CreateEventRule): Promise<EventRule> {

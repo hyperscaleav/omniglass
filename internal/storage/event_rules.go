@@ -52,6 +52,10 @@ type EventRule struct {
 	// waiting out a sustain. EventRuleState lists them.
 	OpenAlarms     int `json:"-"`
 	PendingStreaks int `json:"-"`
+	// LastJudgedAt is when an ingest batch last judged a sample by the rule,
+	// to within ruleJudgedEvery; nil when it never has. A fact about the
+	// rule, naming no component.
+	LastJudgedAt *time.Time `json:"-"`
 }
 
 // EventRuleSpec is a rule to create; its selector's components may be
@@ -318,8 +322,8 @@ func ruleCountsJoin(f readFilter) string {
 // admits.
 func (p *PG) ListEventRules(ctx context.Context, visible scope.Set) ([]EventRule, error) {
 	f := newReadFilter(componentTable, visible, 1)
-	rows, err := p.pool.Query(ctx, f.With+`select `+ruleCols("r.")+`, coalesce(oa.n, 0), coalesce(ps.n, 0)
-		from event_rule r`+ruleCountsJoin(f)+` order by r.name`, f.Args...)
+	rows, err := p.pool.Query(ctx, f.With+`select `+ruleCols("r.")+`, coalesce(oa.n, 0), coalesce(ps.n, 0), lj.last_judged_at
+		from event_rule r`+ruleCountsJoin(f)+` left join event_rule_live lj on lj.rule_id = r.id order by r.name`, f.Args...)
 	if err != nil {
 		return nil, fmt.Errorf("storage: list event rules: %w", err)
 	}
@@ -327,11 +331,12 @@ func (p *PG) ListEventRules(ctx context.Context, visible scope.Set) ([]EventRule
 	var out []EventRule
 	for rows.Next() {
 		var open, pending int
-		r, err := scanEventRuleTrailing(rows, &open, &pending)
+		var judged *time.Time
+		r, err := scanEventRuleTrailing(rows, &open, &pending, &judged)
 		if err != nil {
 			return nil, err
 		}
-		r.OpenAlarms, r.PendingStreaks = open, pending
+		r.OpenAlarms, r.PendingStreaks, r.LastJudgedAt = open, pending, judged
 		out = append(out, r)
 	}
 	return out, rows.Err()
@@ -354,13 +359,16 @@ func countRuleState(ctx context.Context, q querier, r *EventRule, visible scope.
 // GetEventRule reads one rule by name, whatever the caller's scope, with its
 // live state as counts over the components the visible scope admits.
 func (p *PG) GetEventRule(ctx context.Context, name string, visible scope.Set) (*EventRule, error) {
-	r, err := scanEventRule(p.pool.QueryRow(ctx, `select `+eventRuleCols+` from event_rule where name = $1`, name))
+	var judged *time.Time
+	r, err := scanEventRuleTrailing(p.pool.QueryRow(ctx, `select `+ruleCols("r.")+`, lj.last_judged_at from event_rule r
+		left join event_rule_live lj on lj.rule_id = r.id where r.name = $1`, name), &judged)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrEventRuleNotFound
 	}
 	if err != nil {
 		return nil, fmt.Errorf("storage: get event rule %q: %w", name, err)
 	}
+	r.LastJudgedAt = judged
 	if err := countRuleState(ctx, p.pool, &r, visible); err != nil {
 		return nil, err
 	}

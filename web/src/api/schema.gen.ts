@@ -1237,7 +1237,7 @@ export interface paths {
         };
         /**
          * Get an event rule's live state
-         * @description What a rule holds right now: the alarms it raised that are still open, each on a component and instance, and its streaks waiting out a sustain. Only those on components the caller may read are listed. Gated by rule:read.
+         * @description What a rule holds right now: the alarms it raised that are still open, each on a component and instance, its streaks waiting out a sustain, and when it last judged an ingested sample. Only alarms and streaks on components the caller may read are listed. Gated by rule:read.
          */
         get: operations["get-event-rule-state"];
         put?: never;
@@ -5672,6 +5672,11 @@ export interface components {
             /** @description The rule's uuid, the stable form of name */
             id: string;
             label?: string;
+            /**
+             * Format: date-time
+             * @description When an ingested sample was last judged by the rule, to within 5s; absent when it never has been. A fleet-wide fact about the rule, naming no component
+             */
+            last_judged_at?: string;
             /** @description The alarm's message; empty uses the rule's label or name */
             message?: string;
             name: string;
@@ -5711,6 +5716,11 @@ export interface components {
              * @example /api/v1/schemas/EventRuleStateOutputBody.json
              */
             readonly $schema?: string;
+            /**
+             * Format: date-time
+             * @description When an ingested sample was last judged by the rule, to within 5s; absent when it never has been
+             */
+            last_judged_at?: string;
             /** @description The alarms the rule raised that are still open */
             open: components["schemas"]["RuleOpenAlarmBody"][] | null;
             /** @description The rule's streaks waiting out a sustain */

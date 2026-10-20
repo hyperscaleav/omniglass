@@ -16,7 +16,7 @@ it can be acknowledged like any other ([alarms on a component](/guides/operator/
 How the evaluator works is on [alarms and actions](/architecture/alarms-actions/#the-event_rule).
 
 Beside it, **Catalog, under Actions: Severity** (with `severity_level:read`) lists the levels a rule
-raises at.
+raises at, and is where you add your own (with `severity_level:create`).
 
 Rules **read like a registry**: any grant carrying `rule:read`, wherever it is scoped, lists every
 rule. The live counts and a rule's open alarms and streaks name components, so they cover only the
@@ -60,9 +60,16 @@ ride on the list itself, which refreshes every 10 seconds:
 - **disabled**: the rule evaluates nothing, and holds nothing open (disabling cleared it).
 - **clear**: enabled, and holding nothing right now.
 
-Pick a row to open its blade: the criteria, what it watches, and the two live lists, each component
-linked to its own page with where it sits. The list does not yet say when the rule last judged a
-sample (#929).
+The **(i)** at the end of each live cell says when the rule **last judged a sample** ("Last judged a
+sample 12s ago (to within 5s)"), or that it has not judged one yet ("Has not judged a sample yet"). That is what tells a quiet rule from a deaf one: a rule reading
+**clear** that judged a sample seconds ago is watching a healthy fleet, while one that has not judged
+anything for an hour reads a key that has stopped arriving (a probe removed, a collector down) and
+would not notice a fault. The time is to within 5 seconds, since the server writes it at most once
+per rule every 5 seconds rather than on every sample.
+
+Pick a row to open its blade: the criteria, what it watches, when it last judged a sample (the
+**Last judged** fact), and the two live lists, each component linked to its own page with where it
+sits.
 
 ## Write a rule
 
@@ -135,10 +142,32 @@ shipped levels, rendered from the seed:
 <SeededSet kind="severity_levels" />
 
 They are spaced apart, so a level of your own slots between two without renumbering; whether a level
-is an outage follows from its rank, against a fixed floor the table above marks. The page is a read view: author your own levels from the
-CLI or the API (#930), with `severity_level:create`. An official level is read-only; a level an alarm
-or a rule still names cannot be deleted; renaming a level carries every alarm at it; re-ranking one
-across the outage floor recomputes the health of every component with an open alarm at it.
+is an outage follows from its rank, against a fixed floor the table above marks.
+
+### Add, edit and delete a level
+
+**New severity level** (with `severity_level:create`) opens a drawer:
+
+- **Name**: a lowercase kebab name (`major`). Alarms and rules name the level by it.
+- **Label**: optional; what the chip says (`P2`). Blank shows the name.
+- **Color**: one of the console's palette. The chip beneath the field is the one every alarm at the
+  level will wear.
+- **Rank**: a whole number above zero that no other level holds. As you type it, the form says where it
+  sits (**Between Average (30) and High (40).**) and what an alarm at it does: at or above the
+  outage floor it is an **outage** level (its alarms take their component out), below it a
+  **degrades** level.
+
+A name or rank another level holds is refused as you type, before anything is sent. On an operator
+level's blade, **Edit** (with `severity_level:update`) reopens the drawer with every field, the name
+included: **renaming** a level carries every alarm at it and every rule that names it; **re-ranking**
+one across the outage floor recomputes the health of every component with an open alarm at it, so a
+level moved from 35 to 45 takes those components out at once. **Delete** (with `severity_level:delete`,
+behind a confirm) is refused while an alarm or a rule still names the level, and the blade says so.
+An official level is read-only: its blade greys Edit and Delete with that reason. Writing a level asks
+for the permission on any grant (it is reference data, like every registry), not the all-scope grant a
+rule needs.
+
+The same writes from a terminal:
 
 ```sh
 omniglass severity-level list

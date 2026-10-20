@@ -105,6 +105,9 @@ func (p *PG) InsertPropertySamples(ctx context.Context, evs []PropertySampleWrit
 			return err
 		}
 	}
+	if err := eval.stampJudged(ctx, tx); err != nil {
+		return err
+	}
 	if err := tx.Commit(ctx); err != nil {
 		return fmt.Errorf("storage: commit insert property samples: %w", err)
 	}

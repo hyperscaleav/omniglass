@@ -99,6 +99,9 @@ func (p *PG) InsertMetricSamples(ctx context.Context, evs []MetricSampleWrite) e
 			return err
 		}
 	}
+	if err := eval.stampJudged(ctx, tx); err != nil {
+		return err
+	}
 	if err := tx.Commit(ctx); err != nil {
 		return fmt.Errorf("storage: commit insert samples: %w", err)
 	}

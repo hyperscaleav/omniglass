@@ -175,13 +175,24 @@ func lockMutableSeverityLevel(ctx context.Context, tx pgx.Tx, name string) (Seve
 }
 
 // UpdateSeverityLevel patches an operator level, audited. A rename cascades
-// to every alarm naming it.
+// to every alarm and rule naming it.
+//
+// Lock order: the event rules naming the level FOR UPDATE, then the level's
+// row, then (a re-rank) the health locks. An ingest batch holds the rules it
+// judges by FOR SHARE (newRuleEvaluator) and its raise needs the level's key
+// for the alarm's foreign key, so taking the level first would deadlock
+// against such a batch: the rename's cascade waits on the batch's rule rows
+// while the batch waits on the level. Taking the rules first waits the batch
+// out instead, and no batch judging by them starts until this commits.
 func (p *PG) UpdateSeverityLevel(ctx context.Context, actorID, name string, patch SeverityLevelPatch) (*SeverityLevel, error) {
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("storage: begin update severity level: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
+	if _, err := tx.Exec(ctx, `select id from event_rule where severity = $1 order by id for update`, name); err != nil {
+		return nil, fmt.Errorf("storage: lock rules at severity level %q: %w", name, err)
+	}
 	old, err := lockMutableSeverityLevel(ctx, tx, name)
 	if err != nil {
 		return nil, err

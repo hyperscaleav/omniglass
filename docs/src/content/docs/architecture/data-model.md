@@ -280,6 +280,10 @@ telemetry: {
     id: uuid {constraint: primary_key}
     severity: text {constraint: foreign_key}
   }
+  event_rule_live: {
+    shape: sql_table
+    rule_id: uuid {constraint: primary_key}
+  }
   event_rule_state: {
     shape: sql_table
     component_id: uuid {constraint: primary_key}
@@ -524,6 +528,7 @@ telemetry.event.source_event_id -> telemetry.event.id
 telemetry.event.source_log_line_id -> telemetry.log_line.id
 telemetry.event.system_id -> fleet.system.id
 telemetry.event_rule.severity -> telemetry.severity_level.name
+telemetry.event_rule_live.rule_id -> telemetry.event_rule.id
 telemetry.event_rule_state.component_id -> fleet.component.id
 telemetry.event_rule_state.rule_id -> telemetry.event_rule.id
 telemetry.log_line.component_id -> fleet.component.id

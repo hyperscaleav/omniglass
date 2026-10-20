@@ -170,7 +170,23 @@ sample is newest is still decided by that timestamp). Only a **material** edit r
 streaks (its key, criteria, clear criteria, selector or sustains); a label, description, message or
 severity edit leaves them running. Creating a rule, enabling one, or a material edit **primes** it from
 each selected series' newest sample, so a condition that already holds starts its sustain then (or
-fires at once with no sustain) instead of waiting for a change the input may never send. The platform ships one official rule, rendered here from the seed itself:
+fires at once with no sustain) instead of waiting for a change the input may never send.
+
+Two narrow races can still cost one decision on an input that reports only on change: a rule enabled
+(or re-keyed) while an ingest batch carrying its key is uncommitted primes from committed samples only,
+so the batch's sample is judged by neither side; and a judgment Postgres aborts on a deadlock rolls back
+its savepoint, so the sample lands and the rule does not act. A **reconcile pass** heals both (#928):
+once a minute, on a loop of its own beside the sweep (so a slow pass never delays a sustain or a
+settlement) and under a deadline, the server reads every series that took a sample since the pass
+before last, re-judges each enabled rule's newest sample against the alarm and streak it holds, and
+corrects only what disagrees (fires, clears, or starts the streak), each corrected series in a
+transaction of its own under the same lock order as an ingest (the rule's row, the series lock, the
+health locks). Agreement is the common case and costs no write: the series, their newest samples (an
+index probe per series on either lane), the open alarms and the streaks are read in one statement per
+lane and judged in memory, and a streak that agrees keeps its clock. A restarted server's first pass
+reads back a bounded number of recent samples, not the whole history, since the race it could have lost
+was in flight around its own start; a series whose correction fails is retried on its own for a few
+passes and then dropped with an error logged, while the pass moves on. The platform ships one official rule, rendered here from the seed itself:
 
 <SeededSet kind="event_rules" />
 
@@ -203,8 +219,18 @@ every rule, but only the alarms and streaks it could already see. The console's 
 every rule with its criteria in words, its severity and those live counts, opens a rule's blade with
 both lists linked to their components, and authors, edits, disables and deletes operator rules in a
 drawer (official rules are read-only); the operator's walk-through is the
-[rules guide](/guides/admin/rules/). When a rule last judged a sample is not shown: a per-sample write
-was kept off the ingest path on purpose, and the honest cheap signal is still to come (#929).
+[rules guide](/guides/admin/rules/).
+
+The live state also says when the rule **last judged a sample** (`last_judged_at` on the list, a get
+and the state route; absent when it never has), which tells a quiet rule from one whose key has stopped
+arriving (#929). A per-sample write was kept off the ingest path on purpose, so the stamp is coalesced:
+an ingest batch that judged a sample by a rule stamps it once, as its last statement, and only when
+the rule's stamp is at least 5 seconds old; a stamp another batch holds is skipped rather than waited
+on. The time is honest to within those 5 seconds across every server replica, costs a rule reading a
+busy key one small write every 5 seconds, and lives in its own `event_rule_live` row, never on the rule
+row every batch holds. Only the judging of an arriving sample counts: a disabled rule, a component the
+rule does not watch, a sample older than its series' newest, or one the rule cannot evaluate stamps
+nothing. It names no component, so it is not fenced by the read scope.
 
 A rule does not declare a health verdict itself: the alarm it raises impairs its owner's own
 verdict (any active alarm degrades it, one at or above `high` is an outage). Only an outage owner stops
@@ -250,7 +276,10 @@ The console reads the registry everywhere a severity shows: every alarm chip (th
 alarms, a system's and a place's "why", a rule's open alarms) renders the level's label in its color
 and sorts by its rank, so an operator level renders like a shipped one with no console change, and
 **Catalog > Actions > Severity** (#921) lists the levels worst first with their rank, color and
-effect. That page is a read view; operator levels are authored from the CLI or the API (#930).
+effect, and authors operator levels in a drawer (#930): create, rename, relabel, recolor, re-rank and
+delete, gated `severity_level:*` like every registry write (no all-scope grant, unlike a rule), with
+official levels read-only. Its form teaches the rank as it is typed: where the rank sits among the
+levels, and whether an alarm at it would take its component out or degrade it.
 
 :::caution[Open question]
 Whether a severity level is purely a label, color, and order, or also carries policy such as a

@@ -1,5 +1,18 @@
 import { describe, it, expect } from "vitest";
-import { SEVERITY_BADGE, compareSeverity, severityBadge, severityScale } from "./severity";
+import {
+  SEVERITY_BADGE,
+  SEVERITY_COLORS,
+  compareSeverity,
+  draftFromLevel,
+  emptyLevelDraft,
+  levelCreateBody,
+  levelUpdateBody,
+  outageFloor,
+  rankPlace,
+  severityBadge,
+  severityScale,
+  validateLevelDraft,
+} from "./severity";
 import { sortAlarms } from "./alarms";
 import { MAJOR_LEVEL, SEEDED_LEVELS } from "./testseverity";
 
@@ -96,5 +109,82 @@ describe("sorting by the registry's rank", () => {
     expect(cmp("warning", "high")).toBeGreaterThan(0);
     expect(cmp("high", "high")).toBe(0);
     expect(cmp("nope", "info")).toBeGreaterThan(0);
+  });
+});
+
+// Authoring a level (#930): the draft the console's form judges before it
+// sends, the sentence that teaches where a rank sits, and the bodies a draft
+// sends.
+describe("a level draft", () => {
+  const levels = [...SEEDED_LEVELS, MAJOR_LEVEL];
+
+  it("asks for a name, a color and a rank, field by field", () => {
+    expect(validateLevelDraft(emptyLevelDraft(), levels)).toEqual({
+      name: "A name for the level.",
+      color: "The hue its alarms wear.",
+      rank: "Its place among the levels.",
+    });
+  });
+
+  it("refuses a name or a rank another level holds, and a rank that is not a whole number above zero", () => {
+    const d = { name: "average", label: "", color: "orange" as const, rank: "30" };
+    expect(validateLevelDraft(d, levels)).toEqual({
+      name: "A level is already named average.",
+      rank: "Average already holds rank 30; each level has its own.",
+    });
+    for (const rank of ["0", "-5", "2.5", "1e2", " 3x"]) {
+      expect(validateLevelDraft({ ...d, name: "p2", rank }, levels).rank).toBe("A whole number above zero.");
+    }
+    expect(validateLevelDraft({ ...d, name: "Major Two" }, levels).name).toMatch(/Lowercase/);
+  });
+
+  it("lets a level keep its own name and rank on edit", () => {
+    expect(validateLevelDraft(draftFromLevel(MAJOR_LEVEL), levels, "major")).toEqual({});
+  });
+
+  it("judges a name on the server's entity name rule: a leading hyphen run, its length cap, never a uuid", () => {
+    const d = { name: "", label: "", color: "orange" as const, rank: "33" };
+    // The server's rule allows repeated and trailing hyphens; the form does too.
+    expect(validateLevelDraft({ ...d, name: "p2--high" }, levels).name).toBeUndefined();
+    expect(validateLevelDraft({ ...d, name: "p2-" }, levels).name).toBeUndefined();
+    expect(validateLevelDraft({ ...d, name: "-p2" }, levels).name).toMatch(/Lowercase/);
+    expect(validateLevelDraft({ ...d, name: "x".repeat(101) }, levels).name).toBe("At most 100 characters.");
+    expect(validateLevelDraft({ ...d, name: "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b" }, levels).name).toMatch(/uuid/);
+  });
+
+  it("only judges the name on edit when it changed", () => {
+    // A level stored before the rule tightened keeps saving its other fields.
+    const legacy = { ...MAJOR_LEVEL, name: "Legacy_Name" };
+    expect(validateLevelDraft(draftFromLevel(legacy), [...levels, legacy], "Legacy_Name").name).toBeUndefined();
+    expect(validateLevelDraft({ ...draftFromLevel(legacy), name: "Still_Bad" }, [...levels, legacy], "Legacy_Name").name).toMatch(/Lowercase/);
+  });
+
+  it("says where a rank sits: between two levels, above the worst, below the mildest", () => {
+    expect(rankPlace(35, SEEDED_LEVELS)).toBe("Between Average (30) and High (40).");
+    expect(rankPlace(60, SEEDED_LEVELS)).toBe("Above Disaster (50), the worst level.");
+    expect(rankPlace(5, SEEDED_LEVELS)).toBe("Below Info (10), the mildest level.");
+    // A level being edited is not its own neighbour.
+    expect(rankPlace(36, levels, "major")).toBe("Between Average (30) and High (40).");
+  });
+
+  it("reads the outage floor off the levels the server marks", () => {
+    expect(outageFloor(levels)).toBe(40);
+    expect(outageFloor([])).toBeNull();
+  });
+
+  it("creates with a trimmed name and leaves a blank label off", () => {
+    expect(levelCreateBody({ name: " p2 ", label: " ", color: "orange", rank: "35" })).toEqual({ name: "p2", color: "orange", rank: 35 });
+    expect(levelCreateBody({ name: "p2", label: "P2", color: "orange", rank: "35" }).label).toBe("P2");
+  });
+
+  it("patches only what an edit changed", () => {
+    expect(levelUpdateBody(draftFromLevel(MAJOR_LEVEL), MAJOR_LEVEL)).toEqual({});
+    expect(levelUpdateBody({ ...draftFromLevel(MAJOR_LEVEL), label: "P2" }, MAJOR_LEVEL)).toEqual({ label: "P2" });
+    expect(levelUpdateBody({ name: "p2", label: "Major", color: "red", rank: "45" }, MAJOR_LEVEL)).toEqual({ name: "p2", color: "red", rank: 45 });
+  });
+
+  it("offers every color the badge map knows, mildest first", () => {
+    expect([...SEVERITY_COLORS].sort()).toEqual(Object.keys(SEVERITY_BADGE).sort());
+    expect(SEVERITY_COLORS[0]).toBe("gray");
   });
 });

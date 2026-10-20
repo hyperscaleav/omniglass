@@ -43,6 +43,7 @@ type eventRuleBody struct {
 	Version        int           `json:"version" doc:"Bumps on every update"`
 	OpenAlarms     int           `json:"open_alarms" doc:"How many alarms the rule raised are still open right now (its live state; GET /event-rules/{name}/state lists them)"`
 	PendingStreaks int           `json:"pending_streaks" doc:"How many of the rule's streaks are waiting out a sustain right now"`
+	LastJudgedAt   *time.Time    `json:"last_judged_at,omitempty" required:"false" doc:"When an ingested sample was last judged by the rule, to within 5s; absent when it never has been. A fleet-wide fact about the rule, naming no component"`
 }
 
 func toCriteriaBody(c rules.Criteria) criteriaBody {
@@ -65,7 +66,7 @@ func toEventRuleBody(r *storage.EventRule) eventRuleBody {
 		SampleKey: r.SampleKey, SampleLane: string(r.SampleLane), FireCriteria: toCriteriaBody(r.FireCriteria),
 		FireSustain: r.FireSustain.String(), ClearSustain: r.ClearSustain.String(), Severity: r.Severity,
 		Message: r.Message, Enabled: r.Enabled, Official: r.Official, Version: r.Version,
-		OpenAlarms: r.OpenAlarms, PendingStreaks: r.PendingStreaks}
+		OpenAlarms: r.OpenAlarms, PendingStreaks: r.PendingStreaks, LastJudgedAt: r.LastJudgedAt}
 	if r.ClearCriteria != nil {
 		c := toCriteriaBody(*r.ClearCriteria)
 		b.ClearCriteria = &c
@@ -293,6 +294,8 @@ type eventRuleStateOutput struct {
 	Body struct {
 		Open    []ruleOpenAlarmBody `json:"open" doc:"The alarms the rule raised that are still open"`
 		Pending []ruleStreakBody    `json:"pending" doc:"The rule's streaks waiting out a sustain"`
+		// LastJudgedAt names no component, so it is not fenced by the read scope.
+		LastJudgedAt *time.Time `json:"last_judged_at,omitempty" required:"false" doc:"When an ingested sample was last judged by the rule, to within 5s; absent when it never has been"`
 	}
 }
 
@@ -302,13 +305,14 @@ func registerEventRuleStateRoute(api huma.API, a *authenticator, gw storage.Gate
 		Method:      http.MethodGet,
 		Path:        "/event-rules/{name}/state",
 		Summary:     "Get an event rule's live state",
-		Description: "What a rule holds right now: the alarms it raised that are still open, each on a component and instance, and its streaks waiting out a sustain. Only those on components the caller may read are listed. Gated by rule:read.",
+		Description: "What a rule holds right now: the alarms it raised that are still open, each on a component and instance, its streaks waiting out a sustain, and when it last judged an ingested sample. Only alarms and streaks on components the caller may read are listed. Gated by rule:read.",
 	}, "rule", "read"), func(ctx context.Context, in *eventRuleNameInput) (*eventRuleStateOutput, error) {
 		st, err := gw.EventRuleState(ctx, in.Name, a.scopeFor(ctx, "component", "read"))
 		if err != nil {
 			return nil, mapEventRuleErr(err)
 		}
 		out := &eventRuleStateOutput{}
+		out.Body.LastJudgedAt = st.LastJudgedAt
 		out.Body.Open = make([]ruleOpenAlarmBody, 0, len(st.Open))
 		for _, o := range st.Open {
 			out.Body.Open = append(out.Body.Open, ruleOpenAlarmBody{AlarmID: o.AlarmID, Component: o.ComponentName,

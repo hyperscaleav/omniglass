@@ -467,6 +467,10 @@ type Gateway interface {
 	UpsertEventRule(ctx context.Context, spec EventRuleSpec) error
 	// SweepEventRules acts on every rule streak held for its sustain at now.
 	SweepEventRules(ctx context.Context, now time.Time) error
+	// ReconcileEventRules re-judges the newest sample of every series that
+	// took a sample past from, and corrects any rule state that disagrees
+	// with it; it returns the mark to read past next.
+	ReconcileEventRules(ctx context.Context, st *RuleReconcileState) error
 	// The severity level registry (#917): official levels from the boot seed,
 	// operator levels created, renamed, recolored, re-ranked and deleted.
 	UpsertSeverityLevel(ctx context.Context, l SeverityLevel) error
