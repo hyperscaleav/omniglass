@@ -11,7 +11,7 @@
 // recorder; its types and the id and still rules are the shared core the
 // run:walkthrough comment also reads (web/e2e/walkthroughcore.mjs). The docs
 // never restate a caption: they copy the manifest and render from it.
-import { checkId, checkStep, checkStill, plural } from '../../../web/e2e/walkthroughcore.mjs';
+import { PREVIEW, checkId, checkPreview, checkStep, checkStill, plural } from '../../../web/e2e/walkthroughcore.mjs';
 
 /** @typedef {import('../../../web/e2e/walkthroughcore.mjs').Manifest} Manifest */
 
@@ -25,7 +25,8 @@ export function videoName(id) {
 }
 
 // The files a docs page carries for one walkthrough, in docs/public/walkthroughs/<id>/:
-// the manifest and a still per step. Not the recorder's poster.png, a byte copy
+// the manifest, a still per step, and the animated preview when the manifest
+// records one (preview.webp, #937). Not the recorder's poster.png, a byte copy
 // of the poster step's still (the manifest names that step), and never the
 // video, which is too large to commit; a build renders it only when present.
 // A manifest whose recording never passed the budget gate is refused.
@@ -43,7 +44,8 @@ export function walkthroughAssets(m) {
   if (!stills.includes(m.poster)) {
     throw new Error(`walkthrough ${id}: poster "${m.poster}" is not one of its step stills`);
   }
-  return ['walkthrough.json', ...stills];
+  if (m.preview !== undefined) checkPreview(id, m.preview);
+  return ['walkthrough.json', ...stills, ...(m.preview !== undefined ? [PREVIEW] : [])];
 }
 
 /** @param {unknown} s @returns {string} */
@@ -56,8 +58,10 @@ function esc(s) {
     .replace(/'/g, '&#39;');
 }
 
-// The embed: the poster step's still (or, when the mp4 is present at build
-// time, the video over it and a link to it), the title and description, then
+// The embed: the animated preview when the manifest records one (for a reader
+// who has not asked for reduced motion; the poster step's still for one who
+// has, and wherever a <source> is not honored), else the poster step's still (or, when the mp4 is present at build time, the video
+// over the poster step's still and a link to it), the title and description, then
 // every step's caption over its still, folded. `video` must be true only when
 // the mp4 exists, so the page never links a file that is not there.
 /** @param {Manifest} m @param {{ video: boolean }} opts @returns {string} */
@@ -70,7 +74,10 @@ export function renderWalkthrough(m, { video }) {
     ? `<video controls preload="none" poster="${poster}" src="${dir}/${videoName(m.id)}">` +
       `<img src="${poster}" alt="${title}: poster" />` +
       `</video>`
-    : `<img src="${poster}" alt="${title}: poster" loading="lazy" />`;
+    : m.preview !== undefined
+      ? `<picture><source media="(prefers-reduced-motion: no-preference)" srcset="${dir}/${PREVIEW}" />` +
+        `<img src="${poster}" alt="${title}: preview" loading="lazy" /></picture>`
+      : `<img src="${poster}" alt="${title}: poster" loading="lazy" />`;
   const caption =
     `<strong>${title}</strong>` +
     (m.description ? ` ${esc(m.description)}` : '') +

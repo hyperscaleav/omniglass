@@ -95,8 +95,10 @@
     }
   ],
   "poster": "step-15.png",
+  "preview": "preview.webp",
   "budget": {
-    "seconds": 47.1,
-    "bytes": 925946
+    "seconds": 47.5,
+    "bytes": 954070,
+    "previewBytes": 675532
   }
 }

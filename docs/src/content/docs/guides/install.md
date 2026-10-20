@@ -138,10 +138,12 @@ multi-platform index), so recording on an arm64 host needs amd64 emulation regis
 
 `make walkthroughs` records every script on the walkthrough stack (`make walkthroughs ID=<id>` records
 one) into `web/e2e/walkthroughs/out/<id>/`: an mp4 opening on a title card, with a cursor that glides to
-each target and ripples where it clicks, a highlight on the target and a caption bar; `poster.png`; and a
-still per step. A walkthrough is a test: a step whose result never appears fails the run, naming the
-step, its kind and what it waited for, and keeps the stills taken so far; so does a recording over
-the budget, whose limits on length and size are `MAX_SECONDS` and `MAX_BYTES` in
-[`web/e2e/walkthroughlib.mjs`](https://github.com/hyperscaleav/omniglass/blob/main/web/e2e/walkthroughlib.mjs). `make test-walkthroughs` proves both failures.
+each target and ripples where it clicks, a highlight on the target and a caption bar; `preview.webp`, an
+animated preview encoded from the mp4 by the same pinned ffmpeg (a lower frame rate and width, looping),
+which is what the PR comment and a docs page play inline; `poster.png`; and a still per step. A walkthrough
+is a test: a step whose result never appears fails the run, naming the step, its kind and what it waited
+for, and keeps the stills taken so far; so does a recording over the budget, whose limits on length, mp4
+size and preview size are `MAX_SECONDS`, `MAX_BYTES` and `MAX_PREVIEW_BYTES` in
+[`web/e2e/walkthroughlib.mjs`](https://github.com/hyperscaleav/omniglass/blob/main/web/e2e/walkthroughlib.mjs). `make test-walkthroughs` proves both failures, an over-budget preview among them.
 When a PR needs a walkthrough, how to review its stills, and how a docs page embeds one are in
 [walkthroughs](/contributing/walkthroughs/).

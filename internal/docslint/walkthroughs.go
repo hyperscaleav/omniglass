@@ -23,7 +23,8 @@ import (
 //   - a declared id has its copied assets under docs/public/walkthroughs/<id>/,
 //     written by `make docs-walkthroughs`: the manifest, carrying the budget
 //     mark the recorder adds only when the recording passed, and every still it
-//     names, the poster one of them;
+//     names, the poster one of them, and the animated preview (preview.webp)
+//     when the manifest records one;
 //   - the copied manifest has not drifted from the script: the same title,
 //     description, step count and captions;
 //   - no copied directory outlives its declaration.
@@ -175,9 +176,14 @@ type walkthroughManifest struct {
 		Caption string `json:"caption"`
 		Still   string `json:"still"`
 	} `json:"steps"`
-	Poster string           `json:"poster"`
-	Budget *json.RawMessage `json:"budget"`
+	Poster  string           `json:"poster"`
+	Preview json.RawMessage  `json:"preview"`
+	Budget  *json.RawMessage `json:"budget"`
 }
+
+// walkthroughPreview is the one name the recorder gives the animated preview
+// it encodes beside the poster (web/e2e/walkthroughcore.mjs PREVIEW).
+const walkthroughPreview = "preview.webp"
 
 // walkthroughDrift compares a script (web/e2e/walkthroughs/<id>.yaml) with
 // the manifest copied from its last recording: the title, the description,
@@ -223,7 +229,8 @@ func strconvQuote(s string) string { b, _ := json.Marshal(s); return string(b) }
 // declared ids (id to the page declaring it) and their scripts under
 // scriptDir: the manifest, carrying the budget mark the recorder writes only
 // when the recording passed; every still it names, its poster one of them;
-// and no drift from the script. Then any directory no page declares.
+// the animated preview when the manifest records one; and no drift from the
+// script. Then any directory no page declares.
 func scanWalkthroughAssets(dir, scriptDir string, declared map[string]string) []Finding {
 	var findings []Finding
 	ids := make([]string, 0, len(declared))
@@ -261,6 +268,21 @@ func scanWalkthroughAssets(dir, scriptDir string, declared map[string]string) []
 		}
 		if !posterIsStill {
 			add(at("walkthrough.json") + " names poster " + strconvQuote(m.Poster) + ", which is none of its step stills")
+		}
+		// Absent is no preview; any present value but the recorder's name
+		// (empty and null included) is refused, as walkthroughcore.mjs refuses it.
+		var preview string
+		switch {
+		case len(m.Preview) == 0:
+			if _, err := os.Stat(filepath.Join(dir, id, walkthroughPreview)); err == nil {
+				add("walkthrough \"" + id + "\" has " + at(walkthroughPreview) + ", but its manifest names no preview (a stray from another recording)" + redo)
+			}
+		case json.Unmarshal(m.Preview, &preview) != nil || preview != walkthroughPreview:
+			add(at("walkthrough.json") + " names preview " + string(m.Preview) + ", not the recorder's " + walkthroughPreview)
+		default:
+			if _, err := os.Stat(filepath.Join(dir, id, walkthroughPreview)); err != nil {
+				add("walkthrough \"" + id + "\" has no " + at(walkthroughPreview) + redo)
+			}
 		}
 		if script, err := os.ReadFile(filepath.Join(scriptDir, id+".yaml")); err == nil {
 			for _, d := range walkthroughDrift(script, b) {

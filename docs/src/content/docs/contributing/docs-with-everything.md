@@ -180,8 +180,8 @@ nobody diffs by hand.
 
 A page that teaches an operator flow can embed its **walkthrough** (the recorded, captioned flow a
 PR carries as evidence) exactly as it embeds a screenshot: the id in `walkthroughs` frontmatter and
-`::walkthrough{#id}` where it belongs. The page declares only the id; the title, captions, poster and
-stills come from the recording, copied into `docs/public/walkthroughs/<id>/` by
+`::walkthrough{#id}` where it belongs. The page declares only the id; the title, captions, animated
+preview and stills come from the recording, copied into `docs/public/walkthroughs/<id>/` by
 `make docs-walkthroughs`, so a re-recorded flow updates the docs by a copy, never by an edit. The
 video is not committed, and the embed renders it only when it is present at build time. Writing,
 recording, reviewing and embedding one is [walkthroughs](/contributing/walkthroughs/).

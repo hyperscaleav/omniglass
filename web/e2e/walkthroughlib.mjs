@@ -30,6 +30,7 @@
 // fail, naming the file and the step.
 
 import { load } from 'js-yaml';
+import { PREVIEW } from './walkthroughcore.mjs';
 
 /** @typedef {'goto' | 'click' | 'type' | 'select' | 'press' | 'wait'} Kind */
 /**
@@ -70,6 +71,21 @@ const KIND_NAMES = KINDS;
 // The budget the architect ruled (#884): under 60 seconds and 10 MB of mp4.
 export const MAX_SECONDS = 60;
 export const MAX_BYTES = 10_000_000;
+// The animated preview's ceiling (#937): it is what a PR comment and a docs page
+// load inline, so it is held well under the mp4's.
+export const MAX_PREVIEW_BYTES = 5_000_000;
+
+// Where the preview starts (#937). The video runs from the moment the page
+// opens, before the title card is painted (a blank or half-painted lead-in), so
+// the recorder notes when the card was painted and the preview starts a settle
+// beat after that, well inside the card's own 2.2s hold. The beat covers the
+// video lagging the page: on the recordings a frame 0.25s after the paint was
+// still half-painted, one 0.4s after it whole.
+export const PREVIEW_SETTLE_MS = 500;
+// The brightest luma (0 to 255) the preview's opening frame must reach: the
+// title card's text is near-white, while a blank or text-less frame (the
+// ground and the teal rule) stays well under it.
+export const PREVIEW_MIN_YMAX = 200;
 
 export const DEFAULT_WAIT_MS = 10_000;
 const MAX_WAIT_MS = 60_000;
@@ -298,12 +314,12 @@ export function stepFailure(id, step, phase, reason) {
 const size = (b) => (b >= 10_000 ? `${(b / 1e6).toFixed(2)} MB` : `${b} bytes`);
 
 // The limits the budget gate applies: the ruled ones, which the environment
-// (OG_WALKTHROUGH_MAX_SECONDS / OG_WALKTHROUGH_MAX_BYTES, for the recorder's own
-// test) may lower but never raise. A value that is not a positive number is
-// ignored.
+// (OG_WALKTHROUGH_MAX_SECONDS / OG_WALKTHROUGH_MAX_BYTES /
+// OG_WALKTHROUGH_MAX_PREVIEW_BYTES, for the recorder's own test) may lower but
+// never raise. A value that is not a positive number is ignored.
 /**
  * @param {Record<string, string | undefined>} env
- * @returns {{ maxSeconds: number, maxBytes: number }}
+ * @returns {{ maxSeconds: number, maxBytes: number, maxPreviewBytes: number }}
  */
 export function budgetLimits(env) {
   /** @type {(v: string | undefined, max: number) => number} */
@@ -311,24 +327,36 @@ export function budgetLimits(env) {
     const n = v === undefined || v.trim() === '' ? NaN : Number(v);
     return Number.isFinite(n) && n > 0 ? Math.min(n, max) : max;
   };
-  return { maxSeconds: lower(env.OG_WALKTHROUGH_MAX_SECONDS, MAX_SECONDS), maxBytes: lower(env.OG_WALKTHROUGH_MAX_BYTES, MAX_BYTES) };
+  return {
+    maxSeconds: lower(env.OG_WALKTHROUGH_MAX_SECONDS, MAX_SECONDS),
+    maxBytes: lower(env.OG_WALKTHROUGH_MAX_BYTES, MAX_BYTES),
+    maxPreviewBytes: lower(env.OG_WALKTHROUGH_MAX_PREVIEW_BYTES, MAX_PREVIEW_BYTES),
+  };
 }
 
-// The budget verdict for one recorded walkthrough: empty when it fits, else one
-// line per limit exceeded, naming which. A duration that is not a positive
-// number (ffprobe printed nothing) was never measured, and fails.
+// The budget verdict for one recorded walkthrough, its mp4 and the animated
+// preview encoded from it: empty when both fit, else one line per limit
+// exceeded, naming which. A duration that is not a positive number (ffprobe
+// printed nothing) was never measured, and fails; so does a preview that is
+// missing or empty (previewBytes undefined or 0), since the PR comment and the
+// docs lead with it.
 /**
  * @param {string} id
- * @param {{ seconds: number, bytes: number }} measured
- * @param {{ maxSeconds?: number, maxBytes?: number }} [limits]
+ * @param {{ seconds: number, bytes: number, previewBytes: number | undefined }} measured
+ * @param {{ maxSeconds?: number, maxBytes?: number, maxPreviewBytes?: number }} [limits]
  * @returns {string[]}
  */
-export function budgetProblems(id, { seconds, bytes }, { maxSeconds = MAX_SECONDS, maxBytes = MAX_BYTES } = {}) {
+export function budgetProblems(id, { seconds, bytes, previewBytes }, { maxSeconds = MAX_SECONDS, maxBytes = MAX_BYTES, maxPreviewBytes = MAX_PREVIEW_BYTES } = {}) {
   if (!(Number.isFinite(seconds) && seconds > 0)) return [`walkthrough ${id}: no duration measured (got ${seconds}): the recording could not be read`];
   const out = [];
   if (!(seconds < maxSeconds)) out.push(`walkthrough ${id}: over budget: duration ${seconds.toFixed(1)}s, the limit is under ${maxSeconds}s`);
   if (!(bytes < maxBytes)) {
     out.push(`walkthrough ${id}: over budget: size ${size(bytes)}, the limit is under ${size(maxBytes)}`);
+  }
+  if (!(typeof previewBytes === 'number' && previewBytes > 0)) {
+    out.push(`walkthrough ${id}: no preview (${PREVIEW}) was encoded`);
+  } else if (!(previewBytes < maxPreviewBytes)) {
+    out.push(`walkthrough ${id}: over budget: preview ${size(previewBytes)}, the limit is under ${size(maxPreviewBytes)}`);
   }
   return out;
 }
@@ -345,4 +373,31 @@ export const stillName = (n) => `step-${String(n).padStart(2, '0')}.png`;
  */
 export function idProblem(id) {
   return /^[a-z0-9-]+$/.test(id) ? null : `walkthrough id ${JSON.stringify(id)} must be lowercase letters, digits and hyphens`;
+}
+
+// Seconds into the video at which the preview starts: when the title card was
+// painted, measured from when the video started (both wall-clock ms, taken by
+// the recorder), plus the settle beat.
+/**
+ * @param {number} videoStartMs
+ * @param {number} paintedMs
+ * @returns {number}
+ */
+export function previewStartSeconds(videoStartMs, paintedMs) {
+  if (!Number.isFinite(videoStartMs) || !Number.isFinite(paintedMs)) throw new Error('the title card timing was not measured');
+  if (paintedMs < videoStartMs) throw new Error('the title card painted before the video started');
+  return Math.round(paintedMs - videoStartMs + PREVIEW_SETTLE_MS) / 1000;
+}
+
+// Null when the preview's opening frame shows the painted title card, judged
+// by its brightest luma (ffmpeg signalstats YMAX), else why not.
+/**
+ * @param {string} id
+ * @param {number} ymax
+ * @returns {string | null}
+ */
+export function previewOpeningProblem(id, ymax) {
+  if (!Number.isFinite(ymax)) return `walkthrough ${id}: the preview's opening frame could not be measured`;
+  if (ymax >= PREVIEW_MIN_YMAX) return null;
+  return `walkthrough ${id}: the preview opens on a blank frame (brightest luma ${ymax}, the title card's text reaches at least ${PREVIEW_MIN_YMAX})`;
 }

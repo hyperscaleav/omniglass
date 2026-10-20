@@ -7,7 +7,8 @@ A **walkthrough** is a short recording of an operator doing one thing in the con
 first click to the result, with a caption on every step. It is scripted as data
 (`web/e2e/walkthroughs/<id>.yaml`), played by a recorder against the real console on the
 [walkthrough stack](/guides/install/#the-whole-loop-in-docker) (a server, a collecting node and a
-simulator, all in Docker), and written out as an mp4, a poster frame and one still per step.
+simulator, all in Docker), and written out as an mp4, an animated preview, a poster frame and one
+still per step.
 
 A screenshot shows a surface; a walkthrough shows a **flow**: what the operator does, in what
 order, and what the console answers each time. It is also a test. Every action ends on a wait for
@@ -44,18 +45,21 @@ Write it the way an operator would work:
 - **Captions teach.** Say why the operator takes the step, in the product's vocabulary
   (component, place, system), short enough to read in the caption bar.
 - **Mark the payoff.** `poster: true` on the step the walkthrough builds to makes its still the
-  poster, the image a reader sees first; without it the last step is the poster.
+  poster, the still that stands for the whole flow below its animated preview; without it the
+  last step is the poster.
 
 `make test-web` validates every script in the tree, so a malformed one fails before a browser
 starts.
 
 ## The budget
 
-A recording has a ceiling on its length and on the size of its mp4. The limits are defined once,
-as `MAX_SECONDS` and `MAX_BYTES` in [`web/e2e/walkthroughlib.mjs`](https://github.com/hyperscaleav/omniglass/blob/main/web/e2e/walkthroughlib.mjs), and are not restated here; a recording at or over
-either fails, naming which. Only a recording that passes carries the budget mark in its
-`walkthrough.json`, which is what lets the docs copy refuse one that did not. A walkthrough that
-will not fit is two flows: split it.
+A recording has a ceiling on its length, on the size of its mp4 and on the size of its animated
+preview. The limits are defined once, as `MAX_SECONDS`, `MAX_BYTES` and `MAX_PREVIEW_BYTES` in
+[`web/e2e/walkthroughlib.mjs`](https://github.com/hyperscaleav/omniglass/blob/main/web/e2e/walkthroughlib.mjs),
+and are not restated here; a recording at or over any of them, or with no preview, fails, naming
+which. Only a recording whose mp4 and preview both pass carries the budget mark (and the preview's
+name) in its `walkthrough.json`, which is what lets the docs copy refuse one that did not. A
+walkthrough that will not fit is two flows: split it.
 
 ## Record it locally
 
@@ -68,18 +72,26 @@ make test-walkthroughs                   # the recorder's own test: the failure 
 
 `make walkthroughs` brings up the walkthrough stack, plays each script in a Playwright container
 with a visible cursor, a highlight on each target and a caption bar, and writes
-`web/e2e/walkthroughs/out/<id>/` (gitignored): `<id>.mp4`, `poster.png`, `step-NN.png` per step,
-and `walkthrough.json`, the manifest of the title, the captions and the still each step produced
-(with the budget mark added once the mp4 passes the budget).
+`web/e2e/walkthroughs/out/<id>/` (gitignored): `<id>.mp4`; `preview.webp`, an animated preview
+encoded from the mp4 at a lower frame rate and width that loops forever, small enough to load
+inline on a PR or a docs page, and starting once the title card is painted (the recorder notes when
+it was, so the preview never opens on the video's blank lead-in, and the budget gate fails one whose
+opening frame is blank); `poster.png`; `step-NN.png` per step; and `walkthrough.json`, the
+manifest of the title, the captions and the still each step produced (with the budget mark and
+the preview's name added once the mp4 and the preview pass the budget). The preview's frame rate,
+width and quality are set at the top of
+[`web/e2e/walkthroughs.sh`](https://github.com/hyperscaleav/omniglass/blob/main/web/e2e/walkthroughs.sh).
 The ids that failed are listed in `out/failed.txt`. Recording details, including the amd64-only
 ffmpeg image, are in the [install guide](/guides/install/#recording-a-walkthrough).
 
 ## Show it on the PR
 
 Push, then apply the **`run:walkthrough`** label. CI records the walkthroughs on the same stack,
-commits each one's poster and stills to the PR branch, and keeps one PR comment embedding them,
-with the videos as a workflow artifact; a failed walkthrough fails the job and is named in the
-comment. What the label runs, and where the stills land, is described with the rest of the
+commits each one's animated preview, poster and stills to the PR branch, and keeps one PR comment
+that leads each walkthrough with its preview, playing on the PR page, then its poster and its
+stills folded below, with the full-quality videos as a workflow artifact (GitHub plays no inline
+video a workflow can attach, so the preview is what plays); a failed walkthrough fails the job and
+is named in the comment. What the label runs, and where the stills land, is described with the rest of the
 automation labels in [labels](/contributing/labels/). The PR body's Visual confirmation links that
 comment on its **Walkthrough** line.
 
@@ -110,8 +122,8 @@ walkthroughs:
 
 The declaration is only the id. The title, captions and stills come from the recording's manifest,
 so the page never restates a caption that could drift from the video. The embed renders the
-poster step's still, the title and description, and every step's caption over its still, folded
-under a disclosure. [Simulate a fleet](/guides/operator/simulation/#see-it) carries the first one.
+animated preview (the poster step's still for a reader whose system asks for reduced motion, and for
+a recording whose manifest names no preview), the title and description, and every step's caption over its still, folded under a disclosure. [Simulate a fleet](/guides/operator/simulation/#see-it) carries the first one.
 
 The assets reach the site by a copy, committed like the screenshots:
 
@@ -120,23 +132,38 @@ make walkthroughs ID=sample-simulation   # record it
 make docs-walkthroughs                   # copy what the docs declare into docs/public/walkthroughs/<id>/
 ```
 
-`make docs-walkthroughs` copies, for every walkthrough a page declares, the manifest and the stills
-from `web/e2e/walkthroughs/out/<id>/` into `docs/public/walkthroughs/<id>/` (not the recorder's
+`make docs-walkthroughs` copies, for every walkthrough a page declares, the manifest, the stills and
+the animated preview from `web/e2e/walkthroughs/out/<id>/` into `docs/public/walkthroughs/<id>/` (not the recorder's
 `poster.png`, a copy of the poster step's still), removes any file left from an older recording,
 and fails on a declared walkthrough that is not recorded, whose recording failed, or whose manifest
 lacks the budget mark. Commit the copied files with the change.
 
-**Force the next docs build after every copy.** Astro caches each rendered page keyed on the page's
+**The docs build forces itself after a copy.** Astro caches each rendered page keyed on the page's
 own content, and it has no way to learn that the embed also depends on the copied manifest and on
-whether the video exists. An unforced build after a re-copy serves the old render, so build with
-`corepack pnpm astro build --force` from `docs/` (the copy prints this too); the post-build check
-below fails the build if a stale render slips through.
+whether the video exists, so a plain build after a re-copy would serve the old render. That cache
+also survives between deploys: a Cloudflare Pages build restores Astro's content cache (under the docs `node_modules`) from
+the last one. So `corepack pnpm build` runs Astro through `docs/scripts/astro-build.mjs`, which
+digests every `docs/public/walkthroughs/*/walkthrough.json`, the files beside each one, and the
+plugin sources that render the embed (`docs/scripts/lib/render-stamp.mjs`), compares the digest
+with the stamp it wrote beside Astro's cache after the last good build, and runs
+`astro build --force` only when they differ. Nothing to remember after a copy; only a bare
+`astro build` skips the stamp, and the post-build check below fails that build if it renders stale.
 
-**The video is not committed**: an mp4 per walkthrough would grow the repository with every
-re-recording. Its place is `docs/public/walkthroughs/<id>/<id>.mp4` (gitignored), and the embed
+**The video is not committed**: an mp4 per walkthrough (about 0.6 to 1.1 MB today) would grow the
+repository with every re-recording.
+
+**The preview is committed, and that is a cost.** Git keeps every version of a binary, so each
+re-copy of a walkthrough adds its new `preview.webp` (about 0.6 to 0.9 MB today) to the history
+beside its new stills, and that size never leaves the repository. The same holds on a PR: the
+`run:walkthrough` label commits each recorded walkthrough's preview with its stills under
+`.github/screenshots/<pr>/walkthroughs/`, and a squash-merge carries those files into main, so a PR
+that records four walkthroughs adds roughly 3 MB of previews on top of its stills. The trade is
+made on purpose: a preview is what lets a reviewer and a reader watch the flow inline, which no
+uncommitted file can do on GitHub or on a static docs site. Re-record and re-copy when a flow
+changes, not to refresh one that has not. Its place is `docs/public/walkthroughs/<id>/<id>.mp4` (gitignored), and the embed
 renders the video, with a link to it, only when that file is present at build time; without it
-the page shows the poster and the stills, and links nothing. Until the docs deploy carries the
-videos, the published pages show the poster and stills. To see the video in a local build, copy it
+the page shows the animated preview and the stills, and links nothing. Until the docs deploy carries
+the videos, the published pages show the preview and stills. To see the video in a local build, copy it
 too with `DOCS_WALKTHROUGH_VIDEO=1 make docs-walkthroughs`.
 
 Three checks keep the embed true to its recording:
@@ -145,13 +172,14 @@ Three checks keep the embed true to its recording:
   its page does not declare, or a declared walkthrough with no copied manifest.
 - **In `make test`**, the docs lint suite (`internal/docslint/walkthroughs.go`) fails a declared
   id with no script under `web/e2e/walkthroughs/`, a declaration no directive on its page uses, a
-  copied manifest with no budget mark, a missing still, a poster that is none of the stills, a copy
+  copied manifest with no budget mark, a missing still, a poster that is none of the stills, a
+  preview the manifest names that is not `preview.webp` or was not copied, a copy
   that has drifted from its script (title, description, step count or any caption), and a copied
   directory no page declares.
 - **After the build**, `docs/scripts/check-walkthrough-embeds.mjs` re-renders every built embed
   from the manifest the build shipped, with the video only if the build shipped it, and fails on
-  any difference, and on any reference to a walkthrough file the build did not ship. That is what
-  catches a stale cached render; the fix is the forced build above.
+  any difference, and on any reference to a walkthrough file the build did not ship. Through `pnpm build` the
+  stamp above keeps it from firing for staleness; it is the backstop for any build that skips it.
 
 Only a leaf directive alone on its line embeds (`::walkthrough{#id}`, attributes allowed); a
 directive quoted in code or inside an HTML comment, an inline `:walkthrough`, or a `:::` container

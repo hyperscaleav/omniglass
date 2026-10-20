@@ -7,13 +7,18 @@
 //       (step-NN.png), poster.png and walkthrough.json. A step whose expected
 //       result never appears fails the run naming the step, keeping the stills
 //       taken so far (and the failing frame as step-NN-failed.png).
-//   node e2e/walkthrough.mjs budget <out-dir>/<id>.mp4 <seconds>
-//       the budget gate on the converted mp4: under 60 seconds and 10 MB, else
-//       fail naming which; a duration ffprobe never measured fails too. A
-//       pass adds a budget mark ({ seconds, bytes }) to walkthrough.json, so a
-//       manifest without one never passed.
-//       OG_WALKTHROUGH_MAX_SECONDS / OG_WALKTHROUGH_MAX_BYTES may lower the
-//       limits (never raise them), for the recorder's own test only.
+//   node e2e/walkthrough.mjs budget <out-dir>/<id>.mp4 <seconds> <opening-ymax>
+//       the budget gate on the converted mp4 and the animated preview encoded
+//       beside it (preview.webp): within MAX_SECONDS, MAX_BYTES and
+//       MAX_PREVIEW_BYTES (walkthroughlib.mjs), else fail naming which; a
+//       duration ffprobe never measured, a missing preview, or one whose
+//       opening frame (its brightest luma, <opening-ymax>) is not the painted
+//       title card, fails too. A
+//       pass adds a budget mark ({ seconds, bytes, previewBytes }) and the
+//       preview's name to walkthrough.json, so a manifest without the mark
+//       never passed. OG_WALKTHROUGH_MAX_SECONDS / OG_WALKTHROUGH_MAX_BYTES /
+//       OG_WALKTHROUGH_MAX_PREVIEW_BYTES may lower the limits (never raise
+//       them), for the recorder's own test only.
 //
 // What the viewer sees is drawn into the page by an init script, in a shadow
 // root above everything (pointer-events none, so it never takes a click): a
@@ -27,7 +32,18 @@
 import { chromium } from '@playwright/test';
 import { copyFile, mkdir, readFile, readdir, rename, stat, unlink, writeFile } from 'node:fs/promises';
 import { basename, dirname, join } from 'node:path';
-import { budgetLimits, budgetProblems, describeTarget, idProblem, parseWalkthrough, stepFailure, stillName } from './walkthroughlib.mjs';
+import { PREVIEW } from './walkthroughcore.mjs';
+import {
+  budgetLimits,
+  budgetProblems,
+  describeTarget,
+  idProblem,
+  parseWalkthrough,
+  previewOpeningProblem,
+  previewStartSeconds,
+  stepFailure,
+  stillName,
+} from './walkthroughlib.mjs';
 
 const VIEWPORT = { width: 1320, height: 860 };
 // The pace, in milliseconds.
@@ -43,21 +59,37 @@ const PACE = {
 };
 const ACT_TIMEOUT = 10_000;
 
-async function budget(mp4, seconds) {
+async function budget(mp4, seconds, openingYmax) {
   const id = basename(mp4, '.mp4');
   const { size: bytes } = await stat(mp4);
+  const previewBytes = await stat(join(dirname(mp4), PREVIEW)).then((s) => s.size, () => undefined);
   const limits = budgetLimits(process.env);
-  const problems = budgetProblems(id, { seconds, bytes }, limits);
+  const problems = budgetProblems(id, { seconds, bytes, previewBytes }, limits);
+  const opening = previewOpeningProblem(id, openingYmax);
+  if (opening) problems.push(opening);
   for (const p of problems) console.error(p);
-  if (problems.length) return 1;
   // The pass is recorded in the manifest, and only here: a manifest with no
   // budget mark never came from a recording that passed, so the docs copy
   // (docs/scripts/copy-walkthroughs.mjs) refuses it whatever failed.txt says.
+  // A failure takes back a mark an earlier pass on the same files left.
   const manifest = join(dirname(mp4), 'walkthrough.json');
   const m = JSON.parse(await readFile(manifest, 'utf8'));
-  m.budget = { seconds: Number(seconds.toFixed(1)), bytes };
+  if (problems.length) {
+    if ('budget' in m || 'preview' in m) {
+      delete m.budget;
+      delete m.preview;
+      await writeFile(manifest, JSON.stringify(m, null, 2) + '\n');
+    }
+    return 1;
+  }
+  m.preview = PREVIEW;
+  m.budget = { seconds: Number(seconds.toFixed(1)), bytes, previewBytes };
   await writeFile(manifest, JSON.stringify(m, null, 2) + '\n');
-  console.log(`walkthrough ${id}: ${seconds.toFixed(1)}s, ${(bytes / 1e6).toFixed(2)} MB (budget: under ${limits.maxSeconds}s, under ${(limits.maxBytes / 1e6).toFixed(0)} MB)`);
+  const mb = (b) => (b / 1e6).toFixed(2);
+  console.log(
+    `walkthrough ${id}: ${seconds.toFixed(1)}s, ${mb(bytes)} MB, preview ${mb(previewBytes)} MB ` +
+      `(budget: under ${limits.maxSeconds}s, under ${mb(limits.maxBytes)} MB, preview under ${mb(limits.maxPreviewBytes)} MB)`,
+  );
   return 0;
 }
 
@@ -98,6 +130,10 @@ async function record(file, out) {
       recordVideo: { dir: out, size: VIEWPORT },
     });
     await ctx.addInitScript(OVERLAY);
+    // The video starts with the page, before the title card is painted; the
+    // preview starts after it is (previewStartSeconds), so it never opens on
+    // the blank lead-in. Taken before the page opens, so the start errs late.
+    const videoStart = Date.now();
     const page = await ctx.newPage();
     const cursor = { x: VIEWPORT.width / 2, y: VIEWPORT.height / 2 };
 
@@ -108,6 +144,9 @@ async function record(file, out) {
       return want.filter((f) => !document.fonts.check(f));
     });
     if (faces.length) console.error(`walkthrough ${id}: the title card fell back from ${faces.join(', ')}`);
+    // Two animation frames after the faces load, the card is on screen.
+    await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
+    const previewStart = previewStartSeconds(videoStart, Date.now());
     await page.waitForTimeout(PACE.title);
 
     let failure = null;
@@ -152,6 +191,8 @@ async function record(file, out) {
         2,
       ) + '\n',
     );
+    // Where the preview encode (walkthroughs.sh) seeks to, in seconds.
+    await writeFile(join(out, 'preview-start.txt'), `${previewStart}\n`);
     console.log(`walkthrough ${id}: recorded ${w.steps.length} steps`);
     return 0;
   } finally {
@@ -163,7 +204,7 @@ async function record(file, out) {
 // previous run's stills behind. Only the recorder's own outputs are touched.
 async function clearOutputs(out) {
   for (const f of await readdir(out)) {
-    if (/^step-\d+(-failed)?\.png$|^poster\.png$|^walkthrough\.json$|\.webm$|\.mp4$/.test(f)) await unlink(join(out, f));
+    if (/^step-\d+(-failed)?\.png$|^poster\.png$|^preview\.webp$|^preview-start\.txt$|^walkthrough\.json$|\.webm$|\.mp4$/.test(f)) await unlink(join(out, f));
   }
 }
 
@@ -372,9 +413,9 @@ const OVERLAY = () => {
 const [mode, ...args] = process.argv.slice(2);
 if (mode === 'record' && args.length === 2) {
   process.exit(await record(args[0], args[1]));
-} else if (mode === 'budget' && args.length === 2) {
-  process.exit(await budget(args[0], Number(args[1])));
+} else if (mode === 'budget' && args.length === 3) {
+  process.exit(await budget(args[0], Number(args[1]), Number(args[2])));
 } else {
-  console.error('usage: node e2e/walkthrough.mjs record <file.yaml> <out-dir> | budget <file.mp4> <seconds>');
+  console.error('usage: node e2e/walkthrough.mjs record <file.yaml> <out-dir> | budget <file.mp4> <seconds> <opening-ymax>');
   process.exit(2);
 }
