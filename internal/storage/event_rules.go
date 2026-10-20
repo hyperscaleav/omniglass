@@ -690,13 +690,17 @@ func (p *PG) settleRuleWrite(ctx context.Context, tx pgx.Tx, actorID string, old
 				return err
 			}
 		}
-		if wasOn {
-			if err := p.settleSeverity(ctx, tx, actorID, *old, updated); err != nil {
-				return err
-			}
-		}
 	}
-	return p.primeRule(ctx, tx, updated)
+	// Prime before a severity turned on reaches the conditions in force: a
+	// condition the edited rule no longer holds ends first, so the edit never
+	// raises and resolves the same alarm in one transaction.
+	if err := p.primeRule(ctx, tx, updated); err != nil {
+		return err
+	}
+	if wasOn {
+		return p.settleSeverity(ctx, tx, actorID, *old, updated)
+	}
+	return nil
 }
 
 func resetRuleStreaks(ctx context.Context, tx pgx.Tx, ruleID string) error {

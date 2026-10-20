@@ -148,9 +148,21 @@ the health recompute. The [event](/architecture/events/) is `origin = derived`, 
 rule), sits on the series' component and instance, carries the rule's message and the sample's key
 and value as attributes, and carries the alarm it opened or resolved in **`event.alarm_id`**. A rule
 with no clear type resolves its alarm with no clear event, and its condition still ends. Turning a
-severity on opens alarms for the conditions in force, each with a fire event carrying it; turning it
-off resolves them, each with a clear event carrying it, and the conditions stay in force, so an alarm's
-open and resolve are always events that carry it.
+severity on opens alarms for the conditions in force, and turning it off resolves them while the
+conditions stay in force; neither writes a condition event, since the condition did not move, so an
+episode carries exactly one started and one ended event, and a rule edit's alarm open or resolve is
+recorded in the alarm's audit rows, naming the editor. On a material edit that also turns a severity
+on, the rule primes first, so a condition the edited rule no longer holds ends before an alarm could
+be raised for it.
+
+**A hand clear of a rule's alarm holds until the condition ends and returns.** In force is the
+condition row, not the alarm, so an operator clearing the alarm leaves the condition row and its
+events untouched, and a further sample of the same condition (a metric over its threshold on every
+poll included) does not reopen it; the next alarm opens on the next new edge, after the condition ends
+and starts again (the same manual close a Zabbix trigger allows). An alarm the rule holds open with no
+condition row behind it (one an older binary raised during a rolling upgrade) also counts as in force:
+a further fire neither adopts it nor writes an event, and a recovery resolves it with no clear event,
+since no condition row ended.
 
 ```yaml
 event_rule:

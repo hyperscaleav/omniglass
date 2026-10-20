@@ -113,6 +113,20 @@ func (r *edgeRig) conditions() int {
 	return count(r.t, r.f.conn, `select count(*) from event_rule_condition c join event_rule e on e.id = c.rule_id where e.name = '`+r.name+`'`)
 }
 
+// editor bootstraps a named principal (root) to act as a rule's editor.
+func (r *edgeRig) editor() string {
+	r.t.Helper()
+	zeros := make([]byte, 32)
+	if _, err := r.f.gw.BootstrapOwner(r.ctx, storage.OwnerSpec{Username: "root", SecretHash: zeros, Prefix: "root0000"}); err != nil {
+		r.t.Fatal(err)
+	}
+	p, err := r.f.gw.AuthenticateBearer(r.ctx, zeros)
+	if err != nil {
+		r.t.Fatal(err)
+	}
+	return p.ID
+}
+
 func (r *edgeRig) ruleID() string {
 	r.t.Helper()
 	return scalar(r.t, r.f.conn, `select id::text from event_rule where name = '`+r.name+`'`)
@@ -244,25 +258,31 @@ func TestRuleEdgeSweepPrimeReconcile(t *testing.T) {
 }
 
 // Turning a rule's severity on opens alarms for the conditions it holds in
-// force, each with a fire event carrying it; turning it off resolves them,
-// each with a clear event carrying it, and the condition stays in force.
+// force, and turning it off resolves them, with no condition event either
+// way: the condition did not move, so the episode keeps one started and one
+// ended event, and the alarm's open and resolve are recorded in its audit
+// rows, naming the editor.
 func TestRuleEdgeSeverityToggle(t *testing.T) {
 	r := newEdgeRig(t)
+	editor := r.editor()
 	r.rule(storage.EventRuleSpec{Name: "toggle", ClearEventType: "condition-ended"})
 	r.observe("tcp", "down")
 	if r.openAlarm("tcp") != "" {
 		t.Fatal("an informational rule opened an alarm")
 	}
-	r.patch(storage.EventRulePatch{Severity: ptrString("high")})
+	if _, err := r.f.gw.UpdateEventRule(r.ctx, editor, r.name, storage.EventRulePatch{Severity: ptrString("high")}, r.f.all); err != nil {
+		t.Fatal(err)
+	}
 	alarm := r.openAlarm("tcp")
-	evs := r.events()
-	if alarm == "" || len(evs) != 2 || evs[1].key != "condition-started" || edgeStr(evs[1].alarmID) != alarm {
-		t.Fatalf("severity on: alarm %q, events %+v; want the condition in force alarmed, with a fire event carrying it", alarm, evs)
+	if alarm == "" || len(r.events()) != 1 {
+		t.Fatalf("severity on: alarm %q, events %+v; want the condition in force alarmed, and no new event", alarm, r.events())
+	}
+	if got := scalar(t, r.f.conn, `select coalesce(actor_username, '') from audit_log where resource = 'alarm' and verb = 'create' and resource_id = '`+alarm+`'`); got != "root" {
+		t.Fatalf("the severity-on raise is audited as %q, want the editor (root)", got)
 	}
 	r.patch(storage.EventRulePatch{Severity: ptrString("")})
-	evs = r.events()
-	if r.openAlarm("tcp") != "" || len(evs) != 3 || evs[2].key != "condition-ended" || edgeStr(evs[2].alarmID) != alarm {
-		t.Fatalf("severity off: events %+v; want the alarm resolved with a clear event carrying %s", evs, alarm)
+	if r.openAlarm("tcp") != "" || len(r.events()) != 1 {
+		t.Fatalf("severity off: alarm %q, events %+v; want the alarm resolved, and no new event", r.openAlarm("tcp"), r.events())
 	}
 	if r.conditions() != 1 {
 		t.Fatalf("severity off left %d conditions, want the condition still in force", r.conditions())
@@ -270,8 +290,75 @@ func TestRuleEdgeSeverityToggle(t *testing.T) {
 	// Still in force: a further down writes nothing; the recovery ends it.
 	r.observe("tcp", "down")
 	r.observe("tcp", "up")
-	if evs = r.events(); len(evs) != 4 || evs[3].key != "condition-ended" || evs[3].alarmID != nil {
-		t.Fatalf("after recovery: %+v, want one more clear event, carrying no alarm", evs)
+	evs := r.events()
+	if len(evs) != 2 || evs[0].key != "condition-started" || evs[1].key != "condition-ended" || evs[1].alarmID != nil {
+		t.Fatalf("the episode wrote %+v, want one started and one ended event, the ended one carrying no alarm", evs)
+	}
+}
+
+// A material edit that also turns a severity on primes first: a condition
+// the edited rule no longer holds ends (with its clear event) before the
+// severity reaches it, so no alarm is raised and resolved in one write.
+func TestRuleEdgeMaterialEditPrimesBeforeSeverity(t *testing.T) {
+	r := newEdgeRig(t)
+	r.rule(storage.EventRuleSpec{Name: "reword", ClearEventType: "condition-ended"})
+	r.observe("tcp", "down")
+	fire := criteria("eq", "gone")
+	r.patch(storage.EventRulePatch{Fire: &fire, ClearNegates: true, Severity: ptrString("high")})
+	if n := count(t, r.f.conn, `select count(*) from alarm a join event_rule e on e.id = a.raised_by_rule_id where e.name = 'reword'`); n != 0 {
+		t.Fatalf("the edit raised %d alarms for a condition it ended, want 0", n)
+	}
+	if evs := r.events(); len(evs) != 2 || evs[1].key != "condition-ended" || r.conditions() != 0 {
+		t.Fatalf("events %+v, %d conditions; want the condition ended with its clear event", evs, r.conditions())
+	}
+}
+
+// A hand clear of a rule's alarm holds while the condition does: on a
+// polled input that keeps reporting down, the alarm stays cleared and
+// nothing is written, the condition row and its events untouched; it
+// reopens only on the next new edge, after the condition ends and returns.
+func TestRuleEdgeHandClearHolds(t *testing.T) {
+	r := newEdgeRig(t)
+	r.rule(storage.EventRuleSpec{Name: "polled", Severity: "high", ClearEventType: "condition-ended"})
+	r.observe("tcp", "down")
+	alarm := r.openAlarm("tcp")
+	if err := r.f.gw.ClearAlarm(r.ctx, "", "bar-1", alarm); err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 3; i++ {
+		r.observe("tcp", "down")
+	}
+	if r.openAlarm("tcp") != "" || len(r.events()) != 1 || r.conditions() != 1 {
+		t.Fatalf("after a hand clear and more downs: alarm %q, events %+v, %d conditions; want it cleared, one event, the condition in force",
+			r.openAlarm("tcp"), r.events(), r.conditions())
+	}
+	r.observe("tcp", "up")
+	r.observe("tcp", "down")
+	evs := r.events()
+	again := r.openAlarm("tcp")
+	if again == "" || again == alarm || len(evs) != 3 || evs[1].key != "condition-ended" || evs[1].alarmID != nil || edgeStr(evs[2].alarmID) != again {
+		t.Fatalf("after the condition returned: alarm %q, events %+v; want the end (carrying no alarm), then a new alarm with its fire event", again, evs)
+	}
+}
+
+// An alarm the rule holds open with no condition row (written by an older
+// binary mid-upgrade) counts as in force: a further fire neither adopts it
+// nor writes an event, and a recovery resolves it, with no clear event,
+// since no condition row ended.
+func TestRuleEdgeOrphanAlarmIsInForce(t *testing.T) {
+	r := newEdgeRig(t)
+	r.rule(storage.EventRuleSpec{Name: "orphan", Severity: "high", ClearEventType: "condition-ended"})
+	mustExec(t, r.f.conn, `insert into alarm (component_id, severity, message, dedup_key, raised_by_rule_id)
+		values ((select id from component where name = 'bar-1'), 'high', 'old', 'rule:orphan:tcp', (select id from event_rule where name = 'orphan'))`)
+	alarm := r.openAlarm("tcp")
+	r.observe("tcp", "down")
+	if r.openAlarm("tcp") != alarm || len(r.events()) != 0 || r.conditions() != 0 {
+		t.Fatalf("a down over an orphan alarm: alarm %q (was %q), events %+v, %d conditions; want it untouched, nothing written",
+			r.openAlarm("tcp"), alarm, r.events(), r.conditions())
+	}
+	r.observe("tcp", "up")
+	if r.openAlarm("tcp") != "" || len(r.events()) != 0 {
+		t.Fatalf("a recovery over an orphan alarm: alarm %q, events %+v; want it resolved with no event", r.openAlarm("tcp"), r.events())
 	}
 }
 

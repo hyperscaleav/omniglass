@@ -369,11 +369,18 @@ func ruleSeriesLockKey(ruleID, componentID, instance string) string {
 }
 
 // conditionInForce reports whether a rule holds its condition in force on a
-// component and instance.
+// component and instance: its condition row, or an alarm the rule holds open
+// on the series with no row behind it (one an older binary raised during a
+// rolling upgrade). Counting that alarm as in force means a further fire
+// neither adopts it nor writes an event, and a recovery ends it through
+// endCondition, which resolves it; the alarm is never stranded.
 func conditionInForce(ctx context.Context, tx pgx.Tx, r EventRule, componentID, instance string) (bool, error) {
 	var inForce bool
 	if err := tx.QueryRow(ctx, `select exists (select 1 from event_rule_condition where rule_id = $1::uuid
-		and component_id = $2::uuid and instance = $3)`, r.ID, componentID, instance).Scan(&inForce); err != nil {
+			and component_id = $2::uuid and instance = $3)
+		or exists (select 1 from alarm where component_id = $2::uuid and dedup_key = $4
+			and cleared_at is null and raised_by_rule_id = $1::uuid)`,
+		r.ID, componentID, instance, ruleDedupKey(r.Name, instance)).Scan(&inForce); err != nil {
 		return false, fmt.Errorf("storage: rule %s condition: %w", r.Name, err)
 	}
 	return inForce, nil
@@ -542,21 +549,23 @@ func (p *PG) startCondition(ctx context.Context, tx pgx.Tx, r EventRule, comp *C
 	if tag.RowsAffected() == 0 {
 		return nil
 	}
-	alarmID, err := p.raiseRuleAlarm(ctx, tx, r, comp, instance)
+	alarmID, err := p.raiseRuleAlarm(ctx, tx, "", r, comp, instance)
 	if err != nil {
 		return err
 	}
 	return writeRuleEvent(ctx, tx, r, r.FireEventType, comp, instance, alarmID, s)
 }
 
-// raiseRuleAlarm opens a rule's alarm on a component and instance and
-// returns its id; an informational rule (no severity) raises none ("").
-func (p *PG) raiseRuleAlarm(ctx context.Context, tx pgx.Tx, r EventRule, comp *Component, instance string) (string, error) {
+// raiseRuleAlarm opens a rule's alarm on a component and instance, audited
+// as actorID ("" is the system, the evaluator's actor; a rule edit's raise
+// names the editor), and returns its id; an informational rule (no
+// severity) raises none ("").
+func (p *PG) raiseRuleAlarm(ctx context.Context, tx pgx.Tx, actorID string, r EventRule, comp *Component, instance string) (string, error) {
 	if r.Severity == "" {
 		return "", nil
 	}
 	id := r.ID
-	a, err := p.raiseAlarmTx(ctx, tx, "", comp, AlarmSpec{Severity: r.Severity, Message: ruleMessage(r), DedupKey: ruleDedupKey(r.Name, instance)}, &id)
+	a, err := p.raiseAlarmTx(ctx, tx, actorID, comp, AlarmSpec{Severity: r.Severity, Message: ruleMessage(r), DedupKey: ruleDedupKey(r.Name, instance)}, &id)
 	if err != nil {
 		return "", fmt.Errorf("storage: rule %s raise on %s: %w", r.Name, comp.Name, err)
 	}
@@ -566,8 +575,10 @@ func (p *PG) raiseRuleAlarm(ctx context.Context, tx pgx.Tx, r EventRule, comp *C
 // endCondition takes a rule's condition out of force on a component and
 // instance (#949): it deletes the condition row, resolves the alarm the rule
 // holds there, and writes the clear event carrying it when the rule has a
-// clear type. An alarm open with no condition (an upgrade the backfill did
-// not reach) is still resolved, with no event, so nothing is stranded.
+// clear type. The clear event is written only when a condition row was
+// deleted: an alarm open with no row (raised by an older binary, which wrote
+// no fire event either; conditionInForce counts it as in force) is resolved
+// with no event, so its episode never has an end without a start.
 func (p *PG) endCondition(ctx context.Context, tx pgx.Tx, actorID string, r EventRule, comp *Component, instance string, s edgeSample) error {
 	tag, err := tx.Exec(ctx, `delete from event_rule_condition where rule_id = $1::uuid and component_id = $2::uuid and instance = $3`,
 		r.ID, comp.ID, instance)
@@ -887,11 +898,12 @@ func ruleConditions(ctx context.Context, tx pgx.Tx, r EventRule) ([]ruleConditio
 
 // settleSeverity carries a severity turned on or off to the conditions a
 // rule holds in force (#949). Turned on, each condition in force opens its
-// alarm, with a fire event carrying it; turned off, each alarm the rule
-// holds open resolves, with a clear event carrying it when the rule has a
-// clear type, and its condition stays in force. An alarm's open and resolve
-// are therefore always events that carry it. A change from one level to
-// another leaves open alarms at the level they were raised at.
+// alarm; turned off, each alarm the rule holds open resolves, and its
+// condition stays in force. Neither writes a condition event: the condition
+// did not move, so an episode keeps exactly one started and one ended event,
+// and the alarm's open or resolve is recorded in its audit row, naming the
+// editor. A change from one level to another leaves open alarms at the level
+// they were raised at.
 func (p *PG) settleSeverity(ctx context.Context, tx pgx.Tx, actorID string, old, r EventRule) error {
 	switch {
 	case old.Severity == "" && r.Severity != "":
@@ -908,11 +920,7 @@ func (p *PG) settleSeverity(ctx context.Context, tx pgx.Tx, actorID string, old,
 			if err := lockAdvisory(ctx, tx, ruleSeriesLockKey(r.ID, c.component, c.instance)); err != nil {
 				return err
 			}
-			alarmID, err := p.raiseRuleAlarm(ctx, tx, r, &o.comp, c.instance)
-			if err != nil {
-				return err
-			}
-			if err := writeRuleEvent(ctx, tx, r, r.FireEventType, &o.comp, c.instance, alarmID, edgeSample{}); err != nil {
+			if _, err := p.raiseRuleAlarm(ctx, tx, actorID, r, &o.comp, c.instance); err != nil {
 				return err
 			}
 		}
@@ -931,14 +939,7 @@ func (p *PG) settleSeverity(ctx context.Context, tx pgx.Tx, actorID string, old,
 			if err := lockAdvisory(ctx, tx, ruleSeriesLockKey(r.ID, c.component, c.instance)); err != nil {
 				return err
 			}
-			alarmID, err := p.clearAlarmByDedupTx(ctx, tx, actorID, &o.comp, ruleDedupKey(r.Name, c.instance), &id)
-			if err != nil {
-				return err
-			}
-			if alarmID == "" || r.ClearEventType == "" {
-				continue
-			}
-			if err := writeRuleEvent(ctx, tx, r, r.ClearEventType, &o.comp, c.instance, alarmID, edgeSample{}); err != nil {
+			if _, err := p.clearAlarmByDedupTx(ctx, tx, actorID, &o.comp, ruleDedupKey(r.Name, c.instance), &id); err != nil {
 				return err
 			}
 		}
@@ -1226,8 +1227,11 @@ func ruleCandidates(ctx context.Context, q querier, lane rules.Lane, from, to in
 				where r.enabled and r.sample_lane = $1)
 		)
 		select %[3]s, tc.component_id::text, tc.instance, n.value,
-			exists (select 1 from event_rule_condition c where c.rule_id = r.id and c.component_id = tc.component_id
-				and c.instance = tc.instance),
+			(exists (select 1 from event_rule_condition c where c.rule_id = r.id and c.component_id = tc.component_id
+				and c.instance = tc.instance)
+			or exists (select 1 from alarm a where a.component_id = tc.component_id and a.raised_by_rule_id = r.id
+				and a.cleared_at is null
+				and a.dedup_key = 'rule:' || r.name || case when tc.instance = '' then '' else ':' || tc.instance end)),
 			st.pending
 		from touched tc
 		join %[2]s t on t.id = tc.type_id

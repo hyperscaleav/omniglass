@@ -44,7 +44,8 @@ type Event struct {
 	Provenance  string
 	Source      string
 	// DerivedByRule names the event rule that derived the occurrence (#949),
-	// by its name (kept on the row, so it outlives the rule); "" for an
+	// by its name as the row keeps it in source_rule (create-only, so it
+	// never goes stale, and it outlives the rule); "" for an
 	// occurrence no rule derived. AlarmID is the alarm a rule's fire event
 	// opened or its clear event resolved, nil for most events.
 	DerivedByRule string
@@ -53,9 +54,7 @@ type Event struct {
 
 // eventLineageCols reads an event's rule and alarm, the trailing columns
 // both event reads scan into Event.DerivedByRule and Event.AlarmID.
-const eventLineageCols = `case when event.origin = 'derived'
-		then coalesce((select r.name from event_rule r where r.id = event.derived_by_rule_id), event.source_rule) end,
-	event.alarm_id::text`
+const eventLineageCols = `case when event.origin = 'derived' then event.source_rule end, event.alarm_id::text`
 
 // InsertEvents writes observed occurrence rows in one transaction. Each row sets
 // exactly its owner arc column (the CHECK enforces the rest) and provenance

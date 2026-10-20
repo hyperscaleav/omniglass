@@ -81,6 +81,17 @@ func TestEventRuleTypedAndOptionalAlarm(t *testing.T) {
 	if err := gw.DeleteEventType(ctx, "", "kept-type"); !errors.Is(err, storage.ErrEventTypeInUse) {
 		t.Fatalf("deleting a type a rule names: err %v, want ErrEventTypeInUse", err)
 	}
+	// The fire type too: a rule's events name their type by a lookup that
+	// trusts it still exists.
+	if err := gw.UpsertEventType(ctx, storage.EventType{Name: "fire-kept"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := gw.UpdateEventRule(ctx, "", "hot-note", storage.EventRulePatch{FireEventType: ptrString("fire-kept")}, all); err != nil {
+		t.Fatal(err)
+	}
+	if err := gw.DeleteEventType(ctx, "", "fire-kept"); !errors.Is(err, storage.ErrEventTypeInUse) {
+		t.Fatalf("deleting a rule's fire type: err %v, want ErrEventTypeInUse", err)
+	}
 }
 
 // TestOfficialRuleCarriesTheGenericPair proves the boot seed lands the

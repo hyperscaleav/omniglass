@@ -6593,8 +6593,11 @@ key and value as attributes, `derived_by_rule_id` (now a reference to `event_rul
 rule, by a new migration), the rule's name and version in `source_rule` and `source_rule_version`, and
 `alarm_id` set to the alarm it opened or resolved. Disabling, deleting or narrowing a rule ends its
 conditions with their clear events; turning a severity on opens alarms for the conditions in force,
-each with a fire event carrying it, and turning it off resolves them, each with a clear event
-carrying it, leaving the conditions in force. A one-time backfill gives every rule-raised alarm open
+and turning it off resolves them, leaving the conditions in force, with no condition event either way
+(the alarm's audit rows, naming the editor, record a rule edit's open and resolve), and a material
+edit primes before its severity reaches the conditions. A hand clear of a rule's alarm holds until the
+condition ends and returns, and an alarm the rule holds open with no condition row (an older binary's,
+mid-upgrade) counts as in force, so a recovery resolves it rather than stranding it. A one-time backfill gives every rule-raised alarm open
 at upgrade its condition row, since it opened, so the next recovery resolves it with a clear event. The
 component and system event reads return `derived_by_rule` and `alarm_id`. The netadmin end-to-end
 test now proves, on the real stack, that each alarm the unplug opens was opened by exactly one
