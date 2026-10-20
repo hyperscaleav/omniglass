@@ -6784,7 +6784,15 @@ and a per-run budget in two halves. Expr's own memory budget (`MaxRunMemory`, 10
 a run allocates but not what it iterates, so `all(items, all(items, ...))` over a bound list ran
 unbudgeted; the engine patches every builtin's collection argument and every `in` through a
 charge on a per-run meter (`MaxRunIterations`, 1,000,000), and the nested case now stops with
-`ErrRunBudget`. `now`, `date`, `duration` and `timezone` are disabled, and an environment type
-carrying a func, a channel, or methods is refused when the site is declared. Compiled programs
+`ErrRunBudget`. A review then proved more uncharged walks and closed them: string `+` (a chain of
+lets doubling a string reached 1.5 GB), every argument of a variadic builtin (not only the first),
+and the comparisons, `contains`, `startsWith`, `endsWith` and `matches` subjects; every charge now
+costs at least one, so the budget counts steps as well as lengths, and `in` on a map is a free
+lookup. A `matches` pattern must be a constant (one regex compile, not one per run). A 250ms
+wall-clock deadline backs the budget, documented as the one nondeterministic limit. `now`, `date`,
+`duration` and `timezone` are disabled; an expression calls builtins only (no method, no bound
+value); and an environment type carrying a func, a channel, an interface (`any` included), or
+methods is refused when the site is declared, so a future JSON-payload site needs a dedicated
+data-only value type. Integer arithmetic wraps on overflow, as Go's does. Compiled programs
 are cached by (source, env type, result) in a 1024-entry LRU safe for concurrent use. The
 expressions page keeps its Design badge until the criteria entry point lands.

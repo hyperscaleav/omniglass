@@ -58,8 +58,8 @@ type Binding struct {
 }
 
 // EnvOf declares a site's environment as the struct type T and pins its
-// result type. T must carry data only: no func, channel or unsafe pointer
-// anywhere in it, and no type in it with methods (Expr lets an expression
+// result type. T must carry data only: no func, channel, unsafe pointer or
+// interface (any included) anywhere in it, and no type in it with methods (Expr lets an expression
 // call exported methods, and a method is behavior, not data; bind a clock
 // reading as a number, not a time.Time).
 func EnvOf[T any](result Result) (Env, error) {
@@ -73,7 +73,11 @@ func EnvOf[T any](result Result) (Env, error) {
 	if err := dataOnly(t, t.String(), map[reflect.Type]bool{}); err != nil {
 		return Env{}, err
 	}
-	return Env{typ: t, run: runType(t), result: result}, nil
+	run, err := runType(t)
+	if err != nil {
+		return Env{}, err
+	}
+	return Env{typ: t, run: run, result: result}, nil
 }
 
 // MustEnv is EnvOf for a site declared at package init, where a bad
@@ -119,7 +123,12 @@ func bindings(t reflect.Type) []Binding {
 }
 
 // dataOnly refuses a type that carries behavior: a func, a channel, an
-// unsafe pointer, a type with exported methods, or a non-empty interface.
+// unsafe pointer, a type with exported methods, or any interface. An
+// interface, even the empty one, is refused because the value behind it is
+// chosen at run time: a caller could bind a func, a time.Time, or a Stringer,
+// and an expression could then call it. A future site that binds a JSON
+// payload needs a dedicated data-only value type (a closed sum of null, bool,
+// number, string, list and object) rather than any.
 func dataOnly(t reflect.Type, path string, seen map[reflect.Type]bool) error {
 	if seen[t] {
 		return nil
@@ -129,10 +138,7 @@ func dataOnly(t reflect.Type, path string, seen map[reflect.Type]bool) error {
 	case reflect.Func, reflect.Chan, reflect.UnsafePointer:
 		return fmt.Errorf("%s is a %s; an expression environment carries data only", path, t.Kind())
 	case reflect.Interface:
-		if t.NumMethod() > 0 {
-			return fmt.Errorf("%s is the interface %s; an expression environment carries data only", path, t)
-		}
-		return nil
+		return fmt.Errorf("%s is the interface %s; an expression environment binds concrete data types only", path, t)
 	}
 	if t.NumMethod() > 0 || (t.Kind() != reflect.Pointer && reflect.PointerTo(t).NumMethod() > 0) {
 		return fmt.Errorf("%s has methods (%s); an expression environment carries data only", path, t)

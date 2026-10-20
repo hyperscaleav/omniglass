@@ -72,7 +72,11 @@ either) keeps the pipeline's DAG acyclic.
 Expressions are **sandboxed**: no I/O, no network, no unbounded loops, bounded execution.
 The engine pins Expr v1.17.8 and disables its builtins that are not pure: **`now`**, **`date`**,
 **`duration`**, and **`timezone`** (they read the clock, the process's local zone, or the
-timezone database); a time an expression needs is bound by its caller as data.
+timezone database); a time an expression needs is bound by its caller as data. An expression
+calls builtins only, never a method or a bound value, and a site's environment holds concrete
+data types (no interface, so no value whose behavior is chosen at run time). A run is bounded by
+what it allocates and what it walks, deterministically, with a wall-clock deadline behind both
+as a backstop. Integer arithmetic wraps on overflow, as Go's does, rather than failing.
 Operator-supplied configuration values are bound as **data in the environment**, never spliced
 into expression text, so a hostile value is evaluated literally and never executed. Secret
 fields rendered into a request are masked at interpolation time and never surface in a log

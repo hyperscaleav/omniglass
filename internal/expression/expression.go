@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"strings"
 	"sync/atomic"
+	"time"
 
 	"github.com/expr-lang/expr"
 	"github.com/expr-lang/expr/ast"
@@ -26,9 +27,15 @@ const (
 	// (map, filter, sort, repeat, ...) allocates.
 	MaxRunMemory = 100_000
 	// MaxRunIterations is one run's work budget: the summed length of every
-	// collection or string a builtin walks or an `in` searches (budget.go).
-	// Expr has no loop construct beyond these, so this bounds a run's time.
+	// collection or string a builtin or operator walks (budget.go). Expr has
+	// no loop construct beyond these, so this bounds a run's time.
 	MaxRunIterations = 1_000_000
+	// MaxRunDuration is a wall-clock backstop on one run, checked wherever
+	// the iteration budget is charged. It is the one limit that depends on the
+	// machine (so not deterministic); the iteration budget is what bounds an
+	// expression, and this is set well above the time that budget allows
+	// (a run spending the whole budget measured about 50ms).
+	MaxRunDuration = 250 * time.Millisecond
 )
 
 // DisabledBuiltins are the Expr builtins (as of v1.17.8) that are not pure:
@@ -135,9 +142,11 @@ func Compile(source string, env Env) (*Program, error) {
 }
 
 // inspect parses source on its own and walks the tree: the node cap is ours,
-// not Expr's default, and a `$` name (Expr's dynamic $env, or the engine's
-// own run plumbing) is refused, so the declared bindings are the whole
-// namespace.
+// not Expr's default; a `$` name (Expr's dynamic $env, or the engine's own
+// run plumbing) is refused, so the declared bindings are the whole namespace;
+// a call is refused unless it is a builtin (Expr parses a builtin as its own
+// node, so any call node is a method or a value being called); and a matches
+// pattern must be a constant, so its regex compiles once, not per run.
 func inspect(source string) error {
 	c := conf.CreateNew()
 	c.MaxNodes = 0
@@ -150,22 +159,45 @@ func inspect(source string) error {
 	if w.nodes > MaxNodes {
 		return &Error{Phase: PhaseLimit, Message: ErrTooManyNodes.Error(), err: ErrTooManyNodes}
 	}
-	if w.dollar != nil {
-		fe := &file.Error{Location: w.dollar.Location(), Message: "unknown name " + w.dollar.Value}
-		return fromExpr(PhaseType, fe.Bind(tree.Source))
+	if w.fault != nil {
+		return fromExpr(PhaseType, w.fault.Bind(tree.Source))
 	}
 	return nil
 }
 
 type walker struct {
-	nodes  int
-	dollar *ast.IdentifierNode // the first `$` name met
+	nodes int
+	fault *file.Error // the first refusal met
+}
+
+func (w *walker) refuse(n ast.Node, format string, args ...any) {
+	if w.fault == nil {
+		w.fault = &file.Error{Location: n.Location(), Message: fmt.Sprintf(format, args...)}
+	}
 }
 
 func (w *walker) Visit(node *ast.Node) {
 	w.nodes++
-	if id, ok := (*node).(*ast.IdentifierNode); ok && w.dollar == nil && strings.HasPrefix(id.Value, "$") {
-		w.dollar = id
+	switch n := (*node).(type) {
+	case *ast.IdentifierNode:
+		if strings.HasPrefix(n.Value, "$") {
+			w.refuse(n, "unknown name %s", n.Value)
+		}
+	case *ast.CallNode:
+		name := "this value"
+		switch c := n.Callee.(type) {
+		case *ast.IdentifierNode:
+			name = c.Value
+		case *ast.MemberNode:
+			if s, ok := c.Property.(*ast.StringNode); ok {
+				name = s.Value
+			}
+		}
+		w.refuse(n, "%s is not a builtin function; an expression calls builtins only", name)
+	case *ast.BinaryNode:
+		if _, ok := n.Right.(*ast.StringNode); n.Operator == "matches" && !ok {
+			w.refuse(n.Right, "matches needs a constant pattern (a quoted string), not one computed when it runs")
+		}
 	}
 }
 
@@ -210,7 +242,7 @@ func (p *Program) Run(input any) (any, error) {
 	}
 	w := reflect.New(p.env.run).Elem()
 	w.Field(0).Set(v)
-	w.Field(1).Set(reflect.ValueOf(&meter{}))
+	w.Field(1).Set(reflect.ValueOf(newMeter()))
 	machine := vm.VM{MemoryBudget: MaxRunMemory}
 	out, err := machine.Run(p.prog, w.Interface())
 	if err != nil {

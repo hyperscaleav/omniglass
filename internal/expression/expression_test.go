@@ -3,6 +3,7 @@ package expression
 import (
 	"errors"
 	"fmt"
+	"math"
 	"strings"
 	"sync"
 	"testing"
@@ -11,11 +12,13 @@ import (
 // sampleEnv is a site's declared environment: the bindings an expression may
 // name, with their types and docs read from the struct.
 type sampleEnv struct {
-	Value  float64  `expr:"value" doc:"the arriving sample's number"`
-	State  string   `expr:"state" doc:"the arriving sample's text"`
-	Prior  float64  `expr:"prior" doc:"the previous sample's number"`
-	Items  []int    `expr:"items" doc:"a list of numbers"`
-	Labels []string `expr:"labels"`
+	Value  float64        `expr:"value" doc:"the arriving sample's number"`
+	State  string         `expr:"state" doc:"the arriving sample's text"`
+	Prior  float64        `expr:"prior" doc:"the previous sample's number"`
+	Items  []int          `expr:"items" doc:"a list of numbers"`
+	Labels []string       `expr:"labels"`
+	Tags   map[string]int `expr:"tags" doc:"a map of counts"`
+	N      int            `expr:"n"`
 }
 
 func boolEnv(t *testing.T) Env {
@@ -347,6 +350,15 @@ func TestEnvRefusesBehavior(t *testing.T) {
 	type withMethodField struct {
 		M methodful `expr:"m"`
 	}
+	type withAny struct {
+		Extra any `expr:"extra"`
+	}
+	type withAnyMap struct {
+		M map[string]any `expr:"m"`
+	}
+	type withAnyList struct {
+		L []any `expr:"l"`
+	}
 	for name, err := range map[string]error{
 		"func":         func() error { _, err := EnvOf[withFunc](Bool); return err }(),
 		"chan":         func() error { _, err := EnvOf[withChan](Bool); return err }(),
@@ -354,6 +366,11 @@ func TestEnvRefusesBehavior(t *testing.T) {
 		"methods":      func() error { _, err := EnvOf[methodful](Bool); return err }(),
 		"method field": func() error { _, err := EnvOf[withMethodField](Bool); return err }(),
 		"not a struct": func() error { _, err := EnvOf[int](Bool); return err }(),
+		// An interface field, even the empty one, lets a caller bind a func,
+		// a time.Time, or a Stringer, and an expression then calls it.
+		"any":      func() error { _, err := EnvOf[withAny](Bool); return err }(),
+		"any map":  func() error { _, err := EnvOf[withAnyMap](Bool); return err }(),
+		"any list": func() error { _, err := EnvOf[withAnyList](Bool); return err }(),
 	} {
 		if err == nil {
 			t.Errorf("%s: env accepted", name)
@@ -377,6 +394,8 @@ func TestBindings(t *testing.T) {
 		{Name: "prior", Type: "float64", Doc: "the previous sample's number"},
 		{Name: "items", Type: "[]int", Doc: "a list of numbers"},
 		{Name: "labels", Type: "[]string"},
+		{Name: "tags", Type: "map[string]int", Doc: "a map of counts"},
+		{Name: "n", Type: "int"},
 	}
 	if fmt.Sprint(got) != fmt.Sprint(want) {
 		t.Errorf("Bindings() =\n%v\nwant\n%v", got, want)
@@ -476,4 +495,132 @@ func TestZeroEnv(t *testing.T) {
 	if _, err := Compile("true", Env{}); err == nil {
 		t.Error("compiled against the zero Env")
 	}
+}
+
+// budgetErr asserts a run failed on its budget.
+func budgetErr(t *testing.T, src string, err error) {
+	t.Helper()
+	if err == nil {
+		t.Errorf("%q: ran within budget, want ErrRunBudget", src)
+		return
+	}
+	if !errors.Is(err, ErrRunBudget) {
+		t.Errorf("%q: got %v, want ErrRunBudget", src, err)
+	}
+}
+
+func runOn(t *testing.T, src string, in sampleEnv) error {
+	t.Helper()
+	p, err := Compile(src, boolEnv(t))
+	if err != nil {
+		t.Fatalf("%q: %v", src, err)
+	}
+	_, err = p.Run(in)
+	return err
+}
+
+func ints(n int) []int {
+	out := make([]int, n)
+	for i := range out {
+		out[i] = i + 1
+	}
+	return out
+}
+
+// Review #1: string concatenation is charged, so doubling a string in a chain
+// of lets stops at the budget instead of allocating gigabytes.
+func TestStringConcatCharged(t *testing.T) {
+	var b strings.Builder
+	b.WriteString("let a0 = repeat('x', 99999); ")
+	for i := 1; i <= 5; i++ {
+		fmt.Fprintf(&b, "let a%d = a%d + a%d; ", i, i-1, i-1)
+	}
+	b.WriteString("len(a5) > 0")
+	budgetErr(t, b.String(), runOn(t, b.String(), sampleEnv{}))
+}
+
+// Review #2: a variadic builtin is charged for every argument it walks, not
+// only its first.
+func TestVariadicArgumentsCharged(t *testing.T) {
+	src := "count(1..300, max(0, items, items, items, items, items) > 0) == -1"
+	budgetErr(t, src, runOn(t, src, sampleEnv{Items: ints(1000)}))
+}
+
+// Review #3: binary operators that walk their operands are charged.
+func TestWalkingOperatorsCharged(t *testing.T) {
+	big := strings.Repeat("a", 100_000)
+	for _, src := range []string{
+		"count(1..50, state contains 'zz') == -1",
+		"count(1..50, state startsWith 'zz') == -1",
+		"count(1..50, state endsWith 'zz') == -1",
+		"count(1..50, state matches 'zz') == -1",
+		"count(1..50, state == labels[0]) == -1",
+		"count(1..50, state != labels[0]) == -1",
+		"count(1..50, state < labels[0]) == -1",
+		"count(1..50, state >= labels[0]) == -1",
+		"count(1..50, items == items) == -1",
+	} {
+		budgetErr(t, src, runOn(t, src, sampleEnv{State: big, Labels: []string{big}, Items: ints(50_000)}))
+	}
+}
+
+// Review #3: a matches pattern is a constant, so its regex compiles once; a
+// pattern computed at run time is refused at compile time, with its position.
+func TestDynamicMatchesRefused(t *testing.T) {
+	e := asError(t, func() error { _, err := Compile("value > 0 &&\n state matches state", boolEnv(t)); return err }())
+	if e.Phase != PhaseType || e.Line != 2 {
+		t.Errorf("got %v (phase %q, line %d), want a type error on line 2", e, e.Phase, e.Line)
+	}
+	if _, err := Compile("state matches '^d.*n$'", boolEnv(t)); err != nil {
+		t.Errorf("a constant pattern was refused: %v", err)
+	}
+}
+
+// Review #4: an expression calls builtins only: no method, no value.
+func TestOnlyBuiltinsCalled(t *testing.T) {
+	for _, src := range []string{
+		"fromJSON(state).x() == 1",
+		"value() > 1",
+		"state.Len() > 1",
+	} {
+		e := asError(t, func() error { _, err := Compile(src, boolEnv(t)); return err }())
+		if e.Phase != PhaseType || e.Line == 0 || !strings.Contains(e.Message, "builtins only") {
+			t.Errorf("%q: got %v (phase %q), want a positioned type error naming builtins only", src, e, e.Phase)
+		}
+	}
+}
+
+// Review #5: `in` on a map is a lookup, not a walk, and is not charged.
+func TestInOnMapNotCharged(t *testing.T) {
+	tags := make(map[string]int, 100_000)
+	for i := 0; i < 100_000; i++ {
+		tags[fmt.Sprint(i)] = i
+	}
+	src := "count(1..50, 'k' in tags) == 0"
+	if err := runOn(t, src, sampleEnv{Tags: tags}); err != nil {
+		t.Errorf("%q: %v", src, err)
+	}
+}
+
+// Review #6: integer arithmetic wraps on overflow (Expr's int is Go's int).
+// Pinned so a change in Expr is seen.
+func TestIntegerOverflowWraps(t *testing.T) {
+	p, err := Compile("n + 1", mustEnv(t, Int))
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := p.Run(sampleEnv{N: math.MaxInt})
+	if err != nil || got != math.MinInt {
+		t.Errorf("MaxInt + 1 = %v, %v; want MinInt (wrapped)", got, err)
+	}
+}
+
+// Review #7: the wall-clock deadline is a backstop. With it set to nothing,
+// any run that reaches a charge point stops on it.
+func TestDeadlineBackstop(t *testing.T) {
+	saved := runDeadline
+	runDeadline = 0
+	defer func() { runDeadline = saved }()
+	src := "sum(items) > 0"
+	budgetErr(t, src, runOn(t, src, sampleEnv{Items: ints(10)}))
 }

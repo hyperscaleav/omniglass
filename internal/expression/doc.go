@@ -12,7 +12,16 @@
 //
 // The engine is pure. It reads no clock, timezone database, randomness or
 // process environment (DisabledBuiltins lists what is turned off), the
-// environment carries data only (no funcs, channels, or methods), and an
-// operator value bound in the environment is evaluated as data, never
-// spliced into source. Compiled programs are cached by (source, env shape).
+// environment carries data only (no funcs, channels, interfaces, or
+// methods), an expression calls builtins only, and an operator value bound in
+// the environment is evaluated as data, never spliced into source. Compiled
+// programs are cached by (source, env shape).
+//
+// A run is bounded by a deterministic budget: what it allocates
+// (MaxRunMemory) and what it walks (MaxRunIterations). A wall-clock deadline
+// (MaxRunDuration) is only a backstop, the one limit that depends on the
+// machine.
+//
+// Integer arithmetic is Expr's, which is Go's int: it wraps on overflow
+// rather than failing (MaxInt + 1 is MinInt).
 package expression
