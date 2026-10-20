@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { render, screen, fireEvent, within, cleanup, waitFor } from "@solidjs/testing-library";
-import { Router, Route } from "@solidjs/router";
+import { A, Router, Route } from "@solidjs/router";
 import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
 import Locations from "./Locations";
 import { FLEET_VIEW_KEY, type FleetView } from "../lib/fleet";
@@ -153,6 +153,7 @@ function mount(path = `/web/locations/${uuidFor("lz-hq")}`, lateTypes = false) {
       <Router base="/web">
         <Route path="/locations/:id" component={Locations} />
         <Route path="/explore" component={() => <div data-testid="fleet-page" />} />
+        <Route path="/start" component={() => <A data-testid="configure-link" href={`/locations/${uuidFor("lz-room")}?tab=configure`}>Configure place</A>} />
         <Route path="/systems/:id" component={() => <div data-testid="system-page" />} />
         <Route path="/locations/create" component={() => <div data-testid="create-page" />} />
       </Router>
@@ -178,6 +179,15 @@ describe("where a place lands (#872)", () => {
     mount(`/web/locations/${uuidFor("lz-room")}?edit=1`);
     expect(await screen.findByTestId("system-page")).toBeTruthy();
     expect(window.location.pathname + window.location.search).toBe(`/web/systems/${uuidFor("lz-s-board")}?tab=configure&edit=place`);
+  });
+
+  // Followed inside the console (#932), not loaded: the router's own location
+  // carries the query, where the window's lags a client-side navigation.
+  it("lands a configure link followed in the console on the system's Configure", async () => {
+    mount(`/web/start`);
+    fireEvent.click(await screen.findByTestId("configure-link"));
+    expect(await screen.findByTestId("system-page")).toBeTruthy();
+    expect(window.location.pathname + window.location.search).toBe(`/web/systems/${uuidFor("lz-s-board")}?tab=configure`);
   });
 
   it("a name-shaped address resolves to the uuid, keeping the param (#759's rule)", async () => {

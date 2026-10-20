@@ -1,6 +1,6 @@
 import { For, Show, createEffect, createMemo } from "solid-js";
 import { Dynamic } from "solid-js/web";
-import { useNavigate, useParams, useSearchParams } from "@solidjs/router";
+import { useLocation, useNavigate, useParams, useSearchParams } from "@solidjs/router";
 import { useQuery } from "@tanstack/solid-query";
 import Page from "../components/Page";
 import Breadcrumb from "../components/Breadcrumb";
@@ -39,6 +39,9 @@ import { describeError } from "../lib/format";
 export default function LocationZoom() {
   const params = useParams<{ id: string }>();
   const navigate = useNavigate();
+  // The router's location, not the window's: on a client-side navigation the
+  // window's query lags the route being rendered (#932).
+  const location = useLocation();
   const id = () => params.id;
   const me = useMe();
   const blades = createBladeController();
@@ -76,7 +79,7 @@ export default function LocationZoom() {
   createEffect(() => {
     if (!view.data || place()) return;
     const matches = (view.data.locations ?? []).filter((l) => l.name === id());
-    if (matches.length === 1) navigate(`/locations/${matches[0].id}${window.location.search}`, { replace: true });
+    if (matches.length === 1) navigate(`/locations/${matches[0].id}${location.search}`, { replace: true });
   });
   // A place holding one system lands on it, query kept; a configure intent
   // becomes the system's Configure tab and the place's own edit.
@@ -84,7 +87,7 @@ export default function LocationZoom() {
     if (!view.data || !place()) return;
     const landing = landingFor(view.data, id());
     if (landing.kind !== "system") return;
-    const q = new URLSearchParams(window.location.search);
+    const q = new URLSearchParams(location.search);
     if (q.get("edit") === "1") {
       q.delete("edit");
       q.set("tab", "configure");

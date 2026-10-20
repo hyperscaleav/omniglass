@@ -559,7 +559,7 @@ func generatedCommands() []*cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "list <name>",
 						Short:   "List a component's alarms",
-						Long:    "What is currently wrong with this component, newest first. Pass include_cleared for the history rather than the active set. Gated by component:read; an out-of-scope component is a non-disclosing 404.",
+						Long:    "What is currently wrong with this component, newest first, with the component's own verdict those alarms make. Pass include_cleared for the history rather than the active set. Gated by component:read; an out-of-scope component is a non-disclosing 404.",
 						Example: "  omniglass component alarm list <name>",
 						Args:    cobra.ExactArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {

@@ -23,6 +23,20 @@ export type Alarm = components["schemas"]["AlarmBody"];
 export const COMPONENT_ALARMS_PREFIX = ["component-alarms"] as const;
 export const componentAlarmsKey = (name: string) => [...COMPONENT_ALARMS_PREFIX, name] as const;
 
+// The alarms read with the component's own verdict beside them (#934), the
+// one its active alarms make. Keyed under componentAlarmsKey, so whatever
+// invalidates a component's alarms (an acknowledge) refreshes this too.
+export const componentAlarmsReadKey = (name: string) => [...componentAlarmsKey(name), "verdict"] as const;
+export type ComponentAlarmsRead = { alarms: Alarm[]; verdict?: string };
+
+export async function componentAlarmsRead(name: string): Promise<ComponentAlarmsRead> {
+  const { data, error } = await api.GET("/components/{name}/alarms", {
+    params: { path: { name }, query: { include_cleared: true } },
+  });
+  if (error) throw error;
+  return { alarms: (data?.alarms ?? []) as Alarm[], verdict: data?.verdict };
+}
+
 // componentAlarms reads every alarm on the component, cleared ones included: the
 // panel shows what is wrong now above what was recently wrong, and the cleared row
 // is how an operator confirms a fix landed.

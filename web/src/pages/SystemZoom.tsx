@@ -1,5 +1,5 @@
 import { For, Show, createEffect, createMemo, createSignal } from "solid-js";
-import { useNavigate, useParams, useSearchParams } from "@solidjs/router";
+import { useLocation, useNavigate, useParams, useSearchParams } from "@solidjs/router";
 import { useQueries, useQuery } from "@tanstack/solid-query";
 import Page from "../components/Page";
 import Breadcrumb from "../components/Breadcrumb";
@@ -60,6 +60,9 @@ import TimeseriesChart from "../components/TimeseriesChart";
 export default function SystemZoom() {
   const params = useParams<{ id: string }>();
   const navigate = useNavigate();
+  // The router's location, not the window's: on a client-side navigation the
+  // window's query lags the route being rendered (#932).
+  const location = useLocation();
   const me = useMe();
   const id = () => params.id;
   // Pinned at setup, like HealthHistory's: a "now" that moved under the
@@ -76,7 +79,7 @@ export default function SystemZoom() {
   createEffect(() => {
     if (!view.data || system()) return;
     const matches = (view.data.systems ?? []).filter((s) => s.name === id());
-    if (matches.length === 1) navigate(`/systems/${matches[0].id}${window.location.search}`, { replace: true });
+    if (matches.length === 1) navigate(`/systems/${matches[0].id}${location.search}`, { replace: true });
   });
 
   const placeId = () => system()?.location ?? null;

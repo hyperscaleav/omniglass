@@ -55,6 +55,26 @@ function mount(data: Reachability = seed) {
 }
 
 describe("ReachabilityPanel", () => {
+  // An endpoint answering every probe since an old transition (#931): the
+  // pill reads responding and "last checked" is its newest probe sample.
+  it("ages a long-up endpoint by its newest sample, not its last transition", () => {
+    const old = ago(21 * 60_000);
+    const { getByText, queryByText } = mount({
+      component: "disp-2",
+      endpoints: [{
+        endpoint: "disp-2-tcp", transport: "tcp", node: "node-a",
+        verdict: { value: "up", ts: old },
+        last_seen: ago(5_000),
+        layers: [{ layer: "port", check: "tcp-open", value: 1, ts: ago(5_000) }],
+        history: [{ ts: old, value: "up" }],
+      }],
+    });
+    expect(getByText("responding")).toBeTruthy();
+    expect(queryByText("stale")).toBeNull();
+    fireEvent.click(getByText("disp-2-tcp"));
+    expect(getByText(/last checked/).textContent).not.toMatch(/21 ?m/);
+  });
+
   it("renders the endpoint count and a verdict pill per endpoint", () => {
     const { getByText, getAllByText } = mount();
     expect(getByText("2 endpoints")).toBeTruthy();
@@ -194,5 +214,24 @@ describe("the layer-7 rungs", () => {
     expect(screen.getByText("auth failed")).toBeTruthy();
     expect(screen.queryByText("no response")).toBeNull();
     expect(screen.queryByText("auth ok")).toBeNull();
+  });
+
+  // The pill ages with a clock of its own, not with the data (#934): a poll
+  // returning the same answer must still let it go stale.
+  it("lets the pill go stale as time passes with the data unchanged", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "setInterval", "clearInterval", "Date"] });
+    try {
+      const t0 = new Date().toISOString();
+      const { getByText, queryByText } = mount({
+        component: "disp-3",
+        endpoints: [{ endpoint: "disp-3-tcp", transport: "tcp", node: "node-a", verdict: { value: "up", ts: t0 }, last_seen: t0, layers: [], history: [] }],
+      } as unknown as Reachability);
+      expect(getByText("responding")).toBeTruthy();
+      await vi.advanceTimersByTimeAsync(200_000);
+      expect(queryByText("responding")).toBeNull();
+      expect(getByText("stale")).toBeTruthy();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

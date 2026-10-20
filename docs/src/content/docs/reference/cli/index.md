@@ -441,7 +441,7 @@ List a component's alarms
 omniglass component alarm list <name> [flags]
 ```
 
-What is currently wrong with this component, newest first. Pass include_cleared for the history rather than the active set. Gated by component:read; an out-of-scope component is a non-disclosing 404.
+What is currently wrong with this component, newest first, with the component's own verdict those alarms make. Pass include_cleared for the history rather than the active set. Gated by component:read; an out-of-scope component is a non-disclosing 404.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|

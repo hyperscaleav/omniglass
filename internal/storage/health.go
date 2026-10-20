@@ -509,6 +509,17 @@ func (p *PG) activeAlarmRanks(ctx context.Context, q txQuerier, componentID stri
 	return ranks, nil
 }
 
+// ComponentVerdict is one component's own current verdict, by its id, the
+// one its active alarms make: the same live computation the recompute
+// records, so a reader of one component need not read the fleet for it.
+func (p *PG) ComponentVerdict(ctx context.Context, componentID string) (string, error) {
+	v, err := p.componentVerdict(ctx, p.pool, componentID)
+	if err != nil {
+		return "", err
+	}
+	return v.String(), nil
+}
+
 // componentVerdict resolves one component's own current verdict from its
 // active alarms: not the recorded row (a read must not trust a trigger it did
 // not just run), but the same live computation the recompute makes. It is the

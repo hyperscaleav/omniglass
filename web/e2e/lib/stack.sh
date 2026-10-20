@@ -311,8 +311,12 @@ stack_walkthrough_up() {
   [ -n "$node_token" ] || { echo "stack $STACK_ID: could not enroll edge-hq" >&2; return 1; }
   local nodeenv=(-e OMNIGLASS_SERVER="$STACK_SRV_URL" -e OMNIGLASS_NODE_NAME=edge-hq -e OMNIGLASS_NODE_TOKEN="$node_token")
 
+  # The node checks in every 2s (#934): each check-in pulls its worklist and
+  # runs its probes, so a walkthrough's waits ride on it. A test-stack setting
+  # only; the product's default (node run --heartbeat) is unchanged.
+
   stack__start "$STACK_NODE" --sysctl net.ipv4.ping_group_range="0 2147483647" \
-    "${nodeenv[@]}" "$STACK_IMG" node run --heartbeat 5s >/dev/null
+    "${nodeenv[@]}" "$STACK_IMG" node run --heartbeat 2s >/dev/null
   stack__start_on "container:$STACK_NODE" "$STACK_SIM" --user 0:0 --cap-add NET_ADMIN \
     "${nodeenv[@]}" "$STACK_IMG" sim run --impairments --poll 2s >/dev/null
 

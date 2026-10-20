@@ -469,7 +469,7 @@ export interface paths {
         };
         /**
          * List a component's alarms
-         * @description What is currently wrong with this component, newest first. Pass include_cleared for the history rather than the active set. Gated by component:read; an out-of-scope component is a non-disclosing 404.
+         * @description What is currently wrong with this component, newest first, with the component's own verdict those alarms make. Pass include_cleared for the history rather than the active set. Gated by component:read; an out-of-scope component is a non-disclosing 404.
          */
         get: operations["list-component-alarms"];
         put?: never;
@@ -6232,6 +6232,8 @@ export interface components {
             readonly $schema?: string;
             alarms: components["schemas"]["AlarmBody"][] | null;
             component: string;
+            /** @description The component's own verdict, the one its active alarms make (healthy, degraded, or outage), whatever the filter: a component's view reads it here rather than off the whole fleet view */
+            verdict: string;
         };
         ListCommandTypesOutputBody: {
             /**
@@ -7216,6 +7218,11 @@ export interface components {
             history: components["schemas"]["ReachHistoryBody"][] | null;
             /** @description The friendly string an operator reads; absent when unset, and the row then reads the derived name verbatim */
             label?: string;
+            /**
+             * Format: date-time
+             * @description When the endpoint last delivered a batch, by the server's clock and to within a few seconds, whatever it carried (any lane, any series, an unchanged value); absent until one lands
+             */
+            last_seen?: string;
             /** @description The per-layer probe signals that compose the verdict */
             layers: components["schemas"]["ReachLayerBody"][] | null;
             /** @description The node that probes this endpoint */
@@ -7253,7 +7260,7 @@ export interface components {
         ReachVerdictBody: {
             /**
              * Format: date-time
-             * @description When the verdict was observed
+             * @description When the verdict last changed: one is stored only on a transition, so an endpoint's freshness is last_seen, not this
              */
             ts: string;
             /** @description The latest stored verdict value (up/down) */

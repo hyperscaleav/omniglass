@@ -340,15 +340,24 @@ cleared alarm is history, not a state), **what it is** (product, vendor, driver,
 property the contract resolved to a value: model, serial, firmware, the RMA facts), and the
 **systems it serves**, each with the role it fills there and the primary marked when there
 is more than one. **Vitals** lists the effective metrics that carry a value, a dot marking
-the device speaking rather than a contract default standing in. Each section's explainer is
+the component speaking rather than a contract default standing in. Each section's explainer is
 on its label's tooltip.
 
 ::screenshot{#fleet-component}
 
 **Collection** shows each endpoint with its layer rungs (ping answers the path, the port
-answers the service), the node, its state, and the last sample age. A stale sample under a
-healthy node points at the device or the network path, not at collection. An offline node
-says nothing about the device. This card is the one place a node appears on these pages.
+answers the service), the node, its state, and when it was last seen: when the server last
+received anything the endpoint's task delivered, not its last up/down change (hours old on an
+endpoint that never stopped answering) and not a time the node wrote on a sample. A driver
+endpoint (one attached to a driver, such as SNMP) has no reachability verdict, so what it delivers
+is what says it is collecting. A stale sample under a
+healthy node points at the component or the network path, not at collection. An offline node
+says nothing about the component. This card is the one place a node appears on these pages.
+
+The component's view refreshes on its own while it is open: its Collection, Vitals, and its alarms
+with the verdict they make every 5 seconds, the node behind Collection every 10, so an endpoint you
+just added, or a component going down, shows up without a reload. It reads only this component and
+its node, never the whole fleet, and stops while the browser tab is hidden.
 
 ## Scope
 

@@ -1,5 +1,5 @@
 import { For, Show, createEffect, createMemo } from "solid-js";
-import { useNavigate, useParams, useSearchParams } from "@solidjs/router";
+import { useLocation, useNavigate, useParams, useSearchParams } from "@solidjs/router";
 import { useQueries, useQuery } from "@tanstack/solid-query";
 import Page from "../components/Page";
 import Breadcrumb from "../components/Breadcrumb";
@@ -21,15 +21,16 @@ import SimulationSection from "../components/SimulationSection";
 import { FLEET_VIEW_KEY, fleetView } from "../lib/fleet";
 import { COMPONENTS_KEY, listComponents, type Component as FleetComponent } from "../lib/components";
 import { componentSystemsKey, componentSystems } from "../lib/members";
-import { REACHABILITY_KEY, getReachability, layerWord } from "../lib/reachability";
-import { componentAlarms, componentAlarmsKey, splitAlarms } from "../lib/alarms";
+import { REACHABILITY_KEY, getReachability, lastSeenAt, layerWord } from "../lib/reachability";
+import { componentAlarmsRead, componentAlarmsReadKey, splitAlarms } from "../lib/alarms";
 import { effectiveProperties, effectivePropertiesKey } from "../lib/component_properties";
 import { effectiveMetrics, effectiveMetricsKey } from "../lib/component_metrics";
 import { durationText } from "../lib/timeline";
-import { NODES_KEY, listNodes } from "../lib/nodes";
+import { getNode, nodeKey } from "../lib/nodes";
 import { PRODUCTS_KEY, listProducts } from "../lib/products";
-import { collectionState, dotVerdict, identityRows, leafAlarmSince, membershipRows, vitalRows } from "../lib/component_leaf";
+import { LEAF_NODE_POLL_MS, LEAF_POLL_MS, collectionState, dotVerdict, identityRows, leafAlarmSince, membershipRows, vitalRows } from "../lib/component_leaf";
 import { entityLabel } from "../lib/entities";
+import { CLOCK_TICK_MS, createClock } from "../lib/clock";
 import { systemRoles, systemRolesKey } from "../lib/system_roles";
 import { componentCrumbs, isRoomOf, rolesOf } from "../lib/detail";
 import { can, useMe } from "../lib/auth";
@@ -42,7 +43,7 @@ import { describeError, fmtTime } from "../lib/format";
 // three tabs. Overview reads why, what it is, the systems it serves and the
 // role it fills in each, its vitals, and collection in context: the one place
 // a node appears to an operator, because the distinction that matters is
-// stated here plainly (a healthy node with a stale sample means the device or
+// stated here plainly (a healthy node with a stale sample means the component or
 // the path, not collection), which is why nodes need no view of their own.
 // ageWords renders a sample age in plain words, coarse on purpose: the card
 // answers "how stale", not "how many milliseconds".
@@ -59,6 +60,9 @@ function ageWords(ts: string, now: number = Date.now()): string {
 export default function ComponentLeaf() {
   const params = useParams<{ id: string }>();
   const navigate = useNavigate();
+  // The router's location, not the window's: on a client-side navigation the
+  // window's query lags the route being rendered (#932).
+  const location = useLocation();
   const id = () => params.id;
   const me = useMe();
   const blades = createBladeController();
@@ -83,7 +87,6 @@ export default function ComponentLeaf() {
   const view = useQuery(() => ({ queryKey: FLEET_VIEW_KEY, queryFn: fleetView }));
   const components = useQuery(() => ({ queryKey: COMPONENTS_KEY, queryFn: listComponents }));
   const products = useQuery(() => ({ queryKey: PRODUCTS_KEY, queryFn: listProducts }));
-  const nodes = useQuery(() => ({ queryKey: NODES_KEY, queryFn: listNodes }));
 
   const component = createMemo<FleetComponent | undefined>(() =>
     (components.data ?? []).find((c) => c.id === id() || c.name === id()),
@@ -94,7 +97,7 @@ export default function ComponentLeaf() {
   createEffect(() => {
     if (!components.data) return;
     const c = component();
-    if (c && c.id !== id()) navigate(`/components/${c.id}${window.location.search}`, { replace: true });
+    if (c && c.id !== id()) navigate(`/components/${c.id}${location.search}`, { replace: true });
   });
 
   const memberships = useQuery(() => ({
@@ -106,11 +109,13 @@ export default function ComponentLeaf() {
     queryKey: REACHABILITY_KEY(id()),
     queryFn: () => getReachability(id()),
     enabled: !!component(),
+    refetchInterval: LEAF_POLL_MS,
   }));
   const alarmsQ = useQuery(() => ({
-    queryKey: componentAlarmsKey(id()),
-    queryFn: () => componentAlarms(id()),
+    queryKey: componentAlarmsReadKey(id()),
+    queryFn: () => componentAlarmsRead(id()),
     enabled: !!component(),
+    refetchInterval: LEAF_POLL_MS,
   }));
   const propsQ = useQuery(() => ({
     queryKey: effectivePropertiesKey(id()),
@@ -121,24 +126,37 @@ export default function ComponentLeaf() {
     queryKey: effectiveMetricsKey(id()),
     queryFn: () => effectiveMetrics(id()),
     enabled: !!component(),
+    refetchInterval: LEAF_POLL_MS,
   }));
-  // Pinned at setup: an age that re-ages on unrelated re-renders is churn.
-  const pageNow = Date.now();
+  // Every age on the card reads one ticking clock: a poll that returns the
+  // same data changes nothing a query can see, so an age pinned to the data
+  // would keep reading fresh after its node died.
+  const pageNow = createClock(CLOCK_TICK_MS);
   const scale = useSeverity();
   // Each alarm row opens its timeline in place (#950).
   const timelines = createTimelineToggles();
-  const activeAlarms = createMemo(() => splitAlarms(alarmsQ.data ?? [], scale().levels).active);
+  const activeAlarms = createMemo(() => splitAlarms(alarmsQ.data?.alarms ?? [], scale().levels).active);
   // The strip reads red when any active alarm is at an outage level (the
   // registry's flag, #917), amber when they only degrade.
   const inOutage = createMemo(() => activeAlarms().some((a) => scale().outage(a.severity)));
-  const since = createMemo(() => leafAlarmSince(alarmsQ.data ?? [], pageNow, scale().levels));
-  const verdict = createMemo(() => (view.data ? dotVerdict(view.data, component()?.id ?? "") : null));
+  const since = createMemo(() => leafAlarmSince(alarmsQ.data?.alarms ?? [], pageNow(), scale().levels));
+  // The component's own verdict rides on its alarms read, polled; the fleet
+  // view's dot (read once, for the place and the path) stands in until then.
+  const verdict = createMemo(() => alarmsQ.data?.verdict ?? (view.data ? dotVerdict(view.data, component()?.id ?? "") : null));
   const identity = createMemo(() => identityRows(propsQ.data ?? []));
   const vitals = createMemo(() => vitalRows(metricsQ.data ?? []));
 
   const product = createMemo(() => (products.data ?? []).find((p) => p.name === component()?.product));
   const rows = createMemo(() => (view.data && memberships.data ? membershipRows(memberships.data, view.data) : []));
-  const nodeByName = createMemo(() => new Map((nodes.data ?? []).map((n) => [n.name, n])));
+  // The node behind each endpoint, read one by one: a component has a node
+  // or two, the fleet has many, and only these are on the card.
+  const nodeNames = createMemo(() => [...new Set((reach.data?.endpoints ?? []).map((e) => e.node).filter((n): n is string => !!n))], undefined, {
+    equals: (a, b) => a.length === b.length && a.every((x, i) => x === b[i]),
+  });
+  const nodeReads = useQueries(() => ({
+    queries: nodeNames().map((n) => ({ queryKey: nodeKey(n), queryFn: () => getNode(n), refetchInterval: LEAF_NODE_POLL_MS })),
+  }));
+  const nodeByName = createMemo(() => new Map(nodeReads.filter((q) => q.data).map((q) => [q.data!.name, q.data!])));
   // The role this component fills in each system it serves: a membership
   // says THAT it belongs; the system's declared roles say what it does there.
   const roleReads = useQueries(() => ({
@@ -226,7 +244,7 @@ export default function ComponentLeaf() {
                             <SeverityBadge name={a.severity} />
                             <span>{a.message}</span>
                             <span class="text-xs text-base-content/50">
-                              {durationText(pageNow - Date.parse(a.raised_at))} · {a.acknowledged ? "acknowledged" : "unacknowledged"}
+                              {durationText(pageNow() - Date.parse(a.raised_at))} · {a.acknowledged ? "acknowledged" : "unacknowledged"}
                             </span>
                             <AcknowledgeButton component={component()?.id ?? id()} alarm={a} />
                             {timelines.button(a.id, a.message)}
@@ -298,7 +316,7 @@ export default function ComponentLeaf() {
                 </div>
             <Show when={vitals().length > 0}>
               <section data-testid="leaf-vitals" class="rounded-box border border-base-300 bg-base-100 p-3.5 text-sm">
-                <Eyebrow label="Vitals" hint="The latest sample per series; a dot marks the device speaking, not a contract default standing in." />
+                <Eyebrow label="Vitals" hint="The latest sample per series; a dot marks the component speaking, not a contract default standing in." />
                 <dl class="mt-2 grid grid-cols-[minmax(7rem,max-content)_1fr] gap-x-3 gap-y-1">
                   <For each={vitals()}>
                     {(row) => (
@@ -317,16 +335,16 @@ export default function ComponentLeaf() {
               </section>
             </Show>
             <section data-testid="leaf-collection" class="rounded-box border border-base-300 bg-base-100 p-3.5 text-sm">
-              <Eyebrow label="Collection" hint="How this component is read: each endpoint, the node collecting it, and the layers that answer. A stale sample under a healthy node points at the device or the path, not at collection." />
+              <Eyebrow label="Collection" hint="How this component is read: each endpoint, the node collecting it, and the layers that answer. A stale sample under a healthy node points at the component or the path, not at collection." />
               <Show when={reach.data && (reach.data.endpoints ?? []).length > 0} fallback={<p class="text-base-content/60">No endpoint declared yet, so nothing collects from this component.</p>}>
                 <ul class="flex flex-col gap-1">
                   <For each={reach.data!.endpoints}>
                     {(iface) => {
-                      const state = () => collectionState(iface, iface.node ? nodeByName().get(iface.node) : undefined);
+                      const state = () => collectionState(iface, iface.node ? nodeByName().get(iface.node) : undefined, pageNow());
                       return (
                         <li class="flex flex-wrap items-center gap-2 text-xs">
                           <span class="font-medium">{iface.endpoint}</span>
-                          {/* The layer rungs, so device-versus-path reads at
+                          {/* The layer rungs, so component-versus-path reads at
                               a glance: ping answers the path, the port
                               answers the service. */}
                           <For each={iface.layers ?? []}>
@@ -339,16 +357,16 @@ export default function ComponentLeaf() {
                           <Show when={iface.node}>
                             <span class="text-base-content/60">via {iface.node}</span>
                           </Show>
-                          <Show when={iface.verdict}>
-                            <span class="text-base-content/50">last sample {ageWords(iface.verdict!.ts)}</span>
+                          <Show when={lastSeenAt(iface)}>
+                            {(ts) => <span class="text-base-content/50">last seen {ageWords(ts(), pageNow())}</span>}
                           </Show>
                           <span data-testid={`collection-${iface.endpoint}`} class="rounded border border-base-content/20 px-1.5 py-0.5">
                             {
                               {
                                 collecting: "collecting",
-                                "device-or-path": "stale sample; the node is healthy, so check the device or the path",
+                                "component-or-path": "stale sample; the node is healthy, so check the component or the path",
                                 "node-offline": "node offline",
-                                down: "device reports down",
+                                down: "component reports down",
                                 unknown: "no sample yet",
                               }[state().kind]
                             }

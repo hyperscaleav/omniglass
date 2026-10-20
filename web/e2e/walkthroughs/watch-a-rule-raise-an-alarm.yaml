@@ -6,21 +6,26 @@
 # Media Lab Classroom 2, so the alarm takes that system to degraded.
 #
 # The wait is real time, and the 60s budget counts it. The node finds the
-# panel down 13 to 15s after the impairment is saved (the simulator's 2s pull,
-# the node's 5s tick, the probe's timeout); the rule then holds for its seeded
-# 15s fire sustain (internal/seed/event_rules.yaml) and opens the alarm on the
-# server's 5s sweep tick, 30 to 32s after the save; and the rule's blade shows
-# it on its next 5s poll. With the unplug before it, the open alarm is on
-# screen 43 to 51s in, and the whole recording runs 48 to 56s, so plugging the
-# panel back in and watching the alarm clear (three clicks, a reopen and the
-# clear, about 12s more) does not fit: the walkthrough ends on the open alarm
-# and the system it moved. The rule clears the alarm on the panel's next up
-# reading, which the rules guide says in words, as it does the panel's blade
-# naming the rule (opening it from the system is 5s more).
+# panel down on its first check-in after the simulator's next 2s pull (the
+# walkthrough stack's node checks in every 2s, web/e2e/lib/stack.sh) and the
+# probe's timeout; the rule then holds for its seeded 15s fire sustain
+# (internal/seed/event_rules.yaml) and opens the alarm on the server's 5s
+# sweep tick; and the rule's blade shows it on its next 5s poll. Recorded on
+# the 2s check-in, the whole walkthrough runs 44 to 53s. Plugging the panel
+# back in and watching the alarm clear was measured on top of a 51s run: the
+# replug (back to the panel's page, three clicks) and the panel reading
+# healthy again added 13s (64.1s), and reopening the rule's blade to read
+# Open alarms (0) 4s more (68.2s). Across that 9s spread neither fits the
+# budget every time, so the walkthrough ends on the open alarm and the system
+# it moved. The rule clears the alarm on the panel's next up reading, which
+# the rules guide says in words, as it does the panel's blade naming the rule
+# (opening it from the system is 5s more).
 #
 # The rule's blade is the live view: the pending streak and the open alarm
 # land in it by its own poll, so those steps wait rather than hold. The system
-# view does not poll (#934), so it is opened once the alarm is open.
+# view does not poll, so it is opened once the alarm is open. The component's
+# own view does refresh (#934), but the replug is still three clicks on the
+# panel's page, which is what the budget cannot hold.
 title: Watch a rule raise an alarm
 description: Unplug a simulated touch panel from its page, watch the official reachability rule wait out its sustain and open a High alarm, and see the panel's system go degraded because of it.
 steps:

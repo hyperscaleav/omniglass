@@ -1,8 +1,8 @@
 import { createSignal, onCleanup } from "solid-js";
 
 // Relative time ("3m ago", "in 2h"), ported from the design's primitives.
-export function rel(iso: string): string {
-  const diff = (Date.now() - new Date(iso).getTime()) / 1000;
+export function rel(iso: string, now: number = Date.now()): string {
+  const diff = (now - new Date(iso).getTime()) / 1000;
   const fut = diff < 0;
   const a = Math.abs(diff);
   const f =
