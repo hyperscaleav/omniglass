@@ -211,6 +211,56 @@ func registerAlarmRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 	})
 }
 
+type alarmTimelineEntryBody struct {
+	At       time.Time `json:"at" doc:"When it happened"`
+	Kind     string    `json:"kind" enum:"event,audit" doc:"An event carrying the alarm (a rule's fire or clear event), or an audit row about it"`
+	What     string    `json:"what" doc:"The event's type (e.g. condition-started), or the audit action: raise, acknowledge or clear"`
+	Actor    string    `json:"actor,omitempty" doc:"Who acted, by name; absent when the platform acted for a rule"`
+	Rule     string    `json:"rule,omitempty" doc:"The event rule the entry belongs to, by name: the rule that wrote the event, or the rule the platform acted for"`
+	Instance string    `json:"instance,omitempty" doc:"The series instance (an endpoint) an event is about"`
+	Message  string    `json:"message,omitempty" doc:"The event's message, or the message the alarm was raised with"`
+}
+
+type alarmTimelineOutput struct {
+	Body struct {
+		Component string                   `json:"component"`
+		AlarmID   string                   `json:"alarm_id"`
+		Entries   []alarmTimelineEntryBody `json:"entries" doc:"Oldest first; at one instant an event comes before the audit row it caused"`
+	}
+}
+
+// registerAlarmTimelineRoute wires an alarm's timeline (#950): its events
+// and its audit rows merged by time. Gated alarm:read; the component is
+// resolved in the caller's component read scope first, so a component it
+// cannot read is the same non-disclosing 404 an unknown one is.
+func registerAlarmTimelineRoute(api huma.API, a *authenticator, gw storage.Gateway) {
+	huma.Register(api, a.gated(huma.Operation{
+		OperationID: "get-component-alarm-timeline",
+		Method:      http.MethodGet,
+		Path:        "/components/{name}/alarms/{id}:timeline",
+		Summary:     "Read an alarm's timeline",
+		Description: "The alarm's history in one list, oldest first: the events that carry it (an event rule's fire event, which opened it, and its clear event, which resolved it) merged by time with its audit rows (the raise, each acknowledgement, the clear, and a rule edit that opened or resolved it, naming the editor). At one instant an event comes before the audit row it caused. Gated by alarm:read; a component outside the caller's component read scope, and an alarm not on the component, are a non-disclosing 404.",
+	}, "alarm", "read"), func(ctx context.Context, in *clearAlarmInput) (*alarmTimelineOutput, error) {
+		compID, err := requireComponentInScope(ctx, a, gw, in.Name, "read")
+		if err != nil {
+			return nil, err
+		}
+		entries, err := gw.AlarmTimeline(ctx, compID, in.ID)
+		if err != nil {
+			return nil, mapAlarmErr(err)
+		}
+		out := &alarmTimelineOutput{}
+		out.Body.Component = in.Name
+		out.Body.AlarmID = in.ID
+		out.Body.Entries = make([]alarmTimelineEntryBody, 0, len(entries))
+		for _, e := range entries {
+			out.Body.Entries = append(out.Body.Entries, alarmTimelineEntryBody{At: e.At, Kind: e.Kind, What: e.What,
+				Actor: e.Actor, Rule: e.Rule, Instance: e.Instance, Message: e.Message})
+		}
+		return out, nil
+	})
+}
+
 // mapAlarmErr translates the alarm sentinels into HTTP status. A bad severity is
 // something the caller sent, so it is a 422.
 func mapAlarmErr(err error) error {

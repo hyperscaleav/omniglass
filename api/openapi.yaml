@@ -235,6 +235,65 @@ components:
         - active
         - acknowledged
       type: object
+    AlarmTimelineEntryBody:
+      additionalProperties: false
+      properties:
+        actor:
+          description: Who acted, by name; absent when the platform acted for a rule
+          type: string
+        at:
+          description: When it happened
+          format: date-time
+          type: string
+        instance:
+          description: The series instance (an endpoint) an event is about
+          type: string
+        kind:
+          description: An event carrying the alarm (a rule's fire or clear event), or an audit row about it
+          enum:
+            - event
+            - audit
+          type: string
+        message:
+          description: The event's message, or the message the alarm was raised with
+          type: string
+        rule:
+          description: "The event rule the entry belongs to, by name: the rule that wrote the event, or the rule the platform acted for"
+          type: string
+        what:
+          description: "The event's type (e.g. condition-started), or the audit action: raise, acknowledge or clear"
+          type: string
+      required:
+        - at
+        - kind
+        - what
+      type: object
+    AlarmTimelineOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/AlarmTimelineOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        alarm_id:
+          type: string
+        component:
+          type: string
+        entries:
+          description: Oldest first; at one instant an event comes before the audit row it caused
+          items:
+            $ref: "#/components/schemas/AlarmTimelineEntryBody"
+          type:
+            - array
+            - "null"
+      required:
+        - component
+        - alarm_id
+        - entries
+      type: object
     AuditEventBody:
       additionalProperties: false
       properties:
@@ -984,6 +1043,9 @@ components:
         clear_criteria:
           $ref: "#/components/schemas/CriteriaBody"
           description: "The criteria that clears it: {op, value}; absent clears on the negation of fire_criteria"
+        clear_event_type:
+          description: The event type the rule writes when its condition ends, by name (condition-ended is the generic one); absent, it writes none
+          type: string
         clear_sustain:
           description: A Go duration; empty is 0s
           type: string
@@ -996,6 +1058,10 @@ components:
         fire_criteria:
           $ref: "#/components/schemas/CriteriaBody"
           description: "The criteria that opens an alarm: {op, value}"
+        fire_event_type:
+          description: The event type the rule writes when its condition starts, by name (condition-started is the generic one)
+          minLength: 1
+          type: string
         fire_sustain:
           description: A Go duration; empty is 0s
           type: string
@@ -1017,14 +1083,13 @@ components:
           $ref: "#/components/schemas/SelectorBody"
           description: The components the rule watches (component types and components); absent is every component
         severity:
-          description: The severity level the alarm is raised at, by name
-          minLength: 1
+          description: The severity level the alarm is raised at, by name; absent or empty, the rule is informational and raises no alarm
           type: string
       required:
         - name
         - sample_key
         - fire_criteria
-        - severity
+        - fire_event_type
       type: object
     CreateEventTypeInputBody:
       additionalProperties: false
@@ -2306,8 +2371,17 @@ components:
     EventBody:
       additionalProperties: false
       properties:
+        alarm_id:
+          description: The alarm a rule's fire event opened or its clear event resolved; absent for most events
+          type: string
         attributes:
           description: Structured attributes, when the occurrence carried a JSON payload
+        derived_by_rule:
+          description: The event rule that derived the occurrence, by name; absent when no rule did
+          type: string
+        derived_by_rule_id:
+          description: The deriving rule's uuid while the rule exists; absent once it is deleted (derived_by_rule keeps its name)
+          type: string
         event_type_id:
           description: The event_type's uuid, the stable form of key
           type: string
@@ -2353,17 +2427,27 @@ components:
           type: string
         clear_criteria:
           $ref: "#/components/schemas/CriteriaBody"
-          description: When the sample meets this for clear_sustain, the alarm clears; absent, the negation of fire_criteria
+          description: When the sample meets this for clear_sustain, the condition ends (and the alarm clears); absent, the negation of fire_criteria
+        clear_event_type:
+          description: The event type the rule writes when its condition ends, by name; absent, it writes none
+          type: string
         clear_sustain:
           description: How long the clear criteria must hold, a Go duration
           type: string
+        conditions_in_force:
+          description: How many conditions the rule holds in force right now, one per component and instance, whether or not it raises an alarm (GET /event-rules/{name}/state lists them)
+          format: int64
+          type: integer
         description:
           type: string
         enabled:
           type: boolean
         fire_criteria:
           $ref: "#/components/schemas/CriteriaBody"
-          description: When the sample meets this for fire_sustain, the rule opens an alarm
+          description: When the sample meets this for fire_sustain, the rule's condition starts (and it opens an alarm when it names a severity)
+        fire_event_type:
+          description: The event type the rule writes when its condition starts, by name
+          type: string
         fire_sustain:
           description: How long the fire criteria must hold, a Go duration (0s fires at once)
           type: string
@@ -2405,7 +2489,7 @@ components:
           $ref: "#/components/schemas/SelectorBody"
           description: The components the rule watches; both lists empty is every component
         severity:
-          description: The severity level the alarm is raised at, by name
+          description: The severity level the alarm is raised at, by name; absent, the rule is informational and raises no alarm
           type: string
         version:
           description: Bumps on every update
@@ -2420,12 +2504,13 @@ components:
         - fire_criteria
         - fire_sustain
         - clear_sustain
-        - severity
+        - fire_event_type
         - enabled
         - official
         - version
         - open_alarms
         - pending_streaks
+        - conditions_in_force
       type: object
     EventRuleStateOutputBody:
       additionalProperties: false
@@ -2437,6 +2522,13 @@ components:
           format: uri
           readOnly: true
           type: string
+        conditions:
+          description: The conditions the rule holds in force, informational or not
+          items:
+            $ref: "#/components/schemas/RuleConditionBody"
+          type:
+            - array
+            - "null"
         last_judged_at:
           description: When an ingested sample was last judged by the rule, to within 5s; absent when it never has been
           format: date-time
@@ -2456,6 +2548,7 @@ components:
             - array
             - "null"
       required:
+        - conditions
         - open
         - pending
       type: object
@@ -5809,6 +5902,27 @@ components:
         - permission_universe
         - roles
       type: object
+    RuleConditionBody:
+      additionalProperties: false
+      properties:
+        component:
+          description: The component, by name
+          type: string
+        component_id:
+          description: The component's uuid
+          type: string
+        instance:
+          description: The sample instance (an endpoint) the condition is on
+          type: string
+        since:
+          description: When the condition came into force
+          format: date-time
+          type: string
+      required:
+        - component
+        - component_id
+        - since
+      type: object
     RuleOpenAlarmBody:
       additionalProperties: false
       properties:
@@ -6922,8 +7036,17 @@ components:
     SystemEventBody:
       additionalProperties: false
       properties:
+        alarm_id:
+          description: The alarm a rule's fire event opened or its clear event resolved; absent for most events
+          type: string
         attributes:
           description: Structured attributes, when the occurrence carried a JSON payload
+        derived_by_rule:
+          description: The event rule that derived the occurrence, by name; absent when no rule did
+          type: string
+        derived_by_rule_id:
+          description: The deriving rule's uuid while the rule exists; absent once it is deleted (derived_by_rule keeps its name)
+          type: string
         event_type_id:
           description: The event_type's uuid, the stable form of key
           type: string
@@ -6941,6 +7064,9 @@ components:
           type: string
         owner:
           description: The owning row's name (the system's, or the member component's)
+          type: string
+        owner_id:
+          description: The owning row's uuid, the stable form of owner (names repeat across members)
           type: string
         owner_kind:
           description: "Which arc raised the occurrence: system or component"
@@ -6964,6 +7090,7 @@ components:
         - provenance
         - owner_kind
         - owner
+        - owner_id
       type: object
     SystemEventsOutputBody:
       additionalProperties: false
@@ -7596,6 +7723,9 @@ components:
         clear_criteria:
           $ref: "#/components/schemas/CriteriaBody"
           description: "The criteria that clears it: {op, value}; absent clears on the negation of fire_criteria"
+        clear_event_type:
+          description: The event type the rule writes when its condition ends, by name; empty writes none
+          type: string
         clear_negates:
           description: Drop the clear criteria, so the rule clears on the negation of its fire criteria
           type: boolean
@@ -7611,6 +7741,9 @@ components:
         fire_criteria:
           $ref: "#/components/schemas/CriteriaBody"
           description: "The criteria that opens an alarm: {op, value}"
+        fire_event_type:
+          description: The event type the rule writes when its condition starts, by name; it cannot be emptied
+          type: string
         fire_sustain:
           description: How long the fire criteria must hold, a Go duration (e.g. 30s); empty is 0s
           type: string
@@ -7627,7 +7760,7 @@ components:
           $ref: "#/components/schemas/SelectorBody"
           description: Replace the components the rule watches; absent leaves them unchanged, and an empty selector watches every component
         severity:
-          description: The severity level the alarm is raised at, by name
+          description: The severity level the alarm is raised at, by name; empty makes the rule informational (no alarm)
           type: string
       type: object
     UpdateEventTypeInputBody:
@@ -9005,6 +9138,40 @@ paths:
           description: Error
       summary: Acknowledge an alarm
       x-omniglass-permission: alarm:acknowledge
+  /components/{name}/alarms/{id}:timeline:
+    get:
+      description: "The alarm's history in one list, oldest first: the events that carry it (an event rule's fire event, which opened it, and its clear event, which resolved it) merged by time with its audit rows (the raise, each acknowledgement, the clear, and a rule edit that opened or resolved it, naming the editor). At one instant an event comes before the audit row it caused. Gated by alarm:read; a component outside the caller's component read scope, and an alarm not on the component, are a non-disclosing 404."
+      operationId: get-component-alarm-timeline
+      parameters:
+        - description: The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
+            type: string
+        - description: The alarm id
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The alarm id
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AlarmTimelineOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Read an alarm's timeline
+      x-omniglass-permission: alarm:read
   /components/{name}/commands:issue:
     post:
       description: Records a command invocation, writes a caused event, and (for a settleable command) opens an intended value the observed value settles against. Returns the computed settlement verdict. Gated by command:issue, whose scope is resolved on the component tier from that permission (not from component:read); a component outside the caller's component:read is a non-disclosing 404, and one it can read but not command is a 403.
@@ -10128,7 +10295,7 @@ paths:
       x-omniglass-permission: endpoint:update
   /event-rules:
     get:
-      description: "Lists the event rules, the authored config that raises alarms, each with its live state as counts (open_alarms, pending_streaks) read in the same query. Rules read like a registry: every rule is listed whatever the caller's scope, while the counts cover only components the caller may read. Gated by rule:read."
+      description: "Lists the event rules, the authored config that raises alarms, each with its live state as counts (conditions_in_force, open_alarms, pending_streaks) read in the same query. Rules read like a registry: every rule is listed whatever the caller's scope, while the counts cover only components the caller may read. Gated by rule:read."
       operationId: list-event-rule
       responses:
         "200":
@@ -10146,7 +10313,7 @@ paths:
       summary: List event rules
       x-omniglass-permission: rule:read
     post:
-      description: Authors a rule that raises an alarm on each component it watches when its sample key meets the fire criteria for the fire sustain, and clears it when the clear criteria (or the negation of fire) holds for the clear sustain. The key must be a registered property or metric, the criteria evaluable on its lane, and the severity a level that exists (else 422); a name already taken is a 409. Audited. Gated by rule:create, with an all-scope grant.
+      description: Authors a rule whose condition starts on each component it watches when its sample key meets the fire criteria for the fire sustain, and ends when the clear criteria (or the negation of fire) holds for the clear sustain. It names the event type it writes when the condition starts (required) and, optionally, when it ends; with a severity it also raises an alarm while the condition holds, and without one it is informational. The key must be a registered property or metric, the criteria evaluable on its lane, the event types registered and the severity, when given, a level that exists (else 422); a name already taken is a 409. Audited. Gated by rule:create, with an all-scope grant.
       operationId: create-event-rule
       requestBody:
         content:
@@ -10219,7 +10386,7 @@ paths:
       summary: Get an event rule
       x-omniglass-permission: rule:read
     patch:
-      description: Patches a rule (an absent field is unchanged), bumping its version; disabling it stops new opens. Official rules are read-only (409). Audited. Gated by rule:update, with an all-scope grant.
+      description: Patches a rule (an absent field is unchanged), bumping its version; disabling it stops new opens. An empty severity makes the rule informational and an empty clear_event_type drops its clear event; the fire event type cannot be emptied (422). Official rules are read-only (409). Audited. Gated by rule:update, with an all-scope grant.
       operationId: update-event-rule
       parameters:
         - description: The rule's name
@@ -10252,7 +10419,7 @@ paths:
       x-omniglass-permission: rule:update
   /event-rules/{name}/state:
     get:
-      description: "What a rule holds right now: the alarms it raised that are still open, each on a component and instance, its streaks waiting out a sustain, and when it last judged an ingested sample. Only alarms and streaks on components the caller may read are listed. Gated by rule:read."
+      description: "What a rule holds right now: the conditions it holds in force (one per component and instance, whether or not it raises an alarm), the alarms it raised that are still open, each on a component and instance, its streaks waiting out a sustain, and when it last judged an ingested sample. Only conditions, alarms and streaks on components the caller may read are listed. Gated by rule:read."
       operationId: get-event-rule-state
       parameters:
         - description: The rule's name
@@ -10322,7 +10489,7 @@ paths:
       x-omniglass-permission: event_type:create
   /event-types/{name}:
     delete:
-      description: Removes a custom event type by name. Official event types are read-only. Gated by event_type:delete.
+      description: "Removes a custom event type by name. Official event types are read-only (409), and so is a type still in use: one that recorded events or an event rule's fire or clear event type names is a 409 until nothing names it. Gated by event_type:delete."
       operationId: delete-event-type
       parameters:
         - description: The event type's name

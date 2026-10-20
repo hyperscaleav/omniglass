@@ -332,12 +332,17 @@ role assignment, in one transaction: it lands whole or not at all.
 level's rank moves health fleet-wide) lists the severity levels least to most severe,
 each with whether an alarm at it puts a component in outage; official levels are read-only. `/event-rules`
 (gated `rule:*`; read like a registry, written only on an all-scope grant) authors the rules that raise alarms: a sample
-key, fire and clear criteria, sustains, a severity level and a selector; an unknown key or level, or
-criteria its lane cannot evaluate, is a 422. A rule edit is judged on what it changes from the stored rule:
+key, fire and clear criteria, sustains, a selector, the event types it writes when its condition starts
+(`fire_event_type`, required) and ends (`clear_event_type`, optional), and a severity level, which is
+optional: a rule without one is informational and raises no alarm, and a PATCH with an empty `severity`
+makes a rule informational (an empty `clear_event_type` drops the clear event; the fire type cannot be
+emptied). An unknown key, level or event type, a missing fire event type, or criteria its lane cannot
+evaluate, is a 422. A rule edit is judged on what it changes from the stored rule:
 a selector entry, key or criteria it restates unchanged is not re-resolved, so a rule whose component or
 type was deleted stays editable (it matches nothing by the stale entry), while an entry new to the rule must
-exist. The list and a get carry each rule's live state as counts (`open_alarms`, `pending_streaks`), read
-for the whole list in one query; `GET /event-rules/{name}/state` lists the alarms and streaks themselves.
+exist. The list and a get carry each rule's live state as counts (`conditions_in_force`, `open_alarms`,
+`pending_streaks`), read for the whole list in one query; `GET /event-rules/{name}/state` lists the
+conditions in force, the alarms and the streaks themselves.
 Both are fenced to the caller's component read scope. The list, a get and the state also carry
 `last_judged_at`, when the rule last judged an arriving sample, to within 5s (absent when it never has);
 it names no component, so it is not fenced. Because writing a rule needs an all-scope grant,
@@ -374,7 +379,10 @@ out-of-scope component is a non-disclosing 404 (a deliberate early exception to
   `event_type` name it is typed by (on the wire as `key`, e.g. `call-started`) with its
   `event_type_id` beside it, `origin` (caught/caused/derived/scheduled), `instance`,
   `message`, optional `attributes`, `provenance` (`observed` for direct collection), and the `source`
-  endpoint type.
+  endpoint type. An event a rule derived also carries `derived_by_rule` (the rule's name) and, when the
+  same transaction opened or resolved an alarm, its `alarm_id` (#949); `GET /systems/{name}/events`
+  carries both the same way, and names each row's owner by uuid as well (`owner_id`), since names
+  repeat across a system's members.
 - `GET /components/{name}/reconciliation` pivots want/told/is over the series: per declared
   property, the **want** (the current declared value, with the contract default coalesced in), the
   **told** (the `intended` value a command
@@ -721,6 +729,12 @@ the first person and the first time are what the row keeps, and the no-op writes
 Un-acknowledging is deliberately not a verb yet
 ([#728](https://github.com/hyperscaleav/omniglass/issues/728)); snooze and resolve are
 [out of scope with reasons](/architecture/alarms-actions/).
+
+- `GET /components/{name}/alarms/{id}:timeline` (**`alarm:read`**, the component's read scope
+  injected, a non-disclosing **404** outside it or for an alarm not on the component) returns the
+  alarm's history oldest first: `entries` of `{at, kind (event|audit), what, actor?, rule?, instance?,
+  message?}`, the events carrying the alarm merged with its audit rows
+  ([the timeline](/architecture/alarms-actions/#the-alarms-timeline)).
 
 The reports are one shape over two owners:
 

@@ -23,15 +23,18 @@ const (
 )
 
 type eventBody struct {
-	TS          time.Time       `json:"ts" doc:"When the occurrence happened"`
-	Key         string          `json:"key" doc:"The event_type name of the occurrence (e.g. call-started)"`
-	EventTypeID string          `json:"event_type_id" doc:"The event_type's uuid, the stable form of key"`
-	Origin      string          `json:"origin" doc:"How the occurrence arrived (caught/caused/derived/scheduled)"`
-	Instance    string          `json:"instance,omitempty" doc:"The series discriminator (e.g. the endpoint), when set"`
-	Message     string          `json:"message" doc:"The occurrence message"`
-	Attributes  json.RawMessage `json:"attributes,omitempty" doc:"Structured attributes, when the occurrence carried a JSON payload"`
-	Provenance  string          `json:"provenance" doc:"The lineage of the occurrence (observed for direct collection)"`
-	Source      string          `json:"source,omitempty" doc:"The transport that produced the occurrence"`
+	TS              time.Time       `json:"ts" doc:"When the occurrence happened"`
+	Key             string          `json:"key" doc:"The event_type name of the occurrence (e.g. call-started)"`
+	EventTypeID     string          `json:"event_type_id" doc:"The event_type's uuid, the stable form of key"`
+	Origin          string          `json:"origin" doc:"How the occurrence arrived (caught/caused/derived/scheduled)"`
+	Instance        string          `json:"instance,omitempty" doc:"The series discriminator (e.g. the endpoint), when set"`
+	Message         string          `json:"message" doc:"The occurrence message"`
+	Attributes      json.RawMessage `json:"attributes,omitempty" doc:"Structured attributes, when the occurrence carried a JSON payload"`
+	Provenance      string          `json:"provenance" doc:"The lineage of the occurrence (observed for direct collection)"`
+	Source          string          `json:"source,omitempty" doc:"The transport that produced the occurrence"`
+	DerivedByRule   string          `json:"derived_by_rule,omitempty" doc:"The event rule that derived the occurrence, by name; absent when no rule did"`
+	DerivedByRuleID string          `json:"derived_by_rule_id,omitempty" doc:"The deriving rule's uuid while the rule exists; absent once it is deleted (derived_by_rule keeps its name)"`
+	AlarmID         string          `json:"alarm_id,omitempty" doc:"The alarm a rule's fire event opened or its clear event resolved; absent for most events"`
 }
 
 type eventsOutput struct {
@@ -66,12 +69,13 @@ func registerEventRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 			out.Body.Events = append(out.Body.Events, eventBody{
 				TS:  e.TS,
 				Key: e.Key, EventTypeID: e.EventTypeID,
-				Origin:     e.Origin,
-				Instance:   e.Instance,
-				Message:    e.Message,
-				Attributes: json.RawMessage(e.Attributes),
-				Provenance: e.Provenance,
-				Source:     e.Source,
+				Origin:        e.Origin,
+				Instance:      e.Instance,
+				Message:       e.Message,
+				Attributes:    json.RawMessage(e.Attributes),
+				Provenance:    e.Provenance,
+				Source:        e.Source,
+				DerivedByRule: e.DerivedByRule, DerivedByRuleID: derefOr(e.DerivedByRuleID), AlarmID: derefOr(e.AlarmID),
 			})
 		}
 		return out, nil
@@ -84,17 +88,21 @@ func registerEventRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 // not flatten an embedded struct, so the embed would serve flattened JSON
 // while the published schema hid the fields, which is drift by construction.
 type systemEventBody struct {
-	TS          time.Time       `json:"ts" doc:"When the occurrence happened"`
-	Key         string          `json:"key" doc:"The event_type name of the occurrence (e.g. call-started)"`
-	EventTypeID string          `json:"event_type_id" doc:"The event_type's uuid, the stable form of key"`
-	Origin      string          `json:"origin" doc:"How the occurrence arrived (caught/caused/derived/scheduled)"`
-	Instance    string          `json:"instance,omitempty" doc:"The series discriminator (e.g. the endpoint), when set"`
-	Message     string          `json:"message" doc:"The occurrence message"`
-	Attributes  json.RawMessage `json:"attributes,omitempty" doc:"Structured attributes, when the occurrence carried a JSON payload"`
-	Provenance  string          `json:"provenance" doc:"The lineage of the occurrence (observed for direct collection)"`
-	Source      string          `json:"source,omitempty" doc:"The transport that produced the occurrence"`
-	OwnerKind   string          `json:"owner_kind" doc:"Which arc raised the occurrence: system or component"`
-	Owner       string          `json:"owner" doc:"The owning row's name (the system's, or the member component's)"`
+	TS              time.Time       `json:"ts" doc:"When the occurrence happened"`
+	Key             string          `json:"key" doc:"The event_type name of the occurrence (e.g. call-started)"`
+	EventTypeID     string          `json:"event_type_id" doc:"The event_type's uuid, the stable form of key"`
+	Origin          string          `json:"origin" doc:"How the occurrence arrived (caught/caused/derived/scheduled)"`
+	Instance        string          `json:"instance,omitempty" doc:"The series discriminator (e.g. the endpoint), when set"`
+	Message         string          `json:"message" doc:"The occurrence message"`
+	Attributes      json.RawMessage `json:"attributes,omitempty" doc:"Structured attributes, when the occurrence carried a JSON payload"`
+	Provenance      string          `json:"provenance" doc:"The lineage of the occurrence (observed for direct collection)"`
+	Source          string          `json:"source,omitempty" doc:"The transport that produced the occurrence"`
+	OwnerKind       string          `json:"owner_kind" doc:"Which arc raised the occurrence: system or component"`
+	Owner           string          `json:"owner" doc:"The owning row's name (the system's, or the member component's)"`
+	OwnerID         string          `json:"owner_id" doc:"The owning row's uuid, the stable form of owner (names repeat across members)"`
+	DerivedByRule   string          `json:"derived_by_rule,omitempty" doc:"The event rule that derived the occurrence, by name; absent when no rule did"`
+	DerivedByRuleID string          `json:"derived_by_rule_id,omitempty" doc:"The deriving rule's uuid while the rule exists; absent once it is deleted (derived_by_rule keeps its name)"`
+	AlarmID         string          `json:"alarm_id,omitempty" doc:"The alarm a rule's fire event opened or its clear event resolved; absent for most events"`
 }
 
 type systemEventsOutput struct {
@@ -127,9 +135,17 @@ func registerSystemEventRoutes(api huma.API, a *authenticator, gw storage.Gatewa
 			out.Body.Events = append(out.Body.Events, systemEventBody{
 				TS: e.TS, Key: e.Key, EventTypeID: e.EventTypeID, Origin: e.Origin, Instance: e.Instance,
 				Message: e.Message, Attributes: e.Attributes, Provenance: e.Provenance, Source: e.Source,
-				OwnerKind: e.OwnerKind, Owner: e.Owner,
+				OwnerKind: e.OwnerKind, Owner: e.Owner, OwnerID: e.OwnerID, DerivedByRule: e.DerivedByRule, DerivedByRuleID: derefOr(e.DerivedByRuleID), AlarmID: derefOr(e.AlarmID),
 			})
 		}
 		return out, nil
 	})
+}
+
+// derefOr reads an optional id as the wire's omitempty string.
+func derefOr(p *string) string {
+	if p == nil {
+		return ""
+	}
+	return *p
 }

@@ -79,6 +79,12 @@
       "labelled": true
     },
     {
+      "table": "event_rule_condition",
+      "shape": "id only",
+      "reason": "a rule's condition in force, keyed by rule, component and instance; nothing addresses it by name",
+      "labelled": false
+    },
+    {
       "table": "event_rule_live",
       "shape": "id only",
       "reason": "when a rule last judged a sample, keyed by the rule's uuid; nothing addresses it by name",

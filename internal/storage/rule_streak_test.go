@@ -22,7 +22,7 @@ type streakRig struct {
 func newStreakRig(t *testing.T, name string, sustain time.Duration) *streakRig {
 	t.Helper()
 	f := newHealthFixture(t)
-	if _, err := f.gw.CreateEventRule(context.Background(), "", storage.EventRuleSpec{Name: name, SampleKey: "endpoint-reachable",
+	if _, err := f.gw.CreateEventRule(context.Background(), "", storage.EventRuleSpec{FireEventType: "condition-started", Name: name, SampleKey: "endpoint-reachable",
 		Fire: criteria("eq", "down"), FireSustain: sustain, Clear: ptrCriteria(criteria("eq", "up")),
 		Severity: "high"}, scope.Set{All: true}); err != nil {
 		t.Fatal(err)
@@ -178,16 +178,16 @@ func TestRuleCreatedWhileConditionHolds(t *testing.T) {
 		Key: "endpoint-reachable", Instance: "tcp", Value: "down", TS: now.Add(-time.Hour)}}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := f.gw.CreateEventRule(ctx, "", storage.EventRuleSpec{Name: "late", SampleKey: "endpoint-reachable",
+	if _, err := f.gw.CreateEventRule(ctx, "", storage.EventRuleSpec{FireEventType: "condition-started", Name: "late", SampleKey: "endpoint-reachable",
 		Fire: criteria("eq", "down"), FireSustain: 10 * time.Second, Severity: "high"}, all); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := f.gw.CreateEventRule(ctx, "", storage.EventRuleSpec{Name: "at-once", SampleKey: "endpoint-reachable",
+	if _, err := f.gw.CreateEventRule(ctx, "", storage.EventRuleSpec{FireEventType: "condition-started", Name: "at-once", SampleKey: "endpoint-reachable",
 		Fire: criteria("eq", "down"), Severity: "high"}, all); err != nil {
 		t.Fatal(err)
 	}
 	off := false
-	if _, err := f.gw.CreateEventRule(ctx, "", storage.EventRuleSpec{Name: "dormant", SampleKey: "endpoint-reachable",
+	if _, err := f.gw.CreateEventRule(ctx, "", storage.EventRuleSpec{FireEventType: "condition-started", Name: "dormant", SampleKey: "endpoint-reachable",
 		Fire: criteria("eq", "down"), FireSustain: 10 * time.Second, Severity: "high", Enabled: &off}, all); err != nil {
 		t.Fatal(err)
 	}
@@ -246,7 +246,7 @@ func TestOfficialRuleSeedPrimes(t *testing.T) {
 		Key: "endpoint-reachable", Instance: "tcp", Value: "down", TS: time.Now().UTC()}}); err != nil {
 		t.Fatal(err)
 	}
-	spec := storage.EventRuleSpec{Name: "seeded", SampleKey: "endpoint-reachable", Fire: criteria("eq", "down"),
+	spec := storage.EventRuleSpec{FireEventType: "condition-started", Name: "seeded", SampleKey: "endpoint-reachable", Fire: criteria("eq", "down"),
 		FireSustain: time.Hour, Severity: "high"}
 	if err := f.gw.UpsertEventRule(ctx, spec); err != nil {
 		t.Fatal(err)

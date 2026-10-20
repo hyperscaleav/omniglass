@@ -1,11 +1,14 @@
 # The official event rules (#920, ADR-0144). Authoritative: the boot seed
 # upserts these on every start, read-only to operators, who author their own
-# alongside.
+# alongside. A rule names the event type it writes when its condition starts
+# (fire_event_type, required) and ends (clear_event_type, optional), and the
+# severity its alarm is raised at (absent: informational, no alarm) (#948).
 rules:
   # An endpoint that stops answering opens an alarm on its component: one
   # alarm per endpoint, at a level that puts the component in outage, after
   # the verdict has read down for the sustain (so one failed poll does not
-  # page). It clears when the endpoint reads up again.
+  # page). It clears when the endpoint reads up again. It writes the generic
+  # condition pair until a semantic one is ruled.
   - name: reachability-lost
     label: Reachability lost
     description: An endpoint stopped answering its reachability probe.
@@ -14,3 +17,5 @@ rules:
     fire_sustain: 15s
     clear: {op: eq, value: up}
     severity: high
+    fire_event_type: condition-started
+    clear_event_type: condition-ended

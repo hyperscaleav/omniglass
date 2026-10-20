@@ -11,7 +11,9 @@ sidebar:
 Of the three rule families below, the **`event_rule`** is built (#819,
 [ADR-0144](/architecture/decisions/#adr-0144-alarms-are-raised-by-event-rules-at-a-severity-level-from-a-ranked-registry)):
 its own table with typed columns, evaluated in the ingest transaction rather than on a JetStream
-consumer, and documented on [alarms and actions](/architecture/alarms-actions/#the-event_rule). The
+consumer, and documented on [alarms and actions](/architecture/alarms-actions/#the-event_rule). It
+writes its typed fire and clear events at each edge of its condition, its alarm optional
+([ADR-0145](/architecture/decisions/#adr-0145-a-rule-records-its-conditions-as-typed-events-and-its-alarm-is-optional)). The
 calc family this page owns, and the `action_rule`, are still design.
 :::
 
@@ -24,7 +26,7 @@ The rule families run as **JetStream consumers on the data lane**: confined samp
 ## Rules: calc, event, action
 
 - **calc_rule**: samples to sample (calculated); this page.
-- **event_rule**: sample change to event. Lives on [events](/architecture/events/) and [alarms and actions](/architecture/alarms-actions/): a required `fire_criteria` and an optional `clear_criteria`, the fire/clear pair opening and resolving an alarm. Built (#819) as its own table, raising and clearing alarms directly; the paired `event` row is still design.
+- **event_rule**: sample change to event. Lives on [events](/architecture/events/) and [alarms and actions](/architecture/alarms-actions/): a required `fire_criteria` and an optional `clear_criteria`, the fire/clear pair opening and resolving an alarm. Built (#819) as its own table, raising and clearing alarms directly, and (#938) writing its typed fire and clear `event` rows at each edge, carrying the alarm; the alarm is optional.
 - **action_rule**: a subscription wiring events and alarms to actions. Lives on [alarms and actions](/architecture/alarms-actions/).
 
 There is no `alarm_rule` and no `condition_rule`: an alarm is an event rule whose events are paired (open, close). Ownership for a templated function is stamped at the edge; shared-endpoint ingress is owner-bound server-side. A **`discovery_rule`** (observed data creates entities) rounds out the family.

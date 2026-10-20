@@ -94,7 +94,7 @@ var idOnlyIsCorrect = map[string]string{
 // their own (an alarm, an event, an audit row, a rule, a contract line, a role,
 // a tag binding's key).
 var exemptRefs = map[string]bool{
-	"role_id": true, "alarm_id": true,
+	"role_id": true, "alarm_id": true, "derived_by_rule_id": true,
 	"event_id": true, "audit_id": true, "source_rule_id": true,
 	"product_property_id": true, "tag_id": true,
 }
@@ -149,6 +149,13 @@ func TestReferencesCarryBothForms(t *testing.T) {
 			// name pair for either.
 			if field == "property_type_id" || field == "event_type_id" {
 				if _, hasKey := sch.Properties["key"]; hasKey {
+					continue
+				}
+			}
+			// The system event log names a row's owner by name as `owner` (the
+			// mixed-owner read, #793) and by uuid as `owner_id` (#951).
+			if field == "owner_id" {
+				if _, hasOwner := sch.Properties["owner"]; hasOwner {
 					continue
 				}
 			}

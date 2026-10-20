@@ -409,9 +409,10 @@ func (p *PG) activeAlarms(ctx context.Context, q txQuerier, componentID string) 
 // clearAlarmByDedupTx clears the open alarm of one condition on a component
 // raised by ruleID (the rule evaluator's clear, #919; a rule clears only its
 // own alarms), audited and with health recomputed in
-// the caller's transaction. No open alarm of that condition is not an error:
-// there is nothing to clear, and nothing is written.
-func (p *PG) clearAlarmByDedupTx(ctx context.Context, tx pgx.Tx, actorID string, component *Component, dedupKey string, ruleID *string) error {
+// the caller's transaction. It returns the cleared alarm's id, which the
+// rule's clear event carries (#949). No open alarm of that condition is not
+// an error: there is nothing to clear, nothing is written, and the id is "".
+func (p *PG) clearAlarmByDedupTx(ctx context.Context, tx pgx.Tx, actorID string, component *Component, dedupKey string, ruleID *string) (string, error) {
 	var alarmID string
 	var cleared time.Time
 	err := tx.QueryRow(ctx, `
@@ -420,14 +421,14 @@ func (p *PG) clearAlarmByDedupTx(ctx context.Context, tx pgx.Tx, actorID string,
 		  and raised_by_rule_id is not distinct from $3::uuid
 		returning id, cleared_at`, component.ID, dedupKey, ruleID).Scan(&alarmID, &cleared)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return nil
+		return "", nil
 	}
 	if err != nil {
-		return fmt.Errorf("storage: clear alarm %s on %q: %w", dedupKey, component.Name, err)
+		return "", fmt.Errorf("storage: clear alarm %s on %q: %w", dedupKey, component.Name, err)
 	}
 	if err := writeAuditRes(ctx, tx, actorID, "update", "alarm", alarmID, nil,
 		map[string]any{"component": component.Name, "dedup_key": dedupKey, "cleared_at": cleared, "raised_by_rule_id": ruleID}); err != nil {
-		return err
+		return "", err
 	}
-	return p.RecomputeHealth(ctx, tx, component.ID)
+	return alarmID, p.RecomputeHealth(ctx, tx, component.ID)
 }

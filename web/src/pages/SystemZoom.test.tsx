@@ -228,6 +228,8 @@ describe("the system zoom", () => {
     expect(within(strip).getByText("No route to host")).toBeTruthy();
     expect(within(strip).getByText(/Room Microphone/)).toBeTruthy();
     expect(within(strip).getByRole("button", { name: /mic-1/ })).toBeTruthy();
+    // Each alarm row opens its timeline in place (#950).
+    expect(within(strip).getAllByRole("button", { name: /^Timeline of / }).length).toBeGreaterThan(0);
   });
 
   // The report names an alarm's component by name and by uuid (#557): the
@@ -482,6 +484,18 @@ describe("the events and logs tabs (#793)", () => {
     expect(within(tab).getByText("videobar-1")).toBeTruthy();
     expect(within(tab).getByText("occupancy-changed")).toBeTruthy();
     expect(within(tab).getByText("boardroom")).toBeTruthy();
+  });
+
+  it("an event a rule derived names the rule, linking to it, and opens the alarm it carries on its component", async () => {
+    const r = mount(`/web/systems/${uuidFor("szp-sys")}?tab=events`);
+    r.qc.setQueryData([...systemEventsKey(uuidFor("szp-sys"))], [
+      { ts: "2026-08-18T15:53:00Z", key: "condition-started", event_type_id: "et-3", origin: "derived", message: "Reachability lost", provenance: "observed",
+        owner_kind: "component", owner: "videobar-1", owner_id: uuidFor("szp-c-bar"), derived_by_rule: "reachability-lost", derived_by_rule_id: uuidFor("szp-rule"), alarm_id: uuidFor("szp-alarm") },
+    ]);
+    const tab = screen.getByTestId("events-tab");
+    const link = (await within(tab).findByText("reachability-lost")).closest("a")!;
+    expect(link.getAttribute("href")).toMatch(/\/rules\?rule=reachability-lost$/);
+    expect(within(tab).getByRole("button", { name: /^Timeline of / })).toBeTruthy();
   });
 
   it("the logs tab renders the members' lines with severity colouring the row, and an empty room says so", async () => {

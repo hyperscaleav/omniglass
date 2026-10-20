@@ -187,7 +187,7 @@ func TestEveryWritePathStoresNullForAnUnsetLabel(t *testing.T) {
 		},
 		"event_rule": func(t *testing.T) (string, string) {
 			v, _ := json.Marshal("down")
-			if _, err := gw.CreateEventRule(ctx, "", storage.EventRuleSpec{Name: "lbl-rule", Label: blank, SampleKey: "endpoint-reachable",
+			if _, err := gw.CreateEventRule(ctx, "", storage.EventRuleSpec{FireEventType: "condition-started", Name: "lbl-rule", Label: blank, SampleKey: "endpoint-reachable",
 				Fire: rules.Criteria{Op: "eq", Value: v}, Severity: "high"}, scope.Set{All: true}); err != nil {
 				t.Fatalf("create event_rule: %v", err)
 			}

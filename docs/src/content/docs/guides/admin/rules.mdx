@@ -1,6 +1,6 @@
 ---
 title: Rules and severity
-description: "Writing an event rule: what it reads, when it opens and clears an alarm, how long a condition must hold, the severity level it raises at, and how to watch it work, from the console, the CLI, or the API."
+description: "Writing an event rule: what it reads, when its condition comes into force and ends, the events it writes, how long a condition must hold, the severity level it raises an alarm at (or none, for an informational rule), and how to watch it work, from the console, the CLI, or the API."
 walkthroughs:
   - id: watch-a-rule-raise-an-alarm
 ---
@@ -8,9 +8,12 @@ walkthroughs:
 import SeededSet from '../../../../components/SeededSet.astro';
 
 **Catalog, under Actions: Rules** (with `rule:read`) is where alarms come from when nobody raises
-them by hand. An **event rule** watches one property or metric on the components it selects, opens
-an alarm on a component when the value meets its **fire criteria** for long enough, and clears it
-when the value meets its **clear criteria**. The alarm it opens is an ordinary alarm: it takes its
+them by hand, and where what happened is recorded when nobody needs paging. An **event rule** watches
+one property or metric on the components it selects. When the value meets its **fire criteria** for
+long enough, its **condition** comes into force on that component: it writes an event and, when it
+has a severity, opens an alarm; when the value meets its **clear criteria** the condition ends, with
+its own event, and the alarm clears. A rule with no severity is **informational**: it writes its
+events and pages nobody. The alarm it opens is an ordinary alarm: it takes its
 component's verdict down, a system role the component fills stops counting it while it is out, and
 it can be acknowledged like any other ([alarms on a component](/guides/operator/entities/#alarms-on-a-component)).
 How the evaluator works is on [alarms and actions](/architecture/alarms-actions/#the-event_rule).
@@ -42,6 +45,12 @@ opens up to a tick after the sustain runs out. Opened from its system, the compo
 rule beside the alarm (**by rule** `reachability-lost`), so an alarm a rule raised is never mistaken
 for one a person raised. Plug it back in and the next `up` reading clears it.
 
+A person can clear a rule's alarm by hand, and **the hand clear holds until the condition ends and
+returns**: the rule acts on edges, not on every sample, so a component that keeps reporting `down`
+does not reopen it. The rule's condition stays in force and the events it wrote are untouched; once the
+component reads `up` the condition ends, and the next time it goes `down` (for the sustain) the rule
+opens a new alarm.
+
 The walkthrough below unplugs a simulated touch panel and watches the rule's blade, live: the streak
 waiting out the sustain, then the open alarm, then the panel's system gone degraded. Plugging it back
 in is left out: the wait for the alarm fills most of the recording's minute, and the replug (three
@@ -53,9 +62,12 @@ clicks on the panel's page) and the clear measured 13 to 17 seconds more, past t
 
 Each row is a rule: its **name** (label above), what it **reads** (the sample key and its lane),
 its **criteria** in words ("reads above 40 °C for 1m", "clears on the opposite"), its **severity** in
-the level's color, its **live** state, and its **origin** (official or custom). The live column counts
-ride on the list itself, which refreshes every 10 seconds:
+the level's color (or a grey **informational** chip for a rule that raises no alarm), its **live**
+state, and its **origin** (official or custom). The live column counts ride on the list itself, which
+refreshes every 10 seconds:
 
+- **N in force**: conditions the rule holds in force right now, one per component and endpoint. Every
+  rule holds conditions, informational or not.
 - **N open**: alarms the rule raised that are still open, one per component and endpoint.
 - **N pending**: components whose samples point at fire (or clear) and are waiting out the sustain.
 - **disabled**: the rule evaluates nothing, and holds nothing open (disabling cleared it).
@@ -93,7 +105,15 @@ sits.
 - **Clears after at least**: the **clear sustain**, set independently: a long clear sustain holds an
   incident through a noisy recovery without delaying the alarm.
 - **Severity**: the level the alarm is raised at, worst first. A level marked outage takes its
-  component out; any other degrades it.
+  component out; any other degrades it. **None (informational)** makes a rule that records what happened
+  as events and raises no alarm: it pages nobody and moves no verdict. A new rule starts at the worst
+  level that does not take its component out; editing a rule never fills a level in for it.
+- **Fire event type** and **Clear event type**: the [events](/architecture/events/) the rule writes,
+  from the event type registry. The fire type is required and is written once when the condition comes
+  into force (after the fire sustain); the clear type is optional (**No clear event**) and is written
+  once when it leaves force (after the clear sustain). `condition-started` and `condition-ended` are
+  the generic pair; a pair the registry already models (`call-started` / `call-ended`) says what
+  happened instead.
 - **Watches component types** and **Watches components**: the components it selects. A type
   includes every type beneath it. Leave both empty to watch every component.
 - **Message**, **Description**, **Enabled**.
@@ -119,6 +139,31 @@ shows the alarm in the level's color with the rule's label as its message, and t
 degraded (its system moves too if the panel fills one of its roles). Switch it back and it clears. On
 a panel with more than two inputs, fire on **is not** `hdmi1` instead, so any other input counts.
 
+### Conditions, and what a rule writes
+
+A rule acts on a condition's **edges**, never on every sample. Its condition comes into force on a
+component and endpoint once the fire criteria have held for the sustain, and leaves force once the
+clear criteria have; while it holds, the rule's blade lists it under **Conditions in force** with when
+it started. At each edge the rule writes one event, which shows on the component's and its system's
+**Activity**, naming the rule (a link to its blade) and, when the rule raised or resolved an alarm in
+the same moment, carrying that alarm (its timeline opens in place). An event outlives its rule: once a
+rule is deleted, its events keep the name it had, shown as plain text marked **(deleted)** rather than
+a link to a blade that is gone. A condition that holds across many
+samples writes one event, not one per sample.
+
+Two behaviors follow from acting on edges:
+
+- **A hand clear holds until the condition ends and returns.** Clearing a rule's alarm by hand leaves
+  its condition and the events it wrote untouched, and further samples of the same condition (a metric
+  over its threshold on every poll included) do not reopen it. Once the value recovers the condition
+  ends, and the next time it comes back the rule opens a new alarm.
+- **Turning a severity on or off moves the alarms, not the condition.** Giving an informational rule a
+  severity opens alarms for the conditions it already holds; setting a rule to None resolves its open
+  alarms and keeps the conditions in force. Neither writes a condition event, since the condition did
+  not move; the alarm's own audit rows (on its timeline) record the open or resolve and who edited the
+  rule. One consequence: turning a severity off and back on reopens an alarm for every condition still
+  in force, including one whose alarm was cleared by hand.
+
 ## Edit, disable, delete
 
 On a custom rule's blade, **Edit** (with `rule:update`) reopens the drawer with everything but the
@@ -126,9 +171,10 @@ name. Saving sends only what you changed, so a rule that still watches a compone
 deleted since it was written stays editable: the form marks such an entry **deleted** (it matches
 nothing by it) and you can remove it or leave it. Changing what the rule judges (its key, criteria, selector or sustains) starts its pending
 streaks over and judges the newest samples again; changing its label, description, message or
-severity leaves them running. Narrowing what it watches clears its alarms on the components it no
-longer selects. **Disable** stops evaluation and clears the alarms the rule holds open (each stays in
-its component's history as cleared); **Enable** judges the newest samples at once, so a condition that
+severity or event types leaves them running. Narrowing what it watches ends its conditions (each with
+its clear event) and clears its alarms on the components it no longer selects. **Disable** stops
+evaluation, ends the conditions the rule holds in force with their clear events, and clears its open
+alarms (each stays in its component's history as cleared); **Enable** judges the newest samples at once, so a condition that
 still holds starts its sustain again. **Delete** (with `rule:delete`, behind a confirm) clears what the
 rule holds open the same way and removes it; its past alarms stay in each component's history, no
 longer naming it.

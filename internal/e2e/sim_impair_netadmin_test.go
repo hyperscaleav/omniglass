@@ -209,22 +209,46 @@ func TestImpairingASimulatedDeviceShowsInCollection(t *testing.T) {
 
 	// ruleAlarms counts sim-dev's open alarms raised by the official
 	// reachability rule; verdict reads its system's health.
-	ruleAlarms := func() int {
+	ruleAlarmIDs := func() []string {
 		var out struct {
 			Alarms []struct {
+				ID           string `json:"id"`
 				RaisedByRule string `json:"raised_by_rule"`
 			} `json:"alarms"`
 		}
 		if !get("/components/sim-dev/alarms", &out) {
-			return -1
+			return nil
 		}
-		n := 0
+		var ids []string
 		for _, a := range out.Alarms {
 			if a.RaisedByRule == "reachability-lost" {
-				n++
+				ids = append(ids, a.ID)
 			}
 		}
-		return n
+		return ids
+	}
+	ruleAlarms := func() int { return len(ruleAlarmIDs()) }
+	// ruleEvents maps each alarm id the official rule's events of a type
+	// carry to how many carry it (#949): the edges it wrote on sim-dev.
+	ruleEvents := func(key string) map[string]int {
+		var out struct {
+			Events []struct {
+				Key           string `json:"key"`
+				Origin        string `json:"origin"`
+				DerivedByRule string `json:"derived_by_rule"`
+				AlarmID       string `json:"alarm_id"`
+			} `json:"events"`
+		}
+		got := map[string]int{}
+		if !get("/components/sim-dev/events", &out) {
+			return got
+		}
+		for _, e := range out.Events {
+			if e.Key == key && e.Origin == "derived" && e.DerivedByRule == "reachability-lost" {
+				got[e.AlarmID]++
+			}
+		}
+		return got
 	}
 	verdict := func() string {
 		var out struct {
@@ -256,6 +280,15 @@ func TestImpairingASimulatedDeviceShowsInCollection(t *testing.T) {
 	// leaves healthy.
 	waitForWithin(t, 60*time.Second, "the reachability rule to open an alarm", func() bool { return ruleAlarms() > 0 })
 	waitFor(t, "the system to leave healthy", func() bool { v := verdict(); return v != "" && v != "healthy" })
+	// Each alarm the rule opened was opened by a fire event carrying it, once.
+	waitFor(t, "an alarm per endpoint", func() bool { return ruleAlarms() == 2 })
+	opened := ruleAlarmIDs()
+	fired := ruleEvents("condition-started")
+	for _, id := range opened {
+		if fired[id] != 1 {
+			t.Fatalf("alarm %s was opened by %d condition-started events (all: %v), want exactly 1 carrying it", id, fired[id], fired)
+		}
+	}
 
 	replugged := time.Now()
 	as("component", "impairment", "set", "sim-dev")
@@ -263,6 +296,13 @@ func TestImpairingASimulatedDeviceShowsInCollection(t *testing.T) {
 	after("ping to recover once replugged", "icmp-reachable", replugged, up)
 	waitFor(t, "both endpoints to read up again", both("up"))
 	waitFor(t, "the reachability alarms to clear", func() bool { return ruleAlarms() == 0 })
+	// Each was resolved by a clear event carrying it, once.
+	cleared := ruleEvents("condition-ended")
+	for _, id := range opened {
+		if cleared[id] != 1 {
+			t.Fatalf("alarm %s was resolved by %d condition-ended events (all: %v), want exactly 1 carrying it", id, cleared[id], cleared)
+		}
+	}
 	waitFor(t, "the system to read healthy again", func() bool { return verdict() == "healthy" })
 
 	slowed := time.Now()

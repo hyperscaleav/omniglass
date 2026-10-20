@@ -73,7 +73,7 @@ if (nested && tree.length !== rows.length) {
     </table>
   ) : kind === 'event_rules' ? (
     <table class="seeded-set">
-      <thead><tr><th>Rule</th><th>Reads</th><th>Fires</th><th>Clears</th><th>Severity</th></tr></thead>
+      <thead><tr><th>Rule</th><th>Reads</th><th>Fires</th><th>Clears</th><th>Writes</th><th>Severity</th></tr></thead>
       <tbody>
         {rows.map((r) => (
           <tr>
@@ -81,7 +81,8 @@ if (nested && tree.length !== rows.length) {
             <td><code>{r.sample_key}</code></td>
             <td><code>{r.fire}</code>{r.fire_sustain ? ` for ${r.fire_sustain}` : ''}</td>
             <td>{r.clear ? <code>{r.clear}</code> : 'the opposite'}{r.clear_sustain ? ` after ${r.clear_sustain}` : ''}</td>
-            <td><code>{r.severity}</code></td>
+            <td><code>{r.fire_event_type}</code>{r.clear_event_type ? <>, <code>{r.clear_event_type}</code></> : ''}</td>
+            <td>{r.severity ? <code>{r.severity}</code> : 'none (informational)'}</td>
           </tr>
         ))}
       </tbody>

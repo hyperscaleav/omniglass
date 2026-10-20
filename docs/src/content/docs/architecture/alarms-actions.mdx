@@ -28,7 +28,11 @@ component stops occupying its slots; a lesser alarm degrades the component but l
 
 Also built: the **event rule** that raises and clears alarms on its own as samples land, with
 sustains held by a durable streak and a sweep, one official rule (`reachability-lost`), each rule's
-live state, and the console's **Rules** and **Severity** pages. **Acknowledgement** ([below](#acknowledgement-a-fact-about-a-person)), the record that a
+live state, and the console's **Rules** and **Severity** pages. The **event-to-alarm edge** (#938,
+[ADR-0145](/architecture/decisions/#adr-0145-a-rule-records-its-conditions-as-typed-events-and-its-alarm-is-optional)):
+a rule's alarm is optional (an informational rule raises none), it writes typed events at each edge of
+its condition, carrying the alarm they opened or resolved, and an **alarm's timeline** merges those
+events with its audit rows. **Acknowledgement** ([below](#acknowledgement-a-fact-about-a-person)), the record that a
 human has seen an incident, orthogonal to whether it is still raised. **Snooze** and **resolve** are
 not built, and the reasons are in that section.
 See [implementation status](/architecture/status/).
@@ -56,8 +60,8 @@ a [CDC publisher](/architecture/messaging/) fans the committed transition onto J
 **opened / resolved** are rule-driven (`fire_criteria` / `clear_criteria`), each emitting an `event`
 with the `alarm_id`; the operator-driven transitions are recorded in `audit_log` (also carrying the
 `alarm_id`) and applied to the row. The timeline assembles by `alarm_id` across events + audit. The
-acknowledgement half of that is built and works exactly this way ([below](#acknowledgement-a-fact-about-a-person));
-snooze is not.
+acknowledgement half of that is built and works exactly this way ([below](#acknowledgement-a-fact-about-a-person)),
+as are the rule-driven events and the timeline itself ([below](#the-alarms-timeline)); snooze is not.
 :::
 
 An alarm write is **not sample-silent**: raising or clearing one recomputes
@@ -66,6 +70,29 @@ transition as a **calculated-provenance `property` sample** (`provenance='calcul
 `source_rule='health-rollup'`). Cycle safety therefore rests on **provenance, not topology**
 ([ADR-0069](/architecture/decisions/#adr-0069-cycle-safety-is-provenance-based-not-topology-based),
 see *Cycle safety*).
+
+## The alarm's timeline
+
+An alarm's history is one read (#950): `GET /components/{name}/alarms/{id}:timeline` (`omniglass
+component alarm timeline <name> <id>`, gated **`alarm:read`**, the component resolved in the caller's
+component read scope first, so a component it cannot read is the same non-disclosing 404 an unknown one
+is) merges the **events that carry the alarm** (`event.alarm_id`: an event rule's fire event, which
+opened it, and its clear event, which resolved it) with its **audit rows** (the raise, each
+acknowledgement, the clear, and a rule edit that turned a severity on or off, naming the editor) into
+one list, oldest first. Each entry says when, whether it is an event or an audit row, what (the event's
+type, or `raise` / `acknowledge` / `clear`), and who: the person who acted, or the rule the entry
+belongs to (the rule wrote the event, or the platform acted for it). At one instant an event comes
+before the audit row it caused, since a rule's event and the alarm write it moves share the
+transaction's clock. It is two bounded statements over the component the route already resolved (the
+alarm, then both sources in one ordered union over `event.alarm_id` and a partial `audit_log` index on
+alarm rows), never a read per entry. The id may come in any form Postgres reads as a uuid (uppercase,
+braced) and is matched in its canonical form. The platform's audit lines name the rule as its events
+recorded it, so a deleted rule still names its lines. An open timeline refreshes with the alarm list,
+and an acknowledge or clear refreshes it at once.
+Hand-raised alarms write no events, so their timeline is their audit rows alone. In the console every
+alarm row carries a clock button that opens its timeline in place, under the row: the Why strip on a
+component's and a system's page and blade, the component's alarms panel (active and recently cleared),
+and a rule's open alarms.
 
 ## Acknowledgement: a fact about a person
 
@@ -129,6 +156,44 @@ When a landed sample meets the fire criteria the rule opens an alarm on the samp
 one meets the clear criteria it clears it; a rule with no clear criteria clears on the **negation** of
 its fire criteria. There is no separate `alarm_rule`.
 
+The alarm is **optional** (#948): a rule with no severity is **informational** and raises no alarm. A
+rule also names the [event types](/architecture/events/) it records: a required **`fire_event_type`**,
+written when its condition starts, and an optional **`clear_event_type`**, written when it ends, both by
+name from the `event_type` registry (an unknown one is refused, and a type a rule names cannot be
+deleted). The platform seeds a generic pair for rules that need no semantic type of their own,
+`condition-started` and `condition-ended`; a rule can name a bracketing pair the registry already
+models instead (`call-started` / `call-ended`).
+
+**Edges, not samples** (#949). A rule's condition is in force on a component and instance while it
+holds a row in **`event_rule_condition`**, for every rule, informational or not. When the condition
+comes into force (after `fire_sustain`) the rule writes the condition row, opens its alarm when it has a
+severity, and writes its **fire event**; when it leaves force (after `clear_sustain`) it deletes the
+row, resolves the alarm, and writes its **clear event** when it has a clear type. Each is written
+once, never per sample while the condition holds, in one transaction with the alarm transition and
+the health recompute. The [event](/architecture/events/) is `origin = derived`, names its rule
+(`derived_by_rule_id`, and the rule's name and version in `source_rule`, which outlive a deleted
+rule), sits on the series' component and instance, carries the rule's message and the sample's key
+and value as attributes, and carries the alarm it opened or resolved in **`event.alarm_id`**. A rule
+with no clear type resolves its alarm with no clear event, and its condition still ends. Turning a
+severity on opens alarms for the conditions in force, and turning it off resolves them while the
+conditions stay in force; neither writes a condition event, since the condition did not move, so an
+episode carries exactly one started and one ended event, and a rule edit's alarm open or resolve is
+recorded in the alarm's audit rows, naming the editor. On a material edit that also turns a severity
+on, the rule primes first, so a condition the edited rule no longer holds ends before an alarm could
+be raised for it.
+
+**A hand clear of a rule's alarm holds until the condition ends and returns.** In force is the
+condition row, not the alarm, so an operator clearing the alarm leaves the condition row and its
+events untouched, and a further sample of the same condition (a metric over its threshold on every
+poll included) does not reopen it; the next alarm opens on the next new edge, after the condition ends
+and starts again (the same manual close a Zabbix trigger allows); the one exception is a severity turned
+off and back on, which raises for every condition still in force, a hand-cleared one included. A
+condition in force is what the rule's live counts and state read too, so open alarms never outnumber
+conditions. An alarm the rule holds open with no
+condition row behind it (one an older binary raised during a rolling upgrade) also counts as in force:
+a further fire neither adopts it nor writes an event, and a recovery resolves it with no clear event,
+since no condition row ended.
+
 ```yaml
 event_rule:
   name: reach-lost
@@ -137,7 +202,9 @@ event_rule:
   clear_criteria: { op: eq, value: up } # optional: absent, the negation of fire
   fire_sustain: 30s                     # how long fire must hold
   clear_sustain: 0s
-  severity: high
+  severity: high                        # optional: absent, informational (no alarm)
+  fire_event_type: condition-started    # the event written when the condition starts
+  clear_event_type: condition-ended     # optional: the event written when it ends
   selector: { component_types: [display], components: [] }   # empty: every component
 ```
 
@@ -147,16 +214,16 @@ feeds health exactly as a hand-raised one does; it writes as the system actor. T
 (`raised_by_rule_id`, set null if the rule is deleted), and its condition identity is the rule's name
 plus the sample's **instance**, so a per-endpoint input holds **one alarm per endpoint**: a component
 whose SNMP and HTTP both fail carries two, and one recovering clears only its own. A repeated or
-redelivered sample changes nothing. A disabled rule evaluates nothing; disabling or deleting a rule clears
-the alarms it holds open (they stay in the history), and narrowing its selector clears those on the
-components it no longer watches.
+redelivered sample changes nothing. A disabled rule evaluates nothing; disabling or deleting a rule ends
+the conditions it holds in force, each with its clear event, resolving their alarms (they stay in the
+history), and narrowing its selector ends those on the components it no longer watches.
 
 **Sustains** hold an edge until it has lasted: `fire_sustain` before the alarm opens and
 `clear_sustain` before it clears, both defaulting to `0s`, set independently (a long clear sustain
 over a short fire sustain holds an incident through a noisy recovery without delaying the page). A
 sample pointing at an action starts or continues a **streak** (stored per rule, component and instance,
 so it survives a restart); a sample that points nowhere (neither criterion holds), or at an action
-already in force (a fire with the alarm open, a clear with none), breaks it, as does a sample the rule
+already in force (a fire with the condition in force, a clear with none), breaks it, as does a sample the rule
 cannot evaluate; and once it has held for the sustain the action takes effect, either on a later sample
 or on the server's **sweep** (every five seconds, beside the command settlement sweep), which is what
 lets a sustain work on an input that reports only on change, like `endpoint-reachable`. Before acting,
@@ -167,8 +234,9 @@ ingest holds the rule for its batch, so a disable, delete or narrowing waits for
 then clears whatever it raised. Sustains are timed by the **server's receipt** of each sample, never by the
 sample's own timestamp, so a node whose clock runs behind neither skips nor stretches a sustain (which
 sample is newest is still decided by that timestamp). Only a **material** edit restarts a rule's
-streaks (its key, criteria, clear criteria, selector or sustains); a label, description, message or
-severity edit leaves them running. Creating a rule, enabling one, or a material edit **primes** it from
+streaks (its key, criteria, clear criteria, selector or sustains); a label, description, message,
+severity or event type edit leaves them running, since the event types change what the rule writes at
+an edge, not when the edge falls. Creating a rule, enabling one, or a material edit **primes** it from
 each selected series' newest sample, so a condition that already holds starts its sustain then (or
 fires at once with no sustain) instead of waiting for a change the input may never send.
 
@@ -209,10 +277,11 @@ Writing one is fleet-wide: authored at `/event-rules` with `rule:*` on an all-sc
 rule's selector reaches every component (ADR-0144). A version bumps on every change.
 
 A rule's **live state** is a read, not a stored column: `GET /event-rules/{name}/state` (`omniglass
-event-rule state list <rule>`, gated `rule:read`) returns the alarms it raised that are still open (component,
+event-rule state list <rule>`, gated `rule:read`) returns the conditions it holds in force (component,
+endpoint instance, since when; #951), the alarms it raised that are still open (component,
 endpoint instance, severity, when) and its streaks waiting out a sustain (component, instance, whether
 it points at fire or clear, since when). The list and a get carry the same state as counts
-(`open_alarms`, `pending_streaks`), aggregated for the whole list in one query, so a page of rules polls
+(`conditions_in_force`, `open_alarms`, `pending_streaks`), aggregated for the whole list in one query, so a page of rules polls
 one list rather than a state read per rule. The state names components, so the lists and the counts
 cover only the components the caller's component read scope admits: a reader scoped to one place sees
 every rule, but only the alarms and streaks it could already see. The console's **Catalog > Actions > Rules** page (#921) lists
@@ -470,9 +539,11 @@ notify/command/wait/branch, `status`, `current_step`), driven by events and alar
 table exists today.
 :::
 
-The event rule is two tables: the authored **`event_rule`** row and the durable streak each rule
-holds per component and instance while it waits out a sustain, **`event_rule_state`**. The severity
-registry is **`severity_level`**.
+The event rule is three tables: the authored **`event_rule`** row, the durable streak each rule
+holds per component and instance while it waits out a sustain, **`event_rule_state`**, and the
+condition each rule holds in force per component and instance, **`event_rule_condition`**, which an
+upgrade backfilled from the rule-raised alarms open at the time. The severity registry is
+**`severity_level`**.
 
 <SchemaTable
   table="event_rule"
@@ -481,7 +552,9 @@ registry is **`severity_level`**.
     fire_criteria: 'The comparison that opens an alarm ({op, value}); jsonb so the expression leaf drops in (#524)',
     clear_criteria: 'NULL: clears on the negation of fire_criteria',
     selector: 'Component types and components it watches; empty, every component',
-    severity: 'The level its alarms are raised at, by name',
+    severity: 'The level its alarms are raised at, by name; NULL is an informational rule, which raises no alarm',
+    fire_event_type_id: 'The event type written when the condition starts (FK event_type, required)',
+    clear_event_type_id: 'The event type written when the condition ends; NULL writes none',
     version: 'Bumps on every change',
   }}
 />
@@ -491,6 +564,13 @@ registry is **`severity_level`**.
   notes={{
     pending: 'fire or clear: the action the samples point at',
     since: 'The server receipt time the streak began; the sustain is measured from here',
+  }}
+/>
+
+<SchemaTable
+  table="event_rule_condition"
+  notes={{
+    since: 'When the condition came into force; one row while it holds, for every rule',
   }}
 />
 

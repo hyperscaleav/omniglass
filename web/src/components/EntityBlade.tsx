@@ -1,6 +1,7 @@
 import { For, Show, createMemo, createSignal, type JSX } from "solid-js";
 import PlaceCard from "./PlaceCard";
 import AcknowledgeButton from "./AcknowledgeButton";
+import AlarmTimeline, { createTimelineToggles } from "./AlarmTimeline";
 import { useNavigate } from "@solidjs/router";
 import { useQueries, useQuery, useQueryClient } from "@tanstack/solid-query";
 import HealthBadge from "./HealthBadge";
@@ -103,26 +104,41 @@ function useDelete(opts: {
 
 // Why, with the severity first: the reason beside the red light, each
 // naming the component when there is one to open, and the event rule when
-// one raised it.
-function Why(props: { rows: { severity: string; message: string; component?: string; onOpen?: () => void; rule?: string; ack?: JSX.Element }[] }) {
+// one raised it. A row that names its alarm (timeline) opens the alarm's
+// timeline in place (#950).
+function Why(props: {
+  rows: { severity: string; message: string; component?: string; onOpen?: () => void; rule?: string; ack?: JSX.Element; timeline?: { component: string; alarmId: string } }[];
+}) {
+  const timelines = createTimelineToggles();
   return (
     <Show when={props.rows.length > 0}>
       <div data-testid="blade-why" class={section}>
         <span class={eyebrow}>Why</span>
         <For each={props.rows}>
           {(a) => (
-            <div class="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-              <SeverityBadge name={a.severity} size="xs" />
-              <Show when={a.component}>
-                <Show when={a.onOpen} fallback={<span class="font-data text-xs text-base-content/80">{a.component}</span>}>
-                  <button type="button" class="cursor-pointer font-data text-xs text-base-content/80 hover:underline" onClick={() => a.onOpen!()}>{a.component}</button>
+            <div class="flex flex-col gap-1.5">
+              <div class="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                <SeverityBadge name={a.severity} size="xs" />
+                <Show when={a.component}>
+                  <Show when={a.onOpen} fallback={<span class="font-data text-xs text-base-content/80">{a.component}</span>}>
+                    <button type="button" class="cursor-pointer font-data text-xs text-base-content/80 hover:underline" onClick={() => a.onOpen!()}>{a.component}</button>
+                  </Show>
                 </Show>
+                <span class="min-w-0 flex-1 text-xs text-base-content/70">{a.message}</span>
+                <Show when={a.rule}>
+                  {(rule) => <span class="shrink-0 text-[11px] text-base-content/45">by rule <span class="font-data">{rule()}</span></span>}
+                </Show>
+                {a.ack}
+                <Show when={a.timeline}>{(tl) => timelines.button(tl().alarmId, a.message)}</Show>
+              </div>
+              <Show when={a.timeline && timelines.isOpen(a.timeline.alarmId)}>
+                <AlarmTimeline
+                  component={a.timeline!.component}
+                  alarmId={a.timeline!.alarmId}
+                  id={timelines.panelId(a.timeline!.alarmId)}
+                  label={timelines.label(a.message)}
+                />
               </Show>
-              <span class="min-w-0 flex-1 text-xs text-base-content/70">{a.message}</span>
-              <Show when={a.rule}>
-                {(rule) => <span class="shrink-0 text-[11px] text-base-content/45">by rule <span class="font-data">{rule()}</span></span>}
-              </Show>
-              {a.ack}
             </div>
           )}
         </For>
@@ -164,7 +180,15 @@ function SystemBody(props: { id: string }) {
         <HealthBadge verdict={cluster()?.verdict ?? undefined} size="sm" />
         <SinceLine since={health.data ? sinceOf(health.data, now) : undefined} />
       </div>
-      <Why rows={alarms().map((a) => ({ severity: a.severity, message: a.message, component: a.component, onOpen: a.componentId ? () => blades.push({ kind: "component", id: a.componentId! }) : undefined }))} />
+      <Why
+        rows={alarms().map((a) => ({
+          severity: a.severity,
+          message: a.message,
+          component: a.component,
+          onOpen: a.componentId ? () => blades.push({ kind: "component", id: a.componentId! }) : undefined,
+          timeline: a.componentId ? { component: a.componentId, alarmId: a.id } : undefined,
+        }))}
+      />
       {/* The room's only system is the room: the title already names it. */}
       <Show when={cluster()?.location}>{(pid) => <PlaceCard placeId={pid()} path showName={!(view.data && isRoomOf(view.data, pid(), [props.id]))} />}</Show>
       {/* Size only: the standard is the form's Classification, said there. */}
@@ -227,7 +251,15 @@ function ComponentBody(props: { id: string }) {
         <HealthBadge verdict={verdict() ?? undefined} size="sm" />
         <SinceLine since={leafAlarmSince(alarmsQ.data ?? [], now, scale().levels)} />
       </div>
-      <Why rows={active().map((a) => ({ severity: a.severity, message: a.message, rule: a.raised_by_rule, ack: <AcknowledgeButton component={props.id} alarm={a} /> }))} />
+      <Why
+        rows={active().map((a) => ({
+          severity: a.severity,
+          message: a.message,
+          rule: a.raised_by_rule,
+          ack: <AcknowledgeButton component={props.id} alarm={a} />,
+          timeline: { component: props.id, alarmId: a.id },
+        }))}
+      />
       {/* Where its place is the room a system it serves makes, Serves names
           that room already, so no place card says it again. */}
       <Show when={placeId() && !(view.data && isRoomOf(view.data, placeId(), served().map((s) => s.id)))}>

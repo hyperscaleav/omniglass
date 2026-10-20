@@ -179,18 +179,21 @@ type factsSeverityLevel struct {
 	Outage bool   `json:"outage"`
 }
 
-// factsEventRule is one official event rule (#920) as the docs render it: the
-// criteria flattened to "op value" words.
+// factsEventRule is one official event rule (#920, #948) as the docs render
+// it: the criteria flattened to "op value" words, the severity absent for an
+// informational rule.
 type factsEventRule struct {
-	Name         string `json:"name"`
-	Label        string `json:"label,omitempty"`
-	Description  string `json:"description,omitempty"`
-	SampleKey    string `json:"sample_key"`
-	Fire         string `json:"fire"`
-	Clear        string `json:"clear,omitempty"`
-	FireSustain  string `json:"fire_sustain,omitempty"`
-	ClearSustain string `json:"clear_sustain,omitempty"`
-	Severity     string `json:"severity"`
+	Name           string `json:"name"`
+	Label          string `json:"label,omitempty"`
+	Description    string `json:"description,omitempty"`
+	SampleKey      string `json:"sample_key"`
+	Fire           string `json:"fire"`
+	Clear          string `json:"clear,omitempty"`
+	FireSustain    string `json:"fire_sustain,omitempty"`
+	ClearSustain   string `json:"clear_sustain,omitempty"`
+	Severity       string `json:"severity,omitempty"`
+	FireEventType  string `json:"fire_event_type"`
+	ClearEventType string `json:"clear_event_type,omitempty"`
 }
 
 type seedFactsDoc struct {
@@ -424,26 +427,15 @@ func FactsJSON() ([]byte, error) {
 		})
 	}
 
-	var ers struct {
-		Rules []struct {
-			Name         string        `yaml:"name"`
-			Label        string        `yaml:"label"`
-			Description  string        `yaml:"description"`
-			SampleKey    string        `yaml:"sample_key"`
-			Fire         criteriaYAML  `yaml:"fire"`
-			Clear        *criteriaYAML `yaml:"clear"`
-			FireSustain  string        `yaml:"fire_sustain"`
-			ClearSustain string        `yaml:"clear_sustain"`
-			Severity     string        `yaml:"severity"`
-		} `yaml:"rules"`
-	}
+	var ers eventRulesDoc
 	if err := yaml.Unmarshal(eventRulesYAML, &ers); err != nil {
 		return nil, fmt.Errorf("seed facts: event rules: %w", err)
 	}
 	words := func(c criteriaYAML) string { return fmt.Sprintf("%s %v", c.Op, c.Value) }
 	for _, r := range ers.Rules {
 		fr := factsEventRule{Name: r.Name, Label: r.Label, Description: r.Description, SampleKey: r.SampleKey,
-			Fire: words(r.Fire), FireSustain: r.FireSustain, ClearSustain: r.ClearSustain, Severity: r.Severity}
+			Fire: words(r.Fire), FireSustain: r.FireSustain, ClearSustain: r.ClearSustain, Severity: r.Severity,
+			FireEventType: r.FireEventType, ClearEventType: r.ClearEventType}
 		if r.Clear != nil {
 			fr.Clear = words(*r.Clear)
 		}

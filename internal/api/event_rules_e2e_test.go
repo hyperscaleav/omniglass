@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -28,13 +29,15 @@ type eventRuleBody struct {
 	ClearCriteria *struct {
 		Op string `json:"op"`
 	} `json:"clear_criteria"`
-	FireSustain string `json:"fire_sustain"`
-	Severity    string `json:"severity"`
-	Enabled     bool   `json:"enabled"`
-	Version     int    `json:"version"`
-	Official    bool   `json:"official"`
-	OpenAlarms  *int   `json:"open_alarms"`
-	Pending     *int   `json:"pending_streaks"`
+	FireSustain    string  `json:"fire_sustain"`
+	Severity       *string `json:"severity"`
+	FireEventType  string  `json:"fire_event_type"`
+	ClearEventType *string `json:"clear_event_type"`
+	Enabled        bool    `json:"enabled"`
+	Version        int     `json:"version"`
+	Official       bool    `json:"official"`
+	OpenAlarms     *int    `json:"open_alarms"`
+	Pending        *int    `json:"pending_streaks"`
 	// LastJudged is when the rule last judged an ingested sample (#929).
 	LastJudged *time.Time `json:"last_judged_at"`
 }
@@ -68,7 +71,8 @@ func TestEventRuleAPI(t *testing.T) {
 	viewer := setupAllViewer(t, ctx, dsn, "rule-viewer")
 
 	rule := map[string]any{"name": "reach-lost", "label": "Reachability lost", "sample_key": "endpoint-reachable",
-		"fire_criteria": map[string]any{"op": "eq", "value": "down"}, "fire_sustain": "30s", "severity": "high"}
+		"fire_criteria": map[string]any{"op": "eq", "value": "down"}, "fire_sustain": "30s", "severity": "high",
+		"fire_event_type": "condition-started"}
 	c.do(viewer, http.MethodPost, "/event-rules", rule, http.StatusForbidden)
 	var made eventRuleBody
 	if err := json.Unmarshal(c.do(ownerTok, http.MethodPost, "/event-rules", rule, http.StatusCreated), &made); err != nil {
@@ -91,10 +95,10 @@ func TestEventRuleAPI(t *testing.T) {
 		t.Fatalf("a fresh rule's state = %+v, want empty lists and never judged", state)
 	}
 	for _, bad := range []map[string]any{
-		{"name": "r1", "sample_key": "nope", "fire_criteria": map[string]any{"op": "eq", "value": "x"}, "severity": "high"},
-		{"name": "r2", "sample_key": "room-temperature", "fire_criteria": map[string]any{"op": "gt", "value": "hot"}, "severity": "high"},
-		{"name": "r3", "sample_key": "room-temperature", "fire_criteria": map[string]any{"op": "gt", "value": 30}, "severity": "critical"},
-		{"name": "r4", "sample_key": "room-temperature", "fire_criteria": map[string]any{"op": "gt", "value": 30}, "fire_sustain": "soon", "severity": "high"},
+		{"name": "r1", "sample_key": "nope", "fire_criteria": map[string]any{"op": "eq", "value": "x"}, "severity": "high", "fire_event_type": "condition-started"},
+		{"name": "r2", "sample_key": "room-temperature", "fire_criteria": map[string]any{"op": "gt", "value": "hot"}, "severity": "high", "fire_event_type": "condition-started"},
+		{"name": "r3", "sample_key": "room-temperature", "fire_criteria": map[string]any{"op": "gt", "value": 30}, "severity": "critical", "fire_event_type": "condition-started"},
+		{"name": "r4", "sample_key": "room-temperature", "fire_criteria": map[string]any{"op": "gt", "value": 30}, "fire_sustain": "soon", "severity": "high", "fire_event_type": "condition-started"},
 	} {
 		c.do(ownerTok, http.MethodPost, "/event-rules", bad, http.StatusUnprocessableEntity)
 	}
@@ -256,18 +260,343 @@ func TestEventRuleAPI(t *testing.T) {
 		t.Fatalf("fleet permissions %v, want the all-scope viewer's rule:read", me.FleetPermissions)
 	}
 	c.do(placeOwner, http.MethodPost, "/event-rules", map[string]any{"name": "north-only", "sample_key": "room-temperature",
-		"fire_criteria": map[string]any{"op": "gt", "value": 30}, "severity": "high"}, http.StatusForbidden)
+		"fire_criteria": map[string]any{"op": "gt", "value": 30}, "severity": "high", "fire_event_type": "condition-started"}, http.StatusForbidden)
 
 	// A holder of every rule permission on one place alone still writes no
 	// rule: a rule's selector reaches the whole fleet.
 	placeOnly := setupScopedPrincipal(t, ctx, dsn, "north-only-owner", grantSpec{role: "owner", scopeKind: "location", scopeID: loc.ID})
 	c.do(placeOnly, http.MethodGet, "/event-rules/reach-lost", nil, http.StatusOK)
 	c.do(placeOnly, http.MethodPost, "/event-rules", map[string]any{"name": "north-only", "sample_key": "room-temperature",
-		"fire_criteria": map[string]any{"op": "gt", "value": 30}, "severity": "high"}, http.StatusForbidden)
+		"fire_criteria": map[string]any{"op": "gt", "value": 30}, "severity": "high", "fire_event_type": "condition-started"}, http.StatusForbidden)
 	c.do(placeOnly, http.MethodPatch, "/event-rules/reach-lost", map[string]any{"label": "mine"}, http.StatusForbidden)
 	c.do(placeOnly, http.MethodDelete, "/event-rules/reach-lost", nil, http.StatusForbidden)
 
 	c.do(viewer, http.MethodDelete, "/event-rules/reach-lost", nil, http.StatusForbidden)
 	c.do(ownerTok, http.MethodDelete, "/event-rules/reach-lost", nil, http.StatusNoContent)
 	c.do(ownerTok, http.MethodGet, "/event-rules/reach-lost", nil, http.StatusNotFound)
+}
+
+// TestEventRuleTypesAPI drives #948 over HTTP: a rule saves with no severity
+// (informational, the field absent on read), a fire event type is required
+// and must exist, a clear type must exist when given, a PATCH with an empty
+// severity makes a rule informational, and the official rule carries the
+// generic pair.
+func TestEventRuleTypesAPI(t *testing.T) {
+	dsn := storagetest.NewDSN(t)
+	ctx := context.Background()
+	gw, err := storage.NewPG(ctx, dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer gw.Close()
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatal(err)
+	}
+	ownerTok, hash, prefix, err := auth.NewBearerToken()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := gw.BootstrapOwner(ctx, storage.OwnerSpec{Username: "root", SecretHash: hash, Prefix: prefix}); err != nil {
+		t.Fatal(err)
+	}
+	srv := httptest.NewServer(api.NewHandler(gw))
+	defer srv.Close()
+	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
+
+	var info eventRuleBody
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodPost, "/event-rules", map[string]any{"name": "hot-note",
+		"sample_key": "room-temperature", "fire_criteria": map[string]any{"op": "gt", "value": 30},
+		"fire_event_type": "condition-started"}, http.StatusCreated), &info); err != nil {
+		t.Fatal(err)
+	}
+	if info.Severity != nil || info.FireEventType != "condition-started" || info.ClearEventType != nil {
+		t.Fatalf("an informational rule reads %+v, want no severity, fire condition-started, no clear type", info)
+	}
+	for name, bad := range map[string]map[string]any{
+		"no fire type":      {"name": "t1", "sample_key": "room-temperature", "fire_criteria": map[string]any{"op": "gt", "value": 1}},
+		"unknown fire type": {"name": "t2", "sample_key": "room-temperature", "fire_criteria": map[string]any{"op": "gt", "value": 1}, "fire_event_type": "nope"},
+		"unknown clear":     {"name": "t3", "sample_key": "room-temperature", "fire_criteria": map[string]any{"op": "gt", "value": 1}, "fire_event_type": "condition-started", "clear_event_type": "nope"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			c.t = t
+			c.do(ownerTok, http.MethodPost, "/event-rules", bad, http.StatusUnprocessableEntity)
+		})
+	}
+	c.t = t
+
+	var paged eventRuleBody
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodPost, "/event-rules", map[string]any{"name": "hot-page",
+		"sample_key": "room-temperature", "fire_criteria": map[string]any{"op": "gt", "value": 40}, "severity": "high",
+		"fire_event_type": "condition-started", "clear_event_type": "condition-ended"}, http.StatusCreated), &paged); err != nil {
+		t.Fatal(err)
+	}
+	if paged.Severity == nil || *paged.Severity != "high" || paged.ClearEventType == nil || *paged.ClearEventType != "condition-ended" {
+		t.Fatalf("an alarm-raising rule reads %+v", paged)
+	}
+	var upd eventRuleBody
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodPatch, "/event-rules/hot-page", map[string]any{"severity": "",
+		"clear_event_type": ""}, http.StatusOK), &upd); err != nil {
+		t.Fatal(err)
+	}
+	if upd.Severity != nil || upd.ClearEventType != nil || upd.Version != 2 {
+		t.Fatalf("patched %+v, want informational with no clear type, version 2", upd)
+	}
+	c.do(ownerTok, http.MethodPatch, "/event-rules/hot-page", map[string]any{"fire_event_type": ""}, http.StatusUnprocessableEntity)
+
+	var official eventRuleBody
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/event-rules/reachability-lost", nil, http.StatusOK), &official); err != nil {
+		t.Fatal(err)
+	}
+	if official.FireEventType != "condition-started" || official.ClearEventType == nil || *official.ClearEventType != "condition-ended" {
+		t.Fatalf("the official rule reads %+v, want the generic pair", official)
+	}
+}
+
+// TestRuleEventsOnTheEventsRead proves a rule's derived events read back on
+// the component's and its system's event lists naming the rule and carrying
+// the alarm they opened (#949).
+func TestRuleEventsOnTheEventsRead(t *testing.T) {
+	dsn := storagetest.NewDSN(t)
+	ctx := context.Background()
+	gw, err := storage.NewPG(ctx, dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer gw.Close()
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatal(err)
+	}
+	ownerTok, hash, prefix, err := auth.NewBearerToken()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := gw.BootstrapOwner(ctx, storage.OwnerSpec{Username: "root", SecretHash: hash, Prefix: prefix}); err != nil {
+		t.Fatal(err)
+	}
+	srv := httptest.NewServer(api.NewHandler(gw))
+	defer srv.Close()
+	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
+	all := scope.Set{All: true}
+	target, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "ev-target"}, all, all, all, all)
+	if err != nil {
+		t.Fatal(err)
+	}
+	c.do(ownerTok, http.MethodPost, "/systems", map[string]any{"name": "ev-sys"}, http.StatusCreated)
+	if st, b := c.send(ownerTok, http.MethodPut, "/systems/ev-sys/members/ev-target", nil); st >= 300 {
+		t.Fatalf("add member = %d %s", st, b)
+	}
+	c.do(ownerTok, http.MethodPost, "/event-rules", map[string]any{"name": "ev-watch", "sample_key": "endpoint-reachable",
+		"fire_criteria": map[string]any{"op": "eq", "value": "down"}, "severity": "high", "fire_event_type": "condition-started",
+		"selector": map[string]any{"components": []string{"ev-target"}}}, http.StatusCreated)
+	if err := gw.InsertPropertySamples(ctx, []storage.PropertySampleWrite{{OwnerKind: "component", OwnerID: "ev-target",
+		Key: "endpoint-reachable", Instance: "tcp", Value: "down", TS: time.Now()}}); err != nil {
+		t.Fatal(err)
+	}
+	var alarms struct {
+		Alarms []struct {
+			ID           string `json:"id"`
+			RaisedByRule string `json:"raised_by_rule"`
+		} `json:"alarms"`
+	}
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/components/ev-target/alarms", nil, http.StatusOK), &alarms); err != nil {
+		t.Fatal(err)
+	}
+	alarm := ""
+	for _, a := range alarms.Alarms {
+		if a.RaisedByRule == "ev-watch" {
+			alarm = a.ID
+		}
+	}
+	if alarm == "" {
+		t.Fatalf("alarms = %+v, want one raised by ev-watch", alarms)
+	}
+	// The rule reads its condition in force as a count and in its state (#951).
+	var one struct {
+		ConditionsInForce *int `json:"conditions_in_force"`
+		OpenAlarms        int  `json:"open_alarms"`
+	}
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/event-rules/ev-watch", nil, http.StatusOK), &one); err != nil {
+		t.Fatal(err)
+	}
+	if one.ConditionsInForce == nil || *one.ConditionsInForce != 1 || one.OpenAlarms != 1 {
+		t.Fatalf("ev-watch reads %+v, want 1 condition in force and 1 open alarm", one)
+	}
+	var st struct {
+		Conditions []struct {
+			Component   string    `json:"component"`
+			ComponentID string    `json:"component_id"`
+			Instance    string    `json:"instance"`
+			Since       time.Time `json:"since"`
+		} `json:"conditions"`
+	}
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/event-rules/ev-watch/state", nil, http.StatusOK), &st); err != nil {
+		t.Fatal(err)
+	}
+	if len(st.Conditions) != 1 || st.Conditions[0].ComponentID != target.ID || st.Conditions[0].Instance != "tcp" {
+		t.Fatalf("ev-watch state conditions = %+v, want ev-target on tcp", st.Conditions)
+	}
+	type ev struct {
+		Key             string `json:"key"`
+		Origin          string `json:"origin"`
+		DerivedByRule   string `json:"derived_by_rule"`
+		DerivedByRuleID string `json:"derived_by_rule_id"`
+		AlarmID         string `json:"alarm_id"`
+		OwnerID         string `json:"owner_id"`
+	}
+	for _, path := range []string{"/components/ev-target/events", "/systems/ev-sys/events"} {
+		var out struct {
+			Events []ev `json:"events"`
+		}
+		if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, path, nil, http.StatusOK), &out); err != nil {
+			t.Fatal(err)
+		}
+		found := false
+		for _, e := range out.Events {
+			if e.Key == "condition-started" && e.DerivedByRule == "ev-watch" {
+				// The system list names each row's owner by uuid too, so a row
+				// can open its alarm on the right component (names repeat).
+				found = e.Origin == "derived" && e.AlarmID == alarm && (path == "/components/ev-target/events" || e.OwnerID == target.ID)
+			}
+		}
+		if !found {
+			t.Fatalf("%s = %+v, want ev-watch's derived condition-started carrying alarm %s", path, out.Events, alarm)
+		}
+	}
+
+	// An event names its rule by id while the rule exists, so a console links
+	// it; once the rule is deleted the id goes and the recorded name stays.
+	ruleID := func() (string, string) {
+		var out struct {
+			Events []ev `json:"events"`
+		}
+		if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/components/ev-target/events", nil, http.StatusOK), &out); err != nil {
+			t.Fatal(err)
+		}
+		for _, e := range out.Events {
+			if e.Key == "condition-started" {
+				return e.DerivedByRule, e.DerivedByRuleID
+			}
+		}
+		return "", ""
+	}
+	if name, id := ruleID(); name != "ev-watch" || id == "" {
+		t.Fatalf("a live rule's event names %q by id %q, want ev-watch with its id", name, id)
+	}
+	c.do(ownerTok, http.MethodDelete, "/event-rules/ev-watch", nil, http.StatusNoContent)
+	if name, id := ruleID(); name != "ev-watch" || id != "" {
+		t.Fatalf("a deleted rule's event names %q by id %q, want ev-watch with no id", name, id)
+	}
+}
+
+// TestAlarmTimelineAPI drives GET /components/{name}/alarms/{id}:timeline
+// (#950): the alarm's events and audit rows in time order, gated alarm:read
+// with the component's read scope injected, so a caller who cannot read the
+// component gets the same 404 an unknown one does.
+func TestAlarmTimelineAPI(t *testing.T) {
+	dsn := storagetest.NewDSN(t)
+	ctx := context.Background()
+	gw, err := storage.NewPG(ctx, dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer gw.Close()
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatal(err)
+	}
+	ownerTok, hash, prefix, err := auth.NewBearerToken()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := gw.BootstrapOwner(ctx, storage.OwnerSpec{Username: "root", SecretHash: hash, Prefix: prefix}); err != nil {
+		t.Fatal(err)
+	}
+	srv := httptest.NewServer(api.NewHandler(gw))
+	defer srv.Close()
+	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
+	viewer := setupAllViewer(t, ctx, dsn, "timeline-viewer")
+	all := scope.Set{All: true}
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "tl-target"}, all, all, all, all); err != nil {
+		t.Fatal(err)
+	}
+	c.do(ownerTok, http.MethodPost, "/event-rules", map[string]any{"name": "tl-watch", "sample_key": "endpoint-reachable",
+		"fire_criteria": map[string]any{"op": "eq", "value": "down"}, "clear_criteria": map[string]any{"op": "eq", "value": "up"},
+		"severity": "high", "fire_event_type": "condition-started", "clear_event_type": "condition-ended",
+		"selector": map[string]any{"components": []string{"tl-target"}}}, http.StatusCreated)
+	sample := func(v string) {
+		if err := gw.InsertPropertySamples(ctx, []storage.PropertySampleWrite{{OwnerKind: "component", OwnerID: "tl-target",
+			Key: "endpoint-reachable", Instance: "tcp", Value: v, TS: time.Now()}}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	sample("down")
+	var alarms struct {
+		Alarms []struct {
+			ID           string `json:"id"`
+			RaisedByRule string `json:"raised_by_rule"`
+		} `json:"alarms"`
+	}
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/components/tl-target/alarms", nil, http.StatusOK), &alarms); err != nil {
+		t.Fatal(err)
+	}
+	alarm := ""
+	for _, a := range alarms.Alarms {
+		if a.RaisedByRule == "tl-watch" {
+			alarm = a.ID
+		}
+	}
+	if alarm == "" {
+		t.Fatalf("alarms = %+v, want one raised by tl-watch", alarms)
+	}
+	c.do(ownerTok, http.MethodPost, "/components/tl-target/alarms/"+alarm+":acknowledge", nil, http.StatusOK)
+	sample("up")
+
+	var tl struct {
+		AlarmID string `json:"alarm_id"`
+		Entries []struct {
+			At    time.Time `json:"at"`
+			Kind  string    `json:"kind"`
+			What  string    `json:"what"`
+			Actor string    `json:"actor"`
+			Rule  string    `json:"rule"`
+		} `json:"entries"`
+	}
+	if err := json.Unmarshal(c.do(viewer, http.MethodGet, "/components/tl-target/alarms/"+alarm+":timeline", nil, http.StatusOK), &tl); err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	for _, e := range tl.Entries {
+		who := e.Actor
+		if who == "" {
+			who = "rule " + e.Rule
+		}
+		got = append(got, e.Kind+" "+e.What+" by "+who)
+	}
+	want := []string{"event condition-started by rule tl-watch", "audit raise by rule tl-watch", "audit acknowledge by root",
+		"event condition-ended by rule tl-watch", "audit clear by rule tl-watch"}
+	if tl.AlarmID != alarm || strings.Join(got, "; ") != strings.Join(want, "; ") {
+		t.Fatalf("timeline of %s = %q, want %q", tl.AlarmID, got, want)
+	}
+
+	// Any form of the id reads the same history, audit rows included.
+	var upper struct {
+		Entries []struct{} `json:"entries"`
+	}
+	if err := json.Unmarshal(c.do(viewer, http.MethodGet, "/components/tl-target/alarms/"+strings.ToUpper(alarm)+":timeline", nil, http.StatusOK), &upper); err != nil {
+		t.Fatal(err)
+	}
+	if len(upper.Entries) != len(want) {
+		t.Fatalf("the timeline by an uppercase id has %d entries, want %d", len(upper.Entries), len(want))
+	}
+
+	// A caller who cannot read the component is told it is not there.
+	created := c.do(ownerTok, http.MethodPost, "/locations", map[string]any{"name": "tl-north", "location_type": "campus"}, http.StatusCreated)
+	var loc struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(created, &loc); err != nil || loc.ID == "" {
+		t.Fatalf("created location %s (%v)", created, err)
+	}
+	north := setupScopedPrincipal(t, ctx, dsn, "tl-north-viewer", grantSpec{role: "viewer", scopeKind: "location", scopeID: loc.ID})
+	c.do(north, http.MethodGet, "/components/tl-target/alarms/"+alarm+":timeline", nil, http.StatusNotFound)
+	c.do(viewer, http.MethodGet, "/components/tl-target/alarms/01a15700-0000-7000-8000-000000000000:timeline", nil, http.StatusNotFound)
 }

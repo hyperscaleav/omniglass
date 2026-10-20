@@ -183,7 +183,7 @@ func TestSeedFactsSeverityAndRules(t *testing.T) {
 	}
 	r := doc.EventRules[0]
 	if r.Name != "reachability-lost" || r.SampleKey != "endpoint-reachable" || r.Fire != "eq down" || r.Clear != "eq up" ||
-		r.FireSustain != "15s" || r.Severity != "high" {
+		r.FireSustain != "15s" || r.Severity != "high" || r.FireEventType != "condition-started" || r.ClearEventType != "condition-ended" {
 		t.Errorf("event_rules[0] = %+v", r)
 	}
 }

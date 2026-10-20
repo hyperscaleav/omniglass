@@ -24,6 +24,7 @@ export type RuleLane = EventRule["sample_lane"];
 export type RuleState = components["schemas"]["EventRuleStateOutputBody"];
 export type RuleOpenAlarm = components["schemas"]["RuleOpenAlarmBody"];
 export type RuleStreak = components["schemas"]["RuleStreakBody"];
+export type RuleCondition = components["schemas"]["RuleConditionBody"];
 export type CreateEventRule = components["schemas"]["CreateEventRuleInputBody"];
 export type UpdateEventRule = components["schemas"]["UpdateEventRuleInputBody"];
 
@@ -36,10 +37,10 @@ export async function listEventRules(): Promise<EventRule[]> {
   return (data?.event_rules ?? []) as EventRule[];
 }
 
-export async function getRuleState(name: string): Promise<{ open: RuleOpenAlarm[]; pending: RuleStreak[]; last_judged_at?: string }> {
+export async function getRuleState(name: string): Promise<{ conditions: RuleCondition[]; open: RuleOpenAlarm[]; pending: RuleStreak[]; last_judged_at?: string }> {
   const { data, error } = await api.GET("/event-rules/{name}/state", { params: { path: { name } } });
   if (error) throw error;
-  return { open: data?.open ?? [], pending: data?.pending ?? [], last_judged_at: data?.last_judged_at };
+  return { conditions: data?.conditions ?? [], open: data?.open ?? [], pending: data?.pending ?? [], last_judged_at: data?.last_judged_at };
 }
 
 // judgedWords says when a rule last judged an arriving sample (#929): the
@@ -146,6 +147,8 @@ export type RuleDraft = {
   fireSustain: string;
   clearSustain: string;
   severity: string;
+  fireEventType: string;
+  clearEventType: string;
   message: string;
   enabled: boolean;
   componentTypes: string[];
@@ -161,11 +164,18 @@ export function defaultSeverity(levels: SeverityLevel[] | undefined): string {
   return (degrading[degrading.length - 1] ?? sorted[0])?.name ?? "";
 }
 
+// The official generic event types a rule writes when it needs no semantic
+// type of its own (#948): a new rule starts on them until the form offers the
+// registry (#951).
+export const GENERIC_FIRE_EVENT_TYPE = "condition-started";
+export const GENERIC_CLEAR_EVENT_TYPE = "condition-ended";
+
 export function emptyDraft(severity = ""): RuleDraft {
   return {
     name: "", label: "", description: "", sampleKey: "", lane: "property",
     fireOp: "eq", fireValue: "", clearMode: "opposite", clearOp: "eq", clearValue: "",
-    fireSustain: "", clearSustain: "", severity, message: "", enabled: true,
+    fireSustain: "", clearSustain: "", severity, fireEventType: GENERIC_FIRE_EVENT_TYPE,
+    clearEventType: GENERIC_CLEAR_EVENT_TYPE, message: "", enabled: true,
     componentTypes: [], components: [],
   };
 }
@@ -184,7 +194,9 @@ export function draftFromRule(r: EventRule): RuleDraft {
     clearValue: r.clear_criteria ? valueText(r.clear_criteria.value) : "",
     fireSustain: sustainWords(r.fire_sustain),
     clearSustain: sustainWords(r.clear_sustain),
-    severity: r.severity,
+    severity: r.severity ?? "",
+    fireEventType: r.fire_event_type,
+    clearEventType: r.clear_event_type ?? "",
     message: r.message ?? "",
     enabled: r.enabled,
     componentTypes: [...(r.selector?.component_types ?? [])],
@@ -234,10 +246,12 @@ export function readValue(raw: string, lane: RuleLane): { value?: string | numbe
 
 const NAME = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 
-export type DraftErrors = Partial<Record<"name" | "sampleKey" | "fireValue" | "clearValue" | "fireSustain" | "clearSustain" | "severity", string>>;
+export type DraftErrors = Partial<Record<"name" | "sampleKey" | "fireValue" | "clearValue" | "fireSustain" | "clearSustain" | "fireEventType", string>>;
 
 // validateDraft is the form's one judgement, shared by create and edit (the
-// name is create-only, so edit skips it).
+// name is create-only, so edit skips it). No severity is a choice, not a gap:
+// "None (informational)" makes a rule that records its events and raises no
+// alarm (#951). The fire event type is required; the clear one is optional.
 export function validateDraft(d: RuleDraft, mode: "create" | "edit"): DraftErrors {
   const e: DraftErrors = {};
   if (mode === "create") {
@@ -257,7 +271,7 @@ export function validateDraft(d: RuleDraft, mode: "create" | "edit"): DraftError
   if (fs) e.fireSustain = fs;
   const cs = readDuration(d.clearSustain);
   if (cs) e.clearSustain = cs;
-  if (!d.severity) e.severity = "The level the alarm is raised at.";
+  if (!d.fireEventType) e.fireEventType = "The event the rule writes when its condition starts.";
   return e;
 }
 
@@ -277,10 +291,13 @@ export function createBody(d: RuleDraft): CreateEventRule {
     fire_criteria: criteria(d.fireOp, d.fireValue, d.lane),
     fire_sustain: sustainOut(d.fireSustain),
     clear_sustain: sustainOut(d.clearSustain),
-    severity: d.severity,
+    fire_event_type: d.fireEventType,
     enabled: d.enabled,
     selector: { component_types: d.componentTypes, components: d.components },
   };
+  // No severity is an informational rule: it records its events, raises no alarm.
+  if (d.severity) body.severity = d.severity;
+  if (d.clearEventType) body.clear_event_type = d.clearEventType;
   if (d.label.trim()) body.label = d.label.trim();
   if (d.description.trim()) body.description = d.description.trim();
   if (d.message.trim()) body.message = d.message.trim();
@@ -310,7 +327,9 @@ export function updateBody(d: RuleDraft, was: EventRule): UpdateEventRule {
   if (!sameCriteria(fire, was.fire_criteria)) body.fire_criteria = fire;
   if (!sameSustain(d.fireSustain, was.fire_sustain)) body.fire_sustain = sustainOut(d.fireSustain);
   if (!sameSustain(d.clearSustain, was.clear_sustain)) body.clear_sustain = sustainOut(d.clearSustain);
-  if (d.severity !== was.severity) body.severity = d.severity;
+  if (d.severity !== (was.severity ?? "")) body.severity = d.severity;
+  if (d.fireEventType !== was.fire_event_type) body.fire_event_type = d.fireEventType;
+  if (d.clearEventType !== (was.clear_event_type ?? "")) body.clear_event_type = d.clearEventType;
   if (d.enabled !== was.enabled) body.enabled = d.enabled;
   if (!sameList(d.componentTypes, was.selector?.component_types) || !sameList(d.components, was.selector?.components)) {
     body.selector = { component_types: d.componentTypes, components: d.components };

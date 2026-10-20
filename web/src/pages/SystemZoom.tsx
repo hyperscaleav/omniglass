@@ -34,6 +34,8 @@ import { describeError, fmtTime } from "../lib/format";
 import { durationText } from "../lib/timeline";
 import { componentAlarms, componentAlarmsKey } from "../lib/alarms";
 import { useSeverity } from "../lib/severity";
+import AlarmTimeline, { createTimelineToggles } from "../components/AlarmTimeline";
+import RuleLink from "../components/RuleLink";
 import SeverityBadge from "../components/SeverityBadge";
 import { incidentReasons, incidentRows, incidentsOf, markerX, uptimePct, type MemberAlarms } from "../lib/system_history";
 import { spans as timelineSpans } from "../lib/timeline";
@@ -99,6 +101,8 @@ export default function SystemZoom() {
 
   const scale = useSeverity();
   const alarms = createMemo(() => (health.data ? alarmRows(health.data, scale().levels) : []));
+  // Each alarm row in the Why strip opens its timeline in place (#950).
+  const timelines = createTimelineToggles();
   // The strip reads red when any alarm on it is at an outage level (the
   // registry's flag, #917), amber when they only degrade.
   const inOutage = createMemo(() => alarms().some((a) => scale().outage(a.severity)));
@@ -436,14 +440,27 @@ export default function SystemZoom() {
             <Show when={(eventsQ.data ?? []).length > 0} fallback={<p class="text-sm text-base-content/50">No events in the window.</p>}>
               <ul class="divide-y divide-base-300 rounded-box border border-base-300 text-sm">
                 <For each={eventsQ.data ?? []}>
-                  {(e) => (
-                    <li class="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 px-3 py-2">
-                      <span class="text-xs tabular-nums text-base-content/50">{fmtTime(e.ts)}</span>
-                      <span class="font-mono text-xs text-base-content/70">{e.owner}</span>
-                      <span class="font-mono text-xs">{e.key}</span>
-                      <span class="min-w-0 flex-1 truncate text-base-content/80">{e.message}</span>
-                    </li>
-                  )}
+                  {(e) => {
+                    // Each row owns its toggle: a rule's fire and clear events
+                    // carry the same alarm, and opening one opens only that row.
+                    const eventTimelines = createTimelineToggles();
+                    return (
+                      <li class="flex flex-col gap-1.5 px-3 py-2">
+                        <div class="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                          <span class="text-xs tabular-nums text-base-content/50">{fmtTime(e.ts)}</span>
+                          <span class="font-mono text-xs text-base-content/70">{e.owner}</span>
+                          <span class="font-mono text-xs">{e.key}</span>
+                          <span class="min-w-0 flex-1 truncate text-base-content/80">{e.message}</span>
+                          {/* A rule's event names the rule and carries the alarm it moved (#951). */}
+                          <Show when={e.derived_by_rule}>{(rule) => <RuleLink name={rule()} id={e.derived_by_rule_id} />}</Show>
+                          <Show when={e.alarm_id && e.owner_kind === "component" && e.owner_id}>{eventTimelines.button(e.alarm_id!, e.message)}</Show>
+                        </div>
+                        <Show when={e.alarm_id && e.owner_kind === "component" && e.owner_id && eventTimelines.isOpen(e.alarm_id)}>
+                          <AlarmTimeline component={e.owner_id} alarmId={e.alarm_id!} id={eventTimelines.panelId(e.alarm_id!)} label={eventTimelines.label(e.message)} />
+                        </Show>
+                      </li>
+                    );
+                  }}
                 </For>
               </ul>
             </Show>
@@ -475,13 +492,19 @@ export default function SystemZoom() {
                       <h2 class="eyebrow">Why</h2>
                       <For each={alarms()}>
                         {(a) => (
-                          <div class="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-sm">
-                            <SeverityBadge name={a.severity} />
-                            <span>{a.message}</span>
-                            <Show when={a.componentId} fallback={<span class="font-mono text-xs text-base-content/60">{a.component}</span>}>
-                              {(cid) => <button type="button" class="cursor-pointer font-mono text-xs text-base-content/80 hover:underline" onClick={() => openComponent(cid())}>{a.component}</button>}
+                          <div class="flex flex-col gap-1.5">
+                            <div class="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-sm">
+                              <SeverityBadge name={a.severity} />
+                              <span>{a.message}</span>
+                              <Show when={a.componentId} fallback={<span class="font-mono text-xs text-base-content/60">{a.component}</span>}>
+                                {(cid) => <button type="button" class="cursor-pointer font-mono text-xs text-base-content/80 hover:underline" onClick={() => openComponent(cid())}>{a.component}</button>}
+                              </Show>
+                              <span class="text-xs text-base-content/50">impairs {a.roleLabel} · {durationText(pageNow - Date.parse(a.raisedAt))}</span>
+                              <Show when={a.componentId}>{timelines.button(a.id, a.message)}</Show>
+                            </div>
+                            <Show when={a.componentId && timelines.isOpen(a.id)}>
+                              <AlarmTimeline component={a.componentId!} alarmId={a.id} id={timelines.panelId(a.id)} label={timelines.label(a.message)} />
                             </Show>
-                            <span class="text-xs text-base-content/50">impairs {a.roleLabel} · {durationText(pageNow - Date.parse(a.raisedAt))}</span>
                           </div>
                         )}
                       </For>

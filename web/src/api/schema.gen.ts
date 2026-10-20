@@ -524,6 +524,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/components/{name}/alarms/{id}:timeline": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read an alarm's timeline
+         * @description The alarm's history in one list, oldest first: the events that carry it (an event rule's fire event, which opened it, and its clear event, which resolved it) merged by time with its audit rows (the raise, each acknowledgement, the clear, and a rule edit that opened or resolved it, naming the editor). At one instant an event comes before the audit row it caused. Gated by alarm:read; a component outside the caller's component read scope, and an alarm not on the component, are a non-disclosing 404.
+         */
+        get: operations["get-component-alarm-timeline"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/components/{name}/commands:issue": {
         parameters: {
             query?: never;
@@ -1185,13 +1205,13 @@ export interface paths {
         };
         /**
          * List event rules
-         * @description Lists the event rules, the authored config that raises alarms, each with its live state as counts (open_alarms, pending_streaks) read in the same query. Rules read like a registry: every rule is listed whatever the caller's scope, while the counts cover only components the caller may read. Gated by rule:read.
+         * @description Lists the event rules, the authored config that raises alarms, each with its live state as counts (conditions_in_force, open_alarms, pending_streaks) read in the same query. Rules read like a registry: every rule is listed whatever the caller's scope, while the counts cover only components the caller may read. Gated by rule:read.
          */
         get: operations["list-event-rule"];
         put?: never;
         /**
          * Create an event rule
-         * @description Authors a rule that raises an alarm on each component it watches when its sample key meets the fire criteria for the fire sustain, and clears it when the clear criteria (or the negation of fire) holds for the clear sustain. The key must be a registered property or metric, the criteria evaluable on its lane, and the severity a level that exists (else 422); a name already taken is a 409. Audited. Gated by rule:create, with an all-scope grant.
+         * @description Authors a rule whose condition starts on each component it watches when its sample key meets the fire criteria for the fire sustain, and ends when the clear criteria (or the negation of fire) holds for the clear sustain. It names the event type it writes when the condition starts (required) and, optionally, when it ends; with a severity it also raises an alarm while the condition holds, and without one it is informational. The key must be a registered property or metric, the criteria evaluable on its lane, the event types registered and the severity, when given, a level that exists (else 422); a name already taken is a 409. Audited. Gated by rule:create, with an all-scope grant.
          */
         post: operations["create-event-rule"];
         delete?: never;
@@ -1223,7 +1243,7 @@ export interface paths {
         head?: never;
         /**
          * Update an event rule
-         * @description Patches a rule (an absent field is unchanged), bumping its version; disabling it stops new opens. Official rules are read-only (409). Audited. Gated by rule:update, with an all-scope grant.
+         * @description Patches a rule (an absent field is unchanged), bumping its version; disabling it stops new opens. An empty severity makes the rule informational and an empty clear_event_type drops its clear event; the fire event type cannot be emptied (422). Official rules are read-only (409). Audited. Gated by rule:update, with an all-scope grant.
          */
         patch: operations["update-event-rule"];
         trace?: never;
@@ -1237,7 +1257,7 @@ export interface paths {
         };
         /**
          * Get an event rule's live state
-         * @description What a rule holds right now: the alarms it raised that are still open, each on a component and instance, its streaks waiting out a sustain, and when it last judged an ingested sample. Only alarms and streaks on components the caller may read are listed. Gated by rule:read.
+         * @description What a rule holds right now: the conditions it holds in force (one per component and instance, whether or not it raises an alarm), the alarms it raised that are still open, each on a component and instance, its streaks waiting out a sustain, and when it last judged an ingested sample. Only conditions, alarms and streaks on components the caller may read are listed. Gated by rule:read.
          */
         get: operations["get-event-rule-state"];
         put?: never;
@@ -1288,7 +1308,7 @@ export interface paths {
         post?: never;
         /**
          * Delete an event type
-         * @description Removes a custom event type by name. Official event types are read-only. Gated by event_type:delete.
+         * @description Removes a custom event type by name. Official event types are read-only (409), and so is a type still in use: one that recorded events or an event rule's fire or clear event type names is a 409 until nothing names it. Gated by event_type:delete.
          */
         delete: operations["delete-event-type"];
         options?: never;
@@ -4448,6 +4468,40 @@ export interface components {
             /** @description The severity level the alarm was raised at, by name (see /severity-levels) */
             severity: string;
         };
+        AlarmTimelineEntryBody: {
+            /** @description Who acted, by name; absent when the platform acted for a rule */
+            actor?: string;
+            /**
+             * Format: date-time
+             * @description When it happened
+             */
+            at: string;
+            /** @description The series instance (an endpoint) an event is about */
+            instance?: string;
+            /**
+             * @description An event carrying the alarm (a rule's fire or clear event), or an audit row about it
+             * @enum {string}
+             */
+            kind: "event" | "audit";
+            /** @description The event's message, or the message the alarm was raised with */
+            message?: string;
+            /** @description The event rule the entry belongs to, by name: the rule that wrote the event, or the rule the platform acted for */
+            rule?: string;
+            /** @description The event's type (e.g. condition-started), or the audit action: raise, acknowledge or clear */
+            what: string;
+        };
+        AlarmTimelineOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/AlarmTimelineOutputBody.json
+             */
+            readonly $schema?: string;
+            alarm_id: string;
+            component: string;
+            /** @description Oldest first; at one instant an event comes before the audit row it caused */
+            entries: components["schemas"]["AlarmTimelineEntryBody"][] | null;
+        };
         AuditEventBody: {
             actor?: string;
             actor_name?: string;
@@ -4876,6 +4930,8 @@ export interface components {
             readonly $schema?: string;
             /** @description The criteria that clears it: {op, value}; absent clears on the negation of fire_criteria */
             clear_criteria?: components["schemas"]["CriteriaBody"];
+            /** @description The event type the rule writes when its condition ends, by name (condition-ended is the generic one); absent, it writes none */
+            clear_event_type?: string;
             /** @description A Go duration; empty is 0s */
             clear_sustain?: string;
             /** @description What the rule watches for and why */
@@ -4884,6 +4940,8 @@ export interface components {
             enabled?: boolean;
             /** @description The criteria that opens an alarm: {op, value} */
             fire_criteria: components["schemas"]["CriteriaBody"];
+            /** @description The event type the rule writes when its condition starts, by name (condition-started is the generic one) */
+            fire_event_type: string;
             /** @description A Go duration; empty is 0s */
             fire_sustain?: string;
             /** @description A human label; also the alarm message when message is empty */
@@ -4896,8 +4954,8 @@ export interface components {
             sample_key: string;
             /** @description The components the rule watches (component types and components); absent is every component */
             selector?: components["schemas"]["SelectorBody"];
-            /** @description The severity level the alarm is raised at, by name */
-            severity: string;
+            /** @description The severity level the alarm is raised at, by name; absent or empty, the rule is informational and raises no alarm */
+            severity?: string;
         };
         CreateEventTypeInputBody: {
             /**
@@ -5630,8 +5688,14 @@ export interface components {
             type: string;
         };
         EventBody: {
+            /** @description The alarm a rule's fire event opened or its clear event resolved; absent for most events */
+            alarm_id?: string;
             /** @description Structured attributes, when the occurrence carried a JSON payload */
             attributes?: unknown;
+            /** @description The event rule that derived the occurrence, by name; absent when no rule did */
+            derived_by_rule?: string;
+            /** @description The deriving rule's uuid while the rule exists; absent once it is deleted (derived_by_rule keeps its name) */
+            derived_by_rule_id?: string;
             /** @description The event_type's uuid, the stable form of key */
             event_type_id: string;
             /** @description The series discriminator (e.g. the endpoint), when set */
@@ -5659,14 +5723,23 @@ export interface components {
              * @example /api/v1/schemas/EventRuleBody.json
              */
             readonly $schema?: string;
-            /** @description When the sample meets this for clear_sustain, the alarm clears; absent, the negation of fire_criteria */
+            /** @description When the sample meets this for clear_sustain, the condition ends (and the alarm clears); absent, the negation of fire_criteria */
             clear_criteria?: components["schemas"]["CriteriaBody"];
+            /** @description The event type the rule writes when its condition ends, by name; absent, it writes none */
+            clear_event_type?: string;
             /** @description How long the clear criteria must hold, a Go duration */
             clear_sustain: string;
+            /**
+             * Format: int64
+             * @description How many conditions the rule holds in force right now, one per component and instance, whether or not it raises an alarm (GET /event-rules/{name}/state lists them)
+             */
+            conditions_in_force: number;
             description?: string;
             enabled: boolean;
-            /** @description When the sample meets this for fire_sustain, the rule opens an alarm */
+            /** @description When the sample meets this for fire_sustain, the rule's condition starts (and it opens an alarm when it names a severity) */
             fire_criteria: components["schemas"]["CriteriaBody"];
+            /** @description The event type the rule writes when its condition starts, by name */
+            fire_event_type: string;
             /** @description How long the fire criteria must hold, a Go duration (0s fires at once) */
             fire_sustain: string;
             /** @description The rule's uuid, the stable form of name */
@@ -5701,8 +5774,8 @@ export interface components {
             sample_lane: "property" | "metric";
             /** @description The components the rule watches; both lists empty is every component */
             selector: components["schemas"]["SelectorBody"];
-            /** @description The severity level the alarm is raised at, by name */
-            severity: string;
+            /** @description The severity level the alarm is raised at, by name; absent, the rule is informational and raises no alarm */
+            severity?: string;
             /**
              * Format: int64
              * @description Bumps on every update
@@ -5716,6 +5789,8 @@ export interface components {
              * @example /api/v1/schemas/EventRuleStateOutputBody.json
              */
             readonly $schema?: string;
+            /** @description The conditions the rule holds in force, informational or not */
+            conditions: components["schemas"]["RuleConditionBody"][] | null;
             /**
              * Format: date-time
              * @description When an ingested sample was last judged by the rule, to within 5s; absent when it never has been
@@ -7521,6 +7596,19 @@ export interface components {
             permission_universe: string[] | null;
             roles: components["schemas"]["RoleBody"][] | null;
         };
+        RuleConditionBody: {
+            /** @description The component, by name */
+            component: string;
+            /** @description The component's uuid */
+            component_id: string;
+            /** @description The sample instance (an endpoint) the condition is on */
+            instance?: string;
+            /**
+             * Format: date-time
+             * @description When the condition came into force
+             */
+            since: string;
+        };
         RuleOpenAlarmBody: {
             alarm_id: string;
             /** @description The component, by name */
@@ -8124,8 +8212,14 @@ export interface components {
             system_type_id?: string;
         };
         SystemEventBody: {
+            /** @description The alarm a rule's fire event opened or its clear event resolved; absent for most events */
+            alarm_id?: string;
             /** @description Structured attributes, when the occurrence carried a JSON payload */
             attributes?: unknown;
+            /** @description The event rule that derived the occurrence, by name; absent when no rule did */
+            derived_by_rule?: string;
+            /** @description The deriving rule's uuid while the rule exists; absent once it is deleted (derived_by_rule keeps its name) */
+            derived_by_rule_id?: string;
             /** @description The event_type's uuid, the stable form of key */
             event_type_id: string;
             /** @description The series discriminator (e.g. the endpoint), when set */
@@ -8138,6 +8232,8 @@ export interface components {
             origin: string;
             /** @description The owning row's name (the system's, or the member component's) */
             owner: string;
+            /** @description The owning row's uuid, the stable form of owner (names repeat across members) */
+            owner_id: string;
             /** @description Which arc raised the occurrence: system or component */
             owner_kind: string;
             /** @description The lineage of the occurrence (observed for direct collection) */
@@ -8508,6 +8604,8 @@ export interface components {
             readonly $schema?: string;
             /** @description The criteria that clears it: {op, value}; absent clears on the negation of fire_criteria */
             clear_criteria?: components["schemas"]["CriteriaBody"];
+            /** @description The event type the rule writes when its condition ends, by name; empty writes none */
+            clear_event_type?: string;
             /** @description Drop the clear criteria, so the rule clears on the negation of its fire criteria */
             clear_negates?: boolean;
             /** @description How long the clear criteria must hold, a Go duration; empty is 0s */
@@ -8518,6 +8616,8 @@ export interface components {
             enabled?: boolean;
             /** @description The criteria that opens an alarm: {op, value} */
             fire_criteria?: components["schemas"]["CriteriaBody"];
+            /** @description The event type the rule writes when its condition starts, by name; it cannot be emptied */
+            fire_event_type?: string;
             /** @description How long the fire criteria must hold, a Go duration (e.g. 30s); empty is 0s */
             fire_sustain?: string;
             /** @description A human label; also the alarm message when message is empty */
@@ -8528,7 +8628,7 @@ export interface components {
             sample_key?: string;
             /** @description Replace the components the rule watches; absent leaves them unchanged, and an empty selector watches every component */
             selector?: components["schemas"]["SelectorBody"];
-            /** @description The severity level the alarm is raised at, by name */
+            /** @description The severity level the alarm is raised at, by name; empty makes the rule informational (no alarm) */
             severity?: string;
         };
         UpdateEventTypeInputBody: {
@@ -9982,6 +10082,40 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AlarmBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "get-component-alarm-timeline": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1) */
+                name: string;
+                /** @description The alarm id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlarmTimelineOutputBody"];
                 };
             };
             /** @description Error */

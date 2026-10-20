@@ -24,7 +24,7 @@ func TestSeverityRenameDuringARaisingBatch(t *testing.T) {
 	if _, err := f.gw.CreateSeverityLevel(ctx, "", storage.SeverityLevel{Name: "major", Label: "Major", Color: "orange", Rank: 35}, all); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := f.gw.CreateEventRule(ctx, "", storage.EventRuleSpec{Name: "at-major", SampleKey: "endpoint-reachable",
+	if _, err := f.gw.CreateEventRule(ctx, "", storage.EventRuleSpec{FireEventType: "condition-started", Name: "at-major", SampleKey: "endpoint-reachable",
 		Fire: criteria("eq", "down"), Severity: "major"}, all); err != nil {
 		t.Fatal(err)
 	}

@@ -45,7 +45,7 @@ func TestEventRules(t *testing.T) {
 	}
 
 	reach := storage.EventRuleSpec{
-		Name: "reach-lost", Label: "Reachability lost", SampleKey: "endpoint-reachable",
+		FireEventType: "condition-started", Name: "reach-lost", Label: "Reachability lost", SampleKey: "endpoint-reachable",
 		Fire: criteria("eq", "down"), FireSustain: 30 * time.Second, Severity: "high",
 		Selector: storage.EventRuleSelector{Components: []string{"rule-target"}},
 	}
@@ -57,22 +57,22 @@ func TestEventRules(t *testing.T) {
 		got.FireSustain != 30*time.Second || len(got.Selector.Components) != 1 || got.Selector.Components[0] == "rule-target" {
 		t.Fatalf("created %+v, want a property-lane rule, enabled, version 1, its component resolved to an id", got)
 	}
-	cpu := storage.EventRuleSpec{Name: "room-hot", SampleKey: "room-temperature", Fire: criteria("gt", 90), Severity: "warning"}
+	cpu := storage.EventRuleSpec{FireEventType: "condition-started", Name: "room-hot", SampleKey: "room-temperature", Fire: criteria("gt", 90), Severity: "warning"}
 	hot, err := gw.CreateEventRule(ctx, "", cpu, all)
 	if err != nil || hot.SampleLane != "metric" {
 		t.Fatalf("metric rule %+v (%v), want the metric lane", hot, err)
 	}
 
 	for name, bad := range map[string]storage.EventRuleSpec{
-		"unknown key":      {Name: "r1", SampleKey: "no-such-key", Fire: criteria("eq", "x"), Severity: "high"},
-		"ordered on text":  {Name: "r2", SampleKey: "endpoint-reachable", Fire: criteria("gt", "down"), Severity: "high"},
-		"text on a metric": {Name: "r3", SampleKey: "room-temperature", Fire: criteria("eq", "hot"), Severity: "high"},
-		"unknown level":    {Name: "r4", SampleKey: "room-temperature", Fire: criteria("gt", 1), Severity: "critical"},
-		"unknown type":     {Name: "r5", SampleKey: "room-temperature", Fire: criteria("gt", 1), Severity: "high", Selector: storage.EventRuleSelector{ComponentTypes: []string{"no-such-type"}}},
-		"unknown target":   {Name: "r6", SampleKey: "room-temperature", Fire: criteria("gt", 1), Severity: "high", Selector: storage.EventRuleSelector{Components: []string{"nobody"}}},
-		"bad clear":        {Name: "r7", SampleKey: "room-temperature", Fire: criteria("gt", 1), Clear: ptrCriteria(criteria("eq", "x")), Severity: "high"},
-		"negative sustain": {Name: "r8", SampleKey: "room-temperature", Fire: criteria("gt", 1), FireSustain: -time.Second, Severity: "high"},
-		"bad name":         {Name: "Bad Name", SampleKey: "room-temperature", Fire: criteria("gt", 1), Severity: "high"},
+		"unknown key":      {FireEventType: "condition-started", Name: "r1", SampleKey: "no-such-key", Fire: criteria("eq", "x"), Severity: "high"},
+		"ordered on text":  {FireEventType: "condition-started", Name: "r2", SampleKey: "endpoint-reachable", Fire: criteria("gt", "down"), Severity: "high"},
+		"text on a metric": {FireEventType: "condition-started", Name: "r3", SampleKey: "room-temperature", Fire: criteria("eq", "hot"), Severity: "high"},
+		"unknown level":    {FireEventType: "condition-started", Name: "r4", SampleKey: "room-temperature", Fire: criteria("gt", 1), Severity: "critical"},
+		"unknown type":     {FireEventType: "condition-started", Name: "r5", SampleKey: "room-temperature", Fire: criteria("gt", 1), Severity: "high", Selector: storage.EventRuleSelector{ComponentTypes: []string{"no-such-type"}}},
+		"unknown target":   {FireEventType: "condition-started", Name: "r6", SampleKey: "room-temperature", Fire: criteria("gt", 1), Severity: "high", Selector: storage.EventRuleSelector{Components: []string{"nobody"}}},
+		"bad clear":        {FireEventType: "condition-started", Name: "r7", SampleKey: "room-temperature", Fire: criteria("gt", 1), Clear: ptrCriteria(criteria("eq", "x")), Severity: "high"},
+		"negative sustain": {FireEventType: "condition-started", Name: "r8", SampleKey: "room-temperature", Fire: criteria("gt", 1), FireSustain: -time.Second, Severity: "high"},
+		"bad name":         {FireEventType: "condition-started", Name: "Bad Name", SampleKey: "room-temperature", Fire: criteria("gt", 1), Severity: "high"},
 	} {
 		if _, err := gw.CreateEventRule(ctx, "", bad, all); !errors.Is(err, storage.ErrEventRuleInvalid) {
 			t.Errorf("%s: err %v, want ErrEventRuleInvalid", name, err)
@@ -85,7 +85,7 @@ func TestEventRules(t *testing.T) {
 	// Rules read like a registry: a reader whose component scope admits
 	// nothing still lists and gets every rule. Writing one takes an all-scope
 	// grant, since its selector reaches the whole fleet.
-	if _, err := gw.CreateEventRule(ctx, "", storage.EventRuleSpec{Name: "scoped", SampleKey: "room-temperature", Fire: criteria("gt", 1), Severity: "high"}, none); !errors.Is(err, storage.ErrEventRuleForbidden) {
+	if _, err := gw.CreateEventRule(ctx, "", storage.EventRuleSpec{FireEventType: "condition-started", Name: "scoped", SampleKey: "room-temperature", Fire: criteria("gt", 1), Severity: "high"}, none); !errors.Is(err, storage.ErrEventRuleForbidden) {
 		t.Fatalf("a scoped create: err %v, want ErrEventRuleForbidden", err)
 	}
 	if list, err := gw.ListEventRules(ctx, none); err != nil || len(list) != 3 {
@@ -147,7 +147,7 @@ func TestEventRuleEdgeCases(t *testing.T) {
 	if _, err := gw.CreateMetricType(ctx, "", storage.MetricTypeSpec{Name: "doomed-metric", DataType: "float"}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := gw.CreateEventRule(ctx, "", storage.EventRuleSpec{Name: "on-doomed", SampleKey: "doomed-metric",
+	if _, err := gw.CreateEventRule(ctx, "", storage.EventRuleSpec{FireEventType: "condition-started", Name: "on-doomed", SampleKey: "doomed-metric",
 		Fire: criteria("gt", 1), Severity: "info", Selector: storage.EventRuleSelector{Components: []string{"doomed"}}}, all); err != nil {
 		t.Fatal(err)
 	}
@@ -213,7 +213,7 @@ func TestEventRuleEdgeCases(t *testing.T) {
 		t.Fatalf("a clear criterion and clear_negates together: err %v, want ErrEventRuleInvalid", err)
 	}
 	for _, d := range []time.Duration{time.Nanosecond, 1500 * time.Nanosecond, 400 * 24 * time.Hour} {
-		if _, err := gw.CreateEventRule(ctx, "", storage.EventRuleSpec{Name: "sustain-x", SampleKey: "room-temperature",
+		if _, err := gw.CreateEventRule(ctx, "", storage.EventRuleSpec{FireEventType: "condition-started", Name: "sustain-x", SampleKey: "room-temperature",
 			Fire: criteria("gt", 1), FireSustain: d, Severity: "info"}, all); !errors.Is(err, storage.ErrEventRuleInvalid) {
 			t.Errorf("a sustain of %v: err %v, want ErrEventRuleInvalid", d, err)
 		}
@@ -253,10 +253,10 @@ func TestOfficialEventRules(t *testing.T) {
 	if _, err := gw.UpdateEventRule(ctx, "", "reachability-lost", storage.EventRulePatch{Enabled: &off}, all); !errors.Is(err, storage.ErrEventRuleOfficial) {
 		t.Fatalf("editing the official rule: err %v, want ErrEventRuleOfficial", err)
 	}
-	if _, err := gw.CreateEventRule(ctx, "", storage.EventRuleSpec{Name: "mine", SampleKey: "room-temperature", Fire: criteria("gt", 1), Severity: "info"}, all); err != nil {
+	if _, err := gw.CreateEventRule(ctx, "", storage.EventRuleSpec{FireEventType: "condition-started", Name: "mine", SampleKey: "room-temperature", Fire: criteria("gt", 1), Severity: "info"}, all); err != nil {
 		t.Fatal(err)
 	}
-	err = gw.UpsertEventRule(ctx, storage.EventRuleSpec{Name: "mine", SampleKey: "room-temperature", Fire: criteria("gt", 2), Severity: "info"})
+	err = gw.UpsertEventRule(ctx, storage.EventRuleSpec{FireEventType: "condition-started", Name: "mine", SampleKey: "room-temperature", Fire: criteria("gt", 2), Severity: "info"})
 	if !errors.Is(err, storage.ErrEventRuleExists) {
 		t.Fatalf("an official rule named like an operator's: err %v, want ErrEventRuleExists", err)
 	}

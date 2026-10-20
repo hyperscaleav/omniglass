@@ -454,6 +454,22 @@ Example:
 omniglass component alarm list <name>
 ```
 
+#### `omniglass component alarm timeline`
+
+Read an alarm's timeline
+
+```
+omniglass component alarm timeline <name> <id>
+```
+
+The alarm's history in one list, oldest first: the events that carry it (an event rule's fire event, which opened it, and its clear event, which resolved it) merged by time with its audit rows (the raise, each acknowledgement, the clear, and a rule edit that opened or resolved it, naming the editor). At one instant an event comes before the audit row it caused. Gated by alarm:read; a component outside the caller's component read scope, and an alarm not on the component, are a non-disclosing 404.
+
+Example:
+
+```sh
+omniglass component alarm timeline <name> <id>
+```
+
 ### `omniglass component checkName`
 
 Check a component name
@@ -1460,27 +1476,29 @@ Create an event rule
 omniglass event-rule create [flags]
 ```
 
-Authors a rule that raises an alarm on each component it watches when its sample key meets the fire criteria for the fire sustain, and clears it when the clear criteria (or the negation of fire) holds for the clear sustain. The key must be a registered property or metric, the criteria evaluable on its lane, and the severity a level that exists (else 422); a name already taken is a 409. Audited. Gated by rule:create, with an all-scope grant.
+Authors a rule whose condition starts on each component it watches when its sample key meets the fire criteria for the fire sustain, and ends when the clear criteria (or the negation of fire) holds for the clear sustain. It names the event type it writes when the condition starts (required) and, optionally, when it ends; with a severity it also raises an alarm while the condition holds, and without one it is informational. The key must be a registered property or metric, the criteria evaluable on its lane, the event types registered and the severity, when given, a level that exists (else 422); a name already taken is a 409. Audited. Gated by rule:create, with an all-scope grant.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--clear-criteria` | string | (none) | The criteria that clears it: {op, value}; absent clears on the negation of fire_criteria |
+| `--clear-event-type` | string | (none) | The event type the rule writes when its condition ends, by name (condition-ended is the generic one); absent, it writes none |
 | `--clear-sustain` | string | (none) | A Go duration; empty is 0s |
 | `--description` | string | (none) | What the rule watches for and why |
 | `--enabled` | bool | `false` | Defaults to true |
 | `--fire-criteria` | string | (none) | The criteria that opens an alarm: {op, value} |
+| `--fire-event-type` | string | (none) | The event type the rule writes when its condition starts, by name (condition-started is the generic one) |
 | `--fire-sustain` | string | (none) | A Go duration; empty is 0s |
 | `--label` | string | (none) | A human label; also the alarm message when message is empty |
 | `--message` | string | (none) | The alarm message; empty uses the label or the name |
 | `--name` | string | (none) | The rule's name (lowercase kebab) |
 | `--sample-key` | string | (none) | The property or metric the rule reads |
 | `--selector` | string | (none) | The components the rule watches (component types and components); absent is every component |
-| `--severity` | string | (none) | The severity level the alarm is raised at, by name |
+| `--severity` | string | (none) | The severity level the alarm is raised at, by name; absent or empty, the rule is informational and raises no alarm |
 
 Example:
 
 ```sh
-omniglass event-rule create --fire-criteria <json> --name name --sample-key sample_key --severity severity
+omniglass event-rule create --fire-criteria <json> --fire-event-type fire_event_type --name name --sample-key sample_key
 ```
 
 ### `omniglass event-rule delete`
@@ -1523,7 +1541,7 @@ List event rules
 omniglass event-rule list
 ```
 
-Lists the event rules, the authored config that raises alarms, each with its live state as counts (open_alarms, pending_streaks) read in the same query. Rules read like a registry: every rule is listed whatever the caller's scope, while the counts cover only components the caller may read. Gated by rule:read.
+Lists the event rules, the authored config that raises alarms, each with its live state as counts (conditions_in_force, open_alarms, pending_streaks) read in the same query. Rules read like a registry: every rule is listed whatever the caller's scope, while the counts cover only components the caller may read. Gated by rule:read.
 
 Example:
 
@@ -1543,7 +1561,7 @@ Get an event rule's live state
 omniglass event-rule state list <name>
 ```
 
-What a rule holds right now: the alarms it raised that are still open, each on a component and instance, its streaks waiting out a sustain, and when it last judged an ingested sample. Only alarms and streaks on components the caller may read are listed. Gated by rule:read.
+What a rule holds right now: the conditions it holds in force (one per component and instance, whether or not it raises an alarm), the alarms it raised that are still open, each on a component and instance, its streaks waiting out a sustain, and when it last judged an ingested sample. Only conditions, alarms and streaks on components the caller may read are listed. Gated by rule:read.
 
 Example:
 
@@ -1559,22 +1577,24 @@ Update an event rule
 omniglass event-rule update <name> [flags]
 ```
 
-Patches a rule (an absent field is unchanged), bumping its version; disabling it stops new opens. Official rules are read-only (409). Audited. Gated by rule:update, with an all-scope grant.
+Patches a rule (an absent field is unchanged), bumping its version; disabling it stops new opens. An empty severity makes the rule informational and an empty clear_event_type drops its clear event; the fire event type cannot be emptied (422). Official rules are read-only (409). Audited. Gated by rule:update, with an all-scope grant.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--clear-criteria` | string | (none) | The criteria that clears it: {op, value}; absent clears on the negation of fire_criteria |
+| `--clear-event-type` | string | (none) | The event type the rule writes when its condition ends, by name; empty writes none |
 | `--clear-negates` | bool | `false` | Drop the clear criteria, so the rule clears on the negation of its fire criteria |
 | `--clear-sustain` | string | (none) | How long the clear criteria must hold, a Go duration; empty is 0s |
 | `--description` | string | (none) | What the rule watches for and why |
 | `--enabled` | bool | `false` | Whether the rule evaluates; defaults to true on create |
 | `--fire-criteria` | string | (none) | The criteria that opens an alarm: {op, value} |
+| `--fire-event-type` | string | (none) | The event type the rule writes when its condition starts, by name; it cannot be emptied |
 | `--fire-sustain` | string | (none) | How long the fire criteria must hold, a Go duration (e.g. 30s); empty is 0s |
 | `--label` | string | (none) | A human label; also the alarm message when message is empty |
 | `--message` | string | (none) | The alarm message; empty uses the label or the name |
 | `--sample-key` | string | (none) | The property or metric the rule reads |
 | `--selector` | string | (none) | Replace the components the rule watches; absent leaves them unchanged, and an empty selector watches every component |
-| `--severity` | string | (none) | The severity level the alarm is raised at, by name |
+| `--severity` | string | (none) | The severity level the alarm is raised at, by name; empty makes the rule informational (no alarm) |
 
 Example:
 
@@ -1617,7 +1637,7 @@ Delete an event type
 omniglass event-type delete <name>
 ```
 
-Removes a custom event type by name. Official event types are read-only. Gated by event_type:delete.
+Removes a custom event type by name. Official event types are read-only (409), and so is a type still in use: one that recorded events or an event rule's fire or clear event type names is a 409 until nothing names it. Gated by event_type:delete.
 
 Example:
 

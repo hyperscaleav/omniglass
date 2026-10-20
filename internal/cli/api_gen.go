@@ -583,6 +583,23 @@ func generatedCommands() []*cobra.Command {
 				}()
 				return cmd
 			}())
+			parent.AddCommand(func() *cobra.Command {
+				cmd := func() *cobra.Command {
+					cmd := &cobra.Command{
+						Use:     "timeline <name> <id>",
+						Short:   "Read an alarm's timeline",
+						Long:    "The alarm's history in one list, oldest first: the events that carry it (an event rule's fire event, which opened it, and its clear event, which resolved it) merged by time with its audit rows (the raise, each acknowledgement, the clear, and a rule edit that opened or resolved it, naming the editor). At one instant an event comes before the audit row it caused. Gated by alarm:read; a component outside the caller's component read scope, and an alarm not on the component, are a non-disclosing 404.",
+						Example: "  omniglass component alarm timeline <name> <id>",
+						Args:    cobra.ExactArgs(2),
+						RunE: func(cmd *cobra.Command, args []string) error {
+							path := fmt.Sprintf("/api/v1/components/%s/alarms/%s:timeline", url.PathEscape(args[0]), url.PathEscape(args[1]))
+							return runAPICommand(cmd, "GET", path, nil)
+						},
+					}
+					return cmd
+				}()
+				return cmd
+			}())
 			return parent
 		}())
 		parent.AddCommand(func() *cobra.Command {
@@ -1972,10 +1989,12 @@ func generatedCommands() []*cobra.Command {
 		parent.AddCommand(func() *cobra.Command {
 			cmd := func() *cobra.Command {
 				var fClearCriteria string
+				var fClearEventType string
 				var fClearSustain string
 				var fDescription string
 				var fEnabled bool
 				var fFireCriteria string
+				var fFireEventType string
 				var fFireSustain string
 				var fLabel string
 				var fMessage string
@@ -1986,14 +2005,17 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "create",
 					Short:   "Create an event rule",
-					Long:    "Authors a rule that raises an alarm on each component it watches when its sample key meets the fire criteria for the fire sustain, and clears it when the clear criteria (or the negation of fire) holds for the clear sustain. The key must be a registered property or metric, the criteria evaluable on its lane, and the severity a level that exists (else 422); a name already taken is a 409. Audited. Gated by rule:create, with an all-scope grant.",
-					Example: "  omniglass event-rule create --fire-criteria <json> --name name --sample-key sample_key --severity severity",
+					Long:    "Authors a rule whose condition starts on each component it watches when its sample key meets the fire criteria for the fire sustain, and ends when the clear criteria (or the negation of fire) holds for the clear sustain. It names the event type it writes when the condition starts (required) and, optionally, when it ends; with a severity it also raises an alarm while the condition holds, and without one it is informational. The key must be a registered property or metric, the criteria evaluable on its lane, the event types registered and the severity, when given, a level that exists (else 422); a name already taken is a 409. Audited. Gated by rule:create, with an all-scope grant.",
+					Example: "  omniglass event-rule create --fire-criteria <json> --fire-event-type fire_event_type --name name --sample-key sample_key",
 					Args:    cobra.ExactArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
 						path := fmt.Sprintf("/api/v1/event-rules")
 						body := map[string]any{}
 						if cmd.Flags().Changed("clear-criteria") {
 							body["clear_criteria"] = jsonOrString(fClearCriteria)
+						}
+						if cmd.Flags().Changed("clear-event-type") {
+							body["clear_event_type"] = fClearEventType
 						}
 						if cmd.Flags().Changed("clear-sustain") {
 							body["clear_sustain"] = fClearSustain
@@ -2006,6 +2028,9 @@ func generatedCommands() []*cobra.Command {
 						}
 						if cmd.Flags().Changed("fire-criteria") {
 							body["fire_criteria"] = jsonOrString(fFireCriteria)
+						}
+						if cmd.Flags().Changed("fire-event-type") {
+							body["fire_event_type"] = fFireEventType
 						}
 						if cmd.Flags().Changed("fire-sustain") {
 							body["fire_sustain"] = fFireSustain
@@ -2032,11 +2057,14 @@ func generatedCommands() []*cobra.Command {
 					},
 				}
 				cmd.Flags().StringVar(&fClearCriteria, "clear-criteria", "", "The criteria that clears it: {op, value}; absent clears on the negation of fire_criteria")
+				cmd.Flags().StringVar(&fClearEventType, "clear-event-type", "", "The event type the rule writes when its condition ends, by name (condition-ended is the generic one); absent, it writes none")
 				cmd.Flags().StringVar(&fClearSustain, "clear-sustain", "", "A Go duration; empty is 0s")
 				cmd.Flags().StringVar(&fDescription, "description", "", "What the rule watches for and why")
 				cmd.Flags().BoolVar(&fEnabled, "enabled", false, "Defaults to true")
 				cmd.Flags().StringVar(&fFireCriteria, "fire-criteria", "", "The criteria that opens an alarm: {op, value}")
 				_ = cmd.MarkFlagRequired("fire-criteria")
+				cmd.Flags().StringVar(&fFireEventType, "fire-event-type", "", "The event type the rule writes when its condition starts, by name (condition-started is the generic one)")
+				_ = cmd.MarkFlagRequired("fire-event-type")
 				cmd.Flags().StringVar(&fFireSustain, "fire-sustain", "", "A Go duration; empty is 0s")
 				cmd.Flags().StringVar(&fLabel, "label", "", "A human label; also the alarm message when message is empty")
 				cmd.Flags().StringVar(&fMessage, "message", "", "The alarm message; empty uses the label or the name")
@@ -2045,8 +2073,7 @@ func generatedCommands() []*cobra.Command {
 				cmd.Flags().StringVar(&fSampleKey, "sample-key", "", "The property or metric the rule reads")
 				_ = cmd.MarkFlagRequired("sample-key")
 				cmd.Flags().StringVar(&fSelector, "selector", "", "The components the rule watches (component types and components); absent is every component")
-				cmd.Flags().StringVar(&fSeverity, "severity", "", "The severity level the alarm is raised at, by name")
-				_ = cmd.MarkFlagRequired("severity")
+				cmd.Flags().StringVar(&fSeverity, "severity", "", "The severity level the alarm is raised at, by name; absent or empty, the rule is informational and raises no alarm")
 				return cmd
 			}()
 			return cmd
@@ -2090,7 +2117,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "list",
 					Short:   "List event rules",
-					Long:    "Lists the event rules, the authored config that raises alarms, each with its live state as counts (open_alarms, pending_streaks) read in the same query. Rules read like a registry: every rule is listed whatever the caller's scope, while the counts cover only components the caller may read. Gated by rule:read.",
+					Long:    "Lists the event rules, the authored config that raises alarms, each with its live state as counts (conditions_in_force, open_alarms, pending_streaks) read in the same query. Rules read like a registry: every rule is listed whatever the caller's scope, while the counts cover only components the caller may read. Gated by rule:read.",
 					Example: "  omniglass event-rule list",
 					Args:    cobra.ExactArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -2112,7 +2139,7 @@ func generatedCommands() []*cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "list <name>",
 						Short:   "Get an event rule's live state",
-						Long:    "What a rule holds right now: the alarms it raised that are still open, each on a component and instance, its streaks waiting out a sustain, and when it last judged an ingested sample. Only alarms and streaks on components the caller may read are listed. Gated by rule:read.",
+						Long:    "What a rule holds right now: the conditions it holds in force (one per component and instance, whether or not it raises an alarm), the alarms it raised that are still open, each on a component and instance, its streaks waiting out a sustain, and when it last judged an ingested sample. Only conditions, alarms and streaks on components the caller may read are listed. Gated by rule:read.",
 						Example: "  omniglass event-rule state list <name>",
 						Args:    cobra.ExactArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
@@ -2129,11 +2156,13 @@ func generatedCommands() []*cobra.Command {
 		parent.AddCommand(func() *cobra.Command {
 			cmd := func() *cobra.Command {
 				var fClearCriteria string
+				var fClearEventType string
 				var fClearNegates bool
 				var fClearSustain string
 				var fDescription string
 				var fEnabled bool
 				var fFireCriteria string
+				var fFireEventType string
 				var fFireSustain string
 				var fLabel string
 				var fMessage string
@@ -2143,7 +2172,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "update <name>",
 					Short:   "Update an event rule",
-					Long:    "Patches a rule (an absent field is unchanged), bumping its version; disabling it stops new opens. Official rules are read-only (409). Audited. Gated by rule:update, with an all-scope grant.",
+					Long:    "Patches a rule (an absent field is unchanged), bumping its version; disabling it stops new opens. An empty severity makes the rule informational and an empty clear_event_type drops its clear event; the fire event type cannot be emptied (422). Official rules are read-only (409). Audited. Gated by rule:update, with an all-scope grant.",
 					Example: "  omniglass event-rule update <name>",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -2151,6 +2180,9 @@ func generatedCommands() []*cobra.Command {
 						body := map[string]any{}
 						if cmd.Flags().Changed("clear-criteria") {
 							body["clear_criteria"] = jsonOrString(fClearCriteria)
+						}
+						if cmd.Flags().Changed("clear-event-type") {
+							body["clear_event_type"] = fClearEventType
 						}
 						if cmd.Flags().Changed("clear-negates") {
 							body["clear_negates"] = fClearNegates
@@ -2166,6 +2198,9 @@ func generatedCommands() []*cobra.Command {
 						}
 						if cmd.Flags().Changed("fire-criteria") {
 							body["fire_criteria"] = jsonOrString(fFireCriteria)
+						}
+						if cmd.Flags().Changed("fire-event-type") {
+							body["fire_event_type"] = fFireEventType
 						}
 						if cmd.Flags().Changed("fire-sustain") {
 							body["fire_sustain"] = fFireSustain
@@ -2189,17 +2224,19 @@ func generatedCommands() []*cobra.Command {
 					},
 				}
 				cmd.Flags().StringVar(&fClearCriteria, "clear-criteria", "", "The criteria that clears it: {op, value}; absent clears on the negation of fire_criteria")
+				cmd.Flags().StringVar(&fClearEventType, "clear-event-type", "", "The event type the rule writes when its condition ends, by name; empty writes none")
 				cmd.Flags().BoolVar(&fClearNegates, "clear-negates", false, "Drop the clear criteria, so the rule clears on the negation of its fire criteria")
 				cmd.Flags().StringVar(&fClearSustain, "clear-sustain", "", "How long the clear criteria must hold, a Go duration; empty is 0s")
 				cmd.Flags().StringVar(&fDescription, "description", "", "What the rule watches for and why")
 				cmd.Flags().BoolVar(&fEnabled, "enabled", false, "Whether the rule evaluates; defaults to true on create")
 				cmd.Flags().StringVar(&fFireCriteria, "fire-criteria", "", "The criteria that opens an alarm: {op, value}")
+				cmd.Flags().StringVar(&fFireEventType, "fire-event-type", "", "The event type the rule writes when its condition starts, by name; it cannot be emptied")
 				cmd.Flags().StringVar(&fFireSustain, "fire-sustain", "", "How long the fire criteria must hold, a Go duration (e.g. 30s); empty is 0s")
 				cmd.Flags().StringVar(&fLabel, "label", "", "A human label; also the alarm message when message is empty")
 				cmd.Flags().StringVar(&fMessage, "message", "", "The alarm message; empty uses the label or the name")
 				cmd.Flags().StringVar(&fSampleKey, "sample-key", "", "The property or metric the rule reads")
 				cmd.Flags().StringVar(&fSelector, "selector", "", "Replace the components the rule watches; absent leaves them unchanged, and an empty selector watches every component")
-				cmd.Flags().StringVar(&fSeverity, "severity", "", "The severity level the alarm is raised at, by name")
+				cmd.Flags().StringVar(&fSeverity, "severity", "", "The severity level the alarm is raised at, by name; empty makes the rule informational (no alarm)")
 				return cmd
 			}()
 			return cmd
@@ -2255,7 +2292,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "delete <name>",
 					Short:   "Delete an event type",
-					Long:    "Removes a custom event type by name. Official event types are read-only. Gated by event_type:delete.",
+					Long:    "Removes a custom event type by name. Official event types are read-only (409), and so is a type still in use: one that recorded events or an event rule's fire or clear event type names is a 409 until nothing names it. Gated by event_type:delete.",
 					Example: "  omniglass event-type delete <name>",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {

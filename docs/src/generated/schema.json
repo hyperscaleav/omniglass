@@ -3473,7 +3473,16 @@
      {
       "name": "derived_by_rule_id",
       "type": "uuid",
-      "nullable": true
+      "nullable": true,
+      "fk": true,
+      "fk_target": "event_rule.id"
+     },
+     {
+      "name": "alarm_id",
+      "type": "uuid",
+      "nullable": true,
+      "fk": true,
+      "fk_target": "alarm.id"
      }
     ],
     "checks": [
@@ -3561,7 +3570,7 @@
      {
       "name": "severity",
       "type": "text",
-      "nullable": false,
+      "nullable": true,
       "fk": true,
       "fk_target": "severity_level.name"
      },
@@ -3600,6 +3609,20 @@
       "type": "timestamp with time zone",
       "nullable": false,
       "default": "now()"
+     },
+     {
+      "name": "fire_event_type_id",
+      "type": "uuid",
+      "nullable": false,
+      "fk": true,
+      "fk_target": "event_type.id"
+     },
+     {
+      "name": "clear_event_type_id",
+      "type": "uuid",
+      "nullable": true,
+      "fk": true,
+      "fk_target": "event_type.id"
      }
     ],
     "checks": [
@@ -3620,6 +3643,38 @@
      {
       "name": "event_rule_name_key",
       "definition": "CREATE UNIQUE INDEX event_rule_name_key ON public.event_rule USING btree (name)"
+     }
+    ]
+   },
+   "event_rule_condition": {
+    "columns": [
+     {
+      "name": "rule_id",
+      "type": "uuid",
+      "nullable": false,
+      "pk": true,
+      "fk": true,
+      "fk_target": "event_rule.id"
+     },
+     {
+      "name": "component_id",
+      "type": "uuid",
+      "nullable": false,
+      "pk": true,
+      "fk": true,
+      "fk_target": "component.id"
+     },
+     {
+      "name": "instance",
+      "type": "text",
+      "nullable": false,
+      "default": "''::text",
+      "pk": true
+     },
+     {
+      "name": "since",
+      "type": "timestamp with time zone",
+      "nullable": false
      }
     ]
    },

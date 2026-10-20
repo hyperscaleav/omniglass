@@ -18,7 +18,7 @@ func TestRuleSustains(t *testing.T) {
 	f := newHealthFixture(t)
 	ctx := context.Background()
 	gw, all := f.gw, scope.Set{All: true}
-	if _, err := gw.CreateEventRule(ctx, "", storage.EventRuleSpec{Name: "reach-lost", SampleKey: "endpoint-reachable",
+	if _, err := gw.CreateEventRule(ctx, "", storage.EventRuleSpec{FireEventType: "condition-started", Name: "reach-lost", SampleKey: "endpoint-reachable",
 		Fire: criteria("eq", "down"), FireSustain: 10 * time.Second, Clear: ptrCriteria(criteria("eq", "up")),
 		ClearSustain: 10 * time.Second, Severity: "high"}, all); err != nil {
 		t.Fatal(err)

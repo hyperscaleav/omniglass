@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/hyperscaleav/omniglass/internal/api"
@@ -89,6 +90,15 @@ func TestEventTypeAPI(t *testing.T) {
 
 	// An unknown event type is a 404.
 	c.do(ownerTok, http.MethodGet, "/event-types/nope", nil, http.StatusNotFound)
+
+	// A type an event rule names is in use (409) until the rule lets go of it.
+	c.do(ownerTok, http.MethodPost, "/event-rules", map[string]any{"name": "unplug-watch", "sample_key": "endpoint-reachable",
+		"fire_criteria": map[string]any{"op": "eq", "value": "down"}, "fire_event_type": "condition-started",
+		"clear_event_type": "cable-unplugged"}, http.StatusCreated)
+	if body := string(c.do(ownerTok, http.MethodDelete, "/event-types/cable-unplugged", nil, http.StatusConflict)); !strings.Contains(body, "in use") {
+		t.Fatalf("deleting a type a rule names: %s, want a 409 saying it is in use", body)
+	}
+	c.do(ownerTok, http.MethodDelete, "/event-rules/unplug-watch", nil, http.StatusNoContent)
 
 	// Delete the custom event type.
 	c.do(ownerTok, http.MethodDelete, "/event-types/cable-unplugged", nil, http.StatusNoContent)

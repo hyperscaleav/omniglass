@@ -78,6 +78,70 @@ const alarmRow = (label: HTMLElement) => label.closest("div.flex-col") as HTMLEl
 describe("AlarmsPanel", () => {
   afterEach(() => vi.restoreAllMocks());
 
+  it("opens an alarm's timeline in place as a disclosure: its events and audit rows, oldest first, each aged to the second", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const req = input as Request;
+      expect(req.url).toContain("/components/disp-1/alarms/a-1:timeline");
+      return json({
+        component: "disp-1",
+        alarm_id: "a-1",
+        entries: [
+          { at: ago(2 * 3_600_000 + 14_000), kind: "event", what: "condition-started", rule: "lamp-life", instance: "lamp", message: "Lamp hours exceeded" },
+          { at: ago(2 * 3_600_000 + 14_000), kind: "audit", what: "raise", rule: "lamp-life", message: "Lamp hours exceeded" },
+          { at: ago(134_000), kind: "audit", what: "acknowledge", actor: "jordan" },
+        ],
+      });
+    });
+    const { getByText, getByRole } = mount();
+    // Named by what the alarm says, not by its uuid.
+    const toggle = getByRole("button", { name: "Timeline of Lamp hours exceeded" });
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    expect(toggle.hasAttribute("aria-pressed")).toBe(false);
+    fireEvent.click(toggle);
+    const list = await waitFor(() => getByRole("list", { name: "Timeline of Lamp hours exceeded" }));
+    expect(toggle.getAttribute("aria-expanded")).toBe("true");
+    const controls = toggle.getAttribute("aria-controls")!;
+    expect(controls).toBeTruthy();
+    expect(document.getElementById(controls)?.contains(list)).toBe(true);
+    const items = within(list).getAllByRole("listitem").map((li) => li.textContent ?? "");
+    expect(items).toHaveLength(3);
+    expect(items[0]).toContain("condition-started");
+    expect(items[0]).toContain("rule lamp-life");
+    expect(items[0]).toContain("Lamp hours exceeded");
+    expect(items[0]).toMatch(/2h 0m ago/);
+    expect(items[1]).toContain("raised");
+    expect(items[2]).toContain("acknowledged");
+    expect(items[2]).toContain("jordan");
+    expect(items[2]).toMatch(/2m 1[34]s ago/);
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    fireEvent.click(toggle);
+    await waitFor(() => expect(() => getByRole("list", { name: "Timeline of Lamp hours exceeded" })).toThrow());
+    expect(getByText("Lamp hours exceeded")).toBeTruthy();
+  });
+
+  it("refreshes an open timeline when the alarm is acknowledged, so the line appears at once", async () => {
+    let acked = false;
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const req = input as Request;
+      if (req.method === "POST" && req.url.includes(":acknowledge")) {
+        acked = true;
+        return json({ ...alarms[1], acknowledged: true, acknowledged_by: "jordan", acknowledged_at: ago(0) });
+      }
+      if (req.url.includes(":timeline")) {
+        const entries = [{ at: ago(3_600_000), kind: "audit", what: "raise", actor: "sam", message: "HDMI board failed" }];
+        if (acked) entries.push({ at: ago(0), kind: "audit", what: "acknowledge", actor: "jordan", message: "" });
+        return json({ component: "disp-1", alarm_id: "a-2", entries });
+      }
+      return json({ component: "disp-1", alarms });
+    });
+    const { getByRole } = mount();
+    fireEvent.click(getByRole("button", { name: "Timeline of HDMI board failed" }));
+    const list = await waitFor(() => getByRole("list", { name: "Timeline of HDMI board failed" }));
+    expect(within(list).getAllByRole("listitem")).toHaveLength(1);
+    fireEvent.click(getByRole("button", { name: "Acknowledge alarm a-2" }));
+    await waitFor(() => expect(within(getByRole("list", { name: "Timeline of HDMI board failed" })).getAllByRole("listitem")).toHaveLength(2));
+  });
+
   it("lists an active alarm with its severity and message", () => {
     const { getByText } = mount();
     const row = alarmRow(getByText("HDMI board failed"));

@@ -328,13 +328,12 @@ Raising one takes two things:
 **Not every alarm is raised by hand.** An [event rule](/guides/admin/rules/) raises and clears its
 own as telemetry lands: such an alarm says **by rule** and the rule's name, and the rule clears it
 when the condition passes (the official reachability rule does this for every endpoint that stops
-answering). You acknowledge it like any other. Clearing it by hand works too, but whether it stays
-cleared depends on the input, because a rule judges samples as they land and its sustain clock only
-finishes streaks that a sample already started. An input that keeps reporting while the condition holds
-(a metric sampled on every poll) starts a new streak with its next sample and reopens the alarm once
-that streak has held for the sustain. An input that reports only when its value changes sends nothing
-further, so a hand clear on a condition that still holds stays cleared until the value changes and the
-condition comes back. Fix the condition rather than clearing its alarm.
+answering). You acknowledge it like any other. Clearing it by hand works too, and **a hand clear of a
+rule's alarm holds until the condition ends and returns**, whatever the input: a rule acts on the
+condition's edges, not on each sample, so a metric still reading over its threshold on every poll does
+not reopen it. The rule still counts the condition as in force (its condition and the events it wrote
+are untouched); once the value recovers the condition ends, and if it comes back later the rule opens
+a new alarm. Fix the condition rather than clearing its alarm.
 
 **Clearing keeps the row.** The alarm moves to the history with the time it was cleared, so what was wrong
 and when survives the fix. Clearing one twice is a plain miss rather than a silent success.
@@ -366,9 +365,20 @@ Acknowledging twice is harmless. The first person and the first time are what th
 second click (or a colleague reaching it a moment after you) changes nothing and is not an error.
 There is no un-acknowledge yet.
 
+### Reading an alarm's timeline
+
+The **clock** button on an alarm row (in the **Why** strip at the top of a component's or a system's
+page, and in the alarms panel, active or recently cleared) opens the alarm's **timeline** under the row: everything recorded about it, oldest first. An **event** line is what a rule saw (its
+`condition-started` when the condition came into force and opened the alarm, its `condition-ended`
+when it passed and resolved it), named by the rule and the endpoint; an **audit** line is what was
+done to the alarm (raised, acknowledged, cleared) and by whom, a person by name or the rule the
+platform acted for. A hand-raised alarm's timeline is its audit lines alone. The same button sits on
+each open alarm in a rule's blade on the Rules page. Click it again to fold the timeline away; any
+number can be open at once.
+
 From the CLI: `omniglass component alarm list <name> [--include-cleared] [--unacknowledged]`,
 `omniglass component alarm create <name> --severity <level> --message <text>`,
-`omniglass component alarm acknowledge <name> <id>`, and
+`omniglass component alarm acknowledge <name> <id>`, `omniglass component alarm timeline <name> <id>`, and
 `omniglass component alarm delete <name> <id>`.
 
 ## Health on a system or location

@@ -8,6 +8,7 @@ import (
 
 	"github.com/hyperscaleav/omniglass/internal/key"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 // EventType is a registered occurrence key: the "happen" half of the telemetry
@@ -30,6 +31,7 @@ var (
 	ErrEventTypeExists   = errors.New("storage: event type name already exists")
 	ErrEventTypeOfficial = errors.New("storage: official event type is read-only")
 	ErrEventTypeInvalid  = errors.New("storage: event type is invalid")
+	ErrEventTypeInUse    = errors.New("storage: event type is still referenced")
 )
 
 // EventTypeSpec is the create input for a custom event type.
@@ -284,6 +286,11 @@ func (p *PG) DeleteEventType(ctx context.Context, actorID, name string) error {
 		return fmt.Errorf("storage: audit image event_type %q: %w", name, err)
 	}
 	if _, err := tx.Exec(ctx, `delete from event_type where name = $1`, name); err != nil {
+		// Recorded events and the event rules that name the type restrict it.
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23503" {
+			return ErrEventTypeInUse
+		}
 		return fmt.Errorf("storage: delete event type %q: %w", name, err)
 	}
 	if err := writeAuditRes(ctx, tx, actorID, "delete", "event_type", auditImageID(before), before, nil); err != nil {

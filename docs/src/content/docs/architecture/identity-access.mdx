@@ -657,6 +657,12 @@ TLS on the HTTP API (terminated at the binary when given a cert + key, or at the
 
 Every API operation records the resolved **actor** (the principal id) in `audit_log`; secret decrypts are always audited, never filterable. Node-mode writes record the node principal; a system-mode write records a **null** actor (`audit_log.actor_principal_id` is a nullable foreign key), distinguishing operator action from platform internals; an impersonated request also records `real_actor_principal_id`. Fleet mutations write their `audit_log` row **in the same transaction** as the change (via the Storage Gateway); **auth events** (login, logout) fire on read/no-tx paths through a separate non-transactional seam under `resource = 'auth'`. The read side (`GET /audit-log`) requires the admin-sensitive `audit:read:admin`, out of a two-token wildcard's reach ([ADR-0015](/architecture/decisions/#adr-0015-permissions-are-topic-patterns-single-token-and-tail-wildcards)). An attempt on an **unknown** username is **not** written, so scanning random usernames cannot flood the log; endpoint rate limiting (a later slice) bounds a targeted brute force. The full model, including the auth-event verbs, is [audit](/architecture/audit/).
 
+One slice of the audit log is readable without `audit:read:admin`, deliberately: an **alarm's timeline**
+(`GET /components/{name}/alarms/{id}:timeline`, `alarm:read` with the component's read scope) shows the
+alarm's own audit rows, naming who raised, acknowledged or cleared it by hand. It shows the **effective
+actor** only, never the real actor behind an impersonation, so it reveals no more than the alarm row's
+own `acknowledged_by` already does ([alarms and actions](/architecture/alarms-actions/#the-alarms-timeline)).
+
 ## Bootstrap
 
 The first install runs `omniglass bootstrap <username>` with optional `--password <pw>`, `--email <email>`, and `--label <name>` flags: one transaction creating the first operator as a `human` principal with an `owner @ all` grant and a bearer credential; `--password` also installs a password credential for the web console. There is no implicit default principal; the bootstrap is the only path to the first owner.

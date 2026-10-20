@@ -6556,6 +6556,120 @@ locks the rules naming the level before the level itself, the same order an inge
 concurrent with a batch raising at the level waits for it instead of deadlocking (a regression test
 reproduces the deadlock on the old order).
 
+### An event rule's alarm is optional, and its events are typed (#938, slice #948)
+
+The first slice of the event-to-alarm edge. `event_rule.severity` is nullable (the reference to the
+level registry keeps `ON UPDATE CASCADE`): a rule with no severity is informational, and the evaluator
+raises no alarm for it, while a clear still resolves an alarm the rule holds open from before it went
+informational. A rule names its event types from the `event_type` registry by name, a required
+`fire_event_type` and an optional `clear_event_type`, stored as `fire_event_type_id` and
+`clear_event_type_id` references (a type a rule names cannot be deleted; deleting a referenced event
+type is now a 409, where it was a 500). The boot seed lands two official types, `condition-started`
+and `condition-ended`, and gives the official `reachability-lost` rule that pair; the seeded-rules table
+on the rules guide renders the types and an informational rule's absent severity from the seed. The
+schema change is three migrations, one per bucket: the DDL (the nullable severity, the two type
+references, `event.alarm_id` with `ON DELETE SET NULL`, and the `event_rule_condition` table keyed and
+cascading like `event_rule_state`), a one-time backfill giving every existing rule the generic pair
+(creating the two types insert-if-absent when rules exist, since the boot seed runs after migrations;
+a fresh database gets them from the seed alone), and the `NOT NULL` on the fire type after it.
+`/event-rules` takes and returns the new fields (`severity` absent on read for an informational rule;
+a PATCH with an empty `severity` makes a rule informational, an empty `clear_event_type` drops the
+clear event, an empty fire type is a 422), and the CLI follows from `make gen`. Changing a rule's event
+types is not a material edit: it changes what the rule writes at an edge, not when the edge falls, so
+its streaks keep running. The console's new-rule form sends the generic pair until it gains the type
+pickers (#951). Writing the events at the edge, the condition rows and `event.alarm_id` is the next
+slice (#949); the page badges move with the epic's last slice.
+
+### A firing rule writes its events at the edge, carrying its alarm (#938, slice #949)
+
+The second slice of the event-to-alarm edge. A rule's in-force state is now its own
+`event_rule_condition` row, for every rule, informational or not, rather than the alarm it holds open.
+Every path that judges a rule reads it: the ingest evaluator's in-force check, the sweep's re-judge
+before it acts, priming on create, enable or material edit, and the #928 reconcile pass, whose drift
+check reads the condition in the same one-statement scan (so an informational condition held across
+samples no longer reads as drifted on every pass, and its streaks no longer churn). When a condition
+comes into force the rule writes the row, opens its alarm when it has a severity, and writes its fire
+event; when it leaves, it deletes the row, resolves the alarm and writes its clear event when it has a
+clear type: once per edge, in the transaction that moves the alarm and recomputes health. The event is
+`origin = derived` on the series' component and instance, with the rule's message and the sample's
+key and value as attributes, `derived_by_rule_id` (now a reference to `event_rule`, set null with the
+rule, by a new migration), the rule's name and version in `source_rule` and `source_rule_version`, and
+`alarm_id` set to the alarm it opened or resolved. Disabling, deleting or narrowing a rule ends its
+conditions with their clear events; turning a severity on opens alarms for the conditions in force,
+and turning it off resolves them, leaving the conditions in force, with no condition event either way
+(the alarm's audit rows, naming the editor, record a rule edit's open and resolve), and a material
+edit primes before its severity reaches the conditions. A hand clear of a rule's alarm holds until the
+condition ends and returns, and an alarm the rule holds open with no condition row (an older binary's,
+mid-upgrade) counts as in force, so a recovery resolves it rather than stranding it. A one-time backfill gives every rule-raised alarm open
+at upgrade its condition row, since it opened, so the next recovery resolves it with a clear event. The
+component and system event reads return `derived_by_rule` and `alarm_id`. The netadmin end-to-end
+test now proves, on the real stack, that each alarm the unplug opens was opened by exactly one
+`condition-started` event carrying its id, and resolved after the replug by exactly one
+`condition-ended` event carrying it.
+
+### An alarm's timeline, its events and audit rows (#938, slice #950)
+
+The third slice of the event-to-alarm edge. `GET /components/{name}/alarms/{id}:timeline` (`omniglass
+component alarm timeline`) reads one alarm's history oldest first: the events that carry it through
+`event.alarm_id` (a rule's fire and clear events) merged with its audit rows (the raise, each
+acknowledgement, the clear, and a rule edit's severity open or resolve, naming the editor). It is gated
+`alarm:read`, resolves the component in the caller's component read scope first (a component it cannot
+read, and an alarm not on the component, are the same non-disclosing 404), and costs two bounded
+statements: the alarm, then one ordered union of both sources. A new partial `audit_log` index on
+alarm rows keeps the audit half a probe rather than a scan. At one instant an event sorts
+before the audit row it caused, since a rule's event and its alarm write share the transaction's clock;
+an audit row the platform wrote for a rule alarm names that rule. In the console every alarm row (the Why
+strip on a component's and a system's page and blade, the component's alarms panel, active and recently
+cleared, and a rule's open alarms on the Rules blade) carries a clock toggle that opens the timeline in place under the row, one shared primitive
+(`AlarmTimeline` and `createTimelineToggles`), since a drawer is the design system's form surface and a
+row's history is read where the row is.
+
+### Informational rules on the console, and derived events on Activity (#938, slice #951)
+
+The last slice of the event-to-alarm edge. The rule form's **Severity** gains **None (informational)**;
+a new rule still starts at the default level until its author picks one (None included), and an edit
+never fills one in. **Fire event type** (required) and **Clear event type** (optional, **No clear
+event**) pick from the event type registry, judged in TypeScript. The rules list shows an informational
+rule with a quiet neutral chip in place of a level, and its live column counts **conditions in force**
+beside open alarms and pending streaks: the list, a get and the state route carry `conditions_in_force`,
+and the state lists the conditions themselves, each fenced to the reader's component scope like the
+other counts. A rule's blade gains **Writes** (its event types) and **Conditions in force**. Activity on
+a component and a system names the rule that derived each event, linking to the rule's blade
+(`/rules?rule=<name>` now opens it), and an event that carries an alarm opens that alarm's timeline in
+place; the system event read names each row's owner by uuid (`owner_id`) so the timeline opens on the
+right component. The docs roll up: [ADR-0145](/architecture/decisions/#adr-0145-a-rule-records-its-conditions-as-typed-events-and-its-alarm-is-optional)
+records the optional alarm, the event types on a rule, the condition row as in-force state, one event per
+edge with severity toggles writing no condition events, and a hand clear holding while the condition
+persists; the rules guide teaches conditions and both behaviors; the glossary gains **condition** and
+**informational rule**. Alarms and actions and events stay **Partial** (actions, log derivation, the
+scheduled origin and the CDC publisher are still design). The watch-a-rule-raise-an-alarm walkthrough
+is unchanged: this branch predates the 2s simulator check-in (#945), so showing the derived event on
+the component's Activity would not fit its 60s budget.
+
+### An alarm's timeline reads every id form and stays fresh (#938, #950 follow-ups)
+
+Review follow-ups on #950: the timeline matches an alarm id in any form Postgres reads (uppercase,
+braced) by its canonical form, which the audit rows key on (an uppercase id had returned the events and
+none of the audit rows); the platform's audit lines name the rule as its events recorded it, so a
+deleted rule still names them; the gateway takes the component uuid the route resolved, so the read is
+the two statements it says; the audit index is partial on alarm rows, with its upgrade cost in the
+migration's header; an open timeline refreshes every 5s like its alarm list (paused while the tab is
+hidden), and an acknowledge or clear refreshes it at once; the toggle is a disclosure
+(`aria-expanded`, `aria-controls`) named by the alarm's message; each line shows its message and an age
+to the second, with the exact time on hover, every age from one clock. Identity and access now says the
+timeline shows an alarm's hand actors to `alarm:read` (the effective actor only) on purpose.
+
+### Rule links and counts tell the truth (#938, #951 follow-ups)
+
+Review follow-ups on #951. The `/rules?rule=<name>` link follows the param as it changes (back and
+forward open the rule it names) and clears it when the blade closes; a linked rule's blade says
+**Rule not found** only once the list has loaded, and reads no state for a rule that is not there. An
+event names its rule by id (`derived_by_rule_id`) while the rule exists, so Activity links a live rule
+and shows a deleted one's recorded name as plain text marked deleted. A rule's live counts and state
+read conditions in force the way the evaluator does, an open rule alarm with no condition row
+included, so open alarms never outnumber conditions in force. ADR-0145 gains its one exception: a
+severity turned off and back on reopens an alarm for every condition in force, a hand-cleared one
+included.
 ### Configure place lands on Configure, followed in the console (#932)
 
 **Configure place** on a sole system's place card links to the place with `?tab=configure`, and the
