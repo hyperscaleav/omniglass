@@ -34,6 +34,7 @@ import { describeError, fmtTime } from "../lib/format";
 import { durationText } from "../lib/timeline";
 import { componentAlarms, componentAlarmsKey } from "../lib/alarms";
 import { useSeverity } from "../lib/severity";
+import AlarmTimeline, { createTimelineToggles } from "../components/AlarmTimeline";
 import SeverityBadge from "../components/SeverityBadge";
 import { incidentReasons, incidentRows, incidentsOf, markerX, uptimePct, type MemberAlarms } from "../lib/system_history";
 import { spans as timelineSpans } from "../lib/timeline";
@@ -96,6 +97,8 @@ export default function SystemZoom() {
 
   const scale = useSeverity();
   const alarms = createMemo(() => (health.data ? alarmRows(health.data, scale().levels) : []));
+  // Each alarm row in the Why strip opens its timeline in place (#950).
+  const timelines = createTimelineToggles();
   // The strip reads red when any alarm on it is at an outage level (the
   // registry's flag, #917), amber when they only degrade.
   const inOutage = createMemo(() => alarms().some((a) => scale().outage(a.severity)));
@@ -472,13 +475,19 @@ export default function SystemZoom() {
                       <h2 class="eyebrow">Why</h2>
                       <For each={alarms()}>
                         {(a) => (
-                          <div class="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-sm">
-                            <SeverityBadge name={a.severity} />
-                            <span>{a.message}</span>
-                            <Show when={a.componentId} fallback={<span class="font-mono text-xs text-base-content/60">{a.component}</span>}>
-                              {(cid) => <button type="button" class="cursor-pointer font-mono text-xs text-base-content/80 hover:underline" onClick={() => openComponent(cid())}>{a.component}</button>}
+                          <div class="flex flex-col gap-1.5">
+                            <div class="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-sm">
+                              <SeverityBadge name={a.severity} />
+                              <span>{a.message}</span>
+                              <Show when={a.componentId} fallback={<span class="font-mono text-xs text-base-content/60">{a.component}</span>}>
+                                {(cid) => <button type="button" class="cursor-pointer font-mono text-xs text-base-content/80 hover:underline" onClick={() => openComponent(cid())}>{a.component}</button>}
+                              </Show>
+                              <span class="text-xs text-base-content/50">impairs {a.roleLabel} · {durationText(pageNow - Date.parse(a.raisedAt))}</span>
+                              <Show when={a.componentId}>{timelines.button(a.id)}</Show>
+                            </div>
+                            <Show when={a.componentId && timelines.isOpen(a.id)}>
+                              <AlarmTimeline component={a.componentId!} alarmId={a.id} />
                             </Show>
-                            <span class="text-xs text-base-content/50">impairs {a.roleLabel} · {durationText(pageNow - Date.parse(a.raisedAt))}</span>
                           </div>
                         )}
                       </For>

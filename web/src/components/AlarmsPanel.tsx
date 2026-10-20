@@ -2,6 +2,7 @@ import { For, Show, createMemo, createSignal, type JSX } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import Button from "./Button";
 import { Check, Eye, Siren } from "./icons";
+import AlarmTimeline, { createTimelineToggles } from "./AlarmTimeline";
 import { describeError, rel } from "../lib/format";
 import {
   acknowledgeAlarm,
@@ -71,6 +72,8 @@ export default function AlarmsPanel(props: { component: string; canUpdate: boole
   const [chosen, setChosen] = createSignal("");
   const severity = () => chosen() || scale().levels[0]?.name || "";
   const [message, setMessage] = createSignal("");
+  // Each row opens its timeline in place (#950).
+  const timelines = createTimelineToggles();
 
   async function run(write: () => Promise<void>, after?: () => void) {
     setBusy(true);
@@ -196,7 +199,11 @@ export default function AlarmsPanel(props: { component: string; canUpdate: boole
                       onClick={() => void clear(a.id)}
                     />
                   </Show>
+                  {timelines.button(a.id)}
                 </div>
+                <Show when={timelines.isOpen(a.id)}>
+                  <AlarmTimeline component={props.component} alarmId={a.id} />
+                </Show>
               </div>
             )}
           </For>
@@ -249,16 +256,24 @@ export default function AlarmsPanel(props: { component: string; canUpdate: boole
           <div class="divide-y divide-base-300 overflow-hidden rounded-box border border-dashed border-base-300">
             <For each={cleared()}>
               {(a) => (
-                <div class="flex flex-wrap items-baseline gap-2 px-3 py-2 opacity-70">
-                  <SeverityBadge name={a.severity} />
-                  <span class="min-w-0 flex-1 text-[12.5px] text-base-content/70">{a.message || "(no message)"}</span>
-                  <span class="shrink-0 text-[11px] text-base-content/45">
-                    raised {rel(a.raised_at)}
-                    <Show when={a.cleared_at}> · cleared {rel(a.cleared_at!)}</Show>
-                    {/* An incident that came and went with nobody looking is worth
-                        seeing in the history: it is the one that got no attention. */}
-                    <Show when={!a.acknowledged}> · never acknowledged</Show>
-                  </span>
+                <div class="flex flex-col gap-1.5 px-3 py-2">
+                  <div class="flex flex-wrap items-baseline gap-2">
+                    <span class="flex min-w-0 flex-1 flex-wrap items-baseline gap-2 opacity-70">
+                      <SeverityBadge name={a.severity} />
+                      <span class="min-w-0 flex-1 text-[12.5px] text-base-content/70">{a.message || "(no message)"}</span>
+                      <span class="shrink-0 text-[11px] text-base-content/45">
+                        raised {rel(a.raised_at)}
+                        <Show when={a.cleared_at}> · cleared {rel(a.cleared_at!)}</Show>
+                        {/* An incident that came and went with nobody looking is worth
+                            seeing in the history: it is the one that got no attention. */}
+                        <Show when={!a.acknowledged}> · never acknowledged</Show>
+                      </span>
+                    </span>
+                    {timelines.button(a.id)}
+                  </div>
+                  <Show when={timelines.isOpen(a.id)}>
+                    <AlarmTimeline component={props.component} alarmId={a.id} />
+                  </Show>
                 </div>
               )}
             </For>

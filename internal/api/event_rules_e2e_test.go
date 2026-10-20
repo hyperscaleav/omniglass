@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -431,4 +432,106 @@ func TestRuleEventsOnTheEventsRead(t *testing.T) {
 			t.Fatalf("%s = %+v, want ev-watch's derived condition-started carrying alarm %s", path, out.Events, alarm)
 		}
 	}
+}
+
+// TestAlarmTimelineAPI drives GET /components/{name}/alarms/{id}:timeline
+// (#950): the alarm's events and audit rows in time order, gated alarm:read
+// with the component's read scope injected, so a caller who cannot read the
+// component gets the same 404 an unknown one does.
+func TestAlarmTimelineAPI(t *testing.T) {
+	dsn := storagetest.NewDSN(t)
+	ctx := context.Background()
+	gw, err := storage.NewPG(ctx, dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer gw.Close()
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatal(err)
+	}
+	ownerTok, hash, prefix, err := auth.NewBearerToken()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := gw.BootstrapOwner(ctx, storage.OwnerSpec{Username: "root", SecretHash: hash, Prefix: prefix}); err != nil {
+		t.Fatal(err)
+	}
+	srv := httptest.NewServer(api.NewHandler(gw))
+	defer srv.Close()
+	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
+	viewer := setupAllViewer(t, ctx, dsn, "timeline-viewer")
+	all := scope.Set{All: true}
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "tl-target"}, all, all, all, all); err != nil {
+		t.Fatal(err)
+	}
+	c.do(ownerTok, http.MethodPost, "/event-rules", map[string]any{"name": "tl-watch", "sample_key": "endpoint-reachable",
+		"fire_criteria": map[string]any{"op": "eq", "value": "down"}, "clear_criteria": map[string]any{"op": "eq", "value": "up"},
+		"severity": "high", "fire_event_type": "condition-started", "clear_event_type": "condition-ended",
+		"selector": map[string]any{"components": []string{"tl-target"}}}, http.StatusCreated)
+	sample := func(v string) {
+		if err := gw.InsertPropertySamples(ctx, []storage.PropertySampleWrite{{OwnerKind: "component", OwnerID: "tl-target",
+			Key: "endpoint-reachable", Instance: "tcp", Value: v, TS: time.Now()}}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	sample("down")
+	var alarms struct {
+		Alarms []struct {
+			ID           string `json:"id"`
+			RaisedByRule string `json:"raised_by_rule"`
+		} `json:"alarms"`
+	}
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/components/tl-target/alarms", nil, http.StatusOK), &alarms); err != nil {
+		t.Fatal(err)
+	}
+	alarm := ""
+	for _, a := range alarms.Alarms {
+		if a.RaisedByRule == "tl-watch" {
+			alarm = a.ID
+		}
+	}
+	if alarm == "" {
+		t.Fatalf("alarms = %+v, want one raised by tl-watch", alarms)
+	}
+	c.do(ownerTok, http.MethodPost, "/components/tl-target/alarms/"+alarm+":acknowledge", nil, http.StatusOK)
+	sample("up")
+
+	var tl struct {
+		AlarmID string `json:"alarm_id"`
+		Entries []struct {
+			At    time.Time `json:"at"`
+			Kind  string    `json:"kind"`
+			What  string    `json:"what"`
+			Actor string    `json:"actor"`
+			Rule  string    `json:"rule"`
+		} `json:"entries"`
+	}
+	if err := json.Unmarshal(c.do(viewer, http.MethodGet, "/components/tl-target/alarms/"+alarm+":timeline", nil, http.StatusOK), &tl); err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	for _, e := range tl.Entries {
+		who := e.Actor
+		if who == "" {
+			who = "rule " + e.Rule
+		}
+		got = append(got, e.Kind+" "+e.What+" by "+who)
+	}
+	want := []string{"event condition-started by rule tl-watch", "audit raise by rule tl-watch", "audit acknowledge by root",
+		"event condition-ended by rule tl-watch", "audit clear by rule tl-watch"}
+	if tl.AlarmID != alarm || strings.Join(got, "; ") != strings.Join(want, "; ") {
+		t.Fatalf("timeline of %s = %q, want %q", tl.AlarmID, got, want)
+	}
+
+	// A caller who cannot read the component is told it is not there.
+	created := c.do(ownerTok, http.MethodPost, "/locations", map[string]any{"name": "tl-north", "location_type": "campus"}, http.StatusCreated)
+	var loc struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(created, &loc); err != nil || loc.ID == "" {
+		t.Fatalf("created location %s (%v)", created, err)
+	}
+	north := setupScopedPrincipal(t, ctx, dsn, "tl-north-viewer", grantSpec{role: "viewer", scopeKind: "location", scopeID: loc.ID})
+	c.do(north, http.MethodGet, "/components/tl-target/alarms/"+alarm+":timeline", nil, http.StatusNotFound)
+	c.do(viewer, http.MethodGet, "/components/tl-target/alarms/01a15700-0000-7000-8000-000000000000:timeline", nil, http.StatusNotFound)
 }

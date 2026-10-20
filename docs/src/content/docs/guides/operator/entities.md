@@ -365,9 +365,20 @@ Acknowledging twice is harmless. The first person and the first time are what th
 second click (or a colleague reaching it a moment after you) changes nothing and is not an error.
 There is no un-acknowledge yet.
 
+### Reading an alarm's timeline
+
+The **clock** button on an alarm row (in the **Why** strip at the top of a component's or a system's
+page, and in the alarms panel, active or recently cleared) opens the alarm's **timeline** under the row: everything recorded about it, oldest first. An **event** line is what a rule saw (its
+`condition-started` when the condition came into force and opened the alarm, its `condition-ended`
+when it passed and resolved it), named by the rule and the endpoint; an **audit** line is what was
+done to the alarm (raised, acknowledged, cleared) and by whom, a person by name or the rule the
+platform acted for. A hand-raised alarm's timeline is its audit lines alone. The same button sits on
+each open alarm in a rule's blade on the Rules page. Click it again to fold the timeline away; any
+number can be open at once.
+
 From the CLI: `omniglass component alarm list <name> [--include-cleared] [--unacknowledged]`,
 `omniglass component alarm create <name> --severity <level> --message <text>`,
-`omniglass component alarm acknowledge <name> <id>`, and
+`omniglass component alarm acknowledge <name> <id>`, `omniglass component alarm timeline <name> <id>`, and
 `omniglass component alarm delete <name> <id>`.
 
 ## Health on a system or location

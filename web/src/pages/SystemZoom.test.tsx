@@ -228,6 +228,8 @@ describe("the system zoom", () => {
     expect(within(strip).getByText("No route to host")).toBeTruthy();
     expect(within(strip).getByText(/Room Microphone/)).toBeTruthy();
     expect(within(strip).getByRole("button", { name: /mic-1/ })).toBeTruthy();
+    // Each alarm row opens its timeline in place (#950).
+    expect(within(strip).getAllByRole("button", { name: /^Timeline of alarm / }).length).toBeGreaterThan(0);
   });
 
   // The report names an alarm's component by name and by uuid (#557): the

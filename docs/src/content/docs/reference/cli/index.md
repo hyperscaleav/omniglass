@@ -454,6 +454,22 @@ Example:
 omniglass component alarm list <name>
 ```
 
+#### `omniglass component alarm timeline`
+
+Read an alarm's timeline
+
+```
+omniglass component alarm timeline <name> <id>
+```
+
+The alarm's history in one list, oldest first: the events that carry it (an event rule's fire event, which opened it, and its clear event, which resolved it) merged by time with its audit rows (the raise, each acknowledgement, the clear, and a rule edit that opened or resolved it, naming the editor). At one instant an event comes before the audit row it caused. Gated by alarm:read; a component outside the caller's component read scope, and an alarm not on the component, are a non-disclosing 404.
+
+Example:
+
+```sh
+omniglass component alarm timeline <name> <id>
+```
+
 ### `omniglass component checkName`
 
 Check a component name

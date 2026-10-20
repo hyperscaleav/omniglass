@@ -583,6 +583,23 @@ func generatedCommands() []*cobra.Command {
 				}()
 				return cmd
 			}())
+			parent.AddCommand(func() *cobra.Command {
+				cmd := func() *cobra.Command {
+					cmd := &cobra.Command{
+						Use:     "timeline <name> <id>",
+						Short:   "Read an alarm's timeline",
+						Long:    "The alarm's history in one list, oldest first: the events that carry it (an event rule's fire event, which opened it, and its clear event, which resolved it) merged by time with its audit rows (the raise, each acknowledgement, the clear, and a rule edit that opened or resolved it, naming the editor). At one instant an event comes before the audit row it caused. Gated by alarm:read; a component outside the caller's component read scope, and an alarm not on the component, are a non-disclosing 404.",
+						Example: "  omniglass component alarm timeline <name> <id>",
+						Args:    cobra.ExactArgs(2),
+						RunE: func(cmd *cobra.Command, args []string) error {
+							path := fmt.Sprintf("/api/v1/components/%s/alarms/%s:timeline", url.PathEscape(args[0]), url.PathEscape(args[1]))
+							return runAPICommand(cmd, "GET", path, nil)
+						},
+					}
+					return cmd
+				}()
+				return cmd
+			}())
 			return parent
 		}())
 		parent.AddCommand(func() *cobra.Command {

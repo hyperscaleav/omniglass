@@ -816,6 +816,9 @@ func (UnimplementedGateway) RaiseAlarm(context.Context, string, string, AlarmSpe
 	return nil, nil
 }
 func (UnimplementedGateway) ClearAlarm(context.Context, string, string, string) error { return nil }
+func (UnimplementedGateway) AlarmTimeline(context.Context, string, string) ([]AlarmTimelineEntry, error) {
+	return nil, nil
+}
 func (UnimplementedGateway) AcknowledgeAlarm(context.Context, string, string, string) (*Alarm, error) {
 	return nil, nil
 }

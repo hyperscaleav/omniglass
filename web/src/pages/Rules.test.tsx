@@ -179,6 +179,30 @@ describe("Rules page", () => {
     expect(within(b).getByRole("link", { name: "All levels" }).getAttribute("href")).toBe("/severity-levels");
   });
 
+  it("opens an open alarm's timeline in place on the rule's blade", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const req = input as Request;
+      if (req.url.includes(":timeline")) {
+        expect(req.url).toContain(`/components/${display}/alarms/${uuidFor("alarm-1")}:timeline`);
+        return json({ component: display, alarm_id: uuidFor("alarm-1"), entries: [
+          { at: reachState.open[0].raised_at, kind: "event", what: "condition-started", rule: "reachability-lost", instance: "icmp" },
+          { at: reachState.open[0].raised_at, kind: "audit", what: "raise", rule: "reachability-lost" },
+        ] });
+      }
+      return json({ open: [], pending: [] });
+    });
+    mount();
+    fireEvent.click(screen.getByText("Reachability lost"));
+    const b = await blade();
+    const open = within(b).getByRole("region", { name: "Open alarms" });
+    fireEvent.click(within(open).getByRole("button", { name: `Timeline of alarm ${uuidFor("alarm-1")}` }));
+    const list = await waitFor(() => within(open).getByRole("list", { name: `Timeline of alarm ${uuidFor("alarm-1")}` }));
+    const items = within(list).getAllByRole("listitem").map((li) => li.textContent ?? "");
+    expect(items).toHaveLength(2);
+    expect(items[0]).toContain("condition-started");
+    expect(items[1]).toContain("raised");
+  });
+
   it("says a rule that has judged nothing so on its blade", async () => {
     mount();
     fireEvent.click(screen.getByText("Too hot"));

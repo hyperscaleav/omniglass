@@ -56,8 +56,8 @@ a [CDC publisher](/architecture/messaging/) fans the committed transition onto J
 **opened / resolved** are rule-driven (`fire_criteria` / `clear_criteria`), each emitting an `event`
 with the `alarm_id`; the operator-driven transitions are recorded in `audit_log` (also carrying the
 `alarm_id`) and applied to the row. The timeline assembles by `alarm_id` across events + audit. The
-acknowledgement half of that is built and works exactly this way ([below](#acknowledgement-a-fact-about-a-person));
-snooze is not.
+acknowledgement half of that is built and works exactly this way ([below](#acknowledgement-a-fact-about-a-person)),
+as are the rule-driven events and the timeline itself ([below](#the-alarms-timeline)); snooze is not.
 :::
 
 An alarm write is **not sample-silent**: raising or clearing one recomputes
@@ -66,6 +66,25 @@ transition as a **calculated-provenance `property` sample** (`provenance='calcul
 `source_rule='health-rollup'`). Cycle safety therefore rests on **provenance, not topology**
 ([ADR-0069](/architecture/decisions/#adr-0069-cycle-safety-is-provenance-based-not-topology-based),
 see *Cycle safety*).
+
+## The alarm's timeline
+
+An alarm's history is one read (#950): `GET /components/{name}/alarms/{id}:timeline` (`omniglass
+component alarm timeline <name> <id>`, gated **`alarm:read`**, the component resolved in the caller's
+component read scope first, so a component it cannot read is the same non-disclosing 404 an unknown one
+is) merges the **events that carry the alarm** (`event.alarm_id`: an event rule's fire event, which
+opened it, and its clear event, which resolved it) with its **audit rows** (the raise, each
+acknowledgement, the clear, and a rule edit that turned a severity on or off, naming the editor) into
+one list, oldest first. Each entry says when, whether it is an event or an audit row, what (the event's
+type, or `raise` / `acknowledge` / `clear`), and who: the person who acted, or the rule the entry
+belongs to (the rule wrote the event, or the platform acted for it). At one instant an event comes
+before the audit row it caused, since a rule's event and the alarm write it moves share the
+transaction's clock. It is two bounded statements (the alarm, then both sources in one ordered union
+over `event.alarm_id` and an `audit_log (resource, resource_id)` index), never a read per entry.
+Hand-raised alarms write no events, so their timeline is their audit rows alone. In the console every
+alarm row carries a clock button that opens its timeline in place, under the row: the Why strip on a
+component's and a system's page and blade, the component's alarms panel (active and recently cleared),
+and a rule's open alarms.
 
 ## Acknowledgement: a fact about a person
 

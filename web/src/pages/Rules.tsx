@@ -9,6 +9,7 @@ import FieldRow from "../components/FieldRow";
 import KVStacked from "../components/KVStacked";
 import Eyebrow from "../components/Eyebrow";
 import InfoTip from "../components/InfoTip";
+import AlarmTimeline, { createTimelineToggles } from "../components/AlarmTimeline";
 import SeverityBadge from "../components/SeverityBadge";
 import ComponentTypeSelect from "../components/ComponentTypeSelect";
 import { identityColumn } from "../components/IdentityCell";
@@ -285,6 +286,9 @@ function StateList<T extends { component: string; component_id: string; instance
   items: T[];
   empty: string;
   trailing: (item: T) => JSX.Element;
+  // detail renders under an item's row when it has something open there (an
+  // open alarm's timeline).
+  detail?: (item: T) => JSX.Element;
 }): JSX.Element {
   const components = useQuery(() => ({ queryKey: COMPONENTS_KEY, queryFn: listComponents }));
   const byId = createMemo(() => new Map((components.data ?? []).map((c) => [c.id, c])));
@@ -298,17 +302,20 @@ function StateList<T extends { component: string; component_id: string; instance
       <ul class="flex flex-col divide-y divide-base-300 rounded-box border border-base-300">
         <For each={shown()}>
           {(it) => (
-            <li class="flex items-center gap-2 px-3 py-2 text-sm">
-              <span class="flex min-w-0 flex-col">
-                <span class="flex min-w-0 items-baseline gap-1.5">
-                  <A href={`/components/${it.component_id}`} class="truncate font-medium hover:underline">{it.component}</A>
-                  <Show when={it.instance}><span class="font-data text-[11px] text-base-content/50">{it.instance}</span></Show>
+            <li class="flex flex-col gap-1.5 px-3 py-2 text-sm">
+              <span class="flex items-center gap-2">
+                <span class="flex min-w-0 flex-col">
+                  <span class="flex min-w-0 items-baseline gap-1.5">
+                    <A href={`/components/${it.component_id}`} class="truncate font-medium hover:underline">{it.component}</A>
+                    <Show when={it.instance}><span class="font-data text-[11px] text-base-content/50">{it.instance}</span></Show>
+                  </span>
+                  <Show when={where(it.component_id)}>
+                    <span class="truncate text-[11px] text-base-content/50">in {where(it.component_id)}</span>
+                  </Show>
                 </span>
-                <Show when={where(it.component_id)}>
-                  <span class="truncate text-[11px] text-base-content/50">in {where(it.component_id)}</span>
-                </Show>
+                <span class="ml-auto flex flex-none items-center gap-2">{p.trailing(it)}</span>
               </span>
-              <span class="ml-auto flex flex-none items-center gap-2">{p.trailing(it)}</span>
+              {p.detail?.(it)}
             </li>
           )}
         </For>
@@ -327,6 +334,8 @@ function RuleBladeBody(p: { name: string }): JSX.Element {
   const edit = useBladeEdit();
   const ui = useContext(RulesUiContext);
   const row = useRuleRow(p.name);
+  // An open alarm opens its timeline in place, as on the component (#950).
+  const timelines = createTimelineToggles();
   const unit = useMetricUnit();
   const [err, setErr] = createSignal<string | null>(null);
   const state = useQuery(() => ({
@@ -480,7 +489,13 @@ function RuleBladeBody(p: { name: string }): JSX.Element {
                   <>
                     <SeverityBadge name={a.severity} size="xs" />
                     <span class="w-16 text-right text-[11px] text-base-content/50" title={fmtTime(a.raised_at)}>{rel(a.raised_at)}</span>
+                    {timelines.button(a.alarm_id)}
                   </>
+                )}
+                detail={(a) => (
+                  <Show when={timelines.isOpen(a.alarm_id)}>
+                    <AlarmTimeline component={a.component_id} alarmId={a.alarm_id} />
+                  </Show>
                 )}
               />
             </Show>

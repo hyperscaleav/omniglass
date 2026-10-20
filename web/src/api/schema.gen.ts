@@ -524,6 +524,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/components/{name}/alarms/{id}:timeline": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read an alarm's timeline
+         * @description The alarm's history in one list, oldest first: the events that carry it (an event rule's fire event, which opened it, and its clear event, which resolved it) merged by time with its audit rows (the raise, each acknowledgement, the clear, and a rule edit that opened or resolved it, naming the editor). At one instant an event comes before the audit row it caused. Gated by alarm:read; a component outside the caller's component read scope, and an alarm not on the component, are a non-disclosing 404.
+         */
+        get: operations["get-component-alarm-timeline"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/components/{name}/commands:issue": {
         parameters: {
             query?: never;
@@ -4447,6 +4467,40 @@ export interface components {
             raised_by_rule_id?: string;
             /** @description The severity level the alarm was raised at, by name (see /severity-levels) */
             severity: string;
+        };
+        AlarmTimelineEntryBody: {
+            /** @description Who acted, by name; absent when the platform acted for a rule */
+            actor?: string;
+            /**
+             * Format: date-time
+             * @description When it happened
+             */
+            at: string;
+            /** @description The series instance (an endpoint) an event is about */
+            instance?: string;
+            /**
+             * @description An event carrying the alarm (a rule's fire or clear event), or an audit row about it
+             * @enum {string}
+             */
+            kind: "event" | "audit";
+            /** @description The event's message, or the message the alarm was raised with */
+            message?: string;
+            /** @description The event rule the entry belongs to, by name: the rule that wrote the event, or the rule the platform acted for */
+            rule?: string;
+            /** @description The event's type (e.g. condition-started), or the audit action: raise, acknowledge or clear */
+            what: string;
+        };
+        AlarmTimelineOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/AlarmTimelineOutputBody.json
+             */
+            readonly $schema?: string;
+            alarm_id: string;
+            component: string;
+            /** @description Oldest first; at one instant an event comes before the audit row it caused */
+            entries: components["schemas"]["AlarmTimelineEntryBody"][] | null;
         };
         AuditEventBody: {
             actor?: string;
@@ -9995,6 +10049,40 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AlarmBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "get-component-alarm-timeline": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1) */
+                name: string;
+                /** @description The alarm id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlarmTimelineOutputBody"];
                 };
             };
             /** @description Error */

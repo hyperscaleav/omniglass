@@ -723,6 +723,12 @@ Un-acknowledging is deliberately not a verb yet
 ([#728](https://github.com/hyperscaleav/omniglass/issues/728)); snooze and resolve are
 [out of scope with reasons](/architecture/alarms-actions/).
 
+- `GET /components/{name}/alarms/{id}:timeline` (**`alarm:read`**, the component's read scope
+  injected, a non-disclosing **404** outside it or for an alarm not on the component) returns the
+  alarm's history oldest first: `entries` of `{at, kind (event|audit), what, actor?, rule?, instance?,
+  message?}`, the events carrying the alarm merged with its audit rows
+  ([the timeline](/architecture/alarms-actions/#the-alarms-timeline)).
+
 The reports are one shape over two owners:
 
 - `GET /systems/{name}/health` (`system:read`) returns the verdict (`healthy` / `incomplete` /

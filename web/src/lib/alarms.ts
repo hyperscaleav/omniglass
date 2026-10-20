@@ -87,3 +87,37 @@ export function splitAlarms(list: Alarm[], levels?: SeverityLevel[] | null): { a
     cleared: sortAlarms(list.filter((a) => !a.active), levels),
   };
 }
+
+// ---- an alarm's timeline (#950) ---------------------------------------------
+
+export type AlarmTimelineEntry = components["schemas"]["AlarmTimelineEntryBody"];
+
+export const alarmTimelineKey = (component: string, id: string) => ["alarm-timeline", component, id] as const;
+
+// alarmTimeline reads one alarm's history, oldest first: the events that carry
+// it (a rule's fire and clear events) merged by time with its audit rows (the
+// raise, each acknowledgement, the clear).
+export async function alarmTimeline(component: string, id: string): Promise<AlarmTimelineEntry[]> {
+  const { data, error } = await api.GET("/components/{name}/alarms/{id}:timeline", {
+    params: { path: { name: component, id } },
+  });
+  if (error) throw error;
+  return (data?.entries ?? []) as AlarmTimelineEntry[];
+}
+
+const AUDIT_WORDS: Record<string, string> = { raise: "raised", clear: "cleared", acknowledge: "acknowledged" };
+
+// timelineWhat is the entry's verb as an operator reads it: an event by its
+// type (condition-started), an audit row by what was done to the alarm.
+export function timelineWhat(e: Pick<AlarmTimelineEntry, "kind" | "what">): string {
+  return e.kind === "audit" ? (AUDIT_WORDS[e.what] ?? e.what) : e.what;
+}
+
+// timelineWho says who: the person who acted, else the rule the entry belongs
+// to (the rule wrote the event, or the platform acted for it), else the
+// platform itself.
+export function timelineWho(e: Pick<AlarmTimelineEntry, "actor" | "rule">): string {
+  if (e.actor) return e.actor;
+  if (e.rule) return `rule ${e.rule}`;
+  return "the platform";
+}

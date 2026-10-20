@@ -306,6 +306,7 @@ func registerRoutes(api huma.API, gw storage.Gateway, svc *settings.Service, o o
 	registerRoleRoutes(api, a, gw)
 	registerMemberRoutes(api, a, gw)
 	registerAlarmRoutes(api, a, gw)
+	registerAlarmTimelineRoute(api, a, gw)
 	registerHealthRoutes(api, a, gw)
 	registerViewRoutes(api, a, gw)
 	registerNodeRoutes(api, a, gw, o.natsURL)

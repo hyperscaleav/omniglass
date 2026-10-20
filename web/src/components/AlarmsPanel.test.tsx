@@ -78,6 +78,39 @@ const alarmRow = (label: HTMLElement) => label.closest("div.flex-col") as HTMLEl
 describe("AlarmsPanel", () => {
   afterEach(() => vi.restoreAllMocks());
 
+  it("opens an alarm's timeline in place: its events and audit rows, oldest first", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const req = input as Request;
+      expect(req.url).toContain("/components/disp-1/alarms/a-1:timeline");
+      return json({
+        component: "disp-1",
+        alarm_id: "a-1",
+        entries: [
+          { at: ago(2 * 3_600_000), kind: "event", what: "condition-started", rule: "lamp-life", instance: "lamp", message: "Lamp hours exceeded" },
+          { at: ago(2 * 3_600_000), kind: "audit", what: "raise", rule: "lamp-life", message: "Lamp hours exceeded" },
+          { at: ago(90 * 60_000), kind: "audit", what: "acknowledge", actor: "jordan" },
+        ],
+      });
+    });
+    const { getByText, getByRole } = mount();
+    const toggle = getByRole("button", { name: "Timeline of alarm a-1" });
+    expect(toggle.getAttribute("aria-pressed")).toBe("false");
+    fireEvent.click(toggle);
+    const list = await waitFor(() => getByRole("list", { name: "Timeline of alarm a-1" }));
+    const items = within(list).getAllByRole("listitem").map((li) => li.textContent ?? "");
+    expect(items).toHaveLength(3);
+    expect(items[0]).toContain("condition-started");
+    expect(items[0]).toContain("rule lamp-life");
+    expect(items[1]).toContain("raised");
+    expect(items[2]).toContain("acknowledged");
+    expect(items[2]).toContain("jordan");
+    expect(toggle.getAttribute("aria-pressed")).toBe("true");
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    fireEvent.click(toggle);
+    await waitFor(() => expect(() => getByRole("list", { name: "Timeline of alarm a-1" })).toThrow());
+    expect(getByText("Lamp hours exceeded")).toBeTruthy();
+  });
+
   it("lists an active alarm with its severity and message", () => {
     const { getByText } = mount();
     const row = alarmRow(getByText("HDMI board failed"));

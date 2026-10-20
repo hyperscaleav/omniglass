@@ -14,6 +14,7 @@ import Eyebrow from "../components/Eyebrow";
 import DetailGate from "../components/DetailGate";
 import PlaceCard from "../components/PlaceCard";
 import AcknowledgeButton from "../components/AcknowledgeButton";
+import AlarmTimeline, { createTimelineToggles } from "../components/AlarmTimeline";
 import SeverityBadge from "../components/SeverityBadge";
 import { useSeverity } from "../lib/severity";
 import SimulationSection from "../components/SimulationSection";
@@ -124,6 +125,8 @@ export default function ComponentLeaf() {
   // Pinned at setup: an age that re-ages on unrelated re-renders is churn.
   const pageNow = Date.now();
   const scale = useSeverity();
+  // Each alarm row opens its timeline in place (#950).
+  const timelines = createTimelineToggles();
   const activeAlarms = createMemo(() => splitAlarms(alarmsQ.data ?? [], scale().levels).active);
   // The strip reads red when any active alarm is at an outage level (the
   // registry's flag, #917), amber when they only degrade.
@@ -218,13 +221,19 @@ export default function ComponentLeaf() {
                     <h2 class="eyebrow">Why</h2>
                     <For each={activeAlarms()}>
                       {(a) => (
-                        <div class="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-sm">
-                          <SeverityBadge name={a.severity} />
-                          <span>{a.message}</span>
-                          <span class="text-xs text-base-content/50">
-                            {durationText(pageNow - Date.parse(a.raised_at))} · {a.acknowledged ? "acknowledged" : "unacknowledged"}
-                          </span>
-                          <AcknowledgeButton component={component()?.id ?? id()} alarm={a} />
+                        <div class="flex flex-col gap-1.5">
+                          <div class="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-sm">
+                            <SeverityBadge name={a.severity} />
+                            <span>{a.message}</span>
+                            <span class="text-xs text-base-content/50">
+                              {durationText(pageNow - Date.parse(a.raised_at))} · {a.acknowledged ? "acknowledged" : "unacknowledged"}
+                            </span>
+                            <AcknowledgeButton component={component()?.id ?? id()} alarm={a} />
+                            {timelines.button(a.id)}
+                          </div>
+                          <Show when={timelines.isOpen(a.id)}>
+                            <AlarmTimeline component={component()?.id ?? id()} alarmId={a.id} />
+                          </Show>
                         </div>
                       )}
                     </For>
