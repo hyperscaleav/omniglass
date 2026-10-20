@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/hyperscaleav/omniglass/internal/api"
@@ -105,13 +106,18 @@ func TestValidateExpression(t *testing.T) {
 	if b := validate(viewer, map[string]any{"site": "criteria", "source": "value", "key": "door-open"}, http.StatusOK); !b.OK {
 		t.Fatalf("a bool key's bare value: %+v", b)
 	}
-	// No key: the documented default, text.
-	if d := validate(viewer, map[string]any{"site": "criteria", "source": `value == "down"`}, http.StatusOK); !d.OK || d.ValueType != "text" {
-		t.Fatalf("no key: %+v, want ok as text", d)
+	// A rule always reads a key, so criteria need one.
+	validate(viewer, map[string]any{"site": "criteria", "source": `value == "down"`}, http.StatusUnprocessableEntity)
+
+	// A diagnostic speaks in bindings, not Go types.
+	shape := validate(viewer, map[string]any{"site": "criteria", "source": "component > 1", "key": "room-temperature"}, http.StatusOK)
+	if len(shape.Diagnostics) != 1 || strings.Contains(shape.Diagnostics[0].Message, "rules.") ||
+		shape.Diagnostics[0].Message != "invalid operation: > (mismatched types component and int)" {
+		t.Fatalf("diagnostic %+v, want it to name the binding component", shape.Diagnostics)
 	}
 
-	validate(viewer, map[string]any{"site": "nope", "source": "true"}, http.StatusUnprocessableEntity)
+	validate(viewer, map[string]any{"site": "nope", "source": "true", "key": "room-temperature"}, http.StatusUnprocessableEntity)
 	validate(viewer, map[string]any{"site": "criteria", "source": "true", "key": "no-such-key"}, http.StatusUnprocessableEntity)
-	validate(limited, map[string]any{"site": "criteria", "source": "true"}, http.StatusForbidden)
-	validate(ownerTok, map[string]any{"site": "criteria", "source": "true"}, http.StatusOK)
+	validate(limited, map[string]any{"site": "criteria", "source": "true", "key": "room-temperature"}, http.StatusForbidden)
+	validate(ownerTok, map[string]any{"site": "criteria", "source": "true", "key": "room-temperature"}, http.StatusOK)
 }

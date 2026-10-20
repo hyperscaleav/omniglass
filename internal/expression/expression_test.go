@@ -809,3 +809,33 @@ func TestSettingsAreCopies(t *testing.T) {
 		t.Error("an unvetted builtin was admitted")
 	}
 }
+
+// Check compiles without the shared program cache: a caller cycling sources
+// (the validate route) cannot evict the programs rules run on, and gets the
+// same positioned diagnostics Compile would.
+func TestCheckDoesNotCache(t *testing.T) {
+	saved := programs
+	programs = newCache(MaxCachedPrograms)
+	defer func() { programs = saved }()
+	if err := Check("value > 42.4242 // check only", boolEnv(t)); err != nil {
+		t.Fatal(err)
+	}
+	if n := programs.len(); n != 0 {
+		t.Errorf("Check cached %d programs, want 0", n)
+	}
+	e := asError(t, Check("value > 1 &&\n  nope", boolEnv(t)))
+	if e.Line != 2 || e.Column != 3 || e.Phase != PhaseType {
+		t.Errorf("Check's diagnostic %v at %d:%d, want a type error at 2:3", e, e.Line, e.Column)
+	}
+	if err := Check(strings.Repeat(" ", MaxSourceBytes+1), boolEnv(t)); !errors.Is(err, ErrSourceTooLong) {
+		t.Errorf("Check skipped the length cap: %v", err)
+	}
+}
+
+// A diagnostic names a nested binding by its path, never by its Go type.
+func TestDiagnosticsSpeakInBindings(t *testing.T) {
+	e := asError(t, func() error { _, err := Compile("point > 1", boolEnv(t)); return err }())
+	if strings.Contains(e.Message, "expression.point") || !strings.Contains(e.Message, "point") {
+		t.Errorf("message %q names the Go type, want the binding point", e.Message)
+	}
+}

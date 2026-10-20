@@ -3,12 +3,12 @@ package storage
 import (
 	"context"
 	"encoding/json"
-	"github.com/hyperscaleav/omniglass/internal/rules"
-	"github.com/hyperscaleav/omniglass/internal/sim/impair"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/hyperscaleav/omniglass/internal/rules"
 	"github.com/hyperscaleav/omniglass/internal/scope"
+	"github.com/hyperscaleav/omniglass/internal/sim/impair"
 )
 
 // UnimplementedGateway is a no-op Gateway for tests and codegen stubs that must

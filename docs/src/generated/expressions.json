@@ -3,8 +3,8 @@
  "sites": [
   {
    "name": "criteria",
-   "summary": "An event rule's fire_criteria and clear_criteria: true or false for one arriving sample. The sample key's lane and data type type the value; with no key, the value is text.",
-   "default_value_type": "text",
+   "summary": "An event rule's fire_criteria and clear_criteria: true or false for one arriving sample. The sample key's lane and data type type the value, so a key is required.",
+   "key_required": true,
    "variants": [
     {
      "value_type": "number",
@@ -18,7 +18,7 @@
       {
        "name": "key",
        "type": "string",
-       "doc": "The metric the rule reads"
+       "doc": "The sample key the rule reads: a property or a metric, by name"
       },
       {
        "name": "instance",
@@ -49,7 +49,7 @@
       {
        "name": "key",
        "type": "string",
-       "doc": "The property the rule reads"
+       "doc": "The sample key the rule reads: a property or a metric, by name"
       },
       {
        "name": "instance",
@@ -80,7 +80,7 @@
       {
        "name": "key",
        "type": "string",
-       "doc": "The property the rule reads"
+       "doc": "The sample key the rule reads: a property or a metric, by name"
       },
       {
        "name": "instance",

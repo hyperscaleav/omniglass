@@ -301,3 +301,36 @@ func dataOnly(t reflect.Type, path string, seen map[reflect.Type]bool) error {
 	}
 	return nil
 }
+
+// speak rewrites the Go type names a diagnostic carries (rules.Component)
+// to the binding path an expression uses for them (component), so an
+// author reads the language's names, not the engine's.
+func (e Env) speak(msg string) string {
+	var pairs []string
+	var walk func(t reflect.Type, prefix string)
+	walk = func(t reflect.Type, prefix string) {
+		for i := 0; i < t.NumField(); i++ {
+			f := t.Field(i)
+			if !f.IsExported() || f.Type.Kind() != reflect.Struct {
+				continue
+			}
+			if f.Anonymous {
+				walk(f.Type, prefix)
+				continue
+			}
+			name := f.Tag.Get("expr")
+			if name == "" {
+				name = f.Name
+			}
+			if f.Type.Name() != "" {
+				pairs = append(pairs, f.Type.String(), prefix+name)
+			}
+			walk(f.Type, prefix+name+".")
+		}
+	}
+	walk(e.typ, "")
+	if len(pairs) == 0 {
+		return msg
+	}
+	return strings.NewReplacer(pairs...).Replace(msg)
+}

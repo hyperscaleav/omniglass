@@ -6861,13 +6861,17 @@ the result it must yield and its budget. `Env.Bindings` now lists a nested struc
 dotted path (`component.name`, `component.type`), the way an expression names them.
 
 `POST /expressions:validate` (gated `rule:read`, `omniglass expression validate`) takes a site, a
-source and, for criteria, an optional sample key (which types the value; text when absent), and
+source and, for criteria, the sample key (required; it types the value), and
 answers whether it compiles, positioned diagnostics, and the site's bindings, builtins and budget,
 read from the declaration. It stores and runs nothing; an unknown site or key is a 422, and the
 site enum is checked against the registry by a test. `cmd/exprgen` (run by `make gen`) writes the
 same declaration to `docs/src/generated/expressions.json`, which the expressions page renders as its
 bindings and builtins table, so no binding is hand-listed; a drift test fails when the committed file
-is stale. The expressions page moves from Design to Partial: the criteria site is built.
+is stale. The expressions page moves from Design to Partial: the criteria site is built, and the
+built engine (compiling once, the allowlist, the caps and budgets, the `$` refusal) is taught outside
+the design fence. Validate compiles through `expression.Check`, which skips the shared program cache
+so cycling sources evicts nothing, and a diagnostic names a nested binding by its path (`component`),
+never by its Go type. A binding's doc reads the same for every value type, which a test holds.
 
 ### Preview an event rule against recent samples (#959)
 

@@ -9,25 +9,75 @@ sidebar:
 
 import ExpressionSites from '../../../components/ExpressionSites.astro';
 
-
-:::design[Target design: the expression engine, tracked in #524]
-
 Expressions let an operator reshape and judge collected values in plain text wherever the
-platform needs a small computation, with exactly one language to learn: every site in the
-table below goes through **one engine, Omniglass expressions**, built on **Expr**
-([expr-lang/expr](https://github.com/expr-lang/expr)) and **extended** with Omniglass
-functions.
+platform needs a small computation, with exactly one language to learn: every site goes through
+**one engine, Omniglass expressions**, built on **Expr**
+([expr-lang/expr](https://github.com/expr-lang/expr), pinned at v1.17.8). The engine is
+`internal/expression` (#524); its first consumer is the event rule's criteria
+([alarms and actions](/architecture/alarms-actions/#the-event_rule)).
 
-## One engine, built on Expr and extended
+## Compiling, once
 
-**Expr** is the core, chosen because it is transform-oriented, fast, and sandboxable: a rich
-built-in function and operator set suited to reshaping collected values (`raw / 100.0`,
-`int(groups[1])`, `groups[2] == 'true'`), compiled to a fast program cached by
-`(source, env-shape)`. On top ride **Omniglass functions**: helpers Expr does not ship,
-including frame **`encode` / `decode`** and the output-format helpers (**hex / ascii /
-base64**) that binary and raw-TCP protocols need. The engine is **not pluggable**: one dialect
-everyone authors in; where an expression is not even needed, prefer a straightforward native
-path.
+A site declares its environment as a Go struct (the names an expression may use, their types and
+docs), the type an expression must yield (a criteria yields true or false), the builtins it admits
+and its run budget. An expression compiles against that declaration: a name outside it, a result of
+another type, or a parse error is refused with a **diagnostic** carrying the line, the column and an
+operator-readable message (a nested binding is named by its path, `component`, never by a Go type).
+A compiled program is **cached** by its source and its site's declaration in a bounded cache, so a
+hot path (a criteria judged per sample) never recompiles; an event rule also holds its compiled
+criteria per rule version, a failed compile included.
+
+## Safety
+
+Expressions are **sandboxed**: no I/O, no network, no unbounded loops, bounded execution.
+
+- **An allowlist of builtins.** Every Expr builtin is off, and **each site declares the builtins it
+  admits**. A builtin is admitted only once vetted: its cost linear in what the run is charged for,
+  its output no larger than its inputs. The criteria set is comparison, arithmetic, `in`, `contains`
+  / `startsWith` / `endsWith`, `matches` with a constant pattern (capped in compiled size, and charged
+  its subject's length times that size), `len`, `abs` / `ceil` / `floor` / `round` / `min` / `max`
+  on numbers only, `lower` / `upper` / `trim` / `trimPrefix` / `trimSuffix`, and `all` / `any` /
+  `none` / `one` / `count` / `filter` over a bound list with no predicate nested in another.
+  Equality and `in` take scalars and lists of scalars (and a key in a map), never a record, a map,
+  or a list of lists, whose deep comparison no charge covers. Builders and encoders (`map`,
+  `reduce`, `repeat`, `replace`, `join`, `uniq`, `flatten`, `toJSON`, the range `..`) are never
+  admitted: their cost is native work that no input charge bounds.
+- **Determinism.** The clock and zone builtins (**`now`**, **`date`**, **`duration`**,
+  **`timezone`**) can never be vetted; a time an expression needs is bound by its caller as data.
+  An expression calls builtins only, never a method or a bound value, and a site's environment
+  holds concrete data types (no interface, so no value whose behavior is chosen at run time). A `$`
+  name (Expr's dynamic `$env`, or the engine's own plumbing) is refused, so a site's bindings are
+  the whole namespace.
+- **Caps and budgets.** A source is at most 4096 bytes and 1000 syntax nodes, and a list or map
+  literal at most 64 entries. A run is bounded by **its site's budget** of what it allocates and
+  what it walks, deterministically; a criteria's is small, and no site's exceeds a fixed ceiling. A
+  wall-clock deadline backs the budget for charged work only: it cannot interrupt a native call,
+  which is why the allowlist exists.
+- **Values are data.** A value bound in the environment (a sample's text, however hostile) is
+  evaluated literally and never executed. Integer arithmetic wraps on overflow, as Go's does,
+  rather than failing.
+
+## Sites: the bindings, builtins and budget of each
+
+Each place an expression is written is a **site**, declared once in code. The tables below are
+generated from those declarations (`make gen`), and **`POST /expressions:validate`** (`omniglass
+expression validate`, gated `rule:read`) answers from the same ones: given a site, a source and,
+for criteria, the sample key, it says whether the expression compiles, with each diagnostic's line
+and column, and returns the site's bindings, builtins and budget. Built today:
+
+<ExpressionSites />
+
+:::design[Target design: the rest of the expression engine, tracked in #524]
+
+## Extended with Omniglass functions
+
+Expr is the core, chosen because it is transform-oriented, fast, and sandboxable: a rich operator
+set suited to reshaping collected values (`raw / 100.0`, `int(groups[1])`, `groups[2] == 'true'`).
+On top ride **Omniglass functions**: helpers Expr does not ship, including frame **`encode` /
+`decode`** and the output-format helpers (**hex / ascii / base64**) that binary and raw-TCP
+protocols need, each vetted into the sites that need it. The engine is **not pluggable**: one
+dialect everyone authors in; where an expression is not even needed, prefer a straightforward
+native path.
 
 ## Unit conversion: `convert(value, "<unit>")`
 
@@ -41,13 +91,12 @@ in the **same family** (a compile error otherwise). The conversion comes from th
 celsius. A function rather than a per-unit method: data-driven, general, available wherever
 expressions run.
 
-## Where expressions are used
+## Where expressions will be used
 
 | Site | Leaf | What it evaluates |
 |---|---|---|
 | extractor | `value` | reshape a located raw value into the typed sample value |
 | step | `when` | the explicit branch guard (a false guard skips the step and dependents) |
-| `event_rule` | `fire_criteria`, `clear_criteria` | open/close an alarm-paired event off a sample change |
 | `calc_rule` | `reduce` (escape), `filter` | the named reducers (`worst` / `majority` / `average`, plus windowed `time_in_state` for SLIs) and the Expr escape, with per-input filters |
 | rule | `scope` | which instances a rule fires for (the Expr scope escape) |
 | views / list | `filter` | the structured-query predicate operators compose |
@@ -70,42 +119,10 @@ conflict, and cross-source disagreement are all the one operator, surfacing **di
 the universal anomaly signal. Reading both sides as inputs (never writing a verdict back into
 either) keeps the pipeline's DAG acyclic.
 
-## Safety
+## Configuration values and secrets
 
-Expressions are **sandboxed**: no I/O, no network, no unbounded loops, bounded execution.
-The engine pins Expr v1.17.8 and treats its builtins as an **allowlist**: every builtin is off,
-and **each site declares the builtins it admits and its run budget**. A builtin is admitted only
-once vetted: its cost linear in what the run is charged for, its output no larger than its
-inputs. The criteria set is comparison, arithmetic, `in`, `contains` / `startsWith` /
-`endsWith`, `matches` with a constant pattern (capped in compiled size, and charged its
-subject's length times that size), `len`, `abs` / `ceil` / `floor` / `round` /
-`min` / `max` on numbers only, `lower` / `upper` / `trim` / `trimPrefix` / `trimSuffix`, and
-`all` / `any` / `none` / `one` / `count` / `filter` over a bound list with no predicate nested
-in another. Equality and `in` take scalars and lists of scalars (and a key in a map), never a
-record, a map, or a list of lists, whose deep comparison no charge covers. Builders and encoders (`map`, `reduce`, `repeat`, `replace`, `join`, `uniq`,
-`flatten`, `toJSON`, the range `..`) are never admitted: their cost is native work that no input
-charge bounds. The clock and zone builtins (**`now`**, **`date`**, **`duration`**,
-**`timezone`**) can never be vetted; a time an expression needs is bound by its caller as data.
-An expression calls builtins only, never a method or a bound value, and a site's environment
-holds concrete data types (no interface, so no value whose behavior is chosen at run time). A run
-is bounded by its site's budget of what it allocates and what it walks, deterministically; a
-criteria's is small, and no site's exceeds a fixed ceiling. A wall-clock deadline backs the
-budget for charged work only: it cannot interrupt a native call, which is why the allowlist
-exists. Integer arithmetic wraps on overflow, as Go's does, rather than failing.
 Operator-supplied configuration values are bound as **data in the environment**, never spliced
 into expression text, so a hostile value is evaluated literally and never executed. Secret
 fields rendered into a request are masked at interpolation time and never surface in a log
 line, error string, or property label.
 :::
-
-## Sites: the bindings, builtins and budget of each
-
-Each place an expression is written is a **site**, declared once in code with the environment it
-compiles against: the names it may use (from a Go struct, so a binding's name, type and doc are
-the struct's), the builtins it admits, the type it must yield and its run budget. The tables below
-are generated from those declarations (`make gen`), and **`POST /expressions:validate`**
-(`omniglass expression validate`, gated `rule:read`) answers from the same ones: given a site, a
-source and, for criteria, the sample key, it says whether the expression compiles, with each
-diagnostic's line and column, and returns the site's bindings, builtins and budget. Built today:
-
-<ExpressionSites />

@@ -14,12 +14,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/hyperscaleav/omniglass/internal/rules"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/hyperscaleav/omniglass/internal/blob"
 	"github.com/hyperscaleav/omniglass/internal/label"
+	"github.com/hyperscaleav/omniglass/internal/rules"
 	"github.com/hyperscaleav/omniglass/internal/scope"
 	"github.com/hyperscaleav/omniglass/internal/secret"
 	"github.com/hyperscaleav/omniglass/internal/settings"

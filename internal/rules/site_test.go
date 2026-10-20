@@ -39,8 +39,8 @@ func TestCriteriaSite(t *testing.T) {
 			t.Errorf("%s %s: value type %q, variant env mismatch", tc.lane, tc.dataType, vt)
 		}
 	}
-	if s.Default != ValueText {
-		t.Errorf("default value type %q, want text", s.Default)
+	if !s.KeyRequired {
+		t.Error("the criteria site does not require a key; a rule always reads one")
 	}
 	if _, ok := s.Variant("matrix"); ok {
 		t.Error("an unknown value type was found")
@@ -58,7 +58,7 @@ func TestSiteFactsAreTheEnvs(t *testing.T) {
 	if err := json.Unmarshal(raw, &doc); err != nil {
 		t.Fatal(err)
 	}
-	if len(doc.Sites) != 1 || doc.Sites[0].Name != "criteria" || doc.Sites[0].Default != ValueText {
+	if len(doc.Sites) != 1 || doc.Sites[0].Name != "criteria" || !doc.Sites[0].KeyRequired {
 		t.Fatalf("sites = %+v", doc.Sites)
 	}
 	site, _ := LookupSite("criteria")
@@ -99,5 +99,22 @@ func TestSitesFactsMatchCommitted(t *testing.T) {
 	}
 	if string(committed) != string(fresh) {
 		t.Error("docs/src/generated/expressions.json drifted from the expression sites: run make gen and commit the result")
+	}
+}
+
+// The docs list each binding once across a site's variants, so a binding's
+// doc must read true for every variant (only its type may differ).
+func TestBindingDocsAgreeAcrossVariants(t *testing.T) {
+	for _, name := range SiteNames() {
+		s, _ := LookupSite(name)
+		docs := map[string]string{}
+		for _, v := range s.Variants {
+			for _, b := range v.Env.Bindings() {
+				if d, ok := docs[b.Name]; ok && d != b.Doc {
+					t.Errorf("%s: binding %s reads %q for %s, %q for an earlier variant", name, b.Name, b.Doc, v.ValueType, d)
+				}
+				docs[b.Name] = b.Doc
+			}
+		}
 	}
 }

@@ -35,10 +35,10 @@ type SiteVariant struct {
 type Site struct {
 	Name    string
 	Summary string
-	// Default is the value type used when nothing selects one (the validate
-	// route with no sample key).
-	Default  string
-	Variants []SiteVariant
+	// KeyRequired is a site whose value type a sample key selects, and so
+	// must be given one (a rule always reads a key).
+	KeyRequired bool
+	Variants    []SiteVariant
 }
 
 // Variant is the site's environment for a value type.
@@ -55,8 +55,8 @@ func (s Site) Variant(valueType string) (SiteVariant, bool) {
 var sites = []Site{{
 	Name: "criteria",
 	Summary: "An event rule's fire_criteria and clear_criteria: true or false for one arriving sample. " +
-		"The sample key's lane and data type type the value; with no key, the value is text.",
-	Default: ValueText,
+		"The sample key's lane and data type type the value, so a key is required.",
+	KeyRequired: true,
 	Variants: []SiteVariant{
 		{ValueType: ValueNumber, When: "a metric", Env: metricEnv},
 		{ValueType: ValueText, When: "a string or json property", Env: textEnv},
@@ -105,12 +105,12 @@ type SitesFacts struct {
 
 // SiteFacts is one site as the docs and the validate route describe it.
 type SiteFacts struct {
-	Name     string         `json:"name"`
-	Summary  string         `json:"summary"`
-	Default  string         `json:"default_value_type"`
-	Variants []VariantFacts `json:"variants"`
-	Builtins []string       `json:"builtins"`
-	Budget   BudgetFacts    `json:"budget"`
+	Name        string         `json:"name"`
+	Summary     string         `json:"summary"`
+	KeyRequired bool           `json:"key_required"`
+	Variants    []VariantFacts `json:"variants"`
+	Builtins    []string       `json:"builtins"`
+	Budget      BudgetFacts    `json:"budget"`
 }
 
 // VariantFacts is one value type's bindings.
@@ -131,7 +131,7 @@ type BudgetFacts struct {
 // read from its Env, and the builtins and budget the site's Env admits
 // (the same for every variant of a site).
 func (s Site) Facts() SiteFacts {
-	f := SiteFacts{Name: s.Name, Summary: s.Summary, Default: s.Default}
+	f := SiteFacts{Name: s.Name, Summary: s.Summary, KeyRequired: s.KeyRequired}
 	for _, v := range s.Variants {
 		f.Variants = append(f.Variants, VariantFacts{ValueType: v.ValueType, When: v.When, Bindings: v.Env.Bindings()})
 	}

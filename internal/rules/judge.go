@@ -19,7 +19,7 @@ type Component struct {
 // MetricInput is the criteria site's prepared input on the metric lane.
 type MetricInput struct {
 	Value     float64   `expr:"value" doc:"The sample's value, typed by the key: a metric's number, a property's text, or a bool property's truth value"`
-	Key       string    `expr:"key" doc:"The metric the rule reads"`
+	Key       string    `expr:"key" doc:"The sample key the rule reads: a property or a metric, by name"`
 	Instance  string    `expr:"instance" doc:"The sample's instance (an endpoint), empty when it has none"`
 	Component Component `expr:"component" doc:"The component the sample is about"`
 }
@@ -28,7 +28,7 @@ type MetricInput struct {
 // or json (json stays text for now).
 type TextInput struct {
 	Value     string    `expr:"value" doc:"The sample's value, typed by the key: a metric's number, a property's text, or a bool property's truth value"`
-	Key       string    `expr:"key" doc:"The property the rule reads"`
+	Key       string    `expr:"key" doc:"The sample key the rule reads: a property or a metric, by name"`
 	Instance  string    `expr:"instance" doc:"The sample's instance (an endpoint), empty when it has none"`
 	Component Component `expr:"component" doc:"The component the sample is about"`
 }
@@ -36,7 +36,7 @@ type TextInput struct {
 // BoolInput is the prepared input for a bool property.
 type BoolInput struct {
 	Value     bool      `expr:"value" doc:"The sample's value, typed by the key: a metric's number, a property's text, or a bool property's truth value"`
-	Key       string    `expr:"key" doc:"The property the rule reads"`
+	Key       string    `expr:"key" doc:"The sample key the rule reads: a property or a metric, by name"`
 	Instance  string    `expr:"instance" doc:"The sample's instance (an endpoint), empty when it has none"`
 	Component Component `expr:"component" doc:"The component the sample is about"`
 }

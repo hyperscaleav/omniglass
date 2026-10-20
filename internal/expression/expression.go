@@ -413,7 +413,9 @@ func compile(source string, env Env) (*Program, error) {
 	}
 	prog, err := expr.Compile(source, opts...)
 	if err != nil {
-		return nil, fromExpr(PhaseType, err)
+		e := fromExpr(PhaseType, err)
+		e.Message = env.speak(e.Message)
+		return nil, e
 	}
 	if err := typedChecks(source, prog.Node()); err != nil {
 		return nil, err
@@ -467,4 +469,28 @@ func resultIs(r Result, out any) bool {
 		return ok
 	}
 	return true
+}
+
+// Check reports whether source compiles against env, with the diagnostics
+// Compile would give, without touching the shared program cache: a caller
+// that only validates (POST /expressions:validate) cannot evict the
+// programs the engine runs on, however many sources it cycles through.
+func Check(source string, env Env) error {
+	if err := precheck(source, env); err != nil {
+		return err
+	}
+	_, err := compile(source, env)
+	return err
+}
+
+// precheck is the part of a compile that needs no Expr: a declared env, the
+// length cap, and the tree walk (inspect).
+func precheck(source string, env Env) error {
+	if env.typ == nil {
+		return errors.New("compile needs a declared environment (EnvOf), not the zero Env")
+	}
+	if len(source) > MaxSourceBytes {
+		return &Error{Phase: PhaseLimit, Message: ErrSourceTooLong.Error(), err: ErrSourceTooLong}
+	}
+	return inspect(source, env)
 }

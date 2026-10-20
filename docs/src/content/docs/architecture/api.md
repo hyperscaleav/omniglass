@@ -343,11 +343,12 @@ criterion the problem's error is located at `body.fire_criteria.expr` (or `clear
 `body.fire_criteria` when the body gave the short form, and carries the `line` and `column` of the
 fault when it has one. A stored rule whose criteria no longer compile carries `criteria_error`
 (`field`, `line`, `column`, `message`) on the list, a get and its state, and holds until rewritten. `POST /expressions:validate` (gated `rule:read`; `omniglass expression validate`) compiles a
-`source` against a registered expression `site` (today `criteria`; for it, an optional sample `key`
-types the value, a metric a number and a property its data type, text when absent) and answers `ok`,
+`source` against a registered expression `site` (today `criteria`; for it the sample `key` is required
+and types the value, a metric a number and a property its data type, which so tells a `rule:read`
+holder a key's lane and data type, as the rule list does) and answers `ok`,
 the value and result types, `diagnostics` with line, column and phase, and the site's `bindings`,
-`builtins` and `budget`, generated from the site's declaration; it stores and runs nothing, and an
-unknown site or key is a 422. `POST /event-rules:preview` (gated `rule:read`; `omniglass event-rule
+`builtins` and `budget`, generated from the site's declaration; it compiles without the engine's
+program cache, stores and runs nothing, and an unknown site or a missing or unknown key is a 422. `POST /event-rules:preview` (gated `rule:read`; `omniglass event-rule
 preview`) judges a candidate rule (sample key, selector, criteria) without writing anything, in a
 read-only transaction: over the series it selects among the components the caller's component read
 scope admits, the newest sample before the last 24 hours and then each sample in them, alone

@@ -1736,11 +1736,11 @@ Validate an expression
 omniglass expression validate [flags]
 ```
 
-Compiles an expression against a registered site's environment and answers whether it compiles, with positioned diagnostics, and the site's bindings, admitted builtins and run budget, all generated from the site's declaration. For criteria, an optional sample key types the value (a metric is a number; a property is text, or a bool for a bool property); absent, the value is text. Stores nothing and runs nothing. An unknown site or key is a 422. Gated by rule:read.
+Compiles an expression against a registered site's environment and answers whether it compiles, with positioned diagnostics, and the site's bindings, admitted builtins and run budget, all generated from the site's declaration. For criteria a sample key is required, and types the value (a metric is a number; a property is text, or a bool for a bool property); the answer's value_type so reveals a key's lane and data type to a rule:read holder, as the rule list already does. Compiles without the engine's program cache and stores and runs nothing. An unknown site, a missing or unknown key is a 422. Gated by rule:read.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--key` | string | (none) | For criteria, the sample key the rule reads: its lane and data type type the value (a metric is a number; a property is text, or a bool for a bool property). Absent, the value is text |
+| `--key` | string | (none) | For criteria (required there), the sample key the rule reads: its lane and data type type the value (a metric is a number; a property is text, or a bool for a bool property) |
 | `--site` | string | (none) | Where the expression is written: criteria, an event rule's fire_criteria or clear_criteria |
 | `--source` | string | (none) | The expression |
 
