@@ -304,10 +304,12 @@ docs-walkthroughs:
 # embedded. Creates (idempotently) a dev owner with password "dev", also mints a
 # bearer token, then serves the API and console at http://localhost:8080/web.
 # Ctrl-C stops the server; `make down` stops Postgres.
+# SEED_SCENARIO picks the seeded fleet (omniglass help seed-dev lists them).
+SEED_SCENARIO ?= dev
 dev: up build-web
 	@./bin/omniglass bootstrap dev --password dev >/dev/null 2>&1 || true
 	@./bin/omniglass set-password dev dev >/dev/null 2>&1 || true
-	@./bin/omniglass seed-dev || true
+	@./bin/omniglass seed-dev --scenario $(SEED_SCENARIO) || true
 	@echo "console: http://localhost:8080/web"
 	@echo "  sign in with username 'dev' and password 'dev', or paste a bearer token:"
 	@./bin/omniglass token dev --description "dev login token"

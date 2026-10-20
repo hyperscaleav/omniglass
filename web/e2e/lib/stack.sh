@@ -275,12 +275,18 @@ stack_walkthrough_up() {
   key=$(printf 'omniglass-walkthrough-fixed-key!' | base64)
   STACK_ENV=(-e OMNIGLASS_DSN="$STACK_DSN" -e OMNIGLASS_SECRET_KEY="$key" -e OMNIGLASS_DATA_DIR=/tmp)
 
+  # The stack places a device in Bay 2 and enrolls edge-hq, both from the
+  # example fleet, so a scenario without it cannot stand the stack up.
+  if [ "${STACK_SCENARIO:-dev}" = empty ]; then
+    echo "stack $STACK_ID: STACK_SCENARIO=empty has no example fleet for the stack's node and devices; use make dev for a fresh install" >&2
+    return 2
+  fi
   stack_image
   stack_up
   stack_cli migrate >/dev/null
   stack_cli bootstrap "$STACK_USER" --password "$STACK_PASSWORD" >/dev/null 2>&1 || true
   stack_cli set-password "$STACK_USER" "$STACK_PASSWORD" >/dev/null
-  stack_cli seed-dev --sim-port-offset 0 >/dev/null
+  stack_cli seed-dev --scenario "${STACK_SCENARIO:-dev}" --sim-port-offset 0 >/dev/null
 
   # The embedded bus listens beyond loopback and advertises the server's
   # name, so the node (another container) can claim and connect.
