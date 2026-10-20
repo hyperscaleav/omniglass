@@ -1,6 +1,7 @@
 import { api } from "../api/client";
 import type { components } from "../api/schema.gen";
 import type { SeverityLevel } from "./severity";
+import type { PreviewEventRule } from "./expressions";
 import { rel } from "./format";
 
 // The event rules data layer (#918, #921; ADR-0144): thin typed wrappers over
@@ -293,7 +294,7 @@ export function readValue(raw: string, lane: RuleLane): { value?: string | numbe
 
 const NAME = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 
-export type DraftErrors = Partial<Record<"name" | "sampleKey" | "fireValue" | "clearValue" | "fireSustain" | "clearSustain" | "fireEventType", string>>;
+export type DraftErrors = Partial<Record<"name" | "sampleKey" | "fireValue" | "clearValue" | "fireExpr" | "clearExpr" | "fireSustain" | "clearSustain" | "fireEventType", string>>;
 
 // validateDraft is the form's one judgement, shared by create and edit (the
 // name is create-only, so edit skips it). No severity is a choice, not a gap:
@@ -308,8 +309,12 @@ export function validateDraft(d: RuleDraft, mode: "create" | "edit"): DraftError
   if (!d.sampleKey) e.sampleKey = "The property or metric the rule reads.";
   else {
     const f = readValue(d.fireValue, d.lane);
-    if (f.error && d.fireExpr === null) e.fireValue = f.error;
-    if (d.clearMode === "custom" && d.clearExpr === null) {
+    if (d.fireExpr !== null) {
+      if (!d.fireExpr.trim()) e.fireExpr = "An expression that is true when the condition starts.";
+    } else if (f.error) e.fireValue = f.error;
+    if (d.clearMode === "custom" && d.clearExpr !== null) {
+      if (!d.clearExpr.trim()) e.clearExpr = "An expression that is true when the condition ends.";
+    } else if (d.clearMode === "custom") {
       const c = readValue(d.clearValue, d.lane);
       if (c.error) e.clearValue = c.error;
     }
@@ -377,8 +382,11 @@ export function updateBody(d: RuleDraft, was: EventRule): UpdateEventRule {
   if (d.description.trim() !== (was.description ?? "")) body.description = d.description.trim();
   if (d.message.trim() !== (was.message ?? "")) body.message = d.message.trim();
   if (d.sampleKey !== was.sample_key) body.sample_key = d.sampleKey;
-  // An expression the builder cannot say is kept as stored: nothing to send.
-  if (d.fireExpr === null) {
+  // An expression rides when it differs from the stored one; the builder's
+  // comparison when it differs from what the stored expression reads back as.
+  if (d.fireExpr !== null) {
+    if (d.fireExpr !== was.fire_criteria.expr) body.fire_criteria = { expr: d.fireExpr };
+  } else {
     const fire = criteria(d.fireOp, d.fireValue, d.lane);
     if (!sameCriteria(fire, was.fire_criteria)) body.fire_criteria = fire;
   }
@@ -392,10 +400,68 @@ export function updateBody(d: RuleDraft, was: EventRule): UpdateEventRule {
     body.selector = { component_types: d.componentTypes, components: d.components };
   }
   if (d.clearMode === "custom") {
-    if (d.clearExpr === null) {
+    if (d.clearExpr !== null) {
+      if (d.clearExpr !== was.clear_criteria?.expr) body.clear_criteria = { expr: d.clearExpr };
+    } else {
       const clear = criteria(d.clearOp, d.clearValue, d.lane);
       if (!sameCriteria(clear, was.clear_criteria)) body.clear_criteria = clear;
     }
   } else if (was.clear_criteria) body.clear_negates = true;
   return body;
+}
+
+// ---- criteria as expressions (#960) ------------------------------------------
+
+const OP_SYMBOL: Record<RuleOp, string> = { eq: "==", ne: "!=", gt: ">", ge: ">=", lt: "<", le: "<=" };
+
+// lowerShort is the expression the server stores a comparison as (rules.Lower
+// in internal/rules): text JSON-quoted, a number made a float literal, a bool
+// property's threshold that is neither true nor false the constant it always
+// meant. The builder shows it beneath the comparison, so the short form
+// teaches the language. Null when the comparison has no value yet.
+export function lowerShort(op: RuleOp, value: string | number | undefined, lane: RuleLane, dataType?: string): string | null {
+  if (value === undefined || value === "") return null;
+  const sym = OP_SYMBOL[op];
+  if (lane === "metric") {
+    if (typeof value !== "number" || !Number.isFinite(value)) return null;
+    const n = String(value);
+    return `value ${sym} ${/[.e]/.test(n) ? n : `${n}.0`}`;
+  }
+  const text = String(value);
+  if (dataType === "bool") {
+    if (text === "true" || text === "false") return `value ${sym} ${text}`;
+    return op === "eq" ? "false" : "true";
+  }
+  return `value ${sym} ${JSON.stringify(text)}`;
+}
+
+type Side = "fire" | "clear";
+
+// toExpression switches one criterion to an expression, seeded with what its
+// comparison lowers to (or empty when it has none yet).
+export function toExpression(d: RuleDraft, side: Side, dataType?: string): RuleDraft {
+  const op = side === "fire" ? d.fireOp : d.clearOp;
+  const raw = side === "fire" ? d.fireValue : d.clearValue;
+  const expr = lowerShort(op, readValue(raw, d.lane).value, d.lane, dataType) ?? "";
+  return side === "fire" ? { ...d, fireExpr: expr } : { ...d, clearExpr: expr };
+}
+
+// toBuilder switches one criterion back to the comparison builder: the
+// expression's own comparison when it is one, else the builder's last.
+export function toBuilder(d: RuleDraft, side: Side): RuleDraft {
+  const expr = side === "fire" ? d.fireExpr : d.clearExpr;
+  const sf = expr === null ? null : shortForm({ expr });
+  if (side === "fire") return { ...d, fireExpr: null, ...(sf ? { fireOp: sf.op, fireValue: valueText(sf.value) } : {}) };
+  return { ...d, clearExpr: null, ...(sf ? { clearOp: sf.op, clearValue: valueText(sf.value) } : {}) };
+}
+
+// previewBody is the draft as a candidate rule for POST /event-rules:preview:
+// what it reads, what it watches and its criteria, as a save would send them.
+export function previewBody(d: RuleDraft): PreviewEventRule {
+  return {
+    sample_key: d.sampleKey,
+    selector: { component_types: d.componentTypes, components: d.components },
+    fire_criteria: fireOut(d),
+    clear_criteria: d.clearMode === "custom" ? clearOut(d) : undefined,
+  };
 }

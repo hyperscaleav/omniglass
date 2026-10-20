@@ -3,6 +3,7 @@ title: Rules and severity
 description: "Writing an event rule: what it reads, when its condition comes into force and ends, the events it writes, how long a condition must hold, the severity level it raises an alarm at (or none, for an informational rule), and how to watch it work, from the console, the CLI, or the API."
 walkthroughs:
   - id: watch-a-rule-raise-an-alarm
+  - id: write-a-rule-as-an-expression
 ---
 
 import SeededSet from '../../../../components/SeededSet.astro';
@@ -95,18 +96,24 @@ sits.
   comparison list beside the value offers exactly what the chosen key's lane allows, in words.
 - **Fires when it reads**: the comparison and the value that open an alarm. The value is used exactly
   as typed: a property value with leading or trailing spaces is refused rather than trimmed (it would
-  never match), and a metric value must be a plain decimal (`40`, `-2.5`). The comparison is stored
-  as the expression it means (`value == "down"`, `value > 40.0`); a rule whose criteria were written
-  as a richer expression over the API or CLI shows that expression here instead, and saving the form
-  keeps it as written. A rule whose criteria no longer compile (its key's data type changed, say)
-  reads **criteria do not compile** in the list, and its blade says which criteria, where, and why;
-  it judges nothing until they are rewritten.
+  never match), and a metric value must be a plain decimal (`40`, `-2.5`). Beneath it the form shows
+  the **expression the comparison is stored as** (`value == "down"`, `value > 40.0`), so the builder
+  teaches the language.
+- **Write as an expression**: switches the criteria to an expression, starting from the one the
+  comparison lowers to. Write any true-or-false expression over the sample: `value`, `key`,
+  `instance`, and the `component` with its `name` and `type`, with comparisons, `&&`, `||`, `!` and a
+  few functions (`value == "down" && instance != "aux"`). It is checked as you type: a mistake is
+  pointed at under its line and column, and beneath the field are the names it may use and the
+  functions it may call, each with what it means. A rule written as an expression opens in this
+  mode; switching back keeps the comparison when the expression still is one. A rule whose criteria no
+  longer compile (its key's data type changed, say) reads **criteria do not compile** in the list,
+  and its blade says which criteria, where, and why; it judges nothing until they are rewritten.
 - **For at least**: the **fire sustain**, a duration (`30s`, `2m`). The value has to keep meeting the
   criteria this long before the alarm opens; one sample that does not starts the wait over. The
   sustain is timed from the server's receipt of the first sample that meets the criteria and judged
   on the server's 5s sweep tick. Blank acts at once.
 - **Clears**: on the opposite of the fire criteria, or on criteria of their own (then **Clears when
-  it reads** asks for them). A rule that fires above 40 and clears below 35 does not flap at 39.9.
+  it reads** asks for them). A rule that fires above 40 and clears below 35 does not flap at 39.9. The clear criteria take a comparison or an expression the same way.
 - **Clears after at least**: the **clear sustain**, set independently: a long clear sustain holds an
   incident through a noisy recovery without delaying the alarm.
 - **Severity**: the level the alarm is raised at, worst first. A level marked outage takes its
@@ -127,7 +134,22 @@ Every field is checked as you type and **Create rule** stays refused until the r
 is created, the rule judges the newest sample of every series it selects at once, so a condition
 that already holds starts its sustain then rather than waiting for the next change.
 
-### A worked example
+#**Preview**, at the foot of the drawer, runs the draft against the last day of its key's samples on
+the components you can read, without saving or writing anything: what it would hold **in force now**,
+each linked to its component, and the **edges** it would have written, fire and clear, newest last.
+Each sample is judged alone, so a sustain that would have held an edge back is not applied, which the
+panel says; on a fleet with more samples than its cap the preview covers part of the window and says
+that too.
+
+A rule's blade shows its criteria in words and, beneath, as the expressions it judges by (an absent
+clear is `!(fire)`).
+
+The walkthrough below writes a rule's criteria as an expression: the builder's comparison first, then
+the expression itself, an unfinished line pointed at, the fix, a preview of the last day, and the save.
+
+::walkthrough{#write-a-rule-as-an-expression}
+
+## A worked example
 
 A touch panel with two inputs reports the one it shows as its `video-input` property (`hdmi1` or
 `hdmi2`). To be told when one is switched to `hdmi2`, that is, off HDMI 1:

@@ -9,6 +9,8 @@ import FieldRow from "../components/FieldRow";
 import KVStacked from "../components/KVStacked";
 import Eyebrow from "../components/Eyebrow";
 import InfoTip from "../components/InfoTip";
+import ExpressionField from "../components/ExpressionField";
+import Button from "../components/Button";
 import AlarmTimeline, { createTimelineToggles } from "../components/AlarmTimeline";
 import { EVENT_TYPES_KEY, listEventTypes } from "../lib/event_types";
 import SeverityBadge from "../components/SeverityBadge";
@@ -47,13 +49,19 @@ import {
   getRuleState,
   judgedWords,
   listEventRules,
+  lowerShort,
   opLabel,
+  previewBody,
+  readValue,
   ruleStateKey,
   updateBody,
+  toBuilder,
+  toExpression,
   updateEventRule,
   validateDraft,
   withLane,
 } from "../lib/event_rules";
+import { previewEventRule, type RulePreview } from "../lib/expressions";
 
 // Rules (Catalog > Actions > Rules, #921): the event rule registry. A rule reads
 // one sample key across the components it selects and raises an alarm at its
@@ -77,6 +85,10 @@ export const RULE_HINTS = {
     "The components the rule watches: those whose type falls within a listed component type, and those listed by name. Leave both empty to watch every component.",
   criteria:
     "The fire criteria open an alarm; the clear criteria close it. A rule with no clear criteria of its own clears on the opposite of its fire criteria.",
+  expression:
+    "An expression over the arriving sample that is true or false: value, key, instance and component (its name and type), with comparisons, and, or and a few functions. It is checked as you type against what the rule reads, and a mistake is pointed at by line and column.",
+  preview:
+    "Runs this draft against the last day of its key's samples, on the components you can read, without saving or writing anything: the edges it would have written and what it would hold in force now. Each sample is judged alone, so sustains are not applied.",
   sustain:
     "How long it must hold. A value has to keep meeting the criteria for this long before the alarm opens (or clears); one contrary sample starts the wait over. Blank acts at once.",
   severity:
@@ -569,6 +581,14 @@ function RuleBladeBody(p: { name: string }): JSX.Element {
               <span class="text-[12px] text-base-content/50">Clears</span>
               <span data-testid="rule-clear">{clearWords(r(), unit(r()))}</span>
             </div>
+            <div class="grid grid-cols-[auto_1fr] items-baseline gap-x-3 gap-y-1">
+              <span class="text-[12px] text-base-content/50">Fire</span>
+              <code data-testid="rule-fire-expr" class="break-all font-data text-[12px] text-base-content/80">{r().fire_criteria.expr}</code>
+              <span class="text-[12px] text-base-content/50">Clear</span>
+              <code data-testid="rule-clear-expr" class="break-all font-data text-[12px] text-base-content/80">
+                {r().clear_criteria?.expr ?? `!(${r().fire_criteria.expr})`}
+              </code>
+            </div>
             <Show when={r().message}>
               <KVStacked label="Message" value={<span class="text-base-content/80">{r().message}</span>} />
             </Show>
@@ -699,7 +719,12 @@ export function RuleForm(p: { mode: "create" | "edit"; rule?: EventRule; onSaved
   });
 
   const errors = createMemo<DraftErrors>(() => validateDraft(d, p.mode));
-  const valid = () => Object.keys(errors()).length === 0;
+  // The server's verdict on each criterion written as an expression (undefined
+  // until a check answers): a source that does not compile refuses the submit.
+  const [exprOk, setExprOk] = createStore<{ fire?: boolean; clear?: boolean }>({});
+  const exprBad = () =>
+    (d.fireExpr !== null && exprOk.fire === false) || (d.clearMode === "custom" && d.clearExpr !== null && exprOk.clear === false);
+  const valid = () => Object.keys(errors()).length === 0 && !exprBad();
   const shown = (k: keyof DraftErrors) => (touched[k] ? errors()[k] : undefined);
   const touch = (k: keyof DraftErrors) => setTouched(k, true);
 
@@ -715,6 +740,39 @@ export function RuleForm(p: { mode: "create" | "edit"; rule?: EventRule; onSaved
   const typeGone = (t: string) => !!typeNames() && !typeNames()!.has(t);
   const componentGone = (id: string) => !!components.data && !componentById().has(id);
   const keyValue = () => (d.sampleKey ? `${d.lane}:${d.sampleKey}` : "");
+  // A property's data type types its value (a bool property compares true or
+  // false), which is how the builder's comparison lowers.
+  const dataType = () => (d.lane === "property" ? properties.data?.find((x) => x.name === d.sampleKey)?.data_type : undefined);
+  const lowered = (side: "fire" | "clear") =>
+    side === "fire"
+      ? lowerShort(d.fireOp, readValue(d.fireValue, d.lane).value, d.lane, dataType())
+      : lowerShort(d.clearOp, readValue(d.clearValue, d.lane).value, d.lane, dataType());
+  const setMode = (side: "fire" | "clear", expression: boolean) => {
+    setExprOk(side, undefined);
+    const next = expression ? toExpression(d, side, dataType()) : toBuilder(d, side);
+    setD({ fireExpr: next.fireExpr, fireOp: next.fireOp, fireValue: next.fireValue, clearExpr: next.clearExpr, clearOp: next.clearOp, clearValue: next.clearValue });
+  };
+  const ModeToggle = (q: { side: "fire" | "clear" }) => (
+    <label class="-mt-2 inline-flex w-fit cursor-pointer items-center gap-2 text-[12px] text-base-content/70">
+      <input
+        type="checkbox"
+        class="toggle toggle-xs"
+        aria-label={`Write the ${q.side} criteria as an expression`}
+        checked={(q.side === "fire" ? d.fireExpr : d.clearExpr) !== null}
+        onChange={(e) => setMode(q.side, e.currentTarget.checked)}
+      />
+      Write as an expression
+    </label>
+  );
+  const Lowered = (q: { side: "fire" | "clear" }) => (
+    <Show when={lowered(q.side)}>
+      {(x) => (
+        <span class="text-[11px] text-base-content/50">
+          Stored as <code data-testid={`${q.side}-lowered`} class="font-data text-base-content/70">{x()}</code>
+        </span>
+      )}
+    </Show>
+  );
 
   function pickKey(v: string) {
     touch("sampleKey");
@@ -808,23 +866,41 @@ export function RuleForm(p: { mode: "create" | "edit"; rule?: EventRule; onSaved
         {err("sampleKey")}
       </FieldRow>
 
-      <FieldRow label="Fires when it reads" info={RULE_HINTS.criteria}>
-        <Show when={d.fireExpr} fallback={<>
-        <div class="flex gap-2">
-          <OpSelect label="Fire comparison" value={d.fireOp} onChange={(op) => setD("fireOp", op)} />
-          <input
-            aria-label="Fire value"
-            class="input input-bordered min-w-0 flex-1 font-data"
-            classList={{ "input-error": !!shown("fireValue") }}
-            inputmode={d.lane === "metric" ? "decimal" : "text"}
-            placeholder={d.lane === "metric" ? "40" : "down"}
-            value={d.fireValue}
-            onInput={(e) => { setD("fireValue", e.currentTarget.value); touch("fireValue"); }}
+      <Show
+        when={d.fireExpr !== null}
+        fallback={
+          <FieldRow label="Fires when it reads" info={RULE_HINTS.criteria}>
+            <div class="flex gap-2">
+              <OpSelect label="Fire comparison" value={d.fireOp} onChange={(op) => setD("fireOp", op)} />
+              <input
+                aria-label="Fire value"
+                class="input input-bordered min-w-0 flex-1 font-data"
+                classList={{ "input-error": !!shown("fireValue") }}
+                inputmode={d.lane === "metric" ? "decimal" : "text"}
+                placeholder={d.lane === "metric" ? "40" : "down"}
+                value={d.fireValue}
+                onInput={(e) => { setD("fireValue", e.currentTarget.value); touch("fireValue"); }}
+              />
+            </div>
+            {err("fireValue")}
+            <Lowered side="fire" />
+          </FieldRow>
+        }
+      >
+        <FieldRow label="Fires when" info={RULE_HINTS.expression}>
+          <ExpressionField
+            site="criteria"
+            sampleKey={d.sampleKey}
+            label="Fire expression"
+            placeholder={'value == "down"'}
+            value={d.fireExpr ?? ""}
+            onInput={(v) => { setD("fireExpr", v); touch("fireExpr"); }}
+            onCheck={(ok) => setExprOk("fire", ok)}
           />
-        </div>
-        {err("fireValue")}
-        </>}>{(expr) => <KeptExpression expr={expr()} />}</Show>
-      </FieldRow>
+          {err("fireExpr")}
+        </FieldRow>
+      </Show>
+      <ModeToggle side="fire" />
       <FieldRow label="For at least" info={RULE_HINTS.sustain}>
         <input
           class="input input-bordered w-full font-data"
@@ -847,23 +923,41 @@ export function RuleForm(p: { mode: "create" | "edit"; rule?: EventRule; onSaved
         </select>
       </FieldRow>
       <Show when={d.clearMode === "custom"}>
-        <FieldRow label="Clears when it reads">
-          <Show when={d.clearExpr} fallback={<>
-          <div class="flex gap-2">
-            <OpSelect label="Clear comparison" value={d.clearOp} onChange={(op) => setD("clearOp", op)} />
-            <input
-              aria-label="Clear value"
-              class="input input-bordered min-w-0 flex-1 font-data"
-              classList={{ "input-error": !!shown("clearValue") }}
-              inputmode={d.lane === "metric" ? "decimal" : "text"}
-              placeholder={d.lane === "metric" ? "35" : "up"}
-              value={d.clearValue}
-              onInput={(e) => { setD("clearValue", e.currentTarget.value); touch("clearValue"); }}
+        <Show
+          when={d.clearExpr !== null}
+          fallback={
+            <FieldRow label="Clears when it reads">
+              <div class="flex gap-2">
+                <OpSelect label="Clear comparison" value={d.clearOp} onChange={(op) => setD("clearOp", op)} />
+                <input
+                  aria-label="Clear value"
+                  class="input input-bordered min-w-0 flex-1 font-data"
+                  classList={{ "input-error": !!shown("clearValue") }}
+                  inputmode={d.lane === "metric" ? "decimal" : "text"}
+                  placeholder={d.lane === "metric" ? "35" : "up"}
+                  value={d.clearValue}
+                  onInput={(e) => { setD("clearValue", e.currentTarget.value); touch("clearValue"); }}
+                />
+              </div>
+              {err("clearValue")}
+              <Lowered side="clear" />
+            </FieldRow>
+          }
+        >
+          <FieldRow label="Clears when" info={RULE_HINTS.expression}>
+            <ExpressionField
+              site="criteria"
+              sampleKey={d.sampleKey}
+              label="Clear expression"
+              placeholder={'value == "up"'}
+              value={d.clearExpr ?? ""}
+              onInput={(v) => { setD("clearExpr", v); touch("clearExpr"); }}
+              onCheck={(ok) => setExprOk("clear", ok)}
             />
-          </div>
-          {err("clearValue")}
-          </>}>{(expr) => <KeptExpression expr={expr()} />}</Show>
-        </FieldRow>
+            {err("clearExpr")}
+          </FieldRow>
+        </Show>
+        <ModeToggle side="clear" />
       </Show>
       <FieldRow label="Clears after at least" info={RULE_HINTS.sustain}>
         <input
@@ -965,18 +1059,92 @@ export function RuleForm(p: { mode: "create" | "edit"; rule?: EventRule; onSaved
       <FieldRow label="Enabled" info={RULE_HINTS.enabled}>
         <input type="checkbox" class="toggle toggle-sm" checked={d.enabled} onChange={(e) => setD("enabled", e.currentTarget.checked)} />
       </FieldRow>
+
+      <RulePreviewPanel draft={d} ready={!!d.sampleKey && !errors().fireValue && !errors().fireExpr && !exprBad()} />
     </form>
   );
 }
 
-// KeptExpression shows a criterion written as an expression the builder's
-// comparison cannot say (#957): the form keeps it as written and an edit
-// leaves it alone; editing it in the console arrives with #960.
-function KeptExpression(p: { expr: string }) {
+// RulePreviewPanel runs the draft as a candidate rule against the last day of
+// its key's samples (POST /event-rules:preview, #959): the series it would hold
+// in force now, linked to their components, and the edges it would have
+// written. It writes nothing, and judges each sample alone (sustains are not
+// applied), which it says.
+function RulePreviewPanel(p: { draft: RuleDraft; ready: boolean }): JSX.Element {
+  const [result, setResult] = createSignal<RulePreview | null>(null);
+  const [busy, setBusy] = createSignal(false);
+  const [failed, setFailed] = createSignal<string | null>(null);
+  let section: HTMLElement | undefined;
+  async function run() {
+    setBusy(true);
+    setFailed(null);
+    try {
+      setResult(await previewEventRule(previewBody(p.draft)));
+      // The answer lands at the foot of a long drawer: bring the panel up so
+      // it is read, not scrolled for.
+      section?.scrollIntoView?.({ block: "start", behavior: "smooth" });
+    } catch (e) {
+      setResult(null);
+      setFailed(describeError(e));
+    } finally {
+      setBusy(false);
+    }
+  }
   return (
-    <div class="flex flex-col gap-1">
-      <code class="font-data text-sm break-all rounded bg-base-200 px-2 py-1">{p.expr}</code>
-      <p class="text-[11px] text-base-content/60">An expression. Saving keeps it as written.</p>
-    </div>
+    <section ref={section} aria-label="Preview" class="flex flex-col gap-2 border-t border-base-300 pt-3">
+      <Eyebrow
+        label="Preview"
+        hint={RULE_HINTS.preview}
+        right={
+          <Button intent="quiet" size="xs" loading={busy()} disabled={!p.ready} onClick={() => void run()}>
+            Preview
+          </Button>
+        }
+      />
+      <Show when={failed()}>{(m) => <div role="alert" class="alert alert-error alert-soft text-sm"><span>{m()}</span></div>}</Show>
+      <Show when={result()}>
+        {(r) => (
+          <div data-testid="preview-result" class="flex flex-col gap-2 text-sm">
+            <Show when={r().truncated}>
+              <div data-testid="preview-truncated" class="alert alert-warning alert-soft text-[12px]">
+                <span>Cut short at {r().row_cap.toLocaleString("en-US")} samples: this covers part of the window.</span>
+              </div>
+            </Show>
+            <Eyebrow label={`In force now (${r().in_force_now?.length ?? 0})`} />
+            <Show when={(r().in_force_now ?? []).length > 0} fallback={<span class="text-[12px] text-base-content/50">Nothing in force.</span>}>
+              <ul class="flex flex-col gap-0.5">
+                <For each={r().in_force_now ?? []}>
+                  {(s) => (
+                    <li class="flex items-center gap-2 text-[12px]">
+                      <A href={`/components/${s.component_id}`} class="link link-hover">{s.component}</A>
+                      <Show when={s.instance}><span class="font-data text-base-content/60">{s.instance}</span></Show>
+                      <span class="ml-auto text-[11px] text-base-content/50">
+                        {s.since ? <span title={fmtTime(s.since)}>since {rel(s.since)}</span> : "since before the window"}
+                      </span>
+                    </li>
+                  )}
+                </For>
+              </ul>
+            </Show>
+            <Eyebrow label={`Edges in the last ${r().window === "24h0m0s" ? "24h" : r().window} (${r().edges?.length ?? 0})`} />
+            <Show when={(r().edges ?? []).length > 0} fallback={<span class="text-[12px] text-base-content/50">No edge.</span>}>
+              <ul class="flex max-h-48 flex-col gap-0.5 overflow-y-auto">
+                <For each={r().edges ?? []}>
+                  {(e) => (
+                    <li data-testid="preview-edge" class="flex items-center gap-2 text-[12px]">
+                      <span class={`badge badge-sm ${e.kind === "fire" ? "badge-soft badge-warning" : "badge-soft badge-success"}`}>{e.kind}</span>
+                      <span>{e.component}</span>
+                      <Show when={e.instance}><span class="font-data text-base-content/60">{e.instance}</span></Show>
+                      <span class="ml-auto text-[11px] text-base-content/50" title={fmtTime(e.at)}>{rel(e.at)}</span>
+                    </li>
+                  )}
+                </For>
+              </ul>
+            </Show>
+            <span class="text-[11px] text-base-content/50">Sustains are ignored: each sample is judged alone.</span>
+          </div>
+        )}
+      </Show>
+    </section>
   );
 }

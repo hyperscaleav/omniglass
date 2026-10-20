@@ -298,7 +298,11 @@ the candidate (its key, selector and criteria) is judged over the last 24 hours 
 on the components the caller may read, and the answer is the edges it would have written and the
 series it would hold in force now. It writes nothing. Each sample is judged alone, as if the rule
 had no sustains, and the answer says so; a fleet with more samples than the row cap is previewed in
-part, flagged `truncated`.
+part, flagged `truncated`. The console authors criteria either way: the rule drawer's comparison
+builder shows the expression it is stored as, **Write as an expression** opens an expression field
+checked as it is typed (diagnostics under their line and column, the site's bindings and functions
+beneath), and its **Preview** runs the draft; the rule's blade shows its criteria as code (#960). The
+choices behind the engine and its first consumer are [ADR-0146](/architecture/decisions/#adr-0146-expressions-run-on-pinned-expr-with-an-allowlist-and-per-site-budgets-and-rule-criteria-are-expressions).
 The **selector** picks the components a rule watches: those whose type falls within a listed component
 type, and those listed by id; empty, every component. A rule outlives what it points at: deleting a
 component or a key it reads leaves it editable, and it simply matches nothing.

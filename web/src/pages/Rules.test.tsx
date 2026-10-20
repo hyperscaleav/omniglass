@@ -342,6 +342,111 @@ describe("Rules page", () => {
     });
   });
 
+  // Answers the expression and preview routes, records every request.
+  function exprRoutes(preview: unknown = { in_force_now: [], edges: [], window: "24h0m0s", row_cap: 5000, truncated: false, sustains_ignored: true }) {
+    const reqs: { method: string; url: string; body: unknown }[] = [];
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const req = input as Request;
+      const body = req.method === "GET" || req.method === "DELETE" ? undefined : await req.clone().json();
+      reqs.push({ method: req.method, url: req.url, body });
+      if (req.url.endsWith("/expressions:validate")) {
+        const src = (body as { source: string }).source;
+        const bad = src.includes("humidity");
+        return json({ ok: !bad, site: "criteria", value_type: "number", result_type: "bool",
+          diagnostics: bad ? [{ line: 2, column: 3, phase: "type", message: "unknown name humidity" }] : [],
+          bindings: [{ name: "value", type: "float64", doc: "The sample's value" }], builtins: ["abs"], budget: { iterations: 10000, memory: 10000, deadline: "5ms" } });
+      }
+      if (req.url.endsWith("/event-rules:preview")) return json(preview);
+      if (req.method === "POST") return json({ ...hot, ...(body as object) });
+      if (req.url.endsWith("/state")) return json({ conditions: [], open: [], pending: [] });
+      return json({ event_rules: [reach, hot] });
+    });
+    return reqs;
+  }
+
+  it("shows beneath the comparison the expression it is stored as", async () => {
+    mount();
+    fireEvent.click(screen.getByText("New rule"));
+    await waitFor(() => screen.getByLabelText("Name"));
+    fireEvent.change(screen.getByLabelText("Reads"), { target: { value: "property:endpoint-reachable" } });
+    fireEvent.input(screen.getByLabelText("Fire value"), { target: { value: "down" } });
+    expect(screen.getByTestId("fire-lowered").textContent).toBe('value == "down"');
+  });
+
+  it("writes fire criteria as an expression, checked as typed, and saves the expression", async () => {
+    const reqs = exprRoutes();
+    mount();
+    fireEvent.click(screen.getByText("New rule"));
+    fireEvent.input(await waitFor(() => screen.getByLabelText("Name")), { target: { value: "too-hot" } });
+    fireEvent.change(screen.getByLabelText("Reads"), { target: { value: "metric:temperature-c" } });
+    fireEvent.input(screen.getByLabelText("Fire value"), { target: { value: "40" } });
+    fireEvent.click(screen.getByLabelText("Write the fire criteria as an expression"));
+    const area = screen.getByLabelText("Fire expression") as HTMLTextAreaElement;
+    // The builder's comparison (equals 40) is where the expression starts.
+    expect(area.value).toBe("value == 40.0");
+    fireEvent.input(area, { target: { value: "value > 40 &&\n  humidity > 2" } });
+    const diag = await screen.findByTestId("expression-diagnostic", {}, { timeout: 2000 });
+    expect(diag.textContent).toContain("Line 2, column 3");
+    const submit = screen.getByText("Create rule").closest("button") as HTMLButtonElement;
+    await waitFor(() => expect(submit.disabled).toBe(true));
+    fireEvent.input(area, { target: { value: "value > 40" } });
+    await screen.findByTestId("expression-ok", {}, { timeout: 2000 });
+    await waitFor(() => expect(submit.disabled).toBe(false));
+    fireEvent.click(submit);
+    await waitFor(() => expect(reqs.some((r) => r.method === "POST" && r.url.endsWith("/event-rules"))).toBe(true));
+    const created = reqs.find((r) => r.method === "POST" && r.url.endsWith("/event-rules"))!;
+    expect((created.body as { fire_criteria: unknown }).fire_criteria).toEqual({ expr: "value > 40" });
+  });
+
+  it("opens a rule whose criteria the builder cannot say as an expression to edit", async () => {
+    exprRoutes();
+    const rich: EventRule = { ...hot, name: "rich", label: "Rich", fire_criteria: { expr: 'value > 40 && instance != "aux"' } };
+    mount(admin, [reach, rich]);
+    fireEvent.click(screen.getByText("Rich"));
+    fireEvent.click(within(await blade()).getByText("Edit"));
+    const area = (await waitFor(() => screen.getByLabelText("Fire expression"))) as HTMLTextAreaElement;
+    expect(area.value).toBe('value > 40 && instance != "aux"');
+    expect((screen.getByLabelText("Write the fire criteria as an expression") as HTMLInputElement).checked).toBe(true);
+  });
+
+  it("shows a rule's criteria as the expressions it judges by, on its blade", async () => {
+    mount();
+    fireEvent.click(screen.getByText("Too hot"));
+    const b = await blade();
+    expect(within(b).getByTestId("rule-fire-expr").textContent).toBe("value > 40.0");
+    expect(within(b).getByTestId("rule-clear-expr").textContent).toBe("value < 35.0");
+  });
+
+  it("previews the draft against recent samples: in force now, the edges, sustains ignored", async () => {
+    const reqs = exprRoutes({
+      in_force_now: [{ component: "display-1", component_id: display, instance: "tcp", since: new Date(Date.now() - 3_600_000).toISOString() }],
+      edges: [
+        { component: "display-1", component_id: display, instance: "tcp", at: new Date(Date.now() - 7_200_000).toISOString(), kind: "fire" },
+        { component: "display-1", component_id: display, instance: "tcp", at: new Date(Date.now() - 5_400_000).toISOString(), kind: "clear" },
+      ],
+      window: "24h0m0s", row_cap: 5000, truncated: true, sustains_ignored: true,
+    });
+    mount();
+    fireEvent.click(screen.getByText("New rule"));
+    await waitFor(() => screen.getByLabelText("Name"));
+    fireEvent.change(screen.getByLabelText("Reads"), { target: { value: "property:endpoint-reachable" } });
+    fireEvent.input(screen.getByLabelText("Fire value"), { target: { value: "down" } });
+    fireEvent.input(screen.getByLabelText("For at least"), { target: { value: "15s" } });
+    fireEvent.click(screen.getByRole("button", { name: "Preview" }));
+    const panel = await screen.findByRole("region", { name: "Preview" });
+    await waitFor(() => expect(within(panel).getByText("In force now (1)")).toBeTruthy());
+    const link = within(panel).getAllByText("display-1").map((e) => e.closest("a")).find(Boolean)!;
+    expect(link.getAttribute("href")).toBe(`/components/${display}`);
+    expect(within(panel).getByText("Edges in the last 24h (2)")).toBeTruthy();
+    expect(within(panel).getAllByTestId("preview-edge").map((e) => e.textContent)).toEqual([
+      expect.stringContaining("fire"), expect.stringContaining("clear"),
+    ]);
+    expect(within(panel).getByText(/Sustains are ignored/)).toBeTruthy();
+    expect(within(panel).getByTestId("preview-truncated")).toBeTruthy();
+    const sent = reqs.find((r) => r.url.endsWith("/event-rules:preview"))!;
+    expect(sent.body).toEqual({ sample_key: "endpoint-reachable", selector: { component_types: [], components: [] }, fire_criteria: { op: "eq", value: "down" } });
+  });
+
   it("offers a metric all six comparisons and refuses a value that is no number", async () => {
     const fetchSpy = vi.spyOn(globalThis, "fetch");
     mount();

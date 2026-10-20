@@ -16,7 +16,11 @@ import {
   sustainWords,
   updateBody,
   updateEventRule,
+  lowerShort,
+  previewBody,
   shortForm,
+  toBuilder,
+  toExpression,
   validateDraft,
   withLane,
 } from "./event_rules";
@@ -266,5 +270,46 @@ describe("the data layer", () => {
     expect(req.method).toBe("PATCH");
     expect(req.url).toMatch(/\/event-rules\/reachability-lost$/);
     expect(await req.json()).toEqual({ enabled: false });
+  });
+});
+
+describe("the builder teaches the expression it lowers to", () => {
+  it("lowers a comparison exactly as the server does", () => {
+    expect(lowerShort("eq", "down", "property", "string")).toBe('value == "down"');
+    expect(lowerShort("ne", 'say "hi"', "property", "string")).toBe('value != "say \\"hi\\""');
+    expect(lowerShort("gt", 40, "metric")).toBe("value > 40.0");
+    expect(lowerShort("le", -2.5, "metric")).toBe("value <= -2.5");
+    expect(lowerShort("eq", "true", "property", "bool")).toBe("value == true");
+    expect(lowerShort("eq", "on", "property", "bool")).toBe("false");
+    expect(lowerShort("ne", "on", "property", "bool")).toBe("true");
+    expect(lowerShort("eq", undefined, "property", "string")).toBeNull();
+  });
+});
+
+describe("writing criteria as an expression", () => {
+  it("switches to an expression seeded with the builder's own, and back when it is still a comparison", () => {
+    const d = { ...emptyDraft(), sampleKey: "temperature-c", lane: "metric" as const, fireOp: "gt" as const, fireValue: "40" };
+    const e = toExpression(d, "fire");
+    expect(e.fireExpr).toBe("value > 40.0");
+    expect(toBuilder({ ...e, fireExpr: "value >= 45.0" }, "fire")).toMatchObject({ fireExpr: null, fireOp: "ge", fireValue: "45" });
+    // An expression the builder cannot say goes back to the builder's last comparison.
+    expect(toBuilder({ ...e, fireExpr: "value > 40 && instance != \"aux\"" }, "fire")).toMatchObject({ fireExpr: null, fireOp: "gt", fireValue: "40" });
+  });
+
+  it("sends an expression that changed, and requires one that is not empty", () => {
+    const was = { ...hot };
+    const d = { ...draftFromRule(was), fireExpr: "value > 40 && instance != \"aux\"" };
+    expect(updateBody(d, was)).toEqual({ fire_criteria: { expr: "value > 40 && instance != \"aux\"" } });
+    expect(validateDraft({ ...d, fireExpr: "  " }, "edit").fireExpr).toBeTruthy();
+    expect(validateDraft({ ...draftFromRule(reach), clearExpr: "" }, "edit").clearExpr).toBeTruthy();
+    expect(createBody({ ...d, name: "x" }).fire_criteria).toEqual({ expr: "value > 40 && instance != \"aux\"" });
+  });
+
+  it("previews the draft as a candidate rule: key, selector and criteria, as sent", () => {
+    const d = { ...draftFromRule(hot), fireExpr: "value > 41" };
+    expect(previewBody(d)).toEqual({
+      sample_key: "temperature-c", selector: { component_types: ["display"], components: [] },
+      fire_criteria: { expr: "value > 41" }, clear_criteria: undefined,
+    });
   });
 });
