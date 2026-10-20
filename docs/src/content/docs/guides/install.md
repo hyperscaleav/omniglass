@@ -98,8 +98,8 @@ day, or the example fleet at enterprise size. The list, with what each one holds
 Every scenario except the fresh install is the example fleet plus a generated expansion of it, so a
 scenario never drifts from the fleet it grows from, and like the example fleet every one is
 idempotent. Pick one with `SEED_SCENARIO` for `make dev`, or `STACK_SCENARIO` for the Docker stack
-(every one but the fresh install, since the stack's node and simulated devices come from the example
-fleet):
+(on a fresh install the stack is the server and its owner alone, since its node and simulated
+devices come from the example fleet):
 
 ```bash
 SEED_SCENARIO=degraded make dev

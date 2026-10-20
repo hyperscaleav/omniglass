@@ -275,12 +275,6 @@ stack_walkthrough_up() {
   key=$(printf 'omniglass-walkthrough-fixed-key!' | base64)
   STACK_ENV=(-e OMNIGLASS_DSN="$STACK_DSN" -e OMNIGLASS_SECRET_KEY="$key" -e OMNIGLASS_DATA_DIR=/tmp)
 
-  # The stack places a device in Bay 2 and enrolls edge-hq, both from the
-  # example fleet, so a scenario without it cannot stand the stack up.
-  if [ "${STACK_SCENARIO:-dev}" = empty ]; then
-    echo "stack $STACK_ID: STACK_SCENARIO=empty has no example fleet for the stack's node and devices; use make dev for a fresh install" >&2
-    return 2
-  fi
   stack_image
   stack_up
   stack_cli migrate >/dev/null
@@ -301,6 +295,13 @@ stack_walkthrough_up() {
 
   STACK_TOKEN=$(stack_cli token "$STACK_USER" --description "walkthrough stack" 2>/dev/null | grep -o 'ogp_[A-Za-z0-9_-]*')
   [ -n "$STACK_TOKEN" ] || { echo "stack $STACK_ID: could not mint an owner token" >&2; return 1; }
+
+  # A fresh install (STACK_SCENARIO=empty) is the server and its owner and
+  # nothing else: the Bay 2 device, the node edge-hq and the simulated fleet
+  # below all come from the example fleet, and a first run has none of them.
+  if [ "${STACK_SCENARIO:-dev}" = empty ]; then
+    return 0
+  fi
 
   # A component nothing collects from yet: a simulated product placed in Bay 2
   # with no endpoint, so the simulator serves it only once an endpoint names

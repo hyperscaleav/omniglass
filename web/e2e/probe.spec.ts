@@ -17,13 +17,17 @@ import { locate, parseWalkthrough } from "./walkthroughlib.mjs";
 const OUT = process.env.OG_PROBE_OUT;
 const USER = process.env.OG_E2E_USER;
 const PASSWORD = process.env.OG_E2E_PASSWORD;
-const WALKTHROUGHS = join(process.cwd(), "e2e", "walkthroughs");
+const WALKTHROUGHS = process.env.OG_PROBE_DIR ?? join(process.cwd(), "e2e", "walkthroughs");
 const AXE = join(process.cwd(), "node_modules", "axe-core", "axe.min.js");
 const STEP_TIMEOUT = 10_000;
 // Every protected route (sign-in itself is exercised by the sign-in), then
 // every walkthrough.
-const ROUTES = ROUTE_MANIFEST.filter((r) => r.auth !== false);
-const SCRIPTS = readdirSync(WALKTHROUGHS).filter((f) => f.endsWith(".yaml")).sort();
+const ROUTES = process.env.OG_PROBE_ONLY ? [] : ROUTE_MANIFEST.filter((r) => r.auth !== false);
+// OG_PROBE_WALKTHROUGHS=0 skips them, for a fleet they were not written
+// against (a fresh install has no places to drill into); OG_PROBE_ONLY=<id>
+// replays that one walkthrough and visits no route, how a repro is checked.
+const ONLY = process.env.OG_PROBE_ONLY;
+const SCRIPTS = process.env.OG_PROBE_WALKTHROUGHS === "0" ? [] : readdirSync(WALKTHROUGHS).filter((f) => f.endsWith(".yaml") && (!ONLY || f === `${ONLY}.yaml`)).sort();
 // A beat after each action, as a person leaves: at no pause at all a key can
 // land before the drawer it should close has finished opening, which is the
 // harness racing the console rather than a defect in it.
@@ -148,6 +152,9 @@ test.describe("probe", () => {
         try {
           await replay(page, step);
           if (step.kind !== "wait") await page.waitForTimeout(SETTLE_MS);
+          // A replay keeps a still per step, so a passing script still shows
+          // the state it reached (probe.sh replay sets this; a full probe does not).
+          if (process.env.OG_PROBE_STILLS === "1") await page.screenshot({ path: join(dirname(OUT as string), `${id}-step-${step.n}.png`) }).catch(() => {});
         } catch (e) {
           // The error's first lines carry Playwright's call log (what it
           // waited on and why it never acted); the frame it failed on is kept
