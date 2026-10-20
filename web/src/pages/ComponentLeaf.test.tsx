@@ -1,16 +1,16 @@
 import { describe, it, expect, afterEach, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@solidjs/testing-library";
 import { Router, Route } from "@solidjs/router";
-import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
+import { QueryClient, QueryClientProvider, focusManager } from "@tanstack/solid-query";
 import Components from "./Components";
 import { FLEET_VIEW_KEY, type FleetView } from "../lib/fleet";
 import { COMPONENTS_KEY, type Component } from "../lib/components";
 import { componentSystemsKey } from "../lib/members";
 import { REACHABILITY_KEY, type Reachability } from "../lib/reachability";
-import { componentAlarmsKey } from "../lib/alarms";
+import { componentAlarmsReadKey } from "../lib/alarms";
 import { effectivePropertiesKey } from "../lib/component_properties";
 import { effectiveMetricsKey } from "../lib/component_metrics";
-import { NODES_KEY, type Node } from "../lib/nodes";
+import { nodeKey, type Node } from "../lib/nodes";
 import { PRODUCTS_KEY } from "../lib/products";
 import { LOCATIONS_KEY } from "../lib/locations";
 import { LOCATION_TYPES_KEY } from "../lib/location_types";
@@ -29,7 +29,7 @@ vi.mock("../lib/alarms", async (orig) => {
 // The component leaf (#637): direct arrival renders the breadcrumb from the
 // ancestor chain, memberships list with the primary marked, and the
 // collection card states the distinction plainly: a stale sample under a
-// healthy node blames the device or the path, never collection.
+// healthy node blames the component or the path, never collection.
 
 const me: Me = { principal: { id: "u-root", kind: "human" }, human: { username: "root" }, permissions: [">"], grants: [] };
 
@@ -69,13 +69,13 @@ const reach: Reachability = {
 
 const nodes: Node[] = [{ name: "edge-1", enrolled: true, last_heartbeat_at: iso(5), tags: {} } as Node];
 
-function mount(path = `/web/components/${uuidFor("cf-c-bar")}`, memberships?: unknown[], component: Component = bar, meOverride: Me = me, alarms?: unknown[]) {
+function mount(path = `/web/components/${uuidFor("cf-c-bar")}`, memberships?: unknown[], component: Component = bar, meOverride: Me = me, alarms?: unknown[], seed?: { reach?: Reachability; nodes?: Node[] }) {
   const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
   seedSeverityLevels(qc);
   qc.setQueryData([...FLEET_VIEW_KEY], view);
   qc.setQueryData([...COMPONENTS_KEY], [component]);
   qc.setQueryData([...PRODUCTS_KEY], [{ id: uuidFor("cf-p"), name: "kestrel-vroom", label: "Kestrel VRoom", vendor: "kestrel", driver: "kestrel-http" }]);
-  qc.setQueryData([...NODES_KEY], nodes);
+  for (const n of seed?.nodes ?? nodes) qc.setQueryData([...nodeKey(n.name)], n);
   qc.setQueryData([...LOCATIONS_KEY], []);
   qc.setQueryData([...LOCATION_TYPES_KEY], [{ id: uuidFor("cft-room"), name: "room", label: "Room", allowed_parent_types: [] }]);
   qc.setQueryData([...systemRolesKey(uuidFor("cf-s-a"))], [{ name: "conf-bar", label: "Conferencing Bar", assigned_to: ["videobar-1"] }]);
@@ -86,11 +86,11 @@ function mount(path = `/web/components/${uuidFor("cf-c-bar")}`, memberships?: un
     { component: "videobar-1", system: "boardroom", primary: true, system_count: 2 },
     { component: "videobar-1", system: "overflow", primary: false, system_count: 2 },
   ]);
-  qc.setQueryData([...REACHABILITY_KEY(uuidFor("cf-c-bar"))], reach);
-  qc.setQueryData([...componentAlarmsKey(uuidFor("cf-c-bar"))], alarms ?? [
+  qc.setQueryData([...REACHABILITY_KEY(uuidFor("cf-c-bar"))], seed?.reach ?? reach);
+  qc.setQueryData([...componentAlarmsReadKey(uuidFor("cf-c-bar"))], { alarms: alarms ?? [
     { id: "al-1", component: "videobar-1", component_id: uuidFor("cf-c-bar"), severity: "high", message: "No route to host", raised_at: iso(9600), active: true, acknowledged: false },
     { id: "al-0", component: "videobar-1", component_id: uuidFor("cf-c-bar"), severity: "warning", message: "Cleared last week", raised_at: iso(600000), active: false, acknowledged: true },
-  ]);
+  ] });
   qc.setQueryData([...effectivePropertiesKey(uuidFor("cf-c-bar"))], [
     { property_type_name: "serial-number", label: "Serial Number", value: "SN-1183", is_set: true, from_contract: true },
     { property_type_name: "firmware-version", value: "2.1.4", is_set: false, from_contract: true },
@@ -183,7 +183,10 @@ describe("the component leaf", () => {
   it("distinguishes a stale sample under a healthy node from an offline node", () => {
     mount();
     const chip = screen.getByTestId("collection-ssh");
-    expect(chip.textContent).toContain("check the device or the path");
+    expect(chip.textContent).toContain("check the component or the path");
+    // A component that answers badly is a component fact, in the product's
+    // own word for it.
+    expect(screen.getByTestId("leaf-collection").textContent).not.toMatch(/device/);
   });
 
   it("a component filling no role renders without error", () => {
@@ -309,5 +312,95 @@ describe("acknowledging from Why (#872)", () => {
     const readOnly: Me = { ...ackOnly, permissions: ["component:read", "system:read", "location:read"] };
     mount(undefined, undefined, bar, readOnly);
     expect(within(screen.getByTestId("leaf-alarms")).queryByRole("button", { name: "Acknowledge" })).toBeNull();
+  });
+});
+
+// A monitoring console's component view moves as collection arrives (#934):
+// its own reads poll, so a fresh sample, a vital and an alarm land without a
+// reload, each read one request however many endpoints the component has.
+describe("the component leaf refreshes (#934)", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  const json = (body: unknown) => new Response(JSON.stringify(body), { status: 200, headers: { "Content-Type": "application/json" } });
+
+  it("polls its reachability, vitals, alarms and verdict, one request per read", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "setInterval", "clearInterval"] });
+    const gets: string[] = [];
+    const later = new Date().toISOString();
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = (input as Request).url;
+      gets.push(new URL(url).pathname);
+      if (url.includes("/reachability")) {
+        return json({ component: "videobar-1", endpoints: [{ endpoint: "ssh", transport: "ssh", node: "edge-1", verdict: { value: "up", ts: iso(600) }, last_seen: later, layers: [], history: [] }] });
+      }
+      if (url.includes("/metrics")) {
+        return json({ metrics: [{ metric_type_name: "uptime", label: "Uptime", data_type: "float", value: 77, is_sampled: true, from_contract: false, required: false }] });
+      }
+      if (url.includes("/alarms")) {
+        return json({ verdict: "degraded", alarms: [{ id: "al-2", component: "videobar-1", component_id: uuidFor("cf-c-bar"), severity: "warning", message: "Reachability lost", raised_at: later, active: true, acknowledged: false }] });
+      }
+      if (url.endsWith("/views/fleet")) return json(view);
+      if (url.endsWith("/nodes")) return json({ nodes: [{ name: "edge-1", enrolled: true, last_heartbeat_at: later }] });
+      if (url.endsWith("/nodes/edge-1")) return json({ name: "edge-1", enrolled: true, last_heartbeat_at: later });
+      return json({ simulated: false });
+    });
+    mount();
+    // Before the poll: the stale sample, no Uptime, the old alarm.
+    expect(screen.getByTestId("collection-ssh").textContent).toContain("check the component or the path");
+    expect(screen.getByTestId("leaf-vitals").textContent).not.toContain("Uptime");
+
+    await vi.advanceTimersByTimeAsync(10_000);
+
+    expect(screen.getByTestId("collection-ssh").textContent).toBe("collecting");
+    expect(screen.getByTestId("leaf-vitals").textContent).toContain("Uptime");
+    expect(screen.getByTestId("leaf-alarms").textContent).toContain("Reachability lost");
+    // The verdict is the component's own, off its alarms read.
+    expect(screen.getByTestId("leaf-header").textContent).toContain("degraded");
+    const count = (p: string) => gets.filter((g) => g.endsWith(p)).length;
+    // Each read polled, as one request, not one per endpoint or per series.
+    for (const p of ["/reachability", "/metrics", "/alarms", "/nodes/edge-1"]) {
+      expect(count(p)).toBeGreaterThanOrEqual(1);
+      expect(count(p)).toBeLessThanOrEqual(2);
+    }
+    // Nothing the tab polls grows with the fleet: no fleet view, no node list.
+    expect(count("/views/fleet")).toBe(0);
+    expect(count("/nodes")).toBe(0);
+  });
+
+  it("holds the poll while the tab is hidden", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "setInterval", "clearInterval"] });
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(async () => json({}));
+    focusManager.setFocused(false);
+    try {
+      mount();
+      // The mount's own first reads (the simulation section is not seeded)
+      // are not a poll; nothing after them is.
+      await vi.advanceTimersByTimeAsync(0);
+      const atMount = fetchSpy.mock.calls.length;
+      await vi.advanceTimersByTimeAsync(20_000);
+      expect(fetchSpy.mock.calls.length).toBe(atMount);
+    } finally {
+      focusManager.setFocused(undefined);
+    }
+  });
+
+  // A poll that returns the same data changes nothing TanStack can see, so
+  // the card's ages must move with a clock of their own: a node that dies
+  // leaves the last answer standing, and only time says it is old.
+  it("ages the card with the clock when the polled data stays the same", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "setInterval", "clearInterval", "Date"] });
+    const t0 = new Date().toISOString();
+    const frozen = { component: "videobar-1", endpoints: [{ endpoint: "ssh", transport: "ssh", node: "edge-1", verdict: { value: "up", ts: t0 }, last_seen: t0, layers: [], history: [] }] };
+    // Every read stays in flight: nothing the queries hold ever changes, so
+    // only a clock can move the card.
+    vi.spyOn(globalThis, "fetch").mockImplementation(() => new Promise<Response>(() => {}));
+    // Seeded with exactly what every poll returns, so no read ever changes.
+    mount(undefined, undefined, undefined, undefined, [], { reach: frozen as unknown as Reachability, nodes: [{ name: "edge-1", enrolled: true, last_heartbeat_at: t0, tags: {} } as Node] });
+    expect(screen.getByTestId("collection-ssh").textContent).toBe("collecting");
+    await vi.advanceTimersByTimeAsync(200_000);
+    expect(screen.getByTestId("collection-ssh").textContent).toBe("node offline");
   });
 });

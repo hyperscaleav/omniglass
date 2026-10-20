@@ -362,8 +362,12 @@ out-of-scope component is a non-disclosing 404 (a deliberate early exception to
 [reads beyond one resource are views](#reads-beyond-one-resource-are-views)):
 
 - `GET /components/{name}/reachability` composes, per endpoint, the latest verdict state
-  (`endpoint-reachable`), the probe-layer signals that compose it (the raw `icmp`/`tcp` metrics), and
-  the recent verdict transitions the availability strip reads.
+  (`endpoint-reachable`), the probe-layer signals that compose it (the raw `icmp`/`tcp` metrics),
+  the recent verdict transitions the availability strip reads, and `last_seen`, when ingest last
+  landed a batch the endpoint's task delivered, by the server's clock and to within a few seconds,
+  whatever the batch carried. A verdict is stored only on a transition, so its `ts` is when it last
+  changed, and a driver endpoint has no verdict at all; `last_seen` is the one freshness every
+  endpoint has.
 - `GET /components/{name}/events` is the log-kind mirror: the component's recent **log occurrences**
   (the [`event` log sink](/architecture/core-entities/#the-event-sink-the-first-arc-owned-occurrence)),
   newest first, bounded to the last 24 hours and capped at 200 rows; each row carries `ts`, the

@@ -191,7 +191,10 @@ func (p *PG) GetTask(ctx context.Context, id string, read scope.Set) (*Task, err
 // second time, ambiguously, by ownerArcValue on the write side; the id needs no
 // second resolution and can never collide.
 type TaskOwner struct {
-	ComponentID  string
+	ComponentID string
+	// EndpointID is the task's endpoint, which ingest stamps as seen (#933);
+	// empty on the push lane, which has no endpoint.
+	EndpointID   string
 	EndpointName string
 	Transport    string
 }
@@ -218,10 +221,10 @@ func (p *PG) ResolveTaskOwner(ctx context.Context, taskID, nodeName string) (Tas
 	// have the write side resolve it a second time is exactly the shape #627
 	// makes ambiguous.
 	err := p.pool.QueryRow(ctx, `
-		select i.component, (select n.name from node n where n.principal_id = i.node_name), i.name, i.transport
+		select i.component, (select n.name from node n where n.principal_id = i.node_name), i.id, i.name, i.transport
 		from task t
 		join endpoint i on i.id = t.endpoint_id
-		where t.id = $1`, taskID).Scan(&componentID, &ifaceNode, &owner.EndpointName, &owner.Transport)
+		where t.id = $1`, taskID).Scan(&componentID, &ifaceNode, &owner.EndpointID, &owner.EndpointName, &owner.Transport)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return TaskOwner{}, false, nil
 	} else if err != nil {

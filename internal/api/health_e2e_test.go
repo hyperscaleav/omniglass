@@ -155,13 +155,20 @@ func TestHealthAPI(t *testing.T) {
 
 	// The alarm list is the active set by default and the history with the flag.
 	var listed struct {
-		Alarms []alarmWire `json:"alarms"`
+		Alarms  []alarmWire `json:"alarms"`
+		Verdict string      `json:"verdict"`
 	}
 	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/components/bar-1/alarms", nil, http.StatusOK), &listed); err != nil {
 		t.Fatalf("decode alarms: %v", err)
 	}
 	if len(listed.Alarms) != 1 || listed.Alarms[0].ID != raised.ID {
 		t.Fatalf("alarms = %+v, want the one raised", listed.Alarms)
+	}
+	// The list carries the component's own verdict, the one its alarms make
+	// (#934): a component's view reads it here, one request, rather than the
+	// whole fleet view.
+	if listed.Verdict != "outage" {
+		t.Fatalf("alarms verdict = %q, want outage (a high alarm is at the outage rank)", listed.Verdict)
 	}
 
 	// Clear it: everything comes back, and the cleared row survives in the history.
@@ -177,6 +184,9 @@ func TestHealthAPI(t *testing.T) {
 	}
 	if len(listed.Alarms) != 0 {
 		t.Fatalf("active alarms after clearing = %+v, want none", listed.Alarms)
+	}
+	if listed.Verdict != "healthy" {
+		t.Fatalf("alarms verdict after clearing = %q, want healthy", listed.Verdict)
 	}
 	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/components/bar-1/alarms?include_cleared=true", nil, http.StatusOK), &listed); err != nil {
 		t.Fatalf("decode alarm history: %v", err)

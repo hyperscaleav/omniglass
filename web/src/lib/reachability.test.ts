@@ -1,6 +1,8 @@
 import { describe, it, expect } from "vitest";
 import {
   verdictWord,
+  endpointWord,
+  lastSeenAt,
   segments,
   uptime,
   reason,
@@ -24,6 +26,37 @@ describe("verdictWord", () => {
   });
   it("is unknown when there is no verdict", () => {
     expect(verdictWord(null, now)).toBe("unknown");
+  });
+});
+
+// The verdict is stored on change only, so its ts is the last TRANSITION.
+// An endpoint's freshness is the server's own stamp, last_seen: when ingest
+// last landed a batch it delivered, whatever the batch carried and whatever
+// time a node wrote on its samples (#931, #933).
+describe("an endpoint's freshness is the server's last_seen (#931, #933)", () => {
+  const ep = (over: Partial<ReachEndpoint>): ReachEndpoint =>
+    ({ endpoint: "tcp", transport: "tcp", verdict: null, layers: [], history: [], ...over }) as ReachEndpoint;
+  const layer = (msAgo: number) => ({ layer: "port", check: "tcp-open", value: 1, ts: ago(msAgo) });
+
+  it("ages an old transition by last_seen, not the transition", () => {
+    const e = ep({ verdict: { value: "up", ts: ago(21 * 60_000) }, last_seen: ago(5_000) });
+    expect(lastSeenAt(e)).toBe(ago(5_000));
+    expect(endpointWord(e, now)).toBe("responding");
+  });
+  it("keeps a down verdict's word while it is fresh", () => {
+    expect(endpointWord(ep({ verdict: { value: "down", ts: ago(400_000) }, last_seen: ago(2_000) }), now)).toBe("down");
+  });
+  it("is stale once last_seen is past the window, however new a node dated its samples", () => {
+    const e = ep({ verdict: { value: "up", ts: ago(-3_600_000) }, layers: [layer(-3_600_000)], last_seen: ago(STALENESS_WINDOW_MS + 1_000) });
+    expect(lastSeenAt(e)).toBe(ago(STALENESS_WINDOW_MS + 1_000));
+    expect(endpointWord(e, now)).toBe("stale");
+  });
+  it("falls back to the verdict's own time before any stamp, which can only read older", () => {
+    expect(endpointWord(ep({ verdict: { value: "up", ts: ago(900_000) } }), now)).toBe("stale");
+  });
+  it("is unknown with no verdict, and has no time with no stamp", () => {
+    expect(endpointWord(ep({ last_seen: ago(1_000) }), now)).toBe("unknown");
+    expect(lastSeenAt(ep({}))).toBeNull();
   });
 });
 

@@ -62,6 +62,12 @@
       "labelled": true
     },
     {
+      "table": "endpoint_live",
+      "shape": "id only",
+      "reason": "when an endpoint last delivered a batch, keyed by the endpoint's uuid; nothing addresses it by name",
+      "labelled": false
+    },
+    {
       "table": "event",
       "shape": "id only",
       "labelled": false

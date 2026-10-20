@@ -3215,9 +3215,13 @@ components:
             - "null"
         component:
           type: string
+        verdict:
+          description: "The component's own verdict, the one its active alarms make (healthy, degraded, or outage), whatever the filter: a component's view reads it here rather than off the whole fleet view"
+          type: string
       required:
         - component
         - alarms
+        - verdict
       type: object
     ListCommandTypesOutputBody:
       additionalProperties: false
@@ -5124,6 +5128,10 @@ components:
         label:
           description: The friendly string an operator reads; absent when unset, and the row then reads the derived name verbatim
           type: string
+        last_seen:
+          description: When the endpoint last delivered a batch, by the server's clock and to within a few seconds, whatever it carried (any lane, any series, an unchanged value); absent until one lands
+          format: date-time
+          type: string
         layers:
           description: The per-layer probe signals that compose the verdict
           items:
@@ -5192,7 +5200,7 @@ components:
       additionalProperties: false
       properties:
         ts:
-          description: When the verdict was observed
+          description: "When the verdict last changed: one is stored only on a transition, so an endpoint's freshness is last_seen, not this"
           format: date-time
           type: string
         value:
@@ -8862,7 +8870,7 @@ paths:
       x-omniglass-permission: component:update
   /components/{name}/alarms:
     get:
-      description: What is currently wrong with this component, newest first. Pass include_cleared for the history rather than the active set. Gated by component:read; an out-of-scope component is a non-disclosing 404.
+      description: What is currently wrong with this component, newest first, with the component's own verdict those alarms make. Pass include_cleared for the history rather than the active set. Gated by component:read; an out-of-scope component is a non-disclosing 404.
       operationId: list-component-alarms
       parameters:
         - description: The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)

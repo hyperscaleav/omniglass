@@ -6556,6 +6556,90 @@ locks the rules naming the level before the level itself, the same order an inge
 concurrent with a batch raising at the level waits for it instead of deadlocking (a regression test
 reproduces the deadlock on the old order).
 
+### Configure place lands on Configure, followed in the console (#932)
+
+**Configure place** on a sole system's place card links to the place with `?tab=configure`, and the
+place's view hands its address on to the system, query kept. Followed inside the console it landed
+on the system's Overview: the redirect read the query off the window, which on a client-side
+navigation still holds the page being left. It reads the router's own location now, the same
+fix for the three name-to-uuid redirects (place, system, component) that read the window the same
+way. A component test follows the link from another page, the path a direct load never took.
+
+### An endpoint still answering reads fresh (#931)
+
+The reachability verdict is stored only when it changes, so its timestamp is the last up/down
+transition, and the console aged it as though it were the last sample: an endpoint answering every
+probe read **stale** in the Endpoints panel, and "stale sample; the node is healthy" in a component's
+Collection card, a few minutes after its last change. The console now ages an endpoint by when it was
+last seen (the server's stamp, #933 below), in the pill, the Collection state, its "last seen" age and
+the panel's "last checked". Pure tests pin an old transition with a fresh stamp reading responding and
+collecting.
+
+### A driver endpoint reads collecting while its samples arrive (#933)
+
+A component's Collection card read **no sample yet** on a driver endpoint (an SNMP display, say) while
+its Vitals showed a live Uptime: the card judged collection by the reachability verdict, which only a
+probe endpoint gets. No sample row can stand in for it: ingest stamps a sample with its endpoint's name
+only when the driver gave it no instance of its own, the property lane writes only a changed value, and
+a sample's time is the node's clock. So ingest now records it directly: as it lands a batch from a task,
+it stamps the task's endpoint seen in `endpoint_live`, by the server's clock, whatever the batch carried.
+The stamp is coalesced as `event_rule_live` is: one statement per batch, a row stamped within 5s left
+alone, a row another batch is stamping skipped (SKIP LOCKED), and a first sight inserted ON CONFLICT DO
+NOTHING so two batches seeing a new endpoint never abort each other. The reachability read carries it as
+`last_seen` per endpoint, and the verdict's `ts` is documented for what it is, the last change. The console
+judges collection by `last_seen` (a down verdict still reads as the component answering badly), so a
+driver endpoint reads collecting while its batches land and stale once they stop. Proven by a bus test
+through the one ingest write path (an instanced driver series, a property-only driver whose value never
+changes, a sample dated an hour ahead), a storage test (first sight, the coalescing bound, sixteen
+concurrent first sights), the reachability API test, and pure tests of the collection state.
+
+### A component's view refreshes as collection arrives (#934)
+
+A component's view fetched once at mount, so after adding an endpoint its Collection and Vitals stayed as
+they were until the operator left and came back; only its Simulation section polled. The view's own reads
+now poll: reachability, vitals and alarms every 5s (the cadence of a rule's detail and the Simulation
+section), and the two fleet-wide reads it borrows (the verdict off the fleet view, and the nodes behind its
+Collection card, whose heartbeat age would otherwise go stale under fresh samples and read "node offline")
+every 10s. Each is one request however many endpoints or series the component has, and TanStack holds an
+interval while the tab is hidden. The alarm ages move with the alarms read rather than staying pinned to
+the page's open, which would have read negative for an alarm raised after it. A component test advances
+the clock and watches a stale endpoint, a missing vital and an absent alarm all arrive, and another holds
+the poll while the tab is hidden.
+
+Set up monitoring no longer reopens the page or holds past a node heartbeat: it closes the new endpoint,
+turns to Overview and waits there for the samples, and its poster now shows both endpoints collecting
+(#933). It records in 51s to 56s. Watch a rule raise an alarm still ends on the open alarm and the
+system it moved: its wait is the probe's detection, the sustain and the sweep, not the component's view,
+and the replug and the clear would add about 12s to a recording that runs 53s to 56s.
+
+### The component view's review follow-ups (#931 to #934)
+
+A component's view no longer polls anything that grows with the fleet. Its verdict rides on its alarms
+read (`GET /components/{name}/alarms` now carries the component's own `verdict`, the one its active
+alarms make, computed the way the health recompute records it), and the node behind each endpoint is
+read one by one (`GET /nodes/{name}`, every 10s), where it polled the whole fleet view and the whole node
+list for one verdict and one node. The API health test pins the verdict through an alarm's raise and
+clear, and the leaf's poll test counts no fleet view and no node list.
+
+Every age on a component's view, and in its Endpoints panel, now reads one ticking clock (a
+`createClock` primitive, a second's grain) rather than the time the data last changed: a poll that
+returns the same answer changes nothing a query can see, so a node that died would have left its
+endpoint reading "collecting, 4 s ago" indefinitely. Tests hold every read in flight, advance the clock,
+and watch the card turn to node offline and the pill to stale.
+
+The Collection card and the Vitals hint say component where they said device ("check the component or
+the path", "component reports down"), the product's word for the thing collected from.
+
+### The walkthrough stack checks in every two seconds (#934)
+
+The walkthrough stack's node now runs with a 2s heartbeat where it ran with 5s (`web/e2e/lib/stack.sh`,
+a test-stack setting; the product's `node run --heartbeat` default is unchanged). Each check-in pulls the
+worklist and runs the probes, so a walkthrough's waits on new tasks and on a probe's verdict ride on it.
+Set up monitoring now records in 48s to 51s (three runs). Watch a rule raise an alarm records in 44s to
+53s (three runs), most of it the sustain, the sweep and the blade's poll, which the heartbeat does not
+touch, so it still ends on the open alarm: the replug and the clear were recorded on top of it and
+measured 64.1s ending on the panel reading healthy again and 68.2s ending on the rule's blade at
+**Open alarms (0)**, both over the 60s budget. The script header and the rules guide carry the numbers.
 
 ### A blade title reads its row once (#953)
 

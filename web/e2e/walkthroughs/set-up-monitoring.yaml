@@ -7,10 +7,11 @@
 # one-time token), out of the console's reach; the stack enrolls edge-hq that
 # way. Unplugging a component and watching the rule's alarm open is
 # watch-a-rule-raise-an-alarm.
-# The component view does not poll (#934), so every first sample must land
-# before the page is reopened: the driver goes first, with the probe steps as
-# its slack, and the probe's create holds 3.5s, which with the reopen outlasts
-# the node's 5s heartbeat in which it pulls the new task.
+# The component view refreshes on its own (#934), so the walkthrough stays on
+# the page: it turns to Overview and waits for the first samples to land
+# there, which takes the node's next 2s check-in (the walkthrough stack's
+# setting, web/e2e/lib/stack.sh), when it pulls the new tasks, and the next
+# probe and poll. Recorded on the 2s check-in, it runs 48 to 51s.
 title: Set up monitoring on a component
 description: Attach the SNMP driver and add a reachability probe to a component, both collected by an edge node, and watch reachability and samples arrive.
 steps:
@@ -40,9 +41,10 @@ steps:
     caption: An ICMP probe pings the display's address.
   - click: { role: button, name: Create endpoint }
     caption: Create it. The probe is placed on edge-hq, aimed at that address.
-    hold: 3500
-  - goto: /components/bay-2-display
-    caption: Back on the display's page, a few seconds on.
+  - press: Escape
+    caption: Close it. Nothing has been collected yet.
+  - click: { role: tab, name: Overview }
+    caption: Overview reads the display as it is collected, and refreshes on its own as samples land.
   - wait: { selector: '[data-testid="leaf-vitals"]:has-text("ICMP Reachable"):has-text("Uptime")', timeout: 20000 }
-    caption: Samples arrived. Vitals reads the ping's reachability and round trip, and the uptime the display reports.
+    caption: Samples arrived. Vitals reads the ping and the uptime the display reports, and both endpoints read collecting.
     poster: true

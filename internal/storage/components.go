@@ -996,6 +996,10 @@ type ComponentEndpoint struct {
 	Transport string
 	NodeName  string
 	Params    []byte
+	// LastSeenAt is when an ingest batch the endpoint's task delivered last
+	// landed, by the server's clock, to within endpointSeenEvery; nil when
+	// none has (#933).
+	LastSeenAt *time.Time
 }
 
 // ListComponentEndpoints returns a component's endpoints ordered by the label
@@ -1017,8 +1021,9 @@ func (p *PG) ListComponentEndpoints(ctx context.Context, componentRef string) ([
 		return nil, err
 	}
 	rows, err := p.pool.Query(ctx, `
-		select i.name, coalesce(i.label, ''), i.transport, coalesce((select n.name from node n where n.principal_id = i.node_name), ''), i.params
+		select i.name, coalesce(i.label, ''), i.transport, coalesce((select n.name from node n where n.principal_id = i.node_name), ''), i.params, l.last_seen_at
 		from endpoint i
+		left join endpoint_live l on l.endpoint_id = i.id
 		where i.component = $1::uuid
 		order by i.label nulls last, i.name asc`, c.ID)
 	if err != nil {
@@ -1028,7 +1033,7 @@ func (p *PG) ListComponentEndpoints(ctx context.Context, componentRef string) ([
 	var out []ComponentEndpoint
 	for rows.Next() {
 		var it ComponentEndpoint
-		if err := rows.Scan(&it.Name, &it.Label, &it.Transport, &it.NodeName, &it.Params); err != nil {
+		if err := rows.Scan(&it.Name, &it.Label, &it.Transport, &it.NodeName, &it.Params, &it.LastSeenAt); err != nil {
 			return nil, fmt.Errorf("storage: scan endpoint for %s: %w", componentRef, err)
 		}
 		out = append(out, it)

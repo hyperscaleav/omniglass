@@ -84,6 +84,7 @@ type listAlarmsOutput struct {
 	Body struct {
 		Component string      `json:"component"`
 		Alarms    []alarmBody `json:"alarms"`
+		Verdict   string      `json:"verdict" doc:"The component's own verdict, the one its active alarms make (healthy, degraded, or outage), whatever the filter: a component's view reads it here rather than off the whole fleet view"`
 	}
 }
 
@@ -112,7 +113,7 @@ func registerAlarmRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		Method:      http.MethodGet,
 		Path:        "/components/{name}/alarms",
 		Summary:     "List a component's alarms",
-		Description: "What is currently wrong with this component, newest first. Pass include_cleared for the history rather than the active set. Gated by component:read; an out-of-scope component is a non-disclosing 404.",
+		Description: "What is currently wrong with this component, newest first, with the component's own verdict those alarms make. Pass include_cleared for the history rather than the active set. Gated by component:read; an out-of-scope component is a non-disclosing 404.",
 	}, "component", "read"), func(ctx context.Context, in *listAlarmsInput) (*listAlarmsOutput, error) {
 		compID, err := requireComponentInScope(ctx, a, gw, in.Name, "read")
 		if err != nil {
@@ -125,8 +126,13 @@ func registerAlarmRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		if err != nil {
 			return nil, mapAlarmErr(err)
 		}
+		verdict, err := gw.ComponentVerdict(ctx, compID)
+		if err != nil {
+			return nil, huma.Error500InternalServerError("read component verdict")
+		}
 		out := &listAlarmsOutput{}
 		out.Body.Component = in.Name
+		out.Body.Verdict = verdict
 		out.Body.Alarms = make([]alarmBody, 0, len(alarms))
 		for i := range alarms {
 			out.Body.Alarms = append(out.Body.Alarms, toAlarmBody(&alarms[i]))

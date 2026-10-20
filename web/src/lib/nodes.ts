@@ -43,6 +43,10 @@ export async function listNodes(): Promise<Node[]> {
   return (data?.nodes ?? []).map((n) => ({ ...n, tags: n.effective_tags ?? {} })) as Node[];
 }
 
+// One node's read, for a surface that needs a node or two rather than the
+// fleet's list (a component's Collection card, #934).
+export const nodeKey = (name: string) => ["node", name] as const;
+
 export async function getNode(name: string): Promise<Node> {
   const { data, error } = await api.GET("/nodes/{name}", { params: { path: { name } } });
   if (error) throw error;
