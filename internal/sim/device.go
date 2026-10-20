@@ -276,7 +276,9 @@ type Device struct {
 	// One listener per protocol. Future stages populate snmp/ssh/telnet/udp.
 	httpMu         sync.Mutex
 	httpServers    []*http.Server // one per declared http interface
+	httpListeners  []net.Listener // the sockets under httpServers, closed by StopHTTP itself
 	httpAddrs      []net.Addr
+	httpServing    sync.WaitGroup // one per running serve goroutine
 	snmpServer     snmpShutdowner // the SNMP read loop, kept as an interface so device.go doesn't import the server package
 	sshListener    net.Listener
 	telnetListener net.Listener
@@ -1298,7 +1300,9 @@ func (d *Device) StartHTTP(port int, tlsCert *tls.Certificate) error {
 		}}
 	d.httpMu.Lock()
 	d.httpServers = append(d.httpServers, srv)
+	d.httpListeners = append(d.httpListeners, lis)
 	d.httpAddrs = append(d.httpAddrs, lis.Addr())
+	d.httpServing.Add(1)
 	d.httpMu.Unlock()
 	scheme := "http"
 	if tlsCert != nil {
@@ -1307,6 +1311,7 @@ func (d *Device) StartHTTP(port int, tlsCert *tls.Certificate) error {
 	}
 
 	go func() {
+		defer d.httpServing.Done()
 		slog.Debug("device HTTP started", "device", d.Hostname, "scheme", scheme, "addr", addr)
 		var err error
 		if tlsCert != nil {
@@ -1331,15 +1336,23 @@ func (d *Device) HTTPAddrs() []net.Addr {
 
 // StopHTTP closes every HTTP listener the device started and the
 // connections they hold, so a stopped device stops answering clients that
-// kept a connection alive.
+// kept a connection alive. Every port is released by the time it returns,
+// so a rebuild can bind the same address straight after (#946): the
+// server's Close only reaches listeners its serve goroutine has already
+// taken up, so the sockets are closed here directly and the serve
+// goroutines are awaited.
 func (d *Device) StopHTTP() {
 	d.httpMu.Lock()
-	servers := d.httpServers
-	d.httpServers, d.httpAddrs = nil, nil
+	servers, listeners := d.httpServers, d.httpListeners
+	d.httpServers, d.httpListeners, d.httpAddrs = nil, nil, nil
 	d.httpMu.Unlock()
 	for _, srv := range servers {
 		_ = srv.Close()
 	}
+	for _, lis := range listeners {
+		_ = lis.Close()
+	}
+	d.httpServing.Wait()
 }
 
 // AddCommand registers a CLI command with a compiled template. Reused

@@ -7,6 +7,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -358,5 +359,26 @@ func TestEngineSyncRebuildsADeviceWhoseProductChanged(t *testing.T) {
 	model := e.Devices()[0].State()["configuration"].(map[string]any)["device"].(map[string]any)["model"]
 	if model != "Edge 65" {
 		t.Fatalf("model after the product changed = %v, want Edge 65", model)
+	}
+}
+
+// A stopped HTTP listener has released its port by the time StopHTTP
+// returns, even when the device is stopped before its serve goroutine has
+// run: a rebuild binds the same address straight after (#946). One
+// processor holds the serve goroutine off so the stop always lands first.
+func TestStopHTTPReleasesThePortBeforeItReturns(t *testing.T) {
+	defer runtime.GOMAXPROCS(runtime.GOMAXPROCS(1))
+	ip := "127.88.8.3"
+	for i := range 50 {
+		dev := NewDevice("panel", "panel", net.ParseIP(ip), "p", 1, map[string]any{})
+		if err := dev.StartHTTP(21081, nil); err != nil {
+			t.Fatalf("round %d: start: %v", i, err)
+		}
+		dev.StopHTTP()
+		lis, err := net.Listen("tcp", net.JoinHostPort(ip, "21081"))
+		if err != nil {
+			t.Fatalf("round %d: the stopped listener still holds the port: %v", i, err)
+		}
+		lis.Close()
 	}
 }
