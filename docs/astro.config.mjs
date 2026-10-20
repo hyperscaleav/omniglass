@@ -162,6 +162,7 @@ export default defineConfig({
             { label: 'Slice workflow', slug: 'contributing/slice-workflow' },
             { label: 'Feature loops', slug: 'contributing/feature-loops' },
             { label: 'Autopilot', slug: 'contributing/autopilot' },
+            { label: 'Synthetic user', slug: 'contributing/synthetic-user' },
             { label: 'Release and CI', slug: 'contributing/release-ci' },
             { label: 'Labels', slug: 'contributing/labels' },
           ],

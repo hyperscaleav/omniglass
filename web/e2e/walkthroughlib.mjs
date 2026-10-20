@@ -251,6 +251,20 @@ export function parseWalkthrough(text, file) {
   return validateWalkthrough(doc, file);
 }
 
+// The Playwright locator a step's target names, shared by the recorder
+// (walkthrough.mjs) and the probe's fast replay (probe.spec.ts), so the two
+// can never read one script differently.
+/**
+ * @param {import('@playwright/test').Page} page
+ * @param {any} t a step's target, as validateStep accepts it
+ */
+export function locate(page, t) {
+  if (typeof t === 'string') return page.locator(t);
+  if (t.role) return page.getByRole(t.role, { ...(t.name ? { name: t.name } : {}), ...(t.exact ? { exact: true } : {}) });
+  if (t.text) return page.getByText(t.text, t.exact ? { exact: true } : undefined);
+  return page.locator(t.selector);
+}
+
 // What a target names, for logs and failure messages.
 /**
  * @param {Target} t
