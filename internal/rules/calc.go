@@ -140,6 +140,11 @@ type CalcProgram struct {
 	Env     expression.Env
 	Program *expression.Program
 	Reducer *Reducer
+
+	ownerKind string
+	inputs    []TypedInput
+	output    string
+	envType   reflect.Type // the expression's input struct; nil for a reducer
 }
 
 // valueGoType is the Go type a value type binds as.
@@ -205,12 +210,17 @@ func checkCalcInputs(ownerKind string, inputs []TypedInput) error {
 // the list of those values for a system owner (one per role-bound member that
 // has one), yielding the output key's type.
 func CalcEnv(ownerKind string, inputs []TypedInput, output string) (expression.Env, error) {
+	env, _, err := calcEnv(ownerKind, inputs, output)
+	return env, err
+}
+
+func calcEnv(ownerKind string, inputs []TypedInput, output string) (expression.Env, reflect.Type, error) {
 	if err := checkCalcInputs(ownerKind, inputs); err != nil {
-		return expression.Env{}, err
+		return expression.Env{}, nil, err
 	}
 	result, ok := resultFor(output)
 	if !ok {
-		return expression.Env{}, calcErr("output_key", "the output has no value type a calc rule writes (%q)", output)
+		return expression.Env{}, nil, calcErr("output_key", "the output has no value type a calc rule writes (%q)", output)
 	}
 	fields := make([]reflect.StructField, len(inputs))
 	for i, x := range inputs {
@@ -223,11 +233,12 @@ func CalcEnv(ownerKind string, inputs []TypedInput, output string) (expression.E
 		fields[i] = reflect.StructField{Name: fmt.Sprintf("In%d", i), Type: t,
 			Tag: reflect.StructTag(fmt.Sprintf("expr:%q doc:%q", x.As, doc))}
 	}
-	env, err := expression.EnvFor(reflect.StructOf(fields), result, calcOptions()...)
+	typ := reflect.StructOf(fields)
+	env, err := expression.EnvFor(typ, result, calcOptions()...)
 	if err != nil {
-		return expression.Env{}, calcErr("inputs", "%v", err)
+		return expression.Env{}, nil, calcErr("inputs", "%v", err)
 	}
-	return env, nil
+	return env, typ, nil
 }
 
 // CompileCalc checks a rule's reduce against its owner kind, its inputs and
@@ -265,9 +276,9 @@ func CompileCalc(ownerKind string, inputs []TypedInput, reduce CalcReduce, outpu
 		if yields != output {
 			return nil, calcErr("output_key", "%s yields %s, and the output is %s", r.Name, yields, output)
 		}
-		return &CalcProgram{Reducer: &r}, nil
+		return &CalcProgram{Reducer: &r, ownerKind: ownerKind, inputs: slices.Clone(inputs), output: output}, nil
 	}
-	env, err := CalcEnv(ownerKind, inputs, output)
+	env, typ, err := calcEnv(ownerKind, inputs, output)
 	if err != nil {
 		return nil, err
 	}
@@ -275,7 +286,7 @@ func CompileCalc(ownerKind string, inputs []TypedInput, reduce CalcReduce, outpu
 	if err != nil {
 		return nil, &CalcError{Field: "reduce.expr", Err: err}
 	}
-	return &CalcProgram{Env: env, Program: p}, nil
+	return &CalcProgram{Env: env, Program: p, ownerKind: ownerKind, inputs: slices.Clone(inputs), output: output, envType: typ}, nil
 }
 
 // CalcEdge is one enabled rule in the key graph: its input keys lead to its

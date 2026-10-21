@@ -22,7 +22,12 @@ import (
 // for concurrent use.
 type calcCompiles struct {
 	mu      sync.Mutex
-	results map[calcCompileKey]error
+	results map[calcCompileKey]calcCompiled
+}
+
+type calcCompiled struct {
+	prog *rules.CalcProgram
+	err  error
 }
 
 type calcCompileKey struct {
@@ -34,25 +39,32 @@ type calcCompileKey struct {
 
 const calcCompileCap = 4096
 
-func (c *calcCompiles) compile(r CalcRule, typed []rules.TypedInput, output string) error {
+// program is a rule version's compiled reduce for these key types, compiled
+// on first use; a compile error is cached and returned the same way.
+func (c *calcCompiles) program(r CalcRule, typed []rules.TypedInput, output string) (*rules.CalcProgram, error) {
 	types := make([]string, len(typed))
 	for i, t := range typed {
 		types[i] = t.ValueType
 	}
 	k := calcCompileKey{id: r.ID, version: r.Version, inputs: strings.Join(types, ","), output: output}
 	c.mu.Lock()
-	if err, ok := c.results[k]; ok {
+	if got, ok := c.results[k]; ok {
 		c.mu.Unlock()
-		return err
+		return got.prog, got.err
 	}
 	c.mu.Unlock()
-	_, err := rules.CompileCalc(r.OwnerKind, typed, r.Reduce, output)
+	prog, err := rules.CompileCalc(r.OwnerKind, typed, r.Reduce, output)
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.results == nil || len(c.results) >= calcCompileCap {
-		c.results = map[calcCompileKey]error{}
+		c.results = map[calcCompileKey]calcCompiled{}
 	}
-	c.results[k] = err
+	c.results[k] = calcCompiled{prog: prog, err: err}
+	return prog, err
+}
+
+func (c *calcCompiles) compile(r CalcRule, typed []rules.TypedInput, output string) error {
+	_, err := c.program(r, typed, output)
 	return err
 }
 

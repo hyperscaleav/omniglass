@@ -7,7 +7,7 @@ sidebar:
     variant: note
 ---
 
-:::note[The event rule is built; the calc rule's registry is built, its evaluation is not]
+:::note[The event rule is built; the calc rule runs on components]
 Of the three rule families below, the **`event_rule`** is built (#819,
 [ADR-0144](/architecture/decisions/#adr-0144-alarms-are-raised-by-event-rules-at-a-severity-level-from-a-ranked-registry)):
 its own table with typed columns, evaluated in the ingest transaction rather than on a JetStream
@@ -15,8 +15,10 @@ consumer, and documented on [alarms and actions](/architecture/alarms-actions/#t
 writes its typed fire and clear events at each edge of its condition, its alarm optional
 ([ADR-0145](/architecture/decisions/#adr-0145-a-rule-records-its-conditions-as-typed-events-and-its-alarm-is-optional)).
 The **`calc_rule` registry** is built (#995, [ADR-0147](/architecture/decisions/#adr-0147-a-calc-rule-is-a-typed-sibling-registry-checked-acyclic-at-authoring)):
-rules are authored, type-checked and kept acyclic, below. Running them (the pending set, the tick, the
-reducers and the calculated write) is the rest of epic #525, and the `action_rule` is still design.
+rules are authored, type-checked and kept acyclic, below. **Component rules run** (#996,
+[ADR-0148](/architecture/decisions/#adr-0148-calc-rules-run-on-a-durable-pending-set-and-a-server-tick-not-a-jetstream-consumer)): on a durable pending set and a
+server tick rather than a JetStream consumer, below. System rules, a rule's state and preview, and the
+console are the rest of epic #525, and the `action_rule` is still design.
 :::
 
 ## The calc_rule registry
@@ -92,7 +94,37 @@ the line and column when the expression is what failed, and the message), compil
 version and key typing, and such a rule cannot be enabled until it compiles. Deleting a property or
 metric type a rule writes is a 409 naming the rule.
 
-:::design[Target design: running calc rules, tracked in #525]
+## How a calc rule runs
+
+A rule runs where the platform's samples are written today, not on the JetStream lane the design below
+describes ([ADR-0148](/architecture/decisions/#adr-0148-calc-rules-run-on-a-durable-pending-set-and-a-server-tick-not-a-jetstream-consumer)):
+
+- **Marking.** The sample-write transaction, the same one in which event rules judge each sample, also
+  inserts a **mark** in `calc_pending` for every enabled component rule that reads one of the batch's
+  keys on an owner its selector picks. One indexed probe on the rules' inputs finds them, so a batch no
+  rule reads pays nothing more. A mark already present is kept, so a burst of samples is one
+  computation.
+- **The tick.** Every server drains the marks once a second, oldest first, up to 500 a pass under a
+  10s deadline, each mark in its own transaction taken `FOR UPDATE SKIP LOCKED`. Replicas share one
+  queue and never compute a mark twice; a mark is deleted only by the transaction that computes it, so a
+  crash or restart mid-backlog leaves it for the next pass. Latency is up to one tick.
+- **Reducing.** The rule reads each input's current value on the component, ignoring intended values (a
+  rule reads observed and calculated values as truth): every instance's newest value for a named
+  reducer, the aggregate instance's newest value for an expression. A missing input (no value) is not
+  guessed at: the rule writes nothing, and its last outcome on the owner, in `calc_rule_state`, names
+  the missing inputs. So do a reduce that fails at run time (a non-finite number, a run over its
+  budget) and a stored rule that no longer compiles.
+- **Writing.** The result is written on the aggregate instance through the same sample-write path,
+  as a **calculated** sample naming the rule (`source_rule`) and its version (`source_rule_version`),
+  so event rules judge it there and downstream calc rules are marked in turn. An unchanged result
+  writes no row, on either lane, so storage grows only with change.
+- **Never itself.** A write knows the rule that produced it and never marks that rule, so a rule cannot
+  feed itself ([ADR-0069](/architecture/decisions/#adr-0069-cycle-safety-is-provenance-based-not-topology-based)
+  at runtime, beside the authoring cycle check).
+
+A system rule is accepted by the registry but not yet marked or run.
+
+:::design[Target design: the JetStream calc consumer and system rules, tracked in #525 and #430]
 
 Parsing a raw payload into samples is the **edge function** ([collection](/architecture/collection/)), not a server-side rule. The rules that run server-side over the typed samples are two derivation families plus a subscription; this page owns the calc family.
 

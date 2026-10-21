@@ -44,6 +44,7 @@ type Server struct {
 	sims          *simhub.Registry   // the simulators beside this server's nodes
 	stopSweep     chan struct{}      // ends the settlement sweep
 	stopReconcile context.CancelFunc // ends the rule reconcile loop
+	stopCalc      context.CancelFunc // ends the calc tick
 	sweepStop     sync.Once
 	sweepDone     sync.WaitGroup
 	ownStoreDir   string // non-empty when the Server created (and must clean) it
@@ -194,6 +195,7 @@ func (s *Server) subscribe() error {
 	}
 	s.startSettlementSweep()
 	s.startRuleReconcile()
+	s.startCalcTick()
 
 	// The telemetry ingest path: a JetStream stream + durable consumer over the
 	// same internal client. It carries the node -> server sample flow.
@@ -234,6 +236,9 @@ func (s *Server) Shutdown() {
 	// what it reads through.
 	if s.stopReconcile != nil {
 		s.stopReconcile()
+	}
+	if s.stopCalc != nil {
+		s.stopCalc()
 	}
 	if s.stopSweep != nil {
 		s.sweepStop.Do(func() { close(s.stopSweep) })
@@ -455,6 +460,46 @@ func (s *Server) startRuleReconcile() {
 			case <-ctx.Done():
 				return
 			case <-t.C:
+			}
+		}
+	}()
+}
+
+// The calc tick (#996, ADR-0148): how often the server drains pending calc
+// rule marks, the most marks one pass serves (each its own transaction),
+// and the deadline on a pass, short of the next tick's work piling up. A
+// backlog larger than one pass drains over successive ticks, oldest first.
+const (
+	calcTickEvery   = time.Second
+	calcTickBatch   = 500
+	calcTickTimeout = 10 * time.Second
+)
+
+// startCalcTick drains pending calc marks on a goroutine of its own, so a
+// slow pass never delays the sweep or the reconcile: every calcTickEvery,
+// each pass under calcTickTimeout. Marks are rows, so replicas drain one
+// queue (SKIP LOCKED) and a restart resumes where the last pass stopped.
+// Shutdown cancels a pass in flight; its mark in progress rolls back and
+// stays pending.
+func (s *Server) startCalcTick() {
+	ctx, cancel := context.WithCancel(context.Background())
+	s.stopCalc = cancel
+	s.sweepDone.Add(1)
+	go func() {
+		defer s.sweepDone.Done()
+		t := time.NewTicker(calcTickEvery)
+		defer t.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-t.C:
+			}
+			pass, done := context.WithTimeout(ctx, calcTickTimeout)
+			_, err := s.store.DrainCalcPending(pass, calcTickBatch)
+			done()
+			if err != nil && ctx.Err() == nil {
+				slog.Warn("calc tick failed", "facility", "rules", "error", err.Error())
 			}
 		}
 	}()

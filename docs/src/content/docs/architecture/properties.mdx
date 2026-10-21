@@ -27,8 +27,10 @@ share its semantics (reject-not-project per lane, the transition-only property g
 the protobuf `TelemetryBatch` with **per-lane arrays** (`metrics`, `properties`, `events`, `logs`).
 Declared values are series rows and current values are derived from the series
 ([ADR-0079](/architecture/decisions/#adr-0079-five-telemetry-lanes-and-property-stops-being-the-genus)).
-Owner kinds beyond `component` on ingest are directional (#422); the `calculated` producer (the calc
-engine) is directional. See
+Owner kinds beyond `component` on ingest are directional (#422). The `calculated` producer is built for
+component-owned calc rules (#996): a calc rule's output is written through the same sample-write path
+as an observed sample, with `provenance = calculated`, `source_rule` and `source_rule_version`, on a
+server tick rather than the stream ([ADR-0148](/architecture/decisions/#adr-0148-calc-rules-run-on-a-durable-pending-set-and-a-server-tick-not-a-jetstream-consumer)). See
 [ADR-0037](/architecture/decisions/#adr-0037-telemetry-is-a-protobuf-event-over-jetstream-with-an-inline-owner-confining-consumer)
 and [ADR-0038](/architecture/decisions/#adr-0038-the-reachability-verdict-is-a-built-in-state).
 :::
@@ -159,9 +161,14 @@ A separate **`source`** column records *which sensor or path* produced an observ
 
 "Measured from a component," not "from a device": every device is a component, not the reverse. The node parses the payload at the edge and **publishes the observed sample to the JetStream raw ingress subject** (admission confines its owner before the trusted stream); it never writes to Postgres. Lineage rides the row: `source_rule` + `source_rule_version` (the backtest hinge). The verbatim payload is **not** kept (no telemetry table): raw surfaces only on a `collection.failed` event, a dev raw-mode tap, or the bounded opt-in `raw_sample` policy ([collection](/architecture/collection/)). No separate execution table: a derived sample is itself the evidence of its function's run.
 
-:::design[The calculated producer (the calc engine), tracked in #430]
-
 ### calculated: derived by a calc rule
+
+Built for component owners (#996): a calc rule's tick reduces the inputs' current values and writes
+the result through the sample-write path as a calculated row naming the rule and its version, where
+event rules judge it and downstream calc rules are marked; an unchanged result writes nothing. How it
+runs is on [calculations](/architecture/calculations/#how-a-calc-rule-runs).
+
+:::design[The calculated producer on the stream, tracked in #430]
 
 Parallel to observed, but the input is **other samples**, not a device payload. A calc consumer reads the trusted JetStream `samples` stream and **publishes its derived sample back onto it** (a trusted server producer, no admission pass), so calculated values re-enter the data lane and feed downstream calc and the rule engine. Both producers carry `source_rule` + `source_rule_version`; the **`provenance` column** distinguishes them. Inputs are reconstructable from the rule version (backtest); an immutable snapshot, if ever needed, is a nullable `inputs jsonb` column. The rule lives on [calculations](/architecture/calculations/).
 :::

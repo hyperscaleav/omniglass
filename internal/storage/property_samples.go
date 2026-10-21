@@ -52,7 +52,20 @@ func (p *PG) InsertPropertySamples(ctx context.Context, evs []PropertySampleWrit
 		return fmt.Errorf("storage: begin insert property samples: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
+	if err := p.writePropertySamples(ctx, tx, evs, nil); err != nil {
+		return err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("storage: commit insert property samples: %w", err)
+	}
+	return nil
+}
 
+// writePropertySamples is the property lane's sample-write path, in the
+// caller's transaction: the ingest's observed batch or a calc rule's
+// calculated output (lineage set), as writeMetricSamples is for metrics. An
+// observation may also settle a pending command.
+func (p *PG) writePropertySamples(ctx context.Context, tx pgx.Tx, evs []PropertySampleWrite, lineage *sampleLineage) error {
 	// Settlement only cares about properties a command type targets; learn
 	// which once per batch, and read the transaction's clock once.
 	now, err := dbNow(ctx, tx)
@@ -69,14 +82,11 @@ func (p *PG) InsertPropertySamples(ctx context.Context, evs []PropertySampleWrit
 	if err != nil {
 		return err
 	}
-	for _, ev := range evs {
-		col, err := ownerColumn(ev.OwnerKind)
-		if err != nil {
+	arcs := make([]string, len(evs))
+	marks := newCalcMarks()
+	for i, ev := range evs {
+		if _, err := ownerColumn(ev.OwnerKind); err != nil {
 			return fmt.Errorf("storage: property sample %s/%s: %w", ev.OwnerID, ev.Key, err)
-		}
-		ts := ev.TS
-		if ts.IsZero() {
-			ts = time.Now().UTC()
 		}
 		// The arc stores the owner's primary key. Resolving here, once per
 		// row (mirrors InsertMetricSamples/InsertEvents/InsertLogLines),
@@ -90,28 +100,36 @@ func (p *PG) InsertPropertySamples(ctx context.Context, evs []PropertySampleWrit
 		if err != nil {
 			return fmt.Errorf("storage: property sample %s/%s: %w", ev.OwnerID, ev.Key, err)
 		}
-		sql := fmt.Sprintf(`insert into property (ts, owner_kind, %s, property_type_id, instance, value, provenance, source)
-			values ($1, $2, $3, (select id from property_type where name = $4), $5, to_jsonb($6::text), 'observed', $7)`, col)
-		if _, err := tx.Exec(ctx, sql, ts, ev.OwnerKind, arc, ev.Key, ev.Instance, ev.Value, ev.Source); err != nil {
+		arcs[i] = arc
+		marks.add(ev.OwnerKind, arc, ev.Key)
+	}
+	// Marked before any sample lands (writeMetricSamples says why).
+	if err := p.markCalcPending(ctx, tx, marks, lineage.rule()); err != nil {
+		return err
+	}
+	provenance, sourceRule, sourceVersion := lineage.provenanceArgs()
+	for i, ev := range evs {
+		col, _ := ownerColumn(ev.OwnerKind)
+		ts := ev.TS
+		if ts.IsZero() {
+			ts = time.Now().UTC()
+		}
+		sql := fmt.Sprintf(`insert into property (ts, owner_kind, %s, property_type_id, instance, value, provenance, source, source_rule, source_rule_version)
+			values ($1, $2, $3, (select id from property_type where name = $4), $5, to_jsonb($6::text), $7, $8, $9, $10)`, col)
+		if _, err := tx.Exec(ctx, sql, ts, ev.OwnerKind, arcs[i], ev.Key, ev.Instance, ev.Value, provenance, ev.Source, sourceRule, sourceVersion); err != nil {
 			return fmt.Errorf("storage: insert property sample %s/%s: %w", ev.OwnerID, ev.Key, err)
 		}
 		// An observation may be what a pending command was waiting on.
 		if targeted[ev.Key] {
-			if err := p.settleOnObservation(ctx, tx, ev.OwnerKind, arc, ev.Key, ev.Instance, now); err != nil {
+			if err := p.settleOnObservation(ctx, tx, ev.OwnerKind, arcs[i], ev.Key, ev.Instance, now); err != nil {
 				return err
 			}
 		}
-		if err := eval.observe(ctx, tx, rules.LaneProperty, ev.OwnerKind, arc, ev.Key, ev.Instance, ts, ev.Value); err != nil {
+		if err := eval.observe(ctx, tx, rules.LaneProperty, ev.OwnerKind, arcs[i], ev.Key, ev.Instance, ts, ev.Value); err != nil {
 			return err
 		}
 	}
-	if err := eval.stampJudged(ctx, tx); err != nil {
-		return err
-	}
-	if err := tx.Commit(ctx); err != nil {
-		return fmt.Errorf("storage: commit insert property samples: %w", err)
-	}
-	return nil
+	return eval.stampJudged(ctx, tx)
 }
 
 // LatestProperty returns the most recent property row for a component series

@@ -186,6 +186,7 @@ below from the project's history. From here it grows one slice at a time.
 | [ADR-0145](#adr-0145-a-rule-records-its-conditions-as-typed-events-and-its-alarm-is-optional) | 2026-10-20 | Accepted | An event rule's alarm is optional (an informational rule raises none); a rule names the event types it writes (a required fire type, an optional clear type); its in-force state is its own condition row; it writes one event per edge, carrying the alarm the edge moved, and a severity toggled on or off moves alarms with no condition event; a hand clear holds while the condition persists |
 | [ADR-0146](#adr-0146-expressions-run-on-pinned-expr-with-an-allowlist-and-per-site-budgets-and-rule-criteria-are-expressions) | 2026-10-20 | Accepted | Expressions run on pinned Expr behind a per-site allowlist of vetted builtins and a per-site budget (after three adversarial passes); event rule criteria are stored as `{expr}`, the short form lowered on input and by a one-time backfill, with one approved bool divergence; compile errors show on the rule; validate and preview answer from the same declarations |
 | [ADR-0147](#adr-0147-a-calc-rule-is-a-typed-sibling-registry-checked-acyclic-at-authoring) | 2026-10-21 | Accepted | `calc_rule` is a sibling of `event_rule` with typed columns (inputs `{as, key}`, a named reducer or an expression, the output key by id); every write compiles the reduce against a calc expression site of its own and refuses a cycle in the key graph, a second enabled writer of a key, `health` as an input or output, and an output a collection declares (a native probe key or a driver's emits); a reduce that stops compiling reads back as `calc_error` |
+| [ADR-0148](#adr-0148-calc-rules-run-on-a-durable-pending-set-and-a-server-tick-not-a-jetstream-consumer) | 2026-10-21 | Accepted | Component calc rules run on a durable `calc_pending` set marked in the sample-write transaction and drained by a 1s server tick (`SKIP LOCKED`, one transaction per mark), writing calculated samples through the same path so event rules judge them; a write never marks its own rule; a missing input writes nothing and is recorded in `calc_rule_state`; an unchanged result writes no row. Diverges from the JetStream calc consumer (#430) |
 
 ## Entries
 
@@ -6700,3 +6701,39 @@ interface create form, since that name is the platform's to mint.
   signal for "a key any collection writes" to the slice. A flag on the registries would be a second copy
   of what the drivers and probes already declare; the observed-sample probe first shipped beside the
   declarations was dropped in review for the reasons in point 4.
+
+### ADR-0148: Calc rules run on a durable pending set and a server tick, not a JetStream consumer
+
+- **Date:** 2026-10-21 | **Status:** Accepted | **Pages:** [calculations](/architecture/calculations/), [datapoints](/architecture/properties/), [messaging](/architecture/messaging/)
+- **Decision:** Component calc rules run (#996, epic #525 decision 1), as the event rule sweep does
+  (ADR-0144 point 6), off the stream:
+  1. **Marks in the sample write.** The sample-write transaction inserts a `calc_pending` row (rule,
+     owner) for every enabled component rule reading one of the batch's keys on an owner its selector
+     picks, found by one probe of the GIN index on `calc_rule.inputs`. A mark already present is kept
+     (coalescing; `marked_at` is the oldest unserved change), marks are inserted in (rule, owner) order,
+     and a write marks before it inserts or judges anything, so it never waits on a mark while holding a
+     series or health lock.
+  2. **A 1s server tick** (`calcTickEvery`, its own goroutine, a 10s deadline per pass, up to 500 marks a
+     pass, cancelled on shutdown) serves marks oldest first, each in one transaction: the mark `FOR
+     UPDATE SKIP LOCKED`, the rule `FOR SHARE SKIP LOCKED` (a rule write holding it defers the mark to a
+     later pass rather than deadlocking with a delete's cascade), the mark deleted, the result written.
+     Replicas share the queue and compute each mark once; a crash or restart rolls back the mark in
+     flight and loses nothing.
+  3. **Current values.** A named reducer folds every instance's newest value of its input on the
+     component; an expression reads the aggregate instance's newest value. Intended values are never
+     read. A missing input writes nothing (decision 5); the rule's last outcome per owner, in
+     `calc_rule_state` (computed at, rule version, value, missing inputs, error), is what the state read
+     (#998) will answer from, and also carries a run-time failure or a stored rule that no longer
+     compiles.
+  4. **The same write path.** The result is written through the sample-write path as `calculated`, with
+     `source_rule` (the rule's name) and `source_rule_version`, on instance `''`, so event rules judge it
+     in the tick's transaction and downstream calc rules are marked. An unchanged result writes no row
+     on either lane: a metric output is change-only too, keeping storage bounded by change.
+  5. **ADR-0069 at runtime.** The write carries its producing rule, and the marking skips it, so a rule
+     never re-marks itself even if a loop reached the table outside the gateway.
+- **Context:** The design puts calc on a trusted JetStream samples lane (#430) that does not exist; the
+  event rules already judge in the sample-write transaction. Computing inside that transaction would
+  widen ingest's lock footprint with fan-in, and waiting on #430 would block the epic on unbuilt
+  infrastructure. A durable pending set plus a tick is replica-safe and coalescing, and keeps a later
+  move to the lane a change of transport, not of semantics. System rules (#997) stay unmarked until
+  their members are read.

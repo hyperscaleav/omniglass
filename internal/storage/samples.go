@@ -67,21 +67,56 @@ func (p *PG) InsertMetricSamples(ctx context.Context, evs []MetricSampleWrite) e
 		return fmt.Errorf("storage: begin insert samples: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
+	if err := p.writeMetricSamples(ctx, tx, evs, nil); err != nil {
+		return err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("storage: commit insert samples: %w", err)
+	}
+	return nil
+}
 
-	// The event rules reading this batch's keys judge each sample as it lands
-	// (#919), in this transaction.
-	eval, err := p.newRuleEvaluator(ctx, tx, sampleKeys(evs, func(e MetricSampleWrite) string { return e.Key }))
+// sampleLineage is a calculated sample's producer: the calc rule, by id (so
+// the write never marks its own rule pending, ADR-0069) and by name and
+// version (the row's source_rule and source_rule_version). nil is an
+// observed sample.
+type sampleLineage struct {
+	ruleID   string
+	ruleName string
+	version  int
+}
+
+// provenanceArgs is a row's provenance, source_rule and source_rule_version.
+func (l *sampleLineage) provenanceArgs() (string, any, any) {
+	if l == nil {
+		return "observed", nil, nil
+	}
+	return "calculated", l.ruleName, l.version
+}
+
+func (l *sampleLineage) rule() string {
+	if l == nil {
+		return ""
+	}
+	return l.ruleID
+}
+
+// writeMetricSamples is the metric lane's sample-write path, in the caller's
+// transaction: the ingest's observed batch, or a calc rule's calculated
+// output (lineage set). The event rules reading the batch's keys judge each
+// sample as it lands (#919), and the calc rules reading them are marked
+// pending on each owner (#996), never the rule that produced the batch.
+func (p *PG) writeMetricSamples(ctx context.Context, tx pgx.Tx, evs []MetricSampleWrite, lineage *sampleLineage) error {
+	keys := sampleKeys(evs, func(e MetricSampleWrite) string { return e.Key })
+	eval, err := p.newRuleEvaluator(ctx, tx, keys)
 	if err != nil {
 		return err
 	}
-	for _, ev := range evs {
-		col, err := ownerColumn(ev.OwnerKind)
-		if err != nil {
+	arcs := make([]string, len(evs))
+	marks := newCalcMarks()
+	for i, ev := range evs {
+		if _, err := ownerColumn(ev.OwnerKind); err != nil {
 			return fmt.Errorf("storage: sample %s/%s: %w", ev.OwnerID, ev.Key, err)
-		}
-		ts := ev.TS
-		if ts.IsZero() {
-			ts = time.Now().UTC()
 		}
 		// The arc stores the owner's primary key. Resolving here rather than in the
 		// insert means an unknown owner is a named error instead of a NULL that
@@ -90,22 +125,31 @@ func (p *PG) InsertMetricSamples(ctx context.Context, evs []MetricSampleWrite) e
 		if err != nil {
 			return fmt.Errorf("storage: sample %s/%s: %w", ev.OwnerID, ev.Key, err)
 		}
-		sql := fmt.Sprintf(`insert into metric (ts, owner_kind, %s, metric_type_id, instance, value, provenance, source)
-			values ($1, $2, $3, (select id from metric_type where name = $4), $5, $6, 'observed', $7)`, col)
-		if _, err := tx.Exec(ctx, sql, ts, ev.OwnerKind, arc, ev.Key, ev.Instance, ev.Value, ev.Source); err != nil {
+		arcs[i] = arc
+		marks.add(ev.OwnerKind, arc, ev.Key)
+	}
+	// Marked before any sample lands, so the batch takes the pending rows'
+	// locks before any series or health lock (the calc tick's order).
+	if err := p.markCalcPending(ctx, tx, marks, lineage.rule()); err != nil {
+		return err
+	}
+	provenance, sourceRule, sourceVersion := lineage.provenanceArgs()
+	for i, ev := range evs {
+		col, _ := ownerColumn(ev.OwnerKind)
+		ts := ev.TS
+		if ts.IsZero() {
+			ts = time.Now().UTC()
+		}
+		sql := fmt.Sprintf(`insert into metric (ts, owner_kind, %s, metric_type_id, instance, value, provenance, source, source_rule, source_rule_version)
+			values ($1, $2, $3, (select id from metric_type where name = $4), $5, $6, $7, $8, $9, $10)`, col)
+		if _, err := tx.Exec(ctx, sql, ts, ev.OwnerKind, arcs[i], ev.Key, ev.Instance, ev.Value, provenance, ev.Source, sourceRule, sourceVersion); err != nil {
 			return fmt.Errorf("storage: insert sample %s/%s: %w", ev.OwnerID, ev.Key, err)
 		}
-		if err := eval.observe(ctx, tx, rules.LaneMetric, ev.OwnerKind, arc, ev.Key, ev.Instance, ts, ev.Value); err != nil {
+		if err := eval.observe(ctx, tx, rules.LaneMetric, ev.OwnerKind, arcs[i], ev.Key, ev.Instance, ts, ev.Value); err != nil {
 			return err
 		}
 	}
-	if err := eval.stampJudged(ctx, tx); err != nil {
-		return err
-	}
-	if err := tx.Commit(ctx); err != nil {
-		return fmt.Errorf("storage: commit insert samples: %w", err)
-	}
-	return nil
+	return eval.stampJudged(ctx, tx)
 }
 
 // LatestMetric returns the most recent metric row for a component and key, or

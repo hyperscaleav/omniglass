@@ -30,8 +30,9 @@ func (f fakeStore) PendingNodeCommands(context.Context, string) ([]storage.Comma
 func (f fakeStore) RecordCommandExecution(context.Context, string, int64, string, string) error {
 	return nil
 }
-func (f fakeStore) SweepCommandSettlements(context.Context) error    { return nil }
-func (f fakeStore) SweepEventRules(context.Context, time.Time) error { return nil }
+func (f fakeStore) SweepCommandSettlements(context.Context) error      { return nil }
+func (f fakeStore) SweepEventRules(context.Context, time.Time) error   { return nil }
+func (f fakeStore) DrainCalcPending(context.Context, int) (int, error) { return 0, nil }
 func (f fakeStore) ReconcileEventRules(context.Context, *storage.RuleReconcileState) error {
 	return nil
 }

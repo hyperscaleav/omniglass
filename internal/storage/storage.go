@@ -473,6 +473,9 @@ type Gateway interface {
 	UpdateCalcRule(ctx context.Context, actorID, ref string, patch CalcRulePatch, action scope.Set) (*CalcRule, error)
 	RenameCalcRule(ctx context.Context, actorID, ref, newName string, action scope.Set) (*CalcRule, error)
 	DeleteCalcRule(ctx context.Context, actorID, ref string, action scope.Set) error
+	// DrainCalcPending serves up to limit pending calc rule marks (#996):
+	// reduce each rule's inputs on its owner and write the output.
+	DrainCalcPending(ctx context.Context, limit int) (int, error)
 	// SampleKeyType reads which lane a sample key reads and, for a property,
 	// its data type: what types an expression's value (#958).
 	SampleKeyType(ctx context.Context, key string) (rules.Lane, string, error)

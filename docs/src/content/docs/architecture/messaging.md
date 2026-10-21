@@ -13,7 +13,9 @@ isolation with the auth callback, one `OG_TELEMETRY` stream on the node subjects
 (`og.v1.telemetry.*`) and the API push subject (`og.v1.api.telemetry`), the single durable
 `og-telemetry-worker` consumer writing straight to Postgres, and the worklist and heartbeat
 request-reply lanes. The two-lane split below is target design; today there is **one stream and one
-serial consumer doing admission (owner confinement) and persistence inline**.
+serial consumer doing admission (owner confinement) and persistence inline**. Calc rules run off the
+stream too: the sample write marks them pending and a server tick computes them
+([ADR-0148](/architecture/decisions/#adr-0148-calc-rules-run-on-a-durable-pending-set-and-a-server-tick-not-a-jetstream-consumer)).
 :::
 
 This page is the **one home of the two-lane data plane**: the admission / trusted / persistence split, the CDC publisher, and the ingest-path enumeration live here, only named (with a link) everywhere else.

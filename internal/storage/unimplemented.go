@@ -909,6 +909,7 @@ func (UnimplementedGateway) UpdateCalcRule(context.Context, string, string, Calc
 func (UnimplementedGateway) RenameCalcRule(context.Context, string, string, string, scope.Set) (*CalcRule, error) {
 	return nil, ErrCalcRuleNotFound
 }
+func (UnimplementedGateway) DrainCalcPending(context.Context, int) (int, error) { return 0, nil }
 func (UnimplementedGateway) DeleteCalcRule(context.Context, string, string, scope.Set) error {
 	return ErrCalcRuleNotFound
 }

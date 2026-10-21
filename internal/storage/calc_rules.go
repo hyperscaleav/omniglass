@@ -147,6 +147,10 @@ func readCalcRule(ctx context.Context, q querier, ref string, lock bool) (CalcRu
 	if lock {
 		sql += ` for update of c`
 	}
+	return readCalcRuleSQL(ctx, q, sql, ref)
+}
+
+func readCalcRuleSQL(ctx context.Context, q querier, sql, ref string) (CalcRule, error) {
 	r, err := scanCalcRule(q.QueryRow(ctx, sql, ref))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return r, ErrCalcRuleNotFound

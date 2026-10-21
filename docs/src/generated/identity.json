@@ -19,10 +19,22 @@
       "no_label": "no operator surface of its own: a blob is reached through the file that references it, and nothing renders a blob row for a label to appear on"
     },
     {
+      "table": "calc_pending",
+      "shape": "id only",
+      "reason": "a calc rule's pending work on an owner, keyed by rule and owner; nothing addresses it by name",
+      "labelled": false
+    },
+    {
       "table": "calc_rule",
       "shape": "key-bearing",
       "reason": "temp-mean, a rule a calculated sample names as its producer",
       "labelled": true
+    },
+    {
+      "table": "calc_rule_state",
+      "shape": "id only",
+      "reason": "a calc rule's last outcome on an owner, keyed by rule and owner; nothing addresses it by name",
+      "labelled": false
     },
     {
       "table": "choice_alternate",

@@ -23,6 +23,7 @@ type calcRig struct {
 	gw   *storage.PG
 	conn *pgx.Conn
 	all  scope.Set
+	dsn  string
 }
 
 func newCalcRig(t *testing.T) *calcRig {
@@ -45,7 +46,7 @@ func newCalcRig(t *testing.T) *calcRig {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = conn.Close(ctx) })
-	r := &calcRig{t: t, ctx: ctx, gw: gw, conn: conn, all: scope.Set{All: true}}
+	r := &calcRig{t: t, ctx: ctx, gw: gw, conn: conn, all: scope.Set{All: true}, dsn: dsn}
 	// Keys no collection writes, for the rules to derive.
 	for _, m := range []string{"avg-temp", "temp-sum", "temp-twice"} {
 		if _, err := gw.CreateMetricType(ctx, "", storage.MetricTypeSpec{Name: m, DataType: "float"}); err != nil {

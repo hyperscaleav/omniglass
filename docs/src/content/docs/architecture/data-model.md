@@ -251,11 +251,23 @@ telemetry: {
     raised_by_rule_id: uuid {constraint: foreign_key}
     severity: text {constraint: foreign_key}
   }
+  calc_pending: {
+    shape: sql_table
+    component_id: uuid {constraint: foreign_key}
+    rule_id: uuid {constraint: foreign_key}
+    system_id: uuid {constraint: foreign_key}
+  }
   calc_rule: {
     shape: sql_table
     id: uuid {constraint: primary_key}
     output_metric_type_id: uuid {constraint: foreign_key}
     output_property_type_id: uuid {constraint: foreign_key}
+  }
+  calc_rule_state: {
+    shape: sql_table
+    component_id: uuid {constraint: foreign_key}
+    rule_id: uuid {constraint: foreign_key}
+    system_id: uuid {constraint: foreign_key}
   }
   command: {
     shape: sql_table
@@ -532,8 +544,14 @@ telemetry.alarm.acknowledged_by -> identity.principal.id
 telemetry.alarm.component_id -> fleet.component.id
 telemetry.alarm.raised_by_rule_id -> telemetry.event_rule.id
 telemetry.alarm.severity -> telemetry.severity_level.name
+telemetry.calc_pending.component_id -> fleet.component.id
+telemetry.calc_pending.rule_id -> telemetry.calc_rule.id
+telemetry.calc_pending.system_id -> fleet.system.id
 telemetry.calc_rule.output_metric_type_id -> telemetry.metric_type.id
 telemetry.calc_rule.output_property_type_id -> telemetry.property_type.id
+telemetry.calc_rule_state.component_id -> fleet.component.id
+telemetry.calc_rule_state.rule_id -> telemetry.calc_rule.id
+telemetry.calc_rule_state.system_id -> fleet.system.id
 telemetry.command.caused_event_id -> telemetry.event.id
 telemetry.command.command_type_id -> telemetry.command_type.id
 telemetry.command.component_id -> fleet.component.id
