@@ -706,15 +706,30 @@ func TestIntegerOverflowWraps(t *testing.T) {
 }
 
 // Review #7: the wall-clock deadline is a backstop on charged work. With
-// it set to a nanosecond, a run stops at its first charge.
+// it set to a nanosecond, a run stops at the first clock read, clockEvery charges in.
 func TestDeadlineBackstop(t *testing.T) {
 	env := mustEnv(t, Bool, WithBudget(Budget{Iterations: 10_000, Memory: 10_000, Deadline: time.Nanosecond}))
 	p, err := Compile("count(items, # > 0) == -1", env)
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = p.Run(sampleEnv{Items: ints(10)})
+	_, err = p.Run(sampleEnv{Items: ints(clockEvery * 2)})
 	budgetErr(t, "deadline", err)
+}
+
+// The deadline is never read before clockEvery charges, so a small honest
+// expression cannot be refused because the machine was busy when it ran
+// (a goroutine preempted between Run and its first charge read as an overrun
+// and held a rule for no reason).
+func TestDeadlineSparesSmallRuns(t *testing.T) {
+	env := mustEnv(t, Bool, WithBudget(Budget{Iterations: 10_000, Memory: 10_000, Deadline: time.Nanosecond}))
+	p, err := Compile("count(items, # > 0) == 10 && state == 'down'", env)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := p.Run(sampleEnv{Items: ints(10), State: "down"}); err != nil {
+		t.Fatalf("a small run was refused by the deadline: %v", err)
+	}
 }
 
 // Review 3 #1: a regex costs its subject times its program. A pattern whose

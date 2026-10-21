@@ -96,15 +96,17 @@ func newMeter(b Budget) *meter {
 }
 
 // charge adds n, at least 1: each charged step is work even when the value
-// it reads is a number. The clock is read at the first charge and every
-// clockEvery after.
+// it reads is a number. The clock is read every clockEvery charges and never
+// before the first clockEvery: a run that small is bounded by its iteration
+// budget alone, so a busy machine (a goroutine preempted between Run and its
+// first charge) can never refuse it.
 func (m *meter) charge(n int) error {
 	m.used += max(n, 1)
 	m.calls++
 	if m.used > m.limit {
 		return ErrRunBudget
 	}
-	if m.calls%clockEvery == 1 && time.Since(m.start) > m.deadline {
+	if m.calls%clockEvery == 0 && time.Since(m.start) > m.deadline {
 		return ErrRunBudget
 	}
 	return nil

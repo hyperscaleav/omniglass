@@ -7046,3 +7046,7 @@ through it as the program's first run (epic #978, bugs #979 to #981 and #983): t
 suggestion against two unrelated issues, which the run read and confirmed, and a repeat dry run
 planned nothing new.
 
+
+### The criteria deadline cannot refuse a small run (#956)
+
+Re-running the lowering oracle on a loaded machine refused one trivial criterion (`value >= 1000000000000000000000.0`) for its wall-clock deadline: the meter read the clock at a run's first charge, so a goroutine preempted between `Run` and that charge read as an overrun and would have held a rule for no reason. The clock is now read every 256 charges and never before the first 256, so a run that small is bounded by its iteration budget alone and the deadline stays a backstop for long charged work; `TestDeadlineSparesSmallRuns` pins it.
