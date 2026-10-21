@@ -91,6 +91,11 @@ records (`explorer-key: <key>`). A digest finding's key comes from the digest it
 - A finding whose key an open issue already carries is a dated **sighting** on that issue,
   never a second issue. An issue a person filed without a key is **adopted** first
   (`explorer.mjs adopt <issue> <key>`) so the next sighting finds it.
+- A new finding whose title looks like any open issue's (most of the words of the shorter
+  title shared, at least two of them) is **held**, not filed: the run reads the candidates and
+  either adopts one or confirms the finding as new. Two findings in one run that look alike are
+  folded into the more severe. Keys catch the same defect seen again; the look-alike check
+  catches the same defect a person, or another lens, already described in other words.
 - A **bug** is its own `Bug` issue, filed at once with its repro, because the fixer drains
   bugs daily.
 - A **suggestion** is a `Task` sub-issue of the week's epic, `explorer: week of <Monday>`, at

@@ -185,19 +185,74 @@ export function weekOf(date) {
 
 const SEV = { high: 0, medium: 1, low: 2 };
 
+// Words that say nothing about which defect an issue is: articles, the
+// conventional-commit prefixes, and the verbs every finding title shares.
+const STOP = new Set('a an and are as at be by can for from has have in into is it its no not of on or so that the their there this to was when with without fix feat docs chore page pages'.split(' '));
+
+/**
+ * The words a title is about, for comparing two titles: lowercased, prefix
+ * and punctuation dropped, short and empty words dropped, a trailing plural s
+ * folded.
+ * @param {string} title
+ */
+export function titleWords(title) {
+  return new Set(
+    title
+      .toLowerCase()
+      .replace(/^[a-z]+(\([^)]*\))?!?:\s*/, '')
+      .split(/[^a-z0-9]+/)
+      .filter((w) => w.length >= 3 && !STOP.has(w))
+      .map((w) => (w.length > 4 && w.endsWith('s') && !w.endsWith('ss') ? w.slice(0, -1) : w)),
+  );
+}
+
+// Two titles sharing at least this share of the shorter one's words, and at
+// least DUP_MIN_SHARED words, are probably the same defect.
+export const DUP_OVERLAP = 0.6;
+export const DUP_MIN_SHARED = 2;
+
+/**
+ * Open issues that may already be this finding under other words: the
+ * deterministic half of deduplication, for issues a person filed without a
+ * key (or a lens filed under another). A candidate is never filed past: the
+ * run adopts it or confirms the finding is new.
+ * @param {string} title the title the finding would file under
+ * @param {Issue[]} open
+ */
+export function possibleDuplicates(title, open) {
+  const a = titleWords(title);
+  if (a.size === 0) return [];
+  return open
+    .map((i) => {
+      const b = titleWords(i.title);
+      const shared = [...a].filter((w) => b.has(w)).length;
+      return { number: i.number, title: i.title, overlap: b.size ? shared / Math.min(a.size, b.size) : 0, shared };
+    })
+    .filter((c) => c.shared >= DUP_MIN_SHARED && c.overlap >= DUP_OVERLAP)
+    .sort((x, y) => y.overlap - x.overlap || x.number - y.number)
+    .slice(0, 3)
+    .map(({ number, title: t, overlap }) => ({ number, title: t, overlap: Math.round(overlap * 100) / 100 }));
+}
+
 /**
  * What filing today's findings means, as actions for explorer.mjs to apply:
  * a finding whose key an open issue already carries is a dated sighting on
- * that issue, never a second issue; a new bug is its own Bug issue, filed at
+ * that issue, never a second issue; a new finding whose title looks like an
+ * open issue's is held as a possible duplicate (adopt that issue, or confirm
+ * the key as new) and filed nowhere; a new bug is its own Bug issue, filed at
  * once; a new suggestion is a Task under the week's epic, until the week's
  * cap, most severe first; anything over the cap is reported, not filed. Two
  * findings with one key in the same run file once.
  * @param {Finding[]} findings already validated
- * @param {Issue[]} open open issues carrying an explorer key
+ * @param {Issue[]} open every open issue, keyed or not
  * @param {number} suggestionsThisWeek suggestions the week's epic already holds
  * @param {{ date: string, mission: string }} run
+ * @param {{ confirmed?: string[] }} [opts] keys the run confirmed are new despite a look-alike
  */
-export function planFiling(findings, open, suggestionsThisWeek, run) {
+export function planFiling(findings, open, suggestionsThisWeek, run, opts = {}) {
+  const confirmed = new Set(opts.confirmed ?? []);
+  /** @type {Issue[]} */
+  const planned = [];
   const byKey = new Map();
   const filedOn = new Map();
   for (const i of open) {
@@ -220,11 +275,19 @@ export function planFiling(findings, open, suggestionsThisWeek, run) {
       actions.push({ action: 'filed-today', issue: existing, key: f.key });
     } else if (existing) {
       actions.push({ action: 'sighting', issue: existing, key: f.key, body: `Seen again ${run.date} in mission \`${run.mission}\` (${f.lens} lens, ${f.surface}): ${f.claim}` });
+    } else if (possibleDuplicates(issueTitle(f), planned).length > 0) {
+      // Two lenses describing one defect under two keys: the first, most
+      // severe, files; the second is named so the report shows it was folded.
+      actions.push({ action: 'same-run-duplicate', key: f.key, title: issueTitle(f), of: possibleDuplicates(issueTitle(f), planned)[0].title });
+    } else if (!confirmed.has(f.key) && possibleDuplicates(issueTitle(f), open).length > 0) {
+      actions.push({ action: 'possible-duplicate', key: f.key, title: issueTitle(f), candidates: possibleDuplicates(issueTitle(f), open) });
     } else if (f.kind === 'bug') {
       actions.push({ action: 'bug', key: f.key, area: f.area, title: issueTitle(f), body: issueBody(f, run) });
+      planned.push({ number: 0, title: issueTitle(f), body: '' });
     } else if (room > 0) {
       room--;
       actions.push({ action: 'suggestion', key: f.key, area: f.area, title: issueTitle(f), body: issueBody(f, run) });
+      planned.push({ number: 0, title: issueTitle(f), body: '' });
     } else {
       actions.push({ action: 'over-cap', key: f.key, title: issueTitle(f) });
     }

@@ -8,11 +8,13 @@
 //   node web/e2e/explorer.mjs validate <findings.json>
 //       check a run's findings (a JSON array) against the finding shape;
 //       exits 1 naming every problem
-//   node web/e2e/explorer.mjs file <findings.json> --mission <id> --lenses <a,b> --report <report.md> [--today D] [--dry-run]
+//   node web/e2e/explorer.mjs file <findings.json> --mission <id> --lenses <a,b> --report <report.md> [--confirm-new k1,k2] [--today D] [--dry-run]
 //       file the findings (bugs at once, suggestions under the week's epic,
 //       sightings on what is already open), open the week's epic first if it
 //       does not exist yet (rolling last week's over), and post the day's
-//       report with its run marker on the epic. --dry-run prints the plan and
+//       report with its run marker on the epic. A finding that looks like an
+//       open issue is held, not filed: adopt that issue, or pass its key to
+//       --confirm-new once you have read both. --dry-run prints the plan and
 //       touches nothing.
 //   node web/e2e/explorer.mjs digest-keys <digest.json>
 //       each digest finding with the key it files under
@@ -196,9 +198,12 @@ function file(path) {
   }
   const plan = [];
   const epic = weekEpic(plan);
-  const open = ghJSON('issue', 'list', '--repo', REPO, '--state', 'open', '--search', '"explorer-key:" in:body', '--limit', '500', '--json', 'number,title,body,createdAt');
+  // Every open issue, keyed or not: keyed ones take sightings, and any of
+  // them can be the look-alike a new finding is held against.
+  const open = ghJSON('issue', 'list', '--repo', REPO, '--state', 'open', '--limit', '1000', '--json', 'number,title,body,createdAt');
   const already = epic ? subIssues(epic).filter((s) => s.type === 'Task').length : 0;
-  const actions = planFiling(findings, open, already, { date: today, mission: missionId });
+  const confirmed = (flag('confirm-new') ?? '').split(',').filter(Boolean);
+  const actions = planFiling(findings, open, already, { date: today, mission: missionId }, { confirmed });
   plan.push(...actions);
   const filed = [];
   if (!dryRun) {
@@ -210,7 +215,10 @@ function file(path) {
     for (const a of actions) {
       try {
         if (a.action === 'sighting') {
-          gh('issue', 'comment', String(a.issue), '--repo', REPO, '--body', a.body);
+          // One sighting a day per issue, so a re-run after a failure does
+          // not count the same day twice.
+          const seen = ghJSON('issue', 'view', String(a.issue), '--repo', REPO, '--json', 'comments').comments.some((c) => sightingDate(c.body) === today);
+          if (!seen) gh('issue', 'comment', String(a.issue), '--repo', REPO, '--body', a.body);
           filed.push(`- #${a.issue} seen again (\`${a.key}\`)`);
         } else if (a.action === 'bug' || a.action === 'suggestion') {
           const url = gh('issue', 'create', '--repo', REPO, '--type', a.action === 'bug' ? 'Bug' : 'Task', '--label', a.area, '--title', a.title, '--body', a.body).trim();
@@ -219,6 +227,10 @@ function file(path) {
           if (a.action === 'suggestion') linkWithRetry(epic, n, errors);
         } else if (a.action === 'over-cap') {
           filed.push(`- over the weekly cap, not filed: ${a.title} (\`${a.key}\`)`);
+        } else if (a.action === 'possible-duplicate') {
+          filed.push(`- held as a possible duplicate of ${a.candidates.map((c) => `#${c.number}`).join(', ')}, not filed: ${a.title} (\`${a.key}\`)`);
+        } else if (a.action === 'same-run-duplicate') {
+          filed.push(`- folded into "${a.of}" from this run: ${a.title} (\`${a.key}\`)`);
         }
       } catch (e) {
         errors.push(`\`${a.key}\` (${a.action}): ${e.message.split('\n')[0]}`);
@@ -262,7 +274,7 @@ try {
   else if (cmd === 'validate' && args[0]) validate(args[0]);
   else if (cmd === 'file' && args[0]) file(args[0]);
   else {
-    console.error('usage: explorer.mjs pick [--today D] | digest-keys <digest.json> | adopt <issue> <key> [--dry-run] | validate <findings.json> | file <findings.json> --mission <id> --lenses <a,b> --report <report.md> [--today D] [--dry-run]');
+    console.error('usage: explorer.mjs pick [--today D] | digest-keys <digest.json> | adopt <issue> <key> [--dry-run] | validate <findings.json> | file <findings.json> --mission <id> --lenses <a,b> --report <report.md> [--confirm-new k1,k2] [--today D] [--dry-run]');
     process.exit(2);
   }
 } catch (e) {
