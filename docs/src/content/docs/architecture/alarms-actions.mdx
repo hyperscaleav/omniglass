@@ -194,6 +194,19 @@ condition row behind it (one an older binary raised during a rolling upgrade) al
 a further fire neither adopts it nor writes an event, and a recovery resolves it with no clear event,
 since no condition row ended.
 
+**A rule's alarm is found by its rule and instance, whatever key wrote it** (#977). Every path that
+reads a rule's alarms (the in-force check, the live counts and state, the reconcile pass, a recovery,
+and a disable, delete, narrowing or severity turned off) matches an open alarm by `raised_by_rule_id`
+plus the instance its key names, the suffix after the key's rule segment. The rule segment may be the
+rule's uuid, which this binary always writes, or its name, which a replica from before #977 still
+writes during a rolling upgrade after the migration ran (`rule:<name>[:<instance>]`, the name it read
+then, renamed since or not). So such an alarm counts as in force (a further fire opens no second alarm
+and writes no event), is listed on its instance, and is resolved on recovery (by the clear event, when
+it has a condition row) or when the rule lets go of it. Only within one rule: a key's rule segment
+never matches another rule's alarm, since the match starts from `raised_by_rule_id`, and a hand-raised
+alarm may not take a key beginning `rule:` at all (a 422; the key defaults to the message, so a message
+beginning `rule:` needs a key of its own).
+
 ```yaml
 event_rule:
   name: reach-lost

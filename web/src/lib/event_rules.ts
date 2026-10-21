@@ -3,6 +3,7 @@ import type { components } from "../api/schema.gen";
 import type { SeverityLevel } from "./severity";
 import type { PreviewEventRule } from "./expressions";
 import { rel } from "./format";
+import { entityNameError } from "./names";
 
 // The event rules data layer (#918, #921; ADR-0144): thin typed wrappers over
 // /event-rules plus the pure core the Rules page reads a rule through. A rule
@@ -319,19 +320,20 @@ export function readValue(raw: string, lane: RuleLane): { value?: string | numbe
   return { value: Number(raw), error: null };
 }
 
-const NAME = /^[a-z0-9]+(-[a-z0-9]+)*$/;
-
 export type DraftErrors = Partial<Record<"name" | "sampleKey" | "fireValue" | "clearValue" | "fireExpr" | "clearExpr" | "fireSustain" | "clearSustain" | "fireEventType", string>>;
 
-// validateDraft is the form's one judgement, shared by create and edit (the
-// name is create-only, so edit skips it). No severity is a choice, not a gap:
-// "None (informational)" makes a rule that records its events and raises no
-// alarm (#951). The fire event type is required; the clear one is optional.
-// The name is judged on create and on edit alike: an edit may rename (#977).
-export function validateDraft(d: RuleDraft): DraftErrors {
+// validateDraft is the form's one judgement, shared by create and edit.
+// editing names the rule being edited: an edit may rename it (#977), and its
+// name is judged only when it changed, by the shared entity name rule the
+// server applies (names.ts), so a stored name stays saveable as it is. No
+// severity is a choice, not a gap: "None (informational)" makes a rule that
+// records its events and raises no alarm (#951). The fire event type is
+// required; the clear one is optional.
+export function validateDraft(d: RuleDraft, editing?: string): DraftErrors {
   const e: DraftErrors = {};
-  if (!d.name.trim()) e.name = "A name for the rule.";
-  else if (!NAME.test(d.name.trim())) e.name = "Lowercase letters, digits and single hyphens, e.g. too-hot.";
+  const name = d.name.trim();
+  if (!name) e.name = "A name for the rule.";
+  else if (name !== editing && entityNameError(name)) e.name = entityNameError(name)!;
   if (!d.sampleKey) e.sampleKey = "The property or metric the rule reads.";
   else {
     const f = readValue(d.fireValue, d.lane);

@@ -428,15 +428,16 @@ func ruleArgs(r EventRule) ([]byte, []byte, any, error) {
 // ruleInForceSQL is every condition a rule holds in force, as the evaluator
 // judges it (conditionInForce): its condition rows, and an alarm it holds
 // open on a series with no row behind it (an older binary's, mid-upgrade),
-// since the alarm opened. Columns: rule_id, component_id, instance, since.
-// The live state reads it, so open alarms never outnumber conditions.
-const ruleInForceSQL = `(select rule_id, component_id, instance, since from event_rule_condition
+// since the alarm opened, its instance parsed from its key under either rule
+// segment (ruleKeyInstance: the uuid, or an older replica's name). Columns:
+// rule_id, component_id, instance, since. The live state reads it, so open alarms never outnumber conditions.
+var ruleInForceSQL = `(select rule_id, component_id, instance, since from event_rule_condition
 	union all
 	select o.rule_id, o.component_id, o.instance, o.since from (
 		select a.raised_by_rule_id as rule_id, a.component_id, a.raised_at as since,
-			case when a.dedup_key = 'rule:' || r.id::text then '' else substr(a.dedup_key, length('rule:' || r.id::text || ':') + 1) end as instance
-		from alarm a join event_rule r on r.id = a.raised_by_rule_id
-		where a.cleared_at is null and (a.dedup_key = 'rule:' || r.id::text or a.dedup_key like 'rule:' || r.id::text || ':%')
+			` + ruleKeyInstanceSQL("a.dedup_key") + ` as instance
+		from alarm a
+		where a.cleared_at is null and a.raised_by_rule_id is not null and a.dedup_key like 'rule:%'
 	) o
 	where not exists (select 1 from event_rule_condition c where c.rule_id = o.rule_id and c.component_id = o.component_id
 		and c.instance = o.instance))`

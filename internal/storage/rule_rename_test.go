@@ -193,3 +193,96 @@ func TestRuleDedupKeyMigration(t *testing.T) {
 		t.Fatalf("after a second run: %s\nwant %s", got, byUUID)
 	}
 }
+
+// TestRuleLegacyKeyAlarmIsTheRules proves the rolling-upgrade tolerance
+// (#977): after the migration an older replica still raises a rule's alarm
+// under the legacy key, rule:<name>[:<instance>], and the new binary finds it
+// by its rule and instance whatever key wrote it. Raised with its condition
+// row (a post-#949 replica), it is in force: a further down opens no second
+// alarm and writes no event, the state lists it on its instance, and the
+// recovery clears it with the clear event carrying it. Raised with no
+// condition row, a recovery still clears it. A disable clears one too.
+func TestRuleLegacyKeyAlarmIsTheRules(t *testing.T) {
+	r := newEdgeRig(t)
+	r.rule(storage.EventRuleSpec{Name: "legacy", Severity: "high", ClearEventType: "condition-ended"})
+	legacy := func(instance string, condition bool) string {
+		t.Helper()
+		key := "rule:legacy"
+		if instance != "" {
+			key += ":" + instance
+		}
+		mustExec(t, r.f.conn, `insert into alarm (component_id, severity, message, dedup_key, raised_by_rule_id)
+			values ((select id from component where name = 'bar-1'), 'high', 'old replica', $1, (select id from event_rule where name = 'legacy'))`, key)
+		if condition {
+			mustExec(t, r.f.conn, `insert into event_rule_condition (rule_id, component_id, instance, since)
+				values ((select id from event_rule where name = 'legacy'), (select id from component where name = 'bar-1'), $1, now())`, instance)
+		}
+		return scalar(t, r.f.conn, `select id::text from alarm where dedup_key = '`+key+`' and cleared_at is null`)
+	}
+	openCount := func() int {
+		return count(t, r.f.conn, `select count(*) from alarm a join event_rule e on e.id = a.raised_by_rule_id
+			where e.name = 'legacy' and a.cleared_at is null`)
+	}
+	cleared := func(id string) bool {
+		return scalar(t, r.f.conn, `select (cleared_at is not null)::text from alarm where id = '`+id+`'`) == "true"
+	}
+
+	// With its condition row, on an instance carrying a colon of its own.
+	a := legacy("tcp:2", true)
+	r.observe("tcp:2", "down")
+	if openCount() != 1 || len(r.events()) != 0 {
+		t.Fatalf("a down over a legacy-keyed alarm: %d open, events %+v; want the one alarm, no event", openCount(), r.events())
+	}
+	st, err := r.f.gw.EventRuleState(r.ctx, "legacy", r.f.all)
+	if err != nil || len(st.Open) != 1 || st.Open[0].Instance != "tcp:2" || len(st.Conditions) != 1 {
+		t.Fatalf("the state lists %+v (%v), want the legacy alarm open on tcp:2", st, err)
+	}
+	got, err := r.f.gw.GetEventRule(r.ctx, "legacy", r.f.all)
+	if err != nil || got.OpenAlarms != 1 || got.ConditionsInForce != 1 {
+		t.Fatalf("counts %+v (%v), want 1 open and 1 in force", got, err)
+	}
+	r.observe("tcp:2", "up")
+	evs := r.events()
+	if !cleared(a) || openCount() != 0 || len(evs) != 1 || evs[0].key != "condition-ended" || edgeStr(evs[0].alarmID) != a {
+		t.Fatalf("the recovery: cleared %v, %d open, events %+v; want the legacy alarm cleared by the clear event", cleared(a), openCount(), evs)
+	}
+
+	// With no condition row and no instance: in force for the live counts
+	// and the evaluator, and a recovery clears it.
+	b := legacy("", false)
+	got, err = r.f.gw.GetEventRule(r.ctx, "legacy", r.f.all)
+	if err != nil || got.ConditionsInForce != 1 || got.OpenAlarms != 1 {
+		t.Fatalf("an orphan legacy alarm counts %+v (%v), want 1 in force and 1 open", got, err)
+	}
+	r.observe("", "down")
+	if openCount() != 1 {
+		t.Fatalf("a down over an orphan legacy alarm left %d open, want 1", openCount())
+	}
+	r.observe("", "up")
+	if !cleared(b) || openCount() != 0 {
+		t.Fatalf("the recovery left the orphan legacy alarm open (%d open)", openCount())
+	}
+
+	// A disable lets go of a legacy-keyed alarm with its condition.
+	c := legacy("icmp", true)
+	off := false
+	r.patch(storage.EventRulePatch{Enabled: &off})
+	if !cleared(c) || r.conditions() != 0 {
+		t.Fatalf("a disable left the legacy alarm cleared=%v, %d conditions", cleared(c), r.conditions())
+	}
+}
+
+// TestHandRaiseRefusesARuleKey proves an operator's alarm cannot take a key
+// in the rule namespace (#977): a rule: prefix would let a hand raise stand
+// in for, or be cleared as, a rule's condition.
+func TestHandRaiseRefusesARuleKey(t *testing.T) {
+	r := newEdgeRig(t)
+	for _, key := range []string{"rule:x", "rule:"} {
+		if _, err := r.f.gw.RaiseAlarm(r.ctx, "", "bar-1", storage.AlarmSpec{Severity: "high", Message: "m", DedupKey: key}); !errors.Is(err, storage.ErrAlarmInvalid) {
+			t.Fatalf("a hand raise keyed %q: %v, want ErrAlarmInvalid", key, err)
+		}
+	}
+	if _, err := r.f.gw.RaiseAlarm(r.ctx, "", "bar-1", storage.AlarmSpec{Severity: "high", Message: "rule: of thumb"}); !errors.Is(err, storage.ErrAlarmInvalid) {
+		t.Fatalf("a hand raise whose message (its default key) starts rule:: %v, want ErrAlarmInvalid", err)
+	}
+}

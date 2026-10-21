@@ -407,7 +407,7 @@ Records a condition on this component, then recomputes health in the same transa
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--dedup-key` | string | (none) | The condition identity; defaults to the message. Raising an already-open (component, dedup_key) returns the existing open alarm instead of a duplicate |
+| `--dedup-key` | string | (none) | The condition identity; defaults to the message. Raising an already-open (component, dedup_key) returns the existing open alarm instead of a duplicate. A key (or, without one, a message) beginning rule: is refused (422): that namespace names a rule's condition |
 | `--message` | string | (none) | What is wrong, for the operator reading it later |
 | `--severity` | string | (none) | How bad it is: a severity level by name (see /severity-levels); a level at or above high puts the component itself in outage |
 

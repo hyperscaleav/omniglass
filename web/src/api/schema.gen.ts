@@ -7418,7 +7418,7 @@ export interface components {
              * @example /api/v1/schemas/RaiseAlarmInputBody.json
              */
             readonly $schema?: string;
-            /** @description The condition identity; defaults to the message. Raising an already-open (component, dedup_key) returns the existing open alarm instead of a duplicate */
+            /** @description The condition identity; defaults to the message. Raising an already-open (component, dedup_key) returns the existing open alarm instead of a duplicate. A key (or, without one, a message) beginning rule: is refused (422): that namespace names a rule's condition */
             dedup_key?: string;
             /** @description What is wrong, for the operator reading it later */
             message?: string;

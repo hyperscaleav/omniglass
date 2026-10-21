@@ -6954,3 +6954,13 @@ now carries the rule's uuid, which the Rules page resolves, so a link written be
 opens the rule. The rules guide, alarms and actions, the API page and ADR-0144 (a dated amendment to
 its point 5) say so, and the `write-a-rule-as-an-expression` walkthrough's name caption no longer
 claims a name cannot change.
+
+A review of #977 closed four gaps. A replica from before #977 still raises a rule's alarm under the
+name key during a rolling upgrade, after the migration ran, and the new binary matched only the uuid
+key, so such an alarm was never cleared (or was opened twice, or stranded once the condition row
+went). Every rule-alarm match now finds the alarm by `raised_by_rule_id` plus the instance parsed from
+its key after the rule segment (`ruleKeyInstance`, mirrored in SQL), under either segment; a new raise
+always writes the uuid key. A hand raise may no longer take a `rule:` key (422), which could have stood
+in for a rule's alarm. The rule form judges a name only when it changed, by the shared entity name
+rule the server applies (`names.ts`), so a stored name like `too-hot-` stays saveable; and a stale
+comment that still called the name create-only is gone.

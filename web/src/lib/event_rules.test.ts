@@ -139,6 +139,12 @@ describe("the form's rules", () => {
     expect(validateDraft({ ...draftFromRule(hot), name: "" }).name).toBeTruthy();
     expect(validateDraft({ ...draftFromRule(hot), name: "Hot Room" }).name).toMatch(/Lowercase/);
     expect(validateDraft({ ...draftFromRule(hot), name: "hot-room" })).toEqual({});
+    // The server's rule (names.ts), judged only when the name changed: a
+    // stored name the server accepted stays saveable as it is.
+    const trailing = { ...hot, name: "too-hot-" };
+    expect(validateDraft(draftFromRule(trailing), "too-hot-")).toEqual({});
+    expect(validateDraft(draftFromRule(trailing))).toEqual({});
+    expect(validateDraft({ ...draftFromRule(hot), name: "0b6f8d2e-6f4e-4f7a-9d55-3c1f2d7a9e10" }, "too-hot").name).toMatch(/uuid/);
   });
 
   it("asks for a clear value only when the author chose a clear criterion", () => {

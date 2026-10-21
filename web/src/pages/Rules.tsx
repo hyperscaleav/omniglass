@@ -727,7 +727,7 @@ export function RuleForm(p: { mode: "create" | "edit"; rule?: EventRule; onSaved
     }
   });
 
-  const errors = createMemo<DraftErrors>(() => validateDraft(d));
+  const errors = createMemo<DraftErrors>(() => validateDraft(d, p.rule?.name));
   // The server's verdict on each criterion written as an expression (undefined
   // until a check answers): a source that does not compile refuses the submit.
   const [exprOk, setExprOk] = createStore<{ fire?: boolean; clear?: boolean }>({});

@@ -212,6 +212,72 @@ func ruleDedupKey(ruleID, instance string) string {
 	return "rule:" + ruleID + ":" + instance
 }
 
+// ruleKeyInstance is the instance a rule alarm's dedup key names: the suffix
+// after its rule segment, "" when it has none. The rule segment is the uuid
+// this binary writes, or the name an older replica still writes during a
+// rolling upgrade (rule:<name>[:<instance>]); neither holds a colon, so the
+// instance (which may) is everything after the first colon past "rule:".
+// A rule's alarm is found by raised_by_rule_id plus this instance, whatever
+// key wrote it (#977); a new raise always writes the uuid key.
+func ruleKeyInstance(key string) string {
+	rest := strings.TrimPrefix(key, "rule:")
+	if i := strings.IndexByte(rest, ':'); i >= 0 {
+		return rest[i+1:]
+	}
+	return ""
+}
+
+// ruleKeyInstanceSQL is ruleKeyInstance in SQL, over a dedup key column.
+func ruleKeyInstanceSQL(col string) string {
+	return fmt.Sprintf(`(case when strpos(substr(%[1]s, 6), ':') = 0 then ''
+		else substr(substr(%[1]s, 6), strpos(substr(%[1]s, 6), ':') + 1) end)`, col)
+}
+
+// ruleAlarmOn is the predicate matching a rule's alarm on an instance, over
+// an alarm aliased a: the rule's own (raised_by_rule_id) in the rule key
+// namespace, its key naming that instance under either rule segment.
+func ruleAlarmOn(ruleID, instance string) string {
+	return `a.raised_by_rule_id = ` + ruleID + ` and a.dedup_key like 'rule:%' and ` + ruleKeyInstanceSQL("a.dedup_key") + ` = ` + instance
+}
+
+// clearRuleAlarmTx resolves the alarm a rule holds open on a component and
+// instance, whatever key wrote it (the uuid key, or an older replica's
+// name key), and returns its id ("" when none was open). Should both be open
+// (an older replica raised beside this one), both resolve, and the uuid
+// key's id is returned.
+func (p *PG) clearRuleAlarmTx(ctx context.Context, tx pgx.Tx, actorID string, r EventRule, comp *Component, instance string) (string, error) {
+	rows, err := tx.Query(ctx, `select a.dedup_key from alarm a where a.component_id = $1::uuid and a.cleared_at is null and `+
+		ruleAlarmOn("$2::uuid", "$3")+` order by (a.dedup_key = $4) desc, a.raised_at`, comp.ID, r.ID, instance, ruleDedupKey(r.ID, instance))
+	if err != nil {
+		return "", fmt.Errorf("storage: rule %s open alarm on %s: %w", r.Name, comp.Name, err)
+	}
+	var keys []string
+	for rows.Next() {
+		var k string
+		if err := rows.Scan(&k); err != nil {
+			rows.Close()
+			return "", err
+		}
+		keys = append(keys, k)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return "", err
+	}
+	id := r.ID
+	first := ""
+	for _, k := range keys {
+		alarmID, err := p.clearAlarmByDedupTx(ctx, tx, actorID, comp, k, &id)
+		if err != nil {
+			return "", err
+		}
+		if first == "" {
+			first = alarmID
+		}
+	}
+	return first, nil
+}
+
 // ruleMessage is the alarm's message: the rule's message, else its label,
 // else its name.
 func ruleMessage(r EventRule) string {
@@ -382,9 +448,9 @@ func conditionInForce(ctx context.Context, tx pgx.Tx, r EventRule, componentID, 
 	var inForce bool
 	if err := tx.QueryRow(ctx, `select exists (select 1 from event_rule_condition where rule_id = $1::uuid
 			and component_id = $2::uuid and instance = $3)
-		or exists (select 1 from alarm where component_id = $2::uuid and dedup_key = $4
-			and cleared_at is null and raised_by_rule_id = $1::uuid)`,
-		r.ID, componentID, instance, ruleDedupKey(r.ID, instance)).Scan(&inForce); err != nil {
+		or exists (select 1 from alarm a where a.component_id = $2::uuid and a.cleared_at is null
+			and `+ruleAlarmOn("$1::uuid", "$3")+`)`,
+		r.ID, componentID, instance).Scan(&inForce); err != nil {
 		return false, fmt.Errorf("storage: rule %s condition: %w", r.Name, err)
 	}
 	return inForce, nil
@@ -588,8 +654,7 @@ func (p *PG) endCondition(ctx context.Context, tx pgx.Tx, actorID string, r Even
 	if err != nil {
 		return fmt.Errorf("storage: rule %s end condition on %s: %w", r.Name, comp.Name, err)
 	}
-	id := r.ID
-	alarmID, err := p.clearAlarmByDedupTx(ctx, tx, actorID, comp, ruleDedupKey(r.ID, instance), &id)
+	alarmID, err := p.clearRuleAlarmTx(ctx, tx, actorID, r, comp, instance)
 	if err != nil {
 		return fmt.Errorf("storage: rule %s clear on %s: %w", r.Name, comp.Name, err)
 	}
@@ -933,7 +998,6 @@ func (p *PG) settleSeverity(ctx context.Context, tx pgx.Tx, actorID string, old,
 			return err
 		}
 		m := newRuleMatcher(p, nil)
-		id := r.ID
 		for _, c := range conds {
 			o, err := m.ownerFacts(ctx, tx, c.component)
 			if err != nil {
@@ -942,7 +1006,7 @@ func (p *PG) settleSeverity(ctx context.Context, tx pgx.Tx, actorID string, old,
 			if err := lockAdvisory(ctx, tx, ruleSeriesLockKey(r.ID, c.component, c.instance)); err != nil {
 				return err
 			}
-			if _, err := p.clearAlarmByDedupTx(ctx, tx, actorID, &o.comp, ruleDedupKey(r.ID, c.instance), &id); err != nil {
+			if _, err := p.clearRuleAlarmTx(ctx, tx, actorID, r, &o.comp, c.instance); err != nil {
 				return err
 			}
 		}
@@ -1017,7 +1081,6 @@ func (p *PG) EventRuleState(ctx context.Context, name string, visible scope.Set)
 	if err != nil {
 		return nil, err
 	}
-	prefix := ruleDedupKey(r.ID, "")
 	out := &EventRuleLive{Conditions: []RuleCondition{}, Open: []RuleOpenAlarm{}, Pending: []RuleStreak{}, LastJudgedAt: r.LastJudgedAt,
 		CriteriaError: r.CriteriaError}
 	f := newReadFilter(componentTable, visible, 2)
@@ -1035,7 +1098,7 @@ func (p *PG) EventRuleState(ctx context.Context, name string, visible scope.Set)
 			rows.Close()
 			return nil, err
 		}
-		o.Instance = strings.TrimPrefix(strings.TrimPrefix(dedup, prefix), ":")
+		o.Instance = ruleKeyInstance(dedup)
 		out.Open = append(out.Open, o)
 	}
 	rows.Close()
@@ -1268,9 +1331,8 @@ func ruleCandidates(ctx context.Context, q querier, lane rules.Lane, from, to in
 		select %[3]s, tc.component_id::text, tc.instance, n.value,
 			(exists (select 1 from event_rule_condition c where c.rule_id = r.id and c.component_id = tc.component_id
 				and c.instance = tc.instance)
-			or exists (select 1 from alarm a where a.component_id = tc.component_id and a.raised_by_rule_id = r.id
-				and a.cleared_at is null
-				and a.dedup_key = 'rule:' || r.id::text || case when tc.instance = '' then '' else ':' || tc.instance end)),
+			or exists (select 1 from alarm a where a.component_id = tc.component_id and a.cleared_at is null
+				and %[5]s)),
 			st.pending, comp.name, coalesce(ct.name, '')
 		from touched tc
 		join component comp on comp.id = tc.component_id
@@ -1280,7 +1342,8 @@ func ruleCandidates(ctx context.Context, q querier, lane rules.Lane, from, to in
 		join event_rule r on r.enabled and r.sample_lane = $1 and r.sample_key = t.name
 		cross join lateral (%[4]s) n
 		left join event_rule_state st on st.rule_id = r.id and st.component_id = tc.component_id and st.instance = tc.instance`,
-		table, typeTable, ruleCols("r."), seriesNewestSQL(lane, "tc.component_id", "tc.type_id", "tc.instance")), string(lane), from, to)
+		table, typeTable, ruleCols("r."), seriesNewestSQL(lane, "tc.component_id", "tc.type_id", "tc.instance"),
+		ruleAlarmOn("r.id", "tc.instance")), string(lane), from, to)
 	if err != nil {
 		return nil, fmt.Errorf("storage: rule reconcile scan: %w", err)
 	}

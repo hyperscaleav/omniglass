@@ -867,4 +867,9 @@ func TestEventRuleRenameAPI(t *testing.T) {
 	c.do(ownerTok, http.MethodPost, "/event-rules/rn-after:rename", map[string]any{"name": "Not Kebab"}, http.StatusUnprocessableEntity)
 	c.do(ownerTok, http.MethodPost, "/event-rules/rn-after:rename", map[string]any{"name": made.ID}, http.StatusUnprocessableEntity)
 	c.do(ownerTok, http.MethodPost, "/event-rules/nope:rename", map[string]any{"name": "rn-x"}, http.StatusNotFound)
+
+	// A hand raise cannot take a key in the rule namespace: it would stand in
+	// for the rule's condition, or be cleared as one.
+	c.do(ownerTok, http.MethodPost, "/components/rn-target/alarms", map[string]any{"severity": "high", "message": "m",
+		"dedup_key": "rule:" + made.ID + ":tcp"}, http.StatusUnprocessableEntity)
 }

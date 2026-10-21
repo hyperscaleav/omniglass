@@ -543,6 +543,22 @@ describe("Rules page", () => {
     await blade();
   });
 
+  it("saves an edit to a rule whose stored name the server accepted, trailing hyphen and all", async () => {
+    const writes = catchWrites();
+    const trailing: EventRule = { ...hot, id: uuidFor("rule-trailing"), name: "too-hot-", label: "Trailing" };
+    mount(admin, [reach, hot, trailing]);
+    fireEvent.click(screen.getByText("Trailing"));
+    fireEvent.click(within(await blade()).getByText("Edit"));
+    fireEvent.input(await waitFor(() => screen.getByLabelText("Label")), { target: { value: "Still trailing" } });
+    const save = screen.getByText("Save rule").closest("button") as HTMLButtonElement;
+    await waitFor(() => expect(save.disabled).toBe(false));
+    fireEvent.click(save);
+    await waitFor(() => expect(writes).toHaveLength(1));
+    expect(writes[0].method).toBe("PATCH");
+    expect(writes[0].url).toMatch(/\/event-rules\/too-hot-$/);
+    expect(writes[0].body).toEqual({ label: "Still trailing" });
+  });
+
   it("saves the other fields before the rename, so a refused rename leaves them saved and says why", async () => {
     const writes: { method: string; url: string; body: unknown }[] = [];
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
