@@ -43,11 +43,11 @@ func (r *evalRig) property(key, v string) {
 
 func (r *evalRig) drain() int {
 	r.t.Helper()
-	n, err := r.gw.DrainCalcPending(r.ctx, 100)
+	d, err := r.gw.DrainCalcPending(r.ctx, 100)
 	if err != nil {
 		r.t.Fatal(err)
 	}
-	return n
+	return d.Served
 }
 
 func (r *evalRig) pending() int {
@@ -130,8 +130,8 @@ func TestCalcDerivesComponentSamples(t *testing.T) {
 	if got := r.calculated("temp-sum"); len(got) != 1 || got[0] != "63 per-person 1" {
 		t.Fatalf("temp-sum rows %v, want one calculated 63", got)
 	}
-	if got := r.calculated("avg-temp"); len(got) != 2 || got[1] != "21.666666666666668 temp-mean 1" {
-		t.Fatalf("avg-temp rows %v, want a second row over three instances", got)
+	if got := r.calculated("avg-temp"); len(got) != 1 {
+		t.Fatalf("avg-temp rows %v, want still one: the reducer folds the named instances, not the aggregate beside them", got)
 	}
 	if got := scalar(t, r.conn, `select s.missing::text || ' ' || s.value::text from calc_rule_state s join calc_rule c on c.id = s.rule_id
 		where c.name = 'per-person'`); got != `[] 63` {
@@ -279,8 +279,8 @@ func TestCalcDrainReplicasAndRestart(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if n, err := first.DrainCalcPending(r.ctx, 3); err != nil || n != 3 {
-		t.Fatalf("the first process drained %d (%v), want 3", n, err)
+	if d, err := first.DrainCalcPending(r.ctx, 3); err != nil || d.Served != 3 {
+		t.Fatalf("the first process drained %+v (%v), want 3", d, err)
 	}
 	first.Close()
 	if n := r.pending(); n != owners-3 {
@@ -305,15 +305,15 @@ func TestCalcDrainReplicasAndRestart(t *testing.T) {
 		go func(i int, gw *storage.PG) {
 			defer wg.Done()
 			for {
-				n, err := gw.DrainCalcPending(context.Background(), 1)
+				d, err := gw.DrainCalcPending(context.Background(), 1)
 				if err != nil {
 					errs[i] = err
 					return
 				}
-				if n == 0 {
+				if d.Served == 0 {
 					return
 				}
-				served[i] += n
+				served[i] += d.Served
 			}
 		}(i, gw)
 	}

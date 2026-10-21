@@ -47,18 +47,7 @@ func (p *PG) InsertPropertySamples(ctx context.Context, evs []PropertySampleWrit
 	if len(evs) == 0 {
 		return nil
 	}
-	tx, err := p.pool.Begin(ctx)
-	if err != nil {
-		return fmt.Errorf("storage: begin insert property samples: %w", err)
-	}
-	defer func() { _ = tx.Rollback(ctx) }()
-	if err := p.writePropertySamples(ctx, tx, evs, nil); err != nil {
-		return err
-	}
-	if err := tx.Commit(ctx); err != nil {
-		return fmt.Errorf("storage: commit insert property samples: %w", err)
-	}
-	return nil
+	return p.sampleWrite(ctx, "insert property samples", func(tx pgx.Tx) error { return p.writePropertySamples(ctx, tx, evs, nil) })
 }
 
 // writePropertySamples is the property lane's sample-write path, in the

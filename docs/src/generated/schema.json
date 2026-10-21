@@ -3377,6 +3377,12 @@
       "type": "text",
       "nullable": false,
       "default": "''::text"
+     },
+     {
+      "name": "stale",
+      "type": "jsonb",
+      "nullable": false,
+      "default": "'[]'::jsonb"
      }
     ],
     "checks": [

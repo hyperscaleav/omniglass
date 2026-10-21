@@ -4,10 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/hyperscaleav/omniglass/internal/rules"
+	"math/rand/v2"
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
+
+	"github.com/hyperscaleav/omniglass/internal/rules"
 )
 
 // MetricSampleWrite is one observed metric to persist. OwnerKind picks the
@@ -62,18 +65,52 @@ func (p *PG) InsertMetricSamples(ctx context.Context, evs []MetricSampleWrite) e
 	if len(evs) == 0 {
 		return nil
 	}
+	return p.sampleWrite(ctx, "insert samples", func(tx pgx.Tx) error { return p.writeMetricSamples(ctx, tx, evs, nil) })
+}
+
+// sampleWriteAttempts bounds how often a sample-write transaction is retried
+// after Postgres aborts it as a deadlock (40P01). The calc tick and the
+// ingest can lock two marks in opposite orders (calc_eval.go's lock order);
+// the abort comes before anything commits, so the whole batch is retried,
+// after a short jittered pause, rather than lost.
+const sampleWriteAttempts = 4
+
+// sampleWrite runs one sample-write transaction, retrying it whole on a
+// deadlock abort.
+func (p *PG) sampleWrite(ctx context.Context, what string, write func(pgx.Tx) error) error {
+	var err error
+	for attempt := 1; ; attempt++ {
+		err = p.sampleWriteOnce(ctx, what, write)
+		if err == nil || !isDeadlock(err) || attempt == sampleWriteAttempts {
+			return err
+		}
+		select {
+		case <-ctx.Done():
+			return err
+		case <-time.After(time.Duration(attempt)*10*time.Millisecond + time.Duration(rand.Int64N(int64(20*time.Millisecond)))):
+		}
+	}
+}
+
+func (p *PG) sampleWriteOnce(ctx context.Context, what string, write func(pgx.Tx) error) error {
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
-		return fmt.Errorf("storage: begin insert samples: %w", err)
+		return fmt.Errorf("storage: begin %s: %w", what, err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
-	if err := p.writeMetricSamples(ctx, tx, evs, nil); err != nil {
+	if err := write(tx); err != nil {
 		return err
 	}
 	if err := tx.Commit(ctx); err != nil {
-		return fmt.Errorf("storage: commit insert samples: %w", err)
+		return fmt.Errorf("storage: commit %s: %w", what, err)
 	}
 	return nil
+}
+
+// isDeadlock reports a transaction Postgres aborted to break a deadlock.
+func isDeadlock(err error) bool {
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) && pgErr.Code == "40P01"
 }
 
 // sampleLineage is a calculated sample's producer: the calc rule, by id (so

@@ -102,25 +102,34 @@ describes ([ADR-0148](/architecture/decisions/#adr-0148-calc-rules-run-on-a-dura
 - **Marking.** The sample-write transaction, the same one in which event rules judge each sample, also
   inserts a **mark** in `calc_pending` for every enabled component rule that reads one of the batch's
   keys on an owner its selector picks. One indexed probe on the rules' inputs finds them, so a batch no
-  rule reads pays nothing more. A mark already present is kept, so a burst of samples is one
-  computation.
-- **The tick.** Every server drains the marks once a second, oldest first, up to 500 a pass under a
+  rule reads pays nothing more. A mark already present keeps its time, so a burst of samples is one
+  computation, but the batch still holds it until it commits, so the tick never computes from the values
+  before the batch. Creating, enabling or editing a rule marks every component it selects that already
+  holds one of its inputs, so a rule over stable values computes at once and an edit recomputes.
+- **The tick.** Every server drains due marks once a second, oldest first, up to 500 a pass under a
   10s deadline, each mark in its own transaction taken `FOR UPDATE SKIP LOCKED`. Replicas share one
   queue and never compute a mark twice; a mark is deleted only by the transaction that computes it, so a
-  crash or restart mid-backlog leaves it for the next pass. Latency is up to one tick.
+  crash or restart mid-backlog leaves it for the next pass. A mark whose computation fails is recorded
+  and pushed back 30s while the pass goes on, and a pass that serves anything logs what it served and the
+  queue's depth. Latency is up to one tick.
 - **Reducing.** The rule reads each input's current value on the component, ignoring intended values (a
-  rule reads observed and calculated values as truth): every instance's newest value for a named
-  reducer, the aggregate instance's newest value for an expression. A missing input (no value) is not
-  guessed at: the rule writes nothing, and its last outcome on the owner, in `calc_rule_state`, names
-  the missing inputs. So do a reduce that fails at run time (a non-finite number, a run over its
-  budget) and a stored rule that no longer compiles.
+  rule reads observed and calculated values as truth). A **named reducer** folds each instance's newest
+  value: the named instances only, the aggregate instance `''` joining only when the key has no other
+  instance on the component, and an instance whose newest sample is older than an hour (stale) left
+  out and named in the state. `majority` breaks a tie by the value that sorts first (`false` before
+  `true`, text in byte order). An **expression** reads the aggregate instance's newest value. A missing
+  input (no value) is not guessed at: the rule writes nothing, and its last outcome on the owner, in
+  `calc_rule_state`, names the missing inputs. So do a reduce that fails at run time (a non-finite number,
+  a run over its budget) and a stored rule that no longer compiles.
 - **Writing.** The result is written on the aggregate instance through the same sample-write path,
   as a **calculated** sample naming the rule (`source_rule`) and its version (`source_rule_version`),
-  so event rules judge it there and downstream calc rules are marked in turn. An unchanged result
-  writes no row, on either lane, so storage grows only with change.
-- **Never itself.** A write knows the rule that produced it and never marks that rule, so a rule cannot
-  feed itself ([ADR-0069](/architecture/decisions/#adr-0069-cycle-safety-is-provenance-based-not-topology-based)
-  at runtime, beside the authoring cycle check).
+  on the lane the rule holds its output by, so event rules judge it there and downstream calc rules are
+  marked in turn. An unchanged result writes no row, on either lane, so storage grows only with change.
+- **Never itself.** A write knows the rule that produced it and never marks that rule, which stops a
+  rule feeding itself at runtime; longer loops are refused at authoring, and a loop written around the
+  gateway is out of contract
+  ([ADR-0069](/architecture/decisions/#adr-0069-cycle-safety-is-provenance-based-not-topology-based)
+  stands behind both).
 
 A system rule is accepted by the registry but not yet marked or run.
 

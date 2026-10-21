@@ -480,7 +480,7 @@ const (
 // each pass under calcTickTimeout. Marks are rows, so replicas drain one
 // queue (SKIP LOCKED) and a restart resumes where the last pass stopped.
 // Shutdown cancels a pass in flight; its mark in progress rolls back and
-// stays pending.
+// stays pending. A panicking pass is recovered (calcPass).
 func (s *Server) startCalcTick() {
 	ctx, cancel := context.WithCancel(context.Background())
 	s.stopCalc = cancel
@@ -495,12 +495,28 @@ func (s *Server) startCalcTick() {
 				return
 			case <-t.C:
 			}
-			pass, done := context.WithTimeout(ctx, calcTickTimeout)
-			_, err := s.store.DrainCalcPending(pass, calcTickBatch)
-			done()
-			if err != nil && ctx.Err() == nil {
-				slog.Warn("calc tick failed", "facility", "rules", "error", err.Error())
-			}
+			s.calcPass(ctx)
 		}
 	}()
+}
+
+// calcPass runs one drain under its deadline. A panic in it is recovered
+// and logged, so one bad pass never ends the tick. A pass that served or
+// deferred marks, or left a backlog, logs what it did and the queue's
+// depth: there is no metrics surface yet, so the log is the gauge.
+func (s *Server) calcPass(ctx context.Context) {
+	defer func() {
+		if r := recover(); r != nil {
+			slog.Error("calc tick panicked", "facility", "rules", "panic", fmt.Sprint(r))
+		}
+	}()
+	pass, done := context.WithTimeout(ctx, calcTickTimeout)
+	defer done()
+	d, err := s.store.DrainCalcPending(pass, calcTickBatch)
+	if err != nil && ctx.Err() == nil {
+		slog.Warn("calc tick failed", "facility", "rules", "error", err.Error())
+	}
+	if d.Served > 0 || d.Deferred > 0 || d.Depth > 0 {
+		slog.Info("calc tick", "facility", "rules", "served", d.Served, "deferred", d.Deferred, "pending", d.Depth)
+	}
 }

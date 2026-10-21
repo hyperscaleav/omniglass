@@ -45,6 +45,9 @@ type CalcRule struct {
 	// written outside the gateway); nil when it compiles. Read beside the
 	// rule, never stored or audited.
 	CalcError *CalcFault `json:"-"`
+	// outputType is the output's value type, from the registry row the rule
+	// holds by id on its recorded lane, never re-resolved by name.
+	outputType string
 }
 
 // CalcFault is a stored rule's compile error as a reader sees it: the field
@@ -114,7 +117,8 @@ func invalidCalc(field, format string, a ...any) error {
 // calcRuleSelect reads a rule with its output key's name, from whichever
 // registry its lane names.
 const calcRuleSelect = `select c.id, c.name, coalesce(c.label, ''), c.description, c.owner_kind, c.selector, c.inputs, c.reduce,
-	c.output_lane, coalesce(pt.name, mt.name, ''), c.enabled, c.official, c.version, c.created_at, c.updated_at
+	c.output_lane, coalesce(pt.name, mt.name, ''), c.enabled, c.official, c.version, c.created_at, c.updated_at,
+	case when c.output_lane = 'metric' then 'number' when pt.data_type = 'bool' then 'bool' else 'text' end
 	from calc_rule c
 	left join property_type pt on pt.id = c.output_property_type_id
 	left join metric_type mt on mt.id = c.output_metric_type_id`
@@ -124,7 +128,7 @@ func scanCalcRule(row pgx.Row) (CalcRule, error) {
 	var sel, inputs, reduce []byte
 	var lane string
 	if err := row.Scan(&r.ID, &r.Name, &r.Label, &r.Description, &r.OwnerKind, &sel, &inputs, &reduce, &lane, &r.OutputKey,
-		&r.Enabled, &r.Official, &r.Version, &r.CreatedAt, &r.UpdatedAt); err != nil {
+		&r.Enabled, &r.Official, &r.Version, &r.CreatedAt, &r.UpdatedAt, &r.outputType); err != nil {
 		return r, err
 	}
 	r.OutputLane = rules.Lane(lane)
@@ -491,6 +495,9 @@ func (p *PG) CreateCalcRule(ctx context.Context, actorID string, spec CalcRuleSp
 	if err != nil {
 		return nil, err
 	}
+	if err := resetCalcRuleWork(ctx, tx, created); err != nil {
+		return nil, err
+	}
 	if err := writeAuditRes(ctx, tx, actorID, "create", "calc_rule", created.ID, nil, created); err != nil {
 		return nil, err
 	}
@@ -594,6 +601,9 @@ func (p *PG) UpdateCalcRule(ctx context.Context, actorID, ref string, patch Calc
 	}
 	updated, err := readCalcRule(ctx, tx, old.ID, false)
 	if err != nil {
+		return nil, err
+	}
+	if err := resetCalcRuleWork(ctx, tx, updated); err != nil {
 		return nil, err
 	}
 	if err := writeAuditRes(ctx, tx, actorID, "update", "calc_rule", old.ID, old, updated); err != nil {

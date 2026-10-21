@@ -23,12 +23,19 @@ import (
 // judge it and downstream calc rules are marked in turn. A rule never marks
 // itself (ADR-0069 at runtime: the write knows its producer).
 //
-// Lock order, the same on every path: the pending row (the tick's FOR
-// UPDATE, or a write's insert of a mark), then the calc rule's row (FOR
-// SHARE, skipped when a rule write holds it), then the event rule rows and
-// series and health locks the sample write takes. A sample write marks
-// before it inserts or judges anything, so it never waits on a mark while
-// holding a series or health lock.
+// Lock order. A sample write (the ingest's, or the tick's own output write)
+// takes the event rule rows reading its keys FOR SHARE (newRuleEvaluator),
+// then its marks (insert or update of calc_pending rows, in rule and owner
+// order), then the series and health locks its samples' judging takes. The
+// tick takes a mark first (FOR UPDATE SKIP LOCKED, deleting it), then the
+// calc rule's row FOR SHARE SKIP LOCKED, then, in its output write, the
+// order above. A rule write takes its calc_rule row FOR UPDATE, then the
+// rule's marks. Two orders still cross: the tick holds a mark it deleted
+// while its output write marks the next rule, and an ingest batch can hold
+// that next mark while it waits on the deleted one. Postgres breaks that
+// cycle with a deadlock error (40P01), and the ingest retries its whole
+// transaction (sampleWriteAttempts), so a batch is never lost to it; a tick
+// that loses defers its mark.
 
 // calcMarks is a write's owners and the keys each sample on them carried.
 type calcMarks struct {
@@ -79,8 +86,10 @@ func calcKeysPath(keys []string) string {
 // reads one of the keys a write's samples carried on an owner its selector
 // picks, except the rule that produced the write. One indexed probe finds
 // the rules; when none reads the keys the write pays nothing more. A mark
-// already present is kept (coalescing), and the marks are inserted in
-// (rule, owner) order so two writes marking the same rows cannot deadlock.
+// already present keeps its marked_at (coalescing) but is updated, not
+// skipped: the update locks the row until this write commits, so a drain
+// (SKIP LOCKED) cannot serve it from the values before this write and drop
+// the change. The marks are inserted in (rule, owner) order.
 func (p *PG) markCalcPending(ctx context.Context, tx pgx.Tx, marks *calcMarks, exceptRule string) error {
 	keys := marks.allKeys()
 	if len(keys) == 0 {
@@ -165,92 +174,179 @@ func (p *PG) markCalcPending(ctx context.Context, tx pgx.Tx, marks *calcMarks, e
 	}
 	if _, err := tx.Exec(ctx, `insert into calc_pending (rule_id, owner_kind, component_id)
 		select r, 'component', c from unnest($1::uuid[], $2::uuid[]) as m(r, c) order by r, c
-		on conflict on constraint calc_pending_key do nothing`, ruleIDs, compIDs); err != nil {
+		on conflict on constraint calc_pending_key do update set marked_at = calc_pending.marked_at`, ruleIDs, compIDs); err != nil {
 		return fmt.Errorf("storage: mark calc rules pending: %w", err)
 	}
 	return nil
 }
 
-// DrainCalcPending serves up to limit pending marks, oldest first, each in
-// its own transaction, and returns how many it served. A mark is taken FOR
-// UPDATE SKIP LOCKED, so replicas draining at once never serve one mark
-// twice, and deleted in the transaction that computes it, so a crash before
-// the commit leaves it for the next drain. A pass stops early when the queue
-// is empty or the oldest mark's rule is held by a rule write.
-func (p *PG) DrainCalcPending(ctx context.Context, limit int) (int, error) {
-	served := 0
-	for served < limit {
-		ok, err := p.serveCalcMark(ctx)
-		if err != nil {
-			return served, err
-		}
-		if !ok {
-			break
-		}
-		served++
-	}
-	return served, nil
+// CalcStaleAfter is the staleness bound on a named reducer's fold: an
+// instance whose newest sample is older is not folded in (a collector that
+// stopped reporting it should not hold the result), and is named in the
+// rule's state as stale.
+const CalcStaleAfter = time.Hour
+
+// calcRetryBackoff is how far a mark whose computation failed (a database
+// fault) is pushed back, so one bad mark cannot hold the head of the queue.
+const calcRetryBackoff = 30 * time.Second
+
+// CalcDrain is one drain pass: the marks it served, the marks it deferred
+// after a failure, and the queue's depth after it.
+type CalcDrain struct {
+	Served   int
+	Deferred int
+	Depth    int
 }
 
-// serveCalcMark serves the oldest mark it can lock; false when there is none
-// to serve now.
-func (p *PG) serveCalcMark(ctx context.Context) (bool, error) {
+// DrainCalcPending serves up to limit due marks, oldest first, each in its
+// own transaction. A mark is taken FOR UPDATE SKIP LOCKED, so replicas
+// draining at once never serve one mark twice, and deleted in the
+// transaction that computes it, so a crash before the commit leaves it for
+// the next drain. A mark whose rule a rule write holds is passed over for
+// this pass; a mark whose computation fails is recorded in the rule's state
+// and pushed back by calcRetryBackoff, and the pass goes on.
+func (p *PG) DrainCalcPending(ctx context.Context, limit int) (CalcDrain, error) {
+	var d CalcDrain
+	held := []string{}
+pass:
+	for d.Served+d.Deferred < limit {
+		res, err := p.serveCalcMark(ctx, held)
+		if err != nil {
+			return d, err
+		}
+		switch res.outcome {
+		case markNone:
+			break pass
+		case markHeld:
+			held = append(held, res.ruleID)
+		case markServed:
+			d.Served++
+		case markDeferred:
+			d.Deferred++
+		}
+	}
+	if err := p.pool.QueryRow(ctx, `select count(*) from calc_pending`).Scan(&d.Depth); err != nil {
+		return d, fmt.Errorf("storage: calc pending depth: %w", err)
+	}
+	return d, nil
+}
+
+type markOutcome int
+
+const (
+	markNone markOutcome = iota
+	markHeld
+	markServed
+	markDeferred
+)
+
+type markResult struct {
+	outcome markOutcome
+	ruleID  string
+}
+
+// serveCalcMark serves the oldest due mark it can lock whose rule is not in
+// held.
+func (p *PG) serveCalcMark(ctx context.Context, held []string) (markResult, error) {
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
-		return false, fmt.Errorf("storage: begin calc mark: %w", err)
+		return markResult{}, fmt.Errorf("storage: begin calc mark: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 	var ruleID, ownerKind, compID string
 	err = tx.QueryRow(ctx, `select rule_id::text, owner_kind, coalesce(component_id::text, '') from calc_pending
-		order by marked_at, rule_id for update skip locked limit 1`).Scan(&ruleID, &ownerKind, &compID)
+		where marked_at <= now() and not (rule_id = any($1::uuid[]))
+		order by marked_at, rule_id for update skip locked limit 1`, held).Scan(&ruleID, &ownerKind, &compID)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return false, nil
+		return markResult{outcome: markNone}, nil
 	}
 	if err != nil {
-		return false, fmt.Errorf("storage: take a calc mark: %w", err)
+		return markResult{}, fmt.Errorf("storage: take a calc mark: %w", err)
 	}
 	// The rule's row FOR SHARE, SKIP LOCKED: a rule write holding it FOR
-	// UPDATE (and, on a delete, about to cascade into this mark) is not
-	// waited on while this mark is held. The mark stays for a later pass.
+	// UPDATE (and about to reset this rule's marks) is not waited on while
+	// this mark is held; the rule's marks are passed over for this pass.
 	r, err := readCalcRuleSQL(ctx, tx, calcRuleSelect+` where c.id::text = $1 for share of c skip locked`, ruleID)
 	if errors.Is(err, ErrCalcRuleNotFound) {
-		var exists bool
-		if err := tx.QueryRow(ctx, `select exists (select 1 from calc_rule where id = $1::uuid)`, ruleID).Scan(&exists); err != nil {
-			return false, fmt.Errorf("storage: calc mark rule: %w", err)
-		}
-		if exists {
-			return false, nil // a rule write holds it: try again next pass
-		}
-	} else if err != nil {
-		return false, err
+		return markResult{outcome: markHeld, ruleID: ruleID}, nil
+	}
+	if err != nil {
+		return markResult{}, err
 	}
 	if _, err := tx.Exec(ctx, `delete from calc_pending where rule_id = $1::uuid and owner_kind = $2
 		and component_id is not distinct from nullif($3, '')::uuid`, ruleID, ownerKind, compID); err != nil {
-		return false, fmt.Errorf("storage: clear a calc mark: %w", err)
+		return markResult{}, fmt.Errorf("storage: clear a calc mark: %w", err)
 	}
-	if err == nil && r.Enabled && ownerKind == rules.OwnerComponent && r.OwnerKind == rules.OwnerComponent {
-		if err := p.computeCalc(ctx, tx, r, compID); err != nil {
-			return false, err
+	if err := p.computeServed(ctx, tx, r, ownerKind, compID); err != nil {
+		_ = tx.Rollback(ctx)
+		if derr := p.deferCalcMark(ctx, r, compID, err); derr != nil {
+			return markResult{}, derr
 		}
+		return markResult{outcome: markDeferred, ruleID: ruleID}, nil
 	}
 	if err := tx.Commit(ctx); err != nil {
-		return false, fmt.Errorf("storage: commit calc mark: %w", err)
+		if derr := p.deferCalcMark(ctx, r, compID, err); derr != nil {
+			return markResult{}, derr
+		}
+		return markResult{outcome: markDeferred, ruleID: ruleID}, nil
 	}
-	return true, nil
+	return markResult{outcome: markServed, ruleID: ruleID}, nil
+}
+
+// computeServed runs the test hook, then computes an enabled component
+// rule on its component.
+func (p *PG) computeServed(ctx context.Context, tx pgx.Tx, r CalcRule, ownerKind, compID string) error {
+	if p.calcHook != nil {
+		if err := p.calcHook("taken"); err != nil {
+			return err
+		}
+	}
+	if !r.Enabled || ownerKind != rules.OwnerComponent || r.OwnerKind != rules.OwnerComponent {
+		return nil
+	}
+	return p.computeCalc(ctx, tx, r, compID)
+}
+
+// deferCalcMark records a failed computation in the rule's state and puts
+// its mark back, due after calcRetryBackoff, in a transaction of its own
+// (the failed one is rolled back, its mark with it).
+func (p *PG) deferCalcMark(ctx context.Context, r CalcRule, compID string, cause error) error {
+	tx, err := p.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("storage: begin defer calc mark: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	if _, err := tx.Exec(ctx, `insert into calc_pending (rule_id, owner_kind, component_id, marked_at)
+		select $1::uuid, 'component', $2::uuid, now() + make_interval(secs => $3)
+		where exists (select 1 from calc_rule where id = $1::uuid)
+		on conflict on constraint calc_pending_key do update set marked_at = greatest(calc_pending.marked_at, excluded.marked_at)`,
+		r.ID, compID, calcRetryBackoff.Seconds()); err != nil {
+		return fmt.Errorf("storage: defer calc mark: %w", err)
+	}
+	if err := recordCalcState(ctx, tx, r, compID, calcOutcome{err: cause.Error()}); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
 }
 
 // calcOutcome is one computation's result on an owner, for its state row.
 type calcOutcome struct {
 	value   any
 	missing []string
+	stale   []staleInstance
 	err     string
+}
+
+type staleInstance struct {
+	Key      string `json:"key"`
+	Instance string `json:"instance"`
 }
 
 // computeCalc reduces a component rule's inputs on one component and, when
 // the result differs from the output's current value, writes it as a
 // calculated sample on the aggregate instance. Every outcome (a value, the
-// inputs that had none, an error) is recorded in calc_rule_state; only a
-// database fault is returned.
+// inputs that had none, the instances skipped as stale, an error) is
+// recorded in calc_rule_state; only a database fault is returned.
 func (p *PG) computeCalc(ctx context.Context, tx pgx.Tx, r CalcRule, compID string) error {
 	out, err := p.reduceCalc(ctx, tx, r, compID)
 	if err != nil {
@@ -277,14 +373,14 @@ func (p *PG) reduceCalc(ctx context.Context, tx pgx.Tx, r CalcRule, compID strin
 		}
 		typed[i] = rules.TypedInput{As: in.As, Key: in.Key, ValueType: vt}
 	}
-	prog, err := p.calcs.program(r, typed, types[r.OutputKey])
+	prog, err := p.calcs.program(r, typed, r.outputType)
 	if err != nil {
 		return calcOutcome{err: err.Error()}, nil
 	}
+	var out calcOutcome
 	values := make([][]any, len(typed))
-	var missing []string
 	for i, in := range typed {
-		vs, err := readCalcInput(ctx, tx, compID, in, prog.Reducer != nil)
+		vs, stale, err := readCalcInput(ctx, tx, compID, in, prog.Reducer != nil)
 		if err != nil {
 			var bad *calcValueError
 			if errors.As(err, &bad) {
@@ -292,19 +388,22 @@ func (p *PG) reduceCalc(ctx context.Context, tx pgx.Tx, r CalcRule, compID strin
 			}
 			return calcOutcome{}, err
 		}
+		out.stale = append(out.stale, stale...)
 		if len(vs) == 0 {
-			missing = append(missing, in.Key)
+			out.missing = append(out.missing, in.Key)
 		}
 		values[i] = vs
 	}
-	if len(missing) > 0 {
-		return calcOutcome{missing: missing}, nil
+	if len(out.missing) > 0 {
+		return out, nil
 	}
 	v, err := prog.Reduce(values)
 	if err != nil {
-		return calcOutcome{err: err.Error()}, nil
+		out.err = err.Error()
+		return out, nil
 	}
-	return calcOutcome{value: v}, nil
+	out.value = v
+	return out, nil
 }
 
 // calcValueError is a stored input value its type cannot read.
@@ -314,16 +413,20 @@ func (e *calcValueError) Error() string { return e.msg }
 
 // readCalcInput is one input's current values on a component, ignoring
 // intended values (calc reads observed and calculated as truth, never
-// intended): every instance's newest value for a reducer, the aggregate
-// instance's newest value otherwise. Instances are walked one index probe at
-// a time (the series index leads with component, type and instance).
-func readCalcInput(ctx context.Context, tx pgx.Tx, compID string, in rules.TypedInput, allInstances bool) ([]any, error) {
+// intended).
+//
+// For a named reducer (allInstances) it is each instance's newest value:
+// the per-instance values only, the aggregate instance ” joining the fold
+// only when the key has no other instance on the component, and an instance
+// whose newest sample is older than CalcStaleAfter left out and returned as
+// stale. Instances are walked one index probe at a time (the series index
+// leads with component, type and instance). Otherwise it is the aggregate
+// instance's newest value.
+func readCalcInput(ctx context.Context, tx pgx.Tx, compID string, in rules.TypedInput, allInstances bool) ([]any, []staleInstance, error) {
 	table, typeCol, typeTable, value := "property", "property_type_id", "property_type", "value #>> '{}'"
 	if in.ValueType == rules.ValueNumber {
 		table, typeCol, typeTable, value = "metric", "metric_type_id", "metric_type", "value::text"
 	}
-	newest := fmt.Sprintf(`(select %[4]s from %[1]s where component_id = $1::uuid and %[2]s = t.id and instance = i.instance
-		and provenance <> 'intended' order by ts desc, id desc limit 1)`, table, typeCol, typeTable, value)
 	var sql string
 	if allInstances {
 		sql = fmt.Sprintf(`with recursive t as (select id from %[3]s where name = $2),
@@ -332,37 +435,73 @@ func readCalcInput(ctx context.Context, tx pgx.Tx, compID string, in rules.Typed
 				union all
 				select (select x.instance from %[1]s x, t where x.component_id = $1::uuid and x.%[2]s = t.id and x.instance > inst.instance
 					order by x.instance limit 1) from inst where inst.instance is not null)
-			select v from (select %[4]s as v from inst i, t where i.instance is not null) s where v is not null`, table, typeCol, typeTable, newest)
+			select i.instance, n.v, n.ts from inst i, t,
+				lateral (select %[4]s as v, ts from %[1]s where component_id = $1::uuid and %[2]s = t.id and instance = i.instance
+					and provenance <> 'intended' order by ts desc, id desc limit 1) n
+			where i.instance is not null`, table, typeCol, typeTable, value)
 	} else {
 		sql = fmt.Sprintf(`with t as (select id from %[3]s where name = $2), i as (select ''::text as instance)
-			select v from (select %[4]s as v from i, t) s where v is not null`, table, typeCol, typeTable, newest)
+			select i.instance, n.v, n.ts from i, t,
+				lateral (select %[4]s as v, ts from %[1]s where component_id = $1::uuid and %[2]s = t.id and instance = i.instance
+					and provenance <> 'intended' order by ts desc, id desc limit 1) n`, table, typeCol, typeTable, value)
 	}
+
 	rows, err := tx.Query(ctx, sql, compID, in.Key)
 	if err != nil {
-		return nil, fmt.Errorf("storage: read calc input %s: %w", in.Key, err)
+		return nil, nil, fmt.Errorf("storage: read calc input %s: %w", in.Key, err)
 	}
-	defer rows.Close()
-	var out []any
+	type row struct {
+		instance, raw string
+		ts            time.Time
+	}
+	var got []row
 	for rows.Next() {
-		var raw string
-		if err := rows.Scan(&raw); err != nil {
-			return nil, fmt.Errorf("storage: read calc input %s: %w", in.Key, err)
+		var x row
+		if err := rows.Scan(&x.instance, &x.raw, &x.ts); err != nil {
+			rows.Close()
+			return nil, nil, fmt.Errorf("storage: read calc input %s: %w", in.Key, err)
 		}
-		v, err := rules.CalcValue(in.ValueType, raw)
+		got = append(got, x)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return nil, nil, err
+	}
+	if allInstances {
+		var named []row
+		for _, x := range got {
+			if x.instance != "" {
+				named = append(named, x)
+			}
+		}
+		if len(named) > 0 {
+			got = named
+		}
+	}
+	var out []any
+	var stale []staleInstance
+	cutoff := time.Now().Add(-CalcStaleAfter)
+	for _, x := range got {
+		if allInstances && x.ts.Before(cutoff) {
+			stale = append(stale, staleInstance{Key: in.Key, Instance: x.instance})
+			continue
+		}
+		v, err := rules.CalcValue(in.ValueType, x.raw)
 		if err != nil {
-			return nil, &calcValueError{msg: fmt.Sprintf("input %s: %v", in.As, err)}
+			return nil, nil, &calcValueError{msg: fmt.Sprintf("input %s: %v", in.As, err)}
 		}
 		out = append(out, v)
 	}
-	return out, rows.Err()
+	return out, stale, nil
 }
 
 // writeCalcOutput writes a rule's output on a component's aggregate instance
 // through the sample-write path, as calculated, unless it equals the
 // output's current value (so an unchanged result writes no row, on either
-// lane, and storage grows only with change).
+// lane, and storage grows only with change). The lane and type are the ones
+// the rule holds its output by, never re-resolved by name.
 func (p *PG) writeCalcOutput(ctx context.Context, tx pgx.Tx, r CalcRule, compID string, v any) error {
-	current, err := readCalcInput(ctx, tx, compID, rules.TypedInput{Key: r.OutputKey, ValueType: outputValueType(r, v)}, false)
+	current, _, err := readCalcInput(ctx, tx, compID, rules.TypedInput{Key: r.OutputKey, ValueType: r.outputType}, false)
 	if err != nil {
 		var bad *calcValueError
 		if !errors.As(err, &bad) {
@@ -374,8 +513,12 @@ func (p *PG) writeCalcOutput(ctx context.Context, tx pgx.Tx, r CalcRule, compID 
 	lineage := &sampleLineage{ruleID: r.ID, ruleName: r.Name, version: r.Version}
 	ts := time.Now().UTC()
 	if r.OutputLane == rules.LaneMetric {
+		f, ok := v.(float64)
+		if !ok {
+			return fmt.Errorf("storage: calc rule %s produced %T for metric output %s", r.Name, v, r.OutputKey)
+		}
 		return p.writeMetricSamples(ctx, tx, []MetricSampleWrite{{OwnerKind: rules.OwnerComponent, OwnerID: compID, Key: r.OutputKey,
-			Value: v.(float64), Source: calcSource, TS: ts}}, lineage)
+			Value: f, Source: calcSource, TS: ts}}, lineage)
 	}
 	return p.writePropertySamples(ctx, tx, []PropertySampleWrite{{OwnerKind: rules.OwnerComponent, OwnerID: compID, Key: r.OutputKey,
 		Value: rules.FormatCalcValue(v), Source: calcSource, TS: ts}}, lineage)
@@ -385,34 +528,76 @@ func (p *PG) writeCalcOutput(ctx context.Context, tx pgx.Tx, r CalcRule, compID 
 // source_rule.
 const calcSource = "calc"
 
-func outputValueType(r CalcRule, v any) string {
-	switch v.(type) {
-	case float64:
-		return rules.ValueNumber
-	case bool:
-		return rules.ValueBool
-	}
-	return rules.ValueText
-}
-
 // recordCalcState upserts a rule's last outcome on a component.
 func recordCalcState(ctx context.Context, tx pgx.Tx, r CalcRule, compID string, out calcOutcome) error {
-	missing := out.missing
+	missing, stale := out.missing, out.stale
 	if missing == nil {
 		missing = []string{}
 	}
+	if stale == nil {
+		stale = []staleInstance{}
+	}
 	m, _ := json.Marshal(missing)
+	st, _ := json.Marshal(stale)
 	var value any
 	if out.value != nil {
 		b, _ := json.Marshal(out.value)
 		value = b
 	}
-	if _, err := tx.Exec(ctx, `insert into calc_rule_state (rule_id, owner_kind, component_id, computed_at, rule_version, value, missing, error)
-		values ($1::uuid, 'component', $2::uuid, now(), $3, $4::jsonb, $5::jsonb, $6)
+	if _, err := tx.Exec(ctx, `insert into calc_rule_state (rule_id, owner_kind, component_id, computed_at, rule_version, value, missing, stale, error)
+		values ($1::uuid, 'component', $2::uuid, now(), $3, $4::jsonb, $5::jsonb, $6::jsonb, $7)
 		on conflict on constraint calc_rule_state_key do update set computed_at = excluded.computed_at, rule_version = excluded.rule_version,
-			value = excluded.value, missing = excluded.missing, error = excluded.error`,
-		r.ID, compID, r.Version, value, m, out.err); err != nil {
+			value = excluded.value, missing = excluded.missing, stale = excluded.stale, error = excluded.error`,
+		r.ID, compID, r.Version, value, m, st, out.err); err != nil {
 		return fmt.Errorf("storage: record calc state: %w", err)
+	}
+	return nil
+}
+
+// resetCalcRuleWork brings a rule's pending work and state in line with a
+// write that created it or bumped its version, in the write's transaction
+// (which holds the rule's row FOR UPDATE): the rule's marks and state rows
+// go (a disabled rule keeps neither, a narrowed selector's dropped owners
+// lose theirs, and every kept owner is recomputed at the new version), and
+// an enabled component rule marks every component its selector picks that
+// holds a value of one of its inputs, so a rule over values already stored
+// computes without waiting for a new sample. One statement each.
+func resetCalcRuleWork(ctx context.Context, tx pgx.Tx, r CalcRule) error {
+	if _, err := tx.Exec(ctx, `delete from calc_rule_state where rule_id = $1::uuid`, r.ID); err != nil {
+		return fmt.Errorf("storage: reset calc state: %w", err)
+	}
+	if _, err := tx.Exec(ctx, `delete from calc_pending where rule_id = $1::uuid`, r.ID); err != nil {
+		return fmt.Errorf("storage: reset calc marks: %w", err)
+	}
+	if !r.Enabled || r.OwnerKind != rules.OwnerComponent {
+		return nil
+	}
+	keys := inputKeys(r.Inputs)
+	types := r.Selector.ComponentTypes
+	if types == nil {
+		types = []string{}
+	}
+	ids := r.Selector.Components
+	if ids == nil {
+		ids = []string{}
+	}
+	if _, err := tx.Exec(ctx, `with recursive accepted(id) as (
+			select id from component_type where name = any($3::text[])
+			union
+			select ct.id from component_type ct join accepted a on ct.parent_id = a.id
+		),
+		mt as (select id from metric_type where name = any($4::text[])),
+		pt as (select id from property_type where name = any($4::text[]))
+		insert into calc_pending (rule_id, owner_kind, component_id)
+		select $1::uuid, 'component', c.id from component c left join product p on p.id = c.product_id
+		where ((cardinality($2::uuid[]) = 0 and cardinality($3::text[]) = 0)
+				or c.id = any($2::uuid[]) or p.component_type_id in (select id from accepted))
+			and (exists (select 1 from metric m, mt where m.component_id = c.id and m.metric_type_id = mt.id)
+				or exists (select 1 from property x, pt where x.component_id = c.id and x.property_type_id = pt.id))
+		order by c.id
+		on conflict on constraint calc_pending_key do update set marked_at = calc_pending.marked_at`,
+		r.ID, ids, types, keys); err != nil {
+		return fmt.Errorf("storage: mark a written calc rule: %w", err)
 	}
 	return nil
 }

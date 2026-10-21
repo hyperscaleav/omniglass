@@ -33,7 +33,7 @@ type Store interface {
 	ReconcileEventRules(ctx context.Context, st *storage.RuleReconcileState) error
 	// DrainCalcPending serves up to limit pending calc rule marks (#996),
 	// returning how many it served.
-	DrainCalcPending(ctx context.Context, limit int) (int, error)
+	DrainCalcPending(ctx context.Context, limit int) (storage.CalcDrain, error)
 	// The telemetry ingest consumer surface: resolve+confine a task's owner,
 	// snapshot the sample registry (reject-not-project), and write the typed
 	// metric rows through cp1's insert path. The catalog is two lanes (#587):

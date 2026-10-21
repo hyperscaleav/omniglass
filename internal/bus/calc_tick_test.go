@@ -6,6 +6,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/hyperscaleav/omniglass/internal/storage"
 )
 
 // drainStore counts calc drains, records whether each ran under a deadline,
@@ -19,21 +21,26 @@ type drainStore struct {
 	once        sync.Once
 }
 
-func (s *drainStore) DrainCalcPending(ctx context.Context, limit int) (int, error) {
+func (s *drainStore) DrainCalcPending(ctx context.Context, limit int) (storage.CalcDrain, error) {
 	_, ok := ctx.Deadline()
 	s.hadDeadline.Store(ok)
 	s.limit.Store(int64(limit))
-	if s.drains.Add(1) == 3 {
+	switch s.drains.Add(1) {
+	case 1:
+		panic("a drain fault")
+	case 3:
 		s.once.Do(func() { close(s.block) })
 		<-ctx.Done()
-		return 0, ctx.Err()
+		return storage.CalcDrain{}, ctx.Err()
 	}
-	return 0, nil
+	return storage.CalcDrain{Served: 1, Depth: 2}, nil
 }
 
 // The calc tick (#996) drains pending calc marks on its own goroutine every
-// calcTickEvery, each pass under a deadline and a bounded batch, and a
-// shutdown ends a pass in flight rather than waiting on it.
+// calcTickEvery, each pass under a deadline and a bounded batch; a pass that
+// panics is recovered and the tick goes on (the first drain here panics and
+// the third is still reached); and a shutdown ends a pass in flight rather
+// than waiting on it.
 func TestCalcTickDrains(t *testing.T) {
 	st := &drainStore{block: make(chan struct{})}
 	srv, err := New(Config{Host: "127.0.0.1", Port: -1}, st)

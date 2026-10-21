@@ -101,7 +101,7 @@ func (p *PG) calcFault(r CalcRule, types map[string]string) *CalcFault {
 		}
 		typed[i] = rules.TypedInput{As: in.As, Key: in.Key, ValueType: vt}
 	}
-	err := p.calcs.compile(r, typed, types[r.OutputKey])
+	err := p.calcs.compile(r, typed, r.outputType)
 	if err == nil {
 		return nil
 	}

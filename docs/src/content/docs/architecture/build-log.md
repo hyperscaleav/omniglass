@@ -7092,4 +7092,11 @@ row; an event rule fires on a derived property; a chain recomputes downstream an
 itself (a mutation that dropped the skip re-marked it forever); two replicas compute every mark once and
 a restart mid-backlog loses nothing; and end to end, a node's tcp probe on a simulated device is folded
 by a CLI-authored rule into a calculated metric whose event rule raises an alarm. System rules wait for
-#997.
+#997. Review hardened it before merge: a mark the
+batch finds already present is updated, not skipped, so the batch holds it until commit and the tick
+cannot compute from the old value (a skipped conflict lost the change); the ingest retries its whole
+transaction on a deadlock with the tick (`sampleWriteAttempts`); a failing mark is recorded and deferred
+30s while the pass goes on, a held rule's marks are passed over, and a panicking pass is recovered; a
+rule's create, enable or edit marks the components already holding its inputs and resets its state; the
+output is written on the lane the rule holds it by; and a reducer folds named instances (the aggregate
+only when alone) and skips instances stale past an hour, naming them in the state.

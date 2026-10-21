@@ -475,7 +475,7 @@ type Gateway interface {
 	DeleteCalcRule(ctx context.Context, actorID, ref string, action scope.Set) error
 	// DrainCalcPending serves up to limit pending calc rule marks (#996):
 	// reduce each rule's inputs on its owner and write the output.
-	DrainCalcPending(ctx context.Context, limit int) (int, error)
+	DrainCalcPending(ctx context.Context, limit int) (CalcDrain, error)
 	// SampleKeyType reads which lane a sample key reads and, for a property,
 	// its data type: what types an expression's value (#958).
 	SampleKeyType(ctx context.Context, key string) (rules.Lane, string, error)
@@ -875,6 +875,9 @@ type PG struct {
 	// calcs is each calc rule's reduce compile result, per rule version and
 	// key types.
 	calcs calcCompiles
+	// calcHook is a test seam on the calc drain (calc_export_test.go);
+	// nil in production.
+	calcHook func(stage string) error
 }
 
 // Option configures a PG at construction. The secret provider is optional so
