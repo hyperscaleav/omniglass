@@ -6,6 +6,8 @@ import (
 	"fmt"
 
 	"github.com/jackc/pgx/v5"
+
+	"github.com/hyperscaleav/omniglass/internal/rules"
 )
 
 // Sentinels for property CRUD. Official (seed-owned) properties are read-only.
@@ -205,7 +207,17 @@ func (p *PG) DeletePropertyType(ctx context.Context, actorID, name string) error
 		}
 		return fmt.Errorf("storage: audit image property_type %q: %w", name, err)
 	}
+	// A savepoint, so a refused delete leaves the transaction readable for
+	// naming the calc rules that hold the key.
+	if _, err := tx.Exec(ctx, `savepoint type_delete`); err != nil {
+		return fmt.Errorf("storage: savepoint: %w", err)
+	}
 	if _, err := tx.Exec(ctx, `delete from property_type where name = $1`, name); err != nil {
+		if _, rerr := tx.Exec(ctx, `rollback to savepoint type_delete`); rerr == nil {
+			if inUse := calcOutputInUse(ctx, tx, rules.LaneProperty, name, err); inUse != nil {
+				return inUse
+			}
+		}
 		return fmt.Errorf("storage: delete property %q: %w", name, err)
 	}
 	if err := writeAuditRes(ctx, tx, actorID, "delete", "property_type", auditImageID(before), before, nil); err != nil {

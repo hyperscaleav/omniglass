@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/health"
+	"github.com/hyperscaleav/omniglass/internal/rules"
 	"github.com/hyperscaleav/omniglass/internal/scope"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -57,7 +58,7 @@ import (
 // healthKey is the property sample key carrying a rolled-up verdict. There is
 // one series per owner and no instance dimension: an entity has exactly one
 // health.
-const healthKey = "health"
+const healthKey = rules.HealthKey
 
 // healthRule names the producer in the recorded row's lineage. provenance
 // 'calculated' requires a non-null source_rule (and a null event_id), so

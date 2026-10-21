@@ -21,7 +21,7 @@
     {
       "table": "calc_rule",
       "shape": "key-bearing",
-      "reason": "room-in-use, a rule a calculated sample names as its producer",
+      "reason": "temp-mean, a rule a calculated sample names as its producer",
       "labelled": true
     },
     {

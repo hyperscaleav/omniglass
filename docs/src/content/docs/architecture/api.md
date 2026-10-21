@@ -347,7 +347,7 @@ fault when it has one. A stored rule whose criteria no longer compile carries `c
 and types the value, a metric a number and a property its data type, which so tells a `rule:read`
 holder a key's lane and data type, as the rule list does; or `calc`, for which `key` is the rule's
 output key, typing the result, and `inputs` with `owner_kind` give the bindings, an unknown or
-misnamed input being a 422) and answers `ok`,
+misnamed input, or `health` as one, being a 422) and answers `ok`,
 the value and result types, `diagnostics` with line, column and phase, and the site's `bindings`,
 `builtins` and `budget`, generated from the site's declaration; it compiles without the engine's
 program cache, stores and runs nothing, and an unknown site or a missing or unknown key is a 422. `POST /event-rules:preview` (gated `rule:read`; `omniglass event-rule
@@ -388,11 +388,15 @@ over the one input or an `expr` over the inputs by name, and an `output_key`, it
 reduce that does not compile, or yields a type other than the output key's, is a 422 located at
 `body.reduce.expr` with the fault's `line` and `column`; any other refusal is a 422 located at the field
 it names (`body.inputs[0].key`, `body.output_key`, `body.selector`): an unknown key, `health` as an input
-or output, an output a driver emits or a collector has observed, a reducer whose input or result does
-not fit. A rule that would close a cycle in the key graph is a 422 whose detail names the chain
+or output, an output a native probe or a driver's declared emits write, an output another enabled rule
+writes (the refusal names it; enabling a rule is checked too), a reducer whose input or result does not
+fit. A list or get carries `calc_error` (`field`, `line`, `column`, `message`) when a stored reduce no
+longer compiles against the registries, and such a rule cannot be enabled (422). Deleting a property
+or metric type a calc rule writes is a 409 naming the rule. A rule that would close a cycle in the key graph is a 422 whose detail names the chain
 (`temp-twice -> avg-temp -> temp-twice`), its error carrying the `keys` and `rules` along it. A patch
 bumps the version unless it changes nothing; `POST /calc-rules/{name}:rename` moves the name, bumping no
-version, with the same 409 and 422 refusals as an event rule's rename.
+version (a rename to the same name writes nothing), with the same 409 and 422 refusals as an event
+rule's rename.
 
 **The endpoint is authored; the task is derived.** An endpoint is addressed by a surrogate `id` and
 **named by its protocol**: `name` derives from `transport`, unique **within its component**

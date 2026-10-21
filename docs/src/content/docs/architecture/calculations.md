@@ -49,8 +49,8 @@ its own (its bindings, reducers, builtins and budget are in the generated sites 
 
 - A **named reducer** folds every value of the rule's **one** input: on a component, every instance of
   the input key on that component; on a system, every instance on every role-bound member. It yields
-  one value, so the output is aggregate (`instance = ''`). `average`, `min`, `max`, `sum` and `count`
-  fold a metric into a number; `majority` folds a property into its own type; `any` and `all` fold a
+  one value, so the output is aggregate (`instance = ''`). `average`, `min`, `max` and `sum` fold a
+  metric into a number; `count` counts the values present, of any type; `majority` folds a property into its own type; `any` and `all` fold a
   bool property into a bool.
 - An **expression** reads the inputs by name. For a component owner each name is the component's
   current value of its key on the aggregate instance, typed by the key (a metric a number, a property
@@ -72,16 +72,25 @@ Every write is refused, with a 422 naming the field at fault, when:
   provenance rule, not in place of it: a loop through an event rule and an alarm is not in this graph.
 - **it reads or writes `health`.** An alarm moves health, so a rule reading it could feed back through an
   event rule, and health has its own producer, the rollup.
-- **its output is a key a collection writes**, since a current value would mix an observed producer and
-  a calculated one by newest timestamp. Two signals are read: a driver whose spec declares the key among
-  its emits, and a stored sample of the key with provenance `observed` (ever on the property lane, which
-  is transition-only; within the last 7 days on the metric lane). What this cannot catch: a native
-  probe's key (icmp, tcp, http, ssh) before that probe has run on the install, since those keys are fixed
-  in code rather than declared; a driver edited to emit the key after the rule exists; and a collector
-  that starts writing it later.
+- **its output is a key another enabled rule writes.** One enabled rule writes a key: two would mix
+  their values on an owner by newest timestamp. The refusal names the other rule, and enabling a
+  disabled rule is checked the same way.
+- **its output is a key a collection writes**, for the same reason. The check reads declarations, never
+  sample history: the native probes' keys (`internal/collection/probekeys`, the one declaration the
+  probes emit from) and any stored driver whose spec declares the key among its emits. What it cannot
+  catch is a driver created or edited to emit the key after the rule exists.
+
+The graph and the one-writer check are key-level: they ignore owner kinds, so a component rule and a
+system rule writing or reading the same key are judged as one graph. That can refuse a rule that would
+never meet the other on an owner, never admit a loop, so it is deliberate and safe.
 
 A patch is judged on what it changes: unchanged inputs and reduce are not recompiled (so a rule whose
-input key was since deleted stays editable), and an unchanged output is not re-probed for collectors.
+input key was since deleted stays editable), and an unchanged output is not re-checked for collectors.
+Enabling a rule recompiles it. A stored reduce that no longer compiles (an input key deleted or
+retyped, a row written outside the gateway) is not silent: every read carries `calc_error` (the field,
+the line and column when the expression is what failed, and the message), compiled once per rule
+version and key typing, and such a rule cannot be enabled until it compiles. Deleting a property or
+metric type a rule writes is a 409 naming the rule.
 
 :::design[Target design: running calc rules, tracked in #525]
 

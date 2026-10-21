@@ -140,7 +140,7 @@ var IdentityShapes = map[string]TableIdentity{
 	"severity_level": {Shape: ShapeKeyBearing, Reason: "high, a named level rules and alarms reference"},
 	"event_rule":     {Shape: ShapeKeyBearing, Reason: "reach-lost, a rule an alarm names as what raised it"},
 	"command_type":   {Shape: ShapeKeyspace, Reason: "set-input, a command name"},
-	"calc_rule":      {Shape: ShapeKeyBearing, Reason: "room-in-use, a rule a calculated sample names as its producer"},
+	"calc_rule":      {Shape: ShapeKeyBearing, Reason: "temp-mean, a rule a calculated sample names as its producer"},
 
 	// A human identifier that is not a name. These are the exceptions worth stating.
 	"human": {Shape: ShapeHumanNotAKey, Reason: "a username: its own rule, its own uniqueness, and not an " +

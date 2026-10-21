@@ -39,6 +39,15 @@ type calcRuleBody struct {
 	Version     int             `json:"version" doc:"Bumps on every update"`
 	CreatedAt   time.Time       `json:"created_at" doc:"When the rule was created"`
 	UpdatedAt   time.Time       `json:"updated_at" doc:"When the rule was last written"`
+	CalcError   *calcErrorBody  `json:"calc_error,omitempty" required:"false" doc:"Why the stored reduce does not compile against the registries as they are now (an input key deleted or retyped); absent when it compiles. While present the rule cannot be enabled"`
+}
+
+// calcErrorBody is a stored rule's compile error.
+type calcErrorBody struct {
+	Field   string `json:"field" doc:"The field at fault: an input's key (inputs[0].key), reduce.expr, reduce.reducer or output_key"`
+	Line    int    `json:"line,omitempty" required:"false" doc:"The 1-based line of the fault, when the reduce's expression is what failed"`
+	Column  int    `json:"column,omitempty" required:"false" doc:"The 1-based column of the fault, when it has a line"`
+	Message string `json:"message" doc:"Why it does not compile"`
 }
 
 func toCalcRuleBody(r *storage.CalcRule) calcRuleBody {
@@ -47,6 +56,9 @@ func toCalcRuleBody(r *storage.CalcRule) calcRuleBody {
 		Reduce:    calcReduceBody{Reducer: r.Reduce.Reducer, Expr: r.Reduce.Expr},
 		OutputKey: r.OutputKey, OutputLane: string(r.OutputLane), Enabled: r.Enabled, Official: r.Official, Version: r.Version,
 		CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt}
+	if f := r.CalcError; f != nil {
+		b.CalcError = &calcErrorBody{Field: f.Field, Line: f.Line, Column: f.Column, Message: f.Message}
+	}
 	b.Inputs = make([]calcInputBody, len(r.Inputs))
 	for i, in := range r.Inputs {
 		b.Inputs[i] = calcInputBody{As: in.As, Key: in.Key}
@@ -83,7 +95,7 @@ type createCalcRuleInput struct {
 		Selector    *selectorBody   `json:"selector,omitempty" required:"false" doc:"The components a component rule derives for (component types and components); absent is every component. A system rule takes none"`
 		Inputs      []calcInputBody `json:"inputs" minItems:"1" maxItems:"16" doc:"The keys the rule reads, each by a unique name its reduce uses; health may not be one"`
 		Reduce      calcReduceBody  `json:"reduce" doc:"A named reducer over the one input, or an expression over the inputs by name"`
-		OutputKey   string          `json:"output_key" minLength:"1" doc:"The property or metric the rule writes: its type pins the reduce's result. Not health, and not a key a collection writes"`
+		OutputKey   string          `json:"output_key" minLength:"1" doc:"The property or metric the rule writes: its type pins the reduce's result. Not health, not a key a collection writes, and not one another enabled rule writes"`
 		Enabled     *bool           `json:"enabled,omitempty" required:"false" doc:"Defaults to true"`
 	}
 }
@@ -155,7 +167,7 @@ func registerCalcRuleRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 		Path:          "/calc-rules",
 		DefaultStatus: http.StatusCreated,
 		Summary:       "Create a calc rule",
-		Description:   "Authors a rule that derives its output key on each owner (each component its selector picks, or each system) from its named inputs, folded by a named reducer (one input) or an expression over the inputs by name. Every input key must be registered and health may not be one; the reduce must compile and yield the output key's type (a 422 placed at body.reduce.expr with its line and column); the output must be a registered key that is not health and that no collection writes (a driver declaring it among its emits, or an observed sample of it); and an enabled rule may not close a cycle in the graph from every enabled rule's input keys to its output key (a 422 naming the chain of keys). A name already taken is a 409. Returns the rule with its uuid. Audited. Gated by rule:create, with an all-scope grant.",
+		Description:   "Authors a rule that derives its output key on each owner (each component its selector picks, or each system) from its named inputs, folded by a named reducer (one input) or an expression over the inputs by name. Every input key must be registered and health may not be one; the reduce must compile and yield the output key's type (a 422 placed at body.reduce.expr with its line and column); the output must be a registered key that is not health and that no collection writes (a native probe's key, or one a driver declares among its emits); an enabled rule may not close a cycle in the graph from every enabled rule's input keys to its output key (a 422 naming the chain of keys), nor write a key another enabled rule writes (a 422 naming that rule). A list or get carries calc_error when a stored reduce no longer compiles. A name already taken is a 409. Returns the rule with its uuid. Audited. Gated by rule:create, with an all-scope grant.",
 	}, "rule", "create"), func(ctx context.Context, in *createCalcRuleInput) (*calcRuleOutput, error) {
 		b := in.Body
 		spec := storage.CalcRuleSpec{Name: b.Name, Label: b.Label, Description: b.Description, OwnerKind: b.OwnerKind,
@@ -176,7 +188,7 @@ func registerCalcRuleRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 		Method:      http.MethodPatch,
 		Path:        "/calc-rules/{name}",
 		Summary:     "Update a calc rule",
-		Description: "Patches a rule (an absent field is unchanged), bumping its version; a patch that changes nothing writes nothing. What changed is checked as on create: changed inputs, reduce or output recompile, a changed output must be one no collection writes, and an enabled rule may not close a cycle (enabling a disabled rule is checked too). The owner kind is fixed at create. Official rules are read-only (409). Audited. Gated by rule:update, with an all-scope grant.",
+		Description: "Patches a rule (an absent field is unchanged), bumping its version; a patch that changes nothing writes nothing. What changed is checked as on create: changed inputs, reduce or output recompile, a changed output must be one no collection writes, and an enabled rule may not close a cycle or share its output with another enabled rule. Enabling a disabled rule recompiles it and checks both, so a rule carrying calc_error cannot be enabled (422). The owner kind is fixed at create. Official rules are read-only (409). Audited. Gated by rule:update, with an all-scope grant.",
 	}, "rule", "update"), func(ctx context.Context, in *updateCalcRuleInput) (*calcRuleOutput, error) {
 		b := in.Body
 		patch := storage.CalcRulePatch{Label: b.Label, Description: b.Description, OutputKey: b.OutputKey, Enabled: b.Enabled}

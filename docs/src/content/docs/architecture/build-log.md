@@ -7067,7 +7067,10 @@ criteria builtins and a larger budget (100,000 walk, 25ms), and an input's name 
 keyword or any Expr builtin's name. Its named reducers are declared and type-checked there, and
 `POST /expressions:validate` answers for it given the output key and the inputs. Every write refuses
 a rule that would close a cycle in the graph of enabled rules' input keys to output keys (a 422 naming
-the chain, judged under a transaction lock), `health` as an input or output, and an output a driver
-declares among its emits or a collector has observed. Nothing runs a calc rule yet: the pending set,
+the chain, judged under a transaction lock), a second enabled writer of an output key, `health` as an
+input or output, and an output a collection declares: a native probe key (now declared once in
+`internal/collection/probekeys`, which the probes emit from) or a driver's declared emits. A stored
+reduce that stops compiling reads back as `calc_error` and cannot be enabled, and deleting a type a
+rule writes is a 409 naming it. Nothing runs a calc rule yet: the pending set,
 the tick and the reducers' folds are the next slice. The [calculations](/architecture/calculations/)
 page moves to `Partial`, its running half still fenced.

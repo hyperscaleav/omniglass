@@ -23,6 +23,11 @@ const (
 	OwnerSystem    = "system"
 )
 
+// HealthKey is the property the health rollup writes. A calc rule may not
+// read it (#525 decision 3: an alarm moves it, so a rule reading it could
+// feed back through an event rule) or write it (it has its own producer).
+const HealthKey = "health"
+
 // MaxCalcInputs is the most inputs one rule may read.
 const MaxCalcInputs = 16
 
@@ -65,7 +70,7 @@ var reducers = []Reducer{
 	{Name: "min", Accepts: []string{ValueNumber}, Result: ValueNumber, Doc: "The smallest value folded in"},
 	{Name: "max", Accepts: []string{ValueNumber}, Result: ValueNumber, Doc: "The largest value folded in"},
 	{Name: "sum", Accepts: []string{ValueNumber}, Result: ValueNumber, Doc: "The total of the values folded in"},
-	{Name: "count", Accepts: []string{ValueNumber}, Result: ValueNumber, Doc: "How many values were folded in"},
+	{Name: "count", Accepts: []string{ValueNumber, ValueText, ValueBool}, Result: ValueNumber, Doc: "How many values are present to fold, of any type"},
 	{Name: "majority", Accepts: []string{ValueText, ValueBool}, Doc: "The most common value; a tie goes to the value that sorts first"},
 	{Name: "any", Accepts: []string{ValueBool}, Result: ValueBool, Doc: "True when any value folded in is true"},
 	{Name: "all", Accepts: []string{ValueBool}, Result: ValueBool, Doc: "True when every value folded in is true"},
@@ -179,6 +184,9 @@ func checkCalcInputs(ownerKind string, inputs []TypedInput) error {
 		}
 		if seenAs[x.As] {
 			return calcErr(fmt.Sprintf("inputs[%d].as", i), "%q names two inputs; each input's name is unique", x.As)
+		}
+		if x.Key == HealthKey {
+			return calcErr(fmt.Sprintf("inputs[%d].key", i), "%s may not be an input: an alarm moves it, so a rule reading it could feed back through an event rule", HealthKey)
 		}
 		if seenKey[x.Key] {
 			return calcErr(fmt.Sprintf("inputs[%d].key", i), "%q is read twice; read it once and use its name", x.Key)

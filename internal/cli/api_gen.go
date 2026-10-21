@@ -333,7 +333,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "create",
 					Short:   "Create a calc rule",
-					Long:    "Authors a rule that derives its output key on each owner (each component its selector picks, or each system) from its named inputs, folded by a named reducer (one input) or an expression over the inputs by name. Every input key must be registered and health may not be one; the reduce must compile and yield the output key's type (a 422 placed at body.reduce.expr with its line and column); the output must be a registered key that is not health and that no collection writes (a driver declaring it among its emits, or an observed sample of it); and an enabled rule may not close a cycle in the graph from every enabled rule's input keys to its output key (a 422 naming the chain of keys). A name already taken is a 409. Returns the rule with its uuid. Audited. Gated by rule:create, with an all-scope grant.",
+					Long:    "Authors a rule that derives its output key on each owner (each component its selector picks, or each system) from its named inputs, folded by a named reducer (one input) or an expression over the inputs by name. Every input key must be registered and health may not be one; the reduce must compile and yield the output key's type (a 422 placed at body.reduce.expr with its line and column); the output must be a registered key that is not health and that no collection writes (a native probe's key, or one a driver declares among its emits); an enabled rule may not close a cycle in the graph from every enabled rule's input keys to its output key (a 422 naming the chain of keys), nor write a key another enabled rule writes (a 422 naming that rule). A list or get carries calc_error when a stored reduce no longer compiles. A name already taken is a 409. Returns the rule with its uuid. Audited. Gated by rule:create, with an all-scope grant.",
 					Example: "  omniglass calc-rule create --inputs <json> --name name --output-key output_key --owner-kind owner_kind --reduce <json>",
 					Args:    cobra.ExactArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -376,7 +376,7 @@ func generatedCommands() []*cobra.Command {
 				cmd.Flags().StringVar(&fLabel, "label", "", "A human label")
 				cmd.Flags().StringVar(&fName, "name", "", "The rule's name (lowercase letters, digits, hyphens)")
 				_ = cmd.MarkFlagRequired("name")
-				cmd.Flags().StringVar(&fOutputKey, "output-key", "", "The property or metric the rule writes: its type pins the reduce's result. Not health, and not a key a collection writes")
+				cmd.Flags().StringVar(&fOutputKey, "output-key", "", "The property or metric the rule writes: its type pins the reduce's result. Not health, not a key a collection writes, and not one another enabled rule writes")
 				_ = cmd.MarkFlagRequired("output-key")
 				cmd.Flags().StringVar(&fOwnerKind, "owner-kind", "", "What the rule derives a value on: each component its selector picks, or each system. Fixed at create")
 				_ = cmd.MarkFlagRequired("owner-kind")
@@ -474,7 +474,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "update <name>",
 					Short:   "Update a calc rule",
-					Long:    "Patches a rule (an absent field is unchanged), bumping its version; a patch that changes nothing writes nothing. What changed is checked as on create: changed inputs, reduce or output recompile, a changed output must be one no collection writes, and an enabled rule may not close a cycle (enabling a disabled rule is checked too). The owner kind is fixed at create. Official rules are read-only (409). Audited. Gated by rule:update, with an all-scope grant.",
+					Long:    "Patches a rule (an absent field is unchanged), bumping its version; a patch that changes nothing writes nothing. What changed is checked as on create: changed inputs, reduce or output recompile, a changed output must be one no collection writes, and an enabled rule may not close a cycle or share its output with another enabled rule. Enabling a disabled rule recompiles it and checks both, so a rule carrying calc_error cannot be enabled (422). The owner kind is fixed at create. Official rules are read-only (409). Audited. Gated by rule:update, with an all-scope grant.",
 					Example: "  omniglass calc-rule update <name>",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -3669,7 +3669,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "delete <name>",
 					Short:   "Delete a metric type",
-					Long:    "Removes a custom metric type by name. Official metric types are read-only. Gated by metric_type:delete.",
+					Long:    "Removes a custom metric type by name. Official metric types are read-only. A metric type a calc rule writes is a 409 naming the rule. Gated by metric_type:delete.",
 					Example: "  omniglass metric-type delete <name>",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -5169,7 +5169,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "delete <name>",
 					Short:   "Delete a property",
-					Long:    "Removes a custom property by name. Official properties are read-only. Gated by property_type:delete.",
+					Long:    "Removes a custom property by name. Official properties are read-only. A property a calc rule writes is a 409 naming the rule. Gated by property_type:delete.",
 					Example: "  omniglass property-type delete <name>",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {

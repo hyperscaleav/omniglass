@@ -869,6 +869,9 @@ type PG struct {
 	labelEngines label.EngineCache
 	// judges is each event rule's compiled criteria, per rule version.
 	judges ruleJudges
+	// calcs is each calc rule's reduce compile result, per rule version and
+	// key types.
+	calcs calcCompiles
 }
 
 // Option configures a PG at construction. The secret provider is optional so

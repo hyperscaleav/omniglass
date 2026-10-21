@@ -59,10 +59,12 @@
     {
      "name": "count",
      "accepts": [
-      "number"
+      "number",
+      "text",
+      "bool"
      ],
      "result": "number",
-     "doc": "How many values were folded in"
+     "doc": "How many values are present to fold, of any type"
     },
     {
      "name": "majority",

@@ -12,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 
+	"github.com/hyperscaleav/omniglass/internal/collection/probekeys"
 	"github.com/hyperscaleav/omniglass/internal/rules"
 	"github.com/hyperscaleav/omniglass/internal/scope"
 )
@@ -39,6 +40,21 @@ type CalcRule struct {
 	Version     int
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
+	// CalcError is why the stored reduce does not compile against the
+	// registries as they are now (an input key deleted or retyped, a row
+	// written outside the gateway); nil when it compiles. Read beside the
+	// rule, never stored or audited.
+	CalcError *CalcFault `json:"-"`
+}
+
+// CalcFault is a stored rule's compile error as a reader sees it: the field
+// at fault, the 1-based line and column when the reduce's expression is what
+// failed (0 otherwise), and the message.
+type CalcFault struct {
+	Field   string
+	Line    int
+	Column  int
+	Message string
 }
 
 // CalcRuleSpec is a rule to create; its selector's components may be given
@@ -157,7 +173,27 @@ func (p *PG) ListCalcRules(ctx context.Context) ([]CalcRule, error) {
 		}
 		out = append(out, r)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	types, err := keyValueTypes(ctx, p.pool)
+	if err != nil {
+		return nil, err
+	}
+	for i := range out {
+		out[i].CalcError = p.calcFault(out[i], types)
+	}
+	return out, nil
+}
+
+// withCalcFault sets r's CalcError from the registries as they are now.
+func (p *PG) withCalcFault(ctx context.Context, r *CalcRule) (*CalcRule, error) {
+	types, err := keyValueTypes(ctx, p.pool)
+	if err != nil {
+		return nil, err
+	}
+	r.CalcError = p.calcFault(*r, types)
+	return r, nil
 }
 
 // GetCalcRule reads one rule by name or uuid, whatever the caller's scope.
@@ -166,7 +202,7 @@ func (p *PG) GetCalcRule(ctx context.Context, ref string) (*CalcRule, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &r, nil
+	return p.withCalcFault(ctx, &r)
 }
 
 // sampleKey is a key resolved in the registries: its lane, its value type,
@@ -224,8 +260,10 @@ var calcCheckAll = calcChecks{compile: true, output: true, selector: true}
 //   - every input key is registered, and the reduce compiles against the
 //     inputs and yields the output key's type (rules.CompileCalc);
 //   - an enabled rule closes no loop in the graph of every enabled rule's
-//     input keys to its output key (rules.CalcCycle), the graph read under a
-//     transaction lock so two writes cannot each close half of one;
+//     input keys to its output key (rules.CalcCycle), and is the only
+//     enabled rule writing its output key, both read under a transaction
+//     lock so two writes cannot each close half of a loop or both take a
+//     key (checkCalcGraph);
 //   - the output key is one no collection writes (collectedBy).
 func prepareCalcRule(ctx context.Context, q txQuerier, r *CalcRule, check calcChecks, outIDs *[2]any) error {
 	if err := ValidateName("calc_rule", r.Name); err != nil {
@@ -276,12 +314,12 @@ func prepareCalcRule(ctx context.Context, q txQuerier, r *CalcRule, check calcCh
 		}
 	}
 	if r.Enabled {
-		if err := checkCalcCycle(ctx, q, *r); err != nil {
+		if err := checkCalcGraph(ctx, q, *r, *outIDs); err != nil {
 			return err
 		}
 	}
 	if check.output {
-		if err := collectedBy(ctx, q, r.OutputKey, out); err != nil {
+		if err := collectedBy(ctx, q, r.OutputKey); err != nil {
 			return err
 		}
 	}
@@ -300,9 +338,12 @@ func prepareCalcRule(ctx context.Context, q txQuerier, r *CalcRule, check calcCh
 // calcGraphLock serializes the writes that read and change the key graph.
 const calcGraphLock = "calc_rule/graph"
 
-// checkCalcCycle reads every other enabled rule's edges, under the graph
-// lock, and refuses a rule that closes a loop.
-func checkCalcCycle(ctx context.Context, q txQuerier, r CalcRule) error {
+// checkCalcGraph reads every other enabled rule, under the graph lock, and
+// refuses a rule that closes a loop or that writes an output key another
+// enabled rule writes (one writer per key: two would mix their values on an
+// owner by newest ts, the same reason a collected key is refused). The loop
+// is judged first, so a rule that does both is told about the loop.
+func checkCalcGraph(ctx context.Context, q txQuerier, r CalcRule, outIDs [2]any) error {
 	if err := lockAdvisory(ctx, q, calcGraphLock); err != nil {
 		return err
 	}
@@ -337,6 +378,16 @@ func checkCalcCycle(ctx context.Context, q txQuerier, r CalcRule) error {
 	if c := rules.CalcCycle(graph, rules.CalcEdge{Rule: r.Name, Inputs: inputKeys(r.Inputs), Output: r.OutputKey}); c != nil {
 		return &CalcCycleError{Cycle: c}
 	}
+	var writer string
+	err = q.QueryRow(ctx, `select name from calc_rule where enabled and id::text <> $1
+		and (output_property_type_id = $2::uuid or output_metric_type_id = $3::uuid) order by name limit 1`,
+		r.ID, outIDs[0], outIDs[1]).Scan(&writer)
+	switch {
+	case err == nil:
+		return invalidCalc("output_key", "%q is written by the enabled calc rule %s; one enabled rule writes a key", r.OutputKey, writer)
+	case !errors.Is(err, pgx.ErrNoRows):
+		return fmt.Errorf("storage: check calc output %q writers: %w", r.OutputKey, err)
+	}
 	return nil
 }
 
@@ -348,30 +399,22 @@ func inputKeys(inputs []rules.CalcInput) []string {
 	return out
 }
 
-// observedMetricWindow bounds the metric lane's observed-sample probe: a
-// collector writing a metric samples it on a schedule, so one live in the
-// last week has written it, and the probe stays within the recent ts range
-// the BRIN index covers rather than scanning the whole series table. The
-// property lane is transition-only (a stable value is written once), so its
-// probe is unbounded.
-const observedMetricWindow = 7 * 24 * time.Hour
-
 // collectedBy refuses an output key a collection writes (#525 decision 6):
-// a current value would mix an observed producer with a calculated one by
-// newest ts. Two signals are read, the honest ones the platform holds:
+// a current value would mix a collected producer with a calculated one by
+// newest ts. It reads declarations only, never sample history (one
+// hand-posted or simulated sample would otherwise block a key forever):
 //
-//   - a driver whose spec declares the key among a poll's or a listener's
-//     emits (a declared writer, caught before its first sample lands);
-//   - a stored sample of the key with provenance observed (any collector
-//     that has written it: a native probe, a node, a simulator, an
-//     integration), ever on the property lane and within
-//     observedMetricWindow on the metric lane.
+//   - the native probes' keys (probekeys, the one declaration the probes
+//     emit from);
+//   - a stored driver whose spec declares the key among a poll's or a
+//     listener's emits.
 //
-// What it cannot catch: a native probe's key (icmp, tcp, http, ssh) before
-// that probe has run on this install, since those keys are fixed in code
-// rather than declared in a spec; a driver created or edited to emit the key
-// after the rule exists; and a collector that starts writing it later.
-func collectedBy(ctx context.Context, q querier, key string, k sampleKey) error {
+// What it cannot catch: a driver created or edited to emit the key after the
+// rule exists (the ingest-side guard is its own issue).
+func collectedBy(ctx context.Context, q querier, key string) error {
+	if probekeys.IsNative(key) {
+		return invalidCalc("output_key", "%q is collected: a native probe writes it, and a calc rule may not write a key a collection writes", key)
+	}
 	var driver string
 	err := q.QueryRow(ctx, `select d.name from driver d
 		cross join lateral jsonb_array_elements(coalesce(d.spec->'polls', '[]'::jsonb) || coalesce(d.spec->'listeners', '[]'::jsonb)) f
@@ -382,19 +425,6 @@ func collectedBy(ctx context.Context, q querier, key string, k sampleKey) error 
 		return invalidCalc("output_key", "%q is collected: the driver %s emits it, and a calc rule may not write a key a collection writes", key, driver)
 	case !errors.Is(err, pgx.ErrNoRows):
 		return fmt.Errorf("storage: check calc output %q against the drivers: %w", key, err)
-	}
-	var observed bool
-	if k.lane == rules.LaneProperty {
-		err = q.QueryRow(ctx, `select exists (select 1 from property where property_type_id = $1 and provenance = 'observed')`, k.id).Scan(&observed)
-	} else {
-		err = q.QueryRow(ctx, `select exists (select 1 from metric where metric_type_id = $1 and provenance = 'observed'
-			and ts > now() - make_interval(secs => $2))`, k.id, observedMetricWindow.Seconds()).Scan(&observed)
-	}
-	if err != nil {
-		return fmt.Errorf("storage: check calc output %q against observed samples: %w", key, err)
-	}
-	if observed {
-		return invalidCalc("output_key", "%q is collected: an observed sample of it is stored, and a calc rule may not write a key a collection writes", key)
 	}
 	return nil
 }
@@ -463,7 +493,7 @@ func (p *PG) CreateCalcRule(ctx context.Context, actorID string, spec CalcRuleSp
 	if err := tx.Commit(ctx); err != nil {
 		return nil, fmt.Errorf("storage: commit create calc rule: %w", err)
 	}
-	return &created, nil
+	return p.withCalcFault(ctx, &created)
 }
 
 func lockMutableCalcRule(ctx context.Context, tx pgx.Tx, ref string) (CalcRule, error) {
@@ -535,7 +565,8 @@ func (p *PG) UpdateCalcRule(ctx context.Context, actorID, ref string, patch Calc
 	// and output compiled when they were written.
 	outputChanged := r.OutputKey != old.OutputKey
 	check := calcChecks{
-		compile:  outputChanged || !sameRuleJSON(r.Inputs, old.Inputs) || !sameRuleJSON(r.Reduce, old.Reduce),
+		compile: outputChanged || !sameRuleJSON(r.Inputs, old.Inputs) || !sameRuleJSON(r.Reduce, old.Reduce) ||
+			(r.Enabled && !old.Enabled),
 		output:   outputChanged,
 		selector: patch.Selector != nil,
 		kept:     old.Selector,
@@ -545,7 +576,7 @@ func (p *PG) UpdateCalcRule(ctx context.Context, actorID, ref string, patch Calc
 		return nil, err
 	}
 	if sameAuthoredCalc(old, r) {
-		return &old, nil
+		return p.withCalcFault(ctx, &old)
 	}
 	sel, inputs, reduce, err := calcArgs(r)
 	if err != nil {
@@ -567,7 +598,7 @@ func (p *PG) UpdateCalcRule(ctx context.Context, actorID, ref string, patch Calc
 	if err := tx.Commit(ctx); err != nil {
 		return nil, fmt.Errorf("storage: commit update calc rule: %w", err)
 	}
-	return &updated, nil
+	return p.withCalcFault(ctx, &updated)
 }
 
 // RenameCalcRule moves an operator rule's name (ADR-0062, ADR-0076),
@@ -592,6 +623,9 @@ func (p *PG) RenameCalcRule(ctx context.Context, actorID, ref, newName string, a
 	if err != nil {
 		return nil, err
 	}
+	if old.Name == newName {
+		return p.withCalcFault(ctx, &old)
+	}
 	if _, err := tx.Exec(ctx, `update calc_rule set name = $2, updated_at = now() where id = $1`, old.ID, newName); err != nil {
 		return nil, mapCalcWriteErr(err, old.Name)
 	}
@@ -605,7 +639,7 @@ func (p *PG) RenameCalcRule(ctx context.Context, actorID, ref, newName string, a
 	if err := tx.Commit(ctx); err != nil {
 		return nil, fmt.Errorf("storage: commit rename calc rule: %w", err)
 	}
-	return &renamed, nil
+	return p.withCalcFault(ctx, &renamed)
 }
 
 // DeleteCalcRule removes an operator rule, audited; it needs an all-scope

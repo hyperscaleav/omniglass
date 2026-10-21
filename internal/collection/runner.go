@@ -4,16 +4,19 @@ import (
 	"context"
 	"fmt"
 	"time"
+
+	"github.com/hyperscaleav/omniglass/internal/collection/probekeys"
 )
 
-// The canonical reachability sample names the tcp probe emits. They are
-// seeded metric_types (internal/seed/metric_types.yaml); the ingest
+// The canonical reachability sample names the tcp probe emits, declared once
+// in probekeys (which the calc rule check also reads). They are seeded
+// metric_types (internal/seed/metric_types.yaml); the ingest
 // consumer's reject-not-project drops any name absent from that registry.
 const (
-	SignalTCPOpen        = "tcp-open"
-	SignalTCPConnectTime = "tcp-connect-time"
-	SignalICMPReachable  = "icmp-reachable"
-	SignalICMPRTTAvg     = "icmp-rtt-avg"
+	SignalTCPOpen        = probekeys.TCPOpen
+	SignalTCPConnectTime = probekeys.TCPConnectTime
+	SignalICMPReachable  = probekeys.ICMPReachable
+	SignalICMPRTTAvg     = probekeys.ICMPRTTAvg
 )
 
 // defaultTCPTimeout bounds a connect attempt when the task sets none.
@@ -183,10 +186,10 @@ func (r *Runner) CollectICMP(ctx context.Context, t ICMPTask) ([]Sample, error) 
 // endpoint-reachable. EventCollectionFailed is the occurrence a task lands
 // when its payload or config cannot be used, never a silent drop.
 const (
-	SignalHTTPResponseTime      = "http-response-time"
-	SignalSSHHandshakeTime      = "ssh-handshake-time"
-	SignalEndpointResponsive    = "endpoint-responsive"
-	SignalEndpointAuthenticated = "endpoint-authenticated"
+	SignalHTTPResponseTime      = probekeys.HTTPResponseTime
+	SignalSSHHandshakeTime      = probekeys.SSHHandshakeTime
+	SignalEndpointResponsive    = probekeys.EndpointResponsive
+	SignalEndpointAuthenticated = probekeys.EndpointAuthenticated
 	EventCollectionFailed       = "collection-failed"
 )
 

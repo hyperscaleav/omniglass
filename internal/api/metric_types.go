@@ -151,7 +151,7 @@ func registerMetricTypeRoutes(api huma.API, a *authenticator, gw storage.Gateway
 		Path:          "/metric-types/{name}",
 		DefaultStatus: http.StatusNoContent,
 		Summary:       "Delete a metric type",
-		Description:   "Removes a custom metric type by name. Official metric types are read-only. Gated by metric_type:delete.",
+		Description:   "Removes a custom metric type by name. Official metric types are read-only. A metric type a calc rule writes is a 409 naming the rule. Gated by metric_type:delete.",
 	}, "metric_type", "delete"), func(ctx context.Context, in *metricTypeNameInput) (*struct{}, error) {
 		if err := gw.DeleteMetricType(ctx, actorID(ctx), in.Name); err != nil {
 			return nil, mapMetricTypeErr(err)
@@ -168,6 +168,10 @@ func registerMetricTypeRoutes(api huma.API, a *authenticator, gw storage.Gateway
 func mapMetricTypeErr(err error) error {
 	if refErr, ok := mapRefErr(err); ok {
 		return refErr
+	}
+	var inUse *storage.CalcOutputInUseError
+	if errors.As(err, &inUse) {
+		return huma.Error409Conflict(inUse.Error())
 	}
 	switch {
 	case errors.Is(err, storage.ErrMetricTypeNotFound):

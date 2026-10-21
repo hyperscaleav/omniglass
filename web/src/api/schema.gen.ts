@@ -303,7 +303,7 @@ export interface paths {
         put?: never;
         /**
          * Create a calc rule
-         * @description Authors a rule that derives its output key on each owner (each component its selector picks, or each system) from its named inputs, folded by a named reducer (one input) or an expression over the inputs by name. Every input key must be registered and health may not be one; the reduce must compile and yield the output key's type (a 422 placed at body.reduce.expr with its line and column); the output must be a registered key that is not health and that no collection writes (a driver declaring it among its emits, or an observed sample of it); and an enabled rule may not close a cycle in the graph from every enabled rule's input keys to its output key (a 422 naming the chain of keys). A name already taken is a 409. Returns the rule with its uuid. Audited. Gated by rule:create, with an all-scope grant.
+         * @description Authors a rule that derives its output key on each owner (each component its selector picks, or each system) from its named inputs, folded by a named reducer (one input) or an expression over the inputs by name. Every input key must be registered and health may not be one; the reduce must compile and yield the output key's type (a 422 placed at body.reduce.expr with its line and column); the output must be a registered key that is not health and that no collection writes (a native probe's key, or one a driver declares among its emits); an enabled rule may not close a cycle in the graph from every enabled rule's input keys to its output key (a 422 naming the chain of keys), nor write a key another enabled rule writes (a 422 naming that rule). A list or get carries calc_error when a stored reduce no longer compiles. A name already taken is a 409. Returns the rule with its uuid. Audited. Gated by rule:create, with an all-scope grant.
          */
         post: operations["create-calc-rule"];
         delete?: never;
@@ -335,7 +335,7 @@ export interface paths {
         head?: never;
         /**
          * Update a calc rule
-         * @description Patches a rule (an absent field is unchanged), bumping its version; a patch that changes nothing writes nothing. What changed is checked as on create: changed inputs, reduce or output recompile, a changed output must be one no collection writes, and an enabled rule may not close a cycle (enabling a disabled rule is checked too). The owner kind is fixed at create. Official rules are read-only (409). Audited. Gated by rule:update, with an all-scope grant.
+         * @description Patches a rule (an absent field is unchanged), bumping its version; a patch that changes nothing writes nothing. What changed is checked as on create: changed inputs, reduce or output recompile, a changed output must be one no collection writes, and an enabled rule may not close a cycle or share its output with another enabled rule. Enabling a disabled rule recompiles it and checks both, so a rule carrying calc_error cannot be enabled (422). The owner kind is fixed at create. Official rules are read-only (409). Audited. Gated by rule:update, with an all-scope grant.
          */
         patch: operations["update-calc-rule"];
         trace?: never;
@@ -2072,7 +2072,7 @@ export interface paths {
         post?: never;
         /**
          * Delete a metric type
-         * @description Removes a custom metric type by name. Official metric types are read-only. Gated by metric_type:delete.
+         * @description Removes a custom metric type by name. Official metric types are read-only. A metric type a calc rule writes is a 409 naming the rule. Gated by metric_type:delete.
          */
         delete: operations["delete-metric-type"];
         options?: never;
@@ -3004,7 +3004,7 @@ export interface paths {
         post?: never;
         /**
          * Delete a property
-         * @description Removes a custom property by name. Official properties are read-only. Gated by property_type:delete.
+         * @description Removes a custom property by name. Official properties are read-only. A property a calc rule writes is a 409 naming the rule. Gated by property_type:delete.
          */
         delete: operations["delete-property-type"];
         options?: never;
@@ -4677,6 +4677,22 @@ export interface components {
             /** @description The profile picture as a base64-encoded 256x256 JPEG */
             image_base64: string;
         };
+        CalcErrorBody: {
+            /**
+             * Format: int64
+             * @description The 1-based column of the fault, when it has a line
+             */
+            column?: number;
+            /** @description The field at fault: an input's key (inputs[0].key), reduce.expr, reduce.reducer or output_key */
+            field: string;
+            /**
+             * Format: int64
+             * @description The 1-based line of the fault, when the reduce's expression is what failed
+             */
+            line?: number;
+            /** @description Why it does not compile */
+            message: string;
+        };
         CalcInputBody: {
             /** @description The name the reduce knows the input by: an identifier, not a keyword or a builtin's name */
             as: string;
@@ -4699,6 +4715,8 @@ export interface components {
              * @example /api/v1/schemas/CalcRuleBody.json
              */
             readonly $schema?: string;
+            /** @description Why the stored reduce does not compile against the registries as they are now (an input key deleted or retyped); absent when it compiles. While present the rule cannot be enabled */
+            calc_error?: components["schemas"]["CalcErrorBody"];
             /**
              * Format: date-time
              * @description When the rule was created
@@ -5027,7 +5045,7 @@ export interface components {
             label?: string;
             /** @description The rule's name (lowercase letters, digits, hyphens) */
             name: string;
-            /** @description The property or metric the rule writes: its type pins the reduce's result. Not health, and not a key a collection writes */
+            /** @description The property or metric the rule writes: its type pins the reduce's result. Not health, not a key a collection writes, and not one another enabled rule writes */
             output_key: string;
             /**
              * @description What the rule derives a value on: each component its selector picks, or each system. Fixed at create

@@ -20,11 +20,11 @@ func TestCalcRuleCommands(t *testing.T) {
 		b, _ := io.ReadAll(r.Body)
 		body = nil
 		_ = json.Unmarshal(b, &body)
-		_, _ = w.Write([]byte(`{"id":"0b6f8d2e-6f4e-4f7a-9d55-3c1f2d7a9e10","name":"room-avg"}`))
+		_, _ = w.Write([]byte(`{"id":"0b6f8d2e-6f4e-4f7a-9d55-3c1f2d7a9e10","name":"temp-mean"}`))
 	}))
 	defer srv.Close()
 
-	out, err := runCLI(t, "calc-rule", "create", "--name", "room-avg", "--owner-kind", "component",
+	out, err := runCLI(t, "calc-rule", "create", "--name", "temp-mean", "--owner-kind", "component",
 		"--inputs", `[{"as":"t","key":"room-temperature"}]`, "--reduce", `{"reducer":"average"}`, "--output-key", "avg-temp",
 		"--server", srv.URL)
 	if err != nil {
@@ -36,11 +36,11 @@ func TestCalcRuleCommands(t *testing.T) {
 		t.Fatalf("the CLI sent %s %s %v, want POST /api/v1/calc-rules with the inputs, reduce and output key", method, path, body)
 	}
 
-	out, err = runCLI(t, "calc-rule", "rename", "room-avg", "--name", "room-max", "--server", srv.URL)
+	out, err = runCLI(t, "calc-rule", "rename", "temp-mean", "--name", "temp-peak", "--server", srv.URL)
 	if err != nil {
 		t.Fatalf("rename failed: %v (%s)", err, out)
 	}
-	if method != http.MethodPost || path != "/api/v1/calc-rules/room-avg:rename" || body["name"] != "room-max" {
-		t.Fatalf("the CLI sent %s %s %v, want POST /api/v1/calc-rules/room-avg:rename {name: room-max}", method, path, body)
+	if method != http.MethodPost || path != "/api/v1/calc-rules/temp-mean:rename" || body["name"] != "temp-peak" {
+		t.Fatalf("the CLI sent %s %s %v, want POST /api/v1/calc-rules/temp-mean:rename {name: temp-peak}", method, path, body)
 	}
 }

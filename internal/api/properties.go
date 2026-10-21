@@ -159,7 +159,7 @@ func registerPropertyRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 		Path:          "/property-types/{name}",
 		DefaultStatus: http.StatusNoContent,
 		Summary:       "Delete a property",
-		Description:   "Removes a custom property by name. Official properties are read-only. Gated by property_type:delete.",
+		Description:   "Removes a custom property by name. Official properties are read-only. A property a calc rule writes is a 409 naming the rule. Gated by property_type:delete.",
 	}, "property_type", "delete"), func(ctx context.Context, in *propertyNameInput) (*struct{}, error) {
 		if err := gw.DeletePropertyType(ctx, actorID(ctx), in.Name); err != nil {
 			return nil, mapPropertyErr(err)
@@ -189,6 +189,10 @@ func marshalValidation(v any) ([]byte, error) {
 func mapPropertyErr(err error) error {
 	if refErr, ok := mapRefErr(err); ok {
 		return refErr
+	}
+	var inUse *storage.CalcOutputInUseError
+	if errors.As(err, &inUse) {
+		return huma.Error409Conflict(inUse.Error())
 	}
 	switch {
 	case errors.Is(err, storage.ErrPropertyTypeNotFound):
