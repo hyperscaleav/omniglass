@@ -7050,3 +7050,24 @@ planned nothing new.
 ### The criteria deadline cannot refuse a small run (#956)
 
 Re-running the lowering oracle on a loaded machine refused one trivial criterion (`value >= 1000000000000000000000.0`) for its wall-clock deadline: the meter read the clock at a run's first charge, so a goroutine preempted between `Run` and that charge read as an overrun and would have held a rule for no reason. The clock is now read every 256 charges and never before the first 256, so a run that small is bounded by its iteration budget alone and the deadline stays a backstop for long charged work; `TestDeadlineSparesSmallRuns` pins it.
+
+### The calc_rule registry, with the cycle check (#995)
+
+The first slice of epic #525 ([ADR-0147](/architecture/decisions/#adr-0147-a-calc-rule-is-a-typed-sibling-registry-checked-acyclic-at-authoring)).
+`calc_rule` (migration `20261021060000`) is the event rule's sibling: a uuid id and a renameable name,
+`owner_kind` (component or system), the event rule's selector shape, `inputs` as `[{as, key}]`,
+`reduce` as a named reducer or an expression, and `output_key` held by id in the property or metric
+registry with its lane recorded. `/calc-rules` lists, gets (by name or uuid), creates, patches,
+renames (`:rename`, no version bump) and deletes, gated `rule:*` with writes on an all-scope grant,
+audited on the uuid; the CLI's `calc-rule` commands are generated. The **calc expression site**
+joins `criteria` in the site registry: its environment is built per rule from the inputs
+(`expression.EnvFor` over a struct type made at run time; a component binds each input as one value,
+a system as the list of its members' values), its result pinned to the output key's type, the
+criteria builtins and a larger budget (100,000 walk, 25ms), and an input's name refused when it is a
+keyword or any Expr builtin's name. Its named reducers are declared and type-checked there, and
+`POST /expressions:validate` answers for it given the output key and the inputs. Every write refuses
+a rule that would close a cycle in the graph of enabled rules' input keys to output keys (a 422 naming
+the chain, judged under a transaction lock), `health` as an input or output, and an output a driver
+declares among its emits or a collector has observed. Nothing runs a calc rule yet: the pending set,
+the tick and the reducers' folds are the next slice. The [calculations](/architecture/calculations/)
+page moves to `Partial`, its running half still fenced.

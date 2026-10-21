@@ -343,9 +343,11 @@ criterion the problem's error is located at `body.fire_criteria.expr` (or `clear
 `body.fire_criteria` when the body gave the short form, and carries the `line` and `column` of the
 fault when it has one. A stored rule whose criteria no longer compile carries `criteria_error`
 (`field`, `line`, `column`, `message`) on the list, a get and its state, and holds until rewritten. `POST /expressions:validate` (gated `rule:read`; `omniglass expression validate`) compiles a
-`source` against a registered expression `site` (today `criteria`; for it the sample `key` is required
+`source` against a registered expression `site` (`criteria`, for which the sample `key` is required
 and types the value, a metric a number and a property its data type, which so tells a `rule:read`
-holder a key's lane and data type, as the rule list does) and answers `ok`,
+holder a key's lane and data type, as the rule list does; or `calc`, for which `key` is the rule's
+output key, typing the result, and `inputs` with `owner_kind` give the bindings, an unknown or
+misnamed input being a 422) and answers `ok`,
 the value and result types, `diagnostics` with line, column and phase, and the site's `bindings`,
 `builtins` and `budget`, generated from the site's declaration; it compiles without the engine's
 program cache, stores and runs nothing, and an unknown site or a missing or unknown key is a 422. `POST /event-rules:preview` (gated `rule:read`; `omniglass event-rule
@@ -376,6 +378,21 @@ it names no component, so it is not fenced. Because writing a rule needs an all-
 `GET /auth/me` returns `fleet_permissions` beside `permissions`:
 the permissions held on an all-scope grant, which the console checks before offering a rule write. An alarm body names its component by name and uuid, and a
 rule-raised one its rule (`raised_by_rule`, `raised_by_rule_id`).
+
+**Calc rules derive a key from named inputs.** `/calc-rules` (gated `rule:*`, read like a registry,
+written only on an all-scope grant; `omniglass calc-rule`) authors the rules that derive an output key
+on each component or system ([calculations](/architecture/calculations/)): an `owner_kind`, a
+`selector` (a component rule's), `inputs` as `{as, key}` pairs, a `reduce` that is a named `reducer`
+over the one input or an `expr` over the inputs by name, and an `output_key`, its lane answered as
+`output_lane`. A rule is addressed by name or uuid and every write answers the rule with its `id`. A
+reduce that does not compile, or yields a type other than the output key's, is a 422 located at
+`body.reduce.expr` with the fault's `line` and `column`; any other refusal is a 422 located at the field
+it names (`body.inputs[0].key`, `body.output_key`, `body.selector`): an unknown key, `health` as an input
+or output, an output a driver emits or a collector has observed, a reducer whose input or result does
+not fit. A rule that would close a cycle in the key graph is a 422 whose detail names the chain
+(`temp-twice -> avg-temp -> temp-twice`), its error carrying the `keys` and `rules` along it. A patch
+bumps the version unless it changes nothing; `POST /calc-rules/{name}:rename` moves the name, bumping no
+version, with the same 409 and 422 refusals as an event rule's rename.
 
 **The endpoint is authored; the task is derived.** An endpoint is addressed by a surrogate `id` and
 **named by its protocol**: `name` derives from `transport`, unique **within its component**

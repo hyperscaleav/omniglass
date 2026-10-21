@@ -193,6 +193,14 @@ func TestEveryWritePathStoresNullForAnUnsetLabel(t *testing.T) {
 			}
 			return "name", "lbl-rule"
 		},
+		"calc_rule": func(t *testing.T) (string, string) {
+			if _, err := gw.CreateCalcRule(ctx, "", storage.CalcRuleSpec{Name: "lbl-calc", Label: blank, OwnerKind: rules.OwnerComponent,
+				Inputs: []rules.CalcInput{{As: "t", Key: "room-temperature"}}, Reduce: rules.CalcReduce{Reducer: "average"},
+				OutputKey: "occupancy-count"}, scope.Set{All: true}); err != nil {
+				t.Fatalf("create calc_rule: %v", err)
+			}
+			return "name", "lbl-calc"
+		},
 		"severity_level": func(t *testing.T) (string, string) {
 			if _, err := gw.CreateSeverityLevel(ctx, "", storage.SeverityLevel{Name: "lbl-severity", Label: blank, Color: "gray", Rank: 777}, all); err != nil {
 				t.Fatalf("create severity_level: %v", err)

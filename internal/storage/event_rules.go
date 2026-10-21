@@ -345,6 +345,27 @@ func lowerStored(r *EventRule) {
 }
 
 func resolveRuleSelector(ctx context.Context, q querier, r *EventRule, kept EventRuleSelector) error {
+	if err := resolveSelector(ctx, q, &r.Selector, kept); err != nil {
+		var bad selectorError
+		if errors.As(err, &bad) {
+			return invalidRule("%s", bad.msg)
+		}
+		return err
+	}
+	return nil
+}
+
+// selectorError is a selector naming a component type or a component that
+// does not exist.
+type selectorError struct{ msg string }
+
+func (e selectorError) Error() string { return e.msg }
+
+// resolveSelector checks a rule's selector (an event rule's or a calc
+// rule's) against the registries and resolves its components to ids. An
+// entry kept already holds is carried over unresolved; only an entry new to
+// the rule must exist (a selectorError when it does not).
+func resolveSelector(ctx context.Context, q querier, sel *EventRuleSelector, kept EventRuleSelector) error {
 	keptTypes := make(map[string]bool, len(kept.ComponentTypes))
 	for _, t := range kept.ComponentTypes {
 		keptTypes[t] = true
@@ -353,7 +374,7 @@ func resolveRuleSelector(ctx context.Context, q querier, r *EventRule, kept Even
 	for _, id := range kept.Components {
 		keptIDs[id] = true
 	}
-	for _, t := range r.Selector.ComponentTypes {
+	for _, t := range sel.ComponentTypes {
 		if keptTypes[t] {
 			continue
 		}
@@ -362,22 +383,22 @@ func resolveRuleSelector(ctx context.Context, q querier, r *EventRule, kept Even
 			return fmt.Errorf("storage: check rule component type: %w", err)
 		}
 		if !ok {
-			return invalidRule("component type %q does not exist", t)
+			return selectorError{fmt.Sprintf("component type %q does not exist", t)}
 		}
 	}
-	ids := make([]string, 0, len(r.Selector.Components))
-	for _, ref := range r.Selector.Components {
+	ids := make([]string, 0, len(sel.Components))
+	for _, ref := range sel.Components {
 		if keptIDs[ref] {
 			ids = append(ids, ref)
 			continue
 		}
 		c, err := scopedByName(ctx, q, componentConfig, ref)
 		if err != nil {
-			return invalidRule("component %q: %v", ref, err)
+			return selectorError{fmt.Sprintf("component %q: %v", ref, err)}
 		}
 		ids = append(ids, c.ID)
 	}
-	r.Selector.Components = ids
+	sel.Components = ids
 	return nil
 }
 

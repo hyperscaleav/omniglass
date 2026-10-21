@@ -7,11 +7,15 @@
 // binding is hand-listed here.
 //
 // A site's variants differ only in the type of value; the table lists each
-// binding once, with value's type per variant.
+// binding once, with value's type per variant. A site whose bindings are
+// authored with each expression (calc: a rule's named inputs) declares none,
+// so its description is rendered instead, with its result type per variant
+// and its named reducers.
 import facts from '../generated/expressions.json';
 
 type Binding = { name: string; type: string; doc?: string };
 type Variant = { value_type: string; when: string; bindings: Binding[] };
+type Reducer = { name: string; accepts: string[]; result?: string; doc: string };
 
 function merged(variants: Variant[]) {
   const rows: { name: string; types: { type: string; when: string }[]; doc: string }[] = [];
@@ -38,6 +42,42 @@ function merged(variants: Variant[]) {
         </strong>
         : {s.summary}
       </p>
+      {s.bindings ? (
+        <p>
+          Bindings: {s.bindings} The result is{' '}
+          {(s.variants as Variant[]).map((v, i) => (
+            <>
+              {i > 0 ? (i === s.variants.length - 1 ? ' or ' : ', ') : ''}
+              <code>{v.value_type}</code> for {v.when}
+            </>
+          ))}.
+        </p>
+      ) : null}
+      {s.reducers && s.reducers.length > 0 ? (
+        <table>
+          <thead>
+            <tr>
+              <th>Reducer</th>
+              <th>Folds</th>
+              <th>Yields</th>
+              <th>What it gives</th>
+            </tr>
+          </thead>
+          <tbody>
+            {(s.reducers as Reducer[]).map((r) => (
+              <tr>
+                <td>
+                  <code>{r.name}</code>
+                </td>
+                <td>{r.accepts.join(' or ')}</td>
+                <td>{r.result ?? 'the input type'}</td>
+                <td>{r.doc}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      ) : null}
+      {s.bindings ? null : (
       <table>
         <thead>
           <tr>
@@ -69,6 +109,7 @@ function merged(variants: Variant[]) {
           ))}
         </tbody>
       </table>
+      )}
       <p>
         Builtins it admits:{' '}
         {s.builtins.map((b, i) => (

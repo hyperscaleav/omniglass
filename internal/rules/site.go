@@ -2,6 +2,7 @@ package rules
 
 import (
 	"encoding/json"
+	"reflect"
 	"slices"
 
 	"github.com/hyperscaleav/omniglass/internal/expression"
@@ -39,6 +40,11 @@ type Site struct {
 	// must be given one (a rule always reads a key).
 	KeyRequired bool
 	Variants    []SiteVariant
+	// Bindings describes a site whose bindings are authored with each
+	// expression (a calc rule's inputs), so its variants declare none.
+	Bindings string
+	// Reducers are the named folds a site offers beside an expression.
+	Reducers []Reducer
 }
 
 // Variant is the site's environment for a value type.
@@ -51,8 +57,30 @@ func (s Site) Variant(valueType string) (SiteVariant, bool) {
 	return SiteVariant{}, false
 }
 
+// calcVariant is the calc site's environment for an output of one value
+// type, before a rule's inputs are bound: the builtins and budget every calc
+// expression gets (CalcEnv binds the inputs).
+func calcVariant(valueType, when string) SiteVariant {
+	result, _ := resultFor(valueType)
+	return SiteVariant{ValueType: valueType, When: when, Env: expression.MustEnvFor(reflect.TypeFor[struct{}](), result, calcOptions()...)}
+}
+
 // sites is the registry, in name order.
 var sites = []Site{{
+	Name: "calc",
+	Summary: "A calc rule's reduce: one value of the output key's type, from the rule's named inputs on one owner. " +
+		"The output key types the result, so a key is required.",
+	KeyRequired: true,
+	Variants: []SiteVariant{
+		calcVariant(ValueNumber, "a metric output"),
+		calcVariant(ValueText, "a string or json property output"),
+		calcVariant(ValueBool, "a bool property output"),
+	},
+	Bindings: "Each of the rule's inputs, by its as name, typed by its key (a metric is a number, a property text, " +
+		"a bool property a bool). For a component owner it is the component's current value on its aggregate " +
+		"instance; for a system owner, the list of each role-bound member's current value.",
+	Reducers: reducers,
+}, {
 	Name: "criteria",
 	Summary: "An event rule's fire_criteria and clear_criteria: true or false for one arriving sample. " +
 		"The sample key's lane and data type type the value, so a key is required.",
@@ -84,7 +112,7 @@ func SiteNames() []string {
 	return out
 }
 
-// ValueTypeFor is the criteria value type a sample key's lane and data type
+// ValueTypeFor is the value type a sample key's lane and data type
 // select (CriteriaEnv's choice, named).
 func ValueTypeFor(lane Lane, dataType string) string {
 	switch {
@@ -109,6 +137,8 @@ type SiteFacts struct {
 	Summary     string         `json:"summary"`
 	KeyRequired bool           `json:"key_required"`
 	Variants    []VariantFacts `json:"variants"`
+	Bindings    string         `json:"bindings,omitempty"`
+	Reducers    []Reducer      `json:"reducers,omitempty"`
 	Builtins    []string       `json:"builtins"`
 	Budget      BudgetFacts    `json:"budget"`
 }
@@ -131,9 +161,13 @@ type BudgetFacts struct {
 // read from its Env, and the builtins and budget the site's Env admits
 // (the same for every variant of a site).
 func (s Site) Facts() SiteFacts {
-	f := SiteFacts{Name: s.Name, Summary: s.Summary, KeyRequired: s.KeyRequired}
+	f := SiteFacts{Name: s.Name, Summary: s.Summary, KeyRequired: s.KeyRequired, Bindings: s.Bindings, Reducers: s.Reducers}
 	for _, v := range s.Variants {
-		f.Variants = append(f.Variants, VariantFacts{ValueType: v.ValueType, When: v.When, Bindings: v.Env.Bindings()})
+		b := v.Env.Bindings()
+		if b == nil {
+			b = []expression.Binding{}
+		}
+		f.Variants = append(f.Variants, VariantFacts{ValueType: v.ValueType, When: v.When, Bindings: b})
 	}
 	if len(s.Variants) > 0 {
 		env := s.Variants[0].Env

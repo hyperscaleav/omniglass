@@ -6,6 +6,8 @@ import (
 	"slices"
 	"strings"
 	"time"
+
+	"github.com/expr-lang/expr/builtin"
 )
 
 // Result is the type a site pins for its expressions' value. A compiled
@@ -71,8 +73,16 @@ type Binding struct {
 // A site admits no builtin unless it names it (WithBuiltins), and runs on
 // CriteriaBudget() unless it asks for another (WithBudget).
 func EnvOf[T any](result Result, opts ...Option) (Env, error) {
-	t := reflect.TypeFor[T]()
-	if t.Kind() != reflect.Struct {
+	return EnvFor(reflect.TypeFor[T](), result, opts...)
+}
+
+// EnvFor is EnvOf for a struct type built at run time (reflect.StructOf), for
+// a site whose bindings are only known when an expression is authored: a calc
+// rule binds each of its named inputs. The same rules hold (a data-only
+// struct, a declared result), and the same fields give the same Env, so the
+// program cache is shared across rules that declare the same inputs.
+func EnvFor(t reflect.Type, result Result, opts ...Option) (Env, error) {
+	if t == nil || t.Kind() != reflect.Struct {
 		return Env{}, fmt.Errorf("an expression environment is a struct, not %s", t)
 	}
 	if result < Bool || result > Any {
@@ -98,6 +108,15 @@ func EnvOf[T any](result Result, opts ...Option) (Env, error) {
 // declaration is a programming error.
 func MustEnv[T any](result Result, opts ...Option) Env {
 	env, err := EnvOf[T](result, opts...)
+	if err != nil {
+		panic(err)
+	}
+	return env
+}
+
+// MustEnvFor is EnvFor for a site declared at package init.
+func MustEnvFor(t reflect.Type, result Result, opts ...Option) Env {
+	env, err := EnvFor(t, result, opts...)
 	if err != nil {
 		panic(err)
 	}
@@ -333,4 +352,38 @@ func (e Env) speak(msg string) string {
 		return msg
 	}
 	return strings.NewReplacer(pairs...).Replace(msg)
+}
+
+// MaxBindingName is the longest name a site may bind at authoring time.
+const MaxBindingName = 64
+
+// keywords are the words Expr's grammar reserves.
+var keywords = map[string]bool{
+	"true": true, "false": true, "nil": true, "and": true, "or": true, "not": true, "in": true,
+	"matches": true, "contains": true, "startsWith": true, "endsWith": true, "let": true,
+	"if": true, "else": true,
+}
+
+// BindableName reports whether name may be bound as an expression name by an
+// author (a calc rule's input): an identifier (a letter or underscore, then
+// letters, digits or underscores), at most MaxBindingName long, and neither
+// a keyword nor the name of any Expr builtin, admitted at a site or not, so
+// vetting a builtin later never changes what a stored expression means.
+func BindableName(name string) error {
+	if name == "" || len(name) > MaxBindingName {
+		return fmt.Errorf("a name is 1 to %d characters, not %d", MaxBindingName, len(name))
+	}
+	for i, r := range name {
+		letter := r == '_' || (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z')
+		if !letter && (i == 0 || r < '0' || r > '9') {
+			return fmt.Errorf("%q is not an identifier: a letter or underscore, then letters, digits or underscores", name)
+		}
+	}
+	if keywords[name] {
+		return fmt.Errorf("%q is a keyword of the expression language", name)
+	}
+	if _, ok := builtin.Index[name]; ok {
+		return fmt.Errorf("%q is the name of a builtin function", name)
+	}
+	return nil
 }

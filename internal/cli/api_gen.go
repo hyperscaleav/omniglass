@@ -316,6 +316,209 @@ func generatedCommands() []*cobra.Command {
 	}())
 	roots = append(roots, func() *cobra.Command {
 		parent := &cobra.Command{
+			Use:   "calc-rule",
+			Short: "Commands for the calc-rule resource",
+		}
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				var fDescription string
+				var fEnabled bool
+				var fInputs string
+				var fLabel string
+				var fName string
+				var fOutputKey string
+				var fOwnerKind string
+				var fReduce string
+				var fSelector string
+				cmd := &cobra.Command{
+					Use:     "create",
+					Short:   "Create a calc rule",
+					Long:    "Authors a rule that derives its output key on each owner (each component its selector picks, or each system) from its named inputs, folded by a named reducer (one input) or an expression over the inputs by name. Every input key must be registered and health may not be one; the reduce must compile and yield the output key's type (a 422 placed at body.reduce.expr with its line and column); the output must be a registered key that is not health and that no collection writes (a driver declaring it among its emits, or an observed sample of it); and an enabled rule may not close a cycle in the graph from every enabled rule's input keys to its output key (a 422 naming the chain of keys). A name already taken is a 409. Returns the rule with its uuid. Audited. Gated by rule:create, with an all-scope grant.",
+					Example: "  omniglass calc-rule create --inputs <json> --name name --output-key output_key --owner-kind owner_kind --reduce <json>",
+					Args:    cobra.ExactArgs(0),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/calc-rules")
+						body := map[string]any{}
+						if cmd.Flags().Changed("description") {
+							body["description"] = fDescription
+						}
+						if cmd.Flags().Changed("enabled") {
+							body["enabled"] = fEnabled
+						}
+						if cmd.Flags().Changed("inputs") {
+							body["inputs"] = jsonOrString(fInputs)
+						}
+						if cmd.Flags().Changed("label") {
+							body["label"] = fLabel
+						}
+						if cmd.Flags().Changed("name") {
+							body["name"] = fName
+						}
+						if cmd.Flags().Changed("output-key") {
+							body["output_key"] = fOutputKey
+						}
+						if cmd.Flags().Changed("owner-kind") {
+							body["owner_kind"] = fOwnerKind
+						}
+						if cmd.Flags().Changed("reduce") {
+							body["reduce"] = jsonOrString(fReduce)
+						}
+						if cmd.Flags().Changed("selector") {
+							body["selector"] = jsonOrString(fSelector)
+						}
+						return runAPICommand(cmd, "POST", path, body)
+					},
+				}
+				cmd.Flags().StringVar(&fDescription, "description", "", "What the rule derives and why")
+				cmd.Flags().BoolVar(&fEnabled, "enabled", false, "Defaults to true")
+				cmd.Flags().StringVar(&fInputs, "inputs", "", "The keys the rule reads, each by a unique name its reduce uses; health may not be one")
+				_ = cmd.MarkFlagRequired("inputs")
+				cmd.Flags().StringVar(&fLabel, "label", "", "A human label")
+				cmd.Flags().StringVar(&fName, "name", "", "The rule's name (lowercase letters, digits, hyphens)")
+				_ = cmd.MarkFlagRequired("name")
+				cmd.Flags().StringVar(&fOutputKey, "output-key", "", "The property or metric the rule writes: its type pins the reduce's result. Not health, and not a key a collection writes")
+				_ = cmd.MarkFlagRequired("output-key")
+				cmd.Flags().StringVar(&fOwnerKind, "owner-kind", "", "What the rule derives a value on: each component its selector picks, or each system. Fixed at create")
+				_ = cmd.MarkFlagRequired("owner-kind")
+				cmd.Flags().StringVar(&fReduce, "reduce", "", "A named reducer over the one input, or an expression over the inputs by name")
+				_ = cmd.MarkFlagRequired("reduce")
+				cmd.Flags().StringVar(&fSelector, "selector", "", "The components a component rule derives for (component types and components); absent is every component. A system rule takes none")
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				cmd := &cobra.Command{
+					Use:     "delete <name>",
+					Short:   "Delete a calc rule",
+					Long:    "Removes an operator rule; an official rule is read-only (409). Audited. Gated by rule:delete, with an all-scope grant.",
+					Example: "  omniglass calc-rule delete <name>",
+					Args:    cobra.ExactArgs(1),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/calc-rules/%s", url.PathEscape(args[0]))
+						return runAPICommand(cmd, "DELETE", path, nil)
+					},
+				}
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				cmd := &cobra.Command{
+					Use:     "get <name>",
+					Short:   "Get a calc rule",
+					Long:    "Returns one calc rule by name (or uuid). Gated by rule:read.",
+					Example: "  omniglass calc-rule get <name>",
+					Args:    cobra.ExactArgs(1),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/calc-rules/%s", url.PathEscape(args[0]))
+						return runAPICommand(cmd, "GET", path, nil)
+					},
+				}
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				cmd := &cobra.Command{
+					Use:     "list",
+					Short:   "List calc rules",
+					Long:    "Lists the calc rules, by name: the authored config that derives an output key on each owner from named inputs. Rules read like a registry, so every rule is listed whatever the caller's scope. Gated by rule:read.",
+					Example: "  omniglass calc-rule list",
+					Args:    cobra.ExactArgs(0),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/calc-rules")
+						return runAPICommand(cmd, "GET", path, nil)
+					},
+				}
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				var fName string
+				cmd := &cobra.Command{
+					Use:     "rename <name>",
+					Short:   "Rename a calc rule",
+					Long:    "Moves an operator rule's name, the address an operator types. A separate act from an update, because it breaks bookmarks and integration config outside this system; inside it nothing breaks, since the audit rows hold the rule's uuid and the key graph is of keys, not rule names. Not a material change: no version bump. An official rule keeps its name (409), a taken name is a 409, an illegal or uuid-shaped one a 422. Returns the rule with its uuid. Audited. Gated by rule:update, with an all-scope grant.",
+					Example: "  omniglass calc-rule rename <name> --name name",
+					Args:    cobra.ExactArgs(1),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/calc-rules/%s:rename", url.PathEscape(args[0]))
+						body := map[string]any{}
+						if cmd.Flags().Changed("name") {
+							body["name"] = fName
+						}
+						return runAPICommand(cmd, "POST", path, body)
+					},
+				}
+				cmd.Flags().StringVar(&fName, "name", "", "The rule's new name, unique among calc rules (lowercase letters, digits, hyphens)")
+				_ = cmd.MarkFlagRequired("name")
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				var fDescription string
+				var fEnabled bool
+				var fInputs string
+				var fLabel string
+				var fOutputKey string
+				var fReduce string
+				var fSelector string
+				cmd := &cobra.Command{
+					Use:     "update <name>",
+					Short:   "Update a calc rule",
+					Long:    "Patches a rule (an absent field is unchanged), bumping its version; a patch that changes nothing writes nothing. What changed is checked as on create: changed inputs, reduce or output recompile, a changed output must be one no collection writes, and an enabled rule may not close a cycle (enabling a disabled rule is checked too). The owner kind is fixed at create. Official rules are read-only (409). Audited. Gated by rule:update, with an all-scope grant.",
+					Example: "  omniglass calc-rule update <name>",
+					Args:    cobra.ExactArgs(1),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/calc-rules/%s", url.PathEscape(args[0]))
+						body := map[string]any{}
+						if cmd.Flags().Changed("description") {
+							body["description"] = fDescription
+						}
+						if cmd.Flags().Changed("enabled") {
+							body["enabled"] = fEnabled
+						}
+						if cmd.Flags().Changed("inputs") {
+							body["inputs"] = jsonOrString(fInputs)
+						}
+						if cmd.Flags().Changed("label") {
+							body["label"] = fLabel
+						}
+						if cmd.Flags().Changed("output-key") {
+							body["output_key"] = fOutputKey
+						}
+						if cmd.Flags().Changed("reduce") {
+							body["reduce"] = jsonOrString(fReduce)
+						}
+						if cmd.Flags().Changed("selector") {
+							body["selector"] = jsonOrString(fSelector)
+						}
+						return runAPICommand(cmd, "PATCH", path, body)
+					},
+				}
+				cmd.Flags().StringVar(&fDescription, "description", "", "What the rule derives and why")
+				cmd.Flags().BoolVar(&fEnabled, "enabled", false, "Whether the rule runs; an enabled rule is part of the key graph")
+				cmd.Flags().StringVar(&fInputs, "inputs", "", "Replace the keys the rule reads")
+				cmd.Flags().StringVar(&fLabel, "label", "", "A human label")
+				cmd.Flags().StringVar(&fOutputKey, "output-key", "", "The property or metric the rule writes")
+				cmd.Flags().StringVar(&fReduce, "reduce", "", "Replace the reduce")
+				cmd.Flags().StringVar(&fSelector, "selector", "", "Replace the components the rule derives for; an empty selector is every component")
+				return cmd
+			}()
+			return cmd
+		}())
+		return parent
+	}())
+	roots = append(roots, func() *cobra.Command {
+		parent := &cobra.Command{
 			Use:   "command-type",
 			Short: "Commands for the command-type resource",
 		}
@@ -2454,20 +2657,28 @@ func generatedCommands() []*cobra.Command {
 		}
 		parent.AddCommand(func() *cobra.Command {
 			cmd := func() *cobra.Command {
+				var fInputs string
 				var fKey string
+				var fOwnerKind string
 				var fSite string
 				var fSource string
 				cmd := &cobra.Command{
 					Use:     "validate",
 					Short:   "Validate an expression",
-					Long:    "Compiles an expression against a registered site's environment and answers whether it compiles, with positioned diagnostics, and the site's bindings, admitted builtins and run budget, all generated from the site's declaration. For criteria a sample key is required, and types the value (a metric is a number; a property is text, or a bool for a bool property); the answer's value_type so reveals a key's lane and data type to a rule:read holder, as the rule list already does. Compiles without the engine's program cache and stores and runs nothing. An unknown site, a missing or unknown key is a 422. Gated by rule:read.",
+					Long:    "Compiles an expression against a registered site's environment and answers whether it compiles, with positioned diagnostics, and the site's bindings, admitted builtins and run budget, all generated from the site's declaration. For criteria a sample key is required, and types the value (a metric is a number; a property is text, or a bool for a bool property). For calc the key is the rule's output key, typing the result, and the rule's inputs (and owner_kind, component by default) give the bindings, each input's name bound to its key's type (a list of them for a system); an input that is unknown or misnamed is a 422; the answer's value_type so reveals a key's lane and data type to a rule:read holder, as the rule list already does. Compiles without the engine's program cache and stores and runs nothing. An unknown site, a missing or unknown key is a 422. Gated by rule:read.",
 					Example: "  omniglass expression validate --site site --source source",
 					Args:    cobra.ExactArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
 						path := fmt.Sprintf("/api/v1/expressions:validate")
 						body := map[string]any{}
+						if cmd.Flags().Changed("inputs") {
+							body["inputs"] = jsonOrString(fInputs)
+						}
 						if cmd.Flags().Changed("key") {
 							body["key"] = fKey
+						}
+						if cmd.Flags().Changed("owner-kind") {
+							body["owner_kind"] = fOwnerKind
 						}
 						if cmd.Flags().Changed("site") {
 							body["site"] = fSite
@@ -2478,8 +2689,10 @@ func generatedCommands() []*cobra.Command {
 						return runAPICommand(cmd, "POST", path, body)
 					},
 				}
-				cmd.Flags().StringVar(&fKey, "key", "", "For criteria (required there), the sample key the rule reads: its lane and data type type the value (a metric is a number; a property is text, or a bool for a bool property)")
-				cmd.Flags().StringVar(&fSite, "site", "", "Where the expression is written: criteria, an event rule's fire_criteria or clear_criteria")
+				cmd.Flags().StringVar(&fInputs, "inputs", "", "For calc (required there), the rule's inputs: each bound by its name, typed by its key")
+				cmd.Flags().StringVar(&fKey, "key", "", "The sample key that types the expression (required at both sites). For criteria, the key the rule reads: its lane and data type type the value (a metric is a number; a property is text, or a bool for a bool property). For calc, the rule's output key: its type is the result the reduce must yield")
+				cmd.Flags().StringVar(&fOwnerKind, "owner-kind", "", "For calc, what the rule derives on: a component binds each input as one value, a system as the list of its members' values; defaults to component")
+				cmd.Flags().StringVar(&fSite, "site", "", "Where the expression is written: calc, a calc rule's reduce; criteria, an event rule's fire_criteria or clear_criteria")
 				_ = cmd.MarkFlagRequired("site")
 				cmd.Flags().StringVar(&fSource, "source", "", "The expression")
 				_ = cmd.MarkFlagRequired("source")

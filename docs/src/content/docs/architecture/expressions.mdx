@@ -62,8 +62,11 @@ Expressions are **sandboxed**: no I/O, no network, no unbounded loops, bounded e
 Each place an expression is written is a **site**, declared once in code. The tables below are
 generated from those declarations (`make gen`), and **`POST /expressions:validate`** (`omniglass
 expression validate`, gated `rule:read`) answers from the same ones: given a site, a source and,
-for criteria, the sample key, it says whether the expression compiles, with each diagnostic's line
-and column, and returns the site's bindings, builtins and budget. The console's **expression field**
+for criteria, the sample key (for calc, the output key and the rule's inputs), it says whether the
+expression compiles, with each diagnostic's line and column, and returns the site's bindings,
+builtins and budget. The **calc** site (#995) is the first whose bindings are authored with each
+expression: a calc rule's inputs, bound by name for each rule from a struct type built when the rule
+is written, so its table describes them rather than listing them. The console's **expression field**
 (the rule drawer's **Write as an expression**, #960) is that route's face: the source in a monospace
 field checked as it is typed, each diagnostic pointed at under its line and column, and the site's
 bindings and functions listed beneath with their docs. Built today:
@@ -100,7 +103,7 @@ expressions run.
 |---|---|---|
 | extractor | `value` | reshape a located raw value into the typed sample value |
 | step | `when` | the explicit branch guard (a false guard skips the step and dependents) |
-| `calc_rule` | `reduce` (escape), `filter` | the named reducers (`worst` / `majority` / `average`, plus windowed `time_in_state` for SLIs) and the Expr escape, with per-input filters |
+| `calc_rule` | `filter` | per-input filters, `worst` (once property types declare an order) and windowed `time_in_state` for SLIs, beside the built calc site's reducers and expression |
 | rule | `scope` | which instances a rule fires for (the Expr scope escape) |
 | views / list | `filter` | the structured-query predicate operators compose |
 | dynamic group | membership `filter` | recomputed membership |

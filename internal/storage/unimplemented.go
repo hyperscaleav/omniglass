@@ -896,6 +896,22 @@ func (UnimplementedGateway) RenameEventRule(context.Context, string, string, str
 func (UnimplementedGateway) DeleteEventRule(context.Context, string, string, scope.Set) error {
 	return nil
 }
+func (UnimplementedGateway) ListCalcRules(context.Context) ([]CalcRule, error) { return nil, nil }
+func (UnimplementedGateway) GetCalcRule(context.Context, string) (*CalcRule, error) {
+	return nil, ErrCalcRuleNotFound
+}
+func (UnimplementedGateway) CreateCalcRule(context.Context, string, CalcRuleSpec, scope.Set) (*CalcRule, error) {
+	return nil, ErrCalcRuleInvalid
+}
+func (UnimplementedGateway) UpdateCalcRule(context.Context, string, string, CalcRulePatch, scope.Set) (*CalcRule, error) {
+	return nil, ErrCalcRuleNotFound
+}
+func (UnimplementedGateway) RenameCalcRule(context.Context, string, string, string, scope.Set) (*CalcRule, error) {
+	return nil, ErrCalcRuleNotFound
+}
+func (UnimplementedGateway) DeleteCalcRule(context.Context, string, string, scope.Set) error {
+	return ErrCalcRuleNotFound
+}
 func (UnimplementedGateway) SweepEventRules(context.Context, time.Time) error { return nil }
 func (UnimplementedGateway) ReconcileEventRules(context.Context, *RuleReconcileState) error {
 	return nil

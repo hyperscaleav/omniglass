@@ -44,6 +44,12 @@ func provedByCreate(ctx context.Context, gw *storage.PG) map[string]func(key str
 				Fire: rules.Criteria{Op: "eq", Value: v}, Severity: "high"}, scope.Set{All: true})
 			return err
 		},
+		"calc_rule": func(s string) error {
+			_, err := gw.CreateCalcRule(ctx, "", storage.CalcRuleSpec{Name: s, OwnerKind: rules.OwnerComponent,
+				Inputs: []rules.CalcInput{{As: "t", Key: "room-temperature"}}, Reduce: rules.CalcReduce{Reducer: "average"},
+				OutputKey: "occupancy-count"}, scope.Set{All: true})
+			return err
+		},
 		"severity_level": func(s string) error {
 			// Each call takes a rank of its own, since ranks are unique.
 			severityRank++

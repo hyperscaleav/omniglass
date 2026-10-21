@@ -288,6 +288,78 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/calc-rules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List calc rules
+         * @description Lists the calc rules, by name: the authored config that derives an output key on each owner from named inputs. Rules read like a registry, so every rule is listed whatever the caller's scope. Gated by rule:read.
+         */
+        get: operations["list-calc-rule"];
+        put?: never;
+        /**
+         * Create a calc rule
+         * @description Authors a rule that derives its output key on each owner (each component its selector picks, or each system) from its named inputs, folded by a named reducer (one input) or an expression over the inputs by name. Every input key must be registered and health may not be one; the reduce must compile and yield the output key's type (a 422 placed at body.reduce.expr with its line and column); the output must be a registered key that is not health and that no collection writes (a driver declaring it among its emits, or an observed sample of it); and an enabled rule may not close a cycle in the graph from every enabled rule's input keys to its output key (a 422 naming the chain of keys). A name already taken is a 409. Returns the rule with its uuid. Audited. Gated by rule:create, with an all-scope grant.
+         */
+        post: operations["create-calc-rule"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/calc-rules/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get a calc rule
+         * @description Returns one calc rule by name (or uuid). Gated by rule:read.
+         */
+        get: operations["get-calc-rule"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete a calc rule
+         * @description Removes an operator rule; an official rule is read-only (409). Audited. Gated by rule:delete, with an all-scope grant.
+         */
+        delete: operations["delete-calc-rule"];
+        options?: never;
+        head?: never;
+        /**
+         * Update a calc rule
+         * @description Patches a rule (an absent field is unchanged), bumping its version; a patch that changes nothing writes nothing. What changed is checked as on create: changed inputs, reduce or output recompile, a changed output must be one no collection writes, and an enabled rule may not close a cycle (enabling a disabled rule is checked too). The owner kind is fixed at create. Official rules are read-only (409). Audited. Gated by rule:update, with an all-scope grant.
+         */
+        patch: operations["update-calc-rule"];
+        trace?: never;
+    };
+    "/calc-rules/{name}:rename": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Rename a calc rule
+         * @description Moves an operator rule's name, the address an operator types. A separate act from an update, because it breaks bookmarks and integration config outside this system; inside it nothing breaks, since the audit rows hold the rule's uuid and the key graph is of keys, not rule names. Not a material change: no version bump. An official rule keeps its name (409), a taken name is a 409, an illegal or uuid-shaped one a 422. Returns the rule with its uuid. Audited. Gated by rule:update, with an all-scope grant.
+         */
+        post: operations["rename-calc-rule"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/command-types": {
         parameters: {
             query?: never;
@@ -1371,7 +1443,7 @@ export interface paths {
         put?: never;
         /**
          * Validate an expression
-         * @description Compiles an expression against a registered site's environment and answers whether it compiles, with positioned diagnostics, and the site's bindings, admitted builtins and run budget, all generated from the site's declaration. For criteria a sample key is required, and types the value (a metric is a number; a property is text, or a bool for a bool property); the answer's value_type so reveals a key's lane and data type to a rule:read holder, as the rule list already does. Compiles without the engine's program cache and stores and runs nothing. An unknown site, a missing or unknown key is a 422. Gated by rule:read.
+         * @description Compiles an expression against a registered site's environment and answers whether it compiles, with positioned diagnostics, and the site's bindings, admitted builtins and run budget, all generated from the site's declaration. For criteria a sample key is required, and types the value (a metric is a number; a property is text, or a bool for a bool property). For calc the key is the rule's output key, typing the result, and the rule's inputs (and owner_kind, component by default) give the bindings, each input's name bound to its key's type (a list of them for a system); an input that is unknown or misnamed is a 422; the answer's value_type so reveals a key's lane and data type to a rule:read holder, as the rule list already does. Compiles without the engine's program cache and stores and runs nothing. An unknown site, a missing or unknown key is a 422. Gated by rule:read.
          */
         post: operations["validate-expression"];
         delete?: never;
@@ -4605,6 +4677,74 @@ export interface components {
             /** @description The profile picture as a base64-encoded 256x256 JPEG */
             image_base64: string;
         };
+        CalcInputBody: {
+            /** @description The name the reduce knows the input by: an identifier, not a keyword or a builtin's name */
+            as: string;
+            /** @description The property or metric the input reads, by name */
+            key: string;
+        };
+        CalcReduceBody: {
+            /** @description An expression over the inputs by their names, yielding the output key's type; give this or reducer */
+            expr?: string;
+            /**
+             * @description A named fold over every value of the rule's one input (every instance on a component; every instance on every role-bound member of a system); give this or expr
+             * @enum {string}
+             */
+            reducer?: "average" | "min" | "max" | "sum" | "count" | "majority" | "any" | "all";
+        };
+        CalcRuleBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/CalcRuleBody.json
+             */
+            readonly $schema?: string;
+            /**
+             * Format: date-time
+             * @description When the rule was created
+             */
+            created_at: string;
+            /** @description What the rule derives and why */
+            description?: string;
+            /** @description Whether the rule runs; an enabled rule is part of the key graph */
+            enabled: boolean;
+            /** @description The rule's uuid, the stable form of name */
+            id: string;
+            /** @description The keys the rule reads, each by the name its reduce uses */
+            inputs: components["schemas"]["CalcInputBody"][] | null;
+            /** @description A human label */
+            label?: string;
+            /** @description The rule's name, the address an operator types; renameable */
+            name: string;
+            /** @description Shipped with the platform and read-only */
+            official: boolean;
+            /** @description The property or metric the rule writes */
+            output_key: string;
+            /**
+             * @description Which lane the output key is on, derived from the registries
+             * @enum {string}
+             */
+            output_lane: "property" | "metric";
+            /**
+             * @description What the rule derives a value on: each component its selector picks, or each system
+             * @enum {string}
+             */
+            owner_kind: "component" | "system";
+            /** @description How the inputs fold into the output: a named reducer or an expression */
+            reduce: components["schemas"]["CalcReduceBody"];
+            /** @description The components a component rule derives for; both lists empty is every component. A system rule's is empty */
+            selector: components["schemas"]["SelectorBody"];
+            /**
+             * Format: date-time
+             * @description When the rule was last written
+             */
+            updated_at: string;
+            /**
+             * Format: int64
+             * @description Bumps on every update
+             */
+            version: number;
+        };
         ChangePasswordInputBody: {
             /**
              * Format: uri
@@ -4869,6 +5009,35 @@ export interface components {
             resolved_icon?: string;
             /** @description The auto-generated component name's prefix; empty inherits the nearest ancestor's */
             stem?: string;
+        };
+        CreateCalcRuleInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/CreateCalcRuleInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description What the rule derives and why */
+            description?: string;
+            /** @description Defaults to true */
+            enabled?: boolean;
+            /** @description The keys the rule reads, each by a unique name its reduce uses; health may not be one */
+            inputs: components["schemas"]["CalcInputBody"][] | null;
+            /** @description A human label */
+            label?: string;
+            /** @description The rule's name (lowercase letters, digits, hyphens) */
+            name: string;
+            /** @description The property or metric the rule writes: its type pins the reduce's result. Not health, and not a key a collection writes */
+            output_key: string;
+            /**
+             * @description What the rule derives a value on: each component its selector picks, or each system. Fixed at create
+             * @enum {string}
+             */
+            owner_kind: "component" | "system";
+            /** @description A named reducer over the one input, or an expression over the inputs by name */
+            reduce: components["schemas"]["CalcReduceBody"];
+            /** @description The components a component rule derives for (component types and components); absent is every component. A system rule takes none */
+            selector?: components["schemas"]["SelectorBody"];
         };
         CreateCommandTypeInputBody: {
             /**
@@ -6363,6 +6532,16 @@ export interface components {
             /** @description The component's own verdict, the one its active alarms make (healthy, degraded, or outage), whatever the filter: a component's view reads it here rather than off the whole fleet view */
             verdict: string;
         };
+        ListCalcRulesOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/ListCalcRulesOutputBody.json
+             */
+            readonly $schema?: string;
+            /** @description Every calc rule, by name */
+            calc_rules: components["schemas"]["CalcRuleBody"][] | null;
+        };
         ListCommandTypesOutputBody: {
             /**
              * Format: uri
@@ -7515,6 +7694,16 @@ export interface components {
             readonly $schema?: string;
             component: string;
             properties: components["schemas"]["ReconPropertyBody"][] | null;
+        };
+        RenameCalcRuleInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/RenameCalcRuleInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description The rule's new name, unique among calc rules (lowercase letters, digits, hyphens) */
+            name: string;
         };
         RenameComponentInputBody: {
             /**
@@ -8740,6 +8929,28 @@ export interface components {
              */
             theme: "omniglass-dark" | "omniglass-light";
         };
+        UpdateCalcRuleInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/UpdateCalcRuleInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description What the rule derives and why */
+            description?: string;
+            /** @description Whether the rule runs; an enabled rule is part of the key graph */
+            enabled?: boolean;
+            /** @description Replace the keys the rule reads */
+            inputs?: components["schemas"]["CalcInputBody"][];
+            /** @description A human label */
+            label?: string;
+            /** @description The property or metric the rule writes */
+            output_key?: string;
+            /** @description Replace the reduce */
+            reduce?: components["schemas"]["CalcReduceBody"];
+            /** @description Replace the components the rule derives for; an empty selector is every component */
+            selector?: components["schemas"]["SelectorBody"];
+        };
         UpdateCommandTypeInputBody: {
             /**
              * Format: uri
@@ -9150,13 +9361,20 @@ export interface components {
              * @example /api/v1/schemas/ValidateExpressionInputBody.json
              */
             readonly $schema?: string;
-            /** @description For criteria (required there), the sample key the rule reads: its lane and data type type the value (a metric is a number; a property is text, or a bool for a bool property) */
+            /** @description For calc (required there), the rule's inputs: each bound by its name, typed by its key */
+            inputs?: components["schemas"]["CalcInputBody"][] | null;
+            /** @description The sample key that types the expression (required at both sites). For criteria, the key the rule reads: its lane and data type type the value (a metric is a number; a property is text, or a bool for a bool property). For calc, the rule's output key: its type is the result the reduce must yield */
             key?: string;
             /**
-             * @description Where the expression is written: criteria, an event rule's fire_criteria or clear_criteria
+             * @description For calc, what the rule derives on: a component binds each input as one value, a system as the list of its members' values; defaults to component
              * @enum {string}
              */
-            site: "criteria";
+            owner_kind?: "component" | "system";
+            /**
+             * @description Where the expression is written: calc, a calc rule's reduce; criteria, an event rule's fire_criteria or clear_criteria
+             * @enum {string}
+             */
+            site: "calc" | "criteria";
             /** @description The expression */
             source: string;
         };
@@ -9181,7 +9399,7 @@ export interface components {
             result_type: string;
             site: string;
             /**
-             * @description The value type the expression was checked against (criteria)
+             * @description The value type the expression was checked against: for criteria the key's value, for calc the output's
              * @enum {string}
              */
             value_type: "number" | "text" | "bool";
@@ -9735,6 +9953,202 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AuthStatusOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "list-calc-rule": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListCalcRulesOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "create-calc-rule": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateCalcRuleInputBody"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalcRuleBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "get-calc-rule": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The rule's name (its uuid is accepted too) */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalcRuleBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "delete-calc-rule": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The rule's name (its uuid is accepted too) */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "update-calc-rule": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The rule's name (its uuid is accepted too) */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateCalcRuleInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalcRuleBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "rename-calc-rule": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The rule's current name (its uuid is accepted too) */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RenameCalcRuleInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalcRuleBody"];
                 };
             };
             /** @description Error */

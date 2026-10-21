@@ -465,6 +465,14 @@ type Gateway interface {
 	// its uuid, so nothing inside the platform moves with it.
 	RenameEventRule(ctx context.Context, actorID, name, newName string, action scope.Set) (*EventRule, error)
 	DeleteEventRule(ctx context.Context, actorID, name string, action scope.Set) error
+	// Calc rules (#995): read like a registry, written with an all-scope
+	// grant; official rules read-only. A ref is a rule's name or uuid.
+	ListCalcRules(ctx context.Context) ([]CalcRule, error)
+	GetCalcRule(ctx context.Context, ref string) (*CalcRule, error)
+	CreateCalcRule(ctx context.Context, actorID string, spec CalcRuleSpec, create scope.Set) (*CalcRule, error)
+	UpdateCalcRule(ctx context.Context, actorID, ref string, patch CalcRulePatch, action scope.Set) (*CalcRule, error)
+	RenameCalcRule(ctx context.Context, actorID, ref, newName string, action scope.Set) (*CalcRule, error)
+	DeleteCalcRule(ctx context.Context, actorID, ref string, action scope.Set) error
 	// SampleKeyType reads which lane a sample key reads and, for a property,
 	// its data type: what types an expression's value (#958).
 	SampleKeyType(ctx context.Context, key string) (rules.Lane, string, error)

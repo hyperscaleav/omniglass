@@ -185,6 +185,7 @@ below from the project's history. From here it grows one slice at a time.
 | [ADR-0144](#adr-0144-alarms-are-raised-by-event-rules-at-a-severity-level-from-a-ranked-registry) | 2026-10-18 | Accepted; amended (#977): the dedup key names the rule by uuid, and a rule's name is renameable | Alarms are raised by event rules (one table per rule kind, `rule:*` authoring, `raised_by_rule_id`, one alarm per endpoint) at a severity level from a ranked registry referenced by name; `critical` became `high`, the outage floor |
 | [ADR-0145](#adr-0145-a-rule-records-its-conditions-as-typed-events-and-its-alarm-is-optional) | 2026-10-20 | Accepted | An event rule's alarm is optional (an informational rule raises none); a rule names the event types it writes (a required fire type, an optional clear type); its in-force state is its own condition row; it writes one event per edge, carrying the alarm the edge moved, and a severity toggled on or off moves alarms with no condition event; a hand clear holds while the condition persists |
 | [ADR-0146](#adr-0146-expressions-run-on-pinned-expr-with-an-allowlist-and-per-site-budgets-and-rule-criteria-are-expressions) | 2026-10-20 | Accepted | Expressions run on pinned Expr behind a per-site allowlist of vetted builtins and a per-site budget (after three adversarial passes); event rule criteria are stored as `{expr}`, the short form lowered on input and by a one-time backfill, with one approved bool divergence; compile errors show on the rule; validate and preview answer from the same declarations |
+| [ADR-0147](#adr-0147-a-calc-rule-is-a-typed-sibling-registry-checked-acyclic-at-authoring) | 2026-10-21 | Accepted | `calc_rule` is a sibling of `event_rule` with typed columns (inputs `{as, key}`, a named reducer or an expression, the output key by id); every write compiles the reduce against a calc expression site of its own and refuses a cycle in the key graph, `health` as an input or output, and an output a collection writes (a driver's declared emits or an observed sample) |
 
 ## Entries
 
@@ -6646,3 +6647,41 @@ interface create form, since that name is the platform's to mint.
   old evaluator over every short form and sample class, and the divergence is the definition's
   decision (#524, decision 3), recorded here rather than claimed away.
 
+### ADR-0147: A calc rule is a typed sibling registry, checked acyclic at authoring
+
+- **Date:** 2026-10-21 | **Status:** Accepted | **Pages:** [calculations](/architecture/calculations/), [expressions](/architecture/expressions/), [API](/architecture/api/)
+- **Decision:** The calc rule registry (#995, the first slice of epic #525) is built on four choices:
+  1. **A sibling table with typed columns**, as ADR-0144 ruling 1 set for rule kinds: `owner_kind`
+     (component or system), the event rule's `selector` shape, `inputs` as `[{as, key}]` (keys by name,
+     as `event_rule.sample_key` holds its key), `reduce` as `{reducer}` or `{expr}`, and `output_key`
+     held by id in its lane's registry with the lane recorded, so a written key cannot be deleted. The
+     calculations page's one-spec shape is the same divergence the event rule took. The name is
+     renameable from the start (ADR-0062, ADR-0076), and a rule is addressed by name or uuid.
+  2. **A calc expression site of its own.** Its bindings are each rule's inputs, so the environment is
+     built per rule from a struct type made at run time (`expression.EnvFor`): a component owner binds
+     each input as one value of its key's type, a system owner as the list of its members' values, and
+     the result is pinned to the output key's type. It admits the criteria builtins and no more (none is
+     vetted for calc alone), on a budget ten times criteria's walk and a tenth of the ceiling, since it
+     runs on a tick off the ingest path. An input's name may not be a keyword or any Expr builtin's name,
+     so vetting a builtin later never changes a stored rule. The named reducers (`average`, `min`,
+     `max`, `sum`, `count` over a metric; `majority` over a property; `any`, `all` over a bool) are
+     declared in the site registry and type-checked here, though they fold values only once the tick
+     lands.
+  3. **The key graph is checked acyclic at authoring.** Every enabled rule's input keys lead to its
+     output key; a write that would let its output reach one of its own inputs is a 422 naming the chain
+     of keys and the rules along it, judged under a transaction lock so concurrent writes cannot each
+     close half a loop. This complements ADR-0069 rather than replacing it: the provenance rule still
+     guards the loops this graph does not see (a calc output judged by an event rule whose alarm moves
+     health), which is why `health` may be neither an input nor an output (#525 decision 3).
+  4. **An output a collection writes is refused**, on the two signals the platform holds: a driver whose
+     spec declares the key among its emits, and a stored observed sample of the key (ever on the
+     property lane, which is transition-only; within 7 days on the metric lane, to stay inside the
+     recent range its time index covers). Neither the registries nor the native probes declare which keys
+     a collection writes, so a native probe's key before it has run, a driver that starts emitting the
+     key after the rule exists, and a collector that starts later are not caught here; the runtime half
+     belongs with the tick.
+- **Context:** #525's definition asked for a cycle refusal naming the chain, health refused as an
+  input (decision 3), and an output shared with an observed producer refused (decision 6), and left the
+  signal for "a key any collection writes" to the slice. A flag on the registries would be a second copy
+  of what the drivers already declare and would still miss native probes; the observed sample is the
+  fact a mixed current value would actually be made of.
