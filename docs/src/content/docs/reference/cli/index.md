@@ -290,7 +290,7 @@ Authors a rule that derives its output key on each owner (each component its sel
 | `--label` | string | (none) | A human label |
 | `--name` | string | (none) | The rule's name (lowercase letters, digits, hyphens) |
 | `--output-key` | string | (none) | The property or metric the rule writes: its type pins the reduce's result. Not health, not a key a collection writes, and not one another enabled rule writes |
-| `--owner-kind` | string | (none) | What the rule derives a value on: each component its selector picks, or each system. Fixed at create |
+| `--owner-kind` | string | (none) | What the rule derives a value on: each component its selector picks, or each system its selector picks (read from the system's role-bound members). Fixed at create |
 | `--reduce` | string | (none) | A named reducer over the one input, or an expression over the inputs by name |
 | `--selector` | string | (none) | The owners the rule derives for: a component rule's component_types and components, or a system rule's system_types and systems; absent is every owner of its kind |
 
@@ -1882,13 +1882,13 @@ Validate an expression
 omniglass expression validate [flags]
 ```
 
-Compiles an expression against a registered site's environment and answers whether it compiles, with positioned diagnostics, and the site's bindings, admitted builtins and run budget, all generated from the site's declaration. For criteria a sample key is required, and types the value (a metric is a number; a property is text, or a bool for a bool property). For calc the key is the rule's output key, typing the result, and the rule's inputs (and owner_kind, component by default) give the bindings, each input's name bound to its key's type (a list of them for a system); an input that is unknown or misnamed is a 422; the answer's value_type so reveals a key's lane and data type to a rule:read holder, as the rule list already does. Compiles without the engine's program cache and stores and runs nothing. An unknown site, a missing or unknown key is a 422. Gated by rule:read.
+Compiles an expression against a registered site's environment and answers whether it compiles, with positioned diagnostics, and the site's bindings, admitted builtins and run budget, all generated from the site's declaration. For criteria a sample key is required, and types the value (a metric is a number; a property is text, or a bool for a bool property). For calc the key is the rule's output key, typing the result, and the rule's inputs (and owner_kind, component by default) give the bindings, each input's name bound to its key's type (for a system, inside one record per member); an input that is unknown or misnamed is a 422; the answer's value_type so reveals a key's lane and data type to a rule:read holder, as the rule list already does. Compiles without the engine's program cache and stores and runs nothing. An unknown site, a missing or unknown key is a 422. Gated by rule:read.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--inputs` | string | (none) | For calc (required there), the rule's inputs: each bound by its name, typed by its key |
 | `--key` | string | (none) | The sample key that types the expression (required at both sites). For criteria, the key the rule reads: its lane and data type type the value (a metric is a number; a property is text, or a bool for a bool property). For calc, the rule's output key: its type is the result the reduce must yield |
-| `--owner-kind` | string | (none) | For calc, what the rule derives on: a component binds each input as one value, a system as the list of its members' values; defaults to component |
+| `--owner-kind` | string | (none) | For calc, what the rule derives on: a component binds each input as one value; a system binds members, one record per role-bound member with value.<as> and has.<as> per input; defaults to component |
 | `--site` | string | (none) | Where the expression is written: calc, a calc rule's reduce; criteria, an event rule's fire_criteria or clear_criteria |
 | `--source` | string | (none) | The expression |
 

@@ -115,7 +115,7 @@ func TestCalcRules(t *testing.T) {
 
 	// A system rule averages its members' values.
 	if _, err := r.create(storage.CalcRuleSpec{Name: "sys-avg", OwnerKind: rules.OwnerSystem,
-		Inputs: []rules.CalcInput{{As: "temps", Key: "room-temperature"}}, Reduce: rules.CalcReduce{Expr: "len(temps) > 0 ? temps[0] : 0.0"},
+		Inputs: []rules.CalcInput{{As: "temps", Key: "room-temperature"}}, Reduce: rules.CalcReduce{Expr: "len(members) > 0 ? members[0].value.temps : 0.0"},
 		OutputKey: "temp-twice"}); err != nil {
 		t.Fatalf("a system rule: %v", err)
 	}

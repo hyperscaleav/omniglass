@@ -227,18 +227,42 @@ func calcEnv(ownerKind string, inputs []TypedInput, output string) (expression.E
 		t, _ := valueGoType(x.ValueType)
 		doc := x.Key + ": the component's current value"
 		if ownerKind == OwnerSystem {
-			t = reflect.SliceOf(t)
-			doc = x.Key + ": each role-bound member's current value"
+			doc = x.Key + ": the member's current value (the type's zero when it has none; see has)"
 		}
 		fields[i] = reflect.StructField{Name: fmt.Sprintf("In%d", i), Type: t,
 			Tag: reflect.StructTag(fmt.Sprintf("expr:%q doc:%q", x.As, doc))}
 	}
 	typ := reflect.StructOf(fields)
+	if ownerKind == OwnerSystem {
+		typ = systemEnvType(inputs, typ)
+	}
 	env, err := expression.EnvFor(typ, result, calcOptions()...)
 	if err != nil {
 		return expression.Env{}, nil, calcErr("inputs", "%v", err)
 	}
 	return env, typ, nil
+}
+
+// systemEnvType is a system expression's environment: members, one record
+// per role-bound member in a stable order (name, then id), each with the
+// member's id and name, its value of each input under value (values, the
+// struct built for a component's inputs), and whether it holds one under
+// has. One record per member keeps a member's inputs together, which
+// parallel per-input lists could not once a member lacks one of them.
+func systemEnvType(inputs []TypedInput, values reflect.Type) reflect.Type {
+	has := make([]reflect.StructField, len(inputs))
+	for i, x := range inputs {
+		has[i] = reflect.StructField{Name: fmt.Sprintf("In%d", i), Type: reflect.TypeFor[bool](),
+			Tag: reflect.StructTag(fmt.Sprintf("expr:%q doc:%q", x.As, "whether the member holds a value of "+x.Key))}
+	}
+	member := reflect.StructOf([]reflect.StructField{
+		{Name: "ID", Type: reflect.TypeFor[string](), Tag: `expr:"id" doc:"The member component's uuid"`},
+		{Name: "Name", Type: reflect.TypeFor[string](), Tag: `expr:"name" doc:"The member component's name"`},
+		{Name: "Value", Type: values, Tag: `expr:"value" doc:"The member's value of each input, by its name"`},
+		{Name: "Has", Type: reflect.StructOf(has), Tag: `expr:"has" doc:"Whether the member holds a value of each input, by its name"`},
+	})
+	return reflect.StructOf([]reflect.StructField{{Name: "Members", Type: reflect.SliceOf(member),
+		Tag: `expr:"members" doc:"The system's role-bound members, one record each, by name then id"`}})
 }
 
 // CompileCalc checks a rule's reduce against its owner kind, its inputs and

@@ -55,9 +55,53 @@ func TestCalcReduceExpression(t *testing.T) {
 	if err != nil || got != true {
 		t.Fatalf("component expression = %v (%v), want true", got, err)
 	}
-	s := mustCompile(t, OwnerSystem, []TypedInput{in("temps", "t", ValueNumber)}, CalcReduce{Expr: "count(temps, # > 30) * 1.0"}, ValueNumber)
-	if got, err := s.Reduce([][]any{{31.0, 20.0, 40.0}}); err != nil || got != 2.0 {
+	s := mustCompile(t, OwnerSystem, []TypedInput{in("temps", "t", ValueNumber)}, CalcReduce{Expr: "count(members, .value.temps > 30) * 1.0"}, ValueNumber)
+	members := []CalcMember{{ID: "1", Name: "a", Values: [][]any{{31.0}}}, {ID: "2", Name: "b", Values: [][]any{{20.0}}},
+		{ID: "3", Name: "c", Values: [][]any{{40.0}}}}
+	if got, err := s.ReduceSystem(members); err != nil || got != 2.0 {
 		t.Fatalf("system expression = %v (%v), want 2", got, err)
+	}
+}
+
+// A system expression's records line up per member: a member missing one
+// input keeps its other input in its own record, flagged by has, and the
+// records are in a stable order (name, then id).
+func TestCalcSystemRecordsAlign(t *testing.T) {
+	inputs := []TypedInput{in("a", "ka", ValueNumber), in("b", "kb", ValueNumber)}
+	members := []CalcMember{
+		{ID: "2", Name: "m2", Values: [][]any{{5.0}, {7.0}}},
+		{ID: "1", Name: "m1", Values: [][]any{{3.0}, nil}},
+	}
+	for expr, want := range map[string]any{
+		`members[0].value.a`: 3.0,
+		`members[0].has.b`:   false,
+		`members[1].value.b`: 7.0,
+		`members[0].name == "m1" && members[1].id == "2"`: true,
+		`count(members, .has.a && .has.b) * 1.0`:          1.0,
+	} {
+		out := ValueNumber
+		if _, ok := want.(bool); ok {
+			out = ValueBool
+		}
+		c := mustCompile(t, OwnerSystem, inputs, CalcReduce{Expr: expr}, out)
+		if got, err := c.ReduceSystem(members); err != nil || got != want {
+			t.Errorf("%s = %v (%v), want %v", expr, got, err, want)
+		}
+	}
+	// A named reducer folds every member's values of its input.
+	r := mustCompile(t, OwnerSystem, inputs[:1], CalcReduce{Reducer: "sum"}, ValueNumber)
+	if got, err := r.ReduceSystem([]CalcMember{{ID: "1", Values: [][]any{{1.0, 2.0}}}, {ID: "2", Values: [][]any{{4.0}}}}); err != nil || got != 7.0 {
+		t.Errorf("sum over members = %v (%v), want 7", got, err)
+	}
+	// An input no member holds is missing, and so is every input of a
+	// system with no members.
+	c := mustCompile(t, OwnerSystem, inputs, CalcReduce{Expr: "1.0"}, ValueNumber)
+	var miss *MissingInputError
+	if _, err := c.ReduceSystem([]CalcMember{{ID: "1", Values: [][]any{{1.0}, nil}}}); !errors.As(err, &miss) || miss.Key != "kb" {
+		t.Errorf("an input no member holds: %v", err)
+	}
+	if _, err := c.ReduceSystem(nil); !errors.Is(err, ErrMissingInput) {
+		t.Errorf("no members: %v", err)
 	}
 }
 

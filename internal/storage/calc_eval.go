@@ -330,7 +330,39 @@ func (p *PG) computeServed(ctx context.Context, tx pgx.Tx, r CalcRule, owner cal
 	if !r.Enabled || owner.kind != r.OwnerKind {
 		return nil
 	}
+	// The rule may no longer select the owner (a system retyped out of its
+	// selector while this mark was held): its state there goes, and nothing
+	// is computed. Read now, after the write that deselected it committed.
+	selected, err := p.calcSelects(ctx, tx, r, owner)
+	if err != nil {
+		return err
+	}
+	if !selected {
+		if _, err := tx.Exec(ctx, `delete from calc_rule_state where rule_id = $1::uuid and `+owner.col()+` = $2::uuid`, r.ID, owner.id); err != nil {
+			return fmt.Errorf("storage: drop deselected calc state: %w", err)
+		}
+		return nil
+	}
 	return p.computeCalc(ctx, tx, r, owner)
+}
+
+// calcSelects reports whether a rule's selector picks an owner: a system by
+// systemSelectedSQL, a component by the event rules' component matcher.
+func (p *PG) calcSelects(ctx context.Context, tx pgx.Tx, r CalcRule, owner calcOwner) (bool, error) {
+	if owner.kind == rules.OwnerSystem {
+		var ok bool
+		if err := tx.QueryRow(ctx, `select exists (select 1 from calc_rule r, system s where r.id = $1::uuid and s.id = $2::uuid and `+
+			systemSelectedSQL("r", "s")+`)`, r.ID, owner.id).Scan(&ok); err != nil {
+			return false, fmt.Errorf("storage: calc rule selects %s: %w", owner.id, err)
+		}
+		return ok, nil
+	}
+	m := newRuleMatcher(p, nil)
+	o, err := m.ownerFacts(ctx, tx, owner.id)
+	if err != nil {
+		return false, err
+	}
+	return m.selects(ctx, tx, EventRule{ID: r.ID, Selector: r.Selector.components()}, o)
 }
 
 // deferCalcMark records a failed computation in the rule's state and puts
@@ -361,15 +393,22 @@ type calcOutcome struct {
 	missing []string
 	stale   []staleInstance
 	skipped []skippedMember
-	err     string
+	// noMembers is a system with no role-bound member.
+	noMembers bool
+	err       string
 }
 
+// staleInstance is an instance a reducer skipped as stale: the component
+// it is on (by id; its name resolves at read time, under the reader's
+// scope), the key and the instance.
 type staleInstance struct {
-	Key      string `json:"key"`
-	Instance string `json:"instance"`
+	Component string `json:"component"`
+	Key       string `json:"key"`
+	Instance  string `json:"instance"`
 }
 
-// skippedMember is a system's member that held no value of an input.
+// skippedMember is a system's member that held no value of an input, by the
+// member's id (its name resolves at read time, under the reader's scope).
 type skippedMember struct {
 	Key       string `json:"key"`
 	Component string `json:"component"`
@@ -423,9 +462,20 @@ func (p *PG) reduceCalc(ctx context.Context, tx pgx.Tx, r CalcRule, owner calcOw
 		}
 	}
 	var out calcOutcome
+	if owner.kind == rules.OwnerSystem && len(members) == 0 {
+		// No member to read: nothing is written, so the system keeps its
+		// last calculated value, which the state names unsupported.
+		out.noMembers = true
+		out.missing = inputKeys(r.Inputs)
+		return out, nil
+	}
 	values := make([][]any, len(typed))
+	read := make([]rules.CalcMember, len(members))
+	for j, m := range members {
+		read[j] = rules.CalcMember{ID: m.id, Name: m.name, Values: make([][]any, len(typed))}
+	}
 	for i, in := range typed {
-		for _, m := range members {
+		for j, m := range members {
 			vs, stale, err := readCalcInput(ctx, tx, calcOwner{kind: rules.OwnerComponent, id: m.id}, in, prog.Reducer != nil)
 			if err != nil {
 				var bad *calcValueError
@@ -436,9 +486,10 @@ func (p *PG) reduceCalc(ctx context.Context, tx pgx.Tx, r CalcRule, owner calcOw
 			}
 			out.stale = append(out.stale, stale...)
 			if len(vs) == 0 && owner.kind == rules.OwnerSystem {
-				out.skipped = append(out.skipped, skippedMember{Key: in.Key, Component: m.name})
+				out.skipped = append(out.skipped, skippedMember{Key: in.Key, Component: m.id})
 			}
 			values[i] = append(values[i], vs...)
+			read[j].Values[i] = vs
 		}
 		if len(values[i]) == 0 {
 			out.missing = append(out.missing, in.Key)
@@ -447,7 +498,12 @@ func (p *PG) reduceCalc(ctx context.Context, tx pgx.Tx, r CalcRule, owner calcOw
 	if len(out.missing) > 0 {
 		return out, nil
 	}
-	v, err := prog.Reduce(values)
+	var v any
+	if owner.kind == rules.OwnerSystem {
+		v, err = prog.ReduceSystem(read)
+	} else {
+		v, err = prog.Reduce(values)
+	}
 	if err != nil {
 		out.err = err.Error()
 		return out, nil
@@ -565,7 +621,7 @@ func readCalcInput(ctx context.Context, tx pgx.Tx, owner calcOwner, in rules.Typ
 	cutoff := time.Now().Add(-CalcStaleAfter)
 	for _, x := range got {
 		if allInstances && x.ts.Before(cutoff) {
-			stale = append(stale, staleInstance{Key: in.Key, Instance: x.instance})
+			stale = append(stale, staleInstance{Component: owner.id, Key: in.Key, Instance: x.instance})
 			continue
 		}
 		v, err := rules.CalcValue(in.ValueType, x.raw)
@@ -626,12 +682,14 @@ func recordCalcState(ctx context.Context, tx pgx.Tx, r CalcRule, owner calcOwner
 		b, _ := json.Marshal(out.value)
 		value = b
 	}
-	if _, err := tx.Exec(ctx, `insert into calc_rule_state (rule_id, owner_kind, `+owner.col()+`, computed_at, rule_version, value, missing, stale, skipped, error)
-		values ($1::uuid, $2, $3::uuid, now(), $4, $5::jsonb, $6::jsonb, $7::jsonb, $8::jsonb, $9)
+	if _, err := tx.Exec(ctx, `insert into calc_rule_state (rule_id, owner_kind, `+owner.col()+`, computed_at, rule_version, value, missing, stale, skipped, error,
+			no_members_since)
+		values ($1::uuid, $2, $3::uuid, now(), $4, $5::jsonb, $6::jsonb, $7::jsonb, $8::jsonb, $9, case when $10::bool then now() end)
 		on conflict on constraint calc_rule_state_key do update set computed_at = excluded.computed_at, rule_version = excluded.rule_version,
-			value = excluded.value, missing = excluded.missing, stale = excluded.stale, skipped = excluded.skipped, error = excluded.error`,
+			value = excluded.value, missing = excluded.missing, stale = excluded.stale, skipped = excluded.skipped, error = excluded.error,
+			no_members_since = case when $10::bool then coalesce(calc_rule_state.no_members_since, excluded.no_members_since) end`,
 		r.ID, owner.kind, owner.id, r.Version, value, jsonList(out.missing, len(out.missing)), jsonList(out.stale, len(out.stale)),
-		jsonList(out.skipped, len(out.skipped)), out.err); err != nil {
+		jsonList(out.skipped, len(out.skipped)), out.err, out.noMembers); err != nil {
 		return fmt.Errorf("storage: record calc state: %w", err)
 	}
 	return nil
@@ -772,12 +830,20 @@ func markSystemCalcRules(ctx context.Context, tx pgx.Tx, systemIDs ...string) er
 		on conflict on constraint calc_pending_key do update set marked_at = calc_pending.marked_at`, systemIDs); err != nil {
 		return fmt.Errorf("storage: mark system calc rules: %w", err)
 	}
-	for _, table := range []string{"calc_rule_state", "calc_pending"} {
-		if _, err := tx.Exec(ctx, `delete from `+table+` d using calc_rule r, system s
-			where d.rule_id = r.id and d.system_id = s.id and s.id = any($1::uuid[]) and not `+systemSelectedSQL("r", "s"),
-			systemIDs); err != nil {
-			return fmt.Errorf("storage: drop deselected system calc work: %w", err)
-		}
+	// The deselected marks go first and skip a mark a serve holds (the serve
+	// rechecks selection and drops its own work: computeServed), so this
+	// write never waits on a serve that may wait on it; then the state rows,
+	// in the order a serve takes them (mark, then state).
+	if _, err := tx.Exec(ctx, `delete from calc_pending d where (d.rule_id, d.system_id) in (
+			select p.rule_id, p.system_id from calc_pending p join calc_rule r on r.id = p.rule_id join system s on s.id = p.system_id
+			where s.id = any($1::uuid[]) and not `+systemSelectedSQL("r", "s")+`
+			for update of p skip locked)`, systemIDs); err != nil {
+		return fmt.Errorf("storage: drop deselected system calc marks: %w", err)
+	}
+	if _, err := tx.Exec(ctx, `delete from calc_rule_state d using calc_rule r, system s
+		where d.rule_id = r.id and d.system_id = s.id and s.id = any($1::uuid[]) and not `+systemSelectedSQL("r", "s"),
+		systemIDs); err != nil {
+		return fmt.Errorf("storage: drop deselected system calc state: %w", err)
 	}
 	return nil
 }

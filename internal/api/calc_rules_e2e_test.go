@@ -186,12 +186,16 @@ func TestCalcRuleAPI(t *testing.T) {
 			Type string `json:"type"`
 		} `json:"bindings"`
 	}
-	if err := json.Unmarshal(c.do(viewer, http.MethodPost, "/expressions:validate", map[string]any{"site": "calc", "source": "len(temps) > 0 ? temps[0] : 0.0",
+	if err := json.Unmarshal(c.do(viewer, http.MethodPost, "/expressions:validate", map[string]any{"site": "calc", "source": "len(members) > 0 ? members[0].value.temps : 0.0",
 		"key": "temp-twice", "owner_kind": "system", "inputs": []map[string]any{{"as": "temps", "key": "room-temperature"}}}, http.StatusOK), &v); err != nil {
 		t.Fatal(err)
 	}
-	if !v.OK || v.ValueType != "number" || v.ResultType != "float64" || len(v.Bindings) != 1 || v.Bindings[0].Name != "temps" || v.Bindings[0].Type != "[]float64" {
-		t.Fatalf("validate = %+v, want ok with temps a []float64", v)
+	names := map[string]string{}
+	for _, b := range v.Bindings {
+		names[b.Name] = b.Type
+	}
+	if !v.OK || v.ValueType != "number" || v.ResultType != "float64" || names["members"] != "[]record" || names["members[].value.temps"] != "float64" {
+		t.Fatalf("validate = %+v, want ok with members records holding value.temps", v)
 	}
 	c.do(viewer, http.MethodPost, "/expressions:validate", map[string]any{"site": "calc", "source": "1.0", "key": "temp-twice"}, http.StatusUnprocessableEntity)
 	c.do(viewer, http.MethodPost, "/expressions:validate", map[string]any{"site": "calc", "source": `h == "outage"`, "key": "temp-twice",

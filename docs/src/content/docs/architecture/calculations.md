@@ -144,13 +144,25 @@ creating, retyping or re-standarding a system mark the system's rules, and a sys
 of a rule's selector loses that rule's state there. Creating, enabling or editing a system rule marks
 every system it selects.
 
-Each input binds as a **list**, one value per member that holds one (its aggregate instance's newest
-value); a **named reducer** folds every member's per-instance values under the same instance and
-staleness rules as on a component. A member with no value of an input is skipped and named in the
-rule's state (`skipped`); when no member has one, the input is missing and nothing is written. The
-output is a **system-owned** calculated sample with the rule's lineage. A system-owned sample feeds
-no calc rule (system rules read their members), and event rules do not judge it yet: the evaluator
-judges component samples only (#1002).
+An expression reads the members as **records**: `members`, one per role-bound member, ordered by
+component name then id, each holding the member's `id` and `name`, its value of each input under
+`value.<as>` (its aggregate instance's newest value, the type's zero when it has none) and whether it
+holds one under `has.<as>`. One record per member keeps a member's inputs together, so
+`count(members, .has.power && .value.power == "on")` counts members, never a mix of two members' values.
+A **named reducer** folds every member's per-instance values under the same instance and staleness
+rules as on a component. A member with no value of an input is named, by component id, in the rule's
+state (`skipped`; a stale instance is likewise named by component id, key and instance); when no member
+has a value, the input is missing and nothing is written. The output is a **system-owned** calculated
+sample with the rule's lineage.
+
+A system with **no members** writes nothing, so it keeps its last calculated value: the platform does
+not invent a tombstone sample. The rule's state says since when it has had none (`no_members_since`),
+naming that value unsupported (the console shows it, #999). A system that a retype moves out of a rule's
+selector is never computed there again: a serve already in flight rechecks the selection and drops its
+work.
+
+A system-owned sample feeds no calc rule (system rules read their members), and event rules do not judge
+it yet: the evaluator judges component samples only (#1002).
 
 :::design[Target design: the JetStream calc consumer and event rules on system outputs, tracked in #430 and #1002]
 

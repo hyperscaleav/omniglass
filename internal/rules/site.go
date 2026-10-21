@@ -76,9 +76,11 @@ var sites = []Site{{
 		calcVariant(ValueText, "a string or json property output"),
 		calcVariant(ValueBool, "a bool property output"),
 	},
-	Bindings: "Each of the rule's inputs, by its as name, typed by its key (a metric is a number, a property text, " +
-		"a bool property a bool). For a component owner it is the component's current value on its aggregate " +
-		"instance; for a system owner, the list of each role-bound member's current value.",
+	Bindings: "For a component owner, each of the rule's inputs by its as name, typed by its key (a metric is a number, " +
+		"a property text, a bool property a bool): the component's current value on its aggregate instance. For a " +
+		"system owner, members: one record per role-bound member, ordered by name then id, holding id, name, " +
+		"value.<as> (the member's current value of each input, the type's zero when it has none) and has.<as> " +
+		"(whether it holds one), so one member's inputs stay together.",
 	Reducers: reducers,
 }, {
 	Name: "criteria",

@@ -275,7 +275,7 @@ func TestCalcReducerInstances(t *testing.T) {
 	if got := r.latest("avg-temp"); got != "15" {
 		t.Fatalf("avg-temp %q, want 15 (a and b; not the aggregate, not the stale one)", got)
 	}
-	if got := scalar(t, r.conn, `select stale::text from calc_rule_state`); got != `[{"key": "room-temperature", "instance": "old"}]` {
+	if got := scalar(t, r.conn, `select stale::text from calc_rule_state`); got != `[{"key": "room-temperature", "instance": "old", "component": "`+r.comp+`"}]` {
 		t.Fatalf("state stale %s, want the old instance named", got)
 	}
 }

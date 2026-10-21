@@ -38,16 +38,23 @@ func TestCompileCalcComponentExpression(t *testing.T) {
 	}
 }
 
-// A system rule's expression reads each named input as the list of its
-// members' values.
+// A system rule's expression reads its members as one list of records, each
+// with the member's id and name, its value of each input under value, and
+// whether it has one under has, so the inputs of one member stay together.
 func TestCompileCalcSystemExpression(t *testing.T) {
-	c, err := CompileCalc(OwnerSystem, []TypedInput{in("temps", "room-temperature", ValueNumber)},
-		CalcReduce{Expr: "count(temps, # > 30) > 0"}, ValueBool)
+	c, err := CompileCalc(OwnerSystem, []TypedInput{in("temps", "room-temperature", ValueNumber), in("on", "power", ValueBool)},
+		CalcReduce{Expr: "count(members, .has.temps && .value.temps > 30) > 0"}, ValueBool)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if b := c.Env.Bindings(); len(b) != 1 || b[0].Type != "[]float64" {
-		t.Fatalf("bindings %+v, want temps []float64", b)
+	got := map[string]string{}
+	for _, b := range c.Env.Bindings() {
+		got[b.Name] = b.Type
+	}
+	want := map[string]string{"members": "[]record", "members[].id": "string", "members[].name": "string",
+		"members[].value.temps": "float64", "members[].value.on": "bool", "members[].has.temps": "bool", "members[].has.on": "bool"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("bindings %v, want %v", got, want)
 	}
 }
 

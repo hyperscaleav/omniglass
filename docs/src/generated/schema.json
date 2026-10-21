@@ -3389,6 +3389,11 @@
       "type": "jsonb",
       "nullable": false,
       "default": "'[]'::jsonb"
+     },
+     {
+      "name": "no_members_since",
+      "type": "timestamp with time zone",
+      "nullable": true
      }
     ],
     "checks": [

@@ -1443,7 +1443,7 @@ export interface paths {
         put?: never;
         /**
          * Validate an expression
-         * @description Compiles an expression against a registered site's environment and answers whether it compiles, with positioned diagnostics, and the site's bindings, admitted builtins and run budget, all generated from the site's declaration. For criteria a sample key is required, and types the value (a metric is a number; a property is text, or a bool for a bool property). For calc the key is the rule's output key, typing the result, and the rule's inputs (and owner_kind, component by default) give the bindings, each input's name bound to its key's type (a list of them for a system); an input that is unknown or misnamed is a 422; the answer's value_type so reveals a key's lane and data type to a rule:read holder, as the rule list already does. Compiles without the engine's program cache and stores and runs nothing. An unknown site, a missing or unknown key is a 422. Gated by rule:read.
+         * @description Compiles an expression against a registered site's environment and answers whether it compiles, with positioned diagnostics, and the site's bindings, admitted builtins and run budget, all generated from the site's declaration. For criteria a sample key is required, and types the value (a metric is a number; a property is text, or a bool for a bool property). For calc the key is the rule's output key, typing the result, and the rule's inputs (and owner_kind, component by default) give the bindings, each input's name bound to its key's type (for a system, inside one record per member); an input that is unknown or misnamed is a 422; the answer's value_type so reveals a key's lane and data type to a rule:read holder, as the rule list already does. Compiles without the engine's program cache and stores and runs nothing. An unknown site, a missing or unknown key is a 422. Gated by rule:read.
          */
         post: operations["validate-expression"];
         delete?: never;
@@ -4744,7 +4744,7 @@ export interface components {
              */
             output_lane: "property" | "metric";
             /**
-             * @description What the rule derives a value on: each component its selector picks, or each system
+             * @description What the rule derives a value on: each component its selector picks, or each system its selector picks (read from the system's role-bound members)
              * @enum {string}
              */
             owner_kind: "component" | "system";
@@ -5058,7 +5058,7 @@ export interface components {
             /** @description The property or metric the rule writes: its type pins the reduce's result. Not health, not a key a collection writes, and not one another enabled rule writes */
             output_key: string;
             /**
-             * @description What the rule derives a value on: each component its selector picks, or each system. Fixed at create
+             * @description What the rule derives a value on: each component its selector picks, or each system its selector picks (read from the system's role-bound members). Fixed at create
              * @enum {string}
              */
             owner_kind: "component" | "system";
@@ -9394,7 +9394,7 @@ export interface components {
             /** @description The sample key that types the expression (required at both sites). For criteria, the key the rule reads: its lane and data type type the value (a metric is a number; a property is text, or a bool for a bool property). For calc, the rule's output key: its type is the result the reduce must yield */
             key?: string;
             /**
-             * @description For calc, what the rule derives on: a component binds each input as one value, a system as the list of its members' values; defaults to component
+             * @description For calc, what the rule derives on: a component binds each input as one value; a system binds members, one record per role-bound member with value.<as> and has.<as> per input; defaults to component
              * @enum {string}
              */
             owner_kind?: "component" | "system";

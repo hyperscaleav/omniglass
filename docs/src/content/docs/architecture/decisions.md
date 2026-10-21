@@ -6757,6 +6757,10 @@ interface create form, since that name is the platform's to mint.
   role-bound components (the role set the health rollup resolves, one SQL predicate both read); a
   member's sample marks the enabled system rules reading its key on the selected systems it staffs, and
   a role assigned or withdrawn, or a system created, retyped or re-standarded, marks the system's rules
-  (before its health recompute, so the mark precedes the health locks). Each input binds as a list of
-  the members' values, a member with none skipped and named in the state, and the output is
-  system-owned. Event rules do not judge system-owned samples yet (#1002).
+  (before its health recompute, so the mark precedes the health locks). An expression reads
+  `members`, one record per member (by name, then id) holding each input under `value.<as>` and its
+  presence under `has.<as>`, so one member's inputs stay aligned; a member with no value is named by id in
+  the state, and the output is system-owned. A system with no members keeps its last value, its state
+  recording `no_members_since`. A retype out of a selector drops the deselected marks first, skipping one
+  a serve holds, and a serve rechecks the selection before computing, so neither waits on the other.
+  Event rules do not judge system-owned samples yet (#1002).

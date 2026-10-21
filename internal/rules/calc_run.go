@@ -7,6 +7,7 @@ import (
 	"reflect"
 	"slices"
 	"strconv"
+	"strings"
 )
 
 // ErrMissingInput is an input with no current value on the owner: the rule
@@ -62,13 +63,105 @@ func FormatCalcValue(v any) string {
 	return fmt.Sprint(v)
 }
 
-// Reduce computes the rule's output from its inputs' current values, one
-// slice per input in the rule's order, each value of the input's type
-// (CalcValue). A named reducer folds every value of its one input; a
-// component expression reads each input's one value (its aggregate
-// instance); a system expression reads each input as a list. An input with
-// no value is a MissingInputError; a number output must be finite. Pure.
+// CalcMember is one role-bound member of a system as a system rule reads
+// it: its id and name, and its values of each input, in the rule's order
+// (every per-instance value for a named reducer, the aggregate value, when
+// it has one, for an expression).
+type CalcMember struct {
+	ID, Name string
+	Values   [][]any
+}
+
+// ReduceSystem computes a system rule's output from its members. A named
+// reducer folds every member's values of its one input; an expression reads
+// one record per member, ordered by name then id (members). An input no
+// member holds (every input, for a system with no members) is a
+// MissingInputError. Pure.
+func (c *CalcProgram) ReduceSystem(members []CalcMember) (any, error) {
+	if c.ownerKind != OwnerSystem {
+		return nil, fmt.Errorf("a %s rule reduces with Reduce", c.ownerKind)
+	}
+	members = slices.Clone(members)
+	slices.SortFunc(members, func(a, b CalcMember) int {
+		if n := strings.Compare(a.Name, b.Name); n != 0 {
+			return n
+		}
+		return strings.Compare(a.ID, b.ID)
+	})
+	for i, in := range c.inputs {
+		held := false
+		for _, m := range members {
+			if len(m.Values) != len(c.inputs) {
+				return nil, fmt.Errorf("member %s has %d inputs, the rule reads %d", m.ID, len(m.Values), len(c.inputs))
+			}
+			if len(m.Values[i]) > 0 {
+				held = true
+			}
+			for _, v := range m.Values[i] {
+				if !valueIs(in.ValueType, v) {
+					return nil, fmt.Errorf("input %s: %v is not a %s", in.As, v, in.ValueType)
+				}
+			}
+		}
+		if !held {
+			return nil, &MissingInputError{As: in.As, Key: in.Key}
+		}
+	}
+	var out any
+	var err error
+	if c.Reducer != nil {
+		var all []any
+		for _, m := range members {
+			all = append(all, m.Values[0]...)
+		}
+		out, err = fold(c.Reducer.Name, all)
+	} else {
+		out, err = c.runMembers(members)
+	}
+	if err != nil {
+		return nil, err
+	}
+	if f, ok := out.(float64); ok && (math.IsNaN(f) || math.IsInf(f, 0)) {
+		return nil, errors.New("the result is not a finite number")
+	}
+	return out, nil
+}
+
+func (c *CalcProgram) runMembers(members []CalcMember) (any, error) {
+	in := reflect.New(c.envType).Elem()
+	list := in.Field(0)
+	rec := list.Type().Elem()
+	recs := reflect.MakeSlice(list.Type(), len(members), len(members))
+	for j, m := range members {
+		r := reflect.New(rec).Elem()
+		r.Field(0).SetString(m.ID)
+		r.Field(1).SetString(m.Name)
+		for i := range c.inputs {
+			if len(m.Values[i]) > 1 {
+				return nil, fmt.Errorf("member %s has %d values of input %s; an expression reads one (fold instances with a reducer)",
+					m.ID, len(m.Values[i]), c.inputs[i].As)
+			}
+			if len(m.Values[i]) == 1 {
+				r.Field(2).Field(i).Set(reflect.ValueOf(m.Values[i][0]))
+				r.Field(3).Field(i).SetBool(true)
+			}
+		}
+		recs.Index(j).Set(r)
+	}
+	list.Set(recs)
+	return c.Program.Run(in.Interface())
+}
+
+// Reduce computes a component rule's output from its inputs' current
+// values, one slice per input in the rule's order, each value of the input's
+// type (CalcValue). A named reducer folds every value of its one input; an
+// expression reads each input's one value (its aggregate instance). An input
+// with no value is a MissingInputError; a number output must be finite.
+// Pure.
 func (c *CalcProgram) Reduce(values [][]any) (any, error) {
+	if c.ownerKind == OwnerSystem {
+		return nil, errors.New("a system rule reduces with ReduceSystem")
+	}
 	if len(values) != len(c.inputs) {
 		return nil, fmt.Errorf("%d inputs given, the rule reads %d", len(values), len(c.inputs))
 	}
@@ -117,14 +210,6 @@ func (c *CalcProgram) run(values [][]any) (any, error) {
 	in := reflect.New(c.envType).Elem()
 	for i, vs := range values {
 		f := in.Field(i)
-		if c.ownerKind == OwnerSystem {
-			list := reflect.MakeSlice(f.Type(), len(vs), len(vs))
-			for j, v := range vs {
-				list.Index(j).Set(reflect.ValueOf(v))
-			}
-			f.Set(list)
-			continue
-		}
 		if len(vs) != 1 {
 			return nil, fmt.Errorf("input %s has %d values; an expression on a component reads one (fold instances with a reducer)", c.inputs[i].As, len(vs))
 		}

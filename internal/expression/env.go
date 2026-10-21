@@ -273,6 +273,13 @@ func bindingsAt(t reflect.Type, prefix string) []Binding {
 			out = append(out, bindingsAt(f.Type, prefix+name+".")...)
 			continue
 		}
+		// A list of records: the list itself, then each record's fields by
+		// their path under name[].
+		if f.Type.Kind() == reflect.Slice && f.Type.Elem().Kind() == reflect.Struct {
+			out = append(out, Binding{Name: prefix + name, Type: "[]record", Doc: f.Tag.Get("doc")})
+			out = append(out, bindingsAt(f.Type.Elem(), prefix+name+"[].")...)
+			continue
+		}
 		out = append(out, Binding{Name: prefix + name, Type: f.Type.String(), Doc: f.Tag.Get("doc")})
 	}
 	return out

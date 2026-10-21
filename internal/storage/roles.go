@@ -600,13 +600,13 @@ func (p *PG) assignRoleTx(ctx context.Context, tx pgx.Tx, actorID, systemName, r
 		map[string]string{"system": systemName, "role": roleName, "component": componentName}); err != nil {
 		return err
 	}
-	// Staffing changes health: the role may have just reached quorum. The system is
-	// named explicitly rather than left to the component's assignments, so assign
-	// and unassign take the same path.
 	// The system's members moved: its calc rules recompute on the next tick.
 	if err := markSystemCalcRules(ctx, tx, sys.ID); err != nil {
 		return err
 	}
+	// Staffing changes health: the role may have just reached quorum. The system is
+	// named explicitly rather than left to the component's assignments, so assign
+	// and unassign take the same path.
 	if err := p.recomputeChain(ctx, tx, []ownerRef{{ID: component.ID, Name: component.Name}}, []ownerRef{{ID: sys.ID, Name: sys.Name}}, nil); err != nil {
 		return err
 	}
@@ -690,12 +690,12 @@ func (p *PG) UnassignRole(ctx context.Context, actorID, systemName, roleName, co
 	if err := writeAuditRes(ctx, tx, actorID, "delete", "system_role_assignment", assignmentID, nil, nil); err != nil {
 		return err
 	}
-	// The assignment row is already gone, so walking the component's assignments
-	// would no longer reach this system. Naming it is what makes the drop visible.
 	// The system's members moved: its calc rules recompute on the next tick.
 	if err := markSystemCalcRules(ctx, tx, sys.ID); err != nil {
 		return err
 	}
+	// The assignment row is already gone, so walking the component's assignments
+	// would no longer reach this system. Naming it is what makes the drop visible.
 	if err := p.recomputeChain(ctx, tx, []ownerRef{{ID: component.ID, Name: component.Name}}, []ownerRef{{ID: sys.ID, Name: sys.Name}}, nil); err != nil {
 		return err
 	}

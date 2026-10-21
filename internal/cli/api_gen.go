@@ -378,7 +378,7 @@ func generatedCommands() []*cobra.Command {
 				_ = cmd.MarkFlagRequired("name")
 				cmd.Flags().StringVar(&fOutputKey, "output-key", "", "The property or metric the rule writes: its type pins the reduce's result. Not health, not a key a collection writes, and not one another enabled rule writes")
 				_ = cmd.MarkFlagRequired("output-key")
-				cmd.Flags().StringVar(&fOwnerKind, "owner-kind", "", "What the rule derives a value on: each component its selector picks, or each system. Fixed at create")
+				cmd.Flags().StringVar(&fOwnerKind, "owner-kind", "", "What the rule derives a value on: each component its selector picks, or each system its selector picks (read from the system's role-bound members). Fixed at create")
 				_ = cmd.MarkFlagRequired("owner-kind")
 				cmd.Flags().StringVar(&fReduce, "reduce", "", "A named reducer over the one input, or an expression over the inputs by name")
 				_ = cmd.MarkFlagRequired("reduce")
@@ -2665,7 +2665,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "validate",
 					Short:   "Validate an expression",
-					Long:    "Compiles an expression against a registered site's environment and answers whether it compiles, with positioned diagnostics, and the site's bindings, admitted builtins and run budget, all generated from the site's declaration. For criteria a sample key is required, and types the value (a metric is a number; a property is text, or a bool for a bool property). For calc the key is the rule's output key, typing the result, and the rule's inputs (and owner_kind, component by default) give the bindings, each input's name bound to its key's type (a list of them for a system); an input that is unknown or misnamed is a 422; the answer's value_type so reveals a key's lane and data type to a rule:read holder, as the rule list already does. Compiles without the engine's program cache and stores and runs nothing. An unknown site, a missing or unknown key is a 422. Gated by rule:read.",
+					Long:    "Compiles an expression against a registered site's environment and answers whether it compiles, with positioned diagnostics, and the site's bindings, admitted builtins and run budget, all generated from the site's declaration. For criteria a sample key is required, and types the value (a metric is a number; a property is text, or a bool for a bool property). For calc the key is the rule's output key, typing the result, and the rule's inputs (and owner_kind, component by default) give the bindings, each input's name bound to its key's type (for a system, inside one record per member); an input that is unknown or misnamed is a 422; the answer's value_type so reveals a key's lane and data type to a rule:read holder, as the rule list already does. Compiles without the engine's program cache and stores and runs nothing. An unknown site, a missing or unknown key is a 422. Gated by rule:read.",
 					Example: "  omniglass expression validate --site site --source source",
 					Args:    cobra.ExactArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -2691,7 +2691,7 @@ func generatedCommands() []*cobra.Command {
 				}
 				cmd.Flags().StringVar(&fInputs, "inputs", "", "For calc (required there), the rule's inputs: each bound by its name, typed by its key")
 				cmd.Flags().StringVar(&fKey, "key", "", "The sample key that types the expression (required at both sites). For criteria, the key the rule reads: its lane and data type type the value (a metric is a number; a property is text, or a bool for a bool property). For calc, the rule's output key: its type is the result the reduce must yield")
-				cmd.Flags().StringVar(&fOwnerKind, "owner-kind", "", "For calc, what the rule derives on: a component binds each input as one value, a system as the list of its members' values; defaults to component")
+				cmd.Flags().StringVar(&fOwnerKind, "owner-kind", "", "For calc, what the rule derives on: a component binds each input as one value; a system binds members, one record per role-bound member with value.<as> and has.<as> per input; defaults to component")
 				cmd.Flags().StringVar(&fSite, "site", "", "Where the expression is written: calc, a calc rule's reduce; criteria, an event rule's fire_criteria or clear_criteria")
 				_ = cmd.MarkFlagRequired("site")
 				cmd.Flags().StringVar(&fSource, "source", "", "The expression")

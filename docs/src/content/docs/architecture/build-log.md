@@ -7116,3 +7116,10 @@ member's per-instance values), a member with no value is named in the new `calc_
 (migration `20261021090000`), and the output is a system-owned calculated sample with the rule's
 lineage. Event rules do not judge it yet (#1002). The calc tick now logs at Info only when it served
 marks or the backlog reaches `calcBacklogInfo`.
+Review tightened it before merge: a system expression reads `members`, one record per member (name,
+then id) with `value.<as>` and `has.<as>` per input, so a member's inputs stay aligned (the expression
+engine now lists a list of records' fields as `members[].<field>` bindings); `skipped` and stale entries name
+components by id; a system with no members keeps its last value and its state records
+`no_members_since`; and a retype out of a selector deletes the deselected marks first, skipping one a
+serve holds, while the serve rechecks the selection and drops its own work, so neither waits on the
+other and no stray state or output survives.

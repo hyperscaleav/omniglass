@@ -922,3 +922,23 @@ func TestBindableName(t *testing.T) {
 		}
 	}
 }
+
+// A list of records binds as the list and each record field by its path
+// under name[], the way the docs and the validate route list a calc
+// system rule's members.
+func TestBindingsListOfRecords(t *testing.T) {
+	type rec struct {
+		X int `expr:"x" doc:"the x"`
+	}
+	type env struct {
+		Pts []rec `expr:"pts" doc:"the points"`
+	}
+	e, err := EnvOf[env](Int)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b := e.Bindings()
+	if len(b) != 2 || b[0].Name != "pts" || b[0].Type != "[]record" || b[1].Name != "pts[].x" || b[1].Type != "int" || b[1].Doc != "the x" {
+		t.Fatalf("bindings %+v, want pts []record and pts[].x int", b)
+	}
+}
