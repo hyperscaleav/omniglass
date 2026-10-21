@@ -16,6 +16,11 @@ import {
   sustainWords,
   updateBody,
   updateEventRule,
+  lowerShort,
+  previewBody,
+  shortForm,
+  toBuilder,
+  toExpression,
   validateDraft,
   withLane,
 } from "./event_rules";
@@ -24,7 +29,7 @@ import { uuidFor } from "./testids";
 const reach: EventRule = {
   id: uuidFor("rule-reachability-lost"), name: "reachability-lost", label: "Reachability lost",
   selector: { component_types: [], components: [] }, sample_key: "endpoint-reachable", sample_lane: "property",
-  fire_criteria: { op: "eq", value: "down" }, clear_criteria: { op: "eq", value: "up" },
+  fire_criteria: { expr: 'value == "down"' }, clear_criteria: { expr: 'value == "up"' },
   fire_sustain: "15s", clear_sustain: "0s", severity: "high",
   fire_event_type: "condition-started", clear_event_type: "condition-ended", enabled: true, official: true, version: 1,
   open_alarms: 0, pending_streaks: 0, conditions_in_force: 0,
@@ -33,7 +38,7 @@ const reach: EventRule = {
 const hot: EventRule = {
   id: uuidFor("rule-too-hot"), name: "too-hot",
   selector: { component_types: ["display"], components: [] }, sample_key: "temperature-c", sample_lane: "metric",
-  fire_criteria: { op: "gt", value: 40 }, fire_sustain: "1m0s", clear_sustain: "30s",
+  fire_criteria: { expr: "value > 40.0" }, fire_sustain: "1m0s", clear_sustain: "30s",
   severity: "average", fire_event_type: "condition-started", enabled: true, official: false, version: 3, open_alarms: 0, pending_streaks: 0, conditions_in_force: 0,
 };
 
@@ -53,7 +58,12 @@ describe("reading a rule in words", () => {
   });
 
   it("says a ne criterion as anything but", () => {
-    expect(fireWords({ ...reach, fire_criteria: { op: "ne", value: "up" }, fire_sustain: "0s" })).toBe("reads anything but up");
+    expect(fireWords({ ...reach, fire_criteria: { expr: 'value != "up"' }, fire_sustain: "0s" })).toBe("reads anything but up");
+  });
+
+  it("reads an expression with no short form as the expression itself", () => {
+    const expr = 'value == "down" && instance != "aux"';
+    expect(fireWords({ ...reach, fire_criteria: { expr }, fire_sustain: "0s" })).toBe(`reads ${expr}`);
   });
 
   it("drops a zero sustain and trims Go's trailing zero units", () => {
@@ -120,19 +130,27 @@ describe("the form's rules", () => {
   });
 
   it("refuses an incomplete draft field by field", () => {
-    const e = validateDraft({ ...emptyDraft(""), name: "Bad Name", fireSustain: "soon", fireEventType: "" }, "create");
+    const e = validateDraft({ ...emptyDraft(""), name: "Bad Name", fireSustain: "soon", fireEventType: "" });
     expect(e.name).toMatch(/Lowercase/);
     expect(e.sampleKey).toBeTruthy();
     expect(e.fireSustain).toBeTruthy();
     expect(e.fireEventType).toBeTruthy();
-    // Edit never judges the create-only name.
-    expect(validateDraft({ ...draftFromRule(hot), name: "" }, "edit")).toEqual({});
+    // An edit judges the name too: it may rename the rule (#977).
+    expect(validateDraft({ ...draftFromRule(hot), name: "" }).name).toBeTruthy();
+    expect(validateDraft({ ...draftFromRule(hot), name: "Hot Room" }).name).toMatch(/Lowercase/);
+    expect(validateDraft({ ...draftFromRule(hot), name: "hot-room" })).toEqual({});
+    // The server's rule (names.ts), judged only when the name changed: a
+    // stored name the server accepted stays saveable as it is.
+    const trailing = { ...hot, name: "too-hot-" };
+    expect(validateDraft(draftFromRule(trailing), "too-hot-")).toEqual({});
+    expect(validateDraft(draftFromRule(trailing))).toEqual({});
+    expect(validateDraft({ ...draftFromRule(hot), name: "0b6f8d2e-6f4e-4f7a-9d55-3c1f2d7a9e10" }, "too-hot").name).toMatch(/uuid/);
   });
 
   it("asks for a clear value only when the author chose a clear criterion", () => {
     const d = { ...draftFromRule(reach), clearValue: "" };
-    expect(validateDraft(d, "edit").clearValue).toBeTruthy();
-    expect(validateDraft({ ...d, clearMode: "opposite" }, "edit").clearValue).toBeUndefined();
+    expect(validateDraft(d).clearValue).toBeTruthy();
+    expect(validateDraft({ ...d, clearMode: "opposite" }).clearValue).toBeUndefined();
   });
 
   it("defaults severity to the worst level that does not take its component out", () => {
@@ -143,6 +161,41 @@ describe("the form's rules", () => {
     ] as Parameters<typeof defaultSeverity>[0];
     expect(defaultSeverity(levels)).toBe("average");
     expect(defaultSeverity([])).toBe("");
+  });
+});
+
+describe("the short form an expression lowers from", () => {
+  it("reads back the comparisons the server lowers a short form to", () => {
+    expect(shortForm({ expr: 'value == "down"' })).toEqual({ op: "eq", value: "down" });
+    expect(shortForm({ expr: 'value != "say \\"hi\\""' })).toEqual({ op: "ne", value: 'say "hi"' });
+    expect(shortForm({ expr: "value >= 80.0" })).toEqual({ op: "ge", value: 80 });
+    expect(shortForm({ expr: "value < -0.5" })).toEqual({ op: "lt", value: -0.5 });
+    expect(shortForm({ expr: "value == true" })).toEqual({ op: "eq", value: "true" });
+  });
+
+  it("has none for an expression the builder cannot say", () => {
+    // The lowering never writes an exponent, so one is an author's expression.
+    for (const expr of ['value == "down" && instance != "aux"', "value > 40 || value < 0", "false", "value matches 'x'", "upper(value) == \"X\"",
+      "value > 1e21", "value > 2.5E-7", "value > 1.0e+3"]) {
+      expect(shortForm({ expr })).toBeNull();
+    }
+  });
+
+  it("treats an empty expression as no expression: the builder owns it and an edit is sent", () => {
+    const was = { ...reach, official: false, fire_criteria: { expr: "" }, clear_criteria: undefined };
+    const d = draftFromRule(was);
+    expect(d.fireExpr).toBeNull();
+    expect(updateBody({ ...d, fireValue: "down" }, was)).toEqual({ fire_criteria: { op: "eq", value: "down" } });
+  });
+
+  it("keeps an expression the builder cannot say: an edit never overwrites it", () => {
+    const expr = 'value == "down" && instance != "aux"';
+    const was = { ...reach, official: false, fire_criteria: { expr }, clear_criteria: undefined };
+    const d = draftFromRule(was);
+    expect(d.fireExpr).toBe(expr);
+    expect(validateDraft(d)).toEqual({});
+    expect(updateBody({ ...d, label: "Reach" }, was)).toEqual({ label: "Reach" });
+    expect(createBody({ ...d, name: "copy" }).fire_criteria).toEqual({ expr });
   });
 });
 
@@ -172,9 +225,9 @@ describe("the bodies a draft sends", () => {
   });
 
   it("takes no severity as a choice (informational), and requires a fire event type", () => {
-    expect(Object.keys(validateDraft({ ...draftFromRule(hot), severity: "" }, "edit"))).toEqual([]);
-    expect(Object.keys(validateDraft({ ...emptyDraft(), name: "x", sampleKey: "k", fireValue: "1" }, "create"))).not.toContain("severity");
-    expect(validateDraft({ ...draftFromRule(hot), fireEventType: "" }, "edit").fireEventType).toBeTruthy();
+    expect(Object.keys(validateDraft({ ...draftFromRule(hot), severity: "" }))).toEqual([]);
+    expect(Object.keys(validateDraft({ ...emptyDraft(), name: "x", sampleKey: "k", fireValue: "1" }))).not.toContain("severity");
+    expect(validateDraft({ ...draftFromRule(hot), fireEventType: "" }).fireEventType).toBeTruthy();
     expect(createBody({ ...draftFromRule(hot), severity: "" }).severity).toBeUndefined();
   });
 
@@ -225,5 +278,78 @@ describe("the data layer", () => {
     expect(req.method).toBe("PATCH");
     expect(req.url).toMatch(/\/event-rules\/reachability-lost$/);
     expect(await req.json()).toEqual({ enabled: false });
+  });
+});
+
+describe("the builder teaches the expression it lowers to", () => {
+  it("lowers a comparison exactly as the server does", () => {
+    expect(lowerShort("eq", "down", "property", "string")).toBe('value == "down"');
+    expect(lowerShort("ne", 'say "hi"', "property", "string")).toBe('value != "say \\"hi\\""');
+    expect(lowerShort("gt", 40, "metric")).toBe("value > 40.0");
+    expect(lowerShort("le", -2.5, "metric")).toBe("value <= -2.5");
+    expect(lowerShort("eq", "true", "property", "bool")).toBe("value == true");
+    expect(lowerShort("eq", "on", "property", "bool")).toBe("false");
+    expect(lowerShort("ne", "on", "property", "bool")).toBe("true");
+    expect(lowerShort("eq", undefined, "property", "string")).toBeNull();
+    // Plain decimals, as the server writes them: never an exponent.
+    expect(lowerShort("gt", 1e-7, "metric")).toBe("value > 0.0000001");
+    expect(lowerShort("lt", 1e21, "metric")).toBe("value < 1000000000000000000000.0");
+  });
+});
+
+describe("writing criteria as an expression", () => {
+  it("switches to an expression seeded with the builder's own, and back when it is still a comparison", () => {
+    const d = { ...emptyDraft(), sampleKey: "temperature-c", lane: "metric" as const, fireOp: "gt" as const, fireValue: "40" };
+    const e = toExpression(d, "fire");
+    expect(e.fireExpr).toBe("value > 40.0");
+    expect(toBuilder({ ...e, fireExpr: "value >= 45.0" }, "fire")).toMatchObject({ fireExpr: null, fireOp: "ge", fireValue: "45" });
+    // An expression the builder cannot say goes back to the builder's last comparison.
+    expect(toBuilder({ ...e, fireExpr: "value > 40 && instance != \"aux\"" }, "fire")).toMatchObject({ fireExpr: null, fireOp: "gt", fireValue: "40" });
+  });
+
+  it("sends an expression that changed, and requires one that is not empty", () => {
+    const was = { ...hot };
+    const d = { ...draftFromRule(was), fireExpr: "value > 40 && instance != \"aux\"" };
+    expect(updateBody(d, was)).toEqual({ fire_criteria: { expr: "value > 40 && instance != \"aux\"" } });
+    expect(validateDraft({ ...d, fireExpr: "  " }).fireExpr).toBeTruthy();
+    expect(validateDraft({ ...draftFromRule(reach), clearExpr: "" }).clearExpr).toBeTruthy();
+    expect(createBody({ ...d, name: "x" }).fire_criteria).toEqual({ expr: "value > 40 && instance != \"aux\"" });
+  });
+
+  it("previews the draft as a candidate rule: key, selector and criteria, as sent", () => {
+    const d = { ...draftFromRule(hot), fireExpr: "value > 41" };
+    expect(previewBody(d)).toEqual({
+      sample_key: "temperature-c", selector: { component_types: ["display"], components: [] },
+      fire_criteria: { expr: "value > 41" }, clear_criteria: undefined,
+    });
+  });
+});
+
+describe("criteria that do not compile, and expressions the builder cannot say", () => {
+  const broken = { ...reach, official: false, sample_key: "door-state", fire_criteria: { expr: 'value == "open"' }, clear_criteria: undefined,
+    criteria_error: { field: "fire_criteria" as const, line: 1, column: 7, message: "invalid operation: == (mismatched types bool and string)" } };
+
+  it("opens a side whose criteria do not compile as an expression, with the stored source, though the builder could parse it", () => {
+    const d = draftFromRule(broken);
+    expect(d.fireExpr).toBe('value == "open"');
+  });
+
+  it("always sends a side that had an error, even unchanged, so a save repairs or re-judges it", () => {
+    const d = draftFromRule(broken);
+    expect(updateBody({ ...d, fireExpr: "value" }, broken).fire_criteria).toEqual({ expr: "value" });
+    expect(updateBody(d, broken).fire_criteria).toEqual({ expr: 'value == "open"' });
+    const viaBuilder = toBuilder(d, "fire");
+    expect(updateBody({ ...viaBuilder, fireValue: "open" }, broken).fire_criteria).toEqual({ op: "eq", value: "open" });
+  });
+
+  it("keeps an expression the builder cannot say across a switch to the builder and back", () => {
+    const rich = 'value > 40 && instance != "aux"';
+    const d = { ...draftFromRule(hot), fireExpr: rich };
+    const b = toBuilder(d, "fire");
+    expect(b.fireExpr).toBeNull();
+    expect(toExpression(b, "fire").fireExpr).toBe(rich);
+    // One the builder can say is the builder's: switching back lowers the comparison.
+    const simple = toBuilder({ ...d, fireExpr: "value >= 45.0" }, "fire");
+    expect(toExpression({ ...simple, fireValue: "50" }, "fire").fireExpr).toBe("value >= 50.0");
   });
 });

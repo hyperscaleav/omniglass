@@ -3,6 +3,7 @@ title: Rules and severity
 description: "Writing an event rule: what it reads, when its condition comes into force and ends, the events it writes, how long a condition must hold, the severity level it raises an alarm at (or none, for an informational rule), and how to watch it work, from the console, the CLI, or the API."
 walkthroughs:
   - id: watch-a-rule-raise-an-alarm
+  - id: write-a-rule-as-an-expression
 ---
 
 import SeededSet from '../../../../components/SeededSet.astro';
@@ -88,20 +89,33 @@ sits.
 
 **New rule** (with `rule:create`) opens a drawer. The fields, top to bottom:
 
-- **Name**: a lowercase kebab name (`input-moved`). It cannot change later.
+- **Name**: a lowercase kebab name (`input-moved`), the address you type and a link carries. It can
+  be renamed later (see [Rename](#rename-a-rule)).
 - **Label**: optional; it is also the alarm's message when **Message** is blank.
 - **Reads**: one property or metric from the catalogs. Its **lane** decides how it compares: a
   property is text, compared only for equality; a metric is a number, compared any way. The
   comparison list beside the value offers exactly what the chosen key's lane allows, in words.
 - **Fires when it reads**: the comparison and the value that open an alarm. The value is used exactly
   as typed: a property value with leading or trailing spaces is refused rather than trimmed (it would
-  never match), and a metric value must be a plain decimal (`40`, `-2.5`).
+  never match), and a metric value must be a plain decimal (`40`, `-2.5`). Beneath it the form shows
+  the **expression the comparison is stored as** (`value == "down"`, `value > 40.0`), so the builder
+  teaches the language.
+- **Write as an expression**: switches the criteria to an expression, starting from the one the
+  comparison lowers to. Write any true-or-false expression over the sample: `value`, `key`,
+  `instance`, and the `component` with its `name` and `type`, with comparisons, `&&`, `||`, `!` and a
+  few functions (`value == "down" && instance != "aux"`). It is checked as you type: a mistake is
+  pointed at under its line and column, and beneath the field are the names it may use and the
+  functions it may call, each with what it means. A rule written as an expression opens in this
+  mode. Switching back to the builder keeps the comparison when the expression still is one; an
+  expression the builder cannot say is kept, and comes back when you switch to an expression again. A rule whose criteria no
+  longer compile (its key's data type changed, say) reads **criteria do not compile** in the list,
+  and its blade says which criteria, where, and why; it judges nothing until they are rewritten.
 - **For at least**: the **fire sustain**, a duration (`30s`, `2m`). The value has to keep meeting the
   criteria this long before the alarm opens; one sample that does not starts the wait over. The
   sustain is timed from the server's receipt of the first sample that meets the criteria and judged
   on the server's 5s sweep tick. Blank acts at once.
 - **Clears**: on the opposite of the fire criteria, or on criteria of their own (then **Clears when
-  it reads** asks for them). A rule that fires above 40 and clears below 35 does not flap at 39.9.
+  it reads** asks for them). A rule that fires above 40 and clears below 35 does not flap at 39.9. The clear criteria take a comparison or an expression the same way.
 - **Clears after at least**: the **clear sustain**, set independently: a long clear sustain holds an
   incident through a noisy recovery without delaying the alarm.
 - **Severity**: the level the alarm is raised at, worst first. A level marked outage takes its
@@ -121,6 +135,22 @@ sits.
 Every field is checked as you type and **Create rule** stays refused until the rule is whole. When it
 is created, the rule judges the newest sample of every series it selects at once, so a condition
 that already holds starts its sustain then rather than waiting for the next change.
+
+**Preview**, at the foot of the drawer, runs the draft against the last day of its key's samples on
+the components you can read, without saving or writing anything: what it would hold **in force now**,
+each linked to its component, and the **edges** it would have written, fire and clear, newest last.
+Each sample is judged as the server judged it, but alone, so a sustain that would have held an edge
+back is not applied, which the panel says. A series with nothing deciding in the week before the window
+started unknown, and the panel counts those; on a fleet with more samples than the preview's cap it
+judges whole series up to it and says how many of how many.
+
+A rule's blade shows its criteria in words and, beneath, as the expressions it judges by (an absent
+clear is `!(fire)`).
+
+The walkthrough below writes a rule's criteria as an expression: the builder's comparison first, then
+the expression itself, an unfinished line pointed at, the fix, a preview of the last day, and the save.
+
+::walkthrough{#write-a-rule-as-an-expression}
 
 ### A worked example
 
@@ -166,8 +196,8 @@ Two behaviors follow from acting on edges:
 
 ## Edit, disable, delete
 
-On a custom rule's blade, **Edit** (with `rule:update`) reopens the drawer with everything but the
-name. Saving sends only what you changed, so a rule that still watches a component or component type
+On a custom rule's blade, **Edit** (with `rule:update`) reopens the drawer with every field, the
+name included. Saving sends only what you changed, so a rule that still watches a component or component type
 deleted since it was written stays editable: the form marks such an entry **deleted** (it matches
 nothing by it) and you can remove it or leave it. Changing what the rule judges (its key, criteria, selector or sustains) starts its pending
 streaks over and judges the newest samples again; changing its label, description, message or
@@ -178,6 +208,20 @@ alarms (each stays in its component's history as cleared); **Enable** judges the
 still holds starts its sustain again. **Delete** (with `rule:delete`, behind a confirm) clears what the
 rule holds open the same way and removes it; its past alarms stay in each component's history, no
 longer naming it.
+
+### Rename a rule
+
+A changed **Name** in the Edit drawer renames the rule (`rule:update` on an all-scope grant, like
+every rule write). Saving sends the other changes first and the rename last, so a name another rule
+already holds is refused (and said so in the drawer) with the rest already saved. A rename moves only
+the address: bookmarks and integrations that hold the old name stop finding it, which is the point of
+renaming. Inside the platform nothing moves, since everything that refers to the rule holds its
+**uuid**: its open alarms stay open and attached, its conditions stay in force, a pending sustain keeps
+counting, and the next recovery clears the alarm as it would have. A rename is not an edit of what the
+rule judges, so its version does not change. An event keeps the name the rule had when it was written,
+so after a rename an episode's start event reads the old name and its end event the new one; both link
+to the same rule. An official rule keeps its name, since the platform matches it to the shipped seed by
+name.
 
 ## Severity levels
 
@@ -239,22 +283,29 @@ Every console action is the same API call, with the same checks
 | Its live state | `omniglass event-rule state list <name>` | `GET /event-rules/{name}/state` |
 | New rule | `omniglass event-rule create` | `POST /event-rules` |
 | Edit, Disable, Enable | `omniglass event-rule update <name>` | `PATCH /event-rules/{name}` |
+| Rename (Edit, the Name field) | `omniglass event-rule rename <name> --name <new>` | `POST /event-rules/{name}:rename` |
 | Delete | `omniglass event-rule delete <name>` | `DELETE /event-rules/{name}` |
 
-The worked example from a terminal, with criteria as JSON (`{op, value}`, the comparisons the API
-reference lists for `op`) and sustains as durations:
+The worked example from a terminal, with criteria as JSON and sustains as durations. A criterion is
+an expression, `{"expr": "..."}`, over the sample: `value`, `key`, `instance`, and `component` with
+its `name` and `type` ([alarms and actions](/architecture/alarms-actions/#the-event_rule) names each). The
+short form `{op, value}`, the comparisons the API reference lists for `op`, still works and is stored
+as the expression it means; a rule always reads back as its expression.
 
 ```sh
 omniglass event-rule create --name input-moved --label "Input moved off HDMI 1" \
   --sample-key video-input --fire-criteria '{"op":"eq","value":"hdmi2"}' --severity average
 omniglass event-rule create --name slow-to-answer --sample-key icmp-rtt-avg \
-  --fire-criteria '{"op":"gt","value":200}' --fire-sustain 2m \
+  --fire-criteria '{"expr":"value > 200 && instance != \"aux\""}' --fire-sustain 2m \
   --clear-criteria '{"op":"lt","value":100}' --clear-sustain 5m --severity warning \
   --selector '{"component_types":["display"]}'
 omniglass event-rule update slow-to-answer --enabled=false
+omniglass event-rule rename slow-to-answer --name rtt-high
 omniglass event-rule state list input-moved
 ```
 
-A key that is not a registered property or metric, criteria its lane cannot compare, or a severity
-level that does not exist is refused with a 422; a name already taken is a 409; an official rule
-refuses every write with a 409. Every write is audited.
+A key that is not a registered property or metric, a criterion that does not compile (an unknown
+name, or a result that is not true or false; the 422 names the criterion, line and column), or a
+severity level that does not exist is refused with a 422; a name already taken is a 409 (on create and
+on rename); an official rule refuses every write, a rename included, with a 409. Every write is audited,
+and every write answers the rule with its `id`, the handle a client keeps across renames.

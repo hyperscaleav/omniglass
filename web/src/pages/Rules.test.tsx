@@ -23,7 +23,7 @@ import { EVENT_TYPES_KEY, type EventTypeRow } from "../lib/event_types";
 const reach: EventRule = {
   id: uuidFor("rule-reachability-lost"), name: "reachability-lost", label: "Reachability lost",
   selector: { component_types: [], components: [] }, sample_key: "endpoint-reachable", sample_lane: "property",
-  fire_criteria: { op: "eq", value: "down" }, clear_criteria: { op: "eq", value: "up" },
+  fire_criteria: { expr: 'value == "down"' }, clear_criteria: { expr: 'value == "up"' },
   fire_sustain: "15s", clear_sustain: "0s", severity: "high",
   fire_event_type: "condition-started", clear_event_type: "condition-ended", enabled: true, official: true, version: 1,
   open_alarms: 1, pending_streaks: 1, conditions_in_force: 1, last_judged_at: new Date(Date.now() - 30_000).toISOString(),
@@ -31,7 +31,7 @@ const reach: EventRule = {
 const hot: EventRule = {
   id: uuidFor("rule-too-hot"), name: "too-hot", label: "Too hot",
   selector: { component_types: ["display"], components: [] }, sample_key: "temperature-c", sample_lane: "metric",
-  fire_criteria: { op: "gt", value: 40 }, clear_criteria: { op: "lt", value: 35 }, fire_sustain: "1m0s", clear_sustain: "30s",
+  fire_criteria: { expr: "value > 40.0" }, clear_criteria: { expr: "value < 35.0" }, fire_sustain: "1m0s", clear_sustain: "30s",
   severity: "average", fire_event_type: "condition-started", enabled: false, official: false, version: 2, open_alarms: 0, pending_streaks: 0, conditions_in_force: 0,
 };
 // A rule whose component type and component were deleted after it was written:
@@ -77,7 +77,7 @@ const eventTypes: EventTypeRow[] = [
 const watch: EventRule = {
   id: uuidFor("rule-input-watch"), name: "input-watch", label: "Input watch",
   selector: { component_types: [], components: [] }, sample_key: "endpoint-reachable", sample_lane: "property",
-  fire_criteria: { op: "eq", value: "down" }, fire_sustain: "0s", clear_sustain: "0s",
+  fire_criteria: { expr: 'value == "down"' }, fire_sustain: "0s", clear_sustain: "0s",
   fire_event_type: "condition-started", clear_event_type: "condition-ended", enabled: true, official: false, version: 1,
   open_alarms: 0, pending_streaks: 0, conditions_in_force: 1,
 };
@@ -162,6 +162,22 @@ describe("Rules page", () => {
     expect((document.querySelector('[data-live="too-hot"]') as HTMLElement).textContent).toContain("disabled");
     expect(document.querySelector('[data-severity="high"]')?.textContent).toBe("High");
     expect(gets.filter((u) => u.endsWith("/state"))).toEqual([]);
+  });
+
+  it("says when a rule's criteria do not compile, on its row and its blade, with the message", async () => {
+    const broken: EventRule = { ...hot, name: "broken", label: "Broken", enabled: true,
+      criteria_error: { field: "fire_criteria", line: 1, column: 7, message: "invalid operation: > (mismatched types bool and float64)" } };
+    mount(admin, [reach, broken]);
+    const row = document.querySelector('[data-criteria-error="broken"]') as HTMLElement;
+    expect(row?.textContent).toContain("criteria do not compile");
+    expect(row?.getAttribute("title")).toContain("mismatched types");
+    expect(document.querySelector('[data-criteria-error="reachability-lost"]')).toBeNull();
+    fireEvent.click(screen.getByText("Broken"));
+    const b = await blade();
+    const alert = within(b).getByTestId("rule-criteria-error");
+    expect(alert.textContent).toContain("criteria do not compile");
+    expect(alert.textContent).toContain("fire criteria, line 1, column 7");
+    expect(alert.textContent).toContain("mismatched types");
   });
 
   // When it last judged a sample rides the Live cell's (i), a keyboard-reachable
@@ -326,6 +342,145 @@ describe("Rules page", () => {
     });
   });
 
+  // Answers the expression and preview routes, records every request.
+  function exprRoutes(preview: unknown = { in_force_now: [], edges: [], state_unknown: [], window: "24h0m0s", row_cap: 5000, series_judged: 0, series_total: 0, truncated: false, sustains_ignored: true }) {
+    const reqs: { method: string; url: string; body: unknown }[] = [];
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const req = input as Request;
+      const body = req.method === "GET" || req.method === "DELETE" ? undefined : await req.clone().json();
+      reqs.push({ method: req.method, url: req.url, body });
+      if (req.url.endsWith("/expressions:validate")) {
+        const src = (body as { source: string }).source;
+        const bad = src.includes("humidity");
+        return json({ ok: !bad, site: "criteria", value_type: "number", result_type: "bool",
+          diagnostics: bad ? [{ line: 2, column: 3, phase: "type", message: "unknown name humidity" }] : [],
+          bindings: [{ name: "value", type: "float64", doc: "The sample's value" }], builtins: ["abs"], budget: { iterations: 10000, memory: 10000, deadline: "5ms" } });
+      }
+      if (req.url.endsWith("/event-rules:preview")) return json(preview);
+      if (req.method === "POST") return json({ ...hot, ...(body as object) });
+      if (req.url.endsWith("/state")) return json({ conditions: [], open: [], pending: [] });
+      return json({ event_rules: [reach, hot] });
+    });
+    return reqs;
+  }
+
+  it("shows beneath the comparison the expression it is stored as", async () => {
+    mount();
+    fireEvent.click(screen.getByText("New rule"));
+    await waitFor(() => screen.getByLabelText("Name"));
+    fireEvent.change(screen.getByLabelText("Reads"), { target: { value: "property:endpoint-reachable" } });
+    fireEvent.input(screen.getByLabelText("Fire value"), { target: { value: "down" } });
+    expect(screen.getByTestId("fire-lowered").textContent).toBe('value == "down"');
+  });
+
+  it("writes fire criteria as an expression, checked as typed, and saves the expression", async () => {
+    const reqs = exprRoutes();
+    mount();
+    fireEvent.click(screen.getByText("New rule"));
+    fireEvent.input(await waitFor(() => screen.getByLabelText("Name")), { target: { value: "too-hot" } });
+    fireEvent.change(screen.getByLabelText("Reads"), { target: { value: "metric:temperature-c" } });
+    fireEvent.input(screen.getByLabelText("Fire value"), { target: { value: "40" } });
+    fireEvent.click(screen.getByLabelText("Write the fire criteria as an expression"));
+    const area = screen.getByLabelText("Fire expression") as HTMLTextAreaElement;
+    // The builder's comparison (equals 40) is where the expression starts.
+    expect(area.value).toBe("value == 40.0");
+    fireEvent.input(area, { target: { value: "value > 40 &&\n  humidity > 2" } });
+    const diag = await screen.findByTestId("expression-diagnostic", {}, { timeout: 2000 });
+    expect(diag.textContent).toContain("Line 2, column 3");
+    const submit = screen.getByText("Create rule").closest("button") as HTMLButtonElement;
+    await waitFor(() => expect(submit.disabled).toBe(true));
+    fireEvent.input(area, { target: { value: "value > 40" } });
+    await screen.findByTestId("expression-ok", {}, { timeout: 2000 });
+    await waitFor(() => expect(submit.disabled).toBe(false));
+    fireEvent.click(submit);
+    await waitFor(() => expect(reqs.some((r) => r.method === "POST" && r.url.endsWith("/event-rules"))).toBe(true));
+    const created = reqs.find((r) => r.method === "POST" && r.url.endsWith("/event-rules"))!;
+    expect((created.body as { fire_criteria: unknown }).fire_criteria).toEqual({ expr: "value > 40" });
+  });
+
+  it("opens a rule whose criteria the builder cannot say as an expression to edit", async () => {
+    exprRoutes();
+    const rich: EventRule = { ...hot, name: "rich", label: "Rich", fire_criteria: { expr: 'value > 40 && instance != "aux"' } };
+    mount(admin, [reach, rich]);
+    fireEvent.click(screen.getByText("Rich"));
+    fireEvent.click(within(await blade()).getByText("Edit"));
+    const area = (await waitFor(() => screen.getByLabelText("Fire expression"))) as HTMLTextAreaElement;
+    expect(area.value).toBe('value > 40 && instance != "aux"');
+    expect((screen.getByLabelText("Write the fire criteria as an expression") as HTMLInputElement).checked).toBe(true);
+  });
+
+  it("opens a rule whose criteria do not compile on the broken side as an expression, and saves it repaired", async () => {
+    const reqs = exprRoutes();
+    const door: EventRule = { ...reach, official: false, name: "door-ajar", label: "Door ajar", sample_key: "door-state",
+      fire_criteria: { expr: 'value == "open"' }, clear_criteria: undefined,
+      criteria_error: { field: "fire_criteria", line: 1, column: 7, message: "invalid operation: == (mismatched types bool and string)" } };
+    mount(admin, [reach, door]);
+    fireEvent.click(screen.getByText("Door ajar"));
+    fireEvent.click(within(await blade()).getByText("Edit"));
+    const area = (await waitFor(() => screen.getByLabelText("Fire expression"))) as HTMLTextAreaElement;
+    expect(area.value).toBe('value == "open"');
+    fireEvent.input(area, { target: { value: "value" } });
+    const submit = screen.getByText("Save rule").closest("button") as HTMLButtonElement;
+    await waitFor(() => expect(submit.disabled).toBe(false), { timeout: 2000 });
+    fireEvent.click(submit);
+    await waitFor(() => expect(reqs.some((r) => r.method === "PATCH")).toBe(true));
+    expect((reqs.find((r) => r.method === "PATCH")!.body as { fire_criteria: unknown }).fire_criteria).toEqual({ expr: "value" });
+  });
+
+  it("drops a preview answer once the draft it answered changes", async () => {
+    exprRoutes({ in_force_now: [], edges: [], state_unknown: [], window: "24h0m0s", row_cap: 5000, series_judged: 1, series_total: 1, truncated: false, sustains_ignored: true });
+    mount();
+    fireEvent.click(screen.getByText("New rule"));
+    await waitFor(() => screen.getByLabelText("Name"));
+    fireEvent.change(screen.getByLabelText("Reads"), { target: { value: "property:endpoint-reachable" } });
+    fireEvent.input(screen.getByLabelText("Fire value"), { target: { value: "down" } });
+    fireEvent.click(screen.getByRole("button", { name: "Preview" }));
+    await screen.findByTestId("preview-result");
+    fireEvent.input(screen.getByLabelText("Fire value"), { target: { value: "up" } });
+    await waitFor(() => expect(screen.queryByTestId("preview-result")).toBeNull());
+  });
+
+  it("shows a rule's criteria as the expressions it judges by, on its blade", async () => {
+    mount();
+    fireEvent.click(screen.getByText("Too hot"));
+    const b = await blade();
+    expect(within(b).getByTestId("rule-fire-expr").textContent).toBe("value > 40.0");
+    expect(within(b).getByTestId("rule-clear-expr").textContent).toBe("value < 35.0");
+  });
+
+  it("previews the draft against recent samples: in force now, the edges, sustains ignored", async () => {
+    const reqs = exprRoutes({
+      in_force_now: [{ component: "display-1", component_id: display, instance: "tcp", since: new Date(Date.now() - 3_600_000).toISOString() }],
+      edges: [
+        { component: "display-1", component_id: display, instance: "tcp", at: new Date(Date.now() - 7_200_000).toISOString(), kind: "fire" },
+        { component: "display-1", component_id: display, instance: "tcp", at: new Date(Date.now() - 5_400_000).toISOString(), kind: "clear" },
+      ],
+      window: "24h0m0s", row_cap: 5000, truncated: true, sustains_ignored: true,
+      series_judged: 1, series_total: 3,
+      state_unknown: [{ component: "codec-1", component_id: uuidFor("comp-codec-1"), instance: "tcp" }],
+    });
+    mount();
+    fireEvent.click(screen.getByText("New rule"));
+    await waitFor(() => screen.getByLabelText("Name"));
+    fireEvent.change(screen.getByLabelText("Reads"), { target: { value: "property:endpoint-reachable" } });
+    fireEvent.input(screen.getByLabelText("Fire value"), { target: { value: "down" } });
+    fireEvent.input(screen.getByLabelText("For at least"), { target: { value: "15s" } });
+    fireEvent.click(screen.getByRole("button", { name: "Preview" }));
+    const panel = await screen.findByRole("region", { name: "Preview" });
+    await waitFor(() => expect(within(panel).getByText("In force now (1)")).toBeTruthy());
+    const link = within(panel).getAllByText("display-1").map((e) => e.closest("a")).find(Boolean)!;
+    expect(link.getAttribute("href")).toBe(`/components/${display}`);
+    expect(within(panel).getByText("Edges in the last 24h (2)")).toBeTruthy();
+    expect(within(panel).getAllByTestId("preview-edge").map((e) => e.textContent)).toEqual([
+      expect.stringContaining("fire"), expect.stringContaining("clear"),
+    ]);
+    expect(within(panel).getByText(/Sustains are ignored/)).toBeTruthy();
+    expect(within(panel).getByTestId("preview-truncated").textContent).toContain("Judged 1 of 3 series");
+    expect(within(panel).getByTestId("preview-unknown").textContent).toContain("1 series started unknown");
+    const sent = reqs.find((r) => r.url.endsWith("/event-rules:preview"))!;
+    expect(sent.body).toEqual({ sample_key: "endpoint-reachable", selector: { component_types: [], components: [] }, fire_criteria: { op: "eq", value: "down" } });
+  });
+
   it("offers a metric all six comparisons and refuses a value that is no number", async () => {
     const fetchSpy = vi.spyOn(globalThis, "fetch");
     mount();
@@ -362,6 +517,69 @@ describe("Rules page", () => {
     expect(writes[0].body).toEqual({ clear_negates: true });
     // Saving lands back on the rule's blade.
     await blade();
+  });
+
+  it("renames a custom rule from its Edit drawer with the :rename method alone, landing on its blade under the new name", async () => {
+    const writes = catchWrites();
+    mount();
+    fireEvent.click(screen.getByText("Too hot"));
+    const b = await blade();
+    fireEvent.click(within(b).getByText("Edit"));
+    const name = await waitFor(() => screen.getByLabelText("Name") as HTMLInputElement);
+    expect(name.value).toBe("too-hot");
+    // The field teaches what a rename moves and what it leaves.
+    expect(screen.getByRole("button", { name: /More about name/i })).toBeTruthy();
+    fireEvent.input(name, { target: { value: "Too Warm" } });
+    expect(await screen.findByText(/Lowercase letters/)).toBeTruthy();
+    fireEvent.input(name, { target: { value: "too-warm" } });
+    const save = screen.getByText("Save rule").closest("button") as HTMLButtonElement;
+    await waitFor(() => expect(save.disabled).toBe(false));
+    fireEvent.click(save);
+    await waitFor(() => expect(writes).toHaveLength(1));
+    // Nothing else changed, so no PATCH rides: the rename alone, on the old name.
+    expect(writes[0].method).toBe("POST");
+    expect(writes[0].url).toMatch(/\/event-rules\/too-hot:rename$/);
+    expect(writes[0].body).toEqual({ name: "too-warm" });
+    await blade();
+  });
+
+  it("saves an edit to a rule whose stored name the server accepted, trailing hyphen and all", async () => {
+    const writes = catchWrites();
+    const trailing: EventRule = { ...hot, id: uuidFor("rule-trailing"), name: "too-hot-", label: "Trailing" };
+    mount(admin, [reach, hot, trailing]);
+    fireEvent.click(screen.getByText("Trailing"));
+    fireEvent.click(within(await blade()).getByText("Edit"));
+    fireEvent.input(await waitFor(() => screen.getByLabelText("Label")), { target: { value: "Still trailing" } });
+    const save = screen.getByText("Save rule").closest("button") as HTMLButtonElement;
+    await waitFor(() => expect(save.disabled).toBe(false));
+    fireEvent.click(save);
+    await waitFor(() => expect(writes).toHaveLength(1));
+    expect(writes[0].method).toBe("PATCH");
+    expect(writes[0].url).toMatch(/\/event-rules\/too-hot-$/);
+    expect(writes[0].body).toEqual({ label: "Still trailing" });
+  });
+
+  it("saves the other fields before the rename, so a refused rename leaves them saved and says why", async () => {
+    const writes: { method: string; url: string; body: unknown }[] = [];
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const req = input as Request;
+      if (req.method === "GET") return req.url.endsWith("/state") ? json({ conditions: [], open: [], pending: [] }) : json({ event_rules: [reach, hot] });
+      writes.push({ method: req.method, url: req.url, body: await req.clone().json() });
+      if (req.url.includes(":rename")) return json({ title: "Conflict", status: 409, detail: "an event rule already has that name" }, 409);
+      return json({ ...hot, label: "Too warm" });
+    });
+    mount();
+    fireEvent.click(screen.getByText("Too hot"));
+    fireEvent.click(within(await blade()).getByText("Edit"));
+    fireEvent.input(await waitFor(() => screen.getByLabelText("Label")), { target: { value: "Too warm" } });
+    fireEvent.input(screen.getByLabelText("Name"), { target: { value: "reachability-lost" } });
+    fireEvent.click(screen.getByText("Save rule").closest("button")!);
+    await waitFor(() => expect(writes).toHaveLength(2));
+    expect(writes.map((w) => w.method)).toEqual(["PATCH", "POST"]);
+    expect(writes[0].body).toEqual({ label: "Too warm" });
+    expect(await screen.findByText(/already has that name/)).toBeTruthy();
+    // The form stays open to retry.
+    expect(screen.getByText("Save rule")).toBeTruthy();
   });
 
   async function editStale() {
@@ -498,6 +716,20 @@ describe("Rules page", () => {
       mount();
       const b = await blade();
       expect(within(b).getByText("reachability-lost")).toBeTruthy();
+    } finally {
+      window.history.pushState({}, "", "/");
+    }
+  });
+
+  it("opens the rule a link names by uuid, so an event written before a rename still leads to its rule", async () => {
+    window.history.pushState({}, "", `/rules?rule=${reach.id}`);
+    try {
+      mount();
+      const b = await blade();
+      expect(within(b).getByText("reachability-lost")).toBeTruthy();
+      // Its live state reads by the rule's current name.
+      const conds = within(b).getByRole("region", { name: "Conditions in force" });
+      expect(await within(conds).findByText("display-1")).toBeTruthy();
     } finally {
       window.history.pushState({}, "", "/");
     }

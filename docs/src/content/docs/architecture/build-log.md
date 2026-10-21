@@ -6768,6 +6768,202 @@ passes the variable; and a guard test (`hook-in-prop-guard`) fails on any JSX pr
 A regression test opens each of the seventeen blades against a stale cache and bounds the list
 fetches; before the fix every one of them stormed.
 
+### The expression primitive on Expr (#956)
+
+The first slice of the expression engine (#524): `internal/expression`, on Expr
+(`github.com/expr-lang/expr` v1.17.8, MIT). A site declares its environment as a Go struct and
+pins its result type (`EnvOf[T](expression.Bool)` for a criteria); the binding names, types and
+docs come from the struct's fields and `expr` / `doc` tags (`Env.Bindings()`), which is what the
+generated bindings list will read. `Compile` refuses an unknown binding, a result of the wrong
+type (including one whose type is only known at run time), and any `$` name (Expr's dynamic
+`$env` and the engine's own plumbing), each as an `*expression.Error` with a phase and a 1-based
+line and column. `Program.Run` takes one prepared input of the site's type.
+
+A site also names the builtins it admits and its run budget (`WithBuiltins`, `WithBudget`).
+Builtins are an **allowlist**: every Expr builtin is off, and a site may admit only vetted ones,
+each linear in what the run is charged for with output no larger than its inputs. Two adversarial
+review passes shaped this. The first found walks the budget did not charge (string `+`, variadic
+arguments, comparisons, `contains` and `matches` subjects); those are charged, at least one per
+step. The second found the charging model cannot bound Go-native builtins at all: `repeat`
+allocates before any check, aliased `map` builds 10^9 leaves for a few units that `max`, `toJSON`
+and `flatten` walk natively for seconds, `uniq` is quadratic, `replace` and `join` output a product
+of their inputs, and the deadline cannot interrupt a native call. So the criteria set is
+comparison, arithmetic, `in`, `contains` / `startsWith` / `endsWith`, constant-pattern `matches`,
+`len`, the numeric builtins on scalars only, the trim and case builtins, and `all` / `any` /
+`none` / `one` / `count` / `filter` with no nested predicate; the range `..`, the builders and
+encoders, and literals past 64 elements are refused at compile time, with a position. Each later
+site vets a builtin deliberately, with its cost argument and tests. A third pass found two costs
+the charge understated: RE2 is linear in the subject times the compiled pattern
+(`(a|aa|aaa|b){0,1000}z` over 1000 characters took 643ms on a charge of 1000), so a pattern is
+capped at 256 compiled instructions and a match charged length times size; and equality on a
+struct, a map, or a list of lists falls to a deep comparison (200ms for 2 units), so `==`, `!=`
+and `in` take scalars and lists of scalars only, checked on the typed tree. `count` without a
+predicate needs a list of bools at compile time, and the sandbox's settings (`CriteriaBudget`,
+`CeilingBudget`, `CriteriaBuiltins`, `DisabledBuiltins`) are functions returning fresh copies, the
+ceiling built from constants.
+
+The caps: a 4096-byte source, 1000 AST nodes (counted by walking the tree), and a per-site budget
+(criteria: 10,000 walked, 10,000 allocated, a 5ms deadline; ceiling: 1,000,000, 100,000, 250ms).
+The deadline is a backstop for charged work and the one nondeterministic limit. `now`, `date`,
+`duration` and `timezone` can never be vetted; an expression calls builtins only (no method, no
+bound value); and an environment type carrying a func, a channel, an interface (`any` included),
+or methods is refused when the site is declared, so a future JSON-payload site needs a dedicated
+data-only value type. Integer arithmetic wraps on overflow, as Go's does. Compiled programs are
+cached by (source, env, including its builtins and budget) in a 1024-entry LRU safe for concurrent
+use. The expressions page keeps its Design badge until the criteria entry point lands.
+
+### Event rule criteria are expressions (#957)
+
+The second slice of the expression engine (#524): an event rule's `fire_criteria` and
+`clear_criteria` are expressions, stored as `{"expr": "..."}` and compiled by the criteria site in
+`internal/rules` (`rules.Compile`, a `Judge` per rule). The prepared input binds `value` (a metric's
+float64; a property's value typed by its `data_type`, text for `string` and `json`, a bool for
+`bool`), `key`, `instance` and `component {name, type}`, with the criteria builtins and the criteria
+budget, result bool. The short form `{op, value}` is still accepted on input (the API, the CLI, the
+console's builder) and lowered by a pure `rules.Lower`: text JSON-quoted (`value == "down"`), a number
+made a float literal (`value >= 80.0`) so Expr parses it with the same correctly rounded ParseFloat,
+and a bool property's non-boolean threshold lowered to the constant it always meant. An absent clear is
+still `!(fire)`; a non-finite metric, or a `bool` property reading neither `true` nor `false`, holds.
+That last is the lowering's one divergence from the old evaluator, by decision (decision 3 on #524):
+such a sample was compared as text before and holds now.
+
+A one-time data backfill (`20261021040000`, no DDL) rewrote every stored short form with the same
+lowering in SQL, byte for byte: numbers are written as Postgres writes a jsonb number (plain decimal,
+no exponent) and text is escaped as `to_json` escapes it, in both, and the integration test compares
+the text (exponent forms and U+2028 included). A row whose expression would pass the 4096-byte source
+cap is left in short form rather than failing the migration. Its down migration restores the short
+form for every expression the lowering writes. The old `{op,value}` evaluator is kept as a test
+oracle: the lowering decides 21,324 criterion and sample pairs as it did (hostile strings, quotes,
+control characters, unicode, signed zero, NaN, the edges of float precision), the bool divergence
+pinned separately, and an integration test migrates short-form rules forward, back and forward again,
+re-seeds, and drives an upgraded reachability rule and a metric rule through the real ingest. The official `reachability-lost` ships the backfill's own text, so an
+upgraded fleet's first boot changes nothing.
+
+The gateway holds each rule's compiled criteria per (rule, version, data type), so the ingest, the
+prime, the sweep, the reconcile scan and its settle all judge with a program compiled once per rule
+version (a test counts zero compiles across two 50-sample batches). A compile that fails is cached the
+same way, and the rule carries it as `criteria_error` (field, line, column, message) on its list entry,
+get and state, which the Rules list and blade show as criteria that do not compile; that is how a rule
+whose key's data type changed under it, or a short form the backfill left over the cap, is seen. A run
+over its budget, or a value the lane cannot read, holds the rule for that sample, is logged once per
+rule version per process, and the sample still lands. The API accepts `{expr}` or `{op, value}` and always answers `{expr}`; a criterion that
+does not compile is a 422 located at `body.fire_criteria.expr` (or `clear_criteria`), or at the
+criteria when the body gave the short form, with its line and column. The console's builder still sends the short form; the Rules page reads a lowered expression
+back into its comparison for the words and the form, and shows any other expression as written,
+keeping it on save (editing it in the console is #960).
+
+### Validate an expression, with the site's bindings generated (#958)
+
+The third slice of the expression engine (#524). Each place an expression is written is a **site**,
+declared once in `internal/rules` (`site.go`): its environment per value type (for criteria, a
+metric's number, a string or json property's text, a bool property's bool), the builtins it admits,
+the result it must yield and its budget. `Env.Bindings` now lists a nested struct's fields by their
+dotted path (`component.name`, `component.type`), the way an expression names them.
+
+`POST /expressions:validate` (gated `rule:read`, `omniglass expression validate`) takes a site, a
+source and, for criteria, the sample key (required; it types the value), and
+answers whether it compiles, positioned diagnostics, and the site's bindings, builtins and budget,
+read from the declaration. It stores and runs nothing; an unknown site or key is a 422, and the
+site enum is checked against the registry by a test. `cmd/exprgen` (run by `make gen`) writes the
+same declaration to `docs/src/generated/expressions.json`, which the expressions page renders as its
+bindings and builtins table, so no binding is hand-listed; a drift test fails when the committed file
+is stale. The expressions page moves from Design to Partial: the criteria site is built, and the
+built engine (compiling once, the allowlist, the caps and budgets, the `$` refusal) is taught outside
+the design fence. Validate compiles through `expression.Check`, which skips the shared program cache
+so cycling sources evicts nothing, and a diagnostic names a nested binding by its path (`component`),
+never by its Go type. A binding's doc reads the same for every value type, which a test holds.
+
+### Preview an event rule against recent samples (#959)
+
+The fourth slice of the expression engine (#524). `POST /event-rules:preview` (gated `rule:read`,
+`omniglass event-rule preview`) takes a candidate rule (sample key, selector, fire and optional clear
+criteria; sustains accepted and ignored) and answers what it would have done, writing nothing: the
+gateway's `PreviewEventRule` runs in a read-only transaction and compiles the criteria once. As first
+built it read the key's lane twice, the newest sample before the window of every series and every
+sample in it, capped at `RulePreviewRowCap` (5,000) rows each. A review proved that read wrong at scale
+and in four ways, and it was rebuilt before the rollup merged (below). Each selected series is
+walked as the ingest would walk it with no sustains, from the state its pre-window sample sets: a fire
+out of force is a fire edge, a clear in force a clear edge. The answer carries the edges, the series in
+force now (with the window's fire that brought each in, absent when it was in force before the
+window), the window, the cap, `truncated` and `sustains_ignored: true`. A bad criterion is a 422 at
+its line and column. Tests seed a reachability window and check the edges and the in-force set, a
+component-scoped and a place-scoped viewer, the truncation flag at a lowered cap, and that the event,
+alarm, condition, streak, audit and rule row counts do not move.
+
+### The console expression field and rule preview (#960)
+
+The fifth and last slice of the expression engine (#524). `ExpressionField` (web/src/components) is
+the console's one expression editor: the source in a monospace textarea, checked against its site as
+it is typed (`POST /expressions:validate`, debounced), each diagnostic pointed at under its line and
+column with a caret, and the site's bindings and functions listed from the same answer, each doc a
+hover away; it carries no native validation attributes, and a form learns the verdict through a
+callback. The rule drawer authors criteria either way: the comparison builder shows beneath it the
+expression it is stored as (the TypeScript `lowerShort`, mirroring `rules.Lower`), **Write as an
+expression** switches to the field seeded with that expression (and back, keeping the comparison when
+the expression still is one), a rule whose criteria the builder cannot say opens as an expression, and
+a source that does not compile refuses the save. **Preview** at the foot of the drawer runs the draft
+through `POST /event-rules:preview`: in force now, linked to the components, the window's edges, a
+truncation notice and that sustains are ignored. The blade shows the criteria as code, and the list and
+blade keep #957's criteria-do-not-compile display. The decision record is ADR-0146; the expressions
+page stays Partial (functions, `convert`, the other sites and the function-run bindings are design).
+A walkthrough, `write-a-rule-as-an-expression`, is embedded in the rules guide, and the screenshots
+are under `.github/screenshots/960/`. A review then fixed four gaps: a rule whose criteria do not compile
+opens that side as its stored expression (the builder would hide what is wrong) and always sends it,
+so a save repairs it; an expression the builder cannot say survives a switch to the builder and back;
+a preview answer is dropped once the draft it answered changes; and the save waits for every pending
+or failed check, with the "Stored as" line written in the server's plain decimals.
+
+### A rule preview reads only the series it judges, as ingest would (#959)
+
+A review of the preview, with EXPLAIN ANALYZE on 200,000 rows, found its seed read scanned the key's
+whole history and its window read sorted every window row before the cap; the selector ran in Go after
+the capped read, so unselected rows spent the cap; a series seeded from its newest sample before the
+window missed a hysteresis rule's state (fire above 80, clear below 70: 85, then 75, then 60); the cap
+cut series in half; a late sample was judged though the ingest skips it; and a selector name resolved
+fleet-wide said whether a component outside the caller's scope existed. Now the selection is SQL
+(the named components and the type subtrees, within the read scope), each selected component's
+instances are found by a loose index skip on the series index, and each series is two index probes: its
+starting state from the newest deciding sample within `RulePreviewSeedLookback` (7 days, probing at most
+`RulePreviewSeedProbe` samples; none, and the series is listed in `state_unknown`), and its window. A
+window sample older than one that arrived before it decides nothing, the ingest's stale check. The cap
+takes whole series, reported as `series_judged` of `series_total`; selector names resolve in the
+caller's scope, so a hidden component is the same 422 as a missing one. The console's preview panel
+counts the series it judged and those that started unknown. Tests cover each case, and an EXPLAIN test
+asserts every per-series read on both lanes is an index probe on its series index with no seq scan.
+
+
+### An event rule's name is renameable, its references stay by uuid (#977)
+
+Event rules shipped with create-only names (#918), against ADR-0062 and ADR-0076; the architect folded
+the fix into #524's rollup. `POST /event-rules/{name}:rename` (gated `rule:update` on an all-scope
+grant, like every rule write; `omniglass event-rule rename`) moves an operator rule's name through the
+shared validator, audited (`rename`, keyed on the uuid) and answered with the rule and its `id`; an
+official rule is a 409, as every official write is, and a taken name a 409. A rename is not a material
+change: no version bump, streaks keep their clock, conditions stay in force. The one reference that
+held the name was the alarm's dedup key, which is now `rule:<uuid>[:<instance>]` everywhere it is built
+or read (the raise and clear, the in-force probe, the candidates and in-force reads of the reconcile
+pass and the live state, the state's instance parse); a one-time data migration
+(`20261021050000_alarm_rule_dedup_key_by_uuid`) rewrote every rule-raised alarm's key, open and
+cleared, through `raised_by_rule_id`, leaving a deleted rule's alarms as they were, with a tested down
+and a second run that changes nothing. The #949 condition backfill still parses names, which is right:
+it runs before the rewrite. An event's `source_rule` stays the historical name beside
+`derived_by_rule_id`, so an episode spanning a rename reads its fire event under the old name and its
+clear under the new. The console renames from the rule's Edit drawer, on the entity forms' save model
+(the PATCH first, the rename last, so a refused rename leaves the rest saved), and an event's rule link
+now carries the rule's uuid, which the Rules page resolves, so a link written before a rename still
+opens the rule. The rules guide, alarms and actions, the API page and ADR-0144 (a dated amendment to
+its point 5) say so, and the `write-a-rule-as-an-expression` walkthrough's name caption no longer
+claims a name cannot change.
+
+A review of #977 closed four gaps. A replica from before #977 still raises a rule's alarm under the
+name key during a rolling upgrade, after the migration ran, and the new binary matched only the uuid
+key, so such an alarm was never cleared (or was opened twice, or stranded once the condition row
+went). Every rule-alarm match now finds the alarm by `raised_by_rule_id` plus the instance parsed from
+its key after the rule segment (`ruleKeyInstance`, mirrored in SQL), under either segment; a new raise
+always writes the uuid key. A hand raise may no longer take a `rule:` key (422), which could have stood
+in for a rule's alarm. The rule form judges a name only when it changed, by the shared entity name
+rule the server applies (`names.ts`), so a stored name like `too-hot-` stays saveable; and a stale
+comment that still called the name create-only is gone.
 ### Seed scenarios (#964)
 
 `omniglass seed-dev --scenario <name>` stands up a named fleet instead of always the example one: a
@@ -6850,3 +7046,7 @@ through it as the program's first run (epic #978, bugs #979 to #981 and #983): t
 suggestion against two unrelated issues, which the run read and confirmed, and a repeat dry run
 planned nothing new.
 
+
+### The criteria deadline cannot refuse a small run (#956)
+
+Re-running the lowering oracle on a loaded machine refused one trivial criterion (`value >= 1000000000000000000000.0`) for its wall-clock deadline: the meter read the clock at a run's first charge, so a goroutine preempted between `Run` and that charge read as an overrun and would have held a rule for no reason. The clock is now read every 256 charges and never before the first 256, so a run that small is bounded by its iteration budget alone and the deadline stays a backstop for long charged work; `TestDeadlineSparesSmallRuns` pins it.

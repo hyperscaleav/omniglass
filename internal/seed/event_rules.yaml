@@ -3,6 +3,8 @@
 # alongside. A rule names the event type it writes when its condition starts
 # (fire_event_type, required) and ends (clear_event_type, optional), and the
 # severity its alarm is raised at (absent: informational, no alarm) (#948).
+# Criteria are expressions over the sample (#957): value, key, instance,
+# component.name and component.type; an absent clear is !(fire).
 rules:
   # An endpoint that stops answering opens an alarm on its component: one
   # alarm per endpoint, at a level that puts the component in outage, after
@@ -13,9 +15,9 @@ rules:
     label: Reachability lost
     description: An endpoint stopped answering its reachability probe.
     sample_key: endpoint-reachable
-    fire: {op: eq, value: down}
+    fire: 'value == "down"'
     fire_sustain: 15s
-    clear: {op: eq, value: up}
+    clear: 'value == "up"'
     severity: high
     fire_event_type: condition-started
     clear_event_type: condition-ended

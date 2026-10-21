@@ -407,7 +407,7 @@ Records a condition on this component, then recomputes health in the same transa
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--dedup-key` | string | (none) | The condition identity; defaults to the message. Raising an already-open (component, dedup_key) returns the existing open alarm instead of a duplicate |
+| `--dedup-key` | string | (none) | The condition identity; defaults to the message. Raising an already-open (component, dedup_key) returns the existing open alarm instead of a duplicate. A key (or, without one, a message) beginning rule: is refused (422): that namespace names a rule's condition |
 | `--message` | string | (none) | What is wrong, for the operator reading it later |
 | `--severity` | string | (none) | How bad it is: a severity level by name (see /severity-levels); a level at or above high puts the component itself in outage |
 
@@ -1476,16 +1476,16 @@ Create an event rule
 omniglass event-rule create [flags]
 ```
 
-Authors a rule whose condition starts on each component it watches when its sample key meets the fire criteria for the fire sustain, and ends when the clear criteria (or the negation of fire) holds for the clear sustain. It names the event type it writes when the condition starts (required) and, optionally, when it ends; with a severity it also raises an alarm while the condition holds, and without one it is informational. The key must be a registered property or metric, the criteria evaluable on its lane, the event types registered and the severity, when given, a level that exists (else 422); a name already taken is a 409. Audited. Gated by rule:create, with an all-scope grant.
+Authors a rule whose condition starts on each component it watches when its sample key meets the fire criteria for the fire sustain, and ends when the clear criteria (or the negation of fire) holds for the clear sustain. It names the event type it writes when the condition starts (required) and, optionally, when it ends; with a severity it also raises an alarm while the condition holds, and without one it is informational. Criteria are expressions over the sample (value, key, instance, component.name, component.type) yielding true or false; a body may give {expr} or the short form {op, value}, and the answer is always {expr}. The key must be a registered property or metric, the criteria must compile against its lane (an unknown name or a result that is not a bool is a 422 naming the criteria, line and column), the event types registered and the severity, when given, a level that exists (else 422); a name already taken is a 409. Audited. Gated by rule:create, with an all-scope grant.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--clear-criteria` | string | (none) | The criteria that clears it: {op, value}; absent clears on the negation of fire_criteria |
+| `--clear-criteria` | string | (none) | The criteria that ends it: {expr} or {op, value}; absent clears on the negation of fire_criteria, !(fire) |
 | `--clear-event-type` | string | (none) | The event type the rule writes when its condition ends, by name (condition-ended is the generic one); absent, it writes none |
 | `--clear-sustain` | string | (none) | A Go duration; empty is 0s |
 | `--description` | string | (none) | What the rule watches for and why |
 | `--enabled` | bool | `false` | Defaults to true |
-| `--fire-criteria` | string | (none) | The criteria that opens an alarm: {op, value} |
+| `--fire-criteria` | string | (none) | The criteria that starts the condition: {expr}, or the short form {op, value} |
 | `--fire-event-type` | string | (none) | The event type the rule writes when its condition starts, by name (condition-started is the generic one) |
 | `--fire-sustain` | string | (none) | A Go duration; empty is 0s |
 | `--label` | string | (none) | A human label; also the alarm message when message is empty |
@@ -1549,6 +1549,51 @@ Example:
 omniglass event-rule list
 ```
 
+### `omniglass event-rule preview`
+
+Preview an event rule
+
+```
+omniglass event-rule preview [flags]
+```
+
+Judges a candidate rule (sample key, selector, criteria) without writing anything, as the ingest would have with no sustains (the answer says they are ignored): over each series it selects on components the caller may read, from the state its newest deciding sample in the 7 days before the window set (state_unknown when there is none), through every sample in the last 24 hours that the ingest would have judged (a late sample older than one before it decides nothing). Answers the edges it would have written and the series it would hold in force now. Its reads are index probes per series, capped at row_cap window samples taken a whole series at a time: series_judged of series_total, and truncated when the cap stopped it. A selector naming a component the caller cannot read is the same 422 as one that does not exist. Criteria take {expr} or {op, value}; one that does not compile is a 422 naming the criteria, line and column. Gated by rule:read.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--clear-criteria` | string | (none) | The criteria it ends on; absent, the negation of fire_criteria |
+| `--clear-sustain` | string | (none) | Accepted and ignored, like fire_sustain |
+| `--fire-criteria` | string | (none) | The criteria its condition starts on: {expr}, or the short form {op, value} |
+| `--fire-sustain` | string | (none) | Accepted so a rule body previews as it is, and ignored: a preview judges each sample alone |
+| `--sample-key` | string | (none) | The property or metric the candidate rule reads |
+| `--selector` | string | (none) | The components it watches; absent or empty, every component |
+
+Example:
+
+```sh
+omniglass event-rule preview --fire-criteria <json> --sample-key sample_key
+```
+
+### `omniglass event-rule rename`
+
+Rename an event rule
+
+```
+omniglass event-rule rename <name> [flags]
+```
+
+Moves an operator rule's name, the address an operator types. A separate act from an update, because it breaks bookmarks and integration config outside this system; inside it nothing breaks, since every reference holds the rule's uuid (an alarm's raised_by_rule_id and dedup key, a condition, a streak, an event's derived_by_rule_id). Not a material change: no version bump, streaks keep running and conditions stay in force. An event keeps the name it was written under (derived_by_rule); the rule's next events carry the new one. An official rule keeps its name (409), a taken name is a 409, an illegal or uuid-shaped one a 422. Returns the rule with its uuid. Audited. Gated by rule:update, with an all-scope grant.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--name` | string | (none) | The rule's new name, unique among rules (lowercase letters, digits, hyphens) |
+
+Example:
+
+```sh
+omniglass event-rule rename <name> --name name
+```
+
 ### `omniglass event-rule state`
 
 Commands for the state resource
@@ -1577,17 +1622,17 @@ Update an event rule
 omniglass event-rule update <name> [flags]
 ```
 
-Patches a rule (an absent field is unchanged), bumping its version; disabling it stops new opens. An empty severity makes the rule informational and an empty clear_event_type drops its clear event; the fire event type cannot be emptied (422). Official rules are read-only (409). Audited. Gated by rule:update, with an all-scope grant.
+Patches a rule (an absent field is unchanged), bumping its version; disabling it stops new opens. Criteria take {expr} or the short form {op, value}, compiled as on create (a 422 names the criteria, line and column). An empty severity makes the rule informational and an empty clear_event_type drops its clear event; the fire event type cannot be emptied (422). Official rules are read-only (409). Audited. Gated by rule:update, with an all-scope grant.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--clear-criteria` | string | (none) | The criteria that clears it: {op, value}; absent clears on the negation of fire_criteria |
+| `--clear-criteria` | string | (none) | The criteria that ends it: {expr} or {op, value}; absent clears on the negation of fire_criteria, !(fire) |
 | `--clear-event-type` | string | (none) | The event type the rule writes when its condition ends, by name; empty writes none |
 | `--clear-negates` | bool | `false` | Drop the clear criteria, so the rule clears on the negation of its fire criteria |
 | `--clear-sustain` | string | (none) | How long the clear criteria must hold, a Go duration; empty is 0s |
 | `--description` | string | (none) | What the rule watches for and why |
 | `--enabled` | bool | `false` | Whether the rule evaluates; defaults to true on create |
-| `--fire-criteria` | string | (none) | The criteria that opens an alarm: {op, value} |
+| `--fire-criteria` | string | (none) | The criteria that starts the condition: {expr}, or the short form {op, value} |
 | `--fire-event-type` | string | (none) | The event type the rule writes when its condition starts, by name; it cannot be emptied |
 | `--fire-sustain` | string | (none) | How long the fire criteria must hold, a Go duration (e.g. 30s); empty is 0s |
 | `--label` | string | (none) | A human label; also the alarm message when message is empty |
@@ -1697,6 +1742,32 @@ Example:
 
 ```sh
 omniglass event-type update <name>
+```
+
+## `omniglass expression`
+
+Commands for the expression resource
+
+### `omniglass expression validate`
+
+Validate an expression
+
+```
+omniglass expression validate [flags]
+```
+
+Compiles an expression against a registered site's environment and answers whether it compiles, with positioned diagnostics, and the site's bindings, admitted builtins and run budget, all generated from the site's declaration. For criteria a sample key is required, and types the value (a metric is a number; a property is text, or a bool for a bool property); the answer's value_type so reveals a key's lane and data type to a rule:read holder, as the rule list already does. Compiles without the engine's program cache and stores and runs nothing. An unknown site, a missing or unknown key is a 422. Gated by rule:read.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--key` | string | (none) | For criteria (required there), the sample key the rule reads: its lane and data type type the value (a metric is a number; a property is text, or a bool for a bool property) |
+| `--site` | string | (none) | Where the expression is written: criteria, an event rule's fire_criteria or clear_criteria |
+| `--source` | string | (none) | The expression |
+
+Example:
+
+```sh
+omniglass expression validate --site site --source source
 ```
 
 ## `omniglass file`

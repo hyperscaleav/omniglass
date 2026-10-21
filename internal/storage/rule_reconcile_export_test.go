@@ -12,3 +12,23 @@ func ExportRuleMarks(st *RuleReconcileState) [2]RuleMark { return st.marks }
 func ExportSeriesNewestSQL(lane string) string {
 	return seriesNewestSQL(rules.Lane(lane), "$1::uuid", "$2::uuid", "$3")
 }
+
+// SetRulePreviewRowCap lowers the preview's row cap for a test and returns
+// the restore.
+func SetRulePreviewRowCap(n int) func() {
+	was := rulePreviewRowCap
+	rulePreviewRowCap = n
+	return func() { rulePreviewRowCap = was }
+}
+
+// ExportPreviewSQL is a preview's per-series statement on a lane, by part
+// (instances, seed, window), so a test can EXPLAIN what a preview runs.
+func ExportPreviewSQL(lane, part string) string {
+	switch part {
+	case "instances":
+		return previewInstancesSQL(rules.Lane(lane))
+	case "seed":
+		return previewSeedSQL(rules.Lane(lane))
+	}
+	return previewWindowSQL(rules.Lane(lane))
+}

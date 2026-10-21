@@ -494,7 +494,8 @@ describe("the events and logs tabs (#793)", () => {
     ]);
     const tab = screen.getByTestId("events-tab");
     const link = (await within(tab).findByText("reachability-lost")).closest("a")!;
-    expect(link.getAttribute("href")).toMatch(/\/rules\?rule=reachability-lost$/);
+    // By the rule's uuid, which a rename since the event (#977) has not moved.
+    expect(link.getAttribute("href")).toBe(`/web/rules?rule=${uuidFor("szp-rule")}`);
     expect(within(tab).getByRole("button", { name: /^Timeline of / })).toBeTruthy();
   });
 

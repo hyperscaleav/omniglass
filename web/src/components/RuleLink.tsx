@@ -1,14 +1,17 @@
 import { Show, type JSX } from "solid-js";
 import { A } from "@solidjs/router";
 
-// ruleHref is where a rule opens: the Rules page, its blade open (#951).
-export const ruleHref = (name: string) => `/rules?rule=${encodeURIComponent(name)}`;
+// ruleHref is where a rule opens: the Rules page, its blade open (#951). The
+// ref is the rule's name or its uuid; the Rules page resolves either.
+export const ruleHref = (ref: string) => `/rules?rule=${encodeURIComponent(ref)}`;
 
 // RuleLink names the event rule an occurrence belongs to ("by rule
 // reachability-lost"), so an event a rule derived on Activity leads back to
 // the rule that wrote it. It links only while the rule exists (the event
 // carries its id); a rule deleted since keeps the name the event recorded,
-// shown as plain text that says the rule is gone, never as a dead link.
+// shown as plain text that says the rule is gone, never as a dead link. The
+// link carries the id, not the name: the name shown is the one the event was
+// written under, which a rename since (#977) has moved, and the id has not.
 export default function RuleLink(props: { name: string; id?: string }): JSX.Element {
   return (
     <span class="shrink-0 text-[11px] text-base-content/45">
@@ -21,7 +24,7 @@ export default function RuleLink(props: { name: string; id?: string }): JSX.Elem
           </span>
         }
       >
-        <A href={ruleHref(props.name)} class="font-data text-base-content/70 hover:underline">{props.name}</A>
+        <A href={ruleHref(props.id!)} class="font-data text-base-content/70 hover:underline">{props.name}</A>
       </Show>
     </span>
   );

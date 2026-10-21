@@ -1,0 +1,85 @@
+---
+// The expression sites (#958), rendered from the generated facts
+// (docs/src/generated/expressions.json, written by make gen via cmd/exprgen
+// from internal/rules/site.go). Each binding's name, type and doc are read
+// from the site's environment struct, the same declaration the engine
+// compiles against and POST /expressions:validate answers with, so no
+// binding is hand-listed here.
+//
+// A site's variants differ only in the type of value; the table lists each
+// binding once, with value's type per variant.
+import facts from '../generated/expressions.json';
+
+type Binding = { name: string; type: string; doc?: string };
+type Variant = { value_type: string; when: string; bindings: Binding[] };
+
+function merged(variants: Variant[]) {
+  const rows: { name: string; types: { type: string; when: string }[]; doc: string }[] = [];
+  for (const v of variants) {
+    for (const b of v.bindings) {
+      let row = rows.find((r) => r.name === b.name);
+      if (!row) {
+        row = { name: b.name, types: [], doc: b.doc ?? '' };
+        rows.push(row);
+      }
+      if (!row.types.some((t) => t.type === b.type)) row.types.push({ type: b.type, when: v.when });
+    }
+  }
+  return rows;
+}
+---
+
+{
+  facts.sites.map((s) => (
+    <section>
+      <p>
+        <strong>
+          <code>{s.name}</code>
+        </strong>
+        : {s.summary}
+      </p>
+      <table>
+        <thead>
+          <tr>
+            <th>Binding</th>
+            <th>Type</th>
+            <th>What it holds</th>
+          </tr>
+        </thead>
+        <tbody>
+          {merged(s.variants as Variant[]).map((r) => (
+            <tr>
+              <td>
+                <code>{r.name}</code>
+              </td>
+              <td>
+                {r.types.length === 1 ? (
+                  <code>{r.types[0].type}</code>
+                ) : (
+                  r.types.map((t, i) => (
+                    <>
+                      {i > 0 ? '; ' : ''}
+                      <code>{t.type}</code> for {t.when}
+                    </>
+                  ))
+                )}
+              </td>
+              <td>{r.doc}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <p>
+        Builtins it admits:{' '}
+        {s.builtins.map((b, i) => (
+          <>
+            {i > 0 ? ', ' : ''}
+            <code>{b}</code>
+          </>
+        ))}
+        . A run may walk {s.budget.iterations.toLocaleString('en-US')}, allocate{' '}
+        {s.budget.memory.toLocaleString('en-US')} and is stopped after {s.budget.deadline} of charged work.
+      </p>
+    </section>
+  ))
+}

@@ -87,7 +87,9 @@ describe("EventsPanel", () => {
       ],
     });
     const link = getByText("reachability-lost").closest("a")!;
-    expect(link.getAttribute("href")).toBe("/rules?rule=reachability-lost");
+    // By the rule's uuid: the name shown is the one the event was written
+    // under, which a rename since may have moved (#977).
+    expect(link.getAttribute("href")).toBe("/rules?rule=0192a5f0-5555-7000-8000-0000000000a5");
     const row = link.closest("div.flex-col") as HTMLElement;
     expect(within(row).getByRole("button", { name: /^Timeline of / })).toBeTruthy();
   });

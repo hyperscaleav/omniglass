@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/danielgtaylor/huma/v2"
@@ -93,7 +94,7 @@ type raiseAlarmInput struct {
 	Body struct {
 		Severity string `json:"severity" minLength:"1" doc:"How bad it is: a severity level by name (see /severity-levels); a level at or above high puts the component itself in outage"`
 		Message  string `json:"message,omitempty" doc:"What is wrong, for the operator reading it later"`
-		DedupKey string `json:"dedup_key,omitempty" doc:"The condition identity; defaults to the message. Raising an already-open (component, dedup_key) returns the existing open alarm instead of a duplicate"`
+		DedupKey string `json:"dedup_key,omitempty" doc:"The condition identity; defaults to the message. Raising an already-open (component, dedup_key) returns the existing open alarm instead of a duplicate. A key (or, without one, a message) beginning rule: is refused (422): that namespace names a rule's condition"`
 	}
 }
 
@@ -270,6 +271,8 @@ func mapAlarmErr(err error) error {
 	switch {
 	case errors.Is(err, storage.ErrAlarmNotFound):
 		return huma.Error404NotFound("alarm not found")
+	case errors.Is(err, storage.ErrAlarmInvalid):
+		return huma.Error422UnprocessableEntity(strings.TrimPrefix(err.Error(), "storage: alarm is invalid: "))
 	case errors.Is(err, storage.ErrAlarmSeverity):
 		return huma.Error422UnprocessableEntity("severity must name a severity level (see /severity-levels)")
 	case errors.Is(err, storage.ErrComponentNotFound):

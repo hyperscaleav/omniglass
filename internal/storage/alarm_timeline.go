@@ -50,9 +50,11 @@ func auditAlarmAction(verb string) string {
 // canonical form, the form the audit rows key on. An alarm not on that
 // component, or an id that names no alarm, is ErrAlarmNotFound.
 //
-// The platform's audit lines name the rule as the alarm's events recorded it
-// (source_rule, which outlives the rule), so one timeline shows one name;
-// before any event (a hand-raised alarm has none), the rule's current name.
+// The platform's audit lines name the rule as the alarm's first event
+// recorded it (source_rule, which outlives the rule); before any event (a
+// hand-raised alarm has none), the rule's current name. Each event line keeps
+// the name it was written under, so a rule renamed mid-episode (#977) shows
+// its old name on the fire event and its new one on the clear.
 func (p *PG) AlarmTimeline(ctx context.Context, componentID, alarmID string) ([]AlarmTimelineEntry, error) {
 	parsed, err := uuid.Parse(alarmID)
 	if err != nil {

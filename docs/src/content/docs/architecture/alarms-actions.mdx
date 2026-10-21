@@ -171,8 +171,8 @@ severity, and writes its **fire event**; when it leaves force (after `clear_sust
 row, resolves the alarm, and writes its **clear event** when it has a clear type. Each is written
 once, never per sample while the condition holds, in one transaction with the alarm transition and
 the health recompute. The [event](/architecture/events/) is `origin = derived`, names its rule
-(`derived_by_rule_id`, and the rule's name and version in `source_rule`, which outlive a deleted
-rule), sits on the series' component and instance, carries the rule's message and the sample's key
+(`derived_by_rule_id`, and the rule's name and version in `source_rule`, the name it had when the
+event was written, which a rename leaves as written and which outlives a deleted rule), sits on the series' component and instance, carries the rule's message and the sample's key
 and value as attributes, and carries the alarm it opened or resolved in **`event.alarm_id`**. A rule
 with no clear type resolves its alarm with no clear event, and its condition still ends. Turning a
 severity on opens alarms for the conditions in force, and turning it off resolves them while the
@@ -194,12 +194,25 @@ condition row behind it (one an older binary raised during a rolling upgrade) al
 a further fire neither adopts it nor writes an event, and a recovery resolves it with no clear event,
 since no condition row ended.
 
+**A rule's alarm is found by its rule and instance, whatever key wrote it** (#977). Every path that
+reads a rule's alarms (the in-force check, the live counts and state, the reconcile pass, a recovery,
+and a disable, delete, narrowing or severity turned off) matches an open alarm by `raised_by_rule_id`
+plus the instance its key names, the suffix after the key's rule segment. The rule segment may be the
+rule's uuid, which this binary always writes, or its name, which a replica from before #977 still
+writes during a rolling upgrade after the migration ran (`rule:<name>[:<instance>]`, the name it read
+then, renamed since or not). So such an alarm counts as in force (a further fire opens no second alarm
+and writes no event), is listed on its instance, and is resolved on recovery (by the clear event, when
+it has a condition row) or when the rule lets go of it. Only within one rule: a key's rule segment
+never matches another rule's alarm, since the match starts from `raised_by_rule_id`, and a hand-raised
+alarm may not take a key beginning `rule:` at all (a 422; the key defaults to the message, so a message
+beginning `rule:` needs a key of its own).
+
 ```yaml
 event_rule:
   name: reach-lost
   sample_key: endpoint-reachable       # a property (text) or a metric (number)
-  fire_criteria: { op: eq, value: down }
-  clear_criteria: { op: eq, value: up } # optional: absent, the negation of fire
+  fire_criteria: { expr: 'value == "down"' }
+  clear_criteria: { expr: 'value == "up"' } # optional: absent, the negation of fire, !(fire)
   fire_sustain: 30s                     # how long fire must hold
   clear_sustain: 0s
   severity: high                        # optional: absent, informational (no alarm)
@@ -211,12 +224,27 @@ event_rule:
 The evaluator judges each sample **as it lands, in the same transaction**, through the same guarded
 conditional insert, audit row and health recompute a hand-raised alarm uses, so a rule-raised alarm
 feeds health exactly as a hand-raised one does; it writes as the system actor. The alarm names its rule
-(`raised_by_rule_id`, set null if the rule is deleted), and its condition identity is the rule's name
-plus the sample's **instance**, so a per-endpoint input holds **one alarm per endpoint**: a component
+(`raised_by_rule_id`, set null if the rule is deleted), and its condition identity (its `dedup_key`,
+`rule:<uuid>[:<instance>]`) is the rule's uuid plus the sample's **instance**, so a per-endpoint input holds **one alarm per endpoint**: a component
 whose SNMP and HTTP both fail carries two, and one recovering clears only its own. A repeated or
 redelivered sample changes nothing. A disabled rule evaluates nothing; disabling or deleting a rule ends
 the conditions it holds in force, each with its clear event, resolving their alarms (they stay in the
 history), and narrowing its selector ends those on the components it no longer watches.
+
+**A rule's name is renameable; its references are by uuid** (#977,
+[ADR-0062](/architecture/decisions/#adr-0062-a-registry-takes-a-uuid-primary-key-and-a-renameable-handle),
+[ADR-0076](/architecture/decisions/#adr-0076-a-renameable-human-typed-identifier-stays-in-the-url-and-the-write-returns-the-uuid)).
+`POST /event-rules/{name}:rename` moves an operator rule's name, the address an operator types, and
+answers the rule with its uuid. Everything inside the platform that refers to a rule holds the uuid: an
+alarm's `raised_by_rule_id` and its dedup key, the condition rows, the streaks, an event's
+`derived_by_rule_id`, the audit rows. So a rename moves nothing else: the alarms it holds stay open and
+attached, its conditions stay in force, a streak keeps its clock, and the next recovery clears the
+alarm and writes the clear event under the new name. A rename is not a material change and bumps no
+version. An event's `source_rule` is a historical record, the name the rule had when it wrote the
+event, so an episode that spans a rename reads the old name on its fire event and the new one on its
+clear, both by the same `derived_by_rule_id`. An official rule keeps its name (a 409), since the boot
+seed matches it by name. A one-time data migration rewrote the dedup key of every rule-raised alarm,
+open or cleared, from the rule's name to its uuid; an alarm whose rule was deleted keeps the key it had.
 
 **Sustains** hold an edge until it has lasted: `fire_sustain` before the alarm opens and
 `clear_sustain` before it clears, both defaulting to `0s`, set independently (a long clear sustain
@@ -264,10 +292,48 @@ operator in between. That takes the system out only when the component fills a r
 is `outage` and losing it drops the role below quorum; otherwise the system reads whatever the role's
 impact says, and a component that fills no role moves no system.
 
-Criteria are, for now, one comparison of the arriving sample's value, `{op, value}`: a property
-compares text (`eq`, `ne`), a metric compares numbers (`eq` `ne` `gt` `ge` `lt` `le`); a sample of
-the wrong type, or a number that is no number, decides nothing. The column is jsonb, so the
-[expression](/architecture/expressions/) leaf replaces the comparison without a schema change (#524).
+Criteria are [expressions](/architecture/expressions/) (#957), stored as `{"expr": "..."}` and
+evaluated against a prepared input of five bindings: **`value`** (a metric's number, or a property's
+value typed by its `data_type`: text for `string` and, for now, `json`, a true or false for `bool`),
+**`key`** (the property or metric the rule reads), **`instance`** (the sample's endpoint, empty when it
+has none) and **`component`**, the sample's component, with its `name` and its `type` (the component
+type, by name). So `value > 80 && instance != "aux"` or `value == "down" && component.type == "display"`. A
+criterion must yield true or false; one that names anything else, or yields another type, is refused
+when the rule is written (a 422 naming the criteria, line and column) and never stored. The criteria
+site admits a small vetted set of builtins and runs under a small budget (the expressions page lists
+both). A rule with no clear criteria clears on the negation of its fire criteria, `!(fire)`.
+
+The short form a rule could only be written in before, one comparison `{op, value}` (a property
+compares text with `eq` or `ne`, a metric compares numbers with any of `eq` `ne` `gt` `ge` `lt` `le`),
+is still accepted on input and lowered to its expression (`eq "down"` is `value == "down"`, `ge 80`
+is `value >= 80.0`), and the API always answers with the expression. A one-time backfill rewrote every
+stored short form to the same text the gateway's lowering writes, and such a rule decides every sample
+as it did before with one deliberate exception: a `bool` property's sample that is not exactly `true`
+or `false` now holds the rule, where the short form compared its text (the definition's decision on
+#524). A sample the criteria cannot read (that `bool` case, or a number that is no number), or a run
+over its budget, holds the rule for that sample and is logged once per rule version per process; the
+sample still lands.
+
+A rule's criteria compile once per rule version, never per sample, and a compile that fails is held
+the same way. Criteria that stop compiling (a key's `data_type` changed under them, or a short form
+the backfill left as it was because its expression would pass the engine's source cap) hold the rule,
+and the rule says so: its list entry, a get and its state carry **`criteria_error`** (which criteria,
+the line and column, the message), and the console shows the rule as one whose criteria do not
+compile until an operator rewrites them.
+
+Before a rule is saved it can be **previewed** (`POST /event-rules:preview`, gated `rule:read`, #959):
+the candidate (its key, selector and criteria) is judged over the last 24 hours of its key's samples,
+on the components the caller may read, as the ingest would have judged them with no sustains (the
+answer says so): each series starts from the state its newest deciding sample in the week before set,
+and a late sample older than one before it decides nothing. The answer is the edges it would have
+written and the series it would hold in force now, and a series with no deciding sample in that week
+is reported as having started unknown rather than guessed at. It writes nothing. Its reads are index
+probes per selected series, capped at a row count taken a whole series at a time: a preview that hits
+the cap says how many series it judged of how many, flagged `truncated`. The console authors criteria either way: the rule drawer's comparison
+builder shows the expression it is stored as, **Write as an expression** opens an expression field
+checked as it is typed (diagnostics under their line and column, the site's bindings and functions
+beneath), and its **Preview** runs the draft; the rule's blade shows its criteria as code (#960). The
+choices behind the engine and its first consumer are [ADR-0146](/architecture/decisions/#adr-0146-expressions-run-on-pinned-expr-with-an-allowlist-and-per-site-budgets-and-rule-criteria-are-expressions).
 The **selector** picks the components a rule watches: those whose type falls within a listed component
 type, and those listed by id; empty, every component. A rule outlives what it points at: deleting a
 component or a key it reads leaves it editable, and it simply matches nothing.
@@ -308,7 +374,7 @@ it fills; a lesser alarm degrades it but leaves it in place. When it does drop o
 that matters is the role's **impact** ([health](/architecture/health/)).
 
 :::design[The rest of the event rule (ADR-0050)]
-Still design: **expression criteria** and an **expression selector** (`scope:
+Still design: an **expression selector** (`scope:
 'component.template == "polaris-dsp-16"'`, fan-out, one alarm per match) once the engine lands (#524);
 a **window** (`window: { reduce: avg, over: 10m }`) aggregating the input before the criteria; a rule
 **suppressible by name through the cascade** ([cascade](/architecture/cascade/)), so a high-weight group
@@ -549,8 +615,8 @@ upgrade backfilled from the rule-raised alarms open at the time. The severity re
   table="event_rule"
   notes={{
     sample_key: 'The property or metric it reads, by name; sample_lane records which registry',
-    fire_criteria: 'The comparison that opens an alarm ({op, value}); jsonb so the expression leaf drops in (#524)',
-    clear_criteria: 'NULL: clears on the negation of fire_criteria',
+    fire_criteria: 'The expression the condition starts on, {"expr": "..."} (#957); the short form {op, value} is lowered to it on input',
+    clear_criteria: 'The expression it ends on, {"expr": "..."}; NULL clears on the negation of fire_criteria',
     selector: 'Component types and components it watches; empty, every component',
     severity: 'The level its alarms are raised at, by name; NULL is an informational rule, which raises no alarm',
     fire_event_type_id: 'The event type written when the condition starts (FK event_type, required)',

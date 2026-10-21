@@ -1,7 +1,9 @@
 import { api } from "../api/client";
 import type { components } from "../api/schema.gen";
 import type { SeverityLevel } from "./severity";
+import type { PreviewEventRule } from "./expressions";
 import { rel } from "./format";
+import { entityNameError } from "./names";
 
 // The event rules data layer (#918, #921; ADR-0144): thin typed wrappers over
 // /event-rules plus the pure core the Rules page reads a rule through. A rule
@@ -18,8 +20,12 @@ import { rel } from "./format";
 // rules are unit-tested without a component.
 
 export type EventRule = components["schemas"]["EventRuleBody"];
+// A stored criterion is an expression (#957); a body may still send the short
+// form {op, value}, which the server lowers (eq "down" is value == "down").
 export type RuleCriteria = components["schemas"]["CriteriaBody"];
-export type RuleOp = RuleCriteria["op"];
+export type RuleCriteriaInput = components["schemas"]["CriteriaInput"];
+export type RuleOp = NonNullable<RuleCriteriaInput["op"]>;
+export type ShortForm = { op: RuleOp; value: string | number };
 export type RuleLane = EventRule["sample_lane"];
 export type RuleState = components["schemas"]["EventRuleStateOutputBody"];
 export type RuleOpenAlarm = components["schemas"]["RuleOpenAlarmBody"];
@@ -62,6 +68,16 @@ export async function updateEventRule(name: string, body: UpdateEventRule): Prom
   return data as EventRule;
 }
 
+// renameEventRule moves an operator rule's name (#977). Its own custom method,
+// not a PATCH field: the name is the address an operator types, and every
+// reference inside the platform holds the rule's uuid, so nothing there moves
+// with it. The answer carries the uuid.
+export async function renameEventRule(name: string, to: string): Promise<EventRule> {
+  const { data, error } = await api.POST("/event-rules/{name}:rename", { params: { path: { name } }, body: { name: to } });
+  if (error) throw error;
+  return data as EventRule;
+}
+
 export async function deleteEventRule(name: string): Promise<void> {
   const { error } = await api.DELETE("/event-rules/{name}", { params: { path: { name } } });
   if (error) throw error;
@@ -99,13 +115,47 @@ function valueText(v: unknown): string {
   return typeof v === "string" ? v : JSON.stringify(v);
 }
 
+// shortForm reads a stored expression back as the builder's {op, value}
+// when it is one the server's lowering writes: value, a comparison, and a
+// JSON string, a number, or true or false. Anything else (an expression an
+// author wrote) has no short form: the console shows it as written and never
+// overwrites it (editing it arrives with the expression field, #960).
+const SYMBOL_OP: Record<string, RuleOp> = { "==": "eq", "!=": "ne", ">": "gt", ">=": "ge", "<": "lt", "<=": "le" };
+const LOWERED = /^value (==|!=|>=|<=|>|<) (.+)$/;
+
+export function shortForm(c: RuleCriteria | null | undefined): ShortForm | null {
+  const m = c ? LOWERED.exec(c.expr) : null;
+  if (!m) return null;
+  const lit = m[2];
+  if (lit === "true" || lit === "false") return { op: SYMBOL_OP[m[1]], value: lit };
+  // A plain decimal only: the lowering writes numbers as Postgres does, with
+  // no exponent, so a literal with one is an author's expression.
+  if (!/^("(?:[^"\\]|\\.)*"|-?\d+(\.\d+)?)$/.test(lit)) return null;
+  try {
+    const v: unknown = JSON.parse(lit);
+    return typeof v === "string" || typeof v === "number" ? { op: SYMBOL_OP[m[1]], value: v } : null;
+  } catch {
+    return null;
+  }
+}
+
+// criteriaErrorWords says where a rule's criteria failed to compile: "fire
+// criteria, line 1, column 7", the position only when it has one.
+export function criteriaErrorWords(e: NonNullable<EventRule["criteria_error"]>): string {
+  const where = e.field === "clear_criteria" ? "clear criteria" : "fire criteria";
+  return e.line ? `${where}, line ${e.line}, column ${e.column}` : where;
+}
+
 // criteriaPhrase is the value half of a criterion: "down", "anything but up",
-// "above 40". A metric's unit rides after its number when the registry names one.
+// "above 40". A metric's unit rides after its number when the registry names
+// one; an expression with no short form reads as itself.
 export function criteriaPhrase(c: RuleCriteria, lane: RuleLane, unit?: string): string {
-  const v = valueText(c.value);
-  if (lane === "property") return c.op === "ne" ? `anything but ${v}` : v;
+  const sf = shortForm(c);
+  if (!sf) return c.expr;
+  const v = valueText(sf.value);
+  if (lane === "property") return sf.op === "ne" ? `anything but ${v}` : v;
   const n = unit ? `${v} ${unit}` : v;
-  switch (c.op) {
+  switch (sf.op) {
     case "gt": return `above ${n}`;
     case "ge": return `at or above ${n}`;
     case "lt": return `below ${n}`;
@@ -141,9 +191,21 @@ export type RuleDraft = {
   lane: RuleLane;
   fireOp: RuleOp;
   fireValue: string;
+  // fireExpr is a stored fire expression the builder cannot say (no short
+  // form), kept as written; null when the builder's op and value are it.
+  fireExpr: string | null;
   clearMode: ClearMode;
   clearOp: RuleOp;
   clearValue: string;
+  clearExpr: string | null;
+  // A side whose stored criteria do not compile (criteria_error): it opens as
+  // an expression and is always sent, so a save repairs it or is judged anew.
+  fireBroken: boolean;
+  clearBroken: boolean;
+  // The last expression on a side that the builder could not say, kept when
+  // switching to the builder and restored when switching back.
+  fireKept: string | null;
+  clearKept: string | null;
   fireSustain: string;
   clearSustain: string;
   severity: string;
@@ -173,7 +235,8 @@ export const GENERIC_CLEAR_EVENT_TYPE = "condition-ended";
 export function emptyDraft(severity = ""): RuleDraft {
   return {
     name: "", label: "", description: "", sampleKey: "", lane: "property",
-    fireOp: "eq", fireValue: "", clearMode: "opposite", clearOp: "eq", clearValue: "",
+    fireOp: "eq", fireValue: "", fireExpr: null, clearMode: "opposite", clearOp: "eq", clearValue: "", clearExpr: null,
+    fireBroken: false, clearBroken: false, fireKept: null, clearKept: null,
     fireSustain: "", clearSustain: "", severity, fireEventType: GENERIC_FIRE_EVENT_TYPE,
     clearEventType: GENERIC_CLEAR_EVENT_TYPE, message: "", enabled: true,
     componentTypes: [], components: [],
@@ -181,17 +244,30 @@ export function emptyDraft(severity = ""): RuleDraft {
 }
 
 export function draftFromRule(r: EventRule): RuleDraft {
+  const fireBroken = r.criteria_error?.field === "fire_criteria";
+  const clearBroken = r.criteria_error?.field === "clear_criteria";
+  // A broken side opens as the expression it is stored as, whether or not
+  // the builder could parse it: the builder would hide what is wrong.
+  const fire = fireBroken ? null : shortForm(r.fire_criteria);
+  const clear = r.clear_criteria && !clearBroken ? shortForm(r.clear_criteria) : null;
   return {
     name: r.name,
     label: r.label ?? "",
     description: r.description ?? "",
     sampleKey: r.sample_key,
     lane: r.sample_lane,
-    fireOp: r.fire_criteria.op,
-    fireValue: valueText(r.fire_criteria.value),
+    fireOp: fire?.op ?? "eq",
+    fireValue: fire ? valueText(fire.value) : "",
+    // An empty expression is no expression: the builder owns it.
+    fireExpr: fire ? null : r.fire_criteria.expr || null,
     clearMode: r.clear_criteria ? "custom" : "opposite",
-    clearOp: r.clear_criteria?.op ?? "eq",
-    clearValue: r.clear_criteria ? valueText(r.clear_criteria.value) : "",
+    clearOp: clear?.op ?? "eq",
+    clearValue: clear ? valueText(clear.value) : "",
+    clearExpr: r.clear_criteria && !clear ? r.clear_criteria.expr || null : null,
+    fireBroken,
+    clearBroken,
+    fireKept: null,
+    clearKept: null,
     fireSustain: sustainWords(r.fire_sustain),
     clearSustain: sustainWords(r.clear_sustain),
     severity: r.severity ?? "",
@@ -244,25 +320,29 @@ export function readValue(raw: string, lane: RuleLane): { value?: string | numbe
   return { value: Number(raw), error: null };
 }
 
-const NAME = /^[a-z0-9]+(-[a-z0-9]+)*$/;
+export type DraftErrors = Partial<Record<"name" | "sampleKey" | "fireValue" | "clearValue" | "fireExpr" | "clearExpr" | "fireSustain" | "clearSustain" | "fireEventType", string>>;
 
-export type DraftErrors = Partial<Record<"name" | "sampleKey" | "fireValue" | "clearValue" | "fireSustain" | "clearSustain" | "fireEventType", string>>;
-
-// validateDraft is the form's one judgement, shared by create and edit (the
-// name is create-only, so edit skips it). No severity is a choice, not a gap:
-// "None (informational)" makes a rule that records its events and raises no
-// alarm (#951). The fire event type is required; the clear one is optional.
-export function validateDraft(d: RuleDraft, mode: "create" | "edit"): DraftErrors {
+// validateDraft is the form's one judgement, shared by create and edit.
+// editing names the rule being edited: an edit may rename it (#977), and its
+// name is judged only when it changed, by the shared entity name rule the
+// server applies (names.ts), so a stored name stays saveable as it is. No
+// severity is a choice, not a gap: "None (informational)" makes a rule that
+// records its events and raises no alarm (#951). The fire event type is
+// required; the clear one is optional.
+export function validateDraft(d: RuleDraft, editing?: string): DraftErrors {
   const e: DraftErrors = {};
-  if (mode === "create") {
-    if (!d.name.trim()) e.name = "A name for the rule.";
-    else if (!NAME.test(d.name.trim())) e.name = "Lowercase letters, digits and single hyphens, e.g. too-hot.";
-  }
+  const name = d.name.trim();
+  if (!name) e.name = "A name for the rule.";
+  else if (name !== editing && entityNameError(name)) e.name = entityNameError(name)!;
   if (!d.sampleKey) e.sampleKey = "The property or metric the rule reads.";
   else {
     const f = readValue(d.fireValue, d.lane);
-    if (f.error) e.fireValue = f.error;
-    if (d.clearMode === "custom") {
+    if (d.fireExpr !== null) {
+      if (!d.fireExpr.trim()) e.fireExpr = "An expression that is true when the condition starts.";
+    } else if (f.error) e.fireValue = f.error;
+    if (d.clearMode === "custom" && d.clearExpr !== null) {
+      if (!d.clearExpr.trim()) e.clearExpr = "An expression that is true when the condition ends.";
+    } else if (d.clearMode === "custom") {
       const c = readValue(d.clearValue, d.lane);
       if (c.error) e.clearValue = c.error;
     }
@@ -277,9 +357,12 @@ export function validateDraft(d: RuleDraft, mode: "create" | "edit"): DraftError
 
 const sustainOut = (s: string) => (s.trim() === "" || s.trim() === "0" ? "0s" : s.trim());
 
-function criteria(op: RuleOp, raw: string, lane: RuleLane): RuleCriteria {
+function criteria(op: RuleOp, raw: string, lane: RuleLane): RuleCriteriaInput {
   return { op, value: readValue(raw, lane).value };
 }
+
+const fireOut = (d: RuleDraft): RuleCriteriaInput => (d.fireExpr !== null ? { expr: d.fireExpr } : criteria(d.fireOp, d.fireValue, d.lane));
+const clearOut = (d: RuleDraft): RuleCriteriaInput => (d.clearExpr !== null ? { expr: d.clearExpr } : criteria(d.clearOp, d.clearValue, d.lane));
 
 // createBody: the POST a valid draft sends. Optional text is left off when blank;
 // a clear criterion rides only when the author chose one (absent clears on the
@@ -288,7 +371,7 @@ export function createBody(d: RuleDraft): CreateEventRule {
   const body: CreateEventRule = {
     name: d.name.trim(),
     sample_key: d.sampleKey,
-    fire_criteria: criteria(d.fireOp, d.fireValue, d.lane),
+    fire_criteria: fireOut(d),
     fire_sustain: sustainOut(d.fireSustain),
     clear_sustain: sustainOut(d.clearSustain),
     fire_event_type: d.fireEventType,
@@ -301,12 +384,16 @@ export function createBody(d: RuleDraft): CreateEventRule {
   if (d.label.trim()) body.label = d.label.trim();
   if (d.description.trim()) body.description = d.description.trim();
   if (d.message.trim()) body.message = d.message.trim();
-  if (d.clearMode === "custom") body.clear_criteria = criteria(d.clearOp, d.clearValue, d.lane);
+  if (d.clearMode === "custom") body.clear_criteria = clearOut(d);
   return body;
 }
 
-const sameCriteria = (a: RuleCriteria | undefined, b: RuleCriteria | undefined) =>
-  a?.op === b?.op && JSON.stringify(a?.value) === JSON.stringify(b?.value);
+// sameCriteria compares the builder's short form with a stored expression by
+// reading the expression back (shortForm), not by re-lowering it here.
+const sameCriteria = (a: RuleCriteriaInput, b: RuleCriteria | null | undefined) => {
+  const sf = shortForm(b);
+  return !!sf && sf.op === a.op && JSON.stringify(sf.value) === JSON.stringify(a.value);
+};
 const sameList = (a: string[], b: string[] | null | undefined) => a.length === (b ?? []).length && a.every((x, i) => x === b![i]);
 const sameSustain = (draft: string, stored: string | undefined) => sustainWords(sustainOut(draft)) === sustainWords(stored);
 
@@ -323,8 +410,15 @@ export function updateBody(d: RuleDraft, was: EventRule): UpdateEventRule {
   if (d.description.trim() !== (was.description ?? "")) body.description = d.description.trim();
   if (d.message.trim() !== (was.message ?? "")) body.message = d.message.trim();
   if (d.sampleKey !== was.sample_key) body.sample_key = d.sampleKey;
-  const fire = criteria(d.fireOp, d.fireValue, d.lane);
-  if (!sameCriteria(fire, was.fire_criteria)) body.fire_criteria = fire;
+  // An expression rides when it differs from the stored one; the builder's
+  // comparison when it differs from what the stored expression reads back as.
+  // A side whose stored criteria do not compile always rides.
+  if (d.fireExpr !== null) {
+    if (d.fireBroken || d.fireExpr !== was.fire_criteria.expr) body.fire_criteria = { expr: d.fireExpr };
+  } else {
+    const fire = criteria(d.fireOp, d.fireValue, d.lane);
+    if (d.fireBroken || !sameCriteria(fire, was.fire_criteria)) body.fire_criteria = fire;
+  }
   if (!sameSustain(d.fireSustain, was.fire_sustain)) body.fire_sustain = sustainOut(d.fireSustain);
   if (!sameSustain(d.clearSustain, was.clear_sustain)) body.clear_sustain = sustainOut(d.clearSustain);
   if (d.severity !== (was.severity ?? "")) body.severity = d.severity;
@@ -335,8 +429,99 @@ export function updateBody(d: RuleDraft, was: EventRule): UpdateEventRule {
     body.selector = { component_types: d.componentTypes, components: d.components };
   }
   if (d.clearMode === "custom") {
-    const clear = criteria(d.clearOp, d.clearValue, d.lane);
-    if (!sameCriteria(clear, was.clear_criteria ?? undefined)) body.clear_criteria = clear;
+    if (d.clearExpr !== null) {
+      if (d.clearBroken || d.clearExpr !== was.clear_criteria?.expr) body.clear_criteria = { expr: d.clearExpr };
+    } else {
+      const clear = criteria(d.clearOp, d.clearValue, d.lane);
+      if (d.clearBroken || !sameCriteria(clear, was.clear_criteria)) body.clear_criteria = clear;
+    }
   } else if (was.clear_criteria) body.clear_negates = true;
   return body;
+}
+
+// ---- criteria as expressions (#960) ------------------------------------------
+
+const OP_SYMBOL: Record<RuleOp, string> = { eq: "==", ne: "!=", gt: ">", ge: ">=", lt: "<", le: "<=" };
+
+// lowerShort is the expression the server stores a comparison as (rules.Lower
+// in internal/rules): text JSON-quoted, a number made a float literal, a bool
+// property's threshold that is neither true nor false the constant it always
+// meant. The builder shows it beneath the comparison, so the short form
+// teaches the language. Null when the comparison has no value yet.
+export function lowerShort(op: RuleOp, value: string | number | undefined, lane: RuleLane, dataType?: string): string | null {
+  if (value === undefined || value === "") return null;
+  const sym = OP_SYMBOL[op];
+  if (lane === "metric") {
+    if (typeof value !== "number" || !Number.isFinite(value)) return null;
+    const n = plainDecimal(JSON.stringify(value));
+    return `value ${sym} ${n.includes(".") ? n : `${n}.0`}`;
+  }
+  const text = String(value);
+  if (dataType === "bool") {
+    if (text === "true" || text === "false") return `value ${sym} ${text}`;
+    return op === "eq" ? "false" : "true";
+  }
+  return `value ${sym} ${JSON.stringify(text)}`;
+}
+
+type Side = "fire" | "clear";
+
+// plainDecimal writes a JSON number as the server's lowering does (rules
+// decimal(), after Postgres's jsonb numbers): a plain decimal, no exponent,
+// keeping the input's scale less its exponent, no sign on zero.
+export function plainDecimal(num: string): string {
+  let sign = "";
+  if (num.startsWith("-")) [sign, num] = ["-", num.slice(1)];
+  let exp = 0;
+  const e = num.search(/[eE]/);
+  if (e >= 0) {
+    exp = parseInt(num.slice(e + 1).replace(/^\+/, ""), 10);
+    num = num.slice(0, e);
+  }
+  const [intPart, frac = ""] = num.split(".");
+  const digits = intPart + frac;
+  const point = intPart.length + exp;
+  const scale = Math.max(0, frac.length - exp);
+  let whole: string;
+  let fraction = "";
+  if (point <= 0) [whole, fraction] = ["0", "0".repeat(-point) + digits];
+  else if (point >= digits.length) whole = digits + "0".repeat(point - digits.length);
+  else [whole, fraction] = [digits.slice(0, point), digits.slice(point)];
+  fraction = fraction.slice(0, scale);
+  whole = whole.replace(/^0+/, "") || "0";
+  if (/^0*$/.test(whole + fraction)) sign = "";
+  return fraction ? `${sign}${whole}.${fraction}` : `${sign}${whole}`;
+}
+
+// toExpression switches one criterion to an expression: the one kept from a
+// switch the builder could not say, else what its comparison lowers to (or
+// empty when it has none yet).
+export function toExpression(d: RuleDraft, side: Side, dataType?: string): RuleDraft {
+  const op = side === "fire" ? d.fireOp : d.clearOp;
+  const raw = side === "fire" ? d.fireValue : d.clearValue;
+  const kept = side === "fire" ? d.fireKept : d.clearKept;
+  const expr = kept ?? lowerShort(op, readValue(raw, d.lane).value, d.lane, dataType) ?? "";
+  return side === "fire" ? { ...d, fireExpr: expr, fireKept: null } : { ...d, clearExpr: expr, clearKept: null };
+}
+
+// toBuilder switches one criterion back to the comparison builder: the
+// expression's own comparison when it is one; else the builder's last, and
+// the expression is kept to come back on the next switch.
+export function toBuilder(d: RuleDraft, side: Side): RuleDraft {
+  const expr = side === "fire" ? d.fireExpr : d.clearExpr;
+  const sf = expr === null ? null : shortForm({ expr });
+  const kept = sf || !expr ? null : expr;
+  if (side === "fire") return { ...d, fireExpr: null, fireKept: kept, ...(sf ? { fireOp: sf.op, fireValue: valueText(sf.value) } : {}) };
+  return { ...d, clearExpr: null, clearKept: kept, ...(sf ? { clearOp: sf.op, clearValue: valueText(sf.value) } : {}) };
+}
+
+// previewBody is the draft as a candidate rule for POST /event-rules:preview:
+// what it reads, what it watches and its criteria, as a save would send them.
+export function previewBody(d: RuleDraft): PreviewEventRule {
+  return {
+    sample_key: d.sampleKey,
+    selector: { component_types: d.componentTypes, components: d.components },
+    fire_criteria: fireOut(d),
+    clear_criteria: d.clearMode === "custom" ? clearOut(d) : undefined,
+  };
 }

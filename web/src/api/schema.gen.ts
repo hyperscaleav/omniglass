@@ -1211,7 +1211,7 @@ export interface paths {
         put?: never;
         /**
          * Create an event rule
-         * @description Authors a rule whose condition starts on each component it watches when its sample key meets the fire criteria for the fire sustain, and ends when the clear criteria (or the negation of fire) holds for the clear sustain. It names the event type it writes when the condition starts (required) and, optionally, when it ends; with a severity it also raises an alarm while the condition holds, and without one it is informational. The key must be a registered property or metric, the criteria evaluable on its lane, the event types registered and the severity, when given, a level that exists (else 422); a name already taken is a 409. Audited. Gated by rule:create, with an all-scope grant.
+         * @description Authors a rule whose condition starts on each component it watches when its sample key meets the fire criteria for the fire sustain, and ends when the clear criteria (or the negation of fire) holds for the clear sustain. It names the event type it writes when the condition starts (required) and, optionally, when it ends; with a severity it also raises an alarm while the condition holds, and without one it is informational. Criteria are expressions over the sample (value, key, instance, component.name, component.type) yielding true or false; a body may give {expr} or the short form {op, value}, and the answer is always {expr}. The key must be a registered property or metric, the criteria must compile against its lane (an unknown name or a result that is not a bool is a 422 naming the criteria, line and column), the event types registered and the severity, when given, a level that exists (else 422); a name already taken is a 409. Audited. Gated by rule:create, with an all-scope grant.
          */
         post: operations["create-event-rule"];
         delete?: never;
@@ -1243,7 +1243,7 @@ export interface paths {
         head?: never;
         /**
          * Update an event rule
-         * @description Patches a rule (an absent field is unchanged), bumping its version; disabling it stops new opens. An empty severity makes the rule informational and an empty clear_event_type drops its clear event; the fire event type cannot be emptied (422). Official rules are read-only (409). Audited. Gated by rule:update, with an all-scope grant.
+         * @description Patches a rule (an absent field is unchanged), bumping its version; disabling it stops new opens. Criteria take {expr} or the short form {op, value}, compiled as on create (a 422 names the criteria, line and column). An empty severity makes the rule informational and an empty clear_event_type drops its clear event; the fire event type cannot be emptied (422). Official rules are read-only (409). Audited. Gated by rule:update, with an all-scope grant.
          */
         patch: operations["update-event-rule"];
         trace?: never;
@@ -1262,6 +1262,46 @@ export interface paths {
         get: operations["get-event-rule-state"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/event-rules/{name}:rename": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Rename an event rule
+         * @description Moves an operator rule's name, the address an operator types. A separate act from an update, because it breaks bookmarks and integration config outside this system; inside it nothing breaks, since every reference holds the rule's uuid (an alarm's raised_by_rule_id and dedup key, a condition, a streak, an event's derived_by_rule_id). Not a material change: no version bump, streaks keep running and conditions stay in force. An event keeps the name it was written under (derived_by_rule); the rule's next events carry the new one. An official rule keeps its name (409), a taken name is a 409, an illegal or uuid-shaped one a 422. Returns the rule with its uuid. Audited. Gated by rule:update, with an all-scope grant.
+         */
+        post: operations["rename-event-rule"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/event-rules:preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview an event rule
+         * @description Judges a candidate rule (sample key, selector, criteria) without writing anything, as the ingest would have with no sustains (the answer says they are ignored): over each series it selects on components the caller may read, from the state its newest deciding sample in the 7 days before the window set (state_unknown when there is none), through every sample in the last 24 hours that the ingest would have judged (a late sample older than one before it decides nothing). Answers the edges it would have written and the series it would hold in force now. Its reads are index probes per series, capped at row_cap window samples taken a whole series at a time: series_judged of series_total, and truncated when the cap stopped it. A selector naming a component the caller cannot read is the same 422 as one that does not exist. Criteria take {expr} or {op, value}; one that does not compile is a 422 naming the criteria, line and column. Gated by rule:read.
+         */
+        post: operations["preview-event-rule"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1318,6 +1358,26 @@ export interface paths {
          * @description Patches a custom event type's label, description, or payload schema (a nil field is unchanged). The name is fixed at creation. Official event types are read-only. Gated by event_type:update.
          */
         patch: operations["update-event-type"];
+        trace?: never;
+    };
+    "/expressions:validate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Validate an expression
+         * @description Compiles an expression against a registered site's environment and answers whether it compiles, with positioned diagnostics, and the site's bindings, admitted builtins and run budget, all generated from the site's declaration. For criteria a sample key is required, and types the value (a metric is a number; a property is text, or a bool for a bool property); the answer's value_type so reveals a key's lane and data type to a rule:read holder, as the rule list already does. Compiles without the engine's program cache and stores and runs nothing. An unknown site, a missing or unknown key is a 422. Gated by rule:read.
+         */
+        post: operations["validate-expression"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/files": {
@@ -4928,8 +4988,8 @@ export interface components {
              * @example /api/v1/schemas/CreateEventRuleInputBody.json
              */
             readonly $schema?: string;
-            /** @description The criteria that clears it: {op, value}; absent clears on the negation of fire_criteria */
-            clear_criteria?: components["schemas"]["CriteriaBody"];
+            /** @description The criteria that ends it: {expr} or {op, value}; absent clears on the negation of fire_criteria, !(fire) */
+            clear_criteria?: components["schemas"]["CriteriaInput"];
             /** @description The event type the rule writes when its condition ends, by name (condition-ended is the generic one); absent, it writes none */
             clear_event_type?: string;
             /** @description A Go duration; empty is 0s */
@@ -4938,8 +4998,8 @@ export interface components {
             description?: string;
             /** @description Defaults to true */
             enabled?: boolean;
-            /** @description The criteria that opens an alarm: {op, value} */
-            fire_criteria: components["schemas"]["CriteriaBody"];
+            /** @description The criteria that starts the condition: {expr}, or the short form {op, value} */
+            fire_criteria: components["schemas"]["CriteriaInput"];
             /** @description The event type the rule writes when its condition starts, by name (condition-started is the generic one) */
             fire_event_type: string;
             /** @description A Go duration; empty is 0s */
@@ -5400,13 +5460,37 @@ export interface components {
             website?: string;
         };
         CriteriaBody: {
+            /** @description The criterion, an expression over the sample (value, key, instance, component.name, component.type) that yields true or false, e.g. value > 80 && instance != "aux" */
+            expr: string;
+        };
+        CriteriaErrorBody: {
             /**
-             * @description The comparison: a property compares text with eq or ne; a metric compares numbers with any of them
+             * Format: int64
+             * @description The 1-based column of the fault, when it has one
+             */
+            column?: number;
+            /**
+             * @description Which criteria
              * @enum {string}
              */
-            op: "eq" | "ne" | "gt" | "ge" | "lt" | "le";
-            /** @description The threshold: text for a property, a number for a metric */
-            value: unknown;
+            field: "fire_criteria" | "clear_criteria";
+            /**
+             * Format: int64
+             * @description The 1-based line of the fault, when it has one
+             */
+            line?: number;
+            message: string;
+        };
+        CriteriaInput: {
+            /** @description The criterion as an expression over the sample (value, key, instance, component.name, component.type), yielding true or false; give this or op and value */
+            expr?: string;
+            /**
+             * @description The short form's comparison: a property compares text with eq or ne; a metric compares numbers with any of them
+             * @enum {string}
+             */
+            op?: "eq" | "ne" | "gt" | "ge" | "lt" | "le";
+            /** @description The short form's threshold: text for a property, a number for a metric */
+            value?: unknown;
         };
         DownloadFileOutputBody: {
             /**
@@ -5734,6 +5818,8 @@ export interface components {
              * @description How many conditions the rule holds in force right now, one per component and instance, whether or not it raises an alarm (GET /event-rules/{name}/state lists them)
              */
             conditions_in_force: number;
+            /** @description Why the rule's stored criteria do not compile (its key's data type changed under them, or a row the backfill left in short form); absent when they compile. While present the rule holds: it judges nothing */
+            criteria_error?: components["schemas"]["CriteriaErrorBody"];
             description?: string;
             enabled: boolean;
             /** @description When the sample meets this for fire_sustain, the rule's condition starts (and it opens an alarm when it names a severity) */
@@ -5791,6 +5877,8 @@ export interface components {
             readonly $schema?: string;
             /** @description The conditions the rule holds in force, informational or not */
             conditions: components["schemas"]["RuleConditionBody"][] | null;
+            /** @description Why the rule's stored criteria do not compile; absent when they compile. While present the rule holds */
+            criteria_error?: components["schemas"]["CriteriaErrorBody"];
             /**
              * Format: date-time
              * @description When an ingested sample was last judged by the rule, to within 5s; absent when it never has been
@@ -5826,6 +5914,46 @@ export interface components {
             readonly $schema?: string;
             component: string;
             events: components["schemas"]["EventBody"][] | null;
+        };
+        ExpressionBinding: {
+            /** @description What it holds */
+            doc?: string;
+            /** @description The name an expression uses (component.name for a nested field) */
+            name: string;
+            /** @description Its Go type */
+            type: string;
+        };
+        ExpressionBudget: {
+            /** @description The wall-clock backstop on a run's charged work, a Go duration */
+            deadline: string;
+            /**
+             * Format: int64
+             * @description The most a run may walk: the summed length of what its builtins and operators read, at least one per step
+             */
+            iterations: number;
+            /**
+             * Format: int64
+             * @description The most a run may allocate, in Expr's memory units
+             */
+            memory: number;
+        };
+        ExpressionDiagnostic: {
+            /**
+             * Format: int64
+             * @description The 1-based column of the fault; 0 when it has none
+             */
+            column: number;
+            /**
+             * Format: int64
+             * @description The 1-based line of the fault; 0 when it has none (a length cap)
+             */
+            line: number;
+            message: string;
+            /**
+             * @description Where it failed: parse (syntax), type (an unknown name, a mismatched type, a result that is not the site's), or limit (a cap)
+             * @enum {string}
+             */
+            phase: "parse" | "type" | "limit";
         };
         FileBody: {
             /**
@@ -6952,6 +7080,96 @@ export interface components {
             /** @description The bound value */
             value: string;
         };
+        PreviewEdgeBody: {
+            /**
+             * Format: date-time
+             * @description The sample that moved it
+             */
+            at: string;
+            /** @description The component, by name */
+            component: string;
+            /** @description The component's uuid */
+            component_id: string;
+            /** @description The sample instance (an endpoint) */
+            instance?: string;
+            /**
+             * @description Which edge
+             * @enum {string}
+             */
+            kind: "fire" | "clear";
+        };
+        PreviewEventRuleInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/PreviewEventRuleInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description The criteria it ends on; absent, the negation of fire_criteria */
+            clear_criteria?: components["schemas"]["CriteriaInput"];
+            /** @description Accepted and ignored, like fire_sustain */
+            clear_sustain?: string;
+            /** @description The criteria its condition starts on: {expr}, or the short form {op, value} */
+            fire_criteria: components["schemas"]["CriteriaInput"];
+            /** @description Accepted so a rule body previews as it is, and ignored: a preview judges each sample alone */
+            fire_sustain?: string;
+            /** @description The property or metric the candidate rule reads */
+            sample_key: string;
+            /** @description The components it watches; absent or empty, every component */
+            selector?: components["schemas"]["SelectorBody"];
+        };
+        PreviewEventRuleOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/PreviewEventRuleOutputBody.json
+             */
+            readonly $schema?: string;
+            /** @description The edges it would have written over the window, in series and time order */
+            edges: components["schemas"]["PreviewEdgeBody"][] | null;
+            /** @description The series the candidate would hold in force now */
+            in_force_now: components["schemas"]["PreviewSeriesBody"][] | null;
+            /**
+             * Format: int64
+             * @description The most window samples it reads, a whole series at a time
+             */
+            row_cap: number;
+            /**
+             * Format: int64
+             * @description How many of the selected series it judged whole
+             */
+            series_judged: number;
+            /**
+             * Format: int64
+             * @description How many series the candidate selects, on components the caller may read
+             */
+            series_total: number;
+            /** @description The series with no sample that fires or clears in the 7 days before the window: their first such sample in the window set their state without an edge, since whether it moved anything is not known */
+            state_unknown: components["schemas"]["PreviewSeriesBody"][] | null;
+            /** @description Always true: each sample is judged alone, so a sustain that would have held an edge back is not applied */
+            sustains_ignored: boolean;
+            /** @description The row cap stopped it before every series: series_judged of series_total were judged */
+            truncated: boolean;
+            /** @description How far back it judged, a Go duration */
+            window: string;
+            /** Format: date-time */
+            window_since: string;
+            /** Format: date-time */
+            window_until: string;
+        };
+        PreviewSeriesBody: {
+            /** @description The component, by name */
+            component: string;
+            /** @description The component's uuid */
+            component_id: string;
+            /** @description The sample instance (an endpoint) */
+            instance?: string;
+            /**
+             * Format: date-time
+             * @description When the window's fire edge brought it into force; absent when it was in force before the window
+             */
+            since?: string;
+        };
         PrincipalBody: {
             /**
              * Format: uri
@@ -7200,7 +7418,7 @@ export interface components {
              * @example /api/v1/schemas/RaiseAlarmInputBody.json
              */
             readonly $schema?: string;
-            /** @description The condition identity; defaults to the message. Raising an already-open (component, dedup_key) returns the existing open alarm instead of a duplicate */
+            /** @description The condition identity; defaults to the message. Raising an already-open (component, dedup_key) returns the existing open alarm instead of a duplicate. A key (or, without one, a message) beginning rule: is refused (422): that namespace names a rule's condition */
             dedup_key?: string;
             /** @description What is wrong, for the operator reading it later */
             message?: string;
@@ -7306,6 +7524,16 @@ export interface components {
              */
             readonly $schema?: string;
             /** @description The new name, unique within its placement (lowercase letters, digits, hyphens) */
+            name: string;
+        };
+        RenameEventRuleInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/RenameEventRuleInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description The rule's new name, unique among rules (lowercase letters, digits, hyphens) */
             name: string;
         };
         RenameGroupInputBody: {
@@ -8602,8 +8830,8 @@ export interface components {
              * @example /api/v1/schemas/UpdateEventRuleInputBody.json
              */
             readonly $schema?: string;
-            /** @description The criteria that clears it: {op, value}; absent clears on the negation of fire_criteria */
-            clear_criteria?: components["schemas"]["CriteriaBody"];
+            /** @description The criteria that ends it: {expr} or {op, value}; absent clears on the negation of fire_criteria, !(fire) */
+            clear_criteria?: components["schemas"]["CriteriaInput"];
             /** @description The event type the rule writes when its condition ends, by name; empty writes none */
             clear_event_type?: string;
             /** @description Drop the clear criteria, so the rule clears on the negation of its fire criteria */
@@ -8614,8 +8842,8 @@ export interface components {
             description?: string;
             /** @description Whether the rule evaluates; defaults to true on create */
             enabled?: boolean;
-            /** @description The criteria that opens an alarm: {op, value} */
-            fire_criteria?: components["schemas"]["CriteriaBody"];
+            /** @description The criteria that starts the condition: {expr}, or the short form {op, value} */
+            fire_criteria?: components["schemas"]["CriteriaInput"];
             /** @description The event type the rule writes when its condition starts, by name; it cannot be emptied */
             fire_event_type?: string;
             /** @description How long the fire criteria must hold, a Go duration (e.g. 30s); empty is 0s */
@@ -8914,6 +9142,49 @@ export interface components {
             support_phone?: string;
             /** @description A new website (http or https) */
             website?: string;
+        };
+        ValidateExpressionInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/ValidateExpressionInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description For criteria (required there), the sample key the rule reads: its lane and data type type the value (a metric is a number; a property is text, or a bool for a bool property) */
+            key?: string;
+            /**
+             * @description Where the expression is written: criteria, an event rule's fire_criteria or clear_criteria
+             * @enum {string}
+             */
+            site: "criteria";
+            /** @description The expression */
+            source: string;
+        };
+        ValidateExpressionOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/ValidateExpressionOutputBody.json
+             */
+            readonly $schema?: string;
+            /** @description The names the expression may use at the site, generated from the site's environment */
+            bindings: components["schemas"]["ExpressionBinding"][] | null;
+            /** @description What one run at the site may spend */
+            budget: components["schemas"]["ExpressionBudget"];
+            /** @description The builtin functions the site admits */
+            builtins: string[] | null;
+            /** @description Why it does not compile, with line and column; empty when ok */
+            diagnostics: components["schemas"]["ExpressionDiagnostic"][] | null;
+            /** @description Whether the expression compiles at the site */
+            ok: boolean;
+            /** @description The type the site requires the expression to yield */
+            result_type: string;
+            site: string;
+            /**
+             * @description The value type the expression was checked against (criteria)
+             * @enum {string}
+             */
+            value_type: "number" | "text" | "bool";
         };
         VariableBody: {
             /**
@@ -11612,6 +11883,75 @@ export interface operations {
             };
         };
     };
+    "rename-event-rule": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The rule's current name */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RenameEventRuleInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EventRuleBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "preview-event-rule": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PreviewEventRuleInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PreviewEventRuleOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     "list-event-type": {
         parameters: {
             query?: never;
@@ -11759,6 +12099,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EventTypeBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "validate-expression": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ValidateExpressionInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidateExpressionOutputBody"];
                 };
             };
             /** @description Error */

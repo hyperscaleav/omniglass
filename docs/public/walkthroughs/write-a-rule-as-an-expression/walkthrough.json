@@ -1,0 +1,98 @@
+{
+  "id": "write-a-rule-as-an-expression",
+  "title": "Write a rule as an expression",
+  "description": "Author an event rule's criteria as an expression, see a mistake pointed at by line and column, fix it, preview what the rule would have done over the last day, and save it.",
+  "steps": [
+    {
+      "n": 1,
+      "kind": "goto",
+      "caption": "Rules turn readings into conditions and alarms. Start a new one.",
+      "still": "step-01.png"
+    },
+    {
+      "n": 2,
+      "kind": "click",
+      "caption": "New rule opens the drawer.",
+      "still": "step-02.png"
+    },
+    {
+      "n": 3,
+      "kind": "type",
+      "caption": "Name it, the address an operator types. A rename later moves only the name; its alarms hold the rule by uuid.",
+      "still": "step-03.png"
+    },
+    {
+      "n": 4,
+      "kind": "select",
+      "caption": "It reads whether an endpoint answers, which every component reports.",
+      "still": "step-04.png"
+    },
+    {
+      "n": 5,
+      "kind": "type",
+      "caption": "The builder compares one value. Beneath it is the expression it is stored as.",
+      "still": "step-05.png"
+    },
+    {
+      "n": 6,
+      "kind": "click",
+      "caption": "Write the expression itself instead, starting from the builder's own.",
+      "still": "step-06.png"
+    },
+    {
+      "n": 7,
+      "kind": "type",
+      "caption": "Leave the aux endpoint out. The field checks the expression as it is typed.",
+      "still": "step-07.png"
+    },
+    {
+      "n": 8,
+      "kind": "wait",
+      "caption": "Unfinished, so the field points at the fault by line and column.",
+      "still": "step-08.png"
+    },
+    {
+      "n": 9,
+      "kind": "type",
+      "caption": "Finish it. Beneath are the names it may use and the functions it may call.",
+      "still": "step-09.png"
+    },
+    {
+      "n": 10,
+      "kind": "wait",
+      "caption": "It compiles and yields true or false, as a rule's criteria must.",
+      "still": "step-10.png"
+    },
+    {
+      "n": 11,
+      "kind": "click",
+      "caption": "Preview runs the draft against the last day of samples, writing nothing.",
+      "still": "step-11.png"
+    },
+    {
+      "n": 12,
+      "kind": "wait",
+      "caption": "What it would hold in force now, and the edges it would have written. Sustains are ignored.",
+      "still": "step-12.png"
+    },
+    {
+      "n": 13,
+      "kind": "click",
+      "caption": "Save it. The rule judges every sample from now on.",
+      "still": "step-13.png"
+    },
+    {
+      "n": 14,
+      "kind": "wait",
+      "caption": "Its blade shows the criteria as the expressions it judges by.",
+      "still": "step-14.png"
+    }
+  ],
+  "poster": "step-12.png",
+  "preview": "preview.webp",
+  "budget": {
+    "seconds": 44.8,
+    "bytes": 1000313,
+    "previewBytes": 958766
+  }
+}

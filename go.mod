@@ -5,6 +5,7 @@ go 1.25.3
 require (
 	github.com/amacneil/dbmate/v2 v2.33.0
 	github.com/danielgtaylor/huma/v2 v2.38.0
+	github.com/expr-lang/expr v1.17.8
 	github.com/go-chi/chi/v5 v5.2.5
 	github.com/google/nftables v0.3.0
 	github.com/google/uuid v1.6.0

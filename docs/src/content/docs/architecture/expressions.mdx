@@ -1,0 +1,131 @@
+---
+title: Expressions
+description: "Omniglass expressions: one engine built on Expr and extended with Omniglass functions, behind every operator-authored expression leaf."
+sidebar:
+  badge:
+    text: Partial
+    variant: note
+---
+
+import ExpressionSites from '../../../components/ExpressionSites.astro';
+
+Expressions let an operator reshape and judge collected values in plain text wherever the
+platform needs a small computation, with exactly one language to learn: every site goes through
+**one engine, Omniglass expressions**, built on **Expr**
+([expr-lang/expr](https://github.com/expr-lang/expr), pinned at v1.17.8). The engine is
+`internal/expression` (#524); its first consumer is the event rule's criteria
+([alarms and actions](/architecture/alarms-actions/#the-event_rule)).
+
+## Compiling, once
+
+A site declares its environment as a Go struct (the names an expression may use, their types and
+docs), the type an expression must yield (a criteria yields true or false), the builtins it admits
+and its run budget. An expression compiles against that declaration: a name outside it, a result of
+another type, or a parse error is refused with a **diagnostic** carrying the line, the column and an
+operator-readable message (a nested binding is named by its path, `component`, never by a Go type).
+A compiled program is **cached** by its source and its site's declaration in a bounded cache, so a
+hot path (a criteria judged per sample) never recompiles; an event rule also holds its compiled
+criteria per rule version, a failed compile included.
+
+## Safety
+
+Expressions are **sandboxed**: no I/O, no network, no unbounded loops, bounded execution.
+
+- **An allowlist of builtins.** Every Expr builtin is off, and **each site declares the builtins it
+  admits**. A builtin is admitted only once vetted: its cost linear in what the run is charged for,
+  its output no larger than its inputs. The criteria set is comparison, arithmetic, `in`, `contains`
+  / `startsWith` / `endsWith`, `matches` with a constant pattern (capped in compiled size, and charged
+  its subject's length times that size), `len`, `abs` / `ceil` / `floor` / `round` / `min` / `max`
+  on numbers only, `lower` / `upper` / `trim` / `trimPrefix` / `trimSuffix`, and `all` / `any` /
+  `none` / `one` / `count` / `filter` over a bound list with no predicate nested in another.
+  Equality and `in` take scalars and lists of scalars (and a key in a map), never a record, a map,
+  or a list of lists, whose deep comparison no charge covers. Builders and encoders (`map`,
+  `reduce`, `repeat`, `replace`, `join`, `uniq`, `flatten`, `toJSON`, the range `..`) are never
+  admitted: their cost is native work that no input charge bounds.
+- **Determinism.** The clock and zone builtins (**`now`**, **`date`**, **`duration`**,
+  **`timezone`**) can never be vetted; a time an expression needs is bound by its caller as data.
+  An expression calls builtins only, never a method or a bound value, and a site's environment
+  holds concrete data types (no interface, so no value whose behavior is chosen at run time). A `$`
+  name (Expr's dynamic `$env`, or the engine's own plumbing) is refused, so a site's bindings are
+  the whole namespace.
+- **Caps and budgets.** A source is at most 4096 bytes and 1000 syntax nodes, and a list or map
+  literal at most 64 entries. A run is bounded by **its site's budget** of what it allocates and
+  what it walks, deterministically; a criteria's is small, and no site's exceeds a fixed ceiling. A
+  wall-clock deadline backs the budget for charged work only: it cannot interrupt a native call,
+  which is why the allowlist exists.
+- **Values are data.** A value bound in the environment (a sample's text, however hostile) is
+  evaluated literally and never executed. Integer arithmetic wraps on overflow, as Go's does,
+  rather than failing.
+
+## Sites: the bindings, builtins and budget of each
+
+Each place an expression is written is a **site**, declared once in code. The tables below are
+generated from those declarations (`make gen`), and **`POST /expressions:validate`** (`omniglass
+expression validate`, gated `rule:read`) answers from the same ones: given a site, a source and,
+for criteria, the sample key, it says whether the expression compiles, with each diagnostic's line
+and column, and returns the site's bindings, builtins and budget. The console's **expression field**
+(the rule drawer's **Write as an expression**, #960) is that route's face: the source in a monospace
+field checked as it is typed, each diagnostic pointed at under its line and column, and the site's
+bindings and functions listed beneath with their docs. Built today:
+
+<ExpressionSites />
+
+:::design[Target design: the rest of the expression engine, tracked in #524]
+
+## Extended with Omniglass functions
+
+Expr is the core, chosen because it is transform-oriented, fast, and sandboxable: a rich operator
+set suited to reshaping collected values (`raw / 100.0`, `int(groups[1])`, `groups[2] == 'true'`).
+On top ride **Omniglass functions**: helpers Expr does not ship, including frame **`encode` /
+`decode`** and the output-format helpers (**hex / ascii / base64**) that binary and raw-TCP
+protocols need, each vetted into the sites that need it. The engine is **not pluggable**: one
+dialect everyone authors in; where an expression is not even needed, prefer a straightforward
+native path.
+
+## Unit conversion: `convert(value, "<unit>")`
+
+Stored values are always in their `property_type`'s **canonical unit**; **`convert(value,
+"<unit>")`** lets an operator author against a non-canonical one. The **source unit is
+inferred** from the bound property's canonical unit; the **target** must be a registered unit
+in the **same family** (a compile error otherwise). The conversion comes from the
+[unit registry](/architecture/properties/#units-one-canonical-unit-per-metric): `to_canonical` /
+`from_canonical` transforms, **affine** or an **Expr** for the rare nonlinear one. So
+`convert(value, "fahrenheit") > 100` reads in Fahrenheit while storage stays in canonical
+celsius. A function rather than a per-unit method: data-driven, general, available wherever
+expressions run.
+
+## Where expressions will be used
+
+| Site | Leaf | What it evaluates |
+|---|---|---|
+| extractor | `value` | reshape a located raw value into the typed sample value |
+| step | `when` | the explicit branch guard (a false guard skips the step and dependents) |
+| `calc_rule` | `reduce` (escape), `filter` | the named reducers (`worst` / `majority` / `average`, plus windowed `time_in_state` for SLIs) and the Expr escape, with per-input filters |
+| rule | `scope` | which instances a rule fires for (the Expr scope escape) |
+| views / list | `filter` | the structured-query predicate operators compose |
+| dynamic group | membership `filter` | recomputed membership |
+
+## In-scope bindings
+
+Within a function run the engine environment exposes: `$var:<name>` (config/secret through the
+cascade), `$prop.<key>` (properties, emitted and readable for branching; was `$dp.<key>`,
+renamed with the ADR-0065 vocabulary), `$steps.<id>.*` (ephemeral scratch), `$event` (a listen
+payload), and the
+extractor-local inputs a step prepares for its `value` leaf (`raw`, `groups`, `node`, `item`).
+Rule and view contexts bind their own documented environments (the candidate entity, the
+property, the resource row).
+
+## Divergence and `disagree(A, B)`
+
+**`disagree(A, B)`** compares two provenances or sources of one key: config drift, reconcile
+conflict, and cross-source disagreement are all the one operator, surfacing **divergence**,
+the universal anomaly signal. Reading both sides as inputs (never writing a verdict back into
+either) keeps the pipeline's DAG acyclic.
+
+## Configuration values and secrets
+
+Operator-supplied configuration values are bound as **data in the environment**, never spliced
+into expression text, so a hostile value is evaluated literally and never executed. Secret
+fields rendered into a request are masked at interpolation time and never surface in a log
+line, error string, or property label.
+:::

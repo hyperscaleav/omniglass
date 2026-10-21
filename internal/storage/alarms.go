@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -89,6 +90,9 @@ type AlarmSpec struct {
 var (
 	ErrAlarmNotFound = errors.New("storage: alarm not found or already cleared")
 	ErrAlarmSeverity = errors.New("storage: unknown alarm severity")
+	// ErrAlarmInvalid is a hand raise the platform refuses (a dedup key in the
+	// rule namespace): a 422.
+	ErrAlarmInvalid = errors.New("storage: alarm is invalid")
 )
 
 // alarmCols is the read shape. acknowledged_by surfaces the acting principal's
@@ -125,6 +129,16 @@ func scanAlarm(row pgx.Row) (*Alarm, error) {
 // RaiseAlarm records a condition on a component, then recomputes the health
 // chain in the same transaction. An unknown component is ErrComponentNotFound.
 func (p *PG) RaiseAlarm(ctx context.Context, actorID, componentName string, spec AlarmSpec) (*Alarm, error) {
+	// The rule: prefix is the rule key namespace (ruleDedupKey): a hand raise
+	// keyed in it would stand in for a rule's condition, or be cleared as one.
+	// The key defaults to the message, so a message is judged the same way.
+	key := spec.DedupKey
+	if key == "" {
+		key = spec.Message
+	}
+	if strings.HasPrefix(key, "rule:") {
+		return nil, fmt.Errorf("%w: a hand-raised alarm's dedup_key (its message when none is given) may not begin rule:, which names a rule's condition", ErrAlarmInvalid)
+	}
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("storage: begin raise alarm: %w", err)

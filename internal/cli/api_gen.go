@@ -527,7 +527,7 @@ func generatedCommands() []*cobra.Command {
 							return runAPICommand(cmd, "POST", path, body)
 						},
 					}
-					cmd.Flags().StringVar(&fDedupKey, "dedup-key", "", "The condition identity; defaults to the message. Raising an already-open (component, dedup_key) returns the existing open alarm instead of a duplicate")
+					cmd.Flags().StringVar(&fDedupKey, "dedup-key", "", "The condition identity; defaults to the message. Raising an already-open (component, dedup_key) returns the existing open alarm instead of a duplicate. A key (or, without one, a message) beginning rule: is refused (422): that namespace names a rule's condition")
 					cmd.Flags().StringVar(&fMessage, "message", "", "What is wrong, for the operator reading it later")
 					cmd.Flags().StringVar(&fSeverity, "severity", "", "How bad it is: a severity level by name (see /severity-levels); a level at or above high puts the component itself in outage")
 					_ = cmd.MarkFlagRequired("severity")
@@ -2005,7 +2005,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "create",
 					Short:   "Create an event rule",
-					Long:    "Authors a rule whose condition starts on each component it watches when its sample key meets the fire criteria for the fire sustain, and ends when the clear criteria (or the negation of fire) holds for the clear sustain. It names the event type it writes when the condition starts (required) and, optionally, when it ends; with a severity it also raises an alarm while the condition holds, and without one it is informational. The key must be a registered property or metric, the criteria evaluable on its lane, the event types registered and the severity, when given, a level that exists (else 422); a name already taken is a 409. Audited. Gated by rule:create, with an all-scope grant.",
+					Long:    "Authors a rule whose condition starts on each component it watches when its sample key meets the fire criteria for the fire sustain, and ends when the clear criteria (or the negation of fire) holds for the clear sustain. It names the event type it writes when the condition starts (required) and, optionally, when it ends; with a severity it also raises an alarm while the condition holds, and without one it is informational. Criteria are expressions over the sample (value, key, instance, component.name, component.type) yielding true or false; a body may give {expr} or the short form {op, value}, and the answer is always {expr}. The key must be a registered property or metric, the criteria must compile against its lane (an unknown name or a result that is not a bool is a 422 naming the criteria, line and column), the event types registered and the severity, when given, a level that exists (else 422); a name already taken is a 409. Audited. Gated by rule:create, with an all-scope grant.",
 					Example: "  omniglass event-rule create --fire-criteria <json> --fire-event-type fire_event_type --name name --sample-key sample_key",
 					Args:    cobra.ExactArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -2056,12 +2056,12 @@ func generatedCommands() []*cobra.Command {
 						return runAPICommand(cmd, "POST", path, body)
 					},
 				}
-				cmd.Flags().StringVar(&fClearCriteria, "clear-criteria", "", "The criteria that clears it: {op, value}; absent clears on the negation of fire_criteria")
+				cmd.Flags().StringVar(&fClearCriteria, "clear-criteria", "", "The criteria that ends it: {expr} or {op, value}; absent clears on the negation of fire_criteria, !(fire)")
 				cmd.Flags().StringVar(&fClearEventType, "clear-event-type", "", "The event type the rule writes when its condition ends, by name (condition-ended is the generic one); absent, it writes none")
 				cmd.Flags().StringVar(&fClearSustain, "clear-sustain", "", "A Go duration; empty is 0s")
 				cmd.Flags().StringVar(&fDescription, "description", "", "What the rule watches for and why")
 				cmd.Flags().BoolVar(&fEnabled, "enabled", false, "Defaults to true")
-				cmd.Flags().StringVar(&fFireCriteria, "fire-criteria", "", "The criteria that opens an alarm: {op, value}")
+				cmd.Flags().StringVar(&fFireCriteria, "fire-criteria", "", "The criteria that starts the condition: {expr}, or the short form {op, value}")
 				_ = cmd.MarkFlagRequired("fire-criteria")
 				cmd.Flags().StringVar(&fFireEventType, "fire-event-type", "", "The event type the rule writes when its condition starts, by name (condition-started is the generic one)")
 				_ = cmd.MarkFlagRequired("fire-event-type")
@@ -2130,6 +2130,80 @@ func generatedCommands() []*cobra.Command {
 			return cmd
 		}())
 		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				var fClearCriteria string
+				var fClearSustain string
+				var fFireCriteria string
+				var fFireSustain string
+				var fSampleKey string
+				var fSelector string
+				cmd := &cobra.Command{
+					Use:     "preview",
+					Short:   "Preview an event rule",
+					Long:    "Judges a candidate rule (sample key, selector, criteria) without writing anything, as the ingest would have with no sustains (the answer says they are ignored): over each series it selects on components the caller may read, from the state its newest deciding sample in the 7 days before the window set (state_unknown when there is none), through every sample in the last 24 hours that the ingest would have judged (a late sample older than one before it decides nothing). Answers the edges it would have written and the series it would hold in force now. Its reads are index probes per series, capped at row_cap window samples taken a whole series at a time: series_judged of series_total, and truncated when the cap stopped it. A selector naming a component the caller cannot read is the same 422 as one that does not exist. Criteria take {expr} or {op, value}; one that does not compile is a 422 naming the criteria, line and column. Gated by rule:read.",
+					Example: "  omniglass event-rule preview --fire-criteria <json> --sample-key sample_key",
+					Args:    cobra.ExactArgs(0),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/event-rules:preview")
+						body := map[string]any{}
+						if cmd.Flags().Changed("clear-criteria") {
+							body["clear_criteria"] = jsonOrString(fClearCriteria)
+						}
+						if cmd.Flags().Changed("clear-sustain") {
+							body["clear_sustain"] = fClearSustain
+						}
+						if cmd.Flags().Changed("fire-criteria") {
+							body["fire_criteria"] = jsonOrString(fFireCriteria)
+						}
+						if cmd.Flags().Changed("fire-sustain") {
+							body["fire_sustain"] = fFireSustain
+						}
+						if cmd.Flags().Changed("sample-key") {
+							body["sample_key"] = fSampleKey
+						}
+						if cmd.Flags().Changed("selector") {
+							body["selector"] = jsonOrString(fSelector)
+						}
+						return runAPICommand(cmd, "POST", path, body)
+					},
+				}
+				cmd.Flags().StringVar(&fClearCriteria, "clear-criteria", "", "The criteria it ends on; absent, the negation of fire_criteria")
+				cmd.Flags().StringVar(&fClearSustain, "clear-sustain", "", "Accepted and ignored, like fire_sustain")
+				cmd.Flags().StringVar(&fFireCriteria, "fire-criteria", "", "The criteria its condition starts on: {expr}, or the short form {op, value}")
+				_ = cmd.MarkFlagRequired("fire-criteria")
+				cmd.Flags().StringVar(&fFireSustain, "fire-sustain", "", "Accepted so a rule body previews as it is, and ignored: a preview judges each sample alone")
+				cmd.Flags().StringVar(&fSampleKey, "sample-key", "", "The property or metric the candidate rule reads")
+				_ = cmd.MarkFlagRequired("sample-key")
+				cmd.Flags().StringVar(&fSelector, "selector", "", "The components it watches; absent or empty, every component")
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				var fName string
+				cmd := &cobra.Command{
+					Use:     "rename <name>",
+					Short:   "Rename an event rule",
+					Long:    "Moves an operator rule's name, the address an operator types. A separate act from an update, because it breaks bookmarks and integration config outside this system; inside it nothing breaks, since every reference holds the rule's uuid (an alarm's raised_by_rule_id and dedup key, a condition, a streak, an event's derived_by_rule_id). Not a material change: no version bump, streaks keep running and conditions stay in force. An event keeps the name it was written under (derived_by_rule); the rule's next events carry the new one. An official rule keeps its name (409), a taken name is a 409, an illegal or uuid-shaped one a 422. Returns the rule with its uuid. Audited. Gated by rule:update, with an all-scope grant.",
+					Example: "  omniglass event-rule rename <name> --name name",
+					Args:    cobra.ExactArgs(1),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/event-rules/%s:rename", url.PathEscape(args[0]))
+						body := map[string]any{}
+						if cmd.Flags().Changed("name") {
+							body["name"] = fName
+						}
+						return runAPICommand(cmd, "POST", path, body)
+					},
+				}
+				cmd.Flags().StringVar(&fName, "name", "", "The rule's new name, unique among rules (lowercase letters, digits, hyphens)")
+				_ = cmd.MarkFlagRequired("name")
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
 			parent := &cobra.Command{
 				Use:   "state",
 				Short: "Commands for the state resource",
@@ -2172,7 +2246,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "update <name>",
 					Short:   "Update an event rule",
-					Long:    "Patches a rule (an absent field is unchanged), bumping its version; disabling it stops new opens. An empty severity makes the rule informational and an empty clear_event_type drops its clear event; the fire event type cannot be emptied (422). Official rules are read-only (409). Audited. Gated by rule:update, with an all-scope grant.",
+					Long:    "Patches a rule (an absent field is unchanged), bumping its version; disabling it stops new opens. Criteria take {expr} or the short form {op, value}, compiled as on create (a 422 names the criteria, line and column). An empty severity makes the rule informational and an empty clear_event_type drops its clear event; the fire event type cannot be emptied (422). Official rules are read-only (409). Audited. Gated by rule:update, with an all-scope grant.",
 					Example: "  omniglass event-rule update <name>",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -2223,13 +2297,13 @@ func generatedCommands() []*cobra.Command {
 						return runAPICommand(cmd, "PATCH", path, body)
 					},
 				}
-				cmd.Flags().StringVar(&fClearCriteria, "clear-criteria", "", "The criteria that clears it: {op, value}; absent clears on the negation of fire_criteria")
+				cmd.Flags().StringVar(&fClearCriteria, "clear-criteria", "", "The criteria that ends it: {expr} or {op, value}; absent clears on the negation of fire_criteria, !(fire)")
 				cmd.Flags().StringVar(&fClearEventType, "clear-event-type", "", "The event type the rule writes when its condition ends, by name; empty writes none")
 				cmd.Flags().BoolVar(&fClearNegates, "clear-negates", false, "Drop the clear criteria, so the rule clears on the negation of its fire criteria")
 				cmd.Flags().StringVar(&fClearSustain, "clear-sustain", "", "How long the clear criteria must hold, a Go duration; empty is 0s")
 				cmd.Flags().StringVar(&fDescription, "description", "", "What the rule watches for and why")
 				cmd.Flags().BoolVar(&fEnabled, "enabled", false, "Whether the rule evaluates; defaults to true on create")
-				cmd.Flags().StringVar(&fFireCriteria, "fire-criteria", "", "The criteria that opens an alarm: {op, value}")
+				cmd.Flags().StringVar(&fFireCriteria, "fire-criteria", "", "The criteria that starts the condition: {expr}, or the short form {op, value}")
 				cmd.Flags().StringVar(&fFireEventType, "fire-event-type", "", "The event type the rule writes when its condition starts, by name; it cannot be emptied")
 				cmd.Flags().StringVar(&fFireSustain, "fire-sustain", "", "How long the fire criteria must hold, a Go duration (e.g. 30s); empty is 0s")
 				cmd.Flags().StringVar(&fLabel, "label", "", "A human label; also the alarm message when message is empty")
@@ -2367,6 +2441,48 @@ func generatedCommands() []*cobra.Command {
 				cmd.Flags().StringVar(&fDescription, "description", "", "What the occurrence means")
 				cmd.Flags().StringVar(&fLabel, "label", "", "A human label")
 				cmd.Flags().StringVar(&fPayloadSchema, "payload-schema", "", "A JSON Schema fragment (replaces wholesale)")
+				return cmd
+			}()
+			return cmd
+		}())
+		return parent
+	}())
+	roots = append(roots, func() *cobra.Command {
+		parent := &cobra.Command{
+			Use:   "expression",
+			Short: "Commands for the expression resource",
+		}
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				var fKey string
+				var fSite string
+				var fSource string
+				cmd := &cobra.Command{
+					Use:     "validate",
+					Short:   "Validate an expression",
+					Long:    "Compiles an expression against a registered site's environment and answers whether it compiles, with positioned diagnostics, and the site's bindings, admitted builtins and run budget, all generated from the site's declaration. For criteria a sample key is required, and types the value (a metric is a number; a property is text, or a bool for a bool property); the answer's value_type so reveals a key's lane and data type to a rule:read holder, as the rule list already does. Compiles without the engine's program cache and stores and runs nothing. An unknown site, a missing or unknown key is a 422. Gated by rule:read.",
+					Example: "  omniglass expression validate --site site --source source",
+					Args:    cobra.ExactArgs(0),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/expressions:validate")
+						body := map[string]any{}
+						if cmd.Flags().Changed("key") {
+							body["key"] = fKey
+						}
+						if cmd.Flags().Changed("site") {
+							body["site"] = fSite
+						}
+						if cmd.Flags().Changed("source") {
+							body["source"] = fSource
+						}
+						return runAPICommand(cmd, "POST", path, body)
+					},
+				}
+				cmd.Flags().StringVar(&fKey, "key", "", "For criteria (required there), the sample key the rule reads: its lane and data type type the value (a metric is a number; a property is text, or a bool for a bool property)")
+				cmd.Flags().StringVar(&fSite, "site", "", "Where the expression is written: criteria, an event rule's fire_criteria or clear_criteria")
+				_ = cmd.MarkFlagRequired("site")
+				cmd.Flags().StringVar(&fSource, "source", "", "The expression")
+				_ = cmd.MarkFlagRequired("source")
 				return cmd
 			}()
 			return cmd

@@ -44,9 +44,10 @@ type Event struct {
 	Provenance  string
 	Source      string
 	// DerivedByRule names the event rule that derived the occurrence (#949),
-	// by its name as the row keeps it in source_rule (create-only, so it
-	// never goes stale, and it outlives the rule); "" for an
-	// occurrence no rule derived. AlarmID is the alarm a rule's fire event
+	// by the name it had when the event was written, as the row keeps it in
+	// source_rule: a historical record that a rename (#977) does not
+	// rewrite, and that outlives the rule; "" for an occurrence no rule
+	// derived. AlarmID is the alarm a rule's fire event
 	// opened or its clear event resolved, nil for most events.
 	DerivedByRule string
 	// DerivedByRuleID is the deriving rule's uuid while the rule exists; nil

@@ -336,11 +336,38 @@ key, fire and clear criteria, sustains, a selector, the event types it writes wh
 (`fire_event_type`, required) and ends (`clear_event_type`, optional), and a severity level, which is
 optional: a rule without one is informational and raises no alarm, and a PATCH with an empty `severity`
 makes a rule informational (an empty `clear_event_type` drops the clear event; the fire type cannot be
-emptied). An unknown key, level or event type, a missing fire event type, or criteria its lane cannot
-evaluate, is a 422. A rule edit is judged on what it changes from the stored rule:
+emptied). Criteria are expressions (#957): a body gives `{expr}` or the short form `{op, value}`, which is
+lowered to its expression, and a rule always reads back as `{expr}`. An unknown key, level or event
+type, a missing fire event type, or a criterion that does not compile against its lane is a 422; for a
+criterion the problem's error is located at `body.fire_criteria.expr` (or `clear_criteria`), or at
+`body.fire_criteria` when the body gave the short form, and carries the `line` and `column` of the
+fault when it has one. A stored rule whose criteria no longer compile carries `criteria_error`
+(`field`, `line`, `column`, `message`) on the list, a get and its state, and holds until rewritten. `POST /expressions:validate` (gated `rule:read`; `omniglass expression validate`) compiles a
+`source` against a registered expression `site` (today `criteria`; for it the sample `key` is required
+and types the value, a metric a number and a property its data type, which so tells a `rule:read`
+holder a key's lane and data type, as the rule list does) and answers `ok`,
+the value and result types, `diagnostics` with line, column and phase, and the site's `bindings`,
+`builtins` and `budget`, generated from the site's declaration; it compiles without the engine's
+program cache, stores and runs nothing, and an unknown site or a missing or unknown key is a 422. `POST /event-rules:preview` (gated `rule:read`; `omniglass event-rule
+preview`) judges a candidate rule (sample key, selector, criteria) without writing anything, in a
+read-only transaction, as the ingest would with no sustains (`sustains_ignored` is always true): over
+each series it selects among the components the caller's component read scope admits, from the state
+its newest deciding sample in the 7 days before the window set (listed in `state_unknown` when there
+is none), through every sample of the last 24 hours the ingest would have judged (a late sample older
+than one before it decides nothing). It answers `edges` (fire or clear, on a component and instance,
+at the sample) and `in_force_now`. Its reads are index probes per series; the window's are capped at
+`row_cap` samples a whole series at a time, reported as `series_judged` of `series_total` with
+`truncated`. A selector naming a component the caller cannot read is the same 422 as one that does
+not exist, and a criterion that does not compile is a 422 at its line and column. A rule edit is judged on what it changes from the stored rule:
 a selector entry, key or criteria it restates unchanged is not re-resolved, so a rule whose component or
 type was deleted stays editable (it matches nothing by the stale entry), while an entry new to the rule must
-exist. The list and a get carry each rule's live state as counts (`conditions_in_force`, `open_alarms`,
+exist. `POST /event-rules/{name}:rename` (gated `rule:update` on an all-scope grant; `omniglass event-rule
+rename`) moves an operator rule's name (#977) and answers the rule with its `id`; every reference inside
+the platform holds that uuid (an alarm's `raised_by_rule_id` and its `dedup_key`, `rule:<uuid>[:<instance>]`,
+a condition, a streak, an event's `derived_by_rule_id`), so a rename bumps no version and leaves streaks
+and conditions running. An event keeps the name it was written under (`derived_by_rule`). An official
+rule keeps its name (409, the seed matches it by name), a taken name is a 409, an illegal or uuid-shaped
+one a 422. The list and a get carry each rule's live state as counts (`conditions_in_force`, `open_alarms`,
 `pending_streaks`), read for the whole list in one query; `GET /event-rules/{name}/state` lists the
 conditions in force, the alarms and the streaks themselves.
 Both are fenced to the caller's component read scope. The list, a get and the state also carry

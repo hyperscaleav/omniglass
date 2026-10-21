@@ -45,9 +45,9 @@ func TestRuleEvaluator(t *testing.T) {
 
 	prop("bar-1", "tcp", "down")
 	got := open("bar-1")
-	if len(got) != 1 || got[0].Severity != "high" || got[0].DedupKey != "rule:reach-lost:tcp" || got[0].RaisedByRuleID == nil ||
+	if len(got) != 1 || got[0].Severity != "high" || got[0].DedupKey != "rule:"+reach.ID+":tcp" || got[0].RaisedByRuleID == nil ||
 		*got[0].RaisedByRuleID != reach.ID || got[0].Message != "Reachability lost" {
-		t.Fatalf("after down on tcp: %+v, want one high alarm keyed rule:reach-lost:tcp, raised by the rule, messaged with its label", got)
+		t.Fatalf("after down on tcp: %+v, want one high alarm keyed rule:<uuid>:tcp, raised by the rule, messaged with its label", got)
 	}
 	if _, v := f.recorded(t, ctx, "component", "bar-1"); v != "outage" {
 		t.Fatalf("a rule-raised high alarm left bar-1 %q, want outage", v)
@@ -62,7 +62,7 @@ func TestRuleEvaluator(t *testing.T) {
 	}
 	prop("bar-1", "tcp", "up") // the negation of fire clears tcp, not icmp
 	got = open("bar-1")
-	if len(got) != 1 || got[0].DedupKey != "rule:reach-lost:icmp" {
+	if len(got) != 1 || got[0].DedupKey != "rule:"+reach.ID+":icmp" {
 		t.Fatalf("after up on tcp: %+v, want only icmp's alarm open", got)
 	}
 	prop("bar-1", "icmp", "up")

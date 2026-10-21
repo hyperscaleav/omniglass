@@ -64,8 +64,26 @@ type EventRule struct {
 	// to within ruleJudgedEvery; nil when it never has. A fact about the
 	// rule, naming no component.
 	LastJudgedAt *time.Time `json:"-"`
+	// CriteriaError is why the rule's stored criteria do not compile (a
+	// property's data type changed under them, a row the backfill left in
+	// short form); nil when they compile. Read beside the rule, never stored.
+	CriteriaError *CriteriaFault `json:"-"`
 	// The event types' ids, resolved from their names on a write.
 	fireTypeID, clearTypeID string
+	// dataType is the sample key's property data type (string, bool, json)
+	// on the property lane, "" on the metric lane or for a key that is gone:
+	// it types the value the criteria read (#957).
+	dataType string
+}
+
+// CriteriaFault is a rule's criteria compile error as a reader sees it:
+// which criteria, the 1-based line and column (0 when it has none), and
+// the message.
+type CriteriaFault struct {
+	Field   string
+	Line    int
+	Column  int
+	Message string
 }
 
 // EventRuleSpec is a rule to create; its selector's components may be
@@ -125,7 +143,8 @@ func ruleCols(a string) string {
 	%[1]sfire_criteria, %[1]sclear_criteria,
 	(extract(epoch from %[1]sfire_sustain) * 1000000)::bigint, (extract(epoch from %[1]sclear_sustain) * 1000000)::bigint,
 	coalesce(%[1]sseverity, ''), (select name from event_type where id = %[1]sfire_event_type_id),
-	coalesce((select name from event_type where id = %[1]sclear_event_type_id), ''), %[1]smessage, %[1]senabled, %[1]sofficial, %[1]sversion, %[1]screated_at, %[1]supdated_at`, a)
+	coalesce((select name from event_type where id = %[1]sclear_event_type_id), ''), %[1]smessage, %[1]senabled, %[1]sofficial, %[1]sversion, %[1]screated_at, %[1]supdated_at,
+	coalesce((select data_type from property_type where name = %[1]ssample_key and %[1]ssample_lane = 'property'), '')`, a)
 }
 
 var eventRuleCols = ruleCols("")
@@ -154,7 +173,7 @@ func scanEventRuleCols(row pgx.Row, lead, trail []any) (EventRule, error) {
 	var lane string
 	var fireUs, clearUs int64
 	dest := append(lead, &r.ID, &r.Name, &r.Label, &r.Description, &sel, &r.SampleKey, &lane, &fire, &clear,
-		&fireUs, &clearUs, &r.Severity, &r.FireEventType, &r.ClearEventType, &r.Message, &r.Enabled, &r.Official, &r.Version, &r.CreatedAt, &r.UpdatedAt)
+		&fireUs, &clearUs, &r.Severity, &r.FireEventType, &r.ClearEventType, &r.Message, &r.Enabled, &r.Official, &r.Version, &r.CreatedAt, &r.UpdatedAt, &r.dataType)
 	dest = append(dest, trail...)
 	err := row.Scan(dest...)
 	if err != nil {
@@ -220,14 +239,17 @@ func prepareEventRule(ctx context.Context, q querier, r *EventRule, check ruleCh
 		}
 	}
 	if check.key || check.criteria {
-		if err := r.FireCriteria.Validate(r.SampleLane); err != nil {
-			return invalidRule("fire criteria: %v", err)
+		// Compiled against the key's lane and data type: a criterion that
+		// does not compile (an unknown binding, a non-bool result, a bad
+		// short form) is refused with its field, line and column, and is
+		// never stored. The stored form is always the expression (#957).
+		j, err := rules.Compile(r.SampleLane, r.dataType, r.FireCriteria, r.ClearCriteria)
+		if err != nil {
+			return fmt.Errorf("%w: %w", ErrEventRuleInvalid, err)
 		}
-		if r.ClearCriteria != nil {
-			if err := r.ClearCriteria.Validate(r.SampleLane); err != nil {
-				return invalidRule("clear criteria: %v", err)
-			}
-		}
+		r.FireCriteria, r.ClearCriteria = j.Fire(), j.Clear()
+	} else {
+		lowerStored(r)
 	}
 	if err := resolveRuleEventTypes(ctx, q, r); err != nil {
 		return err
@@ -279,12 +301,47 @@ func resolveRuleLane(ctx context.Context, q querier, r *EventRule) error {
 	switch {
 	case isProperty:
 		r.SampleLane = rules.LaneProperty
+		if err := q.QueryRow(ctx, `select data_type from property_type where name = $1`, r.SampleKey).Scan(&r.dataType); err != nil {
+			return fmt.Errorf("storage: check rule sample key: %w", err)
+		}
 	case isMetric:
-		r.SampleLane = rules.LaneMetric
+		r.SampleLane, r.dataType = rules.LaneMetric, ""
 	default:
 		return invalidRule("sample key %q is not a registered property or metric", r.SampleKey)
 	}
 	return nil
+}
+
+// ErrSampleKeyNotFound is a sample key that is no registered property or
+// metric.
+var ErrSampleKeyNotFound = errors.New("storage: sample key is not a registered property or metric")
+
+// SampleKeyType reads which lane a sample key reads and, for a property, its
+// data type ("" for a metric): what types the value an expression over its
+// samples reads (#958). A registry read: no scope, like the registries.
+func (p *PG) SampleKeyType(ctx context.Context, key string) (rules.Lane, string, error) {
+	r := EventRule{SampleKey: key}
+	if err := resolveRuleLane(ctx, p.pool, &r); err != nil {
+		if errors.Is(err, ErrEventRuleInvalid) {
+			return "", "", ErrSampleKeyNotFound
+		}
+		return "", "", err
+	}
+	return r.SampleLane, r.dataType, nil
+}
+
+// lowerStored rewrites a stored short-form criterion (one a row written
+// outside the gateway still holds) to its expression where it lowers; one
+// that does not is left for the judge to refuse, holding the rule.
+func lowerStored(r *EventRule) {
+	if low, err := rules.Lower(r.FireCriteria, r.SampleLane, r.dataType); err == nil {
+		r.FireCriteria = low
+	}
+	if r.ClearCriteria != nil {
+		if low, err := rules.Lower(*r.ClearCriteria, r.SampleLane, r.dataType); err == nil {
+			r.ClearCriteria = &low
+		}
+	}
 }
 
 func resolveRuleSelector(ctx context.Context, q querier, r *EventRule, kept EventRuleSelector) error {
@@ -371,15 +428,16 @@ func ruleArgs(r EventRule) ([]byte, []byte, any, error) {
 // ruleInForceSQL is every condition a rule holds in force, as the evaluator
 // judges it (conditionInForce): its condition rows, and an alarm it holds
 // open on a series with no row behind it (an older binary's, mid-upgrade),
-// since the alarm opened. Columns: rule_id, component_id, instance, since.
-// The live state reads it, so open alarms never outnumber conditions.
-const ruleInForceSQL = `(select rule_id, component_id, instance, since from event_rule_condition
+// since the alarm opened, its instance parsed from its key under either rule
+// segment (ruleKeyInstance: the uuid, or an older replica's name). Columns:
+// rule_id, component_id, instance, since. The live state reads it, so open alarms never outnumber conditions.
+var ruleInForceSQL = `(select rule_id, component_id, instance, since from event_rule_condition
 	union all
 	select o.rule_id, o.component_id, o.instance, o.since from (
 		select a.raised_by_rule_id as rule_id, a.component_id, a.raised_at as since,
-			case when a.dedup_key = 'rule:' || r.name then '' else substr(a.dedup_key, length('rule:' || r.name || ':') + 1) end as instance
-		from alarm a join event_rule r on r.id = a.raised_by_rule_id
-		where a.cleared_at is null and (a.dedup_key = 'rule:' || r.name or a.dedup_key like 'rule:' || r.name || ':%')
+			` + ruleKeyInstanceSQL("a.dedup_key") + ` as instance
+		from alarm a
+		where a.cleared_at is null and a.raised_by_rule_id is not null and a.dedup_key like 'rule:%'
 	) o
 	where not exists (select 1 from event_rule_condition c where c.rule_id = o.rule_id and c.component_id = o.component_id
 		and c.instance = o.instance))`
@@ -419,6 +477,7 @@ func (p *PG) ListEventRules(ctx context.Context, visible scope.Set) ([]EventRule
 			return nil, err
 		}
 		r.OpenAlarms, r.PendingStreaks, r.ConditionsInForce, r.LastJudgedAt = open, pending, inForce, judged
+		r.CriteriaError = p.criteriaFault(r)
 		out = append(out, r)
 	}
 	return out, rows.Err()
@@ -452,6 +511,7 @@ func (p *PG) GetEventRule(ctx context.Context, name string, visible scope.Set) (
 		return nil, fmt.Errorf("storage: get event rule %q: %w", name, err)
 	}
 	r.LastJudgedAt = judged
+	r.CriteriaError = p.criteriaFault(r)
 	if err := countRuleState(ctx, p.pool, &r, visible); err != nil {
 		return nil, err
 	}
@@ -636,6 +696,50 @@ func (p *PG) UpdateEventRule(ctx context.Context, actorID, name string, patch Ev
 		return nil, fmt.Errorf("storage: commit update event rule: %w", err)
 	}
 	return &updated, nil
+}
+
+// RenameEventRule moves an operator rule's name (#977), audited; it needs
+// an all-scope update grant, as every rule write does. An official rule keeps
+// its name, since the boot seed matches it by name (ErrEventRuleOfficial).
+//
+// Separate from the patch because a rename is a separate act (ADR-0076): it
+// breaks only the references held outside the platform. Inside, nothing
+// moves: an alarm's raised_by_rule_id and dedup key, a condition, a streak,
+// an event's derived_by_rule_id and the audit rows all hold the uuid. So a
+// rename is not a material change and bumps no version: streaks keep running
+// and conditions stay in force. An event keeps the name it was written under
+// in source_rule; the rule's next events carry the new one.
+func (p *PG) RenameEventRule(ctx context.Context, actorID, name, newName string, action scope.Set) (*EventRule, error) {
+	if !action.All {
+		return nil, ErrEventRuleForbidden
+	}
+	if err := ValidateName("event_rule", newName); err != nil {
+		return nil, fmt.Errorf("%w: %w", ErrEventRuleInvalid, err)
+	}
+	tx, err := p.pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("storage: begin rename event rule: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	old, err := lockMutableEventRule(ctx, tx, name)
+	if err != nil {
+		return nil, err
+	}
+	renamed, err := scanEventRule(tx.QueryRow(ctx, `update event_rule set name = $2, updated_at = now()
+		where id = $1 returning `+eventRuleCols, old.ID, newName))
+	if err != nil {
+		return nil, mapRuleWriteErr(err, name)
+	}
+	if err := writeAuditRes(ctx, tx, actorID, "rename", "event_rule", old.ID, old, renamed); err != nil {
+		return nil, err
+	}
+	if err := countRuleState(ctx, tx, &renamed, scope.Set{All: true}); err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("storage: commit rename event rule: %w", err)
+	}
+	return &renamed, nil
 }
 
 // DeleteEventRule removes an operator rule, audited; it needs an all-scope

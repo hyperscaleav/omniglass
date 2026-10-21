@@ -1,0 +1,38 @@
+# Write a rule as an expression (#960): start a rule with the comparison
+# builder, see the expression it is stored as, switch to writing the
+# expression itself, watch the field point at an unfinished line, finish it,
+# preview the draft against the last day of samples, and save it. The rule
+# reads endpoint-reachable, which every simulated component reports, so the
+# preview has real edges on the walkthrough stack.
+title: Write a rule as an expression
+description: Author an event rule's criteria as an expression, see a mistake pointed at by line and column, fix it, preview what the rule would have done over the last day, and save it.
+steps:
+  - goto: /rules
+    caption: Rules turn readings into conditions and alarms. Start a new one.
+  - click: { role: button, name: New rule }
+    caption: New rule opens the drawer.
+  - type: { target: { role: textbox, name: Name, exact: true }, text: reach-lost-not-aux }
+    caption: Name it, the address an operator types. A rename later moves only the name; its alarms hold the rule by uuid.
+  - select: { target: { role: combobox, name: Reads, exact: true }, value: 'property:endpoint-reachable' }
+    caption: It reads whether an endpoint answers, which every component reports.
+  - type: { target: { role: textbox, name: Fire value, exact: true }, text: down }
+    caption: The builder compares one value. Beneath it is the expression it is stored as.
+  - click: { role: checkbox, name: Write the fire criteria as an expression }
+    caption: Write the expression itself instead, starting from the builder's own.
+  - type: { target: { role: textbox, name: Fire expression, exact: true }, text: ' && instance !=' }
+    caption: Leave the aux endpoint out. The field checks the expression as it is typed.
+  - wait: { selector: '[data-testid="expression-diagnostic"]', timeout: 10000 }
+    caption: Unfinished, so the field points at the fault by line and column.
+  - type: { target: { role: textbox, name: Fire expression, exact: true }, text: ' "aux"' }
+    caption: Finish it. Beneath are the names it may use and the functions it may call.
+  - wait: { selector: '[data-testid="expression-ok"]', timeout: 10000 }
+    caption: It compiles and yields true or false, as a rule's criteria must.
+  - click: { role: button, name: Preview, exact: true }
+    caption: Preview runs the draft against the last day of samples, writing nothing.
+  - wait: { selector: '[data-testid="preview-result"]', timeout: 15000 }
+    caption: What it would hold in force now, and the edges it would have written. Sustains are ignored.
+    poster: true
+  - click: { role: button, name: Create rule }
+    caption: Save it. The rule judges every sample from now on.
+  - wait: { selector: '[data-testid="rule-fire-expr"]', timeout: 10000 }
+    caption: Its blade shows the criteria as the expressions it judges by.

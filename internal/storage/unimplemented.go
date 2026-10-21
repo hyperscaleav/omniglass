@@ -3,11 +3,12 @@ package storage
 import (
 	"context"
 	"encoding/json"
-	"github.com/hyperscaleav/omniglass/internal/sim/impair"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/hyperscaleav/omniglass/internal/rules"
 	"github.com/hyperscaleav/omniglass/internal/scope"
+	"github.com/hyperscaleav/omniglass/internal/sim/impair"
 )
 
 // UnimplementedGateway is a no-op Gateway for tests and codegen stubs that must
@@ -889,6 +890,9 @@ func (UnimplementedGateway) CreateEventRule(context.Context, string, EventRuleSp
 func (UnimplementedGateway) UpdateEventRule(context.Context, string, string, EventRulePatch, scope.Set) (*EventRule, error) {
 	return nil, nil
 }
+func (UnimplementedGateway) RenameEventRule(context.Context, string, string, string, scope.Set) (*EventRule, error) {
+	return nil, nil
+}
 func (UnimplementedGateway) DeleteEventRule(context.Context, string, string, scope.Set) error {
 	return nil
 }
@@ -897,6 +901,14 @@ func (UnimplementedGateway) ReconcileEventRules(context.Context, *RuleReconcileS
 	return nil
 }
 func (UnimplementedGateway) UpsertEventRule(context.Context, EventRuleSpec) error { return nil }
+func (UnimplementedGateway) SampleKeyType(context.Context, string) (rules.Lane, string, error) {
+	return "", "", ErrSampleKeyNotFound
+}
+
+func (UnimplementedGateway) PreviewEventRule(context.Context, RulePreviewSpec, scope.Set) (*RulePreview, error) {
+	return nil, ErrEventRuleNotFound
+}
+
 func (UnimplementedGateway) EventRuleState(context.Context, string, scope.Set) (*EventRuleLive, error) {
 	return nil, ErrEventRuleNotFound
 }
