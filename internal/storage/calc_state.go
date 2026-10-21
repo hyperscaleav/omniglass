@@ -52,8 +52,8 @@ type CalcOwnerState struct {
 	DueAt *time.Time
 }
 
-// CalcRuleLive is a rule's state on the owners the caller may read, and
-// the rule's whole pending depth (a count naming no owner).
+// CalcRuleLive is a rule's state on the owners the caller may read, and how
+// many of those owners are pending.
 type CalcRuleLive struct {
 	Owners       []CalcOwnerState
 	PendingDepth int
@@ -62,7 +62,14 @@ type CalcRuleLive struct {
 // CalcRuleState reads a rule's live state (by name or uuid), fenced to the
 // owners the component and system read scopes admit.
 func (p *PG) CalcRuleState(ctx context.Context, ref string, components, systems scope.Set) (*CalcRuleLive, error) {
-	r, err := readCalcRule(ctx, p.pool, ref, false)
+	// One read-only transaction: the owners, their names and the members
+	// named read from one snapshot.
+	tx, err := p.pool.BeginTx(ctx, pgx.TxOptions{AccessMode: pgx.ReadOnly, IsoLevel: pgx.RepeatableRead})
+	if err != nil {
+		return nil, fmt.Errorf("storage: begin calc rule state: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	r, err := readCalcRule(ctx, tx, ref, false)
 	if err != nil {
 		return nil, err
 	}
@@ -90,7 +97,7 @@ func (p *PG) CalcRuleState(ctx context.Context, ref string, components, systems 
 			left join calc_rule_state s on s.rule_id = $1::uuid and s.` + col + ` = o.id
 			left join calc_pending pd on pd.rule_id = $1::uuid and pd.` + col + ` = o.id
 			where ` + f.Pred("o.id") + ` order by o.name, o.id`
-		res, err := p.pool.Query(ctx, q, append([]any{r.ID}, f.Args...)...)
+		res, err := tx.Query(ctx, q, append([]any{r.ID}, f.Args...)...)
 		if err != nil {
 			return nil, fmt.Errorf("storage: calc rule %s state: %w", r.Name, err)
 		}
@@ -127,7 +134,7 @@ func (p *PG) CalcRuleState(ctx context.Context, ref string, components, systems 
 			ids = append(ids, s.Component)
 		}
 	}
-	names, err := visibleComponentNames(ctx, p.pool, ids, components)
+	names, err := visibleComponentNames(ctx, tx, ids, components)
 	if err != nil {
 		return nil, err
 	}
@@ -136,9 +143,11 @@ func (p *PG) CalcRuleState(ctx context.Context, ref string, components, systems 
 		st.Skipped, st.SkippedHidden = nameSkipped(x.skipped, names)
 		st.Stale, st.StaleHidden = nameStale(x.stale, names)
 		live.Owners = append(live.Owners, st)
-	}
-	if err := p.pool.QueryRow(ctx, `select count(*) from calc_pending where rule_id = $1::uuid`, r.ID).Scan(&live.PendingDepth); err != nil {
-		return nil, fmt.Errorf("storage: calc rule %s pending: %w", r.Name, err)
+		// The pending depth is over the owners the caller may read: a mark
+		// on an owner it may not is no fact it learns.
+		if st.Pending {
+			live.PendingDepth++
+		}
 	}
 	return live, nil
 }
@@ -197,9 +206,17 @@ func nameStale(in []staleInstance, names map[string]string) ([]CalcStaleRef, int
 // preview says how many it computed of how many.
 const CalcPreviewOwnerCap = 200
 
-// calcPreviewOwnerCap is CalcPreviewOwnerCap; a variable only so a test can
-// lower it.
-var calcPreviewOwnerCap = CalcPreviewOwnerCap
+// CalcPreviewWorkCap bounds a preview's input reads (each member's each
+// input, a component its own one member): a system preview over large
+// systems stops at it, a whole owner at a time, and says so as truncation.
+const CalcPreviewWorkCap = 5000
+
+// calcPreviewOwnerCap and calcPreviewWorkCap are the caps; variables only so
+// a test can lower them.
+var (
+	calcPreviewOwnerCap = CalcPreviewOwnerCap
+	calcPreviewWorkCap  = CalcPreviewWorkCap
+)
 
 // CalcPreviewOwner is what a candidate rule would do on one owner now.
 type CalcPreviewOwner struct {
@@ -222,7 +239,8 @@ type CalcPreviewOwner struct {
 }
 
 // CalcPreview is a candidate rule computed on the owners it selects in
-// scope, at most OwnerCap of OwnersTotal (Truncated past it).
+// scope, at most OwnerCap of OwnersTotal (Truncated past it, or past the
+// work cap).
 type CalcPreview struct {
 	Owners                    []CalcPreviewOwner
 	OwnersJudged, OwnersTotal int
@@ -232,13 +250,16 @@ type CalcPreview struct {
 
 // PreviewCalcRule computes a candidate rule on every owner it selects
 // within the read scopes, with the reduce the tick runs, in a read-only
-// transaction that writes nothing. The candidate is first checked as a save
-// would check it (prepareCalcRule: it compiles, closes no cycle, takes no
-// key another enabled rule or a collection writes), so a rule that could
-// not be saved is refused here with the same error. A candidate given the
-// name of a saved rule is judged as an edit of it: its own stored version is
-// not a second writer of its key. A selector naming an owner the caller may
-// not read is refused as one that does not exist.
+// transaction that writes nothing and takes no lock a save waits on (the
+// graph is read from the transaction's snapshot). The selector's names
+// resolve in the caller's scope first, so a name that does not exist and
+// one the caller may not read are refused alike. The candidate is then
+// checked as a save would check it (prepareCalcRule: it compiles, closes no
+// cycle, takes no key another enabled rule or a collection writes), so a
+// rule that could not be saved is refused here with the same error; given a
+// saved rule's name it is judged as an edit of that rule. The candidate is
+// compiled and the key registry read once; a component preview selects the
+// components holding one of its inputs, as the tick would mark them.
 func (p *PG) PreviewCalcRule(ctx context.Context, spec CalcRuleSpec, components, systems scope.Set) (*CalcPreview, error) {
 	tx, err := p.pool.BeginTx(ctx, pgx.TxOptions{AccessMode: pgx.ReadOnly})
 	if err != nil {
@@ -254,6 +275,9 @@ func (p *PG) PreviewCalcRule(ctx context.Context, spec CalcRuleSpec, components,
 	} else if !errors.Is(err, ErrCalcRuleNotFound) {
 		return nil, err
 	}
+	if err := resolveSelectorInScope(ctx, tx, &r, components, systems); err != nil {
+		return nil, err
+	}
 	var outIDs [2]any
 	if err := prepareCalcRule(ctx, tx, &r, calcCheckAll, &outIDs); err != nil {
 		return nil, err
@@ -263,15 +287,18 @@ func (p *PG) PreviewCalcRule(ctx context.Context, spec CalcRuleSpec, components,
 		return nil, err
 	}
 	r.outputType = out.valueType
+	plan, fault, err := p.calcPlan(ctx, tx, r)
+	if err != nil {
+		return nil, err
+	}
+	if fault != "" {
+		return nil, invalidCalc("reduce", "%s", fault)
+	}
 	owners, err := previewCalcOwners(ctx, tx, r, components, systems)
 	if err != nil {
 		return nil, err
 	}
 	pv := &CalcPreview{Owners: []CalcPreviewOwner{}, OwnersTotal: len(owners), OwnerCap: calcPreviewOwnerCap}
-	if len(owners) > calcPreviewOwnerCap {
-		owners, pv.Truncated = owners[:calcPreviewOwnerCap], true
-	}
-	pv.OwnersJudged = len(owners)
 	type computed struct {
 		row     CalcPreviewOwner
 		skipped []skippedMember
@@ -279,8 +306,31 @@ func (p *PG) PreviewCalcRule(ctx context.Context, spec CalcRuleSpec, components,
 	}
 	var all []computed
 	var ids []string
-	for _, o := range owners {
-		res, err := p.reduceCalc(ctx, tx, r, o.owner)
+	work := 0
+	for i, o := range owners {
+		if i >= calcPreviewOwnerCap {
+			pv.Truncated = true
+			break
+		}
+		if p.calcHook != nil {
+			if err := p.calcHook("preview"); err != nil {
+				return nil, err
+			}
+		}
+		members := 1
+		if o.owner.kind == rules.OwnerSystem {
+			ms, err := systemMembers(ctx, tx, o.owner.id)
+			if err != nil {
+				return nil, err
+			}
+			members = len(ms)
+		}
+		if work+members*len(r.Inputs) > calcPreviewWorkCap && i > 0 {
+			pv.Truncated = true
+			break
+		}
+		work += members * len(r.Inputs)
+		res, err := p.reduceWith(ctx, tx, r, o.owner, plan)
 		if err != nil {
 			return nil, err
 		}
@@ -309,6 +359,7 @@ func (p *PG) PreviewCalcRule(ctx context.Context, spec CalcRuleSpec, components,
 			ids = append(ids, s.Component)
 		}
 	}
+	pv.OwnersJudged = len(all)
 	names, err := visibleComponentNames(ctx, tx, ids, components)
 	if err != nil {
 		return nil, err
@@ -322,31 +373,80 @@ func (p *PG) PreviewCalcRule(ctx context.Context, spec CalcRuleSpec, components,
 	return pv, nil
 }
 
+// resolveSelectorInScope resolves a preview's selector names to ids within
+// the caller's read scope, the way the event rule preview does: a name that
+// is absent and one that is out of scope give the same refusal, and a name
+// shared in and out of scope resolves among the rows in scope only.
+func resolveSelectorInScope(ctx context.Context, q querier, r *CalcRule, components, systems scope.Set) error {
+	ids := make([]string, 0, len(r.Selector.Components))
+	for _, ref := range r.Selector.Components {
+		c, err := scopedByNameInScope(ctx, q, componentConfig, ref, "component", components)
+		if err != nil {
+			return invalidCalc("selector", "component %q does not exist", ref)
+		}
+		ids = append(ids, c.ID)
+	}
+	r.Selector.Components = ids
+	sysIDs := make([]string, 0, len(r.Selector.Systems))
+	for _, ref := range r.Selector.Systems {
+		s, err := scopedByNameInScope(ctx, q, systemConfig, ref, "system", systems)
+		if err != nil {
+			return invalidCalc("selector", "system %q does not exist", ref)
+		}
+		sysIDs = append(sysIDs, s.ID)
+	}
+	r.Selector.Systems = sysIDs
+	return nil
+}
+
 type previewOwner struct {
 	owner calcOwner
 	name  string
 }
 
 // previewCalcOwners is the owners a candidate selects within the read
-// scope, by id, after refusing a selector that names an owner the caller
-// may not read.
+// scope, by id: a component rule's selected components holding a value of
+// one of its inputs (the ones the tick would mark), a system rule's selected
+// systems.
 func previewCalcOwners(ctx context.Context, tx pgx.Tx, r CalcRule, components, systems scope.Set) ([]previewOwner, error) {
 	if r.OwnerKind == rules.OwnerComponent {
-		if err := namedVisible(ctx, tx, componentTable, r.Selector.Components, components, "component"); err != nil {
-			return nil, err
-		}
 		cands, err := previewCandidates(ctx, tx, r.Selector.components(), r.Selector.Components, components)
 		if err != nil {
 			return nil, err
 		}
-		out := make([]previewOwner, len(cands))
+		ids := make([]string, len(cands))
 		for i, c := range cands {
-			out[i] = previewOwner{owner: calcOwner{kind: rules.OwnerComponent, id: c.id}, name: c.name}
+			ids[i] = c.id
+		}
+		keys := inputKeys(r.Inputs)
+		rows, err := tx.Query(ctx, `with mt as (select id from metric_type where name = any($2::text[])),
+				pt as (select id from property_type where name = any($2::text[]))
+			select c.id::text from unnest($1::uuid[]) as c(id)
+			where exists (select 1 from metric m, mt where m.component_id = c.id and m.metric_type_id = mt.id)
+				or exists (select 1 from property x, pt where x.component_id = c.id and x.property_type_id = pt.id)`, ids, keys)
+		if err != nil {
+			return nil, fmt.Errorf("storage: calc preview holders: %w", err)
+		}
+		holds := map[string]bool{}
+		for rows.Next() {
+			var id string
+			if err := rows.Scan(&id); err != nil {
+				rows.Close()
+				return nil, err
+			}
+			holds[id] = true
+		}
+		rows.Close()
+		if err := rows.Err(); err != nil {
+			return nil, err
+		}
+		var out []previewOwner
+		for _, c := range cands {
+			if holds[c.id] {
+				out = append(out, previewOwner{owner: calcOwner{kind: rules.OwnerComponent, id: c.id}, name: c.name})
+			}
 		}
 		return out, nil
-	}
-	if err := namedVisible(ctx, tx, systemTable, r.Selector.Systems, systems, "system"); err != nil {
-		return nil, err
 	}
 	sel, err := json.Marshal(r.Selector)
 	if err != nil {
@@ -369,24 +469,6 @@ func previewCalcOwners(ctx context.Context, tx pgx.Tx, r CalcRule, components, s
 		out = append(out, o)
 	}
 	return out, rows.Err()
-}
-
-// namedVisible refuses a selector naming an owner the read scope does not
-// admit, as one that does not exist (a name is not disclosed by a refusal).
-func namedVisible(ctx context.Context, q querier, table scopeTable, ids []string, read scope.Set, what string) error {
-	if len(ids) == 0 {
-		return nil
-	}
-	f := newReadFilter(table, read, 2)
-	var n int
-	if err := q.QueryRow(ctx, f.With+` select count(*) from `+string(table)+` o where o.id = any($1::uuid[]) and `+f.Pred("o.id"),
-		append([]any{ids}, f.Args...)...).Scan(&n); err != nil {
-		return fmt.Errorf("storage: calc preview selector: %w", err)
-	}
-	if n != len(ids) {
-		return invalidCalc("selector", "a %s the selector names does not exist", what)
-	}
-	return nil
 }
 
 // CalcCounts is a rule's live state at a glance, over the owners the caller

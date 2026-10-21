@@ -34,3 +34,11 @@ func SetCalcPreviewOwnerCap(n int) func() {
 	calcPreviewOwnerCap = n
 	return func() { calcPreviewOwnerCap = was }
 }
+
+// SetCalcPreviewWorkCap lowers the calc preview's work cap for a test,
+// returning the restore.
+func SetCalcPreviewWorkCap(n int) func() {
+	was := calcPreviewWorkCap
+	calcPreviewWorkCap = n
+	return func() { calcPreviewWorkCap = was }
+}

@@ -46,7 +46,7 @@ type calcOwnerStateBody struct {
 type calcRuleStateOutput struct {
 	Body struct {
 		Owners       []calcOwnerStateBody `json:"owners" doc:"The rule's state on each owner the caller may read, by owner name"`
-		PendingDepth int                  `json:"pending_depth" doc:"How many of the rule's marks are pending, fleet-wide (a count naming no owner)"`
+		PendingDepth int                  `json:"pending_depth" doc:"How many of the owners listed are pending (only owners the caller may read are counted)"`
 	}
 }
 
@@ -112,7 +112,7 @@ func registerCalcRuleStateRoutes(api huma.API, a *authenticator, gw storage.Gate
 		Method:      http.MethodGet,
 		Path:        "/calc-rules/{name}/state",
 		Summary:     "Get a calc rule's live state",
-		Description: "What a calc rule last did on each owner the caller may read (components by the component read scope, systems by the system read scope), each owner named now: the value it computed, when and at which version, the inputs it found no value of, a system's members that held none and the instances it left out as stale (named when the caller may read the component, else counted), an error, since when a system has had no members, and whether the owner is pending (with when a deferred mark is due). The rule's pending depth is fleet-wide and names no owner. Gated by rule:read.",
+		Description: "What a calc rule last did on each owner the caller may read (components by the component read scope, systems by the system read scope), each owner named now: the value it computed, when and at which version, the inputs it found no value of, a system's members that held none and the instances it left out as stale (named when the caller may read the component, else counted), an error, since when a system has had no members, and whether the owner is pending (with when a deferred mark is due). The pending depth counts the listed owners that are pending. Gated by rule:read.",
 	}, "rule", "read"), func(ctx context.Context, in *calcRuleNameInput) (*calcRuleStateOutput, error) {
 		live, err := gw.CalcRuleState(ctx, in.Name, a.scopeFor(ctx, "component", "read"), a.scopeFor(ctx, "system", "read"))
 		if err != nil {
@@ -139,7 +139,7 @@ func registerCalcRuleStateRoutes(api huma.API, a *authenticator, gw storage.Gate
 		Method:      http.MethodPost,
 		Path:        "/calc-rules:preview",
 		Summary:     "Preview a calc rule",
-		Description: "Computes a candidate calc rule now, on each owner it selects that the caller may read, with the reduce the tick runs, and writes nothing (a read-only transaction). For each owner it answers the value the rule would write, the output's current value and whether they differ, the inputs with no value, the members skipped and the instances left out as stale (named when the caller may read the component, else counted). At most owner_cap owners are computed (owners_judged of owners_total, truncated past it). The candidate is checked as a save would check it: a reduce that does not compile, a cycle in the key graph, an output another enabled rule or a collection writes, or health are each a 422, so the author learns before saving; given a saved rule's name it is judged as an edit of that rule. A selector naming an owner the caller may not read is a 422 as one that does not exist. Gated by rule:read.",
+		Description: "Computes a candidate calc rule now, on each owner it selects that the caller may read, with the reduce the tick runs, and writes nothing (a read-only transaction). For each owner it answers the value the rule would write, the output's current value and whether they differ, the inputs with no value, the members skipped and the instances left out as stale (named when the caller may read the component, else counted). A component rule previews the selected components holding one of its inputs, as the tick would mark them. At most owner_cap owners are computed, and a bound on total input reads stops a preview over large systems early, a whole owner at a time (owners_judged of owners_total, truncated past either). The candidate is checked as a save would check it: a reduce that does not compile, a cycle in the key graph, an output another enabled rule or a collection writes, or health are each a 422, so the author learns before saving; given a saved rule's name it is judged as an edit of that rule. The selector's names resolve in the caller's read scope: a name that does not exist and one the caller may not read are the same 422, and a name shared in and out of scope means the one in scope. A preview takes no lock a save waits on. Gated by rule:read.",
 	}, "rule", "read"), func(ctx context.Context, in *calcPreviewInput) (*calcPreviewOutput, error) {
 		b := in.Body
 		spec := storage.CalcRuleSpec{Name: b.Name, OwnerKind: b.OwnerKind, Inputs: fromCalcInputs(b.Inputs),

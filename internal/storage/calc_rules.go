@@ -383,8 +383,12 @@ const calcGraphLock = "calc_rule/graph"
 // owner by newest ts, the same reason a collected key is refused). The loop
 // is judged first, so a rule that does both is told about the loop.
 func checkCalcGraph(ctx context.Context, q txQuerier, r CalcRule, outIDs [2]any) error {
-	if err := lockAdvisory(ctx, q, calcGraphLock); err != nil {
-		return err
+	// A preview's candidate reads the graph from its own snapshot and takes
+	// no lock: it saves nothing, so it must not hold up a save that does.
+	if !r.candidate {
+		if err := lockAdvisory(ctx, q, calcGraphLock); err != nil {
+			return err
+		}
 	}
 	rows, err := q.Query(ctx, `select c.id::text, c.name, c.inputs, coalesce(pt.name, mt.name, '')
 		from calc_rule c

@@ -401,7 +401,7 @@ what the rule last did on each owner the caller may read (a component by the com
 system by the system read scope), the owner named now: `value`, `computed_at`, `rule_version`,
 `missing`, a system's `skipped` members and the `stale` instances (named when the caller may read the
 component, else counted in `skipped_hidden` and `stale_hidden`), `error`, `no_members_since`, `pending`
-and a deferred mark's `due_at`, beside the rule's fleet-wide `pending_depth`. `POST /calc-rules:preview`
+and a deferred mark's `due_at`, beside `pending_depth`, how many of the listed owners are pending. `POST /calc-rules:preview`
 (gated `rule:read`; `omniglass calc-rule preview`) computes a candidate rule (`owner_kind`, `selector`,
 `inputs`, `reduce`, `output_key`, and a saved rule's `name` to preview an edit of it) on each selected
 owner the caller may read, with the tick's reduce, in a read-only transaction: per owner the `value` it

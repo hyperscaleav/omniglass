@@ -171,7 +171,7 @@ it yet: the evaluator judges component samples only (#1002).
 A rule's **state** is what it last did on each owner, read at `GET /calc-rules/{name}/state`: the value,
 when and at which version, the inputs with no value, the members skipped and the instances left out as
 stale, an error, since when a system has had no members, and whether the owner is pending (and when a
-deferred mark is due), with the rule's whole pending depth. It is fenced to the owners the caller may
+deferred mark is due), with how many of those owners are pending. It is fenced to the owners the caller may
 read, named at read time, and a member the caller may not read is counted, never named.
 
 A **preview** (`POST /calc-rules:preview`) computes a candidate rule now, on each owner it selects that
@@ -180,6 +180,10 @@ nothing: the value it would write, the current output and whether they differ, a
 skipped or stale, up to 200 owners a preview. A candidate is checked as a save would check it, so a
 rule that could not be saved (a reduce that does not compile, a cycle, a second writer, a collected
 output) is refused before it is saved; given a saved rule's name, it is judged as an edit of that rule.
+The selector's names resolve in the caller's scope (a name out of scope is refused exactly as one that
+does not exist), a component preview computes the components holding one of its inputs (those the
+tick would mark), the candidate compiles once, total input reads are bounded beside the owner cap, and
+a preview takes no lock a save waits on.
 
 :::design[Target design: the JetStream calc consumer and event rules on system outputs, tracked in #430 and #1002]
 

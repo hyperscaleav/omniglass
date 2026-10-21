@@ -438,16 +438,27 @@ type calcMember struct {
 	id, name string
 }
 
-func (p *PG) reduceCalc(ctx context.Context, tx pgx.Tx, r CalcRule, owner calcOwner) (calcOutcome, error) {
+// calcPlan is a rule's reduce ready to run: its inputs typed from the
+// registries and its program, read and compiled once per computation (or
+// once per preview).
+type calcPlan struct {
+	typed []rules.TypedInput
+	prog  *rules.CalcProgram
+}
+
+// calcPlan types a rule's inputs and compiles its reduce; a non-empty fault
+// is a rule that cannot reduce (an input key gone, a reduce that no longer
+// compiles), recorded rather than returned.
+func (p *PG) calcPlan(ctx context.Context, tx pgx.Tx, r CalcRule) (calcPlan, string, error) {
 	types, err := keyValueTypes(ctx, tx)
 	if err != nil {
-		return calcOutcome{}, err
+		return calcPlan{}, "", err
 	}
 	typed := make([]rules.TypedInput, len(r.Inputs))
 	for i, in := range r.Inputs {
 		vt, ok := types[in.Key]
 		if !ok {
-			return calcOutcome{err: fmt.Sprintf("input %s: %q is not a registered property or metric", in.As, in.Key)}, nil
+			return calcPlan{}, fmt.Sprintf("input %s: %q is not a registered property or metric", in.As, in.Key), nil
 		}
 		typed[i] = rules.TypedInput{As: in.As, Key: in.Key, ValueType: vt}
 	}
@@ -459,8 +470,26 @@ func (p *PG) reduceCalc(ctx context.Context, tx pgx.Tx, r CalcRule, owner calcOw
 		prog, err = p.calcs.program(r, typed, r.outputType)
 	}
 	if err != nil {
-		return calcOutcome{err: err.Error()}, nil
+		return calcPlan{}, err.Error(), nil
 	}
+	return calcPlan{typed: typed, prog: prog}, "", nil
+}
+
+func (p *PG) reduceCalc(ctx context.Context, tx pgx.Tx, r CalcRule, owner calcOwner) (calcOutcome, error) {
+	plan, fault, err := p.calcPlan(ctx, tx, r)
+	if err != nil {
+		return calcOutcome{}, err
+	}
+	if fault != "" {
+		return calcOutcome{err: fault}, nil
+	}
+	return p.reduceWith(ctx, tx, r, owner, plan)
+}
+
+// reduceWith reads a rule's inputs on one owner and reduces them by a plan.
+func (p *PG) reduceWith(ctx context.Context, tx pgx.Tx, r CalcRule, owner calcOwner, plan calcPlan) (calcOutcome, error) {
+	typed, prog := plan.typed, plan.prog
+	var err error
 	members := []calcMember{{id: owner.id}}
 	if owner.kind == rules.OwnerSystem {
 		if members, err = systemMembers(ctx, tx, owner.id); err != nil {
