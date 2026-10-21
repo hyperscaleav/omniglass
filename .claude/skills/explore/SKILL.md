@@ -118,6 +118,12 @@ node web/e2e/explorer.mjs file web/e2e/probe/out/findings.json --mission <id> \
   --lenses <a,b> --report web/e2e/probe/out/report.md
 ```
 
+Read the dry-run plan before the real one. A `possible-duplicate` action is a finding whose
+title looks like an open issue's (the candidates are listed): open them, and either adopt the
+issue (`explorer.mjs adopt <n> <key>`, so the finding becomes a sighting) or, when it really is
+a different defect, pass its key to `--confirm-new k1,k2`. Never confirm without reading the
+candidates. A `same-run-duplicate` was folded into a more severe finding from this run.
+
 `file` opens the week's epic if needed (rolling last week's over), files bugs, files
 suggestions under the epic up to the weekly cap, records sightings, and posts the report with
 the run marker the next `pick` reads. Always run it, even with no findings: the marker is

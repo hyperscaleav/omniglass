@@ -15,6 +15,8 @@ import {
   parseRunLog,
   pickMission,
   planFiling,
+  possibleDuplicates,
+  titleWords,
   planRollover,
   sightingDate,
   runLine,
@@ -159,8 +161,8 @@ describe("planFiling", () => {
 
   it("files a bug at once and a suggestion under the cap, most severe first", () => {
     const fs = [
-      finding({ key: "ux:a", severity: "low" }),
-      finding({ key: "ux:b", severity: "high" }),
+      finding({ key: "ux:a", severity: "low", claim: "Tag editor hides its save button" }),
+      finding({ key: "ux:b", severity: "high", claim: "Room tree forgets expansion state" }),
       finding({ key: "perf:c", kind: "bug", lens: "performance", repro: "omniglass components list" }),
     ];
     const acts = planFiling(fs, [], WEEKLY_SUGGESTION_CAP - 1, run);
@@ -215,5 +217,39 @@ describe("adoptBody", () => {
     const b = adoptBody("Found by hand.\n", "digest:a11y:label");
     expect(issueKey(b)).toBe("digest:a11y:label");
     expect(() => adoptBody(b, "digest:a11y:other")).toThrow(/already carries/);
+  });
+});
+
+describe("possibleDuplicates", () => {
+  const open = [
+    { number: 973, title: "fix: a form control on the profile page has no label", body: "" },
+    { number: 974, title: "fix: the files page nests interactive controls", body: "" },
+    { number: 900, title: "feat: the alarm list groups by room", body: "" },
+  ];
+  it("folds prefixes, stop words and plurals", () => {
+    expect([...titleWords("fix: The Files page nests interactive controls")]).toEqual(["file", "nest", "interactive", "control"]);
+  });
+  it("finds an issue a person filed under other words", () => {
+    expect(possibleDuplicates("fix: profile form control has no accessible label", open).map((c) => c.number)).toEqual([973]);
+    expect(possibleDuplicates("fix: interactive controls nested on the files page", open).map((c) => c.number)).toEqual([974]);
+  });
+  it("does not match on one shared word", () => {
+    expect(possibleDuplicates("feat: room health reads on the profile", open)).toEqual([]);
+  });
+});
+
+describe("planFiling's duplicate guard", () => {
+  const run = { date: "2026-10-21", mission: "m" };
+  const lookAlike = [{ number: 973, title: "fix: acknowledge is two menus deep in alarms", body: "filed by hand" }];
+  it("holds a new finding that looks like an unkeyed open issue, and files it once confirmed", () => {
+    expect(planFiling([finding()], lookAlike, 0, run)[0]).toMatchObject({ action: "possible-duplicate", candidates: [{ number: 973 }] });
+    expect(planFiling([finding()], lookAlike, 0, run, { confirmed: ["ux:alarms:ack-buried"] })[0]).toMatchObject({ action: "suggestion" });
+  });
+  it("folds two lenses' look-alike findings in one run into the more severe", () => {
+    const acts = planFiling([finding({ key: "ux:a", severity: "low" }), finding({ key: "design:b", lens: "design", severity: "high" })], [], 0, run);
+    expect(acts.map((a) => [a.action, a.key])).toEqual([
+      ["suggestion", "design:b"],
+      ["same-run-duplicate", "ux:a"],
+    ]);
   });
 });

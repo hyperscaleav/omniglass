@@ -91,6 +91,11 @@ records (`explorer-key: <key>`). A digest finding's key comes from the digest it
 - A finding whose key an open issue already carries is a dated **sighting** on that issue,
   never a second issue. An issue a person filed without a key is **adopted** first
   (`explorer.mjs adopt <issue> <key>`) so the next sighting finds it.
+- A new finding whose title looks like any open issue's (most of the words of the shorter
+  title shared, at least two of them) is **held**, not filed: the run reads the candidates and
+  either adopts one or confirms the finding as new. Two findings in one run that look alike are
+  folded into the more severe. Keys catch the same defect seen again; the look-alike check
+  catches the same defect a person, or another lens, already described in other words.
 - A **bug** is its own `Bug` issue, filed at once with its repro, because the fixer drains
   bugs daily.
 - A **suggestion** is a `Task` sub-issue of the week's epic, `explorer: week of <Monday>`, at
@@ -116,14 +121,20 @@ ends the exploring; the run files what it has and its report names the cap.
 
 ## The Routine
 
-One scheduled Routine fires a fresh session daily on the same worker machine as the
-[autopilot](/contributing/autopilot/) (Docker for the stack, an authenticated `gh`, the
-Playwright Chromium), with a thin prompt so the behavior lives in the versioned skill:
+One scheduled Routine fires a fresh Sonnet session nightly at 02:52 Mountain time, so its issues
+are waiting in the morning. It runs on the same worker machine as the
+[autopilot](/contributing/autopilot/), which already has what the run needs: Docker for the
+stack, an authenticated `gh` and the Playwright Chromium. Each night works in a throwaway
+worktree, so the machine's standing clone is never touched. The prompt is thin, so the behavior
+lives in the versioned skill:
 
 ```text
-Omniglass synthetic user: run today's mission. Work in the hyperscaleav/omniglass clone in
-this environment on a clean checkout of origin/main. Read CLAUDE.md, then invoke the /explore
-skill and follow it end to end: pick the mission, hold its stack, pursue the goal as its
-persona, bring the picked lenses, file with explorer.mjs, release the stack. Find and file
-only; never branch, commit or open a PR.
+Omniglass synthetic user: run tonight's mission. In the hyperscaleav/omniglass clone in this
+environment, git fetch origin and create a fresh detached worktree of origin/main under
+.claude/worktrees/explore-<YYYY-MM-DD>, and work only there: cd web && npm ci, then make build.
+Read CLAUDE.md, then read .claude/skills/explore/SKILL.md and follow it end to end: pick the
+mission, hold its stack, pursue the goal as its persona, bring the picked lenses, dry-run then
+file with explorer.mjs (resolving any possible duplicates), release the stack. Find and file
+only; never branch, commit, push or open a PR. When finished, git worktree remove tonight's
+worktree.
 ```
