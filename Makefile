@@ -1,7 +1,7 @@
 # Local dev loop + the build/run flow for the single binary. Production deploy
 # is BYO Postgres; tests use ephemeral testcontainer Postgres.
 
-.PHONY: build build-web web image gen gen-proto gen-web test test-web test-short test-e2e bench clean-testcontainers tidy up down dev release-plan release-apply release-snapshot docs-shots docs-shots-check docs-shots-verify docs-walkthroughs dev-sim bench-sim test-netadmin walkthrough-stack dev-sim-container test-walkthrough-stack walkthroughs test-walkthroughs
+.PHONY: build build-web web image gen gen-proto gen-web test test-web test-short test-e2e bench clean-testcontainers tidy up down dev release-plan release-apply release-snapshot docs-shots docs-shots-check docs-shots-verify docs-walkthroughs dev-sim bench-sim test-netadmin walkthrough-stack dev-sim-container test-walkthrough-stack walkthroughs test-walkthroughs probe
 
 # Build the single binary (no console embedded; serves the build-the-console
 # placeholder under /web).
@@ -205,6 +205,15 @@ walkthroughs:
 test-walkthroughs:
 	bash web/e2e/walkthroughs.sh selftest
 
+# The probe (#965): bring up the walkthrough stack (STACK_SCENARIO picks its
+# fleet), drive every console route and replay every walkthrough at machine
+# speed, and reduce what it saw (console and page errors, API failures and
+# timings, web vitals, accessibility violations, walkthrough failures) to
+# web/e2e/probe/out/digest.json, the one file an agent reads about the run.
+# Not part of make test: it builds the release image.
+probe:
+	bash web/e2e/probe.sh
+
 # Backstop cleanup: force-remove any orphaned Postgres test containers left by
 # an interrupted run (a hard kill before the harness TestMain or the ryuk reaper
 # could reclaim them). Scoped by the testcontainers label AND the postgres:18
@@ -304,10 +313,12 @@ docs-walkthroughs:
 # embedded. Creates (idempotently) a dev owner with password "dev", also mints a
 # bearer token, then serves the API and console at http://localhost:8080/web.
 # Ctrl-C stops the server; `make down` stops Postgres.
+# SEED_SCENARIO picks the seeded fleet (omniglass help seed-dev lists them).
+SEED_SCENARIO ?= dev
 dev: up build-web
 	@./bin/omniglass bootstrap dev --password dev >/dev/null 2>&1 || true
 	@./bin/omniglass set-password dev dev >/dev/null 2>&1 || true
-	@./bin/omniglass seed-dev || true
+	@./bin/omniglass seed-dev --scenario $(SEED_SCENARIO) || true
 	@echo "console: http://localhost:8080/web"
 	@echo "  sign in with username 'dev' and password 'dev', or paste a bearer token:"
 	@./bin/omniglass token dev --description "dev login token"

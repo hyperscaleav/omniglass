@@ -280,7 +280,7 @@ stack_walkthrough_up() {
   stack_cli migrate >/dev/null
   stack_cli bootstrap "$STACK_USER" --password "$STACK_PASSWORD" >/dev/null 2>&1 || true
   stack_cli set-password "$STACK_USER" "$STACK_PASSWORD" >/dev/null
-  stack_cli seed-dev --sim-port-offset 0 >/dev/null
+  stack_cli seed-dev --scenario "${STACK_SCENARIO:-dev}" --sim-port-offset 0 >/dev/null
 
   # The embedded bus listens beyond loopback and advertises the server's
   # name, so the node (another container) can claim and connect.
@@ -295,6 +295,13 @@ stack_walkthrough_up() {
 
   STACK_TOKEN=$(stack_cli token "$STACK_USER" --description "walkthrough stack" 2>/dev/null | grep -o 'ogp_[A-Za-z0-9_-]*')
   [ -n "$STACK_TOKEN" ] || { echo "stack $STACK_ID: could not mint an owner token" >&2; return 1; }
+
+  # A fresh install (STACK_SCENARIO=empty) is the server and its owner and
+  # nothing else: the Bay 2 device, the node edge-hq and the simulated fleet
+  # below all come from the example fleet, and a first run has none of them.
+  if [ "${STACK_SCENARIO:-dev}" = empty ]; then
+    return 0
+  fi
 
   # A component nothing collects from yet: a simulated product placed in Bay 2
   # with no endpoint, so the simulator serves it only once an endpoint names

@@ -118,6 +118,10 @@ Two disciplines matter more unattended than attended:
 - **Operator surfaces take the visual gate.** Any change under `web/src` runs
   `/assess-ui`: the state matrix captured against the real console, graded, iterated to
   clean, and the evidence committed for the PR.
+- **The synthetic user's lenses are available to you too.** For an operator-surface or
+  CLI slice, `make probe` and one `lens-ux`, `lens-performance` or `lens-ai-friendliness`
+  agent (`.claude/agents/`) over the changed surfaces is a cheap second opinion before
+  `/assess-ui`; what it finds outside the slice is filed, not fixed.
 
 ## 5. Gates, then ship
 

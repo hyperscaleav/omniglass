@@ -89,6 +89,28 @@ On **macOS**, loopback answers only `127.0.0.1` until an address is aliased, so 
 alias for each simulated address it serves (the dev fleet uses `127.60.0.0/16`), for example
 `for i in $(seq 1 20); do sudo ifconfig lo0 alias 127.60.0.$i up; done`. Impairments are Linux only.
 
+### Seed a different fleet
+
+`make dev` and the Docker stack below seed the example fleet, but `omniglass seed-dev --scenario
+<name>` can stand up other fleets: a fresh install with nothing in it, the example fleet having a bad
+day, or the example fleet at enterprise size. The list, with what each one holds, is the command's own help, rendered in the
+[CLI reference](/reference/cli/#omniglass-seed-dev).
+Every scenario except the fresh install is the example fleet plus a generated expansion of it, so a
+scenario never drifts from the fleet it grows from, and like the example fleet every one is
+idempotent. Pick one with `SEED_SCENARIO` for `make dev`, or `STACK_SCENARIO` for the Docker stack
+(on a fresh install the stack is the server and its owner alone, since its node and simulated
+devices come from the example fleet):
+
+```bash
+SEED_SCENARIO=degraded make dev
+STACK_SCENARIO=large make dev-sim-container
+```
+
+The large fleet copies the example fleet's self-contained rooms (a room whose devices serve only the
+systems in it) under replica sites, and simulates only the example fleet's own devices, so the
+collector is not load-tested by accident (a device the example fleet does not declare is never
+wired by the seed, whatever the scenario). It takes a couple of minutes to seed.
+
 ### The whole loop in Docker
 
 From a checkout, with nothing but Docker, `make dev-sim-container` runs every piece of the above as

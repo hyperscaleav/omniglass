@@ -1,0 +1,74 @@
+# The synthetic user's missions (#966): one persona with one goal on one
+# scenario, the lenses that goal wants, and the repo paths it exercises (so a
+# change under them sends the next run there first). The /explore skill takes
+# one a day by the order in explorerlib.mjs pickMission. `user` is a seeded
+# dev user (password `dev`), never the owner, so a missing permission or a
+# scope leak shows up as a finding instead of being masked by owner rights;
+# the fresh-install mission is the one exception, since a fresh install has
+# only its owner. `done` is how the run knows the goal was reached.
+#
+# Steering: add, reword or reorder a mission by PR. Lenses are performance,
+# design, ux, ai-friendliness and accessibility, at most two per mission.
+missions:
+  - id: first-ten-minutes
+    persona: An integrator who just installed Omniglass and has never seen it.
+    user: dev
+    goal: From an empty install, add a place, a device in it, and see that device's reachability.
+    scenario: empty
+    lenses: [ux, design]
+    surfaces: [web/src/pages/Home.tsx, web/src/pages/Locations.tsx, web/src/pages/Components.tsx, internal/api/components.go, internal/api/endpoints.go, web/src/lib/routemanifest.ts]
+    done: The new device's reachability panel shows a verdict.
+
+  - id: alarm-storm-triage
+    persona: A NOC operator on a night shift with many rooms failing at once.
+    user: operator
+    goal: Find which rooms are down, which device in each is the cause, and acknowledge each alarm.
+    scenario: degraded
+    lenses: [ux, performance]
+    surfaces: [web/src/pages/Explore.tsx, web/src/pages/SystemZoom.tsx, internal/api/alarms.go, internal/api/health.go, internal/rules]
+    done: Every room the fleet reads as down has its causing alarm acknowledged, and the acknowledgement shows.
+
+  - id: enterprise-scale
+    persona: A regional manager browsing a five-thousand-device estate.
+    user: viewer-hq
+    goal: Find the busiest building, drill to one of its rooms, and read that room's health and history.
+    scenario: large
+    lenses: [performance, ux]
+    surfaces: [web/src/pages/Explore.tsx, web/src/pages/LocationZoom.tsx, web/src/pages/Locations.tsx, internal/api/views.go, internal/storage/locations.go]
+    done: A room's health and its recent history are on screen, and every list on the way loaded.
+
+  - id: scoped-field-tech
+    persona: A field technician whose access is limited to one site.
+    user: tech-east
+    goal: Commission a new device in a room at the site, and confirm nothing outside the site is visible or editable.
+    scenario: dev
+    lenses: [ux, accessibility]
+    surfaces: [internal/scope, internal/rbac, internal/api/components.go, web/src/pages/Components.tsx]
+    done: The device is placed and collecting, and an attempt to read or edit outside the site is refused cleanly.
+
+  - id: automate-from-the-cli
+    persona: An automation engineer scripting Omniglass from a pipeline, never opening the console.
+    user: operator
+    goal: Using only the CLI and the API, list the fleet's failing systems as JSON and raise then clear an alarm on one device.
+    scenario: degraded
+    lenses: [ai-friendliness, performance]
+    surfaces: [internal/cli, internal/api, docs/src/content/docs/guides/cli.md, docs/src/content/docs/reference]
+    done: The failing systems came out as parseable JSON and the alarm was raised and cleared without reading source code.
+
+  - id: set-up-monitoring
+    persona: An operator onboarding a new room's devices for collection.
+    user: operator
+    goal: Give a device an endpoint, attach a driver, and watch real samples arrive.
+    scenario: dev
+    lenses: [ux, design]
+    surfaces: [web/src/pages/ComponentLeaf.tsx, web/src/pages/Drivers.tsx, internal/api/endpoints.go, internal/collection, internal/node]
+    done: The device's view shows samples newer than the moment the endpoint was created.
+
+  - id: read-only-audit
+    persona: A compliance reviewer with view-only access at one campus.
+    user: viewer-hq
+    goal: Find who changed what in the last day at the campus, and confirm no control writes anything.
+    scenario: dev
+    lenses: [accessibility, ux]
+    surfaces: [web/src/pages/Audit.tsx, internal/api/audit.go, internal/rbac]
+    done: The day's changes at the campus are listed with who made them, and every write control is absent or refused.

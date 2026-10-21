@@ -38,6 +38,7 @@ import {
   budgetProblems,
   describeTarget,
   idProblem,
+  locate,
   parseWalkthrough,
   previewOpeningProblem,
   previewStartSeconds,
@@ -219,13 +220,6 @@ async function signIn(browser, base, user, password) {
   const state = await ctx.storageState();
   await ctx.close();
   return state;
-}
-
-function locate(page, t) {
-  if (typeof t === 'string') return page.locator(t);
-  if (t.role) return page.getByRole(t.role, { ...(t.name ? { name: t.name } : {}), ...(t.exact ? { exact: true } : {}) });
-  if (t.text) return page.getByText(t.text, t.exact ? { exact: true } : undefined);
-  return page.locator(t.selector);
 }
 
 // One step: the caption first, then the action with the cursor drawn to it.
