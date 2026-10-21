@@ -340,6 +340,26 @@ export interface paths {
         patch: operations["update-calc-rule"];
         trace?: never;
     };
+    "/calc-rules/{name}/state": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get a calc rule's live state
+         * @description What a calc rule last did on each owner the caller may read (components by the component read scope, systems by the system read scope), each owner named now: the value it computed, when and at which version, the inputs it found no value of, a system's members that held none and the instances it left out as stale (named when the caller may read the component, else counted), an error, since when a system has had no members, and whether the owner is pending (with when a deferred mark is due). The rule's pending depth is fleet-wide and names no owner. Gated by rule:read.
+         */
+        get: operations["get-calc-rule-state"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/calc-rules/{name}:rename": {
         parameters: {
             query?: never;
@@ -354,6 +374,26 @@ export interface paths {
          * @description Moves an operator rule's name, the address an operator types. A separate act from an update, because it breaks bookmarks and integration config outside this system; inside it nothing breaks, since the audit rows hold the rule's uuid and the key graph is of keys, not rule names. Not a material change: no version bump. An official rule keeps its name (409), a taken name is a 409, an illegal or uuid-shaped one a 422. Returns the rule with its uuid. Audited. Gated by rule:update, with an all-scope grant.
          */
         post: operations["rename-calc-rule"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/calc-rules:preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview a calc rule
+         * @description Computes a candidate calc rule now, on each owner it selects that the caller may read, with the reduce the tick runs, and writes nothing (a read-only transaction). For each owner it answers the value the rule would write, the output's current value and whether they differ, the inputs with no value, the members skipped and the instances left out as stale (named when the caller may read the component, else counted). At most owner_cap owners are computed (owners_judged of owners_total, truncated past it). The candidate is checked as a save would check it: a reduce that does not compile, a cycle in the key graph, an output another enabled rule or a collection writes, or health are each a 422, so the author learns before saving; given a saved rule's name it is judged as an edit of that rule. A selector naming an owner the caller may not read is a 422 as one that does not exist. Gated by rule:read.
+         */
+        post: operations["preview-calc-rule"];
         delete?: never;
         options?: never;
         head?: never;
@@ -4699,6 +4739,154 @@ export interface components {
             /** @description The property or metric the input reads, by name */
             key: string;
         };
+        CalcMemberBody: {
+            /** @description The member component, by name */
+            component: string;
+            /** @description The member component's uuid */
+            component_id: string;
+            /** @description The input key the member held no value of */
+            key: string;
+        };
+        CalcOwnerStateBody: {
+            /**
+             * Format: date-time
+             * @description When the rule last computed on the owner; absent when it has not yet
+             */
+            computed_at?: string;
+            /**
+             * Format: date-time
+             * @description When a deferred mark (a failed computation backing off) is due
+             */
+            due_at?: string;
+            /** @description Why the rule could not compute (a run-time failure, a reduce that no longer compiles, a database fault it is backing off from) */
+            error?: string;
+            /** @description The input keys no value was found for (nothing was written) */
+            missing: string[] | null;
+            /**
+             * Format: date-time
+             * @description A system with no role-bound members since then: the rule writes nothing and its last value stands, unsupported
+             */
+            no_members_since?: string;
+            /** @description The owner, by name, resolved now */
+            owner: string;
+            /** @description The owner's uuid */
+            owner_id: string;
+            /**
+             * @description What the owner is
+             * @enum {string}
+             */
+            owner_kind: "component" | "system";
+            /** @description The owner is marked for the next tick */
+            pending: boolean;
+            /**
+             * Format: int64
+             * @description The rule version that computed it
+             */
+            rule_version?: number;
+            /** @description A system rule's members that held no value of an input, those the caller may read */
+            skipped: components["schemas"]["CalcMemberBody"][] | null;
+            /**
+             * Format: int64
+             * @description How many more skipped members the caller may not read (counted, never named)
+             */
+            skipped_hidden: number;
+            /** @description The instances a reducer left out as stale, on components the caller may read */
+            stale: components["schemas"]["CalcStaleBody"][] | null;
+            /**
+             * Format: int64
+             * @description How many more stale instances are on components the caller may not read
+             */
+            stale_hidden: number;
+            /** @description The value the rule last computed on the owner; absent when it could not compute */
+            value?: unknown;
+        };
+        CalcPreviewInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/CalcPreviewInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description The keys the rule reads, each by a unique name its reduce uses */
+            inputs: components["schemas"]["CalcInputBody"][] | null;
+            /** @description A saved rule's name, to preview an edit of it (its stored version is then not a second writer of its key); absent for a new rule */
+            name?: string;
+            /** @description The property or metric the rule would write */
+            output_key: string;
+            /**
+             * @description What the rule derives a value on
+             * @enum {string}
+             */
+            owner_kind: "component" | "system";
+            /** @description A named reducer over the one input, or an expression */
+            reduce: components["schemas"]["CalcReduceBody"];
+            /** @description The owners the rule derives for; absent is every owner of its kind */
+            selector?: components["schemas"]["CalcSelectorBody"];
+        };
+        CalcPreviewOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/CalcPreviewOutputBody.json
+             */
+            readonly $schema?: string;
+            /**
+             * Format: int64
+             * @description The most owners one preview computes
+             */
+            owner_cap: number;
+            /** @description What the rule would do on each owner it selects that the caller may read, by owner id */
+            owners: components["schemas"]["CalcPreviewOwnerBody"][] | null;
+            /**
+             * Format: int64
+             * @description How many owners were computed
+             */
+            owners_judged: number;
+            /**
+             * Format: int64
+             * @description How many owners the rule selects that the caller may read
+             */
+            owners_total: number;
+            /** @description The cap stopped the preview short of every owner */
+            truncated: boolean;
+        };
+        CalcPreviewOwnerBody: {
+            /** @description The output key's current value on the owner; absent when it has none */
+            current?: unknown;
+            /** @description Whether the value differs from the current one, so the rule would write a sample */
+            differs: boolean;
+            /** @description Why the rule could not compute on the owner */
+            error?: string;
+            /** @description The input keys no value was found for */
+            missing: string[] | null;
+            /** @description A system with no role-bound members: the rule would write nothing */
+            no_members: boolean;
+            /** @description The owner, by name */
+            owner: string;
+            /** @description The owner's uuid */
+            owner_id: string;
+            /**
+             * @description What the owner is
+             * @enum {string}
+             */
+            owner_kind: "component" | "system";
+            /** @description A system rule's members that held no value of an input, those the caller may read */
+            skipped: components["schemas"]["CalcMemberBody"][] | null;
+            /**
+             * Format: int64
+             * @description How many more skipped members the caller may not read
+             */
+            skipped_hidden: number;
+            /** @description The instances a reducer would leave out as stale, on components the caller may read */
+            stale: components["schemas"]["CalcStaleBody"][] | null;
+            /**
+             * Format: int64
+             * @description How many more stale instances the caller may not read
+             */
+            stale_hidden: number;
+            /** @description The value the rule would write now; absent when it would write nothing */
+            value?: unknown;
+        };
         CalcReduceBody: {
             /** @description An expression over the inputs by their names, yielding the output key's type; give this or reducer */
             expr?: string;
@@ -4763,6 +4951,21 @@ export interface components {
              */
             version: number;
         };
+        CalcRuleStateOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/CalcRuleStateOutputBody.json
+             */
+            readonly $schema?: string;
+            /** @description The rule's state on each owner the caller may read, by owner name */
+            owners: components["schemas"]["CalcOwnerStateBody"][] | null;
+            /**
+             * Format: int64
+             * @description How many of the rule's marks are pending, fleet-wide (a count naming no owner)
+             */
+            pending_depth: number;
+        };
         CalcSelectorBody: {
             /** @description A component rule: derive on components whose type falls within one of these component types */
             component_types?: string[] | null;
@@ -4772,6 +4975,16 @@ export interface components {
             system_types?: string[] | null;
             /** @description A system rule: derive on these systems (by name or id on write; ids on read) */
             systems?: string[] | null;
+        };
+        CalcStaleBody: {
+            /** @description The component the instance is on, by name */
+            component: string;
+            /** @description The component's uuid */
+            component_id: string;
+            /** @description The instance left out as stale */
+            instance: string;
+            /** @description The input key */
+            key: string;
         };
         ChangePasswordInputBody: {
             /**
@@ -10154,6 +10367,38 @@ export interface operations {
             };
         };
     };
+    "get-calc-rule-state": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The rule's name (its uuid is accepted too) */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalcRuleStateOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     "rename-calc-rule": {
         parameters: {
             query?: never;
@@ -10177,6 +10422,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CalcRuleBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "preview-calc-rule": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CalcPreviewInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalcPreviewOutputBody"];
                 };
             };
             /** @description Error */

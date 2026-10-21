@@ -348,6 +348,31 @@ Example:
 omniglass calc-rule list
 ```
 
+### `omniglass calc-rule preview`
+
+Preview a calc rule
+
+```
+omniglass calc-rule preview [flags]
+```
+
+Computes a candidate calc rule now, on each owner it selects that the caller may read, with the reduce the tick runs, and writes nothing (a read-only transaction). For each owner it answers the value the rule would write, the output's current value and whether they differ, the inputs with no value, the members skipped and the instances left out as stale (named when the caller may read the component, else counted). At most owner_cap owners are computed (owners_judged of owners_total, truncated past it). The candidate is checked as a save would check it: a reduce that does not compile, a cycle in the key graph, an output another enabled rule or a collection writes, or health are each a 422, so the author learns before saving; given a saved rule's name it is judged as an edit of that rule. A selector naming an owner the caller may not read is a 422 as one that does not exist. Gated by rule:read.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--inputs` | string | (none) | The keys the rule reads, each by a unique name its reduce uses |
+| `--name` | string | (none) | A saved rule's name, to preview an edit of it (its stored version is then not a second writer of its key); absent for a new rule |
+| `--output-key` | string | (none) | The property or metric the rule would write |
+| `--owner-kind` | string | (none) | What the rule derives a value on |
+| `--reduce` | string | (none) | A named reducer over the one input, or an expression |
+| `--selector` | string | (none) | The owners the rule derives for; absent is every owner of its kind |
+
+Example:
+
+```sh
+omniglass calc-rule preview --inputs <json> --output-key output_key --owner-kind owner_kind --reduce <json>
+```
+
 ### `omniglass calc-rule rename`
 
 Rename a calc rule
@@ -366,6 +391,26 @@ Example:
 
 ```sh
 omniglass calc-rule rename <name> --name name
+```
+
+### `omniglass calc-rule state`
+
+Commands for the state resource
+
+#### `omniglass calc-rule state list`
+
+Get a calc rule's live state
+
+```
+omniglass calc-rule state list <name>
+```
+
+What a calc rule last did on each owner the caller may read (components by the component read scope, systems by the system read scope), each owner named now: the value it computed, when and at which version, the inputs it found no value of, a system's members that held none and the instances it left out as stale (named when the caller may read the component, else counted), an error, since when a system has had no members, and whether the owner is pending (with when a deferred mark is due). The rule's pending depth is fleet-wide and names no owner. Gated by rule:read.
+
+Example:
+
+```sh
+omniglass calc-rule state list <name>
 ```
 
 ### `omniglass calc-rule update`

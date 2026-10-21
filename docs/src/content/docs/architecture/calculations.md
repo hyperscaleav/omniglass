@@ -17,9 +17,9 @@ writes its typed fire and clear events at each edge of its condition, its alarm 
 The **`calc_rule` registry** is built (#995, [ADR-0147](/architecture/decisions/#adr-0147-a-calc-rule-is-a-typed-sibling-registry-checked-acyclic-at-authoring)):
 rules are authored, type-checked and kept acyclic, below. **Component and system rules run** (#996,
 #997, [ADR-0148](/architecture/decisions/#adr-0148-calc-rules-run-on-a-durable-pending-set-and-a-server-tick-not-a-jetstream-consumer)): on a durable pending set and a
-server tick rather than a JetStream consumer, below. Event rules do not yet judge a system-owned output
-(#1002). A rule's state and preview, and the console, are the rest of epic #525, and the `action_rule`
-is still design.
+server tick rather than a JetStream consumer, below. A rule's **state** and a candidate's **preview**
+are read on [the API](/architecture/api/) (#998). Event rules do not yet judge a system-owned output
+(#1002). The console is the rest of epic #525, and the `action_rule` is still design.
 :::
 
 ## The calc_rule registry
@@ -163,6 +163,21 @@ work.
 
 A system-owned sample feeds no calc rule (system rules read their members), and event rules do not judge
 it yet: the evaluator judges component samples only (#1002).
+
+### State and preview
+
+A rule's **state** is what it last did on each owner, read at `GET /calc-rules/{name}/state`: the value,
+when and at which version, the inputs with no value, the members skipped and the instances left out as
+stale, an error, since when a system has had no members, and whether the owner is pending (and when a
+deferred mark is due), with the rule's whole pending depth. It is fenced to the owners the caller may
+read, named at read time, and a member the caller may not read is counted, never named.
+
+A **preview** (`POST /calc-rules:preview`) computes a candidate rule now, on each owner it selects that
+the caller may read, with the same reduce the tick runs, in a read-only transaction that writes
+nothing: the value it would write, the current output and whether they differ, and what was missing,
+skipped or stale, up to 200 owners a preview. A candidate is checked as a save would check it, so a
+rule that could not be saved (a reduce that does not compile, a cycle, a second writer, a collected
+output) is refused before it is saved; given a saved rule's name, it is judged as an edit of that rule.
 
 :::design[Target design: the JetStream calc consumer and event rules on system outputs, tracked in #430 and #1002]
 

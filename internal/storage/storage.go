@@ -476,6 +476,12 @@ type Gateway interface {
 	// DrainCalcPending serves up to limit pending calc rule marks (#996):
 	// reduce each rule's inputs on its owner and write the output.
 	DrainCalcPending(ctx context.Context, limit int) (CalcDrain, error)
+	// CalcRuleState reads a calc rule's live state on the owners the
+	// component and system read scopes admit (#998).
+	CalcRuleState(ctx context.Context, ref string, components, systems scope.Set) (*CalcRuleLive, error)
+	// PreviewCalcRule computes a candidate calc rule on the owners it
+	// selects in scope, writing nothing (#998).
+	PreviewCalcRule(ctx context.Context, spec CalcRuleSpec, components, systems scope.Set) (*CalcPreview, error)
 	// SampleKeyType reads which lane a sample key reads and, for a property,
 	// its data type: what types an expression's value (#958).
 	SampleKeyType(ctx context.Context, key string) (rules.Lane, string, error)

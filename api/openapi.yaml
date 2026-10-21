@@ -413,6 +413,254 @@ components:
         - as
         - key
       type: object
+    CalcMemberBody:
+      additionalProperties: false
+      properties:
+        component:
+          description: The member component, by name
+          type: string
+        component_id:
+          description: The member component's uuid
+          type: string
+        key:
+          description: The input key the member held no value of
+          type: string
+      required:
+        - key
+        - component
+        - component_id
+      type: object
+    CalcOwnerStateBody:
+      additionalProperties: false
+      properties:
+        computed_at:
+          description: When the rule last computed on the owner; absent when it has not yet
+          format: date-time
+          type: string
+        due_at:
+          description: When a deferred mark (a failed computation backing off) is due
+          format: date-time
+          type: string
+        error:
+          description: Why the rule could not compute (a run-time failure, a reduce that no longer compiles, a database fault it is backing off from)
+          type: string
+        missing:
+          description: The input keys no value was found for (nothing was written)
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+        no_members_since:
+          description: "A system with no role-bound members since then: the rule writes nothing and its last value stands, unsupported"
+          format: date-time
+          type: string
+        owner:
+          description: The owner, by name, resolved now
+          type: string
+        owner_id:
+          description: The owner's uuid
+          type: string
+        owner_kind:
+          description: What the owner is
+          enum:
+            - component
+            - system
+          type: string
+        pending:
+          description: The owner is marked for the next tick
+          type: boolean
+        rule_version:
+          description: The rule version that computed it
+          format: int64
+          type: integer
+        skipped:
+          description: A system rule's members that held no value of an input, those the caller may read
+          items:
+            $ref: "#/components/schemas/CalcMemberBody"
+          type:
+            - array
+            - "null"
+        skipped_hidden:
+          description: How many more skipped members the caller may not read (counted, never named)
+          format: int64
+          type: integer
+        stale:
+          description: The instances a reducer left out as stale, on components the caller may read
+          items:
+            $ref: "#/components/schemas/CalcStaleBody"
+          type:
+            - array
+            - "null"
+        stale_hidden:
+          description: How many more stale instances are on components the caller may not read
+          format: int64
+          type: integer
+        value:
+          description: The value the rule last computed on the owner; absent when it could not compute
+      required:
+        - owner_kind
+        - owner
+        - owner_id
+        - missing
+        - skipped
+        - skipped_hidden
+        - stale
+        - stale_hidden
+        - pending
+      type: object
+    CalcPreviewInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/CalcPreviewInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        inputs:
+          description: The keys the rule reads, each by a unique name its reduce uses
+          items:
+            $ref: "#/components/schemas/CalcInputBody"
+          maxItems: 16
+          minItems: 1
+          type:
+            - array
+            - "null"
+        name:
+          description: A saved rule's name, to preview an edit of it (its stored version is then not a second writer of its key); absent for a new rule
+          type: string
+        output_key:
+          description: The property or metric the rule would write
+          minLength: 1
+          type: string
+        owner_kind:
+          description: What the rule derives a value on
+          enum:
+            - component
+            - system
+          type: string
+        reduce:
+          $ref: "#/components/schemas/CalcReduceBody"
+          description: A named reducer over the one input, or an expression
+        selector:
+          $ref: "#/components/schemas/CalcSelectorBody"
+          description: The owners the rule derives for; absent is every owner of its kind
+      required:
+        - owner_kind
+        - inputs
+        - reduce
+        - output_key
+      type: object
+    CalcPreviewOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/CalcPreviewOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        owner_cap:
+          description: The most owners one preview computes
+          format: int64
+          type: integer
+        owners:
+          description: What the rule would do on each owner it selects that the caller may read, by owner id
+          items:
+            $ref: "#/components/schemas/CalcPreviewOwnerBody"
+          type:
+            - array
+            - "null"
+        owners_judged:
+          description: How many owners were computed
+          format: int64
+          type: integer
+        owners_total:
+          description: How many owners the rule selects that the caller may read
+          format: int64
+          type: integer
+        truncated:
+          description: The cap stopped the preview short of every owner
+          type: boolean
+      required:
+        - owners
+        - owners_judged
+        - owners_total
+        - owner_cap
+        - truncated
+      type: object
+    CalcPreviewOwnerBody:
+      additionalProperties: false
+      properties:
+        current:
+          description: The output key's current value on the owner; absent when it has none
+        differs:
+          description: Whether the value differs from the current one, so the rule would write a sample
+          type: boolean
+        error:
+          description: Why the rule could not compute on the owner
+          type: string
+        missing:
+          description: The input keys no value was found for
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+        no_members:
+          description: "A system with no role-bound members: the rule would write nothing"
+          type: boolean
+        owner:
+          description: The owner, by name
+          type: string
+        owner_id:
+          description: The owner's uuid
+          type: string
+        owner_kind:
+          description: What the owner is
+          enum:
+            - component
+            - system
+          type: string
+        skipped:
+          description: A system rule's members that held no value of an input, those the caller may read
+          items:
+            $ref: "#/components/schemas/CalcMemberBody"
+          type:
+            - array
+            - "null"
+        skipped_hidden:
+          description: How many more skipped members the caller may not read
+          format: int64
+          type: integer
+        stale:
+          description: The instances a reducer would leave out as stale, on components the caller may read
+          items:
+            $ref: "#/components/schemas/CalcStaleBody"
+          type:
+            - array
+            - "null"
+        stale_hidden:
+          description: How many more stale instances the caller may not read
+          format: int64
+          type: integer
+        value:
+          description: The value the rule would write now; absent when it would write nothing
+      required:
+        - owner_kind
+        - owner
+        - owner_id
+        - differs
+        - missing
+        - skipped
+        - skipped_hidden
+        - stale
+        - stale_hidden
+        - no_members
+      type: object
     CalcReduceBody:
       additionalProperties: false
       properties:
@@ -518,6 +766,31 @@ components:
         - created_at
         - updated_at
       type: object
+    CalcRuleStateOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/CalcRuleStateOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        owners:
+          description: The rule's state on each owner the caller may read, by owner name
+          items:
+            $ref: "#/components/schemas/CalcOwnerStateBody"
+          type:
+            - array
+            - "null"
+        pending_depth:
+          description: How many of the rule's marks are pending, fleet-wide (a count naming no owner)
+          format: int64
+          type: integer
+      required:
+        - owners
+        - pending_depth
+      type: object
     CalcSelectorBody:
       additionalProperties: false
       properties:
@@ -549,6 +822,27 @@ components:
           type:
             - array
             - "null"
+      type: object
+    CalcStaleBody:
+      additionalProperties: false
+      properties:
+        component:
+          description: The component the instance is on, by name
+          type: string
+        component_id:
+          description: The component's uuid
+          type: string
+        instance:
+          description: The instance left out as stale
+          type: string
+        key:
+          description: The input key
+          type: string
+      required:
+        - key
+        - component
+        - component_id
+        - instance
       type: object
     ChangePasswordInputBody:
       additionalProperties: false
@@ -9428,6 +9722,33 @@ paths:
           description: Error
       summary: Update a calc rule
       x-omniglass-permission: rule:update
+  /calc-rules/{name}/state:
+    get:
+      description: "What a calc rule last did on each owner the caller may read (components by the component read scope, systems by the system read scope), each owner named now: the value it computed, when and at which version, the inputs it found no value of, a system's members that held none and the instances it left out as stale (named when the caller may read the component, else counted), an error, since when a system has had no members, and whether the owner is pending (with when a deferred mark is due). The rule's pending depth is fleet-wide and names no owner. Gated by rule:read."
+      operationId: get-calc-rule-state
+      parameters:
+        - description: The rule's name (its uuid is accepted too)
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The rule's name (its uuid is accepted too)
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalcRuleStateOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Get a calc rule's live state
+      x-omniglass-permission: rule:read
   /calc-rules/{name}:rename:
     post:
       description: "Moves an operator rule's name, the address an operator types. A separate act from an update, because it breaks bookmarks and integration config outside this system; inside it nothing breaks, since the audit rows hold the rule's uuid and the key graph is of keys, not rule names. Not a material change: no version bump. An official rule keeps its name (409), a taken name is a 409, an illegal or uuid-shaped one a 422. Returns the rule with its uuid. Audited. Gated by rule:update, with an all-scope grant."
@@ -9461,6 +9782,31 @@ paths:
           description: Error
       summary: Rename a calc rule
       x-omniglass-permission: rule:update
+  /calc-rules:preview:
+    post:
+      description: "Computes a candidate calc rule now, on each owner it selects that the caller may read, with the reduce the tick runs, and writes nothing (a read-only transaction). For each owner it answers the value the rule would write, the output's current value and whether they differ, the inputs with no value, the members skipped and the instances left out as stale (named when the caller may read the component, else counted). At most owner_cap owners are computed (owners_judged of owners_total, truncated past it). The candidate is checked as a save would check it: a reduce that does not compile, a cycle in the key graph, an output another enabled rule or a collection writes, or health are each a 422, so the author learns before saving; given a saved rule's name it is judged as an edit of that rule. A selector naming an owner the caller may not read is a 422 as one that does not exist. Gated by rule:read."
+      operationId: preview-calc-rule
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CalcPreviewInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalcPreviewOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Preview a calc rule
+      x-omniglass-permission: rule:read
   /command-types:
     get:
       description: Lists every registered command type (official and custom). Fleet-wide reference data. Gated by command_type:read.

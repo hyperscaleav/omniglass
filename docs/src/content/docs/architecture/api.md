@@ -396,7 +396,19 @@ or metric type a calc rule writes is a 409 naming the rule. A rule that would cl
 (`temp-twice -> avg-temp -> temp-twice`), its error carrying the `keys` and `rules` along it. A patch
 bumps the version unless it changes nothing; `POST /calc-rules/{name}:rename` moves the name, bumping no
 version (a rename to the same name writes nothing), with the same 409 and 422 refusals as an event
-rule's rename.
+rule's rename. `GET /calc-rules/{name}/state` (gated `rule:read`; `omniglass calc-rule state list`) lists
+what the rule last did on each owner the caller may read (a component by the component read scope, a
+system by the system read scope), the owner named now: `value`, `computed_at`, `rule_version`,
+`missing`, a system's `skipped` members and the `stale` instances (named when the caller may read the
+component, else counted in `skipped_hidden` and `stale_hidden`), `error`, `no_members_since`, `pending`
+and a deferred mark's `due_at`, beside the rule's fleet-wide `pending_depth`. `POST /calc-rules:preview`
+(gated `rule:read`; `omniglass calc-rule preview`) computes a candidate rule (`owner_kind`, `selector`,
+`inputs`, `reduce`, `output_key`, and a saved rule's `name` to preview an edit of it) on each selected
+owner the caller may read, with the tick's reduce, in a read-only transaction: per owner the `value` it
+would write, the `current` output and whether it `differs`, and what was missing, skipped or stale,
+at most `owner_cap` owners (`owners_judged` of `owners_total`, `truncated` past it). A candidate a save
+would refuse (a reduce that does not compile, a cycle, a second writer of the output, a collected
+output, health) is the same 422.
 
 **The endpoint is authored; the task is derived.** An endpoint is addressed by a surrogate `id` and
 **named by its protocol**: `name` derives from `transport`, unique **within its component**

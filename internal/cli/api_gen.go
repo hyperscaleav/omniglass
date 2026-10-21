@@ -440,6 +440,58 @@ func generatedCommands() []*cobra.Command {
 		}())
 		parent.AddCommand(func() *cobra.Command {
 			cmd := func() *cobra.Command {
+				var fInputs string
+				var fName string
+				var fOutputKey string
+				var fOwnerKind string
+				var fReduce string
+				var fSelector string
+				cmd := &cobra.Command{
+					Use:     "preview",
+					Short:   "Preview a calc rule",
+					Long:    "Computes a candidate calc rule now, on each owner it selects that the caller may read, with the reduce the tick runs, and writes nothing (a read-only transaction). For each owner it answers the value the rule would write, the output's current value and whether they differ, the inputs with no value, the members skipped and the instances left out as stale (named when the caller may read the component, else counted). At most owner_cap owners are computed (owners_judged of owners_total, truncated past it). The candidate is checked as a save would check it: a reduce that does not compile, a cycle in the key graph, an output another enabled rule or a collection writes, or health are each a 422, so the author learns before saving; given a saved rule's name it is judged as an edit of that rule. A selector naming an owner the caller may not read is a 422 as one that does not exist. Gated by rule:read.",
+					Example: "  omniglass calc-rule preview --inputs <json> --output-key output_key --owner-kind owner_kind --reduce <json>",
+					Args:    cobra.ExactArgs(0),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/calc-rules:preview")
+						body := map[string]any{}
+						if cmd.Flags().Changed("inputs") {
+							body["inputs"] = jsonOrString(fInputs)
+						}
+						if cmd.Flags().Changed("name") {
+							body["name"] = fName
+						}
+						if cmd.Flags().Changed("output-key") {
+							body["output_key"] = fOutputKey
+						}
+						if cmd.Flags().Changed("owner-kind") {
+							body["owner_kind"] = fOwnerKind
+						}
+						if cmd.Flags().Changed("reduce") {
+							body["reduce"] = jsonOrString(fReduce)
+						}
+						if cmd.Flags().Changed("selector") {
+							body["selector"] = jsonOrString(fSelector)
+						}
+						return runAPICommand(cmd, "POST", path, body)
+					},
+				}
+				cmd.Flags().StringVar(&fInputs, "inputs", "", "The keys the rule reads, each by a unique name its reduce uses")
+				_ = cmd.MarkFlagRequired("inputs")
+				cmd.Flags().StringVar(&fName, "name", "", "A saved rule's name, to preview an edit of it (its stored version is then not a second writer of its key); absent for a new rule")
+				cmd.Flags().StringVar(&fOutputKey, "output-key", "", "The property or metric the rule would write")
+				_ = cmd.MarkFlagRequired("output-key")
+				cmd.Flags().StringVar(&fOwnerKind, "owner-kind", "", "What the rule derives a value on")
+				_ = cmd.MarkFlagRequired("owner-kind")
+				cmd.Flags().StringVar(&fReduce, "reduce", "", "A named reducer over the one input, or an expression")
+				_ = cmd.MarkFlagRequired("reduce")
+				cmd.Flags().StringVar(&fSelector, "selector", "", "The owners the rule derives for; absent is every owner of its kind")
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
 				var fName string
 				cmd := &cobra.Command{
 					Use:     "rename <name>",
@@ -461,6 +513,30 @@ func generatedCommands() []*cobra.Command {
 				return cmd
 			}()
 			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			parent := &cobra.Command{
+				Use:   "state",
+				Short: "Commands for the state resource",
+			}
+			parent.AddCommand(func() *cobra.Command {
+				cmd := func() *cobra.Command {
+					cmd := &cobra.Command{
+						Use:     "list <name>",
+						Short:   "Get a calc rule's live state",
+						Long:    "What a calc rule last did on each owner the caller may read (components by the component read scope, systems by the system read scope), each owner named now: the value it computed, when and at which version, the inputs it found no value of, a system's members that held none and the instances it left out as stale (named when the caller may read the component, else counted), an error, since when a system has had no members, and whether the owner is pending (with when a deferred mark is due). The rule's pending depth is fleet-wide and names no owner. Gated by rule:read.",
+						Example: "  omniglass calc-rule state list <name>",
+						Args:    cobra.ExactArgs(1),
+						RunE: func(cmd *cobra.Command, args []string) error {
+							path := fmt.Sprintf("/api/v1/calc-rules/%s/state", url.PathEscape(args[0]))
+							return runAPICommand(cmd, "GET", path, nil)
+						},
+					}
+					return cmd
+				}()
+				return cmd
+			}())
+			return parent
 		}())
 		parent.AddCommand(func() *cobra.Command {
 			cmd := func() *cobra.Command {

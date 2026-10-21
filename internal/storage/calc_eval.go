@@ -451,7 +451,13 @@ func (p *PG) reduceCalc(ctx context.Context, tx pgx.Tx, r CalcRule, owner calcOw
 		}
 		typed[i] = rules.TypedInput{As: in.As, Key: in.Key, ValueType: vt}
 	}
-	prog, err := p.calcs.program(r, typed, r.outputType)
+	var prog *rules.CalcProgram
+	if r.candidate {
+		// A preview's candidate has no id or version to cache under.
+		prog, err = rules.CompileCalc(r.OwnerKind, typed, r.Reduce, r.outputType)
+	} else {
+		prog, err = p.calcs.program(r, typed, r.outputType)
+	}
 	if err != nil {
 		return calcOutcome{err: err.Error()}, nil
 	}

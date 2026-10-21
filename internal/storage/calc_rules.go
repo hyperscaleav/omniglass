@@ -48,6 +48,9 @@ type CalcRule struct {
 	// outputType is the output's value type, from the registry row the rule
 	// holds by id on its recorded lane, never re-resolved by name.
 	outputType string
+	// candidate is a preview's unsaved rule: compiled each time, never
+	// cached under an id and version it does not have.
+	candidate bool
 }
 
 // CalcFault is a stored rule's compile error as a reader sees it: the field

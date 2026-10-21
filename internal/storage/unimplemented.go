@@ -912,6 +912,12 @@ func (UnimplementedGateway) RenameCalcRule(context.Context, string, string, stri
 func (UnimplementedGateway) DrainCalcPending(context.Context, int) (CalcDrain, error) {
 	return CalcDrain{}, nil
 }
+func (UnimplementedGateway) CalcRuleState(context.Context, string, scope.Set, scope.Set) (*CalcRuleLive, error) {
+	return nil, ErrCalcRuleNotFound
+}
+func (UnimplementedGateway) PreviewCalcRule(context.Context, CalcRuleSpec, scope.Set, scope.Set) (*CalcPreview, error) {
+	return nil, ErrCalcRuleInvalid
+}
 func (UnimplementedGateway) DeleteCalcRule(context.Context, string, string, scope.Set) error {
 	return ErrCalcRuleNotFound
 }

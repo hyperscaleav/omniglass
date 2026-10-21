@@ -26,3 +26,11 @@ func (p *PG) WriteMetricHeld(ctx context.Context, evs []MetricSampleWrite, hold 
 // ExportCalcProbeSQL is the sample write's calc rule probe, for the EXPLAIN
 // guard (TestCalcProbeUsesTheInputsIndex), and the jsonpath it binds.
 func ExportCalcProbeSQL(keys []string) (string, string) { return calcProbeSQL, calcKeysPath(keys) }
+
+// SetCalcPreviewOwnerCap lowers the calc preview's owner cap for a test,
+// returning the restore.
+func SetCalcPreviewOwnerCap(n int) func() {
+	was := calcPreviewOwnerCap
+	calcPreviewOwnerCap = n
+	return func() { calcPreviewOwnerCap = was }
+}
