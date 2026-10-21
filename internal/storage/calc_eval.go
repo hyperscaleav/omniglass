@@ -44,8 +44,9 @@ type calcMarks struct {
 
 func newCalcMarks() *calcMarks { return &calcMarks{keys: map[string]map[string]bool{}} }
 
-// add records a sample: only component-owned samples mark (system rules
-// arrive with #997).
+// add records a sample: only component-owned samples mark. A system rule
+// reads its members' (component) samples, so a system-owned sample, a
+// system rule's own output included, feeds no calc rule.
 func (m *calcMarks) add(ownerKind, ownerID, key string) {
 	if ownerKind != rules.OwnerComponent {
 		return
@@ -95,22 +96,22 @@ func (p *PG) markCalcPending(ctx context.Context, tx pgx.Tx, marks *calcMarks, e
 	if len(keys) == 0 {
 		return nil
 	}
-	rows, err := tx.Query(ctx, `select id::text, selector, inputs from calc_rule
-		where enabled and owner_kind = 'component' and inputs @? $1::jsonpath and id::text <> $2 order by id`,
-		calcKeysPath(keys), exceptRule)
+	rows, err := tx.Query(ctx, calcProbeSQL, calcKeysPath(keys), exceptRule)
 	if err != nil {
 		return fmt.Errorf("storage: find calc rules to mark: %w", err)
 	}
 	type candidate struct {
 		id     string
-		sel    EventRuleSelector
+		kind   string
+		sel    CalcRuleSelector
 		inputs map[string]bool
 	}
 	var found []candidate
+	var systemRules []string
 	for rows.Next() {
 		var c candidate
 		var sel, inputs []byte
-		if err := rows.Scan(&c.id, &sel, &inputs); err != nil {
+		if err := rows.Scan(&c.id, &c.kind, &sel, &inputs); err != nil {
 			rows.Close()
 			return fmt.Errorf("storage: find calc rules to mark: %w", err)
 		}
@@ -127,11 +128,20 @@ func (p *PG) markCalcPending(ctx context.Context, tx pgx.Tx, marks *calcMarks, e
 		for _, in := range ins {
 			c.inputs[in.Key] = true
 		}
+		if c.kind == rules.OwnerSystem {
+			systemRules = append(systemRules, c.id)
+			continue
+		}
 		found = append(found, c)
 	}
 	rows.Close()
 	if err := rows.Err(); err != nil {
 		return err
+	}
+	if len(systemRules) > 0 {
+		if err := markSystemRulesBySamples(ctx, tx, systemRules, marks); err != nil {
+			return err
+		}
 	}
 	if len(found) == 0 {
 		return nil
@@ -159,7 +169,7 @@ func (p *PG) markCalcPending(ctx context.Context, tx pgx.Tx, marks *calcMarks, e
 			if err != nil {
 				return err
 			}
-			ok, err := m.selects(ctx, tx, EventRule{ID: c.id, Selector: c.sel}, o)
+			ok, err := m.selects(ctx, tx, EventRule{ID: c.id, Selector: c.sel.components()}, o)
 			if err != nil {
 				return err
 			}
@@ -253,10 +263,11 @@ func (p *PG) serveCalcMark(ctx context.Context, held []string) (markResult, erro
 		return markResult{}, fmt.Errorf("storage: begin calc mark: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
-	var ruleID, ownerKind, compID string
-	err = tx.QueryRow(ctx, `select rule_id::text, owner_kind, coalesce(component_id::text, '') from calc_pending
+	var ruleID string
+	var owner calcOwner
+	err = tx.QueryRow(ctx, `select rule_id::text, owner_kind, coalesce(component_id, system_id)::text from calc_pending
 		where marked_at <= now() and not (rule_id = any($1::uuid[]))
-		order by marked_at, rule_id for update skip locked limit 1`, held).Scan(&ruleID, &ownerKind, &compID)
+		order by marked_at, rule_id for update skip locked limit 1`, held).Scan(&ruleID, &owner.kind, &owner.id)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return markResult{outcome: markNone}, nil
 	}
@@ -274,18 +285,18 @@ func (p *PG) serveCalcMark(ctx context.Context, held []string) (markResult, erro
 		return markResult{}, err
 	}
 	if _, err := tx.Exec(ctx, `delete from calc_pending where rule_id = $1::uuid and owner_kind = $2
-		and component_id is not distinct from nullif($3, '')::uuid`, ruleID, ownerKind, compID); err != nil {
+		and `+owner.col()+` = $3::uuid`, ruleID, owner.kind, owner.id); err != nil {
 		return markResult{}, fmt.Errorf("storage: clear a calc mark: %w", err)
 	}
-	if err := p.computeServed(ctx, tx, r, ownerKind, compID); err != nil {
+	if err := p.computeServed(ctx, tx, r, owner); err != nil {
 		_ = tx.Rollback(ctx)
-		if derr := p.deferCalcMark(ctx, r, compID, err); derr != nil {
+		if derr := p.deferCalcMark(ctx, r, owner, err); derr != nil {
 			return markResult{}, derr
 		}
 		return markResult{outcome: markDeferred, ruleID: ruleID}, nil
 	}
 	if err := tx.Commit(ctx); err != nil {
-		if derr := p.deferCalcMark(ctx, r, compID, err); derr != nil {
+		if derr := p.deferCalcMark(ctx, r, owner, err); derr != nil {
 			return markResult{}, derr
 		}
 		return markResult{outcome: markDeferred, ruleID: ruleID}, nil
@@ -293,37 +304,52 @@ func (p *PG) serveCalcMark(ctx context.Context, held []string) (markResult, erro
 	return markResult{outcome: markServed, ruleID: ruleID}, nil
 }
 
-// computeServed runs the test hook, then computes an enabled component
-// rule on its component.
-func (p *PG) computeServed(ctx context.Context, tx pgx.Tx, r CalcRule, ownerKind, compID string) error {
+// calcOwner is the owner a mark, a computation or a state row is about: a
+// component or a system, by id.
+type calcOwner struct {
+	kind, id string
+}
+
+// col is the owner's arc column on calc_pending, calc_rule_state and the
+// sample tables.
+func (o calcOwner) col() string {
+	if o.kind == rules.OwnerSystem {
+		return "system_id"
+	}
+	return "component_id"
+}
+
+// computeServed runs the test hook, then computes an enabled rule on the
+// owner its mark names, when the mark's owner kind is the rule's.
+func (p *PG) computeServed(ctx context.Context, tx pgx.Tx, r CalcRule, owner calcOwner) error {
 	if p.calcHook != nil {
 		if err := p.calcHook("taken"); err != nil {
 			return err
 		}
 	}
-	if !r.Enabled || ownerKind != rules.OwnerComponent || r.OwnerKind != rules.OwnerComponent {
+	if !r.Enabled || owner.kind != r.OwnerKind {
 		return nil
 	}
-	return p.computeCalc(ctx, tx, r, compID)
+	return p.computeCalc(ctx, tx, r, owner)
 }
 
 // deferCalcMark records a failed computation in the rule's state and puts
 // its mark back, due after calcRetryBackoff, in a transaction of its own
 // (the failed one is rolled back, its mark with it).
-func (p *PG) deferCalcMark(ctx context.Context, r CalcRule, compID string, cause error) error {
+func (p *PG) deferCalcMark(ctx context.Context, r CalcRule, owner calcOwner, cause error) error {
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("storage: begin defer calc mark: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
-	if _, err := tx.Exec(ctx, `insert into calc_pending (rule_id, owner_kind, component_id, marked_at)
-		select $1::uuid, 'component', $2::uuid, now() + make_interval(secs => $3)
+	if _, err := tx.Exec(ctx, `insert into calc_pending (rule_id, owner_kind, `+owner.col()+`, marked_at)
+		select $1::uuid, $2, $3::uuid, now() + make_interval(secs => $4)
 		where exists (select 1 from calc_rule where id = $1::uuid)
 		on conflict on constraint calc_pending_key do update set marked_at = greatest(calc_pending.marked_at, excluded.marked_at)`,
-		r.ID, compID, calcRetryBackoff.Seconds()); err != nil {
+		r.ID, owner.kind, owner.id, calcRetryBackoff.Seconds()); err != nil {
 		return fmt.Errorf("storage: defer calc mark: %w", err)
 	}
-	if err := recordCalcState(ctx, tx, r, compID, calcOutcome{err: cause.Error()}); err != nil {
+	if err := recordCalcState(ctx, tx, r, owner, calcOutcome{err: cause.Error()}); err != nil {
 		return err
 	}
 	return tx.Commit(ctx)
@@ -334,6 +360,7 @@ type calcOutcome struct {
 	value   any
 	missing []string
 	stale   []staleInstance
+	skipped []skippedMember
 	err     string
 }
 
@@ -342,25 +369,37 @@ type staleInstance struct {
 	Instance string `json:"instance"`
 }
 
-// computeCalc reduces a component rule's inputs on one component and, when
-// the result differs from the output's current value, writes it as a
-// calculated sample on the aggregate instance. Every outcome (a value, the
-// inputs that had none, the instances skipped as stale, an error) is
-// recorded in calc_rule_state; only a database fault is returned.
-func (p *PG) computeCalc(ctx context.Context, tx pgx.Tx, r CalcRule, compID string) error {
-	out, err := p.reduceCalc(ctx, tx, r, compID)
+// skippedMember is a system's member that held no value of an input.
+type skippedMember struct {
+	Key       string `json:"key"`
+	Component string `json:"component"`
+}
+
+// computeCalc reduces a rule's inputs on one owner and, when the result
+// differs from the output's current value, writes it as a calculated sample
+// on the owner's aggregate instance. Every outcome (a value, the inputs that
+// had none, the instances skipped as stale, the members skipped, an error)
+// is recorded in calc_rule_state; only a database fault is returned.
+func (p *PG) computeCalc(ctx context.Context, tx pgx.Tx, r CalcRule, owner calcOwner) error {
+	out, err := p.reduceCalc(ctx, tx, r, owner)
 	if err != nil {
 		return err
 	}
 	if out.value != nil && out.err == "" && len(out.missing) == 0 {
-		if err := p.writeCalcOutput(ctx, tx, r, compID, out.value); err != nil {
+		if err := p.writeCalcOutput(ctx, tx, r, owner, out.value); err != nil {
 			return err
 		}
 	}
-	return recordCalcState(ctx, tx, r, compID, out)
+	return recordCalcState(ctx, tx, r, owner, out)
 }
 
-func (p *PG) reduceCalc(ctx context.Context, tx pgx.Tx, r CalcRule, compID string) (calcOutcome, error) {
+// calcMember is a component an input is read from: the owner itself for a
+// component rule, each role-bound member for a system rule.
+type calcMember struct {
+	id, name string
+}
+
+func (p *PG) reduceCalc(ctx context.Context, tx pgx.Tx, r CalcRule, owner calcOwner) (calcOutcome, error) {
 	types, err := keyValueTypes(ctx, tx)
 	if err != nil {
 		return calcOutcome{}, err
@@ -377,22 +416,33 @@ func (p *PG) reduceCalc(ctx context.Context, tx pgx.Tx, r CalcRule, compID strin
 	if err != nil {
 		return calcOutcome{err: err.Error()}, nil
 	}
+	members := []calcMember{{id: owner.id}}
+	if owner.kind == rules.OwnerSystem {
+		if members, err = systemMembers(ctx, tx, owner.id); err != nil {
+			return calcOutcome{}, err
+		}
+	}
 	var out calcOutcome
 	values := make([][]any, len(typed))
 	for i, in := range typed {
-		vs, stale, err := readCalcInput(ctx, tx, compID, in, prog.Reducer != nil)
-		if err != nil {
-			var bad *calcValueError
-			if errors.As(err, &bad) {
-				return calcOutcome{err: err.Error()}, nil
+		for _, m := range members {
+			vs, stale, err := readCalcInput(ctx, tx, calcOwner{kind: rules.OwnerComponent, id: m.id}, in, prog.Reducer != nil)
+			if err != nil {
+				var bad *calcValueError
+				if errors.As(err, &bad) {
+					return calcOutcome{err: err.Error()}, nil
+				}
+				return calcOutcome{}, err
 			}
-			return calcOutcome{}, err
+			out.stale = append(out.stale, stale...)
+			if len(vs) == 0 && owner.kind == rules.OwnerSystem {
+				out.skipped = append(out.skipped, skippedMember{Key: in.Key, Component: m.name})
+			}
+			values[i] = append(values[i], vs...)
 		}
-		out.stale = append(out.stale, stale...)
-		if len(vs) == 0 {
+		if len(values[i]) == 0 {
 			out.missing = append(out.missing, in.Key)
 		}
-		values[i] = vs
 	}
 	if len(out.missing) > 0 {
 		return out, nil
@@ -406,47 +456,79 @@ func (p *PG) reduceCalc(ctx context.Context, tx pgx.Tx, r CalcRule, compID strin
 	return out, nil
 }
 
+// roleOfSystemSQL is the predicate that a system_role row (alias r) is one
+// of a system's roles (alias s): declared on the system, or inherited from
+// its standard. The one statement of the fact the health rollup's role
+// resolution (resolveHealthRoles), a system rule's members and its marking
+// all read.
+func roleOfSystemSQL(r, s string) string {
+	return fmt.Sprintf(`((%[1]s.owner_kind = 'standard' and %[1]s.standard_id = %[2]s.standard_id)
+		or (%[1]s.owner_kind = 'system' and %[1]s.system_id = %[2]s.id))`, r, s)
+}
+
+// systemMembers is a system's role-bound members: the components assigned
+// to one of its roles, the set the health rollup resolves, by id order.
+func systemMembers(ctx context.Context, tx pgx.Tx, systemID string) ([]calcMember, error) {
+	rows, err := tx.Query(ctx, `select distinct c.id::text, c.name from system s
+		join system_role_assignment ra on ra.system_id = s.id
+		join system_role r on r.id = ra.role_id and `+roleOfSystemSQL("r", "s")+`
+		join component c on c.id = ra.component_id
+		where s.id = $1::uuid order by 1`, systemID)
+	if err != nil {
+		return nil, fmt.Errorf("storage: system %s members: %w", systemID, err)
+	}
+	defer rows.Close()
+	var out []calcMember
+	for rows.Next() {
+		var m calcMember
+		if err := rows.Scan(&m.id, &m.name); err != nil {
+			return nil, fmt.Errorf("storage: system %s members: %w", systemID, err)
+		}
+		out = append(out, m)
+	}
+	return out, rows.Err()
+}
+
 // calcValueError is a stored input value its type cannot read.
 type calcValueError struct{ msg string }
 
 func (e *calcValueError) Error() string { return e.msg }
 
-// readCalcInput is one input's current values on a component, ignoring
-// intended values (calc reads observed and calculated as truth, never
-// intended).
+// readCalcInput is one key's current values on an owner, ignoring intended
+// values (calc reads observed and calculated as truth, never intended).
 //
 // For a named reducer (allInstances) it is each instance's newest value:
 // the per-instance values only, the aggregate instance ” joining the fold
-// only when the key has no other instance on the component, and an instance
+// only when the key has no other instance on the owner, and an instance
 // whose newest sample is older than CalcStaleAfter left out and returned as
 // stale. Instances are walked one index probe at a time (the series index
-// leads with component, type and instance). Otherwise it is the aggregate
+// leads with owner, type and instance). Otherwise it is the aggregate
 // instance's newest value.
-func readCalcInput(ctx context.Context, tx pgx.Tx, compID string, in rules.TypedInput, allInstances bool) ([]any, []staleInstance, error) {
+func readCalcInput(ctx context.Context, tx pgx.Tx, owner calcOwner, in rules.TypedInput, allInstances bool) ([]any, []staleInstance, error) {
 	table, typeCol, typeTable, value := "property", "property_type_id", "property_type", "value #>> '{}'"
 	if in.ValueType == rules.ValueNumber {
 		table, typeCol, typeTable, value = "metric", "metric_type_id", "metric_type", "value::text"
 	}
+	col := owner.col()
 	var sql string
 	if allInstances {
 		sql = fmt.Sprintf(`with recursive t as (select id from %[3]s where name = $2),
 			inst(instance) as (
-				(select instance from %[1]s, t where component_id = $1::uuid and %[2]s = t.id order by instance limit 1)
+				(select instance from %[1]s, t where %[5]s = $1::uuid and %[2]s = t.id order by instance limit 1)
 				union all
-				select (select x.instance from %[1]s x, t where x.component_id = $1::uuid and x.%[2]s = t.id and x.instance > inst.instance
+				select (select x.instance from %[1]s x, t where x.%[5]s = $1::uuid and x.%[2]s = t.id and x.instance > inst.instance
 					order by x.instance limit 1) from inst where inst.instance is not null)
 			select i.instance, n.v, n.ts from inst i, t,
-				lateral (select %[4]s as v, ts from %[1]s where component_id = $1::uuid and %[2]s = t.id and instance = i.instance
+				lateral (select %[4]s as v, ts from %[1]s where %[5]s = $1::uuid and %[2]s = t.id and instance = i.instance
 					and provenance <> 'intended' order by ts desc, id desc limit 1) n
-			where i.instance is not null`, table, typeCol, typeTable, value)
+			where i.instance is not null`, table, typeCol, typeTable, value, col)
 	} else {
 		sql = fmt.Sprintf(`with t as (select id from %[3]s where name = $2), i as (select ''::text as instance)
 			select i.instance, n.v, n.ts from i, t,
-				lateral (select %[4]s as v, ts from %[1]s where component_id = $1::uuid and %[2]s = t.id and instance = i.instance
-					and provenance <> 'intended' order by ts desc, id desc limit 1) n`, table, typeCol, typeTable, value)
+				lateral (select %[4]s as v, ts from %[1]s where %[5]s = $1::uuid and %[2]s = t.id and instance = i.instance
+					and provenance <> 'intended' order by ts desc, id desc limit 1) n`, table, typeCol, typeTable, value, col)
 	}
-
-	rows, err := tx.Query(ctx, sql, compID, in.Key)
+	rows, err := tx.Query(ctx, sql, owner.id, in.Key)
 	if err != nil {
 		return nil, nil, fmt.Errorf("storage: read calc input %s: %w", in.Key, err)
 	}
@@ -495,13 +577,15 @@ func readCalcInput(ctx context.Context, tx pgx.Tx, compID string, in rules.Typed
 	return out, stale, nil
 }
 
-// writeCalcOutput writes a rule's output on a component's aggregate instance
+// writeCalcOutput writes a rule's output on its owner's aggregate instance
 // through the sample-write path, as calculated, unless it equals the
 // output's current value (so an unchanged result writes no row, on either
 // lane, and storage grows only with change). The lane and type are the ones
-// the rule holds its output by, never re-resolved by name.
-func (p *PG) writeCalcOutput(ctx context.Context, tx pgx.Tx, r CalcRule, compID string, v any) error {
-	current, _, err := readCalcInput(ctx, tx, compID, rules.TypedInput{Key: r.OutputKey, ValueType: r.outputType}, false)
+// the rule holds its output by, never re-resolved by name. A system-owned
+// output is not judged by event rules yet: the evaluator judges component
+// samples only (#1002).
+func (p *PG) writeCalcOutput(ctx context.Context, tx pgx.Tx, r CalcRule, owner calcOwner, v any) error {
+	current, _, err := readCalcInput(ctx, tx, owner, rules.TypedInput{Key: r.OutputKey, ValueType: r.outputType}, false)
 	if err != nil {
 		var bad *calcValueError
 		if !errors.As(err, &bad) {
@@ -517,10 +601,10 @@ func (p *PG) writeCalcOutput(ctx context.Context, tx pgx.Tx, r CalcRule, compID 
 		if !ok {
 			return fmt.Errorf("storage: calc rule %s produced %T for metric output %s", r.Name, v, r.OutputKey)
 		}
-		return p.writeMetricSamples(ctx, tx, []MetricSampleWrite{{OwnerKind: rules.OwnerComponent, OwnerID: compID, Key: r.OutputKey,
+		return p.writeMetricSamples(ctx, tx, []MetricSampleWrite{{OwnerKind: owner.kind, OwnerID: owner.id, Key: r.OutputKey,
 			Value: f, Source: calcSource, TS: ts}}, lineage)
 	}
-	return p.writePropertySamples(ctx, tx, []PropertySampleWrite{{OwnerKind: rules.OwnerComponent, OwnerID: compID, Key: r.OutputKey,
+	return p.writePropertySamples(ctx, tx, []PropertySampleWrite{{OwnerKind: owner.kind, OwnerID: owner.id, Key: r.OutputKey,
 		Value: rules.FormatCalcValue(v), Source: calcSource, TS: ts}}, lineage)
 }
 
@@ -528,27 +612,26 @@ func (p *PG) writeCalcOutput(ctx context.Context, tx pgx.Tx, r CalcRule, compID 
 // source_rule.
 const calcSource = "calc"
 
-// recordCalcState upserts a rule's last outcome on a component.
-func recordCalcState(ctx context.Context, tx pgx.Tx, r CalcRule, compID string, out calcOutcome) error {
-	missing, stale := out.missing, out.stale
-	if missing == nil {
-		missing = []string{}
+// recordCalcState upserts a rule's last outcome on an owner.
+func recordCalcState(ctx context.Context, tx pgx.Tx, r CalcRule, owner calcOwner, out calcOutcome) error {
+	jsonList := func(v any, n int) []byte {
+		if n == 0 {
+			return []byte("[]")
+		}
+		b, _ := json.Marshal(v)
+		return b
 	}
-	if stale == nil {
-		stale = []staleInstance{}
-	}
-	m, _ := json.Marshal(missing)
-	st, _ := json.Marshal(stale)
 	var value any
 	if out.value != nil {
 		b, _ := json.Marshal(out.value)
 		value = b
 	}
-	if _, err := tx.Exec(ctx, `insert into calc_rule_state (rule_id, owner_kind, component_id, computed_at, rule_version, value, missing, stale, error)
-		values ($1::uuid, 'component', $2::uuid, now(), $3, $4::jsonb, $5::jsonb, $6::jsonb, $7)
+	if _, err := tx.Exec(ctx, `insert into calc_rule_state (rule_id, owner_kind, `+owner.col()+`, computed_at, rule_version, value, missing, stale, skipped, error)
+		values ($1::uuid, $2, $3::uuid, now(), $4, $5::jsonb, $6::jsonb, $7::jsonb, $8::jsonb, $9)
 		on conflict on constraint calc_rule_state_key do update set computed_at = excluded.computed_at, rule_version = excluded.rule_version,
-			value = excluded.value, missing = excluded.missing, stale = excluded.stale, error = excluded.error`,
-		r.ID, compID, r.Version, value, m, st, out.err); err != nil {
+			value = excluded.value, missing = excluded.missing, stale = excluded.stale, skipped = excluded.skipped, error = excluded.error`,
+		r.ID, owner.kind, owner.id, r.Version, value, jsonList(out.missing, len(out.missing)), jsonList(out.stale, len(out.stale)),
+		jsonList(out.skipped, len(out.skipped)), out.err); err != nil {
 		return fmt.Errorf("storage: record calc state: %w", err)
 	}
 	return nil
@@ -559,9 +642,10 @@ func recordCalcState(ctx context.Context, tx pgx.Tx, r CalcRule, compID string, 
 // (which holds the rule's row FOR UPDATE): the rule's marks and state rows
 // go (a disabled rule keeps neither, a narrowed selector's dropped owners
 // lose theirs, and every kept owner is recomputed at the new version), and
-// an enabled component rule marks every component its selector picks that
-// holds a value of one of its inputs, so a rule over values already stored
-// computes without waiting for a new sample. One statement each.
+// an enabled rule marks its owners, so a rule over values already stored
+// computes without waiting for a new sample: a component rule every
+// component its selector picks that holds a value of one of its inputs, a
+// system rule every system its selector picks. One statement each.
 func resetCalcRuleWork(ctx context.Context, tx pgx.Tx, r CalcRule) error {
 	if _, err := tx.Exec(ctx, `delete from calc_rule_state where rule_id = $1::uuid`, r.ID); err != nil {
 		return fmt.Errorf("storage: reset calc state: %w", err)
@@ -569,7 +653,16 @@ func resetCalcRuleWork(ctx context.Context, tx pgx.Tx, r CalcRule) error {
 	if _, err := tx.Exec(ctx, `delete from calc_pending where rule_id = $1::uuid`, r.ID); err != nil {
 		return fmt.Errorf("storage: reset calc marks: %w", err)
 	}
-	if !r.Enabled || r.OwnerKind != rules.OwnerComponent {
+	if !r.Enabled {
+		return nil
+	}
+	if r.OwnerKind == rules.OwnerSystem {
+		if _, err := tx.Exec(ctx, `insert into calc_pending (rule_id, owner_kind, system_id)
+			select r.id, 'system', s.id from calc_rule r, system s where r.id = $1::uuid and `+systemSelectedSQL("r", "s")+`
+			order by s.id
+			on conflict on constraint calc_pending_key do update set marked_at = calc_pending.marked_at`, r.ID); err != nil {
+			return fmt.Errorf("storage: mark a written calc rule: %w", err)
+		}
 		return nil
 	}
 	keys := inputKeys(r.Inputs)
@@ -598,6 +691,93 @@ func resetCalcRuleWork(ctx context.Context, tx pgx.Tx, r CalcRule) error {
 		on conflict on constraint calc_pending_key do update set marked_at = calc_pending.marked_at`,
 		r.ID, ids, types, keys); err != nil {
 		return fmt.Errorf("storage: mark a written calc rule: %w", err)
+	}
+	return nil
+}
+
+// systemSelectedSQL is the predicate that a system rule (alias r, its
+// selector jsonb) selects a system (alias s): an empty selector selects
+// every system; else the system is named by id, or its type falls within a
+// named system type (its own type or an ancestor, the type tree walked up).
+func systemSelectedSQL(r, s string) string {
+	return fmt.Sprintf(`(
+		(coalesce(jsonb_array_length(%[1]s.selector->'systems'), 0) = 0
+			and coalesce(jsonb_array_length(%[1]s.selector->'system_types'), 0) = 0)
+		or coalesce(%[1]s.selector->'systems', '[]'::jsonb) ? %[2]s.id::text
+		or exists (
+			with recursive up(id, parent_id) as (
+				select st.id, st.parent_id from system_type st where st.id = %[2]s.system_type_id
+				union
+				select st.id, st.parent_id from system_type st join up on st.id = up.parent_id
+			)
+			select 1 from up join system_type t on t.id = up.id
+			where coalesce(%[1]s.selector->'system_types', '[]'::jsonb) ? t.name))`, r, s)
+}
+
+// calcProbeSQL finds the enabled rules (either owner kind) reading any of a
+// write's keys, except the write's own rule: one probe of the GIN index on
+// calc_rule.inputs (TestCalcProbeUsesTheInputsIndex), so a write no rule
+// reads pays for nothing more.
+const calcProbeSQL = `select id::text, owner_kind, selector, inputs from calc_rule
+	where enabled and inputs @? $1::jsonpath and id::text <> $2 order by id`
+
+// markSystemRulesBySamples marks, for the system rules a write's keys
+// reach, every selected system that a sampled component is a role-bound
+// member of and whose rule reads a key that component's samples carried.
+// One statement, the marks in (rule, system) order.
+func markSystemRulesBySamples(ctx context.Context, tx pgx.Tx, ruleIDs []string, marks *calcMarks) error {
+	var comps, keys []string
+	for comp, ks := range marks.keys {
+		for k := range ks {
+			comps = append(comps, comp)
+			keys = append(keys, k)
+		}
+	}
+	if len(comps) == 0 {
+		return nil
+	}
+	if _, err := tx.Exec(ctx, `with samples(component_id, key) as (select * from unnest($2::uuid[], $3::text[])),
+		hits as (
+			select distinct r.id as rule_id, s.id as system_id
+			from calc_rule r
+			join samples x on r.inputs @> jsonb_build_array(jsonb_build_object('key', x.key))
+			join system_role_assignment ra on ra.component_id = x.component_id
+			join system s on s.id = ra.system_id
+			join system_role sr on sr.id = ra.role_id and `+roleOfSystemSQL("sr", "s")+`
+			where r.id = any($1::uuid[]) and `+systemSelectedSQL("r", "s")+`
+		)
+		insert into calc_pending (rule_id, owner_kind, system_id)
+		select rule_id, 'system', system_id from hits order by rule_id, system_id
+		on conflict on constraint calc_pending_key do update set marked_at = calc_pending.marked_at`, ruleIDs, comps, keys); err != nil {
+		return fmt.Errorf("storage: mark system calc rules: %w", err)
+	}
+	return nil
+}
+
+// markSystemCalcRules brings the system rules in line with a write that
+// changed which components are a system's role-bound members, or which rules
+// select it (a role assigned or unassigned, a role declared or withdrawn, a
+// system created, retyped or re-standarded): every enabled system rule
+// selecting one of the systems is marked on it, and a rule that no longer
+// selects one drops its state and mark there. Called before the write's
+// health recompute, so its marks come before any health lock.
+func markSystemCalcRules(ctx context.Context, tx pgx.Tx, systemIDs ...string) error {
+	if len(systemIDs) == 0 {
+		return nil
+	}
+	if _, err := tx.Exec(ctx, `insert into calc_pending (rule_id, owner_kind, system_id)
+		select r.id, 'system', s.id from calc_rule r, system s
+		where r.enabled and r.owner_kind = 'system' and s.id = any($1::uuid[]) and `+systemSelectedSQL("r", "s")+`
+		order by r.id, s.id
+		on conflict on constraint calc_pending_key do update set marked_at = calc_pending.marked_at`, systemIDs); err != nil {
+		return fmt.Errorf("storage: mark system calc rules: %w", err)
+	}
+	for _, table := range []string{"calc_rule_state", "calc_pending"} {
+		if _, err := tx.Exec(ctx, `delete from `+table+` d using calc_rule r, system s
+			where d.rule_id = r.id and d.system_id = s.id and s.id = any($1::uuid[]) and not `+systemSelectedSQL("r", "s"),
+			systemIDs); err != nil {
+			return fmt.Errorf("storage: drop deselected system calc work: %w", err)
+		}
 	}
 	return nil
 }

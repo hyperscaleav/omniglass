@@ -103,7 +103,7 @@ func TestCalcRules(t *testing.T) {
 
 	// A cross-key component expression writing a bool property.
 	inUse, err := r.create(storage.CalcRuleSpec{Name: "in-use", OwnerKind: rules.OwnerComponent,
-		Selector: storage.EventRuleSelector{ComponentTypes: []string{"display"}},
+		Selector: storage.CalcRuleSelector{ComponentTypes: []string{"display"}},
 		Inputs:   []rules.CalcInput{{As: "input", Key: "video-input"}, {As: "call", Key: "in-call"}},
 		Reduce:   rules.CalcReduce{Expr: `call || input != "hdmi1"`}, OutputKey: "busy-flag"})
 	if err != nil {
@@ -147,9 +147,9 @@ func TestCalcRules(t *testing.T) {
 			Reduce: rules.CalcReduce{Reducer: "majority"}, OutputKey: "health"}, "output_key"},
 		"output a driver emits": {storage.CalcRuleSpec{Name: "x9", OwnerKind: "component", Inputs: []rules.CalcInput{{As: "a", Key: "room-temperature"}},
 			Reduce: rules.CalcReduce{Reducer: "max"}, OutputKey: "uptime"}, "output_key"},
-		"system selector": {storage.CalcRuleSpec{Name: "x10", OwnerKind: "system", Selector: storage.EventRuleSelector{ComponentTypes: []string{"display"}},
+		"system selector": {storage.CalcRuleSpec{Name: "x10", OwnerKind: "system", Selector: storage.CalcRuleSelector{ComponentTypes: []string{"display"}},
 			Inputs: []rules.CalcInput{{As: "a", Key: "room-temperature"}}, Reduce: rules.CalcReduce{Reducer: "max"}, OutputKey: "temp-sum"}, "selector"},
-		"unknown component type": {storage.CalcRuleSpec{Name: "x11", OwnerKind: "component", Selector: storage.EventRuleSelector{ComponentTypes: []string{"no-such-type"}},
+		"unknown component type": {storage.CalcRuleSpec{Name: "x11", OwnerKind: "component", Selector: storage.CalcRuleSelector{ComponentTypes: []string{"no-such-type"}},
 			Inputs: []rules.CalcInput{{As: "a", Key: "room-temperature"}}, Reduce: rules.CalcReduce{Reducer: "max"}, OutputKey: "temp-sum"}, "selector"},
 		"bad owner": {storage.CalcRuleSpec{Name: "x12", OwnerKind: "location", Inputs: []rules.CalcInput{{As: "a", Key: "room-temperature"}},
 			Reduce: rules.CalcReduce{Reducer: "max"}, OutputKey: "temp-sum"}, "owner_kind"},

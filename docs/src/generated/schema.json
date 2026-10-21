@@ -3383,6 +3383,12 @@
       "type": "jsonb",
       "nullable": false,
       "default": "'[]'::jsonb"
+     },
+     {
+      "name": "skipped",
+      "type": "jsonb",
+      "nullable": false,
+      "default": "'[]'::jsonb"
      }
     ],
     "checks": [

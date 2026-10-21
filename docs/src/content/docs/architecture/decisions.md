@@ -6752,5 +6752,11 @@ interface create form, since that name is the platform's to mint.
   event rules already judge in the sample-write transaction. Computing inside that transaction would
   widen ingest's lock footprint with fan-in, and waiting on #430 would block the epic on unbuilt
   infrastructure. A durable pending set plus a tick is replica-safe and coalescing, and keeps a later
-  move to the lane a change of transport, not of semantics. System rules (#997) stay unmarked until
-  their members are read.
+  move to the lane a change of transport, not of semantics.
+- **Extended 2026-10-21 (#997):** system rules run on the same set. A system's members are its
+  role-bound components (the role set the health rollup resolves, one SQL predicate both read); a
+  member's sample marks the enabled system rules reading its key on the selected systems it staffs, and
+  a role assigned or withdrawn, or a system created, retyped or re-standarded, marks the system's rules
+  (before its health recompute, so the mark precedes the health locks). Each input binds as a list of
+  the members' values, a member with none skipped and named in the state, and the output is
+  system-owned. Event rules do not judge system-owned samples yet (#1002).

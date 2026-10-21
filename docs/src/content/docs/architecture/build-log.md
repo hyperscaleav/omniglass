@@ -7100,3 +7100,19 @@ transaction on a deadlock with the tick (`sampleWriteAttempts`); a failing mark 
 rule's create, enable or edit marks the components already holding its inputs and resets its state; the
 output is written on the lane the rule holds it by; and a reducer folds named instances (the aggregate
 only when alone) and skips instances stale past an hour, naming them in the state.
+
+### System-level calc rules (#997)
+
+The third slice of epic #525. A system rule's selector names system types (subtypes included) or
+systems, resolved to ids, beside a component rule's component types and components. A system's members
+are its role-bound components, read through `roleOfSystemSQL`, the role-of-a-system predicate the health
+rollup's role resolution now shares. The sample write's probe finds rules of both kinds in one index
+probe (`TestCalcProbeUsesTheInputsIndex` holds it to `calc_rule_inputs_idx`), and one more statement
+marks each enabled system rule reading a sampled key on the selected systems the sampled component
+staffs. Role assignment and withdrawal, role declarations, and a system's create, retype or new
+standard mark its rules before the health recompute; a system leaving a rule's selector drops that
+rule's state there. Each input binds as the list of the members' values (a named reducer folds every
+member's per-instance values), a member with no value is named in the new `calc_rule_state.skipped`
+(migration `20261021090000`), and the output is a system-owned calculated sample with the rule's
+lineage. Event rules do not judge it yet (#1002). The calc tick now logs at Info only when it served
+marks or the backlog reaches `calcBacklogInfo`.

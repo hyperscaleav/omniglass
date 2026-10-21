@@ -500,10 +500,16 @@ func (s *Server) startCalcTick() {
 	}()
 }
 
+// calcBacklogInfo is the pending depth at which a pass that served nothing
+// still logs at Info: a backlog that large is news, a mark waiting out its
+// backoff is not.
+const calcBacklogInfo = 1000
+
 // calcPass runs one drain under its deadline. A panic in it is recovered
-// and logged, so one bad pass never ends the tick. A pass that served or
-// deferred marks, or left a backlog, logs what it did and the queue's
-// depth: there is no metrics surface yet, so the log is the gauge.
+// and logged, so one bad pass never ends the tick. A pass that served marks,
+// or saw a backlog of calcBacklogInfo or more, logs at Info what it did and
+// the queue's depth (there is no metrics surface yet, so the log is the
+// gauge); a pass that only deferred, or saw a smaller backlog, logs at Debug.
 func (s *Server) calcPass(ctx context.Context) {
 	defer func() {
 		if r := recover(); r != nil {
@@ -516,7 +522,12 @@ func (s *Server) calcPass(ctx context.Context) {
 	if err != nil && ctx.Err() == nil {
 		slog.Warn("calc tick failed", "facility", "rules", "error", err.Error())
 	}
-	if d.Served > 0 || d.Deferred > 0 || d.Depth > 0 {
-		slog.Info("calc tick", "facility", "rules", "served", d.Served, "deferred", d.Deferred, "pending", d.Depth)
+	attrs := []any{"facility", "rules", "served", d.Served, "deferred", d.Deferred, "pending", d.Depth}
+	switch {
+	case d.Served > 0 || d.Depth >= calcBacklogInfo:
+		slog.Info("calc tick", attrs...)
+	case d.Deferred > 0 || d.Depth > 0:
+		// A mark waiting out its backoff: every pass sees it, so it is not news.
+		slog.Debug("calc tick", attrs...)
 	}
 }

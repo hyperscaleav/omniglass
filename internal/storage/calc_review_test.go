@@ -192,7 +192,7 @@ func TestCalcStateFollowsTheSelector(t *testing.T) {
 	if n := count(t, r.conn, `select count(*) from calc_rule_state`); n != 2 {
 		t.Fatalf("%d state rows, want 2", n)
 	}
-	sel := storage.EventRuleSelector{Components: []string{"calc-target"}}
+	sel := storage.CalcRuleSelector{Components: []string{"calc-target"}}
 	if _, err := r.gw.UpdateCalcRule(r.ctx, "", "echo", storage.CalcRulePatch{Selector: &sel}, r.all); err != nil {
 		t.Fatal(err)
 	}

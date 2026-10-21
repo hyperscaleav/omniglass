@@ -23,23 +23,37 @@ type calcReduceBody struct {
 	Expr    string `json:"expr,omitempty" required:"false" doc:"An expression over the inputs by their names, yielding the output key's type; give this or reducer"`
 }
 
+// calcSelectorBody is a calc rule's selector: a component rule's
+// components (by component type, subtypes included, or by component), or a
+// system rule's systems (by system type, subtypes included, or by system).
+type calcSelectorBody struct {
+	ComponentTypes []string `json:"component_types,omitempty" required:"false" doc:"A component rule: derive on components whose type falls within one of these component types"`
+	Components     []string `json:"components,omitempty" required:"false" doc:"A component rule: derive on these components (by name or id on write; ids on read)"`
+	SystemTypes    []string `json:"system_types,omitempty" required:"false" doc:"A system rule: derive on systems whose type falls within one of these system types (subtypes included)"`
+	Systems        []string `json:"systems,omitempty" required:"false" doc:"A system rule: derive on these systems (by name or id on write; ids on read)"`
+}
+
+func (b calcSelectorBody) toStorage() storage.CalcRuleSelector {
+	return storage.CalcRuleSelector{ComponentTypes: b.ComponentTypes, Components: b.Components, SystemTypes: b.SystemTypes, Systems: b.Systems}
+}
+
 type calcRuleBody struct {
-	ID          string          `json:"id" doc:"The rule's uuid, the stable form of name"`
-	Name        string          `json:"name" doc:"The rule's name, the address an operator types; renameable"`
-	Label       string          `json:"label,omitempty" doc:"A human label"`
-	Description string          `json:"description,omitempty" doc:"What the rule derives and why"`
-	OwnerKind   string          `json:"owner_kind" enum:"component,system" doc:"What the rule derives a value on: each component its selector picks, or each system"`
-	Selector    selectorBody    `json:"selector" doc:"The components a component rule derives for; both lists empty is every component. A system rule's is empty"`
-	Inputs      []calcInputBody `json:"inputs" doc:"The keys the rule reads, each by the name its reduce uses"`
-	Reduce      calcReduceBody  `json:"reduce" doc:"How the inputs fold into the output: a named reducer or an expression"`
-	OutputKey   string          `json:"output_key" doc:"The property or metric the rule writes"`
-	OutputLane  string          `json:"output_lane" enum:"property,metric" doc:"Which lane the output key is on, derived from the registries"`
-	Enabled     bool            `json:"enabled" doc:"Whether the rule runs; an enabled rule is part of the key graph"`
-	Official    bool            `json:"official" doc:"Shipped with the platform and read-only"`
-	Version     int             `json:"version" doc:"Bumps on every update"`
-	CreatedAt   time.Time       `json:"created_at" doc:"When the rule was created"`
-	UpdatedAt   time.Time       `json:"updated_at" doc:"When the rule was last written"`
-	CalcError   *calcErrorBody  `json:"calc_error,omitempty" required:"false" doc:"Why the stored reduce does not compile against the registries as they are now (an input key deleted or retyped); absent when it compiles. While present the rule cannot be enabled"`
+	ID          string           `json:"id" doc:"The rule's uuid, the stable form of name"`
+	Name        string           `json:"name" doc:"The rule's name, the address an operator types; renameable"`
+	Label       string           `json:"label,omitempty" doc:"A human label"`
+	Description string           `json:"description,omitempty" doc:"What the rule derives and why"`
+	OwnerKind   string           `json:"owner_kind" enum:"component,system" doc:"What the rule derives a value on: each component its selector picks, or each system"`
+	Selector    calcSelectorBody `json:"selector" doc:"The owners the rule derives for: a component rule's components or a system rule's systems; empty is every owner of its kind"`
+	Inputs      []calcInputBody  `json:"inputs" doc:"The keys the rule reads, each by the name its reduce uses"`
+	Reduce      calcReduceBody   `json:"reduce" doc:"How the inputs fold into the output: a named reducer or an expression"`
+	OutputKey   string           `json:"output_key" doc:"The property or metric the rule writes"`
+	OutputLane  string           `json:"output_lane" enum:"property,metric" doc:"Which lane the output key is on, derived from the registries"`
+	Enabled     bool             `json:"enabled" doc:"Whether the rule runs; an enabled rule is part of the key graph"`
+	Official    bool             `json:"official" doc:"Shipped with the platform and read-only"`
+	Version     int              `json:"version" doc:"Bumps on every update"`
+	CreatedAt   time.Time        `json:"created_at" doc:"When the rule was created"`
+	UpdatedAt   time.Time        `json:"updated_at" doc:"When the rule was last written"`
+	CalcError   *calcErrorBody   `json:"calc_error,omitempty" required:"false" doc:"Why the stored reduce does not compile against the registries as they are now (an input key deleted or retyped); absent when it compiles. While present the rule cannot be enabled"`
 }
 
 // calcErrorBody is a stored rule's compile error.
@@ -52,7 +66,8 @@ type calcErrorBody struct {
 
 func toCalcRuleBody(r *storage.CalcRule) calcRuleBody {
 	b := calcRuleBody{ID: r.ID, Name: r.Name, Label: r.Label, Description: r.Description, OwnerKind: r.OwnerKind,
-		Selector:  selectorBody{ComponentTypes: r.Selector.ComponentTypes, Components: r.Selector.Components},
+		Selector: calcSelectorBody{ComponentTypes: r.Selector.ComponentTypes, Components: r.Selector.Components,
+			SystemTypes: r.Selector.SystemTypes, Systems: r.Selector.Systems},
 		Reduce:    calcReduceBody{Reducer: r.Reduce.Reducer, Expr: r.Reduce.Expr},
 		OutputKey: r.OutputKey, OutputLane: string(r.OutputLane), Enabled: r.Enabled, Official: r.Official, Version: r.Version,
 		CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt}
@@ -88,28 +103,28 @@ type calcRuleNameInput struct {
 
 type createCalcRuleInput struct {
 	Body struct {
-		Name        string          `json:"name" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"The rule's name (lowercase letters, digits, hyphens)"`
-		Label       string          `json:"label,omitempty" required:"false" doc:"A human label"`
-		Description string          `json:"description,omitempty" required:"false" doc:"What the rule derives and why"`
-		OwnerKind   string          `json:"owner_kind" enum:"component,system" doc:"What the rule derives a value on: each component its selector picks, or each system. Fixed at create"`
-		Selector    *selectorBody   `json:"selector,omitempty" required:"false" doc:"The components a component rule derives for (component types and components); absent is every component. A system rule takes none"`
-		Inputs      []calcInputBody `json:"inputs" minItems:"1" maxItems:"16" doc:"The keys the rule reads, each by a unique name its reduce uses; health may not be one"`
-		Reduce      calcReduceBody  `json:"reduce" doc:"A named reducer over the one input, or an expression over the inputs by name"`
-		OutputKey   string          `json:"output_key" minLength:"1" doc:"The property or metric the rule writes: its type pins the reduce's result. Not health, not a key a collection writes, and not one another enabled rule writes"`
-		Enabled     *bool           `json:"enabled,omitempty" required:"false" doc:"Defaults to true"`
+		Name        string            `json:"name" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"The rule's name (lowercase letters, digits, hyphens)"`
+		Label       string            `json:"label,omitempty" required:"false" doc:"A human label"`
+		Description string            `json:"description,omitempty" required:"false" doc:"What the rule derives and why"`
+		OwnerKind   string            `json:"owner_kind" enum:"component,system" doc:"What the rule derives a value on: each component its selector picks, or each system. Fixed at create"`
+		Selector    *calcSelectorBody `json:"selector,omitempty" required:"false" doc:"The owners the rule derives for: a component rule's component_types and components, or a system rule's system_types and systems; absent is every owner of its kind"`
+		Inputs      []calcInputBody   `json:"inputs" minItems:"1" maxItems:"16" doc:"The keys the rule reads, each by a unique name its reduce uses; health may not be one"`
+		Reduce      calcReduceBody    `json:"reduce" doc:"A named reducer over the one input, or an expression over the inputs by name"`
+		OutputKey   string            `json:"output_key" minLength:"1" doc:"The property or metric the rule writes: its type pins the reduce's result. Not health, not a key a collection writes, and not one another enabled rule writes"`
+		Enabled     *bool             `json:"enabled,omitempty" required:"false" doc:"Defaults to true"`
 	}
 }
 
 type updateCalcRuleInput struct {
 	Name string `path:"name" doc:"The rule's name (its uuid is accepted too)"`
 	Body struct {
-		Label       *string          `json:"label,omitempty" required:"false" doc:"A human label"`
-		Description *string          `json:"description,omitempty" required:"false" doc:"What the rule derives and why"`
-		Selector    *selectorBody    `json:"selector,omitempty" required:"false" doc:"Replace the components the rule derives for; an empty selector is every component"`
-		Inputs      *[]calcInputBody `json:"inputs,omitempty" required:"false" minItems:"1" maxItems:"16" doc:"Replace the keys the rule reads"`
-		Reduce      *calcReduceBody  `json:"reduce,omitempty" required:"false" doc:"Replace the reduce"`
-		OutputKey   *string          `json:"output_key,omitempty" required:"false" doc:"The property or metric the rule writes"`
-		Enabled     *bool            `json:"enabled,omitempty" required:"false" doc:"Whether the rule runs; an enabled rule is part of the key graph"`
+		Label       *string           `json:"label,omitempty" required:"false" doc:"A human label"`
+		Description *string           `json:"description,omitempty" required:"false" doc:"What the rule derives and why"`
+		Selector    *calcSelectorBody `json:"selector,omitempty" required:"false" doc:"Replace the owners the rule derives for; an empty selector is every owner of its kind"`
+		Inputs      *[]calcInputBody  `json:"inputs,omitempty" required:"false" minItems:"1" maxItems:"16" doc:"Replace the keys the rule reads"`
+		Reduce      *calcReduceBody   `json:"reduce,omitempty" required:"false" doc:"Replace the reduce"`
+		OutputKey   *string           `json:"output_key,omitempty" required:"false" doc:"The property or metric the rule writes"`
+		Enabled     *bool             `json:"enabled,omitempty" required:"false" doc:"Whether the rule runs; an enabled rule is part of the key graph"`
 	}
 }
 
@@ -174,7 +189,7 @@ func registerCalcRuleRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 			Inputs: fromCalcInputs(b.Inputs), Reduce: rules.CalcReduce{Reducer: b.Reduce.Reducer, Expr: b.Reduce.Expr},
 			OutputKey: b.OutputKey, Enabled: b.Enabled}
 		if b.Selector != nil {
-			spec.Selector = storage.EventRuleSelector{ComponentTypes: b.Selector.ComponentTypes, Components: b.Selector.Components}
+			spec.Selector = b.Selector.toStorage()
 		}
 		r, err := gw.CreateCalcRule(ctx, actorID(ctx), spec, a.scopeFor(ctx, "rule", "create"))
 		if err != nil {
@@ -193,7 +208,8 @@ func registerCalcRuleRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 		b := in.Body
 		patch := storage.CalcRulePatch{Label: b.Label, Description: b.Description, OutputKey: b.OutputKey, Enabled: b.Enabled}
 		if b.Selector != nil {
-			patch.Selector = &storage.EventRuleSelector{ComponentTypes: b.Selector.ComponentTypes, Components: b.Selector.Components}
+			sel := b.Selector.toStorage()
+			patch.Selector = &sel
 		}
 		if b.Inputs != nil {
 			inputs := fromCalcInputs(*b.Inputs)

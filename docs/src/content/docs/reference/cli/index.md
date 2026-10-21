@@ -292,7 +292,7 @@ Authors a rule that derives its output key on each owner (each component its sel
 | `--output-key` | string | (none) | The property or metric the rule writes: its type pins the reduce's result. Not health, not a key a collection writes, and not one another enabled rule writes |
 | `--owner-kind` | string | (none) | What the rule derives a value on: each component its selector picks, or each system. Fixed at create |
 | `--reduce` | string | (none) | A named reducer over the one input, or an expression over the inputs by name |
-| `--selector` | string | (none) | The components a component rule derives for (component types and components); absent is every component. A system rule takes none |
+| `--selector` | string | (none) | The owners the rule derives for: a component rule's component_types and components, or a system rule's system_types and systems; absent is every owner of its kind |
 
 Example:
 
@@ -386,7 +386,7 @@ Patches a rule (an absent field is unchanged), bumping its version; a patch that
 | `--label` | string | (none) | A human label |
 | `--output-key` | string | (none) | The property or metric the rule writes |
 | `--reduce` | string | (none) | Replace the reduce |
-| `--selector` | string | (none) | Replace the components the rule derives for; an empty selector is every component |
+| `--selector` | string | (none) | Replace the owners the rule derives for; an empty selector is every owner of its kind |
 
 Example:
 

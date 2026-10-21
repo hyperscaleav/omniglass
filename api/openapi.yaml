@@ -493,8 +493,8 @@ components:
           $ref: "#/components/schemas/CalcReduceBody"
           description: "How the inputs fold into the output: a named reducer or an expression"
         selector:
-          $ref: "#/components/schemas/SelectorBody"
-          description: The components a component rule derives for; both lists empty is every component. A system rule's is empty
+          $ref: "#/components/schemas/CalcSelectorBody"
+          description: "The owners the rule derives for: a component rule's components or a system rule's systems; empty is every owner of its kind"
         updated_at:
           description: When the rule was last written
           format: date-time
@@ -517,6 +517,38 @@ components:
         - version
         - created_at
         - updated_at
+      type: object
+    CalcSelectorBody:
+      additionalProperties: false
+      properties:
+        component_types:
+          description: "A component rule: derive on components whose type falls within one of these component types"
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+        components:
+          description: "A component rule: derive on these components (by name or id on write; ids on read)"
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+        system_types:
+          description: "A system rule: derive on systems whose type falls within one of these system types (subtypes included)"
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+        systems:
+          description: "A system rule: derive on these systems (by name or id on write; ids on read)"
+          items:
+            type: string
+          type:
+            - array
+            - "null"
       type: object
     ChangePasswordInputBody:
       additionalProperties: false
@@ -1035,8 +1067,8 @@ components:
           $ref: "#/components/schemas/CalcReduceBody"
           description: A named reducer over the one input, or an expression over the inputs by name
         selector:
-          $ref: "#/components/schemas/SelectorBody"
-          description: The components a component rule derives for (component types and components); absent is every component. A system rule takes none
+          $ref: "#/components/schemas/CalcSelectorBody"
+          description: "The owners the rule derives for: a component rule's component_types and components, or a system rule's system_types and systems; absent is every owner of its kind"
       required:
         - name
         - owner_kind
@@ -8133,8 +8165,8 @@ components:
           $ref: "#/components/schemas/CalcReduceBody"
           description: Replace the reduce
         selector:
-          $ref: "#/components/schemas/SelectorBody"
-          description: Replace the components the rule derives for; an empty selector is every component
+          $ref: "#/components/schemas/CalcSelectorBody"
+          description: Replace the owners the rule derives for; an empty selector is every owner of its kind
       type: object
     UpdateCommandTypeInputBody:
       additionalProperties: false

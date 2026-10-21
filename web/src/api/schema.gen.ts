@@ -4750,8 +4750,8 @@ export interface components {
             owner_kind: "component" | "system";
             /** @description How the inputs fold into the output: a named reducer or an expression */
             reduce: components["schemas"]["CalcReduceBody"];
-            /** @description The components a component rule derives for; both lists empty is every component. A system rule's is empty */
-            selector: components["schemas"]["SelectorBody"];
+            /** @description The owners the rule derives for: a component rule's components or a system rule's systems; empty is every owner of its kind */
+            selector: components["schemas"]["CalcSelectorBody"];
             /**
              * Format: date-time
              * @description When the rule was last written
@@ -4762,6 +4762,16 @@ export interface components {
              * @description Bumps on every update
              */
             version: number;
+        };
+        CalcSelectorBody: {
+            /** @description A component rule: derive on components whose type falls within one of these component types */
+            component_types?: string[] | null;
+            /** @description A component rule: derive on these components (by name or id on write; ids on read) */
+            components?: string[] | null;
+            /** @description A system rule: derive on systems whose type falls within one of these system types (subtypes included) */
+            system_types?: string[] | null;
+            /** @description A system rule: derive on these systems (by name or id on write; ids on read) */
+            systems?: string[] | null;
         };
         ChangePasswordInputBody: {
             /**
@@ -5054,8 +5064,8 @@ export interface components {
             owner_kind: "component" | "system";
             /** @description A named reducer over the one input, or an expression over the inputs by name */
             reduce: components["schemas"]["CalcReduceBody"];
-            /** @description The components a component rule derives for (component types and components); absent is every component. A system rule takes none */
-            selector?: components["schemas"]["SelectorBody"];
+            /** @description The owners the rule derives for: a component rule's component_types and components, or a system rule's system_types and systems; absent is every owner of its kind */
+            selector?: components["schemas"]["CalcSelectorBody"];
         };
         CreateCommandTypeInputBody: {
             /**
@@ -8966,8 +8976,8 @@ export interface components {
             output_key?: string;
             /** @description Replace the reduce */
             reduce?: components["schemas"]["CalcReduceBody"];
-            /** @description Replace the components the rule derives for; an empty selector is every component */
-            selector?: components["schemas"]["SelectorBody"];
+            /** @description Replace the owners the rule derives for; an empty selector is every owner of its kind */
+            selector?: components["schemas"]["CalcSelectorBody"];
         };
         UpdateCommandTypeInputBody: {
             /**

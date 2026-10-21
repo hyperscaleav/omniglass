@@ -382,7 +382,7 @@ func generatedCommands() []*cobra.Command {
 				_ = cmd.MarkFlagRequired("owner-kind")
 				cmd.Flags().StringVar(&fReduce, "reduce", "", "A named reducer over the one input, or an expression over the inputs by name")
 				_ = cmd.MarkFlagRequired("reduce")
-				cmd.Flags().StringVar(&fSelector, "selector", "", "The components a component rule derives for (component types and components); absent is every component. A system rule takes none")
+				cmd.Flags().StringVar(&fSelector, "selector", "", "The owners the rule derives for: a component rule's component_types and components, or a system rule's system_types and systems; absent is every owner of its kind")
 				return cmd
 			}()
 			return cmd
@@ -510,7 +510,7 @@ func generatedCommands() []*cobra.Command {
 				cmd.Flags().StringVar(&fLabel, "label", "", "A human label")
 				cmd.Flags().StringVar(&fOutputKey, "output-key", "", "The property or metric the rule writes")
 				cmd.Flags().StringVar(&fReduce, "reduce", "", "Replace the reduce")
-				cmd.Flags().StringVar(&fSelector, "selector", "", "Replace the components the rule derives for; an empty selector is every component")
+				cmd.Flags().StringVar(&fSelector, "selector", "", "Replace the owners the rule derives for; an empty selector is every owner of its kind")
 				return cmd
 			}()
 			return cmd

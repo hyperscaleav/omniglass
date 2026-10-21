@@ -30,7 +30,7 @@ type CalcRule struct {
 	Label       string
 	Description string
 	OwnerKind   string
-	Selector    EventRuleSelector
+	Selector    CalcRuleSelector
 	Inputs      []rules.CalcInput
 	Reduce      rules.CalcReduce
 	OutputKey   string
@@ -60,6 +60,23 @@ type CalcFault struct {
 	Message string
 }
 
+// CalcRuleSelector picks a rule's owners. A component rule's is the event
+// rule's shape: component types (a component whose type falls within one)
+// and components; a system rule's mirrors it over systems: system types (a
+// system whose type falls within one, subtypes included) and systems. Names
+// or ids on write, ids on read for the entities; both lists empty is every
+// owner of the rule's kind. A rule fills only its own kind's pair.
+type CalcRuleSelector struct {
+	ComponentTypes []string `json:"component_types,omitempty"`
+	Components     []string `json:"components,omitempty"`
+	SystemTypes    []string `json:"system_types,omitempty"`
+	Systems        []string `json:"systems,omitempty"`
+}
+
+func (s CalcRuleSelector) components() EventRuleSelector {
+	return EventRuleSelector{ComponentTypes: s.ComponentTypes, Components: s.Components}
+}
+
 // CalcRuleSpec is a rule to create; its selector's components may be given
 // by name or id.
 type CalcRuleSpec struct {
@@ -67,7 +84,7 @@ type CalcRuleSpec struct {
 	Label       string
 	Description string
 	OwnerKind   string
-	Selector    EventRuleSelector
+	Selector    CalcRuleSelector
 	Inputs      []rules.CalcInput
 	Reduce      rules.CalcReduce
 	OutputKey   string
@@ -80,7 +97,7 @@ type CalcRuleSpec struct {
 type CalcRulePatch struct {
 	Label       *string
 	Description *string
-	Selector    *EventRuleSelector
+	Selector    *CalcRuleSelector
 	Inputs      *[]rules.CalcInput
 	Reduce      *rules.CalcReduce
 	OutputKey   *string
@@ -251,7 +268,7 @@ func resolveSampleKey(ctx context.Context, q querier, key string) (sampleKey, bo
 // input key was since deleted can still be relabelled or disabled.
 type calcChecks struct {
 	compile, output, selector bool
-	kept                      EventRuleSelector
+	kept                      CalcRuleSelector
 }
 
 var calcCheckAll = calcChecks{compile: true, output: true, selector: true}
@@ -259,9 +276,9 @@ var calcCheckAll = calcChecks{compile: true, output: true, selector: true}
 // prepareCalcRule validates a rule, resolving its output key's id and lane
 // and its selector's components to ids. The checks, in order:
 //
-//   - the name, the owner kind and, for a system owner, an empty selector
-//     (a system rule runs on every system until system selection lands
-//     with system-level evaluation, #525's third slice);
+//   - the name, the owner kind, and a selector of the owner's own kind (a
+//     component rule's component types and components, a system rule's
+//     system types and systems);
 //   - health is neither an input nor the output (#525 decision 3: an alarm
 //     moves health, so a rule reading it could feed back through an event
 //     rule, and health has its own producer, the rollup);
@@ -281,7 +298,10 @@ func prepareCalcRule(ctx context.Context, q txQuerier, r *CalcRule, check calcCh
 		return invalidCalc("owner_kind", "a calc rule derives for a component or a system, not %q", r.OwnerKind)
 	}
 	if r.OwnerKind == rules.OwnerSystem && (len(r.Selector.ComponentTypes) > 0 || len(r.Selector.Components) > 0) {
-		return invalidCalc("selector", "a system rule runs on every system; its selector is empty")
+		return invalidCalc("selector", "a system rule selects systems (system_types, systems), not components")
+	}
+	if r.OwnerKind == rules.OwnerComponent && (len(r.Selector.SystemTypes) > 0 || len(r.Selector.Systems) > 0) {
+		return invalidCalc("selector", "a component rule selects components (component_types, components), not systems")
 	}
 	for i, in := range r.Inputs {
 		if in.Key == healthKey {
@@ -332,7 +352,15 @@ func prepareCalcRule(ctx context.Context, q txQuerier, r *CalcRule, check calcCh
 		}
 	}
 	if check.selector {
-		if err := resolveSelector(ctx, q, &r.Selector, check.kept); err != nil {
+		var err error
+		if r.OwnerKind == rules.OwnerSystem {
+			err = resolveSystemSelector(ctx, q, &r.Selector, check.kept)
+		} else {
+			sel := r.Selector.components()
+			err = resolveSelector(ctx, q, &sel, check.kept.components())
+			r.Selector.ComponentTypes, r.Selector.Components = sel.ComponentTypes, sel.Components
+		}
+		if err != nil {
 			var bad selectorError
 			if errors.As(err, &bad) {
 				return invalidCalc("selector", "%s", bad.msg)
@@ -522,7 +550,7 @@ func lockMutableCalcRule(ctx context.Context, tx pgx.Tx, ref string) (CalcRule, 
 func sameAuthoredCalc(a, b CalcRule) bool {
 	type authored struct {
 		Label, Description, OwnerKind, OutputKey string
-		Selector                                 EventRuleSelector
+		Selector                                 CalcRuleSelector
 		Inputs                                   []rules.CalcInput
 		Reduce                                   rules.CalcReduce
 		Enabled                                  bool
@@ -679,4 +707,37 @@ func (p *PG) DeleteCalcRule(ctx context.Context, actorID, ref string, action sco
 		return err
 	}
 	return tx.Commit(ctx)
+}
+
+// resolveSystemSelector checks a system rule's selector against the
+// registries and resolves its systems to ids, as resolveSelector does for
+// components: an entry kept already holds is carried over, and only an
+// entry new to the rule must exist.
+func resolveSystemSelector(ctx context.Context, q querier, sel *CalcRuleSelector, kept CalcRuleSelector) error {
+	for _, t := range sel.SystemTypes {
+		if slices.Contains(kept.SystemTypes, t) {
+			continue
+		}
+		var ok bool
+		if err := q.QueryRow(ctx, `select exists (select 1 from system_type where name = $1)`, t).Scan(&ok); err != nil {
+			return fmt.Errorf("storage: check rule system type: %w", err)
+		}
+		if !ok {
+			return selectorError{fmt.Sprintf("system type %q does not exist", t)}
+		}
+	}
+	ids := make([]string, 0, len(sel.Systems))
+	for _, ref := range sel.Systems {
+		if slices.Contains(kept.Systems, ref) {
+			ids = append(ids, ref)
+			continue
+		}
+		s, err := scopedByName(ctx, q, systemConfig, ref)
+		if err != nil {
+			return selectorError{fmt.Sprintf("system %q: %v", ref, err)}
+		}
+		ids = append(ids, s.ID)
+	}
+	sel.Systems = ids
+	return nil
 }

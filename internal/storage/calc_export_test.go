@@ -22,3 +22,7 @@ func (p *PG) WriteMetricHeld(ctx context.Context, evs []MetricSampleWrite, hold 
 	hold()
 	return tx.Commit(ctx)
 }
+
+// ExportCalcProbeSQL is the sample write's calc rule probe, for the EXPLAIN
+// guard (TestCalcProbeUsesTheInputsIndex), and the jsonpath it binds.
+func ExportCalcProbeSQL(keys []string) (string, string) { return calcProbeSQL, calcKeysPath(keys) }

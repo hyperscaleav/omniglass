@@ -7,7 +7,7 @@ sidebar:
     variant: note
 ---
 
-:::note[The event rule is built; the calc rule runs on components]
+:::note[The event rule is built; the calc rule runs on components and systems]
 Of the three rule families below, the **`event_rule`** is built (#819,
 [ADR-0144](/architecture/decisions/#adr-0144-alarms-are-raised-by-event-rules-at-a-severity-level-from-a-ranked-registry)):
 its own table with typed columns, evaluated in the ingest transaction rather than on a JetStream
@@ -15,10 +15,11 @@ consumer, and documented on [alarms and actions](/architecture/alarms-actions/#t
 writes its typed fire and clear events at each edge of its condition, its alarm optional
 ([ADR-0145](/architecture/decisions/#adr-0145-a-rule-records-its-conditions-as-typed-events-and-its-alarm-is-optional)).
 The **`calc_rule` registry** is built (#995, [ADR-0147](/architecture/decisions/#adr-0147-a-calc-rule-is-a-typed-sibling-registry-checked-acyclic-at-authoring)):
-rules are authored, type-checked and kept acyclic, below. **Component rules run** (#996,
-[ADR-0148](/architecture/decisions/#adr-0148-calc-rules-run-on-a-durable-pending-set-and-a-server-tick-not-a-jetstream-consumer)): on a durable pending set and a
-server tick rather than a JetStream consumer, below. System rules, a rule's state and preview, and the
-console are the rest of epic #525, and the `action_rule` is still design.
+rules are authored, type-checked and kept acyclic, below. **Component and system rules run** (#996,
+#997, [ADR-0148](/architecture/decisions/#adr-0148-calc-rules-run-on-a-durable-pending-set-and-a-server-tick-not-a-jetstream-consumer)): on a durable pending set and a
+server tick rather than a JetStream consumer, below. Event rules do not yet judge a system-owned output
+(#1002). A rule's state and preview, and the console, are the rest of epic #525, and the `action_rule`
+is still design.
 :::
 
 ## The calc_rule registry
@@ -27,8 +28,9 @@ A **calc rule** derives one **output key** on each of its owners from named **in
 sibling table of `event_rule` (ADR-0144 ruling 1), with typed columns rather than one spec:
 
 - **`owner_kind`**: `component` (each component its `selector` picks, the event rule's selector
-  shape: component types and components, both empty for every component) or `system` (every system;
-  a system rule's selector is empty until system-level evaluation lands). Fixed at create.
+  shape: component types, subtypes included, and components, both empty for every component) or
+  `system` (each system its `selector` picks, the same shape over systems: system types, subtypes
+  included, and systems, both empty for every system). Fixed at create.
 - **`inputs`**: one to sixteen `{as, key}` pairs. `key` is a registered property or metric, read once;
   `as` is the name the reduce knows it by, an identifier that is no keyword and no builtin's name.
 - **`reduce`**: a **named reducer** `{reducer}` or an **expression** `{expr}`, exactly one.
@@ -131,9 +133,26 @@ describes ([ADR-0148](/architecture/decisions/#adr-0148-calc-rules-run-on-a-dura
   ([ADR-0069](/architecture/decisions/#adr-0069-cycle-safety-is-provenance-based-not-topology-based)
   stands behind both).
 
-A system rule is accepted by the registry but not yet marked or run.
+### System rules
 
-:::design[Target design: the JetStream calc consumer and system rules, tracked in #525 and #430]
+A **system rule** derives on each system its selector picks, from the system's **role-bound members**:
+the components assigned to one of its roles (declared on it or inherited from its standard), the same
+set the health rollup resolves. A member's sample marks every enabled system rule reading its key whose
+selected systems it staffs, in the sample write's marking (one statement more, and only when a system
+rule reads one of the batch's keys); assigning or unassigning a role, declaring or withdrawing one, and
+creating, retyping or re-standarding a system mark the system's rules, and a system a retype moves out
+of a rule's selector loses that rule's state there. Creating, enabling or editing a system rule marks
+every system it selects.
+
+Each input binds as a **list**, one value per member that holds one (its aggregate instance's newest
+value); a **named reducer** folds every member's per-instance values under the same instance and
+staleness rules as on a component. A member with no value of an input is skipped and named in the
+rule's state (`skipped`); when no member has one, the input is missing and nothing is written. The
+output is a **system-owned** calculated sample with the rule's lineage. A system-owned sample feeds
+no calc rule (system rules read their members), and event rules do not judge it yet: the evaluator
+judges component samples only (#1002).
+
+:::design[Target design: the JetStream calc consumer and event rules on system outputs, tracked in #430 and #1002]
 
 Parsing a raw payload into samples is the **edge function** ([collection](/architecture/collection/)), not a server-side rule. The rules that run server-side over the typed samples are two derivation families plus a subscription; this page owns the calc family.
 

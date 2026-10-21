@@ -382,7 +382,7 @@ rule-raised one its rule (`raised_by_rule`, `raised_by_rule_id`).
 **Calc rules derive a key from named inputs.** `/calc-rules` (gated `rule:*`, read like a registry,
 written only on an all-scope grant; `omniglass calc-rule`) authors the rules that derive an output key
 on each component or system ([calculations](/architecture/calculations/)): an `owner_kind`, a
-`selector` (a component rule's), `inputs` as `{as, key}` pairs, a `reduce` that is a named `reducer`
+`selector` (a component rule's `component_types` and `components`, or a system rule's `system_types` and `systems`, subtypes included), `inputs` as `{as, key}` pairs, a `reduce` that is a named `reducer`
 over the one input or an `expr` over the inputs by name, and an `output_key`, its lane answered as
 `output_lane`. A rule is addressed by name or uuid and every write answers the rule with its `id`. A
 reduce that does not compile, or yields a type other than the output key's, is a 422 located at
