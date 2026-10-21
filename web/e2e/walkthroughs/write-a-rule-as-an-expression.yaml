@@ -12,7 +12,7 @@ steps:
   - click: { role: button, name: New rule }
     caption: New rule opens the drawer.
   - type: { target: { role: textbox, name: Name, exact: true }, text: reach-lost-not-aux }
-    caption: Name it. It cannot change later.
+    caption: Name it, the address an operator types. A rename later moves only the name; its alarms hold the rule by uuid.
   - select: { target: { role: combobox, name: Reads, exact: true }, value: 'property:endpoint-reachable' }
     caption: It reads whether an endpoint answers, which every component reports.
   - type: { target: { role: textbox, name: Fire value, exact: true }, text: down }

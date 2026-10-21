@@ -519,6 +519,53 @@ describe("Rules page", () => {
     await blade();
   });
 
+  it("renames a custom rule from its Edit drawer with the :rename method alone, landing on its blade under the new name", async () => {
+    const writes = catchWrites();
+    mount();
+    fireEvent.click(screen.getByText("Too hot"));
+    const b = await blade();
+    fireEvent.click(within(b).getByText("Edit"));
+    const name = await waitFor(() => screen.getByLabelText("Name") as HTMLInputElement);
+    expect(name.value).toBe("too-hot");
+    // The field teaches what a rename moves and what it leaves.
+    expect(screen.getByRole("button", { name: /More about name/i })).toBeTruthy();
+    fireEvent.input(name, { target: { value: "Too Warm" } });
+    expect(await screen.findByText(/Lowercase letters/)).toBeTruthy();
+    fireEvent.input(name, { target: { value: "too-warm" } });
+    const save = screen.getByText("Save rule").closest("button") as HTMLButtonElement;
+    await waitFor(() => expect(save.disabled).toBe(false));
+    fireEvent.click(save);
+    await waitFor(() => expect(writes).toHaveLength(1));
+    // Nothing else changed, so no PATCH rides: the rename alone, on the old name.
+    expect(writes[0].method).toBe("POST");
+    expect(writes[0].url).toMatch(/\/event-rules\/too-hot:rename$/);
+    expect(writes[0].body).toEqual({ name: "too-warm" });
+    await blade();
+  });
+
+  it("saves the other fields before the rename, so a refused rename leaves them saved and says why", async () => {
+    const writes: { method: string; url: string; body: unknown }[] = [];
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const req = input as Request;
+      if (req.method === "GET") return req.url.endsWith("/state") ? json({ conditions: [], open: [], pending: [] }) : json({ event_rules: [reach, hot] });
+      writes.push({ method: req.method, url: req.url, body: await req.clone().json() });
+      if (req.url.includes(":rename")) return json({ title: "Conflict", status: 409, detail: "an event rule already has that name" }, 409);
+      return json({ ...hot, label: "Too warm" });
+    });
+    mount();
+    fireEvent.click(screen.getByText("Too hot"));
+    fireEvent.click(within(await blade()).getByText("Edit"));
+    fireEvent.input(await waitFor(() => screen.getByLabelText("Label")), { target: { value: "Too warm" } });
+    fireEvent.input(screen.getByLabelText("Name"), { target: { value: "reachability-lost" } });
+    fireEvent.click(screen.getByText("Save rule").closest("button")!);
+    await waitFor(() => expect(writes).toHaveLength(2));
+    expect(writes.map((w) => w.method)).toEqual(["PATCH", "POST"]);
+    expect(writes[0].body).toEqual({ label: "Too warm" });
+    expect(await screen.findByText(/already has that name/)).toBeTruthy();
+    // The form stays open to retry.
+    expect(screen.getByText("Save rule")).toBeTruthy();
+  });
+
   async function editStale() {
     const writes = catchWrites();
     mount(admin, [reach, hot, stale]);
@@ -653,6 +700,20 @@ describe("Rules page", () => {
       mount();
       const b = await blade();
       expect(within(b).getByText("reachability-lost")).toBeTruthy();
+    } finally {
+      window.history.pushState({}, "", "/");
+    }
+  });
+
+  it("opens the rule a link names by uuid, so an event written before a rename still leads to its rule", async () => {
+    window.history.pushState({}, "", `/rules?rule=${reach.id}`);
+    try {
+      mount();
+      const b = await blade();
+      expect(within(b).getByText("reachability-lost")).toBeTruthy();
+      // Its live state reads by the rule's current name.
+      const conds = within(b).getByRole("region", { name: "Conditions in force" });
+      expect(await within(conds).findByText("display-1")).toBeTruthy();
     } finally {
       window.history.pushState({}, "", "/");
     }

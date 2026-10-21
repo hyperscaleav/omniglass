@@ -5639,6 +5639,25 @@ components:
       required:
         - name
       type: object
+    RenameEventRuleInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/RenameEventRuleInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        name:
+          description: The rule's new name, unique among rules (lowercase letters, digits, hyphens)
+          maxLength: 100
+          minLength: 1
+          pattern: ^[a-z0-9][a-z0-9-]*$
+          type: string
+      required:
+        - name
+      type: object
     RenameGroupInputBody:
       additionalProperties: false
       properties:
@@ -10779,6 +10798,39 @@ paths:
           description: Error
       summary: Get an event rule's live state
       x-omniglass-permission: rule:read
+  /event-rules/{name}:rename:
+    post:
+      description: "Moves an operator rule's name, the address an operator types. A separate act from an update, because it breaks bookmarks and integration config outside this system; inside it nothing breaks, since every reference holds the rule's uuid (an alarm's raised_by_rule_id and dedup key, a condition, a streak, an event's derived_by_rule_id). Not a material change: no version bump, streaks keep running and conditions stay in force. An event keeps the name it was written under (derived_by_rule); the rule's next events carry the new one. An official rule keeps its name (409), a taken name is a 409, an illegal or uuid-shaped one a 422. Returns the rule with its uuid. Audited. Gated by rule:update, with an all-scope grant."
+      operationId: rename-event-rule
+      parameters:
+        - description: The rule's current name
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The rule's current name
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RenameEventRuleInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EventRuleBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Rename an event rule
+      x-omniglass-permission: rule:update
   /event-rules:preview:
     post:
       description: "Judges a candidate rule (sample key, selector, criteria) without writing anything, as the ingest would have with no sustains (the answer says they are ignored): over each series it selects on components the caller may read, from the state its newest deciding sample in the 7 days before the window set (state_unknown when there is none), through every sample in the last 24 hours that the ingest would have judged (a late sample older than one before it decides nothing). Answers the edges it would have written and the series it would hold in force now. Its reads are index probes per series, capped at row_cap window samples taken a whole series at a time: series_judged of series_total, and truncated when the cap stopped it. A selector naming a component the caller cannot read is the same 422 as one that does not exist. Criteria take {expr} or {op, value}; one that does not compile is a 422 naming the criteria, line and column. Gated by rule:read."

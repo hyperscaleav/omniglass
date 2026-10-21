@@ -67,6 +67,16 @@ export async function updateEventRule(name: string, body: UpdateEventRule): Prom
   return data as EventRule;
 }
 
+// renameEventRule moves an operator rule's name (#977). Its own custom method,
+// not a PATCH field: the name is the address an operator types, and every
+// reference inside the platform holds the rule's uuid, so nothing there moves
+// with it. The answer carries the uuid.
+export async function renameEventRule(name: string, to: string): Promise<EventRule> {
+  const { data, error } = await api.POST("/event-rules/{name}:rename", { params: { path: { name } }, body: { name: to } });
+  if (error) throw error;
+  return data as EventRule;
+}
+
 export async function deleteEventRule(name: string): Promise<void> {
   const { error } = await api.DELETE("/event-rules/{name}", { params: { path: { name } } });
   if (error) throw error;
@@ -317,12 +327,11 @@ export type DraftErrors = Partial<Record<"name" | "sampleKey" | "fireValue" | "c
 // name is create-only, so edit skips it). No severity is a choice, not a gap:
 // "None (informational)" makes a rule that records its events and raises no
 // alarm (#951). The fire event type is required; the clear one is optional.
-export function validateDraft(d: RuleDraft, mode: "create" | "edit"): DraftErrors {
+// The name is judged on create and on edit alike: an edit may rename (#977).
+export function validateDraft(d: RuleDraft): DraftErrors {
   const e: DraftErrors = {};
-  if (mode === "create") {
-    if (!d.name.trim()) e.name = "A name for the rule.";
-    else if (!NAME.test(d.name.trim())) e.name = "Lowercase letters, digits and single hyphens, e.g. too-hot.";
-  }
+  if (!d.name.trim()) e.name = "A name for the rule.";
+  else if (!NAME.test(d.name.trim())) e.name = "Lowercase letters, digits and single hyphens, e.g. too-hot.";
   if (!d.sampleKey) e.sampleKey = "The property or metric the rule reads.";
   else {
     const f = readValue(d.fireValue, d.lane);

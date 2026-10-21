@@ -18,7 +18,7 @@
     {
       "n": 3,
       "kind": "type",
-      "caption": "Name it. It cannot change later.",
+      "caption": "Name it, the address an operator types. A rename later moves only the name; its alarms hold the rule by uuid.",
       "still": "step-03.png"
     },
     {
@@ -91,8 +91,8 @@
   "poster": "step-12.png",
   "preview": "preview.webp",
   "budget": {
-    "seconds": 48.2,
-    "bytes": 989876,
-    "previewBytes": 843938
+    "seconds": 44.8,
+    "bytes": 1000313,
+    "previewBytes": 958766
   }
 }

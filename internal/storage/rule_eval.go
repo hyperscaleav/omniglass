@@ -196,17 +196,20 @@ func (e *ruleEvaluator) pick(ctx context.Context, tx pgx.Tx, r EventRule, o *rul
 }
 
 // ruleDedupKey is the condition a rule's alarm is about on its owner: the
-// rule, and the sample's instance when it has one, so a per-endpoint input
-// holds one alarm per endpoint (ruling 5 on #819).
+// rule, by its uuid, and the sample's instance when it has one, so a
+// per-endpoint input holds one alarm per endpoint (ruling 5 on #819). The
+// uuid, not the name, so a rename (#977) leaves every open alarm attached:
+// the key is a reference inside the platform, and those hold the id
+// (ADR-0062).
 //
 // The "rule:" prefix keeps a rule's conditions out of the namespace a hand
 // raise uses (whose key defaults to its message), so an operator's alarm
 // never collides with, or is cleared by, a rule's.
-func ruleDedupKey(rule, instance string) string {
+func ruleDedupKey(ruleID, instance string) string {
 	if instance == "" {
-		return "rule:" + rule
+		return "rule:" + ruleID
 	}
-	return "rule:" + rule + ":" + instance
+	return "rule:" + ruleID + ":" + instance
 }
 
 // ruleMessage is the alarm's message: the rule's message, else its label,
@@ -381,7 +384,7 @@ func conditionInForce(ctx context.Context, tx pgx.Tx, r EventRule, componentID, 
 			and component_id = $2::uuid and instance = $3)
 		or exists (select 1 from alarm where component_id = $2::uuid and dedup_key = $4
 			and cleared_at is null and raised_by_rule_id = $1::uuid)`,
-		r.ID, componentID, instance, ruleDedupKey(r.Name, instance)).Scan(&inForce); err != nil {
+		r.ID, componentID, instance, ruleDedupKey(r.ID, instance)).Scan(&inForce); err != nil {
 		return false, fmt.Errorf("storage: rule %s condition: %w", r.Name, err)
 	}
 	return inForce, nil
@@ -565,7 +568,7 @@ func (p *PG) raiseRuleAlarm(ctx context.Context, tx pgx.Tx, actorID string, r Ev
 		return "", nil
 	}
 	id := r.ID
-	a, err := p.raiseAlarmTx(ctx, tx, actorID, comp, AlarmSpec{Severity: r.Severity, Message: ruleMessage(r), DedupKey: ruleDedupKey(r.Name, instance)}, &id)
+	a, err := p.raiseAlarmTx(ctx, tx, actorID, comp, AlarmSpec{Severity: r.Severity, Message: ruleMessage(r), DedupKey: ruleDedupKey(r.ID, instance)}, &id)
 	if err != nil {
 		return "", fmt.Errorf("storage: rule %s raise on %s: %w", r.Name, comp.Name, err)
 	}
@@ -586,7 +589,7 @@ func (p *PG) endCondition(ctx context.Context, tx pgx.Tx, actorID string, r Even
 		return fmt.Errorf("storage: rule %s end condition on %s: %w", r.Name, comp.Name, err)
 	}
 	id := r.ID
-	alarmID, err := p.clearAlarmByDedupTx(ctx, tx, actorID, comp, ruleDedupKey(r.Name, instance), &id)
+	alarmID, err := p.clearAlarmByDedupTx(ctx, tx, actorID, comp, ruleDedupKey(r.ID, instance), &id)
 	if err != nil {
 		return fmt.Errorf("storage: rule %s clear on %s: %w", r.Name, comp.Name, err)
 	}
@@ -939,7 +942,7 @@ func (p *PG) settleSeverity(ctx context.Context, tx pgx.Tx, actorID string, old,
 			if err := lockAdvisory(ctx, tx, ruleSeriesLockKey(r.ID, c.component, c.instance)); err != nil {
 				return err
 			}
-			if _, err := p.clearAlarmByDedupTx(ctx, tx, actorID, &o.comp, ruleDedupKey(r.Name, c.instance), &id); err != nil {
+			if _, err := p.clearAlarmByDedupTx(ctx, tx, actorID, &o.comp, ruleDedupKey(r.ID, c.instance), &id); err != nil {
 				return err
 			}
 		}
@@ -1014,7 +1017,7 @@ func (p *PG) EventRuleState(ctx context.Context, name string, visible scope.Set)
 	if err != nil {
 		return nil, err
 	}
-	prefix := ruleDedupKey(r.Name, "")
+	prefix := ruleDedupKey(r.ID, "")
 	out := &EventRuleLive{Conditions: []RuleCondition{}, Open: []RuleOpenAlarm{}, Pending: []RuleStreak{}, LastJudgedAt: r.LastJudgedAt,
 		CriteriaError: r.CriteriaError}
 	f := newReadFilter(componentTable, visible, 2)
@@ -1267,7 +1270,7 @@ func ruleCandidates(ctx context.Context, q querier, lane rules.Lane, from, to in
 				and c.instance = tc.instance)
 			or exists (select 1 from alarm a where a.component_id = tc.component_id and a.raised_by_rule_id = r.id
 				and a.cleared_at is null
-				and a.dedup_key = 'rule:' || r.name || case when tc.instance = '' then '' else ':' || tc.instance end)),
+				and a.dedup_key = 'rule:' || r.id::text || case when tc.instance = '' then '' else ':' || tc.instance end)),
 			st.pending, comp.name, coalesce(ct.name, '')
 		from touched tc
 		join component comp on comp.id = tc.component_id

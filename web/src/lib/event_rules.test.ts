@@ -130,19 +130,21 @@ describe("the form's rules", () => {
   });
 
   it("refuses an incomplete draft field by field", () => {
-    const e = validateDraft({ ...emptyDraft(""), name: "Bad Name", fireSustain: "soon", fireEventType: "" }, "create");
+    const e = validateDraft({ ...emptyDraft(""), name: "Bad Name", fireSustain: "soon", fireEventType: "" });
     expect(e.name).toMatch(/Lowercase/);
     expect(e.sampleKey).toBeTruthy();
     expect(e.fireSustain).toBeTruthy();
     expect(e.fireEventType).toBeTruthy();
-    // Edit never judges the create-only name.
-    expect(validateDraft({ ...draftFromRule(hot), name: "" }, "edit")).toEqual({});
+    // An edit judges the name too: it may rename the rule (#977).
+    expect(validateDraft({ ...draftFromRule(hot), name: "" }).name).toBeTruthy();
+    expect(validateDraft({ ...draftFromRule(hot), name: "Hot Room" }).name).toMatch(/Lowercase/);
+    expect(validateDraft({ ...draftFromRule(hot), name: "hot-room" })).toEqual({});
   });
 
   it("asks for a clear value only when the author chose a clear criterion", () => {
     const d = { ...draftFromRule(reach), clearValue: "" };
-    expect(validateDraft(d, "edit").clearValue).toBeTruthy();
-    expect(validateDraft({ ...d, clearMode: "opposite" }, "edit").clearValue).toBeUndefined();
+    expect(validateDraft(d).clearValue).toBeTruthy();
+    expect(validateDraft({ ...d, clearMode: "opposite" }).clearValue).toBeUndefined();
   });
 
   it("defaults severity to the worst level that does not take its component out", () => {
@@ -185,7 +187,7 @@ describe("the short form an expression lowers from", () => {
     const was = { ...reach, official: false, fire_criteria: { expr }, clear_criteria: undefined };
     const d = draftFromRule(was);
     expect(d.fireExpr).toBe(expr);
-    expect(validateDraft(d, "edit")).toEqual({});
+    expect(validateDraft(d)).toEqual({});
     expect(updateBody({ ...d, label: "Reach" }, was)).toEqual({ label: "Reach" });
     expect(createBody({ ...d, name: "copy" }).fire_criteria).toEqual({ expr });
   });
@@ -217,9 +219,9 @@ describe("the bodies a draft sends", () => {
   });
 
   it("takes no severity as a choice (informational), and requires a fire event type", () => {
-    expect(Object.keys(validateDraft({ ...draftFromRule(hot), severity: "" }, "edit"))).toEqual([]);
-    expect(Object.keys(validateDraft({ ...emptyDraft(), name: "x", sampleKey: "k", fireValue: "1" }, "create"))).not.toContain("severity");
-    expect(validateDraft({ ...draftFromRule(hot), fireEventType: "" }, "edit").fireEventType).toBeTruthy();
+    expect(Object.keys(validateDraft({ ...draftFromRule(hot), severity: "" }))).toEqual([]);
+    expect(Object.keys(validateDraft({ ...emptyDraft(), name: "x", sampleKey: "k", fireValue: "1" }))).not.toContain("severity");
+    expect(validateDraft({ ...draftFromRule(hot), fireEventType: "" }).fireEventType).toBeTruthy();
     expect(createBody({ ...draftFromRule(hot), severity: "" }).severity).toBeUndefined();
   });
 
@@ -303,8 +305,8 @@ describe("writing criteria as an expression", () => {
     const was = { ...hot };
     const d = { ...draftFromRule(was), fireExpr: "value > 40 && instance != \"aux\"" };
     expect(updateBody(d, was)).toEqual({ fire_criteria: { expr: "value > 40 && instance != \"aux\"" } });
-    expect(validateDraft({ ...d, fireExpr: "  " }, "edit").fireExpr).toBeTruthy();
-    expect(validateDraft({ ...draftFromRule(reach), clearExpr: "" }, "edit").clearExpr).toBeTruthy();
+    expect(validateDraft({ ...d, fireExpr: "  " }).fireExpr).toBeTruthy();
+    expect(validateDraft({ ...draftFromRule(reach), clearExpr: "" }).clearExpr).toBeTruthy();
     expect(createBody({ ...d, name: "x" }).fire_criteria).toEqual({ expr: "value > 40 && instance != \"aux\"" });
   });
 

@@ -171,8 +171,8 @@ severity, and writes its **fire event**; when it leaves force (after `clear_sust
 row, resolves the alarm, and writes its **clear event** when it has a clear type. Each is written
 once, never per sample while the condition holds, in one transaction with the alarm transition and
 the health recompute. The [event](/architecture/events/) is `origin = derived`, names its rule
-(`derived_by_rule_id`, and the rule's name and version in `source_rule`, which outlive a deleted
-rule), sits on the series' component and instance, carries the rule's message and the sample's key
+(`derived_by_rule_id`, and the rule's name and version in `source_rule`, the name it had when the
+event was written, which a rename leaves as written and which outlives a deleted rule), sits on the series' component and instance, carries the rule's message and the sample's key
 and value as attributes, and carries the alarm it opened or resolved in **`event.alarm_id`**. A rule
 with no clear type resolves its alarm with no clear event, and its condition still ends. Turning a
 severity on opens alarms for the conditions in force, and turning it off resolves them while the
@@ -211,12 +211,27 @@ event_rule:
 The evaluator judges each sample **as it lands, in the same transaction**, through the same guarded
 conditional insert, audit row and health recompute a hand-raised alarm uses, so a rule-raised alarm
 feeds health exactly as a hand-raised one does; it writes as the system actor. The alarm names its rule
-(`raised_by_rule_id`, set null if the rule is deleted), and its condition identity is the rule's name
-plus the sample's **instance**, so a per-endpoint input holds **one alarm per endpoint**: a component
+(`raised_by_rule_id`, set null if the rule is deleted), and its condition identity (its `dedup_key`,
+`rule:<uuid>[:<instance>]`) is the rule's uuid plus the sample's **instance**, so a per-endpoint input holds **one alarm per endpoint**: a component
 whose SNMP and HTTP both fail carries two, and one recovering clears only its own. A repeated or
 redelivered sample changes nothing. A disabled rule evaluates nothing; disabling or deleting a rule ends
 the conditions it holds in force, each with its clear event, resolving their alarms (they stay in the
 history), and narrowing its selector ends those on the components it no longer watches.
+
+**A rule's name is renameable; its references are by uuid** (#977,
+[ADR-0062](/architecture/decisions/#adr-0062-a-registry-takes-a-uuid-primary-key-and-a-renameable-handle),
+[ADR-0076](/architecture/decisions/#adr-0076-a-renameable-human-typed-identifier-stays-in-the-url-and-the-write-returns-the-uuid)).
+`POST /event-rules/{name}:rename` moves an operator rule's name, the address an operator types, and
+answers the rule with its uuid. Everything inside the platform that refers to a rule holds the uuid: an
+alarm's `raised_by_rule_id` and its dedup key, the condition rows, the streaks, an event's
+`derived_by_rule_id`, the audit rows. So a rename moves nothing else: the alarms it holds stay open and
+attached, its conditions stay in force, a streak keeps its clock, and the next recovery clears the
+alarm and writes the clear event under the new name. A rename is not a material change and bumps no
+version. An event's `source_rule` is a historical record, the name the rule had when it wrote the
+event, so an episode that spans a rename reads the old name on its fire event and the new one on its
+clear, both by the same `derived_by_rule_id`. An official rule keeps its name (a 409), since the boot
+seed matches it by name. A one-time data migration rewrote the dedup key of every rule-raised alarm,
+open or cleared, from the rule's name to its uuid; an alarm whose rule was deleted keeps the key it had.
 
 **Sustains** hold an edge until it has lasted: `fire_sustain` before the alarm opens and
 `clear_sustain` before it clears, both defaulting to `0s`, set independently (a long clear sustain

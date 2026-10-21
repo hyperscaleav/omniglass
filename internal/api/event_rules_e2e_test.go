@@ -727,3 +727,144 @@ func TestEventRuleExpressionAPI(t *testing.T) {
 		"fire_criteria": map[string]any{"expr": "now() != nil"}, "fire_event_type": "condition-started"},
 		http.StatusUnprocessableEntity)
 }
+
+// TestEventRuleRenameAPI drives POST /event-rules/{name}:rename (#977): an
+// operator rule's name moves while every reference holds its uuid. A rule
+// holding an open alarm and a condition is renamed; the answer carries the
+// same uuid, the old name 404s and the new resolves, the alarm stays open
+// and names the rule by its new name, and the next recovery clears it with a
+// clear event naming the rule by the same uuid and the new name, while the
+// fire event keeps the name it was written under. An official rule refuses
+// (409), a taken name is a 409, an illegal one a 422, a viewer a 403 and a
+// place-bounded owner a 403.
+func TestEventRuleRenameAPI(t *testing.T) {
+	dsn := storagetest.NewDSN(t)
+	ctx := context.Background()
+	gw, err := storage.NewPG(ctx, dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer gw.Close()
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatal(err)
+	}
+	ownerTok, hash, prefix, err := auth.NewBearerToken()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := gw.BootstrapOwner(ctx, storage.OwnerSpec{Username: "root", SecretHash: hash, Prefix: prefix}); err != nil {
+		t.Fatal(err)
+	}
+	srv := httptest.NewServer(api.NewHandler(gw))
+	defer srv.Close()
+	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
+	viewer := setupAllViewer(t, ctx, dsn, "rename-viewer")
+	all := scope.Set{All: true}
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "rn-target"}, all, all, all, all); err != nil {
+		t.Fatal(err)
+	}
+	var made struct {
+		ID      string `json:"id"`
+		Version int    `json:"version"`
+	}
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodPost, "/event-rules", map[string]any{"name": "rn-before", "sample_key": "endpoint-reachable",
+		"fire_criteria": map[string]any{"expr": `value == "down"`}, "clear_criteria": map[string]any{"expr": `value == "up"`},
+		"severity": "high", "fire_event_type": "condition-started", "clear_event_type": "condition-ended",
+		"selector": map[string]any{"components": []string{"rn-target"}}}, http.StatusCreated), &made); err != nil || made.ID == "" {
+		t.Fatalf("created %+v (%v)", made, err)
+	}
+	sample := func(v string) {
+		t.Helper()
+		if err := gw.InsertPropertySamples(ctx, []storage.PropertySampleWrite{{OwnerKind: "component", OwnerID: "rn-target",
+			Key: "endpoint-reachable", Instance: "tcp", Value: v, TS: time.Now()}}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	sample("down")
+	type alarmRow struct {
+		ID           string     `json:"id"`
+		DedupKey     string     `json:"dedup_key"`
+		RaisedByRule string     `json:"raised_by_rule"`
+		ClearedAt    *time.Time `json:"cleared_at"`
+	}
+	alarms := func() []alarmRow {
+		t.Helper()
+		var out struct {
+			Alarms []alarmRow `json:"alarms"`
+		}
+		if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/components/rn-target/alarms?include_cleared=true", nil, http.StatusOK), &out); err != nil {
+			t.Fatal(err)
+		}
+		return out.Alarms
+	}
+	open := alarms()
+	if len(open) != 1 || open[0].DedupKey != "rule:"+made.ID+":tcp" {
+		t.Fatalf("alarms = %+v, want one keyed by the rule's uuid", open)
+	}
+	alarm := open[0].ID
+
+	body := map[string]any{"name": "rn-after"}
+	c.do(viewer, http.MethodPost, "/event-rules/rn-before:rename", body, http.StatusForbidden)
+	south := c.do(ownerTok, http.MethodPost, "/locations", map[string]any{"name": "rn-south", "location_type": "campus"}, http.StatusCreated)
+	var loc struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(south, &loc); err != nil || loc.ID == "" {
+		t.Fatalf("created location %s (%v)", south, err)
+	}
+	placeOwner := setupScopedPrincipal(t, ctx, dsn, "rn-south-owner", grantSpec{role: "owner", scopeKind: "location", scopeID: loc.ID})
+	c.do(placeOwner, http.MethodPost, "/event-rules/rn-before:rename", body, http.StatusForbidden)
+
+	var renamed struct {
+		ID                string `json:"id"`
+		Name              string `json:"name"`
+		Version           int    `json:"version"`
+		OpenAlarms        int    `json:"open_alarms"`
+		ConditionsInForce int    `json:"conditions_in_force"`
+	}
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodPost, "/event-rules/rn-before:rename", body, http.StatusOK), &renamed); err != nil {
+		t.Fatal(err)
+	}
+	if renamed.ID != made.ID || renamed.Name != "rn-after" || renamed.Version != made.Version || renamed.OpenAlarms != 1 || renamed.ConditionsInForce != 1 {
+		t.Fatalf("renamed = %+v, want the same uuid under rn-after, version %d, its alarm and condition held", renamed, made.Version)
+	}
+	c.do(ownerTok, http.MethodGet, "/event-rules/rn-before", nil, http.StatusNotFound)
+	c.do(viewer, http.MethodGet, "/event-rules/rn-after", nil, http.StatusOK)
+	if got := alarms(); len(got) != 1 || got[0].ID != alarm || got[0].ClearedAt != nil || got[0].DedupKey != "rule:"+made.ID+":tcp" || got[0].RaisedByRule != "rn-after" {
+		t.Fatalf("after the rename alarms = %+v, want the same alarm open, keyed by the uuid, raised by rn-after", got)
+	}
+
+	sample("up")
+	if got := alarms(); len(got) != 1 || got[0].ID != alarm || got[0].ClearedAt == nil {
+		t.Fatalf("after the recovery alarms = %+v, want the alarm cleared", got)
+	}
+	var evs struct {
+		Events []struct {
+			Key             string `json:"key"`
+			DerivedByRule   string `json:"derived_by_rule"`
+			DerivedByRuleID string `json:"derived_by_rule_id"`
+			AlarmID         string `json:"alarm_id"`
+		} `json:"events"`
+	}
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/components/rn-target/events", nil, http.StatusOK), &evs); err != nil {
+		t.Fatal(err)
+	}
+	seen := map[string]string{}
+	for _, e := range evs.Events {
+		if e.DerivedByRuleID != made.ID || e.AlarmID != alarm {
+			continue
+		}
+		seen[e.Key] = e.DerivedByRule
+	}
+	if seen["condition-started"] != "rn-before" || seen["condition-ended"] != "rn-after" {
+		t.Fatalf("events = %+v, want the fire event under rn-before and the clear event under rn-after, both by the rule's uuid", evs.Events)
+	}
+
+	c.do(ownerTok, http.MethodPost, "/event-rules/reachability-lost:rename", map[string]any{"name": "mine-now"}, http.StatusConflict)
+	c.do(ownerTok, http.MethodPost, "/event-rules", map[string]any{"name": "rn-taken", "sample_key": "room-temperature",
+		"fire_criteria": map[string]any{"expr": "value > 30.0"}, "fire_event_type": "condition-started"}, http.StatusCreated)
+	c.do(ownerTok, http.MethodPost, "/event-rules/rn-after:rename", map[string]any{"name": "rn-taken"}, http.StatusConflict)
+	c.do(ownerTok, http.MethodPost, "/event-rules/rn-after:rename", map[string]any{"name": "Not Kebab"}, http.StatusUnprocessableEntity)
+	c.do(ownerTok, http.MethodPost, "/event-rules/rn-after:rename", map[string]any{"name": made.ID}, http.StatusUnprocessableEntity)
+	c.do(ownerTok, http.MethodPost, "/event-rules/nope:rename", map[string]any{"name": "rn-x"}, http.StatusNotFound)
+}

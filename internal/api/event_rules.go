@@ -149,6 +149,16 @@ type createEventRuleInput struct {
 	}
 }
 
+// renameEventRuleInput is the :rename body. The name rule lives here, in the
+// contract, as well as in the gateway's shared validator: the pattern and the
+// ceiling are what the generated client, CLI, and JSONSchema enforce.
+type renameEventRuleInput struct {
+	Name string `path:"name" doc:"The rule's current name"`
+	Body struct {
+		Name string `json:"name" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"The rule's new name, unique among rules (lowercase letters, digits, hyphens)"`
+	}
+}
+
 type updateEventRuleInput struct {
 	Name string `path:"name" doc:"The rule's name"`
 	Body struct {
@@ -291,6 +301,20 @@ func registerEventRuleRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 			patch.ClearSustain = &d
 		}
 		r, err := gw.UpdateEventRule(ctx, actorID(ctx), in.Name, patch, a.scopeFor(ctx, "rule", "update"))
+		if err != nil {
+			return nil, mapEventRuleErr(err)
+		}
+		return rereadEventRule(ctx, a, gw, r.Name)
+	})
+
+	huma.Register(api, a.gated(huma.Operation{
+		OperationID: "rename-event-rule",
+		Method:      http.MethodPost,
+		Path:        "/event-rules/{name}:rename",
+		Summary:     "Rename an event rule",
+		Description: "Moves an operator rule's name, the address an operator types. A separate act from an update, because it breaks bookmarks and integration config outside this system; inside it nothing breaks, since every reference holds the rule's uuid (an alarm's raised_by_rule_id and dedup key, a condition, a streak, an event's derived_by_rule_id). Not a material change: no version bump, streaks keep running and conditions stay in force. An event keeps the name it was written under (derived_by_rule); the rule's next events carry the new one. An official rule keeps its name (409), a taken name is a 409, an illegal or uuid-shaped one a 422. Returns the rule with its uuid. Audited. Gated by rule:update, with an all-scope grant.",
+	}, "rule", "update"), func(ctx context.Context, in *renameEventRuleInput) (*eventRuleOutput, error) {
+		r, err := gw.RenameEventRule(ctx, actorID(ctx), in.Name, in.Body.Name, a.scopeFor(ctx, "rule", "update"))
 		if err != nil {
 			return nil, mapEventRuleErr(err)
 		}

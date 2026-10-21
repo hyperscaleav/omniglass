@@ -58,6 +58,7 @@ import {
   toBuilder,
   toExpression,
   updateEventRule,
+  renameEventRule,
   validateDraft,
   withLane,
 } from "../lib/event_rules";
@@ -106,6 +107,8 @@ export const RULE_HINTS = {
   official: "Official rules ship with Omniglass and update with it, so they are read-only. Author your own beside them.",
   enabled: "A disabled rule evaluates nothing, and disabling it clears the alarms it holds open (each stays in its component's history). Enabling it again judges the newest samples at once.",
   message: "The alarm's message. Blank uses the rule's label, or its name.",
+  name:
+    "A lowercase kebab name, e.g. too-hot: the address an operator types and a link carries. Renaming it breaks bookmarks and external references by design; inside the platform nothing moves, since the rule's alarms, conditions and events all hold its uuid. Past events keep the name they were written under.",
   deleted:
     "Deleted since the rule was written, so the rule matches nothing by it; the rest of what it watches still applies. Remove it to tidy the rule, or leave it: saving other changes keeps it as it is.",
 } as const;
@@ -204,7 +207,7 @@ export default function Rules(): JSX.Element {
     setEditing(null);
     blades.push({ kind: "rule", id: name });
   };
-  // A link may name a rule (/rules?rule=<name>): an event row on Activity
+  // A link may name a rule (/rules?rule=<name or uuid>): an event row on Activity
   // points at the rule that wrote it, and lands on its blade. The page follows
   // the param as it changes (back and forward open the rule it names), and
   // lets go of it when the blade stack closes, so a reload does not reopen a
@@ -321,9 +324,11 @@ function useRuleRow(name: string): () => EventRule | undefined {
 
 // useRuleLookup reads one rule from the list, and whether the list has loaded,
 // so a blade says "not found" only once it knows (no flash on a cold load).
-function useRuleLookup(name: string): { row: () => EventRule | undefined; loaded: () => boolean } {
+// The ref is the rule's name or its uuid: an event links its rule by uuid
+// (#977), so a link written before a rename still opens the rule.
+function useRuleLookup(ref: string): { row: () => EventRule | undefined; loaded: () => boolean } {
   const rules = useQuery(() => ({ queryKey: EVENT_RULES_KEY, queryFn: listEventRules }));
-  return { row: () => (rules.data ?? []).find((r) => r.name === name), loaded: () => rules.isSuccess };
+  return { row: () => (rules.data ?? []).find((r) => r.name === ref || r.id === ref), loaded: () => rules.isSuccess };
 }
 
 // RuleBladeTitle reads the rule's row once. Written inline as
@@ -430,9 +435,11 @@ function RuleBladeBody(p: { name: string }): JSX.Element {
   const unit = useMetricUnit();
   const [err, setErr] = createSignal<string | null>(null);
   // No row, no state to read: a link naming a rule that is gone reads nothing.
+  // The state reads by the rule's current name: the blade may be opened by uuid.
+  const ruleName = () => row()?.name ?? p.name;
   const state = useQuery(() => ({
-    queryKey: ruleStateKey(p.name),
-    queryFn: () => getRuleState(p.name),
+    queryKey: ruleStateKey(ruleName()),
+    queryFn: () => getRuleState(ruleName()),
     refetchInterval: DETAIL_POLL_MS,
     enabled: !!row(),
   }));
@@ -687,7 +694,9 @@ function DeletedMark(p: { what: string }): JSX.Element {
 }
 
 // RuleForm authors a rule, on create and on edit alike; a Drawer hosts it and
-// draws its action rail. The name is create-only. The sample key picker spans
+// draws its action rail. An edit may rename (#977), on the entity forms' save
+// model: the PATCH first, the :rename LAST, so a refused rename (a taken name)
+// leaves the rest saved and says why. The sample key picker spans
 // both registries and its lane decides the comparisons and the value's type;
 // every rule is judged in TypeScript (lib/event_rules), shown beside its field
 // once the field is touched, and gates the submit.
@@ -718,7 +727,7 @@ export function RuleForm(p: { mode: "create" | "edit"; rule?: EventRule; onSaved
     }
   });
 
-  const errors = createMemo<DraftErrors>(() => validateDraft(d, p.mode));
+  const errors = createMemo<DraftErrors>(() => validateDraft(d));
   // The server's verdict on each criterion written as an expression (undefined
   // until a check answers): a source that does not compile refuses the submit.
   const [exprOk, setExprOk] = createStore<{ fire?: boolean; clear?: boolean }>({});
@@ -800,11 +809,25 @@ export function RuleForm(p: { mode: "create" | "edit"; rule?: EventRule; onSaved
     setBusy(true);
     setFormErr(null);
     try {
-      const saved = p.mode === "create" ? await createEventRule(createBody(d)) : await updateEventRule(p.rule!.name, updateBody(d, p.rule!));
+      if (p.mode === "create") {
+        const saved = await createEventRule(createBody(d));
+        await qc.invalidateQueries({ queryKey: EVENT_RULES_KEY });
+        p.onSaved(saved);
+        return;
+      }
+      const was = p.rule!;
+      const to = d.name.trim();
+      const body = updateBody(d, was);
+      let saved = was;
+      // A rename alone sends no PATCH: there is nothing else to write.
+      if (to === was.name || Object.keys(body).length > 0) saved = await updateEventRule(was.name, body);
+      if (to !== was.name) saved = await renameEventRule(was.name, to);
       await qc.invalidateQueries({ queryKey: EVENT_RULES_KEY });
       p.onSaved(saved);
     } catch (e) {
       setFormErr(describeError(e));
+      // A PATCH that landed before a refused rename is saved: show it.
+      if (p.mode === "edit") await qc.invalidateQueries({ queryKey: EVENT_RULES_KEY });
     } finally {
       setBusy(false);
     }
@@ -830,22 +853,17 @@ export function RuleForm(p: { mode: "create" | "edit"; rule?: EventRule; onSaved
       <Show when={formErr()}>
         <div role="alert" class="alert alert-error alert-soft text-sm"><span>{formErr()}</span></div>
       </Show>
-      <Show
-        when={p.mode === "create"}
-        fallback={<KVStacked bind="name" value={<span class="font-data">{d.name}</span>} />}
-      >
-        <FieldRow bind="name" info="A lowercase kebab name, e.g. too-hot. It cannot change later.">
-          <input
-            class="input input-bordered w-full font-data"
-            classList={{ "input-error": !!shown("name") }}
-            aria-required="true"
-            value={d.name}
-            placeholder="too-hot"
-            onInput={(e) => { setD("name", e.currentTarget.value); touch("name"); }}
-          />
-          {err("name")}
-        </FieldRow>
-      </Show>
+      <FieldRow bind="name" info={RULE_HINTS.name}>
+        <input
+          class="input input-bordered w-full font-data"
+          classList={{ "input-error": !!shown("name") }}
+          aria-required="true"
+          value={d.name}
+          placeholder="too-hot"
+          onInput={(e) => { setD("name", e.currentTarget.value); touch("name"); }}
+        />
+        {err("name")}
+      </FieldRow>
       <FieldRow bind="label">
         <input class="input input-bordered w-full" value={d.label} placeholder="Too hot" onInput={(e) => setD("label", e.currentTarget.value)} />
       </FieldRow>

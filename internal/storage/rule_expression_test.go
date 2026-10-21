@@ -70,7 +70,7 @@ func TestRuleCriteriaAreExpressions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(alarms) != 1 || alarms[0].DedupKey != "rule:expr-form:tcp" {
+	if len(alarms) != 1 || alarms[0].RaisedByRuleID == nil || alarms[0].DedupKey != "rule:"+*alarms[0].RaisedByRuleID+":tcp" {
 		t.Fatalf("alarms %+v, want one on tcp (aux is excluded by the expression)", alarms)
 	}
 

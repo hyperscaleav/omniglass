@@ -1574,6 +1574,26 @@ Example:
 omniglass event-rule preview --fire-criteria <json> --sample-key sample_key
 ```
 
+### `omniglass event-rule rename`
+
+Rename an event rule
+
+```
+omniglass event-rule rename <name> [flags]
+```
+
+Moves an operator rule's name, the address an operator types. A separate act from an update, because it breaks bookmarks and integration config outside this system; inside it nothing breaks, since every reference holds the rule's uuid (an alarm's raised_by_rule_id and dedup key, a condition, a streak, an event's derived_by_rule_id). Not a material change: no version bump, streaks keep running and conditions stay in force. An event keeps the name it was written under (derived_by_rule); the rule's next events carry the new one. An official rule keeps its name (409), a taken name is a 409, an illegal or uuid-shaped one a 422. Returns the rule with its uuid. Audited. Gated by rule:update, with an all-scope grant.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--name` | string | (none) | The rule's new name, unique among rules (lowercase letters, digits, hyphens) |
+
+Example:
+
+```sh
+omniglass event-rule rename <name> --name name
+```
+
 ### `omniglass event-rule state`
 
 Commands for the state resource

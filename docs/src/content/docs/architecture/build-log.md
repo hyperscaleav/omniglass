@@ -6931,3 +6931,26 @@ caller's scope, so a hidden component is the same 422 as a missing one. The cons
 counts the series it judged and those that started unknown. Tests cover each case, and an EXPLAIN test
 asserts every per-series read on both lanes is an index probe on its series index with no seq scan.
 
+
+### An event rule's name is renameable, its references stay by uuid (#977)
+
+Event rules shipped with create-only names (#918), against ADR-0062 and ADR-0076; the architect folded
+the fix into #524's rollup. `POST /event-rules/{name}:rename` (gated `rule:update` on an all-scope
+grant, like every rule write; `omniglass event-rule rename`) moves an operator rule's name through the
+shared validator, audited (`rename`, keyed on the uuid) and answered with the rule and its `id`; an
+official rule is a 409, as every official write is, and a taken name a 409. A rename is not a material
+change: no version bump, streaks keep their clock, conditions stay in force. The one reference that
+held the name was the alarm's dedup key, which is now `rule:<uuid>[:<instance>]` everywhere it is built
+or read (the raise and clear, the in-force probe, the candidates and in-force reads of the reconcile
+pass and the live state, the state's instance parse); a one-time data migration
+(`20261021050000_alarm_rule_dedup_key_by_uuid`) rewrote every rule-raised alarm's key, open and
+cleared, through `raised_by_rule_id`, leaving a deleted rule's alarms as they were, with a tested down
+and a second run that changes nothing. The #949 condition backfill still parses names, which is right:
+it runs before the rewrite. An event's `source_rule` stays the historical name beside
+`derived_by_rule_id`, so an episode spanning a rename reads its fire event under the old name and its
+clear under the new. The console renames from the rule's Edit drawer, on the entity forms' save model
+(the PATCH first, the rename last, so a refused rename leaves the rest saved), and an event's rule link
+now carries the rule's uuid, which the Rules page resolves, so a link written before a rename still
+opens the rule. The rules guide, alarms and actions, the API page and ADR-0144 (a dated amendment to
+its point 5) say so, and the `write-a-rule-as-an-expression` walkthrough's name caption no longer
+claims a name cannot change.

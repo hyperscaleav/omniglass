@@ -461,6 +461,9 @@ type Gateway interface {
 	GetEventRule(ctx context.Context, name string, visible scope.Set) (*EventRule, error)
 	CreateEventRule(ctx context.Context, actorID string, spec EventRuleSpec, create scope.Set) (*EventRule, error)
 	UpdateEventRule(ctx context.Context, actorID, name string, patch EventRulePatch, action scope.Set) (*EventRule, error)
+	// RenameEventRule moves an operator rule's name; every reference holds
+	// its uuid, so nothing inside the platform moves with it.
+	RenameEventRule(ctx context.Context, actorID, name, newName string, action scope.Set) (*EventRule, error)
 	DeleteEventRule(ctx context.Context, actorID, name string, action scope.Set) error
 	// SampleKeyType reads which lane a sample key reads and, for a property,
 	// its data type: what types an expression's value (#958).

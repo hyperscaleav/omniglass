@@ -434,9 +434,9 @@ const ruleInForceSQL = `(select rule_id, component_id, instance, since from even
 	union all
 	select o.rule_id, o.component_id, o.instance, o.since from (
 		select a.raised_by_rule_id as rule_id, a.component_id, a.raised_at as since,
-			case when a.dedup_key = 'rule:' || r.name then '' else substr(a.dedup_key, length('rule:' || r.name || ':') + 1) end as instance
+			case when a.dedup_key = 'rule:' || r.id::text then '' else substr(a.dedup_key, length('rule:' || r.id::text || ':') + 1) end as instance
 		from alarm a join event_rule r on r.id = a.raised_by_rule_id
-		where a.cleared_at is null and (a.dedup_key = 'rule:' || r.name or a.dedup_key like 'rule:' || r.name || ':%')
+		where a.cleared_at is null and (a.dedup_key = 'rule:' || r.id::text or a.dedup_key like 'rule:' || r.id::text || ':%')
 	) o
 	where not exists (select 1 from event_rule_condition c where c.rule_id = o.rule_id and c.component_id = o.component_id
 		and c.instance = o.instance))`
@@ -695,6 +695,50 @@ func (p *PG) UpdateEventRule(ctx context.Context, actorID, name string, patch Ev
 		return nil, fmt.Errorf("storage: commit update event rule: %w", err)
 	}
 	return &updated, nil
+}
+
+// RenameEventRule moves an operator rule's name (#977), audited; it needs
+// an all-scope update grant, as every rule write does. An official rule keeps
+// its name, since the boot seed matches it by name (ErrEventRuleOfficial).
+//
+// Separate from the patch because a rename is a separate act (ADR-0076): it
+// breaks only the references held outside the platform. Inside, nothing
+// moves: an alarm's raised_by_rule_id and dedup key, a condition, a streak,
+// an event's derived_by_rule_id and the audit rows all hold the uuid. So a
+// rename is not a material change and bumps no version: streaks keep running
+// and conditions stay in force. An event keeps the name it was written under
+// in source_rule; the rule's next events carry the new one.
+func (p *PG) RenameEventRule(ctx context.Context, actorID, name, newName string, action scope.Set) (*EventRule, error) {
+	if !action.All {
+		return nil, ErrEventRuleForbidden
+	}
+	if err := ValidateName("event_rule", newName); err != nil {
+		return nil, fmt.Errorf("%w: %w", ErrEventRuleInvalid, err)
+	}
+	tx, err := p.pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("storage: begin rename event rule: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	old, err := lockMutableEventRule(ctx, tx, name)
+	if err != nil {
+		return nil, err
+	}
+	renamed, err := scanEventRule(tx.QueryRow(ctx, `update event_rule set name = $2, updated_at = now()
+		where id = $1 returning `+eventRuleCols, old.ID, newName))
+	if err != nil {
+		return nil, mapRuleWriteErr(err, name)
+	}
+	if err := writeAuditRes(ctx, tx, actorID, "rename", "event_rule", old.ID, old, renamed); err != nil {
+		return nil, err
+	}
+	if err := countRuleState(ctx, tx, &renamed, scope.Set{All: true}); err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("storage: commit rename event rule: %w", err)
+	}
+	return &renamed, nil
 }
 
 // DeleteEventRule removes an operator rule, audited; it needs an all-scope

@@ -890,6 +890,9 @@ func (UnimplementedGateway) CreateEventRule(context.Context, string, EventRuleSp
 func (UnimplementedGateway) UpdateEventRule(context.Context, string, string, EventRulePatch, scope.Set) (*EventRule, error) {
 	return nil, nil
 }
+func (UnimplementedGateway) RenameEventRule(context.Context, string, string, string, scope.Set) (*EventRule, error) {
+	return nil, nil
+}
 func (UnimplementedGateway) DeleteEventRule(context.Context, string, string, scope.Set) error {
 	return nil
 }

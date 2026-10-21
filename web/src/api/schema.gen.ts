@@ -1268,6 +1268,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/event-rules/{name}:rename": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Rename an event rule
+         * @description Moves an operator rule's name, the address an operator types. A separate act from an update, because it breaks bookmarks and integration config outside this system; inside it nothing breaks, since every reference holds the rule's uuid (an alarm's raised_by_rule_id and dedup key, a condition, a streak, an event's derived_by_rule_id). Not a material change: no version bump, streaks keep running and conditions stay in force. An event keeps the name it was written under (derived_by_rule); the rule's next events carry the new one. An official rule keeps its name (409), a taken name is a 409, an illegal or uuid-shaped one a 422. Returns the rule with its uuid. Audited. Gated by rule:update, with an all-scope grant.
+         */
+        post: operations["rename-event-rule"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/event-rules:preview": {
         parameters: {
             query?: never;
@@ -7506,6 +7526,16 @@ export interface components {
             /** @description The new name, unique within its placement (lowercase letters, digits, hyphens) */
             name: string;
         };
+        RenameEventRuleInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/RenameEventRuleInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description The rule's new name, unique among rules (lowercase letters, digits, hyphens) */
+            name: string;
+        };
         RenameGroupInputBody: {
             /**
              * Format: uri
@@ -11840,6 +11870,42 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EventRuleStateOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "rename-event-rule": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The rule's current name */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RenameEventRuleInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EventRuleBody"];
                 };
             };
             /** @description Error */

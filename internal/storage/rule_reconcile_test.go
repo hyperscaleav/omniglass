@@ -289,7 +289,7 @@ func TestReconcileRetriesAFailedSeriesWithoutPinningTheMark(t *testing.T) {
 		t.Helper()
 		var n int
 		if err := f.conn.QueryRow(ctx, `select count(*) from alarm a join event_rule r on r.id = a.raised_by_rule_id
-			where r.name = 'pin' and a.dedup_key = $1 and a.cleared_at is null`, "rule:pin:"+instance).Scan(&n); err != nil {
+			where r.name = 'pin' and a.dedup_key = 'rule:' || r.id::text || ':' || $1 and a.cleared_at is null`, instance).Scan(&n); err != nil {
 			t.Fatal(err)
 		}
 		return n == 1

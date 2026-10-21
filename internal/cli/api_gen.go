@@ -2180,6 +2180,30 @@ func generatedCommands() []*cobra.Command {
 			return cmd
 		}())
 		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				var fName string
+				cmd := &cobra.Command{
+					Use:     "rename <name>",
+					Short:   "Rename an event rule",
+					Long:    "Moves an operator rule's name, the address an operator types. A separate act from an update, because it breaks bookmarks and integration config outside this system; inside it nothing breaks, since every reference holds the rule's uuid (an alarm's raised_by_rule_id and dedup key, a condition, a streak, an event's derived_by_rule_id). Not a material change: no version bump, streaks keep running and conditions stay in force. An event keeps the name it was written under (derived_by_rule); the rule's next events carry the new one. An official rule keeps its name (409), a taken name is a 409, an illegal or uuid-shaped one a 422. Returns the rule with its uuid. Audited. Gated by rule:update, with an all-scope grant.",
+					Example: "  omniglass event-rule rename <name> --name name",
+					Args:    cobra.ExactArgs(1),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/event-rules/%s:rename", url.PathEscape(args[0]))
+						body := map[string]any{}
+						if cmd.Flags().Changed("name") {
+							body["name"] = fName
+						}
+						return runAPICommand(cmd, "POST", path, body)
+					},
+				}
+				cmd.Flags().StringVar(&fName, "name", "", "The rule's new name, unique among rules (lowercase letters, digits, hyphens)")
+				_ = cmd.MarkFlagRequired("name")
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
 			parent := &cobra.Command{
 				Use:   "state",
 				Short: "Commands for the state resource",

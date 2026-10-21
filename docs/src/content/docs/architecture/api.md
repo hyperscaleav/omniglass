@@ -361,7 +361,13 @@ at the sample) and `in_force_now`. Its reads are index probes per series; the wi
 not exist, and a criterion that does not compile is a 422 at its line and column. A rule edit is judged on what it changes from the stored rule:
 a selector entry, key or criteria it restates unchanged is not re-resolved, so a rule whose component or
 type was deleted stays editable (it matches nothing by the stale entry), while an entry new to the rule must
-exist. The list and a get carry each rule's live state as counts (`conditions_in_force`, `open_alarms`,
+exist. `POST /event-rules/{name}:rename` (gated `rule:update` on an all-scope grant; `omniglass event-rule
+rename`) moves an operator rule's name (#977) and answers the rule with its `id`; every reference inside
+the platform holds that uuid (an alarm's `raised_by_rule_id` and its `dedup_key`, `rule:<uuid>[:<instance>]`,
+a condition, a streak, an event's `derived_by_rule_id`), so a rename bumps no version and leaves streaks
+and conditions running. An event keeps the name it was written under (`derived_by_rule`). An official
+rule keeps its name (409, the seed matches it by name), a taken name is a 409, an illegal or uuid-shaped
+one a 422. The list and a get carry each rule's live state as counts (`conditions_in_force`, `open_alarms`,
 `pending_streaks`), read for the whole list in one query; `GET /event-rules/{name}/state` lists the
 conditions in force, the alarms and the streaks themselves.
 Both are fenced to the caller's component read scope. The list, a get and the state also carry

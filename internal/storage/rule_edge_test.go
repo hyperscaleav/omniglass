@@ -102,7 +102,7 @@ func (r *edgeRig) openAlarm(instance string) string {
 	r.t.Helper()
 	var id string
 	err := r.f.conn.QueryRow(r.ctx, `select coalesce((select a.id::text from alarm a join event_rule er on er.id = a.raised_by_rule_id
-		where er.name = $1 and a.dedup_key = 'rule:' || $1 || ':' || $2 and a.cleared_at is null), '')`, r.name, instance).Scan(&id)
+		where er.name = $1 and a.dedup_key = 'rule:' || er.id::text || ':' || $2 and a.cleared_at is null), '')`, r.name, instance).Scan(&id)
 	if err != nil {
 		r.t.Fatal(err)
 	}
@@ -350,7 +350,8 @@ func TestRuleEdgeOrphanAlarmIsInForce(t *testing.T) {
 	r := newEdgeRig(t)
 	r.rule(storage.EventRuleSpec{Name: "orphan", Severity: "high", ClearEventType: "condition-ended"})
 	mustExec(t, r.f.conn, `insert into alarm (component_id, severity, message, dedup_key, raised_by_rule_id)
-		values ((select id from component where name = 'bar-1'), 'high', 'old', 'rule:orphan:tcp', (select id from event_rule where name = 'orphan'))`)
+		values ((select id from component where name = 'bar-1'), 'high', 'old', 'rule:' || (select id::text from event_rule where name = 'orphan') || ':tcp',
+			(select id from event_rule where name = 'orphan'))`)
 	alarm := r.openAlarm("tcp")
 	r.observe("tcp", "down")
 	if r.openAlarm("tcp") != alarm || len(r.events()) != 0 || r.conditions() != 0 {
