@@ -53,6 +53,10 @@ type calcRuleBody struct {
 	Version     int              `json:"version" doc:"Bumps on every update"`
 	CreatedAt   time.Time        `json:"created_at" doc:"When the rule was created"`
 	UpdatedAt   time.Time        `json:"updated_at" doc:"When the rule was last written"`
+	Computed    int              `json:"owners_computed" doc:"How many owners the caller may read hold a value the rule computed (on the list; 0 on a single read)"`
+	Pending     int              `json:"owners_pending" doc:"How many owners the caller may read are marked for the next tick (on the list)"`
+	Unsupported int              `json:"owners_unsupported" doc:"How many owners the caller may read the rule last wrote nothing for: an input missing, a system with no members (on the list)"`
+	Errors      int              `json:"owners_failed" doc:"How many owners the caller may read the rule last failed on (on the list)"`
 	CalcError   *calcErrorBody   `json:"calc_error,omitempty" required:"false" doc:"Why the stored reduce does not compile against the registries as they are now (an input key deleted or retyped); absent when it compiles. While present the rule cannot be enabled"`
 }
 
@@ -148,16 +152,23 @@ func registerCalcRuleRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 		Method:      http.MethodGet,
 		Path:        "/calc-rules",
 		Summary:     "List calc rules",
-		Description: "Lists the calc rules, by name: the authored config that derives an output key on each owner from named inputs. Rules read like a registry, so every rule is listed whatever the caller's scope. Gated by rule:read.",
+		Description: "Lists the calc rules, by name: the authored config that derives an output key on each owner from named inputs, each with its live state as counts (owners_computed, owners_pending, owners_unsupported, owners_failed) over the owners the caller may read. Rules read like a registry, so every rule is listed whatever the caller's scope. Gated by rule:read.",
 	}, "rule", "read"), func(ctx context.Context, _ *struct{}) (*listCalcRulesOutput, error) {
 		rs, err := gw.ListCalcRules(ctx)
+		if err != nil {
+			return nil, mapCalcRuleErr(err)
+		}
+		counts, err := gw.CalcRuleCounts(ctx, a.scopeFor(ctx, "component", "read"), a.scopeFor(ctx, "system", "read"))
 		if err != nil {
 			return nil, mapCalcRuleErr(err)
 		}
 		out := &listCalcRulesOutput{}
 		out.Body.CalcRules = make([]calcRuleBody, 0, len(rs))
 		for i := range rs {
-			out.Body.CalcRules = append(out.Body.CalcRules, toCalcRuleBody(&rs[i]))
+			b := toCalcRuleBody(&rs[i])
+			c := counts[rs[i].ID]
+			b.Computed, b.Pending, b.Unsupported, b.Errors = c.Computed, c.Pending, c.Unsupported, c.Errors
+			out.Body.CalcRules = append(out.Body.CalcRules, b)
 		}
 		return out, nil
 	})

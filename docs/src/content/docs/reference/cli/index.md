@@ -340,7 +340,7 @@ List calc rules
 omniglass calc-rule list
 ```
 
-Lists the calc rules, by name: the authored config that derives an output key on each owner from named inputs. Rules read like a registry, so every rule is listed whatever the caller's scope. Gated by rule:read.
+Lists the calc rules, by name: the authored config that derives an output key on each owner from named inputs, each with its live state as counts (owners_computed, owners_pending, owners_unsupported, owners_failed) over the owners the caller may read. Rules read like a registry, so every rule is listed whatever the caller's scope. Gated by rule:read.
 
 Example:
 

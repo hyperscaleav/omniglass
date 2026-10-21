@@ -18,8 +18,10 @@ The **`calc_rule` registry** is built (#995, [ADR-0147](/architecture/decisions/
 rules are authored, type-checked and kept acyclic, below. **Component and system rules run** (#996,
 #997, [ADR-0148](/architecture/decisions/#adr-0148-calc-rules-run-on-a-durable-pending-set-and-a-server-tick-not-a-jetstream-consumer)): on a durable pending set and a
 server tick rather than a JetStream consumer, below. A rule's **state** and a candidate's **preview**
-are read on [the API](/architecture/api/) (#998). Event rules do not yet judge a system-owned output
-(#1002). The console is the rest of epic #525, and the `action_rule` is still design.
+are read on [the API](/architecture/api/) (#998), and the console authors, previews and reads them
+(Catalog, Actions: Calc rules, #999; [the guide](/guides/admin/calc-rules/)), linking a calculated
+value on a component or a system to its rule. Event rules do not yet judge a system-owned output
+(#1002), and the `action_rule` is still design.
 :::
 
 ## The calc_rule registry

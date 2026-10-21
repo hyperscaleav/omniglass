@@ -52,6 +52,9 @@ Every task on these pages has two front doors, and they call the same API with t
   writing an event rule (what it reads, when it fires and clears, how long a condition must hold),
   watching its live state, and the ranked severity levels its alarms are raised at, which you can
   add to, rename, recolor and re-rank on the console.
+- **[Calc rules](/guides/admin/calc-rules/)** derive a value from others, on each component or on each
+  system from its members: writing one with a named reducer or an expression, previewing it, and
+  reading what it last computed on each owner.
 - The classifier catalogs shape the fleet's entities:
   **[location types](/guides/admin/location-types/)** for locations, **[standards](/guides/admin/standards/)** for
   systems, and **[products](/guides/admin/products/)** for components, with

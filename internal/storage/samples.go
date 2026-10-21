@@ -123,12 +123,13 @@ type sampleLineage struct {
 	version  int
 }
 
-// provenanceArgs is a row's provenance, source_rule and source_rule_version.
-func (l *sampleLineage) provenanceArgs() (string, any, any) {
+// provenanceArgs is a row's provenance, source_rule, source_rule_version and
+// source_rule_id.
+func (l *sampleLineage) provenanceArgs() (string, any, any, any) {
 	if l == nil {
-		return "observed", nil, nil
+		return "observed", nil, nil, nil
 	}
-	return "calculated", l.ruleName, l.version
+	return "calculated", l.ruleName, l.version, l.ruleID
 }
 
 func (l *sampleLineage) rule() string {
@@ -170,16 +171,16 @@ func (p *PG) writeMetricSamples(ctx context.Context, tx pgx.Tx, evs []MetricSamp
 	if err := p.markCalcPending(ctx, tx, marks, lineage.rule()); err != nil {
 		return err
 	}
-	provenance, sourceRule, sourceVersion := lineage.provenanceArgs()
+	provenance, sourceRule, sourceVersion, sourceRuleID := lineage.provenanceArgs()
 	for i, ev := range evs {
 		col, _ := ownerColumn(ev.OwnerKind)
 		ts := ev.TS
 		if ts.IsZero() {
 			ts = time.Now().UTC()
 		}
-		sql := fmt.Sprintf(`insert into metric (ts, owner_kind, %s, metric_type_id, instance, value, provenance, source, source_rule, source_rule_version)
-			values ($1, $2, $3, (select id from metric_type where name = $4), $5, $6, $7, $8, $9, $10)`, col)
-		if _, err := tx.Exec(ctx, sql, ts, ev.OwnerKind, arcs[i], ev.Key, ev.Instance, ev.Value, provenance, ev.Source, sourceRule, sourceVersion); err != nil {
+		sql := fmt.Sprintf(`insert into metric (ts, owner_kind, %s, metric_type_id, instance, value, provenance, source, source_rule, source_rule_version, source_rule_id)
+			values ($1, $2, $3, (select id from metric_type where name = $4), $5, $6, $7, $8, $9, $10, $11::uuid)`, col)
+		if _, err := tx.Exec(ctx, sql, ts, ev.OwnerKind, arcs[i], ev.Key, ev.Instance, ev.Value, provenance, ev.Source, sourceRule, sourceVersion, sourceRuleID); err != nil {
 			return fmt.Errorf("storage: insert sample %s/%s: %w", ev.OwnerID, ev.Key, err)
 		}
 		if err := eval.observe(ctx, tx, rules.LaneMetric, ev.OwnerKind, arcs[i], ev.Key, ev.Instance, ts, ev.Value); err != nil {

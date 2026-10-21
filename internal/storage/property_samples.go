@@ -96,16 +96,16 @@ func (p *PG) writePropertySamples(ctx context.Context, tx pgx.Tx, evs []Property
 	if err := p.markCalcPending(ctx, tx, marks, lineage.rule()); err != nil {
 		return err
 	}
-	provenance, sourceRule, sourceVersion := lineage.provenanceArgs()
+	provenance, sourceRule, sourceVersion, sourceRuleID := lineage.provenanceArgs()
 	for i, ev := range evs {
 		col, _ := ownerColumn(ev.OwnerKind)
 		ts := ev.TS
 		if ts.IsZero() {
 			ts = time.Now().UTC()
 		}
-		sql := fmt.Sprintf(`insert into property (ts, owner_kind, %s, property_type_id, instance, value, provenance, source, source_rule, source_rule_version)
-			values ($1, $2, $3, (select id from property_type where name = $4), $5, to_jsonb($6::text), $7, $8, $9, $10)`, col)
-		if _, err := tx.Exec(ctx, sql, ts, ev.OwnerKind, arcs[i], ev.Key, ev.Instance, ev.Value, provenance, ev.Source, sourceRule, sourceVersion); err != nil {
+		sql := fmt.Sprintf(`insert into property (ts, owner_kind, %s, property_type_id, instance, value, provenance, source, source_rule, source_rule_version, source_rule_id)
+			values ($1, $2, $3, (select id from property_type where name = $4), $5, to_jsonb($6::text), $7, $8, $9, $10, $11::uuid)`, col)
+		if _, err := tx.Exec(ctx, sql, ts, ev.OwnerKind, arcs[i], ev.Key, ev.Instance, ev.Value, provenance, ev.Source, sourceRule, sourceVersion, sourceRuleID); err != nil {
 			return fmt.Errorf("storage: insert property sample %s/%s: %w", ev.OwnerID, ev.Key, err)
 		}
 		// An observation may be what a pending command was waiting on.

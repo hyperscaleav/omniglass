@@ -21,6 +21,8 @@ How the evaluator works is on [alarms and actions](/architecture/alarms-actions/
 
 Beside it, **Catalog, under Actions: Severity** (with `severity_level:read`) lists the levels a rule
 raises at, and is where you add your own (with `severity_level:create` on an all-scope grant).
+**Catalog, under Actions: Calc rules** derives values from others for rules like these to judge
+([calc rules](/guides/admin/calc-rules/)).
 
 Rules **read like a registry**: any grant carrying `rule:read`, wherever it is scoped, lists every
 rule. The live counts and a rule's open alarms and streaks name components, so they cover only the

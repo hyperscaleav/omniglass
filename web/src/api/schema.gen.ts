@@ -297,7 +297,7 @@ export interface paths {
         };
         /**
          * List calc rules
-         * @description Lists the calc rules, by name: the authored config that derives an output key on each owner from named inputs. Rules read like a registry, so every rule is listed whatever the caller's scope. Gated by rule:read.
+         * @description Lists the calc rules, by name: the authored config that derives an output key on each owner from named inputs, each with its live state as counts (owners_computed, owners_pending, owners_unsupported, owners_failed) over the owners the caller may read. Rules read like a registry, so every rule is listed whatever the caller's scope. Gated by rule:read.
          */
         get: operations["list-calc-rule"];
         put?: never;
@@ -4936,6 +4936,26 @@ export interface components {
              * @enum {string}
              */
             owner_kind: "component" | "system";
+            /**
+             * Format: int64
+             * @description How many owners the caller may read hold a value the rule computed (on the list; 0 on a single read)
+             */
+            owners_computed: number;
+            /**
+             * Format: int64
+             * @description How many owners the caller may read the rule last failed on (on the list)
+             */
+            owners_failed: number;
+            /**
+             * Format: int64
+             * @description How many owners the caller may read are marked for the next tick (on the list)
+             */
+            owners_pending: number;
+            /**
+             * Format: int64
+             * @description How many owners the caller may read the rule last wrote nothing for: an input missing, a system with no members (on the list)
+             */
+            owners_unsupported: number;
             /** @description How the inputs fold into the output: a named reducer or an expression */
             reduce: components["schemas"]["CalcReduceBody"];
             /** @description The owners the rule derives for: a component rule's components or a system rule's systems; empty is every owner of its kind */
@@ -5969,6 +5989,10 @@ export interface components {
             required: boolean;
             /** @description The series' latest sample; omitted when none has arrived */
             sample_value?: unknown;
+            /** @description The calc rule the latest sample was derived by, by the name it was written under; absent for any other sample */
+            source_rule?: string;
+            /** @description That calc rule's uuid, the stable form of source_rule */
+            source_rule_id?: string;
             /** @description The effective value: the latest sample, or the contract default until one arrives */
             value?: unknown;
         };

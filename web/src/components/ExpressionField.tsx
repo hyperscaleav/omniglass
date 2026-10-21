@@ -26,6 +26,13 @@ export default function ExpressionField(p: {
   placeholder?: string;
   // How long typing must pause before a check (ms).
   debounce?: number;
+  // For the calc site (#999): the rule's inputs and owner kind, which give the
+  // expression its bindings (sampleKey is then the output key, which types the
+  // result).
+  inputs?: { as: string; key: string }[];
+  ownerKind?: "component" | "system";
+  // What to say while there is no key to check against.
+  needsKey?: string;
   // The verdict, so a form can refuse a source that does not compile: true
   // when it compiles, false when it does not (or is empty, has no key to be
   // checked against, or could not be checked), undefined while a check is
@@ -39,7 +46,7 @@ export default function ExpressionField(p: {
   let seq = 0;
 
   createEffect(
-    on([() => p.value, () => p.sampleKey], ([source, key]) => {
+    on([() => p.value, () => p.sampleKey, () => JSON.stringify(p.inputs ?? null), () => p.ownerKind], ([source, key]) => {
       clearTimeout(timer);
       const n = ++seq;
       if (!key || !source.trim()) {
@@ -51,7 +58,10 @@ export default function ExpressionField(p: {
       p.onCheck?.(undefined);
       timer = setTimeout(async () => {
         try {
-          const r = await validateExpression({ site: p.site, source, key });
+          const body: ValidateExpression = { site: p.site, source, key };
+          if (p.inputs) body.inputs = p.inputs.filter((i) => i.as && i.key);
+          if (p.ownerKind) body.owner_kind = p.ownerKind;
+          const r = await validateExpression(body);
           if (n !== seq) return;
           setFailed(null);
           setCheck(r);
@@ -87,7 +97,7 @@ export default function ExpressionField(p: {
       />
       <div id={diagId} role="status" aria-live="polite" class="flex flex-col gap-1">
         <Show when={!p.sampleKey}>
-          <span class="text-[11px] text-base-content/50">Choose what the rule reads to check this expression.</span>
+          <span class="text-[11px] text-base-content/50">{p.needsKey ?? "Choose what the rule reads to check this expression."}</span>
         </Show>
         <Show when={failed()}>{(m) => <span class="text-[11px] text-error">{m()}</span>}</Show>
         <For each={diagnostics()}>

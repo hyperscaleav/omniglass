@@ -1,5 +1,6 @@
 import { Show, type JSX } from "solid-js";
 import { A } from "@solidjs/router";
+import { calcRuleHref } from "../lib/calc_rules";
 
 // ruleHref is where a rule opens: the Rules page, its blade open (#951). The
 // ref is the rule's name or its uuid; the Rules page resolves either.
@@ -26,6 +27,19 @@ export default function RuleLink(props: { name: string; id?: string }): JSX.Elem
       >
         <A href={ruleHref(props.id!)} class="font-data text-base-content/70 hover:underline">{props.name}</A>
       </Show>
+    </span>
+  );
+}
+
+// CalcRuleLink names the calc rule a calculated value was derived by ("by
+// calc rule room-mean", #999), linked by the rule's id, so a rename since
+// leaves the link working; the name shown is the one the sample was written
+// under.
+export function CalcRuleLink(props: { name: string; id: string }): JSX.Element {
+  return (
+    <span class="shrink-0 text-[11px] text-base-content/45">
+      by calc rule{" "}
+      <A href={calcRuleHref(props.id)} class="font-data text-base-content/70 hover:underline">{props.name}</A>
     </span>
   );
 }

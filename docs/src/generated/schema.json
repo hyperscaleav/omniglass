@@ -4220,6 +4220,11 @@
       "nullable": true,
       "fk": true,
       "fk_target": "command.id"
+     },
+     {
+      "name": "source_rule_id",
+      "type": "uuid",
+      "nullable": true
      }
     ],
     "checks": [
@@ -4412,6 +4417,11 @@
       "nullable": true,
       "fk": true,
       "fk_target": "command.id"
+     },
+     {
+      "name": "source_rule_id",
+      "type": "uuid",
+      "nullable": true
      }
     ],
     "checks": [

@@ -190,3 +190,51 @@ func TestCalcPreview(t *testing.T) {
 		t.Fatal("counts")
 	}
 }
+
+// A calculated sample carries its rule's id (#999), so a value shown on a
+// component or a system links to the rule that derived it, and each rule
+// reads its live counts on the owners the caller may read.
+func TestCalcLineageAndCounts(t *testing.T) {
+	r := newSystemRig(t)
+	r.assign("sys-1", "left", "m1")
+	r.temp("m1", "", 20)
+	r.systemRule("kind-mean", storage.CalcRuleSelector{SystemTypes: []string{"kind-a"}}, rules.CalcReduce{Reducer: "average"})
+	r.drain()
+	rule, err := r.gw.GetCalcRule(r.ctx, "kind-mean")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ms, err := r.gw.EffectiveMetrics(r.ctx, "system", r.ids["sys-1"], r.all)
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, m := range ms {
+		if m.MetricTypeName == "avg-temp" {
+			found = true
+			if m.SourceRule != "kind-mean" || m.SourceRuleID != rule.ID {
+				t.Fatalf("avg-temp on sys-1 carries %q/%q, want kind-mean and its id", m.SourceRule, m.SourceRuleID)
+			}
+		}
+		if m.MetricTypeName == "room-temperature" && m.SourceRuleID != "" {
+			t.Fatalf("an observed metric carries a rule id %q", m.SourceRuleID)
+		}
+	}
+	if !found {
+		t.Fatal("avg-temp is not among sys-1's metrics")
+	}
+	counts, err := r.gw.CalcRuleCounts(r.ctx, r.all, r.all)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c := counts[rule.ID]; c.Computed != 1 || c.Pending != 0 || c.Unsupported != 1 {
+		t.Fatalf("kind-mean counts %+v, want sys-1 computed and sys-2 unsupported (no members)", c)
+	}
+	scoped, err := r.gw.CalcRuleCounts(r.ctx, scope.Set{}, self(r.ids["sys-2"]))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c := scoped[rule.ID]; c.Computed != 0 || c.Unsupported != 1 {
+		t.Fatalf("a viewer of sys-2 counts %+v, want sys-2 alone", c)
+	}
+}

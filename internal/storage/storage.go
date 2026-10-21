@@ -476,6 +476,9 @@ type Gateway interface {
 	// DrainCalcPending serves up to limit pending calc rule marks (#996):
 	// reduce each rule's inputs on its owner and write the output.
 	DrainCalcPending(ctx context.Context, limit int) (CalcDrain, error)
+	// CalcRuleCounts counts every calc rule's live state over the owners the
+	// read scopes admit (#999), keyed by rule id.
+	CalcRuleCounts(ctx context.Context, components, systems scope.Set) (map[string]CalcCounts, error)
 	// CalcRuleState reads a calc rule's live state on the owners the
 	// component and system read scopes admit (#998).
 	CalcRuleState(ctx context.Context, ref string, components, systems scope.Set) (*CalcRuleLive, error)

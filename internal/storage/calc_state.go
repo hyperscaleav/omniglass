@@ -388,3 +388,53 @@ func namedVisible(ctx context.Context, q querier, table scopeTable, ids []string
 	}
 	return nil
 }
+
+// CalcCounts is a rule's live state at a glance, over the owners the caller
+// may read: owners holding a computed value, owners pending, owners whose
+// last computation wrote nothing (an input missing, a system with no
+// members), and owners whose last computation failed.
+type CalcCounts struct {
+	Computed, Pending, Unsupported, Errors int
+}
+
+// CalcRuleCounts counts every rule's live state, by rule id, over the
+// owners the component and system read scopes admit: one statement per owner
+// kind, so a list reads every rule's counts at once.
+func (p *PG) CalcRuleCounts(ctx context.Context, components, systems scope.Set) (map[string]CalcCounts, error) {
+	out := map[string]CalcCounts{}
+	for _, kind := range []string{rules.OwnerComponent, rules.OwnerSystem} {
+		table, vis := componentTable, components
+		if kind == rules.OwnerSystem {
+			table, vis = systemTable, systems
+		}
+		col := calcOwner{kind: kind}.col()
+		f := newReadFilter(table, vis, 1)
+		q := f.With + ` select r.id::text,
+				(select count(*) from calc_rule_state s where s.rule_id = r.id and s.` + col + ` is not null and ` + f.Pred("s."+col) + `
+					and s.value is not null and s.error = '' and s.missing = '[]'),
+				(select count(*) from calc_pending d where d.rule_id = r.id and d.` + col + ` is not null and ` + f.Pred("d."+col) + `),
+				(select count(*) from calc_rule_state s where s.rule_id = r.id and s.` + col + ` is not null and ` + f.Pred("s."+col) + `
+					and s.error = '' and (s.missing <> '[]' or s.no_members_since is not null)),
+				(select count(*) from calc_rule_state s where s.rule_id = r.id and s.` + col + ` is not null and ` + f.Pred("s."+col) + `
+					and s.error <> '')
+			from calc_rule r where r.owner_kind = '` + kind + `'`
+		rows, err := p.pool.Query(ctx, q, f.Args...)
+		if err != nil {
+			return nil, fmt.Errorf("storage: calc rule counts: %w", err)
+		}
+		for rows.Next() {
+			var id string
+			var c CalcCounts
+			if err := rows.Scan(&id, &c.Computed, &c.Pending, &c.Unsupported, &c.Errors); err != nil {
+				rows.Close()
+				return nil, err
+			}
+			out[id] = c
+		}
+		rows.Close()
+		if err := rows.Err(); err != nil {
+			return nil, err
+		}
+	}
+	return out, nil
+}

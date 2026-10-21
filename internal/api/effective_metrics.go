@@ -28,6 +28,8 @@ type effectiveMetricBody struct {
 	DefaultValue   json.RawMessage `json:"default_value,omitempty" doc:"The contract default; omitted when the contract sets none"`
 	SampleValue    json.RawMessage `json:"sample_value,omitempty" doc:"The series' latest sample; omitted when none has arrived"`
 	Value          json.RawMessage `json:"value,omitempty" doc:"The effective value: the latest sample, or the contract default until one arrives"`
+	SourceRule     string          `json:"source_rule,omitempty" required:"false" doc:"The calc rule the latest sample was derived by, by the name it was written under; absent for any other sample"`
+	SourceRuleID   string          `json:"source_rule_id,omitempty" required:"false" doc:"That calc rule's uuid, the stable form of source_rule"`
 }
 
 func toEffectiveMetricBody(e *storage.EffectiveMetric) effectiveMetricBody {
@@ -42,6 +44,8 @@ func toEffectiveMetricBody(e *storage.EffectiveMetric) effectiveMetricBody {
 		DefaultValue:   json.RawMessage(e.DefaultValue),
 		SampleValue:    json.RawMessage(e.SampleValue),
 		Value:          json.RawMessage(e.Value),
+		SourceRule:     e.SourceRule,
+		SourceRuleID:   e.SourceRuleID,
 	}
 }
 

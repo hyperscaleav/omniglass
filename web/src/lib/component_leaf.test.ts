@@ -147,10 +147,13 @@ describe("the leaf's dispatch facts (#786)", () => {
       { metric_type_name: "icmp-rtt-avg", label: "RTT", data_type: "float", value: 6.1, is_sampled: true, from_contract: false, required: false },
       { metric_type_name: "target-volume", data_type: "float", value: 0.8, is_sampled: false, from_contract: true, required: false },
       { metric_type_name: "mic-gain", data_type: "float", is_sampled: false, from_contract: true, required: false },
+      // A calculated value names the calc rule that derived it (#999).
+      { metric_type_name: "temp-mean", data_type: "float", value: 21, is_sampled: true, from_contract: false, required: false, source_rule: "room-mean", source_rule_id: "11111111-1111-7111-8111-111111111111" },
     ] as never);
     expect(rows).toEqual([
       { name: "icmp-rtt-avg", label: "RTT", value: 6.1, sampled: true },
       { name: "target-volume", label: "target-volume", value: 0.8, sampled: false },
+      { name: "temp-mean", label: "temp-mean", value: 21, sampled: true, sourceRule: "room-mean", sourceRuleId: "11111111-1111-7111-8111-111111111111" },
     ]);
   });
 

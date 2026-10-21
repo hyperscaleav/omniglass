@@ -111,7 +111,9 @@ export function identityRows(props: components["schemas"]["EffectivePropertyBody
     .map((p) => ({ name: p.property_type_name, label: entityLabel({ name: p.property_type_name, label: p.label }), value: p.value }));
 }
 
-export type VitalRow = { name: string; label: string; value: unknown; sampled: boolean };
+// sourceRule and sourceRuleId name the calc rule that derived the value, when
+// one did (#999).
+export type VitalRow = { name: string; label: string; value: unknown; sampled: boolean; sourceRule?: string; sourceRuleId?: string };
 
 // vitalRows is the same rule over the metric lane, with the live-series
 // marker: a sampled row is the component speaking, an unsampled one is the
@@ -119,7 +121,11 @@ export type VitalRow = { name: string; label: string; value: unknown; sampled: b
 export function vitalRows(metrics: components["schemas"]["EffectiveMetricBody"][]): VitalRow[] {
   return (metrics ?? [])
     .filter((m) => m.value !== null && m.value !== undefined)
-    .map((m) => ({ name: m.metric_type_name, label: entityLabel({ name: m.metric_type_name, label: m.label }), value: m.value, sampled: m.is_sampled }));
+    .map((m) => {
+      const row: VitalRow = { name: m.metric_type_name, label: entityLabel({ name: m.metric_type_name, label: m.label }), value: m.value, sampled: m.is_sampled };
+      if (m.source_rule && m.source_rule_id) Object.assign(row, { sourceRule: m.source_rule, sourceRuleId: m.source_rule_id });
+      return row;
+    });
 }
 
 // leafAlarmSince: the component has no transitions read, so since-when comes
