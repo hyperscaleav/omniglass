@@ -20,6 +20,13 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT"
 . web/e2e/lib/stack.sh
 
+# The walkthroughs and the stack's own check need the example fleet's places,
+# node and simulated devices; a fresh install (STACK_SCENARIO=empty) has none.
+if [ "${STACK_SCENARIO:-dev}" = empty ]; then
+  echo "$(basename "$0"): STACK_SCENARIO=empty has no example fleet to walk through; use make probe for a fresh install" >&2
+  exit 2
+fi
+
 mode=${1:-up}
 [ $# -eq 0 ] || shift
 

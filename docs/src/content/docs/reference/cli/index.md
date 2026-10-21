@@ -3902,9 +3902,16 @@ omniglass seed-dev [flags]
 
 Populate a fresh dev database with a small example fleet so `make dev` comes up with locations, sign-in-able users, and their grants instead of empty. The same trusted direct-DB lane as bootstrap, and idempotent, so it runs on every `make dev`. Not for production: these are operator rows, not ship-with reference data.
 
+--scenario picks the fleet:
+  dev       the example fleet `make dev` comes up with
+  empty     nothing beyond the boot seed: a fresh install's first run
+  degraded  the example fleet with an open alarm on one in every 3 components
+  large     the example fleet plus its self-contained rooms copied 6 times under each of 5 replica sites (only the example fleet is simulated)
+
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--sim-fleet` | bool | `true` | wire the simulated fleet: addresses and endpoints on the dev node for every component the simulator serves (make dev-sim collects from them) |
+| `--scenario` | string | `dev` | the fleet to seed (see the list above) |
+| `--sim-fleet` | bool | `true` | wire the simulated fleet: addresses and endpoints on the dev node for every example-fleet component the simulator serves, never a scenario's copies or a hand-added device (make dev-sim collects from them) |
 | `--sim-port-offset` | int | `10000` | the lift the simulator applies to ports below 1024, which the simulated fleet's endpoints target: the default for make dev-sim's unprivileged simulator, 0 for one that binds the real ports (in a container) |
 
 ## `omniglass server`

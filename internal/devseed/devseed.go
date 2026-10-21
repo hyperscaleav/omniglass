@@ -239,6 +239,12 @@ func RunWith(ctx context.Context, gw storage.Gateway, actorID string, opts Optio
 	if err != nil {
 		return err
 	}
+	return runDoc(ctx, gw, actorID, doc, opts)
+}
+
+// runDoc seeds one fixture document: the example fleet, or a scenario's
+// expansion of it (scenario.go).
+func runDoc(ctx context.Context, gw storage.Gateway, actorID string, doc Doc, opts Options) error {
 	all := scope.Set{All: true}
 
 	// Locations first, parents before children (the fixture is ordered so) so a
@@ -651,7 +657,23 @@ func RunWith(ctx context.Context, gw storage.Gateway, actorID string, opts Optio
 	if !opts.SimFleet {
 		return nil
 	}
-	return seedSimFleet(ctx, gw, actorID, opts.SimPortOffset)
+	// Only the example fleet's own devices are simulated, never a scenario's
+	// copies of them (scenario.go) nor a device added by hand: one simulator
+	// and one node collecting from thousands of devices would turn a dev
+	// start into a load test of the collector. Limited on every run, whatever
+	// the scenario, so a plain re-seed of a database a large scenario filled
+	// does not wire the copies after the fact.
+	base, err := Fixtures()
+	if err != nil {
+		return err
+	}
+	only := map[string]bool{}
+	for _, c := range base.Components {
+		if id, ok := compIDs[c.Key]; ok {
+			only[id] = true
+		}
+	}
+	return seedSimFleet(ctx, gw, actorID, opts.SimPortOffset, only)
 }
 
 // standardMaps are the example rooms' layouts, drawn the way an integrator

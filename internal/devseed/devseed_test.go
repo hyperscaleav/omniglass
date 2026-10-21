@@ -34,6 +34,13 @@ func TestFixturesShape(t *testing.T) {
 	if err != nil {
 		t.Fatalf("parse fixtures: %v", err)
 	}
+	checkDocShape(t, doc)
+}
+
+// checkDocShape is the shape check itself, shared with every scenario's
+// expansion of the fixture (scenario_test.go).
+func checkDocShape(t *testing.T, doc devseed.Doc) {
+	t.Helper()
 	if len(doc.Locations) == 0 || len(doc.Users) == 0 {
 		t.Fatalf("fixtures empty: %d locations, %d users", len(doc.Locations), len(doc.Users))
 	}

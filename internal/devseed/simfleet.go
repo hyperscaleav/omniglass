@@ -29,8 +29,9 @@ const (
 
 // seedSimFleet lands the plan through the gateway: the community secret,
 // then each planned component's endpoints on the dev node. A component that
-// already has an endpoint is left alone, so a re-run changes nothing.
-func seedSimFleet(ctx context.Context, gw storage.Gateway, actorID string, portOffset int) error {
+// already has an endpoint is left alone, so a re-run changes nothing. Only the
+// components whose ids are in only are planned.
+func seedSimFleet(ctx context.Context, gw storage.Gateway, actorID string, portOffset int, only map[string]bool) error {
 	all := scope.Set{All: true}
 	store, err := profile.LoadStoreFS(profiles.FS)
 	if err != nil {
@@ -58,7 +59,7 @@ func seedSimFleet(ctx context.Context, gw storage.Gateway, actorID string, portO
 	}
 	var cands []simfleet.Component
 	for _, c := range comps {
-		if c.ProductHandle != nil {
+		if c.ProductHandle != nil && only[c.ID] {
 			cands = append(cands, simfleet.Component{ID: c.ID, Product: *c.ProductHandle})
 		}
 	}

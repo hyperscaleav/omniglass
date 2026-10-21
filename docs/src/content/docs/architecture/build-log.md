@@ -6964,3 +6964,85 @@ always writes the uuid key. A hand raise may no longer take a `rule:` key (422),
 in for a rule's alarm. The rule form judges a name only when it changed, by the shared entity name
 rule the server applies (`names.ts`), so a stored name like `too-hot-` stays saveable; and a stale
 comment that still called the name create-only is gone.
+### Seed scenarios (#964)
+
+`omniglass seed-dev --scenario <name>` stands up a named fleet instead of always the example one: a
+fresh install with nothing seeded, the example fleet with an open alarm on one in every three
+components, or the example fleet at enterprise size (about 5,400 components). The synthetic user
+(#961) needs these so each exploratory run can start from the situation its mission is about. Every
+scenario but the fresh install is the example fleet run through a pure expansion: `Replicate` copies
+the fleet's self-contained rooms (found from the fixture, never named in code, so no location type is
+keyed on) under replica sites with fleet-unique location names, and `Degrade` reuses the severities and
+messages the fixture's own alarms carry. The registry is the CLI help, so the list cannot drift.
+Only the example fleet's own devices are ever wired to the simulator, on every run, so a plain re-seed
+of a database the large scenario filled does not turn the next `make dev` into a collector load test.
+`make dev` takes `SEED_SCENARIO` and the walkthrough stack `STACK_SCENARIO` (every scenario but the
+fresh install, which the stack refuses: its node and devices come from the example fleet). Tests: every scenario's
+document passes the fixture shape check, the replica and degraded paths are idempotent against a real
+Postgres, the fresh install seeds nothing, and the large fleet seeds within a five-minute budget
+(2m9s measured).
+
+### The run digest (#965)
+
+`make probe` brings up the walkthrough stack, visits every route in the console's route manifest and
+replays every walkthrough at machine speed (a 300 ms beat after each action, since at none a key can
+beat the drawer it should close), recording console and page errors, every API call's status and
+time, web vitals, axe-core accessibility violations and walkthrough outcomes as raw events. A pure
+reducer (`web/e2e/digestlib.mjs`) folds those into `digest.json`: grouped by kind, API calls by their
+OpenAPI path template (read from `api/openapi.json`), ranked breakage before friction, capped at 16 KB
+of the written file with a count of what the cap dropped, and independent of event order. A planned
+surface count makes a run that never reached some surfaces a finding of its own. The digest is what the synthetic user (#961) reads instead of logs. The recorder's step
+locator moved into `walkthroughlib.mjs` so the probe and the recorder cannot read a script
+differently. Tests: the reducer's unit tests (an injected console error and an injected slow route
+each appear by name, a clean run has no findings, the byte cap holds on the written file under a 2,000-error flood,
+the output is the same for events in any order, a slow route called per device is one finding, an
+unvisited planned surface is named); proven live with two consecutive clean probe runs on the dev scenario
+(49 surfaces, about 640 API calls, every walkthrough passing). Its first run found the console's
+contrast, an unlabelled profile field and nested controls on Files (#972, #973, #974).
+
+### The explore skill, missions and the lens agents (#966)
+
+The synthetic user's daily run is the `/explore` skill over `web/e2e/explorer.mjs`, whose
+decisions are pure and tested in `explorerlib.mjs`: which mission today (one whose repo surfaces
+changed since the last run, else the least recently run), which lenses (the mission's own, with
+a lens unused for a week taking the second slot, counted from the first run on record), the one
+finding shape every lens returns, and the filing plan (a known key is a sighting, a bug is its
+own issue, a suggestion is a sub-issue of the week's epic under a weekly cap, and the weekly
+roll-over carries what was seen again and closes the rest). State lives on GitHub as marker
+lines, so a fresh session needs nothing on disk. Seven missions ship in
+`web/e2e/explorer/missions.yaml`, each signing in as a seeded non-owner user; a test holds every
+mission surface to a path that exists. Five lens agents (`.claude/agents/lens-*.md`, Sonnet)
+carry narrow rubrics, the design lens reusing `/assess-ui`'s. `probe.sh` gained `hold` (keep the
+probed stack up, published, with a token for the mission's user in `stack.env`), `replay` (play
+one script against it from the host, exit 0 when it reached its end, how a repro is proven) and
+`release` (a TERM to the holder, since a backgrounded shell ignores INT). A fresh install now
+stands the stack up as the server and its owner alone, where the scenario slice had refused it.
+Proven live: hold on the dev and degraded scenarios as non-owner users, the CLI driven with the
+held token, a broken script failing replay and a good one passing, release leaving no container,
+and the empty scenario probed. The first live probes' accessibility bugs (#972 to #974) were
+adopted with their digest keys.
+
+Before it merged, a supervised trial had Sonnet run the whole loop unaided on the fresh-install
+mission (it reached `done` through the CLI and API, dispatched both lenses and produced thirteen
+valid findings), and its stumbles and an adversarial review shaped the slice: the weekly epics
+are searched newest first (an unsorted search returns best match), a mission counts changes since
+its own last run and cools down for three days so a busy area cannot starve the rest, a
+finding's area is checked against the repo's real labels before anything is filed (nine of the
+trial's thirteen named labels that do not exist), filing reports a partial failure instead of
+stopping, replays run in their own directories with a still per step and an exit code that tells a
+failing script from a replay that never ran, `release` only signals a process that is a probe
+hold, `probe.sh node` runs a node the persona enrolled, and the walkthrough recorder and the
+stack check refuse the fresh-install scenario, which has no fleet to walk.
+
+### Look-alike findings are held, not filed (#966)
+
+Keys deduplicate the same defect seen again, but not one a person filed in other words or two
+lenses described under two keys. `possibleDuplicates` compares a finding's title with every open
+issue's (prefixes, stop words and plurals folded; a match shares at least two words and 60% of the
+shorter title), and the filing plan holds a match as `possible-duplicate` with its candidates until
+the run adopts one or confirms the finding with `--confirm-new`; look-alikes within one run fold into
+the more severe. A sighting posts once per issue per day. The supervised trial's findings were filed
+through it as the program's first run (epic #978, bugs #979 to #981 and #983): the guard held one
+suggestion against two unrelated issues, which the run read and confirmed, and a repeat dry run
+planned nothing new.
+
