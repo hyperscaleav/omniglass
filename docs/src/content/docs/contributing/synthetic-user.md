@@ -30,7 +30,7 @@ than a person's pace. On every surface it records:
 - for a walkthrough, whether it reached its end, and if not the step, Playwright's account of what it
   waited on, and the frame it failed on.
 
-Those raw events land in `web/e2e/probe/out/raw.jsonl`, which no agent reads. The reducer
+Those raw events land in `raw.jsonl` in the probe's output directory (`probe/out/`, beside `probe.sh`, gitignored), which no agent reads. The reducer
 (`web/e2e/digestlib.mjs`) folds them into `digest.json` beside it: findings grouped by what they are
 (a console error seen on forty rows is one finding with a count and the surfaces it was seen on; an
 API call is grouped under its OpenAPI path template, read from the generated `api/openapi.json`, so a
@@ -61,7 +61,7 @@ is the whole day, and `web/e2e/explorer.mjs` makes every decision in it that nee
    is never the owner (except on a fresh install, which has no one else), so a missing
    permission or a scope leak is a finding rather than something owner rights hide.
 2. **Stand up and probe.** `probe.sh hold` probes the scenario's stack, then keeps it up with the
-   console published on a local port and `web/e2e/probe/out/stack.env` holding the address and a
+   console published on a local port and `stack.env` (in the same output directory) holding the address and a
    token for the mission's user. `probe.sh replay <script>` plays one walkthrough script against
    it in a directory of its own with a still per step (exit 0 reached its end, 1 failed at a
    step, 2 never ran), which is how the run drives the console and how a repro is proven.
