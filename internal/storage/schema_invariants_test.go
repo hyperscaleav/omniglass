@@ -69,7 +69,10 @@ func TestChurnDroppedConstraintsRestored(t *testing.T) {
 	// replaces them with partial uniques that all lead with the FK column, so
 	// none of them can serve `where name = $1` (the ambiguity scan in
 	// scopedByName, and the *NameTaken advisories) without a plain btree back.
-	indexes := []string{"property_owner_idx", "component_name_idx", "system_name_idx", "location_name_idx"}
+	// The property entry is property_series_idx: the restored
+	// property_owner_idx was its exact twin and #971 dropped it, so the
+	// series probe now rides the surviving name.
+	indexes := []string{"property_series_idx", "component_name_idx", "system_name_idx", "location_name_idx"}
 	for _, idx := range indexes {
 		var exists bool
 		if err := conn.QueryRow(ctx,
