@@ -17,8 +17,8 @@ import { describeError } from "../lib/format";
 // so the field teaches exactly the language the engine runs, never a copy.
 //
 // It renders the editor FIRST and the rest beside it, so a FieldRow's label
-// sits on the field; the editor's content carries the accessible name (a
-// textbox named by `label`). Tab is left to move focus on, so the field never
+// is the field's: a click on it focuses the editor, and the editor's content
+// carries the accessible name (a textbox named by `label`). Tab is left to move focus on, so the field never
 // traps the keyboard. No native validation attributes (validation-guard): the
 // check is the server's, and the caller learns the verdict through onCheck.
 export default function ExpressionField(p: {
@@ -84,8 +84,10 @@ export default function ExpressionField(p: {
           const r = await validateExpression(request("", key));
           if (n === vocabSeq) setVocab({ bindings: r.bindings ?? [], builtins: r.builtins ?? [] });
         } catch {
-          // An unanswered vocabulary leaves completion quiet; the source
-          // check reports what went wrong.
+          // Refused (a calc input the server no longer accepts, say): no
+          // vocabulary, so nothing offers a name the engine has just refused.
+          // The source check reports why.
+          if (n === vocabSeq) setVocab(null);
         }
       }, p.debounce ?? 300);
     }),
@@ -135,8 +137,13 @@ export default function ExpressionField(p: {
   const aria = () => ({ label: p.label, describedBy: diagId, invalid: diagnostics().length > 0 });
   const [editor, setEditor] = createSignal<ExpressionEditor | null>(null);
   let gone = false;
+  // A FieldRow's <label for> points at the host, which is not labelable, so
+  // a click on the label focuses the editor by hand (as it did the textarea).
+  let label: Element | null = null;
+  const focusEditor = () => editor()?.focus();
   onCleanup(() => {
     gone = true;
+    label?.removeEventListener("click", focusEditor);
     editor()?.destroy();
   });
   // CodeMirror is its own chunk, loaded the first time a field renders.
@@ -154,6 +161,8 @@ export default function ExpressionField(p: {
         bindingCard,
       }),
     );
+    label = host.id ? document.querySelector(`label[for="${host.id}"]`) : null;
+    label?.addEventListener("click", focusEditor);
   });
 
   // The form's value is the source of truth: a value set from outside (the

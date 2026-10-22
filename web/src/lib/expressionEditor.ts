@@ -169,7 +169,8 @@ export function bindingAt(doc: string, pos: number, bindings: ExpressionBinding[
 }
 
 // toEditorDiagnostics places the server's diagnostics in the source: each at
-// its 1-based line and column, underlining the word that starts there (one
+// its 1-based line and column (Expr counts the column in characters, so it is
+// walked by code point, never indexed as UTF-16), underlining the word that starts there (one
 // character where none does, or the line's end when the column runs past
 // it). A diagnostic with no position (a length cap), or one off the end of
 // the source, is left to the list beneath the field.
@@ -181,7 +182,8 @@ export function toEditorDiagnostics(doc: string, diags: ExpressionDiagnostic[]):
     let start = 0;
     for (let i = 0; i < d.line - 1; i++) start += lines[i].length + 1;
     const text = lines[d.line - 1];
-    const col = Math.min(d.column - 1, text.length);
+    const chars = Array.from(text);
+    const col = chars.slice(0, Math.min(d.column - 1, chars.length)).join("").length;
     const word = /^[\w$.]+/.exec(text.slice(col));
     const len = word ? word[0].length : col < text.length ? 1 : 0;
     out.push({ from: start + col, to: start + col + len, severity: "error", message: d.message, source: d.phase });

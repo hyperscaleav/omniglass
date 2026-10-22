@@ -18,6 +18,7 @@ export type EditorAria = { label: string; describedBy: string; invalid: boolean 
 
 export type ExpressionEditor = {
   setDoc(text: string): void;
+  focus(): void;
   setAria(a: EditorAria): void;
   // Underline the diagnostics an answer gave for `source`.
   setDiagnostics(source: string, ds: ExpressionDiagnostic[]): void;
@@ -104,6 +105,7 @@ export function mountExpressionEditor(
       if (ds.length > 0 && view.state.doc.toString() !== source) return;
       view.dispatch(setDiagnostics(view.state, toEditorDiagnostics(source, ds)));
     },
+    focus: () => view.focus(),
     destroy: () => view.destroy(),
   };
 }

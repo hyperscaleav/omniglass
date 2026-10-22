@@ -169,6 +169,13 @@ describe("toEditorDiagnostics", () => {
     expect(d.message).toBe("unknown name humidity");
   });
 
+  it("counts the column in characters, as Expr does, not in UTF-16 units", () => {
+    const doc = 'value == "\u{1F525}" && humidity > 2';
+    const col = Array.from(doc).indexOf("h") + 1;
+    const [d] = toEditorDiagnostics(doc, [{ line: 1, column: col, phase: "type", message: "unknown name humidity" }]);
+    expect(doc.slice(d.from, d.to)).toBe("humidity");
+  });
+
   it("marks one character where no word starts, the end where the column runs past it, and skips a positionless one", () => {
     const doc = "value >";
     const ds = toEditorDiagnostics(doc, [

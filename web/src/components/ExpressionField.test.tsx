@@ -103,6 +103,13 @@ describe("ExpressionField", () => {
     expect(currentCompletions(view.state).map((c) => c.label).sort()).toEqual(["abs", "component.name", "len", "value"]);
   });
 
+  it("is focused by a click on its FieldRow label, as the textarea was", async () => {
+    mount("value > 40");
+    const ed = await editor();
+    (screen.getByText("Fires when") as HTMLLabelElement).click();
+    expect(document.activeElement).toBe(ed);
+  });
+
   it("leaves Tab to move focus on, so the field never traps the keyboard", async () => {
     mount("value > 40");
     const ev = new KeyboardEvent("keydown", { key: "Tab", bubbles: true, cancelable: true });
@@ -136,6 +143,21 @@ describe("ExpressionField", () => {
     typeExpression(await editor(), "v");
     await screen.findByTestId("expression-bindings");
     expect(calls.some((c) => c.source === "")).toBe(true);
+  });
+
+  it("drops a vocabulary the server stops answering, so it never offers a refused name", async () => {
+    let refuse = false;
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () =>
+      refuse
+        ? new Response(JSON.stringify({ detail: "a calc rule reads 1 to 8 inputs, not 0" }), { status: 422, headers: { "Content-Type": "application/json" } })
+        : json(answer("value")),
+    );
+    const [key, setKey] = createSignal("temperature-c");
+    render(() => <ExpressionField site="criteria" sampleKey={key()} value="" onInput={() => {}} label="Fire expression" debounce={10} />);
+    await screen.findByTestId("expression-bindings");
+    refuse = true;
+    setKey("humidity-pct");
+    await waitFor(() => expect(screen.queryByTestId("expression-bindings")).toBeNull());
   });
 
   it("checks nothing until the rule reads a key", async () => {
