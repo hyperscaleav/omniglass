@@ -217,7 +217,7 @@ observed-sample round trip and lands on the sample row, so the cycle guard walks
 
 "Derived on read" only stays cheap while the read is a per-series **indexed** read rather than a scan
 of the series, so `property` carries one partial owner index per arc a read is built on:
-`property_owner_idx` (`component_id, property_type_id, instance, ts desc`) for the component arc, and
+`property_series_idx` (`component_id, property_type_id, instance, ts desc`) for the component arc, and
 `property_system_owner_idx` (`property_type_id, system_id, id desc`) for the system arc, which the two
 health reads take, the bulk verdict read behind `GET /systems:health` and the location rollup a
 recompute pays per location ([#725](https://github.com/hyperscaleav/omniglass/issues/725)). Each is
