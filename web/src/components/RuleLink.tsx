@@ -1,6 +1,7 @@
 import { Show, type JSX } from "solid-js";
 import { A } from "@solidjs/router";
 import { calcRuleHref } from "../lib/calc_rules";
+import InfoTip from "./InfoTip";
 
 // ruleHref is where a rule opens: the Rules page, its blade open (#951). The
 // ref is the rule's name or its uuid; the Rules page resolves either.
@@ -41,5 +42,38 @@ export function CalcRuleLink(props: { name: string; id: string }): JSX.Element {
       by calc rule{" "}
       <A href={calcRuleHref(props.id)} class="font-data text-base-content/70 hover:underline">{props.name}</A>
     </span>
+  );
+}
+
+// CalcWriter names the calc rule that writes a key (#1019): one enabled rule
+// writes a key, and no collector may, so a metric's or property's page says
+// which rule its values come from, linked by the rule's id.
+export type CalcWriter = { rule: string; rule_id: string };
+
+export function CalcWriterLine(props: { writer: CalcWriter }): JSX.Element {
+  return (
+    <span class="inline-flex items-center gap-1.5 text-sm" data-testid="written-by">
+      <span>
+        Written by calc rule{" "}
+        <A href={calcRuleHref(props.writer.rule_id)} class="font-data hover:underline">{props.writer.rule}</A>
+      </span>
+      <InfoTip
+        label="written by a calc rule"
+        text="A calc rule derives this key's values on each owner it selects. One rule writes a key, and no collector may, so its values are the rule's alone."
+      />
+    </span>
+  );
+}
+
+// CalcWriterCell is the list's compact form: the rule's name, linked.
+export function CalcWriterCell(props: { writer?: CalcWriter | null }): JSX.Element {
+  return (
+    <Show when={props.writer}>
+      {(w) => (
+        <A href={calcRuleHref(w().rule_id)} class="truncate font-data text-[12px] hover:underline" title={`Written by calc rule ${w().rule}`}>
+          {w().rule}
+        </A>
+      )}
+    </Show>
   );
 }

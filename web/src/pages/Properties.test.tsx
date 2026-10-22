@@ -1,6 +1,7 @@
 import { describe, it, expect, afterEach, vi } from "vitest";
 import { render, fireEvent, screen, waitFor, within } from "@solidjs/testing-library";
 import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
+import { Router, Route } from "@solidjs/router";
 import Properties from "./Properties";
 import { PROPERTIES_KEY, type PropertyRow } from "../lib/properties";
 import { ME_KEY, type Me } from "../lib/auth";
@@ -14,7 +15,7 @@ import { ME_KEY, type Me } from "../lib/auth";
 const seed: PropertyRow[] = [
   { name: "serial-number", data_type: "string", label: "Serial number", official: true },
   { name: "interface-reachable", data_type: "string", label: "Interface Reachable", official: true },
-  { name: "rack-unit", data_type: "string", label: "Rack unit", official: false },
+  { name: "rack-unit", written_by: { rule: "rack-unit-calc", rule_id: "11111111-1111-7111-8111-111111111111" }, data_type: "string", label: "Rack unit", official: false },
 ];
 
 const admin: Me = { principal: { id: "u-root", kind: "human" }, human: { username: "root" }, permissions: [">"], grants: [] };
@@ -38,13 +39,30 @@ function mount(me: Me = admin) {
   qc.setQueryData([...ME_KEY], me);
   return render(() => (
     <QueryClientProvider client={qc}>
-      <Properties />
+      <Router><Route path="*" component={Properties} /></Router>
     </QueryClientProvider>
   ));
 }
 
 describe("Properties page", () => {
   afterEach(() => vi.restoreAllMocks());
+
+  // A property a calc rule writes names its rule, linked by id, in the list and
+  // on its blade (#1019).
+  it("names the calc rule that writes a property", async () => {
+    mount();
+    const row = screen.getByText("rack-unit").closest("tr")!;
+    const link = within(row).getByRole("link", { name: "rack-unit-calc" });
+    expect(link.getAttribute("href")).toContain("/calc-rules?rule=11111111-1111-7111-8111-111111111111");
+    fireEvent.click(screen.getByText("rack-unit"));
+    const blade = await waitFor(() => {
+      const el = document.querySelectorAll("aside[data-blade]")[0];
+      if (!el) throw new Error("no blade yet");
+      return el as HTMLElement;
+    });
+    expect(within(blade).getByText(/Written by calc rule/)).toBeTruthy();
+    expect(within(blade).getByRole("link", { name: "rack-unit-calc" })).toBeTruthy();
+  });
 
   it("lists the seeded properties", () => {
     mount();

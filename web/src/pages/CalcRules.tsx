@@ -1,4 +1,4 @@
-import { For, Index, Show, createContext, createEffect, createMemo, createSignal, on, useContext, type JSX } from "solid-js";
+import { For, Index, Show, createContext, createEffect, createMemo, createSignal, createUniqueId, on, useContext, type JSX } from "solid-js";
 import { createStore } from "solid-js/store";
 import { A, useSearchParams } from "@solidjs/router";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
@@ -21,8 +21,8 @@ import { useMe, canFleet, fleetView } from "../lib/auth";
 import { OFFICIAL_LOCK, registryLock } from "../lib/catalog";
 import { describeError, fmtTime, rel } from "../lib/format";
 import { type BladeDef, createBladeController, useBlades, useBladeEdit } from "../lib/blades";
-import { PROPERTIES_KEY, listProperties } from "../lib/properties";
-import { METRICS_KEY, listMetricTypes } from "../lib/metric_types";
+import { PROPERTIES_KEY, PROPERTY_DATA_TYPES, type PropertyDataType, type PropertyRow, createProperty, listProperties } from "../lib/properties";
+import { METRICS_KEY, type MetricRow, createMetricType, listMetricTypes } from "../lib/metric_types";
 import { COMPONENT_TYPES_KEY, listComponentTypes } from "../lib/component_types";
 import { COMPONENTS_KEY, listComponents } from "../lib/components";
 import { SYSTEM_TYPES_KEY, listSystemTypes } from "../lib/system_types";
@@ -90,6 +90,8 @@ export const CALC_HINTS = {
   official: "Official rules ship with Omniglass and update with it, so they are read-only. Author your own beside them.",
   name:
     "A lowercase kebab name, e.g. busy-flag: the address an operator types and a link carries. Renaming it breaks bookmarks and external references; inside the platform nothing moves, and past samples keep the name they were written under.",
+  binding:
+    "A calc rule is its output's one writer: two writers would mix their values on an owner by whichever came last, so a key another enabled rule writes, or one a collection writes, is refused.",
   noMembers: "This system has no role-bound members, so the rule writes nothing: the last value it wrote stays, unsupported, until a member returns.",
 } as const;
 
@@ -512,6 +514,8 @@ function CalcBladeBody(p: { name: string }): JSX.Element {
             <KVStacked label="Description" value={<span class="text-base-content/80">{r().description}</span>} />
           </Show>
 
+          <BindingLine outputKey={r().output_key} ownerKind={r().owner_kind} />
+
           <section class="flex flex-col gap-2">
             <Eyebrow label="Reads" hint={CALC_HINTS.inputs} />
             <div class="grid grid-cols-[auto_1fr] items-baseline gap-x-3 gap-y-1">
@@ -566,6 +570,138 @@ function CalcBladeBody(p: { name: string }): JSX.Element {
   );
 }
 
+// BindingLine states what a rule's output is bound to (#1019): the key it
+// writes on each owner, and that nothing else may write it, the why a tip
+// away.
+function BindingLine(p: { outputKey: string; ownerKind: OwnerKind }): JSX.Element {
+  return (
+    <p data-testid="calc-binding" class="inline-flex flex-wrap items-center gap-1 text-[12px] text-base-content/70">
+      <span>
+        Writes <code class="font-data text-base-content">{p.outputKey}</code> on each {p.ownerKind}. No other rule or collector may write it.
+      </span>
+      <InfoTip label="one writer" text={CALC_HINTS.binding} />
+    </p>
+  );
+}
+
+// OutputCreate registers a rule's output from its own drawer (#1019): a new
+// metric (a name, a label, a unit; its values are numbers) or property (a
+// name, a label, a data type), through the create route the Metrics and
+// Properties pages use, its refusals shown at the fields they name.
+function OutputCreate(p: { lane: "metric" | "property"; onCreated: (name: string) => void; onCancel: () => void }): JSX.Element {
+  const qc = useQueryClient();
+  const noun = p.lane;
+  const [name, setName] = createSignal("");
+  const [label, setLabel] = createSignal("");
+  const [unit, setUnit] = createSignal("");
+  const [dataType, setDataType] = createSignal<PropertyDataType>("string");
+  const [busy, setBusy] = createSignal(false);
+  const [fieldErr, setFieldErr] = createSignal<Record<string, string>>({});
+  const [formErr, setFormErr] = createSignal<string | null>(null);
+  const id = createUniqueId();
+
+  async function create() {
+    setBusy(true);
+    setFieldErr({});
+    setFormErr(null);
+    try {
+      const lbl = label().trim() || undefined;
+      if (p.lane === "metric") {
+        const u = unit().trim() || undefined;
+        const row = await createMetricType({ name: name().trim(), data_type: "float", ...(lbl ? { label: lbl } : {}), ...(u ? { unit: u } : {}) });
+        qc.setQueryData<MetricRow[]>([...METRICS_KEY], (rows) => [...(rows ?? []), row]);
+        void qc.invalidateQueries({ queryKey: METRICS_KEY });
+        p.onCreated(row.name);
+      } else {
+        const row = await createProperty({ name: name().trim(), data_type: dataType(), ...(lbl ? { label: lbl } : {}) });
+        qc.setQueryData<PropertyRow[]>([...PROPERTIES_KEY], (rows) => [...(rows ?? []), row]);
+        void qc.invalidateQueries({ queryKey: PROPERTIES_KEY });
+        p.onCreated(row.name);
+      }
+    } catch (e) {
+      // A refusal of one field shows at it; anything else beneath them all.
+      const o = e as { errors?: { location?: string; message?: string }[] } | null;
+      const at: Record<string, string> = {};
+      for (const fe of o?.errors ?? []) {
+        const f = (fe.location ?? "").replace(/^body\./, "");
+        if (fe.message && ["name", "label", "unit", "data_type"].includes(f)) at[f] = at[f] ? `${at[f]}; ${fe.message}` : fe.message;
+      }
+      setFieldErr(at);
+      if (Object.keys(at).length === 0) setFormErr(describeError(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const err = (f: string) => fieldErr()[f];
+  const field = (f: string, labelText: string, input: JSX.Element) => (
+    <div class="flex flex-col gap-0.5">
+      {input}
+      <Show when={err(f)}>{(m) => <p id={`${id}-${f}`} class="text-[11px] text-error">{labelText}: {m()}</p>}</Show>
+    </div>
+  );
+  return (
+    <div class="flex flex-col gap-2 rounded-box border border-base-300 p-2.5" role="group" aria-label={`New ${noun}`}>
+      <span class="text-[11px] text-base-content/60">
+        A new {noun} for the rule to write{p.lane === "metric" ? ": its values are numbers." : "."}
+      </span>
+      {field("name", "Name", (
+        <input
+          aria-label={`New ${noun} name`}
+          aria-invalid={err("name") ? "true" : undefined}
+          aria-describedby={err("name") ? `${id}-name` : undefined}
+          class="input input-bordered input-sm w-full font-data"
+          classList={{ "input-error": !!err("name") }}
+          placeholder={p.lane === "metric" ? "tcp-worst" : "in-use"}
+          value={name()}
+          onInput={(e) => setName(e.currentTarget.value)}
+        />
+      ))}
+      {field("label", "Label", (
+        <input
+          aria-label={`New ${noun} label`}
+          aria-invalid={err("label") ? "true" : undefined}
+          class="input input-bordered input-sm w-full"
+          placeholder={p.lane === "metric" ? "Slowest TCP connect" : "In use"}
+          value={label()}
+          onInput={(e) => setLabel(e.currentTarget.value)}
+        />
+      ))}
+      <Show
+        when={p.lane === "metric"}
+        fallback={field("data_type", "Data type", (
+          <select
+            aria-label={`New ${noun} data type`}
+            class="select select-bordered select-sm w-full"
+            value={dataType()}
+            onChange={(e) => setDataType(e.currentTarget.value as PropertyDataType)}
+          >
+            <For each={PROPERTY_DATA_TYPES}>{(t) => <option value={t}>{t}</option>}</For>
+          </select>
+        ))}
+      >
+        {field("unit", "Unit", (
+          <input
+            aria-label={`New ${noun} unit`}
+            aria-invalid={err("unit") ? "true" : undefined}
+            class="input input-bordered input-sm w-full font-data"
+            placeholder="ms"
+            value={unit()}
+            onInput={(e) => setUnit(e.currentTarget.value)}
+          />
+        ))}
+      </Show>
+      <Show when={formErr()}>{(m) => <p role="alert" class="text-[11px] text-error">{m()}</p>}</Show>
+      <span class="flex gap-1.5">
+        <Button intent="action" size="xs" icon={Plus} loading={busy()} disabled={!name().trim()} onClick={() => void create()}>
+          Create {noun}
+        </Button>
+        <Button intent="quiet" size="xs" onClick={() => p.onCancel()}>Cancel</Button>
+      </span>
+    </div>
+  );
+}
+
 // ---- the form ----------------------------------------------------------------
 
 // CalcRuleForm authors a calc rule, on create and edit alike, in a Drawer that
@@ -591,6 +727,8 @@ export function CalcRuleForm(p: { mode: "create" | "edit"; rule?: CalcRule; onSa
   const [busy, setBusy] = createSignal(false);
   const [formErr, setFormErr] = createSignal<string | null>(null);
   const [exprOk, setExprOk] = createSignal<boolean | undefined>(undefined);
+  // The output being registered inline (#1019): a new metric or property.
+  const [creating, setCreating] = createSignal<"metric" | "property" | null>(null);
 
   const errors = createMemo(() => validateCalcDraft(d, p.rule?.name));
   const valid = () => !hasErrors(errors()) && exprOk() === true;
@@ -839,6 +977,27 @@ export function CalcRuleForm(p: { mode: "create" | "edit"; rule?: CalcRule; onSa
       <FieldRow label="Writes" info={CALC_HINTS.output}>
         <KeySelect label="Writes" value={d.outputKey} onChange={(v) => setD("outputKey", v)} invalid={!!shown(errors().outputKey)} />
         <Show when={shown(errors().outputKey)}>{(m) => <p class="text-[11px] text-error">{m()}</p>}</Show>
+        <Show
+          when={creating()}
+          fallback={
+            <span class="flex flex-wrap gap-1.5">
+              <Button intent="quiet" size="xs" icon={Plus} onClick={() => setCreating("metric")}>New metric</Button>
+              <Button intent="quiet" size="xs" icon={Plus} onClick={() => setCreating("property")}>New property</Button>
+            </span>
+          }
+        >
+          {(lane) => (
+            <OutputCreate
+              lane={lane()}
+              onCancel={() => setCreating(null)}
+              onCreated={(name) => {
+                setCreating(null);
+                setD("outputKey", name);
+              }}
+            />
+          )}
+        </Show>
+        <Show when={d.outputKey}>{(k) => <BindingLine outputKey={k()} ownerKind={d.ownerKind} />}</Show>
       </FieldRow>
       <FieldRow label="Description">
         <input class="input input-bordered w-full" value={d.description} onInput={(e) => setD("description", e.currentTarget.value)} />

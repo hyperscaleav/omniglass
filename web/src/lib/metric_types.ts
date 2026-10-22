@@ -19,6 +19,8 @@ export type MetricRow = {
   unit?: string;
   precision?: number;
   official: boolean;
+  // The calc rule that writes this key, when one does (#1019).
+  written_by?: { rule: string; rule_id: string };
 };
 
 export const METRICS_KEY = ["metric_types"] as const;

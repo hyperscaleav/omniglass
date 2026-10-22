@@ -114,6 +114,14 @@ function routes(preview: unknown = { owners: [], owners_judged: 0, owners_total:
         bindings: (b.inputs ?? []).map((i) => ({ name: i.alias, type: "[]bool" })), builtins: ["any", "avg", "max"],
         budget: { iterations: 100000, memory: 50000, deadline: "25ms" } });
     }
+    if (req.url.endsWith("/metric-types") || req.url.endsWith("/property-types")) {
+      const b = body as { name: string };
+      if (b.name === "Bad Name") {
+        return json({ title: "Unprocessable Entity", status: 422, detail: "validation failed",
+          errors: [{ location: "body.name", message: "expected string to match pattern", value: b.name }] }, 422);
+      }
+      return json({ official: false, ...(body as object) }, 201);
+    }
     if (req.url.endsWith("/calc-rules:preview")) return json(preview);
     if (req.url.includes("/state")) {
       return json({ owners: [...state.owners, { ...state.owners[1], owner: "sys-n", owner_id: uuidFor("sys-n") }], total: 14, pending_depth: 1 });
@@ -273,6 +281,54 @@ describe("Calc rules page", () => {
     expect(within(result).getByText("would write")).toBeTruthy();
     expect(within(result).getByTestId("calc-preview-truncated").textContent).toContain("2 of 3");
     expect(reqs.some((r) => r.method === "POST" && r.url.endsWith("/calc-rules"))).toBe(false);
+  });
+
+  // The output is registered from the rule's own drawer (#1019): New metric
+  // opens the fields inline, the create route's refusals show at them, and the
+  // created metric is selected as what the rule writes.
+  it("registers the output inline and selects it", async () => {
+    const reqs = routes();
+    mount();
+    fireEvent.click(screen.getByText("New rule"));
+    await waitFor(() => screen.getByLabelText("Name"));
+    fireEvent.click(screen.getByRole("button", { name: "New metric" }));
+    const name = screen.getByLabelText("New metric name") as HTMLInputElement;
+    fireEvent.input(name, { target: { value: "Bad Name" } });
+    fireEvent.click(screen.getByRole("button", { name: "Create metric" }));
+    await waitFor(() => expect(screen.getByText(/expected string to match pattern/)).toBeTruthy());
+    expect(name.getAttribute("aria-invalid")).toBe("true");
+    fireEvent.input(name, { target: { value: "tcp-worst" } });
+    fireEvent.input(screen.getByLabelText("New metric label"), { target: { value: "Slowest TCP connect" } });
+    fireEvent.input(screen.getByLabelText("New metric unit"), { target: { value: "s" } });
+    fireEvent.click(screen.getByRole("button", { name: "Create metric" }));
+    await waitFor(() => expect((screen.getByLabelText("Writes") as HTMLSelectElement).value).toBe("tcp-worst"));
+    expect(reqs.filter((r) => r.method === "POST" && r.url.endsWith("/metric-types")).at(-1)!.body).toEqual({
+      name: "tcp-worst", data_type: "float", label: "Slowest TCP connect", unit: "s",
+    });
+    expect(screen.queryByLabelText("New metric name")).toBeNull();
+    // The form says what the rule will write, and that it alone may.
+    expect(screen.getByTestId("calc-binding").textContent).toContain("Writes tcp-worst on each component. No other rule or collector may write it.");
+  });
+
+  it("registers a property output inline with its data type", async () => {
+    const reqs = routes();
+    mount();
+    fireEvent.click(screen.getByText("New rule"));
+    await waitFor(() => screen.getByLabelText("Name"));
+    fireEvent.click(screen.getByRole("button", { name: "New property" }));
+    fireEvent.input(screen.getByLabelText("New property name"), { target: { value: "is-busy" } });
+    fireEvent.change(screen.getByLabelText("New property data type"), { target: { value: "bool" } });
+    fireEvent.click(screen.getByRole("button", { name: "Create property" }));
+    await waitFor(() => expect((screen.getByLabelText("Writes") as HTMLSelectElement).value).toBe("is-busy"));
+    expect(reqs.filter((r) => r.method === "POST" && r.url.endsWith("/property-types")).at(-1)!.body).toEqual({ name: "is-busy", data_type: "bool" });
+  });
+
+  it("states the binding on the blade", async () => {
+    routes();
+    mount();
+    fireEvent.click(screen.getByText("Room mean"));
+    const b = await blade();
+    expect(within(b).getByTestId("calc-binding").textContent).toContain("Writes avg-temp on each system. No other rule or collector may write it.");
   });
 
   it("edits a rule, renaming it with its own method after the patch", async () => {
