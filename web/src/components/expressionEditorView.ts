@@ -1,5 +1,5 @@
 import { Compartment, EditorState } from "@codemirror/state";
-import { EditorView, hoverTooltip, keymap, placeholder as placeholderText } from "@codemirror/view";
+import { EditorView, hoverTooltip, keymap, placeholder as placeholderText, tooltips } from "@codemirror/view";
 import { HighlightStyle, StreamLanguage, syntaxHighlighting } from "@codemirror/language";
 import { autocompletion, completionKeymap } from "@codemirror/autocomplete";
 import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
@@ -56,6 +56,10 @@ export function mountExpressionEditor(
           const b = bindingAt(v.state.doc.toString(), pos, o.vocab()?.bindings ?? []);
           return b ? { pos, above: true, create: () => ({ dom: o.bindingCard(b) }) } : null;
         }),
+        // Tooltips (completion, hover) mount on the dialog the field sits in,
+        // else the page, never inside the form's scrolling body, which would
+        // clip them at its edge (the portal rule overlays follow).
+        tooltips({ parent: (host.closest('[role="dialog"]') as HTMLElement | null) ?? document.body }),
         EditorView.lineWrapping,
         placeholderText(o.placeholder),
         aria.of(ariaAttrs(o.aria)),
@@ -104,7 +108,9 @@ const editorTheme = EditorView.theme({
   "&": { backgroundColor: "transparent", color: "inherit", fontSize: "inherit" },
   "&.cm-focused": { outline: "none" },
   ".cm-scroller": { fontFamily: "var(--og-font-data)", lineHeight: "inherit", maxHeight: "11rem", overflow: "auto" },
-  ".cm-content": { padding: "0", minHeight: "2.75em", caretColor: "var(--color-base-content)" },
+  // No ligatures: the field teaches what to type, and JetBrains Mono would
+  // draw != and == as single glyphs.
+  ".cm-content": { padding: "0", minHeight: "2.75em", caretColor: "var(--color-base-content)", fontVariantLigatures: "none" },
   ".cm-line": { padding: "0" },
   ".cm-placeholder": { color: "color-mix(in oklab, var(--color-base-content) 40%, transparent)" },
   ".cm-lintRange-error": {
@@ -120,7 +126,7 @@ const editorTheme = EditorView.theme({
     borderRadius: "0.375rem",
     fontFamily: "var(--og-font-ui)",
   },
-  ".cm-tooltip-autocomplete > ul": { fontFamily: "var(--og-font-data)", fontSize: "12px" },
+  ".cm-tooltip-autocomplete > ul": { fontFamily: "var(--og-font-data)", fontSize: "12px", fontVariantLigatures: "none" },
   ".cm-tooltip-autocomplete > ul > li[aria-selected]": {
     backgroundColor: "var(--color-primary)",
     color: "var(--color-primary-content)",

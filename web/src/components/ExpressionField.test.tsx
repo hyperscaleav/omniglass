@@ -73,7 +73,7 @@ describe("ExpressionField", () => {
 
   it("checks the source as it is typed and points at the fault under its line and column", async () => {
     const { calls, checks } = mount("value > 40");
-    await waitFor(() => expect(calls.length).toBe(1));
+    await waitFor(() => expect(calls.filter((c) => c.source).length).toBe(1));
     typeExpression(await editor(), "value > 40 &&\n  humidity > 2");
     const diag = await screen.findByTestId("expression-diagnostic");
     expect(diag.textContent).toContain("Line 2, column 3");
@@ -127,6 +127,15 @@ describe("ExpressionField", () => {
     // An empty source is never ok, and fetching the vocabulary does not say otherwise.
     expect(checks).toEqual([false]);
     expect(screen.queryByTestId("expression-diagnostic")).toBeNull();
+  });
+
+  it("asks for the vocabulary as soon as the key is known, even while the author is already typing", async () => {
+    const { calls } = mount("");
+    // Typed before the field's debounce would have fired: the source check
+    // waits for a pause, the vocabulary does not.
+    typeExpression(await editor(), "v");
+    await screen.findByTestId("expression-bindings");
+    expect(calls.some((c) => c.source === "")).toBe(true);
   });
 
   it("checks nothing until the rule reads a key", async () => {

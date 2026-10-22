@@ -47,45 +47,71 @@ export default function ExpressionField(p: {
 }): JSX.Element {
   const [check, setCheck] = createSignal<ExpressionCheck | null>(null);
   const [failed, setFailed] = createSignal<string | null>(null);
-  // What the site lets the expression name, from the latest answer: kept
-  // across checks, and asked for while the source is empty, so completion has
-  // the site's words from the first one on.
+  // What the site lets the expression name (its bindings and builtins),
+  // fetched apart from the source check, so completion has the site's words
+  // from the first one on.
   const [vocab, setVocab] = createSignal<Vocabulary | null>(null);
   const diagId = createUniqueId();
   let timer: ReturnType<typeof setTimeout> | undefined;
+  let vocabTimer: ReturnType<typeof setTimeout> | undefined;
   let seq = 0;
+  let vocabSeq = 0;
   // The source the current check answered, so its faults are placed in that
   // text and not in whatever has been typed since.
   let checked = "";
+
+  const request = (source: string, key: string): ValidateExpression => {
+    const body: ValidateExpression = { site: p.site, source, key };
+    if (p.inputs) body.inputs = p.inputs.filter((i) => i.as && i.key);
+    if (p.ownerKind) body.owner_kind = p.ownerKind;
+    return body;
+  };
+
+  // The vocabulary depends on the site, the key and the calc inputs, never on
+  // the source, so it is asked for (with an empty source) whenever those
+  // change, on its own clock: typing, which holds the source check back
+  // until a pause, never holds back the words the first one completes from.
+  createEffect(
+    on([() => p.sampleKey, () => JSON.stringify(p.inputs ?? null), () => p.ownerKind], ([key]) => {
+      clearTimeout(vocabTimer);
+      const n = ++vocabSeq;
+      if (!key) {
+        setVocab(null);
+        return;
+      }
+      vocabTimer = setTimeout(async () => {
+        try {
+          const r = await validateExpression(request("", key));
+          if (n === vocabSeq) setVocab({ bindings: r.bindings ?? [], builtins: r.builtins ?? [] });
+        } catch {
+          // An unanswered vocabulary leaves completion quiet; the source
+          // check reports what went wrong.
+        }
+      }, p.debounce ?? 300);
+    }),
+  );
 
   createEffect(
     on([() => p.value, () => p.sampleKey, () => JSON.stringify(p.inputs ?? null), () => p.ownerKind], ([source, key]) => {
       clearTimeout(timer);
       const n = ++seq;
-      const empty = !source.trim();
-      if (!key || empty) {
+      if (!key || !source.trim()) {
         setCheck(null);
         setFailed(null);
         p.onCheck?.(false);
-        if (!key) return;
-      } else p.onCheck?.(undefined);
+        return;
+      }
+      p.onCheck?.(undefined);
       timer = setTimeout(async () => {
         try {
-          const body: ValidateExpression = { site: p.site, source, key };
-          if (p.inputs) body.inputs = p.inputs.filter((i) => i.as && i.key);
-          if (p.ownerKind) body.owner_kind = p.ownerKind;
-          const r = await validateExpression(body);
+          const r = await validateExpression(request(source, key));
           if (n !== seq) return;
-          setVocab({ bindings: r.bindings ?? [], builtins: r.builtins ?? [] });
-          // An empty source is asked only for its vocabulary: its verdict
-          // (not ok) is already given, and being empty is no diagnostic.
-          if (empty) return;
           setFailed(null);
           checked = source;
           setCheck(r);
           p.onCheck?.(r.ok);
         } catch (e) {
-          if (n !== seq || empty) return;
+          if (n !== seq) return;
           setCheck(null);
           setFailed(describeError(e));
           p.onCheck?.(false);
@@ -93,7 +119,10 @@ export default function ExpressionField(p: {
       }, p.debounce ?? 300);
     }),
   );
-  onCleanup(() => clearTimeout(timer));
+  onCleanup(() => {
+    clearTimeout(timer);
+    clearTimeout(vocabTimer);
+  });
 
   const diagnostics = () => check()?.diagnostics ?? [];
 
@@ -152,7 +181,7 @@ export default function ExpressionField(p: {
               <div data-testid="expression-diagnostic" class="flex flex-col gap-0.5">
                 <Show when={at}>
                   {(a) => (
-                    <pre class="overflow-x-auto rounded bg-base-200 px-2 py-1 font-data text-[12px] leading-snug text-base-content/80">
+                    <pre class="overflow-x-auto rounded bg-base-200 px-2 py-1 font-data text-[12px] leading-snug text-base-content/80 [font-variant-ligatures:none]">
                       {`${a().text}\n${a().caret}`}
                     </pre>
                   )}
