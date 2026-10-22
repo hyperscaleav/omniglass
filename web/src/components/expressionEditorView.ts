@@ -68,6 +68,19 @@ export function mountExpressionEditor(
             return { top: 8, left: 8, bottom: w.innerHeight - 8, right: w.innerWidth - 8 };
           },
         }),
+        // A click in the empty space below the last line puts the caret at
+        // the end, as a textarea does, rather than at that x on the last line
+        // (the field is taller than one line, so that space is a target).
+        EditorView.domEventHandlers({
+          mousedown(e, v) {
+            const end = v.state.doc.length;
+            if (e.button !== 0 || e.clientY <= v.documentTop + v.lineBlockAt(end).bottom) return false;
+            e.preventDefault();
+            v.focus();
+            v.dispatch({ selection: { anchor: end }, scrollIntoView: true });
+            return true;
+          },
+        }),
         EditorView.lineWrapping,
         placeholderText(o.placeholder),
         aria.of(ariaAttrs(o.aria)),
