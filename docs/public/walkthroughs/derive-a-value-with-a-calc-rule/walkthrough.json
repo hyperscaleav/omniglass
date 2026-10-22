@@ -1,7 +1,7 @@
 {
   "id": "derive-a-value-with-a-calc-rule",
   "title": "Derive a value with a calc rule",
-  "description": "Register a metric, author a calc rule that writes each component's slowest TCP connect time to it, preview the values it would write, save it, and read what it computed on each component.",
+  "description": "Register a metric, author a calc rule whose expression writes each component's slowest TCP connect time to it, preview the values it would write, save it, and read what it computed on each component.",
   "steps": [
     {
       "n": 1,
@@ -47,58 +47,64 @@
     },
     {
       "n": 8,
-      "kind": "type",
-      "caption": "Each input has a short name the reduce uses.",
+      "kind": "select",
+      "caption": "It reads TCP connect time, one value per endpoint. Its alias, the name the expression uses, fills in from the key.",
       "still": "step-08.png"
     },
     {
       "n": 9,
       "kind": "select",
-      "caption": "It reads TCP connect time, one value for each endpoint on a component.",
+      "caption": "Write the result to the new metric. A number, so the expression must yield one.",
       "still": "step-09.png"
     },
     {
       "n": 10,
-      "kind": "select",
-      "caption": "Fold them with max, the slowest endpoint wins.",
+      "kind": "type",
+      "caption": "The alias is a list of the endpoints' values. Fold it with max; the editor offers the alias as it is typed.",
       "still": "step-10.png"
     },
     {
       "n": 11,
-      "kind": "select",
-      "caption": "Write the result to the new metric.",
+      "kind": "press",
+      "caption": "Take the alias it offers.",
       "still": "step-11.png"
     },
     {
       "n": 12,
-      "kind": "click",
-      "caption": "Preview computes the draft on each component now, writing nothing.",
+      "kind": "type",
+      "caption": "Close it. The slowest endpoint wins, and the editor checks that it yields a number.",
       "still": "step-12.png"
     },
     {
       "n": 13,
-      "kind": "wait",
-      "caption": "The value it would write on each component, beside what that component holds now.",
+      "kind": "click",
+      "caption": "Preview computes the draft on each component now, writing nothing.",
       "still": "step-13.png"
     },
     {
       "n": 14,
-      "kind": "click",
-      "caption": "Save it. The rule computes again whenever an input changes.",
+      "kind": "wait",
+      "caption": "The value it would write on each component, beside what that component holds now.",
       "still": "step-14.png"
     },
     {
       "n": 15,
+      "kind": "click",
+      "caption": "Save it. The rule computes again whenever an input changes.",
+      "still": "step-15.png"
+    },
+    {
+      "n": 16,
       "kind": "wait",
       "caption": "Its blade shows the value it last computed on each component.",
-      "still": "step-15.png"
+      "still": "step-16.png"
     }
   ],
-  "poster": "step-13.png",
+  "poster": "step-14.png",
   "preview": "preview.webp",
   "budget": {
-    "seconds": 49.7,
-    "bytes": 1096475,
-    "previewBytes": 1049926
+    "seconds": 51.4,
+    "bytes": 1236489,
+    "previewBytes": 1152960
   }
 }

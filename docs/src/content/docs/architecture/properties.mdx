@@ -166,8 +166,11 @@ A separate **`source`** column records *which sensor or path* produced an observ
 
 Built for component and system owners (#996, #997; event rules judge component outputs only, #1002): a calc rule's tick reduces the inputs' current values and writes
 the result through the sample-write path as a calculated row naming the rule and its version, where
-event rules judge it and downstream calc rules are marked; an unchanged result writes nothing. How it
-runs is on [calculations](/architecture/calculations/#how-a-calc-rule-runs).
+event rules judge it and downstream calc rules are marked; an unchanged result writes nothing. A
+property a calc rule writes resolves as the owner's value where nothing declares one, after a declared
+value and before the contract default, naming the rule (`source_rule`, `source_rule_id`) as an
+effective metric does (#999, #1018); reconciliation's want stays the declared value alone. How it runs
+is on [calculations](/architecture/calculations/#how-a-calc-rule-runs).
 
 :::design[The calculated producer on the stream, tracked in #430]
 

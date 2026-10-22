@@ -379,20 +379,21 @@ it names no component, so it is not fenced. Because writing a rule needs an all-
 the permissions held on an all-scope grant, which the console checks before offering a rule write. An alarm body names its component by name and uuid, and a
 rule-raised one its rule (`raised_by_rule`, `raised_by_rule_id`).
 
-**Calc rules derive a key from named inputs.** `/calc-rules` (gated `rule:*`, read like a registry,
+**Calc rules derive a key from aliased inputs.** `/calc-rules` (gated `rule:*`, read like a registry,
 written only on an all-scope grant; `omniglass calc-rule`) authors the rules that derive an output key
 on each component or system ([calculations](/architecture/calculations/)): an `owner_kind`, a
-`selector` (a component rule's `component_types` and `components`, or a system rule's `system_types` and `systems`, subtypes included), `inputs` as `{as, key}` pairs, a `reduce` that is a named `reducer`
-over the one input or an `expr` over the inputs by name, and an `output_key`, its lane answered as
-`output_lane`. A rule is addressed by name or uuid and every write answers the rule with its `id`. A
+`selector` (a component rule's `component_types` and `components`, or a system rule's `system_types` and `systems`, subtypes included), `inputs` as `{alias, key}` pairs (the key by name or uuid, held by uuid; a read answers `key`,
+`key_id` and `lane`), a `reduce` that is an `expr` over the aliases, each bound as the list of its
+values (#1018), and an `output_key`, its lane answered as `output_lane`. A rule is addressed by name or uuid and every write answers the rule with its `id`. A
 reduce that does not compile, or yields a type other than the output key's, is a 422 located at
-`body.reduce.expr` with the fault's `line` and `column`; any other refusal is a 422 located at the field
-it names (`body.inputs[0].key`, `body.output_key`, `body.selector`): an unknown key, `health` as an input
-or output, an output a native probe or a driver's declared emits write, an output another enabled rule
-writes (the refusal names it; enabling a rule is checked too), a reducer whose input or result does not
-fit. A list or get carries `calc_error` (`field`, `line`, `column`, `message`) when a stored reduce no
+`body.reduce.expr` with the fault's `line` and `column` (and `unbound`, the name, when it is one no
+alias binds); any other refusal is a 422 located at the field
+it names (`body.inputs[0].key`, `body.inputs[0].alias`, `body.output_key`, `body.selector`): an unknown
+key, an alias that is not an identifier of at most 64, is reserved or repeats, `health` as an input or
+output, an output a native probe or a driver's declared emits write, an output another enabled rule
+writes (the refusal names it; enabling a rule is checked too). A list or get carries `calc_error` (`field`, `line`, `column`, `message`) when a stored reduce no
 longer compiles against the registries, and such a rule cannot be enabled (422). Deleting a property
-or metric type a calc rule writes is a 409 naming the rule. A rule that would close a cycle in the key graph is a 422 whose detail names the chain
+or metric type a calc rule writes or reads is a 409 naming the rule. A rule that would close a cycle in the key graph is a 422 whose detail names the chain
 (`temp-twice -> avg-temp -> temp-twice`), its error carrying the `keys` and `rules` along it. A patch
 bumps the version unless it changes nothing; `POST /calc-rules/{name}:rename` moves the name, bumping no
 version (a rename to the same name writes nothing), with the same 409 and 422 refusals as an event
@@ -401,13 +402,16 @@ what the rule last did on each owner the caller may read (a component by the com
 system by the system read scope), the owner named now: `value`, `computed_at`, `rule_version`,
 `missing`, a system's `skipped` members and the `stale` instances (named when the caller may read the
 component, else counted in `skipped_hidden` and `stale_hidden`), `error`, `no_members_since`, `pending`
-and a deferred mark's `due_at`, beside `pending_depth`, how many of the listed owners are pending. `POST /calc-rules:preview`
+and a deferred mark's `due_at`; failing owners first, then pending, missing, valued, each by name, at
+most `limit` (100 unless asked, up to 1,000), beside the `total` and `pending_depth` over every owner the
+caller may read. `POST /calc-rules:preview`
 (gated `rule:read`; `omniglass calc-rule preview`) computes a candidate rule (`owner_kind`, `selector`,
 `inputs`, `reduce`, `output_key`, and a saved rule's `name` to preview an edit of it) on each selected
 owner the caller may read, with the tick's reduce, in a read-only transaction: per owner the `value` it
 would write, the `current` output and whether it `differs`, and what was missing, skipped or stale
-(an expression over a system with a member the caller may not read is withheld there, its `error`
-counting the members out of scope),
+(the owners holding a value first; an expression that can read one member's value over a system with
+a member the caller may not read is withheld there, its `error` counting the members out of scope, while
+one folding each list whole is previewed),
 at most `owner_cap` owners (`owners_judged` of `owners_total`, `truncated` past it). A candidate a save
 would refuse (a reduce that does not compile, a cycle, a second writer of the output, a collected
 output, health) is the same 422.

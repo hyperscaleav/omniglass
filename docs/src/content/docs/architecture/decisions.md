@@ -185,8 +185,8 @@ below from the project's history. From here it grows one slice at a time.
 | [ADR-0144](#adr-0144-alarms-are-raised-by-event-rules-at-a-severity-level-from-a-ranked-registry) | 2026-10-18 | Accepted; amended (#977): the dedup key names the rule by uuid, and a rule's name is renameable | Alarms are raised by event rules (one table per rule kind, `rule:*` authoring, `raised_by_rule_id`, one alarm per endpoint) at a severity level from a ranked registry referenced by name; `critical` became `high`, the outage floor |
 | [ADR-0145](#adr-0145-a-rule-records-its-conditions-as-typed-events-and-its-alarm-is-optional) | 2026-10-20 | Accepted | An event rule's alarm is optional (an informational rule raises none); a rule names the event types it writes (a required fire type, an optional clear type); its in-force state is its own condition row; it writes one event per edge, carrying the alarm the edge moved, and a severity toggled on or off moves alarms with no condition event; a hand clear holds while the condition persists |
 | [ADR-0146](#adr-0146-expressions-run-on-pinned-expr-with-an-allowlist-and-per-site-budgets-and-rule-criteria-are-expressions) | 2026-10-20 | Accepted | Expressions run on pinned Expr behind a per-site allowlist of vetted builtins and a per-site budget (after three adversarial passes); event rule criteria are stored as `{expr}`, the short form lowered on input and by a one-time backfill, with one approved bool divergence; compile errors show on the rule; validate and preview answer from the same declarations |
-| [ADR-0147](#adr-0147-a-calc-rule-is-a-typed-sibling-registry-checked-acyclic-at-authoring) | 2026-10-21 | Accepted | `calc_rule` is a sibling of `event_rule` with typed columns (inputs `{as, key}`, a named reducer or an expression, the output key by id); every write compiles the reduce against a calc expression site of its own and refuses a cycle in the key graph, a second enabled writer of a key, `health` as an input or output, and an output a collection declares (a native probe key or a driver's emits); a reduce that stops compiling reads back as `calc_error` |
-| [ADR-0148](#adr-0148-calc-rules-run-on-a-durable-pending-set-and-a-server-tick-not-a-jetstream-consumer) | 2026-10-21 | Accepted | Component calc rules run on a durable `calc_pending` set marked in the sample-write transaction and drained by a 1s server tick (`SKIP LOCKED`, one transaction per mark), writing calculated samples through the same path so event rules judge them; marks are held by their writer until commit, the ingest retries a deadlock, a failing mark is deferred, a rule write recomputes its owners; a write never marks its own rule; a missing input writes nothing and is recorded in `calc_rule_state`; an unchanged result writes no row. Diverges from the JetStream calc consumer (#430) |
+| [ADR-0147](#adr-0147-a-calc-rule-is-a-typed-sibling-registry-checked-acyclic-at-authoring) | 2026-10-21 | Accepted, amended (#1018) | `calc_rule` is a sibling of `event_rule` with typed columns (inputs `{as, key}`, a named reducer or an expression, the output key by id); every write compiles the reduce against a calc expression site of its own and refuses a cycle in the key graph, a second enabled writer of a key, `health` as an input or output, and an output a collection declares (a native probe key or a driver's emits); a reduce that stops compiling reads back as `calc_error`; **Amended (#1018):** the reduce is always an expression, its named reducers now list functions, and inputs are held by uuid in `calc_rule_input`, each bound by an alias as the list of its values |
+| [ADR-0148](#adr-0148-calc-rules-run-on-a-durable-pending-set-and-a-server-tick-not-a-jetstream-consumer) | 2026-10-21 | Accepted, amended (#1018) | Component calc rules run on a durable `calc_pending` set marked in the sample-write transaction and drained by a 1s server tick (`SKIP LOCKED`, one transaction per mark), writing calculated samples through the same path so event rules judge them; marks are held by their writer until commit, the ingest retries a deadlock, a failing mark is deferred, a rule write recomputes its owners; a write never marks its own rule; a missing input writes nothing and is recorded in `calc_rule_state`; an unchanged result writes no row. Diverges from the JetStream calc consumer (#430). **Amended (#1018):** every input binds as the list of its per-instance values, an expression's included, and the marking probe reads `calc_rule_input` by key id |
 
 ## Entries
 
@@ -6701,6 +6701,36 @@ interface create form, since that name is the platform's to mint.
   signal for "a key any collection writes" to the slice. A flag on the registries would be a second copy
   of what the drivers and probes already declare; the observed-sample probe first shipped beside the
   declarations was dropped in review for the reasons in point 4.
+- **Amended 2026-10-22 (#1018, ruled by the architect in #1017's review):** the reduce is always an
+  expression, and inputs are held by uuid with aliases.
+  1. **One reduce.** `reduce` is `{expr}` only. The named reducers become **list functions** the calc
+     site admits through the vetting registry, each with its cost argument (one charged pass over a
+     list, one value out): `max`, `min`, `avg`, `sum`, `majority`, `any`, `all`, beside `len` and
+     `count`. Each retired reducer is one expression (`average` is `avg(x)`, `count` is `len(x)`, the
+     rest their own names), proven equal over the same values on both owner kinds. Expr parses `any`,
+     `all` and `sum` as predicate builtins only, so their one-list calls are told apart lexically and
+     renamed in place to the engine's own functions of the same length; the predicate forms stand.
+  2. **Inputs are lists.** Each input binds by its alias as the list of its current values: on a
+     component one per instance under ADR-0148 point 4's instance and staleness rules (no longer only
+     the aggregate instance for an expression), on a system every role-bound member's, in member order;
+     a system's `members` records stay beside the lists. A single-instance key is a one-element list.
+  3. **Inputs by uuid, with aliases.** Inputs move from `calc_rule.inputs` (`{as, key}`, keys by name)
+     to `calc_rule_input`, a row per input holding its key by id in its lane's registry, the lane
+     recorded, as the output is: a key rename leaves the rule computing, and a key a rule reads cannot be
+     deleted (a 409 naming the rule, where point 5 left a `calc_error`). The API takes a key by name or
+     uuid and answers both. The key graph runs over key ids, so a property and a metric of one name are
+     two keys, and its refusal names keys by their names now.
+  4. **Alias rules, one list.** An alias is an identifier of at most 64, not a keyword or the name of
+     any builtin or list function, not one of the site's own bindings (`component`, `has`, `members`,
+     `system`, `value`), and unique; a name no alias binds is refused at its position naming it, and a
+     `let` shadowing an alias is refused where it is declared. The reserved list is generated for the
+     console, so the form and the editor refuse what the server refuses.
+  5. **Moved by a data migration.** Databases that ran the branch had their `{as, key}` inputs moved to
+     rows and each `{reducer}` rewritten to its expression (idempotent, tested from the earlier schema);
+     a stored expression that read a scalar now reads a list and shows a `calc_error` until rewritten.
+     The preview's withholding (an expression over a system with an unreadable member) now applies to an
+     expression that can read one member's value, and not to one that folds each list whole, as the
+     named reducers were previewed.
 
 ### ADR-0148: Calc rules run on a durable pending set and a server tick, not a JetStream consumer
 
@@ -6764,3 +6794,9 @@ interface create form, since that name is the platform's to mint.
   recording `no_members_since`. A retype out of a selector drops the deselected marks first, skipping one
   a serve holds, and a serve rechecks the selection before computing, so neither waits on the other.
   Event rules do not judge system-owned samples yet (#1002).
+- **Amended 2026-10-22 (#1018):** point 4's instance and staleness rules now give every input its
+  values, expression or not: the reduce is always an expression (ADR-0147's amendment), and each input
+  binds as the list of its per-instance values on a component, every member's on a system, where an
+  expression read the aggregate instance alone. A system member's record still carries its own
+  aggregate value. The marking probe reads `calc_rule_input` by key id (the inputs' GIN index went with
+  the jsonb column), so a property and a metric of one name mark only the rules reading that lane's key.
