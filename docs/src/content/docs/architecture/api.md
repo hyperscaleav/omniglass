@@ -781,6 +781,10 @@ The reports are one shape over two owners:
   same recorded value a fleet view dot reads. It is the per-system read of the members' health, so a
   system's view polls it with the system's health report rather than the whole fleet view
   ([#940](https://github.com/hyperscaleav/omniglass/issues/940)).
+- `GET /systems/{name}/alarms` (`system:read`) is every member's alarms in one read, newest first, each
+  naming its component: the active ones whatever their age and those cleared in the last 30 days, capped
+  at 500. A system's Activity explains its incidents with it, one request however many members the
+  system has.
 
 Both resolve their owner **within the caller's scope first** (an out-of-scope system or location is a
 **non-disclosing 404**), and **neither read writes anything**: the verdict served is computed from the

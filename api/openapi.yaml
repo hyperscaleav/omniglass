@@ -7221,6 +7221,28 @@ components:
         - position
         - with
       type: object
+    SystemAlarmsOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/SystemAlarmsOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        alarms:
+          items:
+            $ref: "#/components/schemas/AlarmBody"
+          type:
+            - array
+            - "null"
+        system:
+          type: string
+      required:
+        - system
+        - alarms
+      type: object
     SystemBody:
       additionalProperties: false
       properties:
@@ -15017,6 +15039,33 @@ paths:
           description: Error
       summary: Update a system
       x-omniglass-permission: system:update
+  /systems/{name}/alarms:
+    get:
+      description: "Every member's alarms in one read, newest first, each naming its component: the active ones whatever their age, and those cleared in the last 30 days, capped at 500. It is what a system's Activity reads to explain its incidents, one request however many members the system has. Gated by system:read; an out-of-scope system is a non-disclosing 404."
+      operationId: list-system-alarms
+      parameters:
+        - description: The system's name, or a dotted address (e.g. boi.17c.$sys.av)
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The system's name, or a dotted address (e.g. boi.17c.$sys.av)
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SystemAlarmsOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: List a system's members' alarms
+      x-omniglass-permission: system:read
   /systems/{name}/events:
     get:
       description: Returns the system's own events and its members', newest first, bounded to the last 24 hours, each row labeled by the owner that raised it. A component shared with another system appears in both systems' lists. Gated by system:read; an out-of-scope system is a non-disclosing 404.

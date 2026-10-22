@@ -4576,6 +4576,26 @@ omniglass standard update <id>
 
 Commands for the system resource
 
+### `omniglass system alarm`
+
+Commands for the alarm resource
+
+#### `omniglass system alarm list`
+
+List a system's members' alarms
+
+```
+omniglass system alarm list <name>
+```
+
+Every member's alarms in one read, newest first, each naming its component: the active ones whatever their age, and those cleared in the last 30 days, capped at 500. It is what a system's Activity reads to explain its incidents, one request however many members the system has. Gated by system:read; an out-of-scope system is a non-disclosing 404.
+
+Example:
+
+```sh
+omniglass system alarm list <name>
+```
+
 ### `omniglass system checkName`
 
 Check a system name

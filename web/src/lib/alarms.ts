@@ -48,6 +48,18 @@ export async function componentAlarms(name: string): Promise<Alarm[]> {
   return (data?.alarms ?? []) as Alarm[];
 }
 
+// The system's end (#940): every member's alarms in one read, active ones
+// whatever their age and those cleared in the last 30 days, each naming its
+// component. A system's Activity polls it, one request however many members
+// the system has, rather than one alarms read per member.
+export const systemAlarmsKey = (name: string) => ["system-alarms", name] as const;
+
+export async function systemAlarms(name: string): Promise<Alarm[]> {
+  const { data, error } = await api.GET("/systems/{name}/alarms", { params: { path: { name } } });
+  if (error) throw error;
+  return (data?.alarms ?? []) as Alarm[];
+}
+
 export type RaiseAlarm = {
   // A severity level by name, from the registry (GET /severity-levels).
   severity: string;

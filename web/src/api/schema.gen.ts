@@ -3552,6 +3552,26 @@ export interface paths {
         patch: operations["update-system"];
         trace?: never;
     };
+    "/systems/{name}/alarms": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List a system's members' alarms
+         * @description Every member's alarms in one read, newest first, each naming its component: the active ones whatever their age, and those cleared in the last 30 days, capped at 500. It is what a system's Activity reads to explain its incidents, one request however many members the system has. Gated by system:read; an out-of-scope system is a non-disclosing 404.
+         */
+        get: operations["list-system-alarms"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/systems/{name}/events": {
         parameters: {
             query?: never;
@@ -8390,6 +8410,16 @@ export interface components {
              * @description The other position to exchange with
              */
             with: number;
+        };
+        SystemAlarmsOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/SystemAlarmsOutputBody.json
+             */
+            readonly $schema?: string;
+            alarms: components["schemas"]["AlarmBody"][] | null;
+            system: string;
         };
         SystemBody: {
             /**
@@ -17027,6 +17057,38 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SystemBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "list-system-alarms": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The system's name, or a dotted address (e.g. boi.17c.$sys.av) */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SystemAlarmsOutputBody"];
                 };
             };
             /** @description Error */

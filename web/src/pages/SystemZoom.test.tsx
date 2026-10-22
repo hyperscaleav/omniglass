@@ -8,7 +8,7 @@ import { systemHealthKey, type FleetHealth } from "../lib/health";
 import { systemRolesKey } from "../lib/system_roles";
 import { SYSTEMS_KEY } from "../lib/systems";
 import { systemMetricsKey } from "../lib/system_metrics";
-import { componentAlarmsKey } from "../lib/alarms";
+import { systemAlarmsKey } from "../lib/alarms";
 import { systemMembersKey } from "../lib/members";
 import { systemEventsKey, systemLogsKey } from "../lib/system_activity";
 import { metricSeriesKey } from "../lib/series";
@@ -415,13 +415,10 @@ describe("the history tab (#792)", () => {
   });
 
   function seedAlarms(qc: QueryClient) {
-    qc.setQueryData([...componentAlarmsKey(uuidFor("szp-c-mic"))], [
+    qc.setQueryData([...systemAlarmsKey(uuidFor("szp-sys"))], [
       { id: "hal-1", component: "mic-1", component_id: uuidFor("szp-c-mic"), severity: "high", message: "No route to host", raised_at: "2026-08-15T14:20:00Z", active: true, acknowledged: false },
-    ]);
-    qc.setQueryData([...componentAlarmsKey(uuidFor("szp-c-bar"))], [
       { id: "hal-0", component: "videobar-1", component_id: uuidFor("szp-c-bar"), severity: "warning", message: "Fan speed high", raised_at: "2026-08-09T09:12:00Z", cleared_at: "2026-08-09T09:53:00Z", active: false, acknowledged: true },
     ]);
-    qc.setQueryData([...componentAlarmsKey(uuidFor("szp-c-power"))], []);
   }
 
   // #795 refinement: the tab reads like a status page: uptime up top, the
@@ -890,6 +887,46 @@ describe("the system view refreshes (#940)", () => {
     // Nothing the view polls grows with the fleet: no fleet view, no fleet-wide verdicts.
     expect(count("/views/fleet")).toBe(0);
     expect(count("/systems:health")).toBe(0);
+  });
+
+  // Activity explains incidents with the members' alarms. Read per member,
+  // a poll is one request per member; read per system it is one request
+  // however big the room, so the poll's size is fixed.
+  it("polls Activity with a fixed number of requests, however many members the system has", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "setInterval", "clearInterval"] });
+    const big = {
+      ...view,
+      systems: (view.systems ?? []).map((sys) => sys.id !== uuidFor("szp-sys") ? sys : {
+        ...sys,
+        dots: [...(sys.dots ?? []), ...Array.from({ length: 12 }, (_, i) => ({ component: uuidFor(`szp-c-extra-${i}`), name: `extra-${i}`, verdict: "healthy", primary: true, shared: false }))],
+      }),
+    } as unknown as FleetView;
+    const gets: string[] = [];
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = (input as Request).url;
+      gets.push(new URL(url).pathname);
+      if (url.endsWith("/health")) return json(calm);
+      if (url.endsWith("/members")) return json({ members: memberRowsOf(big, uuidFor("szp-sys")) });
+      if (url.endsWith("/roles")) return json({ roles: declared });
+      if (url.endsWith("/metrics")) return json({ metrics: [] });
+      if (url.endsWith("/alarms")) return json({ alarms: [] });
+      if (url.endsWith("/events")) return json({ events: [] });
+      if (url.endsWith("/logs")) return json({ lines: [] });
+      return json({});
+    });
+    const r = mount(`/web/systems/${uuidFor("szp-sys")}?tab=activity`, calm, [], [], me, memberRowsOf(big, uuidFor("szp-sys")));
+    r.qc.setQueryData([...FLEET_VIEW_KEY], big);
+    // The mount's own first reads are not a poll.
+    await vi.advanceTimersByTimeAsync(0);
+    gets.length = 0;
+
+    await vi.advanceTimersByTimeAsync(5_000);
+
+    // No member is read on its own; the members' alarms are one read.
+    expect(gets.filter((g) => g.startsWith("/api/v1/components/"))).toEqual([]);
+    expect(gets.filter((g) => g.endsWith("/alarms"))).toEqual([`/api/v1/systems/${uuidFor("szp-sys")}/alarms`]);
+    // The whole poll: health, roles, members, metrics, alarms, events, logs.
+    expect([...gets].sort()).toEqual(["/alarms", "/events", "/health", "/logs", "/members", "/metrics", "/roles"].map((p) => `/api/v1/systems/${uuidFor("szp-sys")}${p}`).sort());
   });
 
   it("holds the poll while the tab is hidden", async () => {

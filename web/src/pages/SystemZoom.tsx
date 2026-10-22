@@ -32,7 +32,7 @@ import { entityLabel } from "../lib/entities";
 import { can, useMe } from "../lib/auth";
 import { describeError, fmtTime } from "../lib/format";
 import { durationText } from "../lib/timeline";
-import { componentAlarms, componentAlarmsKey } from "../lib/alarms";
+import { systemAlarms, systemAlarmsKey } from "../lib/alarms";
 import { useSeverity } from "../lib/severity";
 import AlarmTimeline, { createTimelineToggles } from "../components/AlarmTimeline";
 import RuleLink from "../components/RuleLink";
@@ -166,21 +166,19 @@ export default function SystemZoom() {
     return "overview";
   };
   // Every member's alarm history, cleared ones included: the causes beside
-  // the verdict spans. Fan-out per component (rooms are small); each query
-  // shares the leaf's cache key, so walking to a leaf is warm.
+  // the verdict spans. One read for the whole system (#940), so the poll is
+  // one request however many members the room has.
   const memberIds = createMemo(() => {
     const b = bodyOf();
     if (!b) return [] as { name: string; componentId: string }[];
     const all = [...b.cards, ...b.groups.flatMap((g) => g.memberCards)];
     return all.map((c) => ({ name: c.name, componentId: c.componentId }));
   });
-  const alarmHistories = useQueries(() => ({
-    queries: memberIds().map((m) => ({
-      queryKey: componentAlarmsKey(m.componentId),
-      queryFn: () => componentAlarms(m.componentId),
-      enabled: tab() === "activity",
-      refetchInterval: LEAF_POLL_MS,
-    })),
+  const alarmHistory = useQuery(() => ({
+    queryKey: systemAlarmsKey(id()),
+    queryFn: () => systemAlarms(id()),
+    enabled: tab() === "activity",
+    refetchInterval: LEAF_POLL_MS,
   }));
   // One series query per declared metric, alive only on Overview, where the
   // Data table draws every sparkline at once (#795 review).
@@ -219,10 +217,12 @@ export default function SystemZoom() {
   };
   const [openIncident, setOpenIncident] = createSignal<number | null>(null);
   const incidents = createMemo(() => {
-    const members: MemberAlarms[] = memberIds().map((m, i) => ({
+    const byComponent = new Map<string, NonNullable<typeof alarmHistory.data>>();
+    for (const a of alarmHistory.data ?? []) byComponent.set(a.component_id, [...(byComponent.get(a.component_id) ?? []), a]);
+    const members: MemberAlarms[] = memberIds().map((m) => ({
       component: m.name,
       componentId: m.componentId,
-      alarms: alarmHistories[i]?.data ?? [],
+      alarms: byComponent.get(m.componentId) ?? [],
     }));
     return incidentRows(members, historyNow(), 30 * 24, scale().levels);
   });

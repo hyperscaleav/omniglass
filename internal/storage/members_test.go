@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/scope"
 	"github.com/hyperscaleav/omniglass/internal/seed"
@@ -374,5 +375,56 @@ func TestListMembersCarriesEachMembersOwnVerdict(t *testing.T) {
 	}
 	if got["dsp"] != "outage" || got["mic-a"] != "healthy" {
 		t.Errorf("member verdicts = %v, want dsp outage (a high alarm) and mic-a healthy", got)
+	}
+}
+
+// A system's alarms read (#940) is its members' alarms in one query: what
+// is wrong now, whatever its age, and what cleared inside the window; never a
+// component that is not a member; capped at the limit, newest first.
+func TestListSystemAlarmsIsTheMembersAlarmsWindowed(t *testing.T) {
+	ctx := context.Background()
+	f := newMemberFixture(t, ctx)
+	for _, c := range []string{"dsp", "mic-a"} {
+		if err := f.gw.AddMember(ctx, "", "room-a", c, f.all, f.all); err != nil {
+			t.Fatalf("add %s: %v", c, err)
+		}
+	}
+	raise := func(comp, msg string) *storage.Alarm {
+		t.Helper()
+		a, err := f.gw.RaiseAlarm(ctx, "", comp, storage.AlarmSpec{Severity: "high", Message: msg})
+		if err != nil {
+			t.Fatalf("raise %s: %v", msg, err)
+		}
+		return a
+	}
+	old := raise("mic-a", "cleared a while ago")
+	if err := f.gw.ClearAlarm(ctx, "", "mic-a", old.ID); err != nil {
+		t.Fatalf("clear: %v", err)
+	}
+	time.Sleep(300 * time.Millisecond)
+	recent := raise("mic-a", "cleared just now")
+	if err := f.gw.ClearAlarm(ctx, "", "mic-a", recent.ID); err != nil {
+		t.Fatalf("clear: %v", err)
+	}
+	active := raise("dsp", "no route to host")
+	raise("mic-b", "not a member") // mic-b is in no system
+
+	sys, err := f.gw.GetSystem(ctx, "room-a", f.all)
+	if err != nil {
+		t.Fatalf("get system: %v", err)
+	}
+	got, err := f.gw.ListSystemAlarms(ctx, sys.ID, 200*time.Millisecond, 50)
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	ids := make([]string, 0, len(got))
+	for _, a := range got {
+		ids = append(ids, a.ID)
+	}
+	if len(got) != 2 || got[0].ID != active.ID || got[1].ID != recent.ID {
+		t.Fatalf("system alarms = %v, want [active %s, recently cleared %s] (newest first; the older clear and the non-member out)", ids, active.ID, recent.ID)
+	}
+	if capped, err := f.gw.ListSystemAlarms(ctx, sys.ID, 0, 1); err != nil || len(capped) != 1 || capped[0].ID != active.ID {
+		t.Fatalf("capped at 1 = %+v (%v), want the newest alone", capped, err)
 	}
 }

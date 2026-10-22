@@ -167,6 +167,23 @@ func TestHealthAPI(t *testing.T) {
 		t.Fatalf("member verdict = %q, want outage (the high alarm took bar-1 down)", v)
 	}
 
+	// The system's alarms read is every member's alarms in one request (#940):
+	// a system's Activity polls it rather than one read per member.
+	systemAlarms := func() []alarmWire {
+		t.Helper()
+		var w struct {
+			System string      `json:"system"`
+			Alarms []alarmWire `json:"alarms"`
+		}
+		if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/systems/hq-1/alarms", nil, http.StatusOK), &w); err != nil {
+			t.Fatalf("decode system alarms: %v", err)
+		}
+		return w.Alarms
+	}
+	if got := systemAlarms(); len(got) != 1 || got[0].ID != raised.ID || !got[0].Active || got[0].Component != "bar-1" {
+		t.Fatalf("system alarms = %+v, want bar-1's active alarm", got)
+	}
+
 	// The location rolls up and names the system to drill into.
 	loc := health(ownerTok, "/locations/hq/health")
 	if loc.Verdict != "outage" {
@@ -205,6 +222,12 @@ func TestHealthAPI(t *testing.T) {
 	if v := memberVerdict(); v != "healthy" {
 		t.Fatalf("member verdict after clearing = %q, want healthy", v)
 	}
+	// A recently cleared alarm stays on the system's read: Activity explains a
+	// past incident with it.
+	if got := systemAlarms(); len(got) != 1 || got[0].ID != raised.ID || got[0].Active {
+		t.Fatalf("system alarms after clearing = %+v, want the cleared row kept", got)
+	}
+	c.do(ownerTok, http.MethodGet, "/systems/no-such/alarms", nil, http.StatusNotFound)
 	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/components/bar-1/alarms", nil, http.StatusOK), &listed); err != nil {
 		t.Fatalf("decode active alarms: %v", err)
 	}

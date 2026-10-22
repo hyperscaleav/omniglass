@@ -549,6 +549,9 @@ type Gateway interface {
 	// ListSystemEvents merges the system's own events with its members',
 	// newest first, each row naming its owner (#793).
 	ListSystemEvents(ctx context.Context, systemID string, window time.Duration, limit int) ([]Event, error)
+	// ListSystemAlarms is the members' alarms in one read (#940): active ones
+	// whatever their age and those cleared inside window, newest first, capped.
+	ListSystemAlarms(ctx context.Context, systemID string, window time.Duration, limit int) ([]Alarm, error)
 	// ListMetricSeries returns one metric series' raw samples newest first,
 	// windowed and capped: the rows behind the effective read (#794).
 	ListMetricSeries(ctx context.Context, ownerKind, ownerRef, key string, window time.Duration, limit int) ([]MetricSample, error)
