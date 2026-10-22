@@ -153,6 +153,19 @@ func TestCalcDerivesComponentSamples(t *testing.T) {
 	if r.pending() != 0 {
 		t.Fatal("a disabled rule was marked")
 	}
+
+	// Deleting a rule keeps its history: the samples it wrote stay, with
+	// the name, version and id of the rule that wrote them.
+	if err := r.gw.DeleteCalcRule(r.ctx, "", "per-person", r.all); err != nil {
+		t.Fatal(err)
+	}
+	if got := r.calculated("temp-sum"); len(got) != 1 || got[0] != "63 per-person 1" {
+		t.Fatalf("temp-sum rows %v after the rule's delete, want its one calculated 63 kept", got)
+	}
+	if n := count(t, r.conn, `select count(*) from metric where component_id = '`+r.comp+`' and source_rule = 'per-person'
+		and source_rule_id is not null`); n != 1 {
+		t.Fatalf("%d temp-sum rows keep the deleted rule's id, want 1", n)
+	}
 }
 
 // A property output is transition-only, and an event rule judges a derived
@@ -330,5 +343,50 @@ func TestCalcDrainReplicasAndRestart(t *testing.T) {
 	if n := count(t, r.conn, `select count(*) from (select component_id from metric where provenance = 'calculated'
 		group by component_id having count(*) > 1) d`); n != 0 {
 		t.Fatalf("%d owners computed twice", n)
+	}
+}
+
+// A rule reads observed and calculated values only (calculations.md): an
+// operator's declared value, which marks no rule when it changes, is never
+// an input, and a cleared declaration (a declared 'null' tombstone) neither
+// fails the rule nor defers its mark.
+func TestCalcIgnoresDeclaredInputs(t *testing.T) {
+	r := newEvalRig(t)
+	if _, err := r.create(storage.CalcRuleSpec{Name: "call-copy", OwnerKind: rules.OwnerComponent,
+		Inputs: []rules.CalcInput{{As: "call", Key: "in-call"}}, Reduce: rules.CalcReduce{Expr: "call"}, OutputKey: "busy-flag"}); err != nil {
+		t.Fatal(err)
+	}
+	// A sample on another instance marks the rule; the expression reads the
+	// aggregate instance, whose newest row is then the declaration.
+	mark := func() {
+		t.Helper()
+		if err := r.gw.InsertPropertySamples(r.ctx, []storage.PropertySampleWrite{{OwnerKind: "component", OwnerID: r.comp, Key: "in-call",
+			Instance: "aux", Value: "false", Source: "test", TS: time.Now()}}); err != nil {
+			t.Fatal(err)
+		}
+		r.drain()
+	}
+	output := func() string {
+		t.Helper()
+		return scalar(t, r.conn, `select value #>> '{}' from property where component_id = '`+r.comp+`' and source_rule = 'call-copy' order by id desc limit 1`)
+	}
+	r.property("in-call", "false")
+	r.drain()
+	if _, err := r.gw.SetProperty(r.ctx, "", "component", r.comp, "in-call", "", []byte(`true`), r.all, r.all); err != nil {
+		t.Fatal(err)
+	}
+	mark()
+	if got := output(); got != "false" {
+		t.Fatalf("busy-flag reads %q over a declared true, want false (the observed value)", got)
+	}
+	if err := r.gw.ClearProperty(r.ctx, "", "component", r.comp, "in-call", "", r.all, r.all); err != nil {
+		t.Fatal(err)
+	}
+	mark()
+	if got := scalar(t, r.conn, `select error from calc_rule_state where component_id = '`+r.comp+`'`); got != "" {
+		t.Fatalf("the rule's state records %q over a cleared declaration, want no error", got)
+	}
+	if n := r.pending(); n != 0 {
+		t.Fatalf("%d marks left after the drain, want none deferred", n)
 	}
 }

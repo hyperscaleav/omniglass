@@ -28,7 +28,8 @@ the protobuf `TelemetryBatch` with **per-lane arrays** (`metrics`, `properties`,
 Declared values are series rows and current values are derived from the series
 ([ADR-0079](/architecture/decisions/#adr-0079-five-telemetry-lanes-and-property-stops-being-the-genus)).
 Owner kinds beyond `component` on ingest are directional (#422). The `calculated` producer is built for
-component-owned calc rules (#996): a calc rule's output is written through the same sample-write path
+component- and system-owned calc rules (#996, #997; a system's output is not yet judged by event rules,
+#1002): a calc rule's output is written through the same sample-write path
 as an observed sample, with `provenance = calculated`, `source_rule` and `source_rule_version`, on a
 server tick rather than the stream ([ADR-0148](/architecture/decisions/#adr-0148-calc-rules-run-on-a-durable-pending-set-and-a-server-tick-not-a-jetstream-consumer)). See
 [ADR-0037](/architecture/decisions/#adr-0037-telemetry-is-a-protobuf-event-over-jetstream-with-an-inline-owner-confining-consumer)
@@ -163,7 +164,7 @@ A separate **`source`** column records *which sensor or path* produced an observ
 
 ### calculated: derived by a calc rule
 
-Built for component owners (#996): a calc rule's tick reduces the inputs' current values and writes
+Built for component and system owners (#996, #997; event rules judge component outputs only, #1002): a calc rule's tick reduces the inputs' current values and writes
 the result through the sample-write path as a calculated row naming the rule and its version, where
 event rules judge it and downstream calc rules are marked; an unchanged result writes nothing. How it
 runs is on [calculations](/architecture/calculations/#how-a-calc-rule-runs).

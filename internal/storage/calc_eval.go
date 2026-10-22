@@ -611,13 +611,13 @@ func readCalcInput(ctx context.Context, tx pgx.Tx, owner calcOwner, in rules.Typ
 					order by x.instance limit 1) from inst where inst.instance is not null)
 			select i.instance, n.v, n.ts from inst i, t,
 				lateral (select %[4]s as v, ts from %[1]s where %[5]s = $1::uuid and %[2]s = t.id and instance = i.instance
-					and provenance <> 'intended' order by ts desc, id desc limit 1) n
+					and provenance in ('observed', 'calculated') order by ts desc, id desc limit 1) n
 			where i.instance is not null`, table, typeCol, typeTable, value, col)
 	} else {
 		sql = fmt.Sprintf(`with t as (select id from %[3]s where name = $2), i as (select ''::text as instance)
 			select i.instance, n.v, n.ts from i, t,
 				lateral (select %[4]s as v, ts from %[1]s where %[5]s = $1::uuid and %[2]s = t.id and instance = i.instance
-					and provenance <> 'intended' order by ts desc, id desc limit 1) n`, table, typeCol, typeTable, value, col)
+					and provenance in ('observed', 'calculated') order by ts desc, id desc limit 1) n`, table, typeCol, typeTable, value, col)
 	}
 	rows, err := tx.Query(ctx, sql, owner.id, in.Key)
 	if err != nil {
