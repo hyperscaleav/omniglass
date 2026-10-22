@@ -7050,3 +7050,15 @@ planned nothing new.
 ### The criteria deadline cannot refuse a small run (#956)
 
 Re-running the lowering oracle on a loaded machine refused one trivial criterion (`value >= 1000000000000000000000.0`) for its wall-clock deadline: the meter read the clock at a run's first charge, so a goroutine preempted between `Run` and that charge read as an overrun and would have held a rule for no reason. The clock is now read every 256 charges and never before the first 256, so a run that small is bounded by its iteration budget alone and the deadline stays a backstop for long charged work; `TestDeadlineSparesSmallRuns` pins it.
+
+### One coalesced-stamp primitive for rule and endpoint last-seen (#943)
+
+`event_rule_live` (#929) and `endpoint_live` (#933) were built independently to the same shape: one
+statement per ingest batch, stamped by the server's clock, a row stamped within 5s left alone, a row
+another batch holds skipped (SKIP LOCKED), and a first sight inserted ON CONFLICT DO NOTHING. That
+statement is now one primitive, `liveStamp` (`internal/storage/live_stamp.go`): a table, its key and
+stamp columns, and an optional owner table whose missing rows first sight skips. The rule evaluator
+calls it on its ingest transaction and the endpoint stamp on the pool, so a third live stamp is a call,
+not a copy. Behavior is unchanged: the #929 and #933 tests pass unedited, and the helper's own
+testcontainer tests, on a scratch table, prove concurrent first sight, the bound, the owner guard, never
+waiting on a held row, and the transaction's clock.
