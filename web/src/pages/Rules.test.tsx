@@ -382,7 +382,7 @@ describe("Rules page", () => {
     fireEvent.change(screen.getByLabelText("Reads"), { target: { value: "metric:temperature-c" } });
     fireEvent.input(screen.getByLabelText("Fire value"), { target: { value: "40" } });
     fireEvent.click(screen.getByLabelText("Write the fire criteria as an expression"));
-    const area = screen.getByLabelText("Fire expression");
+    const area = await screen.findByLabelText("Fire expression");
     // The builder's comparison (equals 40) is where the expression starts.
     expect(expressionText(area)).toBe("value == 40.0");
     typeExpression(area, "value > 40 &&\n  humidity > 2");

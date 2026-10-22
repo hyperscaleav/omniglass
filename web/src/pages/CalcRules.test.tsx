@@ -194,9 +194,12 @@ describe("Calc rules page", () => {
     fireEvent.input(screen.getByLabelText("Input 1 name"), { target: { value: "call" } });
     fireEvent.click(screen.getByLabelText("Write the reduce as an expression"));
     fireEvent.change(screen.getByLabelText("Writes"), { target: { value: "busy-flag" } });
-    typeExpression(screen.getByLabelText("Reduce expression"), "call");
-    await waitFor(() => expect(reqs.some((r) => r.url.endsWith("/expressions:validate"))).toBe(true), { timeout: 2000 });
-    const v = reqs.find((r) => r.url.endsWith("/expressions:validate"))!.body as Record<string, unknown>;
+    typeExpression(await screen.findByLabelText("Reduce expression"), "call");
+    // The field may first ask for the site's vocabulary with an empty source;
+    // the check that matters is the one for what was typed.
+    const typed = () => reqs.find((r) => r.url.endsWith("/expressions:validate") && (r.body as { source?: string }).source === "call");
+    await waitFor(() => expect(typed()).toBeTruthy(), { timeout: 2000 });
+    const v = typed()!.body as Record<string, unknown>;
     expect(v).toMatchObject({ site: "calc", source: "call", key: "busy-flag", owner_kind: "component", inputs: [{ as: "call", key: "in-call" }] });
     const run = screen.getByRole("button", { name: "Preview" });
     await waitFor(() => expect((run as HTMLButtonElement).disabled).toBe(false));

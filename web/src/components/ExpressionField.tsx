@@ -1,15 +1,9 @@
-import { For, Show, createEffect, createSignal, createUniqueId, on, onCleanup, type JSX } from "solid-js";
-import { Compartment, EditorState } from "@codemirror/state";
-import { EditorView, hoverTooltip, keymap, placeholder as placeholderText } from "@codemirror/view";
-import { HighlightStyle, StreamLanguage, syntaxHighlighting } from "@codemirror/language";
-import { autocompletion, completionKeymap } from "@codemirror/autocomplete";
-import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
-import { setDiagnostics } from "@codemirror/lint";
-import { tags } from "@lezer/highlight";
+import { For, Show, createEffect, createSignal, createUniqueId, on, onCleanup, untrack, type JSX } from "solid-js";
 import InfoTip from "./InfoTip";
 import Eyebrow from "./Eyebrow";
 import { caretOf, validateExpression, type ExpressionBinding, type ExpressionCheck, type ValidateExpression } from "../lib/expressions";
-import { bindingAt, exprCompletions, exprTokens, toEditorDiagnostics, type Vocabulary } from "../lib/expressionEditor";
+import type { Vocabulary } from "../lib/expressionEditor";
+import type { ExpressionEditor } from "./expressionEditorView";
 import { describeError } from "../lib/format";
 
 // ExpressionField is the console's one expression editor (#960, #1000): the
@@ -109,58 +103,38 @@ export default function ExpressionField(p: {
       classList={{ "textarea-error": diagnostics().length > 0 }}
     />
   ) as HTMLDivElement;
-  const aria = new Compartment();
-  const ariaAttrs = () =>
-    EditorView.contentAttributes.of({
-      "aria-label": p.label,
-      "aria-describedby": diagId,
-      ...(diagnostics().length > 0 ? { "aria-invalid": "true" } : {}),
-    });
-  const view = new EditorView({
-    parent: host,
-    state: EditorState.create({
-      doc: p.value,
-      extensions: [
-        history(),
-        keymap.of([...completionKeymap, ...defaultKeymap, ...historyKeymap]),
-        StreamLanguage.define(exprTokens),
-        syntaxHighlighting(exprHighlight),
-        autocompletion({ override: [exprCompletions(vocab)], icons: false }),
-        hoverTooltip((v, pos) => {
-          const b = bindingAt(v.state.doc.toString(), pos, vocab()?.bindings ?? []);
-          return b ? { pos, above: true, create: () => ({ dom: bindingCard(b) }) } : null;
-        }),
-        EditorView.lineWrapping,
-        placeholderText(p.placeholder ?? ""),
-        aria.of(ariaAttrs()),
-        editorTheme,
-        EditorView.updateListener.of((u) => {
-          const text = u.state.doc.toString();
-          if (u.docChanged && text !== p.value) p.onInput(text);
-        }),
-      ],
-    }),
+  const aria = () => ({ label: p.label, describedBy: diagId, invalid: diagnostics().length > 0 });
+  const [editor, setEditor] = createSignal<ExpressionEditor | null>(null);
+  let gone = false;
+  onCleanup(() => {
+    gone = true;
+    editor()?.destroy();
   });
-  onCleanup(() => view.destroy());
+  // CodeMirror is its own chunk, loaded the first time a field renders.
+  void import("./expressionEditorView").then(({ mountExpressionEditor }) => {
+    if (gone) return;
+    setEditor(
+      mountExpressionEditor(host, {
+        doc: untrack(() => p.value),
+        placeholder: untrack(() => p.placeholder ?? ""),
+        aria: untrack(aria),
+        vocab,
+        onInput: (text) => {
+          if (text !== p.value) p.onInput(text);
+        },
+        bindingCard,
+      }),
+    );
+  });
 
   // The form's value is the source of truth: a value set from outside (the
   // builder's expression, a reset) replaces the editor's.
-  createEffect(
-    on(
-      () => p.value,
-      (v) => {
-        if (v !== view.state.doc.toString()) view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: v } });
-      },
-      { defer: true },
-    ),
-  );
-  createEffect(() => view.dispatch({ effects: aria.reconfigure(ariaAttrs()) }));
-  // Each answer's faults underlined where they sit. Typed past the source it
-  // answered, the editor maps the marks it has until the next answer lands.
+  createEffect(() => editor()?.setDoc(p.value));
+  createEffect(() => editor()?.setAria(aria()));
+  // Each answer's faults underlined in the source it answered.
   createEffect(() => {
     const ds = diagnostics();
-    if (ds.length > 0 && view.state.doc.toString() !== checked) return;
-    view.dispatch(setDiagnostics(view.state, toEditorDiagnostics(checked, ds)));
+    editor()?.setDiagnostics(checked, ds);
   });
 
   return (
@@ -234,56 +208,7 @@ function bindingCard(b: ExpressionBinding): HTMLElement {
         <code class="font-data text-[12px]">{b.name}</code>
         <span class="text-[11px] text-base-content/50">{b.type}</span>
       </span>
-      <Show when={b.doc}>
-        <span class="text-[12px] text-base-content/80">{b.doc}</span>
-      </Show>
+      {b.doc ? <span class="text-[12px] text-base-content/80">{b.doc}</span> : null}
     </div>
   ) as HTMLElement;
 }
-
-// The theme's colors, by token kind. Every color is a daisyUI theme variable,
-// so the editor follows the console's light and dark themes with no copy of
-// either palette.
-const exprHighlight = HighlightStyle.define([
-  { tag: tags.keyword, color: "var(--color-secondary)" },
-  { tag: tags.atom, color: "var(--color-warning)" },
-  { tag: tags.string, color: "var(--color-success)" },
-  { tag: tags.number, color: "var(--color-info)" },
-  { tag: tags.function(tags.variableName), color: "var(--color-accent)" },
-  { tag: tags.variableName, color: "var(--color-base-content)" },
-  { tag: tags.operator, color: "color-mix(in oklab, var(--color-base-content) 70%, transparent)" },
-  { tag: tags.comment, color: "color-mix(in oklab, var(--color-base-content) 50%, transparent)", fontStyle: "italic" },
-]);
-
-// The editor sits inside a daisyUI textarea frame (the frame draws the border,
-// the focus ring and the error state); the theme only fits CodeMirror's own
-// parts to it and to the console's surfaces.
-const editorTheme = EditorView.theme({
-  "&": { backgroundColor: "transparent", color: "inherit", fontSize: "inherit" },
-  "&.cm-focused": { outline: "none" },
-  ".cm-scroller": { fontFamily: "var(--og-font-data)", lineHeight: "inherit", maxHeight: "11rem", overflow: "auto" },
-  ".cm-content": { padding: "0", minHeight: "2.75em", caretColor: "var(--color-base-content)" },
-  ".cm-line": { padding: "0" },
-  ".cm-placeholder": { color: "color-mix(in oklab, var(--color-base-content) 40%, transparent)" },
-  ".cm-lintRange-error": {
-    backgroundImage: "none",
-    textDecoration: "underline wavy var(--color-error)",
-    textDecorationSkipInk: "none",
-    textUnderlineOffset: "3px",
-  },
-  ".cm-tooltip": {
-    backgroundColor: "var(--color-base-200)",
-    color: "var(--color-base-content)",
-    border: "1px solid var(--color-base-300)",
-    borderRadius: "0.375rem",
-    fontFamily: "var(--og-font-ui)",
-  },
-  ".cm-tooltip-autocomplete > ul": { fontFamily: "var(--og-font-data)", fontSize: "12px" },
-  ".cm-tooltip-autocomplete > ul > li[aria-selected]": {
-    backgroundColor: "var(--color-primary)",
-    color: "var(--color-primary-content)",
-  },
-  ".cm-completionDetail": { opacity: "0.6", marginLeft: "0.75em", fontStyle: "normal" },
-  ".cm-completionInfo": { maxWidth: "20rem", padding: "0.375rem 0.5rem", fontSize: "12px" },
-  ".cm-diagnostic-error": { borderLeftColor: "var(--color-error)" },
-});
