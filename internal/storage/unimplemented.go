@@ -850,6 +850,10 @@ func (UnimplementedGateway) ListSystemEvents(context.Context, string, time.Durat
 	return nil, nil
 }
 
+func (UnimplementedGateway) ListSystemAlarms(context.Context, string, time.Duration, int) ([]Alarm, error) {
+	return nil, nil
+}
+
 func (UnimplementedGateway) ListSystemLogs(context.Context, string, time.Duration, int) ([]LogLine, error) {
 	return nil, nil
 }

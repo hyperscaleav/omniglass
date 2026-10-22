@@ -40,10 +40,15 @@ type Member struct {
 	ComponentUUID string
 	IsPrimary     bool
 	SystemCount   int
+	// ComponentVerdict is the component's own recorded verdict (#940), the
+	// same read the fleet view's dots make: a system's view polls its members'
+	// health off its members read rather than the whole fleet view.
+	ComponentVerdict string
 }
 
-const memberCols = `m.id, s.name, c.name, s.id, c.id, m.is_primary,
-	(select count(*) from system_member peer where peer.component_id = m.component_id)`
+var memberCols = `m.id, s.name, c.name, s.id, c.id, m.is_primary,
+	(select count(*) from system_member peer where peer.component_id = m.component_id), ` +
+	latestVerdict("component_id", "c")
 
 // memberFrom joins both ends back to their names, because a membership is
 // displayed as "this component, in this system" and the arc now stores ids.
@@ -53,7 +58,7 @@ const memberFrom = ` from system_member m
 
 func scanMember(row pgx.Row) (*Member, error) {
 	var m Member
-	if err := row.Scan(&m.ID, &m.SystemID, &m.ComponentID, &m.SystemUUID, &m.ComponentUUID, &m.IsPrimary, &m.SystemCount); err != nil {
+	if err := row.Scan(&m.ID, &m.SystemID, &m.ComponentID, &m.SystemUUID, &m.ComponentUUID, &m.IsPrimary, &m.SystemCount, &m.ComponentVerdict); err != nil {
 		return nil, err
 	}
 	return &m, nil

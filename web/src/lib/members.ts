@@ -29,3 +29,16 @@ export async function componentSystems(name: string): Promise<Member[]> {
   if (error) throw error;
   return (data?.memberships ?? []) as Member[];
 }
+
+// The system's end of the same relation (#940): every member of one system,
+// each carrying its own recorded verdict. A system's view polls its members'
+// health here, one request for the system, never the whole fleet view.
+export const systemMembersKey = (name: string) => ["system-members", name] as const;
+
+export async function systemMembers(name: string): Promise<Member[]> {
+  const { data, error } = await api.GET("/systems/{name}/members", {
+    params: { path: { name } },
+  });
+  if (error) throw error;
+  return (data?.members ?? []) as Member[];
+}

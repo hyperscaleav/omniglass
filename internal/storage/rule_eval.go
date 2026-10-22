@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"sort"
 	"strings"
 	"time"
 
@@ -36,11 +35,10 @@ type ruleEvaluator struct {
 	judged map[string]bool
 }
 
-// ruleJudgedEvery bounds how often a rule's last-judged time is written
-// (#929): a batch judging a rule stamped less than this long ago leaves the
-// stamp alone, so a rule reading a busy key costs a write every few seconds,
-// not one per batch, and the stamp is honest to within this bound.
-const ruleJudgedEvery = 5 * time.Second
+// ruleLive is a rule's coalesced last-judged stamp (#929). A batch judges only
+// rules its transaction holds FOR SHARE (newRuleEvaluator), so no rule can be
+// deleted under it and first sight needs no owner check.
+var ruleLive = liveStamp{table: "event_rule_live", key: "rule_id", at: "last_judged_at"}
 
 // ruleOwner is what a selector needs to know about a component.
 type ruleOwner struct {
@@ -322,12 +320,13 @@ func (e *ruleEvaluator) observe(ctx context.Context, tx pgx.Tx, lane rules.Lane,
 
 // stampJudged records, once per batch, that the batch judged a sample by
 // each rule it did (#929): one statement, the last the batch runs before it
-// commits. A rule stamped within ruleJudgedEvery is left alone, and a row
-// another batch is stamping right now is skipped rather than waited on
-// (SKIP LOCKED), so batches never queue on a rule's stamp; only a rule's very
-// first stamp inserts its row. Every lock a batch holds is already taken by
-// then, and a stamp row takes no other lock after it, so it adds no edge to
-// the lock order newRuleEvaluator documents.
+// commits, the coalesced live stamp (liveStamp, #943). A rule stamped within
+// liveStampEvery is left alone, and a row another batch is stamping right now
+// is skipped rather than waited on, so batches never queue on a rule's stamp;
+// only a rule's very first stamp inserts its row. The stamp is the
+// transaction's now(), the same instant as e.now. Every lock a batch holds is
+// already taken by then, and a stamp row takes no other lock after it, so it
+// adds no edge to the lock order newRuleEvaluator documents.
 func (e *ruleEvaluator) stampJudged(ctx context.Context, tx pgx.Tx) error {
 	if e == nil || len(e.judged) == 0 {
 		return nil
@@ -336,17 +335,7 @@ func (e *ruleEvaluator) stampJudged(ctx context.Context, tx pgx.Tx) error {
 	for id := range e.judged {
 		ids = append(ids, id)
 	}
-	sort.Strings(ids)
-	if _, err := tx.Exec(ctx, `with due as (
-			select rule_id from event_rule_live where rule_id = any($1::uuid[]) and last_judged_at <= $2::timestamptz - $3::interval
-			order by rule_id for update skip locked
-		), stamped as (
-			update event_rule_live l set last_judged_at = $2 from due where l.rule_id = due.rule_id
-		)
-		insert into event_rule_live (rule_id, last_judged_at)
-		select id, $2 from unnest($1::uuid[]) id
-		where not exists (select 1 from event_rule_live l where l.rule_id = id)
-		on conflict (rule_id) do nothing`, ids, e.now, ruleJudgedEvery); err != nil {
+	if err := ruleLive.stamp(ctx, tx, ids, liveStampEvery); err != nil {
 		return fmt.Errorf("storage: stamp rules judged: %w", err)
 	}
 	return nil
@@ -1068,7 +1057,7 @@ type EventRuleLive struct {
 	Open       []RuleOpenAlarm
 	Pending    []RuleStreak
 	// LastJudgedAt is when the rule last judged a sample, to within
-	// ruleJudgedEvery; nil when it never has.
+	// liveStampEvery; nil when it never has.
 	LastJudgedAt *time.Time
 	// CriteriaError is why the rule's criteria do not compile; nil when
 	// they do.

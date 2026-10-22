@@ -1,7 +1,7 @@
 {
   "id": "watch-a-rule-raise-an-alarm",
   "title": "Watch a rule raise an alarm",
-  "description": "Unplug a simulated touch panel from its page, watch the official reachability rule wait out its sustain and open a High alarm, and see the panel's system go degraded because of it.",
+  "description": "Unplug a simulated touch panel from its page, open the system it serves, and watch the official reachability rule open a High alarm that takes the system to degraded while you look.",
   "steps": [
     {
       "n": 1,
@@ -29,46 +29,34 @@
     },
     {
       "n": 5,
-      "kind": "goto",
-      "caption": "Rules turn readings into alarms. The official rule fires when an endpoint reads down for 15s.",
+      "kind": "press",
+      "caption": "Close the simulation. The panel's page lists the systems it serves.",
       "still": "step-05.png"
     },
     {
       "n": 6,
       "kind": "click",
-      "caption": "Open the rule to watch it work. It holds nothing yet.",
+      "caption": "Open the system it serves. It still reads healthy; the official rule waits for a down to hold 15s, so one failed probe never pages.",
       "still": "step-06.png"
     },
     {
       "n": 7,
       "kind": "wait",
-      "caption": "The panel's endpoint read down. The rule waits out its sustain, so one failed probe never pages.",
+      "caption": "The down held, so the rule opened a High alarm on the panel. The system's view refreshes on its own, so Why names it with no reload.",
       "still": "step-07.png"
     },
     {
       "n": 8,
       "kind": "wait",
-      "caption": "The down held for the whole sustain, so the rule opened a High alarm on the panel.",
-      "still": "step-08.png"
-    },
-    {
-      "n": 9,
-      "kind": "goto",
-      "caption": "The panel's system, Media Lab Classroom 2. Why names the rule's alarm on the panel.",
-      "still": "step-09.png"
-    },
-    {
-      "n": 10,
-      "kind": "wait",
       "caption": "The alarm takes the panel out, so Touch Control is short and the system reads degraded.",
-      "still": "step-10.png"
+      "still": "step-08.png"
     }
   ],
-  "poster": "step-08.png",
+  "poster": "step-07.png",
   "preview": "preview.webp",
   "budget": {
-    "seconds": 52.6,
-    "bytes": 1096318,
-    "previewBytes": 783098
+    "seconds": 49.2,
+    "bytes": 968901,
+    "previewBytes": 973024
   }
 }

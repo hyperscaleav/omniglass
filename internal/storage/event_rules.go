@@ -61,7 +61,7 @@ type EventRule struct {
 	// (#951), informational or not.
 	ConditionsInForce int `json:"-"`
 	// LastJudgedAt is when an ingest batch last judged a sample by the rule,
-	// to within ruleJudgedEvery; nil when it never has. A fact about the
+	// to within liveStampEvery; nil when it never has. A fact about the
 	// rule, naming no component.
 	LastJudgedAt *time.Time `json:"-"`
 	// CriteriaError is why the rule's stored criteria do not compile (a

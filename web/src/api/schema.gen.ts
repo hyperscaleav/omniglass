@@ -3664,6 +3664,26 @@ export interface paths {
         patch: operations["update-system"];
         trace?: never;
     };
+    "/systems/{name}/alarms": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List a system's members' alarms
+         * @description Every member's alarms in one read, newest first, each naming its component: the active ones whatever their age, and those cleared in the last 30 days, capped at 500. It is what a system's Activity reads to explain its incidents, one request however many members the system has. Gated by system:read; an out-of-scope system is a non-disclosing 404.
+         */
+        get: operations["list-system-alarms"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/systems/{name}/events": {
         parameters: {
             query?: never;
@@ -3733,7 +3753,7 @@ export interface paths {
         };
         /**
          * List the components in a system
-         * @description The components bound into this system, ordered by name. Membership is what a role attaches to: every component staffing a role here is a member, and a member may also carry no role at all (a power conditioner is in the room without filling a declared slot). Gated by system:read; an out-of-scope system is a non-disclosing 404.
+         * @description The components bound into this system, ordered by name. Membership is what a role attaches to: every component staffing a role here is a member, and a member may also carry no role at all (a power conditioner is in the room without filling a declared slot). Each member carries its own verdict, so a system's view can poll its members' health here rather than reading the whole fleet. Gated by system:read; an out-of-scope system is a non-disclosing 404.
          */
         get: operations["list-system-members"];
         put?: never;
@@ -8864,6 +8884,16 @@ export interface components {
              */
             with: number;
         };
+        SystemAlarmsOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/SystemAlarmsOutputBody.json
+             */
+            readonly $schema?: string;
+            alarms: components["schemas"]["AlarmBody"][] | null;
+            system: string;
+        };
         SystemBody: {
             /**
              * Format: uri
@@ -8997,6 +9027,8 @@ export interface components {
             component: string;
             /** @description The component's uuid */
             component_id: string;
+            /** @description The component's own recorded verdict (healthy, degraded, or outage), the one its active alarms make; never the system's */
+            component_verdict: string;
             /** @description Whether this membership is the component's default when no system is given */
             primary: boolean;
             /** @description Name of the system, or a dotted address (e.g. boi.17c.$sys.av) */
@@ -17791,6 +17823,38 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SystemBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "list-system-alarms": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The system's name, or a dotted address (e.g. boi.17c.$sys.av) */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SystemAlarmsOutputBody"];
                 };
             };
             /** @description Error */

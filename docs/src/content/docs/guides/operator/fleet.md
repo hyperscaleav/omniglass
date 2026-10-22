@@ -223,6 +223,13 @@ The view reads top-down:
 A place holding a system and places beneath it lists those places under the system, as the
 outline rooted there.
 
+The system's view refreshes on its own while it is open, every 5 seconds: its verdict, **Why**,
+the roles and who is staffing them, each component's health light, and the data section's latest
+values (the 24 hour sparklines every 30), and on **Activity** the incidents, events and logs. A component going down shows up as the system's new
+verdict and the alarm in Why without a reload, and every age on the page (since when, how long an
+alarm has been raised) keeps counting. It reads only this system and its members, never the whole
+fleet, and stops while the browser tab is hidden.
+
 A system's label is its place's by default, so a room and its system read as one name. A place
 holding several systems names each one's kind ("Media Lab Meeting Room", "Media Lab Signage"),
 and a system with no place reads its kind. Type your own label and it stays yours.
