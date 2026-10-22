@@ -7078,3 +7078,6 @@ Watch a rule raise an alarm now opens the system in the page, from the panel's S
 before the alarm opens, and waits there for the alarm to land in Why with no reload. It records in 44 to
 50s (three runs: 49.7s, 44.5s, 49.2s). Following the alarm's event to the rule's blade was measured at 57.9s, too near the minute to hold,
 so the rules guide says it in words.
+### The property lane maintains one series index, not two (#971)
+
+`property_owner_idx` (the #588 rename of `state_owner_idx`) and `property_series_idx` (#944) were the same index: btree on `(component_id, property_type_id, instance, ts desc)`, partial on `component_id is not null`, so every property insert maintained it twice. `20261022010000_drop_property_owner_idx.sql` drops the older name and keeps `property_series_idx`, the one `TestSeriesNewestIsAnIndexProbe` explains its reads against. `TestNoDuplicateIndexes` groups `pg_index` by table, access method, key columns, operator classes, collations, sort options, expressions, predicate and uniqueness and fails on any group of two, so a twin cannot land on any table again; this pair was the only one in the schema.
