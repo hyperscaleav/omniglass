@@ -393,7 +393,10 @@ key, an alias that is not an identifier of at most 64, is reserved or repeats, `
 output, an output a native probe or a driver's declared emits write, an output another enabled rule
 writes (the refusal names it; enabling a rule is checked too). A list or get carries `calc_error` (`field`, `line`, `column`, `message`) when a stored reduce no
 longer compiles against the registries, and such a rule cannot be enabled (422). Deleting a property
-or metric type a calc rule writes or reads is a 409 naming the rule. A rule that would close a cycle in the key graph is a 422 whose detail names the chain
+or metric type a calc rule writes or reads is a 409 naming the rule. A metric or property type a calc
+rule writes names it on `/metric-types` and `/property-types` (list and get) as `written_by`
+(`rule`, `rule_id`): the enabled writer, else a disabled one, read with the type and scope-free as the
+registry is (#1019). A rule that would close a cycle in the key graph is a 422 whose detail names the chain
 (`temp-twice -> avg-temp -> temp-twice`), its error carrying the `keys` and `rules` along it. A patch
 bumps the version unless it changes nothing; `POST /calc-rules/{name}:rename` moves the name, bumping no
 version (a rename to the same name writes nothing), with the same 409 and 422 refusals as an event

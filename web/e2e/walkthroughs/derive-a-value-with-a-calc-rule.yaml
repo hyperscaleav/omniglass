@@ -1,22 +1,14 @@
-# Derive a value with a calc rule (#999, #1018): register the metric a calc
-# rule will write, author a component rule whose expression takes the slowest
-# of every endpoint's TCP connect time, preview what it would write on each
-# component, save it, and read what it computed. Picking the key fills its
-# alias, the name the expression uses for the input's list of values. The
-# simulated fleet answers TCP on every component, so tcp-connect-time has
-# current values on the walkthrough stack and the preview and the first tick
-# have real owners.
+# Derive a value with a calc rule (#999, #1018, #1019): in one drawer, author
+# a component rule that reads every endpoint's TCP connect time, register the
+# metric it writes inline, write the expression that takes the slowest,
+# preview it, save it, and follow one owner to its component, where the
+# derived value shows among its vitals linked to the rule. Picking the key
+# fills its alias, the name the expression uses for the input's list of
+# values. The simulated fleet answers TCP on every component, so
+# tcp-connect-time has current values on the walkthrough stack.
 title: Derive a value with a calc rule
-description: Register a metric, author a calc rule whose expression writes each component's slowest TCP connect time to it, preview the values it would write, save it, and read what it computed on each component.
+description: Author a calc rule and the metric it writes in one drawer, write the expression that takes each component's slowest TCP connect time, preview and save it, and find the derived value on a component, linked to its rule.
 steps:
-  - goto: /metrics
-    caption: A calc rule writes a metric or property of its own. First register the metric it will write.
-  - click: { role: button, name: New metric }
-    caption: New metric opens the drawer.
-  - type: { target: { role: textbox, name: Name, exact: true }, text: tcp-worst }
-    caption: Name it. The rule will write each component's slowest connect time here.
-  - click: { role: button, name: Create metric }
-    caption: Create it. A metric no collection writes is one a calc rule may write.
   - goto: /calc-rules
     caption: Calc rules derive a value from others, on each component or each system.
   - click: { role: button, name: New rule }
@@ -25,8 +17,12 @@ steps:
     caption: Name the rule.
   - select: { target: { role: combobox, name: Input 1 key, exact: true }, value: tcp-connect-time }
     caption: It reads TCP connect time, one value per endpoint. Its alias, the name the expression uses, fills in from the key.
-  - select: { target: { role: combobox, name: Writes, exact: true }, value: tcp-worst }
-    caption: Write the result to the new metric. A number, so the expression must yield one.
+  - click: { role: button, name: New metric, exact: true }
+    caption: It writes a metric of its own. Register it here, without leaving the drawer.
+  - type: { target: { role: textbox, name: New metric name, exact: true }, text: tcp-worst }
+    caption: Name the metric. Its values are numbers.
+  - click: { role: button, name: Create metric, exact: true }
+    caption: Create it. The rule now writes it, and the form says no other rule or collector may.
   - type: { target: { role: textbox, name: Reduce, exact: true }, text: max(tcp }
     caption: The alias is a list of the endpoints' values. Fold it with max; the editor offers the alias as it is typed.
   - press: Enter
@@ -36,9 +32,13 @@ steps:
   - click: { role: button, name: Preview, exact: true }
     caption: Preview computes the draft on each component now, writing nothing.
   - wait: { selector: '[data-testid="calc-preview-result"]', timeout: 15000 }
-    caption: The value it would write on each component, beside what that component holds now.
+    caption: The value it would write on each component.
     poster: true
   - click: { role: button, name: Create rule }
     caption: Save it. The rule computes again whenever an input changes.
   - wait: { selector: 'section[aria-label="State"] li span.font-data', timeout: 20000 }
     caption: Its blade shows the value it last computed on each component.
+  - click: 'section[aria-label="State"] li a >> nth=0'
+    caption: Open one of those components.
+  - wait: { selector: '[data-testid="leaf-vitals"] a[href*="/calc-rules?rule="]', timeout: 15000 }
+    caption: Among its vitals is the derived value, linked to the calc rule that wrote it.

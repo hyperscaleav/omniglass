@@ -63,7 +63,12 @@ lists the first twelve; **and N more** shows the rest.
   its slot, ready for an alias. A name the expression uses that no input has as its alias is underlined,
   with **Bind it to a key**, which adds an input of that alias for you to choose the key of.
 - **Writes**: the property or metric it writes, whose type the reduce must yield. Not one a collection
-  writes, and not one another enabled rule writes.
+  writes, and not one another enabled rule writes. To write a key that does not exist yet, **New metric**
+  (a name, a label and a unit; its values are numbers) or **New property** (a name, a label and a data
+  type) registers it from the drawer and selects it; a name the catalog refuses is said at its field.
+  Beneath, the form states the binding: "Writes `tcp-worst` on each component. No other rule or collector
+  may write it." The rule's blade says the same, and the metric's or property's own page names the rule
+  that writes it ("Written by calc rule tcp-worst"), linked to it, as its row in the list does.
 - **Enabled**.
 
 **Preview** computes the draft now, on the owners it selects that you can read, with the same reduce
@@ -79,9 +84,10 @@ out of your scope. One that folds each list whole, such as `avg(temp)`, is previ
 Saving computes at once: a new rule marks every selected owner that already holds one of its inputs,
 and the next tick writes its values.
 
-The walkthrough below registers the metric a rule will write, authors a component rule whose expression,
-`max(tcp_connect_time)`, writes each component's slowest TCP connect time to it, previews the values,
-saves it, and reads what it computed.
+The walkthrough below authors a component rule in one drawer: it picks the input key, registers the
+metric the rule writes inline, writes the expression `max(tcp_connect_time)` (each component's slowest
+TCP connect time), previews and saves it, then opens one of its components, where the derived value
+shows among the vitals, linked to the rule.
 
 ::walkthrough{#derive-a-value-with-a-calc-rule}
 

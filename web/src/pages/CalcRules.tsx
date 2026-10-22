@@ -575,11 +575,11 @@ function CalcBladeBody(p: { name: string }): JSX.Element {
 // away.
 function BindingLine(p: { outputKey: string; ownerKind: OwnerKind }): JSX.Element {
   return (
-    <p data-testid="calc-binding" class="inline-flex flex-wrap items-center gap-1 text-[12px] text-base-content/70">
-      <span>
-        Writes <code class="font-data text-base-content">{p.outputKey}</code> on each {p.ownerKind}. No other rule or collector may write it.
+    <p data-testid="calc-binding" class="text-[12px] leading-relaxed text-base-content/70">
+      Writes <code class="font-data text-base-content">{p.outputKey}</code> on each {p.ownerKind}. No other rule or collector may write it.{" "}
+      <span class="inline-flex align-middle">
+        <InfoTip label="one writer" text={CALC_HINTS.binding} />
       </span>
-      <InfoTip label="one writer" text={CALC_HINTS.binding} />
     </p>
   );
 }
@@ -634,8 +634,10 @@ function OutputCreate(p: { lane: "metric" | "property"; onCreated: (name: string
   }
 
   const err = (f: string) => fieldErr()[f];
+  // Each field's caption is visible, and contained in its accessible name.
   const field = (f: string, labelText: string, input: JSX.Element) => (
     <div class="flex flex-col gap-0.5">
+      <span class="text-[11px] text-base-content/60" aria-hidden="true">{labelText}</span>
       {input}
       <Show when={err(f)}>{(m) => <p id={`${id}-${f}`} class="text-[11px] text-error">{labelText}: {m()}</p>}</Show>
     </div>
@@ -724,6 +726,9 @@ export function CalcRuleForm(p: { mode: "create" | "edit"; rule?: CalcRule; onSa
   const systems = useQuery(() => ({ queryKey: SYSTEMS_KEY, queryFn: listSystems }));
   const [d, setD] = createStore<CalcDraft>(p.rule ? draftFromCalcRule(p.rule) : emptyCalcDraft());
   const [touched, setTouched] = createSignal(false);
+  // Leaving the name says what is wrong with the name alone: revealing every
+  // field's fault then would move the form under the pointer.
+  const [nameTouched, setNameTouched] = createSignal(false);
   const [busy, setBusy] = createSignal(false);
   const [formErr, setFormErr] = createSignal<string | null>(null);
   const [exprOk, setExprOk] = createSignal<boolean | undefined>(undefined);
@@ -733,6 +738,7 @@ export function CalcRuleForm(p: { mode: "create" | "edit"; rule?: CalcRule; onSa
   const errors = createMemo(() => validateCalcDraft(d, p.rule?.name));
   const valid = () => !hasErrors(errors()) && exprOk() === true;
   const shown = (msg: string | undefined) => (touched() ? msg : undefined);
+  const nameErr = () => (touched() || nameTouched() ? errors().name : undefined);
   // An input's fault shows once the form is touched, or as soon as its alias
   // is the author's own and its key is chosen (so a refused alias says why
   // while it is typed).
@@ -828,14 +834,14 @@ export function CalcRuleForm(p: { mode: "create" | "edit"; rule?: CalcRule; onSa
       <FieldRow bind="name" info={CALC_HINTS.name}>
         <input
           class="input input-bordered w-full font-data"
-          classList={{ "input-error": !!shown(errors().name) }}
+          classList={{ "input-error": !!nameErr() }}
           aria-required="true"
           value={d.name}
           placeholder="busy-flag"
           onInput={(e) => setD("name", e.currentTarget.value)}
-          onBlur={() => setTouched(true)}
+          onBlur={() => setNameTouched(true)}
         />
-        <Show when={shown(errors().name)}>{(m) => <p class="text-[11px] text-error">{m()}</p>}</Show>
+        <Show when={nameErr()}>{(m) => <p class="text-[11px] text-error">{m()}</p>}</Show>
       </FieldRow>
       <FieldRow bind="label">
         <input class="input input-bordered w-full" value={d.label} placeholder="Busy" onInput={(e) => setD("label", e.currentTarget.value)} />
