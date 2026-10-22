@@ -218,7 +218,7 @@ describe("exprCompletions over a calc rule's vocabulary", () => {
 
   it("ranks the site's names above the functions in an empty slot", () => {
     const ctx = new CompletionContext(EditorState.create({ doc: "avg()" }), 4, true);
-    const opts = (exprCompletions(() => calc)(ctx) as { options: { label: string; boost?: number }[] }).options;
+    const opts = (exprCompletions(() => calc)(ctx) as unknown as { options: { label: string; boost?: number }[] }).options;
     expect(opts.find((o) => o.label === "tcp_connect_time")!.boost).toBeGreaterThan(0);
     expect(opts.find((o) => o.label === "avg")!.boost ?? 0).toBe(0);
   });
