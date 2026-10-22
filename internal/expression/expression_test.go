@@ -9,6 +9,9 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/expr-lang/expr/ast"
+	"github.com/expr-lang/expr/parser"
 )
 
 // sampleEnv is a site's declared environment: the bindings an expression may
@@ -923,6 +926,67 @@ func TestBindableName(t *testing.T) {
 	}
 }
 
+// memberEnv is a site over a list of records, the shape a calc rule reduces.
+type memberEnv struct {
+	Members []member `expr:"members" doc:"the members of the group"`
+}
+
+type member struct {
+	Has   map[string]bool    `expr:"has"`
+	Value map[string]float64 `expr:"value"`
+	Name  string             `expr:"name"`
+}
+
+func memberSite(t *testing.T, r Result) Env {
+	t.Helper()
+	b := CriteriaBudget()
+	b.Deadline = CeilingBudget().Deadline
+	env, err := EnvOf[memberEnv](r, WithBuiltins(CriteriaBuiltins()...), WithBudget(b))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return env
+}
+
+func members(n int) []member {
+	out := make([]member, n)
+	for i := range out {
+		out[i] = member{Value: map[string]float64{"a": float64(i)}, Name: fmt.Sprintf("m%d", i)}
+	}
+	return out
+}
+
+// #1003: a field read on an indexed filter result compiles and runs, as
+// reading one on an indexed binding does. Expr's optimizer rewrites
+// filter(list, p)[0] into find, losing the record's field table, and its
+// compiler panicked on the field read.
+func TestIndexedFilterResult(t *testing.T) {
+	in := memberEnv{Members: members(4)}
+	in.Members[1].Has = map[string]bool{"a": true}
+	in.Members[2].Has = map[string]bool{"a": true}
+	for _, tc := range []struct {
+		src  string
+		r    Result
+		want any
+	}{
+		{"filter(members, .has.a)[0].value.a", Float, 1.0},
+		{"filter(members, .has.a)[-1].value.a", Float, 2.0},
+		{"filter(members, .has.a)[1].name", String, "m2"},
+		{"filter(members, .has.a)[0]?.name ?? ''", String, "m1"},
+		{"filter(members, .has.a)[0].value['a'] + members[3].value.a", Float, 4.0},
+	} {
+		p, err := Compile(tc.src, memberSite(t, tc.r))
+		if err != nil {
+			t.Errorf("%q: %v", tc.src, err)
+			continue
+		}
+		got, err := p.Run(in)
+		if err != nil || got != tc.want {
+			t.Errorf("%q = %v, %v; want %v", tc.src, got, err, tc.want)
+		}
+	}
+}
+
 // A list of records binds as the list and each record field by its path
 // under name[], the way the docs and the validate route list a calc
 // system rule's members.
@@ -940,5 +1004,62 @@ func TestBindingsListOfRecords(t *testing.T) {
 	b := e.Bindings()
 	if len(b) != 2 || b[0].Name != "pts" || b[0].Type != "[]record" || b[1].Name != "pts[].x" || b[1].Type != "int" || b[1].Doc != "the x" {
 		t.Fatalf("bindings %+v, want pts []record and pts[].x int", b)
+	}
+}
+
+// #1003: indexing a filter result still charges the filter's walk over its
+// whole list, so a list past the walk budget is refused, not short-circuited.
+func TestIndexedFilterResultCharged(t *testing.T) {
+	src := "filter(members, .value.a >= 0)[0].value.a"
+	p, err := Compile(src, memberSite(t, Float))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := p.Run(memberEnv{Members: members(100)}); err != nil {
+		t.Errorf("%q over 100 members: %v", src, err)
+	}
+	_, err = p.Run(memberEnv{Members: members(CriteriaBudget().Iterations + 1)})
+	budgetErr(t, src, err)
+}
+
+// #1003: a pass that panics is a positioned type error naming the pass and
+// the construct it met, not a nil pointer and a stack.
+func TestPassPanicNamesThePass(t *testing.T) {
+	source := "value > 1 &&\n items[0] > 2"
+	err := guardPass(source, "charge", func(p *pass) error {
+		tree, perr := parser.Parse(source)
+		if perr != nil {
+			t.Fatal(perr)
+		}
+		p.at = tree.Node.(*ast.BinaryNode).Right.(*ast.BinaryNode).Left
+		var pt *point
+		_ = pt.X
+		return nil
+	})
+	e := asError(t, err)
+	if e.Phase != PhaseType || e.Line != 2 {
+		t.Errorf("got %s %d:%d, want a type error on line 2", e.Phase, e.Line, e.Column)
+	}
+	for _, want := range []string{"charge pass", "an index", "items[0]"} {
+		if !strings.Contains(e.Message, want) {
+			t.Errorf("message %q does not name %q", e.Message, want)
+		}
+	}
+	if strings.Contains(e.Message, "goroutine") {
+		t.Errorf("message %q carries a stack", e.Message)
+	}
+
+	// A pass that panics before it reaches a node names the pass alone, at
+	// the whole expression.
+	e = asError(t, guardPass(source, "Expr checker", func(*pass) error { panic("boom") }))
+	if e.Line != 1 || e.Column != 1 || !strings.Contains(e.Message, "Expr checker pass") {
+		t.Errorf("got %v", e)
+	}
+
+	// Expr's compiler recovers its own panics into an error with a stack;
+	// that is the same refusal.
+	e = asError(t, fromCompilerPanic(errors.New("runtime error: invalid memory address or nil pointer dereference\ngoroutine 7 [running]:\nruntime/debug.Stack()")))
+	if !strings.Contains(e.Message, "Expr compiler pass") || strings.Contains(e.Message, "goroutine") {
+		t.Errorf("got %q", e.Message)
 	}
 }
