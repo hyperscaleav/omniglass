@@ -5039,6 +5039,12 @@ export interface components {
             /** @description The input key */
             key: string;
         };
+        CalcWriterBody: {
+            /** @description The calc rule's name now */
+            rule: string;
+            /** @description The calc rule's uuid */
+            rule_id: string;
+        };
         ChangePasswordInputBody: {
             /**
              * Format: uri
@@ -7461,6 +7467,8 @@ export interface components {
             precision?: number;
             /** @description The display unit of the series (ms, dB, percent) */
             unit?: string;
+            /** @description The calc rule that writes this metric, absent when none does (one enabled rule writes a key; a disabled writer is named when no rule is enabled) */
+            written_by?: components["schemas"]["CalcWriterBody"];
         };
         MoveComponentInputBody: {
             /**
@@ -7765,6 +7773,8 @@ export interface components {
             official: boolean;
             /** @description A JSON Schema fragment constraining the value */
             validation?: unknown;
+            /** @description The calc rule that writes this property, absent when none does (one enabled rule writes a key; a disabled writer is named when no rule is enabled) */
+            written_by?: components["schemas"]["CalcWriterBody"];
         };
         PropertySampleBody: {
             /** @description The series discriminator, when set */

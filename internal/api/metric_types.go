@@ -13,20 +13,35 @@ import (
 // signal catalog (#587), carrying the numeric facts (unit, precision) the
 // property lane never holds. official marks a seed-owned, read-only type.
 type metricTypeBody struct {
-	ID          string  `json:"id" doc:"The metric type's uuid, the stable form the contract and telemetry keys store"`
-	Name        string  `json:"name"`
-	DataType    string  `json:"data_type"`
-	Label       string  `json:"label,omitempty"`
-	Description string  `json:"description,omitempty"`
-	Unit        *string `json:"unit,omitempty" doc:"The display unit of the series (ms, dB, percent)"`
-	Precision   *int    `json:"precision,omitempty" doc:"Decimal places a rendered value keeps"`
-	Official    bool    `json:"official"`
+	ID          string          `json:"id" doc:"The metric type's uuid, the stable form the contract and telemetry keys store"`
+	Name        string          `json:"name"`
+	DataType    string          `json:"data_type"`
+	Label       string          `json:"label,omitempty"`
+	Description string          `json:"description,omitempty"`
+	Unit        *string         `json:"unit,omitempty" doc:"The display unit of the series (ms, dB, percent)"`
+	Precision   *int            `json:"precision,omitempty" doc:"Decimal places a rendered value keeps"`
+	Official    bool            `json:"official"`
+	WrittenBy   *calcWriterBody `json:"written_by,omitempty" required:"false" doc:"The calc rule that writes this metric, absent when none does (one enabled rule writes a key; a disabled writer is named when no rule is enabled)"`
+}
+
+// calcWriterBody names the calc rule that writes a key (#1019).
+type calcWriterBody struct {
+	Rule   string `json:"rule" doc:"The calc rule's name now"`
+	RuleID string `json:"rule_id" doc:"The calc rule's uuid"`
+}
+
+func toCalcWriterBody(w *storage.CalcWriter) *calcWriterBody {
+	if w == nil {
+		return nil
+	}
+	return &calcWriterBody{Rule: w.Rule, RuleID: w.RuleID}
 }
 
 func toMetricTypeBody(mt *storage.MetricType) metricTypeBody {
 	return metricTypeBody{
 		ID: mt.ID, Name: mt.Name, DataType: mt.DataType, Label: mt.Label,
 		Description: mt.Description, Unit: mt.Unit, Precision: mt.Precision, Official: mt.Official,
+		WrittenBy: toCalcWriterBody(mt.WrittenBy),
 	}
 }
 

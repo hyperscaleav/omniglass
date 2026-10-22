@@ -90,6 +90,22 @@ func TestCalcRuleAPI(t *testing.T) {
 		len(made.Inputs) != 1 || made.Inputs[0].Alias != "t" || made.Inputs[0].KeyID == "" || made.Inputs[0].Lane != "metric" {
 		t.Fatalf("made = %+v", made)
 	}
+	// The metric it writes names it (#1019), on the get and the list.
+	var mt struct {
+		WrittenBy *struct {
+			Rule   string `json:"rule"`
+			RuleID string `json:"rule_id"`
+		} `json:"written_by"`
+	}
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/metric-types/avg-temp", nil, http.StatusOK), &mt); err != nil {
+		t.Fatal(err)
+	}
+	if mt.WrittenBy == nil || mt.WrittenBy.Rule != made.Name || mt.WrittenBy.RuleID != made.ID {
+		t.Fatalf("avg-temp written_by %+v, want %s (%s)", mt.WrittenBy, made.Name, made.ID)
+	}
+	if list := string(c.do(ownerTok, http.MethodGet, "/metric-types", nil, http.StatusOK)); !strings.Contains(list, `"rule_id":"`+made.ID+`"`) {
+		t.Fatal("the metric type list does not name the writing rule")
+	}
 	// A second enabled writer of avg-temp is refused naming the first; a
 	// disabled one under the taken name is a name conflict.
 	p := problem{}

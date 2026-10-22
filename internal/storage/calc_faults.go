@@ -2,6 +2,7 @@ package storage
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -156,4 +157,33 @@ func calcOutputInUse(ctx context.Context, q querier, lane rules.Lane, key string
 		return fmt.Errorf("storage: read the calc rules writing %q: %w", key, qerr)
 	}
 	return &CalcOutputInUseError{Key: key, Rules: names, Reads: reads}
+}
+
+// CalcWriter is the calc rule that writes a key (#1019): its name and id.
+type CalcWriter struct {
+	Rule, RuleID string
+}
+
+// calcWriterCol is the select-list column naming the calc rule that writes a
+// type row of table (the enabled writer, else the first disabled one by
+// name; one enabled rule writes a key), as jsonb, null when none does. A
+// correlated probe on the rule's output reference; rules read like a
+// registry, so it is scope-free like the type read itself.
+func calcWriterCol(col, table string) string {
+	return `(select jsonb_build_object('rule', c.name, 'rule_id', c.id::text) from calc_rule c where c.` + col + ` = ` + table +
+		`.id order by c.enabled desc, c.name limit 1)`
+}
+
+func parseCalcWriter(raw []byte) *CalcWriter {
+	if len(raw) == 0 {
+		return nil
+	}
+	var w struct {
+		Rule   string `json:"rule"`
+		RuleID string `json:"rule_id"`
+	}
+	if err := json.Unmarshal(raw, &w); err != nil || w.RuleID == "" {
+		return nil
+	}
+	return &CalcWriter{Rule: w.Rule, RuleID: w.RuleID}
 }

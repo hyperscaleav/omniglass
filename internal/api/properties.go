@@ -22,12 +22,13 @@ type propertyBody struct {
 	Description string          `json:"description,omitempty"`
 	Validation  json.RawMessage `json:"validation,omitempty" doc:"A JSON Schema fragment constraining the value"`
 	Official    bool            `json:"official"`
+	WrittenBy   *calcWriterBody `json:"written_by,omitempty" required:"false" doc:"The calc rule that writes this property, absent when none does (one enabled rule writes a key; a disabled writer is named when no rule is enabled)"`
 }
 
 func toPropertyBody(p *storage.PropertyType) propertyBody {
 	b := propertyBody{
 		ID: p.ID, Name: p.Name, DataType: p.DataType, Label: p.Label,
-		Description: p.Description, Official: p.Official,
+		Description: p.Description, Official: p.Official, WrittenBy: toCalcWriterBody(p.WrittenBy),
 	}
 	if len(p.Validation) > 0 {
 		b.Validation = json.RawMessage(p.Validation)

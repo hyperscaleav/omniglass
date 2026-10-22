@@ -52,6 +52,8 @@ var referenceFields = map[string]string{
 	// A calc rule's input names the property or metric it reads as `key`, the
 	// sample-key vocabulary, beside the uuid the rule holds it by (#1018).
 	"key_id": "key",
+	// The calc rule that writes a key (#1019), by name beside its uuid.
+	"rule_id": "rule",
 }
 
 // registryNameRefs is the reverse direction: a response that names a renameable

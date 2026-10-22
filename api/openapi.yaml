@@ -884,6 +884,19 @@ components:
         - component_id
         - instance
       type: object
+    CalcWriterBody:
+      additionalProperties: false
+      properties:
+        rule:
+          description: The calc rule's name now
+          type: string
+        rule_id:
+          description: The calc rule's uuid
+          type: string
+      required:
+        - rule
+        - rule_id
+      type: object
     ChangePasswordInputBody:
       additionalProperties: false
       properties:
@@ -5257,6 +5270,9 @@ components:
         unit:
           description: The display unit of the series (ms, dB, percent)
           type: string
+        written_by:
+          $ref: "#/components/schemas/CalcWriterBody"
+          description: The calc rule that writes this metric, absent when none does (one enabled rule writes a key; a disabled writer is named when no rule is enabled)
       required:
         - id
         - name
@@ -5798,6 +5814,9 @@ components:
           type: boolean
         validation:
           description: A JSON Schema fragment constraining the value
+        written_by:
+          $ref: "#/components/schemas/CalcWriterBody"
+          description: The calc rule that writes this property, absent when none does (one enabled rule writes a key; a disabled writer is named when no rule is enabled)
       required:
         - id
         - name

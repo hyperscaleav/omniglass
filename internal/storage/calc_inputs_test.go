@@ -276,3 +276,49 @@ func TestCalcRuleReservedAliasBackfill(t *testing.T) {
 		}
 	}
 }
+
+// A metric or property a calc rule writes names its rule, by name and id, on
+// the type's list and get (#1019): the enabled writer, or a disabled one when
+// none is enabled. A type no rule writes names none.
+func TestKeyWrittenByCalcRule(t *testing.T) {
+	r := newCalcRig(t)
+	mean, err := r.create(avgSpec("temp-mean"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	off := false
+	busy, err := r.create(storage.CalcRuleSpec{Name: "busy", OwnerKind: rules.OwnerComponent, Enabled: &off,
+		Inputs: []rules.CalcInput{{Alias: "c", Key: "in-call"}}, Reduce: rules.CalcReduce{Expr: "any(c)"}, OutputKey: "busy-flag"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	mt, err := r.gw.GetMetricType(r.ctx, "avg-temp")
+	if err != nil || mt.WrittenBy == nil || mt.WrittenBy.Rule != "temp-mean" || mt.WrittenBy.RuleID != mean.ID {
+		t.Fatalf("avg-temp %+v (%v), want written by temp-mean", mt, err)
+	}
+	pt, err := r.gw.GetPropertyType(r.ctx, "busy-flag")
+	if err != nil || pt.WrittenBy == nil || pt.WrittenBy.Rule != "busy" || pt.WrittenBy.RuleID != busy.ID {
+		t.Fatalf("busy-flag %+v (%v), want written by busy", pt, err)
+	}
+	mts, err := r.gw.ListMetricTypes(r.ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, m := range mts {
+		if m.Name == "avg-temp" && (m.WrittenBy == nil || m.WrittenBy.Rule != "temp-mean") {
+			t.Errorf("the list's avg-temp %+v, want written by temp-mean", m)
+		}
+		if m.Name == "temp-sum" && m.WrittenBy != nil {
+			t.Errorf("temp-sum names a writer %+v", m.WrittenBy)
+		}
+	}
+	pts, err := r.gw.ListPropertyTypes(r.ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, p := range pts {
+		if p.Name == "busy-flag" && (p.WrittenBy == nil || p.WrittenBy.RuleID != busy.ID) {
+			t.Errorf("the list's busy-flag %+v, want written by busy", p)
+		}
+	}
+}

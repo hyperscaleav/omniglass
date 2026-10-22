@@ -27,6 +27,9 @@ type MetricType struct {
 	FusionPolicy []byte
 	Description  string
 	Official     bool
+	// WrittenBy is the calc rule that writes this metric, nil when none
+	// does (#1019). Read beside the type, never stored or audited.
+	WrittenBy *CalcWriter `json:"-"`
 }
 
 // Sentinels for metric_type CRUD. Official (seed-owned) metric types are read-only.
@@ -57,13 +60,16 @@ type MetricTypePatch struct {
 	Precision   *int
 }
 
-const metricTypeCols = `id, name, coalesce(label, ''), data_type, unit, "precision", fusion_policy, description, official`
+var metricTypeCols = `id, name, coalesce(label, ''), data_type, unit, "precision", fusion_policy, description, official, ` +
+	calcWriterCol("output_metric_type_id", "metric_type")
 
 func scanMetricType(row pgx.Row) (*MetricType, error) {
 	var mt MetricType
-	if err := row.Scan(&mt.ID, &mt.Name, &mt.Label, &mt.DataType, &mt.Unit, &mt.Precision, &mt.FusionPolicy, &mt.Description, &mt.Official); err != nil {
+	var writer []byte
+	if err := row.Scan(&mt.ID, &mt.Name, &mt.Label, &mt.DataType, &mt.Unit, &mt.Precision, &mt.FusionPolicy, &mt.Description, &mt.Official, &writer); err != nil {
 		return nil, err
 	}
+	mt.WrittenBy = parseCalcWriter(writer)
 	return &mt, nil
 }
 
@@ -96,11 +102,11 @@ func (p *PG) ListMetricTypes(ctx context.Context) ([]MetricType, error) {
 	defer rows.Close()
 	var out []MetricType
 	for rows.Next() {
-		var mt MetricType
-		if err := rows.Scan(&mt.ID, &mt.Name, &mt.Label, &mt.DataType, &mt.Unit, &mt.Precision, &mt.FusionPolicy, &mt.Description, &mt.Official); err != nil {
+		mt, err := scanMetricType(rows)
+		if err != nil {
 			return nil, fmt.Errorf("storage: scan metric type: %w", err)
 		}
-		out = append(out, mt)
+		out = append(out, *mt)
 	}
 	return out, rows.Err()
 }
