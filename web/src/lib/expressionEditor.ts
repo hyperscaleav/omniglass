@@ -123,7 +123,9 @@ export function exprCompletions(vocab: () => Vocabulary | null): CompletionSourc
     return {
       from,
       options: [
-        ...roots.map((b) => ({ label: b.name, type: "variable", detail: b.type, info: b.doc || undefined })),
+        // The site's names lead the functions: in a function's empty slot
+        // (a template's) the alias to fold is the likeliest next word.
+        ...roots.map((b) => ({ label: b.name, type: "variable", detail: b.type, info: b.doc || undefined, boost: 1 })),
         ...v.builtins.map((f) => ({ label: f, type: "function" })),
       ],
       validFor: /^[\w$.]*$/,

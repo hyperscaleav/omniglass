@@ -215,6 +215,13 @@ describe("exprCompletions over a calc rule's vocabulary", () => {
     expect(done("maj")).toContain("majority");
     expect(done("count(members, .")).toEqual(["name", "value.tcp_connect_time", "has.tcp_connect_time"]);
   });
+
+  it("ranks the site's names above the functions in an empty slot", () => {
+    const ctx = new CompletionContext(EditorState.create({ doc: "avg()" }), 4, true);
+    const opts = (exprCompletions(() => calc)(ctx) as { options: { label: string; boost?: number }[] }).options;
+    expect(opts.find((o) => o.label === "tcp_connect_time")!.boost).toBeGreaterThan(0);
+    expect(opts.find((o) => o.label === "avg")!.boost ?? 0).toBe(0);
+  });
 });
 
 describe("toEditorDiagnostics' bind action", () => {

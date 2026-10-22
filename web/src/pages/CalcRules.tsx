@@ -778,7 +778,7 @@ export function CalcRuleForm(p: { mode: "create" | "edit"; rule?: CalcRule; onSa
 
       <section class="flex flex-col gap-2" aria-label="Inputs">
         <Eyebrow label="Reads" hint={CALC_HINTS.inputs} />
-        <div class="grid grid-cols-[minmax(0,1fr)_minmax(0,11rem)_auto] items-center gap-x-2 gap-y-1">
+        <div class="grid grid-cols-[minmax(0,1fr)_minmax(0,9.5rem)_auto] items-center gap-x-2 gap-y-1">
           <span class="text-[11px] text-base-content/50">Key</span>
           <span class="text-[11px] text-base-content/50">Alias in the expression</span>
           <span />
@@ -792,7 +792,7 @@ export function CalcRuleForm(p: { mode: "create" | "edit"; rule?: CalcRule; onSa
                     aria-label={`Input ${i + 1} alias`}
                     aria-invalid={inputErr(i) ? "true" : undefined}
                     aria-describedby={inputErr(i) ? errId : undefined}
-                    class="input input-bordered w-full font-data [font-variant-ligatures:none]"
+                    class="input input-bordered w-full font-data text-[13px] [font-variant-ligatures:none]"
                     classList={{ "input-error": !!inputErr(i) && !!x().key }}
                     placeholder="t"
                     spellcheck={false}
