@@ -2,6 +2,7 @@ package expression
 
 import (
 	"errors"
+	"math"
 	"strings"
 	"testing"
 )
@@ -327,6 +328,45 @@ func TestWholeListsOnly(t *testing.T) {
 		}
 		if got := p.WholeListsOnly("nums", "flags", "words", "pts"); got != want {
 			t.Errorf("%q: WholeListsOnly = %v, want %v", src, got, want)
+		}
+	}
+}
+
+// Integer totals stay exact (#1018's review): a sum or an extreme over ints
+// is folded as an int, so a value past 2^53 is not rounded through a float,
+// and an int sum wraps as Expr's int arithmetic does.
+func TestListFunctionsKeepIntegersExact(t *testing.T) {
+	big := 9007199254740993 // 2^53 + 1, not a float64
+	in := listEnv{Ints: []int{big, 0}}
+	for src, want := range map[string]int{"sum(ints)": big, "max(ints)": big, "min(ints)": 0, "max(ints[0], 1)": big} {
+		p, err := Compile(src, listSite(t, Int, true))
+		if err != nil {
+			t.Fatalf("%q: %v", src, err)
+		}
+		if got, err := p.Run(in); err != nil || got != want {
+			t.Errorf("%q = %v, %v; want %d", src, got, err, want)
+		}
+	}
+	p, err := Compile("sum(ints)", listSite(t, Int, true))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, err := p.Run(listEnv{Ints: []int{math.MaxInt, 1}}); err != nil || got != math.MinInt {
+		t.Errorf("sum over MaxInt+1 = %v, %v; want it to wrap to MinInt", got, err)
+	}
+}
+
+// The refusals read cleanly and name what the site admits, list functions
+// included.
+func TestListFunctionRefusalsRead(t *testing.T) {
+	e := asError(t, func() error { _, err := Compile("any(nums)", listSite(t, Bool, true)); return err }())
+	if strings.Contains(e.Message, ",,") {
+		t.Errorf("message %q has a doubled comma", e.Message)
+	}
+	e = asError(t, func() error { _, err := Compile("mean(nums) > 1", listSite(t, Bool, true)); return err }())
+	for _, want := range []string{"avg", "majority", "max"} {
+		if !strings.Contains(e.Message, want) {
+			t.Errorf("message %q does not list %s", e.Message, want)
 		}
 	}
 }

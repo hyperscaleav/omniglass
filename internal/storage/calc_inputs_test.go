@@ -211,3 +211,68 @@ func TestCalcRuleInputBackfill(t *testing.T) {
 		t.Errorf("mixed reads %+v (%v), want a calc_error", got, err)
 	}
 }
+
+// TestCalcRuleReservedAliasBackfill proves the #1018 review's follow-up
+// migration: a rule moved from the earlier shape whose alias is now reserved
+// (a site binding, a list function's name) is disabled, as one reading a
+// deleted key is, and reads back with a calc_error on that alias; a rule
+// with a fine alias is left alone; the backfill run again changes nothing.
+func TestCalcRuleReservedAliasBackfill(t *testing.T) {
+	if testing.Short() {
+		t.Skip("integration test needs Postgres")
+	}
+	dsn := storagetest.NewDSN(t)
+	if err := migrate.RollbackBelow(dsn, "20261022020000"); err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	conn := connectDSN(t, dsn)
+	exec := func(sql string, args ...any) {
+		t.Helper()
+		if _, err := conn.Exec(ctx, sql, args...); err != nil {
+			t.Fatalf("%s: %v", sql, err)
+		}
+	}
+	exec(`insert into metric_type (name, data_type) values ('tcp-connect-time', 'float'), ('out-a', 'float'), ('out-b', 'float'), ('out-c', 'float')`)
+	for name, alias := range map[string]string{"by-value": "value", "by-avg": "avg", "by-members": "members", "fine": "tcp"} {
+		out := map[string]string{"by-value": "out-a", "by-avg": "out-b", "by-members": "out-c", "fine": "out-a"}[name]
+		exec(`insert into calc_rule (name, owner_kind, inputs, reduce, output_lane, output_metric_type_id, enabled)
+			values ($1, 'component', jsonb_build_array(jsonb_build_object('as', $2::text, 'key', 'tcp-connect-time')), '{"reducer": "max"}',
+			'metric', (select id from metric_type where name = $3), true)`, name, alias, out)
+	}
+	if err := migrate.Run(dsn); err != nil {
+		t.Fatal(err)
+	}
+	enabled := func() string {
+		t.Helper()
+		return scalar(t, conn, `select string_agg(name || '=' || enabled::text, ',' order by name) from calc_rule`)
+	}
+	want := "by-avg=false,by-members=false,by-value=false,fine=true"
+	if got := enabled(); got != want {
+		t.Fatalf("after the migration %s, want %s", got, want)
+	}
+	raw, err := db.FS.ReadFile("migrations/20261022050000_calc_rule_alias_reserved.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	up, _, _ := strings.Cut(string(raw), "-- migrate:down")
+	exec(strings.TrimPrefix(up, "-- migrate:up"))
+	if got := enabled(); got != want {
+		t.Fatalf("a second run %s, want %s", got, want)
+	}
+	gw, err := storage.NewPG(ctx, dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer gw.Close()
+	got, err := gw.GetCalcRule(ctx, "by-value")
+	if err != nil || got.CalcError == nil || got.CalcError.Field != "inputs[0].alias" {
+		t.Fatalf("by-value reads %+v (%v), want a calc_error on its alias", got, err)
+	}
+	// Every name the calc site reserves today is in the migration's list.
+	for _, n := range rules.CalcReservedNames() {
+		if !strings.Contains(up, "'"+n+"'") {
+			t.Errorf("the migration does not reserve %q", n)
+		}
+	}
+}

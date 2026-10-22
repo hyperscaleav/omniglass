@@ -242,19 +242,26 @@ func extremeFunc(name string, sign int) *builtin.Function {
 			if len(vals) == 0 {
 				return nil, fmt.Errorf("%s of an empty list has no value", name)
 			}
-			best, allInt := 0.0, true
+			// Ints are compared as ints, so one past 2^53 keeps its value; a
+			// float among them compares every value as a float64.
+			if ints, ok := allInts(vals); ok {
+				best := ints[0]
+				for _, n := range ints[1:] {
+					if (sign > 0 && n > best) || (sign < 0 && n < best) {
+						best = n
+					}
+				}
+				return best, nil
+			}
+			best := 0.0
 			for i, v := range vals {
-				f, isInt, ok := number(v)
+				f, _, ok := number(v)
 				if !ok {
 					return nil, fmt.Errorf("%s takes numbers, not %T", name, v)
 				}
-				allInt = allInt && isInt
 				if i == 0 || (sign > 0 && f > best) || (sign < 0 && f < best) {
 					best = f
 				}
-			}
-			if allInt {
-				return int(best), nil
 			}
 			return best, nil
 		},
@@ -289,21 +296,40 @@ func sumValidate(args []reflect.Type) (reflect.Type, error) {
 	return reflect.TypeFor[float64](), nil
 }
 
+// sumFunc totals a list: an int total of ints, wrapping on overflow as
+// Expr's int arithmetic does (exact past 2^53, where a float64 is not), else
+// a float64.
 func sumFunc(args ...any) (any, error) {
 	l, _ := asList(args[0])
-	sum, allInt := 0.0, true
+	if ints, ok := allInts(l); ok && len(l) > 0 {
+		total := 0
+		for _, n := range ints {
+			total += n
+		}
+		return total, nil
+	}
+	sum := 0.0
 	for _, v := range l {
-		f, isInt, ok := number(v)
+		f, _, ok := number(v)
 		if !ok {
 			return nil, fmt.Errorf("sum takes numbers, not %T", v)
 		}
-		allInt = allInt && isInt
 		sum += f
 	}
-	if allInt && len(l) > 0 {
-		return int(sum), nil
-	}
 	return sum, nil
+}
+
+// allInts is a list's values as ints when every one is an int.
+func allInts(vals []any) ([]int, bool) {
+	out := make([]int, len(vals))
+	for i, v := range vals {
+		rv := reflect.ValueOf(v)
+		if !rv.IsValid() || !isIntKind(rv.Kind()) {
+			return nil, false
+		}
+		out[i] = int(rv.Int())
+	}
+	return out, true
 }
 
 func avgFunc(args ...any) (any, error) {
@@ -512,7 +538,7 @@ func listCheck(node ast.Node, fail func(n ast.Node, format string, args ...any))
 	case "majority":
 		listOf(args[0], func(k reflect.Kind) bool { return k == reflect.String || k == reflect.Bool }, "one list of text or bools")
 	case "any", "all":
-		listOf(args[0], func(k reflect.Kind) bool { return k == reflect.Bool }, "one list of bools, or a list and a predicate,")
+		listOf(args[0], func(k reflect.Kind) bool { return k == reflect.Bool }, "one list of bools, or a list and a predicate")
 	case "sum":
 		if len(args) == 2 {
 			if p, ok := args[1].(*ast.PredicateNode); ok {

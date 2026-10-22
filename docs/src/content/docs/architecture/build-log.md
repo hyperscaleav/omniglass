@@ -7290,4 +7290,7 @@ review: the editor is named by its visible label, takes an outside value without
 follows a changing placeholder, refuses its verdict when its chunk fails to load, drops an answer landing
 after it is gone, hides its caret echo from assistive technology, and draws its tokens in colors that
 meet text contrast in the light theme. The walkthrough
-([derive a value with a calc rule](/guides/admin/calc-rules/)) is re-recorded on the new flow.
+([derive a value with a calc rule](/guides/admin/calc-rules/)) is re-recorded on the new flow. The adversarial review's low findings were fixed after: a sum or an extreme over ints folds as an int
+(exact past 2^53, wrapping as Expr's ints do), a refusal of an unadmitted function lists the list
+functions too, and a follow-up backfill (`20261022050000`, `TestCalcRuleReservedAliasBackfill`) disables
+a moved rule whose alias is now reserved.

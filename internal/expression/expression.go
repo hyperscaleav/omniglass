@@ -260,11 +260,11 @@ func (w *walker) Visit(node *ast.Node) {
 		}
 	case *ast.BuiltinNode:
 		if !w.env.admits(n.Name) {
-			allowed := w.env.builtins
+			allowed := strings.Join(w.env.Builtins(), ", ")
 			if allowed == "" {
 				allowed = "none"
 			}
-			w.refuse(n, "%s is not available here (this site admits: %s)", n.Name, strings.ReplaceAll(allowed, ",", ", "))
+			w.refuse(n, "%s is not available here (this site admits: %s)", n.Name, allowed)
 		}
 	case *ast.PredicateNode:
 		var inner nested

@@ -238,7 +238,7 @@ There is no `alarm_rule` and no `condition_rule`: an alarm is an event rule whos
 
 ## calc_rule: cross-key and system-level derivation
 
-A **calc_rule** owns inputs, a reduce (an Expr expression; worst, majority and average are its list functions), an output key, and a scope; downstream consumers see its output like any other sample. It is for **cross-key** and **system-level** derivation: a 5-minute average, a system rollup, `room-in-use` derived from display power + codec call-state + occupancy. Same-key multi-source reconcile is the key's `fusion_policy`, not a calc (see [Fusion](/architecture/properties/#fusion)).
+A **calc_rule** owns inputs, a reduce (an Expr expression folding its inputs with the list functions max, min, avg, sum, majority, any and all), an output key, and a scope; downstream consumers see its output like any other sample. It is for **cross-key** and **system-level** derivation: a 5-minute average, a system rollup, `room-in-use` derived from display power + codec call-state + occupancy. Same-key multi-source reconcile is the key's `fusion_policy`, not a calc (see [Fusion](/architecture/properties/#fusion)).
 
 The calculated value is parallel to observed, distinguished by the **`provenance` column**, both carrying `source_rule` + `source_rule_version` on the row ([calculated](/architecture/properties/#calculated-derived-by-a-calc-rule)).
 

@@ -481,7 +481,8 @@ type previewOwner struct {
 }
 
 // orderPreviewOwners sorts a preview's owners in place: those holding a
-// current value of the output first, then by name, then id. One statement.
+// current value of the output first, then by name, then id, so the cap
+// never hides an owner whose existing value would change. One statement.
 func orderPreviewOwners(ctx context.Context, tx pgx.Tx, r CalcRule, owners []previewOwner) error {
 	if len(owners) == 0 {
 		return nil

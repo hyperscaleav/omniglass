@@ -6730,7 +6730,10 @@ interface create form, since that name is the platform's to mint.
      a stored expression that read a scalar now reads a list and shows a `calc_error` until rewritten.
      The preview's withholding (an expression over a system with an unreadable member) now applies to an
      expression that can read one member's value, and not to one that folds each list whole, as the
-     named reducers were previewed.
+     named reducers were previewed. An aggregate is not a fence: over a small system it can reveal a
+     single hidden member's value (subtracting the visible members' values from `sum(t)`, or `max(t)`
+     above every visible one), exactly as the named reducers already could; the withholding stops a
+     direct read of one member, not inference from an aggregate the rule's state shows anyway.
 
 ### ADR-0148: Calc rules run on a durable pending set and a server tick, not a JetStream consumer
 
