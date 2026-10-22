@@ -393,6 +393,37 @@ func (p *PG) ListAlarms(ctx context.Context, componentName string, filter AlarmF
 	return out, rows.Err()
 }
 
+// ListSystemAlarms returns a system's members' alarms in one query, newest
+// first (#940): every active alarm whatever its age, and every alarm cleared
+// inside window (a zero window keeps every cleared one), capped at limit. It
+// is what a system's Activity polls to explain its incidents, so the poll is
+// one request however many members the system has. The system is resolved
+// (and scope-checked) by the caller and passed by id.
+func (p *PG) ListSystemAlarms(ctx context.Context, systemID string, window time.Duration, limit int) ([]Alarm, error) {
+	bound, args := tsSince("a.cleared_at", window, systemID, limit)
+	rows, err := p.pool.Query(ctx, `
+		select `+alarmCols+`
+		from alarm a
+		where a.component_id in (select m.component_id from system_member m where m.system_id = $1::uuid)
+		  and (a.cleared_at is null or `+bound+`)
+		order by a.raised_at desc, a.id desc
+		limit $2`, args...)
+	if err != nil {
+		return nil, fmt.Errorf("storage: list system alarms %s: %w", systemID, err)
+	}
+	defer rows.Close()
+
+	out := []Alarm{}
+	for rows.Next() {
+		a, err := scanAlarm(rows)
+		if err != nil {
+			return nil, fmt.Errorf("storage: scan system alarm: %w", err)
+		}
+		out = append(out, *a)
+	}
+	return out, rows.Err()
+}
+
 // activeAlarms is the health report's read: what is currently wrong with a
 // component, so the report can name the alarm behind a down occupant. Takes the
 // component's id directly (resolveHealthRoles' assignee join already has it;

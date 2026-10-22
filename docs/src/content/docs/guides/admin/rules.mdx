@@ -54,10 +54,13 @@ does not reopen it. The rule's condition stays in force and the events it wrote 
 component reads `up` the condition ends, and the next time it goes `down` (for the sustain) the rule
 opens a new alarm.
 
-The walkthrough below unplugs a simulated touch panel and watches the rule's blade, live: the streak
-waiting out the sustain, then the open alarm, then the panel's system gone degraded. Plugging it back
-in is left out: the wait for the alarm fills most of the recording's minute, and the replug (three
-clicks on the panel's page) and the clear measured 13 to 17 seconds more, past the minute.
+The walkthrough below unplugs a simulated touch panel, opens the system it serves, and watches it
+live: the system reads healthy while the rule waits out the sustain, then the rule's alarm lands in
+**Why** and the system goes degraded, with no reload. The rule's own blade shows the same story from
+its side (the streak pending, then the open alarm), and an alarm's event on the system's **Activity**
+names the rule that wrote it and opens it. Plugging the panel back in is left out: the wait for the
+alarm fills most of the recording's minute, and the replug (three clicks on the panel's page) and the
+clear measured 13 to 17 seconds more, past the minute.
 
 ::walkthrough{#watch-a-rule-raise-an-alarm}
 

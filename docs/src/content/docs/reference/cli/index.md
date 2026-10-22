@@ -4749,6 +4749,26 @@ omniglass standard update <id>
 
 Commands for the system resource
 
+### `omniglass system alarm`
+
+Commands for the alarm resource
+
+#### `omniglass system alarm list`
+
+List a system's members' alarms
+
+```
+omniglass system alarm list <name>
+```
+
+Every member's alarms in one read, newest first, each naming its component: the active ones whatever their age, and those cleared in the last 30 days, capped at 500. It is what a system's Activity reads to explain its incidents, one request however many members the system has. Gated by system:read; an out-of-scope system is a non-disclosing 404.
+
+Example:
+
+```sh
+omniglass system alarm list <name>
+```
+
 ### `omniglass system checkName`
 
 Check a system name
@@ -4949,7 +4969,7 @@ List the components in a system
 omniglass system member list <name>
 ```
 
-The components bound into this system, ordered by name. Membership is what a role attaches to: every component staffing a role here is a member, and a member may also carry no role at all (a power conditioner is in the room without filling a declared slot). Gated by system:read; an out-of-scope system is a non-disclosing 404.
+The components bound into this system, ordered by name. Membership is what a role attaches to: every component staffing a role here is a member, and a member may also carry no role at all (a power conditioner is in the room without filling a declared slot). Each member carries its own verdict, so a system's view can poll its members' health here rather than reading the whole fleet. Gated by system:read; an out-of-scope system is a non-disclosing 404.
 
 Example:
 

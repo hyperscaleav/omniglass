@@ -997,7 +997,7 @@ type ComponentEndpoint struct {
 	NodeName  string
 	Params    []byte
 	// LastSeenAt is when an ingest batch the endpoint's task delivered last
-	// landed, by the server's clock, to within endpointSeenEvery; nil when
+	// landed, by the server's clock, to within liveStampEvery; nil when
 	// none has (#933).
 	LastSeenAt *time.Time
 }

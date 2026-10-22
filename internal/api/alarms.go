@@ -107,8 +107,47 @@ type clearAlarmInput struct {
 	ID   string `path:"id" doc:"The alarm id"`
 }
 
+// systemAlarmWindow and systemAlarmLimit bound the system's alarms read: the
+// window is the system's Activity history (the health report's 30 days), and
+// the cap keeps a flapping member from making the read fleet-sized.
+const (
+	systemAlarmWindow = 30 * 24 * time.Hour
+	systemAlarmLimit  = 500
+)
+
+type systemAlarmsOutput struct {
+	Body struct {
+		System string      `json:"system"`
+		Alarms []alarmBody `json:"alarms"`
+	}
+}
+
 // registerAlarmRoutes wires the component alarm surface.
 func registerAlarmRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
+	huma.Register(api, a.gated(huma.Operation{
+		OperationID: "list-system-alarms",
+		Method:      http.MethodGet,
+		Path:        "/systems/{name}/alarms",
+		Summary:     "List a system's members' alarms",
+		Description: "Every member's alarms in one read, newest first, each naming its component: the active ones whatever their age, and those cleared in the last 30 days, capped at 500. It is what a system's Activity reads to explain its incidents, one request however many members the system has. Gated by system:read; an out-of-scope system is a non-disclosing 404.",
+	}, "system", "read"), func(ctx context.Context, in *systemPathInput) (*systemAlarmsOutput, error) {
+		sys, err := gw.GetSystem(ctx, in.Name, a.scopeFor(ctx, "system", "read"))
+		if err != nil {
+			return nil, mapSystemErr(err)
+		}
+		alarms, err := gw.ListSystemAlarms(ctx, sys.ID, systemAlarmWindow, systemAlarmLimit)
+		if err != nil {
+			return nil, huma.Error500InternalServerError("read system alarms")
+		}
+		out := &systemAlarmsOutput{}
+		out.Body.System = sys.Name
+		out.Body.Alarms = make([]alarmBody, 0, len(alarms))
+		for i := range alarms {
+			out.Body.Alarms = append(out.Body.Alarms, toAlarmBody(&alarms[i]))
+		}
+		return out, nil
+	})
+
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "list-component-alarms",
 		Method:      http.MethodGet,
