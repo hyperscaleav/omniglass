@@ -259,7 +259,7 @@ export default function ExpressionField(p: {
                     {d.message}
                   </span>
                   <Show when={d.unbound && p.onBind}>
-                    <button type="button" class="link link-hover text-[11px] text-base-content/80" onClick={() => p.onBind!(d.unbound!)}>
+                    <button type="button" class="link text-[11px] text-base-content/80" onClick={() => p.onBind!(d.unbound!)}>
                       {bindLabel(d.unbound!)}
                     </button>
                   </Show>
