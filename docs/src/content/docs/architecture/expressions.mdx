@@ -56,6 +56,13 @@ Expressions are **sandboxed**: no I/O, no network, no unbounded loops, bounded e
 - **Values are data.** A value bound in the environment (a sample's text, however hostile) is
   evaluated literally and never executed. Integer arithmetic wraps on overflow, as Go's does,
   rather than failing.
+- **Compiled unoptimized, and refused rather than crashed.** Expr's optimizer is off: in v1.17.8 it
+  rewrites `filter(list, p)[0]` and `[-1]` into `find` and `findLast` and loses the record's field
+  table on the way, so a field read on the result (`filter(members, .has.a)[0].value.a`) panicked
+  in Expr's compiler. It comes back on when upstream is fixed (#1006). Nothing is charged
+  differently without it: every charge wraps its operand before Expr would fold it. A panic in any
+  compile stage, the engine's own or Expr's, is refused as a type error naming the stage and the
+  construct it was on, never a crash or a nil pointer.
 
 ## Sites: the bindings, builtins and budget of each
 
