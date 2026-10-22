@@ -7057,10 +7057,11 @@ Re-running the lowering oracle on a loaded machine refused one trivial criterion
 surfaced as a type error, while `members[0].value.a` compiled. The fault is upstream, in Expr
 v1.17.8: its optimizer rewrites `filter(list, p)[0]` and `[-1]` into `find` and `findLast` and
 copies the old node's type onto the rewrite without the record's field table, so its compiler
-panicked on the field read. The engine now runs Expr's stages itself (`exprCompile`) and adds a
-`renature` pass between the optimizer and the compiler that gives every struct-typed node the
-description the checker would, which changes only the broken ones. The filter's list is still
-charged its full length up front, so the rewrite's early stop does not make indexing a filter
-cheaper than walking it (`TestIndexedFilterResultCharged`). Each compile pass, ours and Expr's, now
-runs under a guard: a panic in one becomes a positioned type error naming the pass and the
-construct it was on, never a nil pointer and a stack (`TestPassPanicNamesThePass`).
+panicked on the field read. Expressions now compile with Expr's optimizer off until upstream is
+fixed (#1006). The typed checks no longer read folded constant literals (an unoptimized literal
+list is still its own node), and charging is unchanged, since every charge wraps its operand
+before Expr would have folded it: a 50-construct corpus decides identically with the optimizer on
+and off, and the lowering oracle still compares 21,324 decisions identically. The filter's list is
+still charged its full length (`TestIndexedFilterResultCharged`). Each compile pass, the engine's
+and Expr's, now runs under a guard: a panic in one becomes a positioned type error naming the
+stage and the construct it was on, never a nil pointer and a stack (`TestPassPanicNamesThePass`).

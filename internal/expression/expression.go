@@ -10,12 +10,8 @@ import (
 
 	"github.com/expr-lang/expr"
 	"github.com/expr-lang/expr/ast"
-	"github.com/expr-lang/expr/checker"
-	"github.com/expr-lang/expr/checker/nature"
-	"github.com/expr-lang/expr/compiler"
 	"github.com/expr-lang/expr/conf"
 	"github.com/expr-lang/expr/file"
-	"github.com/expr-lang/expr/optimizer"
 	"github.com/expr-lang/expr/parser"
 	"github.com/expr-lang/expr/vm"
 )
@@ -360,25 +356,11 @@ func scalar(t reflect.Type) bool {
 }
 
 // flat is a scalar, or a list whose elements are scalars: a typed list, or a
-// list literal of scalar elements (Expr types a literal as []any, and its
-// optimizer folds a constant one into a ConstantNode).
+// list literal of scalar elements (Expr types a literal as []any). The tree
+// is unoptimized (compile turns Expr's optimizer off), so a constant literal
+// is still its ArrayNode, not a folded ConstantNode.
 func flat(n ast.Node) bool {
 	n = unwrapCharge(n)
-	if c, ok := n.(*ast.ConstantNode); ok {
-		v := reflect.ValueOf(c.Value)
-		if !v.IsValid() || scalar(v.Type()) {
-			return true
-		}
-		if v.Kind() != reflect.Slice && v.Kind() != reflect.Array {
-			return false
-		}
-		for i := 0; i < v.Len(); i++ {
-			if el := v.Index(i); el.IsValid() && !(el.Kind() == reflect.Interface && el.IsNil()) && !scalar(reflect.TypeOf(el.Interface())) {
-				return false
-			}
-		}
-		return true
-	}
 	if a, ok := n.(*ast.ArrayNode); ok {
 		for _, el := range a.Nodes {
 			if !scalar(el.Type()) {
@@ -396,10 +378,6 @@ func flat(n ast.Node) bool {
 
 func scalarKeyed(n ast.Node) bool {
 	n = unwrapCharge(n)
-	if c, ok := n.(*ast.ConstantNode); ok && c.Value != nil {
-		t := reflect.TypeOf(c.Value)
-		return t.Kind() == reflect.Map && scalar(t.Key())
-	}
 	t := n.Type()
 	return t != nil && t.Kind() == reflect.Map && scalar(t.Key())
 }
@@ -422,7 +400,15 @@ func compile(source string, env Env) (*Program, error) {
 	compileCount.Add(1)
 	var prog *vm.Program
 	err := guardPass(source, "Expr checker", func(p *pass) error {
-		opts := []expr.Option{expr.Env(reflect.New(env.run).Elem().Interface()), chargeOption(p), expr.DisableAllBuiltins()}
+		opts := []expr.Option{
+			expr.Env(reflect.New(env.run).Elem().Interface()), chargeOption(p), expr.DisableAllBuiltins(),
+			// Expr's optimizer is off: in v1.17.8 it rewrites filter(list, p)[0]
+			// and [-1] into find and findLast and drops the struct's field table
+			// from the type it copies onto the rewrite, so a field read on the
+			// result (filter(list, p)[0].x) panics in Expr's compiler. Tracked in
+			// #1006; this option comes off when upstream is fixed.
+			expr.Optimize(false),
+		}
 		for _, name := range env.Builtins() {
 			opts = append(opts, expr.EnableBuiltin(name))
 		}
@@ -437,7 +423,7 @@ func compile(source string, env Env) (*Program, error) {
 			opts = append(opts, expr.AsKind(reflect.String))
 		}
 		var err error
-		prog, err = exprCompile(source, p, opts...)
+		prog, err = expr.Compile(source, opts...)
 		if refused := fromCompilerPanic(err); refused != nil {
 			return refused
 		}
@@ -462,57 +448,6 @@ func compile(source string, env Env) (*Program, error) {
 		}
 	}
 	return &Program{env: env, prog: prog}, nil
-}
-
-// exprCompile is expr.Compile with one pass added between Expr's optimizer
-// and its compiler, renature, and each stage named on p so a panic in one is
-// refused by name (guard.go). It copies expr.Compile v1.17.8;
-// TestExprVersionPinnedForCompilePipeline fails on any other Expr version
-// until the copy is re-diffed against the new expr.Compile.
-func exprCompile(source string, p *pass, opts ...expr.Option) (*vm.Program, error) {
-	config := conf.CreateNew()
-	for _, op := range opts {
-		op(config)
-	}
-	for name := range config.Disabled {
-		delete(config.Builtins, name)
-	}
-	config.Check()
-	p.name = "Expr checker"
-	tree, err := checker.ParseCheck(source, config)
-	if err != nil {
-		return nil, err
-	}
-	if config.Optimize {
-		p.name = "Expr optimizer"
-		if err := optimizer.Optimize(&tree.Node, config); err != nil {
-			var fe *file.Error
-			if errors.As(err, &fe) {
-				return nil, fe.Bind(tree.Source)
-			}
-			return nil, err
-		}
-	}
-	p.name = "renature"
-	ast.Walk(&tree.Node, visitFunc(func(node *ast.Node) {
-		p.at = *node
-		renature(&config.NtCache, *node)
-	}))
-	p.name, p.at = "Expr compiler", nil
-	return compiler.Compile(tree, config)
-}
-
-// renature gives a struct-typed node the type description the checker
-// would: Expr's optimizer rewrites filter(list, p)[0] and [-1] into find and
-// findLast and copies the old node's type onto the rewrite without the
-// struct's field table, so a field read on the result (filter(list, p)[0].x)
-// panicked in Expr's compiler (v1.17.8, #1003). The cache returns the same
-// description for a node the checker typed, so this changes only the broken
-// ones.
-func renature(cache *nature.Cache, n ast.Node) {
-	if nt := n.Nature(); nt.Kind == reflect.Struct && nt.Type != nil {
-		n.SetNature(cache.FromType(nt.Type))
-	}
 }
 
 // Run evaluates the program against one prepared input: a value of the
