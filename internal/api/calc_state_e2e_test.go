@@ -103,7 +103,7 @@ func TestCalcRuleStateAndPreviewAPI(t *testing.T) {
 		}
 	}
 	rule := map[string]any{"owner_kind": "system", "selector": map[string]any{"system_types": []string{"av"}},
-		"inputs": []map[string]any{{"as": "t", "key": "room-temperature"}}, "reduce": map[string]any{"reducer": "average"}, "output_key": "avg-temp"}
+		"inputs": []map[string]any{{"alias": "t", "key": "room-temperature"}}, "reduce": map[string]any{"expr": "avg(t)"}, "output_key": "avg-temp"}
 	// A viewer of e1 and of sys-e alone (the scope grants the event rule
 	// preview's tests use: a component and a system).
 	e1, err := gw.GetComponent(ctx, "e1", all)
@@ -154,7 +154,7 @@ func TestCalcRuleStateAndPreviewAPI(t *testing.T) {
 	// preview withholds the value rather than reveal that member's own (w1
 	// holds no temperature here, so its value would read as the zero).
 	probe := map[string]any{"owner_kind": "system", "selector": map[string]any{"systems": []string{"sys-e"}},
-		"inputs": []map[string]any{{"as": "t", "key": "room-temperature"}}, "reduce": map[string]any{"expr": "members[len(members) - 1].value.t"}, "output_key": "avg-temp"}
+		"inputs": []map[string]any{{"alias": "t", "key": "room-temperature"}}, "reduce": map[string]any{"expr": "members[len(members) - 1].value.t"}, "output_key": "avg-temp"}
 	var leak struct {
 		Owners []struct {
 			Owner string          `json:"owner"`

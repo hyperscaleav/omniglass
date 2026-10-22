@@ -280,18 +280,18 @@ Create a calc rule
 omniglass calc-rule create [flags]
 ```
 
-Authors a rule that derives its output key on each owner (each component its selector picks, or each system) from its named inputs, folded by a named reducer (one input) or an expression over the inputs by name. Every input key must be registered and health may not be one; the reduce must compile and yield the output key's type (a 422 placed at body.reduce.expr with its line and column); the output must be a registered key that is not health and that no collection writes (a native probe's key, or one a driver declares among its emits); an enabled rule may not close a cycle in the graph from every enabled rule's input keys to its output key (a 422 naming the chain of keys), nor write a key another enabled rule writes (a 422 naming that rule). A list or get carries calc_error when a stored reduce no longer compiles. A name already taken is a 409. Returns the rule with its uuid. Audited. Gated by rule:create, with an all-scope grant.
+Authors a rule that derives its output key on each owner (each component its selector picks, or each system) from its aliased inputs, reduced by an expression over the aliases, each bound as the list of its current values (one per instance on a component, every member's on a system, with members records beside it). Every input key must be registered (by name or uuid; the rule holds it by uuid) and health may not be one; each alias is an identifier of at most 64, not a keyword, a builtin or list function's name, or a site binding (component, has, members, system, value), and unique; the reduce must compile and yield the output key's type (a 422 placed at body.reduce.expr with its line and column, and the name when it is one no alias binds); the output must be a registered key that is not health and that no collection writes (a native probe's key, or one a driver declares among its emits); an enabled rule may not close a cycle in the graph from every enabled rule's input keys to its output key (a 422 naming the chain of keys), nor write a key another enabled rule writes (a 422 naming that rule). A list or get carries calc_error when a stored reduce no longer compiles. A name already taken is a 409. Returns the rule with its uuid. Audited. Gated by rule:create, with an all-scope grant.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--description` | string | (none) | What the rule derives and why |
 | `--enabled` | bool | `false` | Defaults to true |
-| `--inputs` | string | (none) | The keys the rule reads, each by a unique name its reduce uses; health may not be one |
+| `--inputs` | string | (none) | The keys the rule reads, each by a unique alias its reduce uses; health may not be one |
 | `--label` | string | (none) | A human label |
 | `--name` | string | (none) | The rule's name (lowercase letters, digits, hyphens) |
 | `--output-key` | string | (none) | The property or metric the rule writes: its type pins the reduce's result. Not health, not a key a collection writes, and not one another enabled rule writes |
 | `--owner-kind` | string | (none) | What the rule derives a value on: each component its selector picks, or each system its selector picks (read from the system's role-bound members). Fixed at create |
-| `--reduce` | string | (none) | A named reducer over the one input, or an expression over the inputs by name |
+| `--reduce` | string | (none) | An expression over the inputs by alias |
 | `--selector` | string | (none) | The owners the rule derives for: a component rule's component_types and components, or a system rule's system_types and systems; absent is every owner of its kind |
 
 Example:
@@ -340,7 +340,7 @@ List calc rules
 omniglass calc-rule list
 ```
 
-Lists the calc rules, by name: the authored config that derives an output key on each owner from named inputs, each with its live state as counts (owners_computed, owners_pending, owners_unsupported, owners_failed) over the owners the caller may read. Rules read like a registry, so every rule is listed whatever the caller's scope. Gated by rule:read.
+Lists the calc rules, by name: the authored config that derives an output key on each owner from aliased inputs, each with its live state as counts (owners_computed, owners_pending, owners_unsupported, owners_failed) over the owners the caller may read. Rules read like a registry, so every rule is listed whatever the caller's scope. Gated by rule:read.
 
 Example:
 
@@ -356,15 +356,15 @@ Preview a calc rule
 omniglass calc-rule preview [flags]
 ```
 
-Computes a candidate calc rule now, on each owner it selects that the caller may read, with the reduce the tick runs, and writes nothing (a read-only transaction). For each owner it answers the value the rule would write, the output's current value and whether they differ, the inputs with no value, the members skipped and the instances left out as stale (named when the caller may read the component, else counted). An expression over a system with a member the caller may not read is withheld on that system, its error counting the members out of scope, since an expression can read one member by position. A component rule previews the selected components holding one of its inputs, as the tick would mark them. At most owner_cap owners are computed, and a bound on total input reads stops a preview over large systems early, a whole owner at a time (owners_judged of owners_total, truncated past either). The candidate is checked as a save would check it: a reduce that does not compile, a cycle in the key graph, an output another enabled rule or a collection writes, or health are each a 422, so the author learns before saving; given a saved rule's name it is judged as an edit of that rule. The selector's names resolve in the caller's read scope: a name that does not exist and one the caller may not read are the same 422, and a name shared in and out of scope means the one in scope. A preview takes no lock a save waits on. Gated by rule:read.
+Computes a candidate calc rule now, on each owner it selects that the caller may read, with the reduce the tick runs, and writes nothing (a read-only transaction). For each owner it answers the value the rule would write, the output's current value and whether they differ, the inputs with no value, the members skipped and the instances left out as stale (named when the caller may read the component, else counted). An expression that reads one member's value by position (members[1].value.t, or an element of an input's list) over a system with a member the caller may not read is withheld on that system, its error counting the members out of scope; one that folds each input's list whole (avg(t), max(t)) shows the aggregate. A component rule previews the selected components holding one of its inputs, as the tick would mark them. At most owner_cap owners are computed, and a bound on total input reads stops a preview over large systems early, a whole owner at a time (owners_judged of owners_total, truncated past either). The candidate is checked as a save would check it: a reduce that does not compile, a cycle in the key graph, an output another enabled rule or a collection writes, or health are each a 422, so the author learns before saving; given a saved rule's name it is judged as an edit of that rule. The selector's names resolve in the caller's read scope: a name that does not exist and one the caller may not read are the same 422, and a name shared in and out of scope means the one in scope. A preview takes no lock a save waits on. Gated by rule:read.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--inputs` | string | (none) | The keys the rule reads, each by a unique name its reduce uses |
+| `--inputs` | string | (none) | The keys the rule reads, each by a unique alias its reduce uses |
 | `--name` | string | (none) | A saved rule's name, to preview an edit of it (its stored version is then not a second writer of its key); absent for a new rule |
 | `--output-key` | string | (none) | The property or metric the rule would write |
 | `--owner-kind` | string | (none) | What the rule derives a value on |
-| `--reduce` | string | (none) | A named reducer over the one input, or an expression |
+| `--reduce` | string | (none) | An expression over the inputs by alias |
 | `--selector` | string | (none) | The owners the rule derives for; absent is every owner of its kind |
 
 Example:
@@ -430,7 +430,7 @@ Patches a rule (an absent field is unchanged), bumping its version; a patch that
 | `--inputs` | string | (none) | Replace the keys the rule reads |
 | `--label` | string | (none) | A human label |
 | `--output-key` | string | (none) | The property or metric the rule writes |
-| `--reduce` | string | (none) | Replace the reduce |
+| `--reduce` | string | (none) | Replace the reduce's expression |
 | `--selector` | string | (none) | Replace the owners the rule derives for; an empty selector is every owner of its kind |
 
 Example:
@@ -1927,13 +1927,13 @@ Validate an expression
 omniglass expression validate [flags]
 ```
 
-Compiles an expression against a registered site's environment and answers whether it compiles, with positioned diagnostics, and the site's bindings, admitted builtins and run budget, all generated from the site's declaration. For criteria a sample key is required, and types the value (a metric is a number; a property is text, or a bool for a bool property). For calc the key is the rule's output key, typing the result, and the rule's inputs (and owner_kind, component by default) give the bindings, each input's name bound to its key's type (for a system, inside one record per member); an input that is unknown or misnamed is a 422; the answer's value_type so reveals a key's lane and data type to a rule:read holder, as the rule list already does. Compiles without the engine's program cache and stores and runs nothing. An unknown site, a missing or unknown key is a 422. Gated by rule:read.
+Compiles an expression against a registered site's environment and answers whether it compiles, with positioned diagnostics, and the site's bindings, admitted builtins and run budget, all generated from the site's declaration. For criteria a sample key is required, and types the value (a metric is a number; a property is text, or a bool for a bool property). For calc the key is the rule's output key, typing the result, and the rule's inputs (and owner_kind, component by default) give the bindings, each input's alias bound to the list of its key's type (a system also binds members, one record per member); an input that is unknown, or an alias that is not an identifier, is reserved or repeats, is a 422; a name the expression uses that no alias binds is a diagnostic carrying that name (unbound); the answer's value_type so reveals a key's lane and data type to a rule:read holder, as the rule list already does. Compiles without the engine's program cache and stores and runs nothing. An unknown site, a missing or unknown key is a 422. Gated by rule:read.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--inputs` | string | (none) | For calc (required there), the rule's inputs: each bound by its name, typed by its key |
+| `--inputs` | string | (none) | For calc (required there), the rule's inputs: each bound by its alias, typed by its key (by name or uuid) |
 | `--key` | string | (none) | The sample key that types the expression (required at both sites). For criteria, the key the rule reads: its lane and data type type the value (a metric is a number; a property is text, or a bool for a bool property). For calc, the rule's output key: its type is the result the reduce must yield |
-| `--owner-kind` | string | (none) | For calc, what the rule derives on: a component binds each input as one value; a system binds members, one record per role-bound member with value.<as> and has.<as> per input; defaults to component |
+| `--owner-kind` | string | (none) | For calc, what the rule derives on: each input binds by its alias as the list of its current values (one per instance on a component, every member's on a system); a system also binds members, one record per role-bound member with value.<alias> and has.<alias> per input; defaults to component |
 | `--site` | string | (none) | Where the expression is written: calc, a calc rule's reduce; criteria, an event rule's fire_criteria or clear_criteria |
 | `--source` | string | (none) | The expression |
 

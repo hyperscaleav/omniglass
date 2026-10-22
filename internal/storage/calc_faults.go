@@ -68,38 +68,15 @@ func (c *calcCompiles) compile(r CalcRule, typed []rules.TypedInput, output stri
 	return err
 }
 
-// keyValueTypes reads every registered key's value type, by name (a
-// property wins over a metric of the same name, as resolveSampleKey takes
-// them). The registries are small, so a list reads them once rather than
-// per rule.
-func keyValueTypes(ctx context.Context, q querier) (map[string]string, error) {
-	rows, err := q.Query(ctx, `select name, 'metric', '' from metric_type
-		union all select name, 'property', data_type from property_type`)
-	if err != nil {
-		return nil, fmt.Errorf("storage: read key types: %w", err)
-	}
-	defer rows.Close()
-	out := map[string]string{}
-	for rows.Next() {
-		var name, lane, dataType string
-		if err := rows.Scan(&name, &lane, &dataType); err != nil {
-			return nil, fmt.Errorf("storage: read key types: %w", err)
-		}
-		out[name] = rules.ValueTypeFor(rules.Lane(lane), dataType)
-	}
-	return out, rows.Err()
-}
-
 // calcFault is why a stored rule's reduce does not compile against the
-// registries as they are now, or nil when it compiles.
-func (p *PG) calcFault(r CalcRule, types map[string]string) *CalcFault {
-	typed := make([]rules.TypedInput, len(r.Inputs))
-	for i, in := range r.Inputs {
-		vt, ok := types[in.Key]
-		if !ok {
-			return &CalcFault{Field: fmt.Sprintf("inputs[%d].key", i), Message: fmt.Sprintf("%q is not a registered property or metric", in.Key)}
+// registries as they are now (the key types its read resolved, by the ids it
+// holds), or nil when it compiles.
+func (p *PG) calcFault(r CalcRule) *CalcFault {
+	typed := typedInputs(r)
+	for i, t := range typed {
+		if t.ValueType == "" {
+			return &CalcFault{Field: fmt.Sprintf("inputs[%d].key", i), Message: fmt.Sprintf("%q is not a registered property or metric", t.Key)}
 		}
-		typed[i] = rules.TypedInput{As: in.As, Key: in.Key, ValueType: vt}
 	}
 	err := p.calcs.compile(r, typed, r.outputType)
 	if err == nil {
@@ -118,36 +95,59 @@ func (p *PG) calcFault(r CalcRule, types map[string]string) *CalcFault {
 }
 
 // ErrKeyWrittenByCalcRule is a property or metric type that cannot be
-// deleted because a calc rule writes it.
-var ErrKeyWrittenByCalcRule = errors.New("storage: a calc rule writes this key")
+// deleted because a calc rule writes it; ErrKeyReadByCalcRule, because one
+// reads it (an input holds its key by id, #1018).
+var (
+	ErrKeyWrittenByCalcRule = errors.New("storage: a calc rule writes this key")
+	ErrKeyReadByCalcRule    = errors.New("storage: a calc rule reads this key")
+)
 
-// CalcOutputInUseError names the calc rules (enabled or not) whose output a
-// type delete would remove.
+// CalcOutputInUseError names the calc rules (enabled or not) whose output,
+// or with Reads whose input, a type delete would remove.
 type CalcOutputInUseError struct {
 	Key   string
 	Rules []string
+	Reads bool
 }
 
 func (e *CalcOutputInUseError) Error() string {
+	if e.Reads {
+		return fmt.Sprintf("%s is read by the calc rule %s; delete the rule or change its inputs first", e.Key, strings.Join(e.Rules, ", "))
+	}
 	return fmt.Sprintf("%s is written by the calc rule %s; delete or repoint the rule first", e.Key, strings.Join(e.Rules, ", "))
 }
 
-func (e *CalcOutputInUseError) Unwrap() error { return ErrKeyWrittenByCalcRule }
+func (e *CalcOutputInUseError) Unwrap() error {
+	if e.Reads {
+		return ErrKeyReadByCalcRule
+	}
+	return ErrKeyWrittenByCalcRule
+}
 
 // calcOutputInUse turns a type delete's foreign-key refusal from calc_rule's
-// output reference into a CalcOutputInUseError naming the rules, or returns
-// nil when err is anything else.
+// output reference, or calc_rule_input's input reference, into a
+// CalcOutputInUseError naming the rules, or returns nil when err is anything
+// else.
 func calcOutputInUse(ctx context.Context, q querier, lane rules.Lane, key string, err error) error {
 	var pgErr *pgconn.PgError
-	if !errors.As(err, &pgErr) || pgErr.Code != "23503" || !strings.HasPrefix(pgErr.ConstraintName, "calc_rule_output_") {
+	if !errors.As(err, &pgErr) || pgErr.Code != "23503" {
+		return nil
+	}
+	reads := strings.HasPrefix(pgErr.ConstraintName, "calc_rule_input_")
+	if !reads && !strings.HasPrefix(pgErr.ConstraintName, "calc_rule_output_") {
 		return nil
 	}
 	col, table := "output_metric_type_id", "metric_type"
 	if lane == rules.LaneProperty {
 		col, table = "output_property_type_id", "property_type"
 	}
-	rows, qerr := q.Query(ctx, `select c.name from calc_rule c join `+table+` t on t.id = c.`+col+`
-		where t.name = $1 order by c.name`, key)
+	sql := `select c.name from calc_rule c join ` + table + ` t on t.id = c.` + col + ` where t.name = $1 order by c.name`
+	if reads {
+		col = strings.TrimPrefix(col, "output_")
+		sql = `select distinct c.name from calc_rule c join calc_rule_input i on i.rule_id = c.id join ` + table + ` t on t.id = i.` + col + `
+			where t.name = $1 order by c.name`
+	}
+	rows, qerr := q.Query(ctx, sql, key)
 	if qerr != nil {
 		return fmt.Errorf("storage: read the calc rules writing %q: %w", key, qerr)
 	}
@@ -155,5 +155,5 @@ func calcOutputInUse(ctx context.Context, q querier, lane rules.Lane, key string
 	if qerr != nil {
 		return fmt.Errorf("storage: read the calc rules writing %q: %w", key, qerr)
 	}
-	return &CalcOutputInUseError{Key: key, Rules: names}
+	return &CalcOutputInUseError{Key: key, Rules: names, Reads: reads}
 }

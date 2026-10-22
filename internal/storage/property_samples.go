@@ -90,7 +90,7 @@ func (p *PG) writePropertySamples(ctx context.Context, tx pgx.Tx, evs []Property
 			return fmt.Errorf("storage: property sample %s/%s: %w", ev.OwnerID, ev.Key, err)
 		}
 		arcs[i] = arc
-		marks.add(ev.OwnerKind, arc, ev.Key)
+		marks.add(ev.OwnerKind, arc, rules.LaneProperty, ev.Key)
 	}
 	// Marked before any sample lands (writeMetricSamples says why).
 	if err := p.markCalcPending(ctx, tx, marks, lineage.rule()); err != nil {

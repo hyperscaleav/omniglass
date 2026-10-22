@@ -3235,11 +3235,6 @@
       "default": "'{}'::jsonb"
      },
      {
-      "name": "inputs",
-      "type": "jsonb",
-      "nullable": false
-     },
-     {
       "name": "reduce",
       "type": "jsonb",
       "nullable": false
@@ -3296,10 +3291,6 @@
     ],
     "checks": [
      {
-      "name": "calc_rule_inputs_check",
-      "expr": "CHECK (((jsonb_typeof(inputs) = 'array'::text) AND (jsonb_array_length(inputs) \u003e 0)))"
-     },
-     {
       "name": "calc_rule_output_check",
       "expr": "CHECK ((((output_lane = 'property'::text) AND (output_property_type_id IS NOT NULL) AND (output_metric_type_id IS NULL)) OR ((output_lane = 'metric'::text) AND (output_metric_type_id IS NOT NULL) AND (output_property_type_id IS NULL))))"
      },
@@ -3313,13 +3304,83 @@
      },
      {
       "name": "calc_rule_reduce_check",
-      "expr": "CHECK ((jsonb_typeof(reduce) = 'object'::text))"
+      "expr": "CHECK (((jsonb_typeof(reduce) = 'object'::text) AND (jsonb_typeof((reduce -\u003e 'expr'::text)) = 'string'::text) AND (NOT (reduce ? 'reducer'::text))))"
      }
     ],
     "uniques": [
      {
       "name": "calc_rule_name_key",
       "definition": "CREATE UNIQUE INDEX calc_rule_name_key ON public.calc_rule USING btree (name)"
+     }
+    ]
+   },
+   "calc_rule_input": {
+    "columns": [
+     {
+      "name": "rule_id",
+      "type": "uuid",
+      "nullable": false,
+      "pk": true,
+      "fk": true,
+      "fk_target": "calc_rule.id"
+     },
+     {
+      "name": "position",
+      "type": "integer",
+      "nullable": false,
+      "pk": true
+     },
+     {
+      "name": "alias",
+      "type": "text",
+      "nullable": false
+     },
+     {
+      "name": "lane",
+      "type": "text",
+      "nullable": false
+     },
+     {
+      "name": "property_type_id",
+      "type": "uuid",
+      "nullable": true,
+      "fk": true,
+      "fk_target": "property_type.id"
+     },
+     {
+      "name": "metric_type_id",
+      "type": "uuid",
+      "nullable": true,
+      "fk": true,
+      "fk_target": "metric_type.id"
+     }
+    ],
+    "checks": [
+     {
+      "name": "calc_rule_input_key_check",
+      "expr": "CHECK ((((lane = 'property'::text) AND (property_type_id IS NOT NULL) AND (metric_type_id IS NULL)) OR ((lane = 'metric'::text) AND (metric_type_id IS NOT NULL) AND (property_type_id IS NULL))))"
+     },
+     {
+      "name": "calc_rule_input_lane_check",
+      "expr": "CHECK ((lane = ANY (ARRAY['property'::text, 'metric'::text])))"
+     },
+     {
+      "name": "calc_rule_input_position_check",
+      "expr": "CHECK ((\"position\" \u003e= 0))"
+     }
+    ],
+    "uniques": [
+     {
+      "name": "calc_rule_input_alias_key",
+      "definition": "CREATE UNIQUE INDEX calc_rule_input_alias_key ON public.calc_rule_input USING btree (rule_id, alias)"
+     },
+     {
+      "name": "calc_rule_input_metric_key",
+      "definition": "CREATE UNIQUE INDEX calc_rule_input_metric_key ON public.calc_rule_input USING btree (metric_type_id, rule_id) WHERE (metric_type_id IS NOT NULL)"
+     },
+     {
+      "name": "calc_rule_input_property_key",
+      "definition": "CREATE UNIQUE INDEX calc_rule_input_property_key ON public.calc_rule_input USING btree (property_type_id, rule_id) WHERE (property_type_id IS NOT NULL)"
      }
     ]
    },

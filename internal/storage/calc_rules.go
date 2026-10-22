@@ -18,10 +18,10 @@ import (
 )
 
 // CalcRule is the authored config that derives one output key on an owner
-// from named inputs (#995, epic #525): a sibling of EventRule (ADR-0144
-// ruling 1). It reads Inputs (sample keys, each named by As), folds them with
-// Reduce (a named reducer or an expression over the names), and writes
-// OutputKey on each owner of OwnerKind its Selector picks. Version bumps on
+// from aliased inputs (#995, epic #525): a sibling of EventRule (ADR-0144
+// ruling 1). It reads Inputs (sample keys held by id, each bound by its
+// Alias, #1018), reduces them with Reduce (an expression over the aliases),
+// and writes OutputKey on each owner of OwnerKind its Selector picks. Version bumps on
 // every update. Official rules would ship with the boot seed and are
 // read-only; none ships yet.
 type CalcRule struct {
@@ -46,8 +46,13 @@ type CalcRule struct {
 	// rule, never stored or audited.
 	CalcError *CalcFault `json:"-"`
 	// outputType is the output's value type, from the registry row the rule
-	// holds by id on its recorded lane, never re-resolved by name.
+	// holds by id on its recorded lane, never re-resolved by name; outputID
+	// is that row's id.
 	outputType string
+	outputID   string
+	// inputTypes are the inputs' value types, in order, from the registry
+	// rows the rule holds them by.
+	inputTypes []string
 	// candidate is a preview's unsaved rule: compiled each time, never
 	// cached under an id and version it does not have.
 	candidate bool
@@ -134,10 +139,17 @@ func invalidCalc(field, format string, a ...any) error {
 	return fmt.Errorf("%w: %w", ErrCalcRuleInvalid, &rules.CalcError{Field: field, Err: fmt.Errorf(format, a...)})
 }
 
-// calcRuleSelect reads a rule with its output key's name, from whichever
-// registry its lane names.
-const calcRuleSelect = `select c.id, c.name, coalesce(c.label, ''), c.description, c.owner_kind, c.selector, c.inputs, c.reduce,
-	c.output_lane, coalesce(pt.name, mt.name, ''), c.enabled, c.official, c.version, c.created_at, c.updated_at,
+// calcRuleSelect reads a rule with its inputs (each key's name, id, lane and
+// data type, read now from the row the input holds by id) and its output
+// key's name and id, from whichever registry its lane names.
+const calcRuleSelect = `select c.id, c.name, coalesce(c.label, ''), c.description, c.owner_kind, c.selector,
+	(select coalesce(jsonb_agg(jsonb_build_object('alias', i.alias, 'key', coalesce(ipt.name, imt.name),
+			'key_id', coalesce(i.property_type_id, i.metric_type_id), 'lane', i.lane, 'data_type', coalesce(ipt.data_type, ''))
+			order by i.position), '[]'::jsonb)
+		from calc_rule_input i left join property_type ipt on ipt.id = i.property_type_id
+		left join metric_type imt on imt.id = i.metric_type_id where i.rule_id = c.id),
+	c.reduce, c.output_lane, coalesce(pt.name, mt.name, ''), coalesce(c.output_property_type_id, c.output_metric_type_id)::text,
+	c.enabled, c.official, c.version, c.created_at, c.updated_at,
 	case when c.output_lane = 'metric' then 'number' when pt.data_type = 'bool' then 'bool' else 'text' end
 	from calc_rule c
 	left join property_type pt on pt.id = c.output_property_type_id
@@ -147,7 +159,7 @@ func scanCalcRule(row pgx.Row) (CalcRule, error) {
 	var r CalcRule
 	var sel, inputs, reduce []byte
 	var lane string
-	if err := row.Scan(&r.ID, &r.Name, &r.Label, &r.Description, &r.OwnerKind, &sel, &inputs, &reduce, &lane, &r.OutputKey,
+	if err := row.Scan(&r.ID, &r.Name, &r.Label, &r.Description, &r.OwnerKind, &sel, &inputs, &reduce, &lane, &r.OutputKey, &r.outputID,
 		&r.Enabled, &r.Official, &r.Version, &r.CreatedAt, &r.UpdatedAt, &r.outputType); err != nil {
 		return r, err
 	}
@@ -155,8 +167,18 @@ func scanCalcRule(row pgx.Row) (CalcRule, error) {
 	if err := json.Unmarshal(sel, &r.Selector); err != nil {
 		return r, fmt.Errorf("storage: calc rule %q selector: %w", r.Name, err)
 	}
-	if err := json.Unmarshal(inputs, &r.Inputs); err != nil {
+	var stored []struct {
+		rules.CalcInput
+		DataType string `json:"data_type"`
+	}
+	if err := json.Unmarshal(inputs, &stored); err != nil {
 		return r, fmt.Errorf("storage: calc rule %q inputs: %w", r.Name, err)
+	}
+	r.Inputs = make([]rules.CalcInput, len(stored))
+	r.inputTypes = make([]string, len(stored))
+	for i, in := range stored {
+		r.Inputs[i] = in.CalcInput
+		r.inputTypes[i] = rules.ValueTypeFor(in.Lane, in.DataType)
 	}
 	if err := json.Unmarshal(reduce, &r.Reduce); err != nil {
 		return r, fmt.Errorf("storage: calc rule %q reduce: %w", r.Name, err)
@@ -204,23 +226,16 @@ func (p *PG) ListCalcRules(ctx context.Context) ([]CalcRule, error) {
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
-	types, err := keyValueTypes(ctx, p.pool)
-	if err != nil {
-		return nil, err
-	}
 	for i := range out {
-		out[i].CalcError = p.calcFault(out[i], types)
+		out[i].CalcError = p.calcFault(out[i])
 	}
 	return out, nil
 }
 
-// withCalcFault sets r's CalcError from the registries as they are now.
-func (p *PG) withCalcFault(ctx context.Context, r *CalcRule) (*CalcRule, error) {
-	types, err := keyValueTypes(ctx, p.pool)
-	if err != nil {
-		return nil, err
-	}
-	r.CalcError = p.calcFault(*r, types)
+// withCalcFault sets r's CalcError from the registries as they are now (the
+// key types its read resolved).
+func (p *PG) withCalcFault(_ context.Context, r *CalcRule) (*CalcRule, error) {
+	r.CalcError = p.calcFault(*r)
 	return r, nil
 }
 
@@ -234,36 +249,89 @@ func (p *PG) GetCalcRule(ctx context.Context, ref string) (*CalcRule, error) {
 }
 
 // sampleKey is a key resolved in the registries: its lane, its value type,
-// and its id in its lane's registry.
+// its id in its lane's registry, and its name now.
 type sampleKey struct {
 	lane      rules.Lane
 	valueType string
+	dataType  string
 	id        string
+	name      string
 }
 
-// resolveSampleKey finds a key in the property registry, else the metric
-// registry (the order resolveRuleLane takes).
-func resolveSampleKey(ctx context.Context, q querier, key string) (sampleKey, bool, error) {
+// resolveSampleKey finds a key by name, in the property registry, else the
+// metric registry (the order resolveRuleLane takes), or by id in either.
+func resolveSampleKey(ctx context.Context, q querier, ref string) (sampleKey, bool, error) {
+	col := "name"
+	if isUUID(ref) {
+		col = "id::text"
+	}
 	var k sampleKey
-	var dataType string
-	err := q.QueryRow(ctx, `select id::text, data_type from property_type where name = $1`, key).Scan(&k.id, &dataType)
+	err := q.QueryRow(ctx, `select id::text, name, data_type from property_type where `+col+` = $1`, ref).Scan(&k.id, &k.name, &k.dataType)
 	if err == nil {
 		k.lane = rules.LaneProperty
-		k.valueType = rules.ValueTypeFor(k.lane, dataType)
+		k.valueType = rules.ValueTypeFor(k.lane, k.dataType)
 		return k, true, nil
 	}
 	if !errors.Is(err, pgx.ErrNoRows) {
-		return k, false, fmt.Errorf("storage: resolve sample key %q: %w", key, err)
+		return k, false, fmt.Errorf("storage: resolve sample key %q: %w", ref, err)
 	}
-	err = q.QueryRow(ctx, `select id::text from metric_type where name = $1`, key).Scan(&k.id)
+	err = q.QueryRow(ctx, `select id::text, name from metric_type where `+col+` = $1`, ref).Scan(&k.id, &k.name)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return k, false, nil
 	}
 	if err != nil {
-		return k, false, fmt.Errorf("storage: resolve sample key %q: %w", key, err)
+		return k, false, fmt.Errorf("storage: resolve sample key %q: %w", ref, err)
 	}
 	k.lane, k.valueType = rules.LaneMetric, rules.ValueNumber
 	return k, true, nil
+}
+
+// SampleKeyRef is a sample key as the registries hold it: its lane, data
+// type (a property's), id and name.
+type SampleKeyRef struct {
+	Lane           rules.Lane
+	DataType, ID   string
+	Name           string
+}
+
+// ResolveSampleKey finds a key by name (a property first, then a metric) or
+// by id; ErrSampleKeyNotFound when neither registry holds it.
+func (p *PG) ResolveSampleKey(ctx context.Context, ref string) (SampleKeyRef, error) {
+	k, ok, err := resolveSampleKey(ctx, p.pool, ref)
+	if err != nil {
+		return SampleKeyRef{}, err
+	}
+	if !ok {
+		return SampleKeyRef{}, ErrSampleKeyNotFound
+	}
+	return SampleKeyRef{Lane: k.lane, DataType: k.dataType, ID: k.id, Name: k.name}, nil
+}
+
+// resolveCalcInputs resolves each input's key (by its id once held, else by
+// the name or id the author gave) to the registry row it reads, setting its
+// name, id and lane and the rule's input value types. health is refused by
+// its name; a key neither registry holds is refused on its field.
+func resolveCalcInputs(ctx context.Context, q querier, r *CalcRule) error {
+	r.inputTypes = make([]string, len(r.Inputs))
+	for i, in := range r.Inputs {
+		ref := in.Key
+		if in.KeyID != "" {
+			ref = in.KeyID
+		}
+		k, ok, err := resolveSampleKey(ctx, q, ref)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return invalidCalc(fmt.Sprintf("inputs[%d].key", i), "%q is not a registered property or metric", in.Key)
+		}
+		if k.name == healthKey {
+			return invalidCalc(fmt.Sprintf("inputs[%d].key", i), "%s may not be an input: an alarm moves it, so a rule reading it could feed back through an event rule", healthKey)
+		}
+		r.Inputs[i] = rules.CalcInput{Alias: in.Alias, Key: k.name, KeyID: k.id, Lane: k.lane}
+		r.inputTypes[i] = k.valueType
+	}
+	return nil
 }
 
 // calcChecks says which of a rule's parts to validate: all of them on
@@ -282,11 +350,13 @@ var calcCheckAll = calcChecks{compile: true, output: true, selector: true}
 //   - the name, the owner kind, and a selector of the owner's own kind (a
 //     component rule's component types and components, a system rule's
 //     system types and systems);
-//   - health is neither an input nor the output (#525 decision 3: an alarm
-//     moves health, so a rule reading it could feed back through an event
-//     rule, and health has its own producer, the rollup);
-//   - every input key is registered, and the reduce compiles against the
-//     inputs and yields the output key's type (rules.CompileCalc);
+//   - every input key is registered, resolved to the row it reads by id
+//     (resolveCalcInputs), and health is neither an input nor the output
+//     (#525 decision 3: an alarm moves health, so a rule reading it could
+//     feed back through an event rule, and health has its own producer, the
+//     rollup);
+//   - the reduce compiles against the inputs and yields the output key's
+//     type (rules.CompileCalc);
 //   - an enabled rule closes no loop in the graph of every enabled rule's
 //     input keys to its output key (rules.CalcCycle), and is the only
 //     enabled rule writing its output key, both read under a transaction
@@ -306,10 +376,8 @@ func prepareCalcRule(ctx context.Context, q txQuerier, r *CalcRule, check calcCh
 	if r.OwnerKind == rules.OwnerComponent && (len(r.Selector.SystemTypes) > 0 || len(r.Selector.Systems) > 0) {
 		return invalidCalc("selector", "a component rule selects components (component_types, components), not systems")
 	}
-	for i, in := range r.Inputs {
-		if in.Key == healthKey {
-			return invalidCalc(fmt.Sprintf("inputs[%d].key", i), "%s may not be an input: an alarm moves it, so a rule reading it could feed back through an event rule", healthKey)
-		}
+	if err := resolveCalcInputs(ctx, q, r); err != nil {
+		return err
 	}
 	if r.OutputKey == healthKey {
 		return invalidCalc("output_key", "%s is written by the health rollup, not by a calc rule", healthKey)
@@ -321,7 +389,7 @@ func prepareCalcRule(ctx context.Context, q txQuerier, r *CalcRule, check calcCh
 	if !ok {
 		return invalidCalc("output_key", "%q is not a registered property or metric", r.OutputKey)
 	}
-	r.OutputLane = out.lane
+	r.OutputLane, r.OutputKey, r.outputID, r.outputType = out.lane, out.name, out.id, out.valueType
 	*outIDs = [2]any{nil, nil}
 	if out.lane == rules.LaneProperty {
 		outIDs[0] = out.id
@@ -329,18 +397,7 @@ func prepareCalcRule(ctx context.Context, q txQuerier, r *CalcRule, check calcCh
 		outIDs[1] = out.id
 	}
 	if check.compile {
-		typed := make([]rules.TypedInput, len(r.Inputs))
-		for i, in := range r.Inputs {
-			k, ok, err := resolveSampleKey(ctx, q, in.Key)
-			if err != nil {
-				return err
-			}
-			if !ok {
-				return invalidCalc(fmt.Sprintf("inputs[%d].key", i), "%q is not a registered property or metric", in.Key)
-			}
-			typed[i] = rules.TypedInput{As: in.As, Key: in.Key, ValueType: k.valueType}
-		}
-		if _, err := rules.CompileCalc(r.OwnerKind, typed, r.Reduce, out.valueType); err != nil {
+		if _, err := rules.CompileCalc(r.OwnerKind, typedInputs(*r), r.Reduce, out.valueType); err != nil {
 			return fmt.Errorf("%w: %w", ErrCalcRuleInvalid, err)
 		}
 	}
@@ -390,7 +447,12 @@ func checkCalcGraph(ctx context.Context, q txQuerier, r CalcRule, outIDs [2]any)
 			return err
 		}
 	}
-	rows, err := q.Query(ctx, `select c.id::text, c.name, c.inputs, coalesce(pt.name, mt.name, '')
+	rows, err := q.Query(ctx, `select c.id::text, c.name,
+			c.output_lane || ':' || coalesce(c.output_property_type_id, c.output_metric_type_id)::text, coalesce(pt.name, mt.name, ''),
+			(select coalesce(jsonb_agg(jsonb_build_object('node', i.lane || ':' || coalesce(i.property_type_id, i.metric_type_id)::text,
+				'name', coalesce(ipt.name, imt.name)) order by i.position), '[]'::jsonb)
+				from calc_rule_input i left join property_type ipt on ipt.id = i.property_type_id
+				left join metric_type imt on imt.id = i.metric_type_id where i.rule_id = c.id)
 		from calc_rule c
 		left join property_type pt on pt.id = c.output_property_type_id
 		left join metric_type mt on mt.id = c.output_metric_type_id
@@ -399,26 +461,46 @@ func checkCalcGraph(ctx context.Context, q txQuerier, r CalcRule, outIDs [2]any)
 		return fmt.Errorf("storage: read the calc graph: %w", err)
 	}
 	defer rows.Close()
+	// The graph's nodes are keys by lane and id, so a rename moves nothing
+	// and a property and a metric of one name are two keys; names says each
+	// node's name now, for the chain a refusal reads.
+	names := map[string]string{}
 	var graph []rules.CalcEdge
 	for rows.Next() {
-		var id, name, output string
+		var id, name, output, outputName string
 		var raw []byte
-		if err := rows.Scan(&id, &name, &raw, &output); err != nil {
+		if err := rows.Scan(&id, &name, &output, &outputName, &raw); err != nil {
 			return fmt.Errorf("storage: read the calc graph: %w", err)
 		}
 		if id == r.ID {
 			continue
 		}
-		var inputs []rules.CalcInput
+		var inputs []struct{ Node, Name string }
 		if err := json.Unmarshal(raw, &inputs); err != nil {
 			return fmt.Errorf("storage: calc rule %q inputs: %w", name, err)
 		}
-		graph = append(graph, rules.CalcEdge{Rule: name, Inputs: inputKeys(inputs), Output: output})
+		e := rules.CalcEdge{Rule: name, Output: output}
+		for _, in := range inputs {
+			e.Inputs = append(e.Inputs, in.Node)
+			names[in.Node] = in.Name
+		}
+		names[output] = outputName
+		graph = append(graph, e)
 	}
 	if err := rows.Err(); err != nil {
 		return fmt.Errorf("storage: read the calc graph: %w", err)
 	}
-	if c := rules.CalcCycle(graph, rules.CalcEdge{Rule: r.Name, Inputs: inputKeys(r.Inputs), Output: r.OutputKey}); c != nil {
+	candidate := rules.CalcEdge{Rule: r.Name, Output: string(r.OutputLane) + ":" + r.outputID}
+	names[candidate.Output] = r.OutputKey
+	for _, in := range r.Inputs {
+		node := string(in.Lane) + ":" + in.KeyID
+		candidate.Inputs = append(candidate.Inputs, node)
+		names[node] = in.Key
+	}
+	if c := rules.CalcCycle(graph, candidate); c != nil {
+		for i, k := range c.Keys {
+			c.Keys[i] = names[k]
+		}
 		return &CalcCycleError{Cycle: c}
 	}
 	var writer string
@@ -440,6 +522,51 @@ func inputKeys(inputs []rules.CalcInput) []string {
 		out[i] = in.Key
 	}
 	return out
+}
+
+// inputTypeIDs splits a rule's inputs' key ids by lane.
+func inputTypeIDs(inputs []rules.CalcInput) (metrics, properties []string) {
+	metrics, properties = []string{}, []string{}
+	for _, in := range inputs {
+		if in.Lane == rules.LaneMetric {
+			metrics = append(metrics, in.KeyID)
+		} else {
+			properties = append(properties, in.KeyID)
+		}
+	}
+	return metrics, properties
+}
+
+// typedInputs are a rule's inputs with the value types its read or its
+// resolution found.
+func typedInputs(r CalcRule) []rules.TypedInput {
+	typed := make([]rules.TypedInput, len(r.Inputs))
+	for i, in := range r.Inputs {
+		vt := ""
+		if i < len(r.inputTypes) {
+			vt = r.inputTypes[i]
+		}
+		typed[i] = rules.TypedInput{Alias: in.Alias, Key: in.Key, KeyID: in.KeyID, Lane: in.Lane, ValueType: vt}
+	}
+	return typed
+}
+
+// writeCalcInputs replaces a rule's input rows with its inputs, in order.
+func writeCalcInputs(ctx context.Context, tx pgx.Tx, r CalcRule) error {
+	if _, err := tx.Exec(ctx, `delete from calc_rule_input where rule_id = $1::uuid`, r.ID); err != nil {
+		return fmt.Errorf("storage: clear calc rule %q inputs: %w", r.Name, err)
+	}
+	pos := make([]int, len(r.Inputs))
+	aliases, lanes, ids := make([]string, len(r.Inputs)), make([]string, len(r.Inputs)), make([]string, len(r.Inputs))
+	for i, in := range r.Inputs {
+		pos[i], aliases[i], lanes[i], ids[i] = i, in.Alias, string(in.Lane), in.KeyID
+	}
+	if _, err := tx.Exec(ctx, `insert into calc_rule_input (rule_id, position, alias, lane, property_type_id, metric_type_id)
+		select $1::uuid, p, a, l, case when l = 'property' then k end, case when l = 'metric' then k end
+		from unnest($2::int[], $3::text[], $4::text[], $5::uuid[]) as x(p, a, l, k)`, r.ID, pos, aliases, lanes, ids); err != nil {
+		return mapCalcWriteErr(err, r.Name)
+	}
+	return nil
 }
 
 // collectedBy refuses an output key a collection writes (#525 decision 6):
@@ -479,16 +606,16 @@ func mapCalcWriteErr(err error, name string) error {
 	}
 	var pgErr *pgconn.PgError
 	if errors.As(err, &pgErr) && pgErr.Code == "23503" {
+		if strings.HasPrefix(pgErr.ConstraintName, "calc_rule_input_") {
+			return invalidCalc("inputs", "a key the rule reads no longer exists")
+		}
 		return invalidCalc("output_key", "the output key does not exist")
 	}
 	return fmt.Errorf("storage: write calc rule %q: %w", name, err)
 }
 
-func calcArgs(r CalcRule) (sel, inputs, reduce []byte, err error) {
+func calcArgs(r CalcRule) (sel, reduce []byte, err error) {
 	if sel, err = json.Marshal(r.Selector); err != nil {
-		return
-	}
-	if inputs, err = json.Marshal(r.Inputs); err != nil {
 		return
 	}
 	reduce, err = json.Marshal(r.Reduce)
@@ -515,17 +642,20 @@ func (p *PG) CreateCalcRule(ctx context.Context, actorID string, spec CalcRuleSp
 	if err := prepareCalcRule(ctx, tx, &r, calcCheckAll, &out); err != nil {
 		return nil, err
 	}
-	sel, inputs, reduce, err := calcArgs(r)
+	sel, reduce, err := calcArgs(r)
 	if err != nil {
 		return nil, err
 	}
-	var id string
-	if err := tx.QueryRow(ctx, `insert into calc_rule (name, label, description, owner_kind, selector, inputs, reduce,
+	if err := tx.QueryRow(ctx, `insert into calc_rule (name, label, description, owner_kind, selector, reduce,
 		output_lane, output_property_type_id, output_metric_type_id, enabled)
-		values ($1, $2, $3, $4, $5, $6, $7, $8, $9::uuid, $10::uuid, $11) returning id::text`,
-		r.Name, labelOrNull(r.Label), r.Description, r.OwnerKind, sel, inputs, reduce, string(r.OutputLane), out[0], out[1], r.Enabled).Scan(&id); err != nil {
+		values ($1, $2, $3, $4, $5, $6, $7, $8::uuid, $9::uuid, $10) returning id::text`,
+		r.Name, labelOrNull(r.Label), r.Description, r.OwnerKind, sel, reduce, string(r.OutputLane), out[0], out[1], r.Enabled).Scan(&r.ID); err != nil {
 		return nil, mapCalcWriteErr(err, r.Name)
 	}
+	if err := writeCalcInputs(ctx, tx, r); err != nil {
+		return nil, err
+	}
+	id := r.ID
 	created, err := readCalcRule(ctx, tx, id, false)
 	if err != nil {
 		return nil, err
@@ -596,7 +726,12 @@ func (p *PG) UpdateCalcRule(ctx context.Context, actorID, ref string, patch Calc
 		r.Selector = *patch.Selector
 	}
 	if patch.Inputs != nil {
-		r.Inputs = *patch.Inputs
+		r.Inputs = slices.Clone(*patch.Inputs)
+		// Resolved now, so an unchanged input given by name compares equal
+		// to the stored one held by id.
+		if err := resolveCalcInputs(ctx, tx, &r); err != nil {
+			return nil, err
+		}
 	}
 	if patch.Reduce != nil {
 		r.Reduce = *patch.Reduce
@@ -624,15 +759,20 @@ func (p *PG) UpdateCalcRule(ctx context.Context, actorID, ref string, patch Calc
 	if sameAuthoredCalc(old, r) {
 		return p.withCalcFault(ctx, &old)
 	}
-	sel, inputs, reduce, err := calcArgs(r)
+	sel, reduce, err := calcArgs(r)
 	if err != nil {
 		return nil, err
 	}
-	if _, err := tx.Exec(ctx, `update calc_rule set label = $2, description = $3, selector = $4, inputs = $5, reduce = $6,
-		output_lane = $7, output_property_type_id = $8::uuid, output_metric_type_id = $9::uuid, enabled = $10,
+	if _, err := tx.Exec(ctx, `update calc_rule set label = $2, description = $3, selector = $4, reduce = $5,
+		output_lane = $6, output_property_type_id = $7::uuid, output_metric_type_id = $8::uuid, enabled = $9,
 		version = version + 1, updated_at = now() where id = $1`,
-		old.ID, labelOrNull(r.Label), r.Description, sel, inputs, reduce, string(r.OutputLane), out[0], out[1], r.Enabled); err != nil {
+		old.ID, labelOrNull(r.Label), r.Description, sel, reduce, string(r.OutputLane), out[0], out[1], r.Enabled); err != nil {
 		return nil, mapCalcWriteErr(err, old.Name)
+	}
+	if !sameRuleJSON(r.Inputs, old.Inputs) {
+		if err := writeCalcInputs(ctx, tx, r); err != nil {
+			return nil, err
+		}
 	}
 	updated, err := readCalcRule(ctx, tx, old.ID, false)
 	if err != nil {

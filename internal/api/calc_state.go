@@ -35,7 +35,7 @@ type calcOwnerStateBody struct {
 	Missing        []string         `json:"missing" doc:"The input keys no value was found for (nothing was written)"`
 	Skipped        []calcMemberBody `json:"skipped" doc:"A system rule's members that held no value of an input, those the caller may read"`
 	SkippedHidden  int              `json:"skipped_hidden" doc:"How many more skipped members the caller may not read (counted, never named)"`
-	Stale          []calcStaleBody  `json:"stale" doc:"The instances a reducer left out as stale, on components the caller may read"`
+	Stale          []calcStaleBody  `json:"stale" doc:"The instances an input's list left out as stale, on components the caller may read"`
 	StaleHidden    int              `json:"stale_hidden" doc:"How many more stale instances are on components the caller may not read"`
 	Error          string           `json:"error,omitempty" required:"false" doc:"Why the rule could not compute (a run-time failure, a reduce that no longer compiles, a database fault it is backing off from)"`
 	NoMembersSince *time.Time       `json:"no_members_since,omitempty" required:"false" doc:"A system with no role-bound members since then: the rule writes nothing and its last value stands, unsupported"`
@@ -71,8 +71,8 @@ type calcPreviewInput struct {
 		Name      string            `json:"name,omitempty" required:"false" doc:"A saved rule's name, to preview an edit of it (its stored version is then not a second writer of its key); absent for a new rule"`
 		OwnerKind string            `json:"owner_kind" enum:"component,system" doc:"What the rule derives a value on"`
 		Selector  *calcSelectorBody `json:"selector,omitempty" required:"false" doc:"The owners the rule derives for; absent is every owner of its kind"`
-		Inputs    []calcInputBody   `json:"inputs" minItems:"1" maxItems:"16" doc:"The keys the rule reads, each by a unique name its reduce uses"`
-		Reduce    calcReduceBody    `json:"reduce" doc:"A named reducer over the one input, or an expression"`
+		Inputs    []calcInputBody   `json:"inputs" minItems:"1" maxItems:"16" doc:"The keys the rule reads, each by a unique alias its reduce uses"`
+		Reduce    calcReduceBody    `json:"reduce" doc:"An expression over the inputs by alias"`
 		OutputKey string            `json:"output_key" minLength:"1" doc:"The property or metric the rule would write"`
 	}
 }
@@ -87,7 +87,7 @@ type calcPreviewOwnerBody struct {
 	Missing       []string         `json:"missing" doc:"The input keys no value was found for"`
 	Skipped       []calcMemberBody `json:"skipped" doc:"A system rule's members that held no value of an input, those the caller may read"`
 	SkippedHidden int              `json:"skipped_hidden" doc:"How many more skipped members the caller may not read"`
-	Stale         []calcStaleBody  `json:"stale" doc:"The instances a reducer would leave out as stale, on components the caller may read"`
+	Stale         []calcStaleBody  `json:"stale" doc:"The instances an input's list would leave out as stale, on components the caller may read"`
 	StaleHidden   int              `json:"stale_hidden" doc:"How many more stale instances the caller may not read"`
 	NoMembers     bool             `json:"no_members" doc:"A system with no role-bound members: the rule would write nothing"`
 	Error         string           `json:"error,omitempty" required:"false" doc:"Why the rule could not compute on the owner"`
@@ -139,11 +139,11 @@ func registerCalcRuleStateRoutes(api huma.API, a *authenticator, gw storage.Gate
 		Method:      http.MethodPost,
 		Path:        "/calc-rules:preview",
 		Summary:     "Preview a calc rule",
-		Description: "Computes a candidate calc rule now, on each owner it selects that the caller may read, with the reduce the tick runs, and writes nothing (a read-only transaction). For each owner it answers the value the rule would write, the output's current value and whether they differ, the inputs with no value, the members skipped and the instances left out as stale (named when the caller may read the component, else counted). An expression over a system with a member the caller may not read is withheld on that system, its error counting the members out of scope, since an expression can read one member by position. A component rule previews the selected components holding one of its inputs, as the tick would mark them. At most owner_cap owners are computed, and a bound on total input reads stops a preview over large systems early, a whole owner at a time (owners_judged of owners_total, truncated past either). The candidate is checked as a save would check it: a reduce that does not compile, a cycle in the key graph, an output another enabled rule or a collection writes, or health are each a 422, so the author learns before saving; given a saved rule's name it is judged as an edit of that rule. The selector's names resolve in the caller's read scope: a name that does not exist and one the caller may not read are the same 422, and a name shared in and out of scope means the one in scope. A preview takes no lock a save waits on. Gated by rule:read.",
+		Description: "Computes a candidate calc rule now, on each owner it selects that the caller may read, with the reduce the tick runs, and writes nothing (a read-only transaction). For each owner it answers the value the rule would write, the output's current value and whether they differ, the inputs with no value, the members skipped and the instances left out as stale (named when the caller may read the component, else counted). An expression that reads one member's value by position (members[1].value.t, or an element of an input's list) over a system with a member the caller may not read is withheld on that system, its error counting the members out of scope; one that folds each input's list whole (avg(t), max(t)) shows the aggregate. A component rule previews the selected components holding one of its inputs, as the tick would mark them. At most owner_cap owners are computed, and a bound on total input reads stops a preview over large systems early, a whole owner at a time (owners_judged of owners_total, truncated past either). The candidate is checked as a save would check it: a reduce that does not compile, a cycle in the key graph, an output another enabled rule or a collection writes, or health are each a 422, so the author learns before saving; given a saved rule's name it is judged as an edit of that rule. The selector's names resolve in the caller's read scope: a name that does not exist and one the caller may not read are the same 422, and a name shared in and out of scope means the one in scope. A preview takes no lock a save waits on. Gated by rule:read.",
 	}, "rule", "read"), func(ctx context.Context, in *calcPreviewInput) (*calcPreviewOutput, error) {
 		b := in.Body
 		spec := storage.CalcRuleSpec{Name: b.Name, OwnerKind: b.OwnerKind, Inputs: fromCalcInputs(b.Inputs),
-			Reduce: rules.CalcReduce{Reducer: b.Reduce.Reducer, Expr: b.Reduce.Expr}, OutputKey: b.OutputKey}
+			Reduce: rules.CalcReduce{Expr: b.Reduce.Expr}, OutputKey: b.OutputKey}
 		if b.Selector != nil {
 			spec.Selector = b.Selector.toStorage()
 		}

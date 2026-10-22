@@ -297,13 +297,13 @@ export interface paths {
         };
         /**
          * List calc rules
-         * @description Lists the calc rules, by name: the authored config that derives an output key on each owner from named inputs, each with its live state as counts (owners_computed, owners_pending, owners_unsupported, owners_failed) over the owners the caller may read. Rules read like a registry, so every rule is listed whatever the caller's scope. Gated by rule:read.
+         * @description Lists the calc rules, by name: the authored config that derives an output key on each owner from aliased inputs, each with its live state as counts (owners_computed, owners_pending, owners_unsupported, owners_failed) over the owners the caller may read. Rules read like a registry, so every rule is listed whatever the caller's scope. Gated by rule:read.
          */
         get: operations["list-calc-rule"];
         put?: never;
         /**
          * Create a calc rule
-         * @description Authors a rule that derives its output key on each owner (each component its selector picks, or each system) from its named inputs, folded by a named reducer (one input) or an expression over the inputs by name. Every input key must be registered and health may not be one; the reduce must compile and yield the output key's type (a 422 placed at body.reduce.expr with its line and column); the output must be a registered key that is not health and that no collection writes (a native probe's key, or one a driver declares among its emits); an enabled rule may not close a cycle in the graph from every enabled rule's input keys to its output key (a 422 naming the chain of keys), nor write a key another enabled rule writes (a 422 naming that rule). A list or get carries calc_error when a stored reduce no longer compiles. A name already taken is a 409. Returns the rule with its uuid. Audited. Gated by rule:create, with an all-scope grant.
+         * @description Authors a rule that derives its output key on each owner (each component its selector picks, or each system) from its aliased inputs, reduced by an expression over the aliases, each bound as the list of its current values (one per instance on a component, every member's on a system, with members records beside it). Every input key must be registered (by name or uuid; the rule holds it by uuid) and health may not be one; each alias is an identifier of at most 64, not a keyword, a builtin or list function's name, or a site binding (component, has, members, system, value), and unique; the reduce must compile and yield the output key's type (a 422 placed at body.reduce.expr with its line and column, and the name when it is one no alias binds); the output must be a registered key that is not health and that no collection writes (a native probe's key, or one a driver declares among its emits); an enabled rule may not close a cycle in the graph from every enabled rule's input keys to its output key (a 422 naming the chain of keys), nor write a key another enabled rule writes (a 422 naming that rule). A list or get carries calc_error when a stored reduce no longer compiles. A name already taken is a 409. Returns the rule with its uuid. Audited. Gated by rule:create, with an all-scope grant.
          */
         post: operations["create-calc-rule"];
         delete?: never;
@@ -391,7 +391,7 @@ export interface paths {
         put?: never;
         /**
          * Preview a calc rule
-         * @description Computes a candidate calc rule now, on each owner it selects that the caller may read, with the reduce the tick runs, and writes nothing (a read-only transaction). For each owner it answers the value the rule would write, the output's current value and whether they differ, the inputs with no value, the members skipped and the instances left out as stale (named when the caller may read the component, else counted). An expression over a system with a member the caller may not read is withheld on that system, its error counting the members out of scope, since an expression can read one member by position. A component rule previews the selected components holding one of its inputs, as the tick would mark them. At most owner_cap owners are computed, and a bound on total input reads stops a preview over large systems early, a whole owner at a time (owners_judged of owners_total, truncated past either). The candidate is checked as a save would check it: a reduce that does not compile, a cycle in the key graph, an output another enabled rule or a collection writes, or health are each a 422, so the author learns before saving; given a saved rule's name it is judged as an edit of that rule. The selector's names resolve in the caller's read scope: a name that does not exist and one the caller may not read are the same 422, and a name shared in and out of scope means the one in scope. A preview takes no lock a save waits on. Gated by rule:read.
+         * @description Computes a candidate calc rule now, on each owner it selects that the caller may read, with the reduce the tick runs, and writes nothing (a read-only transaction). For each owner it answers the value the rule would write, the output's current value and whether they differ, the inputs with no value, the members skipped and the instances left out as stale (named when the caller may read the component, else counted). An expression that reads one member's value by position (members[1].value.t, or an element of an input's list) over a system with a member the caller may not read is withheld on that system, its error counting the members out of scope; one that folds each input's list whole (avg(t), max(t)) shows the aggregate. A component rule previews the selected components holding one of its inputs, as the tick would mark them. At most owner_cap owners are computed, and a bound on total input reads stops a preview over large systems early, a whole owner at a time (owners_judged of owners_total, truncated past either). The candidate is checked as a save would check it: a reduce that does not compile, a cycle in the key graph, an output another enabled rule or a collection writes, or health are each a 422, so the author learns before saving; given a saved rule's name it is judged as an edit of that rule. The selector's names resolve in the caller's read scope: a name that does not exist and one the caller may not read are the same 422, and a name shared in and out of scope means the one in scope. A preview takes no lock a save waits on. Gated by rule:read.
          */
         post: operations["preview-calc-rule"];
         delete?: never;
@@ -1483,7 +1483,7 @@ export interface paths {
         put?: never;
         /**
          * Validate an expression
-         * @description Compiles an expression against a registered site's environment and answers whether it compiles, with positioned diagnostics, and the site's bindings, admitted builtins and run budget, all generated from the site's declaration. For criteria a sample key is required, and types the value (a metric is a number; a property is text, or a bool for a bool property). For calc the key is the rule's output key, typing the result, and the rule's inputs (and owner_kind, component by default) give the bindings, each input's name bound to its key's type (for a system, inside one record per member); an input that is unknown or misnamed is a 422; the answer's value_type so reveals a key's lane and data type to a rule:read holder, as the rule list already does. Compiles without the engine's program cache and stores and runs nothing. An unknown site, a missing or unknown key is a 422. Gated by rule:read.
+         * @description Compiles an expression against a registered site's environment and answers whether it compiles, with positioned diagnostics, and the site's bindings, admitted builtins and run budget, all generated from the site's declaration. For criteria a sample key is required, and types the value (a metric is a number; a property is text, or a bool for a bool property). For calc the key is the rule's output key, typing the result, and the rule's inputs (and owner_kind, component by default) give the bindings, each input's alias bound to the list of its key's type (a system also binds members, one record per member); an input that is unknown, or an alias that is not an identifier, is reserved or repeats, is a 422; a name the expression uses that no alias binds is a diagnostic carrying that name (unbound); the answer's value_type so reveals a key's lane and data type to a rule:read holder, as the rule list already does. Compiles without the engine's program cache and stores and runs nothing. An unknown site, a missing or unknown key is a 422. Gated by rule:read.
          */
         post: operations["validate-expression"];
         delete?: never;
@@ -4723,7 +4723,7 @@ export interface components {
              * @description The 1-based column of the fault, when it has a line
              */
             column?: number;
-            /** @description The field at fault: an input's key (inputs[0].key), reduce.expr, reduce.reducer or output_key */
+            /** @description The field at fault: an input's key (inputs[0].key), reduce.expr or output_key */
             field: string;
             /**
              * Format: int64
@@ -4734,10 +4734,23 @@ export interface components {
             message: string;
         };
         CalcInputBody: {
-            /** @description The name the reduce knows the input by: an identifier, not a keyword or a builtin's name */
-            as: string;
-            /** @description The property or metric the input reads, by name */
+            /** @description The name the reduce's expression binds the input by: an identifier of at most 64, not a keyword, a builtin or list function's name, or one of the calc site's own bindings (component, has, members, system, value); unique in the rule */
+            alias: string;
+            /** @description The property or metric the input reads, by name or uuid; the rule holds it by uuid, so a rename changes nothing */
             key: string;
+        };
+        CalcInputReadBody: {
+            /** @description The name the reduce's expression binds the input by */
+            alias: string;
+            /** @description The key's name now */
+            key: string;
+            /** @description The key's uuid, which the rule holds it by */
+            key_id: string;
+            /**
+             * @description Which registry the key is in
+             * @enum {string}
+             */
+            lane: "property" | "metric";
         };
         CalcMemberBody: {
             /** @description The member component, by name */
@@ -4790,7 +4803,7 @@ export interface components {
              * @description How many more skipped members the caller may not read (counted, never named)
              */
             skipped_hidden: number;
-            /** @description The instances a reducer left out as stale, on components the caller may read */
+            /** @description The instances an input's list left out as stale, on components the caller may read */
             stale: components["schemas"]["CalcStaleBody"][] | null;
             /**
              * Format: int64
@@ -4807,7 +4820,7 @@ export interface components {
              * @example /api/v1/schemas/CalcPreviewInputBody.json
              */
             readonly $schema?: string;
-            /** @description The keys the rule reads, each by a unique name its reduce uses */
+            /** @description The keys the rule reads, each by a unique alias its reduce uses */
             inputs: components["schemas"]["CalcInputBody"][] | null;
             /** @description A saved rule's name, to preview an edit of it (its stored version is then not a second writer of its key); absent for a new rule */
             name?: string;
@@ -4818,7 +4831,7 @@ export interface components {
              * @enum {string}
              */
             owner_kind: "component" | "system";
-            /** @description A named reducer over the one input, or an expression */
+            /** @description An expression over the inputs by alias */
             reduce: components["schemas"]["CalcReduceBody"];
             /** @description The owners the rule derives for; absent is every owner of its kind */
             selector?: components["schemas"]["CalcSelectorBody"];
@@ -4877,7 +4890,7 @@ export interface components {
              * @description How many more skipped members the caller may not read
              */
             skipped_hidden: number;
-            /** @description The instances a reducer would leave out as stale, on components the caller may read */
+            /** @description The instances an input's list would leave out as stale, on components the caller may read */
             stale: components["schemas"]["CalcStaleBody"][] | null;
             /**
              * Format: int64
@@ -4888,13 +4901,8 @@ export interface components {
             value?: unknown;
         };
         CalcReduceBody: {
-            /** @description An expression over the inputs by their names, yielding the output key's type; give this or reducer */
-            expr?: string;
-            /**
-             * @description A named fold over every value of the rule's one input (every instance on a component; every instance on every role-bound member of a system); give this or expr
-             * @enum {string}
-             */
-            reducer?: "average" | "min" | "max" | "sum" | "count" | "majority" | "any" | "all";
+            /** @description An expression over the inputs by alias, each bound as the list of its current values (one per instance on a component, every member's on a system), yielding the output key's type: max(tcp), avg(temp), any(call) || max(people) > 0 */
+            expr: string;
         };
         CalcRuleBody: {
             /**
@@ -4916,8 +4924,8 @@ export interface components {
             enabled: boolean;
             /** @description The rule's uuid, the stable form of name */
             id: string;
-            /** @description The keys the rule reads, each by the name its reduce uses */
-            inputs: components["schemas"]["CalcInputBody"][] | null;
+            /** @description The keys the rule reads, each by the alias its reduce uses */
+            inputs: components["schemas"]["CalcInputReadBody"][] | null;
             /** @description A human label */
             label?: string;
             /** @description The rule's name, the address an operator types; renameable */
@@ -4956,7 +4964,7 @@ export interface components {
              * @description How many owners the caller may read the rule last wrote nothing for: an input missing, a system with no members (on the list)
              */
             owners_unsupported: number;
-            /** @description How the inputs fold into the output: a named reducer or an expression */
+            /** @description How the inputs reduce into the output: an expression over their aliases */
             reduce: components["schemas"]["CalcReduceBody"];
             /** @description The owners the rule derives for: a component rule's components or a system rule's systems; empty is every owner of its kind */
             selector: components["schemas"]["CalcSelectorBody"];
@@ -5282,7 +5290,7 @@ export interface components {
             description?: string;
             /** @description Defaults to true */
             enabled?: boolean;
-            /** @description The keys the rule reads, each by a unique name its reduce uses; health may not be one */
+            /** @description The keys the rule reads, each by a unique alias its reduce uses; health may not be one */
             inputs: components["schemas"]["CalcInputBody"][] | null;
             /** @description A human label */
             label?: string;
@@ -5295,7 +5303,7 @@ export interface components {
              * @enum {string}
              */
             owner_kind: "component" | "system";
-            /** @description A named reducer over the one input, or an expression over the inputs by name */
+            /** @description An expression over the inputs by alias */
             reduce: components["schemas"]["CalcReduceBody"];
             /** @description The owners the rule derives for: a component rule's component_types and components, or a system rule's system_types and systems; absent is every owner of its kind */
             selector?: components["schemas"]["CalcSelectorBody"];
@@ -6388,6 +6396,8 @@ export interface components {
              * @enum {string}
              */
             phase: "parse" | "type" | "limit";
+            /** @description The name the expression uses that nothing binds, when that is the fault (an editor offers to bind it) */
+            unbound?: string;
         };
         FileBody: {
             /**
@@ -9211,7 +9221,7 @@ export interface components {
             label?: string;
             /** @description The property or metric the rule writes */
             output_key?: string;
-            /** @description Replace the reduce */
+            /** @description Replace the reduce's expression */
             reduce?: components["schemas"]["CalcReduceBody"];
             /** @description Replace the owners the rule derives for; an empty selector is every owner of its kind */
             selector?: components["schemas"]["CalcSelectorBody"];
@@ -9626,12 +9636,12 @@ export interface components {
              * @example /api/v1/schemas/ValidateExpressionInputBody.json
              */
             readonly $schema?: string;
-            /** @description For calc (required there), the rule's inputs: each bound by its name, typed by its key */
+            /** @description For calc (required there), the rule's inputs: each bound by its alias, typed by its key (by name or uuid) */
             inputs?: components["schemas"]["CalcInputBody"][] | null;
             /** @description The sample key that types the expression (required at both sites). For criteria, the key the rule reads: its lane and data type type the value (a metric is a number; a property is text, or a bool for a bool property). For calc, the rule's output key: its type is the result the reduce must yield */
             key?: string;
             /**
-             * @description For calc, what the rule derives on: a component binds each input as one value; a system binds members, one record per role-bound member with value.<as> and has.<as> per input; defaults to component
+             * @description For calc, what the rule derives on: each input binds by its alias as the list of its current values (one per instance on a component, every member's on a system); a system also binds members, one record per role-bound member with value.<alias> and has.<alias> per input; defaults to component
              * @enum {string}
              */
             owner_kind?: "component" | "system";

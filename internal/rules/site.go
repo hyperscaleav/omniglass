@@ -2,8 +2,10 @@ package rules
 
 import (
 	"encoding/json"
+	"fmt"
 	"reflect"
 	"slices"
+	"strings"
 
 	"github.com/hyperscaleav/omniglass/internal/expression"
 )
@@ -43,8 +45,9 @@ type Site struct {
 	// Bindings describes a site whose bindings are authored with each
 	// expression (a calc rule's inputs), so its variants declare none.
 	Bindings string
-	// Reducers are the named folds a site offers beside an expression.
-	Reducers []Reducer
+	// ReservedNames are the names an authored binding (a calc rule's alias)
+	// may not take; nil for a site that authors none.
+	ReservedNames []string
 }
 
 // Variant is the site's environment for a value type.
@@ -68,7 +71,7 @@ func calcVariant(valueType, when string) SiteVariant {
 // sites is the registry, in name order.
 var sites = []Site{{
 	Name: "calc",
-	Summary: "A calc rule's reduce: one value of the output key's type, from the rule's named inputs on one owner. " +
+	Summary: "A calc rule's reduce: one value of the output key's type, from the rule's aliased inputs on one owner. " +
 		"The output key types the result, so a key is required.",
 	KeyRequired: true,
 	Variants: []SiteVariant{
@@ -76,12 +79,14 @@ var sites = []Site{{
 		calcVariant(ValueText, "a string or json property output"),
 		calcVariant(ValueBool, "a bool property output"),
 	},
-	Bindings: "For a component owner, each of the rule's inputs by its as name, typed by its key (a metric is a number, " +
-		"a property text, a bool property a bool): the component's current value on its aggregate instance. For a " +
-		"system owner, members: one record per role-bound member, ordered by name then id, holding id, name, " +
-		"value.<as> (the member's current value of each input, the type's zero when it has none) and has.<as> " +
-		"(whether it holds one), so one member's inputs stay together.",
-	Reducers: reducers,
+	Bindings: "Each of the rule's inputs by its alias, as the list of its current values, typed by its key (a metric " +
+		"is a number, a property text, a bool property a bool). For a component owner, one value per instance: the " +
+		"named instances, the aggregate instance only when it is the key's one, an instance not heard from in an hour " +
+		"left out. For a system owner, every role-bound member's values, ordered by member name then id; and members: " +
+		"one record per member, holding id, name, value.<alias> (the member's own current value, the type's zero when " +
+		"it has none) and has.<alias> (whether it holds one), so one member's inputs stay together. A list function " +
+		"(avg, max, min, sum, majority, any, all) folds a list into one value.",
+	ReservedNames: CalcReservedNames(),
 }, {
 	Name: "criteria",
 	Summary: "An event rule's fire_criteria and clear_criteria: true or false for one arriving sample. " +
@@ -140,9 +145,19 @@ type SiteFacts struct {
 	KeyRequired bool           `json:"key_required"`
 	Variants    []VariantFacts `json:"variants"`
 	Bindings    string         `json:"bindings,omitempty"`
-	Reducers    []Reducer      `json:"reducers,omitempty"`
 	Builtins    []string       `json:"builtins"`
-	Budget      BudgetFacts    `json:"budget"`
+	// Functions are the list functions the site admits, each with its cost
+	// argument.
+	Functions []FunctionFacts `json:"functions,omitempty"`
+	// ReservedNames are the names an authored binding may not take.
+	ReservedNames []string    `json:"reserved_names,omitempty"`
+	Budget        BudgetFacts `json:"budget"`
+}
+
+// FunctionFacts is one list function as the docs describe it.
+type FunctionFacts struct {
+	Name string `json:"name"`
+	Cost string `json:"cost"`
 }
 
 // VariantFacts is one value type's bindings.
@@ -163,7 +178,7 @@ type BudgetFacts struct {
 // read from its Env, and the builtins and budget the site's Env admits
 // (the same for every variant of a site).
 func (s Site) Facts() SiteFacts {
-	f := SiteFacts{Name: s.Name, Summary: s.Summary, KeyRequired: s.KeyRequired, Bindings: s.Bindings, Reducers: s.Reducers}
+	f := SiteFacts{Name: s.Name, Summary: s.Summary, KeyRequired: s.KeyRequired, Bindings: s.Bindings, ReservedNames: s.ReservedNames}
 	for _, v := range s.Variants {
 		b := v.Env.Bindings()
 		if b == nil {
@@ -174,6 +189,9 @@ func (s Site) Facts() SiteFacts {
 	if len(s.Variants) > 0 {
 		env := s.Variants[0].Env
 		f.Builtins = env.Builtins()
+		for _, n := range env.ListFunctions() {
+			f.Functions = append(f.Functions, FunctionFacts{Name: n, Cost: expression.ListFunctionCost(n)})
+		}
 		b := env.Budget()
 		f.Budget = BudgetFacts{Iterations: b.Iterations, Memory: b.Memory, Deadline: b.Deadline.String()}
 	}
@@ -193,4 +211,27 @@ func SitesFactsJSON() ([]byte, error) {
 		return nil, err
 	}
 	return append(b, '\n'), nil
+}
+
+// CalcNamesTS renders the calc site's alias rules for the console
+// (web/src/lib/calc_names.gen.ts, written by make gen), so the form and the
+// editor refuse exactly the aliases the server refuses;
+// TestCalcNamesMatchCommitted is its drift gate.
+func CalcNamesTS() []byte {
+	var b strings.Builder
+	b.WriteString("// Generated by cmd/exprgen from internal/rules (make gen). Do not edit.\n")
+	b.WriteString("// The calc site's alias rules (#1018): an identifier of at most CALC_ALIAS_MAX,\n")
+	b.WriteString("// not one of CALC_RESERVED_NAMES (keywords, builtins, list functions, the site's own bindings).\n\n")
+	fmt.Fprintf(&b, "export const CALC_ALIAS_MAX = %d;\n\n", expression.MaxBindingName)
+	b.WriteString("export const CALC_RESERVED_NAMES: readonly string[] = [\n")
+	for _, n := range CalcReservedNames() {
+		fmt.Fprintf(&b, "  %q,\n", n)
+	}
+	b.WriteString("];\n\n")
+	b.WriteString("export const CALC_LIST_FUNCTIONS: readonly string[] = [\n")
+	for _, n := range expression.ListFunctions() {
+		fmt.Fprintf(&b, "  %q,\n", n)
+	}
+	b.WriteString("];\n")
+	return []byte(b.String())
 }

@@ -164,7 +164,7 @@ func (p *PG) writeMetricSamples(ctx context.Context, tx pgx.Tx, evs []MetricSamp
 			return fmt.Errorf("storage: sample %s/%s: %w", ev.OwnerID, ev.Key, err)
 		}
 		arcs[i] = arc
-		marks.add(ev.OwnerKind, arc, ev.Key)
+		marks.add(ev.OwnerKind, arc, rules.LaneMetric, ev.Key)
 	}
 	// Marked before any sample lands, so the batch takes the pending rows'
 	// locks before any series or health lock (the calc tick's order).

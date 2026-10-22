@@ -2,7 +2,10 @@ package rules
 
 import (
 	"errors"
+	"fmt"
+	"maps"
 	"math"
+	"slices"
 	"testing"
 )
 
@@ -15,49 +18,123 @@ func mustCompile(t *testing.T, owner string, inputs []TypedInput, reduce CalcRed
 	return c
 }
 
-// Each named reducer folds every value of its one input into one value.
-func TestCalcFold(t *testing.T) {
-	nums := []any{3.0, 1.0, 5.0, 3.0}
+// oldFold is the named reducer the calc rules ran before #1018, kept here as
+// the oracle the list functions are proven against: each instance's value
+// folded into one.
+func oldFold(name string, vs []any) any {
+	switch name {
+	case "count":
+		return float64(len(vs))
+	case "average", "min", "max", "sum":
+		acc, sum := vs[0].(float64), 0.0
+		for _, v := range vs {
+			f := v.(float64)
+			sum += f
+			if (name == "min" && f < acc) || (name == "max" && f > acc) {
+				acc = f
+			}
+		}
+		switch name {
+		case "average":
+			return sum / float64(len(vs))
+		case "sum":
+			return sum
+		}
+		return acc
+	case "any", "all":
+		want := name == "any"
+		for _, v := range vs {
+			if v.(bool) == want {
+				return want
+			}
+		}
+		return !want
+	case "majority":
+		counts, byText := map[string]int{}, map[string]any{}
+		for _, v := range vs {
+			k := FormatCalcValue(v)
+			counts[k]++
+			byText[k] = v
+		}
+		keys := slices.Sorted(maps.Keys(counts))
+		best := keys[0]
+		for _, k := range keys[1:] {
+			if counts[k] > counts[best] {
+				best = k
+			}
+		}
+		return byText[best]
+	}
+	panic(name)
+}
+
+// reducerExprs is each retired reducer as the expression the data migration
+// writes for it (db/migrations, the calc_rule_reduce_expr backfill), over the
+// input's alias x.
+var reducerExprs = map[string]string{
+	"average": "avg(x)", "min": "min(x)", "max": "max(x)", "sum": "sum(x)", "count": "len(x)",
+	"majority": "majority(x)", "any": "any(x)", "all": "all(x)",
+}
+
+// The list functions compute what the named reducers did (#1018): over the
+// same values, on a component (its instances) and on a system (every
+// member's instances), each retired reducer's expression equals its fold,
+// majority's tie included.
+func TestCalcListFunctionsEqualTheReducers(t *testing.T) {
+	nums := [][]any{{3.0}, {3.0, 1.0, 5.0, 3.0}, {-2.5, 7.25}}
+	texts := [][]any{{"hdmi2", "hdmi1", "hdmi2"}, {"b", "a", "a", "b"}, {"x"}}
+	bools := [][]any{{true, false, false}, {false, true}, {true, false}, {true, true}, {false}}
 	for _, tc := range []struct {
-		reducer string
-		in      []any
-		vt, out string
-		want    any
+		reducer, vt, out string
+		cases            [][]any
 	}{
-		{"average", nums, ValueNumber, ValueNumber, 3.0},
-		{"min", nums, ValueNumber, ValueNumber, 1.0},
-		{"max", nums, ValueNumber, ValueNumber, 5.0},
-		{"sum", nums, ValueNumber, ValueNumber, 12.0},
-		{"count", nums, ValueNumber, ValueNumber, 4.0},
-		{"count", []any{"a", "b"}, ValueText, ValueNumber, 2.0},
-		{"majority", []any{"hdmi2", "hdmi1", "hdmi2"}, ValueText, ValueText, "hdmi2"},
-		{"majority", []any{"b", "a", "a", "b"}, ValueText, ValueText, "a"}, // a tie: the value that sorts first
-		{"majority", []any{true, false, false}, ValueBool, ValueBool, false},
-		{"any", []any{false, true}, ValueBool, ValueBool, true},
-		{"any", []any{false, false}, ValueBool, ValueBool, false},
-		{"all", []any{true, true}, ValueBool, ValueBool, true},
-		{"all", []any{true, false}, ValueBool, ValueBool, false},
+		{"average", ValueNumber, ValueNumber, nums}, {"min", ValueNumber, ValueNumber, nums}, {"max", ValueNumber, ValueNumber, nums},
+		{"sum", ValueNumber, ValueNumber, nums}, {"count", ValueNumber, ValueNumber, nums}, {"count", ValueText, ValueNumber, texts},
+		{"count", ValueBool, ValueNumber, bools}, {"majority", ValueText, ValueText, texts}, {"majority", ValueBool, ValueBool, bools},
+		{"any", ValueBool, ValueBool, bools}, {"all", ValueBool, ValueBool, bools},
 	} {
-		c := mustCompile(t, OwnerComponent, []TypedInput{in("x", "k", tc.vt)}, CalcReduce{Reducer: tc.reducer}, tc.out)
-		got, err := c.Reduce([][]any{tc.in})
-		if err != nil || got != tc.want {
-			t.Errorf("%s over %v = %v (%v), want %v", tc.reducer, tc.in, got, err, tc.want)
+		src := reducerExprs[tc.reducer]
+		comp := mustCompile(t, OwnerComponent, []TypedInput{in("x", "k", tc.vt)}, CalcReduce{Expr: src}, tc.out)
+		sys := mustCompile(t, OwnerSystem, []TypedInput{in("x", "k", tc.vt)}, CalcReduce{Expr: src}, tc.out)
+		for _, vs := range tc.cases {
+			want := oldFold(tc.reducer, vs)
+			if got, err := comp.Reduce([][]any{vs}); err != nil || got != want {
+				t.Errorf("component %s over %v = %v (%v), the %s reducer gave %v", src, vs, got, err, tc.reducer, want)
+			}
+			// The same values spread over members, the first holding two
+			// instances: the system's list is every member's values.
+			var members []CalcMember
+			for i := 0; i < len(vs); {
+				n := 1
+				if i == 0 && len(vs) > 1 {
+					n = 2
+				}
+				members = append(members, CalcMember{ID: fmt.Sprint(i), Name: fmt.Sprintf("m%02d", i), Values: [][]any{vs[i : i+n]}, Record: []any{nil}})
+				i += n
+			}
+			if got, err := sys.ReduceSystem(members); err != nil || got != want {
+				t.Errorf("system %s over %v = %v (%v), the %s reducer gave %v", src, vs, got, err, tc.reducer, want)
+			}
 		}
 	}
 }
 
-// A component expression reads each input's one current value; a system
-// expression reads each input as the list of its members' values.
+// A component expression reads each input as the list of its values; a
+// single-instance key is a one-element list.
 func TestCalcReduceExpression(t *testing.T) {
 	c := mustCompile(t, OwnerComponent, []TypedInput{in("power", "p", ValueText), in("call", "c", ValueBool), in("people", "o", ValueNumber)},
-		CalcReduce{Expr: `power == "on" || call || people > 0`}, ValueBool)
+		CalcReduce{Expr: `power[0] == "on" || any(call) || max(people) > 0`}, ValueBool)
 	got, err := c.Reduce([][]any{{"off"}, {false}, {2.0}})
 	if err != nil || got != true {
 		t.Fatalf("component expression = %v (%v), want true", got, err)
 	}
+	m := mustCompile(t, OwnerComponent, []TypedInput{in("tcp", "tcp-connect-time", ValueNumber)}, CalcReduce{Expr: "max(tcp) - min(tcp)"}, ValueNumber)
+	if got, err := m.Reduce([][]any{{12.0, 40.0, 19.0}}); err != nil || got != 28.0 {
+		t.Fatalf("max(tcp) - min(tcp) = %v (%v), want 28", got, err)
+	}
 	s := mustCompile(t, OwnerSystem, []TypedInput{in("temps", "t", ValueNumber)}, CalcReduce{Expr: "count(members, .value.temps > 30) * 1.0"}, ValueNumber)
-	members := []CalcMember{{ID: "1", Name: "a", Values: [][]any{{31.0}}}, {ID: "2", Name: "b", Values: [][]any{{20.0}}},
-		{ID: "3", Name: "c", Values: [][]any{{40.0}}}}
+	members := []CalcMember{{ID: "1", Name: "a", Values: [][]any{{31.0}}, Record: []any{31.0}}, {ID: "2", Name: "b", Values: [][]any{{20.0}}, Record: []any{20.0}},
+		{ID: "3", Name: "c", Values: [][]any{{40.0}}, Record: []any{40.0}}}
 	if got, err := s.ReduceSystem(members); err != nil || got != 2.0 {
 		t.Fatalf("system expression = %v (%v), want 2", got, err)
 	}
@@ -65,12 +142,13 @@ func TestCalcReduceExpression(t *testing.T) {
 
 // A system expression's records line up per member: a member missing one
 // input keeps its other input in its own record, flagged by has, and the
-// records are in a stable order (name, then id).
+// records are in a stable order (name, then id). The alias lists follow the
+// same order.
 func TestCalcSystemRecordsAlign(t *testing.T) {
 	inputs := []TypedInput{in("a", "ka", ValueNumber), in("b", "kb", ValueNumber)}
 	members := []CalcMember{
-		{ID: "2", Name: "m2", Values: [][]any{{5.0}, {7.0}}},
-		{ID: "1", Name: "m1", Values: [][]any{{3.0}, nil}},
+		{ID: "2", Name: "m2", Values: [][]any{{5.0}, {7.0}}, Record: []any{5.0, 7.0}},
+		{ID: "1", Name: "m1", Values: [][]any{{3.0}, nil}, Record: []any{3.0, nil}},
 	}
 	for expr, want := range map[string]any{
 		`members[0].value.a`: 3.0,
@@ -78,6 +156,8 @@ func TestCalcSystemRecordsAlign(t *testing.T) {
 		`members[1].value.b`: 7.0,
 		`members[0].name == "m1" && members[1].id == "2"`: true,
 		`count(members, .has.a && .has.b) * 1.0`:          1.0,
+		`a[0] * 10 + a[1]`:                                35.0,
+		`len(b) * 1.0`:                                    1.0,
 	} {
 		out := ValueNumber
 		if _, ok := want.(bool); ok {
@@ -88,16 +168,11 @@ func TestCalcSystemRecordsAlign(t *testing.T) {
 			t.Errorf("%s = %v (%v), want %v", expr, got, err, want)
 		}
 	}
-	// A named reducer folds every member's values of its input.
-	r := mustCompile(t, OwnerSystem, inputs[:1], CalcReduce{Reducer: "sum"}, ValueNumber)
-	if got, err := r.ReduceSystem([]CalcMember{{ID: "1", Values: [][]any{{1.0, 2.0}}}, {ID: "2", Values: [][]any{{4.0}}}}); err != nil || got != 7.0 {
-		t.Errorf("sum over members = %v (%v), want 7", got, err)
-	}
 	// An input no member holds is missing, and so is every input of a
 	// system with no members.
 	c := mustCompile(t, OwnerSystem, inputs, CalcReduce{Expr: "1.0"}, ValueNumber)
 	var miss *MissingInputError
-	if _, err := c.ReduceSystem([]CalcMember{{ID: "1", Values: [][]any{{1.0}, nil}}}); !errors.As(err, &miss) || miss.Key != "kb" {
+	if _, err := c.ReduceSystem([]CalcMember{{ID: "1", Values: [][]any{{1.0}, nil}, Record: []any{1.0, nil}}}); !errors.As(err, &miss) || miss.Key != "kb" {
 		t.Errorf("an input no member holds: %v", err)
 	}
 	if _, err := c.ReduceSystem(nil); !errors.Is(err, ErrMissingInput) {
@@ -106,16 +181,16 @@ func TestCalcSystemRecordsAlign(t *testing.T) {
 }
 
 // An input with no value is missing: the reduce refuses rather than guess,
-// and names the input. So does a component expression input with more than
-// one value, a value of the wrong type, and a result that is no finite number.
+// and names the input. So does a value of the wrong type, and a result that
+// is no finite number.
 func TestCalcReduceRefusals(t *testing.T) {
-	c := mustCompile(t, OwnerComponent, []TypedInput{in("a", "ka", ValueNumber), in("b", "kb", ValueNumber)}, CalcReduce{Expr: "a / b"}, ValueNumber)
+	c := mustCompile(t, OwnerComponent, []TypedInput{in("a", "ka", ValueNumber), in("b", "kb", ValueNumber)}, CalcReduce{Expr: "sum(a) / sum(b)"}, ValueNumber)
 	var miss *MissingInputError
-	if _, err := c.Reduce([][]any{{1.0}, nil}); !errors.As(err, &miss) || miss.Key != "kb" || !errors.Is(err, ErrMissingInput) {
+	if _, err := c.Reduce([][]any{{1.0}, nil}); !errors.As(err, &miss) || miss.Key != "kb" || miss.Alias != "b" || !errors.Is(err, ErrMissingInput) {
 		t.Errorf("a missing input: %v, want a MissingInputError on kb", err)
 	}
-	if _, err := c.Reduce([][]any{{1.0, 2.0}, {1.0}}); err == nil {
-		t.Error("two values for a component expression input were accepted")
+	if got, err := c.Reduce([][]any{{1.0, 2.0}, {1.0}}); err != nil || got != 3.0 {
+		t.Errorf("two values of an input: %v (%v), want 3", got, err)
 	}
 	if _, err := c.Reduce([][]any{{"x"}, {1.0}}); err == nil {
 		t.Error("a text value for a number input was accepted")
@@ -123,12 +198,31 @@ func TestCalcReduceRefusals(t *testing.T) {
 	if got, err := c.Reduce([][]any{{1.0}, {0.0}}); err == nil {
 		t.Errorf("a division by zero gave %v, want refused as not finite", got)
 	}
-	r := mustCompile(t, OwnerComponent, []TypedInput{in("a", "ka", ValueNumber)}, CalcReduce{Reducer: "average"}, ValueNumber)
+	r := mustCompile(t, OwnerComponent, []TypedInput{in("a", "ka", ValueNumber)}, CalcReduce{Expr: "avg(a)"}, ValueNumber)
 	if _, err := r.Reduce([][]any{{}}); !errors.Is(err, ErrMissingInput) {
-		t.Errorf("a reducer over no values: %v, want missing", err)
+		t.Errorf("an input with no values: %v, want missing", err)
 	}
 	if _, err := r.Reduce([][]any{{math.NaN()}}); err == nil {
 		t.Error("a NaN average was accepted")
+	}
+}
+
+// A reduce that reads its lists only whole is an aggregate; one that reads
+// an element, or a member's record, is not.
+func TestCalcAggregate(t *testing.T) {
+	inputs := []TypedInput{in("t", "k", ValueNumber)}
+	for src, want := range map[string]bool{
+		"avg(t)":                       true,
+		"max(t) - min(t) + len(t)":     true,
+		"sum(t) / len(members)":        true,
+		"t[0]":                         false,
+		"members[0].value.t":           false,
+		"count(members, .has.t) + 0.0": false,
+	} {
+		c := mustCompile(t, OwnerSystem, inputs, CalcReduce{Expr: src}, ValueNumber)
+		if got := c.Aggregate(); got != want {
+			t.Errorf("%s: Aggregate = %v, want %v", src, got, want)
+		}
 	}
 }
 

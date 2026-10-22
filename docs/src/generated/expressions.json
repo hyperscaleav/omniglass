@@ -3,7 +3,7 @@
  "sites": [
   {
    "name": "calc",
-   "summary": "A calc rule's reduce: one value of the output key's type, from the rule's named inputs on one owner. The output key types the result, so a key is required.",
+   "summary": "A calc rule's reduce: one value of the output key's type, from the rule's aliased inputs on one owner. The output key types the result, so a key is required.",
    "key_required": true,
    "variants": [
     {
@@ -22,94 +22,153 @@
      "bindings": []
     }
    ],
-   "bindings": "For a component owner, each of the rule's inputs by its as name, typed by its key (a metric is a number, a property text, a bool property a bool): the component's current value on its aggregate instance. For a system owner, members: one record per role-bound member, ordered by name then id, holding id, name, value.\u003cas\u003e (the member's current value of each input, the type's zero when it has none) and has.\u003cas\u003e (whether it holds one), so one member's inputs stay together.",
-   "reducers": [
-    {
-     "name": "average",
-     "accepts": [
-      "number"
-     ],
-     "result": "number",
-     "doc": "The mean of the values folded in"
-    },
-    {
-     "name": "min",
-     "accepts": [
-      "number"
-     ],
-     "result": "number",
-     "doc": "The smallest value folded in"
-    },
-    {
-     "name": "max",
-     "accepts": [
-      "number"
-     ],
-     "result": "number",
-     "doc": "The largest value folded in"
-    },
-    {
-     "name": "sum",
-     "accepts": [
-      "number"
-     ],
-     "result": "number",
-     "doc": "The total of the values folded in"
-    },
-    {
-     "name": "count",
-     "accepts": [
-      "number",
-      "text",
-      "bool"
-     ],
-     "result": "number",
-     "doc": "How many values are present to fold, of any type"
-    },
-    {
-     "name": "majority",
-     "accepts": [
-      "text",
-      "bool"
-     ],
-     "doc": "The most common value; a tie goes to the value that sorts first"
-    },
-    {
-     "name": "any",
-     "accepts": [
-      "bool"
-     ],
-     "result": "bool",
-     "doc": "True when any value folded in is true"
-    },
-    {
-     "name": "all",
-     "accepts": [
-      "bool"
-     ],
-     "result": "bool",
-     "doc": "True when every value folded in is true"
-    }
-   ],
+   "bindings": "Each of the rule's inputs by its alias, as the list of its current values, typed by its key (a metric is a number, a property text, a bool property a bool). For a component owner, one value per instance: the named instances, the aggregate instance only when it is the key's one, an instance not heard from in an hour left out. For a system owner, every role-bound member's values, ordered by member name then id; and members: one record per member, holding id, name, value.\u003calias\u003e (the member's own current value, the type's zero when it has none) and has.\u003calias\u003e (whether it holds one), so one member's inputs stay together. A list function (avg, max, min, sum, majority, any, all) folds a list into one value.",
    "builtins": [
     "abs",
     "all",
     "any",
+    "avg",
     "ceil",
     "count",
     "filter",
     "floor",
     "len",
     "lower",
+    "majority",
     "max",
     "min",
     "none",
     "one",
     "round",
+    "sum",
     "trim",
     "trimPrefix",
     "trimSuffix",
     "upper"
+   ],
+   "functions": [
+    {
+     "name": "all",
+     "cost": "one list of bools: one pass over the charged list, output a bool (the predicate form is the builtin's)"
+    },
+    {
+     "name": "any",
+     "cost": "one list of bools: one pass over the charged list, output a bool (the predicate form is the builtin's)"
+    },
+    {
+     "name": "avg",
+     "cost": "one list of numbers: one pass over the charged list, output a number"
+    },
+    {
+     "name": "majority",
+     "cost": "one list of text or bools: one pass over the charged list, its strings charged their bytes, counting into a map no larger than the list, output one of its values"
+    },
+    {
+     "name": "max",
+     "cost": "numbers, or one list of numbers: one pass over the charged list, output a number"
+    },
+    {
+     "name": "min",
+     "cost": "numbers, or one list of numbers: one pass over the charged list, output a number"
+    },
+    {
+     "name": "sum",
+     "cost": "one list of numbers, or a list and a predicate yielding one: one pass over the charged list, output a number; a predicate may not nest another"
+    }
+   ],
+   "reserved_names": [
+    "abs",
+    "all",
+    "and",
+    "any",
+    "avg",
+    "bitand",
+    "bitnand",
+    "bitnot",
+    "bitor",
+    "bitshl",
+    "bitshr",
+    "bitushr",
+    "bitxor",
+    "ceil",
+    "component",
+    "concat",
+    "contains",
+    "count",
+    "date",
+    "duration",
+    "else",
+    "endsWith",
+    "false",
+    "filter",
+    "find",
+    "findIndex",
+    "findLast",
+    "findLastIndex",
+    "first",
+    "flatten",
+    "float",
+    "floor",
+    "fromBase64",
+    "fromJSON",
+    "fromPairs",
+    "get",
+    "groupBy",
+    "has",
+    "hasPrefix",
+    "hasSuffix",
+    "if",
+    "in",
+    "indexOf",
+    "int",
+    "join",
+    "keys",
+    "last",
+    "lastIndexOf",
+    "len",
+    "let",
+    "lower",
+    "majority",
+    "map",
+    "matches",
+    "max",
+    "mean",
+    "median",
+    "members",
+    "min",
+    "nil",
+    "none",
+    "not",
+    "now",
+    "one",
+    "or",
+    "reduce",
+    "repeat",
+    "replace",
+    "reverse",
+    "round",
+    "sort",
+    "sortBy",
+    "split",
+    "splitAfter",
+    "startsWith",
+    "string",
+    "sum",
+    "system",
+    "take",
+    "timezone",
+    "toBase64",
+    "toJSON",
+    "toPairs",
+    "trim",
+    "trimPrefix",
+    "trimSuffix",
+    "true",
+    "type",
+    "uniq",
+    "upper",
+    "value",
+    "values"
    ],
    "budget": {
     "iterations": 100000,

@@ -263,6 +263,13 @@ telemetry: {
     output_metric_type_id: uuid {constraint: foreign_key}
     output_property_type_id: uuid {constraint: foreign_key}
   }
+  calc_rule_input: {
+    shape: sql_table
+    position: integer {constraint: primary_key}
+    rule_id: uuid {constraint: primary_key}
+    metric_type_id: uuid {constraint: foreign_key}
+    property_type_id: uuid {constraint: foreign_key}
+  }
   calc_rule_state: {
     shape: sql_table
     component_id: uuid {constraint: foreign_key}
@@ -549,6 +556,9 @@ telemetry.calc_pending.rule_id -> telemetry.calc_rule.id
 telemetry.calc_pending.system_id -> fleet.system.id
 telemetry.calc_rule.output_metric_type_id -> telemetry.metric_type.id
 telemetry.calc_rule.output_property_type_id -> telemetry.property_type.id
+telemetry.calc_rule_input.metric_type_id -> telemetry.metric_type.id
+telemetry.calc_rule_input.property_type_id -> telemetry.property_type.id
+telemetry.calc_rule_input.rule_id -> telemetry.calc_rule.id
 telemetry.calc_rule_state.component_id -> fleet.component.id
 telemetry.calc_rule_state.rule_id -> telemetry.calc_rule.id
 telemetry.calc_rule_state.system_id -> fleet.system.id

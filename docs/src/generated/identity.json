@@ -31,6 +31,12 @@
       "labelled": true
     },
     {
+      "table": "calc_rule_input",
+      "shape": "id only",
+      "reason": "one input of a calc rule, keyed by rule and position; its alias is an expression's binding, not an address",
+      "labelled": false
+    },
+    {
       "table": "calc_rule_state",
       "shape": "id only",
       "reason": "a calc rule's last outcome on an owner, keyed by rule and owner; nothing addresses it by name",

@@ -525,3 +525,48 @@ func listCheck(node ast.Node, fail func(n ast.Node, format string, args ...any))
 		listOf(args[0], isNumberKind, "a list of numbers")
 	}
 }
+
+// wholeListFolds are the calls that read a list only as a whole, into one
+// value: the one-list functions and the folds without a predicate.
+var wholeListFolds = map[string]bool{"max": true, "min": true, "avg": true, "majority": true,
+	anyList: true, allList: true, sumList: true, "len": true, "count": true}
+
+// WholeListsOnly reports whether the program reads each of the named
+// bindings only as a whole list folded into one value (the one argument of
+// max, min, avg, sum, majority, any, all, len or count), never an element of
+// it by position, through a predicate, or as a value of its own. A caller
+// that may show an expression's result over a list some of whose elements
+// the reader may not see uses it to tell an aggregate from a read of one
+// element.
+func (p *Program) WholeListsOnly(names ...string) bool {
+	watched := map[string]bool{}
+	for _, n := range names {
+		watched[n] = true
+	}
+	root := p.prog.Node()
+	folded := map[ast.Node]bool{}
+	ast.Walk(&root, visitFunc(func(node *ast.Node) {
+		var name string
+		var args []ast.Node
+		switch n := (*node).(type) {
+		case *ast.CallNode:
+			if id, ok := n.Callee.(*ast.IdentifierNode); ok {
+				name, args = id.Value, n.Arguments
+			}
+		case *ast.BuiltinNode:
+			name, args = n.Name, n.Arguments
+		}
+		if wholeListFolds[name] && len(args) == 1 {
+			if id, ok := unwrapCharge(args[0]).(*ast.IdentifierNode); ok {
+				folded[id] = true
+			}
+		}
+	}))
+	whole := true
+	ast.Walk(&root, visitFunc(func(node *ast.Node) {
+		if id, ok := (*node).(*ast.IdentifierNode); ok && watched[id.Value] && !folded[id] {
+			whole = false
+		}
+	}))
+	return whole
+}

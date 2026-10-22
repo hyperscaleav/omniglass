@@ -22,12 +22,13 @@ type calcRuleBody struct {
 	Name      string `json:"name"`
 	OwnerKind string `json:"owner_kind"`
 	Inputs    []struct {
-		As  string `json:"as"`
-		Key string `json:"key"`
+		Alias string `json:"alias"`
+		Key   string `json:"key"`
+		KeyID string `json:"key_id"`
+		Lane  string `json:"lane"`
 	} `json:"inputs"`
 	Reduce struct {
-		Reducer string `json:"reducer"`
-		Expr    string `json:"expr"`
+		Expr string `json:"expr"`
 	} `json:"reduce"`
 	OutputKey  string `json:"output_key"`
 	OutputLane string `json:"output_lane"`
@@ -78,22 +79,22 @@ func TestCalcRuleAPI(t *testing.T) {
 	}
 
 	rule := map[string]any{"name": "temp-mean", "owner_kind": "component",
-		"inputs": []map[string]any{{"as": "t", "key": "room-temperature"}}, "reduce": map[string]any{"reducer": "average"},
+		"inputs": []map[string]any{{"alias": "t", "key": "room-temperature"}}, "reduce": map[string]any{"expr": "avg(t)"},
 		"output_key": "avg-temp"}
 	c.do(viewer, http.MethodPost, "/calc-rules", rule, http.StatusForbidden)
 	var made calcRuleBody
 	if err := json.Unmarshal(c.do(ownerTok, http.MethodPost, "/calc-rules", rule, http.StatusCreated), &made); err != nil {
 		t.Fatal(err)
 	}
-	if made.ID == "" || made.OutputLane != "metric" || made.Version != 1 || !made.Enabled || made.Reduce.Reducer != "average" ||
-		len(made.Inputs) != 1 || made.Inputs[0].As != "t" {
+	if made.ID == "" || made.OutputLane != "metric" || made.Version != 1 || !made.Enabled || made.Reduce.Expr != "avg(t)" ||
+		len(made.Inputs) != 1 || made.Inputs[0].Alias != "t" || made.Inputs[0].KeyID == "" || made.Inputs[0].Lane != "metric" {
 		t.Fatalf("made = %+v", made)
 	}
 	// A second enabled writer of avg-temp is refused naming the first; a
 	// disabled one under the taken name is a name conflict.
 	p := problem{}
 	second := map[string]any{"name": "temp-high", "owner_kind": "system",
-		"inputs": []map[string]any{{"as": "t", "key": "room-temperature"}}, "reduce": map[string]any{"reducer": "max"}, "output_key": "avg-temp"}
+		"inputs": []map[string]any{{"alias": "t", "key": "room-temperature"}}, "reduce": map[string]any{"expr": "max(t)"}, "output_key": "avg-temp"}
 	if err := json.Unmarshal(c.do(ownerTok, http.MethodPost, "/calc-rules", second, http.StatusUnprocessableEntity), &p); err != nil {
 		t.Fatal(err)
 	}
@@ -132,7 +133,7 @@ func TestCalcRuleAPI(t *testing.T) {
 	// column.
 	p = problem{}
 	if err := json.Unmarshal(c.do(ownerTok, http.MethodPost, "/calc-rules", map[string]any{"name": "bad-expr", "owner_kind": "component",
-		"inputs": []map[string]any{{"as": "t", "key": "room-temperature"}}, "reduce": map[string]any{"expr": "t +\n nope"},
+		"inputs": []map[string]any{{"alias": "t", "key": "room-temperature"}}, "reduce": map[string]any{"expr": "t +\n nope"},
 		"output_key": "temp-twice"}, http.StatusUnprocessableEntity), &p); err != nil {
 		t.Fatal(err)
 	}
@@ -142,11 +143,11 @@ func TestCalcRuleAPI(t *testing.T) {
 
 	// A rule closing a loop names the chain.
 	c.do(ownerTok, http.MethodPost, "/calc-rules", map[string]any{"name": "doubled", "owner_kind": "component",
-		"inputs": []map[string]any{{"as": "a", "key": "avg-temp"}}, "reduce": map[string]any{"expr": "a * 2"},
+		"inputs": []map[string]any{{"alias": "a", "key": "avg-temp"}}, "reduce": map[string]any{"expr": "max(a) * 2"},
 		"output_key": "temp-twice"}, http.StatusCreated)
 	p = problem{}
 	if err := json.Unmarshal(c.do(ownerTok, http.MethodPost, "/calc-rules", map[string]any{"name": "closing", "owner_kind": "component",
-		"inputs": []map[string]any{{"as": "a", "key": "temp-twice"}}, "reduce": map[string]any{"expr": "a / 2"},
+		"inputs": []map[string]any{{"alias": "a", "key": "temp-twice"}}, "reduce": map[string]any{"expr": "max(a) / 2"},
 		"output_key": "avg-temp"}, http.StatusUnprocessableEntity), &p); err != nil {
 		t.Fatal(err)
 	}
@@ -155,16 +156,16 @@ func TestCalcRuleAPI(t *testing.T) {
 	}
 
 	for name, bad := range map[string]map[string]any{
-		"health input": {"name": "h-in", "owner_kind": "component", "inputs": []map[string]any{{"as": "h", "key": "health"}},
+		"health input": {"name": "h-in", "owner_kind": "component", "inputs": []map[string]any{{"alias": "h", "key": "health"}},
 			"reduce": map[string]any{"expr": `h == "outage" ? 1.0 : 0.0`}, "output_key": "temp-twice"},
-		"health output": {"name": "h-out", "owner_kind": "component", "inputs": []map[string]any{{"as": "v", "key": "video-input"}},
-			"reduce": map[string]any{"reducer": "majority"}, "output_key": "health"},
-		"driver output": {"name": "d-out", "owner_kind": "component", "inputs": []map[string]any{{"as": "t", "key": "room-temperature"}},
-			"reduce": map[string]any{"reducer": "max"}, "output_key": "uptime"},
-		"bad as": {"name": "bad-as", "owner_kind": "component", "inputs": []map[string]any{{"as": "not", "key": "room-temperature"}},
-			"reduce": map[string]any{"reducer": "max"}, "output_key": "temp-twice"},
-		"bad owner": {"name": "bad-owner", "owner_kind": "location", "inputs": []map[string]any{{"as": "t", "key": "room-temperature"}},
-			"reduce": map[string]any{"reducer": "max"}, "output_key": "temp-twice"},
+		"health output": {"name": "h-out", "owner_kind": "component", "inputs": []map[string]any{{"alias": "v", "key": "video-input"}},
+			"reduce": map[string]any{"expr": "majority(v)"}, "output_key": "health"},
+		"driver output": {"name": "d-out", "owner_kind": "component", "inputs": []map[string]any{{"alias": "t", "key": "room-temperature"}},
+			"reduce": map[string]any{"expr": "max(t)"}, "output_key": "uptime"},
+		"bad as": {"name": "bad-as", "owner_kind": "component", "inputs": []map[string]any{{"alias": "not", "key": "room-temperature"}},
+			"reduce": map[string]any{"expr": "max(not)"}, "output_key": "temp-twice"},
+		"bad owner": {"name": "bad-owner", "owner_kind": "location", "inputs": []map[string]any{{"alias": "t", "key": "room-temperature"}},
+			"reduce": map[string]any{"expr": "max(t)"}, "output_key": "temp-twice"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			c.t = t
@@ -187,7 +188,7 @@ func TestCalcRuleAPI(t *testing.T) {
 		} `json:"bindings"`
 	}
 	if err := json.Unmarshal(c.do(viewer, http.MethodPost, "/expressions:validate", map[string]any{"site": "calc", "source": "len(members) > 0 ? members[0].value.temps : 0.0",
-		"key": "temp-twice", "owner_kind": "system", "inputs": []map[string]any{{"as": "temps", "key": "room-temperature"}}}, http.StatusOK), &v); err != nil {
+		"key": "temp-twice", "owner_kind": "system", "inputs": []map[string]any{{"alias": "temps", "key": "room-temperature"}}}, http.StatusOK), &v); err != nil {
 		t.Fatal(err)
 	}
 	names := map[string]string{}
@@ -199,7 +200,7 @@ func TestCalcRuleAPI(t *testing.T) {
 	}
 	c.do(viewer, http.MethodPost, "/expressions:validate", map[string]any{"site": "calc", "source": "1.0", "key": "temp-twice"}, http.StatusUnprocessableEntity)
 	c.do(viewer, http.MethodPost, "/expressions:validate", map[string]any{"site": "calc", "source": `h == "outage"`, "key": "temp-twice",
-		"inputs": []map[string]any{{"as": "h", "key": "health"}}}, http.StatusUnprocessableEntity)
+		"inputs": []map[string]any{{"alias": "h", "key": "health"}}}, http.StatusUnprocessableEntity)
 
 	// A stored reduce that stops compiling reads back with calc_error.
 	conn, err := pgx.Connect(ctx, dsn)
@@ -238,16 +239,16 @@ func TestCalcRuleAPI(t *testing.T) {
 	placeOwner := setupScopedPrincipal(t, ctx, dsn, "calc-south-owner", grantSpec{role: "owner", scopeKind: "location", scopeID: loc.ID})
 	c.do(placeOwner, http.MethodGet, "/calc-rules/temp-mean", nil, http.StatusOK)
 	c.do(placeOwner, http.MethodPost, "/calc-rules", map[string]any{"name": "mine", "owner_kind": "component",
-		"inputs": []map[string]any{{"as": "t", "key": "room-temperature"}}, "reduce": map[string]any{"reducer": "max"}, "output_key": "temp-twice"}, http.StatusForbidden)
+		"inputs": []map[string]any{{"alias": "t", "key": "room-temperature"}}, "reduce": map[string]any{"expr": "max(t)"}, "output_key": "temp-twice"}, http.StatusForbidden)
 	c.do(placeOwner, http.MethodPatch, "/calc-rules/temp-mean", map[string]any{"label": "mine"}, http.StatusForbidden)
 	c.do(placeOwner, http.MethodPost, "/calc-rules/temp-mean:rename", map[string]any{"name": "mine"}, http.StatusForbidden)
 	c.do(placeOwner, http.MethodDelete, "/calc-rules/temp-mean", nil, http.StatusForbidden)
 
 	var up calcRuleBody
-	if err := json.Unmarshal(c.do(ownerTok, http.MethodPatch, "/calc-rules/temp-mean", map[string]any{"reduce": map[string]any{"reducer": "max"}}, http.StatusOK), &up); err != nil {
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodPatch, "/calc-rules/temp-mean", map[string]any{"reduce": map[string]any{"expr": "max(t)"}}, http.StatusOK), &up); err != nil {
 		t.Fatal(err)
 	}
-	if up.Version != 2 || up.Reduce.Reducer != "max" || up.ID != made.ID {
+	if up.Version != 2 || up.Reduce.Expr != "max(t)" || up.ID != made.ID {
 		t.Fatalf("updated = %+v, want version 2 with max", up)
 	}
 

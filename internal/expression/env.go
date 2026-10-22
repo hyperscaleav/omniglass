@@ -387,6 +387,26 @@ var keywords = map[string]bool{
 	"if": true, "else": true,
 }
 
+// ReservedNames is every name an author may not bind (BindableName's
+// refusals by name): the keywords, and every Expr builtin and list function,
+// admitted at a site or not. Sorted, a fresh slice each call.
+func ReservedNames() []string {
+	var out []string
+	for k := range keywords {
+		out = append(out, k)
+	}
+	for k := range builtin.Index {
+		if !strings.HasPrefix(k, "$") {
+			out = append(out, k)
+		}
+	}
+	for k := range listFuncs {
+		out = append(out, k)
+	}
+	slices.Sort(out)
+	return slices.Compact(out)
+}
+
 // BindableName reports whether name may be bound as an expression name by an
 // author (a calc rule's input): an identifier (a letter or underscore, then
 // letters, digits or underscores), at most MaxBindingName long, and neither

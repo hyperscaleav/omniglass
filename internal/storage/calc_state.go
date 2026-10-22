@@ -26,7 +26,7 @@ type CalcMemberRef struct {
 	Key, ComponentID, ComponentName string
 }
 
-// CalcStaleRef is an instance a reducer skipped as stale.
+// CalcStaleRef is an instance an input's list left out as stale.
 type CalcStaleRef struct {
 	Key, ComponentID, ComponentName, Instance string
 }
@@ -152,11 +152,10 @@ func (p *PG) CalcRuleState(ctx context.Context, ref string, components, systems 
 	return live, nil
 }
 
-// hiddenCalcMembers counts the members of a system an expression preview
-// would read that the component read scope does not admit; zero for a named
-// reducer, which only ever folds them all together.
-func hiddenCalcMembers(ctx context.Context, q querier, r CalcRule, ms []calcMember, read scope.Set) (int, error) {
-	if r.Reduce.Expr == "" || len(ms) == 0 {
+// hiddenCalcMembers counts the members of a system a preview would read
+// that the component read scope does not admit.
+func hiddenCalcMembers(ctx context.Context, q querier, ms []calcMember, read scope.Set) (int, error) {
+	if len(ms) == 0 {
 		return 0, nil
 	}
 	ids := make([]string, len(ms))
@@ -300,11 +299,6 @@ func (p *PG) PreviewCalcRule(ctx context.Context, spec CalcRuleSpec, components,
 	if err := prepareCalcRule(ctx, tx, &r, calcCheckAll, &outIDs); err != nil {
 		return nil, err
 	}
-	out, _, err := resolveSampleKey(ctx, tx, r.OutputKey)
-	if err != nil {
-		return nil, err
-	}
-	r.outputType = out.valueType
 	plan, fault, err := p.calcPlan(ctx, tx, r)
 	if err != nil {
 		return nil, err
@@ -342,16 +336,18 @@ func (p *PG) PreviewCalcRule(ctx context.Context, spec CalcRuleSpec, components,
 				return nil, err
 			}
 			members = len(ms)
-			if hidden, err = hiddenCalcMembers(ctx, tx, r, ms, components); err != nil {
-				return nil, err
+			if !plan.prog.Aggregate() {
+				if hidden, err = hiddenCalcMembers(ctx, tx, ms, components); err != nil {
+					return nil, err
+				}
 			}
 		}
 		if hidden > 0 {
-			// An expression reads each member by position (members[1].value.t,
-			// .name, .id), so its value over a system with a member the
-			// caller may not read could be that member's own: withheld,
-			// the members counted. A named reducer folds every member
-			// together, the aggregate the rule's state shows too.
+			// An expression that reads a member by position (members[1].value.t,
+			// .name, .id, or an input's list t[1]) could show, over a system
+			// with a member the caller may not read, that member's own value:
+			// withheld, the members counted. One that folds each list whole
+			// (avg(t)) shows an aggregate, as the rule's state does.
 			all = append(all, computed{row: CalcPreviewOwner{OwnerKind: o.owner.kind, OwnerID: o.owner.id, OwnerName: o.name, Missing: []string{},
 				Error: fmt.Sprintf("withheld: %d of the system's members are outside your read scope, and an expression can read a member by position", hidden)}})
 			continue
@@ -370,17 +366,16 @@ func (p *PG) PreviewCalcRule(ctx context.Context, spec CalcRuleSpec, components,
 		if row.Missing == nil {
 			row.Missing = []string{}
 		}
-		current, _, err := readCalcInput(ctx, tx, o.owner, rules.TypedInput{Key: r.OutputKey, ValueType: r.outputType}, false)
-		var bad *calcValueError
-		if err != nil && !errors.As(err, &bad) {
+		current, err := currentOutput(ctx, tx, r, o.owner)
+		if err != nil {
 			return nil, err
 		}
-		if len(current) == 1 {
-			row.Current, _ = json.Marshal(current[0])
+		if current != nil {
+			row.Current, _ = json.Marshal(current)
 		}
 		if res.value != nil && res.err == "" && len(res.missing) == 0 {
 			row.Value, _ = json.Marshal(res.value)
-			row.Differs = len(current) != 1 || current[0] != res.value
+			row.Differs = current == nil || current != res.value
 		}
 		all = append(all, computed{row: row, skipped: res.skipped, stale: res.stale})
 		for _, m := range res.skipped {
@@ -449,12 +444,10 @@ func previewCalcOwners(ctx context.Context, tx pgx.Tx, r CalcRule, components, s
 		for i, c := range cands {
 			ids[i] = c.id
 		}
-		keys := inputKeys(r.Inputs)
-		rows, err := tx.Query(ctx, `with mt as (select id from metric_type where name = any($2::text[])),
-				pt as (select id from property_type where name = any($2::text[]))
-			select c.id::text from unnest($1::uuid[]) as c(id)
-			where exists (select 1 from metric m, mt where m.component_id = c.id and m.metric_type_id = mt.id)
-				or exists (select 1 from property x, pt where x.component_id = c.id and x.property_type_id = pt.id)`, ids, keys)
+		metricIDs, propertyIDs := inputTypeIDs(r.Inputs)
+		rows, err := tx.Query(ctx, `select c.id::text from unnest($1::uuid[]) as c(id)
+			where exists (select 1 from metric m where m.component_id = c.id and m.metric_type_id = any($2::uuid[]))
+				or exists (select 1 from property x where x.component_id = c.id and x.property_type_id = any($3::uuid[]))`, ids, metricIDs, propertyIDs)
 		if err != nil {
 			return nil, fmt.Errorf("storage: calc preview holders: %w", err)
 		}

@@ -13,14 +13,24 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/storage"
 )
 
+// calcInputBody is an input as written: its alias and its key, by name or
+// uuid (#1018).
 type calcInputBody struct {
-	As  string `json:"as" minLength:"1" maxLength:"64" pattern:"^[A-Za-z_][A-Za-z0-9_]*$" doc:"The name the reduce knows the input by: an identifier, not a keyword or a builtin's name"`
-	Key string `json:"key" minLength:"1" doc:"The property or metric the input reads, by name"`
+	Alias string `json:"alias" minLength:"1" maxLength:"64" pattern:"^[A-Za-z_][A-Za-z0-9_]*$" doc:"The name the reduce's expression binds the input by: an identifier of at most 64, not a keyword, a builtin or list function's name, or one of the calc site's own bindings (component, has, members, system, value); unique in the rule"`
+	Key   string `json:"key" minLength:"1" doc:"The property or metric the input reads, by name or uuid; the rule holds it by uuid, so a rename changes nothing"`
+}
+
+// calcInputReadBody is an input as a rule holds it: its alias, and its key
+// by uuid on its lane, with the key's name now.
+type calcInputReadBody struct {
+	Alias string `json:"alias" doc:"The name the reduce's expression binds the input by"`
+	Key   string `json:"key" doc:"The key's name now"`
+	KeyID string `json:"key_id" doc:"The key's uuid, which the rule holds it by"`
+	Lane  string `json:"lane" enum:"property,metric" doc:"Which registry the key is in"`
 }
 
 type calcReduceBody struct {
-	Reducer string `json:"reducer,omitempty" required:"false" enum:"average,min,max,sum,count,majority,any,all" doc:"A named fold over every value of the rule's one input (every instance on a component; every instance on every role-bound member of a system); give this or expr"`
-	Expr    string `json:"expr,omitempty" required:"false" doc:"An expression over the inputs by their names, yielding the output key's type; give this or reducer"`
+	Expr string `json:"expr" minLength:"1" doc:"An expression over the inputs by alias, each bound as the list of its current values (one per instance on a component, every member's on a system), yielding the output key's type: max(tcp), avg(temp), any(call) || max(people) > 0"`
 }
 
 // calcSelectorBody is a calc rule's selector: a component rule's
@@ -44,8 +54,8 @@ type calcRuleBody struct {
 	Description string           `json:"description,omitempty" doc:"What the rule derives and why"`
 	OwnerKind   string           `json:"owner_kind" enum:"component,system" doc:"What the rule derives a value on: each component its selector picks, or each system its selector picks (read from the system's role-bound members)"`
 	Selector    calcSelectorBody `json:"selector" doc:"The owners the rule derives for: a component rule's components or a system rule's systems; empty is every owner of its kind"`
-	Inputs      []calcInputBody  `json:"inputs" doc:"The keys the rule reads, each by the name its reduce uses"`
-	Reduce      calcReduceBody   `json:"reduce" doc:"How the inputs fold into the output: a named reducer or an expression"`
+	Inputs      []calcInputReadBody `json:"inputs" doc:"The keys the rule reads, each by the alias its reduce uses"`
+	Reduce      calcReduceBody      `json:"reduce" doc:"How the inputs reduce into the output: an expression over their aliases"`
 	OutputKey   string           `json:"output_key" doc:"The property or metric the rule writes"`
 	OutputLane  string           `json:"output_lane" enum:"property,metric" doc:"Which lane the output key is on, derived from the registries"`
 	Enabled     bool             `json:"enabled" doc:"Whether the rule runs; an enabled rule is part of the key graph"`
@@ -62,7 +72,7 @@ type calcRuleBody struct {
 
 // calcErrorBody is a stored rule's compile error.
 type calcErrorBody struct {
-	Field   string `json:"field" doc:"The field at fault: an input's key (inputs[0].key), reduce.expr, reduce.reducer or output_key"`
+	Field   string `json:"field" doc:"The field at fault: an input's key (inputs[0].key), reduce.expr or output_key"`
 	Line    int    `json:"line,omitempty" required:"false" doc:"The 1-based line of the fault, when the reduce's expression is what failed"`
 	Column  int    `json:"column,omitempty" required:"false" doc:"The 1-based column of the fault, when it has a line"`
 	Message string `json:"message" doc:"Why it does not compile"`
@@ -72,15 +82,15 @@ func toCalcRuleBody(r *storage.CalcRule) calcRuleBody {
 	b := calcRuleBody{ID: r.ID, Name: r.Name, Label: r.Label, Description: r.Description, OwnerKind: r.OwnerKind,
 		Selector: calcSelectorBody{ComponentTypes: r.Selector.ComponentTypes, Components: r.Selector.Components,
 			SystemTypes: r.Selector.SystemTypes, Systems: r.Selector.Systems},
-		Reduce:    calcReduceBody{Reducer: r.Reduce.Reducer, Expr: r.Reduce.Expr},
+		Reduce:    calcReduceBody{Expr: r.Reduce.Expr},
 		OutputKey: r.OutputKey, OutputLane: string(r.OutputLane), Enabled: r.Enabled, Official: r.Official, Version: r.Version,
 		CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt}
 	if f := r.CalcError; f != nil {
 		b.CalcError = &calcErrorBody{Field: f.Field, Line: f.Line, Column: f.Column, Message: f.Message}
 	}
-	b.Inputs = make([]calcInputBody, len(r.Inputs))
+	b.Inputs = make([]calcInputReadBody, len(r.Inputs))
 	for i, in := range r.Inputs {
-		b.Inputs[i] = calcInputBody{As: in.As, Key: in.Key}
+		b.Inputs[i] = calcInputReadBody{Alias: in.Alias, Key: in.Key, KeyID: in.KeyID, Lane: string(in.Lane)}
 	}
 	return b
 }
@@ -88,7 +98,7 @@ func toCalcRuleBody(r *storage.CalcRule) calcRuleBody {
 func fromCalcInputs(in []calcInputBody) []rules.CalcInput {
 	out := make([]rules.CalcInput, len(in))
 	for i, x := range in {
-		out[i] = rules.CalcInput{As: x.As, Key: x.Key}
+		out[i] = rules.CalcInput{Alias: x.Alias, Key: x.Key}
 	}
 	return out
 }
@@ -112,8 +122,8 @@ type createCalcRuleInput struct {
 		Description string            `json:"description,omitempty" required:"false" doc:"What the rule derives and why"`
 		OwnerKind   string            `json:"owner_kind" enum:"component,system" doc:"What the rule derives a value on: each component its selector picks, or each system its selector picks (read from the system's role-bound members). Fixed at create"`
 		Selector    *calcSelectorBody `json:"selector,omitempty" required:"false" doc:"The owners the rule derives for: a component rule's component_types and components, or a system rule's system_types and systems; absent is every owner of its kind"`
-		Inputs      []calcInputBody   `json:"inputs" minItems:"1" maxItems:"16" doc:"The keys the rule reads, each by a unique name its reduce uses; health may not be one"`
-		Reduce      calcReduceBody    `json:"reduce" doc:"A named reducer over the one input, or an expression over the inputs by name"`
+		Inputs      []calcInputBody   `json:"inputs" minItems:"1" maxItems:"16" doc:"The keys the rule reads, each by a unique alias its reduce uses; health may not be one"`
+		Reduce      calcReduceBody    `json:"reduce" doc:"An expression over the inputs by alias"`
 		OutputKey   string            `json:"output_key" minLength:"1" doc:"The property or metric the rule writes: its type pins the reduce's result. Not health, not a key a collection writes, and not one another enabled rule writes"`
 		Enabled     *bool             `json:"enabled,omitempty" required:"false" doc:"Defaults to true"`
 	}
@@ -126,7 +136,7 @@ type updateCalcRuleInput struct {
 		Description *string           `json:"description,omitempty" required:"false" doc:"What the rule derives and why"`
 		Selector    *calcSelectorBody `json:"selector,omitempty" required:"false" doc:"Replace the owners the rule derives for; an empty selector is every owner of its kind"`
 		Inputs      *[]calcInputBody  `json:"inputs,omitempty" required:"false" minItems:"1" maxItems:"16" doc:"Replace the keys the rule reads"`
-		Reduce      *calcReduceBody   `json:"reduce,omitempty" required:"false" doc:"Replace the reduce"`
+		Reduce      *calcReduceBody   `json:"reduce,omitempty" required:"false" doc:"Replace the reduce's expression"`
 		OutputKey   *string           `json:"output_key,omitempty" required:"false" doc:"The property or metric the rule writes"`
 		Enabled     *bool             `json:"enabled,omitempty" required:"false" doc:"Whether the rule runs; an enabled rule is part of the key graph"`
 	}
@@ -142,7 +152,7 @@ type renameCalcRuleInput struct {
 }
 
 // registerCalcRuleRoutes wires calc rule authoring (#995, epic #525): rules
-// that derive an output key on each owner from named inputs, gated rule:*
+// that derive an output key on each owner from aliased inputs, gated rule:*
 // like event rules (ADR-0144 ruling 2). A rule reads like a registry
 // (rule:read from any grant); writing one takes an all-scope grant, since a
 // rule reaches the whole fleet. Official rules are read-only.
@@ -152,7 +162,7 @@ func registerCalcRuleRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 		Method:      http.MethodGet,
 		Path:        "/calc-rules",
 		Summary:     "List calc rules",
-		Description: "Lists the calc rules, by name: the authored config that derives an output key on each owner from named inputs, each with its live state as counts (owners_computed, owners_pending, owners_unsupported, owners_failed) over the owners the caller may read. Rules read like a registry, so every rule is listed whatever the caller's scope. Gated by rule:read.",
+		Description: "Lists the calc rules, by name: the authored config that derives an output key on each owner from aliased inputs, each with its live state as counts (owners_computed, owners_pending, owners_unsupported, owners_failed) over the owners the caller may read. Rules read like a registry, so every rule is listed whatever the caller's scope. Gated by rule:read.",
 	}, "rule", "read"), func(ctx context.Context, _ *struct{}) (*listCalcRulesOutput, error) {
 		rs, err := gw.ListCalcRules(ctx)
 		if err != nil {
@@ -193,11 +203,11 @@ func registerCalcRuleRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 		Path:          "/calc-rules",
 		DefaultStatus: http.StatusCreated,
 		Summary:       "Create a calc rule",
-		Description:   "Authors a rule that derives its output key on each owner (each component its selector picks, or each system) from its named inputs, folded by a named reducer (one input) or an expression over the inputs by name. Every input key must be registered and health may not be one; the reduce must compile and yield the output key's type (a 422 placed at body.reduce.expr with its line and column); the output must be a registered key that is not health and that no collection writes (a native probe's key, or one a driver declares among its emits); an enabled rule may not close a cycle in the graph from every enabled rule's input keys to its output key (a 422 naming the chain of keys), nor write a key another enabled rule writes (a 422 naming that rule). A list or get carries calc_error when a stored reduce no longer compiles. A name already taken is a 409. Returns the rule with its uuid. Audited. Gated by rule:create, with an all-scope grant.",
+		Description:   "Authors a rule that derives its output key on each owner (each component its selector picks, or each system) from its aliased inputs, reduced by an expression over the aliases, each bound as the list of its current values (one per instance on a component, every member's on a system, with members records beside it). Every input key must be registered (by name or uuid; the rule holds it by uuid) and health may not be one; each alias is an identifier of at most 64, not a keyword, a builtin or list function's name, or a site binding (component, has, members, system, value), and unique; the reduce must compile and yield the output key's type (a 422 placed at body.reduce.expr with its line and column, and the name when it is one no alias binds); the output must be a registered key that is not health and that no collection writes (a native probe's key, or one a driver declares among its emits); an enabled rule may not close a cycle in the graph from every enabled rule's input keys to its output key (a 422 naming the chain of keys), nor write a key another enabled rule writes (a 422 naming that rule). A list or get carries calc_error when a stored reduce no longer compiles. A name already taken is a 409. Returns the rule with its uuid. Audited. Gated by rule:create, with an all-scope grant.",
 	}, "rule", "create"), func(ctx context.Context, in *createCalcRuleInput) (*calcRuleOutput, error) {
 		b := in.Body
 		spec := storage.CalcRuleSpec{Name: b.Name, Label: b.Label, Description: b.Description, OwnerKind: b.OwnerKind,
-			Inputs: fromCalcInputs(b.Inputs), Reduce: rules.CalcReduce{Reducer: b.Reduce.Reducer, Expr: b.Reduce.Expr},
+			Inputs: fromCalcInputs(b.Inputs), Reduce: rules.CalcReduce{Expr: b.Reduce.Expr},
 			OutputKey: b.OutputKey, Enabled: b.Enabled}
 		if b.Selector != nil {
 			spec.Selector = b.Selector.toStorage()
@@ -227,7 +237,7 @@ func registerCalcRuleRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 			patch.Inputs = &inputs
 		}
 		if b.Reduce != nil {
-			patch.Reduce = &rules.CalcReduce{Reducer: b.Reduce.Reducer, Expr: b.Reduce.Expr}
+			patch.Reduce = &rules.CalcReduce{Expr: b.Reduce.Expr}
 		}
 		r, err := gw.UpdateCalcRule(ctx, actorID(ctx), in.Name, patch, a.scopeFor(ctx, "rule", "update"))
 		if err != nil {
@@ -274,7 +284,11 @@ func calcProblem(ce *rules.CalcError) error {
 	if errors.As(ce, &ee) {
 		d.Message = ee.Message
 		if ee.Line > 0 {
-			d.Value = map[string]any{"line": ee.Line, "column": ee.Column, "phase": string(ee.Phase)}
+			v := map[string]any{"line": ee.Line, "column": ee.Column, "phase": string(ee.Phase)}
+			if ee.Unbound != "" {
+				v["unbound"] = ee.Unbound
+			}
+			d.Value = v
 		}
 	}
 	return huma.Error422UnprocessableEntity(ce.Field+": "+d.Message, d)

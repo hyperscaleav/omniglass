@@ -182,6 +182,7 @@ var IdentityShapes = map[string]TableIdentity{
 	"event_rule_condition": {Shape: ShapeIDOnly, Reason: "a rule's condition in force, keyed by rule, component and instance; nothing addresses it by name"},
 	"calc_pending":         {Shape: ShapeIDOnly, Reason: "a calc rule's pending work on an owner, keyed by rule and owner; nothing addresses it by name"},
 	"calc_rule_state":      {Shape: ShapeIDOnly, Reason: "a calc rule's last outcome on an owner, keyed by rule and owner; nothing addresses it by name"},
+	"calc_rule_input":      {Shape: ShapeIDOnly, Reason: "one input of a calc rule, keyed by rule and position; its alias is an expression's binding, not an address"},
 	"endpoint_live":        {Shape: ShapeIDOnly, Reason: "when an endpoint last delivered a batch, keyed by the endpoint's uuid; nothing addresses it by name"},
 	"system_role_product":  {Shape: ShapeIDOnly}, "system_role_type": {Shape: ShapeIDOnly},
 	"tag_binding": {Shape: ShapeIDOnly},

@@ -195,7 +195,7 @@ func TestEveryWritePathStoresNullForAnUnsetLabel(t *testing.T) {
 		},
 		"calc_rule": func(t *testing.T) (string, string) {
 			if _, err := gw.CreateCalcRule(ctx, "", storage.CalcRuleSpec{Name: "lbl-calc", Label: blank, OwnerKind: rules.OwnerComponent,
-				Inputs: []rules.CalcInput{{As: "t", Key: "room-temperature"}}, Reduce: rules.CalcReduce{Reducer: "average"},
+				Inputs: []rules.CalcInput{{Alias: "t", Key: "room-temperature"}}, Reduce: rules.CalcReduce{Expr: "avg(t)"},
 				OutputKey: "occupancy-count"}, scope.Set{All: true}); err != nil {
 				t.Fatalf("create calc_rule: %v", err)
 			}

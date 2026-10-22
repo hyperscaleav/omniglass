@@ -67,7 +67,7 @@ func (r *calcRig) create(spec storage.CalcRuleSpec) (*storage.CalcRule, error) {
 
 func avgSpec(name string) storage.CalcRuleSpec {
 	return storage.CalcRuleSpec{Name: name, OwnerKind: rules.OwnerComponent,
-		Inputs: []rules.CalcInput{{As: "t", Key: "room-temperature"}}, Reduce: rules.CalcReduce{Reducer: "average"}, OutputKey: "avg-temp"}
+		Inputs: []rules.CalcInput{{Alias: "t", Key: "room-temperature"}}, Reduce: rules.CalcReduce{Expr: "avg(t)"}, OutputKey: "avg-temp"}
 }
 
 // TestCalcRules proves a calc rule is authored config the gateway keeps
@@ -82,7 +82,7 @@ func TestCalcRules(t *testing.T) {
 		t.Fatal(err)
 	}
 	if got.ID == "" || got.OutputLane != rules.LaneMetric || got.OutputKey != "avg-temp" || got.Version != 1 || !got.Enabled ||
-		got.Official || got.OwnerKind != "component" || got.Reduce.Reducer != "average" || len(got.Inputs) != 1 {
+		got.Official || got.OwnerKind != "component" || got.Reduce.Expr != "avg(t)" || len(got.Inputs) != 1 {
 		t.Fatalf("created %+v, want an enabled component rule writing avg-temp on the metric lane", got)
 	}
 	if n := count(t, r.conn, `select count(*) from calc_rule c join metric_type m on m.id = c.output_metric_type_id
@@ -104,8 +104,8 @@ func TestCalcRules(t *testing.T) {
 	// A cross-key component expression writing a bool property.
 	inUse, err := r.create(storage.CalcRuleSpec{Name: "in-use", OwnerKind: rules.OwnerComponent,
 		Selector: storage.CalcRuleSelector{ComponentTypes: []string{"display"}},
-		Inputs:   []rules.CalcInput{{As: "input", Key: "video-input"}, {As: "call", Key: "in-call"}},
-		Reduce:   rules.CalcReduce{Expr: `call || input != "hdmi1"`}, OutputKey: "busy-flag"})
+		Inputs:   []rules.CalcInput{{Alias: "input", Key: "video-input"}, {Alias: "call", Key: "in-call"}},
+		Reduce:   rules.CalcReduce{Expr: `any(call) || majority(input) != "hdmi1"`}, OutputKey: "busy-flag"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -115,7 +115,7 @@ func TestCalcRules(t *testing.T) {
 
 	// A system rule averages its members' values.
 	if _, err := r.create(storage.CalcRuleSpec{Name: "sys-avg", OwnerKind: rules.OwnerSystem,
-		Inputs: []rules.CalcInput{{As: "temps", Key: "room-temperature"}}, Reduce: rules.CalcReduce{Expr: "len(members) > 0 ? members[0].value.temps : 0.0"},
+		Inputs: []rules.CalcInput{{Alias: "temps", Key: "room-temperature"}}, Reduce: rules.CalcReduce{Expr: "len(members) > 0 ? members[0].value.temps : 0.0"},
 		OutputKey: "temp-twice"}); err != nil {
 		t.Fatalf("a system rule: %v", err)
 	}
@@ -129,32 +129,32 @@ func TestCalcRules(t *testing.T) {
 		spec  storage.CalcRuleSpec
 		field string
 	}{
-		"unknown input key": {storage.CalcRuleSpec{Name: "x1", OwnerKind: "component", Inputs: []rules.CalcInput{{As: "a", Key: "no-such-key"}},
+		"unknown input key": {storage.CalcRuleSpec{Name: "x1", OwnerKind: "component", Inputs: []rules.CalcInput{{Alias: "a", Key: "no-such-key"}},
 			Reduce: rules.CalcReduce{Expr: "1.0"}, OutputKey: "temp-sum"}, "inputs[0].key"},
-		"bad as": {storage.CalcRuleSpec{Name: "x2", OwnerKind: "component", Inputs: []rules.CalcInput{{As: "in-call", Key: "in-call"}},
-			Reduce: rules.CalcReduce{Expr: "true"}, OutputKey: "busy-flag"}, "inputs[0].as"},
-		"reduce does not compile": {storage.CalcRuleSpec{Name: "x3", OwnerKind: "component", Inputs: []rules.CalcInput{{As: "a", Key: "room-temperature"}},
-			Reduce: rules.CalcReduce{Expr: "a + nope"}, OutputKey: "temp-sum"}, "reduce.expr"},
-		"result is not the output's type": {storage.CalcRuleSpec{Name: "x4", OwnerKind: "component", Inputs: []rules.CalcInput{{As: "a", Key: "room-temperature"}},
-			Reduce: rules.CalcReduce{Expr: "a > 1"}, OutputKey: "temp-sum"}, "reduce.expr"},
-		"reducer of the wrong type": {storage.CalcRuleSpec{Name: "x5", OwnerKind: "component", Inputs: []rules.CalcInput{{As: "a", Key: "room-temperature"}},
-			Reduce: rules.CalcReduce{Reducer: "average"}, OutputKey: "busy-flag"}, "output_key"},
-		"unknown output": {storage.CalcRuleSpec{Name: "x6", OwnerKind: "component", Inputs: []rules.CalcInput{{As: "a", Key: "room-temperature"}},
-			Reduce: rules.CalcReduce{Reducer: "average"}, OutputKey: "no-such-key"}, "output_key"},
-		"health as input": {storage.CalcRuleSpec{Name: "x7", OwnerKind: "component", Inputs: []rules.CalcInput{{As: "h", Key: "health"}},
-			Reduce: rules.CalcReduce{Expr: `h == "outage"`}, OutputKey: "busy-flag"}, "inputs[0].key"},
-		"health as output": {storage.CalcRuleSpec{Name: "x8", OwnerKind: "component", Inputs: []rules.CalcInput{{As: "a", Key: "video-input"}},
-			Reduce: rules.CalcReduce{Reducer: "majority"}, OutputKey: "health"}, "output_key"},
-		"output a driver emits": {storage.CalcRuleSpec{Name: "x9", OwnerKind: "component", Inputs: []rules.CalcInput{{As: "a", Key: "room-temperature"}},
-			Reduce: rules.CalcReduce{Reducer: "max"}, OutputKey: "uptime"}, "output_key"},
+		"bad as": {storage.CalcRuleSpec{Name: "x2", OwnerKind: "component", Inputs: []rules.CalcInput{{Alias: "in-call", Key: "in-call"}},
+			Reduce: rules.CalcReduce{Expr: "true"}, OutputKey: "busy-flag"}, "inputs[0].alias"},
+		"reduce does not compile": {storage.CalcRuleSpec{Name: "x3", OwnerKind: "component", Inputs: []rules.CalcInput{{Alias: "a", Key: "room-temperature"}},
+			Reduce: rules.CalcReduce{Expr: "max(a) + nope"}, OutputKey: "temp-sum"}, "reduce.expr"},
+		"result is not the output's type": {storage.CalcRuleSpec{Name: "x4", OwnerKind: "component", Inputs: []rules.CalcInput{{Alias: "a", Key: "room-temperature"}},
+			Reduce: rules.CalcReduce{Expr: "max(a) > 1"}, OutputKey: "temp-sum"}, "reduce.expr"},
+		"a result of the output's other type": {storage.CalcRuleSpec{Name: "x5", OwnerKind: "component", Inputs: []rules.CalcInput{{Alias: "a", Key: "room-temperature"}},
+			Reduce: rules.CalcReduce{Expr: "avg(a)"}, OutputKey: "busy-flag"}, "reduce.expr"},
+		"unknown output": {storage.CalcRuleSpec{Name: "x6", OwnerKind: "component", Inputs: []rules.CalcInput{{Alias: "a", Key: "room-temperature"}},
+			Reduce: rules.CalcReduce{Expr: "avg(a)"}, OutputKey: "no-such-key"}, "output_key"},
+		"health as input": {storage.CalcRuleSpec{Name: "x7", OwnerKind: "component", Inputs: []rules.CalcInput{{Alias: "h", Key: "health"}},
+			Reduce: rules.CalcReduce{Expr: `majority(h) == "outage"`}, OutputKey: "busy-flag"}, "inputs[0].key"},
+		"health as output": {storage.CalcRuleSpec{Name: "x8", OwnerKind: "component", Inputs: []rules.CalcInput{{Alias: "a", Key: "video-input"}},
+			Reduce: rules.CalcReduce{Expr: "majority(a)"}, OutputKey: "health"}, "output_key"},
+		"output a driver emits": {storage.CalcRuleSpec{Name: "x9", OwnerKind: "component", Inputs: []rules.CalcInput{{Alias: "a", Key: "room-temperature"}},
+			Reduce: rules.CalcReduce{Expr: "max(a)"}, OutputKey: "uptime"}, "output_key"},
 		"system selector": {storage.CalcRuleSpec{Name: "x10", OwnerKind: "system", Selector: storage.CalcRuleSelector{ComponentTypes: []string{"display"}},
-			Inputs: []rules.CalcInput{{As: "a", Key: "room-temperature"}}, Reduce: rules.CalcReduce{Reducer: "max"}, OutputKey: "temp-sum"}, "selector"},
+			Inputs: []rules.CalcInput{{Alias: "a", Key: "room-temperature"}}, Reduce: rules.CalcReduce{Expr: "max(a)"}, OutputKey: "temp-sum"}, "selector"},
 		"unknown component type": {storage.CalcRuleSpec{Name: "x11", OwnerKind: "component", Selector: storage.CalcRuleSelector{ComponentTypes: []string{"no-such-type"}},
-			Inputs: []rules.CalcInput{{As: "a", Key: "room-temperature"}}, Reduce: rules.CalcReduce{Reducer: "max"}, OutputKey: "temp-sum"}, "selector"},
-		"bad owner": {storage.CalcRuleSpec{Name: "x12", OwnerKind: "location", Inputs: []rules.CalcInput{{As: "a", Key: "room-temperature"}},
-			Reduce: rules.CalcReduce{Reducer: "max"}, OutputKey: "temp-sum"}, "owner_kind"},
-		"bad name": {storage.CalcRuleSpec{Name: "Bad Name", OwnerKind: "component", Inputs: []rules.CalcInput{{As: "a", Key: "room-temperature"}},
-			Reduce: rules.CalcReduce{Reducer: "max"}, OutputKey: "temp-sum"}, ""},
+			Inputs: []rules.CalcInput{{Alias: "a", Key: "room-temperature"}}, Reduce: rules.CalcReduce{Expr: "max(a)"}, OutputKey: "temp-sum"}, "selector"},
+		"bad owner": {storage.CalcRuleSpec{Name: "x12", OwnerKind: "location", Inputs: []rules.CalcInput{{Alias: "a", Key: "room-temperature"}},
+			Reduce: rules.CalcReduce{Expr: "max(a)"}, OutputKey: "temp-sum"}, "owner_kind"},
+		"bad name": {storage.CalcRuleSpec{Name: "Bad Name", OwnerKind: "component", Inputs: []rules.CalcInput{{Alias: "a", Key: "room-temperature"}},
+			Reduce: rules.CalcReduce{Expr: "max(a)"}, OutputKey: "temp-sum"}, ""},
 	} {
 		_, err := r.create(tc.spec)
 		if !errors.Is(err, storage.ErrCalcRuleInvalid) {
@@ -172,8 +172,8 @@ func TestCalcRules(t *testing.T) {
 		t.Errorf("a taken name: %v, want ErrCalcRuleExists", err)
 	}
 	// The driver refusal names the driver that declares the key.
-	_, err = r.create(storage.CalcRuleSpec{Name: "x13", OwnerKind: "component", Inputs: []rules.CalcInput{{As: "a", Key: "room-temperature"}},
-		Reduce: rules.CalcReduce{Reducer: "max"}, OutputKey: "uptime"})
+	_, err = r.create(storage.CalcRuleSpec{Name: "x13", OwnerKind: "component", Inputs: []rules.CalcInput{{Alias: "a", Key: "room-temperature"}},
+		Reduce: rules.CalcReduce{Expr: "max(a)"}, OutputKey: "uptime"})
 	if err == nil || !strings.Contains(err.Error(), "driver") {
 		t.Errorf("an output a driver emits: %v, want a refusal naming the driver", err)
 	}
@@ -204,11 +204,11 @@ func TestCalcRules(t *testing.T) {
 	if err != nil || same.Version != 2 {
 		t.Fatalf("a no-op update %+v (%v), want version 2 kept", same, err)
 	}
-	reducer := rules.CalcReduce{Reducer: "max"}
-	if up, err = r.gw.UpdateCalcRule(r.ctx, "", "temp-mean", storage.CalcRulePatch{Reduce: &reducer}, r.all); err != nil || up.Version != 3 || up.Reduce.Reducer != "max" {
+	reducer := rules.CalcReduce{Expr: "max(t)"}
+	if up, err = r.gw.UpdateCalcRule(r.ctx, "", "temp-mean", storage.CalcRulePatch{Reduce: &reducer}, r.all); err != nil || up.Version != 3 || up.Reduce.Expr != "max(t)" {
 		t.Fatalf("a reduce update %+v (%v)", up, err)
 	}
-	bad := rules.CalcReduce{Expr: "t + nope"}
+	bad := rules.CalcReduce{Expr: "max(t) + nope"}
 	if _, err := r.gw.UpdateCalcRule(r.ctx, "", "temp-mean", storage.CalcRulePatch{Reduce: &bad}, r.all); !errors.Is(err, storage.ErrCalcRuleInvalid) {
 		t.Errorf("a bad reduce update: %v", err)
 	}
@@ -255,8 +255,8 @@ func TestCalcRuleOutputCollected(t *testing.T) {
 			t.Fatalf("native probe key %s is not a registered property or metric (%v)", key, err)
 		}
 	}
-	_, err := r.create(storage.CalcRuleSpec{Name: "probe-out", OwnerKind: "component", Inputs: []rules.CalcInput{{As: "a", Key: "room-temperature"}},
-		Reduce: rules.CalcReduce{Reducer: "max"}, OutputKey: probekeys.ICMPRTTAvg})
+	_, err := r.create(storage.CalcRuleSpec{Name: "probe-out", OwnerKind: "component", Inputs: []rules.CalcInput{{Alias: "a", Key: "room-temperature"}},
+		Reduce: rules.CalcReduce{Expr: "max(a)"}, OutputKey: probekeys.ICMPRTTAvg})
 	var ce *rules.CalcError
 	if !errors.Is(err, storage.ErrCalcRuleInvalid) || !errors.As(err, &ce) || ce.Field != "output_key" || !strings.Contains(err.Error(), "probe") {
 		t.Fatalf("a native probe's key as output: %v, want refused on output_key naming the probe", err)
@@ -282,7 +282,7 @@ func TestCalcRuleOneWriter(t *testing.T) {
 		t.Fatal(err)
 	}
 	second := storage.CalcRuleSpec{Name: "temp-high", OwnerKind: rules.OwnerSystem,
-		Inputs: []rules.CalcInput{{As: "t", Key: "room-temperature"}}, Reduce: rules.CalcReduce{Reducer: "max"}, OutputKey: "avg-temp"}
+		Inputs: []rules.CalcInput{{Alias: "t", Key: "room-temperature"}}, Reduce: rules.CalcReduce{Expr: "max(t)"}, OutputKey: "avg-temp"}
 	_, err := r.create(second)
 	var ce *rules.CalcError
 	if !errors.Is(err, storage.ErrCalcRuleInvalid) || !errors.As(err, &ce) || ce.Field != "output_key" || !strings.Contains(err.Error(), "temp-mean") {
@@ -305,8 +305,8 @@ func TestCalcRuleOneWriter(t *testing.T) {
 	}
 	// Moving a rule onto a written key is the same refusal.
 	other := "temp-twice"
-	if _, err := r.create(storage.CalcRuleSpec{Name: "twice", OwnerKind: "component", Inputs: []rules.CalcInput{{As: "t", Key: "room-temperature"}},
-		Reduce: rules.CalcReduce{Expr: "t * 2"}, OutputKey: other}); err != nil {
+	if _, err := r.create(storage.CalcRuleSpec{Name: "twice", OwnerKind: "component", Inputs: []rules.CalcInput{{Alias: "t", Key: "room-temperature"}},
+		Reduce: rules.CalcReduce{Expr: "max(t) * 2"}, OutputKey: other}); err != nil {
 		t.Fatal(err)
 	}
 	taken := "avg-temp"
@@ -322,8 +322,8 @@ func TestCalcRuleOutputTypeDelete(t *testing.T) {
 	if _, err := r.create(avgSpec("temp-mean")); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := r.create(storage.CalcRuleSpec{Name: "busy", OwnerKind: "component", Inputs: []rules.CalcInput{{As: "c", Key: "in-call"}},
-		Reduce: rules.CalcReduce{Reducer: "any"}, OutputKey: "busy-flag"}); err != nil {
+	if _, err := r.create(storage.CalcRuleSpec{Name: "busy", OwnerKind: "component", Inputs: []rules.CalcInput{{Alias: "c", Key: "in-call"}},
+		Reduce: rules.CalcReduce{Expr: "any(c)"}, OutputKey: "busy-flag"}); err != nil {
 		t.Fatal(err)
 	}
 	var inUse *storage.CalcOutputInUseError
@@ -346,15 +346,15 @@ func TestCalcRuleOutputTypeDelete(t *testing.T) {
 // disabled, but enabling it again is refused until it compiles.
 func TestCalcRuleCalcError(t *testing.T) {
 	r := newCalcRig(t)
-	got, err := r.create(storage.CalcRuleSpec{Name: "busy", OwnerKind: "component", Inputs: []rules.CalcInput{{As: "c", Key: "in-call"}},
-		Reduce: rules.CalcReduce{Expr: "c"}, OutputKey: "busy-flag"})
+	got, err := r.create(storage.CalcRuleSpec{Name: "busy", OwnerKind: "component", Inputs: []rules.CalcInput{{Alias: "c", Key: "in-call"}},
+		Reduce: rules.CalcReduce{Expr: "any(c)"}, OutputKey: "busy-flag"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if got.CalcError != nil {
 		t.Fatalf("a compiling rule carries %+v", got.CalcError)
 	}
-	if _, err := r.conn.Exec(r.ctx, `update calc_rule set reduce = '{"expr": "c &&\n nope"}', version = version + 1 where id = $1`, got.ID); err != nil {
+	if _, err := r.conn.Exec(r.ctx, `update calc_rule set reduce = '{"expr": "any(c) &&\n nope"}', version = version + 1 where id = $1`, got.ID); err != nil {
 		t.Fatal(err)
 	}
 	g, err := r.gw.GetCalcRule(r.ctx, "busy")
@@ -372,20 +372,25 @@ func TestCalcRuleCalcError(t *testing.T) {
 	if _, err := r.gw.UpdateCalcRule(r.ctx, "", "busy", storage.CalcRulePatch{Enabled: &on}, r.all); !errors.Is(err, storage.ErrCalcRuleInvalid) {
 		t.Fatalf("enabling a broken rule: %v, want refused", err)
 	}
-	fixed := rules.CalcReduce{Expr: "!c"}
+	fixed := rules.CalcReduce{Expr: "!any(c)"}
 	if _, err := r.gw.UpdateCalcRule(r.ctx, "", "busy", storage.CalcRulePatch{Reduce: &fixed, Enabled: &on}, r.all); err != nil {
 		t.Fatalf("enabling with a fixed reduce: %v", err)
 	}
-	// An input key deleted under the rule is a fault on that input.
-	if _, err := r.conn.Exec(r.ctx, `delete from property_type where name = 'in-call'`); err != nil {
-		t.Fatal(err)
+	// An input key cannot be deleted under the rule (#1018: it is held by
+	// id), and the refusal names the rule.
+	var inUse *storage.CalcOutputInUseError
+	if err := r.gw.DeletePropertyType(r.ctx, "", "in-call"); !errors.As(err, &inUse) || !inUse.Reads ||
+		!errors.Is(err, storage.ErrKeyReadByCalcRule) || len(inUse.Rules) != 1 || inUse.Rules[0] != "busy" {
+		t.Fatalf("deleting a read key: %v, want refused naming busy", err)
 	}
-	if _, err := r.conn.Exec(r.ctx, `update calc_rule set version = version + 1 where id = $1`, got.ID); err != nil {
+	// An input key retyped under the rule leaves a reduce that no longer
+	// compiles: any over text.
+	if _, err := r.conn.Exec(r.ctx, `update property_type set data_type = 'string' where name = 'in-call'`); err != nil {
 		t.Fatal(err)
 	}
 	g, err = r.gw.GetCalcRule(r.ctx, "busy")
-	if err != nil || g.CalcError == nil || g.CalcError.Field != "inputs[0].key" {
-		t.Fatalf("a deleted input key reads %+v (%v), want calc_error on inputs[0].key", g, err)
+	if err != nil || g.CalcError == nil || g.CalcError.Field != "reduce.expr" || g.CalcError.Column != 6 {
+		t.Fatalf("a retyped input key reads %+v (%v), want calc_error on reduce.expr at its argument", g, err)
 	}
 }
 
@@ -399,11 +404,11 @@ func TestCalcRuleCycle(t *testing.T) {
 		t.Fatal(err)
 	}
 	if _, err := r.create(storage.CalcRuleSpec{Name: "doubled", OwnerKind: "component", // avg-temp -> temp-twice
-		Inputs: []rules.CalcInput{{As: "a", Key: "avg-temp"}}, Reduce: rules.CalcReduce{Expr: "a * 2"}, OutputKey: "temp-twice"}); err != nil {
+		Inputs: []rules.CalcInput{{Alias: "a", Key: "avg-temp"}}, Reduce: rules.CalcReduce{Expr: "max(a) * 2"}, OutputKey: "temp-twice"}); err != nil {
 		t.Fatal(err)
 	}
 	closing := storage.CalcRuleSpec{Name: "closing", OwnerKind: "component", // temp-twice -> avg-temp: a loop
-		Inputs: []rules.CalcInput{{As: "a", Key: "temp-twice"}}, Reduce: rules.CalcReduce{Expr: "a / 2"}, OutputKey: "avg-temp"}
+		Inputs: []rules.CalcInput{{Alias: "a", Key: "temp-twice"}}, Reduce: rules.CalcReduce{Expr: "max(a) / 2"}, OutputKey: "avg-temp"}
 	_, err := r.create(closing)
 	if !errors.Is(err, storage.ErrCalcRuleInvalid) || !errors.Is(err, rules.ErrCalcCycle) {
 		t.Fatalf("a closing rule: %v, want a cycle refusal", err)
@@ -424,7 +429,7 @@ func TestCalcRuleCycle(t *testing.T) {
 	}
 	// Repointing doubled away from avg-temp opens the loop, and closing may
 	// then be enabled.
-	inputs := []rules.CalcInput{{As: "a", Key: "room-temperature"}}
+	inputs := []rules.CalcInput{{Alias: "a", Key: "room-temperature"}}
 	if _, err := r.gw.UpdateCalcRule(r.ctx, "", "doubled", storage.CalcRulePatch{Inputs: &inputs}, r.all); err != nil {
 		t.Fatal(err)
 	}
@@ -434,8 +439,8 @@ func TestCalcRuleCycle(t *testing.T) {
 		t.Fatalf("enabling once the loop is open: %v, want only the second-writer refusal", err)
 	}
 	// A rule reading its own output is the shortest loop.
-	_, err = r.create(storage.CalcRuleSpec{Name: "self", OwnerKind: "component", Inputs: []rules.CalcInput{{As: "s", Key: "temp-sum"}},
-		Reduce: rules.CalcReduce{Expr: "s + 1"}, OutputKey: "temp-sum"})
+	_, err = r.create(storage.CalcRuleSpec{Name: "self", OwnerKind: "component", Inputs: []rules.CalcInput{{Alias: "s", Key: "temp-sum"}},
+		Reduce: rules.CalcReduce{Expr: "max(s) + 1"}, OutputKey: "temp-sum"})
 	if !errors.As(err, &cyc) || cyc.Cycle.String() != "temp-sum -> temp-sum" {
 		t.Fatalf("a self loop: %v", err)
 	}
@@ -482,8 +487,8 @@ func TestCalcRuleRename(t *testing.T) {
 		t.Errorf("an illegal name: %v", err)
 	}
 	// The renamed rule still closes a loop under its new name.
-	_, err = r.create(storage.CalcRuleSpec{Name: "loop", OwnerKind: "component", Inputs: []rules.CalcInput{{As: "a", Key: "avg-temp"}},
-		Reduce: rules.CalcReduce{Expr: "a"}, OutputKey: "room-temperature"})
+	_, err = r.create(storage.CalcRuleSpec{Name: "loop", OwnerKind: "component", Inputs: []rules.CalcInput{{Alias: "a", Key: "avg-temp"}},
+		Reduce: rules.CalcReduce{Expr: "max(a)"}, OutputKey: "room-temperature"})
 	var cyc *storage.CalcCycleError
 	if !errors.As(err, &cyc) {
 		t.Fatalf("a loop through the renamed rule: %v", err)

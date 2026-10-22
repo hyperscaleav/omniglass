@@ -31,76 +31,32 @@ const HealthKey = "health"
 // MaxCalcInputs is the most inputs one rule may read.
 const MaxCalcInputs = 16
 
-// CalcInput is one input as authored: a sample key, and the name the reduce
-// knows it by.
+// CalcInput is one input as authored and stored (#1018): the alias the
+// expression knows it by, and the key it reads, held by id in its lane's
+// registry (KeyID, Lane) so a key rename changes nothing; Key is the key's
+// name, resolved when the rule is read (on a write, Key may name the key or
+// give its id).
 type CalcInput struct {
-	As  string `json:"as"`
-	Key string `json:"key"`
+	Alias string `json:"alias"`
+	Key   string `json:"key"`
+	KeyID string `json:"key_id,omitempty"`
+	Lane  Lane   `json:"lane,omitempty"`
 }
 
 // TypedInput is an input with its key's value type resolved from the
 // registries (ValueTypeFor).
 type TypedInput struct {
-	As, Key, ValueType string
+	Alias, Key, KeyID string
+	Lane              Lane
+	ValueType         string
 }
 
-// CalcReduce is how a rule folds its inputs into its output: a named reducer
-// or an expression, exactly one.
+// CalcReduce is how a rule folds its inputs into its output: always an
+// expression over the inputs by alias (#1018 retired the named reducers;
+// the list functions avg, max, min, sum, majority, any and all are what they
+// were).
 type CalcReduce struct {
-	Reducer string `json:"reducer,omitempty"`
-	Expr    string `json:"expr,omitempty"`
-}
-
-// Reducer is a named fold over every value of one input: on a component
-// owner, every instance of the input key on the component; on a system
-// owner, every instance on every role-bound member. It yields one value, so a
-// rule's output stays aggregate (instance ”). Declared here and checked at
-// authoring; the tick that folds arrives with #525's second slice.
-type Reducer struct {
-	Name string `json:"name"`
-	// Accepts are the input value types it folds.
-	Accepts []string `json:"accepts"`
-	// Result is the value type it yields; empty is the input's own.
-	Result string `json:"result,omitempty"`
-	Doc    string `json:"doc"`
-}
-
-var reducers = []Reducer{
-	{Name: "average", Accepts: []string{ValueNumber}, Result: ValueNumber, Doc: "The mean of the values folded in"},
-	{Name: "min", Accepts: []string{ValueNumber}, Result: ValueNumber, Doc: "The smallest value folded in"},
-	{Name: "max", Accepts: []string{ValueNumber}, Result: ValueNumber, Doc: "The largest value folded in"},
-	{Name: "sum", Accepts: []string{ValueNumber}, Result: ValueNumber, Doc: "The total of the values folded in"},
-	{Name: "count", Accepts: []string{ValueNumber, ValueText, ValueBool}, Result: ValueNumber, Doc: "How many values are present to fold, of any type"},
-	{Name: "majority", Accepts: []string{ValueText, ValueBool}, Doc: "The most common value; a tie goes to the value that sorts first"},
-	{Name: "any", Accepts: []string{ValueBool}, Result: ValueBool, Doc: "True when any value folded in is true"},
-	{Name: "all", Accepts: []string{ValueBool}, Result: ValueBool, Doc: "True when every value folded in is true"},
-}
-
-// CalcReducers are the named reducers, a fresh copy each call.
-func CalcReducers() []Reducer {
-	out := make([]Reducer, len(reducers))
-	for i, r := range reducers {
-		r.Accepts = slices.Clone(r.Accepts)
-		out[i] = r
-	}
-	return out
-}
-
-func lookupReducer(name string) (Reducer, bool) {
-	for _, r := range reducers {
-		if r.Name == name {
-			return r, true
-		}
-	}
-	return Reducer{}, false
-}
-
-func reducerNames() string {
-	names := make([]string, len(reducers))
-	for i, r := range reducers {
-		names[i] = r.Name
-	}
-	return strings.Join(names, ", ")
+	Expr string `json:"expr"`
 }
 
 // CalcBudget is the calc site's run budget: a reduce runs on the server's
@@ -111,16 +67,50 @@ func CalcBudget() expression.Budget {
 	return expression.Budget{Iterations: 100_000, Memory: 50_000, Deadline: 25 * time.Millisecond}
 }
 
-// calcOptions are the calc site's builtins (the criteria set: arithmetic is
-// the language's operators, not a builtin, and no builtin is vetted for calc
-// alone) and its budget.
+// calcOptions are the calc site's functions (the criteria builtins and every
+// list function, since an input binds as a list) and its budget.
 func calcOptions() []expression.Option {
-	return []expression.Option{expression.WithBuiltins(expression.CriteriaBuiltins()...), expression.WithBudget(CalcBudget())}
+	return []expression.Option{expression.WithBuiltins(expression.CriteriaBuiltins()...),
+		expression.WithListFunctions(expression.ListFunctions()...), expression.WithBudget(CalcBudget())}
+}
+
+// CalcBuiltins are the functions the calc site admits, sorted, a fresh slice
+// each call.
+func CalcBuiltins() []string { return calcVariant(ValueNumber, "").Env.Builtins() }
+
+// calcSiteBindings are the names the calc site binds itself, or keeps for
+// itself, beside a rule's aliases: members (a system rule's records), the
+// record's value and has, and the owners' own names (component, system), kept
+// so a later binding of them never changes what a stored rule means.
+var calcSiteBindings = []string{"component", "has", "members", "system", "value"}
+
+// CalcReservedNames is every name an alias may not take: the expression
+// language's keywords, builtin and list function names, and the calc site's
+// own bindings. Sorted, a fresh slice each call; generated for the console
+// (make gen) so the form and editor refuse what the server refuses.
+func CalcReservedNames() []string {
+	out := slices.Concat(expression.ReservedNames(), calcSiteBindings)
+	slices.Sort(out)
+	return slices.Compact(out)
+}
+
+// CheckAlias reports whether an alias may name a calc rule's input: a name
+// the expression can say that means only the input (expression.BindableName:
+// an identifier of at most 64, not a keyword, builtin or list function), and
+// not one of the site's own bindings.
+func CheckAlias(alias string) error {
+	if err := expression.BindableName(alias); err != nil {
+		return err
+	}
+	if slices.Contains(calcSiteBindings, alias) {
+		return fmt.Errorf("%q is a name the calc site binds itself", alias)
+	}
+	return nil
 }
 
 // CalcError is a rule refused at authoring, naming the field at fault
-// (owner_kind, inputs, inputs[i].as, inputs[i].key, reduce, reduce.reducer,
-// reduce.expr, output_key). It wraps an *expression.Error, with its line and
+// (owner_kind, inputs, inputs[i].alias, inputs[i].key, reduce.expr,
+// output_key). It wraps an *expression.Error, with its line and
 // column, when the reduce's expression is what failed.
 type CalcError struct {
 	Field string
@@ -134,17 +124,16 @@ func calcErr(field, format string, a ...any) error {
 	return &CalcError{Field: field, Err: fmt.Errorf(format, a...)}
 }
 
-// CalcProgram is a rule's reduce checked against its inputs and output: a
-// named reducer, or a compiled expression and the environment it runs on.
+// CalcProgram is a rule's reduce compiled against its inputs and output, and
+// the environment it runs on.
 type CalcProgram struct {
 	Env     expression.Env
 	Program *expression.Program
-	Reducer *Reducer
 
 	ownerKind string
 	inputs    []TypedInput
 	output    string
-	envType   reflect.Type // the expression's input struct; nil for a reducer
+	envType   reflect.Type // the expression's input struct
 }
 
 // valueGoType is the Go type a value type binds as.
@@ -173,8 +162,8 @@ func resultFor(valueType string) (expression.Result, bool) {
 }
 
 // checkCalcInputs checks an owner kind and its inputs: one to MaxCalcInputs,
-// each named by a bindable, unique name, each key read once, each of a known
-// value type.
+// each named by a unique alias CheckAlias accepts, each key read once, each
+// of a known value type.
 func checkCalcInputs(ownerKind string, inputs []TypedInput) error {
 	if ownerKind != OwnerComponent && ownerKind != OwnerSystem {
 		return calcErr("owner_kind", "a calc rule derives for a component or a system, not %q", ownerKind)
@@ -182,33 +171,39 @@ func checkCalcInputs(ownerKind string, inputs []TypedInput) error {
 	if len(inputs) == 0 || len(inputs) > MaxCalcInputs {
 		return calcErr("inputs", "a calc rule reads 1 to %d inputs, not %d", MaxCalcInputs, len(inputs))
 	}
-	seenAs, seenKey := map[string]bool{}, map[string]bool{}
+	seenAlias, seenKey := map[string]bool{}, map[string]bool{}
 	for i, x := range inputs {
-		if err := expression.BindableName(x.As); err != nil {
-			return &CalcError{Field: fmt.Sprintf("inputs[%d].as", i), Err: err}
+		if err := CheckAlias(x.Alias); err != nil {
+			return &CalcError{Field: fmt.Sprintf("inputs[%d].alias", i), Err: err}
 		}
-		if seenAs[x.As] {
-			return calcErr(fmt.Sprintf("inputs[%d].as", i), "%q names two inputs; each input's name is unique", x.As)
+		if seenAlias[x.Alias] {
+			return calcErr(fmt.Sprintf("inputs[%d].alias", i), "%q names two inputs; each input's alias is unique", x.Alias)
 		}
 		if x.Key == HealthKey {
 			return calcErr(fmt.Sprintf("inputs[%d].key", i), "%s may not be an input: an alarm moves it, so a rule reading it could feed back through an event rule", HealthKey)
 		}
-		if seenKey[x.Key] {
-			return calcErr(fmt.Sprintf("inputs[%d].key", i), "%q is read twice; read it once and use its name", x.Key)
+		key := x.Key
+		if x.KeyID != "" {
+			key = string(x.Lane) + ":" + x.KeyID
+		}
+		if seenKey[key] {
+			return calcErr(fmt.Sprintf("inputs[%d].key", i), "%q is read twice; read it once and use its alias", x.Key)
 		}
 		if _, ok := valueGoType(x.ValueType); !ok {
 			return calcErr(fmt.Sprintf("inputs[%d].key", i), "%q has no value type a calc rule reads (%q)", x.Key, x.ValueType)
 		}
-		seenAs[x.As], seenKey[x.Key] = true, true
+		seenAlias[x.Alias], seenKey[key] = true, true
 	}
 	return nil
 }
 
 // CalcEnv is the environment a rule's expression compiles against: each
-// input bound by its name, as one value of its key's type for a component
-// owner (the component's current value on its aggregate instance, ”) or as
-// the list of those values for a system owner (one per role-bound member that
-// has one), yielding the output key's type.
+// input bound by its alias as the list of its current values, of its key's
+// type (#1018): on a component owner one per instance (the named instances,
+// the aggregate instance ” only when it is the key's one, a stale one left
+// out), on a system owner every role-bound member's, in member order. A
+// system owner also binds members, one record per member. It yields the
+// output key's type.
 func CalcEnv(ownerKind string, inputs []TypedInput, output string) (expression.Env, error) {
 	env, _, err := calcEnv(ownerKind, inputs, output)
 	return env, err
@@ -222,19 +217,19 @@ func calcEnv(ownerKind string, inputs []TypedInput, output string) (expression.E
 	if !ok {
 		return expression.Env{}, nil, calcErr("output_key", "the output has no value type a calc rule writes (%q)", output)
 	}
-	fields := make([]reflect.StructField, len(inputs))
+	lists := make([]reflect.StructField, len(inputs))
 	for i, x := range inputs {
 		t, _ := valueGoType(x.ValueType)
-		doc := x.Key + ": the component's current value"
+		doc := x.Key + ": the component's current values, one per instance"
 		if ownerKind == OwnerSystem {
-			doc = x.Key + ": the member's current value (the type's zero when it has none; see has)"
+			doc = x.Key + ": every member's current values, one per instance, by member name"
 		}
-		fields[i] = reflect.StructField{Name: fmt.Sprintf("In%d", i), Type: t,
-			Tag: reflect.StructTag(fmt.Sprintf("expr:%q doc:%q", x.As, doc))}
+		lists[i] = reflect.StructField{Name: fmt.Sprintf("In%d", i), Type: reflect.SliceOf(t),
+			Tag: reflect.StructTag(fmt.Sprintf("expr:%q doc:%q", x.Alias, doc))}
 	}
-	typ := reflect.StructOf(fields)
+	typ := reflect.StructOf(lists)
 	if ownerKind == OwnerSystem {
-		typ = systemEnvType(inputs, typ)
+		typ = systemEnvType(inputs, lists)
 	}
 	env, err := expression.EnvFor(typ, result, calcOptions()...)
 	if err != nil {
@@ -243,74 +238,78 @@ func calcEnv(ownerKind string, inputs []TypedInput, output string) (expression.E
 	return env, typ, nil
 }
 
-// systemEnvType is a system expression's environment: members, one record
-// per role-bound member in a stable order (name, then id), each with the
-// member's id and name, its value of each input under value (values, the
-// struct built for a component's inputs), and whether it holds one under
-// has. One record per member keeps a member's inputs together, which
-// parallel per-input lists could not once a member lacks one of them.
-func systemEnvType(inputs []TypedInput, values reflect.Type) reflect.Type {
+// systemEnvType is a system expression's environment: each input's list
+// (lists), then members, one record per role-bound member in a stable order
+// (name, then id), each with the member's id and name, its own value of each
+// input under value (its aggregate instance's), and whether it holds one
+// under has. One record per member keeps a member's inputs together, which
+// the per-input lists cannot once a member lacks one of them.
+func systemEnvType(inputs []TypedInput, lists []reflect.StructField) reflect.Type {
 	has := make([]reflect.StructField, len(inputs))
+	values := make([]reflect.StructField, len(inputs))
 	for i, x := range inputs {
+		t, _ := valueGoType(x.ValueType)
+		values[i] = reflect.StructField{Name: fmt.Sprintf("In%d", i), Type: t,
+			Tag: reflect.StructTag(fmt.Sprintf("expr:%q doc:%q", x.Alias, x.Key+": the member's own current value (its aggregate instance; the type's zero when it has none, see has)"))}
 		has[i] = reflect.StructField{Name: fmt.Sprintf("In%d", i), Type: reflect.TypeFor[bool](),
-			Tag: reflect.StructTag(fmt.Sprintf("expr:%q doc:%q", x.As, "whether the member holds a value of "+x.Key))}
+			Tag: reflect.StructTag(fmt.Sprintf("expr:%q doc:%q", x.Alias, "whether the member holds its own value of "+x.Key))}
 	}
 	member := reflect.StructOf([]reflect.StructField{
 		{Name: "ID", Type: reflect.TypeFor[string](), Tag: `expr:"id" doc:"The member component's uuid"`},
 		{Name: "Name", Type: reflect.TypeFor[string](), Tag: `expr:"name" doc:"The member component's name"`},
-		{Name: "Value", Type: values, Tag: `expr:"value" doc:"The member's value of each input, by its name"`},
-		{Name: "Has", Type: reflect.StructOf(has), Tag: `expr:"has" doc:"Whether the member holds a value of each input, by its name"`},
+		{Name: "Value", Type: reflect.StructOf(values), Tag: `expr:"value" doc:"The member's own value of each input, by its alias"`},
+		{Name: "Has", Type: reflect.StructOf(has), Tag: `expr:"has" doc:"Whether the member holds its own value of each input, by its alias"`},
 	})
-	return reflect.StructOf([]reflect.StructField{{Name: "Members", Type: reflect.SliceOf(member),
-		Tag: `expr:"members" doc:"The system's role-bound members, one record each, by name then id"`}})
+	return reflect.StructOf(append(slices.Clone(lists), reflect.StructField{Name: "Members", Type: reflect.SliceOf(member),
+		Tag: `expr:"members" doc:"The system's role-bound members, one record each, by name then id"`}))
 }
 
 // CompileCalc checks a rule's reduce against its owner kind, its inputs and
-// its output key's value type. A named reducer reads exactly one input, of a
-// type it folds, and yields the output's type; an expression compiles against
-// CalcEnv. Every refusal is a *CalcError naming its field.
+// its output key's value type: the expression compiles against CalcEnv.
+// Every refusal is a *CalcError naming its field; an expression's carries the
+// positioned *expression.Error (with Unbound set for a name no alias binds).
 func CompileCalc(ownerKind string, inputs []TypedInput, reduce CalcReduce, output string) (*CalcProgram, error) {
-	if err := checkCalcInputs(ownerKind, inputs); err != nil {
-		return nil, err
-	}
-	if _, ok := resultFor(output); !ok {
-		return nil, calcErr("output_key", "the output has no value type a calc rule writes (%q)", output)
-	}
-	switch {
-	case reduce.Reducer != "" && reduce.Expr != "":
-		return nil, calcErr("reduce", "a reduce is a named reducer or an expression, not both")
-	case reduce.Reducer == "" && reduce.Expr == "":
-		return nil, calcErr("reduce", "a reduce names a reducer (%s) or gives an expression", reducerNames())
-	case reduce.Reducer != "":
-		r, ok := lookupReducer(reduce.Reducer)
-		if !ok {
-			return nil, calcErr("reduce.reducer", "%q is not a reducer (%s)", reduce.Reducer, reducerNames())
-		}
-		if len(inputs) != 1 {
-			return nil, calcErr("reduce.reducer", "%s folds one input, not %d; reduce several with an expression", r.Name, len(inputs))
-		}
-		x := inputs[0]
-		if !slices.Contains(r.Accepts, x.ValueType) {
-			return nil, calcErr("reduce.reducer", "%s folds %s values, and %s is %s", r.Name, strings.Join(r.Accepts, " or "), x.Key, x.ValueType)
-		}
-		yields := r.Result
-		if yields == "" {
-			yields = x.ValueType
-		}
-		if yields != output {
-			return nil, calcErr("output_key", "%s yields %s, and the output is %s", r.Name, yields, output)
-		}
-		return &CalcProgram{Reducer: &r, ownerKind: ownerKind, inputs: slices.Clone(inputs), output: output}, nil
-	}
 	env, typ, err := calcEnv(ownerKind, inputs, output)
 	if err != nil {
 		return nil, err
 	}
+	if reduce.Expr == "" {
+		return nil, calcErr("reduce.expr", "a reduce is an expression over the inputs by alias, e.g. max(%s)", inputs[0].Alias)
+	}
 	p, err := expression.Compile(reduce.Expr, env)
 	if err != nil {
-		return nil, &CalcError{Field: "reduce.expr", Err: err}
+		return nil, &CalcError{Field: "reduce.expr", Err: calcDiagnostic(err)}
 	}
 	return &CalcProgram{Env: env, Program: p, ownerKind: ownerKind, inputs: slices.Clone(inputs), output: output, envType: typ}, nil
+}
+
+// Aggregate reports whether the reduce reads every input, and a system's
+// members, only as a whole list folded into one value (avg(t), max(t),
+// len(members)), never one element by position or through a predicate: its
+// result is an aggregate over the owner's values, as a named reducer's was,
+// rather than one member's own.
+func (c *CalcProgram) Aggregate() bool {
+	names := []string{"members"}
+	for _, in := range c.inputs {
+		names = append(names, in.Alias)
+	}
+	return c.Program.WholeListsOnly(names...)
+}
+
+// CheckCalc is CompileCalc's check of a source against a built env without
+// the program cache (the validate route), its diagnostic said the same way.
+func CheckCalc(source string, env expression.Env) error {
+	return calcDiagnostic(expression.Check(source, env))
+}
+
+// calcDiagnostic says an unbound name in a calc rule's terms: a name no
+// input's alias binds, which the author binds by giving a key that alias.
+func calcDiagnostic(err error) error {
+	var ee *expression.Error
+	if errors.As(err, &ee) && ee.Unbound != "" {
+		ee.Message = fmt.Sprintf("%s is not an input of this rule: no input has the alias %s; bind it to a key", ee.Unbound, ee.Unbound)
+	}
+	return err
 }
 
 // CalcEdge is one enabled rule in the key graph: its input keys lead to its

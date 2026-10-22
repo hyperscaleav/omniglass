@@ -46,7 +46,7 @@ func provedByCreate(ctx context.Context, gw *storage.PG) map[string]func(key str
 		},
 		"calc_rule": func(s string) error {
 			_, err := gw.CreateCalcRule(ctx, "", storage.CalcRuleSpec{Name: s, OwnerKind: rules.OwnerComponent,
-				Inputs: []rules.CalcInput{{As: "t", Key: "room-temperature"}}, Reduce: rules.CalcReduce{Reducer: "average"},
+				Inputs: []rules.CalcInput{{Alias: "t", Key: "room-temperature"}}, Reduce: rules.CalcReduce{Expr: "avg(t)"},
 				OutputKey: "occupancy-count"}, scope.Set{All: true})
 			return err
 		},

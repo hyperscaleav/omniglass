@@ -20,12 +20,12 @@ func TestCalcRuleState(t *testing.T) {
 	r := newSystemRig(t)
 	r.assign("sys-1", "left", "m1")
 	r.assign("sys-1", "right", "m2")
-	r.systemRule("kind-mean", storage.CalcRuleSelector{SystemTypes: []string{"kind-a"}}, rules.CalcReduce{Reducer: "average"})
+	r.systemRule("kind-mean", storage.CalcRuleSelector{SystemTypes: []string{"kind-a"}}, rules.CalcReduce{Expr: "avg(t)"})
 	r.temp("m1", "", 20)
 	r.drain()
 	// A component rule on two components, one of them still pending.
 	if _, err := r.create(storage.CalcRuleSpec{Name: "echo", OwnerKind: rules.OwnerComponent,
-		Inputs: []rules.CalcInput{{As: "t", Key: "occupancy-count"}}, Reduce: rules.CalcReduce{Expr: "t * 1.0"}, OutputKey: "temp-sum"}); err != nil {
+		Inputs: []rules.CalcInput{{Alias: "t", Key: "occupancy-count"}}, Reduce: rules.CalcReduce{Expr: "max(t) * 1.0"}, OutputKey: "temp-sum"}); err != nil {
 		t.Fatal(err)
 	}
 	for _, c := range []string{"m3", "m4"} {
@@ -115,7 +115,7 @@ func TestCalcPreview(t *testing.T) {
 	r.temp("m2", "", 30)
 	r.drain()
 	spec := storage.CalcRuleSpec{OwnerKind: rules.OwnerSystem, Selector: storage.CalcRuleSelector{SystemTypes: []string{"kind-a"}},
-		Inputs: []rules.CalcInput{{As: "t", Key: "room-temperature"}}, Reduce: rules.CalcReduce{Reducer: "average"}, OutputKey: "avg-temp"}
+		Inputs: []rules.CalcInput{{Alias: "t", Key: "room-temperature"}}, Reduce: rules.CalcReduce{Expr: "avg(t)"}, OutputKey: "avg-temp"}
 	before := r.tableCounts()
 	pv, err := r.gw.PreviewCalcRule(r.ctx, spec, r.all, r.all)
 	if err != nil {
@@ -181,8 +181,8 @@ func TestCalcPreview(t *testing.T) {
 	if _, err := r.gw.PreviewCalcRule(r.ctx, bad, r.all, r.all); !errors.As(err, &ce) || ce.Field != "reduce.expr" {
 		t.Errorf("a broken reduce: %v", err)
 	}
-	loop := storage.CalcRuleSpec{OwnerKind: rules.OwnerComponent, Inputs: []rules.CalcInput{{As: "a", Key: "avg-temp"}},
-		Reduce: rules.CalcReduce{Expr: "a"}, OutputKey: "room-temperature"}
+	loop := storage.CalcRuleSpec{OwnerKind: rules.OwnerComponent, Inputs: []rules.CalcInput{{Alias: "a", Key: "avg-temp"}},
+		Reduce: rules.CalcReduce{Expr: "max(a)"}, OutputKey: "room-temperature"}
 	if _, err := r.gw.PreviewCalcRule(r.ctx, loop, r.all, r.all); !errors.Is(err, rules.ErrCalcCycle) {
 		t.Errorf("a cycle: %v", err)
 	}
@@ -198,7 +198,7 @@ func TestCalcLineageAndCounts(t *testing.T) {
 	r := newSystemRig(t)
 	r.assign("sys-1", "left", "m1")
 	r.temp("m1", "", 20)
-	r.systemRule("kind-mean", storage.CalcRuleSelector{SystemTypes: []string{"kind-a"}}, rules.CalcReduce{Reducer: "average"})
+	r.systemRule("kind-mean", storage.CalcRuleSelector{SystemTypes: []string{"kind-a"}}, rules.CalcReduce{Expr: "avg(t)"})
 	r.drain()
 	rule, err := r.gw.GetCalcRule(r.ctx, "kind-mean")
 	if err != nil {

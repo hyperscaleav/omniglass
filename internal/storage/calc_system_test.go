@@ -83,7 +83,7 @@ func (r *systemRig) systemOutput(system string) string {
 func (r *systemRig) systemRule(name string, sel storage.CalcRuleSelector, reduce rules.CalcReduce) {
 	r.t.Helper()
 	if _, err := r.create(storage.CalcRuleSpec{Name: name, OwnerKind: rules.OwnerSystem, Selector: sel,
-		Inputs: []rules.CalcInput{{As: "t", Key: "room-temperature"}}, Reduce: reduce, OutputKey: "avg-temp"}); err != nil {
+		Inputs: []rules.CalcInput{{Alias: "t", Key: "room-temperature"}}, Reduce: reduce, OutputKey: "avg-temp"}); err != nil {
 		r.t.Fatal(err)
 	}
 }
@@ -98,7 +98,7 @@ func TestCalcSystemRule(t *testing.T) {
 	r.assign("sys-1", "left", "m1")
 	r.assign("sys-1", "right", "m2")
 	r.assign("sys-3", "left", "m3")
-	r.systemRule("kind-mean", storage.CalcRuleSelector{SystemTypes: []string{"kind-a"}}, rules.CalcReduce{Reducer: "average"})
+	r.systemRule("kind-mean", storage.CalcRuleSelector{SystemTypes: []string{"kind-a"}}, rules.CalcReduce{Expr: "avg(t)"})
 	r.temp("m1", "", 20)
 	r.temp("m2", "", 24)
 	r.temp("m3", "", 99)
@@ -189,17 +189,17 @@ func TestCalcSystemSelector(t *testing.T) {
 		"component fields": {ComponentTypes: []string{"display"}},
 	} {
 		_, err := r.create(storage.CalcRuleSpec{Name: "bad", OwnerKind: rules.OwnerSystem, Selector: sel,
-			Inputs: []rules.CalcInput{{As: "t", Key: "room-temperature"}}, Reduce: rules.CalcReduce{Reducer: "max"}, OutputKey: "avg-temp"})
+			Inputs: []rules.CalcInput{{Alias: "t", Key: "room-temperature"}}, Reduce: rules.CalcReduce{Expr: "max(t)"}, OutputKey: "avg-temp"})
 		var ce *rules.CalcError
 		if !errors.Is(err, storage.ErrCalcRuleInvalid) || !errors.As(err, &ce) || ce.Field != "selector" {
 			t.Errorf("%s: %v, want refused on selector", name, err)
 		}
 	}
 	if _, err := r.create(storage.CalcRuleSpec{Name: "bad", OwnerKind: rules.OwnerComponent, Selector: storage.CalcRuleSelector{Systems: []string{"sys-3"}},
-		Inputs: []rules.CalcInput{{As: "t", Key: "room-temperature"}}, Reduce: rules.CalcReduce{Reducer: "max"}, OutputKey: "avg-temp"}); !errors.Is(err, storage.ErrCalcRuleInvalid) {
+		Inputs: []rules.CalcInput{{Alias: "t", Key: "room-temperature"}}, Reduce: rules.CalcReduce{Expr: "max(t)"}, OutputKey: "avg-temp"}); !errors.Is(err, storage.ErrCalcRuleInvalid) {
 		t.Errorf("a component rule with a system selector: %v", err)
 	}
-	r.systemRule("kinds", storage.CalcRuleSelector{SystemTypes: []string{"kind-a"}}, rules.CalcReduce{Reducer: "max"})
+	r.systemRule("kinds", storage.CalcRuleSelector{SystemTypes: []string{"kind-a"}}, rules.CalcReduce{Expr: "max(t)"})
 	got, err := r.gw.GetCalcRule(r.ctx, "kinds")
 	if err != nil || len(got.Selector.SystemTypes) != 1 {
 		t.Fatalf("read back %+v (%v)", got, err)
@@ -208,22 +208,23 @@ func TestCalcSystemSelector(t *testing.T) {
 		t.Fatalf("%d system marks after create, want 2 (sys-1 and sys-2)", n)
 	}
 	ids, err := r.create(storage.CalcRuleSpec{Name: "one-only", OwnerKind: rules.OwnerSystem, Selector: storage.CalcRuleSelector{Systems: []string{"sys-3"}},
-		Inputs: []rules.CalcInput{{As: "t", Key: "occupancy-count"}}, Reduce: rules.CalcReduce{Reducer: "max"}, OutputKey: "temp-sum"})
+		Inputs: []rules.CalcInput{{Alias: "t", Key: "occupancy-count"}}, Reduce: rules.CalcReduce{Expr: "max(t)"}, OutputKey: "temp-sum"})
 	if err != nil || len(ids.Selector.Systems) != 1 || ids.Selector.Systems[0] != r.ids["sys-3"] {
 		t.Fatalf("a selector by name stores the id: %+v (%v)", ids, err)
 	}
 }
 
-// The sample write's probe for the calc rules reading its keys is one probe
-// of the inputs index, for both owner kinds (#997): a batch no rule reads
-// pays for nothing more, and a system rule adds no scan to it.
-func TestCalcProbeUsesTheInputsIndex(t *testing.T) {
+// The sample write's probe for the calc rules reading its keys is an index
+// probe of calc_rule_input by key id, on both lanes and for both owner kinds
+// (#997, #1018): a batch no rule reads pays for nothing more, and a system
+// rule adds no scan to it.
+func TestCalcProbeUsesTheInputIndexes(t *testing.T) {
 	r := newEvalRig(t)
 	if _, err := r.conn.Exec(r.ctx, "set enable_seqscan = off"); err != nil {
 		t.Fatal(err)
 	}
-	sql, path := storage.ExportCalcProbeSQL([]string{"room-temperature", "occupancy-count"})
-	rows, err := r.conn.Query(r.ctx, "explain "+sql, path, "")
+	sql, lanes, names := storage.ExportCalcProbeSQL([]string{"metric:room-temperature", "property:in-call"})
+	rows, err := r.conn.Query(r.ctx, "explain "+sql, lanes, names, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -236,8 +237,10 @@ func TestCalcProbeUsesTheInputsIndex(t *testing.T) {
 		plan += line + "\n"
 	}
 	rows.Close()
-	if !strings.Contains(plan, "calc_rule_inputs_idx") {
-		t.Fatalf("the calc probe does not reach for calc_rule_inputs_idx:\n%s", plan)
+	for _, idx := range []string{"calc_rule_input_metric_key", "calc_rule_input_property_key"} {
+		if !strings.Contains(plan, idx) {
+			t.Fatalf("the calc probe does not reach for %s:\n%s", idx, plan)
+		}
 	}
 }
 
@@ -249,7 +252,7 @@ func TestCalcRetypeWhileServing(t *testing.T) {
 	r := newSystemRig(t)
 	r.assign("sys-1", "left", "m1")
 	r.temp("m1", "", 20)
-	r.systemRule("kind-mean", storage.CalcRuleSelector{SystemTypes: []string{"kind-a"}}, rules.CalcReduce{Reducer: "average"})
+	r.systemRule("kind-mean", storage.CalcRuleSelector{SystemTypes: []string{"kind-a"}}, rules.CalcReduce{Expr: "avg(t)"})
 	if _, err := r.conn.Exec(r.ctx, `delete from calc_pending where system_id <> $1`, r.ids["sys-1"]); err != nil {
 		t.Fatal(err)
 	}
@@ -299,7 +302,7 @@ func TestCalcSystemNoMembers(t *testing.T) {
 	r := newSystemRig(t)
 	r.assign("sys-1", "left", "m1")
 	r.temp("m1", "", 20)
-	r.systemRule("kind-mean", storage.CalcRuleSelector{Systems: []string{"sys-1"}}, rules.CalcReduce{Reducer: "average"})
+	r.systemRule("kind-mean", storage.CalcRuleSelector{Systems: []string{"sys-1"}}, rules.CalcReduce{Expr: "avg(t)"})
 	r.drain()
 	if got := r.systemOutput("sys-1"); got != "20 kind-mean 1 system" {
 		t.Fatalf("sys-1 output %q, want 20", got)

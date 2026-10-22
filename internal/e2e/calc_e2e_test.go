@@ -118,7 +118,7 @@ func TestCalcRuleEndToEnd(t *testing.T) {
 	// and an event rule on the output.
 	must("metric-type", "create", "--name", "port-open-peak", "--data-type", "float")
 	must("calc-rule", "create", "--name", "port-open", "--owner-kind", "component",
-		"--inputs", `[{"as":"open","key":"tcp-open"}]`, "--reduce", `{"reducer":"max"}`, "--output-key", "port-open-peak")
+		"--inputs", `[{"alias":"open","key":"tcp-open"}]`, "--reduce", `{"expr":"max(open)"}`, "--output-key", "port-open-peak")
 	must("event-rule", "create", "--name", "port-up", "--sample-key", "port-open-peak",
 		"--fire-criteria", `{"expr":"value >= 1.0"}`, "--severity", "high", "--fire-event-type", "condition-started")
 

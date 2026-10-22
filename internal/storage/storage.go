@@ -488,6 +488,9 @@ type Gateway interface {
 	// SampleKeyType reads which lane a sample key reads and, for a property,
 	// its data type: what types an expression's value (#958).
 	SampleKeyType(ctx context.Context, key string) (rules.Lane, string, error)
+	// ResolveSampleKey finds a sample key by name (a property first, then a
+	// metric) or by id, with its lane, data type, id and name (#1018).
+	ResolveSampleKey(ctx context.Context, ref string) (SampleKeyRef, error)
 	// PreviewEventRule judges a candidate rule over recent samples, writing
 	// nothing (#959).
 	PreviewEventRule(ctx context.Context, spec RulePreviewSpec, visible scope.Set) (*RulePreview, error)

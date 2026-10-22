@@ -118,3 +118,15 @@ func TestBindingDocsAgreeAcrossVariants(t *testing.T) {
 		}
 	}
 }
+
+// The committed alias rules the console imports equal a fresh render (make
+// gen), so the form refuses what the server refuses.
+func TestCalcNamesMatchCommitted(t *testing.T) {
+	committed, err := os.ReadFile("../../web/src/lib/calc_names.gen.ts")
+	if err != nil {
+		t.Fatalf("read committed calc_names.gen.ts (run make gen and commit it): %v", err)
+	}
+	if string(committed) != string(CalcNamesTS()) {
+		t.Error("web/src/lib/calc_names.gen.ts drifted from the calc site: run make gen and commit the result")
+	}
+}

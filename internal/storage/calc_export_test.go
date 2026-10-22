@@ -24,8 +24,12 @@ func (p *PG) WriteMetricHeld(ctx context.Context, evs []MetricSampleWrite, hold 
 }
 
 // ExportCalcProbeSQL is the sample write's calc rule probe, for the EXPLAIN
-// guard (TestCalcProbeUsesTheInputsIndex), and the jsonpath it binds.
-func ExportCalcProbeSQL(keys []string) (string, string) { return calcProbeSQL, calcKeysPath(keys) }
+// guard (TestCalcProbeUsesTheInputIndexes), and the lanes and names it binds
+// for keys given as lane:name.
+func ExportCalcProbeSQL(keys []string) (string, []string, []string) {
+	lanes, names := calcProbeArgs(keys)
+	return calcProbeSQL, lanes, names
+}
 
 // SetCalcPreviewOwnerCap lowers the calc preview's owner cap for a test,
 // returning the restore.

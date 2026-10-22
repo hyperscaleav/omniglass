@@ -37,9 +37,10 @@ import (
 // transaction (sampleWriteAttempts), so a batch is never lost to it; a tick
 // that loses defers its mark.
 
-// calcMarks is a write's owners and the keys each sample on them carried.
+// calcMarks is a write's owners and the keys each sample on them carried,
+// each key as lane:name (a property and a metric may share a name).
 type calcMarks struct {
-	keys map[string]map[string]bool // component id -> keys
+	keys map[string]map[string]bool // component id -> lane:name
 }
 
 func newCalcMarks() *calcMarks { return &calcMarks{keys: map[string]map[string]bool{}} }
@@ -47,14 +48,14 @@ func newCalcMarks() *calcMarks { return &calcMarks{keys: map[string]map[string]b
 // add records a sample: only component-owned samples mark. A system rule
 // reads its members' (component) samples, so a system-owned sample, a
 // system rule's own output included, feeds no calc rule.
-func (m *calcMarks) add(ownerKind, ownerID, key string) {
+func (m *calcMarks) add(ownerKind, ownerID string, lane rules.Lane, key string) {
 	if ownerKind != rules.OwnerComponent {
 		return
 	}
 	if m.keys[ownerID] == nil {
 		m.keys[ownerID] = map[string]bool{}
 	}
-	m.keys[ownerID][key] = true
+	m.keys[ownerID][string(lane)+":"+key] = true
 }
 
 func (m *calcMarks) allKeys() []string {
@@ -72,15 +73,14 @@ func (m *calcMarks) allKeys() []string {
 	return out
 }
 
-// calcKeysPath is the jsonpath matching an inputs array that reads any of
-// keys, the containment the calc_rule_inputs_idx GIN index answers.
-func calcKeysPath(keys []string) string {
-	terms := make([]string, len(keys))
-	for i, k := range keys {
-		q, _ := json.Marshal(k)
-		terms[i] = "@.key == " + string(q)
+// calcProbeArgs splits lane:name keys into the lanes and names the probe
+// binds.
+func calcProbeArgs(keys []string) (lanes, names []string) {
+	for _, k := range keys {
+		lane, name, _ := strings.Cut(k, ":")
+		lanes, names = append(lanes, lane), append(names, name)
 	}
-	return "$[*] ? (" + strings.Join(terms, " || ") + ")"
+	return lanes, names
 }
 
 // markCalcPending inserts a mark for every enabled component calc rule that
@@ -96,7 +96,8 @@ func (p *PG) markCalcPending(ctx context.Context, tx pgx.Tx, marks *calcMarks, e
 	if len(keys) == 0 {
 		return nil
 	}
-	rows, err := tx.Query(ctx, calcProbeSQL, calcKeysPath(keys), exceptRule)
+	lanes, names := calcProbeArgs(keys)
+	rows, err := tx.Query(ctx, calcProbeSQL, lanes, names, exceptRule)
 	if err != nil {
 		return fmt.Errorf("storage: find calc rules to mark: %w", err)
 	}
@@ -110,23 +111,19 @@ func (p *PG) markCalcPending(ctx context.Context, tx pgx.Tx, marks *calcMarks, e
 	var systemRules []string
 	for rows.Next() {
 		var c candidate
-		var sel, inputs []byte
-		if err := rows.Scan(&c.id, &c.kind, &sel, &inputs); err != nil {
+		var sel []byte
+		var ins []string
+		if err := rows.Scan(&c.id, &c.kind, &sel, &ins); err != nil {
 			rows.Close()
 			return fmt.Errorf("storage: find calc rules to mark: %w", err)
 		}
-		var ins []rules.CalcInput
 		if err := json.Unmarshal(sel, &c.sel); err != nil {
 			rows.Close()
 			return fmt.Errorf("storage: calc rule %s selector: %w", c.id, err)
 		}
-		if err := json.Unmarshal(inputs, &ins); err != nil {
-			rows.Close()
-			return fmt.Errorf("storage: calc rule %s inputs: %w", c.id, err)
-		}
 		c.inputs = map[string]bool{}
 		for _, in := range ins {
-			c.inputs[in.Key] = true
+			c.inputs[in] = true
 		}
 		if c.kind == rules.OwnerSystem {
 			systemRules = append(systemRules, c.id)
@@ -190,10 +187,10 @@ func (p *PG) markCalcPending(ctx context.Context, tx pgx.Tx, marks *calcMarks, e
 	return nil
 }
 
-// CalcStaleAfter is the staleness bound on a named reducer's fold: an
-// instance whose newest sample is older is not folded in (a collector that
-// stopped reporting it should not hold the result), and is named in the
-// rule's state as stale.
+// CalcStaleAfter is the staleness bound on an input's list: an instance
+// whose newest sample is older is left out (a collector that stopped
+// reporting it should not hold the result), and is named in the rule's state
+// as stale.
 const CalcStaleAfter = time.Hour
 
 // calcRetryBackoff is how far a mark whose computation failed (a database
@@ -398,7 +395,7 @@ type calcOutcome struct {
 	err       string
 }
 
-// staleInstance is an instance a reducer skipped as stale: the component
+// staleInstance is an instance an input's list left out as stale: the component
 // it is on (by id; its name resolves at read time, under the reader's
 // scope), the key and the instance.
 type staleInstance struct {
@@ -449,20 +446,10 @@ type calcPlan struct {
 // calcPlan types a rule's inputs and compiles its reduce; a non-empty fault
 // is a rule that cannot reduce (an input key gone, a reduce that no longer
 // compiles), recorded rather than returned.
-func (p *PG) calcPlan(ctx context.Context, tx pgx.Tx, r CalcRule) (calcPlan, string, error) {
-	types, err := keyValueTypes(ctx, tx)
-	if err != nil {
-		return calcPlan{}, "", err
-	}
-	typed := make([]rules.TypedInput, len(r.Inputs))
-	for i, in := range r.Inputs {
-		vt, ok := types[in.Key]
-		if !ok {
-			return calcPlan{}, fmt.Sprintf("input %s: %q is not a registered property or metric", in.As, in.Key), nil
-		}
-		typed[i] = rules.TypedInput{As: in.As, Key: in.Key, ValueType: vt}
-	}
+func (p *PG) calcPlan(_ context.Context, _ pgx.Tx, r CalcRule) (calcPlan, string, error) {
+	typed := typedInputs(r)
 	var prog *rules.CalcProgram
+	var err error
 	if r.candidate {
 		// A preview's candidate has no id or version to cache under.
 		prog, err = rules.CompileCalc(r.OwnerKind, typed, r.Reduce, r.outputType)
@@ -507,11 +494,11 @@ func (p *PG) reduceWith(ctx context.Context, tx pgx.Tx, r CalcRule, owner calcOw
 	values := make([][]any, len(typed))
 	read := make([]rules.CalcMember, len(members))
 	for j, m := range members {
-		read[j] = rules.CalcMember{ID: m.id, Name: m.name, Values: make([][]any, len(typed))}
+		read[j] = rules.CalcMember{ID: m.id, Name: m.name, Values: make([][]any, len(typed)), Record: make([]any, len(typed))}
 	}
 	for i, in := range typed {
 		for j, m := range members {
-			vs, stale, err := readCalcInput(ctx, tx, calcOwner{kind: rules.OwnerComponent, id: m.id}, in, prog.Reducer != nil)
+			vs, own, stale, err := readCalcInput(ctx, tx, calcOwner{kind: rules.OwnerComponent, id: m.id}, in, false)
 			if err != nil {
 				var bad *calcValueError
 				if errors.As(err, &bad) {
@@ -524,7 +511,7 @@ func (p *PG) reduceWith(ctx context.Context, tx pgx.Tx, r CalcRule, owner calcOw
 				out.skipped = append(out.skipped, skippedMember{Key: in.Key, Component: m.id})
 			}
 			values[i] = append(values[i], vs...)
-			read[j].Values[i] = vs
+			read[j].Values[i], read[j].Record[i] = vs, own
 		}
 		if len(values[i]) == 0 {
 			out.missing = append(out.missing, in.Key)
@@ -585,43 +572,42 @@ type calcValueError struct{ msg string }
 
 func (e *calcValueError) Error() string { return e.msg }
 
-// readCalcInput is one key's current values on an owner, ignoring intended
-// values (calc reads observed and calculated as truth, never intended).
-//
-// For a named reducer (allInstances) it is each instance's newest value:
-// the per-instance values only, the aggregate instance ” joining the fold
-// only when the key has no other instance on the owner, and an instance
-// whose newest sample is older than CalcStaleAfter left out and returned as
-// stale. Instances are walked one index probe at a time (the series index
-// leads with owner, type and instance). Otherwise it is the aggregate
-// instance's newest value.
-func readCalcInput(ctx context.Context, tx pgx.Tx, owner calcOwner, in rules.TypedInput, allInstances bool) ([]any, []staleInstance, error) {
-	table, typeCol, typeTable, value := "property", "property_type_id", "property_type", "value #>> '{}'"
-	if in.ValueType == rules.ValueNumber {
-		table, typeCol, typeTable, value = "metric", "metric_type_id", "metric_type", "value::text"
+// readCalcInput is one key's current values on an owner, held by its key's
+// id on its lane, ignoring intended values (calc reads observed and
+// calculated as truth, never intended): each instance's newest value, the
+// per-instance values only, the aggregate instance '' joining only when the
+// key has no other instance on the owner, and an instance whose newest
+// sample is older than CalcStaleAfter left out and returned as stale. own is
+// the aggregate instance's newest value (nil when there is none), the value
+// a system member's record carries. Instances are walked one index probe at
+// a time (the series index leads with owner, type and instance). With
+// aggregateOnly it reads the aggregate instance alone, as own (an output's
+// current value).
+func readCalcInput(ctx context.Context, tx pgx.Tx, owner calcOwner, in rules.TypedInput, aggregateOnly bool) (values []any, own any, stale []staleInstance, err error) {
+	table, typeCol, value := "property", "property_type_id", "value #>> '{}'"
+	if in.Lane == rules.LaneMetric {
+		table, typeCol, value = "metric", "metric_type_id", "value::text"
 	}
 	col := owner.col()
 	var sql string
-	if allInstances {
-		sql = fmt.Sprintf(`with recursive t as (select id from %[3]s where name = $2),
-			inst(instance) as (
-				(select instance from %[1]s, t where %[5]s = $1::uuid and %[2]s = t.id order by instance limit 1)
+	if !aggregateOnly {
+		sql = fmt.Sprintf(`with recursive inst(instance) as (
+				(select instance from %[1]s where %[4]s = $1::uuid and %[2]s = $2::uuid order by instance limit 1)
 				union all
-				select (select x.instance from %[1]s x, t where x.%[5]s = $1::uuid and x.%[2]s = t.id and x.instance > inst.instance
+				select (select x.instance from %[1]s x where x.%[4]s = $1::uuid and x.%[2]s = $2::uuid and x.instance > inst.instance
 					order by x.instance limit 1) from inst where inst.instance is not null)
-			select i.instance, n.v, n.ts from inst i, t,
-				lateral (select %[4]s as v, ts from %[1]s where %[5]s = $1::uuid and %[2]s = t.id and instance = i.instance
+			select i.instance, n.v, n.ts from inst i,
+				lateral (select %[3]s as v, ts from %[1]s where %[4]s = $1::uuid and %[2]s = $2::uuid and instance = i.instance
 					and provenance in ('observed', 'calculated') order by ts desc, id desc limit 1) n
-			where i.instance is not null`, table, typeCol, typeTable, value, col)
+			where i.instance is not null`, table, typeCol, value, col)
 	} else {
-		sql = fmt.Sprintf(`with t as (select id from %[3]s where name = $2), i as (select ''::text as instance)
-			select i.instance, n.v, n.ts from i, t,
-				lateral (select %[4]s as v, ts from %[1]s where %[5]s = $1::uuid and %[2]s = t.id and instance = i.instance
-					and provenance in ('observed', 'calculated') order by ts desc, id desc limit 1) n`, table, typeCol, typeTable, value, col)
+		sql = fmt.Sprintf(`select ''::text, n.v, n.ts from
+				lateral (select %[3]s as v, ts from %[1]s where %[4]s = $1::uuid and %[2]s = $2::uuid and instance = ''
+					and provenance in ('observed', 'calculated') order by ts desc, id desc limit 1) n`, table, typeCol, value, col)
 	}
-	rows, err := tx.Query(ctx, sql, owner.id, in.Key)
+	rows, err := tx.Query(ctx, sql, owner.id, in.KeyID)
 	if err != nil {
-		return nil, nil, fmt.Errorf("storage: read calc input %s: %w", in.Key, err)
+		return nil, nil, nil, fmt.Errorf("storage: read calc input %s: %w", in.Key, err)
 	}
 	type row struct {
 		instance, raw string
@@ -632,40 +618,61 @@ func readCalcInput(ctx context.Context, tx pgx.Tx, owner calcOwner, in rules.Typ
 		var x row
 		if err := rows.Scan(&x.instance, &x.raw, &x.ts); err != nil {
 			rows.Close()
-			return nil, nil, fmt.Errorf("storage: read calc input %s: %w", in.Key, err)
+			return nil, nil, nil, fmt.Errorf("storage: read calc input %s: %w", in.Key, err)
 		}
 		got = append(got, x)
 	}
 	rows.Close()
 	if err := rows.Err(); err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
-	if allInstances {
-		var named []row
-		for _, x := range got {
-			if x.instance != "" {
-				named = append(named, x)
-			}
+	read := func(raw string) (any, error) {
+		v, err := rules.CalcValue(in.ValueType, raw)
+		if err != nil {
+			return nil, &calcValueError{msg: fmt.Sprintf("input %s: %v", in.Alias, err)}
 		}
-		if len(named) > 0 {
-			got = named
-		}
+		return v, nil
 	}
-	var out []any
-	var stale []staleInstance
-	cutoff := time.Now().Add(-CalcStaleAfter)
+	var named []row
 	for _, x := range got {
-		if allInstances && x.ts.Before(cutoff) {
+		if x.instance == "" {
+			if own, err = read(x.raw); err != nil {
+				return nil, nil, nil, err
+			}
+			continue
+		}
+		named = append(named, x)
+	}
+	if aggregateOnly {
+		return nil, own, nil, nil
+	}
+	if len(named) == 0 {
+		named = got
+	}
+	cutoff := time.Now().Add(-CalcStaleAfter)
+	for _, x := range named {
+		if x.ts.Before(cutoff) {
 			stale = append(stale, staleInstance{Component: owner.id, Key: in.Key, Instance: x.instance})
 			continue
 		}
-		v, err := rules.CalcValue(in.ValueType, x.raw)
+		v, err := read(x.raw)
 		if err != nil {
-			return nil, nil, &calcValueError{msg: fmt.Sprintf("input %s: %v", in.As, err)}
+			return nil, nil, nil, err
 		}
-		out = append(out, v)
+		values = append(values, v)
 	}
-	return out, stale, nil
+	return values, own, stale, nil
+}
+
+// currentOutput is a rule's output's current value on an owner (its
+// aggregate instance's), nil when it has none or cannot be read.
+func currentOutput(ctx context.Context, tx pgx.Tx, r CalcRule, owner calcOwner) (any, error) {
+	_, own, _, err := readCalcInput(ctx, tx, owner, rules.TypedInput{Key: r.OutputKey, KeyID: r.outputID, Lane: r.OutputLane, ValueType: r.outputType}, true)
+	var bad *calcValueError
+	if errors.As(err, &bad) {
+		return nil, nil
+	}
+	return own, err
 }
 
 // writeCalcOutput writes a rule's output on its owner's aggregate instance
@@ -676,13 +683,11 @@ func readCalcInput(ctx context.Context, tx pgx.Tx, owner calcOwner, in rules.Typ
 // output is not judged by event rules yet: the evaluator judges component
 // samples only (#1002).
 func (p *PG) writeCalcOutput(ctx context.Context, tx pgx.Tx, r CalcRule, owner calcOwner, v any) error {
-	current, _, err := readCalcInput(ctx, tx, owner, rules.TypedInput{Key: r.OutputKey, ValueType: r.outputType}, false)
+	current, err := currentOutput(ctx, tx, r, owner)
 	if err != nil {
-		var bad *calcValueError
-		if !errors.As(err, &bad) {
-			return err
-		}
-	} else if len(current) == 1 && current[0] == v {
+		return err
+	}
+	if current != nil && current == v {
 		return nil
 	}
 	lineage := &sampleLineage{ruleID: r.ID, ruleName: r.Name, version: r.Version}
@@ -758,7 +763,7 @@ func resetCalcRuleWork(ctx context.Context, tx pgx.Tx, r CalcRule) error {
 		}
 		return nil
 	}
-	keys := inputKeys(r.Inputs)
+	metricIDs, propertyIDs := inputTypeIDs(r.Inputs)
 	types := r.Selector.ComponentTypes
 	if types == nil {
 		types = []string{}
@@ -771,18 +776,16 @@ func resetCalcRuleWork(ctx context.Context, tx pgx.Tx, r CalcRule) error {
 			select id from component_type where name = any($3::text[])
 			union
 			select ct.id from component_type ct join accepted a on ct.parent_id = a.id
-		),
-		mt as (select id from metric_type where name = any($4::text[])),
-		pt as (select id from property_type where name = any($4::text[]))
+		)
 		insert into calc_pending (rule_id, owner_kind, component_id)
 		select $1::uuid, 'component', c.id from component c left join product p on p.id = c.product_id
 		where ((cardinality($2::uuid[]) = 0 and cardinality($3::text[]) = 0)
 				or c.id = any($2::uuid[]) or p.component_type_id in (select id from accepted))
-			and (exists (select 1 from metric m, mt where m.component_id = c.id and m.metric_type_id = mt.id)
-				or exists (select 1 from property x, pt where x.component_id = c.id and x.property_type_id = pt.id))
+			and (exists (select 1 from metric m where m.component_id = c.id and m.metric_type_id = any($4::uuid[]))
+				or exists (select 1 from property x where x.component_id = c.id and x.property_type_id = any($5::uuid[])))
 		order by c.id
 		on conflict on constraint calc_pending_key do update set marked_at = calc_pending.marked_at`,
-		r.ID, ids, types, keys); err != nil {
+		r.ID, ids, types, metricIDs, propertyIDs); err != nil {
 		return fmt.Errorf("storage: mark a written calc rule: %w", err)
 	}
 	return nil
@@ -808,32 +811,45 @@ func systemSelectedSQL(r, s string) string {
 }
 
 // calcProbeSQL finds the enabled rules (either owner kind) reading any of a
-// write's keys, except the write's own rule: one probe of the GIN index on
-// calc_rule.inputs (TestCalcProbeUsesTheInputsIndex), so a write no rule
-// reads pays for nothing more.
-const calcProbeSQL = `select id::text, owner_kind, selector, inputs from calc_rule
-	where enabled and inputs @? $1::jsonpath and id::text <> $2 order by id`
+// write's keys (lane:name, resolved to their ids in the registries), except
+// the write's own rule, with each rule's input keys as lane:name: an index
+// probe of calc_rule_input by key id (TestCalcProbeUsesTheInputIndexes), so
+// a write no rule reads pays for nothing more.
+const calcProbeSQL = `with k(lane, name) as (select * from unnest($1::text[], $2::text[])),
+	pk as (select pt.id from property_type pt join k on k.lane = 'property' and k.name = pt.name),
+	mk as (select mt.id from metric_type mt join k on k.lane = 'metric' and k.name = mt.name),
+	hit as (select i.rule_id from calc_rule_input i join pk on i.property_type_id = pk.id
+		union select i.rule_id from calc_rule_input i join mk on i.metric_type_id = mk.id)
+	select r.id::text, r.owner_kind, r.selector,
+		(select array_agg(i.lane || ':' || coalesce(ipt.name, imt.name)) from calc_rule_input i
+			left join property_type ipt on ipt.id = i.property_type_id left join metric_type imt on imt.id = i.metric_type_id
+			where i.rule_id = r.id)
+	from calc_rule r join hit on hit.rule_id = r.id
+	where r.enabled and r.id::text <> $3 order by r.id`
 
 // markSystemRulesBySamples marks, for the system rules a write's keys
 // reach, every selected system that a sampled component is a role-bound
 // member of and whose rule reads a key that component's samples carried.
 // One statement, the marks in (rule, system) order.
 func markSystemRulesBySamples(ctx context.Context, tx pgx.Tx, ruleIDs []string, marks *calcMarks) error {
-	var comps, keys []string
+	var comps, lanes, keys []string
 	for comp, ks := range marks.keys {
 		for k := range ks {
-			comps = append(comps, comp)
-			keys = append(keys, k)
+			lane, name, _ := strings.Cut(k, ":")
+			comps, lanes, keys = append(comps, comp), append(lanes, lane), append(keys, name)
 		}
 	}
 	if len(comps) == 0 {
 		return nil
 	}
-	if _, err := tx.Exec(ctx, `with samples(component_id, key) as (select * from unnest($2::uuid[], $3::text[])),
+	if _, err := tx.Exec(ctx, `with samples(component_id, lane, key) as (select * from unnest($2::uuid[], $3::text[], $4::text[])),
 		hits as (
 			select distinct r.id as rule_id, s.id as system_id
 			from calc_rule r
-			join samples x on r.inputs @> jsonb_build_array(jsonb_build_object('key', x.key))
+			join calc_rule_input i on i.rule_id = r.id
+			left join property_type ipt on ipt.id = i.property_type_id
+			left join metric_type imt on imt.id = i.metric_type_id
+			join samples x on x.lane = i.lane and x.key = coalesce(ipt.name, imt.name)
 			join system_role_assignment ra on ra.component_id = x.component_id
 			join system s on s.id = ra.system_id
 			join system_role sr on sr.id = ra.role_id and `+roleOfSystemSQL("sr", "s")+`
@@ -841,7 +857,7 @@ func markSystemRulesBySamples(ctx context.Context, tx pgx.Tx, ruleIDs []string, 
 		)
 		insert into calc_pending (rule_id, owner_kind, system_id)
 		select rule_id, 'system', system_id from hits order by rule_id, system_id
-		on conflict on constraint calc_pending_key do update set marked_at = calc_pending.marked_at`, ruleIDs, comps, keys); err != nil {
+		on conflict on constraint calc_pending_key do update set marked_at = calc_pending.marked_at`, ruleIDs, comps, lanes, keys); err != nil {
 		return fmt.Errorf("storage: mark system calc rules: %w", err)
 	}
 	return nil

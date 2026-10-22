@@ -86,19 +86,19 @@ func (r *evalRig) calculated(key string) []string {
 func TestCalcDerivesComponentSamples(t *testing.T) {
 	r := newEvalRig(t)
 	if _, err := r.create(storage.CalcRuleSpec{Name: "temp-mean", OwnerKind: rules.OwnerComponent,
-		Inputs: []rules.CalcInput{{As: "t", Key: "room-temperature"}}, Reduce: rules.CalcReduce{Reducer: "average"}, OutputKey: "avg-temp"}); err != nil {
+		Inputs: []rules.CalcInput{{Alias: "t", Key: "room-temperature"}}, Reduce: rules.CalcReduce{Expr: "avg(t)"}, OutputKey: "avg-temp"}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := r.create(storage.CalcRuleSpec{Name: "per-person", OwnerKind: rules.OwnerComponent,
-		Inputs: []rules.CalcInput{{As: "t", Key: "room-temperature"}, {As: "n", Key: "occupancy-count"}},
-		Reduce: rules.CalcReduce{Expr: "t * n"}, OutputKey: "temp-sum"}); err != nil {
+		Inputs: []rules.CalcInput{{Alias: "t", Key: "room-temperature"}, {Alias: "n", Key: "occupancy-count"}},
+		Reduce: rules.CalcReduce{Expr: "avg(t) * max(n)"}, OutputKey: "temp-sum"}); err != nil {
 		t.Fatal(err)
 	}
 	if r.pending() != 0 {
 		t.Fatal("a mark before any sample")
 	}
-	// Two instances of the temperature, folded by the reducer; the cross-key
-	// rule reads the aggregate instance only and has no occupancy yet.
+	// Two instances of the temperature, averaged over the input's list; the
+	// cross-key rule reads both too, and has no occupancy yet.
 	r.metric("room-temperature", "north", 20)
 	r.metric("room-temperature", "south", 24)
 	if n := r.pending(); n != 2 {
@@ -114,8 +114,8 @@ func TestCalcDerivesComponentSamples(t *testing.T) {
 		t.Fatalf("temp-sum rows %v with an input missing, want none", got)
 	}
 	if got := scalar(t, r.conn, `select s.missing::text || ' ' || (s.value is null)::text from calc_rule_state s join calc_rule c on c.id = s.rule_id
-		where c.name = 'per-person'`); got != `["room-temperature", "occupancy-count"] true` {
-		t.Fatalf("per-person state %q, want both inputs missing on the aggregate instance and no value", got)
+		where c.name = 'per-person'`); got != `["occupancy-count"] true` {
+		t.Fatalf("per-person state %q, want occupancy-count missing and no value", got)
 	}
 
 	// The same values again: marked, drained, no new row.
@@ -127,15 +127,15 @@ func TestCalcDerivesComponentSamples(t *testing.T) {
 	r.metric("room-temperature", "", 21)
 	r.metric("occupancy-count", "", 3)
 	r.drain()
-	if got := r.calculated("temp-sum"); len(got) != 1 || got[0] != "63 per-person 1" {
-		t.Fatalf("temp-sum rows %v, want one calculated 63", got)
+	if got := r.calculated("temp-sum"); len(got) != 1 || got[0] != "66 per-person 1" {
+		t.Fatalf("temp-sum rows %v, want one calculated 66 (the named instances averaged, times 3)", got)
 	}
 	if got := r.calculated("avg-temp"); len(got) != 1 {
 		t.Fatalf("avg-temp rows %v, want still one: the reducer folds the named instances, not the aggregate beside them", got)
 	}
 	if got := scalar(t, r.conn, `select s.missing::text || ' ' || s.value::text from calc_rule_state s join calc_rule c on c.id = s.rule_id
-		where c.name = 'per-person'`); got != `[] 63` {
-		t.Fatalf("per-person state %q, want nothing missing and 63", got)
+		where c.name = 'per-person'`); got != `[] 66` {
+		t.Fatalf("per-person state %q, want nothing missing and 66", got)
 	}
 
 	// A rule disabled is not marked, and a mark it already had drains to
@@ -159,8 +159,8 @@ func TestCalcDerivesComponentSamples(t *testing.T) {
 	if err := r.gw.DeleteCalcRule(r.ctx, "", "per-person", r.all); err != nil {
 		t.Fatal(err)
 	}
-	if got := r.calculated("temp-sum"); len(got) != 1 || got[0] != "63 per-person 1" {
-		t.Fatalf("temp-sum rows %v after the rule's delete, want its one calculated 63 kept", got)
+	if got := r.calculated("temp-sum"); len(got) != 1 || got[0] != "66 per-person 1" {
+		t.Fatalf("temp-sum rows %v after the rule's delete, want its one calculated 66 kept", got)
 	}
 	if n := count(t, r.conn, `select count(*) from metric where component_id = '`+r.comp+`' and source_rule = 'per-person'
 		and source_rule_id is not null`); n != 1 {
@@ -173,8 +173,8 @@ func TestCalcDerivesComponentSamples(t *testing.T) {
 func TestCalcPropertyOutputAndEventRule(t *testing.T) {
 	r := newEvalRig(t)
 	if _, err := r.create(storage.CalcRuleSpec{Name: "busy", OwnerKind: rules.OwnerComponent,
-		Inputs: []rules.CalcInput{{As: "call", Key: "in-call"}, {As: "n", Key: "occupancy-count"}},
-		Reduce: rules.CalcReduce{Expr: "call || n > 0"}, OutputKey: "busy-flag"}); err != nil {
+		Inputs: []rules.CalcInput{{Alias: "call", Key: "in-call"}, {Alias: "n", Key: "occupancy-count"}},
+		Reduce: rules.CalcReduce{Expr: "any(call) || max(n) > 0"}, OutputKey: "busy-flag"}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := r.gw.CreateEventRule(r.ctx, "", storage.EventRuleSpec{Name: "busy-now", SampleKey: "busy-flag",
@@ -212,11 +212,11 @@ func TestCalcPropertyOutputAndEventRule(t *testing.T) {
 func TestCalcChainAndNoSelfMark(t *testing.T) {
 	r := newEvalRig(t)
 	if _, err := r.create(storage.CalcRuleSpec{Name: "first", OwnerKind: rules.OwnerComponent,
-		Inputs: []rules.CalcInput{{As: "t", Key: "room-temperature"}}, Reduce: rules.CalcReduce{Expr: "t + 1"}, OutputKey: "avg-temp"}); err != nil {
+		Inputs: []rules.CalcInput{{Alias: "t", Key: "room-temperature"}}, Reduce: rules.CalcReduce{Expr: "max(t) + 1"}, OutputKey: "avg-temp"}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := r.create(storage.CalcRuleSpec{Name: "second", OwnerKind: rules.OwnerComponent,
-		Inputs: []rules.CalcInput{{As: "a", Key: "avg-temp"}, {As: "t", Key: "room-temperature"}}, Reduce: rules.CalcReduce{Expr: "a * 2 + t"},
+		Inputs: []rules.CalcInput{{Alias: "a", Key: "avg-temp"}, {Alias: "t", Key: "room-temperature"}}, Reduce: rules.CalcReduce{Expr: "max(a) * 2 + max(t)"},
 		OutputKey: "temp-twice"}); err != nil {
 		t.Fatal(err)
 	}
@@ -245,9 +245,10 @@ func TestCalcChainAndNoSelfMark(t *testing.T) {
 	// A rule reading its own output can only exist outside the gateway (the
 	// cycle check refuses it); written straight into the table, it still
 	// never marks itself: one drain computes it once and leaves nothing.
-	if _, err := r.conn.Exec(r.ctx, `insert into calc_rule (name, owner_kind, inputs, reduce, output_lane, output_metric_type_id)
-		values ('self', 'component', '[{"as": "s", "key": "temp-sum"}]', '{"expr": "s + 1"}', 'metric',
-		(select id from metric_type where name = 'temp-sum'))`); err != nil {
+	if _, err := r.conn.Exec(r.ctx, `with c as (insert into calc_rule (name, owner_kind, reduce, output_lane, output_metric_type_id)
+			values ('self', 'component', '{"expr": "max(s) + 1"}', 'metric', (select id from metric_type where name = 'temp-sum')) returning id)
+		insert into calc_rule_input (rule_id, position, alias, lane, metric_type_id)
+		select c.id, 0, 's', 'metric', (select id from metric_type where name = 'temp-sum') from c`); err != nil {
 		t.Fatal(err)
 	}
 	r.metric("temp-sum", "", 1)
@@ -267,7 +268,7 @@ func TestCalcChainAndNoSelfMark(t *testing.T) {
 func TestCalcDrainReplicasAndRestart(t *testing.T) {
 	r := newEvalRig(t)
 	if _, err := r.create(storage.CalcRuleSpec{Name: "temp-mean", OwnerKind: rules.OwnerComponent,
-		Inputs: []rules.CalcInput{{As: "t", Key: "room-temperature"}}, Reduce: rules.CalcReduce{Reducer: "average"}, OutputKey: "avg-temp"}); err != nil {
+		Inputs: []rules.CalcInput{{Alias: "t", Key: "room-temperature"}}, Reduce: rules.CalcReduce{Expr: "avg(t)"}, OutputKey: "avg-temp"}); err != nil {
 		t.Fatal(err)
 	}
 	const owners = 12
@@ -353,7 +354,7 @@ func TestCalcDrainReplicasAndRestart(t *testing.T) {
 func TestCalcIgnoresDeclaredInputs(t *testing.T) {
 	r := newEvalRig(t)
 	if _, err := r.create(storage.CalcRuleSpec{Name: "call-copy", OwnerKind: rules.OwnerComponent,
-		Inputs: []rules.CalcInput{{As: "call", Key: "in-call"}}, Reduce: rules.CalcReduce{Expr: "call"}, OutputKey: "busy-flag"}); err != nil {
+		Inputs: []rules.CalcInput{{Alias: "call", Key: "in-call"}}, Reduce: rules.CalcReduce{Expr: "any(call)"}, OutputKey: "busy-flag"}); err != nil {
 		t.Fatal(err)
 	}
 	// A sample on another instance marks the rule; the expression reads the

@@ -929,6 +929,9 @@ func (UnimplementedGateway) ReconcileEventRules(context.Context, *RuleReconcileS
 	return nil
 }
 func (UnimplementedGateway) UpsertEventRule(context.Context, EventRuleSpec) error { return nil }
+func (UnimplementedGateway) ResolveSampleKey(context.Context, string) (SampleKeyRef, error) {
+	return SampleKeyRef{}, ErrSampleKeyNotFound
+}
 func (UnimplementedGateway) SampleKeyType(context.Context, string) (rules.Lane, string, error) {
 	return "", "", ErrSampleKeyNotFound
 }

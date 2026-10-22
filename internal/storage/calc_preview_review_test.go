@@ -39,7 +39,7 @@ func TestCalcPreviewSelectorInScope(t *testing.T) {
 	viewer := scope.Set{SelfIDs: []string{in.ID}}
 	spec := func(ref string) storage.CalcRuleSpec {
 		return storage.CalcRuleSpec{OwnerKind: rules.OwnerComponent, Selector: storage.CalcRuleSelector{Components: []string{ref}},
-			Inputs: []rules.CalcInput{{As: "t", Key: "room-temperature"}}, Reduce: rules.CalcReduce{Reducer: "average"}, OutputKey: "avg-temp"}
+			Inputs: []rules.CalcInput{{Alias: "t", Key: "room-temperature"}}, Reduce: rules.CalcReduce{Expr: "avg(t)"}, OutputKey: "avg-temp"}
 	}
 	_, errMissing := r.gw.PreviewCalcRule(r.ctx, spec("no-such-one"), viewer, scope.Set{})
 	_, errHidden := r.gw.PreviewCalcRule(r.ctx, spec("hidden-one"), viewer, scope.Set{})

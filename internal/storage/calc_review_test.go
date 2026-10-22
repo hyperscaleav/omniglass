@@ -13,7 +13,7 @@ import (
 func (r *evalRig) avgRule(name, input, output string) {
 	r.t.Helper()
 	if _, err := r.create(storage.CalcRuleSpec{Name: name, OwnerKind: rules.OwnerComponent,
-		Inputs: []rules.CalcInput{{As: "t", Key: input}}, Reduce: rules.CalcReduce{Expr: "t"}, OutputKey: output}); err != nil {
+		Inputs: []rules.CalcInput{{Alias: "t", Key: input}}, Reduce: rules.CalcReduce{Expr: "max(t)"}, OutputKey: output}); err != nil {
 		r.t.Fatal(err)
 	}
 }
@@ -69,7 +69,7 @@ func TestCalcIngestRetriesADeadlock(t *testing.T) {
 	// second. Mark order is by rule id, so the second rule is created first
 	// (uuidv7 ids sort by creation).
 	if _, err := r.create(storage.CalcRuleSpec{Name: "second", OwnerKind: rules.OwnerComponent,
-		Inputs: []rules.CalcInput{{As: "a", Key: "avg-temp"}, {As: "t", Key: "room-temperature"}}, Reduce: rules.CalcReduce{Expr: "a + t"},
+		Inputs: []rules.CalcInput{{Alias: "a", Key: "avg-temp"}, {Alias: "t", Key: "room-temperature"}}, Reduce: rules.CalcReduce{Expr: "max(a) + max(t)"},
 		OutputKey: "temp-twice", Enabled: ptrBool(false)}); err != nil {
 		t.Fatal(err)
 	}
@@ -144,7 +144,7 @@ func TestCalcRuleWriteMarks(t *testing.T) {
 	if got := r.latest("avg-temp"); got != "20" {
 		t.Fatalf("avg-temp %q, want 20", got)
 	}
-	twice := rules.CalcReduce{Expr: "t * 2"}
+	twice := rules.CalcReduce{Expr: "max(t) * 2"}
 	if _, err := r.gw.UpdateCalcRule(r.ctx, "", "echo", storage.CalcRulePatch{Reduce: &twice}, r.all); err != nil {
 		t.Fatal(err)
 	}
@@ -261,7 +261,7 @@ func TestCalcOutputByRecordedLane(t *testing.T) {
 func TestCalcReducerInstances(t *testing.T) {
 	r := newEvalRig(t)
 	if _, err := r.create(storage.CalcRuleSpec{Name: "mean", OwnerKind: rules.OwnerComponent,
-		Inputs: []rules.CalcInput{{As: "t", Key: "room-temperature"}}, Reduce: rules.CalcReduce{Reducer: "average"}, OutputKey: "avg-temp"}); err != nil {
+		Inputs: []rules.CalcInput{{Alias: "t", Key: "room-temperature"}}, Reduce: rules.CalcReduce{Expr: "avg(t)"}, OutputKey: "avg-temp"}); err != nil {
 		t.Fatal(err)
 	}
 	r.metric("room-temperature", "", 100) // the aggregate, ignored beside instances

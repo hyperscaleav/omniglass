@@ -25,14 +25,14 @@ func TestCalcRuleCommands(t *testing.T) {
 	defer srv.Close()
 
 	out, err := runCLI(t, "calc-rule", "create", "--name", "temp-mean", "--owner-kind", "component",
-		"--inputs", `[{"as":"t","key":"room-temperature"}]`, "--reduce", `{"reducer":"average"}`, "--output-key", "avg-temp",
+		"--inputs", `[{"alias":"t","key":"room-temperature"}]`, "--reduce", `{"expr":"avg(t)"}`, "--output-key", "avg-temp",
 		"--server", srv.URL)
 	if err != nil {
 		t.Fatalf("create failed: %v (%s)", err, out)
 	}
 	inputs, _ := body["inputs"].([]any)
 	reduce, _ := body["reduce"].(map[string]any)
-	if method != http.MethodPost || path != "/api/v1/calc-rules" || len(inputs) != 1 || reduce["reducer"] != "average" || body["output_key"] != "avg-temp" {
+	if method != http.MethodPost || path != "/api/v1/calc-rules" || len(inputs) != 1 || reduce["expr"] != "avg(t)" || body["output_key"] != "avg-temp" {
 		t.Fatalf("the CLI sent %s %s %v, want POST /api/v1/calc-rules with the inputs, reduce and output key", method, path, body)
 	}
 

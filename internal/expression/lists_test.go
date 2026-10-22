@@ -218,6 +218,14 @@ func TestUnboundNameNamed(t *testing.T) {
 	if e.Phase != PhaseType || e.Line != 1 || e.Column != 13 || e.Unbound != "limit" {
 		t.Errorf("got %s %d:%d unbound %q, want a type error at 1:13 naming limit", e.Phase, e.Line, e.Column, e.Unbound)
 	}
+	// Inside a list function's argument too: Expr would trust the call's
+	// type and never look at the argument.
+	for _, src := range []string{"max(limit) > 1", "avg(nums) + max(fan) > 1", "majority(words2) == 'a'", "any(flags2)", "sum(n2) > 1"} {
+		e = asError(t, func() error { _, err := Compile(src, listSite(t, Bool, true)); return err }())
+		if e.Unbound == "" || e.Phase != PhaseType {
+			t.Errorf("%q: got %v, want an unbound name", src, e)
+		}
+	}
 	e = asError(t, Check("value > 1", listSite(t, Bool, true)))
 	if e.Unbound != "value" {
 		t.Errorf("Check: unbound %q, want value", e.Unbound)
@@ -292,5 +300,33 @@ func TestListFunctionRunErrorIsRun(t *testing.T) {
 	var e *Error
 	if !errors.As(err, &e) || e.Phase != PhaseRun || !strings.Contains(e.Message, "empty") {
 		t.Errorf("got %v, want a run error saying the list is empty", err)
+	}
+}
+
+// An expression that reads each list only whole, folded into one value, is
+// told apart from one that reads an element (by position, through a
+// predicate, or bound by a let), so a preview may show the first over a list
+// with elements its reader may not see.
+func TestWholeListsOnly(t *testing.T) {
+	for src, want := range map[string]bool{
+		"avg(nums) + max(nums) - min(nums) + sum(nums) + len(nums) > 0": true,
+		"any(flags) || all(flags) || count(flags) > 1":                  true,
+		"majority(words) == 'a'":                                        true,
+		"one > 1":                                                       true,
+		"nums[0] > 1":                                                   false,
+		"any(nums, # > 1)":                                              false,
+		"let n = nums; max(n) > 1":                                      false,
+		"max(nums[0], 2) > 1":                                           false,
+		"len(pts) > 0":                                                  true,
+		"pts[0].v > 0":                                                  false,
+		"count(pts, .has) > 0":                                          false,
+	} {
+		p, err := Compile(src, listSite(t, Bool, true))
+		if err != nil {
+			t.Fatalf("%q: %v", src, err)
+		}
+		if got := p.WholeListsOnly("nums", "flags", "words", "pts"); got != want {
+			t.Errorf("%q: WholeListsOnly = %v, want %v", src, got, want)
+		}
 	}
 }

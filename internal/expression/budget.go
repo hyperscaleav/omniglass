@@ -10,6 +10,7 @@ import (
 	"github.com/expr-lang/expr"
 	"github.com/expr-lang/expr/ast"
 	"github.com/expr-lang/expr/builtin"
+	"github.com/expr-lang/expr/checker/nature"
 	"github.com/expr-lang/expr/conf"
 )
 
@@ -186,6 +187,13 @@ func chargeOption(p *pass) expr.Option {
 
 type charger struct{ p *pass }
 
+// Reset and ShouldRepeat make the charger one of Expr's repeatable patchers,
+// which run after the others, each walk right after a type check and once
+// (ShouldRepeat is false): so the final check follows its walk directly, and
+// a call whose type it clears is checked whole (see the CallNode case).
+func (charger) Reset()             {}
+func (charger) ShouldRepeat() bool { return false }
+
 func (c charger) Visit(node *ast.Node) {
 	outer := c.p.name
 	c.p.name, c.p.at = "charge", *node
@@ -210,6 +218,11 @@ func (c charger) Visit(node *ast.Node) {
 			for i := range n.Arguments {
 				wrap(&n.Arguments[i], fn)
 			}
+			// Expr's checker types every node before a patch, and on a later
+			// check trusts a call's type without visiting its arguments, so a
+			// fault in one (an unknown name) would pass unseen: the type is
+			// cleared, so the final check checks the call whole.
+			n.SetNature(nature.Nature{})
 		}
 	case *ast.BinaryNode:
 		switch {
