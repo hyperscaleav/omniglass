@@ -4,6 +4,9 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"os"
+	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -973,5 +976,41 @@ func TestPassPanicNamesThePass(t *testing.T) {
 	e = asError(t, fromCompilerPanic(errors.New("runtime error: invalid memory address or nil pointer dereference\ngoroutine 7 [running]:\nruntime/debug.Stack()")))
 	if !strings.Contains(e.Message, "Expr compiler pass") || strings.Contains(e.Message, "goroutine") {
 		t.Errorf("got %q", e.Message)
+	}
+}
+
+// exprCompiledFrom is the Expr version whose expr.Compile body exprCompile
+// copies.
+const exprCompiledFrom = "v1.17.8"
+
+// exprCompile copies expr.Compile's pipeline to add renature (#1003), so an
+// Expr upgrade must re-check the copy before it lands. The version is read
+// from go.mod: a test binary's build info lists no dependencies.
+func TestExprVersionPinnedForCompilePipeline(t *testing.T) {
+	const path = "github.com/expr-lang/expr"
+	src, err := os.ReadFile(filepath.Join("..", "..", "go.mod"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var version string
+	for _, line := range strings.Split(string(src), "\n") {
+		f := strings.Fields(line)
+		if len(f) > 0 && f[0] == "require" {
+			f = f[1:]
+		}
+		if slices.Contains(f, path) && slices.Contains(f, "=>") {
+			t.Fatalf("go.mod replaces %s; exprCompile was copied from the upstream %s", path, exprCompiledFrom)
+		}
+		if len(f) >= 2 && f[0] == path {
+			version = f[1]
+		}
+	}
+	if version == "" {
+		t.Fatalf("go.mod does not require %s", path)
+	}
+	if version != exprCompiledFrom {
+		t.Fatalf("%s is %s, but exprCompile was copied from expr.Compile %s: "+
+			"re-diff exprCompile (expression.go) against the new expr.Compile, carry over any change, "+
+			"then update exprCompiledFrom in this test", path, version, exprCompiledFrom)
 	}
 }

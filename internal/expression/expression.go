@@ -466,7 +466,9 @@ func compile(source string, env Env) (*Program, error) {
 
 // exprCompile is expr.Compile with one pass added between Expr's optimizer
 // and its compiler, renature, and each stage named on p so a panic in one is
-// refused by name (guard.go).
+// refused by name (guard.go). It copies expr.Compile v1.17.8;
+// TestExprVersionPinnedForCompilePipeline fails on any other Expr version
+// until the copy is re-diffed against the new expr.Compile.
 func exprCompile(source string, p *pass, opts ...expr.Option) (*vm.Program, error) {
 	config := conf.CreateNew()
 	for _, op := range opts {
