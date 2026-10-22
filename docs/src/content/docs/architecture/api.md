@@ -777,6 +777,10 @@ The reports are one shape over two owners:
   instead: every system placed **anywhere** beneath the location, with its verdict, as the drill-down.
 - `transitions` is the **recorded edges** over the last 30 days, oldest first, each `{ts, verdict}`: one
   entry per change, never a sample.
+- `GET /systems/{name}/members` (`system:read`) carries each member's own `component_verdict`, the
+  same recorded value a fleet view dot reads. It is the per-system read of the members' health, so a
+  system's view polls it with the system's health report rather than the whole fleet view
+  ([#940](https://github.com/hyperscaleav/omniglass/issues/940)).
 
 Both resolve their owner **within the caller's scope first** (an out-of-scope system or location is a
 **non-disclosing 404**), and **neither read writes anything**: the verdict served is computed from the

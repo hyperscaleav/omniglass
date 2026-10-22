@@ -43,6 +43,9 @@ import { systemEvents, systemEventsKey, systemLogs, systemLogsKey } from "../lib
 import { metricSeries, metricSeriesKey } from "../lib/series";
 import { memberModel, systemCrumbs, systemsAtPlace } from "../lib/detail";
 import TimeseriesChart from "../components/TimeseriesChart";
+import { systemMembers, systemMembersKey } from "../lib/members";
+import { LEAF_POLL_MS } from "../lib/component_leaf";
+import { CLOCK_TICK_MS, createClock } from "../lib/clock";
 
 // The system's detail view (#636, reoriented in #872). Systems are the unit
 // Omniglass monitors; places are folders and metadata; components are the
@@ -57,6 +60,22 @@ import TimeseriesChart from "../components/TimeseriesChart";
 // place's parent, so the room is named once. A place shared by several
 // systems keeps its own view and stays in the path. A place with places
 // beneath it lists them under the system, as the outline rooted there.
+//
+// It refreshes on its own while open (#940), the way a component's view does
+// (#934): the system's own reads (its health report, which carries the
+// verdict, Why and the roles' staffing; its declared roles; its members, each
+// with its own verdict; its data) poll at the leaf's cadence. The fleet view
+// is read once, for the place, the path and who the members are; nothing
+// polled grows with the fleet. TanStack holds every poll while the tab is
+// hidden.
+// SERIES_POLL_MS is the Data table's sparkline cadence: a day's line moves
+// too little in the leaf's five seconds to be worth a request per metric.
+const SERIES_POLL_MS = 30_000;
+// HISTORY_TICK_MS is how often the history and the charts take a new now:
+// a thirty-day strip and a day's sparkline move too little in a second to
+// redraw on every tick.
+const HISTORY_TICK_MS = 60_000;
+
 export default function SystemZoom() {
   const params = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -65,13 +84,19 @@ export default function SystemZoom() {
   const location = useLocation();
   const me = useMe();
   const id = () => params.id;
-  // Pinned at setup, like HealthHistory's: a "now" that moved under the
-  // since-line would re-age it on every unrelated re-render.
-  const pageNow = Date.now();
+  // Every age on the card reads one ticking clock: a poll that returns the
+  // same report changes nothing a query can see, so an age pinned to the data
+  // (or to the mount) would stop moving. The history and the charts read a
+  // coarser clock, so a second's tick redraws only the ages.
+  const now = createClock(CLOCK_TICK_MS);
+  const coarse = createClock(HISTORY_TICK_MS);
 
   const view = useQuery(() => ({ queryKey: FLEET_VIEW_KEY, queryFn: fleetView }));
-  const health = useQuery(() => ({ queryKey: systemHealthKey(id()), queryFn: () => systemHealth(id()) }));
-  const declared = useQuery(() => ({ queryKey: systemRolesKey(id()), queryFn: () => systemRoles(id()) }));
+  const health = useQuery(() => ({ queryKey: systemHealthKey(id()), queryFn: () => systemHealth(id()), refetchInterval: LEAF_POLL_MS }));
+  const declared = useQuery(() => ({ queryKey: systemRolesKey(id()), queryFn: () => systemRoles(id()), refetchInterval: LEAF_POLL_MS }));
+  // Each member's own verdict, polled off the system's members read: the
+  // fleet view's dots (read once) stand in until it answers.
+  const membersQ = useQuery(() => ({ queryKey: systemMembersKey(id()), queryFn: () => systemMembers(id()), refetchInterval: LEAF_POLL_MS }));
 
   const system = createMemo(() => (view.data?.systems ?? []).find((s) => s.id === id()));
 
@@ -107,7 +132,7 @@ export default function SystemZoom() {
   // registry's flag, #917), amber when they only degrade.
   const inOutage = createMemo(() => alarms().some((a) => scale().outage(a.severity)));
   const bodyOf = createMemo(() => (vm() ? componentCards(vm()!) : undefined));
-  const metricsQ = useQuery(() => ({ queryKey: systemMetricsKey(id()), queryFn: () => systemMetrics(id()) }));
+  const metricsQ = useQuery(() => ({ queryKey: systemMetricsKey(id()), queryFn: () => systemMetrics(id()), refetchInterval: LEAF_POLL_MS }));
   const standards = useQuery(() => ({ queryKey: STANDARDS_KEY, queryFn: listStandards }));
   const standardRow = createMemo(() => (standards.data ?? []).find((x) => x.name === standard()));
   const mapDecl = createMemo(() => {
@@ -154,6 +179,7 @@ export default function SystemZoom() {
       queryKey: componentAlarmsKey(m.componentId),
       queryFn: () => componentAlarms(m.componentId),
       enabled: tab() === "activity",
+      refetchInterval: LEAF_POLL_MS,
     })),
   }));
   // One series query per declared metric, alive only on Overview, where the
@@ -163,16 +189,26 @@ export default function SystemZoom() {
       queryKey: metricSeriesKey("systems", id(), m.metric_type_name, 24),
       queryFn: () => metricSeries("systems", id(), m.metric_type_name, 24),
       enabled: tab() === "overview",
+      // A day's sparkline does not visibly move in five seconds; the latest
+      // value beside it rides the metrics read, which does.
+      refetchInterval: SERIES_POLL_MS,
     })),
   }));
   const metricSeriesData = () => kpiMetrics().map((_, i) => seriesQueries[i]?.data);
-  const eventsQ = useQuery(() => ({ queryKey: systemEventsKey(id()), queryFn: () => systemEvents(id()), enabled: tab() === "activity" }));
-  const logsQ = useQuery(() => ({ queryKey: systemLogsKey(id()), queryFn: () => systemLogs(id()), enabled: tab() === "activity" }));
+  const eventsQ = useQuery(() => ({ queryKey: systemEventsKey(id()), queryFn: () => systemEvents(id()), enabled: tab() === "activity", refetchInterval: LEAF_POLL_MS }));
+  const logsQ = useQuery(() => ({ queryKey: systemLogsKey(id()), queryFn: () => systemLogs(id()), enabled: tab() === "activity", refetchInterval: LEAF_POLL_MS }));
+  // The history's now: the coarse clock, but never behind the report's own
+  // last edge, which a poll can bring in between two ticks (an incident that
+  // opened seconds ago would otherwise have a negative length and vanish).
+  const historyNow = createMemo(() => {
+    const t = health.data?.transitions ?? [];
+    return Math.max(coarse(), t.length ? Date.parse(t[t.length - 1].ts) : 0);
+  });
   const verdictSpans = createMemo(() =>
-    timelineSpans((health.data?.transitions ?? []).map((t) => ({ ts: t.ts, value: t.verdict })), health.data?.verdict ?? null, pageNow),
+    timelineSpans((health.data?.transitions ?? []).map((t) => ({ ts: t.ts, value: t.verdict })), health.data?.verdict ?? null, historyNow()),
   );
   const uptime = createMemo(() => uptimePct(verdictSpans()));
-  const incidentList = createMemo(() => incidentsOf(verdictSpans(), pageNow));
+  const incidentList = createMemo(() => incidentsOf(verdictSpans(), historyNow()));
   // Healthy stays grey (#872): only an uptime that should worry someone
   // wears a hue.
   const uptimeTone = () => {
@@ -188,7 +224,7 @@ export default function SystemZoom() {
       componentId: m.componentId,
       alarms: alarmHistories[i]?.data ?? [],
     }));
-    return incidentRows(members, pageNow, 30 * 24, scale().levels);
+    return incidentRows(members, historyNow(), 30 * 24, scale().levels);
   });
   const otherAlarms = createMemo(() => {
     const inIncident = new Set(incidentList().flatMap((inc) => incidentReasons(inc, incidents()).map((r) => r.id)));
@@ -205,9 +241,10 @@ export default function SystemZoom() {
     const prod = new Map((prods.data ?? []).map((p) => [p.name, p] as const));
     const types = new Map((ctypes.data ?? []).map((t) => [t.name, t] as const));
     const dots = new Map((system()?.dots ?? []).map((d) => [d.component, d] as const));
+    const polled = new Map((membersQ.data ?? []).map((m) => [m.component_id, m.component_verdict] as const));
     const alarmOf = new Map(alarms().filter((a) => a.componentId).map((a) => [a.componentId!, a.message] as const));
     return memberModel(b, {
-      verdict: (cid) => verdictOf(dots.get(cid)?.verdict),
+      verdict: (cid) => verdictOf(polled.get(cid) ?? dots.get(cid)?.verdict),
       alarm: (cid) => alarmOf.get(cid),
       product: (cid) => {
         const h = comp.get(cid)?.product;
@@ -263,7 +300,7 @@ export default function SystemZoom() {
             <div data-testid="system-header" class="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-base-300 px-4 py-3 text-sm">
               <Eyebrow label="System" hint="The logical group of components that makes this place work, and the thing Omniglass monitors: its verdict is what the components filling its roles add up to." />
               <HealthBadge verdict={health.data?.verdict} size="sm" />
-              <Show when={health.data && sinceOf(health.data, pageNow)}>
+              <Show when={health.data && sinceOf(health.data, now())}>
                 {(sc) => <span data-testid="since-line" class="tabular-nums text-base-content/70">since {fmtTime(sc().ts)} · {durationText(sc().ms)}</span>}
               </Show>
               <Show when={standard()}>
@@ -326,7 +363,7 @@ export default function SystemZoom() {
                         data-testid={`incident-marker-${inc.id}`}
                         class="absolute top-0 h-0 w-0 -translate-x-1/2 border-x-4 border-b-6 border-x-transparent"
                         classList={{ "border-b-error": scale().outage(inc.severity), "border-b-warning": !scale().outage(inc.severity) }}
-                        style={{ left: `${markerX(inc.raisedAt, pageNow, 30 * 24 * 3600_000) * 100}%` }}
+                        style={{ left: `${markerX(inc.raisedAt, historyNow(), 30 * 24 * 3600_000) * 100}%` }}
                         title={`${inc.message} · ${inc.component}`}
                       />
                     )}
@@ -365,7 +402,7 @@ export default function SystemZoom() {
                               {" → "}
                               {inc.ongoing ? "now" : fmtTime(new Date(inc.to).toISOString())}
                               {" · "}
-                              {durationText((inc.ongoing ? pageNow : inc.to) - inc.from)}
+                              {durationText((inc.ongoing ? now() : inc.to) - inc.from)}
                             </span>
                             <span class="ml-auto text-xs text-base-content/40">{open() ? "collapse" : "expand"}</span>
                           </button>
@@ -499,7 +536,7 @@ export default function SystemZoom() {
                               <Show when={a.componentId} fallback={<span class="font-mono text-xs text-base-content/60">{a.component}</span>}>
                                 {(cid) => <button type="button" class="cursor-pointer font-mono text-xs text-base-content/80 hover:underline" onClick={() => openComponent(cid())}>{a.component}</button>}
                               </Show>
-                              <span class="text-xs text-base-content/50">impairs {a.roleLabel} · {durationText(pageNow - Date.parse(a.raisedAt))}</span>
+                              <span class="text-xs text-base-content/50">impairs {a.roleLabel} · {durationText(now() - Date.parse(a.raisedAt))}</span>
                               <Show when={a.componentId}>{timelines.button(a.id, a.message)}</Show>
                             </div>
                             <Show when={a.componentId && timelines.isOpen(a.id)}>
@@ -547,7 +584,7 @@ export default function SystemZoom() {
                         >
                           <td>{entityLabel({ name: m.metric_type_name, label: m.label })}</td>
                           <td>
-                            <TimeseriesChart spark samples={metricSeriesData()[i()] ?? []} now={pageNow} windowMs={24 * 3600_000} />
+                            <TimeseriesChart spark samples={metricSeriesData()[i()] ?? []} now={historyNow()} windowMs={24 * 3600_000} />
                           </td>
                           <td class="text-right font-mono tabular-nums">{m.value === null || m.value === undefined ? "" : String(m.value)}</td>
                           <td class="text-right text-[10px] text-base-content/45">{m.is_sampled ? "sampled" : "contract default"}</td>
@@ -555,7 +592,7 @@ export default function SystemZoom() {
                         <Show when={seriesPick() === m.metric_type_name}>
                           <tr>
                             <td colspan="4" class="bg-base-200/40">
-                              <TimeseriesChart samples={metricSeriesData()[i()] ?? []} now={pageNow} windowMs={24 * 3600_000} />
+                              <TimeseriesChart samples={metricSeriesData()[i()] ?? []} now={historyNow()} windowMs={24 * 3600_000} />
                             </td>
                           </tr>
                         </Show>

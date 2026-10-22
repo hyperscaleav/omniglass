@@ -7452,6 +7452,9 @@ components:
         component_id:
           description: The component's uuid
           type: string
+        component_verdict:
+          description: The component's own recorded verdict (healthy, degraded, or outage), the one its active alarms make; never the system's
+          type: string
         primary:
           description: Whether this membership is the component's default when no system is given
           type: boolean
@@ -7472,6 +7475,7 @@ components:
         - component_id
         - primary
         - system_count
+        - component_verdict
       type: object
     SystemMetricsOutputBody:
       additionalProperties: false
@@ -15096,7 +15100,7 @@ paths:
       x-omniglass-permission: system:read
   /systems/{name}/members:
     get:
-      description: "The components bound into this system, ordered by name. Membership is what a role attaches to: every component staffing a role here is a member, and a member may also carry no role at all (a power conditioner is in the room without filling a declared slot). Gated by system:read; an out-of-scope system is a non-disclosing 404."
+      description: "The components bound into this system, ordered by name. Membership is what a role attaches to: every component staffing a role here is a member, and a member may also carry no role at all (a power conditioner is in the room without filling a declared slot). Each member carries its own verdict, so a system's view can poll its members' health here rather than reading the whole fleet. Gated by system:read; an out-of-scope system is a non-disclosing 404."
       operationId: list-system-members
       parameters:
         - description: Name of the system, or a dotted address (e.g. boi.17c.$sys.av)

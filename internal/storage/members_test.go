@@ -348,3 +348,31 @@ func TestMembershipIsScoped(t *testing.T) {
 		t.Fatalf("add on a readable system out of the action scope = %v, want ErrSystemForbidden", err)
 	}
 }
+
+// A system's members read carries each member's own recorded verdict (#940),
+// the value a fleet view dot reads: a system's view polls its members' health
+// here rather than the whole fleet. A member nothing was ever recorded for
+// reads healthy.
+func TestListMembersCarriesEachMembersOwnVerdict(t *testing.T) {
+	ctx := context.Background()
+	f := newMemberFixture(t, ctx)
+	for _, c := range []string{"dsp", "mic-a"} {
+		if err := f.gw.AddMember(ctx, "", "room-a", c, f.all, f.all); err != nil {
+			t.Fatalf("add %s: %v", c, err)
+		}
+	}
+	if _, err := f.gw.RaiseAlarm(ctx, "", "dsp", storage.AlarmSpec{Severity: "high", Message: "no route to host"}); err != nil {
+		t.Fatalf("raise: %v", err)
+	}
+	members, err := f.gw.ListMembers(ctx, "room-a", f.all)
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	got := map[string]string{}
+	for _, m := range members {
+		got[m.ComponentID] = m.ComponentVerdict
+	}
+	if got["dsp"] != "outage" || got["mic-a"] != "healthy" {
+		t.Errorf("member verdicts = %v, want dsp outage (a high alarm) and mic-a healthy", got)
+	}
+}

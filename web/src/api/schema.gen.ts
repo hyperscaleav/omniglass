@@ -3621,7 +3621,7 @@ export interface paths {
         };
         /**
          * List the components in a system
-         * @description The components bound into this system, ordered by name. Membership is what a role attaches to: every component staffing a role here is a member, and a member may also carry no role at all (a power conditioner is in the room without filling a declared slot). Gated by system:read; an out-of-scope system is a non-disclosing 404.
+         * @description The components bound into this system, ordered by name. Membership is what a role attaches to: every component staffing a role here is a member, and a member may also carry no role at all (a power conditioner is in the room without filling a declared slot). Each member carries its own verdict, so a system's view can poll its members' health here rather than reading the whole fleet. Gated by system:read; an out-of-scope system is a non-disclosing 404.
          */
         get: operations["list-system-members"];
         put?: never;
@@ -8524,6 +8524,8 @@ export interface components {
             component: string;
             /** @description The component's uuid */
             component_id: string;
+            /** @description The component's own recorded verdict (healthy, degraded, or outage), the one its active alarms make; never the system's */
+            component_verdict: string;
             /** @description Whether this membership is the component's default when no system is given */
             primary: boolean;
             /** @description Name of the system, or a dotted address (e.g. boi.17c.$sys.av) */

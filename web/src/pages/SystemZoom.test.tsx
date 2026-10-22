@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@solidjs/testing-library";
 import { Router, Route, useLocation } from "@solidjs/router";
-import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
+import { QueryClient, QueryClientProvider, focusManager } from "@tanstack/solid-query";
 import Systems from "./Systems";
 import { FLEET_VIEW_KEY, type FleetView } from "../lib/fleet";
 import { systemHealthKey, type FleetHealth } from "../lib/health";
@@ -9,6 +9,7 @@ import { systemRolesKey } from "../lib/system_roles";
 import { SYSTEMS_KEY } from "../lib/systems";
 import { systemMetricsKey } from "../lib/system_metrics";
 import { componentAlarmsKey } from "../lib/alarms";
+import { systemMembersKey } from "../lib/members";
 import { systemEventsKey, systemLogsKey } from "../lib/system_activity";
 import { metricSeriesKey } from "../lib/series";
 import { STANDARDS_KEY } from "../lib/standards";
@@ -115,7 +116,7 @@ const declared = [
   },
 ] as unknown as EffectiveRole[];
 
-function mount(path = `/web/systems/${uuidFor("szp-sys")}`, healthOverride: FleetHealth = health, metrics: unknown[] = [], standards: unknown[] = [], meOverride: Me = me) {
+function mount(path = `/web/systems/${uuidFor("szp-sys")}`, healthOverride: FleetHealth = health, metrics: unknown[] = [], standards: unknown[] = [], meOverride: Me = me, membersOverride?: unknown[]) {
   const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
   seedSeverityLevels(qc);
   qc.setQueryData([...FLEET_VIEW_KEY], view);
@@ -126,6 +127,7 @@ function mount(path = `/web/systems/${uuidFor("szp-sys")}`, healthOverride: Flee
   qc.setQueryData([...TAGS_KEY], []);
   qc.setQueryData([...systemHealthKey(uuidFor("szp-sys"))], healthOverride);
   qc.setQueryData([...systemRolesKey(uuidFor("szp-sys"))], declared);
+  qc.setQueryData([...systemMembersKey(uuidFor("szp-sys"))], membersOverride ?? memberRowsOf(view, uuidFor("szp-sys")));
   qc.setQueryData([...systemMetricsKey(uuidFor("szp-sys"))], metrics);
   qc.setQueryData(["system-properties", uuidFor("szp-sys")], [
     { property_type_name: "room-owner", label: "Room owner", value: "\"facilities\"", from_contract: true, source: "default" },
@@ -152,6 +154,16 @@ function mount(path = `/web/systems/${uuidFor("szp-sys")}`, healthOverride: Flee
     </QueryClientProvider>
   ));
   return Object.assign(r, { qc });
+}
+
+// The members read the fleet view's dots stand for: one row per member, each
+// carrying the component's own verdict.
+function memberRowsOf(v: FleetView, systemId: string, verdicts: Record<string, string> = {}) {
+  const sys = (v.systems ?? []).find((s) => s.id === systemId);
+  return (sys?.dots ?? []).map((d) => ({
+    system: sys!.name, system_id: systemId, component: d.name, component_id: d.component,
+    primary: d.primary, system_count: d.shared ? 2 : 1, component_verdict: verdicts[d.name] ?? d.verdict,
+  }));
 }
 
 afterEach(cleanup);
@@ -433,6 +445,18 @@ describe("the history tab (#792)", () => {
     fireEvent.click(within(first).getByRole("button", { name: /expand/ }));
     expect(await within(first).findByText("No route to host")).toBeTruthy();
     expect(within(first).getAllByText(/degraded/).length).toBeGreaterThan(0);
+  });
+
+  // The history reads a coarse clock so a second's tick does not redraw it
+  // (#940), but a coarse "now" must never fall behind the report's own last
+  // edge: an incident that opened seconds ago (in the current minute, or
+  // after the clock last ticked) would have a negative length and vanish.
+  it("keeps an incident that opened seconds ago on the list", () => {
+    vi.setSystemTime(new Date("2026-08-20T16:00:40Z"));
+    const fresh = { ...health, transitions: [{ ts: "2026-08-01T09:00:00Z", verdict: "healthy" }, { ts: "2026-08-20T16:00:30Z", verdict: "degraded" }] } as unknown as FleetHealth;
+    mount(`/web/systems/${uuidFor("szp-sys")}?tab=history`, fresh);
+    const list = screen.getByTestId("incident-list");
+    expect(within(list).getAllByTestId(/^incident-/)[0].textContent).toMatch(/ongoing/);
   });
 
   it("an alarm outside every incident still shows, under other alarms", async () => {
@@ -787,5 +811,115 @@ describe("a configure select takes its value when its catalog lands (#782)", () 
 
     await waitFor(() => expect(picker().options.length).toBe(3));
     expect(picker().value).toBe("huddle-room");
+  });
+});
+
+// A monitoring console's system view moves as its members' health moves
+// (#940): the system's own reads poll at the leaf's cadence, so a member's
+// alarm opening lands as the degraded verdict and the alarm in Why without a
+// reload. Each read is one request a poll, and nothing it polls grows with
+// the fleet.
+describe("the system view refreshes (#940)", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  const json = (body: unknown) => new Response(JSON.stringify(body), { status: 200, headers: { "Content-Type": "application/json" } });
+
+  // Quiet: every role staffed, nobody down, nothing raised.
+  const calm = {
+    ...health,
+    verdict: "healthy",
+    roles: [
+      {
+        name: "room-mic", label: "Room Microphone", impact: "degraded", quorum: 1, satisfying: 1, short: 0, spare: 0,
+        impaired: false, active: true, assigned_to: ["mic-1"], down: [], alarms: [],
+      },
+    ],
+    transitions: [{ ts: "2026-08-01T09:00:00Z", verdict: "healthy" }],
+  } as unknown as FleetHealth;
+  // A high alarm opened on the mic: it no longer occupies its role, and the
+  // role's impact takes the system to degraded.
+  const raisedAt = () => new Date().toISOString();
+  const moved = () => ({
+    ...calm,
+    verdict: "degraded",
+    roles: [
+      {
+        name: "room-mic", label: "Room Microphone", impact: "degraded", quorum: 1, satisfying: 0, short: 1, spare: 0,
+        impaired: true, active: true, assigned_to: ["mic-1"], down: ["mic-1"],
+        alarms: [{ id: "al-9", component: "mic-1", component_id: uuidFor("szp-c-mic"), severity: "high", message: "Reachability lost", raised_at: raisedAt() }],
+      },
+    ],
+    transitions: [...(calm.transitions ?? []), { ts: raisedAt(), verdict: "degraded" }],
+  });
+  const calmMembers = () => memberRowsOf(view, uuidFor("szp-sys"), { "mic-1": "healthy" });
+
+  it("polls its health and its members, so a member's alarm moves the verdict and Why without a reload, one request per read", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "setInterval", "clearInterval"] });
+    const gets: string[] = [];
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = (input as Request).url;
+      gets.push(new URL(url).pathname);
+      if (url.endsWith("/health")) return json(moved());
+      if (url.endsWith("/members")) return json({ system: "boardroom", members: memberRowsOf(view, uuidFor("szp-sys"), { "mic-1": "outage" }) });
+      if (url.endsWith("/roles")) return json({ roles: declared });
+      if (url.endsWith("/metrics")) return json({ metrics: [] });
+      if (url.endsWith("/views/fleet")) return json(view);
+      return json({});
+    });
+    mount(undefined, calm, [], [], me, calmMembers());
+    // Before the poll: healthy, nothing in Why, the mic's light quiet.
+    expect(screen.getByTestId("system-header").textContent).toContain("healthy");
+    expect(screen.queryByTestId("alarm-strip")).toBeNull();
+    const micLight = () => within(screen.getByTestId(`member-${uuidFor("szp-c-mic")}`)).getByRole("img").getAttribute("aria-label");
+    expect(micLight()).toBe("healthy");
+
+    await vi.advanceTimersByTimeAsync(5_000);
+
+    expect(screen.getByTestId("system-header").textContent).toContain("degraded");
+    expect(screen.getByTestId("alarm-strip").textContent).toContain("Reachability lost");
+    expect(micLight()).toBe("outage");
+    const count = (p: string) => gets.filter((g) => g.endsWith(p)).length;
+    // Each of the system's own reads polled, as one request, not one per
+    // member or per role.
+    for (const p of ["/health", "/members", "/metrics"]) {
+      expect(count(p)).toBe(1);
+    }
+    // Nothing the view polls grows with the fleet: no fleet view, no fleet-wide verdicts.
+    expect(count("/views/fleet")).toBe(0);
+    expect(count("/systems:health")).toBe(0);
+  });
+
+  it("holds the poll while the tab is hidden", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "setInterval", "clearInterval"] });
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(async () => json({}));
+    focusManager.setFocused(false);
+    try {
+      mount(undefined, calm, [], [], me, calmMembers());
+      // The mount's own first reads of whatever was not seeded are not a
+      // poll; nothing after them is.
+      await vi.advanceTimersByTimeAsync(0);
+      const atMount = fetchSpy.mock.calls.length;
+      await vi.advanceTimersByTimeAsync(20_000);
+      expect(fetchSpy.mock.calls.length).toBe(atMount);
+    } finally {
+      focusManager.setFocused(undefined);
+    }
+  });
+
+  // A poll that returns the same report changes nothing a query can see, so
+  // the ages on the card move with a clock of their own.
+  it("ages the since-line with the clock when the polled report stays the same", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "setInterval", "clearInterval", "Date"] });
+    const t0 = new Date().toISOString();
+    const still = { ...calm, transitions: [{ ts: t0, verdict: "healthy" }] } as unknown as FleetHealth;
+    // Every read stays in flight: only a clock can move the line.
+    vi.spyOn(globalThis, "fetch").mockImplementation(() => new Promise<Response>(() => {}));
+    mount(undefined, still, [], [], me, calmMembers());
+    const before = screen.getByTestId("since-line").textContent;
+    await vi.advanceTimersByTimeAsync(3 * 60_000);
+    expect(screen.getByTestId("since-line").textContent).not.toBe(before);
   });
 });
