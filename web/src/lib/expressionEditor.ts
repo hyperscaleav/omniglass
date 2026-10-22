@@ -168,13 +168,20 @@ export function bindingAt(doc: string, pos: number, bindings: ExpressionBinding[
   return best?.b ?? null;
 }
 
+// bindLabel is the action that binds an unbound name.
+export const bindLabel = (name: string) => `Bind ${name} to a key`;
+
 // toEditorDiagnostics places the server's diagnostics in the source: each at
 // its 1-based line and column (Expr counts the column in characters, so it is
 // walked by code point, never indexed as UTF-16), underlining the word that starts there (one
 // character where none does, or the line's end when the column runs past
 // it). A diagnostic with no position (a length cap), or one off the end of
 // the source, is left to the list beneath the field.
-export function toEditorDiagnostics(doc: string, diags: ExpressionDiagnostic[]): Diagnostic[] {
+//
+// A diagnostic that names a name nothing binds (unbound) carries an action
+// to bind it, when onBind is given (a calc rule binds a name by giving an
+// input that alias).
+export function toEditorDiagnostics(doc: string, diags: ExpressionDiagnostic[], onBind?: (name: string) => void): Diagnostic[] {
   const lines = doc.split("\n");
   const out: Diagnostic[] = [];
   for (const d of diags) {
@@ -186,7 +193,11 @@ export function toEditorDiagnostics(doc: string, diags: ExpressionDiagnostic[]):
     const col = chars.slice(0, Math.min(d.column - 1, chars.length)).join("").length;
     const word = /^[\w$.]+/.exec(text.slice(col));
     const len = word ? word[0].length : col < text.length ? 1 : 0;
-    out.push({ from: start + col, to: start + col + len, severity: "error", message: d.message, source: d.phase });
+    const unbound = d.unbound;
+    out.push({
+      from: start + col, to: start + col + len, severity: "error", message: d.message, source: d.phase,
+      ...(unbound && onBind ? { actions: [{ name: bindLabel(unbound), apply: () => onBind(unbound) }] } : {}),
+    });
   }
   return out;
 }

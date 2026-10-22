@@ -142,6 +142,13 @@ describe("the leaf's dispatch facts (#786)", () => {
     ]);
   });
 
+  it("identityRows names the calc rule a property's value was derived by (#999, #1018)", () => {
+    const rows = identityRows([
+      { property_type_name: "busy-flag", label: "Busy", value: true, is_set: false, from_contract: false, source_rule: "busy", source_rule_id: "11111111-1111-7111-8111-111111111111" },
+    ] as never);
+    expect(rows).toEqual([{ name: "busy-flag", label: "Busy", value: true, sourceRule: "busy", sourceRuleId: "11111111-1111-7111-8111-111111111111" }]);
+  });
+
   it("vitalRows keeps only metrics carrying a value and marks the live series", () => {
     const rows = vitalRows([
       { metric_type_name: "icmp-rtt-avg", label: "RTT", data_type: "float", value: 6.1, is_sampled: true, from_contract: false, required: false },

@@ -1,9 +1,10 @@
 import { Compartment, EditorState } from "@codemirror/state";
 import { EditorView, hoverTooltip, keymap, placeholder as placeholderText, tooltips } from "@codemirror/view";
 import { HighlightStyle, StreamLanguage, syntaxHighlighting } from "@codemirror/language";
-import { autocompletion, completionKeymap } from "@codemirror/autocomplete";
+import { autocompletion, completionKeymap, startCompletion } from "@codemirror/autocomplete";
 import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
 import { setDiagnostics } from "@codemirror/lint";
+import { Transaction } from "@codemirror/state";
 import { tags } from "@lezer/highlight";
 import type { ExpressionBinding, ExpressionDiagnostic } from "../lib/expressions";
 import { bindingAt, exprCompletions, exprTokens, toEditorDiagnostics, type Vocabulary } from "../lib/expressionEditor";
@@ -14,14 +15,22 @@ import { bindingAt, exprCompletions, exprTokens, toEditorDiagnostics, type Vocab
 // part of every console load. It takes plain callbacks and hands back a
 // handle, so the Solid component keeps all of the field's state.
 
-export type EditorAria = { label: string; describedBy: string; invalid: boolean };
+// The content's accessible name: the visible label's id when the field has
+// one (labelledBy, so what an author sees is what assistive technology
+// says), else label.
+export type EditorAria = { label: string; labelledBy?: string; describedBy: string; invalid: boolean };
 
 export type ExpressionEditor = {
   setDoc(text: string): void;
   focus(): void;
   setAria(a: EditorAria): void;
-  // Underline the diagnostics an answer gave for `source`.
-  setDiagnostics(source: string, ds: ExpressionDiagnostic[]): void;
+  setPlaceholder(text: string): void;
+  // Replace the selection with text, the cursor left `cursor` characters
+  // into it, and offer completions there (a template's slot).
+  insert(text: string, cursor: number): void;
+  // Underline the diagnostics an answer gave for `source`; a name nothing
+  // binds carries the action onBind names.
+  setDiagnostics(source: string, ds: ExpressionDiagnostic[], onBind?: (name: string) => void): void;
   destroy(): void;
 };
 
@@ -37,9 +46,10 @@ export function mountExpressionEditor(
   },
 ): ExpressionEditor {
   const aria = new Compartment();
+  const hint = new Compartment();
   const ariaAttrs = (a: EditorAria) =>
     EditorView.contentAttributes.of({
-      "aria-label": a.label,
+      ...(a.labelledBy ? { "aria-labelledby": a.labelledBy } : { "aria-label": a.label }),
       "aria-describedby": a.describedBy,
       ...(a.invalid ? { "aria-invalid": "true" } : {}),
     });
@@ -83,7 +93,7 @@ export function mountExpressionEditor(
           },
         }),
         EditorView.lineWrapping,
-        placeholderText(o.placeholder),
+        hint.of(placeholderText(o.placeholder)),
         aria.of(ariaAttrs(o.aria)),
         editorTheme,
         EditorView.updateListener.of((u) => {
@@ -94,16 +104,34 @@ export function mountExpressionEditor(
   });
   return {
     setDoc(text) {
-      if (text !== view.state.doc.toString()) view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: text } });
+      if (text === view.state.doc.toString()) return;
+      // A value set from outside (a reset, the builder's expression) is not
+      // the author's edit: it stays out of the undo history, and the caret
+      // keeps its place as far as the new text reaches.
+      const sel = view.state.selection.main;
+      view.dispatch({
+        changes: { from: 0, to: view.state.doc.length, insert: text },
+        selection: { anchor: Math.min(sel.anchor, text.length), head: Math.min(sel.head, text.length) },
+        annotations: Transaction.addToHistory.of(false),
+      });
     },
     setAria(a) {
       view.dispatch({ effects: aria.reconfigure(ariaAttrs(a)) });
     },
-    setDiagnostics(source, ds) {
+    setPlaceholder(text) {
+      view.dispatch({ effects: hint.reconfigure(placeholderText(text)) });
+    },
+    insert(text, cursor) {
+      const { from, to } = view.state.selection.main;
+      view.dispatch({ changes: { from, to, insert: text }, selection: { anchor: from + cursor }, userEvent: "input" });
+      view.focus();
+      startCompletion(view);
+    },
+    setDiagnostics(source, ds, onBind) {
       // Typed past the source the answer was for, the editor keeps mapping
       // the marks it has until the next answer lands.
       if (ds.length > 0 && view.state.doc.toString() !== source) return;
-      view.dispatch(setDiagnostics(view.state, toEditorDiagnostics(source, ds)));
+      view.dispatch(setDiagnostics(view.state, toEditorDiagnostics(source, ds, onBind)));
     },
     focus: () => view.focus(),
     destroy: () => view.destroy(),
@@ -113,12 +141,15 @@ export function mountExpressionEditor(
 // The theme's colors, by token kind. Every color is a daisyUI theme variable,
 // so the editor follows the console's light and dark themes with no copy of
 // either palette.
+// The token colors are app.css's --og-code-* (per theme: the light theme's
+// are darker than its semantic colors, which fail text contrast at 14px on
+// its ground).
 const exprHighlight = HighlightStyle.define([
-  { tag: tags.keyword, color: "var(--color-secondary)" },
-  { tag: tags.atom, color: "var(--color-warning)" },
-  { tag: tags.string, color: "var(--color-success)" },
-  { tag: tags.number, color: "var(--color-info)" },
-  { tag: tags.function(tags.variableName), color: "var(--color-accent)" },
+  { tag: tags.keyword, color: "var(--og-code-keyword, var(--color-secondary))" },
+  { tag: tags.atom, color: "var(--og-code-atom, var(--color-warning))" },
+  { tag: tags.string, color: "var(--og-code-string, var(--color-success))" },
+  { tag: tags.number, color: "var(--og-code-number, var(--color-info))" },
+  { tag: tags.function(tags.variableName), color: "var(--og-code-function, var(--color-accent))" },
   { tag: tags.variableName, color: "var(--color-base-content)" },
   { tag: tags.operator, color: "color-mix(in oklab, var(--color-base-content) 70%, transparent)" },
   { tag: tags.comment, color: "color-mix(in oklab, var(--color-base-content) 50%, transparent)", fontStyle: "italic" },
@@ -137,7 +168,7 @@ const editorTheme = EditorView.theme({
   // it lands in the editor, and below the text it lands past the end.
   ".cm-content": { padding: "0", minHeight: "4.125em", caretColor: "var(--color-base-content)", fontVariantLigatures: "none" },
   ".cm-line": { padding: "0" },
-  ".cm-placeholder": { color: "color-mix(in oklab, var(--color-base-content) 40%, transparent)" },
+  ".cm-placeholder": { color: "color-mix(in oklab, var(--color-base-content) 62%, transparent)" },
   ".cm-lintRange-error": {
     backgroundImage: "none",
     textDecoration: "underline wavy var(--color-error)",

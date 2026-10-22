@@ -382,7 +382,7 @@ describe("Rules page", () => {
     fireEvent.change(screen.getByLabelText("Reads"), { target: { value: "metric:temperature-c" } });
     fireEvent.input(screen.getByLabelText("Fire value"), { target: { value: "40" } });
     fireEvent.click(screen.getByLabelText("Write the fire criteria as an expression"));
-    const area = await screen.findByLabelText("Fire expression");
+    const area = await screen.findByLabelText("Fires when");
     // The builder's comparison (equals 40) is where the expression starts.
     expect(expressionText(area)).toBe("value == 40.0");
     typeExpression(area, "value > 40 &&\n  humidity > 2");
@@ -405,7 +405,7 @@ describe("Rules page", () => {
     mount(admin, [reach, rich]);
     fireEvent.click(screen.getByText("Rich"));
     fireEvent.click(within(await blade()).getByText("Edit"));
-    const area = await waitFor(() => screen.getByLabelText("Fire expression"));
+    const area = await waitFor(() => screen.getByLabelText("Fires when"));
     expect(expressionText(area)).toBe('value > 40 && instance != "aux"');
     expect((screen.getByLabelText("Write the fire criteria as an expression") as HTMLInputElement).checked).toBe(true);
   });
@@ -418,7 +418,7 @@ describe("Rules page", () => {
     mount(admin, [reach, door]);
     fireEvent.click(screen.getByText("Door ajar"));
     fireEvent.click(within(await blade()).getByText("Edit"));
-    const area = await waitFor(() => screen.getByLabelText("Fire expression"));
+    const area = await waitFor(() => screen.getByLabelText("Fires when"));
     expect(expressionText(area)).toBe('value == "open"');
     typeExpression(area, "value");
     const submit = screen.getByText("Save rule").closest("button") as HTMLButtonElement;

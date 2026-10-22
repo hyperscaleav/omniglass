@@ -283,7 +283,12 @@ export default function ComponentLeaf() {
                     {(row) => (
                       <>
                         <dt class="text-base-content/50">{row.label}</dt>
-                        <dd class="font-mono text-xs">{String(row.value)}</dd>
+                        <dd class="flex items-baseline gap-1.5 font-mono text-xs">
+                          <span>{String(row.value)}</span>
+                          <Show when={row.sourceRuleId}>
+                            <CalcRuleLink name={row.sourceRule!} id={row.sourceRuleId!} />
+                          </Show>
+                        </dd>
                       </>
                     )}
                   </For>

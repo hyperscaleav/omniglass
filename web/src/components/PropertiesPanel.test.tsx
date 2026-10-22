@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, fireEvent, within } from "@solidjs/testing-library";
 import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
+import { Router, Route } from "@solidjs/router";
 import type { JSX } from "solid-js";
 import PropertiesPanel, { propertyResolutionBlade, propertyBladeId } from "./PropertiesPanel";
 import { effectivePropertiesKey, type EffectiveProperty } from "../lib/component_properties";
@@ -86,6 +87,34 @@ describe("PropertiesPanel", () => {
     expect(within(offContract).getByText("Mount height")).toBeTruthy();
     expect(within(offContract).queryByText("Diagonal inches")).toBeNull(); // contract rows stay above
     expect(getByText(/not declared by its product/i)).toBeTruthy();
+  });
+
+  // A property a calc rule writes (#999, #1018) reads as calculated: a row of
+  // its own, not editable (nothing declares it, so there is nothing to
+  // override or clear), linked to the rule that derived it; a contract
+  // property whose value a rule computed links to it too.
+  it("shows a calculated property apart, read-only, linked to its calc rule", () => {
+    const ruleID = "11111111-1111-7111-8111-111111111111";
+    const rows: EffectiveProperty[] = [
+      ...seed,
+      { property_type_name: "busy-flag", property_type_id: "busy-flag-id", label: "Busy", data_type: "bool", required: false, is_set: false, from_contract: false, value: true, source_rule: "busy", source_rule_id: ruleID },
+      { property_type_name: "room.state", property_type_id: "room.state-id", label: "Room state", data_type: "string", required: false, is_set: false, from_contract: true, value: "in-use", source_rule: "room-state", source_rule_id: ruleID },
+    ];
+    const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
+    qc.setQueryData([...effectivePropertiesKey("disp-1")], rows);
+    qc.setQueryData([...ME_KEY], owner);
+    const { getByRole, getByText } = render(() => (
+      <QueryClientProvider client={qc}>
+        <Router><Route path="*" component={() => <PropertiesPanel component="disp-1" onOpen={() => {}} />} /></Router>
+      </QueryClientProvider>
+    ));
+    const calc = getByRole("group", { name: /calculated/i });
+    expect(within(calc).getByText("Busy")).toBeTruthy();
+    expect(within(calc).getByText("true")).toBeTruthy();
+    expect(within(calc).getByRole("link", { name: "busy" }).getAttribute("href")).toBe(`/calc-rules?rule=${ruleID}`);
+    expect(within(getByRole("group", { name: /off contract/i })).queryByText("Busy")).toBeNull();
+    const contractRow = getByText("Room state").closest("[data-property]") as HTMLElement;
+    expect(within(contractRow).getByRole("link", { name: "room-state" })).toBeTruthy();
   });
 
   // The empty state teaches where properties come from without asserting WHY none

@@ -190,3 +190,41 @@ describe("toEditorDiagnostics", () => {
     ]);
   });
 });
+
+// A calc rule's vocabulary (#1018): its aliases as lists, the list
+// functions, and on a system the members' record fields.
+describe("exprCompletions over a calc rule's vocabulary", () => {
+  const calc: Vocabulary = {
+    bindings: [
+      { name: "tcp_connect_time", type: "[]float64", doc: "tcp-connect-time: every member's current values" },
+      { name: "members", type: "[]record" },
+      { name: "members[].name", type: "string" },
+      { name: "members[].value.tcp_connect_time", type: "float64" },
+      { name: "members[].has.tcp_connect_time", type: "bool" },
+    ],
+    builtins: ["all", "any", "avg", "count", "len", "majority", "max", "min", "sum"],
+  };
+  const done = (doc: string) => {
+    const ctx = new CompletionContext(EditorState.create({ doc }), doc.length, false);
+    return (exprCompletions(() => calc)(ctx) as { options: { label: string }[] } | null)?.options.map((o) => o.label) ?? [];
+  };
+
+  it("completes an alias inside a list function's slot, the functions, and a member's fields", () => {
+    expect(done("max(tc")).toContain("tcp_connect_time");
+    expect(done("av")).toContain("avg");
+    expect(done("maj")).toContain("majority");
+    expect(done("count(members, .")).toEqual(["name", "value.tcp_connect_time", "has.tcp_connect_time"]);
+  });
+});
+
+describe("toEditorDiagnostics' bind action", () => {
+  it("offers to bind a name nothing binds, and only that", () => {
+    const bound: string[] = [];
+    const [d] = toEditorDiagnostics("max(fan)", [{ line: 1, column: 5, phase: "type", message: "fan is not an input", unbound: "fan" }], (n) => bound.push(n));
+    expect(d.actions?.map((a) => a.name)).toEqual(["Bind fan to a key"]);
+    d.actions![0].apply(null as never, d.from, d.to);
+    expect(bound).toEqual(["fan"]);
+    const [plain] = toEditorDiagnostics("max(x)", [{ line: 1, column: 1, phase: "type", message: "expected bool" }], () => {});
+    expect(plain.actions).toBeUndefined();
+  });
+});

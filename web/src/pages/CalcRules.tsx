@@ -33,10 +33,10 @@ import {
   type CalcPreview,
   type CalcRule,
   type OwnerKind,
-  type Reducer,
-  type ValueType,
   CALC_RULES_KEY,
+  boundInputs,
   calcStateKey,
+  calcTemplates,
   createCalcBody,
   createCalcRule,
   deleteCalcRule,
@@ -49,26 +49,27 @@ import {
   liveWords,
   previewCalcBody,
   previewCalcRule,
-  reduceWords,
-  reducersFor,
   renameCalcRule,
   updateCalcBody,
   updateCalcRule,
   validateCalcDraft,
-  valueTypeOf,
+  withInputKey,
 } from "../lib/calc_rules";
 
-// Calc rules (Catalog > Actions > Calc rules, #999; epic #525): the calc rule
-// registry, a sibling of Rules and Severity in the catalog's Actions group, as
-// each registry there is its own page. A calc rule derives one output key on
-// each owner it selects (a component, or a system from its role-bound members)
-// by folding named inputs with a named reducer or an expression; the server's
-// tick computes it and writes the result as a calculated sample. Each row reads
-// its reduce and its live counts (owners computed, pending, without inputs,
-// failing, over the owners the caller may read); a row opens a blade with the
-// state per owner; New and Edit open the one form in a Drawer, with a preview
-// that computes the draft now without saving. Writing a rule needs an
-// all-scope grant (fleetView), as for event rules.
+// Calc rules (Catalog > Actions > Calc rules, #999, #1018; epic #525): the
+// calc rule registry, a sibling of Rules and Severity in the catalog's Actions
+// group, as each registry there is its own page. A calc rule derives one
+// output key on each owner it selects (a component, or a system from its
+// role-bound members) by an expression over its inputs, each bound by an
+// alias as the list of its current values; the server's tick computes it and
+// writes the result as a calculated sample. Each row reads its reduce (the
+// expression, as code) and its live counts (owners computed, pending, without
+// inputs, failing, over the owners the caller may read); a row opens a blade
+// with the state per owner, in the server's order; New and Edit open the one
+// form in a Drawer: the inputs (a key, its alias pre-filled), the expression
+// editor with start-from templates, and a preview that computes the draft now
+// without saving. Writing a rule needs an all-scope grant (fleetView), as for
+// event rules.
 
 export const CALC_HINTS = {
   owner:
@@ -76,9 +77,9 @@ export const CALC_HINTS = {
   selector:
     "The owners the rule derives on: those whose type falls within a listed type (subtypes included), and those listed by name. Leave both empty for every owner of its kind.",
   inputs:
-    "The keys the rule reads, each by a short name its reduce uses (t, call, people). A key is a property or a metric; health is never an input.",
+    "The keys the rule reads, each by an alias its expression uses: picking a key fills the alias from its name, and you may shorten it (t, call, people). A key is a property or a metric, held by its id, so renaming it changes nothing here; health is never an input.",
   reduce:
-    "How the inputs become one value. A named reducer folds every value of one input (every endpoint on a component, every member of a system). An expression combines several inputs by name: on a system, members is one record per member, each with value.<name> and has.<name>.",
+    "An expression over the inputs' aliases. Each alias is the list of the input's current values: one per instance on a component (one value when it has one), every member's on a system. Fold a list with max, min, avg, sum, len, majority, any or all; on a system, members is one record per member, each with value.<alias> and has.<alias>.",
   output:
     "The property or metric the rule writes, on each owner, as a calculated sample naming the rule. Not one a collection writes, and not one another enabled rule writes; its type is the type the reduce must yield.",
   state:
@@ -107,11 +108,11 @@ function ownerBadge(kind: OwnerKind): JSX.Element {
 
 function inputsCell(r: CalcRule): JSX.Element {
   return (
-    <span class="flex min-w-0 flex-col leading-snug" title={r.inputs.map((i) => `${i.as} = ${i.key}`).join(", ")}>
+    <span class="flex min-w-0 flex-col leading-snug" title={r.inputs.map((i) => `${i.alias} = ${i.key}`).join(", ")}>
       <For each={r.inputs.slice(0, 2)}>
         {(i) => (
           <span class="truncate text-[12px]">
-            <span class="font-data text-base-content/50">{i.as}</span> <span class="font-data">{i.key}</span>
+            <span class="font-data text-base-content/50">{i.alias}</span> <span class="font-data">{i.key}</span>
           </span>
         )}
       </For>
@@ -132,9 +133,7 @@ function ReduceCell(p: { rule: CalcRule }): JSX.Element {
         </span>
       }
     >
-      <Show when={p.rule.reduce.reducer} fallback={<code class="truncate font-data text-[12px]" title={p.rule.reduce.expr}>{p.rule.reduce.expr}</code>}>
-        <span class="truncate text-[12px]">{reduceWords(p.rule)}</span>
-      </Show>
+      <code class="truncate font-data text-[12px] [font-variant-ligatures:none]" title={p.rule.reduce.expr}>{p.rule.reduce.expr}</code>
     </Show>
   );
 }
@@ -315,8 +314,11 @@ function SelectorFacts(p: { rule: CalcRule }): JSX.Element {
 
 // The most skipped members named per key on a state row; the rest counted.
 const SKIPPED_NAMES = 4;
-// The most owners a blade lists; the rest counted.
+// The owners a blade lists at first, in the server's order (failing,
+// pending, missing, valued); "and N more" asks the route for the rest, up to
+// its most.
 const STATE_ROWS = 12;
+const STATE_ALL = 1000;
 
 function skippedByKey(ms: CalcOwnerState["skipped"]): { key: string; members: CalcOwnerState["skipped"] }[] {
   const out: { key: string; members: CalcOwnerState["skipped"] }[] = [];
@@ -326,20 +328,6 @@ function skippedByKey(ms: CalcOwnerState["skipped"]): { key: string; members: Ca
     else out.push({ key: m.key, members: [m] });
   }
   return out;
-}
-
-// Owners holding a value first (what the rule did), then the rest, each by
-// name.
-function stateOrder(os: CalcOwnerState[]): CalcOwnerState[] {
-  const has = (o: CalcOwnerState) => (o.value !== undefined && o.value !== null ? 0 : 1);
-  return [...os].sort((a, b) => has(a) - has(b) || a.owner.localeCompare(b.owner));
-}
-
-// A preview's owners with a value first (what the rule would write), then
-// those it would write nothing for, each by name.
-function previewOrder(os: CalcPreview["owners"]): CalcPreview["owners"] {
-  const has = (o: CalcPreview["owners"][number]) => (o.value !== undefined && o.value !== null ? 0 : 1);
-  return [...os].sort((a, b) => has(a) - has(b) || a.owner.localeCompare(b.owner));
 }
 
 function stateValue(v: unknown): string {
@@ -421,11 +409,14 @@ function CalcBladeBody(p: { name: string }): JSX.Element {
   const row = lookup.row;
   const [err, setErr] = createSignal<string | null>(null);
   const ruleName = () => row()?.name ?? p.name;
+  const [stateLimit, setStateLimit] = createSignal(STATE_ROWS);
   const state = useQuery(() => ({
-    queryKey: calcStateKey(ruleName()),
-    queryFn: () => getCalcState(ruleName()),
+    queryKey: calcStateKey(ruleName(), stateLimit()),
+    queryFn: () => getCalcState(ruleName(), stateLimit()),
     refetchInterval: DETAIL_POLL_MS,
     enabled: !!row(),
+    // Asking for more keeps the owners shown until the longer answer lands.
+    placeholderData: (prev: Awaited<ReturnType<typeof getCalcState>> | undefined) => prev,
   }));
   const canUpdate = () => canFleet(me.data, "rule", "update");
   const canDelete = () => canFleet(me.data, "rule", "delete");
@@ -527,7 +518,7 @@ function CalcBladeBody(p: { name: string }): JSX.Element {
               <For each={r().inputs}>
                 {(i) => (
                   <>
-                    <code class="font-data text-[12px] text-base-content/60">{i.as}</code>
+                    <code class="font-data text-[12px] text-base-content/60">{i.alias}</code>
                     <span class="font-data text-[12px]">{i.key}</span>
                   </>
                 )}
@@ -539,23 +530,32 @@ function CalcBladeBody(p: { name: string }): JSX.Element {
 
           <section class="flex flex-col gap-2">
             <Eyebrow label="Reduce" hint={CALC_HINTS.reduce} />
-            <Show when={r().reduce.reducer} fallback={<code data-testid="calc-expr" class="break-all font-data text-[12px] text-base-content/80">{r().reduce.expr}</code>}>
-              <span class="text-sm">{reduceWords(r())}</span>
-            </Show>
+            <code data-testid="calc-expr" class="break-all font-data text-[12px] text-base-content/80 [font-variant-ligatures:none]">{r().reduce.expr}</code>
           </section>
 
           <section class="flex flex-col gap-2" aria-label="State">
             <Eyebrow
-              label={`State${state.data ? ` (${state.data.owners.length} owners, ${state.data.pending_depth} pending)` : ""}`}
+              label={`State${state.data ? ` (${state.data.total} owners, ${state.data.pending_depth} pending)` : ""}`}
               hint={CALC_HINTS.state}
             />
             <Show when={state.data} fallback={<span class="text-[12px] text-base-content/40">{state.isError ? describeError(state.error) : "Loading…"}</span>}>
               <Show when={state.data!.owners.length > 0} fallback={<span class="text-[12px] text-base-content/40">Nothing computed yet on an owner you can read.</span>}>
+                {/* In the server's order: failing, pending, missing an input,
+                    valued, each by name. */}
                 <ul class="flex flex-col divide-y divide-base-300 rounded-box border border-base-300">
-                  <For each={stateOrder(state.data!.owners).slice(0, STATE_ROWS)}>{(o) => <StateRow o={o} />}</For>
+                  <For each={state.data!.owners}>{(o) => <StateRow o={o} />}</For>
                 </ul>
-                <Show when={state.data!.owners.length > STATE_ROWS}>
-                  <span class="text-[12px] text-base-content/50">and {state.data!.owners.length - STATE_ROWS} more</span>
+                <Show when={state.data!.total > state.data!.owners.length}>
+                  <Button
+                    intent="quiet"
+                    size="xs"
+                    class="w-fit"
+                    loading={state.isFetching && stateLimit() === STATE_ALL}
+                    disabled={stateLimit() === STATE_ALL}
+                    onClick={() => setStateLimit(STATE_ALL)}
+                  >
+                    and {state.data!.total - state.data!.owners.length} more
+                  </Button>
                 </Show>
               </Show>
             </Show>
@@ -571,9 +571,13 @@ function CalcBladeBody(p: { name: string }): JSX.Element {
 // CalcRuleForm authors a calc rule, on create and edit alike, in a Drawer that
 // draws its action rail. An edit may rename (#977's pattern: the PATCH first,
 // the :rename last, so a refused rename leaves the rest saved); the owner kind
-// is fixed at create. Every rule is judged in TypeScript (lib/calc_rules) and
-// gates the submit; an expression reduce is also checked by the server as it is
-// typed (the calc site, with the inputs and owner kind it binds).
+// is fixed at create. The form is the inputs, each a key and the alias its
+// expression binds it by (filled from the key's name until edited), then the
+// expression editor against the calc site (checked as it is typed, with the
+// inputs and owner kind it binds; start-from templates; a name nothing binds
+// offered as a new input). Every rule is judged in TypeScript
+// (lib/calc_rules, the alias rules generated from the server's) and gates
+// the submit, with the expression's own verdict.
 export function CalcRuleForm(p: { mode: "create" | "edit"; rule?: CalcRule; onSaved: (r: CalcRule) => void }): JSX.Element {
   const qc = useQueryClient();
   const properties = useQuery(() => ({ queryKey: PROPERTIES_KEY, queryFn: listProperties }));
@@ -588,21 +592,22 @@ export function CalcRuleForm(p: { mode: "create" | "edit"; rule?: CalcRule; onSa
   const [formErr, setFormErr] = createSignal<string | null>(null);
   const [exprOk, setExprOk] = createSignal<boolean | undefined>(undefined);
 
-  const typeOf = (key: string): ValueType | undefined => {
-    if ((metrics.data ?? []).some((m) => m.name === key)) return "number";
-    const prop = (properties.data ?? []).find((x) => x.name === key);
-    return prop ? valueTypeOf("property", prop.data_type) : undefined;
-  };
-  const errors = createMemo(() => validateCalcDraft(d, typeOf, p.rule?.name));
-  const exprBad = () => d.mode === "expr" && exprOk() !== true;
-  const valid = () => !hasErrors(errors()) && !exprBad();
+  const errors = createMemo(() => validateCalcDraft(d, p.rule?.name));
+  const valid = () => !hasErrors(errors()) && exprOk() === true;
   const shown = (msg: string | undefined) => (touched() ? msg : undefined);
+  // An input's fault shows once the form is touched, or as soon as its alias
+  // is the author's own and its key is chosen (so a refused alias says why
+  // while it is typed).
+  const inputErr = (i: number) => {
+    const m = errors().input?.[i];
+    const x = d.inputs[i];
+    return touched() || (x && x.aliasEdited && x.key) ? m : undefined;
+  };
   const byLabel = (a: { label?: string; name: string }, b: { label?: string; name: string }) => entityLabel(a).localeCompare(entityLabel(b));
   const keyOptions = createMemo(() => ({
     properties: [...(properties.data ?? [])].filter((x) => x.name !== "health").sort(byLabel),
     metrics: [...(metrics.data ?? [])].sort(byLabel),
   }));
-  const reducerOptions = () => reducersFor(d.inputs.length === 1 ? typeOf(d.inputs[0].key) : undefined);
 
   useFormActions().bind({
     submitLabel: p.mode === "create" ? "Create rule" : "Save rule",
@@ -638,6 +643,14 @@ export function CalcRuleForm(p: { mode: "create" | "edit"; rule?: CalcRule; onSa
     } finally {
       setBusy(false);
     }
+  }
+
+  // bindName gives a name the expression uses a new input of that alias,
+  // and puts the focus on its key, the one thing left to choose.
+  function bindName(name: string) {
+    const n = d.inputs.length + 1;
+    setD("inputs", [...d.inputs, { alias: name, key: "", aliasEdited: true }]);
+    setTimeout(() => (document.querySelector(`[aria-label="Input ${n} key"]`) as HTMLElement | null)?.focus(), 0);
   }
 
   const KeySelect = (q: { value: string; label: string; onChange: (v: string) => void; invalid?: boolean }) => (
@@ -765,76 +778,63 @@ export function CalcRuleForm(p: { mode: "create" | "edit"; rule?: CalcRule; onSa
 
       <section class="flex flex-col gap-2" aria-label="Inputs">
         <Eyebrow label="Reads" hint={CALC_HINTS.inputs} />
-        <Index each={d.inputs}>
-          {(x, i) => (
-            <div class="flex flex-col gap-1">
-              <div class="flex items-center gap-2">
-                <input
-                  aria-label={`Input ${i + 1} name`}
-                  class="input input-bordered w-24 flex-none font-data"
-                  placeholder="t"
-                  value={x().as}
-                  onInput={(e) => setD("inputs", i, "as", e.currentTarget.value)}
-                />
-                <div class="min-w-0 flex-1">
-                  <KeySelect label={`Input ${i + 1} key`} value={x().key} onChange={(v) => setD("inputs", i, "key", v)} invalid={!!shown(errors().input?.[i])} />
-                </div>
-                <Show when={d.inputs.length > 1}>
-                  <Button intent="quiet" size="xs" square icon={X} label={`Remove input ${i + 1}`} onClick={() => setD("inputs", d.inputs.filter((_, j) => j !== i))} />
-                </Show>
-              </div>
-              <Show when={shown(errors().input?.[i])}>{(m) => <p class="text-[11px] text-error">{m()}</p>}</Show>
-            </div>
-          )}
-        </Index>
-        <Button intent="quiet" size="xs" class="w-fit" icon={Plus} onClick={() => setD("inputs", [...d.inputs, { as: "", key: "" }])}>
+        <div class="grid grid-cols-[minmax(0,1fr)_minmax(0,11rem)_auto] items-center gap-x-2 gap-y-1">
+          <span class="text-[11px] text-base-content/50">Key</span>
+          <span class="text-[11px] text-base-content/50">Alias in the expression</span>
+          <span />
+          <Index each={d.inputs}>
+            {(x, i) => {
+              const errId = `calc-input-${i}-err`;
+              return (
+                <>
+                  <KeySelect label={`Input ${i + 1} key`} value={x().key} onChange={(v) => setD("inputs", withInputKey(d.inputs, i, v))} invalid={!!inputErr(i) && !x().key} />
+                  <input
+                    aria-label={`Input ${i + 1} alias`}
+                    aria-invalid={inputErr(i) ? "true" : undefined}
+                    aria-describedby={inputErr(i) ? errId : undefined}
+                    class="input input-bordered w-full font-data [font-variant-ligatures:none]"
+                    classList={{ "input-error": !!inputErr(i) && !!x().key }}
+                    placeholder="t"
+                    spellcheck={false}
+                    autocomplete="off"
+                    value={x().alias}
+                    onInput={(e) => setD("inputs", i, { alias: e.currentTarget.value, aliasEdited: true })}
+                  />
+                  <span class="flex w-6 justify-center">
+                    <Show when={d.inputs.length > 1}>
+                      <Button intent="quiet" size="xs" square icon={X} label={`Remove input ${i + 1}`} onClick={() => setD("inputs", d.inputs.filter((_, j) => j !== i))} />
+                    </Show>
+                  </span>
+                  <Show when={inputErr(i)}>
+                    {(m) => <p id={errId} class="col-span-3 -mt-0.5 text-[11px] text-error">{m()}</p>}
+                  </Show>
+                </>
+              );
+            }}
+          </Index>
+        </div>
+        <Button intent="quiet" size="xs" class="w-fit" icon={Plus} onClick={() => setD("inputs", [...d.inputs, { alias: "", key: "", aliasEdited: false }])}>
           Add an input
         </Button>
       </section>
 
-      <label class="inline-flex w-fit cursor-pointer items-center gap-2 text-[12px] text-base-content/70">
-        <input
-          type="checkbox"
-          class="toggle toggle-xs"
-          aria-label="Write the reduce as an expression"
-          checked={d.mode === "expr"}
-          onChange={(e) => { setExprOk(undefined); setD("mode", e.currentTarget.checked ? "expr" : "reducer"); }}
+      <FieldRow label="Reduce" info={CALC_HINTS.reduce}>
+        <ExpressionField
+          site="calc"
+          sampleKey={d.outputKey}
+          inputs={boundInputs(d.inputs)}
+          ownerKind={d.ownerKind}
+          needsKey="Choose what the rule writes to check this expression."
+          label="Reduce"
+          placeholder={sys() ? "avg(t), or count(members, .has.t && .value.t > 30) * 1.0" : "max(t), or any(call) || max(people) > 0"}
+          value={d.expr}
+          onInput={(v) => setD("expr", v)}
+          onCheck={(ok) => setExprOk(ok)}
+          templates={calcTemplates(d.ownerKind)}
+          onBind={bindName}
         />
-        Write the reduce as an expression
-      </label>
-      <Show
-        when={d.mode === "expr"}
-        fallback={
-          <FieldRow label="Reducer" info={CALC_HINTS.reduce}>
-            <select
-              aria-label="Reducer"
-              ref={bindSelectValue(() => d.reducer, reducerOptions)}
-              class="select select-bordered w-full"
-              classList={{ "select-error": !!shown(errors().reduce) }}
-              onChange={(e) => setD("reducer", e.currentTarget.value as Reducer)}
-            >
-              <option value="" disabled>{d.inputs.length === 1 && d.inputs[0].key ? "Choose a reducer…" : "Choose one input first…"}</option>
-              <For each={reducerOptions()}>{(r) => <option value={r}>{r}</option>}</For>
-            </select>
-            <Show when={shown(errors().reduce)}>{(m) => <p class="text-[11px] text-error">{m()}</p>}</Show>
-          </FieldRow>
-        }
-      >
-        <FieldRow label="Reduce" info={CALC_HINTS.reduce}>
-          <ExpressionField
-            site="calc"
-            sampleKey={d.outputKey}
-            inputs={d.inputs}
-            ownerKind={d.ownerKind}
-            needsKey="Choose what the rule writes to check this expression."
-            label="Reduce expression"
-            placeholder={sys() ? "count(members, .has.t && .value.t > 30) * 1.0" : "call || people > 0"}
-            value={d.expr}
-            onInput={(v) => setD("expr", v)}
-            onCheck={(ok) => setExprOk(ok)}
-          />
-        </FieldRow>
-      </Show>
+        <Show when={shown(errors().reduce)}>{(m) => <p class="text-[11px] text-error">{m()}</p>}</Show>
+      </FieldRow>
 
       <FieldRow label="Writes" info={CALC_HINTS.output}>
         <KeySelect label="Writes" value={d.outputKey} onChange={(v) => setD("outputKey", v)} invalid={!!shown(errors().outputKey)} />
@@ -855,8 +855,8 @@ export function CalcRuleForm(p: { mode: "create" | "edit"; rule?: CalcRule; onSa
 // CalcPreviewPanel computes the draft now (POST /calc-rules:preview), on the
 // owners it selects that the caller can read: the value it would write on
 // each, whether that differs from what the owner holds, and what it found no
-// value of. It writes nothing. A draft the server would refuse to save is
-// refused here with the same reason.
+// value of, in the server's order. It writes nothing. A draft the server
+// would refuse to save is refused here with the same reason.
 function CalcPreviewPanel(p: { draft: CalcDraft; editing?: string; ready: boolean }): JSX.Element {
   const [result, setResult] = createSignal<CalcPreview | null>(null);
   const [busy, setBusy] = createSignal(false);
@@ -899,7 +899,9 @@ function CalcPreviewPanel(p: { draft: CalcDraft; editing?: string; ready: boolea
             </Show>
             <Show when={r().owners.length > 0} fallback={<span class="text-[12px] text-base-content/50">It selects no owner you can read.</span>}>
               <ul class="flex max-h-60 flex-col gap-1 overflow-y-auto">
-                <For each={previewOrder(r().owners)}>
+                {/* In the server's order: owners holding a value or that the
+                    rule would write one on first, then by name. */}
+                <For each={r().owners}>
                   {(o) => (
                     <li class="flex flex-col gap-0.5 text-[12px]">
                       <span class="flex items-center gap-2">

@@ -1,8 +1,9 @@
 import { For, Show, createEffect, createSignal, createUniqueId, on, onCleanup, untrack, type JSX } from "solid-js";
 import InfoTip from "./InfoTip";
+import Button from "./Button";
 import Eyebrow from "./Eyebrow";
 import { caretOf, validateExpression, type ExpressionBinding, type ExpressionCheck, type ValidateExpression } from "../lib/expressions";
-import type { Vocabulary } from "../lib/expressionEditor";
+import { bindLabel, type Vocabulary } from "../lib/expressionEditor";
 import type { ExpressionEditor } from "./expressionEditorView";
 import { describeError } from "../lib/format";
 
@@ -18,9 +19,15 @@ import { describeError } from "../lib/format";
 //
 // It renders the editor FIRST and the rest beside it, so a FieldRow's label
 // is the field's: a click on it focuses the editor, and the editor's content
-// carries the accessible name (a textbox named by `label`). Tab is left to move focus on, so the field never
-// traps the keyboard. No native validation attributes (validation-guard): the
-// check is the server's, and the caller learns the verdict through onCheck.
+// is named by that label (aria-labelledby; `label` names it where there is
+// no FieldRow). Tab is left to move focus on, so the field never traps the
+// keyboard. No native validation attributes (validation-guard): the check is
+// the server's, and the caller learns the verdict through onCheck.
+//
+// A caller may offer start-from templates (a calc rule's list functions,
+// inserted at the cursor with the cursor left in the slot) and an action on
+// a name nothing binds (onBind: a calc rule binds it by giving an input that
+// alias), beside the fault and in its underline's tooltip.
 export default function ExpressionField(p: {
   site: ValidateExpression["site"];
   // The sample key the expression reads (criteria types its value by it); the
@@ -35,15 +42,20 @@ export default function ExpressionField(p: {
   // For the calc site (#999): the rule's inputs and owner kind, which give the
   // expression its bindings (sampleKey is then the output key, which types the
   // result).
-  inputs?: { as: string; key: string }[];
+  inputs?: { alias: string; key: string }[];
   ownerKind?: "component" | "system";
   // What to say while there is no key to check against.
   needsKey?: string;
   // The verdict, so a form can refuse a source that does not compile: true
   // when it compiles, false when it does not (or is empty, has no key to be
-  // checked against, or could not be checked), undefined while a check is
-  // pending.
+  // checked against, could not be checked, or the editor did not load),
+  // undefined while a check is pending.
   onCheck?: (ok: boolean | undefined) => void;
+  // Start-from templates, each inserted at the cursor, the cursor left
+  // `cursor` characters in (label draws the slot).
+  templates?: { label: string; text: string; cursor: number; title: string }[];
+  // Bind a name the expression uses that nothing binds.
+  onBind?: (name: string) => void;
 }): JSX.Element {
   const [check, setCheck] = createSignal<ExpressionCheck | null>(null);
   const [failed, setFailed] = createSignal<string | null>(null);
@@ -51,6 +63,10 @@ export default function ExpressionField(p: {
   // fetched apart from the source check, so completion has the site's words
   // from the first one on.
   const [vocab, setVocab] = createSignal<Vocabulary | null>(null);
+  // The editor's chunk failed to load (a tab holding an old build's chunk
+  // names): the field says so and is never ok.
+  const [unloaded, setUnloaded] = createSignal(false);
+  const verdict = (ok: boolean | undefined) => p.onCheck?.(unloaded() ? false : ok);
   const diagId = createUniqueId();
   let timer: ReturnType<typeof setTimeout> | undefined;
   let vocabTimer: ReturnType<typeof setTimeout> | undefined;
@@ -62,7 +78,7 @@ export default function ExpressionField(p: {
 
   const request = (source: string, key: string): ValidateExpression => {
     const body: ValidateExpression = { site: p.site, source, key };
-    if (p.inputs) body.inputs = p.inputs.filter((i) => i.as && i.key);
+    if (p.inputs) body.inputs = p.inputs.filter((i) => i.alias && i.key);
     if (p.ownerKind) body.owner_kind = p.ownerKind;
     return body;
   };
@@ -72,7 +88,7 @@ export default function ExpressionField(p: {
   // change, on its own clock: typing, which holds the source check back
   // until a pause, never holds back the words the first one completes from.
   createEffect(
-    on([() => p.sampleKey, () => JSON.stringify(p.inputs ?? null), () => p.ownerKind], ([key]) => {
+    on([() => p.sampleKey, () => JSON.stringify(p.inputs ?? null), () => p.ownerKind, () => p.site], ([key]) => {
       clearTimeout(vocabTimer);
       const n = ++vocabSeq;
       if (!key) {
@@ -94,16 +110,16 @@ export default function ExpressionField(p: {
   );
 
   createEffect(
-    on([() => p.value, () => p.sampleKey, () => JSON.stringify(p.inputs ?? null), () => p.ownerKind], ([source, key]) => {
+    on([() => p.value, () => p.sampleKey, () => JSON.stringify(p.inputs ?? null), () => p.ownerKind, () => p.site], ([source, key]) => {
       clearTimeout(timer);
       const n = ++seq;
       if (!key || !source.trim()) {
         setCheck(null);
         setFailed(null);
-        p.onCheck?.(false);
+        verdict(false);
         return;
       }
-      p.onCheck?.(undefined);
+      verdict(undefined);
       timer = setTimeout(async () => {
         try {
           const r = await validateExpression(request(source, key));
@@ -111,12 +127,12 @@ export default function ExpressionField(p: {
           setFailed(null);
           checked = source;
           setCheck(r);
-          p.onCheck?.(r.ok);
+          verdict(r.ok);
         } catch (e) {
           if (n !== seq) return;
           setCheck(null);
           setFailed(describeError(e));
-          p.onCheck?.(false);
+          verdict(false);
         }
       }, p.debounce ?? 300);
     }),
@@ -124,6 +140,10 @@ export default function ExpressionField(p: {
   onCleanup(() => {
     clearTimeout(timer);
     clearTimeout(vocabTimer);
+    // An answer in flight when the field goes is no one's: bumping the
+    // sequences drops it, so it never reaches a form that has moved on.
+    seq++;
+    vocabSeq++;
   });
 
   const diagnostics = () => check()?.diagnostics ?? [];
@@ -134,12 +154,14 @@ export default function ExpressionField(p: {
       classList={{ "textarea-error": diagnostics().length > 0 }}
     />
   ) as HTMLDivElement;
-  const aria = () => ({ label: p.label, describedBy: diagId, invalid: diagnostics().length > 0 });
+  // A FieldRow's <label for> points at the host, which is not labelable:
+  // the editor's content is named by that label (by id), and a click on it
+  // focuses the editor by hand (as it did the textarea).
+  let label: HTMLElement | null = null;
+  const [labelId, setLabelId] = createSignal<string | undefined>(undefined);
+  const aria = () => ({ label: p.label, labelledBy: labelId(), describedBy: diagId, invalid: diagnostics().length > 0 });
   const [editor, setEditor] = createSignal<ExpressionEditor | null>(null);
   let gone = false;
-  // A FieldRow's <label for> points at the host, which is not labelable, so
-  // a click on the label focuses the editor by hand (as it did the textarea).
-  let label: Element | null = null;
   const focusEditor = () => editor()?.focus();
   onCleanup(() => {
     gone = true;
@@ -147,57 +169,100 @@ export default function ExpressionField(p: {
     editor()?.destroy();
   });
   // CodeMirror is its own chunk, loaded the first time a field renders.
-  void import("./expressionEditorView").then(({ mountExpressionEditor }) => {
-    if (gone) return;
-    setEditor(
-      mountExpressionEditor(host, {
-        doc: untrack(() => p.value),
-        placeholder: untrack(() => p.placeholder ?? ""),
-        aria: untrack(aria),
-        vocab,
-        onInput: (text) => {
-          if (text !== p.value) p.onInput(text);
-        },
-        bindingCard,
-      }),
-    );
-    label = host.id ? document.querySelector(`label[for="${host.id}"]`) : null;
-    label?.addEventListener("click", focusEditor);
-  });
+  import("./expressionEditorView")
+    .then(({ mountExpressionEditor }) => {
+      if (gone) return;
+      label = host.id ? document.querySelector<HTMLElement>(`label[for="${host.id}"]`) : null;
+      if (label) {
+        if (!label.id) label.id = `${diagId}-label`;
+        setLabelId(label.id);
+      }
+      setEditor(
+        mountExpressionEditor(host, {
+          doc: untrack(() => p.value),
+          placeholder: untrack(() => p.placeholder ?? ""),
+          aria: untrack(aria),
+          vocab,
+          onInput: (text) => {
+            if (text !== p.value) p.onInput(text);
+          },
+          bindingCard,
+        }),
+      );
+      label?.addEventListener("click", focusEditor);
+    })
+    .catch(() => {
+      if (gone) return;
+      setUnloaded(true);
+      verdict(false);
+    });
 
   // The form's value is the source of truth: a value set from outside (the
   // builder's expression, a reset) replaces the editor's.
   createEffect(() => editor()?.setDoc(p.value));
   createEffect(() => editor()?.setAria(aria()));
+  createEffect(on(() => p.placeholder ?? "", (ph) => editor()?.setPlaceholder(ph), { defer: true }));
   // Each answer's faults underlined in the source it answered.
   createEffect(() => {
     const ds = diagnostics();
-    editor()?.setDiagnostics(checked, ds);
+    editor()?.setDiagnostics(checked, ds, p.onBind);
   });
 
   return (
     <>
       {host}
+      <Show when={p.templates && p.templates.length > 0}>
+        <div class="flex flex-wrap items-center gap-1" role="group" aria-label="Start from">
+          <span class="text-[11px] text-base-content/50">Start from</span>
+          <For each={p.templates}>
+            {(t) => (
+              <Button
+                intent="quiet"
+                size="xs"
+                class="font-data text-[12px] font-normal [font-variant-ligatures:none]"
+                title={t.title}
+                disabled={!editor()}
+                onClick={() => editor()?.insert(t.text, t.cursor)}
+              >
+                {t.label}
+              </Button>
+            )}
+          </For>
+        </div>
+      </Show>
       <div id={diagId} role="status" aria-live="polite" class="flex flex-col gap-1">
+        <Show when={unloaded()}>
+          <span class="text-[11px] text-error">The expression editor did not load; reload the page to edit this expression.</span>
+        </Show>
         <Show when={!p.sampleKey}>
           <span class="text-[11px] text-base-content/50">{p.needsKey ?? "Choose what the rule reads to check this expression."}</span>
         </Show>
         <Show when={failed()}>{(m) => <span class="text-[11px] text-error">{m()}</span>}</Show>
         <For each={diagnostics()}>
           {(d) => {
-            const at = caretOf(p.value, d.line, d.column);
+            const at = caretOf(checked, d.line, d.column);
             return (
               <div data-testid="expression-diagnostic" class="flex flex-col gap-0.5">
                 <Show when={at}>
                   {(a) => (
-                    <pre class="overflow-x-auto rounded bg-base-200 px-2 py-1 font-data text-[12px] leading-snug text-base-content/80 [font-variant-ligatures:none]">
+                    <pre
+                      aria-hidden="true"
+                      class="overflow-x-auto rounded bg-base-200 px-2 py-1 font-data text-[12px] leading-snug text-base-content/80 [font-variant-ligatures:none]"
+                    >
                       {`${a().text}\n${a().caret}`}
                     </pre>
                   )}
                 </Show>
-                <span class="text-[11px] text-error">
-                  {d.line > 0 ? `Line ${d.line}, column ${d.column}: ` : ""}
-                  {d.message}
+                <span class="flex flex-wrap items-baseline gap-x-2 text-[11px] text-error">
+                  <span>
+                    {d.line > 0 ? `Line ${d.line}, column ${d.column}: ` : ""}
+                    {d.message}
+                  </span>
+                  <Show when={d.unbound && p.onBind}>
+                    <button type="button" class="link link-hover text-[11px] text-base-content/80" onClick={() => p.onBind!(d.unbound!)}>
+                      {bindLabel(d.unbound!)}
+                    </button>
+                  </Show>
                 </span>
               </div>
             );
