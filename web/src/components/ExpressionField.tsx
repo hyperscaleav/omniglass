@@ -128,7 +128,7 @@ export default function ExpressionField(p: {
 
   const host = (
     <div
-      class="textarea textarea-bordered w-full px-2 py-1.5 font-data text-sm leading-snug"
+      class="textarea textarea-bordered min-h-0 w-full px-2 py-1.5 font-data text-sm leading-snug"
       classList={{ "textarea-error": diagnostics().length > 0 }}
     />
   ) as HTMLDivElement;
