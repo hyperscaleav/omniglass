@@ -164,18 +164,22 @@ func chargeValidate(args []reflect.Type) (reflect.Type, error) {
 	return args[1], nil
 }
 
-func chargeOption() expr.Option {
+// chargeOption installs the charges and the charger, which reports where it
+// is to p (guard.go).
+func chargeOption(p *pass) expr.Option {
 	return func(c *conf.Config) {
 		c.Functions[chargeFn] = &builtin.Function{Name: chargeFn, Func: chargeFunc(false, false), Validate: chargeValidate}
 		c.Functions[chargeSeqFn] = &builtin.Function{Name: chargeSeqFn, Func: chargeFunc(true, false), Validate: chargeValidate}
 		c.Functions[chargeTimesFn] = &builtin.Function{Name: chargeTimesFn, Func: chargeFunc(false, true), Validate: chargeValidate}
-		c.Visitors = append(c.Visitors, charger{})
+		c.Visitors = append(c.Visitors, charger{p})
 	}
 }
 
-type charger struct{}
+type charger struct{ p *pass }
 
-func (charger) Visit(node *ast.Node) {
+func (c charger) Visit(node *ast.Node) {
+	outer := c.p.name
+	c.p.name, c.p.at = "charge", *node
 	switch n := (*node).(type) {
 	case *ast.BuiltinNode:
 		if constantTime[n.Name] {
@@ -203,6 +207,7 @@ func (charger) Visit(node *ast.Node) {
 			wrap(&n.Right, chargeSeqFn)
 		}
 	}
+	c.p.name, c.p.at = outer, nil
 }
 
 func wrap(arg *ast.Node, fn string, extra ...ast.Node) {
