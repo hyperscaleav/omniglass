@@ -57,7 +57,9 @@ unsupported, until a member returns).
 the server runs, without saving or writing anything: the value it would write on each, whether that
 differs from what the owner holds, and what it found no value of. A draft the server would refuse to
 save (a cycle with another rule's output, a second writer of the key, a reduce that does not compile) is
-refused by the preview with the same reason. A preview computes at most 200 owners and says so.
+refused by the preview with the same reason. A preview computes at most 200 owners and says so. An
+expression over a system with a member you cannot read is not previewed on that system, since it could
+read that member's own value; the preview says how many of its members are out of your scope.
 
 Saving computes at once: a new rule marks every selected owner that already holds one of its inputs,
 and the next tick writes its values.

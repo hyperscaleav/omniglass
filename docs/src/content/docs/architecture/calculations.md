@@ -177,7 +177,11 @@ read, named at read time, and a member the caller may not read is counted, never
 A **preview** (`POST /calc-rules:preview`) computes a candidate rule now, on each owner it selects that
 the caller may read, with the same reduce the tick runs, in a read-only transaction that writes
 nothing: the value it would write, the current output and whether they differ, and what was missing,
-skipped or stale, up to 200 owners a preview. A candidate is checked as a save would check it, so a
+skipped or stale, up to 200 owners a preview. An **expression** over a system with a member the caller
+may not read is withheld on that system (its `error` says how many members are out of scope): an
+expression can read one member by position (`members[1].value.t`, `.name`, `.id`), so its value could be
+that member's own. A named reducer folds every member together and is previewed, the same aggregate the
+rule's state shows. A candidate is checked as a save would check it, so a
 rule that could not be saved (a reduce that does not compile, a cycle, a second writer, a collected
 output) is refused before it is saved; given a saved rule's name, it is judged as an edit of that rule.
 The selector's names resolve in the caller's scope (a name out of scope is refused exactly as one that

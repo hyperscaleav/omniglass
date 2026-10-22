@@ -149,6 +149,33 @@ func TestCalcRuleStateAndPreviewAPI(t *testing.T) {
 		t.Fatalf("the east preview names %+v, want w1 a hidden count", pv.Owners[0])
 	}
 
+	// An expression can address one member (members[1].value.t, .name,
+	// .id), so over a system with a member the caller may not read the
+	// preview withholds the value rather than reveal that member's own (w1
+	// holds no temperature here, so its value would read as the zero).
+	probe := map[string]any{"owner_kind": "system", "selector": map[string]any{"systems": []string{"sys-e"}},
+		"inputs": []map[string]any{{"as": "t", "key": "room-temperature"}}, "reduce": map[string]any{"expr": "members[len(members) - 1].value.t"}, "output_key": "avg-temp"}
+	var leak struct {
+		Owners []struct {
+			Owner string          `json:"owner"`
+			Value json.RawMessage `json:"value"`
+			Error string          `json:"error"`
+		} `json:"owners"`
+	}
+	if err := json.Unmarshal(c.do(eastViewer, http.MethodPost, "/calc-rules:preview", probe, http.StatusOK), &leak); err != nil {
+		t.Fatal(err)
+	}
+	if len(leak.Owners) != 1 || len(leak.Owners[0].Value) != 0 || !strings.Contains(leak.Owners[0].Error, "outside") {
+		t.Fatalf("the east expression preview %+v, want sys-e withheld (a member is outside the read scope)", leak.Owners)
+	}
+	leak.Owners = nil
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodPost, "/calc-rules:preview", probe, http.StatusOK), &leak); err != nil {
+		t.Fatal(err)
+	}
+	if len(leak.Owners) != 1 || string(leak.Owners[0].Value) == "" {
+		t.Fatalf("the fleet expression preview %+v, want a value (every member in scope)", leak.Owners)
+	}
+
 	// Saved and computed, its state reads the same way.
 	rule["name"] = "av-mean"
 	c.do(ownerTok, http.MethodPost, "/calc-rules", rule, http.StatusCreated)

@@ -405,7 +405,9 @@ and a deferred mark's `due_at`, beside `pending_depth`, how many of the listed o
 (gated `rule:read`; `omniglass calc-rule preview`) computes a candidate rule (`owner_kind`, `selector`,
 `inputs`, `reduce`, `output_key`, and a saved rule's `name` to preview an edit of it) on each selected
 owner the caller may read, with the tick's reduce, in a read-only transaction: per owner the `value` it
-would write, the `current` output and whether it `differs`, and what was missing, skipped or stale,
+would write, the `current` output and whether it `differs`, and what was missing, skipped or stale
+(an expression over a system with a member the caller may not read is withheld there, its `error`
+counting the members out of scope),
 at most `owner_cap` owners (`owners_judged` of `owners_total`, `truncated` past it). A candidate a save
 would refuse (a reduce that does not compile, a cycle, a second writer of the output, a collected
 output, health) is the same 422.

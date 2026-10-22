@@ -152,6 +152,24 @@ func (p *PG) CalcRuleState(ctx context.Context, ref string, components, systems 
 	return live, nil
 }
 
+// hiddenCalcMembers counts the members of a system an expression preview
+// would read that the component read scope does not admit; zero for a named
+// reducer, which only ever folds them all together.
+func hiddenCalcMembers(ctx context.Context, q querier, r CalcRule, ms []calcMember, read scope.Set) (int, error) {
+	if r.Reduce.Expr == "" || len(ms) == 0 {
+		return 0, nil
+	}
+	ids := make([]string, len(ms))
+	for i, m := range ms {
+		ids[i] = m.id
+	}
+	names, err := visibleComponentNames(ctx, q, ids, read)
+	if err != nil {
+		return 0, err
+	}
+	return len(ms) - len(names), nil
+}
+
 // visibleComponentNames names the components among ids the read scope
 // admits, in one statement; an id it leaves out is not visible.
 func visibleComponentNames(ctx context.Context, q querier, ids []string, read scope.Set) (map[string]string, error) {
@@ -317,13 +335,26 @@ func (p *PG) PreviewCalcRule(ctx context.Context, spec CalcRuleSpec, components,
 				return nil, err
 			}
 		}
-		members := 1
+		members, hidden := 1, 0
 		if o.owner.kind == rules.OwnerSystem {
 			ms, err := systemMembers(ctx, tx, o.owner.id)
 			if err != nil {
 				return nil, err
 			}
 			members = len(ms)
+			if hidden, err = hiddenCalcMembers(ctx, tx, r, ms, components); err != nil {
+				return nil, err
+			}
+		}
+		if hidden > 0 {
+			// An expression reads each member by position (members[1].value.t,
+			// .name, .id), so its value over a system with a member the
+			// caller may not read could be that member's own: withheld,
+			// the members counted. A named reducer folds every member
+			// together, the aggregate the rule's state shows too.
+			all = append(all, computed{row: CalcPreviewOwner{OwnerKind: o.owner.kind, OwnerID: o.owner.id, OwnerName: o.name, Missing: []string{},
+				Error: fmt.Sprintf("withheld: %d of the system's members are outside your read scope, and an expression can read a member by position", hidden)}})
+			continue
 		}
 		if work+members*len(r.Inputs) > calcPreviewWorkCap && i > 0 {
 			pv.Truncated = true
