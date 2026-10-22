@@ -51,11 +51,12 @@ const (
 	chargeFn      = "$charge"      // charges a collection, map, or string
 	chargeSeqFn   = "$chargeSeq"   // as chargeFn, but a map is free (an `in` lookup)
 	chargeTimesFn = "$chargeTimes" // as chargeFn, times a constant (a regex's size)
+	chargeDeepFn  = "$chargeDeep"  // as chargeFn, plus each string element's bytes
 	meterField    = "$meter"
 )
 
 func isCharge(name string) bool {
-	return name == chargeFn || name == chargeSeqFn || name == chargeTimesFn
+	return name == chargeFn || name == chargeSeqFn || name == chargeTimesFn || name == chargeDeepFn
 }
 
 // patternInsts is the size of the program RE2 runs for a matches pattern
@@ -128,7 +129,7 @@ func runType(env reflect.Type) (t reflect.Type, err error) {
 	}), nil
 }
 
-func chargeFunc(mapsFree, times bool) func(args ...any) (any, error) {
+func chargeFunc(mapsFree, times bool, deep ...bool) func(args ...any) (any, error) {
 	return func(args ...any) (any, error) {
 		m, ok := args[0].(*meter)
 		if !ok {
@@ -146,6 +147,13 @@ func chargeFunc(mapsFree, times bool) func(args ...any) (any, error) {
 		}
 		if times {
 			n *= args[2].(int)
+		}
+		if len(deep) > 0 && deep[0] && (v.Kind() == reflect.Slice || v.Kind() == reflect.Array) {
+			for i := 0; i < v.Len(); i++ {
+				if s, ok := v.Index(i).Interface().(string); ok {
+					n += len(s)
+				}
+			}
 		}
 		if err := m.charge(n); err != nil {
 			return nil, err
@@ -171,6 +179,7 @@ func chargeOption(p *pass) expr.Option {
 		c.Functions[chargeFn] = &builtin.Function{Name: chargeFn, Func: chargeFunc(false, false), Validate: chargeValidate}
 		c.Functions[chargeSeqFn] = &builtin.Function{Name: chargeSeqFn, Func: chargeFunc(true, false), Validate: chargeValidate}
 		c.Functions[chargeTimesFn] = &builtin.Function{Name: chargeTimesFn, Func: chargeFunc(false, true), Validate: chargeValidate}
+		c.Functions[chargeDeepFn] = &builtin.Function{Name: chargeDeepFn, Func: chargeFunc(false, false, true), Validate: chargeValidate}
 		c.Visitors = append(c.Visitors, charger{p})
 	}
 }
@@ -188,6 +197,18 @@ func (c charger) Visit(node *ast.Node) {
 		for i := range n.Arguments {
 			if _, ok := n.Arguments[i].(*ast.PredicateNode); !ok {
 				wrap(&n.Arguments[i], chargeFn)
+			}
+		}
+	case *ast.CallNode:
+		// An engine function (lists.go; inspect admitted no other call)
+		// walks each argument once; majority hashes its strings too.
+		if id, ok := n.Callee.(*ast.IdentifierNode); ok && !isCharge(id.Value) {
+			fn := chargeFn
+			if listFuncs[spoken(id.Value)].deep {
+				fn = chargeDeepFn
+			}
+			for i := range n.Arguments {
+				wrap(&n.Arguments[i], fn)
 			}
 		}
 	case *ast.BinaryNode:

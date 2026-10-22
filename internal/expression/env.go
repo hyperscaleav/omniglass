@@ -52,6 +52,7 @@ type Env struct {
 	run      reflect.Type // typ embedded with the run meter (budget.go)
 	result   Result
 	builtins string // the admitted builtins, sorted, comma-joined (comparable)
+	lists    string // the admitted list functions (lists.go), the same way
 	budget   Budget
 }
 
@@ -129,15 +130,30 @@ func (e Env) Result() Result { return e.result }
 // Budget is what one run at this site may spend.
 func (e Env) Budget() Budget { return e.budget }
 
-// Builtins lists the builtins this site admits, sorted.
+// Builtins lists the functions this site admits, sorted: the Expr builtins
+// it names and its list functions (lists.go), each name once.
 func (e Env) Builtins() []string {
+	out := slices.Concat(e.exprBuiltins(), e.ListFunctions())
+	if len(out) == 0 {
+		return nil
+	}
+	slices.Sort(out)
+	return slices.Compact(out)
+}
+
+// exprBuiltins are the Expr builtins the site admits by WithBuiltins.
+func (e Env) exprBuiltins() []string {
 	if e.builtins == "" {
 		return nil
 	}
 	return strings.Split(e.builtins, ",")
 }
 
-func (e Env) admits(name string) bool { return slices.Contains(e.Builtins(), name) }
+// admits reports whether a builtin call (a BuiltinNode) is admitted: one of
+// the site's Expr builtins, or sum, Expr's builtin, among its list functions.
+func (e Env) admits(name string) bool {
+	return slices.Contains(e.exprBuiltins(), name) || (name == "sum" && e.admitsList(name))
+}
 
 // Option declares one more thing about a site.
 type Option func(*Env) error
@@ -148,7 +164,7 @@ type Option func(*Env) error
 // deliberately, with its cost argument and its tests, when a site needs it.
 func WithBuiltins(names ...string) Option {
 	return func(e *Env) error {
-		set := e.Builtins()
+		set := e.exprBuiltins()
 		for _, n := range names {
 			if _, ok := vetted[n]; !ok {
 				return fmt.Errorf("builtin %q is not vetted for expressions; vet it (a cost argument and tests) before a site admits it", n)
@@ -374,8 +390,9 @@ var keywords = map[string]bool{
 // BindableName reports whether name may be bound as an expression name by an
 // author (a calc rule's input): an identifier (a letter or underscore, then
 // letters, digits or underscores), at most MaxBindingName long, and neither
-// a keyword nor the name of any Expr builtin, admitted at a site or not, so
-// vetting a builtin later never changes what a stored expression means.
+// a keyword nor the name of any Expr builtin or list function, admitted at a
+// site or not, so vetting a function later never changes what a stored
+// expression means.
 func BindableName(name string) error {
 	if name == "" || len(name) > MaxBindingName {
 		return fmt.Errorf("a name is 1 to %d characters, not %d", MaxBindingName, len(name))
@@ -391,6 +408,9 @@ func BindableName(name string) error {
 	}
 	if _, ok := builtin.Index[name]; ok {
 		return fmt.Errorf("%q is the name of a builtin function", name)
+	}
+	if _, ok := listFuncs[name]; ok {
+		return fmt.Errorf("%q is the name of a list function", name)
 	}
 	return nil
 }
