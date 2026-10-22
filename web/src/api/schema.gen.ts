@@ -349,7 +349,7 @@ export interface paths {
         };
         /**
          * Get a calc rule's live state
-         * @description What a calc rule last did on each owner the caller may read (components by the component read scope, systems by the system read scope), each owner named now: the value it computed, when and at which version, the inputs it found no value of, a system's members that held none and the instances it left out as stale (named when the caller may read the component, else counted), an error, since when a system has had no members, and whether the owner is pending (with when a deferred mark is due). The pending depth counts the listed owners that are pending. Gated by rule:read.
+         * @description What a calc rule last did on each owner the caller may read (components by the component read scope, systems by the system read scope), each owner named now: the value it computed, when and at which version, the inputs it found no value of, a system's members that held none and the instances it left out as stale (named when the caller may read the component, else counted), an error, since when a system has had no members, and whether the owner is pending (with when a deferred mark is due). Ordered on the server, failing owners first, then pending, then those it wrote nothing for, then those holding a value, each by name, and at most limit of them; total and the pending depth count every owner the caller may read, listed or not. Gated by rule:read.
          */
         get: operations["get-calc-rule-state"];
         put?: never;
@@ -391,7 +391,7 @@ export interface paths {
         put?: never;
         /**
          * Preview a calc rule
-         * @description Computes a candidate calc rule now, on each owner it selects that the caller may read, with the reduce the tick runs, and writes nothing (a read-only transaction). For each owner it answers the value the rule would write, the output's current value and whether they differ, the inputs with no value, the members skipped and the instances left out as stale (named when the caller may read the component, else counted). An expression that reads one member's value by position (members[1].value.t, or an element of an input's list) over a system with a member the caller may not read is withheld on that system, its error counting the members out of scope; one that folds each input's list whole (avg(t), max(t)) shows the aggregate. A component rule previews the selected components holding one of its inputs, as the tick would mark them. At most owner_cap owners are computed, and a bound on total input reads stops a preview over large systems early, a whole owner at a time (owners_judged of owners_total, truncated past either). The candidate is checked as a save would check it: a reduce that does not compile, a cycle in the key graph, an output another enabled rule or a collection writes, or health are each a 422, so the author learns before saving; given a saved rule's name it is judged as an edit of that rule. The selector's names resolve in the caller's read scope: a name that does not exist and one the caller may not read are the same 422, and a name shared in and out of scope means the one in scope. A preview takes no lock a save waits on. Gated by rule:read.
+         * @description Computes a candidate calc rule now, on each owner it selects that the caller may read, with the reduce the tick runs, and writes nothing (a read-only transaction). For each owner it answers the value the rule would write, the output's current value and whether they differ, the inputs with no value, the members skipped and the instances left out as stale (named when the caller may read the component, else counted). An expression that reads one member's value by position (members[1].value.t, or an element of an input's list) over a system with a member the caller may not read is withheld on that system, its error counting the members out of scope; one that folds each input's list whole (avg(t), max(t)) shows the aggregate. A component rule previews the selected components holding one of its inputs, as the tick would mark them. The owners holding a current value of the output are computed first, so the cap never hides one, and the answer lists the owners holding a value or that the rule would write one on first, each by name. At most owner_cap owners are computed, and a bound on total input reads stops a preview over large systems early, a whole owner at a time (owners_judged of owners_total, truncated past either). The candidate is checked as a save would check it: a reduce that does not compile, a cycle in the key graph, an output another enabled rule or a collection writes, or health are each a 422, so the author learns before saving; given a saved rule's name it is judged as an edit of that rule. The selector's names resolve in the caller's read scope: a name that does not exist and one the caller may not read are the same 422, and a name shared in and out of scope means the one in scope. A preview takes no lock a save waits on. Gated by rule:read.
          */
         post: operations["preview-calc-rule"];
         delete?: never;
@@ -4986,13 +4986,18 @@ export interface components {
              * @example /api/v1/schemas/CalcRuleStateOutputBody.json
              */
             readonly $schema?: string;
-            /** @description The rule's state on each owner the caller may read, by owner name */
+            /** @description The rule's state on the owners the caller may read, at most limit of them: failing first, then pending, then those it wrote nothing for (an input missing, a system with no members), then those holding a value, each by name */
             owners: components["schemas"]["CalcOwnerStateBody"][] | null;
             /**
              * Format: int64
-             * @description How many of the owners listed are pending (only owners the caller may read are counted)
+             * @description How many of those owners are pending, listed or not (only owners the caller may read are counted)
              */
             pending_depth: number;
+            /**
+             * Format: int64
+             * @description How many owners the caller may read the rule has state or a mark on, listed or not
+             */
+            total: number;
         };
         CalcSelectorBody: {
             /** @description A component rule: derive on components whose type falls within one of these component types */
@@ -6023,7 +6028,11 @@ export interface components {
             required: boolean;
             /** @description The component's override; omitted when the property is unset */
             set_value?: unknown;
-            /** @description The effective value: the override, or the contract default when unset */
+            /** @description The calc rule whose calculated sample is the value, by the name it was written under; absent when the value is a declared one or a default */
+            source_rule?: string;
+            /** @description That calc rule's uuid, the stable form of source_rule */
+            source_rule_id?: string;
+            /** @description The effective value: the override, else a calc rule's calculated value, else the contract default */
             value?: unknown;
             /** @description The stored value's id when set; omitted when the property is unset */
             value_id?: string;
@@ -10403,7 +10412,10 @@ export interface operations {
     };
     "get-calc-rule-state": {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description The most owners to list, in state order: failing, pending, missing an input (or with no members), valued, each by name */
+                limit?: number;
+            };
             header?: never;
             path: {
                 /** @description The rule's name (its uuid is accepted too) */

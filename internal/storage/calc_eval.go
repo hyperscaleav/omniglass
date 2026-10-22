@@ -575,7 +575,7 @@ func (e *calcValueError) Error() string { return e.msg }
 // readCalcInput is one key's current values on an owner, held by its key's
 // id on its lane, ignoring intended values (calc reads observed and
 // calculated as truth, never intended): each instance's newest value, the
-// per-instance values only, the aggregate instance '' joining only when the
+// per-instance values only, the aggregate instance ” joining only when the
 // key has no other instance on the owner, and an instance whose newest
 // sample is older than CalcStaleAfter left out and returned as stale. own is
 // the aggregate instance's newest value (nil when there is none), the value

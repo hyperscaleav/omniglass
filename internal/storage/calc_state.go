@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -52,16 +54,39 @@ type CalcOwnerState struct {
 	DueAt *time.Time
 }
 
-// CalcRuleLive is a rule's state on the owners the caller may read, and how
-// many of those owners are pending.
+// CalcRuleLive is a rule's state on the owners the caller may read, at most
+// the limit asked for, of Total; and how many of all those owners are
+// pending.
 type CalcRuleLive struct {
 	Owners       []CalcOwnerState
+	Total        int
 	PendingDepth int
 }
 
+// CalcStateLimit is how many owners a state read lists when the caller asks
+// for no other limit; CalcStateMaxLimit is the most it may ask for.
+const (
+	CalcStateLimit    = 100
+	CalcStateMaxLimit = 1000
+)
+
+// calcStateRank orders a rule's owners for a reader (#999's review): those
+// it failed on, then those pending, then those it wrote nothing for (an
+// input missing, a system with no members), then those holding a value.
+const calcStateRank = `case when coalesce(s.error, '') <> '' then 0
+		when pd.marked_at is not null then 1
+		when s.no_members_since is not null or coalesce(s.missing, '[]') <> '[]' then 2
+		when s.value is not null then 3 else 4 end`
+
 // CalcRuleState reads a rule's live state (by name or uuid), fenced to the
-// owners the component and system read scopes admit.
-func (p *PG) CalcRuleState(ctx context.Context, ref string, components, systems scope.Set) (*CalcRuleLive, error) {
+// owners the component and system read scopes admit, ordered by
+// calcStateRank and then name, at most limit owners (CalcStateLimit when it
+// is not positive, never more than CalcStateMaxLimit).
+func (p *PG) CalcRuleState(ctx context.Context, ref string, components, systems scope.Set, limit int) (*CalcRuleLive, error) {
+	if limit <= 0 {
+		limit = CalcStateLimit
+	}
+	limit = min(limit, CalcStateMaxLimit)
 	// One read-only transaction: the owners, their names and the members
 	// named read from one snapshot.
 	tx, err := p.pool.BeginTx(ctx, pgx.TxOptions{AccessMode: pgx.ReadOnly, IsoLevel: pgx.RepeatableRead})
@@ -80,24 +105,27 @@ func (p *PG) CalcRuleState(ctx context.Context, ref string, components, systems 
 		stale   []staleInstance
 	}
 	var rows []stored
-	for _, kind := range []string{rules.OwnerComponent, rules.OwnerSystem} {
+	// A rule's owners are all of its one kind (fixed at create).
+	for _, kind := range []string{r.OwnerKind} {
+		kindTotal, kindPending := 0, 0
 		owner := calcOwner{kind: kind}
 		table, vis := componentTable, components
 		if kind == rules.OwnerSystem {
 			table, vis = systemTable, systems
 		}
-		f := newReadFilter(table, vis, 2)
+		f := newReadFilter(table, vis, 3)
 		col := owner.col()
 		q := f.With + ` select o.id::text, o.name, s.value, s.computed_at, coalesce(s.rule_version, 0),
 				coalesce(s.missing, '[]'), coalesce(s.skipped, '[]'), coalesce(s.stale, '[]'), coalesce(s.error, ''), s.no_members_since,
-				pd.marked_at is not null, case when pd.marked_at > now() then pd.marked_at end
+				pd.marked_at is not null, case when pd.marked_at > now() then pd.marked_at end,
+				count(*) over (), count(*) filter (where pd.marked_at is not null) over ()
 			from (select ` + col + ` as id from calc_rule_state where rule_id = $1::uuid and ` + col + ` is not null
 				union select ` + col + ` from calc_pending where rule_id = $1::uuid and ` + col + ` is not null) k
 			join ` + string(table) + ` o on o.id = k.id
 			left join calc_rule_state s on s.rule_id = $1::uuid and s.` + col + ` = o.id
 			left join calc_pending pd on pd.rule_id = $1::uuid and pd.` + col + ` = o.id
-			where ` + f.Pred("o.id") + ` order by o.name, o.id`
-		res, err := tx.Query(ctx, q, append([]any{r.ID}, f.Args...)...)
+			where ` + f.Pred("o.id") + ` order by ` + calcStateRank + `, o.name, o.id limit $2`
+		res, err := tx.Query(ctx, q, append([]any{r.ID, limit}, f.Args...)...)
 		if err != nil {
 			return nil, fmt.Errorf("storage: calc rule %s state: %w", r.Name, err)
 		}
@@ -105,8 +133,9 @@ func (p *PG) CalcRuleState(ctx context.Context, ref string, components, systems 
 			var x stored
 			var value, missing, skipped, stale []byte
 			x.state.OwnerKind = kind
+			var total, pending int
 			if err := res.Scan(&x.state.OwnerID, &x.state.OwnerName, &value, &x.state.ComputedAt, &x.state.RuleVersion,
-				&missing, &skipped, &stale, &x.state.Error, &x.state.NoMembersSince, &x.state.Pending, &x.state.DueAt); err != nil {
+				&missing, &skipped, &stale, &x.state.Error, &x.state.NoMembersSince, &x.state.Pending, &x.state.DueAt, &total, &pending); err != nil {
 				res.Close()
 				return nil, fmt.Errorf("storage: calc rule %s state: %w", r.Name, err)
 			}
@@ -119,8 +148,12 @@ func (p *PG) CalcRuleState(ctx context.Context, ref string, components, systems 
 				return nil, fmt.Errorf("storage: calc rule %s state: %w", r.Name, err)
 			}
 			rows = append(rows, x)
+			// The window counts are the same on every row.
+			kindTotal, kindPending = total, pending
 		}
 		res.Close()
+		live.Total += kindTotal
+		live.PendingDepth += kindPending
 		if err := res.Err(); err != nil {
 			return nil, err
 		}
@@ -142,12 +175,10 @@ func (p *PG) CalcRuleState(ctx context.Context, ref string, components, systems 
 		st := x.state
 		st.Skipped, st.SkippedHidden = nameSkipped(x.skipped, names)
 		st.Stale, st.StaleHidden = nameStale(x.stale, names)
+		// The pending depth (counted above, over every owner listed or
+		// not) is over the owners the caller may read: a mark on an owner
+		// it may not is no fact it learns.
 		live.Owners = append(live.Owners, st)
-		// The pending depth is over the owners the caller may read: a mark
-		// on an owner it may not is no fact it learns.
-		if st.Pending {
-			live.PendingDepth++
-		}
 	}
 	return live, nil
 }
@@ -310,6 +341,11 @@ func (p *PG) PreviewCalcRule(ctx context.Context, spec CalcRuleSpec, components,
 	if err != nil {
 		return nil, err
 	}
+	// The owners holding a current output come first, so the cap never hides
+	// one whose value the rule would change; then by name (#999's review).
+	if err := orderPreviewOwners(ctx, tx, r, owners); err != nil {
+		return nil, err
+	}
 	pv := &CalcPreview{Owners: []CalcPreviewOwner{}, OwnersTotal: len(owners), OwnerCap: calcPreviewOwnerCap}
 	type computed struct {
 		row     CalcPreviewOwner
@@ -386,6 +422,20 @@ func (p *PG) PreviewCalcRule(ctx context.Context, spec CalcRuleSpec, components,
 		}
 	}
 	pv.OwnersJudged = len(all)
+	// The rows lead with the owners holding a value or that the rule would
+	// write one on, then by name.
+	valued := func(o CalcPreviewOwner) int {
+		if o.Current != nil || (o.Value != nil && o.Differs) {
+			return 0
+		}
+		return 1
+	}
+	slices.SortStableFunc(all, func(a, b computed) int {
+		if d := valued(a.row) - valued(b.row); d != 0 {
+			return d
+		}
+		return strings.Compare(a.row.OwnerName, b.row.OwnerName)
+	})
 	names, err := visibleComponentNames(ctx, tx, ids, components)
 	if err != nil {
 		return nil, err
@@ -428,6 +478,58 @@ func resolveSelectorInScope(ctx context.Context, q querier, r *CalcRule, compone
 type previewOwner struct {
 	owner calcOwner
 	name  string
+}
+
+// orderPreviewOwners sorts a preview's owners in place: those holding a
+// current value of the output first, then by name, then id. One statement.
+func orderPreviewOwners(ctx context.Context, tx pgx.Tx, r CalcRule, owners []previewOwner) error {
+	if len(owners) == 0 {
+		return nil
+	}
+	ids := make([]string, len(owners))
+	for i, o := range owners {
+		ids[i] = o.owner.id
+	}
+	table, typeCol := "property", "property_type_id"
+	if r.OutputLane == rules.LaneMetric {
+		table, typeCol = "metric", "metric_type_id"
+	}
+	col := calcOwner{kind: r.OwnerKind}.col()
+	rows, err := tx.Query(ctx, `select o.id::text from unnest($1::uuid[]) as o(id)
+		where exists (select 1 from `+table+` x where x.`+col+` = o.id and x.`+typeCol+` = $2::uuid and x.instance = ''
+			and x.provenance in ('observed', 'calculated'))`, ids, r.outputID)
+	if err != nil {
+		return fmt.Errorf("storage: calc preview holders of the output: %w", err)
+	}
+	holds := map[string]bool{}
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			rows.Close()
+			return err
+		}
+		holds[id] = true
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	rank := func(o previewOwner) int {
+		if holds[o.owner.id] {
+			return 0
+		}
+		return 1
+	}
+	slices.SortStableFunc(owners, func(a, b previewOwner) int {
+		if d := rank(a) - rank(b); d != 0 {
+			return d
+		}
+		if d := strings.Compare(a.name, b.name); d != 0 {
+			return d
+		}
+		return strings.Compare(a.owner.id, b.owner.id)
+	})
+	return nil
 }
 
 // previewCalcOwners is the owners a candidate selects within the read

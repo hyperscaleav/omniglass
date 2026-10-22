@@ -48,26 +48,26 @@ func (b calcSelectorBody) toStorage() storage.CalcRuleSelector {
 }
 
 type calcRuleBody struct {
-	ID          string           `json:"id" doc:"The rule's uuid, the stable form of name"`
-	Name        string           `json:"name" doc:"The rule's name, the address an operator types; renameable"`
-	Label       string           `json:"label,omitempty" doc:"A human label"`
-	Description string           `json:"description,omitempty" doc:"What the rule derives and why"`
-	OwnerKind   string           `json:"owner_kind" enum:"component,system" doc:"What the rule derives a value on: each component its selector picks, or each system its selector picks (read from the system's role-bound members)"`
-	Selector    calcSelectorBody `json:"selector" doc:"The owners the rule derives for: a component rule's components or a system rule's systems; empty is every owner of its kind"`
+	ID          string              `json:"id" doc:"The rule's uuid, the stable form of name"`
+	Name        string              `json:"name" doc:"The rule's name, the address an operator types; renameable"`
+	Label       string              `json:"label,omitempty" doc:"A human label"`
+	Description string              `json:"description,omitempty" doc:"What the rule derives and why"`
+	OwnerKind   string              `json:"owner_kind" enum:"component,system" doc:"What the rule derives a value on: each component its selector picks, or each system its selector picks (read from the system's role-bound members)"`
+	Selector    calcSelectorBody    `json:"selector" doc:"The owners the rule derives for: a component rule's components or a system rule's systems; empty is every owner of its kind"`
 	Inputs      []calcInputReadBody `json:"inputs" doc:"The keys the rule reads, each by the alias its reduce uses"`
 	Reduce      calcReduceBody      `json:"reduce" doc:"How the inputs reduce into the output: an expression over their aliases"`
-	OutputKey   string           `json:"output_key" doc:"The property or metric the rule writes"`
-	OutputLane  string           `json:"output_lane" enum:"property,metric" doc:"Which lane the output key is on, derived from the registries"`
-	Enabled     bool             `json:"enabled" doc:"Whether the rule runs; an enabled rule is part of the key graph"`
-	Official    bool             `json:"official" doc:"Shipped with the platform and read-only"`
-	Version     int              `json:"version" doc:"Bumps on every update"`
-	CreatedAt   time.Time        `json:"created_at" doc:"When the rule was created"`
-	UpdatedAt   time.Time        `json:"updated_at" doc:"When the rule was last written"`
-	Computed    int              `json:"owners_computed" doc:"How many owners the caller may read hold a value the rule computed (on the list; 0 on a single read)"`
-	Pending     int              `json:"owners_pending" doc:"How many owners the caller may read are marked for the next tick (on the list)"`
-	Unsupported int              `json:"owners_unsupported" doc:"How many owners the caller may read the rule last wrote nothing for: an input missing, a system with no members (on the list)"`
-	Errors      int              `json:"owners_failed" doc:"How many owners the caller may read the rule last failed on (on the list)"`
-	CalcError   *calcErrorBody   `json:"calc_error,omitempty" required:"false" doc:"Why the stored reduce does not compile against the registries as they are now (an input key deleted or retyped); absent when it compiles. While present the rule cannot be enabled"`
+	OutputKey   string              `json:"output_key" doc:"The property or metric the rule writes"`
+	OutputLane  string              `json:"output_lane" enum:"property,metric" doc:"Which lane the output key is on, derived from the registries"`
+	Enabled     bool                `json:"enabled" doc:"Whether the rule runs; an enabled rule is part of the key graph"`
+	Official    bool                `json:"official" doc:"Shipped with the platform and read-only"`
+	Version     int                 `json:"version" doc:"Bumps on every update"`
+	CreatedAt   time.Time           `json:"created_at" doc:"When the rule was created"`
+	UpdatedAt   time.Time           `json:"updated_at" doc:"When the rule was last written"`
+	Computed    int                 `json:"owners_computed" doc:"How many owners the caller may read hold a value the rule computed (on the list; 0 on a single read)"`
+	Pending     int                 `json:"owners_pending" doc:"How many owners the caller may read are marked for the next tick (on the list)"`
+	Unsupported int                 `json:"owners_unsupported" doc:"How many owners the caller may read the rule last wrote nothing for: an input missing, a system with no members (on the list)"`
+	Errors      int                 `json:"owners_failed" doc:"How many owners the caller may read the rule last failed on (on the list)"`
+	CalcError   *calcErrorBody      `json:"calc_error,omitempty" required:"false" doc:"Why the stored reduce does not compile against the registries as they are now (an input key deleted or retyped); absent when it compiles. While present the rule cannot be enabled"`
 }
 
 // calcErrorBody is a stored rule's compile error.

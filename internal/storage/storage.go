@@ -481,7 +481,7 @@ type Gateway interface {
 	CalcRuleCounts(ctx context.Context, components, systems scope.Set) (map[string]CalcCounts, error)
 	// CalcRuleState reads a calc rule's live state on the owners the
 	// component and system read scopes admit (#998).
-	CalcRuleState(ctx context.Context, ref string, components, systems scope.Set) (*CalcRuleLive, error)
+	CalcRuleState(ctx context.Context, ref string, components, systems scope.Set, limit int) (*CalcRuleLive, error)
 	// PreviewCalcRule computes a candidate calc rule on the owners it
 	// selects in scope, writing nothing (#998).
 	PreviewCalcRule(ctx context.Context, spec CalcRuleSpec, components, systems scope.Set) (*CalcPreview, error)

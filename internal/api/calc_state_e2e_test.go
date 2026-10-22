@@ -32,6 +32,7 @@ type calcStateBody struct {
 		SkippedHidden int  `json:"skipped_hidden"`
 		Pending       bool `json:"pending"`
 	} `json:"owners"`
+	Total        int `json:"total"`
 	PendingDepth int `json:"pending_depth"`
 }
 
@@ -194,9 +195,18 @@ func TestCalcRuleStateAndPreviewAPI(t *testing.T) {
 	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/calc-rules/av-mean/state", nil, http.StatusOK), &st); err != nil {
 		t.Fatal(err)
 	}
-	if len(st.Owners) != 2 {
-		t.Fatalf("the fleet state %+v, want two owners", st)
+	if len(st.Owners) != 2 || st.Total != 2 {
+		t.Fatalf("the fleet state %+v, want two owners of two", st)
 	}
+	// The route lists at most limit owners and says how many there are.
+	one := calcStateBody{}
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/calc-rules/av-mean/state?limit=1", nil, http.StatusOK), &one); err != nil {
+		t.Fatal(err)
+	}
+	if len(one.Owners) != 1 || one.Total != 2 {
+		t.Fatalf("the state at limit=1 %+v, want one owner of two", one)
+	}
+	c.do(ownerTok, http.MethodGet, "/calc-rules/av-mean/state?limit=0", nil, http.StatusUnprocessableEntity)
 	for _, o := range st.Owners {
 		if o.Owner == "sys-e" && (len(o.Skipped) != 1 || o.Skipped[0].Component != "w1") {
 			t.Fatalf("the fleet names w1 as skipped: %+v", o)

@@ -289,9 +289,9 @@ func resolveSampleKey(ctx context.Context, q querier, ref string) (sampleKey, bo
 // SampleKeyRef is a sample key as the registries hold it: its lane, data
 // type (a property's), id and name.
 type SampleKeyRef struct {
-	Lane           rules.Lane
-	DataType, ID   string
-	Name           string
+	Lane         rules.Lane
+	DataType, ID string
+	Name         string
 }
 
 // ResolveSampleKey finds a key by name (a property first, then a metric) or

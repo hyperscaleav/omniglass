@@ -915,7 +915,7 @@ func (UnimplementedGateway) DrainCalcPending(context.Context, int) (CalcDrain, e
 func (UnimplementedGateway) CalcRuleCounts(context.Context, scope.Set, scope.Set) (map[string]CalcCounts, error) {
 	return map[string]CalcCounts{}, nil
 }
-func (UnimplementedGateway) CalcRuleState(context.Context, string, scope.Set, scope.Set) (*CalcRuleLive, error) {
+func (UnimplementedGateway) CalcRuleState(context.Context, string, scope.Set, scope.Set, int) (*CalcRuleLive, error) {
 	return nil, ErrCalcRuleNotFound
 }
 func (UnimplementedGateway) PreviewCalcRule(context.Context, CalcRuleSpec, scope.Set, scope.Set) (*CalcPreview, error) {

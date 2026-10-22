@@ -157,11 +157,11 @@ func TestCalcStatePendingDepthScoped(t *testing.T) {
 	if err := r.gw.InsertMetricSamples(r.ctx, []storage.MetricSampleWrite{{OwnerKind: "component", OwnerID: other.ID, Key: "room-temperature", Value: 2, TS: time.Now()}}); err != nil {
 		t.Fatal(err)
 	}
-	all, err := r.gw.CalcRuleState(r.ctx, "temp-mean", r.all, r.all)
+	all, err := r.gw.CalcRuleState(r.ctx, "temp-mean", r.all, r.all, 0)
 	if err != nil || all.PendingDepth != 2 {
 		t.Fatalf("fleet pending %+v (%v), want 2", all, err)
 	}
-	one, err := r.gw.CalcRuleState(r.ctx, "temp-mean", scope.Set{SelfIDs: []string{r.comp}}, scope.Set{})
+	one, err := r.gw.CalcRuleState(r.ctx, "temp-mean", scope.Set{SelfIDs: []string{r.comp}}, scope.Set{}, 0)
 	if err != nil || one.PendingDepth != 1 {
 		t.Fatalf("scoped pending %+v (%v), want 1", one, err)
 	}

@@ -42,7 +42,7 @@ func TestCalcRuleState(t *testing.T) {
 
 	// The fleet view of the system rule: sys-1 computed (m2 skipped, by
 	// name), sys-2 with no members.
-	all, err := r.gw.CalcRuleState(r.ctx, "kind-mean", r.all, r.all)
+	all, err := r.gw.CalcRuleState(r.ctx, "kind-mean", r.all, r.all, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -63,7 +63,7 @@ func TestCalcRuleState(t *testing.T) {
 	}
 
 	// A viewer of sys-1 and m1 alone: sys-1 only, m2 a count, never a name.
-	scoped, err := r.gw.CalcRuleState(r.ctx, "kind-mean", self(r.ids["m1"]), self(r.ids["sys-1"]))
+	scoped, err := r.gw.CalcRuleState(r.ctx, "kind-mean", self(r.ids["m1"]), self(r.ids["sys-1"]), 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -72,7 +72,7 @@ func TestCalcRuleState(t *testing.T) {
 	}
 
 	// The component rule: m4 pending again, m3 not; a viewer of m3 sees m3.
-	echo, err := r.gw.CalcRuleState(r.ctx, "echo", r.all, r.all)
+	echo, err := r.gw.CalcRuleState(r.ctx, "echo", r.all, r.all, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -84,11 +84,11 @@ func TestCalcRuleState(t *testing.T) {
 			t.Errorf("echo on %s: %+v, want value 2, pending %v", o.OwnerName, o, want)
 		}
 	}
-	one, err := r.gw.CalcRuleState(r.ctx, "echo", self(r.ids["m3"]), scope.Set{})
+	one, err := r.gw.CalcRuleState(r.ctx, "echo", self(r.ids["m3"]), scope.Set{}, 0)
 	if err != nil || len(one.Owners) != 1 || one.Owners[0].OwnerName != "m3" {
 		t.Fatalf("a viewer of m3: %+v (%v)", one, err)
 	}
-	if _, err := r.gw.CalcRuleState(r.ctx, "nobody", r.all, r.all); !errors.Is(err, storage.ErrCalcRuleNotFound) {
+	if _, err := r.gw.CalcRuleState(r.ctx, "nobody", r.all, r.all, 0); !errors.Is(err, storage.ErrCalcRuleNotFound) {
 		t.Errorf("an unknown rule: %v", err)
 	}
 }

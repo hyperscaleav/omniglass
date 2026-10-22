@@ -47,6 +47,12 @@ type EffectiveProperty struct {
 	IsSet            bool
 	FromContract     bool
 	ValueID          string // the property id when set; empty when unset (what the surface clears)
+	// SourceRule and SourceRuleID name the calc rule whose calculated sample
+	// is the value (its name when written, and its id), "" for any other
+	// (#999, #1018): a property a calc rule writes resolves to its latest
+	// calculated sample where nothing declares a value.
+	SourceRule   string
+	SourceRuleID string
 }
 
 // Property-value sentinels. Clearing a value the owner never set is the explicit
@@ -275,8 +281,10 @@ var ownerContracts = map[string]ownerContract{
 
 // EffectiveProperties resolves an instance's declared properties: every property
 // its classifier's contract declares (value = coalesce(the instance's set value,
-// the contract default)), plus any ad-hoc property the instance sets directly that
-// the contract does not declare. An instance with no classifier (a productless
+// a calc rule's calculated value, the contract default)), plus any ad-hoc
+// property the instance sets directly that the contract does not declare, and
+// any a calc rule writes on it that nothing declares (#999, #1018), naming the
+// rule. An instance with no classifier (a productless
 // component, a one-off system) has only the ad-hoc set. The instance must be within
 // the read scope; an out-of-scope instance is its non-disclosing not-found.
 //
@@ -315,7 +323,7 @@ func (p *PG) EffectiveProperties(ctx context.Context, ownerKind, ownerID string,
 
 	// The current declared value per property: the latest series row of each
 	// (property, instance='') declared series on this owner's arc, a tombstone
-	// (JSON-null value) resolving to no value. Shared by both arms.
+	// (JSON-null value) resolving to no value. Shared by every arm.
 	declared := fmt.Sprintf(`
 		declared as (
 			select distinct on (s.property_type_id)
@@ -326,49 +334,97 @@ func (p *PG) EffectiveProperties(ctx context.Context, ownerKind, ownerID string,
 			where s.instance = '' and s.provenance = 'declared'
 			order by s.property_type_id, s.ts desc, s.id desc
 		)`, oc.arcCol)
+	// The calculated value per property (#999, #1018): the latest observed or
+	// calculated row of each (property, instance='') series, kept when a calc
+	// rule wrote it, with the rule's name and id. A calc rule's output is a
+	// key no collection writes, so its latest such row is the rule's. It is
+	// the value where nothing declares one, after the declared value and
+	// before the contract default.
+	calculated := fmt.Sprintf(`
+		calculated as (
+			select property_type_id, value, source_rule, source_rule_id from (
+				select distinct on (s.property_type_id)
+				       s.property_type_id,
+				       -- A sample's value is text; a bool property's reads as the
+				       -- bool a declared value is.
+				       case when pt.data_type = 'bool' and s.value #>> '{}' in ('true', 'false')
+				            then to_jsonb((s.value #>> '{}')::boolean) else s.value end as value,
+				       s.provenance, s.source_rule, s.source_rule_id::text as source_rule_id
+				from property s
+				join inst on s.%[1]s = inst.arc
+				join property_type pt on pt.id = s.property_type_id
+				where s.instance = '' and s.provenance in ('observed', 'calculated')
+				order by s.property_type_id, s.ts desc, s.id desc) latest
+			where provenance = 'calculated' and source_rule_id is not null
+		)`, oc.arcCol)
+
+	// The calculated arm: properties a calc rule writes on the instance that
+	// nothing declares (no declared value, no contract row).
+	calcArm := func(contract string) string {
+		notContract := ""
+		if contract != "" {
+			notContract = fmt.Sprintf(`and not exists (select 1 from %[1]s c where c.%[2]s = inst.classifier and c.property_type_id = k.property_type_id)`,
+				contract, oc.contractKeyCol)
+		}
+		return `
+		union all
+		select pr.name, pr.id, pr.label, pr.data_type, false,
+		       null::jsonb, null::jsonb, k.value, false, false, null::text, k.source_rule, k.source_rule_id
+		from inst
+		cross join calculated k
+		join property_type pr on pr.id = k.property_type_id
+		where not exists (select 1 from declared d where d.property_type_id = k.property_type_id and d.value is not null)
+		  ` + notContract
+	}
 
 	var q string
 	if oc.contractTable == "" {
-		// The ad-hoc arm alone when the owner kind has no classifier to inherit
-		// from: everything the instance declares, minus tombstoned series.
+		// The ad-hoc arms alone when the owner kind has no classifier to inherit
+		// from: everything the instance declares, minus tombstoned series, and
+		// what a calc rule writes on it.
 		q = fmt.Sprintf(`
-		with inst as (select %[3]s as arc from %[1]s where %[3]s = $1), %[2]s
+		with inst as (select %[3]s as arc from %[1]s where %[3]s = $1), %[2]s, %[4]s
 		select pr.name as property_type_name, pr.id as property_type_id, pr.label, pr.data_type, false as required,
 		       null::jsonb as default_value,
 		       d.value as set_value,
 		       d.value as effective_value,
 		       true as is_set,
 		       false as from_contract,
-		       d.id::text as value_id
+		       d.id::text as value_id,
+		       null::text as source_rule, null::text as source_rule_id
 		from declared d
 		join property_type pr on pr.id = d.property_type_id
 		where d.value is not null
+		%[5]s
 		order by 1`,
-			oc.instanceTable, declared, oc.arcMatch)
+			oc.instanceTable, declared, oc.arcMatch, calculated, calcArm(""))
 	} else {
 		q = fmt.Sprintf(`
 		with inst as (
 			select %[6]s as arc, %[2]s as classifier from %[1]s where %[6]s = $1
-		), %[5]s
+		), %[5]s, %[7]s
 		-- The contract arm: what the instance's classifier declares, resolved
-		-- against the instance's own current declared value.
+		-- against the instance's own current declared value, then a calc
+		-- rule's value, then the contract default.
 		select pr.name as property_type_name, pr.id as property_type_id, pr.label, pr.data_type, c.required,
 		       c.default_value,
 		       d.value as set_value,
-		       coalesce(d.value, c.default_value) as effective_value,
+		       coalesce(d.value, k.value, c.default_value) as effective_value,
 		       (d.value is not null) as is_set,
 		       true as from_contract,
-		       case when d.value is not null then d.id::text end as value_id
+		       case when d.value is not null then d.id::text end as value_id,
+		       case when d.value is null then k.source_rule end, case when d.value is null then k.source_rule_id end
 		from inst
 		join %[3]s c on c.%[4]s = inst.classifier
 		join property_type pr on pr.id = c.property_type_id
 		left join declared d on d.property_type_id = c.property_type_id
+		left join calculated k on k.property_type_id = c.property_type_id
 		union all
 		-- The ad-hoc arm: values set directly on the instance for properties the
 		-- contract does not declare.
 		select pr.name, pr.id, pr.label, pr.data_type, false,
 		       null::jsonb,
-		       d.value, d.value, true, false, d.id::text
+		       d.value, d.value, true, false, d.id::text, null::text, null::text
 		from inst
 		cross join declared d
 		join property_type pr on pr.id = d.property_type_id
@@ -377,8 +433,9 @@ func (p *PG) EffectiveProperties(ctx context.Context, ownerKind, ownerID string,
 			select 1 from %[3]s c
 			where c.%[4]s = inst.classifier and c.property_type_id = d.property_type_id
 		)
+		%[8]s
 		order by 1`,
-			oc.instanceTable, oc.classifierCol, oc.contractTable, oc.contractKeyCol, declared, oc.arcMatch)
+			oc.instanceTable, oc.classifierCol, oc.contractTable, oc.contractKeyCol, declared, oc.arcMatch, calculated, calcArm(oc.contractTable))
 	}
 
 	rows, err := p.pool.Query(ctx, q, arc)
@@ -394,9 +451,10 @@ func (p *PG) EffectiveProperties(ctx context.Context, ownerKind, ownerID string,
 			def, set, val []byte
 			label         *string // NULL when unset
 			valueID       *string // NULL when the property is unset
+			rule, ruleID  *string // NULL unless a calc rule's value is the value
 		)
 		if err := rows.Scan(&e.PropertyTypeName, &e.PropertyTypeID, &label, &e.DataType, &e.Required,
-			&def, &set, &val, &e.IsSet, &e.FromContract, &valueID); err != nil {
+			&def, &set, &val, &e.IsSet, &e.FromContract, &valueID, &rule, &ruleID); err != nil {
 			return nil, fmt.Errorf("storage: scan effective property: %w", err)
 		}
 		if label != nil {
@@ -407,6 +465,9 @@ func (p *PG) EffectiveProperties(ctx context.Context, ownerKind, ownerID string,
 		e.Value = copyRaw(val)
 		if valueID != nil {
 			e.ValueID = *valueID
+		}
+		if rule != nil && ruleID != nil {
+			e.SourceRule, e.SourceRuleID = *rule, *ruleID
 		}
 		out = append(out, e)
 	}
