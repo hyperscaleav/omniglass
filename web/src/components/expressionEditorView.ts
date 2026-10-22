@@ -59,7 +59,15 @@ export function mountExpressionEditor(
         // Tooltips (completion, hover) mount on the dialog the field sits in,
         // else the page, never inside the form's scrolling body, which would
         // clip them at its edge (the portal rule overlays follow).
-        tooltips({ parent: (host.closest('[role="dialog"]') as HTMLElement | null) ?? document.body }),
+        // They keep a margin from the window's edge, where a drawer's field
+        // would otherwise put them flush.
+        tooltips({
+          parent: (host.closest('[role="dialog"]') as HTMLElement | null) ?? document.body,
+          tooltipSpace: (v) => {
+            const w = v.dom.ownerDocument.defaultView ?? window;
+            return { top: 8, left: 8, bottom: w.innerHeight - 8, right: w.innerWidth - 8 };
+          },
+        }),
         EditorView.lineWrapping,
         placeholderText(o.placeholder),
         aria.of(ariaAttrs(o.aria)),
@@ -126,8 +134,9 @@ const editorTheme = EditorView.theme({
     borderRadius: "0.375rem",
     fontFamily: "var(--og-font-ui)",
   },
-  ".cm-tooltip-autocomplete > ul": { fontFamily: "var(--og-font-data)", fontSize: "12px", fontVariantLigatures: "none" },
-  ".cm-tooltip-autocomplete > ul > li[aria-selected]": {
+  ".cm-tooltip.cm-tooltip-autocomplete > ul": { fontFamily: "var(--og-font-data)", fontSize: "12px", fontVariantLigatures: "none", padding: "0.25rem 0" },
+  ".cm-tooltip.cm-tooltip-autocomplete > ul > li": { padding: "0.125rem 0.625rem" },
+  ".cm-tooltip.cm-tooltip-autocomplete > ul > li[aria-selected]": {
     backgroundColor: "var(--color-primary)",
     color: "var(--color-primary-content)",
   },

@@ -20,9 +20,9 @@ steps:
   - click: { role: checkbox, name: Write the fire criteria as an expression }
     caption: Write the expression itself instead, starting from the builder's own.
   - type: { target: { role: textbox, name: Fire expression, exact: true }, text: ' && instance !=' }
-    caption: Leave the aux endpoint out. The field checks the expression as it is typed.
+    caption: Leave the aux endpoint out. As a word begins the field offers the names it may use, and it checks the expression as it is typed.
   - wait: { selector: '[data-testid="expression-diagnostic"]', timeout: 10000 }
-    caption: Unfinished, so the field points at the fault by line and column.
+    caption: Unfinished, so the field underlines the fault and points at it by line and column.
   - type: { target: { role: textbox, name: Fire expression, exact: true }, text: ' "aux"' }
     caption: Finish it. Beneath are the names it may use and the functions it may call.
   - wait: { selector: '[data-testid="expression-ok"]', timeout: 10000 }
