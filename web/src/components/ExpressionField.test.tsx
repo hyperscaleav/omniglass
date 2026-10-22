@@ -1,8 +1,11 @@
 import { describe, it, expect, afterEach, vi } from "vitest";
-import { render, fireEvent, waitFor, screen } from "@solidjs/testing-library";
+import { render, waitFor, screen } from "@solidjs/testing-library";
 import { createSignal } from "solid-js";
+import { EditorView } from "@codemirror/view";
+import { currentCompletions, startCompletion } from "@codemirror/autocomplete";
 import ExpressionField from "./ExpressionField";
 import FieldRow from "./FieldRow";
+import { expressionText, typeExpression } from "./ExpressionField.testing";
 
 const json = (body: unknown) => new Response(JSON.stringify(body), { status: 200, headers: { "Content-Type": "application/json" } });
 
@@ -34,7 +37,7 @@ function mount(initial: string, key = "temperature-c", fail = false) {
   const checks: (boolean | undefined)[] = [];
   render(() => (
     <FieldRow label="Fires when">
-      <ExpressionField site="criteria" sampleKey={key} value={v()} onInput={setV} label="Fires when" debounce={10} onCheck={(ok) => checks.push(ok)} />
+      <ExpressionField site="criteria" sampleKey={key} value={v()} onInput={setV} label="Fire expression" debounce={10} onCheck={(ok) => checks.push(ok)} />
     </FieldRow>
   ));
   return { calls, checks, setV };
@@ -43,28 +46,67 @@ function mount(initial: string, key = "temperature-c", fail = false) {
 describe("ExpressionField", () => {
   afterEach(() => vi.restoreAllMocks());
 
-  it("is a labelled monospace textarea the author types into", () => {
-    mount("value > 40");
-    const area = screen.getByLabelText("Fires when") as HTMLTextAreaElement;
-    expect(area.tagName).toBe("TEXTAREA");
-    expect(area.value).toBe("value > 40");
-    expect(area.className).toContain("font-data");
-    for (const attr of ["required", "pattern", "minlength", "maxlength"]) expect(area.hasAttribute(attr)).toBe(false);
+  const editor = () => screen.getByRole("textbox", { name: "Fire expression" });
+
+  it("is a labelled monospace code editor the author types into", () => {
+    const { setV } = mount("value > 40");
+    const ed = editor();
+    expect(ed.getAttribute("aria-multiline")).toBe("true");
+    expect(expressionText(ed)).toBe("value > 40");
+    expect(ed.closest(".font-data")).toBeTruthy();
+    for (const attr of ["required", "pattern", "minlength", "maxlength"]) expect(ed.hasAttribute(attr)).toBe(false);
+    typeExpression(ed, "value > 41");
+    // The form's value follows the editor, and the editor follows the form's.
+    setV("value > 42");
+    expect(expressionText(ed)).toBe("value > 42");
+  });
+
+  it("highlights Expr: a binding, a keyword, a string and a number each read as their kind", () => {
+    mount('value > 40 and component.name != "x"');
+    const ed = editor();
+    const styled = (text: string) => [...ed.querySelectorAll("span")].find((s) => s.textContent === text)?.className ?? "";
+    // Each kind gets its own class, and no two of these share one.
+    const kinds = ["value", "and", '"x"', "40"].map(styled);
+    expect(kinds.every((k) => k !== "")).toBe(true);
+    expect(new Set(kinds).size).toBe(4);
   });
 
   it("checks the source as it is typed and points at the fault under its line and column", async () => {
     const { calls, checks } = mount("value > 40");
     await waitFor(() => expect(calls.length).toBe(1));
-    fireEvent.input(screen.getByLabelText("Fires when"), { target: { value: "value > 40 &&\n  humidity > 2" } });
+    typeExpression(editor(), "value > 40 &&\n  humidity > 2");
     const diag = await screen.findByTestId("expression-diagnostic");
     expect(diag.textContent).toContain("Line 2, column 3");
     expect(diag.textContent).toContain("unknown name humidity");
     const pre = diag.querySelector("pre")!;
     expect(pre.textContent).toBe("  humidity > 2\n  ^");
-    expect(screen.getByLabelText("Fires when").getAttribute("aria-invalid")).toBe("true");
+    expect(editor().getAttribute("aria-invalid")).toBe("true");
+    // The fault is underlined in the source itself, on the word it names.
+    await waitFor(() => expect(editor().querySelector(".cm-lintRange-error")?.textContent).toBe("humidity"));
     expect(calls.at(-1)).toEqual({ site: "criteria", source: "value > 40 &&\n  humidity > 2", key: "temperature-c" });
     // Pending (undefined) while each check is in flight, then its verdict.
     expect(checks).toEqual([undefined, true, undefined, false]);
+    typeExpression(editor(), "value > 40");
+    await screen.findByTestId("expression-ok");
+    expect(editor().querySelector(".cm-lintRange-error")).toBeNull();
+    expect(editor().hasAttribute("aria-invalid")).toBe(false);
+  });
+
+  it("completes exactly the site's bindings and builtins, from the server's answer", async () => {
+    mount("value > 40 && ");
+    await screen.findByTestId("expression-bindings");
+    const view = EditorView.findFromDOM(editor())!;
+    view.dispatch({ selection: { anchor: view.state.doc.length } });
+    startCompletion(view);
+    await waitFor(() => expect(currentCompletions(view.state).length).toBeGreaterThan(0));
+    expect(currentCompletions(view.state).map((c) => c.label).sort()).toEqual(["abs", "component.name", "len", "value"]);
+  });
+
+  it("leaves Tab to move focus on, so the field never traps the keyboard", () => {
+    mount("value > 40");
+    const ev = new KeyboardEvent("keydown", { key: "Tab", bubbles: true, cancelable: true });
+    editor().dispatchEvent(ev);
+    expect(ev.defaultPrevented).toBe(false);
   });
 
   it("lists the site's bindings and functions from the same answer, each name with its doc", async () => {
@@ -74,6 +116,16 @@ describe("ExpressionField", () => {
     expect(list.textContent).toContain("component.name");
     expect(screen.getByRole("button", { name: "More about component.name" })).toBeTruthy();
     expect(screen.getByTestId("expression-builtins").textContent).toContain("abs");
+  });
+
+  it("asks for the site's vocabulary while the source is still empty, so the first word completes", async () => {
+    const { calls, checks } = mount("");
+    const list = await screen.findByTestId("expression-bindings");
+    expect(list.textContent).toContain("component.name");
+    expect(calls).toEqual([{ site: "criteria", source: "", key: "temperature-c" }]);
+    // An empty source is never ok, and fetching the vocabulary does not say otherwise.
+    expect(checks).toEqual([false]);
+    expect(screen.queryByTestId("expression-diagnostic")).toBeNull();
   });
 
   it("checks nothing until the rule reads a key", async () => {

@@ -12,6 +12,7 @@ import { SYSTEM_TYPES_KEY } from "../lib/system_types";
 import { SYSTEMS_KEY } from "../lib/systems";
 import { ME_KEY, type Me } from "../lib/auth";
 import { uuidFor } from "../lib/testids";
+import { typeExpression } from "../components/ExpressionField.testing";
 
 // The Calc rules page (#999): a FlatList over /calc-rules, each row reading its
 // owner kind, inputs, reduce, output and live counts; a row opens a blade with
@@ -193,7 +194,7 @@ describe("Calc rules page", () => {
     fireEvent.input(screen.getByLabelText("Input 1 name"), { target: { value: "call" } });
     fireEvent.click(screen.getByLabelText("Write the reduce as an expression"));
     fireEvent.change(screen.getByLabelText("Writes"), { target: { value: "busy-flag" } });
-    fireEvent.input(screen.getByLabelText("Reduce expression"), { target: { value: "call" } });
+    typeExpression(screen.getByLabelText("Reduce expression"), "call");
     await waitFor(() => expect(reqs.some((r) => r.url.endsWith("/expressions:validate"))).toBe(true), { timeout: 2000 });
     const v = reqs.find((r) => r.url.endsWith("/expressions:validate"))!.body as Record<string, unknown>;
     expect(v).toMatchObject({ site: "calc", source: "call", key: "busy-flag", owner_kind: "component", inputs: [{ as: "call", key: "in-call" }] });
