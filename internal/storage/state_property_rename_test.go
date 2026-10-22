@@ -95,7 +95,20 @@ func TestStateBecomesPropertyMigration(t *testing.T) {
 			t.Errorf("constraint %s missing after the rename", c)
 		}
 	}
-	for _, idx := range []string{"property_owner_idx", "property_ts_brin"} {
+	// property_owner_idx followed the table here too, but #971 later dropped
+	// it as the twin of property_series_idx, so at head only the BRIN is
+	// asserted by name; the old name must not survive either way.
+	for _, idx := range []string{"state_owner_idx", "state_ts_brin"} {
+		var present bool
+		if err := conn.QueryRow(ctx, `
+			select exists (select 1 from pg_class where relkind = 'i' and relname = $1)`, idx).Scan(&present); err != nil {
+			t.Fatalf("check index %s: %v", idx, err)
+		}
+		if present {
+			t.Errorf("index %s still exists after the rename", idx)
+		}
+	}
+	for _, idx := range []string{"property_ts_brin"} {
 		var present bool
 		if err := conn.QueryRow(ctx, `
 			select exists (select 1 from pg_class where relkind = 'i' and relname = $1)`, idx).Scan(&present); err != nil {
