@@ -7050,3 +7050,17 @@ planned nothing new.
 ### The criteria deadline cannot refuse a small run (#956)
 
 Re-running the lowering oracle on a loaded machine refused one trivial criterion (`value >= 1000000000000000000000.0`) for its wall-clock deadline: the meter read the clock at a run's first charge, so a goroutine preempted between `Run` and that charge read as an overrun and would have held a rule for no reason. The clock is now read every 256 charges and never before the first 256, so a run that small is bounded by its iteration budget alone and the deadline stays a backstop for long charged work; `TestDeadlineSparesSmallRuns` pins it.
+
+### Indexing a filter result compiles, and a pass that panics says which (#1003)
+
+`filter(members, .has.a)[0].value.a` was refused at compile time with a recovered nil pointer
+surfaced as a type error, while `members[0].value.a` compiled. The fault is upstream, in Expr
+v1.17.8: its optimizer rewrites `filter(list, p)[0]` and `[-1]` into `find` and `findLast` and
+copies the old node's type onto the rewrite without the record's field table, so its compiler
+panicked on the field read. The engine now runs Expr's stages itself (`exprCompile`) and adds a
+`renature` pass between the optimizer and the compiler that gives every struct-typed node the
+description the checker would, which changes only the broken ones. The filter's list is still
+charged its full length up front, so the rewrite's early stop does not make indexing a filter
+cheaper than walking it (`TestIndexedFilterResultCharged`). Each compile pass, ours and Expr's, now
+runs under a guard: a panic in one becomes a positioned type error naming the pass and the
+construct it was on, never a nil pointer and a stack (`TestPassPanicNamesThePass`).

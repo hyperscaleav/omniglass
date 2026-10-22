@@ -10,8 +10,12 @@ import (
 
 	"github.com/expr-lang/expr"
 	"github.com/expr-lang/expr/ast"
+	"github.com/expr-lang/expr/checker"
+	"github.com/expr-lang/expr/checker/nature"
+	"github.com/expr-lang/expr/compiler"
 	"github.com/expr-lang/expr/conf"
 	"github.com/expr-lang/expr/file"
+	"github.com/expr-lang/expr/optimizer"
 	"github.com/expr-lang/expr/parser"
 	"github.com/expr-lang/expr/vm"
 )
@@ -169,7 +173,13 @@ func inspect(source string, env Env) error {
 		return fromExpr(PhaseParse, err)
 	}
 	w := walker{env: env}
-	ast.Walk(&tree.Node, &w)
+	if err := guardPass(source, "inspect", func(p *pass) error {
+		w.at = p
+		ast.Walk(&tree.Node, &w)
+		return nil
+	}); err != nil {
+		return err
+	}
 	if w.nodes > MaxNodes {
 		return &Error{Phase: PhaseLimit, Message: ErrTooManyNodes.Error(), err: ErrTooManyNodes}
 	}
@@ -189,6 +199,7 @@ type walker struct {
 	fault    *file.Error // the first refusal met
 	phase    Phase
 	sentinel error
+	at       *pass
 }
 
 func (w *walker) refuse(n ast.Node, format string, args ...any) {
@@ -207,6 +218,7 @@ func (w *walker) limit(n ast.Node, sentinel error) {
 
 func (w *walker) Visit(node *ast.Node) {
 	w.nodes++
+	w.at.at = *node
 	switch n := (*node).(type) {
 	case *ast.IdentifierNode:
 		if strings.HasPrefix(n.Value, "$") {
@@ -285,38 +297,49 @@ func typedChecks(source string, root ast.Node) error {
 			fault = &file.Error{Location: n.Location(), Message: fmt.Sprintf(format, args...)}
 		}
 	}
-	ast.Walk(&root, visitFunc(func(node *ast.Node) {
-		switch n := (*node).(type) {
-		case *ast.BuiltinNode:
-			if scalarOnly[n.Name] {
-				for _, arg := range n.Arguments {
-					if !scalar(arg.Type()) {
-						fail(arg, "%s takes numbers only here, not a list", n.Name)
-					}
-				}
-			}
-			if n.Name == "count" && len(n.Arguments) == 1 {
-				if t := n.Arguments[0].Type(); t == nil || (t.Kind() != reflect.Slice && t.Kind() != reflect.Array) || t.Elem().Kind() != reflect.Bool {
-					fail(n.Arguments[0], "count without a predicate counts true elements, so its list must be of bools; give a predicate")
-				}
-			}
-		case *ast.BinaryNode:
-			switch n.Operator {
-			case "==", "!=":
-				if !flat(n.Left) || !flat(n.Right) {
-					fail(n, "%s compares scalars and lists of scalars only, not a struct, a map, or a list of lists", n.Operator)
-				}
-			case "in":
-				if !scalar(unwrapCharge(n.Left).Type()) || !(flat(n.Right) && !scalar(unwrapCharge(n.Right).Type()) || scalarKeyed(n.Right)) {
-					fail(n, "in looks for a scalar in a list of scalars or among a map's keys")
-				}
-			}
-		}
-	}))
+	if err := guardPass(source, "typed checks", func(p *pass) error {
+		ast.Walk(&root, visitFunc(func(node *ast.Node) {
+			p.at = *node
+			typedCheck(*node, fail)
+		}))
+		return nil
+	}); err != nil {
+		return err
+	}
 	if fault != nil {
 		return fromExpr(PhaseType, fault.Bind(file.NewSource(source)))
 	}
 	return nil
+}
+
+// typedCheck is typedChecks on one node.
+func typedCheck(node ast.Node, fail func(n ast.Node, format string, args ...any)) {
+	switch n := node.(type) {
+	case *ast.BuiltinNode:
+		if scalarOnly[n.Name] {
+			for _, arg := range n.Arguments {
+				if !scalar(arg.Type()) {
+					fail(arg, "%s takes numbers only here, not a list", n.Name)
+				}
+			}
+		}
+		if n.Name == "count" && len(n.Arguments) == 1 {
+			if t := n.Arguments[0].Type(); t == nil || (t.Kind() != reflect.Slice && t.Kind() != reflect.Array) || t.Elem().Kind() != reflect.Bool {
+				fail(n.Arguments[0], "count without a predicate counts true elements, so its list must be of bools; give a predicate")
+			}
+		}
+	case *ast.BinaryNode:
+		switch n.Operator {
+		case "==", "!=":
+			if !flat(n.Left) || !flat(n.Right) {
+				fail(n, "%s compares scalars and lists of scalars only, not a struct, a map, or a list of lists", n.Operator)
+			}
+		case "in":
+			if !scalar(unwrapCharge(n.Left).Type()) || !(flat(n.Right) && !scalar(unwrapCharge(n.Right).Type()) || scalarKeyed(n.Right)) {
+				fail(n, "in looks for a scalar in a list of scalars or among a map's keys")
+			}
+		}
+	}
 }
 
 // scalar is a type compared in constant time per byte: a bool, a number, a
@@ -397,21 +420,33 @@ func (f visitFunc) Visit(n *ast.Node) { f(n) }
 
 func compile(source string, env Env) (*Program, error) {
 	compileCount.Add(1)
-	opts := []expr.Option{expr.Env(reflect.New(env.run).Elem().Interface()), chargeOption(), expr.DisableAllBuiltins()}
-	for _, name := range env.Builtins() {
-		opts = append(opts, expr.EnableBuiltin(name))
+	var prog *vm.Program
+	err := guardPass(source, "Expr checker", func(p *pass) error {
+		opts := []expr.Option{expr.Env(reflect.New(env.run).Elem().Interface()), chargeOption(p), expr.DisableAllBuiltins()}
+		for _, name := range env.Builtins() {
+			opts = append(opts, expr.EnableBuiltin(name))
+		}
+		switch env.result {
+		case Bool:
+			opts = append(opts, expr.AsBool())
+		case Float:
+			opts = append(opts, expr.AsFloat64())
+		case Int:
+			opts = append(opts, expr.AsInt())
+		case String:
+			opts = append(opts, expr.AsKind(reflect.String))
+		}
+		var err error
+		prog, err = exprCompile(source, p, opts...)
+		if refused := fromCompilerPanic(err); refused != nil {
+			return refused
+		}
+		return err
+	})
+	var refused *Error
+	if errors.As(err, &refused) {
+		return nil, refused
 	}
-	switch env.result {
-	case Bool:
-		opts = append(opts, expr.AsBool())
-	case Float:
-		opts = append(opts, expr.AsFloat64())
-	case Int:
-		opts = append(opts, expr.AsInt())
-	case String:
-		opts = append(opts, expr.AsKind(reflect.String))
-	}
-	prog, err := expr.Compile(source, opts...)
 	if err != nil {
 		e := fromExpr(PhaseType, err)
 		e.Message = env.speak(e.Message)
@@ -427,6 +462,55 @@ func compile(source string, env Env) (*Program, error) {
 		}
 	}
 	return &Program{env: env, prog: prog}, nil
+}
+
+// exprCompile is expr.Compile with one pass added between Expr's optimizer
+// and its compiler, renature, and each stage named on p so a panic in one is
+// refused by name (guard.go).
+func exprCompile(source string, p *pass, opts ...expr.Option) (*vm.Program, error) {
+	config := conf.CreateNew()
+	for _, op := range opts {
+		op(config)
+	}
+	for name := range config.Disabled {
+		delete(config.Builtins, name)
+	}
+	config.Check()
+	p.name = "Expr checker"
+	tree, err := checker.ParseCheck(source, config)
+	if err != nil {
+		return nil, err
+	}
+	if config.Optimize {
+		p.name = "Expr optimizer"
+		if err := optimizer.Optimize(&tree.Node, config); err != nil {
+			var fe *file.Error
+			if errors.As(err, &fe) {
+				return nil, fe.Bind(tree.Source)
+			}
+			return nil, err
+		}
+	}
+	p.name = "renature"
+	ast.Walk(&tree.Node, visitFunc(func(node *ast.Node) {
+		p.at = *node
+		renature(&config.NtCache, *node)
+	}))
+	p.name, p.at = "Expr compiler", nil
+	return compiler.Compile(tree, config)
+}
+
+// renature gives a struct-typed node the type description the checker
+// would: Expr's optimizer rewrites filter(list, p)[0] and [-1] into find and
+// findLast and copies the old node's type onto the rewrite without the
+// struct's field table, so a field read on the result (filter(list, p)[0].x)
+// panicked in Expr's compiler (v1.17.8, #1003). The cache returns the same
+// description for a node the checker typed, so this changes only the broken
+// ones.
+func renature(cache *nature.Cache, n ast.Node) {
+	if nt := n.Nature(); nt.Kind == reflect.Struct && nt.Type != nil {
+		n.SetNature(cache.FromType(nt.Type))
+	}
 }
 
 // Run evaluates the program against one prepared input: a value of the
