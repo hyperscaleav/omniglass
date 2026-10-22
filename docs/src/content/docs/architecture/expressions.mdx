@@ -67,9 +67,13 @@ expression compiles, with each diagnostic's line and column, and returns the sit
 builtins and budget. The **calc** site (#995) is the first whose bindings are authored with each
 expression: a calc rule's inputs, bound by name for each rule from a struct type built when the rule
 is written, so its table describes them rather than listing them. The console's **expression field**
-(the rule drawer's **Write as an expression**, #960) is that route's face: the source in a monospace
-field checked as it is typed, each diagnostic pointed at under its line and column, and the site's
-bindings and functions listed beneath with their docs. Built today:
+(the rule drawer's **Write as an expression**, #960, and the calc rule's reduce) is that route's face, a
+code editor on CodeMirror 6 (#1000) driven entirely by the route's answer: Expr highlighted as it is
+written, completion of exactly the site's bindings and builtins (as a word is begun, or on Ctrl-Space),
+a binding's doc on hover, and each diagnostic underlined where it sits as well as pointed at beneath under
+its line and column, with the site's bindings and functions listed under the field. The field asks for
+the site's vocabulary while the source is still empty, so the first word completes too. The editor is a
+chunk of its own, loaded only by a page with an expression site. Built today:
 
 <ExpressionSites />
 

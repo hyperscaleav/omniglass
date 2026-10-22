@@ -46,7 +46,9 @@ unsupported, until a member returns).
   `count` over a metric, `majority` over a property, `any` and `all` over a true or false property; the
   form offers only the ones the input's type takes. An expression combines inputs by name
   (`call || people > 0`); on a system it reads `members`, one record per member with `value.<name>` and
-  `has.<name>`. It is checked as you type against exactly what the rule binds.
+  `has.<name>`. It is the same code editor as an event
+  rule's criteria: it completes the input names (and `members` on a system) as you write, and is checked
+  as you type against exactly what the rule binds.
 - **Writes**: the property or metric it writes, whose type the reduce must yield. Not one a collection
   writes, and not one another enabled rule writes.
 - **Enabled**.
