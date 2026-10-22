@@ -1,6 +1,8 @@
 ---
 title: Calc rules
 description: "Writing a calc rule: the value it derives on each component or system, the inputs it reads, how it folds them (a named reducer or an expression), what it writes, previewing it before saving, and reading what it last computed on each owner, from the console, the CLI, or the API."
+walkthroughs:
+  - id: derive-a-value-with-a-calc-rule
 ---
 
 **Catalog, under Actions: Calc rules** (with `rule:read`) is where a value is **derived from others**:
@@ -63,6 +65,11 @@ read that member's own value; the preview says how many of its members are out o
 
 Saving computes at once: a new rule marks every selected owner that already holds one of its inputs,
 and the next tick writes its values.
+
+The walkthrough below registers the metric a rule will write, authors a component rule that writes each
+component's slowest TCP connect time to it, previews the values, saves it, and reads what it computed.
+
+::walkthrough{#derive-a-value-with-a-calc-rule}
 
 ## From the CLI and the API
 

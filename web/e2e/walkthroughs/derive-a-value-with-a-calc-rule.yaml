@@ -1,0 +1,40 @@
+# Derive a value with a calc rule (#999): register the metric a calc rule will
+# write, author a component rule that folds every endpoint's TCP connect time
+# into its slowest, preview what it would write on each component, save it,
+# and read what it computed. The simulated fleet answers TCP on every
+# component, so tcp-connect-time has current values on the walkthrough stack
+# and the preview and the first tick have real owners.
+title: Derive a value with a calc rule
+description: Register a metric, author a calc rule that writes each component's slowest TCP connect time to it, preview the values it would write, save it, and read what it computed on each component.
+steps:
+  - goto: /metrics
+    caption: A calc rule writes a metric or property of its own. First register the metric it will write.
+  - click: { role: button, name: New metric }
+    caption: New metric opens the drawer.
+  - type: { target: { role: textbox, name: Name, exact: true }, text: connect-worst }
+    caption: Name it. The rule will write each component's slowest connect time here.
+  - click: { role: button, name: Create metric }
+    caption: Create it. A metric no collection writes is one a calc rule may write.
+  - goto: /calc-rules
+    caption: Calc rules derive a value from others, on each component or each system.
+  - click: { role: button, name: New rule }
+    caption: New rule opens the drawer.
+  - type: { target: { role: textbox, name: Name, exact: true }, text: connect-worst }
+    caption: Name the rule.
+  - type: { target: { role: textbox, name: Input 1 name, exact: true }, text: tcp }
+    caption: Each input has a short name the reduce uses.
+  - select: { target: { role: combobox, name: Input 1 key, exact: true }, value: tcp-connect-time }
+    caption: It reads TCP connect time, one value for each endpoint on a component.
+  - select: { target: { role: combobox, name: Reducer, exact: true }, value: max }
+    caption: Fold them with max, the slowest endpoint wins.
+  - select: { target: { role: combobox, name: Writes, exact: true }, value: connect-worst }
+    caption: Write the result to the new metric.
+  - click: { role: button, name: Preview, exact: true }
+    caption: Preview computes the draft on each component now, writing nothing.
+  - wait: { selector: '[data-testid="calc-preview-result"]', timeout: 15000 }
+    caption: The value it would write on each component, beside what that component holds now.
+    poster: true
+  - click: { role: button, name: Create rule }
+    caption: Save it. The rule computes again whenever an input changes.
+  - wait: { selector: 'section[aria-label="State"] li span.font-data', timeout: 20000 }
+    caption: Its blade shows the value it last computed on each component.
