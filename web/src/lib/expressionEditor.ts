@@ -79,9 +79,27 @@ export const exprTokens: StreamParser<{ inComment: boolean }> = {
 // The word (a dotted path) the cursor is in or just after.
 const WORD = /[A-Za-z_$][\w$.]*$/;
 
+// The server names a list's element fields with [] (members[].value.t), a
+// spelling that documents the shape but is not Expr: a source reads the list
+// by its name and an element's fields after a dot, in a predicate
+// (all(members, .has.t)) or past an index (members[0].name). So a vocabulary
+// splits into the names a word may start with and the fields after a dot.
+function split(bindings: ExpressionBinding[]): { roots: ExpressionBinding[]; fields: { field: string; b: ExpressionBinding }[] } {
+  const roots: ExpressionBinding[] = [];
+  const fields: { field: string; b: ExpressionBinding }[] = [];
+  for (const b of bindings) {
+    const at = b.name.indexOf("[].");
+    if (at < 0) roots.push(b);
+    else fields.push({ field: b.name.slice(at + 3), b });
+  }
+  return { roots, fields };
+}
+
 // exprCompletions completes the word before the cursor from the site's
-// bindings and builtins. It offers nothing inside a string, and nothing
-// unprompted until a word is begun (Ctrl-Space asks explicitly).
+// bindings and builtins: after a dot, an element's fields; otherwise the
+// names and functions a word may start with. It offers nothing inside a
+// string, and nothing unprompted until a word (or a field's dot) is begun;
+// Ctrl-Space asks explicitly.
 export function exprCompletions(vocab: () => Vocabulary | null): CompletionSource {
   return (ctx: CompletionContext): CompletionResult | null => {
     const v = vocab();
@@ -90,11 +108,22 @@ export function exprCompletions(vocab: () => Vocabulary | null): CompletionSourc
     const before = line.text.slice(0, ctx.pos - line.from);
     if (insideString(before)) return null;
     const m = WORD.exec(before);
+    const from = m ? ctx.pos - m[0].length : ctx.pos;
+    const afterDot = m ? before[m.index - 1] === "." : before.endsWith(".");
+    const { roots, fields } = split(v.bindings);
+    if (afterDot) {
+      if (fields.length === 0) return null;
+      return {
+        from,
+        options: fields.map(({ field, b }) => ({ label: field, type: "property", detail: b.type, info: b.doc || undefined })),
+        validFor: /^[\w$.]*$/,
+      };
+    }
     if (!m && !ctx.explicit) return null;
     return {
-      from: m ? ctx.pos - m[0].length : ctx.pos,
+      from,
       options: [
-        ...v.bindings.map((b) => ({ label: b.name, type: "variable", detail: b.type, info: b.doc || undefined })),
+        ...roots.map((b) => ({ label: b.name, type: "variable", detail: b.type, info: b.doc || undefined })),
         ...v.builtins.map((f) => ({ label: f, type: "function" })),
       ],
       validFor: /^[\w$.]*$/,
@@ -116,20 +145,27 @@ function insideString(before: string): boolean {
 
 // bindingAt is the binding the word at pos names: the dotted path under the
 // position, or the longest binding it extends (component.tags for
-// component.tags.x); null over anything that is not a binding.
+// component.tags.x), read as an element's field when a dot comes before it
+// (.has.t names members[].has.t); null over anything that is not a binding.
 export function bindingAt(doc: string, pos: number, bindings: ExpressionBinding[]): ExpressionBinding | null {
   const isWord = (c: string | undefined) => !!c && /[\w$.]/.test(c);
   let from = pos;
   let to = pos;
   while (from > 0 && isWord(doc[from - 1])) from--;
   while (to < doc.length && isWord(doc[to])) to++;
-  const word = doc.slice(from, to);
+  let word = doc.slice(from, to);
+  const { roots, fields } = split(bindings);
+  // A path that starts with a dot (.has.t, #.has.t, members[0].name) is an
+  // element's field.
+  const field = word.startsWith(".");
+  word = word.replace(/^\.+/, "");
   if (!word) return null;
-  let best: ExpressionBinding | null = null;
-  for (const b of bindings) {
-    if ((word === b.name || word.startsWith(b.name + ".")) && (!best || b.name.length > best.name.length)) best = b;
+  const named = field ? fields.map(({ field: f, b }) => ({ name: f, b })) : roots.map((b) => ({ name: b.name, b }));
+  let best: { name: string; b: ExpressionBinding } | null = null;
+  for (const n of named) {
+    if ((word === n.name || word.startsWith(n.name + ".")) && (!best || n.name.length > best.name.length)) best = n;
   }
-  return best;
+  return best?.b ?? null;
 }
 
 // toEditorDiagnostics places the server's diagnostics in the source: each at

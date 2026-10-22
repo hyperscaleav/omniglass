@@ -104,12 +104,54 @@ describe("exprCompletions", () => {
   });
 });
 
+// A system calc site's vocabulary: a list of records and each record's fields,
+// which the server names with [] (members[].value.t).
+const members: Vocabulary = {
+  bindings: [
+    { name: "members", type: "[]record", doc: "The system's members" },
+    { name: "members[].name", type: "string", doc: "The member's name" },
+    { name: "members[].value.t", type: "float64", doc: "The member's temperature" },
+    { name: "members[].has.t", type: "bool" },
+  ],
+  builtins: ["all", "count"],
+};
+
+function completeIn(v: Vocabulary, doc: string, explicit = false) {
+  const ctx = new CompletionContext(EditorState.create({ doc }), doc.length, explicit);
+  return exprCompletions(() => v)(ctx) as { from: number; options: { label: string; type?: string }[] } | null;
+}
+
+describe("exprCompletions over a list of records", () => {
+  it("offers the list by its name and never a [] path, which is not Expr", () => {
+    const r = completeIn(members, "count(mem")!;
+    expect(r.options.map((o) => o.label)).toEqual(["members", "all", "count"]);
+  });
+
+  it("offers a record's fields after a dot, as a predicate or an index reads them", () => {
+    for (const doc of ["all(members, .ha", "count(members, #.va", "members[0].na", "all(members, ."]) {
+      const r = completeIn(members, doc)!;
+      expect(r.options.map((o) => [o.label, o.type])).toEqual([
+        ["name", "property"],
+        ["value.t", "property"],
+        ["has.t", "property"],
+      ]);
+      expect(doc.slice(r.from)).toBe(doc.endsWith(".") ? "" : doc.slice(doc.lastIndexOf(".") + 1));
+    }
+  });
+});
+
 describe("bindingAt", () => {
   it("finds the binding whose name the position sits in, dotted names whole", () => {
     const doc = "value > 1 && component.name != ''";
     expect(bindingAt(doc, 2, vocab.bindings)?.name).toBe("value");
     expect(bindingAt(doc, doc.indexOf("name"), vocab.bindings)?.name).toBe("component.name");
     expect(bindingAt(doc, doc.indexOf(">"), vocab.bindings)).toBeNull();
+  });
+
+  it("names a record's field read after a dot by its full path", () => {
+    expect(bindingAt("all(members, .has.t)", 15, members.bindings)?.name).toBe("members[].has.t");
+    expect(bindingAt("members[0].value.t > 2", 12, members.bindings)?.name).toBe("members[].value.t");
+    expect(bindingAt("count(members, .x)", 9, members.bindings)?.name).toBe("members");
   });
 
   it("answers the record for a field path under it, and nothing for an unknown word", () => {
