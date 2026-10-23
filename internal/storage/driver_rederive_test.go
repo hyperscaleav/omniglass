@@ -91,8 +91,24 @@ func TestReseedWithNoChangeTouchesNothing(t *testing.T) {
 	if err := conn.QueryRow(ctx, `select updated_at from endpoint where id = $1`, ep.ID).Scan(&epUpdated); err != nil {
 		t.Fatal(err)
 	}
+	// Review of #823: an unchanged re-seed issues no write at all for the
+	// driver or its tasks; the rows' xmin (the writing transaction) stays.
+	xmins := func() string {
+		var drv, tasks string
+		if err := conn.QueryRow(ctx, `select xmin::text from driver where name = 'newtron-nvp'`).Scan(&drv); err != nil {
+			t.Fatal(err)
+		}
+		if err := conn.QueryRow(ctx, `select coalesce(string_agg(xmin::text, ',' order by id), '') from task where endpoint_id = $1`, ep.ID).Scan(&tasks); err != nil {
+			t.Fatal(err)
+		}
+		return drv + "|" + tasks
+	}
+	xminBefore := xmins()
 	if err := seed.Run(ctx, gw); err != nil {
 		t.Fatal(err)
+	}
+	if got := xmins(); got != xminBefore {
+		t.Fatalf("an unchanged re-seed wrote the driver or its tasks (xmin %s -> %s)", xminBefore, got)
 	}
 	after := endpointTasks(t, ctx, conn, ep.ID)
 	if len(after) != len(before) {
@@ -280,4 +296,131 @@ func compactJSON(t *testing.T, raw []byte) string {
 		t.Fatal(err)
 	}
 	return string(b)
+}
+
+// raceFixture is a custom driver with a digits-only poll regex, a component
+// and a node, for the concurrency tests.
+func raceFixture(t *testing.T) (context.Context, *storage.PG, string) {
+	t.Helper()
+	if testing.Short() {
+		t.Skip("integration test needs Postgres")
+	}
+	ctx := context.Background()
+	dsn := storagetest.NewDSN(t)
+	gw, err := storage.NewPG(ctx, dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(gw.Close)
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatal(err)
+	}
+	all := scope.Set{All: true}
+	wrong := strings.Replace(lineProtoSpec, `"^INPUT (\\S+)$"`, `"^INPUT (\\d+)$"`, 1)
+	if _, err := gw.CreateDriver(ctx, "", storage.Driver{Name: "panel-race", Label: "Panel", Version: "1.0.0", Spec: []byte(wrong)}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "panel-x"}, all, all, all, all); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "edge-x"}, all, all); err != nil {
+		t.Fatal(err)
+	}
+	return ctx, gw, dsn
+}
+
+func attachRace(ctx context.Context, gw *storage.PG) (*storage.Endpoint, error) {
+	all := scope.Set{All: true}
+	comp, name, node := "panel-x", "panel-race", "edge-x"
+	return gw.CreateEndpoint(ctx, "", storage.EndpointSpec{
+		Driver: &name, Component: &comp, Node: &node,
+		Inputs: map[string]string{"host": "10.20.4.80"}, SecretRead: all, CanAdmin: true,
+	}, all)
+}
+
+// Review of #823: an attach that runs while a driver update is in flight
+// waits for it and derives from the new spec. Before, the attach read the
+// old committed spec and the update's re-derive could not see the attach's
+// uncommitted endpoint, so the endpoint kept the old spec for good.
+func TestAttachDuringADriverUpdateDerivesTheNewSpec(t *testing.T) {
+	ctx, gw, dsn := raceFixture(t)
+	upd, err := pgx.Connect(ctx, dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer upd.Close(ctx)
+	tx, err := upd.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The update's row lock, held: the spec now carries the fixed regex.
+	if _, err := tx.Exec(ctx, `update driver set spec = $1::jsonb, updated_at = now() where name = 'panel-race'`, lineProtoSpec); err != nil {
+		t.Fatal(err)
+	}
+	type result struct {
+		ep  *storage.Endpoint
+		err error
+	}
+	done := make(chan result, 1)
+	go func() {
+		ep, err := attachRace(ctx, gw)
+		done <- result{ep, err}
+	}()
+	select {
+	case r := <-done:
+		_ = tx.Rollback(ctx)
+		t.Fatalf("the attach did not wait for the driver update in flight (err %v)", r.err)
+	case <-time.After(300 * time.Millisecond):
+	}
+	if err := tx.Commit(ctx); err != nil {
+		t.Fatal(err)
+	}
+	r := <-done
+	if r.err != nil {
+		t.Fatal(r.err)
+	}
+	conn, err := pgx.Connect(ctx, dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close(ctx)
+	for _, task := range endpointTasks(t, ctx, conn, r.ep.ID) {
+		if task.Mode == "poll" && strings.Contains(task.Spec, `"driver"`) && !strings.Contains(task.Spec, `^INPUT (\\S+)$`) {
+			t.Fatalf("the attach derived from the superseded spec: %s", task.Spec)
+		}
+	}
+}
+
+// Review of #823: a re-derive that meets an endpoint being deleted skips it
+// rather than failing the update (or the seed) on the task foreign key.
+func TestRederiveSkipsAnEndpointDeletedConcurrently(t *testing.T) {
+	ctx, gw, dsn := raceFixture(t)
+	ep, err := attachRace(ctx, gw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	del, err := pgx.Connect(ctx, dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer del.Close(ctx)
+	tx, err := del.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tx.Exec(ctx, `delete from endpoint where id = $1`, ep.ID); err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan error, 1)
+	go func() {
+		_, err := gw.UpdateDriver(ctx, "", "panel-race", storage.DriverPatch{Spec: []byte(lineProtoSpec)})
+		done <- err
+	}()
+	time.Sleep(300 * time.Millisecond)
+	if err := tx.Commit(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := <-done; err != nil {
+		t.Fatalf("a concurrent endpoint delete failed the driver update: %v", err)
+	}
 }

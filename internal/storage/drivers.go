@@ -51,7 +51,9 @@ func scanDriver(row pgx.Row) (*Driver, error) {
 // Idempotent: re-seeding the same id updates it in place, and re-derives the
 // tasks of every endpoint attached through it in the same transaction
 // (#823), so a spec a new binary ships reaches endpoints attached under the
-// old one; an unchanged spec touches no task.
+// old one. A re-seed that changes nothing writes nothing: the upsert's update
+// applies only when a field differs, and the re-derive runs only when it did,
+// so a boot does not walk every attached endpoint.
 func (p *PG) UpsertDriver(ctx context.Context, d Driver) error {
 	if err := p.validateDriverSpec(ctx, d.Spec); err != nil {
 		return fmt.Errorf("storage: upsert driver %q: %w", d.Name, err)
@@ -71,8 +73,15 @@ func (p *PG) UpsertDriver(ctx context.Context, d Driver) error {
 			    official     = excluded.official,
 			    spec         = excluded.spec,
 			    updated_at   = now()
+		where driver.label is distinct from excluded.label
+		   or driver.version is distinct from excluded.version
+		   or driver.official is distinct from excluded.official
+		   or driver.spec is distinct from excluded.spec
 		returning id`,
 		d.Name, labelOrNull(d.Label), d.Version, d.Official, specOrNull(d.Spec)).Scan(&id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil // unchanged: nothing written, nothing to re-derive
+	}
 	if err != nil {
 		return fmt.Errorf("storage: upsert driver %q: %w", d.Name, err)
 	}

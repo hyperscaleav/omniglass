@@ -507,8 +507,13 @@ looks up a catalog at runtime). The tasks **re-derive when the driver's spec cha
 driver update over the API, and the boot seed's upsert of an official spec, rewrite every attached
 endpoint's driver tasks in the same transaction, writing the ones the spec now derives and retiring
 the ones it no longer does. Task ids are content hashes, so an unchanged function keeps its row and
-a re-seed that changes nothing touches nothing; an endpoint whose tasks changed has its config
-generation moved, and its node runs the new spec from its next pull. Refusals name the fault as a 422: a missing required input, an
+a re-seed that changes nothing writes nothing at all (not the driver row, not a task); an endpoint
+whose tasks changed has its config generation moved, and its node runs the new spec from its next
+pull. An attach reads the driver row under a share lock, so one that races an update waits for it
+and derives the committed spec, and a re-derive skips an endpoint a concurrent delete removes.
+One gap is accepted: between the re-derive and the node's next pull (one tick), samples the node
+still publishes under a retired task's id are dropped at ingest as orphans, the same confinement
+that drops any unknown task id; the next tick publishes under the new one. Refusals name the fault as a 422: a missing required input, an
 input the spec does not declare, an ambiguous secret name. A secret input is resolved under the
 **caller's own secret read scope and admin tier**, so an attach can only bind a credential the
 operator could themselves read: an out-of-scope or admin-sensitive secret refuses

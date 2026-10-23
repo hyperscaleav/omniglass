@@ -270,9 +270,13 @@ func attachParams(effective map[string]string) map[string]string {
 
 // loadDriverRef resolves a driver by name or uuid inside the caller's
 // transaction, ErrTypeNotFound when absent (the registry's own sentinel, which
-// the API tier maps to a 422 reference fault).
+// the API tier maps to a 422 reference fault). The row is read FOR SHARE: a
+// driver update or seed upsert in flight holds a lock that conflicts, so the
+// attach waits for it and derives from the spec it commits, and one that
+// starts after waits for the attach, whose endpoint its re-derive then sees
+// (#823). Without it an attach racing an update kept the old spec for good.
 func loadDriverRef(ctx context.Context, q querier, ref string) (*Driver, error) {
-	d, err := scanDriver(q.QueryRow(ctx, `select `+driverCols+` from driver where `+registryRefCol(ref)+` = $1`, ref))
+	d, err := scanDriver(q.QueryRow(ctx, `select `+driverCols+` from driver where `+registryRefCol(ref)+` = $1 for share`, ref))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrTypeNotFound
 	}
@@ -401,7 +405,11 @@ func rederiveDriverTasks(ctx context.Context, tx pgx.Tx, driverID string) error 
 	if err != nil {
 		return err
 	}
-	rows, err := tx.Query(ctx, `select id::text from endpoint where driver_id = $1 order by id`, driverID)
+	// FOR KEY SHARE, in id order: an endpoint a concurrent delete holds is
+	// waited on and, once deleted, skipped, rather than failing the task
+	// insert on its foreign key; one a delete has not reached cannot vanish
+	// mid re-derive.
+	rows, err := tx.Query(ctx, `select id::text from endpoint where driver_id = $1 order by id for key share`, driverID)
 	if err != nil {
 		return fmt.Errorf("storage: endpoints of driver %q: %w", d.Name, err)
 	}

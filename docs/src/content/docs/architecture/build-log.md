@@ -7416,7 +7416,15 @@ whose tasks changed has its `updated_at` (the node's config generation) moved. T
 covers it. Proven over Postgres (`TestReseedWithNoChangeTouchesNothing`,
 `TestSeededSpecChangeReachesAttachedEndpoints`, `TestDriverUpdateRederivesAttachedEndpoints`) and end to
 end (`TestDriverFixReachesTheNextPoll`: a regex fix turns a faulting poll against a real line server into
-a landed value on the next poll).
+a landed value on the next poll). The review that followed closed three races and a cost, each with a
+Postgres test that failed first: an attach now reads the driver row `FOR SHARE`, so one racing an update
+waits and derives the committed spec instead of keeping the old one for good
+(`TestAttachDuringADriverUpdateDerivesTheNewSpec`, two interleaved transactions); the re-derive's endpoint
+list takes `FOR KEY SHARE` in id order, so a concurrent delete is waited on and skipped rather than
+failing the update on the task foreign key (`TestRederiveSkipsAnEndpointDeletedConcurrently`); and the
+seed's upsert writes only when a field differs and re-derives only when it wrote, so an unchanged boot
+leaves the driver and task rows' `xmin` as they were. Samples published under a retired task id in the
+one-tick gap before the node's next pull are dropped as orphans, accepted and documented.
 
 ### The node honors a driver poll's declared schedule (#822)
 
