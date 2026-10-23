@@ -399,8 +399,9 @@ func (p *PG) createEndpointTx(ctx context.Context, tx pgx.Tx, actorID string, sp
 	return it, nil
 }
 
-// UpdateEndpoint patches an endpoint's node placement, params or label with
-// the read-then-action scope split (both evaluated against the owning component)
+// UpdateEndpoint patches an endpoint's node placement, params, label, or (on a
+// driver-attached endpoint, #1061) its inputs in place, with the read-then-action
+// scope split (both evaluated against the owning component)
 // and in-transaction audit. Type and component rebind are deferred, and the name
 // is not patchable at all: it is derived from the type, so the label is the only
 // identity string this route moves.
@@ -415,12 +416,22 @@ func (p *PG) UpdateEndpoint(ctx context.Context, actorID, id string, patch Endpo
 	if err != nil {
 		return nil, err
 	}
-	// A driver-attached endpoint's params are DERIVED from its inputs (the host
-	// and port the attach resolved), not an operator fact, and its credential
-	// rides the worklist to the placed node. Letting endpoint:update repoint the
-	// params would send that credential to a target the inputs never named, so a
-	// params patch on an attached endpoint refuses: the re-attach is the write
-	// path for its address.
+	// Lock the row before reading what an edit merges over: two concurrent
+	// edits (one the host, one the port) must not each merge over the same
+	// stale inputs and lose one. FOR NO KEY UPDATE does not conflict with a
+	// driver update's FOR KEY SHARE re-derive (#823).
+	if _, err := tx.Exec(ctx, `select 1 from endpoint where id = $1 for no key update`, before.ID); err != nil {
+		return nil, fmt.Errorf("storage: lock endpoint %q: %w", before.ID, err)
+	}
+	if before, err = loadEndpoint(ctx, tx, before.ID); err != nil {
+		return nil, err
+	}
+	// A driver-attached endpoint's params are DERIVED from its inputs (its host
+	// and port), and its credential rides the worklist to the placed node. Its
+	// address therefore edits through its inputs (#1061), every attached secret
+	// re-resolved under the editor's own scope, so an edit cannot send a
+	// credential its editor could not use to a new address; a raw target patch
+	// on it refuses.
 	params, inputs, err := p.patchedConnection(ctx, tx, before, patch)
 	if err != nil {
 		return nil, err
@@ -484,8 +495,8 @@ func (p *PG) patchedConnection(ctx context.Context, tx pgx.Tx, before *Endpoint,
 	if err != nil {
 		return nil, nil, fmt.Errorf("storage: stored spec for driver %q does not parse: %w", d.Name, err)
 	}
-	if patch.Transport != nil && *patch.Transport != sp.Transport {
-		return nil, nil, fmt.Errorf("%w: transport: driver %q speaks %s only", ErrEndpointPatchInvalid, d.Name, sp.Transport)
+	if patch.Transport != nil && *patch.Transport != before.Transport {
+		return nil, nil, fmt.Errorf("%w: transport: the endpoint speaks %s, the one transport driver %q declares", ErrEndpointPatchInvalid, before.Transport, d.Name)
 	}
 	var current map[string]any
 	if len(patch.Params) > 0 {
@@ -493,9 +504,16 @@ func (p *PG) patchedConnection(ctx context.Context, tx pgx.Tx, before *Endpoint,
 		if err := json.Unmarshal(patch.Params, &extra); err != nil {
 			return nil, nil, fmt.Errorf("%w: params: %v", ErrEndpointPatchInvalid, err)
 		}
-		for k := range extra {
+		for k, v := range extra {
 			if k != "timeout" {
 				return nil, nil, fmt.Errorf("%w: params.%s: a driver-attached endpoint's address is derived from its host and port inputs; patch the inputs", ErrEndpointPatchInvalid, k)
+			}
+			if v == nil {
+				continue // null clears the timeout
+			}
+			str, ok := v.(string)
+			if d, err := time.ParseDuration(str); !ok || err != nil || d <= 0 {
+				return nil, nil, fmt.Errorf("%w: params.timeout must be a positive duration such as \"5s\", and %v is not", ErrEndpointPatchInvalid, v)
 			}
 		}
 		current = extra
@@ -509,7 +527,31 @@ func (p *PG) patchedConnection(ctx context.Context, tx pgx.Tx, before *Endpoint,
 			return nil, nil, fmt.Errorf("storage: stored inputs of endpoint %q: %w", before.ID, err)
 		}
 	}
+	// An input the driver no longer declares (a driver update dropped it) is
+	// dead to the derivation and never blocks an edit; an empty value clears
+	// an input (its default, if any, fills it again; a required one refuses).
+	declared := map[string]bool{}
+	for _, in := range sp.Inputs {
+		declared[in.Name] = true
+	}
+	for k := range stored {
+		if !declared[k] {
+			delete(stored, k)
+		}
+	}
 	for k, v := range patch.Inputs {
+		if strings.TrimSpace(v) == "" {
+			delete(stored, k)
+			if !declared[k] {
+				return nil, nil, fmt.Errorf("%w: input %q is not declared by driver %q", ErrEndpointPatchInvalid, k, d.Name)
+			}
+			for _, in := range sp.Inputs {
+				if in.Name == k && in.Required {
+					return nil, nil, fmt.Errorf("%w: required input %q cannot be cleared", ErrEndpointPatchInvalid, k)
+				}
+			}
+			continue
+		}
 		stored[k] = v
 	}
 	effective, err := p.resolveInputs(ctx, tx, d, sp, stored, patch.SecretRead, patch.CanAdmin)
@@ -529,6 +571,10 @@ func (p *PG) patchedConnection(ctx context.Context, tx pgx.Tx, before *Endpoint,
 		derived["timeout"] = t
 	}
 	for k, v := range current {
+		if v == nil {
+			delete(derived, k)
+			continue
+		}
 		derived[k] = v
 	}
 	if params, err = json.Marshal(derived); err != nil {

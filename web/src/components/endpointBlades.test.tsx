@@ -179,6 +179,20 @@ describe("endpoint edit blade, driver-attached", () => {
     expect(screen.queryByText(/re-attach/i)).toBeNull();
   });
 
+  it("a cleared input is sent empty, so the server clears it (or refuses a required one)", async () => {
+    const bodies: unknown[] = [];
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const req = input as Request;
+      if (req.method === "PATCH") bodies.push(await req.json());
+      return json(row);
+    });
+    const slot = mountEdit();
+    fireEvent.input(await screen.findByLabelText("port"), { target: { value: "" } });
+    await slot.save();
+    await waitFor(() => expect(bodies.length).toBe(1));
+    expect(bodies[0]).toEqual({ inputs: { port: "" } });
+  });
+
   it("a label-only edit sends no inputs", async () => {
     const bodies: unknown[] = [];
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {

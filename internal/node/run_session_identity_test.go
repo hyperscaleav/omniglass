@@ -325,8 +325,9 @@ func TestTheSSHProbeCredentialIsGated(t *testing.T) {
 
 // TestADriverEndpointEditsItsAddressInPlace (#1061 ruling): no re-attach.
 // The endpoint starts on a wrong port (down at the transport, no login
-// tried); its port edited in place connects and authenticates within a
-// tick; a label edit through the same route recycles nothing; its address
+// tried); its port edited in place reaches the login, which its stale secret
+// fails (rejected); its secret edited in place un-gates it within a tick; a
+// label edit through the same route recycles nothing; its address
 // edited in place moves the healthy session to the new component.
 func TestADriverEndpointEditsItsAddressInPlace(t *testing.T) {
 	if testing.Short() {
@@ -344,13 +345,23 @@ func TestADriverEndpointEditsItsAddressInPlace(t *testing.T) {
 		}
 	}
 	s.component("panel-e")
-	if _, err := s.gw.CreateSecret(s.ctx, "", storage.SecretSpec{
-		Name: "panel-login", SecretType: "basic-auth", OwnerKind: "platform",
-		Fields: map[string]string{"username": "admin", "password": "newtron"},
-	}, s.all, true); err != nil {
+	for name, pw := range map[string]string{"panel-login": "newtron", "stale-login": "wrong"} {
+		if _, err := s.gw.CreateSecret(s.ctx, "", storage.SecretSpec{
+			Name: name, SecretType: "basic-auth", OwnerKind: "platform",
+			Fields: map[string]string{"username": "admin", "password": pw},
+		}, s.all, true); err != nil {
+			t.Fatal(err)
+		}
+	}
+	drv, comp, node := "newtron-nvp-telnet", "panel-e", "edge-e"
+	ep, err := s.gw.CreateEndpoint(s.ctx, "", storage.EndpointSpec{
+		Driver: &drv, Component: &comp, Node: &node,
+		Inputs:     map[string]string{"host": s.ip, "port": "2399", "login": "stale-login"},
+		SecretRead: s.all, CanAdmin: true,
+	}, s.all)
+	if err != nil {
 		t.Fatal(err)
 	}
-	ep := s.attach("panel-e", "newtron-nvp-telnet", "edge-e", 2399)
 	s.runNode("edge-e")
 	edit := func(p storage.EndpointPatch) {
 		t.Helper()
@@ -365,8 +376,14 @@ func TestADriverEndpointEditsItsAddressInPlace(t *testing.T) {
 		t.Fatalf("a wrong port tried %d logins", n)
 	}
 
+	// The port edited in place: the transport rung passes, and the stale
+	// credential is refused, gating the session.
 	edit(storage.EndpointPatch{Inputs: map[string]string{"port": fmt.Sprint(23 + 20000)}})
-	s.waitFor("panel-e", ep.Name, "session-state", is("up"), "up on the port edited in place")
+	s.waitFor("panel-e", ep.Name, "session-state", is("rejected"), "rejected on the stale credential")
+	// The attached secret swapped in place: the fingerprint moves and the
+	// rejected session un-gates within a tick.
+	edit(storage.EndpointPatch{Inputs: map[string]string{"login": "panel-login"}})
+	s.waitFor("panel-e", ep.Name, "session-state", is("up"), "up on the secret edited in place")
 	s.waitFor("panel-e", ep.Name, "endpoint-authenticated", is("yes"), "authenticated")
 	logins := a.TelnetLogins()
 

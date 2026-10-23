@@ -100,7 +100,8 @@ template refuses with the fault named (422). Attaching a driver to a component h
 component's own detail ([nodes and reachability](/guides/operator/collection/)): the spec
 derives the endpoint and its tasks. Its inputs (the host, the port, an attached secret's name) then
 edit in place on the endpoint's blade or with `omniglass endpoint update <id> --inputs ...`, checked
-against the spec's declared inputs; no re-attach.
+against the spec's declared inputs; no re-attach. Clearing an optional input restores its default;
+a required one cannot be cleared.
 
 A driver is consumed by the [product](/guides/admin/products/) catalog: a `product` references
 its driver through an optional `driver_id` to say which driver reads it, chosen from a driver

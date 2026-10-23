@@ -8,6 +8,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/scope"
 	"net"
 	"strconv"
+	"strings"
 
 	"github.com/hyperscaleav/omniglass/internal/driver"
 	"github.com/jackc/pgx/v5"
@@ -200,7 +201,9 @@ func (p *PG) resolveInputs(ctx context.Context, q querier, d *Driver, sp *driver
 	for _, in := range sp.Inputs {
 		v, supplied := es.Inputs[in.Name]
 		switch {
-		case supplied:
+		case supplied && strings.TrimSpace(v) == "" && in.Required:
+			return nil, fmt.Errorf("%w: required input %q is empty", ErrAttachInvalid, in.Name)
+		case supplied && strings.TrimSpace(v) != "":
 			effective[in.Name] = v
 		case in.Default != "":
 			effective[in.Name] = in.Default

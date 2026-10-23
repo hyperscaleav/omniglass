@@ -147,9 +147,9 @@ function EndpointBladeBody(props: { id: string }): JSX.Element {
     // unchanged: the API has no clear-placement, so an empty node would FK-fault (422).
     const patch: UpdateEndpoint = {};
     if (node() && node() !== (iface.node ?? "")) patch.node = node();
-    // A driver-attached endpoint's target is derived, and the server refuses a
-    // params patch on it; the editor above is read-only for one, so this only
-    // ever fires for a bare probe endpoint.
+    // A driver-attached endpoint's target derives from its host and port
+    // inputs (edited below, #1061), so a raw target patch is a bare probe
+    // endpoint's alone.
     if (!iface.driver && target() && target() !== endpointTarget(iface)) patch.params = { target: target().trim() };
     // The label is sent whenever it differs, including when it is now empty:
     // clearing one is an instruction, not an omission.
@@ -159,7 +159,9 @@ function EndpointBladeBody(props: { id: string }): JSX.Element {
     if (iface.driver) {
       const changed: Record<string, string> = {};
       for (const [k, v] of Object.entries(inputs())) {
-        if (v.trim() !== "" && v.trim() !== (iface.inputs?.[k] ?? "")) changed[k] = v.trim();
+        // A cleared field is sent empty: the server clears an optional input
+        // (its default fills it) and refuses a required one by name.
+        if (v.trim() !== (iface.inputs?.[k] ?? "")) changed[k] = v.trim();
       }
       if (Object.keys(changed).length > 0) patch.inputs = changed;
     }

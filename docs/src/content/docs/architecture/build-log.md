@@ -7641,3 +7641,11 @@ sends no inputs), and end to end (`TestADriverEndpointEditsItsAddressInPlace`: a
 down with no login; the port edited in place connects and authenticates within a tick; a label edit
 recycles nothing; the address edited in place moves the healthy session to the other component).
 Recorded in ADR-0157 point 6.
+
+The in-place edit's review, each with a test that failed first: a `params.timeout` value is parsed
+and refused by name unless it is a positive duration; an input a driver update dropped no longer
+blocks an edit; an empty value clears an optional input (its default fills it again) and refuses a
+required one by name, the console sending a cleared field rather than dropping it; the row is locked
+before an edit merges over it, so two concurrent edits cannot lose one; a transport restatement is
+judged against the endpoint's own. End to end, an in-place swap of the attached secret now un-gates
+a session its stale credential had rejected, within a tick.

@@ -127,6 +127,11 @@ func TestADriverEndpointEditsItsConnectionInputsInPlace(t *testing.T) {
 		{storage.EndpointPatch{Transport: strPtr("ssh")}, "transport", all},
 		{storage.EndpointPatch{Params: []byte(`{"target":"attacker:23"}`)}, "target", all},
 		{storage.EndpointPatch{Inputs: map[string]string{"host": "10.20.4.99"}}, "login", scope.Set{}},
+		// Review: the timeout's value is checked, not only its key; a
+		// required input cannot be emptied.
+		{storage.EndpointPatch{Params: []byte(`{"timeout":"five seconds"}`)}, "params.timeout", all},
+		{storage.EndpointPatch{Params: []byte(`{"timeout":5}`)}, "params.timeout", all},
+		{storage.EndpointPatch{Inputs: map[string]string{"host": ""}}, "host", all},
 	}
 	for _, r := range refusals {
 		r.patch.SecretRead, r.patch.CanAdmin = r.read, true
@@ -138,5 +143,59 @@ func TestADriverEndpointEditsItsConnectionInputsInPlace(t *testing.T) {
 	// The same transport is no change, and is accepted.
 	if _, err := patch(storage.EndpointPatch{Transport: strPtr("telnet")}); err != nil {
 		t.Fatalf("restating the transport: %v", err)
+	}
+}
+
+// Review of the in-place edit: an input the driver no longer declares (a
+// driver update dropped it) never blocks an edit, and an optional input
+// cleared with an empty value falls back to its default.
+func TestAnInPlaceEditSurvivesADriverDroppingAnInput(t *testing.T) {
+	if testing.Short() {
+		t.Skip("integration test needs Postgres")
+	}
+	ctx := context.Background()
+	gw, err := storage.NewPG(ctx, storagetest.NewDSN(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer gw.Close()
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatal(err)
+	}
+	all := scope.Set{All: true}
+	spec := func(extra string) []byte {
+		return []byte(`{"version":1,"transport":"tcp","inputs":[{"name":"host","kind":"string","required":true},{"name":"port","kind":"number","default":"4998"}` + extra + `],
+			"polls":[{"name":"status","schedule":{"every":"30s"},"request":{"line":"GET STATUS"},"emits":[{"name":"video-input","extract":{"regex":"^INPUT (\\S+)$"}}]}]}`)
+	}
+	d, err := gw.CreateDriver(ctx, "", storage.Driver{Name: "drop-drv", Label: "Drop", Version: "1.0.0", Spec: spec(`,{"name":"note","kind":"string"}`)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	comp, drv := "amp-d", "drop-drv"
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: comp}, all, all, all, all); err != nil {
+		t.Fatal(err)
+	}
+	ep, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{Driver: &drv, Component: &comp,
+		Inputs: map[string]string{"host": "10.0.0.3", "port": "5000", "note": "x"}, SecretRead: all, CanAdmin: true}, all)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := gw.UpdateDriver(ctx, "", d.ID, storage.DriverPatch{Spec: spec("")}); err != nil {
+		t.Fatal(err)
+	}
+	after, err := gw.UpdateEndpoint(ctx, "", ep.ID, storage.EndpointPatch{Params: []byte(`{"timeout":"3s"}`), SecretRead: all, CanAdmin: true}, all, all)
+	if err != nil {
+		t.Fatalf("an edit after the driver dropped an input: %v", err)
+	}
+	if strings.Contains(string(after.Inputs), "note") {
+		t.Fatalf("the dropped input survived: %s", after.Inputs)
+	}
+	// An optional input cleared falls back to its default.
+	after, err = gw.UpdateEndpoint(ctx, "", ep.ID, storage.EndpointPatch{Inputs: map[string]string{"port": ""}, SecretRead: all, CanAdmin: true}, all, all)
+	if err != nil {
+		t.Fatalf("clear the port: %v", err)
+	}
+	if !strings.Contains(string(after.Params), "10.0.0.3:4998") {
+		t.Fatalf("a cleared port did not fall back to its default: %s", after.Params)
 	}
 }
