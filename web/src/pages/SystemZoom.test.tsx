@@ -380,6 +380,23 @@ describe("the map tab (#791)", () => {
     expect(within(map).getByText(/Main Display · empty/)).toBeTruthy();
   });
 
+  // Each occupied position's dot wears its component's own verdict (#1071),
+  // the same verdict the component rows beside it show: healthy the muted
+  // green, degraded amber, outage red. An empty position keeps its hollow
+  // grey ring, never a fill.
+  it("dots each occupant in its own verdict's colour, and leaves a gap hollow", () => {
+    const dot = (id: string) => screen.getByTestId(id).querySelector("span")!.className;
+    mount(`/web/systems/${uuidFor("szp-sys")}?tab=map`, health, [], MAPPED);
+    expect(dot("mapmarker-room-mic-1")).toContain("bg-healthy-muted");
+    expect(dot("mapmarker-room-mic-2")).toContain("bg-error");
+    expect(dot("mapmarker-main-display-1")).toContain("border-dashed");
+    expect(dot("mapmarker-main-display-1")).not.toMatch(/bg-(healthy|warning|error|incomplete)/);
+    cleanup();
+    mount(`/web/systems/${uuidFor("szp-sys")}?tab=map`, health, [], MAPPED, me, memberRowsOf(view, uuidFor("szp-sys"), { "videobar-1": "degraded" }));
+    expect(dot("mapmarker-room-mic-1")).toContain("bg-warning");
+    expect(dot("mapmarker-room-mic-1")).not.toContain("bg-healthy");
+  });
+
   it("clicking an occupied marker opens its component blade (#799)", async () => {
     mount(`/web/systems/${uuidFor("szp-sys")}?tab=map`, health, [], MAPPED);
     fireEvent.click(screen.getByTestId(`mapmarker-room-mic-2`));
