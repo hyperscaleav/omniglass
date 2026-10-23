@@ -7,7 +7,7 @@ sidebar:
     variant: caution
 ---
 
-::::design[Target design, tracked in #317]
+::::design[Target design, tracked in #827]
 
 A template is an **example configuration an operator clones**. It ships inside the binary as a menu,
 never as data: nothing is inserted until somebody picks one, and the fork is an ordinary row they

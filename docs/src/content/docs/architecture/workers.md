@@ -13,7 +13,7 @@ Built today: one durable JetStream work-queue consumer, `og-telemetry-worker`
 which does owner confinement and persistence inline.
 :::
 
-Workers are how Omniglass does the steady background work (deriving samples, sending actions, firing timers, reconciling drift) on one machinery instead of a pile of bespoke loops: crash recovery and exactly-once outcomes for free everywhere.
+Workers are how Omniglass means to do the steady background work (deriving samples, sending actions, firing timers, reconciling drift) on one machinery, with crash recovery and exactly-once outcomes for free everywhere. Not all of it rides a consumer today: the event rule sweep closes sustains and reconciles streaks on a server tick ([ADR-0144](/architecture/decisions/#adr-0144-alarms-are-raised-by-event-rules-at-a-severity-level-from-a-ranked-registry) point 6), and calc rules drain a durable pending set on a tick of their own ([ADR-0148](/architecture/decisions/#adr-0148-calc-rules-run-on-a-durable-pending-set-and-a-server-tick-not-a-jetstream-consumer)). Both are replica-safe and lose nothing on restart; [time](/architecture/time/) as a primitive (#419) is where those loops converge.
 
 ## One machinery, several consumers
 

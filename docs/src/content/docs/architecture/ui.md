@@ -134,11 +134,11 @@ system and component kinds already moved to Standards and Products ([build log](
 Editing a setting is editing **[config](/architecture/variables/)**, an audited mutation, not a
 separate prop store ([audit](/architecture/audit/)).
 
-:::design[The rule-authoring surface (ADR-0050); the expression editor is #524, the AI seam ADR-0001]
-The standout is the **rule-authoring page**:
+The standout is the **rule-authoring page**. Its **Expr editor** for a rule's criteria and a calc
+rule's expression is built (#975), the prepared-input contract surfaced
+([expressions](/architecture/expressions/)).
 
-- an **Expr editor** for the predicate or condition, the prepared-input contract surfaced
-  ([expressions](/architecture/expressions/));
+:::design[The rest of the rule-authoring surface (ADR-0050); the AI seam is ADR-0001]
 - a **live blast-radius preview** (which entities a scope selects, which samples a rule would
   have fired on);
 - the **AI-suggestion seam** ([AI](/architecture/ai/)): AI may propose a rule pre-filled with

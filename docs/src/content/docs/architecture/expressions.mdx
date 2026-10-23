@@ -103,7 +103,7 @@ only by a page with an expression site; a page that cannot load it says so and r
 
 <ExpressionSites />
 
-:::design[Target design: the rest of the expression engine, tracked in #524]
+:::design[Omniglass functions, with the driver step and extractor sites, tracked in #827]
 
 ## Extended with Omniglass functions
 
@@ -114,6 +114,9 @@ On top ride **Omniglass functions**: helpers Expr does not ship, including frame
 protocols need, each vetted into the sites that need it. The engine is **not pluggable**: one
 dialect everyone authors in; where an expression is not even needed, prefer a straightforward
 native path.
+:::
+
+:::design[Unit conversion, tracked in #430]
 
 ## Unit conversion: `convert(value, "<unit>")`
 
@@ -126,17 +129,23 @@ in the **same family** (a compile error otherwise). The conversion comes from th
 `convert(value, "fahrenheit") > 100` reads in Fahrenheit while storage stays in canonical
 celsius. A function rather than a per-unit method: data-driven, general, available wherever
 expressions run.
+:::
+
+:::design[The remaining expression sites, tracked in #1023 and #827 per row]
 
 ## Where expressions will be used
 
-| Site | Leaf | What it evaluates |
-|---|---|---|
-| extractor | `value` | reshape a located raw value into the typed sample value |
-| step | `when` | the explicit branch guard (a false guard skips the step and dependents) |
-| `calc_rule` | `filter` | per-input filters, `worst` (once property types declare an order) and windowed `time_in_state` for SLIs, beside the built calc site's list functions |
-| rule | `scope` | which instances a rule fires for (the Expr scope escape) |
-| views / list | `filter` | the structured-query predicate operators compose |
-| dynamic group | membership `filter` | recomputed membership |
+| Site | Leaf | What it evaluates | Tracked in |
+|---|---|---|---|
+| extractor | `value` | reshape a located raw value into the typed sample value | #827 |
+| step | `when` | the explicit branch guard (a false guard skips the step and dependents) | #827 |
+| `calc_rule` | `filter` | per-input filters, `worst` (once property types declare an order) and windowed `time_in_state` for SLIs, beside the built calc site's list functions | #1023 |
+| rule | `scope` | which instances a rule fires for (the Expr scope escape) | #1023 |
+| views / list | `filter` | the structured-query predicate operators compose | #1023 |
+| dynamic group | membership `filter` | recomputed membership | #1023 |
+:::
+
+:::design[Function-run bindings and configuration values, tracked in #827]
 
 ## In-scope bindings
 
@@ -148,17 +157,20 @@ extractor-local inputs a step prepares for its `value` leaf (`raw`, `groups`, `n
 Rule and view contexts bind their own documented environments (the candidate entity, the
 property, the resource row).
 
-## Divergence and `disagree(A, B)`
-
-**`disagree(A, B)`** compares two provenances or sources of one key: config drift, reconcile
-conflict, and cross-source disagreement are all the one operator, surfacing **divergence**,
-the universal anomaly signal. Reading both sides as inputs (never writing a verdict back into
-either) keeps the pipeline's DAG acyclic.
-
 ## Configuration values and secrets
 
 Operator-supplied configuration values are bound as **data in the environment**, never spliced
 into expression text, so a hostile value is evaluated literally and never executed. Secret
 fields rendered into a request are masked at interpolation time and never surface in a log
 line, error string, or property label.
+:::
+
+:::design[Divergence, tracked in #430]
+
+## Divergence and `disagree(A, B)`
+
+**`disagree(A, B)`** compares two provenances or sources of one key: config drift, reconcile
+conflict, and cross-source disagreement are all the one operator, surfacing **divergence**,
+the universal anomaly signal. Reading both sides as inputs (never writing a verdict back into
+either) keeps the pipeline's DAG acyclic.
 :::
