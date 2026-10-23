@@ -131,6 +131,15 @@ and still probably be wrong. So the engine keeps a **registry of diagnostics** (
 hints, and a matcher that panics is a bug in the rule: the expression is judged as if the rule were absent,
 never refused by it and never crashing the server.
 
+`POST /expressions:validate` answers each diagnostic's `severity`, and a registered one's `code` and `fix`,
+so the console's **expression field** shows them where they arise (#1053): an error is underlined with a
+wavy red line and refuses the source, a warning with a wavy amber one and a hint with a dotted line, neither
+marking the field invalid nor stopping a save. Beneath the field each diagnostic names its severity, links
+its code to its entry in the table below, and offers its fix as a button (a keyboard user reaches it with
+Tab; in the editor, F8 moves to the next diagnostic and Mod-Shift-M lists them with their fixes). A fix is
+an edit of the author's own, so Ctrl-Z takes it back. A stored rule's warnings show on its blade as a note,
+never an alert.
+
 The first four rules (#1054) are the mistakes authors made first: **`sum-of-bools`** explains a `sum` over
 true-or-false values (`sum(members, .has.t) > 0`) as the count it meant, on the `sum`, with the fix
 `count(...)`; **`float-equality`** warns that `value == 1.5` is seldom exactly true of a measured number

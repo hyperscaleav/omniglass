@@ -61,7 +61,10 @@ lists the first twelve; **and N more** shows the rest.
   criteria: it completes the aliases, the functions and a member's fields as you write, and is checked
   as you type against exactly what the rule binds. **Start from** inserts a function with the cursor in
   its slot, ready for an alias. A name the expression uses that no input has as its alias is underlined,
-  with **Bind it to a key**, which adds an input of that alias for you to choose the key of.
+  with **Bind it to a key**, which adds an input of that alias for you to choose the key of. A common
+  mistake is said plainly with a fix a click away: `sum(members, .has.t) > 0` is refused on the `sum`
+  ("sum adds numbers") with **Use count** beside it. An input the expression never names is a
+  **warning** in amber: the rule still saves, and its blade carries the warning as a note.
 - **Writes**: the property or metric it writes, whose type the reduce must yield. Not one a collection
   writes, and not one another enabled rule writes. To write a key that does not exist yet, **New metric**
   (a name, a label and a unit; its values are numbers) or **New property** (a name, a label and a data

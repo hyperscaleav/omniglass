@@ -17,11 +17,22 @@ const bindings = [
 
 // The server's answer for a source: a type error at 2:3 for one naming
 // humidity, clean otherwise.
+// A sum is refused with a quick fix (sum-of-bools), and a decimal compared
+// with == compiles with a warning (float-equality).
 function answer(source: string) {
   const bad = source.includes("humidity");
+  const sum = source.startsWith("sum(");
+  const decimal = source.includes("== 1.5");
+  const diagnostics = bad
+    ? [{ line: 2, column: 3, phase: "type", severity: "error", message: "unknown name humidity", unbound: "humidity" }]
+    : sum
+      ? [{ line: 1, column: 1, phase: "type", severity: "error", code: "sum-of-bools", message: "sum adds numbers; to count matches use count(...)",
+          fix: { title: "Use count", line: 1, column: 1, end_line: 1, end_column: 4, replacement: "count" } }]
+      : decimal
+        ? [{ line: 1, column: 7, phase: "lint", severity: "warning", code: "float-equality", message: "a measured number seldom equals 1.5 exactly" }]
+        : [];
   return {
-    ok: !bad, site: "criteria", value_type: "number", result_type: "bool",
-    diagnostics: bad ? [{ line: 2, column: 3, phase: "type", severity: "error", message: "unknown name humidity", unbound: "humidity" }] : [],
+    ok: !bad && !sum, site: "criteria", value_type: "number", result_type: "bool", diagnostics,
     bindings, builtins: ["abs", "len"], budget: { iterations: 10000, memory: 10000, deadline: "5ms" },
   };
 }
@@ -280,5 +291,40 @@ describe("ExpressionField's verdict", () => {
     expect(document.querySelector(".text-error")).toBeTruthy();
     m.setV("");
     await waitFor(() => expect(document.querySelector(".text-error")).toBeNull());
+  });
+
+  // Diagnostics by severity, with quick fixes (#1021).
+  it("lets a warning ride along: drawn as a warning, the field still valid and its verdict ok", async () => {
+    const { checks } = mount("value == 1.5");
+    const diag = await screen.findByTestId("expression-diagnostic");
+    expect(diag.dataset.severity).toBe("warning");
+    expect(diag.textContent).toContain("Warning");
+    expect(diag.textContent).toContain("seldom equals 1.5");
+    const ed = await screen.findByRole("textbox", { name: "Fires when" });
+    await waitFor(() => expect(ed.querySelector(".cm-lintRange-warning")?.textContent).toBe("=="));
+    expect(ed.hasAttribute("aria-invalid")).toBe(false);
+    expect(ed.closest(".textarea")!.classList.contains("textarea-error")).toBe(false);
+    expect(checks.at(-1)).toBe(true);
+    await screen.findByTestId("expression-ok");
+  });
+
+  it("offers a diagnostic's fix beside it as a button, which rewrites the source as an undoable edit", async () => {
+    const { v, checks } = mount("sum(c) > 0");
+    const fix = await screen.findByRole("button", { name: "Use count" });
+    expect(checks.at(-1)).toBe(false);
+    // A button: reached with Tab and pressed with Enter or Space.
+    expect(fix.tagName).toBe("BUTTON");
+    fix.click();
+    expect(v()).toBe("count(c) > 0");
+    const view = EditorView.findFromDOM(await screen.findByRole("textbox", { name: "Fires when" }))!;
+    expect(undo(view)).toBe(true);
+    expect(v()).toBe("sum(c) > 0");
+  });
+
+  it("links a diagnostic's code to its entry in the docs", async () => {
+    mount("sum(c) > 0");
+    const link = await screen.findByRole("link", { name: "sum-of-bools" });
+    expect(link.getAttribute("href")).toBe("https://docs.omniglass.hyperscaleav.com/architecture/expressions/#diagnostic-sum-of-bools");
+    expect(link.getAttribute("target")).toBe("_blank");
   });
 });

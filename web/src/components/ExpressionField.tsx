@@ -3,7 +3,7 @@ import InfoTip from "./InfoTip";
 import Button from "./Button";
 import Eyebrow from "./Eyebrow";
 import { caretOf, validateExpression, type ExpressionBinding, type ExpressionCheck, type ValidateExpression } from "../lib/expressions";
-import { bindLabel, type Vocabulary } from "../lib/expressionEditor";
+import { bindLabel, diagnosticHref, type Vocabulary } from "../lib/expressionEditor";
 import type { ExpressionEditor } from "./expressionEditorView";
 import { describeError } from "../lib/format";
 
@@ -147,11 +147,14 @@ export default function ExpressionField(p: {
   });
 
   const diagnostics = () => check()?.diagnostics ?? [];
+  // Only an error refuses the source; a warning or a hint rides along with
+  // one that compiles, so it never marks the field invalid.
+  const refused = () => diagnostics().some((d) => d.severity === "error");
 
   const host = (
     <div
       class="textarea textarea-bordered min-h-0 w-full px-2 py-1.5 font-data text-sm leading-snug"
-      classList={{ "textarea-error": diagnostics().length > 0 }}
+      classList={{ "textarea-error": refused() }}
     />
   ) as HTMLDivElement;
   // A FieldRow's <label for> points at the host, which is not labelable:
@@ -159,7 +162,7 @@ export default function ExpressionField(p: {
   // focuses the editor by hand (as it did the textarea).
   let label: HTMLElement | null = null;
   const [labelId, setLabelId] = createSignal<string | undefined>(undefined);
-  const aria = () => ({ label: p.label, labelledBy: labelId(), describedBy: diagId, invalid: diagnostics().length > 0 });
+  const aria = () => ({ label: p.label, labelledBy: labelId(), describedBy: diagId, invalid: refused() });
   const [editor, setEditor] = createSignal<ExpressionEditor | null>(null);
   let gone = false;
   const focusEditor = () => editor()?.focus();
@@ -241,8 +244,9 @@ export default function ExpressionField(p: {
         <For each={diagnostics()}>
           {(d) => {
             const at = caretOf(checked, d.line, d.column);
+            const source = checked;
             return (
-              <div data-testid="expression-diagnostic" class="flex flex-col gap-0.5">
+              <div data-testid="expression-diagnostic" data-severity={d.severity} class="flex flex-col gap-0.5">
                 <Show when={at}>
                   {(a) => (
                     <pre
@@ -253,15 +257,32 @@ export default function ExpressionField(p: {
                     </pre>
                   )}
                 </Show>
-                <span class="flex flex-wrap items-baseline gap-x-2 text-[11px] text-error">
+                <span class="flex flex-wrap items-baseline gap-x-2 text-[11px]" classList={{ [SEVERITY_TEXT[d.severity]]: true }}>
                   <span>
+                    <Show when={d.severity !== "error"}>
+                      <span class="font-semibold">{SEVERITY_WORD[d.severity]}: </span>
+                    </Show>
                     {d.line > 0 ? `Line ${d.line}, column ${d.column}: ` : ""}
                     {d.message}
                   </span>
+                  <Show when={d.code}>
+                    <a class="link font-data text-[11px] text-base-content/60" href={diagnosticHref(d.code!)} target="_blank" rel="noreferrer"
+                      title="What this diagnostic catches, with examples">
+                      {d.code}
+                    </a>
+                  </Show>
                   <Show when={d.unbound && p.onBind}>
                     <button type="button" class="link text-[11px] text-base-content/80" onClick={() => p.onBind!(d.unbound!)}>
                       {bindLabel(d.unbound!)}
                     </button>
+                  </Show>
+                  <Show when={d.fix}>
+                    {(f) => (
+                      <Button intent="quiet" size="xs" class="font-data text-[12px] font-normal" disabled={!editor()} title={`Replace with ${f().replacement}`}
+                        onClick={() => editor()?.applyFix(source, f())}>
+                        {f().title}
+                      </Button>
+                    )}
                   </Show>
                 </span>
               </div>
@@ -302,6 +323,11 @@ export default function ExpressionField(p: {
     </>
   );
 }
+
+// Each severity's color and word in the list beneath the field: an error
+// says nothing more (it is the refusal), a warning and a hint name themselves.
+const SEVERITY_TEXT: Record<string, string> = { error: "text-error", warning: "text-warning", hint: "text-info" };
+const SEVERITY_WORD: Record<string, string> = { error: "Error", warning: "Warning", hint: "Hint" };
 
 // The hover card for a binding: its name and type, and what it holds.
 function bindingCard(b: ExpressionBinding): HTMLElement {

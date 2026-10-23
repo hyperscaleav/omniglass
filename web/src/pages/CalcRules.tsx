@@ -10,6 +10,7 @@ import KVStacked from "../components/KVStacked";
 import Eyebrow from "../components/Eyebrow";
 import InfoTip from "../components/InfoTip";
 import ExpressionField from "../components/ExpressionField";
+import ExpressionNotes from "../components/ExpressionNotes";
 import Button from "../components/Button";
 import ComponentTypeSelect from "../components/ComponentTypeSelect";
 import { identityColumn } from "../components/IdentityCell";
@@ -494,6 +495,7 @@ function CalcBladeBody(p: { name: string }): JSX.Element {
               </div>
             )}
           </Show>
+          <ExpressionNotes testid="calc-warnings" notes={r().calc_warnings} where={(n) => (n.line ? `${n.field}, line ${n.line}, column ${n.column}` : n.field)} />
           <div class="grid grid-cols-2 gap-3 text-sm">
             <KVStacked bind="name" value={<span class="font-data">{r().name}</span>} />
             <KVStacked label="Origin" value={<span class="inline-flex items-center gap-1.5">{originBadge(r().official)}<Show when={r().official}><InfoTip label="official rules" text={CALC_HINTS.official} /></Show></span>} />

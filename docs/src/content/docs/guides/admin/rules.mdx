@@ -113,7 +113,12 @@ sits.
   word (Ctrl-Space asks at any point; Enter takes the highlighted one, Tab moves on to the next field),
   and shows what a name holds when you hover it. It is checked as you type: a mistake is underlined
   where it sits and pointed at under its line and column, and beneath the field are the names and
-  functions again, each with what it means. A rule written as an expression opens in this
+  functions again, each with what it means. A common mistake is said plainly, and an expression that
+  saves but is probably wrong (`value == 21.5`, which a measured number seldom equals exactly) carries a
+  **warning** in amber, which never stops the save; where a mistake has a one-click fix, a button beside
+  it applies it (Ctrl-Z takes it back), and its code links to the
+  [diagnostics table](/architecture/expressions/#diagnostics-clear-messages-and-quick-fixes). A saved
+  rule's warnings show on its blade as a note. A rule written as an expression opens in this
   mode. Switching back to the builder keeps the comparison when the expression still is one; an
   expression the builder cannot say is kept, and comes back when you switch to an expression again. A rule whose criteria no
   longer compile (its key's data type changed, say) reads **criteria do not compile** in the list,

@@ -1,6 +1,6 @@
 import type { StreamParser, StringStream } from "@codemirror/language";
 import type { CompletionContext, CompletionResult, CompletionSource } from "@codemirror/autocomplete";
-import type { Diagnostic } from "@codemirror/lint";
+import type { Action, Diagnostic } from "@codemirror/lint";
 import type { ExpressionBinding, ExpressionDiagnostic } from "./expressions";
 
 // The pure half of the expression editor (#1000): how CodeMirror reads Expr
@@ -173,16 +173,56 @@ export function bindingAt(doc: string, pos: number, bindings: ExpressionBinding[
 // bindLabel is the action that binds an unbound name.
 export const bindLabel = (name: string) => `Bind ${name} to a key`;
 
+export type ExpressionFix = NonNullable<ExpressionDiagnostic["fix"]>;
+
+// The docs' generated diagnostics table (make gen), one anchor per code.
+const DIAGNOSTICS_DOC = "https://docs.omniglass.hyperscaleav.com/architecture/expressions/";
+
+// diagnosticHref is a registered diagnostic's entry in the docs.
+export const diagnosticHref = (code: string) => `${DIAGNOSTICS_DOC}#diagnostic-${code}`;
+
+// offsetOf is the UTF-16 offset of a 1-based line and column, the column
+// counted in characters (code points) as Expr counts it; null when the
+// position is not in the source. The column may sit one past a line's last
+// character (a range that ends there).
+export function offsetOf(doc: string, line: number, column: number): number | null {
+  const lines = doc.split("\n");
+  if (line < 1 || column < 1 || line > lines.length) return null;
+  let start = 0;
+  for (let i = 0; i < line - 1; i++) start += lines[i].length + 1;
+  const chars = Array.from(lines[line - 1]);
+  if (column - 1 > chars.length) return null;
+  return start + chars.slice(0, column - 1).join("").length;
+}
+
+// fixRange is a fix's range in the source, as UTF-16 offsets; null when it
+// is not in the source.
+export function fixRange(doc: string, fix: ExpressionFix): { from: number; to: number } | null {
+  const from = offsetOf(doc, fix.line, fix.column);
+  const to = offsetOf(doc, fix.end_line, fix.end_column);
+  return from === null || to === null || to < from ? null : { from, to };
+}
+
+// applyFix is the source with a diagnostic's quick fix applied; null when
+// its range is not in the source.
+export function applyFix(doc: string, fix: ExpressionFix): string | null {
+  const r = fixRange(doc, fix);
+  return r ? doc.slice(0, r.from) + fix.replacement + doc.slice(r.to) : null;
+}
+
 // toEditorDiagnostics places the server's diagnostics in the source: each at
 // its 1-based line and column (Expr counts the column in characters, so it is
-// walked by code point, never indexed as UTF-16), underlining the word that starts there (one
-// character where none does, or the line's end when the column runs past
-// it). A diagnostic with no position (a length cap), or one off the end of
+// walked by code point, never indexed as UTF-16), underlining the word or
+// operator that starts there (one character where neither does, or the
+// line's end when the column runs past it), at its severity (an error, a
+// warning, or a hint, each drawn its own way). A diagnostic with no position
+// (a length cap, an input the expression never names), or one off the end of
 // the source, is left to the list beneath the field.
 //
 // A diagnostic that names a name nothing binds (unbound) carries an action
 // to bind it, when onBind is given (a calc rule binds a name by giving an
-// input that alias).
+// input that alias); one with a quick fix carries the fix, which rewrites
+// the source as an edit of the author's own (undoable).
 export function toEditorDiagnostics(doc: string, diags: ExpressionDiagnostic[], onBind?: (name: string) => void): Diagnostic[] {
   const lines = doc.split("\n");
   const out: Diagnostic[] = [];
@@ -193,12 +233,26 @@ export function toEditorDiagnostics(doc: string, diags: ExpressionDiagnostic[], 
     const text = lines[d.line - 1];
     const chars = Array.from(text);
     const col = chars.slice(0, Math.min(d.column - 1, chars.length)).join("").length;
-    const word = /^[\w$.]+/.exec(text.slice(col));
+    const word = /^(?:[\w$.]+|[=!<>&|?]+)/.exec(text.slice(col));
     const len = word ? word[0].length : col < text.length ? 1 : 0;
     const unbound = d.unbound;
+    const fix = d.fix;
+    const actions: Action[] = [];
+    if (unbound && onBind) actions.push({ name: bindLabel(unbound), apply: () => onBind(unbound) });
+    if (fix) {
+      actions.push({
+        name: fix.title,
+        // The fix's range is in the source the answer was for; typed past
+        // it, the fix waits for the next answer rather than land elsewhere.
+        apply: (view) => {
+          const r = view.state.doc.toString() === doc ? fixRange(doc, fix) : null;
+          if (r) view.dispatch({ changes: { from: r.from, to: r.to, insert: fix.replacement }, userEvent: "input.fix" });
+        },
+      });
+    }
     out.push({
-      from: start + col, to: start + col + len, severity: "error", message: d.message, source: d.phase,
-      ...(unbound && onBind ? { actions: [{ name: bindLabel(unbound), apply: () => onBind(unbound) }] } : {}),
+      from: start + col, to: start + col + len, severity: d.severity, message: d.message, source: d.code || d.phase,
+      ...(actions.length > 0 ? { actions } : {}),
     });
   }
   return out;

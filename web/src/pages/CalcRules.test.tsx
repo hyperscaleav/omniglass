@@ -188,6 +188,22 @@ describe("Calc rules page", () => {
     expect(within(b).getByText("call").closest("code")).toBeTruthy();
   });
 
+  // A stored reduce's warning (#1021) is a note, never an alert: the rule
+  // computes all the same.
+  it("shows a stored reduce's warnings on the blade as notes, each code linked to its docs", async () => {
+    routes();
+    const warned: CalcRule = { ...mean, calc_warnings: [{ field: "reduce.expr", line: 0, column: 0, code: "unused-alias",
+      message: "the input up is never named in the expression, so the rule reads it for nothing; use it, or remove the input" }] };
+    mount(admin, [warned, busy]);
+    fireEvent.click(screen.getByText("Room mean"));
+    const b = await blade();
+    const note = within(b).getByTestId("calc-warnings");
+    expect(note.getAttribute("role")).toBe("note");
+    expect(note.textContent).toContain("the input up is never named");
+    expect(within(note).getByRole("link", { name: "unused-alias" }).getAttribute("href")).toContain("#diagnostic-unused-alias");
+    expect(within(b).queryByTestId("calc-error")).toBeNull();
+  });
+
   it("offers New rule only on an all-scope grant", () => {
     routes();
     mount(viewer);

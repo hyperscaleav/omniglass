@@ -1,8 +1,9 @@
 import { describe, it, expect } from "vitest";
 import { EditorState } from "@codemirror/state";
+import { EditorView } from "@codemirror/view";
 import { CompletionContext } from "@codemirror/autocomplete";
 import { StringStream } from "@codemirror/language";
-import { bindingAt, exprCompletions, exprTokens, toEditorDiagnostics, type Vocabulary } from "./expressionEditor";
+import { applyFix, bindingAt, diagnosticHref, exprCompletions, exprTokens, toEditorDiagnostics, type Vocabulary } from "./expressionEditor";
 
 const vocab: Vocabulary = {
   bindings: [
@@ -233,5 +234,45 @@ describe("toEditorDiagnostics' bind action", () => {
     expect(bound).toEqual(["fan"]);
     const [plain] = toEditorDiagnostics("max(x)", [{ line: 1, column: 1, phase: "type", severity: "error", message: "expected bool" }], () => {});
     expect(plain.actions).toBeUndefined();
+  });
+});
+
+// Diagnostics by severity, with their quick fixes (#1021).
+describe("toEditorDiagnostics' severities and fixes", () => {
+  it("keeps each diagnostic's severity and underlines an operator whole", () => {
+    const doc = "value == 1.5";
+    const [w] = toEditorDiagnostics(doc, [{ line: 1, column: 7, phase: "lint", severity: "warning", code: "float-equality", message: "seldom equal" }]);
+    expect(w.severity).toBe("warning");
+    expect(doc.slice(w.from, w.to)).toBe("==");
+    expect(w.source).toBe("float-equality");
+    const [h] = toEditorDiagnostics("count(c, #) == len(c)", [{ line: 1, column: 1, phase: "lint", severity: "hint", code: "count-equals-len", message: "is all" }]);
+    expect(h.severity).toBe("hint");
+  });
+
+  it("offers a diagnostic's fix as an action that rewrites the source, in characters", () => {
+    const doc = '"\u{1F525}" != "" && sum(c) > 0';
+    const col = Array.from(doc).indexOf("s") + 1;
+    const fix = { title: "Use count", line: 1, column: col, end_line: 1, end_column: col + 3, replacement: "count" };
+    const [d] = toEditorDiagnostics(doc, [{ line: 1, column: col, phase: "type", severity: "error", code: "sum-of-bools", message: "sum adds numbers", fix }]);
+    expect(d.actions?.map((a) => a.name)).toEqual(["Use count"]);
+    const view = new EditorView({ state: EditorState.create({ doc }) });
+    d.actions![0].apply(view, d.from, d.to);
+    expect(view.state.doc.toString()).toBe('"\u{1F525}" != "" && count(c) > 0');
+    // Typed past the answer's source, a fix never lands on stale columns.
+    view.dispatch({ changes: { from: 0, insert: "x" } });
+    const typed = view.state.doc.toString();
+    d.actions![0].apply(view, d.from, d.to);
+    expect(view.state.doc.toString()).toBe(typed);
+    view.destroy();
+    expect(applyFix(doc, fix)).toBe('"\u{1F525}" != "" && count(c) > 0');
+  });
+
+  it("refuses a fix whose range is not in the source", () => {
+    expect(applyFix("sum(c)", { title: "x", line: 2, column: 1, end_line: 2, end_column: 2, replacement: "y" })).toBeNull();
+    expect(applyFix("sum(c)", { title: "x", line: 1, column: 5, end_line: 1, end_column: 2, replacement: "y" })).toBeNull();
+  });
+
+  it("links a code to its entry in the generated docs table", () => {
+    expect(diagnosticHref("sum-of-bools")).toBe("https://docs.omniglass.hyperscaleav.com/architecture/expressions/#diagnostic-sum-of-bools");
   });
 });
