@@ -1804,3 +1804,78 @@ func TestSimulatedFleetAtRealPorts(t *testing.T) {
 		t.Errorf("simulated probe targets: %d lifted, %d below 1024; want none lifted and some below 1024", lifted, low)
 	}
 }
+
+// TestSeededFleetHoldsARejectedSession proves the dev fleet carries a held
+// session worth showing (#1059): the huddle's touch panel also answers NVP over
+// telnet behind a login, and the endpoint seeded on it logs in with a stale
+// password, so a live node reads its session rejected beside Retry. The
+// right credential is a second secret the endpoint's login can be pointed at,
+// which is the fix the walkthrough teaches. A second run adds nothing.
+func TestSeededFleetHoldsARejectedSession(t *testing.T) {
+	ctx, conn, gw := seededFleet(t)
+	type ep struct{ host, port, login, node string }
+	telnet := func() (ep, int) {
+		t.Helper()
+		var e ep
+		var n int
+		rows, err := conn.Query(ctx, `
+			select e.inputs->>'host', e.inputs->>'port', e.inputs->>'login', (select n.name from node n where n.principal_id = e.node_name)
+			from endpoint e join driver d on d.id = e.driver_id join component c on c.id = e.component join location l on l.id = c.location_id
+			where d.name = 'newtron-nvp-telnet' and l.name = 'huddle'`)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer rows.Close()
+		for rows.Next() {
+			n++
+			if err := rows.Scan(&e.host, &e.port, &e.login, &e.node); err != nil {
+				t.Fatal(err)
+			}
+		}
+		return e, n
+	}
+	got, n := telnet()
+	if n != 1 {
+		t.Fatalf("huddle telnet endpoints: want 1, got %d", n)
+	}
+	var nvpHost string
+	if err := conn.QueryRow(ctx, `
+		select e.inputs->>'host'
+		from endpoint e join driver d on d.id = e.driver_id join component c on c.id = e.component join location l on l.id = c.location_id
+		where d.name = 'newtron-nvp' and l.name = 'huddle'`).Scan(&nvpHost); err != nil {
+		t.Fatalf("the huddle panel's nvp endpoint: %v", err)
+	}
+	// The panel's own simulated address, its telnet port lifted as make dev
+	// lifts every port below 1024, on the dev node, with the stale login.
+	if got.host != nvpHost || got.port != "10023" || got.node != "edge-hq" || got.login != "sim-panel-login-old" {
+		t.Fatalf("huddle telnet endpoint = %+v, want host %s, port 10023, node edge-hq, login sim-panel-login-old", got, nvpHost)
+	}
+
+	all := scope.Set{All: true}
+	reveal := func(name string) map[string]string {
+		t.Helper()
+		var id string
+		if err := conn.QueryRow(ctx, `select s.id::text from secret s join secret_type t on t.id = s.secret_type where s.name = $1 and t.name = 'basic-auth'`, name).Scan(&id); err != nil {
+			t.Fatalf("secret %s: %v", name, err)
+		}
+		fields, err := gw.RevealSecret(ctx, "", id, all, all, true)
+		if err != nil {
+			t.Fatalf("reveal %s: %v", name, err)
+		}
+		return fields
+	}
+	// The simulated panel's login is admin / newtron (its nvp-telnet face).
+	if right := reveal("sim-panel-login"); right["username"] != "admin" || right["password"] != "newtron" {
+		t.Errorf("sim-panel-login = %v, want the panel's admin / newtron", right)
+	}
+	if stale := reveal("sim-panel-login-old"); stale["username"] != "admin" || stale["password"] == "newtron" || stale["password"] == "" {
+		t.Errorf("sim-panel-login-old = %v, want admin with a password the panel refuses", stale)
+	}
+
+	if err := devseed.Run(ctx, gw, ""); err != nil {
+		t.Fatalf("second run: %v", err)
+	}
+	if _, n := telnet(); n != 1 {
+		t.Fatalf("a second run changed the huddle's telnet endpoints: %d", n)
+	}
+}

@@ -2048,3 +2048,30 @@ alarms:
     severity: warning
     message: Lamp hours approaching end of life
     dedup_key: lamp-hours
+
+# A held session worth showing (#1059), wired only with the simulated fleet (so
+# the docs screenshots, seeded without it, carry none of this). The huddle's
+# touch panel also answers its NVP line protocol over telnet behind a login
+# (the simulated panel's nvp-telnet face, admin / newtron), and this endpoint
+# logs in with a stale password: the panel answers "auth rejected", the driver
+# declares that terminal, and a live node reads the session rejected after one
+# attempt, with the panel's own words beside Retry. The right credential is the
+# other secret; pointing the endpoint's login at it moves the connection
+# fingerprint and the session comes up, which is the walkthrough
+# (retry-a-rejected-session). The host is the panel's simulated address and the
+# port the driver's default, lifted as make dev lifts it.
+sim_secrets:
+  - name: sim-panel-login
+    label: Simulated panel login
+    secret_type: basic-auth
+    fields: { username: admin, password: newtron }
+  - name: sim-panel-login-old
+    label: Simulated panel login (before the rotation)
+    secret_type: basic-auth
+    fields: { username: admin, password: newtron-2025 }
+
+sim_endpoints:
+  - component: huddle-touch
+    driver: newtron-nvp-telnet
+    label: Panel console
+    inputs: { login: sim-panel-login-old }
