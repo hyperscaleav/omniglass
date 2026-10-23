@@ -101,9 +101,9 @@ Two facts shape where the simulator runs:
 ### Fixed ports and ephemeral ports
 
 Each protocol surface a simulated component serves is a **face**: one listener, realizing one
-interface its profile declares. The engine asks every face for its port through one port map,
+surface its profile declares. The engine asks every face for its port through one port map,
 which the caller picks; the face binds what it is asked for and records the address it actually
-got (`Device.Faces`, each with the interface's name, protocol, declared port and bound address).
+got (`Device.Faces`, each with the surface's name, protocol, declared port and bound address).
 There is one bind path, so the two choices differ only in the port asked for:
 
 - **Fixed** (no map, or `sim.PrivilegedPortShift(offset)`): every face binds the port its

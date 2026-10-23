@@ -7765,7 +7765,7 @@ and port (127.89.16.5:20023 and its like, after the privileged-port lift), so tw
 one host (two worktrees, or a session beside a `make test`) failed with `bind: address already in
 use`; #1061's tests had taken a fresh address per stack as a stopgap, which isolated a `-count` rerun
 but not a second process. Now a face binds whatever port the engine's port map asks for and records
-the address it got: `Device.Faces` lists each face with its interface's name, protocol, declared port
+the address it got: `Device.Faces` lists each face with its surface's name, protocol, declared port
 and bound address. The map is the explicit choice: fixed (no map, or `PrivilegedPortShift`) for the
 operator-facing simulator, whose ports an operator, a seeded endpoint and the docs all name, and
 `sim.EphemeralPorts` for tests, where every face binds port 0 and the kernel hands it a free port. A
