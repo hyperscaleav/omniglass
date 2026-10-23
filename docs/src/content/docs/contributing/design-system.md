@@ -54,7 +54,7 @@ CLI is generated the same way. `make gen` regenerates all of it; a non-empty dif
   element, its focus and an open menu. Its columns answer the outline's own width through
   container queries rather than the window's, since the sidebar and the blade take their share
   first. Health is four fixed slots (healthy, incomplete, degraded, outage), glyph and count,
-  where healthy stays grey and only trouble carries a hue (ADR-0137).
+  where healthy wears a muted green beside the full trouble hues (ADR-0154).
 - **A detail view is one per system, its place as context.** Systems are the unit; places are
   folders and metadata; components are pieces of systems (#872). A system's view
   (`pages/SystemZoom.tsx`) is a `PlaceCard` (the place's type, tags and its own panel, never its
@@ -170,11 +170,12 @@ badge-warning` for stale). A **neutral** state (a node that has never checked in
 an unknown verdict) does **not** use `badge-neutral`: against this theme's dark `base-100`
 (`#080c16`) it renders near-black, and `theme-badges.test.ts` bans it. The app's neutral chip is
 `badge-ghost`, which `app.css` restyles from daisyUI's transparent default into a soft grey fill
-tinted from the text color, so it reads as a visible pill at the same weight as the soft hues. A
-**healthy** verdict wears `badge-healthy`, the same grey with its own name (#872): only trouble
-carries a hue, on every health pill, strip and marker, and a known healthy verdict stays
-distinguishable from an unknown one in markup. The same reason keeps `type` values (endpoint/task
-`type`) as plain `font-data` text, not a `badge-neutral` chip.
+tinted from the text color, so it reads as a visible pill at the same weight as the soft hues. The
+same reason keeps `type` values (endpoint/task `type`) as plain `font-data` text, not a
+`badge-neutral` chip. A **healthy** verdict wears green from one token, `--og-healthy` (ADR-0154):
+`badge-healthy` on a pill and `bg-healthy` on a strip at the trouble hues' weight, `text-healthy`
+(muted) on dense views such as the outline, so a known healthy verdict never reads as the grey
+unknown chip.
 
 A **severity** wears its level's color, one map for the whole console (`SEVERITY_BADGE` beside
 `SeverityBadge`): gray is the `badge-ghost` neutral chip, blue `badge-info`, green `badge-success`,

@@ -97,6 +97,7 @@
   --og-code-string: var(--color-success); --og-code-number: var(--color-info);
   --og-code-function: var(--color-accent);
   --og-up: #21cab9; --og-unknown: #8aa0c0; --og-snoozed: #a78bfa;
+  --og-healthy: var(--color-success);
   --og-average: #fb923c; --og-disaster: #e11d48;
   /* incomplete: a commissioning gap, not a fault. Deliberately a cool indigo
      rather than any warm hue, so a half-built fleet never reads as a wall of
@@ -114,6 +115,7 @@
   --og-code-string: #0e7a51; --og-code-number: #2c5bc4;
   --og-code-function: #0a6e64;
   --og-up: #11a294; --og-unknown: #6b7f99; --og-snoozed: #7c5cd6;
+  --og-healthy: var(--color-success);
   --og-average: #d97516; --og-disaster: #c81e3f;
   --og-incomplete: #5561b8;
   --tag-l: .50; --tag-c: .15;
@@ -130,11 +132,14 @@
    else should name these directly. */
 .badge-average  { color: var(--og-average);  background: color-mix(in oklch, var(--og-average) 15%, transparent);  border-color: color-mix(in oklch, var(--og-average) 45%, transparent); }
 .badge-disaster { color: var(--og-disaster); background: color-mix(in oklch, var(--og-disaster) 22%, transparent); border-color: color-mix(in oklch, var(--og-disaster) 60%, transparent); }
-/* Healthy is grey (#872): the outline's rule carried to every health pill. A
-   hue means "look here", so healthy wears the neutral chip's fill; the word and
-   the glyph still carry the state. Its own class, not badge-ghost, so a known
-   healthy verdict stays distinguishable from an unknown one in markup. */
-.badge-healthy { color: color-mix(in oklch, var(--color-base-content) 70%, transparent); background: color-mix(in oklch, var(--color-base-content) 10%, transparent); border-color: color-mix(in oklch, var(--color-base-content) 18%, transparent); }
+/* Healthy is green (#1067, reversing #872's grey, which read as unknown). One
+   token, three tiers: the pill and the strip segment wear it at the weight of
+   the trouble hues; text-healthy is the muted tier for dense views (the
+   outline's slots, the uptime figure), so a healthy fleet still reads calm and
+   the one amber branch still pops. Unknown keeps the grey badge-ghost. */
+.badge-healthy { color: var(--og-healthy); background: color-mix(in oklch, var(--og-healthy) 15%, transparent); border-color: color-mix(in oklch, var(--og-healthy) 45%, transparent); }
+.bg-healthy    { background-color: var(--og-healthy); }
+.text-healthy  { color: color-mix(in oklch, var(--og-healthy) 70%, transparent); }
 /* solid fill for a timeline segment, the StateStrip counterpart to bg-success /
    bg-warning / bg-error. daisyUI ships no semantic for this hue, so the strip
    needs its own utility or an incomplete stretch falls back to the no-data grey. */

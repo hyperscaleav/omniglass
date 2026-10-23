@@ -25,6 +25,23 @@ function walk(dir: string): string[] {
   return out;
 }
 
+// Healthy is green (#1067): one token, three utilities. A grey healthy read as
+// unknown, so the healthy rules must draw from --og-healthy, never from the
+// base-content grey the unknown chip is mixed from.
+describe("healthy hue", () => {
+  const css = readFileSync(join(SRC, "app.css"), "utf8");
+  const rule = (sel: string) => css.match(new RegExp(`\\${sel}\\s*\\{([^}]*)\\}`))?.[1] ?? "";
+  it("defines the healthy token from the success hue", () => {
+    expect(css.match(/--og-healthy:\s*var\(--color-success\)/g)?.length ?? 0).toBeGreaterThanOrEqual(1);
+  });
+  for (const sel of [".badge-healthy", ".bg-healthy", ".text-healthy"]) {
+    it(`${sel} draws from --og-healthy, not the unknown grey`, () => {
+      expect(rule(sel)).toContain("--og-healthy");
+      expect(rule(sel)).not.toContain("base-content");
+    });
+  }
+});
+
 describe("badge theming ban", () => {
   it("never uses the illegible badge-neutral class in SPA source", () => {
     const offenders = walk(SRC).filter((f) => readFileSync(f, "utf8").includes("badge-neutral"));

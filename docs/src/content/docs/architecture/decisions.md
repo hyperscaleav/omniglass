@@ -192,6 +192,7 @@ below from the project's history. From here it grows one slice at a time.
 | [ADR-0151](#adr-0151-a-held-line-session-routes-every-inbound-line-listeners-first-answers-by-reply-shape) | 2026-10-23 | Accepted | Listeners run over the held session (#817): `arm` commands on every connection before up (plumbing, self-logged), `match` claims a pushed line, its emits land as push samples under the listen task. Every inbound line is routed listeners first, then the exchange in flight by its declared `request.reply` shape (or the first unclaimed line), then unclaimed (counted; `unmatched: collection-failed` lands one fault per tick). Commands ride the held session. Reverses the designed matcher order (outstanding poll first) |
 | [ADR-0152](#adr-0152-a-driver-poll-runs-on-its-declared-schedule-at-heartbeat-granularity) | 2026-10-23 | Accepted | A driver poll runs on its declared `schedule.every` at heartbeat granularity (#822): a per-task next-due time kept for the run, the first tick at or after it runs the poll, a new task runs at once, a late tick never bursts; probes stay per tick and pushes are never gated. Settles the nodes page's open question for driver polls |
 | [ADR-0153](#adr-0153-the-held-session-proof-is-the-line-protocol-over-tcp-other-held-transports-are-their-own-issues) | 2026-10-23 | Accepted | The stateful arc proves the held session on the line protocol over `tcp` (sessions, listeners, the shared reader); SSH, which #816 named as the session-lifecycle carrier, and the other held transports are deferred, each to its own issue (#1032 ssh, #1033 telnet, #1034 websocket, #1035 tls, #1036 mqtt, #1037 udp, #1038 SSE over http, #1039 modbus/tcp, #1040 bacnet/ip, #1041 knxnet/ip, #1042 ONVIF as a driver on http, #1043 the file sample with #1044 to #1047 for file-moving protocols), with server-hosted ingress at #1024; there is no serial transport, serial being reached through an IP-to-serial gateway over tcp (or tls or telnet) |
+| [ADR-0154](#adr-0154-healthy-reads-green-tiered-so-a-calm-fleet-stays-calm) | 2026-10-23 | Accepted | Healthy reads green, reversing the grey healthy of [ADR-0137](#adr-0137-explore-is-the-fleets-door-and-it-is-an-outline-of-places) and [ADR-0139](#adr-0139-a-detail-view-is-one-per-system-its-place-a-card-of-context) (#1067): one `--og-healthy` token from the success hue, full weight on the health pill and the history strip, muted (`text-healthy`) on the outline's slots and the uptime figure; unknown keeps the grey chip |
 
 ## Entries
 
@@ -7002,3 +7003,21 @@ interface create form, since that name is the platform's to mint.
   channel semantics that are a slice of their own; holding the arc for it would have delayed a proven
   machine. The collection and nodes pages' transport fences now name these issues, so no deferred
   transport is a fence without an owner.
+
+### ADR-0154: Healthy reads green, tiered so a calm fleet stays calm
+
+- **Date:** 2026-10-23 | **Status:** Accepted | **Pages:** [health](/architecture/health/), [design system](/contributing/design-system/), [fleet guide](/guides/operator/fleet/)
+- **Decision:** A healthy verdict wears green, reversing the "healthy is grey, only trouble carries
+  a hue" rule of [ADR-0137](#adr-0137-explore-is-the-fleets-door-and-it-is-an-outline-of-places) and
+  [ADR-0139](#adr-0139-a-detail-view-is-one-per-system-its-place-a-card-of-context). One token,
+  `--og-healthy` (the theme's success hue), in three tiers: `badge-healthy` (the health pill, the
+  simulator's running pill) and `bg-healthy` (the history strip's healthy stretch) at the trouble hues'
+  weight, and `text-healthy`, a muted green, on the dense views (the outline's healthy slot and glyph,
+  a good uptime figure). Unknown keeps the grey `badge-ghost` chip.
+- **Context:** In use, the grey healthy chip and the grey unknown chip read as one state, so an
+  operator could not tell a system known to be fine from one never read (#1067). The concern #872 was
+  answering, that a fleet of loud green would bury the one amber branch, holds for the dense views, so
+  they take the muted tier; the single-subject surfaces (a pill, a strip) take the full hue, where there
+  is nothing for green to drown out. The word and the glyph still carry the state for a colour-blind
+  reader.
+

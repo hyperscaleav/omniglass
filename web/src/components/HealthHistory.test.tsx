@@ -56,12 +56,13 @@ describe("HealthHistory", () => {
     expect(seen.size).toBe(4);
   });
 
-  // Healthy stays grey (#872): only trouble wears a hue, in the strip as in
-  // the pill, so a calm month reads calm and the one bad stretch stands out.
-  it("draws healthy without a hue, in the pill and the strip", () => {
+  // Healthy reads green (#1067), in the strip as in the pill: a grey healthy
+  // stretch read as the no-data grey beside it.
+  it("draws healthy in its own green, in the pill and the strip", () => {
     const { getByText, container } = render(() => <HealthHistory transitions={[at(ago(3600_000), "healthy")]} verdict="healthy" />);
     expect(getByText("healthy").className).toContain("badge-healthy");
-    expect(container.innerHTML).not.toMatch(/\b(bg|badge)-success\b/);
+    expect(container.querySelector(".bg-healthy")).toBeTruthy();
+    expect(container.innerHTML).not.toMatch(/bg-base-content\/25/);
   });
 
   // The tooltips-not-prose rule (#790): the model this section teaches rides
