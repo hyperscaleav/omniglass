@@ -3,6 +3,9 @@ import { useQuery } from "@tanstack/solid-query";
 import { ChevronRight, Plus, Sliders } from "./icons";
 import Button from "./Button";
 import StateStrip from "./StateStrip";
+import SessionPill from "./SessionPill";
+import ReachLadder from "./ReachLadder";
+import SessionNotice from "./SessionNotice";
 import { rel } from "../lib/format";
 import { CLOCK_TICK_MS, createClock } from "../lib/clock";
 import { entityLabel } from "../lib/entities";
@@ -32,6 +35,13 @@ import {
 // read-edit-save detail blade). Those write through the endpoints API and refresh
 // this panel. The management affordances render only when the component detail
 // passes their callbacks (gated on endpoint:create / endpoint:read).
+//
+// A held session (#1059) rides the row too: the reachability ladder (ping,
+// transport, login, the layered gate visible), the session pill, and for a
+// rejected or down session the reason beneath the row without expanding it,
+// with Retry and the way into the endpoint's own edit. The ladder's chips are
+// buttons (each teaches its rung), so they sit beside the row's expand toggle,
+// never inside it.
 
 // The pill hue and label per derived verdict word.
 const PILL: Record<VerdictWord, { cls: string; label: string }> = {
@@ -98,7 +108,7 @@ function GateBreakdown(p: { iface: ReachEndpoint }) {
   );
 }
 
-function EndpointRow(p: { iface: ReachEndpoint; manageId?: string; onManage?: (id: string) => void }) {
+function EndpointRow(p: { iface: ReachEndpoint; component: string; manageId?: string; onManage?: (id: string) => void }) {
   const [open, setOpen] = createSignal(false);
   const now = createClock(CLOCK_TICK_MS);
   const word = createMemo(() => endpointWord(p.iface, now()));
@@ -127,17 +137,15 @@ function EndpointRow(p: { iface: ReachEndpoint; manageId?: string; onManage?: (i
           <div class="min-w-0 flex-1">
             <AvailabilityStrip iface={p.iface} />
           </div>
-          {/* The layer-7 rungs (#812): responds and, when a credential was
-              tried, auth. Rendered only once a probe has climbed them, so a
-              tcp/icmp endpoint's row stays exactly as it was. */}
-          <Show when={p.iface.responsive}>
-            {(r) => <span class={`badge badge-soft badge-sm shrink-0 ${r().value === "up" ? "badge-success" : "badge-error"}`}>{r().value === "up" ? "responds" : "no response"}</span>}
-          </Show>
-          <Show when={p.iface.authenticated}>
-            {(a) => <span class={`badge badge-soft badge-sm shrink-0 ${a().value === "yes" ? "badge-success" : "badge-error"}`}>{a().value === "yes" ? "auth ok" : "auth failed"}</span>}
-          </Show>
-          <span class={`badge badge-soft badge-sm shrink-0 ${pill().cls}`}>{pill().label}</span>
         </button>
+        {/* The ladder (#1059): its rungs teach themselves on hover, so they
+            are buttons of their own beside the toggle, never inside it. The
+            session pill, then the verdict pill, close the row. */}
+        <div class="flex shrink-0 items-center gap-2 pr-3">
+          <ReachLadder iface={p.iface} />
+          <SessionPill iface={p.iface} now={now()} />
+          <span class={`badge badge-soft badge-sm shrink-0 ${pill().cls}`}>{pill().label}</span>
+        </div>
         <Show when={canManage()}>
           <button
             type="button"
@@ -150,6 +158,17 @@ function EndpointRow(p: { iface: ReachEndpoint; manageId?: string; onManage?: (i
           </button>
         </Show>
       </div>
+      <Show when={p.iface.session}>
+        <div class="px-3 pb-2.5 empty:hidden">
+          <SessionNotice
+            iface={p.iface}
+            component={p.component}
+            now={now()}
+            onFix={canManage() ? () => p.onManage!(p.manageId!) : undefined}
+            fixLabel="Open endpoint"
+          />
+        </div>
+      </Show>
       <Show when={open()}>
         <GateBreakdown iface={p.iface} />
         <Show when={p.iface.node}>
@@ -179,6 +198,15 @@ export default function ReachabilityPanel(p: {
 }) {
   const q = useQuery(() => ({ queryKey: REACHABILITY_KEY(p.name), queryFn: () => getReachability(p.name) }));
   const ifaces = createMemo(() => q.data?.endpoints ?? []);
+  // Rows are kept by endpoint id, never by the objects a read hands back: the
+  // component's view polls this read and every poll returns fresh objects,
+  // which would rebuild each row, closing an expanded one and dropping a retry
+  // that waits on its session (#1059).
+  const keyOf = (it: ReachEndpoint, i: number) => it.id ?? `${it.endpoint}#${i}`;
+  const keys = createMemo(() => ifaces().map(keyOf), undefined, {
+    equals: (a, b) => a.length === b.length && a.every((x, i) => x === b[i]),
+  });
+  const byKey = createMemo(() => new Map(ifaces().map((it, i) => [keyOf(it, i), it])));
   // Only load the endpoint list when the caller can open endpoint details; map an
   // endpoint's name (the reachability row key) to its surrogate id so a row can
   // open its detail blade. Matched by component_id, not the component name
@@ -215,7 +243,13 @@ export default function ReachabilityPanel(p: {
         }
       >
         <div class="divide-y divide-base-300 overflow-hidden rounded-box border border-base-300">
-          <For each={ifaces()}>{(iface) => <EndpointRow iface={iface} manageId={idByName().get(iface.endpoint)} onManage={p.onOpenEndpoint} />}</For>
+          <For each={keys()}>
+            {(key) => (
+              <Show when={byKey().get(key)}>
+                {(iface) => <EndpointRow iface={iface()} component={p.name} manageId={idByName().get(iface().endpoint)} onManage={p.onOpenEndpoint} />}
+              </Show>
+            )}
+          </For>
         </div>
       </Show>
     </div>

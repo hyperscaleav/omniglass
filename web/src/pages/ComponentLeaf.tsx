@@ -18,10 +18,13 @@ import AlarmTimeline, { createTimelineToggles } from "../components/AlarmTimelin
 import SeverityBadge from "../components/SeverityBadge";
 import { useSeverity } from "../lib/severity";
 import SimulationSection from "../components/SimulationSection";
+import ReachLadder from "../components/ReachLadder";
+import SessionPill from "../components/SessionPill";
+import SessionNotice from "../components/SessionNotice";
 import { FLEET_VIEW_KEY, fleetView } from "../lib/fleet";
 import { COMPONENTS_KEY, listComponents, type Component as FleetComponent } from "../lib/components";
 import { componentSystemsKey, componentSystems } from "../lib/members";
-import { REACHABILITY_KEY, getReachability, lastSeenAt, layerWord } from "../lib/reachability";
+import { REACHABILITY_KEY, getReachability, lastSeenAt, type ReachEndpoint } from "../lib/reachability";
 import { componentAlarmsRead, componentAlarmsReadKey, splitAlarms } from "../lib/alarms";
 import { effectiveProperties, effectivePropertiesKey } from "../lib/component_properties";
 import { effectiveMetrics, effectiveMetricsKey } from "../lib/component_metrics";
@@ -158,6 +161,14 @@ export default function ComponentLeaf() {
     queries: nodeNames().map((n) => ({ queryKey: nodeKey(n), queryFn: () => getNode(n), refetchInterval: LEAF_NODE_POLL_MS })),
   }));
   const nodeByName = createMemo(() => new Map(nodeReads.filter((q) => q.data).map((q) => [q.data!.name, q.data!])));
+  // The collection rows are kept by endpoint id, never by the objects a poll
+  // hands back (each poll is fresh: last_seen moves), so a row's ladder
+  // tooltip and a retry waiting on its session survive the next poll (#1059).
+  const reachKey = (it: ReachEndpoint, i: number) => it.id ?? `${it.endpoint}#${i}`;
+  const reachKeys = createMemo(() => (reach.data?.endpoints ?? []).map(reachKey), undefined, {
+    equals: (a, b) => a.length === b.length && a.every((x, i) => x === b[i]),
+  });
+  const reachByKey = createMemo(() => new Map((reach.data?.endpoints ?? []).map((it, i) => [reachKey(it, i), it])));
   // The role this component fills in each system it serves: a membership
   // says THAT it belongs; the system's declared roles say what it does there.
   const roleReads = useQueries(() => ({
@@ -344,45 +355,57 @@ export default function ComponentLeaf() {
               </section>
             </Show>
             <section data-testid="leaf-collection" class="rounded-box border border-base-300 bg-base-100 p-3.5 text-sm">
-              <Eyebrow label="Collection" hint="How this component is read: each endpoint, the node collecting it, and the layers that answer. A stale sample under a healthy node points at the component or the path, not at collection." />
+              <Eyebrow label="Collection" hint="How this component is read: each endpoint, the node collecting it, and the ladder it climbs bottom up (a ping, informational only; the transport answering, the gate; then the login). A held session's state sits beside it. A stale sample under a healthy node points at the component or the path, not at collection." />
               <Show when={reach.data && (reach.data.endpoints ?? []).length > 0} fallback={<p class="text-base-content/60">No endpoint declared yet, so nothing collects from this component.</p>}>
-                <ul class="flex flex-col gap-1">
-                  <For each={reach.data!.endpoints}>
-                    {(iface) => {
-                      const state = () => collectionState(iface, iface.node ? nodeByName().get(iface.node) : undefined, pageNow());
-                      return (
-                        <li class="flex flex-wrap items-center gap-2 text-xs">
-                          <span class="font-medium">{iface.endpoint}</span>
-                          {/* The layer rungs, so component-versus-path reads at
-                              a glance: ping answers the path, the port
-                              answers the service. */}
-                          <For each={iface.layers ?? []}>
-                            {(l) => (
-                              <span class="rounded border border-base-content/15 px-1 text-[10px] text-base-content/60">
-                                {`${l.layer} ${layerWord(l)}`}
-                              </span>
-                            )}
-                          </For>
-                          <Show when={iface.node}>
-                            <span class="text-base-content/60">via {iface.node}</span>
-                          </Show>
-                          <Show when={lastSeenAt(iface)}>
-                            {(ts) => <span class="text-base-content/50">last seen {ageWords(ts(), pageNow())}</span>}
-                          </Show>
-                          <span data-testid={`collection-${iface.endpoint}`} class="rounded border border-base-content/20 px-1.5 py-0.5">
-                            {
-                              {
-                                collecting: "collecting",
-                                "component-or-path": "stale sample; the node is healthy, so check the component or the path",
-                                "node-offline": "node offline",
-                                down: "component reports down",
-                                unknown: "no sample yet",
-                              }[state().kind]
-                            }
-                          </span>
-                        </li>
-                      );
-                    }}
+                <ul class="mt-1 flex flex-col gap-1.5">
+                  <For each={reachKeys()}>
+                    {(key) => (
+                      <Show when={reachByKey().get(key)}>
+                        {(iface) => {
+                          const state = () => collectionState(iface(), iface().node ? nodeByName().get(iface().node!) : undefined, pageNow());
+                          return (
+                            <li class="flex flex-col gap-1.5">
+                              <div class="flex flex-wrap items-center gap-2 text-xs">
+                                <span class="font-medium">{iface().endpoint}</span>
+                                {/* The ladder (#1059), so component-versus-path
+                                    reads at a glance and the layered gate is
+                                    visible: the ping answers the path, the
+                                    transport answers the service, the login
+                                    answers the credential. */}
+                                <ReachLadder iface={iface()} />
+                                <SessionPill iface={iface()} now={pageNow()} />
+                                <Show when={iface().node}>
+                                  <span class="text-base-content/60">via {iface().node}</span>
+                                </Show>
+                                <Show when={lastSeenAt(iface())}>
+                                  {(ts) => <span class="text-base-content/50">last seen {ageWords(ts(), pageNow())}</span>}
+                                </Show>
+                                <span data-testid={`collection-${iface().endpoint}`} class="rounded border border-base-content/20 px-1.5 py-0.5">
+                                  {
+                                    {
+                                      collecting: "collecting",
+                                      "component-or-path": "stale sample; the node is healthy, so check the component or the path",
+                                      "node-offline": "node offline",
+                                      down: "component reports down",
+                                      rejected: "polls stopped",
+                                      "session-down": "polls failing",
+                                      unknown: "no sample yet",
+                                    }[state().kind]
+                                  }
+                                </span>
+                              </div>
+                              <SessionNotice
+                                iface={iface()}
+                                component={component()?.id ?? id()}
+                                now={pageNow()}
+                                onFix={iface().id && can(me.data, "endpoint", "read") ? () => blades.push({ kind: "endpoint", id: iface().id! }) : undefined}
+                                fixLabel="Open endpoint"
+                              />
+                            </li>
+                          );
+                        }}
+                      </Show>
+                    )}
                   </For>
                 </ul>
               </Show>

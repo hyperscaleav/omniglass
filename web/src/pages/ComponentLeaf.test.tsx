@@ -246,11 +246,40 @@ describe("the leaf's dispatch facts (#786)", () => {
     expect(within(card).getByText("6.1")).toBeTruthy();
   });
 
-  it("the collection card shows each endpoint's layer rungs", () => {
+  it("the collection card shows each endpoint's ladder, bottom up", () => {
     mount();
     const card = screen.getByTestId("leaf-collection");
-    expect(within(card).getByText("ping up")).toBeTruthy();
-    expect(within(card).getByText("port open")).toBeTruthy();
+    const rungs = within(card).getAllByTestId("ladder-rung").map((r) => `${r.dataset.rung}:${r.dataset.status}`);
+    expect(rungs).toEqual(["reachable:pass", "responsive:pass"]);
+  });
+
+  // A held session on the component's view (#1059): the pill, and a rejected
+  // session's reason with Retry, where a viewer reads Retry greyed with why.
+  const rejectedReach = {
+    component: "videobar-1",
+    endpoints: [{
+      id: uuidFor("cf-ep-telnet"), endpoint: "telnet", transport: "telnet", node: "edge-1", last_seen: iso(2),
+      verdict: { value: "up", ts: iso(60) }, responsive: { value: "up", ts: iso(60) }, authenticated: { value: "no", ts: iso(30) },
+      session: { state: "rejected", ts: iso(30), reason: "auth: auth rejected" }, rejection: { rung: "authenticated", class: "auth" },
+      layers: [{ layer: "ping", check: "icmp-reachable", value: 1, ts: iso(2) }], history: [],
+    }],
+  } as unknown as Reachability;
+
+  it("the collection card reads a rejected session, its reason, and Retry", () => {
+    mount(undefined, undefined, bar, me, undefined, { reach: rejectedReach });
+    const card = screen.getByTestId("leaf-collection");
+    expect(within(card).getByTestId("session-pill").dataset.state).toBe("rejected");
+    expect(within(card).getByTestId("session-reason").textContent).toBe("auth: auth rejected");
+    expect(within(card).getByTestId("collection-telnet").textContent).toBe("polls stopped");
+    expect((within(card).getByRole("button", { name: /retry/i }) as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it("a viewer reads the rejected session with Retry greyed and its reason", () => {
+    const viewerMe = { principal: { id: "vw", kind: "human" }, permissions: ["*:read"], grants: [] } as unknown as Me;
+    mount(undefined, undefined, bar, viewerMe, undefined, { reach: rejectedReach });
+    const card = screen.getByTestId("leaf-collection");
+    expect((within(card).getByRole("button", { name: /retry/i }) as HTMLButtonElement).disabled).toBe(true);
+    expect(within(card).getByLabelText(/needs the endpoint:retry permission/i)).toBeTruthy();
   });
 });
 

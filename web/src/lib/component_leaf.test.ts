@@ -62,6 +62,25 @@ describe("collectionState", () => {
   it("no verdict yet is unknown", () => {
     expect(collectionState(iface(null, "edge-1"), node(5), now).kind).toBe("unknown");
   });
+
+  // A held session (#1059): the probes keep delivering while it is refused or
+  // gone, so freshness alone would read collecting beside a session that
+  // polls nothing. A rejected session stops polls; a down one fails them.
+  const held = (state: "up" | "down" | "rejected") =>
+    ({ ...iface({ value: "up", ts: iso(10) }, "edge-1"), last_seen: iso(3), session: { state, ts: iso(30) } }) as ReachEndpoint;
+  it("a rejected session stops collection, however fresh the probes", () => {
+    expect(collectionState(held("rejected"), node(5), now).kind).toBe("rejected");
+  });
+  it("a down session fails collection, however fresh the probes", () => {
+    expect(collectionState(held("down"), node(5), now).kind).toBe("session-down");
+  });
+  it("an up session collects", () => {
+    expect(collectionState(held("up"), node(5), now).kind).toBe("collecting");
+  });
+  it("a node that stopped heartbeating still reads offline, whatever the session last said", () => {
+    const e = { ...held("rejected"), last_seen: iso(600) } as ReachEndpoint;
+    expect(collectionState(e, node(600), now).kind).toBe("node-offline");
+  });
 });
 
 const view: FleetView = {

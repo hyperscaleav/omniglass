@@ -23,4 +23,22 @@ describe("InfoTip", () => {
     const clip = container.querySelector('[data-testid="clip"]') as HTMLElement;
     expect(clip.contains(tip)).toBe(false); // tooltip portals out, never clipped by the drawer
   });
+
+  // A chip can be its own trigger (#1059: a ladder rung teaches itself on
+  // hover), so the console keeps one tooltip primitive rather than a second
+  // hand-rolled Kobalte tooltip per shape.
+  it("takes its trigger's content as children, named by the label in full", async () => {
+    const { getByRole } = render(() => (
+      <InfoTip text="The login, tried only once the transport answers." label="authenticated: held" class="chip">
+        <span>authenticated</span>
+      </InfoTip>
+    ));
+    const btn = getByRole("button", { name: "authenticated: held" }) as HTMLButtonElement;
+    expect(btn.type).toBe("button");
+    expect(btn.classList.contains("chip")).toBe(true);
+    expect(btn.querySelector("svg")).toBeNull(); // the chip, not the (i)
+    fireEvent.keyDown(document.body, { key: "Tab" });
+    btn.focus();
+    expect(await screen.findByText("The login, tried only once the transport answers.")).toBeTruthy();
+  });
 });
