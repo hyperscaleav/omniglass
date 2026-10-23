@@ -204,6 +204,33 @@ interfaces:
         subject: "status.video.input"
         response: "OK"
 
+  # NVP over Telnet (#1033): the same line protocol behind a login, the
+  # proving face for the telnet transport and the shared login dialog
+  # (#1049). The panel writes "login: " and "Password: " with no line ending,
+  # answers a wrong credential "auth rejected" and hangs up, and greets a
+  # good one with the welcome line, which a driver's login reads as ready.
+  # The NVP verbs are the device's commands (declared on the nvp interface
+  # above); this face declares the subject so SUBSCRIBE INPUT pushes here too.
+  - name: nvp-telnet
+    protocol: telnet
+    port: 23
+    doc:
+      summary: "NVP line protocol over Telnet, behind a login"
+      tags: [control, persistent-session, telnet]
+    auth:
+      type: password
+      default_user: admin
+      default_password: newtron
+    api_surface: newtron-nvp
+    persistent: true
+    line_ending: "\r\n"
+    welcome: "Newtron Panel 7 NVP ready."
+    subjects:
+      - match: "status.video.input"
+        path: "status.video.input"
+        publish_token: "INPUT"
+        push_format: "EVT INPUT {{ .Raw }}"
+
   - name: snmp
     protocol: snmp
     port: 161

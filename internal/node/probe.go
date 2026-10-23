@@ -62,6 +62,7 @@ func runTasks(ctx context.Context, nc *nats.Conn, node string, wl collection.Wor
 			// A driver poll runs on its declared schedule (#822), not on
 			// every heartbeat.
 			interval := pollInterval(task)
+			sched.releaseRefused(task.ID, sessions.isUp(task.EndpointID))
 			if !sched.due(task.ID, interval, now) {
 				continue
 			}
@@ -130,7 +131,7 @@ func bookPollRun(sched *pollSchedule, taskID string, interval time.Duration, now
 	if len(dps) == 0 && len(faults) > 0 {
 		for _, f := range faults {
 			if _, terminal := collection.AsTerminal(f); terminal {
-				sched.succeeded(taskID)
+				sched.refusedRun(taskID)
 				return
 			}
 		}
@@ -252,6 +253,12 @@ func collectTask(ctx context.Context, runner *collection.Runner, task collection
 			return nil, err
 		}
 		return runner.CollectHTTP(ctx, t)
+	case "telnet":
+		t, err := parseTCPTask(task)
+		if err != nil {
+			return nil, err
+		}
+		return runner.CollectTelnet(ctx, collection.TelnetTask{Target: t.Target, Timeout: t.Timeout})
 	case "ssh":
 		t, err := parseSSHTask(task)
 		if err != nil {

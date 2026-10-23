@@ -249,6 +249,30 @@ func TestTerminalFaultBooksTheFullInterval(t *testing.T) {
 	}
 }
 
+// A poll its session refused waits its interval while the session stays
+// rejected, but runs at the first tick the session is up again, so a fixed
+// credential lands data within a tick, not an interval later.
+func TestARefusedPollRunsOnceItsSessionIsUpAgain(t *testing.T) {
+	sched := newPollSchedule(5 * time.Second)
+	now := time.Date(2026, 10, 23, 0, 0, 0, 0, time.UTC)
+	every := time.Hour
+	sched.due("p1", every, now)
+	bookPollRun(sched, "p1", every, now, nil, []error{&collection.TerminalError{Class: driver.ClassAuth, Reason: "auth rejected"}})
+	later := now.Add(time.Minute)
+	sched.releaseRefused("p1", false)
+	if sched.due("p1", every, later) {
+		t.Fatal("a refused poll ran while its session was still rejected")
+	}
+	sched.releaseRefused("p1", true)
+	if !sched.due("p1", every, later) {
+		t.Fatal("a refused poll did not run once its session was up")
+	}
+	sched.releaseRefused("p1", true)
+	if sched.due("p1", every, later.Add(time.Second)) {
+		t.Fatal("the release ran the poll twice")
+	}
+}
+
 // A command on an endpoint whose driver declares a session rides it or
 // fails: never a throwaway connection.
 func TestExecuteDeliveryNeverFallsBackForASessionOnlyEndpoint(t *testing.T) {

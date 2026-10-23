@@ -371,6 +371,13 @@
    "unit": "ms",
    "label": "SSH Handshake Time",
    "description": "Time for the SSH key exchange to reach authentication; absent when the daemon never completed it."
+  },
+  {
+   "name": "telnet-response-time",
+   "data_type": "float",
+   "unit": "ms",
+   "label": "Telnet Response Time",
+   "description": "Time for a telnet port to send its first bytes (an option negotiation or a banner) after the connection opened; absent when the port accepted and stayed silent."
   }
  ],
  "event_types": [
@@ -493,6 +500,12 @@
    "description": "UDP datagram transport; probing arrives with its driver.",
    "held": false,
    "built": false
+  },
+  {
+   "name": "telnet",
+   "description": "Telnet: the line protocol over TCP with option negotiation (every option refused), its login the session's auth step; the probe connects and waits for the first negotiation or banner bytes (responds).",
+   "held": true,
+   "built": true
   },
   {
    "name": "ssh",
@@ -1742,6 +1755,15 @@
    "label": "Newtron NVP",
    "version": "1.0.0",
    "transport": "tcp",
+   "polls": 1,
+   "listeners": 1,
+   "commands": 1
+  },
+  {
+   "id": "newtron-nvp-telnet",
+   "label": "Newtron NVP over Telnet",
+   "version": "1.0.0",
+   "transport": "telnet",
    "polls": 1,
    "listeners": 1,
    "commands": 1

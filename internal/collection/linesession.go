@@ -58,7 +58,9 @@ const drainWindow = 2 * time.Millisecond
 // session's auth step before the reader starts routing lines.
 func NewLineSessionDialer() StagedDialer { return lineSessionDialer{} }
 
-type lineSessionDialer struct{}
+// lineSessionDialer dials the line protocol over tcp, or over telnet (the
+// same connection behind the telnet filter, #1033).
+type lineSessionDialer struct{ telnet bool }
 
 func (d lineSessionDialer) Dial(ctx context.Context, target string, timeout time.Duration, in Inbound) (HeldConn, error) {
 	pc, err := d.Connect(ctx, target, timeout)
@@ -68,7 +70,7 @@ func (d lineSessionDialer) Dial(ctx context.Context, target string, timeout time
 	return pc.Open(in, ChannelOptions{})
 }
 
-func (lineSessionDialer) Connect(ctx context.Context, target string, timeout time.Duration) (PendingConn, error) {
+func (ld lineSessionDialer) Connect(ctx context.Context, target string, timeout time.Duration) (PendingConn, error) {
 	if timeout <= 0 {
 		timeout = defaultSessionTimeout
 	}
@@ -76,6 +78,9 @@ func (lineSessionDialer) Connect(ctx context.Context, target string, timeout tim
 	c, err := d.DialContext(ctx, "tcp", target)
 	if err != nil {
 		return nil, fmt.Errorf("collection: line session dial %s: %w", target, err)
+	}
+	if ld.telnet {
+		c = NewTelnetConn(c)
 	}
 	return &pendingLine{c: c, target: target}, nil
 }

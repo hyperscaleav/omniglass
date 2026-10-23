@@ -87,7 +87,7 @@ func TestValidateSessionRefusals(t *testing.T) {
 
 // Polls, commands and listeners ride every held line transport, not only tcp.
 func TestValidateAcceptsTheLineFamiliesOnEveryLineTransport(t *testing.T) {
-	for _, tr := range []string{"tcp"} {
+	for _, tr := range []string{"tcp", "telnet"} {
 		s := validSpec()
 		s.Transport = tr
 		if err := s.Validate(catalog()); err != nil {

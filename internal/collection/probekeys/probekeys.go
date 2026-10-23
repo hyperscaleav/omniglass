@@ -17,6 +17,7 @@ const (
 	ICMPRTTAvg            = "icmp-rtt-avg"
 	HTTPResponseTime      = "http-response-time"
 	SSHHandshakeTime      = "ssh-handshake-time"
+	TelnetResponseTime    = "telnet-response-time"
 	EndpointReachable     = "endpoint-reachable"
 	EndpointResponsive    = "endpoint-responsive"
 	EndpointAuthenticated = "endpoint-authenticated"
@@ -30,7 +31,7 @@ const (
 )
 
 var native = []string{
-	TCPOpen, TCPConnectTime, ICMPReachable, ICMPRTTAvg, HTTPResponseTime, SSHHandshakeTime,
+	TCPOpen, TCPConnectTime, ICMPReachable, ICMPRTTAvg, HTTPResponseTime, SSHHandshakeTime, TelnetResponseTime,
 	EndpointReachable, EndpointResponsive, EndpointAuthenticated, SessionState, SessionReason,
 }
 

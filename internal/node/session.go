@@ -445,6 +445,19 @@ func (m *sessionManager) lookup(endpointID string) collection.HeldExchanger {
 	return nil
 }
 
+// isUp reports whether the node holds a session for endpointID that reads up.
+func (m *sessionManager) isUp(endpointID string) bool {
+	if m == nil || endpointID == "" {
+		return false
+	}
+	h, ok := m.held[endpointID]
+	if !ok {
+		return false
+	}
+	st, _ := h.sess.State()
+	return st == collection.SessionUp
+}
+
 // closeAll tears down every held session: node shutdown.
 func (m *sessionManager) closeAll() {
 	for id, h := range m.held {

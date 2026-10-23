@@ -32,6 +32,7 @@ var registry = []Transport{
 	{Name: "icmp", Description: "ICMP echo / ping reachability and RTT.", Held: false, Built: true},
 	{Name: "tcp", Description: "Raw TCP: the connect / port-open check, and the line protocol, which holds a session over it (polls, commands, and listeners share one connection).", Held: true, Built: true, Line: true},
 	{Name: "udp", Description: "UDP datagram transport; probing arrives with its driver.", Held: false, Built: false},
+	{Name: "telnet", Description: "Telnet: the line protocol over TCP with option negotiation (every option refused), its login the session's auth step; the probe connects and waits for the first negotiation or banner bytes (responds).", Held: true, Built: true, Line: true},
 	{Name: "ssh", Description: "SSH transport; the probe runs a real key exchange (responds), and tries the endpoint credential when one is set (auth).", Held: true, Built: true},
 	{Name: "http", Description: "HTTP transport; the probe draws a real response off the API (responds), any status counting as an answer.", Held: true, Built: true},
 	{Name: "snmp", Description: "SNMP transport; the v2c scalar driver arrives with its slice.", Held: true, Built: false},

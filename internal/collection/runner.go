@@ -73,6 +73,8 @@ type Runner struct {
 	SSH  SSHProber
 	SNMP SNMPGetter
 	Line LineExchanger
+	// Telnet is the telnet reachability probe (#1033).
+	Telnet TelnetProbe
 }
 
 // CollectTCP runs one tcp task and returns its samples. A tcp probe always
@@ -188,6 +190,7 @@ func (r *Runner) CollectICMP(ctx context.Context, t ICMPTask) ([]Sample, error) 
 const (
 	SignalHTTPResponseTime      = probekeys.HTTPResponseTime
 	SignalSSHHandshakeTime      = probekeys.SSHHandshakeTime
+	SignalTelnetResponseTime    = probekeys.TelnetResponseTime
 	SignalEndpointResponsive    = probekeys.EndpointResponsive
 	SignalEndpointAuthenticated = probekeys.EndpointAuthenticated
 	EventCollectionFailed       = "collection-failed"
@@ -198,6 +201,50 @@ const (
 type HTTPTask struct {
 	Target  string
 	Timeout time.Duration
+}
+
+// TelnetTask is the parsed telnet reachability unit (#1033): the dial
+// target and the per-attempt timeout.
+type TelnetTask struct {
+	Target  string
+	Timeout time.Duration
+}
+
+// CollectTelnet runs one telnet task: the L4 dial facts, and the responds
+// rung (the component sent its first bytes, a negotiation or a banner:
+// telnet-response-time when it did) as endpoint-responsive. A port that
+// accepts and stays silent is reached but not responsive. The login is the
+// held session's auth step, never the probe's: a probe that logged in every
+// tick would retry a bad credential forever.
+func (r *Runner) CollectTelnet(ctx context.Context, t TelnetTask) ([]Sample, error) {
+	if t.Target == "" {
+		return nil, fmt.Errorf("collection: telnet task: empty target")
+	}
+	res, err := r.Telnet.Probe(ctx, t.Target, t.Timeout)
+	if err != nil {
+		return nil, err
+	}
+	now := time.Now().UTC()
+	openVal := 0.0
+	if res.Dialed {
+		openVal = 1.0
+	}
+	out := []Sample{{
+		Name:   SignalTCPOpen,
+		Value:  openVal,
+		TS:     now,
+		Labels: map[string]string{ReasonLabel: string(res.Reason)},
+	}}
+	if res.Dialed {
+		out = append(out, Sample{Name: SignalTCPConnectTime, Value: res.DialMS, TS: now})
+	}
+	responsive := "down"
+	if res.Responded {
+		responsive = "up"
+		out = append(out, Sample{Name: SignalTelnetResponseTime, Value: res.ResponseMS, TS: now})
+	}
+	out = append(out, ladderVerdict(SignalEndpointResponsive, responsive, res.Reason, now))
+	return out, nil
 }
 
 // SSHTask is the parsed ssh unit: the dial target, the optional credential the

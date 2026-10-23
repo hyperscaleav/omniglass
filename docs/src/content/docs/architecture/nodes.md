@@ -20,10 +20,10 @@ credential is permitted only its own `<node>` subjects. Also built: running task
 `internal/bus/consumer.go`), and the raw self-log lane (ADR-0066: `internal/node/logs.go`,
 `GET /nodes/{name}/logs`, the console Self-logs panel), the command wire (a per-node pull, actuated
 over the driver's binding, [ADR-0136](/architecture/decisions/#adr-0136-actuation-is-a-per-node-pull-rendered-at-dispatch)),
-driver polls on their declared schedule (#822), and, for the line protocol over `tcp`, held sessions
+driver polls on their declared schedule (#822), and, for the line protocol over `tcp` and `telnet` (#1033), held sessions
 (#816, [below](#sessions)) with their listeners and the inbound demux (#817). Still `Design`: the
 durable JetStream command queue, the session pool knobs and the held transports beyond the line
-protocol (#1032 (ssh), #1033 (telnet), #1034 (websocket), #1035 (tls), #1036 (mqtt), #1037 (udp), #1038 (SSE over http), #1039 (modbus/tcp), #1040 (bacnet/ip), #1041 (knxnet/ip), [ADR-0153](/architecture/decisions/#adr-0153-the-held-session-proof-is-the-line-protocol-over-tcp-other-held-transports-are-their-own-issues)), the layered `_check` reachability gate,
+protocol (#1032 (ssh), #1034 (websocket), #1035 (tls), #1036 (mqtt), #1037 (udp), #1038 (SSE over http), #1039 (modbus/tcp), #1040 (bacnet/ip), #1041 (knxnet/ip), [ADR-0153](/architecture/decisions/#adr-0153-the-held-session-proof-is-the-line-protocol-over-tcp-other-held-transports-are-their-own-issues)), the layered `_check` reachability gate,
 config-generation-driven cache invalidation, node self-telemetry, the node-down sweep, the JetStream
 publish-ack delivery contract (telemetry publish is fire-and-forget today, #430), tick
 scheduling and concurrency knobs, and config apply (the `:apply` flow). The credential is a shared

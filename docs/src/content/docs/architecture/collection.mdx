@@ -161,7 +161,7 @@ Waiting for a frame is one mode (**listen**) regardless of transport; statefulne
 
 Built (#816): a session **holds its connection** across ticks. The node holds one per endpoint
 whose worklist carries a standing listen task over a transport with a session dialer (the line
-protocol over `tcp` today), or a driver poll whose driver declares a `session` block (a login a
+protocol over `tcp` and over `telnet`, #1033), or any driver poll over `telnet`, or a driver poll whose driver declares a `session` block (a login a
 throwaway connection would skip, #1049), keyed by the endpoint's id, which the worklist carries
 beside its name (endpoint names are unique only per component). The machine runs on its own:
 
@@ -268,11 +268,17 @@ the endpoint's `params` JSON, unmarshalled on the node:
 | `icmp` | inline probe | `target` (host or IP), `count`, `timeout` | `icmp-reachable`, `icmp-rtt-avg` (fixed) |
 | `tcp` | inline probe | `target` (`host:port`), `timeout` | `tcp-open`, `tcp-connect-time` (fixed) |
 | `http` | inline probe | `target` (`host:port`), `timeout` | the tcp pair, `http-response-time`, `endpoint-responsive` |
+| `telnet` | inline probe | `target` (`host:port`), `timeout` | the tcp pair, `telnet-response-time` (the first negotiation or banner bytes), `endpoint-responsive`; the login is the held session's auth step, never the probe's |
 | `ssh` | inline probe | `target` (`host:port`), `timeout`, optional `username`/`password` (secret references arrive with the driver spec) | the tcp pair, `ssh-handshake-time`, `endpoint-responsive`, `endpoint-authenticated` (only when a credential was tried) |
 
 The `raw-tcp` row below is built in its driver form: the line protocol over `tcp` holds a session
-(#816) that polls, commands, and listeners share (#817). The other held transports are each their own
-issue: #1032 (ssh), #1033 (telnet), #1034 (websocket), #1035 (tls), #1036 (mqtt), #1037 (udp), #1038 (SSE over http), #1039 (modbus/tcp), #1040 (bacnet/ip), #1041 (knxnet/ip). There is no serial transport: an RS-232 or RS-485 device is reached
+(#816) that polls, commands, and listeners share (#817). So is the `telnet` row (#1033): the same line
+protocol behind a telnet filter that strips option negotiation and refuses every option (DO is
+answered WONT, WILL is answered DONT, a literal 0xFF escaped), its login the driver's login dialog run
+as the session's auth step on establish and every recover; proven against the simulated panel's
+`nvp-telnet` face (login, poll, command, push, recover with a fresh login, and a wrong password
+rejected after one attempt). The other held transports are each their own
+issue: #1032 (ssh), #1034 (websocket), #1035 (tls), #1036 (mqtt), #1037 (udp), #1038 (SSE over http), #1039 (modbus/tcp), #1040 (bacnet/ip), #1041 (knxnet/ip). There is no serial transport: an RS-232 or RS-485 device is reached
 through an IP-to-serial gateway, which is the `tcp` transport (or `tls` or `telnet`), so its driver is
 a line protocol like any other ([ADR-0153](/architecture/decisions/#adr-0153-the-held-session-proof-is-the-line-protocol-over-tcp-other-held-transports-are-their-own-issues)).
 

@@ -48,6 +48,12 @@ type Config struct {
 	// standing listen task over tcp holds its connection with. Nil defaults
 	// to the real collection.NewLineSessionDialer(); tests inject a fake.
 	LineSession collection.SessionDialer
+	// TelnetSession is the held telnet dialer (#1033). Nil defaults to the
+	// real collection.NewTelnetSessionDialer(); tests inject a fake.
+	TelnetSession collection.SessionDialer
+	// Telnet is the telnet reachability probe (#1033). Nil defaults to the
+	// real collection.NewTelnetProber().
+	Telnet collection.TelnetProbe
 }
 
 // Run claims the node's NATS credential, connects outbound-only to the bus,
@@ -111,7 +117,11 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 	if lineExchanger == nil {
 		lineExchanger = collection.NewLineExchanger()
 	}
-	runner := &collection.Runner{TCP: dialer, Ping: pinger, HTTP: httpProber, SSH: sshProber, SNMP: snmpGetter, Line: lineExchanger}
+	telnetProber := cfg.Telnet
+	if telnetProber == nil {
+		telnetProber = collection.NewTelnetProber()
+	}
+	runner := &collection.Runner{TCP: dialer, Ping: pinger, HTTP: httpProber, SSH: sshProber, SNMP: snmpGetter, Line: lineExchanger, Telnet: telnetProber}
 
 	// The held sessions (#816): one per endpoint whose worklist carries a
 	// standing listen task over a transport with a session dialer (or a
@@ -128,7 +138,11 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 	// A listener's claimed push lands the same way, at once and under its
 	// listen task (#817); the arm conversation is plumbing, so it is a
 	// self-log and never a command row.
-	sessions := newSessionManager(map[string]collection.SessionDialer{"tcp": lineSession}, sessionHooks{
+	telnetSession := cfg.TelnetSession
+	if telnetSession == nil {
+		telnetSession = collection.NewTelnetSessionDialer()
+	}
+	sessions := newSessionManager(map[string]collection.SessionDialer{"tcp": lineSession, "telnet": telnetSession}, sessionHooks{
 		transition: func(taskID, endpoint string, tr collection.SessionTransition) {
 			// A rejection is logged once, at the transition, never per tick
 			// (#1049): the rejected session dials no more, so nothing repeats.
