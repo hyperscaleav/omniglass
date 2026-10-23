@@ -451,3 +451,57 @@ func TestCalcComponentRetype(t *testing.T) {
 		t.Fatalf("%d marks after re-stating the product, want none", n)
 	}
 }
+
+// A component retyped out of a rule's selector while a serve holds the
+// rule's mark there does not wait on the serve, and the serve, rechecking
+// selection after the retype commits, computes nothing and leaves no state.
+func TestCalcComponentRetypeWhileServing(t *testing.T) {
+	r := newEvalRig(t)
+	display, generic := "boreal-edge-55", "generic-device"
+	if _, err := r.gw.UpdateComponent(r.ctx, "", r.comp, storage.ComponentPatch{ProductName: &display}, r.all, r.all); err != nil {
+		t.Fatal(err)
+	}
+	spec := avgSpec("display-mean")
+	spec.Selector = storage.CalcRuleSelector{ComponentTypes: []string{"display"}}
+	if _, err := r.create(spec); err != nil {
+		t.Fatal(err)
+	}
+	r.metric("room-temperature", "", 20)
+	taken, resume := make(chan struct{}), make(chan struct{})
+	r.gw.SetCalcServeHook(func(stage string) error {
+		if stage == "taken" {
+			close(taken)
+			<-resume
+		}
+		return nil
+	})
+	drained := make(chan error, 1)
+	go func() { _, err := r.gw.DrainCalcPending(r.ctx, 1); drained <- err }()
+	<-taken
+	r.gw.SetCalcServeHook(nil)
+	retyped := make(chan error, 1)
+	go func() {
+		_, err := r.gw.UpdateComponent(r.ctx, "", r.comp, storage.ComponentPatch{ProductName: &generic}, r.all, r.all)
+		retyped <- err
+	}()
+	select {
+	case err := <-retyped:
+		if err != nil {
+			t.Fatalf("the retype: %v", err)
+		}
+	case <-time.After(10 * time.Second):
+		close(resume)
+		t.Fatal("the retype waited on the held serve")
+	}
+	close(resume)
+	if err := <-drained; err != nil {
+		t.Fatal(err)
+	}
+	r.drain()
+	if got := r.calculated("avg-temp"); len(got) != 0 {
+		t.Fatalf("avg-temp rows %v after leaving the selector, want none", got)
+	}
+	if n := count(t, r.conn, `select count(*) from calc_rule_state where component_id = '`+r.comp+`'`); n != 0 {
+		t.Fatalf("%d state rows after leaving the selector, want none", n)
+	}
+}
