@@ -626,6 +626,11 @@ func TestCommandWireDelivery(t *testing.T) {
 	if d.EndpointID == "" || d.Reply == nil || d.Reply.Prefix != "INPUT " {
 		t.Fatalf("delivery endpoint %q reply %+v, want the endpoint and the declared reply shape", d.EndpointID, d.Reply)
 	}
+	// #1049: a tcp driver with no session block may still fall back to a
+	// throwaway connection when no session is held.
+	if d.SessionOnly {
+		t.Fatalf("delivery = %+v, want not session-only for a tcp driver with no session block", d)
+	}
 
 	// Dispatched: an immediate re-pull redelivers nothing (at-least-once
 	// means silence redelivers, not every pull).

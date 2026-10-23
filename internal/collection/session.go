@@ -20,8 +20,12 @@ import (
 // surfaced as the session-state property per endpoint (the transitions only)
 // plus the node's own logs, which carry the reasons.
 
-// SignalSessionState is the property the session's transitions land under.
-const SignalSessionState = probekeys.SessionState
+// SignalSessionState is the property the session's transitions land under,
+// and SignalSessionReason the property their reasons land under (#1049).
+const (
+	SignalSessionState  = probekeys.SessionState
+	SignalSessionReason = probekeys.SessionReason
+)
 
 // SessionState is the session's honest state, the session-state property's
 // value domain.
@@ -42,6 +46,12 @@ const (
 	// outliving the stable window), so a device that returns reads up again
 	// unattended and one that keeps failing publishes nothing more.
 	SessionDown SessionState = "down"
+	// SessionRejected: a refusal retrying cannot fix (#1049): the auth step
+	// was refused, a reply the driver declares terminal arrived, or the
+	// transport refused on its own account (a changed host key). The
+	// session holds no connection and dials no more until its endpoint
+	// changes, an operator retries, or the driver's slow re-probe comes due.
+	SessionRejected SessionState = "rejected"
 )
 
 // The recovery bounds. A failed attempt waits SessionBackoff(attempt), an
@@ -132,6 +142,50 @@ type SessionDialer interface {
 	Dial(ctx context.Context, target string, timeout time.Duration, in Inbound) (HeldConn, error)
 }
 
+// StagedDialer is a dialer whose connections run the session's auth step
+// between connecting and routing (#1049): Connect makes the connection,
+// PendingConn.Authenticate runs the auth step over it, and only then does
+// Open start routing lines, so nothing (a poll, a command, a listener's
+// arm) can ride a connection that has not authenticated.
+type StagedDialer interface {
+	SessionDialer
+	Connect(ctx context.Context, target string, timeout time.Duration) (PendingConn, error)
+}
+
+// PendingConn is a connection made and not yet routing.
+type PendingConn interface {
+	// Authenticate runs the auth step: the transport's own (ssh userauth)
+	// and the driver's login dialog. A refusal is a TerminalError; anything
+	// else that fails it is retryable.
+	Authenticate(ctx context.Context, auth *SessionAuth, terminal Classifier, timeout time.Duration) error
+	// Open starts routing: the connection becomes the session's HeldConn.
+	Open(in Inbound, ch ChannelOptions) (HeldConn, error)
+	Close() error
+}
+
+// SessionAuth is the session's auth step, declared by the driver or the
+// transport. Its fields carry credentials: it is never printed.
+type SessionAuth struct {
+	// Login is the driver's login dialog, its sends rendered.
+	Login *LoginDialog
+}
+
+// String never prints a credential.
+func (a *SessionAuth) String() string { return "session auth" }
+
+// ChannelOptions shape the line channel a connection opens.
+type ChannelOptions struct{}
+
+// AuthVerdict is the auth step's outcome, the endpoint-authenticated rung:
+// Authenticated with the reason it passed, or refused with the device's
+// text. Reported only when the step decided (a dropped or silent login
+// decides nothing) and only when the verdict changes.
+type AuthVerdict struct {
+	Authenticated bool
+	Reason        string
+	At            time.Time
+}
+
 // SessionConfig is what a session needs: where to connect, how, and who hears
 // its transitions. Backoff and Now default to the jittered curve and the wall
 // clock; tests inject their own.
@@ -154,6 +208,23 @@ type SessionConfig struct {
 	// and nothing records a command row.
 	Arm   []string
 	OnArm func(line, reply string, err error)
+	// Auth is the session's auth step (#1049); nil runs none. Every attempt
+	// runs it after connecting and before anything borrows the connection,
+	// over a StagedDialer (a dialer that cannot run one rejects the session
+	// as a protocol refusal).
+	Auth *SessionAuth
+	// OnAuth hears the auth step's verdict when it changes.
+	OnAuth func(AuthVerdict)
+	// Terminal classifies a device's line as a refusal retrying cannot fix
+	// (the driver's terminal rules): during the login, and as the answer or
+	// refusal of any exchange or arm. A match rejects the session.
+	Terminal Classifier
+	// Reprobe is how long a rejected session waits before trying once more
+	// on its own; zero is never (the driver declares it, slow by design).
+	Reprobe time.Duration
+	// After is the clock's timer for the backoff and the re-probe; nil is
+	// time.After. Tests inject a fake clock.
+	After func(time.Duration) <-chan time.Time
 }
 
 // Session holds one endpoint's connection. Start it with StartSession, borrow
@@ -174,6 +245,13 @@ type Session struct {
 	// dialing is true while the first dial is in flight: the one window an
 	// exchange waits in, so the first poll after a start rides it.
 	dialing bool
+	// refusal is why the session is rejected, nil otherwise.
+	refusal *TerminalError
+	// retry wakes a rejected session for one more attempt (Retry);
+	// terminal carries a terminal reply an exchange met to the machine.
+	retry    chan struct{}
+	terminal chan *TerminalError
+	lastAuth string // the last auth verdict reported, so it reports changes only
 }
 
 // StartSession starts the machine: it reports establishing at once and
@@ -191,10 +269,35 @@ func StartSession(cfg SessionConfig) *Session {
 	if cfg.StableAfter <= 0 {
 		cfg.StableAfter = SessionStableAfter
 	}
+	if cfg.After == nil {
+		cfg.After = time.After
+	}
 	ctx, cancel := context.WithCancel(context.Background())
-	s := &Session{cfg: cfg, cancel: cancel, done: make(chan struct{}), changed: make(chan struct{}), dialing: true}
+	s := &Session{
+		cfg: cfg, cancel: cancel, done: make(chan struct{}), changed: make(chan struct{}), dialing: true,
+		retry: make(chan struct{}, 1), terminal: make(chan *TerminalError, 1),
+	}
 	go s.run(ctx)
 	return s
+}
+
+// Retry wakes a rejected session for one more attempt (an operator's retry,
+// or the endpoint's revision moving): it dials once, and reads up, rejected
+// again, or, on a transient failure, follows the ordinary backoff and
+// budget. A session that is not rejected is left alone, and Retry reports
+// false.
+func (s *Session) Retry() bool {
+	s.mu.Lock()
+	rejected := s.state == SessionRejected && !s.closed
+	s.mu.Unlock()
+	if !rejected {
+		return false
+	}
+	select {
+	case s.retry <- struct{}{}:
+	default:
+	}
+	return true
 }
 
 // State is the session's current state and the reason for it.
@@ -224,10 +327,13 @@ func (s *Session) Exchange(ctx context.Context, line string, reply *driver.Reply
 			s.mu.Unlock()
 			return "", ErrSessionClosed
 		}
-		conn, heard, state, reason, changed, dialing := s.conn, s.heard, s.state, s.reason, s.changed, s.dialing
+		conn, heard, state, reason, changed, dialing, refusal := s.conn, s.heard, s.state, s.reason, s.changed, s.dialing, s.refusal
 		s.mu.Unlock()
 		if conn != nil {
 			answer, err := conn.Exchange(ctx, line, reply, timeout)
+			if terr := s.terminalReply(answer, err); terr != nil {
+				return "", fmt.Errorf("collection: session to %s: %w", s.cfg.Target, terr)
+			}
 			if err == nil {
 				select {
 				case heard <- struct{}{}:
@@ -235,6 +341,11 @@ func (s *Session) Exchange(ctx context.Context, line string, reply *driver.Reply
 				}
 			}
 			return answer, err
+		}
+		if refusal != nil {
+			// Rejected: fail fast as the refusal itself, so a poll waits its
+			// interval and a command fails with the reason, never a retry.
+			return "", fmt.Errorf("collection: session to %s is %s: %w", s.cfg.Target, state, refusal)
 		}
 		if !dialing {
 			return "", fmt.Errorf("collection: session to %s is %s: %s", s.cfg.Target, state, reason)
@@ -252,6 +363,29 @@ func (s *Session) Exchange(ctx context.Context, line string, reply *driver.Reply
 			return "", fmt.Errorf("collection: session to %s: %w", s.cfg.Target, ctx.Err())
 		}
 	}
+}
+
+// terminalReply classifies an exchange's answer, or the device's refusal, by
+// the driver's terminal rules. A match is handed to the machine, which
+// rejects the session, and becomes the exchange's error.
+func (s *Session) terminalReply(answer string, err error) *TerminalError {
+	line := answer
+	if err != nil {
+		var refused *RefusedError
+		if !errors.As(err, &refused) {
+			return nil
+		}
+		line = refused.Line
+	}
+	terr := s.cfg.Terminal.classify(line)
+	if terr == nil {
+		return nil
+	}
+	select {
+	case s.terminal <- terr:
+	default:
+	}
+	return terr
 }
 
 // Close tears the session down: the machine stops, the held connection
@@ -279,6 +413,9 @@ func (s *Session) transition(state SessionState, reason string, conn HeldConn) {
 		return
 	}
 	s.state, s.reason = state, reason
+	if state != SessionRejected {
+		s.refusal = nil
+	}
 	if conn == nil {
 		s.conn, s.heard, s.pushed = nil, nil, nil
 	}
@@ -356,11 +493,32 @@ func (s *Session) run(ctx context.Context) {
 			s.transition(state, cause, nil)
 		}
 	}
+	// reject moves the session to rejected and waits there: for an
+	// operator's retry, the driver's re-probe, or the end. false is the end.
+	reject := func(terr *TerminalError) bool {
+		failures, needAnswer = 0, false
+		state = SessionRejected
+		s.mu.Lock()
+		s.refusal = terr
+		s.mu.Unlock()
+		s.transition(state, terr.Error(), nil)
+		var reprobe <-chan time.Time
+		if s.cfg.Reprobe > 0 {
+			reprobe = s.cfg.After(s.cfg.Reprobe)
+		}
+		select {
+		case <-ctx.Done():
+			return false
+		case <-s.retry:
+		case <-reprobe:
+		}
+		return true
+	}
 	for {
-		if failures > 0 && !sleepCtx(ctx, s.cfg.Backoff(failures)) {
+		if failures > 0 && !s.sleep(ctx, s.cfg.Backoff(failures)) {
 			return
 		}
-		conn, err := s.cfg.Dialer.Dial(ctx, s.cfg.Target, s.cfg.Timeout, provingInbound{s})
+		conn, err := s.connect(ctx)
 		if ctx.Err() != nil {
 			if conn != nil {
 				_ = conn.Close()
@@ -369,23 +527,42 @@ func (s *Session) run(ctx context.Context) {
 		}
 		if err != nil {
 			s.firstDialDone()
+			if terr, ok := AsTerminal(err); ok {
+				if !reject(terr) {
+					return
+				}
+				continue
+			}
 			fail(err.Error())
 			continue
 		}
 		// Arm before anything borrows the connection or it reads up, so the
 		// listeners' subscriptions are in place whenever the session is up.
-		// An arm the device does not answer is a failed attempt.
+		// An arm the device does not answer is a failed attempt; one it
+		// answers with a terminal reply rejects the session.
 		if err := s.armConn(ctx, conn); err != nil {
 			_ = conn.Close()
 			if ctx.Err() != nil {
 				return
 			}
+			s.firstDialDone()
+			if terr, ok := AsTerminal(err); ok {
+				if !reject(terr) {
+					return
+				}
+				continue
+			}
 			if errors.Is(err, ErrExchangeTimeout) {
 				needAnswer = true
 			}
-			s.firstDialDone()
 			fail("arming failed: " + err.Error())
 			continue
+		}
+		// A terminal reply met before this connection (on the last one) is
+		// stale: drop it.
+		select {
+		case <-s.terminal:
+		default:
 		}
 		heard, pushed := make(chan struct{}, 1), make(chan struct{}, 1)
 		s.lend(conn, heard, pushed)
@@ -410,6 +587,7 @@ func (s *Session) run(ctx context.Context) {
 			s.transition(state, "connected to "+s.cfg.Target, conn)
 		}
 		answered := false
+		var refused *TerminalError
 	held:
 		for {
 			select {
@@ -417,6 +595,8 @@ func (s *Session) run(ctx context.Context) {
 				stopTimer(stableTimer)
 				_ = conn.Close()
 				return
+			case refused = <-s.terminal:
+				break held
 			case <-heard:
 				answered = true
 				failures, needAnswer = 0, false
@@ -446,6 +626,12 @@ func (s *Session) run(ctx context.Context) {
 		cause := conn.Err()
 		_ = conn.Close()
 		s.lend(nil, nil, nil)
+		if refused != nil {
+			if !reject(refused) {
+				return
+			}
+			continue
+		}
 		reason := "connection lost"
 		if cause != nil {
 			reason += ": " + cause.Error()
@@ -467,6 +653,71 @@ func (s *Session) run(ctx context.Context) {
 	}
 }
 
+// connect makes one attempt's connection: dial, then the auth step, then
+// routing. Over a StagedDialer the auth step runs between connecting and
+// opening, so nothing rides the connection before it passes; its verdict is
+// reported as the endpoint-authenticated rung. A session declaring an auth
+// step over a dialer that cannot run one is a protocol refusal.
+func (s *Session) connect(ctx context.Context) (HeldConn, error) {
+	staged, ok := s.cfg.Dialer.(StagedDialer)
+	if !ok {
+		if s.cfg.Auth != nil {
+			return nil, &TerminalError{Class: driver.ClassProtocol, Reason: "the transport cannot run the declared auth step"}
+		}
+		return s.cfg.Dialer.Dial(ctx, s.cfg.Target, s.cfg.Timeout, provingInbound{s})
+	}
+	pc, err := staged.Connect(ctx, s.cfg.Target, s.cfg.Timeout)
+	if err != nil {
+		return nil, err
+	}
+	if s.cfg.Auth != nil {
+		if err := pc.Authenticate(ctx, s.cfg.Auth, s.cfg.Terminal, s.cfg.Timeout); err != nil {
+			_ = pc.Close()
+			if terr, ok := AsTerminal(err); ok && terr.Class == driver.ClassAuth {
+				s.reportAuth(false, terr.Error())
+			}
+			return nil, err
+		}
+		s.reportAuth(true, "the auth step passed on "+s.cfg.Target)
+	}
+	conn, err := pc.Open(provingInbound{s}, ChannelOptions{})
+	if err != nil {
+		_ = pc.Close()
+		return nil, err
+	}
+	return conn, nil
+}
+
+// reportAuth reports the auth verdict when it changes. Called only from the
+// machine's goroutine.
+func (s *Session) reportAuth(ok bool, reason string) {
+	v := "no"
+	if ok {
+		v = "yes"
+	}
+	if v == s.lastAuth {
+		return
+	}
+	s.lastAuth = v
+	if s.cfg.OnAuth != nil {
+		s.cfg.OnAuth(AuthVerdict{Authenticated: ok, Reason: reason, At: s.cfg.Now().UTC()})
+	}
+}
+
+// sleep waits d on the session's clock, or until ctx ends; false means ctx
+// ended.
+func (s *Session) sleep(ctx context.Context, d time.Duration) bool {
+	if d <= 0 {
+		return ctx.Err() == nil
+	}
+	select {
+	case <-ctx.Done():
+		return false
+	case <-s.cfg.After(d):
+		return true
+	}
+}
+
 // ErrUnacknowledged is reported for an arm command the device sent nothing
 // back for within the timeout: armed, unacknowledged. Not a failure, since
 // many devices subscribe silently; only the connection dying fails the arm.
@@ -479,6 +730,12 @@ var ErrUnacknowledged = errors.New("armed, unacknowledged")
 func (s *Session) armConn(ctx context.Context, conn HeldConn) error {
 	for _, line := range s.cfg.Arm {
 		reply, err := conn.Exchange(ctx, line, driver.AnyLine(), s.cfg.Timeout)
+		if terr := s.cfg.Terminal.classify(reply); err == nil && terr != nil {
+			if s.cfg.OnArm != nil {
+				s.cfg.OnArm(line, reply, terr)
+			}
+			return terr
+		}
 		if err != nil && errors.Is(err, ErrNoAnswer) && !isDone(conn) {
 			err = ErrUnacknowledged
 		}
@@ -518,20 +775,5 @@ func (s *Session) firstDialDone() {
 func stopTimer(t *time.Timer) {
 	if t != nil {
 		t.Stop()
-	}
-}
-
-// sleepCtx waits d or until ctx ends; false means ctx ended.
-func sleepCtx(ctx context.Context, d time.Duration) bool {
-	if d <= 0 {
-		return ctx.Err() == nil
-	}
-	t := time.NewTimer(d)
-	defer t.Stop()
-	select {
-	case <-ctx.Done():
-		return false
-	case <-t.C:
-		return true
 	}
 }

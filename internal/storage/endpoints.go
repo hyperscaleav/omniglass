@@ -431,6 +431,41 @@ func (p *PG) UpdateEndpoint(ctx context.Context, actorID, id string, patch Endpo
 	return after, nil
 }
 
+// RetryEndpoint records an operator's retry of the endpoint's held session
+// (#1049): it moves the endpoint's revision (updated_at, carried on the
+// worklist), which wakes a rejected session on the node for exactly one
+// attempt; a session that is not rejected ignores it. The read/action split
+// runs through the owning component like every endpoint write, and the
+// retry is audited in the same transaction.
+func (p *PG) RetryEndpoint(ctx context.Context, actorID, id string, read, action scope.Set) (*Endpoint, error) {
+	tx, err := p.pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("storage: begin retry endpoint: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	before, err := resolveEndpointScoped(ctx, tx, id, read, action)
+	if err != nil {
+		return nil, err
+	}
+	// clock_timestamp, not now(): two retries in one transaction-start
+	// instant must still move the revision.
+	after, err := scanEndpoint(tx.QueryRow(ctx, `
+		update endpoint set updated_at = greatest(clock_timestamp(), updated_at + interval '1 microsecond')
+		where id = $1
+		returning `+endpointCols, before.ID))
+	if err != nil {
+		return nil, mapEndpointWriteErr(err)
+	}
+	if err := writeAuditRes(ctx, tx, actorID, "retry", "endpoint", after.ID, before, after); err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("storage: commit retry endpoint: %w", err)
+	}
+	return after, nil
+}
+
 // DeleteEndpoint removes an endpoint by id with the read/action split (through
 // the owning component) and in-transaction audit. Its derived tasks cascade-delete
 // with it (task.interface_id ON DELETE CASCADE).

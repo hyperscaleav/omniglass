@@ -14,7 +14,8 @@ roles:
   - id: operator
     label: Operator
     description: >-
-      Day-to-day operations: create or edit components, endpoints, secrets,
+      Day-to-day operations: create or edit components, endpoints (and retry
+      an endpoint's rejected session), secrets,
       variables, and the property, metric, event, and command catalogs, issue
       commands in scope, and impair simulated devices.
       Sees and reveals the device secrets in its scope (never the admin-sensitive
@@ -22,7 +23,7 @@ roles:
     inherits: ["viewer"]
     permissions:
       - "component:create,update,rename,move"
-      - "endpoint:create,update"
+      - "endpoint:create,update,retry"
       - "secret:read,reveal,create,update"
       - "variable:create,update"
       - "property_type:create,update"

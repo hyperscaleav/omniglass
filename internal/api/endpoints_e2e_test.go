@@ -97,6 +97,15 @@ func TestEndpointAPI(t *testing.T) {
 			t.Fatalf("operator@B leaked comp-a endpoint %q", it.Name)
 		}
 	}
+
+	// :retry (#1049) wakes a rejected session for one attempt. It is gated by
+	// endpoint:retry, which the viewer floor lacks (a capability 403), scoped
+	// through the component (A's endpoint is a non-disclosing 404 to the
+	// operator scoped to B), and held by the operator in scope.
+	c.do(viewerAllTok, http.MethodPost, "/endpoints/"+ifA.ID+":retry", nil, http.StatusForbidden)
+	c.do(opBTok, http.MethodPost, "/endpoints/"+ifA.ID+":retry", nil, http.StatusNotFound)
+	c.do(opBTok, http.MethodPost, "/endpoints/"+ifB.ID+":retry", nil, http.StatusOK)
+	c.do(ownerTok, http.MethodPost, "/endpoints/"+ifA.ID+":retry", nil, http.StatusOK)
 }
 
 // TestEndpointCreateWithAmbiguousComponentIs409 closes I1's other half: the

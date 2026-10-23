@@ -165,17 +165,29 @@ The built endpoint types, their per-task params, and the fixed samples each emit
 ## Sessions
 
 Built (#816): the node holds one session per endpoint whose worklist carries a standing listen task
-over a transport with a session dialer (the line protocol over `tcp` today), reconciled against
-every worklist pull and torn down on task removal, re-address, or node shutdown. It establishes,
+over a transport with a session dialer (the line protocol over `tcp` today), or a driver poll whose
+driver declares a `session` block, reconciled against every worklist pull and torn down on task
+removal, re-address, or node shutdown. It establishes,
 lends its connection to the endpoint's line polls, recovers with a jittered, bounded backoff, and
 reports each transition as the `session-state` property (`establishing`, `up`, `recovering`,
-`down`) plus a self-log carrying the reason; there is no `session_log` table
+`down`, `rejected`) plus `session-reason` and a self-log carrying the reason; there is no
+`session_log` table
 ([ADR-0150](/architecture/decisions/#adr-0150-a-held-sessions-state-is-a-property-series-and-node-logs-not-a-session-table)).
 The machine's detail is on [collection](/architecture/collection/#sessions). Built with #817: the
 subscription on establish (a listener's instantiation commands, re-sent on every recover) and the
 demux on the shared connection (listeners first, answers by reply shape;
-[routing](/architecture/collection/#listeners-over-a-held-session)). Still design below: the pool
-knobs and authentication on establish.
+[routing](/architecture/collection/#listeners-over-a-held-session)). Built with #1049:
+**authentication on establish**, as a layer that gates the session. The worklist carries each
+driver task's `session` block (read off the live driver spec) and the endpoint's revision; the node
+renders the login against the delivered secrets (a credential it lacks refuses the session by
+reference, never by value), runs it on every connection before any poll, command, or arm, and
+publishes its verdict as `endpoint-authenticated`. A terminal refusal reads `rejected` and the node
+dials no more: a poll over it fails fast and waits its interval, a command fails with the reason, and
+neither falls back to a throwaway connection. A changed credential or address recycles the session;
+an operator's `:retry` moves the endpoint's revision, which wakes a rejected session for exactly one
+attempt ([auth and rejection](/architecture/collection/#auth-and-rejection),
+[ADR-0154](/architecture/decisions/#adr-0154-auth-is-a-layer-that-gates-a-held-session-and-a-terminal-refusal-reads-rejected)).
+Still design below: the pool knobs.
 
 ::::design[Target design: sessions and the session pool, tracked in #603; the held transports beyond the line protocol are #1032 (ssh), #1033 (telnet), #1034 (websocket), #1035 (tls), #1036 (mqtt), #1037 (udp), #1038 (SSE over http), #1039 (modbus/tcp), #1040 (bacnet/ip), #1041 (knxnet/ip)]
 A stateful endpoint (`ssh`, `mqtt`, anything held open) becomes a **session** at runtime: one

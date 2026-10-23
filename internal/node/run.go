@@ -114,7 +114,9 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 	runner := &collection.Runner{TCP: dialer, Ping: pinger, HTTP: httpProber, SSH: sshProber, SNMP: snmpGetter, Line: lineExchanger}
 
 	// The held sessions (#816): one per endpoint whose worklist carries a
-	// standing listen task over a transport with a session dialer. A
+	// standing listen task over a transport with a session dialer (or a
+	// poll whose driver declares a session, or over a transport with no
+	// stateless line, #1049). A
 	// transition lands at once (not on the next tick) as the session-state
 	// property under the listen task, and as a self-log carrying the reason;
 	// the deferred closeAll is the node-shutdown teardown, run before the bus
@@ -128,9 +130,23 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 	// self-log and never a command row.
 	sessions := newSessionManager(map[string]collection.SessionDialer{"tcp": lineSession}, sessionHooks{
 		transition: func(taskID, endpoint string, tr collection.SessionTransition) {
-			logger.Info("session "+string(tr.State), "facility", "session", "task", taskID, "endpoint", endpoint, "reason", tr.Reason)
-			if err := publishBatch(nc, cfg.Name, taskID, []collection.Sample{sessionSample(tr)}); err != nil {
+			// A rejection is logged once, at the transition, never per tick
+			// (#1049): the rejected session dials no more, so nothing repeats.
+			level := slog.LevelInfo
+			if tr.State == collection.SessionRejected {
+				level = slog.LevelWarn
+			}
+			logger.Log(ctx, level, "session "+string(tr.State), "facility", "session", "task", taskID, "endpoint", endpoint, "reason", tr.Reason)
+			if err := publishBatch(nc, cfg.Name, taskID, sessionSamples(tr)); err != nil {
 				logger.Warn("session state not published", "facility", "session", "task", taskID, "error", err.Error())
+			}
+		},
+		auth: func(taskID, endpoint string, v collection.AuthVerdict) {
+			// The auth step's verdict is the endpoint-authenticated rung, the
+			// ladder's own vocabulary, published when it changes.
+			logger.Info("session authenticated", "facility", "session", "task", taskID, "endpoint", endpoint, "authenticated", v.Authenticated, "reason", v.Reason)
+			if err := publishBatch(nc, cfg.Name, taskID, []collection.Sample{authSample(v)}); err != nil {
+				logger.Warn("auth verdict not published", "facility", "session", "task", taskID, "error", err.Error())
 			}
 		},
 		samples: func(taskID string, dps []collection.Sample) {

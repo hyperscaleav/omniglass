@@ -53,12 +53,22 @@ func (e *RefusedError) Error() string {
 // (a banner sent on connect) land in this window and are discarded.
 const drainWindow = 2 * time.Millisecond
 
-// NewLineSessionDialer returns the real held line-connection dialer.
-func NewLineSessionDialer() SessionDialer { return lineSessionDialer{} }
+// NewLineSessionDialer returns the real held line-connection dialer. It is
+// staged (#1049): a declared login runs over the raw connection as the
+// session's auth step before the reader starts routing lines.
+func NewLineSessionDialer() StagedDialer { return lineSessionDialer{} }
 
 type lineSessionDialer struct{}
 
-func (lineSessionDialer) Dial(ctx context.Context, target string, timeout time.Duration, in Inbound) (HeldConn, error) {
+func (d lineSessionDialer) Dial(ctx context.Context, target string, timeout time.Duration, in Inbound) (HeldConn, error) {
+	pc, err := d.Connect(ctx, target, timeout)
+	if err != nil {
+		return nil, err
+	}
+	return pc.Open(in, ChannelOptions{})
+}
+
+func (lineSessionDialer) Connect(ctx context.Context, target string, timeout time.Duration) (PendingConn, error) {
 	if timeout <= 0 {
 		timeout = defaultSessionTimeout
 	}
@@ -67,12 +77,46 @@ func (lineSessionDialer) Dial(ctx context.Context, target string, timeout time.D
 	if err != nil {
 		return nil, fmt.Errorf("collection: line session dial %s: %w", target, err)
 	}
+	return &pendingLine{c: c, target: target}, nil
+}
+
+// pendingLine is a line connection made and not yet routing: the auth step
+// reads and writes it raw, and Open hands it to the reader.
+type pendingLine struct {
+	c      net.Conn
+	target string
+}
+
+// Authenticate runs the declared login dialog over the raw connection.
+func (p *pendingLine) Authenticate(ctx context.Context, auth *SessionAuth, terminal Classifier, timeout time.Duration) error {
+	if auth == nil || auth.Login == nil {
+		return nil
+	}
+	if err := RunLogin(ctx, p.c, auth.Login, terminal, timeout); err != nil {
+		if _, ok := AsTerminal(err); ok {
+			return err
+		}
+		return fmt.Errorf("collection: line session %s: %w", p.target, err)
+	}
+	return nil
+}
+
+// Open starts the reader: from here the connection routes every line.
+func (p *pendingLine) Open(in Inbound, _ ChannelOptions) (HeldConn, error) {
+	return openLineConn(p.c, p.target, in), nil
+}
+
+func (p *pendingLine) Close() error { return p.c.Close() }
+
+// openLineConn wraps a connection as a held line connection and starts its
+// reader goroutine.
+func openLineConn(c net.Conn, target string, in Inbound) *lineConn {
 	lc := &lineConn{
 		c: c, target: target, br: bufio.NewReaderSize(c, maxLineAnswer), in: in,
 		asks: make(chan lineAsk, 1), done: make(chan struct{}),
 	}
 	go lc.read()
-	return lc, nil
+	return lc
 }
 
 // lineAsk is one exchange handed to the reader: the line to write, the

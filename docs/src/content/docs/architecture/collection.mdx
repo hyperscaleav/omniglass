@@ -50,7 +50,11 @@ borrowing it, its state the `session-state` property per endpoint ([ADR-0150](/a
 and the driver's **listeners come alive** over it (#817): their instantiation commands arm every
 connection, their match rules claim the device's pushes, and the claimed line lands as a push
 sample with no poll involved ([ADR-0151](/architecture/decisions/#adr-0151-a-held-line-session-routes-every-inbound-line-listeners-first-answers-by-reply-shape)).
-The arc's closeout is #818. See
+The arc's closeout is #818. Built since: **auth is a layer that gates the session** (#1049): a
+driver's declared login runs as the session's auth step before anything rides the connection, its
+verdict the `endpoint-authenticated` rung, and a refusal retrying cannot fix reads `rejected` and
+stops dialing ([ADR-0154](/architecture/decisions/#adr-0154-auth-is-a-layer-that-gates-a-held-session-and-a-terminal-refusal-reads-rejected),
+[ADR-0155](/architecture/decisions/#adr-0155-a-driver-declares-its-terminal-replies-and-a-transport-classifies-its-own-refusals)). See
 [ADR-0037](/architecture/decisions/#adr-0037-telemetry-is-a-protobuf-event-over-jetstream-with-an-inline-owner-confining-consumer),
 [ADR-0038](/architecture/decisions/#adr-0038-the-reachability-verdict-is-a-built-in-state),
 [ADR-0039](/architecture/decisions/#adr-0039-an-endpoint-is-a-device-api-the-endpoint-type-is-its-transport-not-its-driver),
@@ -157,10 +161,14 @@ Waiting for a frame is one mode (**listen**) regardless of transport; statefulne
 
 Built (#816): a session **holds its connection** across ticks. The node holds one per endpoint
 whose worklist carries a standing listen task over a transport with a session dialer (the line
-protocol over `tcp` today), keyed by the endpoint's id, which the worklist carries beside its name
-(endpoint names are unique only per component). The machine runs on its own:
+protocol over `tcp` today), or a driver poll whose driver declares a `session` block (a login a
+throwaway connection would skip, #1049), keyed by the endpoint's id, which the worklist carries
+beside its name (endpoint names are unique only per component). The machine runs on its own:
 
 - **establish**: the first dial; the session reads `establishing` until it connects.
+- **authenticate**: when the driver declares an auth step, it runs on every connection between the
+  dial and anything else ([auth and rejection, below](#auth-and-rejection)): no poll, command, or
+  listener arm rides a connection whose auth step has not passed.
 - **operate**: the session reads `up`, and the endpoint's line polls **borrow the held connection**
   instead of dialing per tick. One reader goroutine owns the connection: on an ask it discards
   whatever already arrived (a banner, a stray line), writes the line, and hands the next line to
@@ -194,6 +202,50 @@ task, and as a node self-log (`facility: session`) carrying the reason
 ([ADR-0150](/architecture/decisions/#adr-0150-a-held-sessions-state-is-a-property-series-and-node-logs-not-a-session-table)).
 Proven against the simulator's line protocol: kill the device's listener mid-session and the session
 reads `recovering`, then `up` once it returns, with the transitions landing on the server.
+
+### Auth and rejection
+
+Built (#1049). **Auth is a layer that gates the session**, the held-session form of the ladder the
+stateless probes climb (dialed, responds, authenticated). Each attempt runs in order: dial, then the
+**auth step**, then the listeners' arm, then `up`. The auth step is declared by the driver (a login
+dialog in its `session` block) or by the transport (a transport that authenticates on its own); its
+verdict lands as the `endpoint-authenticated` property (`yes` or `no`, published when it changes),
+the same rung the ssh probe writes. A login that never prompts or a connection that drops mid-login
+decides nothing: it is an ordinary failed attempt.
+
+**One login dialog.** A driver declares the prompts to wait for, what to send at each (a secret
+input's field, `${secret.<input>.<field>}`), and the match that means ready. A prompt need not end a
+line (`login: ` waits on the same line), and a prompt for a step already answered (the component
+asking again) is a refusal. The same primitive answers a raw tcp password prompt, a telnet login, and
+ssh keyboard-interactive questions. A credential is only ever written to the wire: a refusal names
+the reference that was missing, never its value.
+
+**Terminal or retryable.** A refusal retrying cannot fix is a **terminal error**, a class and the
+component's own text: the driver declares which replies are terminal (`session.terminal`, each a
+match with a class: `auth`, `host-key`, `certificate`, `protocol`), and a transport classifies its own
+protocol refusals. A terminal reply during the login, to a poll, a command, or a listener's arm
+rejects the session; anything unclassified stays retryable and follows the backoff and budget above.
+
+**Rejected.** A terminal error moves the session straight to `rejected`, without spending the
+budget: it closes the connection and dials no more. Polls fail fast with the refusal (a terminal
+fault waits the poll's interval, never the failure backoff), commands fail with the reason, and
+neither falls back to a throwaway connection, which would retry the bad credential. It leaves
+`rejected` when:
+
+- the endpoint's session identity changes (the credential the worklist delivers, the address, the
+  transport, or the driver's session block): the session is recycled, so a fixed credential
+  reconnects at the next worklist pull;
+- an operator retries it (`POST /endpoints/{id}:retry`, gated by `endpoint:retry` and audited): the
+  endpoint's revision moves, and the node's rejected session dials exactly once more;
+- the driver declares a slow re-probe (`session.reprobe`, at least 5m; the default is never).
+
+Each transition also lands `session-reason`, the reason as a property (`auth: auth rejected` when
+rejected), so an event rule can alarm on it, and the node logs it once, at the transition. Proven
+over a real socket (`linesession_login_integration_test.go`: a raw tcp line protocol behind a
+password prompt; the right password logs in before the first poll, a wrong one is dialed exactly
+once, never arms, and reads `rejected` with the component's text) and over fakes for the machine
+(`session_auth_test.go`: a wrong credential dials once over an hour of the session's clock, a retry
+dials once more, a re-probe fires on its interval, a transient failure still spends the budget).
 
 **Native push**: data pushed by smart senders is self-describing (it carries its key), its edge parse a near-identity pass-through marked `shape=native`; a failed parse keeps the raw on a `collection.failed` event.
 

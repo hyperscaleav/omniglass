@@ -81,13 +81,14 @@ func runCommands(ctx context.Context, nc *nats.Conn, name string, runner *collec
 // the device's reply and the failure story (empty on success). A command on
 // an endpoint the node holds a session for rides that session (#817), its
 // answer picked by the binding's reply shape; with none held it falls back
-// to a throwaway connection. Any answer from the device counts as an
+// to a throwaway connection, unless the command is session-only (#1049), when
+// it fails rather than skip the auth step. Any answer from the device counts as an
 // actuation; whether the device DID it is settlement's judgment, made on the
 // server from the reply (when the binding settles from the response) or from
 // what is observed next.
 func executeDelivery(ctx context.Context, runner *collection.Runner, d collection.CommandDelivery, sessions *sessionManager) (reply, outcome string) {
 	switch d.Transport {
-	case "tcp":
+	case "tcp", "telnet", "ssh":
 		if held := sessions.lookup(d.EndpointID); held != nil {
 			reply, err := held.Exchange(ctx, d.Line, d.Reply, 0)
 			var refused *collection.RefusedError
@@ -100,6 +101,11 @@ func executeDelivery(ctx context.Context, runner *collection.Runner, d collectio
 				return "", err.Error()
 			}
 			return reply, ""
+		}
+		if d.SessionOnly || d.Transport != "tcp" {
+			// The command rides the held session or fails: a throwaway
+			// connection would skip the auth step (#1049).
+			return "", "node: no session is held for endpoint " + d.EndpointID + ", and its commands ride only a held session"
 		}
 		if runner.Line == nil {
 			return "", "node: no line actuator wired"

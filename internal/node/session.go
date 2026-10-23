@@ -29,20 +29,25 @@ import (
 // its listeners land, the faults they meet, and the arm conversation.
 type sessionHooks struct {
 	transition func(taskID, endpoint string, tr collection.SessionTransition)
+	auth       func(taskID, endpoint string, v collection.AuthVerdict)
 	samples    func(taskID string, dps []collection.Sample)
 	fault      func(taskID string, err error)
 	arm        func(taskID, endpoint, line, reply string, err error)
 }
 
 // sessionConn is what a held connection depends on: the transport, the
-// address, the wait, the credentials, and the arm conversation. A change to
-// any of them recycles the session; anything else (a listener's match or
-// emits, re-hashing its task id) keeps the healthy connection.
+// address, the wait, the credentials, the session block (its login and
+// terminal replies, #1049), and the arm conversation. A change to any of
+// them recycles the session, which is also how a rejected session leaves
+// rejected when its credential or address is fixed; anything else (a
+// listener's match or emits, re-hashing its task id) keeps the healthy
+// connection.
 type sessionConn struct {
 	transport   string
 	target      string
 	timeout     time.Duration
-	credentials string // canonical JSON of the listen task's delivered secrets
+	credentials string // canonical JSON of the task's delivered secrets
+	session     string // canonical JSON of the driver's session block
 	arm         string // the instantiation commands, in order, newline-joined
 }
 
@@ -63,6 +68,44 @@ type sessionWant struct {
 	endpoint  string
 	listeners []routedListener
 	policy    string
+	// The auth step and the terminal handling (#1049), from the driver's
+	// session block with the login rendered against the delivered secrets.
+	auth     *collection.SessionAuth
+	terminal collection.Classifier
+	reprobe  time.Duration
+	// revision is the endpoint's revision; a move retries a rejected
+	// session once.
+	revision int64
+}
+
+// holdsSession reports whether a task asks its endpoint's session to be held:
+// a standing listen task always does; a driver poll does when its driver
+// declares a session (its login cannot run on a throwaway connection) or its
+// transport has no stateless line (#1049).
+func holdsSession(task collection.TaskSpec) bool {
+	if task.Mode == "listen" {
+		return true
+	}
+	return driver.IsBaked(task.Spec) && (task.Session != nil || task.Transport != "tcp")
+}
+
+// sessionAuthOf renders the driver's session block for one endpoint: the
+// login's sends from the delivered secrets. A credential the login needs and
+// the worklist did not deliver refuses the session, naming the reference.
+func sessionAuthOf(task collection.TaskSpec) (*collection.SessionAuth, error) {
+	ss := task.Session
+	if ss == nil || ss.Login == nil {
+		return nil, nil
+	}
+	sends, err := ss.Login.Render(task.Secrets)
+	if err != nil {
+		return nil, err
+	}
+	d := &collection.LoginDialog{Ready: ss.Login.Ready}
+	for i, st := range ss.Login.Steps {
+		d.Steps = append(d.Steps, collection.LoginPrompt{Expect: st.Expect, Send: sends[i]})
+	}
+	return &collection.SessionAuth{Login: d}, nil
 }
 
 // desiredSessions derives the held set from a worklist. Pure. A listen task
@@ -79,7 +122,7 @@ func desiredSessions(tasks []collection.TaskSpec, dialers map[string]collection.
 	sorted := append([]collection.TaskSpec(nil), tasks...)
 	sort.SliceStable(sorted, func(i, j int) bool { return sorted[i].ID < sorted[j].ID })
 	for _, task := range sorted {
-		if task.Mode != "listen" || task.EndpointID == "" || dialers[task.Transport] == nil {
+		if !holdsSession(task) || task.EndpointID == "" || dialers[task.Transport] == nil {
 			continue
 		}
 		if _, bad := refused[task.EndpointID]; bad {
@@ -87,12 +130,16 @@ func desiredSessions(tasks []collection.TaskSpec, dialers map[string]collection.
 		}
 		fn, err := driver.ParseBaked(task.Spec)
 		if err != nil {
-			refused[task.EndpointID] = fmt.Sprintf("listen task %s: %v", task.ID, err)
+			refused[task.EndpointID] = fmt.Sprintf("%s task %s: %v", task.Mode, task.ID, err)
 			delete(want, task.EndpointID)
 			continue
 		}
+		var listener []routedListener
+		if task.Mode == "listen" {
+			listener = []routedListener{{taskID: task.ID, fn: fn}}
+		}
 		if w, held := want[task.EndpointID]; held {
-			w.listeners = append(w.listeners, routedListener{taskID: task.ID, fn: fn})
+			w.listeners = append(w.listeners, listener...)
 			want[task.EndpointID] = w
 			continue
 		}
@@ -121,11 +168,25 @@ func desiredSessions(tasks []collection.TaskSpec, dialers map[string]collection.
 			b, _ := json.Marshal(task.Secrets) // map keys marshal sorted: canonical
 			creds = string(b)
 		}
+		session := ""
+		if task.Session != nil {
+			b, _ := json.Marshal(task.Session)
+			session = string(b)
+		}
+		auth, err := sessionAuthOf(task)
+		if err != nil {
+			refused[task.EndpointID] = fmt.Sprintf("session auth: %v", err)
+			continue
+		}
 		want[task.EndpointID] = sessionWant{
-			conn:      sessionConn{transport: task.Transport, target: p.Target, timeout: timeout, credentials: creds},
+			conn:      sessionConn{transport: task.Transport, target: p.Target, timeout: timeout, credentials: creds, session: session},
 			taskID:    task.ID,
 			endpoint:  task.EndpointName,
-			listeners: []routedListener{{taskID: task.ID, fn: fn}},
+			listeners: listener,
+			auth:      auth,
+			terminal:  collection.TerminalClassifier(task.Session),
+			reprobe:   task.Session.ReprobeInterval(),
+			revision:  task.EndpointRevision,
 		}
 	}
 	for id, w := range want {
@@ -238,9 +299,10 @@ func samplesOf(emitted []driver.Emitted) []collection.Sample {
 // its listeners, and where its transitions publish now (updated in place by
 // a re-hash).
 type heldSession struct {
-	conn   sessionConn
-	sess   *collection.Session
-	router *listenerRouter
+	conn     sessionConn
+	sess     *collection.Session
+	router   *listenerRouter
+	revision int64 // the endpoint revision last seen; a move retries a rejection
 
 	mu       sync.Mutex
 	taskID   string
@@ -280,6 +342,14 @@ func (m *sessionManager) reconcile(tasks []collection.TaskSpec) {
 			h.taskID, h.endpoint = w.taskID, w.endpoint
 			h.mu.Unlock()
 			h.router.set(w.listeners, w.policy)
+			if w.revision != h.revision {
+				// The endpoint was written to, an operator's :retry included:
+				// a rejected session tries once more; any other is left alone.
+				h.revision = w.revision
+				if h.sess.Retry() {
+					slog.Info("session retried", "facility", "session", "task", w.taskID, "endpoint", w.endpoint, "reason", "its endpoint's revision moved")
+				}
+			}
 		}
 	}
 	for id, w := range want {
@@ -298,18 +368,27 @@ func (m *sessionManager) reconcile(tasks []collection.TaskSpec) {
 
 func (m *sessionManager) start(id string, w sessionWant) {
 	hooks := m.hooks
-	h := &heldSession{conn: w.conn, taskID: w.taskID, endpoint: w.endpoint, router: newListenerRouter(hooks)}
+	h := &heldSession{conn: w.conn, taskID: w.taskID, endpoint: w.endpoint, router: newListenerRouter(hooks), revision: w.revision}
 	h.router.set(w.listeners, w.policy)
 	var arm []string
 	if w.conn.arm != "" {
 		arm = strings.Split(w.conn.arm, "\n")
 	}
 	h.sess = collection.StartSession(collection.SessionConfig{
-		Target:  w.conn.target,
-		Timeout: w.conn.timeout,
-		Dialer:  m.dialers[w.conn.transport],
-		Inbound: h.router,
-		Arm:     arm,
+		Target:   w.conn.target,
+		Timeout:  w.conn.timeout,
+		Dialer:   m.dialers[w.conn.transport],
+		Inbound:  h.router,
+		Arm:      arm,
+		Auth:     w.auth,
+		Terminal: w.terminal,
+		Reprobe:  w.reprobe,
+		OnAuth: func(v collection.AuthVerdict) {
+			if hooks.auth != nil {
+				taskID, endpoint := h.publishTo()
+				hooks.auth(taskID, endpoint, v)
+			}
+		},
 		OnArm: func(line, reply string, err error) {
 			if hooks.arm != nil {
 				taskID, endpoint := h.publishTo()
@@ -382,5 +461,33 @@ func sessionSample(tr collection.SessionTransition) collection.Sample {
 		IsText: true,
 		TS:     tr.At,
 		Labels: map[string]string{collection.ReasonLabel: tr.Reason},
+	}
+}
+
+// sessionSamples renders a transition as what it publishes: session-state,
+// and session-reason (#1049), the reason as a property an event rule can
+// read (`auth: <device text>` when rejected), since labels do not persist.
+func sessionSamples(tr collection.SessionTransition) []collection.Sample {
+	return []collection.Sample{sessionSample(tr), {
+		Name:   collection.SignalSessionReason,
+		Text:   tr.Reason,
+		IsText: true,
+		TS:     tr.At,
+	}}
+}
+
+// authSample renders the session's auth verdict as the endpoint-authenticated
+// rung (#1049), the ladder's own vocabulary: yes or no, the reason a label.
+func authSample(v collection.AuthVerdict) collection.Sample {
+	verdict := "no"
+	if v.Authenticated {
+		verdict = "yes"
+	}
+	return collection.Sample{
+		Name:   collection.SignalEndpointAuthenticated,
+		Text:   verdict,
+		IsText: true,
+		TS:     v.At,
+		Labels: map[string]string{collection.ReasonLabel: v.Reason},
 	}
 }

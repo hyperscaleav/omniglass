@@ -14,12 +14,15 @@ package transport
 // whose driver holds a session open (establish, operate, recover, teardown)
 // rather than dialing per poll; Built marks that a node-side reachability
 // probe ships today, which is what the retired interface_type.built column
-// recorded.
+// recorded. Line marks a transport the line protocol rides over a held
+// session: a driver's polls, commands and listeners speak lines over it, and
+// its session may declare a login and terminal replies (#1049).
 type Transport struct {
 	Name        string `json:"name"`
 	Description string `json:"description"`
 	Held        bool   `json:"held"`
 	Built       bool   `json:"built"`
+	Line        bool   `json:"line"`
 }
 
 // registry is the one authoritative list, in the order surfaces render it:
@@ -27,7 +30,7 @@ type Transport struct {
 // line protocol a driver speaks over it holds a session (#817).
 var registry = []Transport{
 	{Name: "icmp", Description: "ICMP echo / ping reachability and RTT.", Held: false, Built: true},
-	{Name: "tcp", Description: "Raw TCP: the connect / port-open check, and the line protocol, which holds a session over it (polls, commands, and listeners share one connection).", Held: true, Built: true},
+	{Name: "tcp", Description: "Raw TCP: the connect / port-open check, and the line protocol, which holds a session over it (polls, commands, and listeners share one connection).", Held: true, Built: true, Line: true},
 	{Name: "udp", Description: "UDP datagram transport; probing arrives with its driver.", Held: false, Built: false},
 	{Name: "ssh", Description: "SSH transport; the probe runs a real key exchange (responds), and tries the endpoint credential when one is set (auth).", Held: true, Built: true},
 	{Name: "http", Description: "HTTP transport; the probe draws a real response off the API (responds), any status counting as an answer.", Held: true, Built: true},

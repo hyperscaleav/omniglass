@@ -192,6 +192,8 @@ below from the project's history. From here it grows one slice at a time.
 | [ADR-0151](#adr-0151-a-held-line-session-routes-every-inbound-line-listeners-first-answers-by-reply-shape) | 2026-10-23 | Accepted | Listeners run over the held session (#817): `arm` commands on every connection before up (plumbing, self-logged), `match` claims a pushed line, its emits land as push samples under the listen task. Every inbound line is routed listeners first, then the exchange in flight by its declared `request.reply` shape (or the first unclaimed line), then unclaimed (counted; `unmatched: collection-failed` lands one fault per tick). Commands ride the held session. Reverses the designed matcher order (outstanding poll first) |
 | [ADR-0152](#adr-0152-a-driver-poll-runs-on-its-declared-schedule-at-heartbeat-granularity) | 2026-10-23 | Accepted | A driver poll runs on its declared `schedule.every` at heartbeat granularity (#822): a per-task next-due time kept for the run, the first tick at or after it runs the poll, a new task runs at once, a late tick never bursts; probes stay per tick and pushes are never gated. Settles the nodes page's open question for driver polls |
 | [ADR-0153](#adr-0153-the-held-session-proof-is-the-line-protocol-over-tcp-other-held-transports-are-their-own-issues) | 2026-10-23 | Accepted | The stateful arc proves the held session on the line protocol over `tcp` (sessions, listeners, the shared reader); SSH, which #816 named as the session-lifecycle carrier, and the other held transports are deferred, each to its own issue (#1032 ssh, #1033 telnet, #1034 websocket, #1035 tls, #1036 mqtt, #1037 udp, #1038 SSE over http, #1039 modbus/tcp, #1040 bacnet/ip, #1041 knxnet/ip, #1042 ONVIF as a driver on http, #1043 the file sample with #1044 to #1047 for file-moving protocols), with server-hosted ingress at #1024; there is no serial transport, serial being reached through an IP-to-serial gateway over tcp (or tls or telnet) |
+| [ADR-0154](#adr-0154-auth-is-a-layer-that-gates-a-held-session-and-a-terminal-refusal-reads-rejected) | 2026-10-23 | Accepted | Auth is a layer that gates a held session (#1049, the architect's ruling): each attempt runs dial, then the auth step (a driver's login dialog or a transport's own auth), then the arm, then `up`, and nothing borrows the connection before the step passes; its verdict is the existing `endpoint-authenticated` rung. A terminal refusal moves the session to `rejected` (amending ADR-0150's state set), which dials no more and fails polls and commands fast with no throwaway fallback, until the endpoint's session identity changes, an operator's audited `:retry` (gated by `endpoint:retry`) moves the endpoint's revision, or the driver's slow re-probe comes due. `session-reason` carries the reason as a property. One login dialog serves raw tcp, telnet and ssh keyboard-interactive |
+| [ADR-0155](#adr-0155-a-driver-declares-its-terminal-replies-and-a-transport-classifies-its-own-refusals) | 2026-10-23 | Accepted | Non-retryable errors are defined in drivers (#1049, the architect's ruling): a spec's `session.terminal` lists the replies retrying cannot fix, each a match with a class (`auth`, `host-key`, `certificate`, `protocol`, a code-held set), applied to the login and to every answer, refusal and arm reply; a transport classifies its own protocol refusals into the same classes. The primitive is `collection.TerminalError{Class, Reason}`; anything unclassified stays retryable, and a terminal poll fault waits its interval rather than the failure backoff |
 
 ## Entries
 
@@ -7002,3 +7004,65 @@ interface create form, since that name is the platform's to mint.
   channel semantics that are a slice of their own; holding the arc for it would have delayed a proven
   machine. The collection and nodes pages' transport fences now name these issues, so no deferred
   transport is a fence without an owner.
+
+### ADR-0154: Auth is a layer that gates a held session, and a terminal refusal reads rejected
+
+- **Date:** 2026-10-23 | **Status:** Accepted | **Pages:** [collection](/architecture/collection/), [nodes](/architecture/nodes/), [glossary](/architecture/glossary/), [drivers](/guides/admin/drivers/)
+- **Decision:** The architect's ruling, made in session on 2026-10-23 (#1049), applies the ladder
+  the stateless probes climb (dialed, responds, authenticated) to held sessions:
+  1. **Auth gates the session.** Every attempt runs dial, then the **auth step**, then the
+     listeners' arm, then `up`. The step is declared by the driver (a login dialog in the spec's
+     `session` block) or by the transport (one that authenticates on its own); a dialer that cannot
+     run a declared step is a `protocol` refusal. Nothing (a poll, a command, an arm) borrows a
+     connection whose step has not passed: the dialer is staged (`Connect`, then `Authenticate`,
+     then `Open`), so the line reader does not exist until the step passes. The verdict lands as
+     the existing `endpoint-authenticated` property (`yes`/`no`, on change), no parallel vocabulary.
+     A login that is silent or dropped decides nothing and is an ordinary failed attempt.
+  2. **One login dialog.** Steps wait for a prompt (matched on a partial line, since a prompt
+     ends no line) and send a line that may name a secret input's field
+     (`${secret.<input>.<field>}`); `ready` says it passed; a prompt for a step already answered is
+     an `auth` refusal. The same primitive answers ssh keyboard-interactive questions. A credential
+     is written only to the wire: render faults name the reference, never the value.
+  3. **`rejected` joins the state set** (amending ADR-0150's establishing, up, recovering, down).
+     A terminal refusal ([ADR-0155](#adr-0155-a-driver-declares-its-terminal-replies-and-a-transport-classifies-its-own-refusals))
+     moves the session there at once, without spending the budget; it closes the connection and
+     dials no more. Polls and commands over it fail fast with the refusal, and neither falls back
+     to a throwaway connection (a command delivery is `session_only` when its driver declares a
+     session or its transport has no stateless line).
+  4. **Leaving `rejected`.** A change to the session's identity (the delivered credential, the
+     address, the transport, the driver's session block) recycles it, so a fixed credential
+     reconnects at the next pull. An operator's `POST /endpoints/{id}:retry`, gated by a new
+     `endpoint:retry` action the operator role holds and audited, moves the endpoint's revision
+     (its `updated_at`, now on the worklist), which wakes a rejected session for exactly one
+     attempt and leaves any other alone. A driver may declare `session.reprobe` (at least 5m;
+     default never).
+  5. **Visibility.** Each transition lands `session-reason` beside `session-state`, the reason as a
+     property an event rule can read (labels do not persist); the node logs a rejection once, at
+     warn, at the transition.
+- **Context:** Every session failure was retryable (ADR-0150): after the budget a session redialed
+  at the capped 30s pace forever, about 2,880 attempts a day, harmless for the tcp line protocol and
+  an account lockout for any transport with a login. A retry nonce needed a home the node could
+  see; the endpoint's revision already moves on every endpoint write and rides no new column, and a
+  healthy session ignores it, so an unrelated edit costs a rejected session at most one attempt.
+
+### ADR-0155: A driver declares its terminal replies, and a transport classifies its own refusals
+
+- **Date:** 2026-10-23 | **Status:** Accepted | **Pages:** [collection](/architecture/collection/), [glossary](/architecture/glossary/), [drivers](/guides/admin/drivers/)
+- **Decision:** The architect's ruling, made in session on 2026-10-23 (#1049): non-retryable errors
+  are defined in drivers.
+  1. A spec's `session.terminal` lists the replies retrying cannot fix, each a `match` (a prefix
+     or a regex) with a `class`. The classes are a code-held set (`auth`, `host-key`,
+     `certificate`, `protocol`), refused at write when unknown, grown in code as transports need.
+  2. A rule applies to every line the component sends the session's way: the login's lines, every
+     exchange's answer and declared refusal, and every arm reply. A match fails that exchange with
+     the refusal and rejects the session ([ADR-0154](#adr-0154-auth-is-a-layer-that-gates-a-held-session-and-a-terminal-refusal-reads-rejected)).
+  3. A transport classifies its own protocol-level refusals into the same classes (an ssh auth
+     failure is `auth`, a changed host key `host-key`), so a driver need not declare what the
+     protocol already says.
+  4. The primitive is `collection.TerminalError{Class, Reason}`, the reason the component's own
+     text; anything unclassified stays retryable and follows the backoff and budget. A stateless
+     or session poll whose fault is terminal waits its interval, never the failure backoff.
+- **Context:** Only the driver knows what its component's refusal looks like ("auth rejected",
+  "Login incorrect", an "account locked" reply), and only the transport knows its protocol's
+  refusals; a session machine guessing from text would misclassify both ways. A fixed class set
+  keeps an event rule's vocabulary stable across drivers.

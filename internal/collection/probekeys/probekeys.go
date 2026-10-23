@@ -23,11 +23,15 @@ const (
 	// SessionState is a held session's state per endpoint (#816), written
 	// by the node's session machine on each transition.
 	SessionState = "session-state"
+	// SessionReason is why a held session is in its state (#1049), the
+	// reason of its latest transition: `<class>: <device text>` when
+	// rejected, so an event rule can alarm on it.
+	SessionReason = "session-reason"
 )
 
 var native = []string{
 	TCPOpen, TCPConnectTime, ICMPReachable, ICMPRTTAvg, HTTPResponseTime, SSHHandshakeTime,
-	EndpointReachable, EndpointResponsive, EndpointAuthenticated, SessionState,
+	EndpointReachable, EndpointResponsive, EndpointAuthenticated, SessionState, SessionReason,
 }
 
 // Native is every key a native probe writes, sorted, a fresh slice each call.

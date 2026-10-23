@@ -1617,6 +1617,22 @@ Example:
 omniglass endpoint list
 ```
 
+### `omniglass endpoint retry`
+
+Retry an endpoint's rejected session
+
+```
+omniglass endpoint retry <id>
+```
+
+Wakes the endpoint's held session for one more attempt when it reads rejected (a refusal retrying cannot fix: a wrong credential, a changed host key, a reply its driver declares terminal). The session dials once and reads up, rejected again, or follows the ordinary backoff on a transient failure; a session that is not rejected is left alone. Fixing the credential or the address needs no retry: the edit itself recycles the session. Audited. Gated by endpoint:retry; read and retry scopes (through the component) drive the 404 versus 403 split.
+
+Example:
+
+```sh
+omniglass endpoint retry <id>
+```
+
 ### `omniglass endpoint update`
 
 Update an endpoint

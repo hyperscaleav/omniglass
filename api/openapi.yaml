@@ -8499,6 +8499,8 @@ components:
           type: string
         held:
           type: boolean
+        line:
+          type: boolean
         name:
           type: string
       required:
@@ -8506,6 +8508,7 @@ components:
         - description
         - held
         - built
+        - line
       type: object
     UISettings:
       additionalProperties: false
@@ -11582,6 +11585,33 @@ paths:
           description: Error
       summary: Update an endpoint
       x-omniglass-permission: endpoint:update
+  /endpoints/{id}:retry:
+    post:
+      description: "Wakes the endpoint's held session for one more attempt when it reads rejected (a refusal retrying cannot fix: a wrong credential, a changed host key, a reply its driver declares terminal). The session dials once and reads up, rejected again, or follows the ordinary backoff on a transient failure; a session that is not rejected is left alone. Fixing the credential or the address needs no retry: the edit itself recycles the session. Audited. Gated by endpoint:retry; read and retry scopes (through the component) drive the 404 versus 403 split."
+      operationId: retry-endpoint
+      parameters:
+        - description: The endpoint's surrogate id
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The endpoint's surrogate id
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EndpointBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Retry an endpoint's rejected session
+      x-omniglass-permission: endpoint:retry
   /event-rules:
     get:
       description: "Lists the event rules, the authored config that raises alarms, each with its live state as counts (conditions_in_force, open_alarms, pending_streaks) read in the same query. Rules read like a registry: every rule is listed whatever the caller's scope, while the counts cover only components the caller may read. Gated by rule:read."

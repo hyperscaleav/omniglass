@@ -196,6 +196,21 @@ func registerEndpointRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 	})
 
 	huma.Register(api, a.gated(huma.Operation{
+		OperationID: "retry-endpoint",
+		Method:      http.MethodPost,
+		Path:        "/endpoints/{id}:retry",
+		Summary:     "Retry an endpoint's rejected session",
+		Description: "Wakes the endpoint's held session for one more attempt when it reads rejected (a refusal retrying cannot fix: a wrong credential, a changed host key, a reply its driver declares terminal). The session dials once and reads up, rejected again, or follows the ordinary backoff on a transient failure; a session that is not rejected is left alone. Fixing the credential or the address needs no retry: the edit itself recycles the session. Audited. Gated by endpoint:retry; read and retry scopes (through the component) drive the 404 versus 403 split.",
+	}, "endpoint", "retry"), func(ctx context.Context, in *endpointPathInput) (*endpointOutput, error) {
+		it, err := gw.RetryEndpoint(ctx, actorID(ctx), in.ID,
+			a.scopeFor(ctx, "endpoint", "read"), a.scopeFor(ctx, "endpoint", "retry"))
+		if err != nil {
+			return nil, mapEndpointErr(err)
+		}
+		return &endpointOutput{Body: toEndpointBody(it)}, nil
+	})
+
+	huma.Register(api, a.gated(huma.Operation{
 		OperationID:   "delete-endpoint",
 		Method:        http.MethodDelete,
 		Path:          "/endpoints/{id}",

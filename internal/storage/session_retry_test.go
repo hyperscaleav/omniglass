@@ -1,0 +1,174 @@
+package storage_test
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"errors"
+	"testing"
+
+	"github.com/hyperscaleav/omniglass/internal/auth"
+	"github.com/hyperscaleav/omniglass/internal/scope"
+	"github.com/hyperscaleav/omniglass/internal/secret"
+	"github.com/hyperscaleav/omniglass/internal/seed"
+	"github.com/hyperscaleav/omniglass/internal/storage"
+	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
+	"github.com/jackc/pgx/v5"
+)
+
+// The session's auth layer on the server side (#1049): the worklist carries
+// the driver's session block and the endpoint's revision, and an operator's
+// :retry moves the revision (which is what wakes a rejected session on the
+// node) and is audited. Skipped under -short.
+
+// loginLineSpec is a line protocol behind a password prompt: a login dialog
+// over tcp, its failure line terminal.
+const loginLineSpec = `{
+	"version": 1,
+	"transport": "tcp",
+	"inputs": [
+		{"name": "host", "kind": "string", "required": true},
+		{"name": "port", "kind": "number", "default": "23"},
+		{"name": "login", "kind": "secret", "secret_type": "basic-auth", "required": true}
+	],
+	"session": {
+		"login": {
+			"steps": [
+				{"expect": {"regex": "login: ?$"}, "send": "${secret.login.username}"},
+				{"expect": {"regex": "Password: ?$"}, "send": "${secret.login.password}"}
+			],
+			"ready": {"prefix": "READY"}
+		},
+		"terminal": [{"class": "auth", "match": {"prefix": "auth rejected"}}],
+		"reprobe": "1h"
+	},
+	"polls": [{
+		"name": "status",
+		"schedule": {"every": "30s"},
+		"request": {"line": "GET INPUT", "reply": {"prefix": "INPUT "}},
+		"emits": [{"name": "video-input", "extract": {"regex": "^INPUT (\\S+)$"}}]
+	}],
+	"commands": [
+		{"command_type": "set-input", "request": {"line": "SET INPUT ${value}", "reply": {"prefix": "INPUT "}}}
+	]
+}`
+
+func TestWorklistCarriesTheSessionBlockAndRetryMovesTheRevision(t *testing.T) {
+	if testing.Short() {
+		t.Skip("integration test needs Postgres")
+	}
+	ctx := context.Background()
+	dsn := storagetest.NewDSN(t)
+	gw, err := storage.NewPG(ctx, dsn, storage.WithSecretProvider(secret.NewStaticProvider(bytes.Repeat([]byte{0x7}, 32))))
+	if err != nil {
+		t.Fatalf("open gateway: %v", err)
+	}
+	defer gw.Close()
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	all := scope.Set{All: true}
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "panel-1"}, all, all, all, all); err != nil {
+		t.Fatalf("create component: %v", err)
+	}
+	if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "edge-1"}, all, all); err != nil {
+		t.Fatalf("create node: %v", err)
+	}
+	if _, err := gw.CreateSecret(ctx, "", storage.SecretSpec{
+		Name: "panel-login", SecretType: "basic-auth", OwnerKind: "platform",
+		Fields: map[string]string{"username": "admin", "password": "newtron"},
+	}, all, true); err != nil {
+		t.Fatalf("create secret: %v", err)
+	}
+	if _, err := gw.CreateDriver(ctx, "", storage.Driver{Name: "panel-login", Label: "Panel Login", Version: "1.0.0", Spec: []byte(loginLineSpec)}); err != nil {
+		t.Fatalf("create driver: %v", err)
+	}
+	comp, drv, node := "panel-1", "panel-login", "edge-1"
+	ep, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{
+		Driver: &drv, Component: &comp, Node: &node,
+		Inputs:     map[string]string{"host": "10.20.4.41", "login": "panel-login"},
+		SecretRead: all, CanAdmin: true,
+	}, all)
+	if err != nil {
+		t.Fatalf("attach: %v", err)
+	}
+
+	driverTask := func() storage.WorklistTask {
+		t.Helper()
+		wl, err := gw.NodeWorklist(ctx, "edge-1")
+		if err != nil {
+			t.Fatalf("worklist: %v", err)
+		}
+		for _, task := range wl.Tasks {
+			if len(task.Spec) > 2 {
+				return task
+			}
+		}
+		t.Fatalf("no driver task in %+v", wl.Tasks)
+		return storage.WorklistTask{}
+	}
+	first := driverTask()
+	if first.Session == nil || first.Session.Login == nil || len(first.Session.Login.Steps) != 2 || first.Session.Reprobe != "1h" {
+		t.Fatalf("the worklist session block = %+v, want the driver's login and re-probe", first.Session)
+	}
+	if first.Secrets["login"]["password"] != "newtron" {
+		t.Fatalf("the login's credential was not delivered: %v", first.Secrets)
+	}
+	if first.EndpointRevision == 0 {
+		t.Fatal("the worklist carries no endpoint revision")
+	}
+
+	// A viewer-shaped caller (no action scope) cannot retry; out of read
+	// scope it is not even told the endpoint exists.
+	none := scope.Set{}
+	if _, err := gw.RetryEndpoint(ctx, "", ep.ID, all, none); !errors.Is(err, storage.ErrEndpointForbidden) {
+		t.Fatalf("retry without action scope = %v, want forbidden", err)
+	}
+	if _, err := gw.RetryEndpoint(ctx, "", ep.ID, none, none); !errors.Is(err, storage.ErrEndpointNotFound) {
+		t.Fatalf("retry out of read scope = %v, want not found", err)
+	}
+
+	if _, err := gw.RetryEndpoint(ctx, "", ep.ID, all, all); err != nil {
+		t.Fatalf("retry: %v", err)
+	}
+	if after := driverTask(); after.EndpointRevision <= first.EndpointRevision {
+		t.Fatalf("revision %d after a retry, want past %d", after.EndpointRevision, first.EndpointRevision)
+	}
+	conn, err := pgx.Connect(ctx, dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close(ctx)
+	var n int
+	if err := conn.QueryRow(ctx, `select count(*) from audit_log where resource = 'endpoint' and verb = 'retry' and resource_id = $1`, ep.ID).Scan(&n); err != nil {
+		t.Fatal(err)
+	}
+	if n != 1 {
+		t.Fatalf("audit rows for the retry = %d, want 1", n)
+	}
+
+	// A session-only driver's command delivery says so: the node rides the
+	// held session or fails, never a throwaway connection that would skip
+	// the login.
+	_, hash, prefix, err := auth.NewBearerToken()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := gw.BootstrapOwner(ctx, storage.OwnerSpec{Username: "root", SecretHash: hash, Prefix: prefix}); err != nil {
+		t.Fatal(err)
+	}
+	var actor string
+	if err := conn.QueryRow(ctx, `select principal_id from human where username = 'root'`).Scan(&actor); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := gw.IssueCommand(ctx, actor, "component", "panel-1", "set-input", "", json.RawMessage(`"hdmi2"`), nil); err != nil {
+		t.Fatalf("issue: %v", err)
+	}
+	got, err := gw.PendingNodeCommands(ctx, "edge-1")
+	if err != nil || len(got) != 1 {
+		t.Fatalf("pending = %+v, %v", got, err)
+	}
+	if !got[0].SessionOnly {
+		t.Fatalf("delivery = %+v, want session-only for a driver that declares a login", got[0])
+	}
+}

@@ -92,6 +92,12 @@ type TaskSpec struct {
 	EndpointParams json.RawMessage              `json:"endpoint_params,omitempty"`
 	Spec           json.RawMessage              `json:"spec,omitempty"`
 	Secrets        map[string]map[string]string `json:"secrets,omitempty"`
+	// Session is the endpoint's driver's session block (#1049): its auth
+	// step, terminal replies and re-probe, read off the live driver spec.
+	Session *driver.SessionSpec `json:"session,omitempty"`
+	// EndpointRevision moves on every write to the endpoint, an operator's
+	// :retry included; a rejected session redials once when it moves.
+	EndpointRevision int64 `json:"endpoint_revision,omitempty"`
 }
 
 // WorklistReply is the server's response to a worklist request: the node's
@@ -121,6 +127,11 @@ type CommandDelivery struct {
 	// pushes.
 	EndpointID string        `json:"endpoint_id,omitempty"`
 	Reply      *driver.Reply `json:"reply,omitempty"`
+	// SessionOnly says the command rides the endpoint's held session or
+	// fails (#1049): its driver declares a session, or its transport has no
+	// stateless line. A throwaway connection would skip the auth step, or
+	// retry a credential the session was rejected for.
+	SessionOnly bool `json:"session_only,omitempty"`
 }
 
 // CommandPullReply is the server's response to a command queue pull.

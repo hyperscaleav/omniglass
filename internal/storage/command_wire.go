@@ -49,6 +49,10 @@ type CommandDelivery struct {
 	// reply shape.
 	EndpointID string
 	Reply      *driver.Reply
+	// SessionOnly: the command rides the endpoint's held session or fails
+	// (#1049), since its driver declares a session or its transport has no
+	// stateless line.
+	SessionOnly bool
 }
 
 // PendingNodeCommands resolves and marks dispatched the commands a node
@@ -156,6 +160,7 @@ func (p *PG) PendingNodeCommands(ctx context.Context, node string) ([]CommandDel
 			Line:        req.Line,
 			EndpointID:  r.endpointID,
 			Reply:       req.Reply,
+			SessionOnly: sp.Session != nil || r.transport != "tcp",
 		})
 		delivered = append(delivered, dispatch{r.id, r.endpointID})
 	}

@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"github.com/hyperscaleav/omniglass/internal/driver"
 	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/scope"
@@ -76,6 +77,14 @@ type WorklistTask struct {
 	EndpointParams []byte
 	Spec           []byte
 	Secrets        map[string]map[string]string
+	// Session is the driver's session block (#1049), read off the live
+	// spec: the auth step, terminal replies and re-probe a held session
+	// runs. Nil for a driver that declares none and for non-driver tasks.
+	Session *driver.SessionSpec
+	// EndpointRevision is the endpoint's updated_at in microseconds: it
+	// moves on every write to the endpoint, an operator's :retry included,
+	// and a rejected session on the node redials once when it moves.
+	EndpointRevision int64
 }
 
 // Worklist is a node's resolved work plus the config generation (the max
@@ -378,7 +387,8 @@ func (p *PG) RecordHeartbeat(ctx context.Context, name string) error {
 // worklist subject. An unknown node returns an empty worklist, not an error.
 func (p *PG) NodeWorklist(ctx context.Context, name string) (Worklist, error) {
 	rows, err := p.pool.Query(ctx, `
-		select t.id, t.mode, i.id::text, i.name, i.transport, i.params, t.spec, i.inputs, i.component, d.spec
+		select t.id, t.mode, i.id::text, i.name, i.transport, i.params, t.spec, i.inputs, i.component, d.spec,
+			(extract(epoch from i.updated_at) * 1000000)::bigint
 		from task t
 		join endpoint i on i.id = t.endpoint_id
 		left join driver d on d.id = i.driver_id
@@ -395,8 +405,16 @@ func (p *PG) NodeWorklist(ctx context.Context, name string) (Worklist, error) {
 		var wt WorklistTask
 		var epInputs, driverSpec []byte
 		var componentID *string
-		if err := rows.Scan(&wt.ID, &wt.Mode, &wt.EndpointID, &wt.EndpointName, &wt.Transport, &wt.EndpointParams, &wt.Spec, &epInputs, &componentID, &driverSpec); err != nil {
+		if err := rows.Scan(&wt.ID, &wt.Mode, &wt.EndpointID, &wt.EndpointName, &wt.Transport, &wt.EndpointParams, &wt.Spec, &epInputs, &componentID, &driverSpec, &wt.EndpointRevision); err != nil {
 			return Worklist{}, fmt.Errorf("storage: scan worklist task: %w", err)
+		}
+		// A driver task carries its driver's session block (#1049), read off
+		// the live spec so a re-authored login reaches the node at its next
+		// pull. A stored spec is validated at write; corruption delivers none.
+		if len(driverSpec) > 0 && len(wt.Spec) > 2 {
+			if sp, err := driver.Parse(driverSpec); err == nil {
+				wt.Session = sp.Session
+			}
 		}
 		// A driver task's secret inputs travel with it: the spec says which
 		// inputs are secret, the endpoint's inputs say which secret row each

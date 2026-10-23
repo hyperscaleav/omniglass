@@ -66,13 +66,7 @@ func runTasks(ctx context.Context, nc *nats.Conn, node string, wl collection.Wor
 				continue
 			}
 			dps, faults := collectDriverTask(ctx, runner, task, sessions)
-			// A run that landed nothing and faulted (the fetch failed) retries
-			// on a backoff rather than waiting its whole interval.
-			if len(dps) == 0 && len(faults) > 0 {
-				sched.failed(task.ID, interval, now)
-			} else {
-				sched.succeeded(task.ID)
-			}
+			bookPollRun(sched, task.ID, interval, now, dps, faults)
 			current := ""
 			for _, f := range faults {
 				current += f.Error() + "\n"
@@ -128,6 +122,24 @@ func runTasks(ctx context.Context, nc *nats.Conn, node string, wl collection.Wor
 	return nil
 }
 
+// bookPollRun books a poll's next run from what its run landed. A run that
+// landed nothing and faulted (the fetch failed) retries on a backoff rather
+// than waiting its whole interval, unless the fault is terminal (#1049): a
+// refusal retrying cannot fix waits the interval, never the backoff.
+func bookPollRun(sched *pollSchedule, taskID string, interval time.Duration, now time.Time, dps []collection.Sample, faults []error) {
+	if len(dps) == 0 && len(faults) > 0 {
+		for _, f := range faults {
+			if _, terminal := collection.AsTerminal(f); terminal {
+				sched.succeeded(taskID)
+				return
+			}
+		}
+		sched.failed(taskID, interval, now)
+		return
+	}
+	sched.succeeded(taskID)
+}
+
 // pollInterval reads a driver poll's declared cadence off its baked spec;
 // zero (run every tick) when it declares none or does not parse, where the
 // poll itself then faults by name.
@@ -179,12 +191,13 @@ func collectDriverTask(ctx context.Context, runner *collection.Runner, task coll
 		timeout = d
 	}
 	return runner.CollectDriverPoll(ctx, collection.DriverPollTask{
-		Fn:        fn,
-		Transport: task.Transport,
-		Target:    p.Target,
-		Secrets:   task.Secrets,
-		Timeout:   timeout,
-		Session:   sessions.lookup(task.EndpointID),
+		Fn:          fn,
+		Transport:   task.Transport,
+		Target:      p.Target,
+		Secrets:     task.Secrets,
+		Timeout:     timeout,
+		Session:     sessions.lookup(task.EndpointID),
+		SessionOnly: task.Session != nil,
 	})
 }
 

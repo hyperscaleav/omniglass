@@ -1308,6 +1308,26 @@ export interface paths {
         patch: operations["update-endpoint"];
         trace?: never;
     };
+    "/endpoints/{id}:retry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Retry an endpoint's rejected session
+         * @description Wakes the endpoint's held session for one more attempt when it reads rejected (a refusal retrying cannot fix: a wrong credential, a changed host key, a reply its driver declares terminal). The session dials once and reads up, rejected again, or follows the ordinary backoff on a transient failure; a session that is not rejected is left alone. Fixing the credential or the address needs no retry: the edit itself recycles the session. Audited. Gated by endpoint:retry; read and retry scopes (through the component) drive the 404 versus 403 split.
+         */
+        post: operations["retry-endpoint"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/event-rules": {
         parameters: {
             query?: never;
@@ -9240,6 +9260,7 @@ export interface components {
             built: boolean;
             description: string;
             held: boolean;
+            line: boolean;
             name: string;
         };
         UISettings: {
@@ -12478,6 +12499,38 @@ export interface operations {
                 "application/json": components["schemas"]["UpdateEndpointInputBody"];
             };
         };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EndpointBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "retry-endpoint": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The endpoint's surrogate id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             /** @description OK */
             200: {

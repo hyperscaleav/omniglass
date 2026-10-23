@@ -28,6 +28,30 @@ answer the request as a failure carrying the device's text instead of timing out
 a spec is Go RE2 with **substring** semantics: `INPUT \S+` also matches `EVT INPUT hdmi2`, so anchor
 a pattern meant to match a whole line (`^INPUT \S+$`). `unmatched: collection-failed` makes a line
 nobody claims a collection fault rather than a counted discard ([routing](/architecture/collection/#listeners-over-a-held-session)).
+A spec may declare a **session** block, the auth step the held session runs before anything rides
+it ([auth and rejection](/architecture/collection/#auth-and-rejection)). `session.login` is a login
+dialog: its `steps` each wait for a prompt (`expect`, a `prefix` or `regex` that may match a prompt
+with no line ending, such as `login: `) and `send` a line, which may name a secret input's field
+(`${secret.login.password}`, the input declared `kind: secret`), and its `ready` match says the
+login passed. `session.terminal` lists the replies retrying cannot fix, each a `match` with a
+`class` (`auth`, `host-key`, `certificate`, `protocol`): a line matching one, during the login or
+answering any request, moves the session to `rejected`, where the node dials no more until the
+endpoint's credential or address changes or an operator retries it (`omniglass endpoint retry <id>`,
+with `endpoint:retry`). `session.reprobe` (at least `5m`, default never) lets a
+rejected session try once more on its own. A wrong password then costs one attempt, never a lockout:
+
+```yaml
+session:
+  login:
+    steps:
+      - { expect: { regex: "login: ?$" }, send: "${secret.login.username}" }
+      - { expect: { regex: "Password: ?$" }, send: "${secret.login.password}" }
+    ready: { prefix: "Newtron Panel 7 NVP ready" }
+  terminal:
+    - { class: auth, match: { prefix: "auth rejected" } }
+  reprobe: 1h
+```
+
 A poll's `schedule.every` is how often the node asks the device, at the node's heartbeat
 granularity (a `60s` poll on a 30s heartbeat runs every other tick). A poll whose fetch fails
 (the device rebooting, say) retries sooner, on a backoff that starts at the heartbeat and doubles
