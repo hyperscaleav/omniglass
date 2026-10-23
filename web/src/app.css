@@ -115,7 +115,8 @@
   --og-code-string: #0e7a51; --og-code-number: #2c5bc4;
   --og-code-function: #0a6e64;
   --og-up: #11a294; --og-unknown: #6b7f99; --og-snoozed: #7c5cd6;
-  --og-healthy: var(--color-success);
+  /* darker than the light success hue, which falls short as text here */
+  --og-healthy: #0e7a51;
   --og-average: #d97516; --og-disaster: #c81e3f;
   --og-incomplete: #5561b8;
   --tag-l: .50; --tag-c: .15;

@@ -34,7 +34,7 @@ describe("SimStatusBadge", () => {
     expect(look("failed")).toContain("badge-error");
     expect(look("starting")).toContain("badge-incomplete");
     expect(look("running")).toContain("badge-healthy");
-    expect(look("running")).not.toMatch(/badge-(warning|error|incomplete|ghost)/);
+    expect(look("running")).not.toMatch(/badge-(success|warning|error|incomplete|ghost)/);
   });
 
   it("explains a failed component in its hint", () => {

@@ -31,8 +31,11 @@ function walk(dir: string): string[] {
 describe("healthy hue", () => {
   const css = readFileSync(join(SRC, "app.css"), "utf8");
   const rule = (sel: string) => css.match(new RegExp(`\\${sel}\\s*\\{([^}]*)\\}`))?.[1] ?? "";
-  it("defines the healthy token from the success hue", () => {
-    expect(css.match(/--og-healthy:\s*var\(--color-success\)/g)?.length ?? 0).toBeGreaterThanOrEqual(1);
+  // Once per theme: a theme missing it leaves the three rules invalid, and
+  // healthy falls back to the inherited grey.
+  it("defines the healthy token in both themes", () => {
+    expect(css.match(/--og-healthy:\s*[^;]+;/g)?.length).toBe(2);
+    expect(css).toMatch(/--og-healthy:\s*var\(--color-success\)/);
   });
   for (const sel of [".badge-healthy", ".bg-healthy", ".text-healthy"]) {
     it(`${sel} draws from --og-healthy, not the unknown grey`, () => {

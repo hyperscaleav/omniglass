@@ -51,7 +51,7 @@ describe("HealthBadge", () => {
     const { getByText } = mount(() => <HealthBadge verdict="healthy" />);
     const cls = getByText("healthy").className;
     expect(cls).toContain("badge-healthy");
-    expect(cls).not.toMatch(/badge-(warning|error|incomplete|ghost)/);
+    expect(cls).not.toMatch(/badge-(success|warning|error|incomplete|ghost)/);
     expect(getByText("healthy").querySelector("svg")).toBeTruthy();
   });
 
