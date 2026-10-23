@@ -7339,3 +7339,164 @@ copies were removed; it stays PR evidence), and the lint flags a stray one. The 
 the post-build embed check both fail a declared walkthrough whose copy has no mp4, and the remark
 plugin fails the page. The six docs walkthroughs were re-recorded to get their videos, about 6 MB of mp4 in the
 repository, a cost [walkthroughs](/contributing/walkthroughs/) states.
+
+### A session holds its connection (#816)
+
+The first slice of epic #603's stateful arc. A stateful transport keeps its connection across ticks:
+`internal/collection/session.go` is the machine (establish, operate, recover, teardown) over a
+`HeldConn` seam, and `internal/collection/linesession.go` is the real held line connection (one TCP
+connection, a single reader goroutine framing lines and handing the next one to the exchange waiting
+for it, a line nobody asked for dropped as unsolicited until listeners claim it in #817, an
+unterminated flood bounded, a 15s keepalive). The node (`internal/node/session.go`) holds one session
+per endpoint whose worklist carries a standing listen task over a transport with a session dialer (the
+line protocol over `tcp`), keyed by the endpoint id the worklist now carries beside its name, and
+reconciles the held set on every pull: a new listen task starts one, a removed task or a re-addressed
+endpoint tears it down, node shutdown tears down all. The endpoint's line polls borrow the held
+connection instead of dialing per tick; a poll waits only while the first dial is in flight, and over a
+session that is otherwise not up it faults at once naming the state (a down device never stalls the
+tick), never dialing on its own. Recovery is bounded by named constants: a
+jittered exponential backoff (`SessionBackoff`: 250ms doubling, 30s cap, 20% jitter), five consecutive
+failed dials to `down` (still retrying at the cap), and churn (a connection dropping within 10s) growing
+the wait so an accept-and-drop device cannot hot-loop. The honest states land as the seeded
+`session-state` property per endpoint (`establishing`, `up`, `recovering`, `down`), published at each
+transition under the listen task, and each transition is a node self-log carrying the reason; there is
+no session table ([ADR-0150](/architecture/decisions/#adr-0150-a-held-sessions-state-is-a-property-series-and-node-logs-not-a-session-table)).
+Proven at three tiers: the state machine over fakes (`internal/collection/session_test.go`), the real
+held line connection over a real socket (`linesession_integration_test.go`) and against the
+simulator's NVP listener (`internal/sim/session_hold_test.go`: three polls ride one connection, the
+listener killed mid-session reads recovering, then up once it returns), and end to end
+(`internal/node/run_session_test.go`: the shipped `newtron-nvp` driver attached, the real node and
+bus, the `session-state` series on the server reading establishing, up, recovering, up through a
+listener outage, the reason in `node_log`, and node shutdown leaving the device holding no session).
+
+### The held session's review fixes (#816)
+
+The slice's review, fixed before the rollup, each with a regression test that failed first. A
+timed-out exchange recycles its connection (`ErrExchangeTimeout`), since its late reply would answer
+the next ask forever (`TestHeldSessionTimeoutNeverAnswersTheNextAsk`: SLOW GET INPUT times out, GET
+VOLUME gets VOLUME); the held line connection was rebuilt so one reader goroutine draws every ask's
+boundary (discard what already arrived, write, hand the next line over), so a banner sent on connect
+is never an answer (`a banner on connect is never an answer`, fifty fresh connections). An attempt
+now fails on a churned connection or an answer timeout as well as a failed dial, so an
+accept-then-drop or a hung device reads down within the attempt budget instead of up forever
+(`TestSessionAcceptThenDropReadsDownWithinTheBudget`, `TestHeldSessionToAHungDeviceReadsDown`), and a
+stable connection's drop still never does. The first dial's wait window closes inside the up
+transition, and a listen task's spec re-hash keeps a healthy connection while a credential change
+recycles it (`TestSessionManagerKeepsTheConnectionAcrossATaskRehash`). ADR-0150 now says the last
+`session-state` outlives a teardown and is read by its age.
+
+### The held session forgives a healthy device's rare timeout (#816)
+
+The re-review of the review fixes, each with a regression test that failed first. The previous
+commit's title overclaimed: a line the device sends after the drain and before it reads the request
+is still taken as the answer, a window #817's reply matching closes (ADR-0150 point 5 now says so).
+An answered exchange now forgives the failures before it, so one missed answer in fifty never reads
+down (`TestSessionSporadicTimeoutsNeverReadDown`, 250 good exchanges); a down session publishes
+nothing until a returning connection proves itself by an answer, or by outliving the stable window
+unless answers were what failed, so an accept-then-drop or hung device no longer flaps up and down
+(`TestSessionHungDeviceStaysDownWithoutFlapping`, `TestSessionDownReadsUpOnceTheConnectionProvesStable`).
+On the wire: a late interrupt mid-answer keeps the partial bytes (`TestLineConnLateInterruptKeepsThePartialReply`),
+only a passed read deadline is an interrupt so a failed keepalive keeps its cause, a caller's own
+deadline is not recorded as the device's timeout, and the wait for a first dial has its own budget
+(`TestSessionFirstDialWaitHasItsOwnBudget`).
+
+### Listeners and their instantiation commands (#817)
+
+The second slice of epic #603's stateful arc: a driver's listeners come alive over the held session.
+The session arms every connection with the listeners' `arm` commands before it reads up (on establish
+and on every recover; plumbing per the #603 ruling, each a `session armed` self-log with the device's
+reply, an unanswered one a failed attempt). The held line connection's one reader routes every inbound
+line by a documented precedence
+([ADR-0151](/architecture/decisions/#adr-0151-a-held-line-session-routes-every-inbound-line-listeners-first-answers-by-reply-shape)):
+a line a listener's `match` claims lands at once as a push sample under its listen task (the endpoint
+its instance, no poll involved), and is never an exchange's answer unless it also matches the
+exchange's declared reply shape; an exchange takes the first line its new `request.reply` shape
+matches (or the first unclaimed line); a line waiting in the socket when an ask begins is routed, not
+discarded; the rest is counted unclaimed, with a new spec-level `unmatched: collection-failed` policy
+landing one fault per tick. Commands ride the held session too (the delivery now names its endpoint
+and carries the binding's reply shape), falling back to a throwaway connection only when none is held,
+and the transport registry marks `tcp` as held. The seeded `newtron-nvp` declares its reply shapes.
+Proven over the simulator's NVP port (`internal/sim/listener_hold_test.go`: SUBSCRIBE INPUT armed, a
+change made elsewhere heard within a second, thirty GET polls amid a stream of pushes each getting
+their own answer, the subscription re-armed after the listener dies and returns) and end to end
+(`TestNodeLandsPushedSamplesThroughARecover`: with the node's tick at an hour, a change on the panel
+lands as the component's `video-input` within a second, and again after a recover).
+The slice's adversarial review, fixed before the rollup, each with a real-socket test that failed with
+the fix disabled. A reply may declare an `error` shape: the panel's `-ERR` refusal now answers a command
+at once as a refusal carrying the device's text (its execution error and its reply), not a timeout that
+recycled the session and charged its budget (`TestLineConnErrorReplyIsAFailureNotATimeout`, and over the
+simulator in the listener test); the seeded `newtron-nvp` declares it. A shaped exchange's timeout fails
+only that exchange and keeps the connection (`TestLineConnShapedTimeoutKeepsTheConnection`). An arm's ack
+is the first line of any kind, a listener's push included, and no ack within the timeout is logged as
+armed, unacknowledged rather than failing the attempt, so a device that acks with a push or not at all
+no longer stays down (`TestSessionArmAckedByAPushReadsUp`, `TestSessionArmNeverAckedStillReadsUp`).
+Regexes compile once per process (`TestRegexCompiledOnce`), and the drivers guide says a regex is an
+RE2 substring search to anchor (`TestLineConnUnanchoredReplyRegexMatchesAPush` pins it).
+
+### Driver tasks re-derive when a driver's spec changes (#823)
+
+Deferred from the stateless arc's review, closed in the stateful rollup. Driver tasks were baked at
+attach and never re-derived, so fixing a regex in a driver left the fleet emitting by the old one while
+the Drivers page showed the fix, and the reply and error shapes #817 added to the official
+`newtron-nvp` never reached endpoints attached before it. Now a driver update over the API, and the
+boot seed's upsert (now one transaction per driver), re-derive every attached endpoint's driver tasks in
+the same transaction: the tasks the spec derives are written where missing and the driver tasks it no
+longer derives retire, while the reachability probe stays. Ids are content hashes, so an unchanged
+function keeps its row, a re-seed that changes nothing touches no task and no endpoint, and an endpoint
+whose tasks changed has its `updated_at` (the node's config generation) moved. The update's audit row
+covers it. Proven over Postgres (`TestReseedWithNoChangeTouchesNothing`,
+`TestSeededSpecChangeReachesAttachedEndpoints`, `TestDriverUpdateRederivesAttachedEndpoints`) and end to
+end (`TestDriverFixReachesTheNextPoll`: a regex fix turns a faulting poll against a real line server into
+a landed value on the next poll). The review that followed closed three races and a cost, each with a
+Postgres test that failed first: an attach now reads the driver row `FOR SHARE`, so one racing an update
+waits and derives the committed spec instead of keeping the old one for good
+(`TestAttachDuringADriverUpdateDerivesTheNewSpec`, two interleaved transactions); the re-derive's endpoint
+list takes `FOR KEY SHARE` in id order, so a concurrent delete is waited on and skipped rather than
+failing the update on the task foreign key (`TestRederiveSkipsAnEndpointDeletedConcurrently`); and the
+seed's upsert writes only when a field differs and re-derives only when it wrote, so an unchanged boot
+leaves the driver and task rows' `xmin` as they were. Samples published under a retired task id in the
+one-tick gap before the node's next pull are dropped as orphans, accepted and documented.
+
+### The node honors a driver poll's declared schedule (#822)
+
+Deferred from the stateless arc's review, closed in the stateful rollup. A driver poll's `schedule.every`
+was validated and baked but unread, so every driver poll ran on every heartbeat. The node now keeps a
+per-task next-due time for the run (`internal/node/schedule.go`) and runs a driver poll on the first
+tick at or after it: a task new to the worklist runs at once, the cadence books from the due time so tick
+jitter does not drift it, a late tick runs once rather than bursting, and a task that leaves the worklist
+is forgotten. Reachability probes still run every tick, and a listener's pushes are never gated
+([ADR-0152](/architecture/decisions/#adr-0152-a-driver-poll-runs-on-its-declared-schedule-at-heartbeat-granularity),
+settling the nodes page's open question for driver polls). Proven by `TestPollScheduleRunsOncePerInterval`
+(a 60s poll on a simulated 1s tick runs at 0, 60 and 120s) and `TestNodeHonorsThePollSchedule` (the real
+node on a 50ms heartbeat asks a device about 4 times in 1.3s for a 400ms poll; the same test against an
+ungated stub measured 26). The review that followed added the retry: a run whose fetch failed retries on
+a backoff from the heartbeat, doubling, capped at the interval (`TestPollScheduleRetriesAFailureOnABackoff`;
+it also let the simulator end-to-end test drop the start-order workaround the gate had forced on it),
+pinned the anti-drift booking (`TestPollScheduleDoesNotDrift`), and let a listener's push prove a down
+held session, which a gated poll could otherwise keep reading down for its whole interval
+(`TestSessionDownReadsUpOnAPush`).
+
+### The collection decision set (#818)
+
+The closeout of epic #603. The four decisions the epic names are in the log, cited rather than
+duplicated: spec-is-data
+([ADR-0135](/architecture/decisions/#adr-0135-a-drivers-spec-is-data-one-engine-interprets-it)), the
+actuation contract
+([ADR-0136](/architecture/decisions/#adr-0136-actuation-is-a-per-node-pull-rendered-at-dispatch), with
+settlement from the reply in
+[ADR-0141](/architecture/decisions/#adr-0141-a-command-settles-when-its-evidence-arrives-from-its-reply-first-and-observation-second)),
+the endpoint naming with `interface` on the docslint denylist
+([ADR-0134](/architecture/decisions/#adr-0134-the-entity-an-api-is-reached-through-is-an-endpoint)), and
+instantiation commands as plumbing
+([ADR-0151](/architecture/decisions/#adr-0151-a-held-line-session-routes-every-inbound-line-listeners-first-answers-by-reply-shape)
+point 1). One new decision records the arc's held-session proof
+([ADR-0153](/architecture/decisions/#adr-0153-the-held-session-proof-is-the-line-protocol-over-tcp-other-held-transports-are-their-own-issues)):
+the line protocol over `tcp`, with SSH and the other held transports deferred to #1032 through #1041 and
+server-hosted ingress to #1024, and no serial transport (serial is reached through an IP-to-serial
+gateway over tcp, tls, or telnet), which the collection and nodes pages' transport fences now name. The
+sweep moved what the arc built out of design prose: the nodes page's status note (the command wire,
+scheduled polls, held line sessions, listeners and the demux), its listen-mode, sessions, and task-queue
+sections, the glossary (the endpoint row's rename note, and new listener and reply-shape rows), the
+collection page's stale hand-count of seeded catalog rows, and the roadmap. Badges stay at their floors:
+collection, nodes, messaging, commands, and the glossary are each Partial, every one still carrying
+design.

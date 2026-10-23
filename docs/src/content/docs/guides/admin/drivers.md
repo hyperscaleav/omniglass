@@ -19,7 +19,23 @@ a versioned declarative document (data, not code) naming the transport it rides,
 an attach must supply (host, port, credentials as secret references), and its three function
 families (poll functions, listeners, command bindings). The detail blade renders the spec as
 the **menu it is**: what each poll asks and what lands, what each listener waits for, what each
-command binding actuates. A row without a spec is a **stub** and cannot be attached; specs are
+command binding actuates. On a line protocol a listener's **arm** commands (the subscribe
+conversation) are sent on every connection the node holds, its **match** rule claims the
+device's pushes, and each claimed line lands as a sample with no poll involved; a request may
+declare its **reply** shape (`request.reply`, a `prefix` or `regex`) so its answer is picked out of
+those pushes, plus an optional `error` shape (`reply.error`) for the device's refusals, which then
+answer the request as a failure carrying the device's text instead of timing out. Every `regex` in
+a spec is Go RE2 with **substring** semantics: `INPUT \S+` also matches `EVT INPUT hdmi2`, so anchor
+a pattern meant to match a whole line (`^INPUT \S+$`). `unmatched: collection-failed` makes a line
+nobody claims a collection fault rather than a counted discard ([routing](/architecture/collection/#listeners-over-a-held-session)).
+A poll's `schedule.every` is how often the node asks the device, at the node's heartbeat
+granularity (a `60s` poll on a 30s heartbeat runs every other tick). A poll whose fetch fails
+(the device rebooting, say) retries sooner, on a backoff that starts at the heartbeat and doubles
+up to the interval, so a daily poll is not lost for a day. A listener's pushes land as they arrive
+whatever the schedule. Changing a spec (or its version) reaches the endpoints already attached through it: their tasks
+re-derive in the update's own transaction, under its one audit row, and the next poll runs the
+new spec; an official spec a new release ships reaches them at boot the same way.
+A row without a spec is a **stub** and cannot be attached; specs are
 authored over the API or CLI (`omniglass driver create --spec ...`) and **validate at write**,
 so a spec that references an unregistered sample name, an unknown secret shape, or a broken
 template refuses with the fault named (422). Attaching a driver to a component happens on the

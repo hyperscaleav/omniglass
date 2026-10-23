@@ -45,14 +45,19 @@ drivers:
       polls:
         - name: status
           schedule: { every: 30s }
-          request: { line: "GET INPUT" }
+          # The reply shape picks GET INPUT's answer out of the EVT pushes
+          # sharing the held session (#817); the panel refuses with a -ERR
+          # line, which answers the ask as a failure rather than a timeout.
+          request: { line: "GET INPUT", reply: { prefix: "INPUT ", error: { prefix: "-ERR" } } }
           emits:
             - { name: video-input, extract: { regex: "^INPUT (\\S+)$" } }
       # The NVP conversation is line-oriented over a held TCP session: the
       # subscribe arms on establish (and re-arms on every recover), and the
-      # device pushes EVT lines the listener claims by prefix. The session and
-      # listener runtimes arrive with the stateful arc (slices 6 and 7); the
-      # standing listen task derives now so the worklist shape is complete.
+      # device pushes EVT lines the listener claims by prefix. The standing
+      # listen task is what makes the node hold the endpoint's session (#816):
+      # SUBSCRIBE INPUT is sent on every connection before it reads up, the
+      # EVT pushes land as video-input samples with no poll involved, and the
+      # status poll and set-input command borrow the same connection (#817).
       listeners:
         - name: events
           arm: ["SUBSCRIBE INPUT"]
@@ -63,7 +68,7 @@ drivers:
         # The panel answers SET INPUT with the input it now shows, so the
         # reply settles the command (ADR-0141).
         - command_type: set-input
-          request: { line: "SET INPUT ${value}" }
+          request: { line: "SET INPUT ${value}", reply: { prefix: "INPUT ", error: { prefix: "-ERR" } } }
           settle: { from: response, extract: { regex: "^INPUT (\\S+)$" } }
   - id: http-json
     label: HTTP JSON

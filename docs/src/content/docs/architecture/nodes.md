@@ -18,8 +18,12 @@ request-reply (its enabled tasks plus a `config_generation`), and heartbeats on 
 credential is permitted only its own `<node>` subjects. Also built: running tasks (the probes,
 `internal/node/probe.go`), shipping telemetry (the JetStream `TelemetryBatch` ingested by
 `internal/bus/consumer.go`), and the raw self-log lane (ADR-0066: `internal/node/logs.go`,
-`GET /nodes/{name}/logs`, the console Self-logs panel). Still `Design`: commands and the durable
-command queue, sessions and inbound demux, the layered `_check` reachability gate,
+`GET /nodes/{name}/logs`, the console Self-logs panel), the command wire (a per-node pull, actuated
+over the driver's binding, [ADR-0136](/architecture/decisions/#adr-0136-actuation-is-a-per-node-pull-rendered-at-dispatch)),
+driver polls on their declared schedule (#822), and, for the line protocol over `tcp`, held sessions
+(#816, [below](#sessions)) with their listeners and the inbound demux (#817). Still `Design`: the
+durable JetStream command queue, the session pool knobs and the held transports beyond the line
+protocol (#1032 (ssh), #1033 (telnet), #1034 (websocket), #1035 (tls), #1036 (mqtt), #1037 (udp), #1038 (SSE over http), #1039 (modbus/tcp), #1040 (bacnet/ip), #1041 (knxnet/ip), [ADR-0153](/architecture/decisions/#adr-0153-the-held-session-proof-is-the-line-protocol-over-tcp-other-held-transports-are-their-own-issues)), the layered `_check` reachability gate,
 config-generation-driven cache invalidation, node self-telemetry, the node-down sweep, the JetStream
 publish-ack delivery contract (telemetry publish is fire-and-forget today, #430), tick
 scheduling and concurrency knobs, and config apply (the `:apply` flow). The credential is a shared
@@ -141,6 +145,11 @@ callback URL resolves to the placed listener's address, never a hardcode.
 
 ## Running tasks
 
+Built for driver tasks: a poll runs its request on its schedule and a listen task claims pushed lines
+over its endpoint's held session, both locating and transforming each emit at the edge and landing a
+`collection-failed` for anything that does not parse ([collection](/architecture/collection/)). The
+Expr extraction and the cascading labels below remain design.
+
 :::design[Target design: edge normalization (locate + Expr) and the listen mode, tracked in #603]
 Per task the node runs the protocol over the endpoint's connection, then **normalizes at the
 edge**: the locate + Expr extraction ([collection](/architecture/collection/)) produces samples and
@@ -155,13 +164,26 @@ The built endpoint types, their per-task params, and the fixed samples each emit
 
 ## Sessions
 
-::::design[Target design: sessions and the session pool, tracked in #816]
+Built (#816): the node holds one session per endpoint whose worklist carries a standing listen task
+over a transport with a session dialer (the line protocol over `tcp` today), reconciled against
+every worklist pull and torn down on task removal, re-address, or node shutdown. It establishes,
+lends its connection to the endpoint's line polls, recovers with a jittered, bounded backoff, and
+reports each transition as the `session-state` property (`establishing`, `up`, `recovering`,
+`down`) plus a self-log carrying the reason; there is no `session_log` table
+([ADR-0150](/architecture/decisions/#adr-0150-a-held-sessions-state-is-a-property-series-and-node-logs-not-a-session-table)).
+The machine's detail is on [collection](/architecture/collection/#sessions). Built with #817: the
+subscription on establish (a listener's instantiation commands, re-sent on every recover) and the
+demux on the shared connection (listeners first, answers by reply shape;
+[routing](/architecture/collection/#listeners-over-a-held-session)). Still design below: the pool
+knobs and authentication on establish.
+
+::::design[Target design: sessions and the session pool, tracked in #603; the held transports beyond the line protocol are #1032 (ssh), #1033 (telnet), #1034 (websocket), #1035 (tls), #1036 (mqtt), #1037 (udp), #1038 (SSE over http), #1039 (modbus/tcp), #1040 (bacnet/ip), #1041 (knxnet/ip)]
 A stateful endpoint (`ssh`, `mqtt`, anything held open) becomes a **session** at runtime: one
 connection keyed by `(node, endpoint)`, shared by every task and command under it, handshake and
 auth paid once. A pool holds it open across ticks (reconnect, backoff, keepalive); a listener
 runtime wakes on its inbound. The socket is ephemeral on the node, which **reports lifecycle
-transitions as `session_log` rows**; the `session` entity is a server-side projection (a
-view over `session_log`; [storage](/architecture/storage/)).
+transitions as the `session-state` property and its own logs** (ADR-0150 replaced the designed
+`session_log` rows and `session` view).
 
 :::caution[Open question]
 The exact `session` lifecycle state enum and pooling parameters (idle timeout, max lifetime, pool
@@ -169,12 +191,13 @@ size per endpoint, a shared versus dedicated session for a stream).
 :::
 
 Lifecycle: **establish** (connect, authenticate, subscribe if a stream rides the session),
-**operate** (pollers and stream events over the held connection, demuxed, next), **recover**
-(graceful retry with backoff, surfaced as a `session_log` error, never hammering: a rejected
+**operate** (pollers and stream events over the held connection, demuxed; built for the line
+protocol, #817), **recover**
+(graceful retry with backoff, surfaced as `session-state` and a node log, never hammering: a rejected
 credential risks lockout; a subscription is session-scoped, so a reconnect **re-subscribes**),
 **teardown** (exit cleanly, set up again).
 
-**Where failures land.** `session_log` owns **connection health** (cannot connect, auth rejected,
+**Where failures land.** `session-state` and the node's logs own **connection health** (cannot connect, auth rejected,
 dropped, timeout); the **data event owns parse health**: a parse failure emits a `collection.failed`
 event carrying the `raw` (plus the `action` row for commands), surfacing as an alertable
 collection-health sample. A command timeout can touch both.
@@ -182,7 +205,15 @@ collection-health sample. A command timeout can touch both.
 
 ## Inbound handling on a shared connection
 
-:::design[Target design: the ordered matcher set, tracked in #817]
+Built for the line protocol (#817): one reader per held connection routes every inbound line,
+**listeners first** (a claimed line is never an answer unless it also matches the exchange's
+declared reply shape), then the exchange in flight by its reply shape (or, with none declared, the
+first unclaimed line), then unclaimed (counted, and a `collection-failed` per tick when the spec
+says so). This reverses the design's order below, which tried an outstanding poll's matcher first
+([ADR-0151](/architecture/decisions/#adr-0151-a-held-line-session-routes-every-inbound-line-listeners-first-answers-by-reply-shape)); the precedence and its reasons are on
+[collection](/architecture/collection/#listeners-over-a-held-session).
+
+:::design[Target design: the ordered matcher set, tracked in #603]
 One connection carrying heterogeneous inbound frames cannot assume an arriving frame answers the
 last command. Frames route through an **ordered matcher set**: every task
 contributes a matcher (a poller's awaited-response shape, a listener/stream's `match:` predicate),
@@ -195,6 +226,10 @@ missing matcher surfaces, never fails silently.
 :::
 
 ## The component task queue
+
+Built: a standing listen task shares its endpoint's held session with the endpoint's polls and
+commands, demuxed by one reader (#817); the per-component lanes and the smart-wait gate below remain
+design.
 
 ::::design[Target design: the component task queue, tracked in #603; the durable command queue is ADR-0036]
 The node's work is the **component task queue** (distinct from the central **rule engine**;
@@ -309,7 +344,7 @@ ship.
 
 ## Tick scheduling, concurrency, and self-observability
 
-::::design[Target design: the tick scheduler, `node.self`, and the node-down sweep, tracked in #822 and #430; the seeded node rules are the `event_rule` (ADR-0050)]
+::::design[Target design: the tick scheduler, `node.self`, and the node-down sweep, tracked in #430 (per-task driver poll schedules are built, #822); the seeded node rules are the `event_rule` (ADR-0050)]
 A tick groups the worklist **by endpoint** and runs three phases: the L3 ping pre-pass (batched per
 host), the gate-verdict pre-pass, the poll phase. The gate pre-passes run at a **high fixed
 concurrency** (`gateConcurrency`), the poll phase across the **bounded poll pool** (default 16,
@@ -318,9 +353,12 @@ dead targets is bounded by concurrency, not the serial sum of probe timeouts (a 
 `timeout * (retries+1)`, via `--snmp-timeout` / `--snmp-retries`, default 3s x2). Each poll task gets
 a per-task deadline (`--task-deadline`, default 30s).
 
-:::caution[Open question]
-Per-task schedule dispatch: the resolved `interval` exists, but honoring distinct per-task cadences
-within one node tick is unsettled.
+:::note[Settled for driver polls (#822)]
+A driver poll runs on its declared `schedule.every`, at heartbeat granularity: the node keeps each
+poll's next due time and runs it on the first tick at or after it (a task new to the worklist runs at
+once, a restart polls at its first tick, and a run whose fetch failed retries on a backoff from the
+heartbeat, doubling, capped at the interval). Reachability probes still run every tick, and a listener's
+pushes are never gated ([ADR-0152](/architecture/decisions/#adr-0152-a-driver-poll-runs-on-its-declared-schedule-at-heartbeat-granularity)).
 :::
 
 The loop is **overrun-aware**: it reschedules relative to each tick's finish, not a fixed ticker; a

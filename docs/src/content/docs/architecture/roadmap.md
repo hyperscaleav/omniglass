@@ -44,7 +44,10 @@ per-slice detail is on [implementation status](/architecture/status/).
   code and completed the layer-7 ladder: an `http` probe draws a real response and an `ssh` probe runs a
   real key exchange and tries the endpoint credential, so an endpoint reports reached, responsive, and
   authenticated, not just an open port. The same arc shipped the declarative driver spec, poll
-  interpretation, and the command wire that actuates a device and settles against what it reports.
+  interpretation, and the command wire that actuates a device and settles against what it reports. The
+  stateful arc followed: the line protocol holds a session whose listeners land the device's pushes
+  (#816, #817), polls run on their declared schedule (#822), and an attached endpoint's tasks
+  re-derive when its driver's spec changes (#823).
 - **The telemetry ontology.** The `metric_type` / `property_type` / `event_type` / `command_type`
   registries, the sample lanes (`metric`, `property`, `event`, `log_line`), current values derived
   from the series, and the
@@ -69,7 +72,7 @@ authoritative.
 
 | Epic | Outcome | Lands in |
 |---|---|---|
-| [Release 0.1.0 (#825)](https://github.com/hyperscaleav/omniglass/issues/825) | Ahead: the first public tag. The expression engine (#524) and the event rule tier (#819) are done, as is the stateless arc of [drivers, listeners, and the command wire (#603)](https://github.com/hyperscaleav/omniglass/issues/603). **Next is #603's stateful arc**: [sessions (#816)](https://github.com/hyperscaleav/omniglass/issues/816) that hold a connection and recover it, [listeners (#817)](https://github.com/hyperscaleav/omniglass/issues/817) that take device-pushed payloads over a held session, and [the collection decision set (#818)](https://github.com/hyperscaleav/omniglass/issues/818) that closes the epic out. Beside it ride the delivery half of [telemetry integrity (#430)](https://github.com/hyperscaleav/omniglass/issues/430) and the [role staffing bugs (#504)](https://github.com/hyperscaleav/omniglass/issues/504); the epic lists the pre-tag hygiene. | [collection](/architecture/collection/), [nodes](/architecture/nodes/) |
+| [Release 0.1.0 (#825)](https://github.com/hyperscaleav/omniglass/issues/825) | Ahead: the first public tag. The expression engine (#524) and the event rule tier (#819) are done, as is the stateless arc of [drivers, listeners, and the command wire (#603)](https://github.com/hyperscaleav/omniglass/issues/603). **#603's stateful arc closes the epic**: [sessions (#816)](https://github.com/hyperscaleav/omniglass/issues/816) that hold a connection and recover it, [listeners (#817)](https://github.com/hyperscaleav/omniglass/issues/817) that take device-pushed payloads over a held session, scheduled polls (#822), re-derived driver tasks (#823), and [the collection decision set (#818)](https://github.com/hyperscaleav/omniglass/issues/818). Beside it ride the delivery half of [telemetry integrity (#430)](https://github.com/hyperscaleav/omniglass/issues/430) and the [role staffing bugs (#504)](https://github.com/hyperscaleav/omniglass/issues/504); the epic lists the pre-tag hygiene. | [collection](/architecture/collection/), [nodes](/architecture/nodes/) |
 | [Groups as scope and the cross-tier cascade (#10)](https://github.com/hyperscaleav/omniglass/issues/10) | Ahead: entity-groups as scope anchors and dynamic-membership scope, plus the cross-tier cascade (a location scope reaching its systems and components). Principal groups as grant subjects shipped; group-as-scope has not. | [identity and access](/architecture/identity-access/), [groups](/architecture/groups/), [cascade](/architecture/cascade/) |
 | [Public releases (#57)](https://github.com/hyperscaleav/omniglass/issues/57) | Ahead: signed and notarized binaries for every major OS/arch and one-line installs (Homebrew / Scoop / winget), so a first-time user runs with no security warning. | [scaling and deployment](/architecture/scaling/) |
 | [Embedded Postgres run mode (#19)](https://github.com/hyperscaleav/omniglass/issues/19) | Ahead: an opt-in single-binary mode with a managed embedded Postgres, for edge, demo, and learning installs with zero external database. | [scaling and deployment](/architecture/scaling/) |
@@ -89,10 +92,11 @@ that describes the target:
 1. **Collection at the edge.** Substantially landed: the [node](/architecture/nodes/) runtime, the
    embedded bus, the probes up the layer-7 ladder (`http` and `ssh` prove a real answer, not only an
    open port), the declarative driver spec with poll interpretation, the command wire, and
-   [endpoint](/architecture/collection/) and task authoring all shipped. Next: the stateful half
-   (held sessions and the listeners that ride them, #603). Still ahead after it:
-   [templates](/architecture/templates/) (the reusable device shape, #827), the snmp driver, and
-   server-hosted listeners (webhook, trap, syslog ingress).
+   [endpoint](/architecture/collection/) and task authoring all shipped, and so did the stateful half:
+   held line sessions and the listeners that ride them (#603). Still ahead:
+   [templates](/architecture/templates/) (the reusable device shape, #827), the snmp driver, the held
+   transports beyond the line protocol (#1032 to #1041), protocols that move whole files (#1043 to
+   #1047), and server-hosted listeners (webhook, trap, syslog ingress, #1024).
 2. **The data model.** Landed except one piece: [properties](/architecture/properties/) (the
    canonical-signal registry and the exclusive-arc owner columns), the sample sinks,
    [config and variables](/architecture/variables/) resolved down the

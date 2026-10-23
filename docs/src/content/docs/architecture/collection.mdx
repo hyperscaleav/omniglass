@@ -44,7 +44,13 @@ transport (a v2c scalar SNMP GET, a stateless line exchange over tcp), the node 
 emit (locate by OID, regex capture, dotted JSON path, or key; apply the declared transform; type
 by the baked lane), the worklist delivers a task's secret inputs unsealed on the per-node subject,
 and anything that does not parse lands a `collection-failed` event naming the task, never a silent
-drop and never a wrong-lane sample. Sessions and listeners are the stateful arc, next. See
+drop and never a wrong-lane sample. Also built, the stateful arc: a **session holds its
+connection** (#816) for an endpoint with a standing listen task, its line polls and commands
+borrowing it, its state the `session-state` property per endpoint ([ADR-0150](/architecture/decisions/#adr-0150-a-held-sessions-state-is-a-property-series-and-node-logs-not-a-session-table));
+and the driver's **listeners come alive** over it (#817): their instantiation commands arm every
+connection, their match rules claim the device's pushes, and the claimed line lands as a push
+sample with no poll involved ([ADR-0151](/architecture/decisions/#adr-0151-a-held-line-session-routes-every-inbound-line-listeners-first-answers-by-reply-shape)).
+The arc's closeout is #818. See
 [ADR-0037](/architecture/decisions/#adr-0037-telemetry-is-a-protobuf-event-over-jetstream-with-an-inline-owner-confining-consumer),
 [ADR-0038](/architecture/decisions/#adr-0038-the-reachability-verdict-is-a-built-in-state),
 [ADR-0039](/architecture/decisions/#adr-0039-an-endpoint-is-a-device-api-the-endpoint-type-is-its-transport-not-its-driver),
@@ -136,7 +142,7 @@ for a targeted refetch.
 A **task** is a node's unit of collection work, described by two independent axes:
 
 - **Task mode** (on the task): **poll** (we ask) or **listen** (we wait), stated from *our* perspective on purpose, since "pull/push" inverts with the frame.
-- **Transport** (on the endpoint): **stateless** (a throwaway connection per shot) or **stateful** (a held-open connection, a `session` emitting `session_log` rows for connect/auth/drop/reconnect).
+- **Transport** (on the endpoint): **stateless** (a throwaway connection per shot) or **stateful** (a held-open connection, a **session** whose state is the `session-state` property per endpoint, its connect/drop/reconnect reasons in the node's own logs; [ADR-0150](/architecture/decisions/#adr-0150-a-held-sessions-state-is-a-property-series-and-node-logs-not-a-session-table)).
 
 All four cells are real:
 
@@ -146,6 +152,48 @@ All four cells are real:
 | **stateful** | SSH-exec or xAPI `xStatus` on a held session | MQTT subscribe, xAPI feedback |
 
 Waiting for a frame is one mode (**listen**) regardless of transport; statefulness lives on the endpoint.
+
+### Sessions
+
+Built (#816): a session **holds its connection** across ticks. The node holds one per endpoint
+whose worklist carries a standing listen task over a transport with a session dialer (the line
+protocol over `tcp` today), keyed by the endpoint's id, which the worklist carries beside its name
+(endpoint names are unique only per component). The machine runs on its own:
+
+- **establish**: the first dial; the session reads `establishing` until it connects.
+- **operate**: the session reads `up`, and the endpoint's line polls **borrow the held connection**
+  instead of dialing per tick. One reader goroutine owns the connection: on an ask it discards
+  whatever already arrived (a banner, a stray line), writes the line, and hands the next line to
+  that ask. An ask whose answer does not come in time recycles the connection, since its late reply
+  would answer the next ask. A pushed line a listener claims is never an answer, and a request that
+  declares its reply shape takes only a line that shape matches ([routing, below](#listeners-over-a-held-session)).
+  A poll issued while the
+  first dial is in flight waits for it (on a budget of its own, then the exchange gets its whole
+  timeout); any other poll over a session with no connection faults at once with a
+  `collection-failed` naming the state, so a down device never stalls the node's tick, and it never
+  dials a connection of its own.
+- **recover**: a held connection that drops (the peer closed, a read failed, the TCP keepalive gave
+  up, an unshaped answer timed out) reads `recovering` at once, without waiting for a poll, and redials with
+  a jittered exponential backoff (250ms doubling, capped at 30s, 20% jitter). Five consecutive failed
+  attempts read `down`, where an attempt fails if its dial fails, its connection drops unanswered
+  within 10s, or an answer over it timed out; so a device that accepts and drops, or accepts and
+  never answers, reads `down` rather than `up` forever. An answered exchange forgives the failures
+  before it, so a healthy device's rare missed answer never reads `down`. The session keeps retrying
+  at the capped pace and leaves `down` only when a returning connection proves itself (an answer, a
+  listener's push, or outliving 10s unless answers were what failed), so a failing device publishes no flapping; a
+  stable connection's drop redials at once.
+- **teardown**: a listen task that leaves the worklist, a change to what the connection depends on
+  (transport, address, timeout, credentials; a listen task's spec re-hash keeps it), or node
+  shutdown closes the connection. Teardown publishes no state (the node stopped wanting the session,
+  which says nothing about the device), so the last `session-state` outlives it and is read by its
+  age.
+
+There is **no session table**: each transition lands as the `session-state` property on the
+endpoint's component (instance: the endpoint's name), published at the transition under the listen
+task, and as a node self-log (`facility: session`) carrying the reason
+([ADR-0150](/architecture/decisions/#adr-0150-a-held-sessions-state-is-a-property-series-and-node-logs-not-a-session-table)).
+Proven against the simulator's line protocol: kill the device's listener mid-session and the session
+reads `recovering`, then `up` once it returns, with the transitions landing on the server.
 
 **Native push**: data pushed by smart senders is self-describing (it carries its key), its edge parse a near-identity pass-through marked `shape=native`; a failed parse keeps the raw on a `collection.failed` event.
 
@@ -170,7 +218,13 @@ the endpoint's `params` JSON, unmarshalled on the node:
 | `http` | inline probe | `target` (`host:port`), `timeout` | the tcp pair, `http-response-time`, `endpoint-responsive` |
 | `ssh` | inline probe | `target` (`host:port`), `timeout`, optional `username`/`password` (secret references arrive with the driver spec) | the tcp pair, `ssh-handshake-time`, `endpoint-responsive`, `endpoint-authenticated` (only when a credential was tried) |
 
-:::design[The remaining transports and their per-task spec, tracked in #603]
+The `raw-tcp` row below is built in its driver form: the line protocol over `tcp` holds a session
+(#816) that polls, commands, and listeners share (#817). The other held transports are each their own
+issue: #1032 (ssh), #1033 (telnet), #1034 (websocket), #1035 (tls), #1036 (mqtt), #1037 (udp), #1038 (SSE over http), #1039 (modbus/tcp), #1040 (bacnet/ip), #1041 (knxnet/ip). There is no serial transport: an RS-232 or RS-485 device is reached
+through an IP-to-serial gateway, which is the `tcp` transport (or `tls` or `telnet`), so its driver is
+a line protocol like any other ([ADR-0153](/architecture/decisions/#adr-0153-the-held-session-proof-is-the-line-protocol-over-tcp-other-held-transports-are-their-own-issues)).
+
+:::design[The remaining transports and their per-task spec, tracked in #603 and #1032 (ssh), #1033 (telnet), #1034 (websocket), #1035 (tls), #1036 (mqtt), #1037 (udp), #1038 (SSE over http), #1039 (modbus/tcp), #1040 (bacnet/ip), #1041 (knxnet/ip)]
 
 | endpoint type | shape | host/target | per-task params | samples |
 |---|---|---|---|---|
@@ -182,9 +236,9 @@ the endpoint's `params` JSON, unmarshalled on the node:
 
 :::
 
-`icmp`/`tcp` are inline probes (config on `endpoint.params`); the rest, in the design model, are held connections: the connection lives on the endpoint, the task names what to read. The ship-with registry seeds the 11 real catalog rows, 4 `metric_type` plus 7 `property_type` (`internal/seed/metric_types.yaml`, `internal/seed/property_types.yaml`), including the probe built-ins above plus `endpoint-reachable`; the wider per-transport set (`udp-open`, `snmp-reachable`, the http trio, `<proto>-reachable`/`<proto>-response-time` for the text family) is Design, and unregistered names would be reject-not-project dropped at ingest.
+`icmp`/`tcp` are inline probes (config on `endpoint.params`); the rest, in the design model, are held connections: the connection lives on the endpoint, the task names what to read. The ship-with registry seeds the probe built-ins above, the endpoint verdicts, and `session-state` (`internal/seed/metric_types.yaml`, `internal/seed/property_types.yaml`; the [metrics](/guides/admin/metrics/) and [properties](/guides/admin/properties/) guides render each set from the seed); the wider per-transport set (`udp-open`, `snmp-reachable`, the http trio, `<proto>-reachable`/`<proto>-response-time` for the text family) is Design, and unregistered names would be reject-not-project dropped at ingest.
 
-:::design[The held-connection transports in detail, tracked in #603]
+:::design[The held-connection transports in detail, tracked in #603 and #1032 (ssh), #1033 (telnet), #1034 (websocket), #1035 (tls), #1036 (mqtt), #1037 (udp), #1038 (SSE over http), #1039 (modbus/tcp), #1040 (bacnet/ip), #1041 (knxnet/ip)]
 
 For `snmp`, each OID keeps its **native SNMP type**: numeric OIDs land as `metric`, string OIDs
 (OctetString / IPAddress / OID) as `property`, the lane decided at ingest by catalog membership;
@@ -216,9 +270,56 @@ text family persistently (prompt-expect, echo handling, Q-SYS-style framing), ss
 
 :::
 
+### Listeners over a held session
+
+Built (#817): a listener declared in a driver's spec derives a standing listen task, and the
+node runs every listen task on an endpoint over that endpoint's one held session:
+
+- **Instantiation commands** (`arm`): the subscribe conversation, sent in order on every connection
+  before the session reads `up`, so on establish and again on each recover. They are **plumbing**,
+  not command rows (the #603 ruling): each is a node self-log (`session armed`, with the device's
+  reply). The ack is the first line of any kind, one a listener claims included (the listener has
+  it too), since a device may acknowledge a subscribe with the push itself; an arm with no ack
+  within the timeout is logged at warn (`session armed, unacknowledged`) and does not fail the
+  attempt, while the connection dying during the arm does.
+- **Match** (`prefix` or `regex`): classifies an inbound line. Listeners are offered a line in
+  function-name order and the first whose rule picks it claims it.
+- **Extraction**: the claimed line runs through the same emit shape a poll's answer does (locate,
+  transform, type by the baked lane), and lands at once as a sample under the listen task: the
+  component owns it, the endpoint is its instance, and no poll schedule is involved. A claimed line
+  whose emits do not extract is a `collection-failed`, landed once per change.
+
+Every inbound line on a held session is routed by one precedence
+([ADR-0151](/architecture/decisions/#adr-0151-a-held-line-session-routes-every-inbound-line-listeners-first-answers-by-reply-shape)):
+
+1. A line a listener claims is the listener's. It is never an exchange's answer, unless the
+   exchange declared a reply shape the line matches, in which case both have it.
+2. An exchange in flight (a poll, a command) takes the first line its declared reply shape
+   (`request.reply`, a `prefix` or `regex`) matches, or, when it declares none, the first line no
+   listener claims. When the shape also declares an `error` shape, an unclaimed line matching it
+   answers the exchange as a **refusal** carrying the device's text. A line that began before the
+   request was written is never its answer.
+3. Anything left is **unclaimed**: counted, and once per tick the node logs the count and the last
+   such line; a spec declaring `unmatched: collection-failed` also lands one `collection-failed`
+   per tick naming them (the default is `discard`).
+
+A request with a reply shape closes the window #816 left open (a stray line arriving just before
+the device reads the request); without one, a line no listener claims in that instant can still be
+taken as the answer, so a driver whose protocol mixes unsolicited lines with answers declares its
+replies. A shape's `regex` is Go RE2 with **substring** semantics, so anchor it (`^INPUT \S+$`), or it
+also matches a push containing it. Because shape routing cannot hand a late answer to the next ask,
+a shaped request that gets no answer in time fails only that exchange: the connection is kept and
+the session is not charged (an unshaped one still recycles the connection, ADR-0150). A poll whose
+answer is a refusal lands a `collection-failed` naming the device's text. Commands ride the held
+session too: a delivery names its endpoint, and a node holding a session there actuates over it
+(falling back to a throwaway connection only when none is held). A command the device answers
+settles from that answer as it did over a throwaway connection; one it refuses reports the
+device's text as both its execution error and its reply, so it fails at once with the reason on
+the row rather than timing out.
+
 ### Listeners and their config
 
-:::design[Server-hosted listeners, tracked in #1024]
+:::design[Server-hosted listeners: syslog, SNMP trap, and webhook ingress, tracked in #1024]
 
 A **listener** waits for pushed data (`mode: listen`): a webhook POST, an MQTT/subscribe stream, an
 SNMP trap or syslog line, or a line on a held session; a webhook is one transport, not the
@@ -408,7 +509,17 @@ spec declares:
 defaults bake, and the spec's functions derive the endpoint's tasks in the same transaction: a
 poll task per poll function, a standing listen task per listener, each task's spec carrying the
 function **whole with its emit lanes resolved at attach** (the compile step: the node never
-looks up a catalog at runtime). Refusals name the fault as a 422: a missing required input, an
+looks up a catalog at runtime). The tasks **re-derive when the driver's spec changes** (#823): a
+driver update over the API, and the boot seed's upsert of an official spec, rewrite every attached
+endpoint's driver tasks in the same transaction, writing the ones the spec now derives and retiring
+the ones it no longer does. Task ids are content hashes, so an unchanged function keeps its row and
+a re-seed that changes nothing writes nothing at all (not the driver row, not a task); an endpoint
+whose tasks changed has its config generation moved, and its node runs the new spec from its next
+pull. An attach reads the driver row under a share lock, so one that races an update waits for it
+and derives the committed spec, and a re-derive skips an endpoint a concurrent delete removes.
+One gap is accepted: between the re-derive and the node's next pull (one tick), samples the node
+still publishes under a retired task's id are dropped at ingest as orphans, the same confinement
+that drops any unknown task id; the next tick publishes under the new one. Refusals name the fault as a 422: a missing required input, an
 input the spec does not declare, an ambiguous secret name. A secret input is resolved under the
 **caller's own secret read scope and admin tier**, so an attach can only bind a credential the
 operator could themselves read: an out-of-scope or admin-sensitive secret refuses
@@ -419,10 +530,14 @@ driver row without a spec is a **stub** that cannot be attached. The console's e
 create offers both moves (a bare probe endpoint, or attach a driver and fill its inputs), and the
 Drivers page renders each spec as the menu it is.
 
-**The interpreter runs the poll functions** (#814): the node tells a baked driver task from a
-probe task by its spec, fetches over the transport (the v2c scalar GET rides `gosnmp`, proven
+**The interpreter runs the poll functions** (#814) **on their declared schedule** (#822): a poll's
+`schedule.every` is honored at heartbeat granularity, the node running it on the first tick at or
+after it is due (a new task at once, and a run whose fetch failed retried on a backoff from the
+heartbeat, doubling, capped at the interval), while reachability probes run every tick and a listener's
+pushes ride the held session as they arrive, never gated ([ADR-0152](/architecture/decisions/#adr-0152-a-driver-poll-runs-on-its-declared-schedule-at-heartbeat-granularity)).
+The node tells a baked driver task from a probe task by its spec, fetches over the transport (the v2c scalar GET rides `gosnmp`, proven
 against a from-the-spec BER agent; a line poll runs one stateless ask over a throwaway
-connection until the stateful arc holds a session), and interprets the payload against the baked
+connection, or borrows the endpoint's [held session](#sessions) when the node holds one), and interprets the payload against the baked
 function: locate each emit by its one extractor, apply the declared transform (enum map, then
 scale, then cast), and type it by the baked lane. A metric-lane value that is not numeric is a
 fault, never a wrong-lane sample; a missing emit faults by name while the rest of the payload
@@ -430,8 +545,8 @@ still lands; a failed fetch lands nothing; every fault is a `collection-failed` 
 task. Secret inputs reach the node **unsealed in the worklist reply**: the server resolves each
 reference once per pull (the per-node NATS grant is the isolation boundary, and the attach that
 bound the reference is the audited operator action), and a reference that no longer resolves is
-delivered as absence, which the node reports as the missing credential. Sessions and listeners
-arrive with the stateful arc. The ship-with set:
+delivered as absence, which the node reports as the missing credential. Sessions and the
+listeners over them are built ([above](#sessions)). The ship-with set:
 
 <SeededSet kind="drivers" />
 

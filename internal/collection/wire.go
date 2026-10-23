@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"strings"
 	"time"
+
+	"github.com/hyperscaleav/omniglass/internal/driver"
 )
 
 // The node-server control-plane wire, checkpoint 2: JSON over NATS. The
@@ -74,7 +76,9 @@ func NodeFromSubject(subject string) string {
 }
 
 // TaskSpec is one enabled task in a worklist reply: the content-addressed task
-// plus the placement-bound endpoint it runs over. EndpointParams and Spec are
+// plus the placement-bound endpoint it runs over. EndpointID is the
+// node-unique endpoint key (names are unique only per component), which a
+// held session is keyed by (#816). EndpointParams and Spec are
 // raw jsonb passed through from storage. Secrets carries a driver task's
 // unsealed secret inputs (#814), resolved server-side at reply time; the
 // per-node subject grant is the isolation boundary, so a node only ever
@@ -82,6 +86,7 @@ func NodeFromSubject(subject string) string {
 type TaskSpec struct {
 	ID             string                       `json:"id"`
 	Mode           string                       `json:"mode"`
+	EndpointID     string                       `json:"endpoint_id,omitempty"`
 	EndpointName   string                       `json:"endpoint_name"`
 	Transport      string                       `json:"transport"`
 	EndpointParams json.RawMessage              `json:"endpoint_params,omitempty"`
@@ -110,6 +115,12 @@ type CommandDelivery struct {
 	Transport   string `json:"transport"`
 	Target      string `json:"target"`
 	Line        string `json:"line,omitempty"`
+	// EndpointID is the endpoint the command dispatched to, so a node that
+	// holds a session there actuates over it (#817); Reply is the binding's
+	// declared reply shape, which picks the answer out of that session's
+	// pushes.
+	EndpointID string        `json:"endpoint_id,omitempty"`
+	Reply      *driver.Reply `json:"reply,omitempty"`
 }
 
 // CommandPullReply is the server's response to a command queue pull.

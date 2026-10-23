@@ -35,10 +35,17 @@ type endpointParams struct {
 // never stalls the rest of the worklist. tcp and icmp are the wired probe types;
 // their samples ride the same pipeline (the ingest consumer does not branch
 // on probe type).
-func runTasks(ctx context.Context, nc *nats.Conn, node string, wl collection.WorklistReply, runner *collection.Runner, verdicts map[string]string, faultseen map[string]string) error {
+func runTasks(ctx context.Context, nc *nats.Conn, node string, wl collection.WorklistReply, runner *collection.Runner, sessions *sessionManager, sched *pollSchedule, verdicts map[string]string, faultseen map[string]string) error {
+	now := time.Now()
+	present := make(map[string]bool, len(wl.Tasks))
 	for _, task := range wl.Tasks {
-		// A standing listen task is inert until the stateful arc arms
-		// listeners over held sessions (#603 slices 6 and 7): skip without a
+		present[task.ID] = true
+	}
+	sched.retain(present)
+	for _, task := range wl.Tasks {
+		// A standing listen task runs no tick of its own: it is what holds
+		// its endpoint's session (the session manager reconciles it, #816),
+		// and its listeners arm over that session with #817. Skip without a
 		// collection-failed, since an armed-later task is not a fault.
 		if task.Mode == "listen" {
 			continue
@@ -52,7 +59,20 @@ func runTasks(ctx context.Context, nc *nats.Conn, node string, wl collection.Wor
 		// tick lands one event, not one per tick forever, so a stuck driver
 		// does not flood the event lane.
 		if driver.IsBaked(task.Spec) {
-			dps, faults := collectDriverTask(ctx, runner, task)
+			// A driver poll runs on its declared schedule (#822), not on
+			// every heartbeat.
+			interval := pollInterval(task)
+			if !sched.due(task.ID, interval, now) {
+				continue
+			}
+			dps, faults := collectDriverTask(ctx, runner, task, sessions)
+			// A run that landed nothing and faulted (the fetch failed) retries
+			// on a backoff rather than waiting its whole interval.
+			if len(dps) == 0 && len(faults) > 0 {
+				sched.failed(task.ID, interval, now)
+			} else {
+				sched.succeeded(task.ID)
+			}
 			current := ""
 			for _, f := range faults {
 				current += f.Error() + "\n"
@@ -108,6 +128,17 @@ func runTasks(ctx context.Context, nc *nats.Conn, node string, wl collection.Wor
 	return nil
 }
 
+// pollInterval reads a driver poll's declared cadence off its baked spec;
+// zero (run every tick) when it declares none or does not parse, where the
+// poll itself then faults by name.
+func pollInterval(task collection.TaskSpec) time.Duration {
+	fn, err := driver.ParseBaked(task.Spec)
+	if err != nil || fn.Schedule == nil {
+		return 0
+	}
+	return fn.Schedule.Interval()
+}
+
 // publishBatch maps samples to a per-lane TelemetryBatch and publishes it on
 // the node's own telemetry subject.
 func publishBatch(nc *nats.Conn, node, taskID string, dps []collection.Sample) error {
@@ -124,9 +155,11 @@ func publishBatch(nc *nats.Conn, node, taskID string, dps []collection.Sample) e
 
 // collectDriverTask parses one derived driver poll and runs it: the baked
 // function from the task spec, the target from the endpoint params, the
-// unsealed secret inputs from the worklist. Faults are the collection-failed
-// stories; a parse fault covers the whole task.
-func collectDriverTask(ctx context.Context, runner *collection.Runner, task collection.TaskSpec) ([]collection.Sample, []error) {
+// unsealed secret inputs from the worklist, and the endpoint's held session
+// when the node holds one (#816), which the poll borrows instead of dialing.
+// Faults are the collection-failed stories; a parse fault covers the whole
+// task.
+func collectDriverTask(ctx context.Context, runner *collection.Runner, task collection.TaskSpec, sessions *sessionManager) ([]collection.Sample, []error) {
 	fn, err := driver.ParseBaked(task.Spec)
 	if err != nil {
 		return nil, []error{fmt.Errorf("node: task %s: %w", task.ID, err)}
@@ -151,6 +184,7 @@ func collectDriverTask(ctx context.Context, runner *collection.Runner, task coll
 		Target:    p.Target,
 		Secrets:   task.Secrets,
 		Timeout:   timeout,
+		Session:   sessions.lookup(task.EndpointID),
 	})
 }
 

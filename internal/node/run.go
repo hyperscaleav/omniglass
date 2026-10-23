@@ -3,6 +3,7 @@ package node
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -43,6 +44,10 @@ type Config struct {
 	// Line is the driver-poll stateless line-protocol client (#814). Nil
 	// defaults to the real collection.NewLineExchanger(); tests inject a fake.
 	Line collection.LineExchanger
+	// LineSession is the held line-session dialer (#816) an endpoint with a
+	// standing listen task over tcp holds its connection with. Nil defaults
+	// to the real collection.NewLineSessionDialer(); tests inject a fake.
+	LineSession collection.SessionDialer
 }
 
 // Run claims the node's NATS credential, connects outbound-only to the bus,
@@ -108,6 +113,49 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 	}
 	runner := &collection.Runner{TCP: dialer, Ping: pinger, HTTP: httpProber, SSH: sshProber, SNMP: snmpGetter, Line: lineExchanger}
 
+	// The held sessions (#816): one per endpoint whose worklist carries a
+	// standing listen task over a transport with a session dialer. A
+	// transition lands at once (not on the next tick) as the session-state
+	// property under the listen task, and as a self-log carrying the reason;
+	// the deferred closeAll is the node-shutdown teardown, run before the bus
+	// connection closes.
+	lineSession := cfg.LineSession
+	if lineSession == nil {
+		lineSession = collection.NewLineSessionDialer()
+	}
+	// A listener's claimed push lands the same way, at once and under its
+	// listen task (#817); the arm conversation is plumbing, so it is a
+	// self-log and never a command row.
+	sessions := newSessionManager(map[string]collection.SessionDialer{"tcp": lineSession}, sessionHooks{
+		transition: func(taskID, endpoint string, tr collection.SessionTransition) {
+			logger.Info("session "+string(tr.State), "facility", "session", "task", taskID, "endpoint", endpoint, "reason", tr.Reason)
+			if err := publishBatch(nc, cfg.Name, taskID, []collection.Sample{sessionSample(tr)}); err != nil {
+				logger.Warn("session state not published", "facility", "session", "task", taskID, "error", err.Error())
+			}
+		},
+		samples: func(taskID string, dps []collection.Sample) {
+			if err := publishBatch(nc, cfg.Name, taskID, dps); err != nil {
+				logger.Warn("pushed samples not published", "facility", "session", "task", taskID, "error", err.Error())
+			}
+		},
+		fault: func(taskID string, cause error) {
+			logger.Warn("listener fault", "facility", "collection", "task", taskID, "error", cause.Error())
+			_ = publishCollectionFailed(nc, cfg.Name, taskID, cause)
+		},
+		arm: func(taskID, endpoint, line, reply string, err error) {
+			if errors.Is(err, collection.ErrUnacknowledged) {
+				logger.Warn("session armed, unacknowledged", "facility", "session", "task", taskID, "endpoint", endpoint, "line", line)
+				return
+			}
+			if err != nil {
+				logger.Warn("session arm failed", "facility", "session", "task", taskID, "endpoint", endpoint, "line", line, "error", err.Error())
+				return
+			}
+			logger.Info("session armed", "facility", "session", "task", taskID, "endpoint", endpoint, "line", line, "reply", reply)
+		},
+	})
+	defer sessions.closeAll()
+
 	// verdicts remembers the last reachability verdict per task (keyed by the
 	// node-unique task id, since interface names collide across components) across
 	// ticks, so the node emits endpoint-reachable only on a flip or first
@@ -116,21 +164,29 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 	// faultseen remembers each driver task's last fault set so a static
 	// misconfiguration lands one collection-failed, not one per tick (#814).
 	faultseen := map[string]string{}
+	// sched remembers when each driver poll is next due, so a poll runs on
+	// its declared schedule rather than every heartbeat (#822).
+	heartbeat := cfg.HeartbeatEvery
+	if heartbeat <= 0 {
+		heartbeat = 30 * time.Second
+	}
+	sched := newPollSchedule(heartbeat)
 
 	wl, err := pullWorklist(nc, cfg.Name)
 	if err != nil {
 		return collection.WorklistReply{}, err
 	}
 	logger.Info("worklist pulled", "facility", "collection", "tasks", len(wl.Tasks))
+	sessions.reconcile(wl.Tasks)
 	// executedCommands remembers each pulled command's outcome across ticks:
 	// at-least-once delivery means redelivery, and idempotence per command id
 	// lives here (the report repeats, the device is not touched twice). It is
 	// pruned past the redelivery window so it does not grow for the life of the run.
 	executedCommands := map[int64]commandOutcome{}
-	if err := runTasks(ctx, nc, cfg.Name, wl, runner, verdicts, faultseen); err != nil {
+	if err := runTasks(ctx, nc, cfg.Name, wl, runner, sessions, sched, verdicts, faultseen); err != nil {
 		return wl, err
 	}
-	runCommands(ctx, nc, cfg.Name, runner, executedCommands)
+	runCommands(ctx, nc, cfg.Name, runner, sessions, executedCommands)
 	if err := publishHeartbeat(nc, cfg.Name); err != nil {
 		return wl, err
 	}
@@ -159,11 +215,15 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 			if next, err := pullWorklist(nc, cfg.Name); err == nil {
 				wl = next
 			}
+			// Hold, recycle, or tear down sessions to match the worklist.
+			sessions.reconcile(wl.Tasks)
 			// Run the worklist's tcp tasks and publish their telemetry. A publish
 			// failure is non-fatal (retry next tick).
-			_ = runTasks(ctx, nc, cfg.Name, wl, runner, verdicts, faultseen)
+			_ = runTasks(ctx, nc, cfg.Name, wl, runner, sessions, sched, verdicts, faultseen)
 			// Pull and actuate the pending command queue (#815).
-			runCommands(ctx, nc, cfg.Name, runner, executedCommands)
+			runCommands(ctx, nc, cfg.Name, runner, sessions, executedCommands)
+			// Report the inbound lines no listener claimed this tick.
+			sessions.flushUnclaimed()
 			// Ship whatever the node logged this tick as self-logs.
 			publishSelfLogs(nc, cfg.Name, sink)
 		}

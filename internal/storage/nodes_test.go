@@ -153,6 +153,15 @@ func TestNodeGateway(t *testing.T) {
 	if wl.Tasks[0].ID != "t-icmp" || wl.Tasks[0].Transport != "icmp" || wl.Tasks[0].Mode != "poll" {
 		t.Fatalf("worklist task: got %+v", wl.Tasks[0])
 	}
+	// The endpoint id rides with each task: endpoint names are unique only
+	// per component, and a node keys a held session by the endpoint (#816).
+	var epID string
+	if err := conn.QueryRow(ctx, `select id::text from endpoint where name = 'disp-1-icmp'`).Scan(&epID); err != nil {
+		t.Fatalf("endpoint id: %v", err)
+	}
+	if wl.Tasks[0].EndpointID != epID {
+		t.Fatalf("worklist task endpoint id = %q, want %q", wl.Tasks[0].EndpointID, epID)
+	}
 	if wl.ConfigGeneration == 0 {
 		t.Fatalf("config_generation = 0, want the interface's updated_at epoch")
 	}

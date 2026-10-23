@@ -188,6 +188,10 @@ below from the project's history. From here it grows one slice at a time.
 | [ADR-0147](#adr-0147-a-calc-rule-is-a-typed-sibling-registry-checked-acyclic-at-authoring) | 2026-10-21 | Accepted, amended (#1018) | `calc_rule` is a sibling of `event_rule` with typed columns (inputs `{as, key}`, a named reducer or an expression, the output key by id); every write compiles the reduce against a calc expression site of its own and refuses a cycle in the key graph, a second enabled writer of a key, `health` as an input or output, and an output a collection declares (a native probe key or a driver's emits); a reduce that stops compiling reads back as `calc_error`; **Amended (#1018):** the reduce is always an expression, its named reducers now list functions, and inputs are held by uuid in `calc_rule_input`, each bound by an alias as the list of its values |
 | [ADR-0148](#adr-0148-calc-rules-run-on-a-durable-pending-set-and-a-server-tick-not-a-jetstream-consumer) | 2026-10-21 | Accepted, amended (#1018) | Component calc rules run on a durable `calc_pending` set marked in the sample-write transaction and drained by a 1s server tick (`SKIP LOCKED`, one transaction per mark), writing calculated samples through the same path so event rules judge them; marks are held by their writer until commit, the ingest retries a deadlock, a failing mark is deferred, a rule write recomputes its owners; a write never marks its own rule; a missing input writes nothing and is recorded in `calc_rule_state`; an unchanged result writes no row. Diverges from the JetStream calc consumer (#430). **Amended (#1018):** every input binds as the list of its per-instance values, an expression's included, and the marking probe reads `calc_rule_input` by key id |
 | [ADR-0149](#adr-0149-walkthrough-evidence-lives-on-per-pr-refs-its-pr-video-plays-through-jsdelivr-and-the-docs-commit-the-mp4) | 2026-10-23 | Accepted | A PR's walkthrough evidence (mp4, preview, poster, stills) is committed to `refs/walkthroughs/pr-<n>`, never the PR branch, and reached by that commit's SHA; the PR comment links each video through jsDelivr (a public-repo dependency) so it scrubs; the docs commit each declared walkthrough's mp4 and play it with controls, carrying no preview; a scheduled job deletes an evidence ref 30 days after its PR closes. Supersedes the #884 ruling that put evidence on the PR branch |
+| [ADR-0150](#adr-0150-a-held-sessions-state-is-a-property-series-and-node-logs-not-a-session-table) | 2026-10-23 | Accepted | A held session (#816) surfaces as the `session-state` property per endpoint (establishing, up, recovering, down; transitions only, under the endpoint's standing listen task) plus the node's self-logs carrying the reasons; no `session_log` table and no `session` view. The session is held for an endpoint whose worklist carries a standing listen task over a transport with a session dialer (the line protocol over `tcp` today), polls on that endpoint borrow it, and recovery is a jittered exponential backoff with an attempt budget before down |
+| [ADR-0151](#adr-0151-a-held-line-session-routes-every-inbound-line-listeners-first-answers-by-reply-shape) | 2026-10-23 | Accepted | Listeners run over the held session (#817): `arm` commands on every connection before up (plumbing, self-logged), `match` claims a pushed line, its emits land as push samples under the listen task. Every inbound line is routed listeners first, then the exchange in flight by its declared `request.reply` shape (or the first unclaimed line), then unclaimed (counted; `unmatched: collection-failed` lands one fault per tick). Commands ride the held session. Reverses the designed matcher order (outstanding poll first) |
+| [ADR-0152](#adr-0152-a-driver-poll-runs-on-its-declared-schedule-at-heartbeat-granularity) | 2026-10-23 | Accepted | A driver poll runs on its declared `schedule.every` at heartbeat granularity (#822): a per-task next-due time kept for the run, the first tick at or after it runs the poll, a new task runs at once, a late tick never bursts; probes stay per tick and pushes are never gated. Settles the nodes page's open question for driver polls |
+| [ADR-0153](#adr-0153-the-held-session-proof-is-the-line-protocol-over-tcp-other-held-transports-are-their-own-issues) | 2026-10-23 | Accepted | The stateful arc proves the held session on the line protocol over `tcp` (sessions, listeners, the shared reader); SSH, which #816 named as the session-lifecycle carrier, and the other held transports are deferred, each to its own issue (#1032 ssh, #1033 telnet, #1034 websocket, #1035 tls, #1036 mqtt, #1037 udp, #1038 SSE over http, #1039 modbus/tcp, #1040 bacnet/ip, #1041 knxnet/ip, #1042 ONVIF as a driver on http, #1043 the file sample with #1044 to #1047 for file-moving protocols), with server-hosted ingress at #1024; there is no serial transport, serial being reached through an IP-to-serial gateway over tcp (or tls or telnet) |
 
 ## Entries
 
@@ -6839,3 +6843,162 @@ interface create form, since that name is the platform's to mint.
   is public; a private repository would need another host for scrubbable PR video. The docs mp4 costs
   about 1 MB per walkthrough per re-record in main's history, accepted so the deployed docs and their PR
   previews play the flow with controls. Supersedes the #884 ruling on where PR evidence lives.
+
+### ADR-0150: A held session's state is a property series and node logs, not a session table
+
+- **Date:** 2026-10-23 | **Status:** Accepted | **Pages:** [collection](/architecture/collection/), [nodes](/architecture/nodes/), [datapoints](/architecture/properties/), [glossary](/architecture/glossary/), [storage](/architecture/storage/)
+- **Decision:** A stateful transport holds its connection (#816, epic #603's thin cut "no session
+  table"), and its lifecycle is surfaced without a new store:
+  1. **The state is a property.** `session-state` (seeded, `establishing`, `up`, `recovering`,
+     `down`) lands per endpoint on the endpoint's component (instance: the endpoint's name, as
+     `endpoint-reachable` does), published by the node at the moment of each transition under the
+     endpoint's standing listen task, so ownership binds server-side like every other sample and the
+     series is transitions only.
+  2. **The reasons are node logs.** Each transition is also a self-log (`facility: session`,
+     ADR-0066) carrying the reason (`connection lost: EOF`, `5 consecutive attempts failed, last:
+     ...`), and teardown logs why (`its listen task left the worklist`, `its endpoint changed`, `node
+     shutdown`). The reason also rides the sample as the `reason` label, which is not persisted.
+     Teardown publishes no state: the node stopped wanting the session, which says nothing about the
+     device. So the last `session-state` outlives a teardown or a node shutdown (an `up` stays the
+     latest value of a session nobody holds), and a read must judge it by its age, as the
+     property catalog already says of stale values. No surface reads `session-state` yet (the
+     reachability panel reads the endpoint verdicts only); the console work that shows it, with
+     #817's listeners, must render it aged.
+  3. **What holds a session.** An endpoint whose worklist carries a standing listen task over a
+     transport with a session dialer (the line protocol over `tcp` today; ssh is not wired). The
+     listen task is what needs the connection held (its listeners arm over it, #817); the endpoint's
+     line polls borrow the session instead of dialing, and a poll over a session that is not up
+     faults (`collection-failed` naming the state) rather than dialing a connection of its own. The
+     worklist carries each task's endpoint id, the node-unique key a session is held under.
+  4. **Recovery is bounded.** A failed attempt waits `SessionBackoff`: 250ms doubling per attempt,
+     capped at 30s, jittered 20% either way; five consecutive failed attempts read `down`, and the
+     session keeps retrying at the capped pace so a device that returns reads `up` unattended. An
+     attempt fails when its dial fails, when its connection drops unanswered within 10s (a device
+     that accepts and drops cannot hot-loop or read `up` forever), or when an exchange over it that
+     declared no reply shape timed out (a hung device, however long the connection lived; a shaped
+     exchange's timeout fails only itself, ADR-0151). An answered exchange forgives the
+     failures before it, so a healthy device's rare missed answer never adds up to `down`; a
+     connection that outlives 10s and drops for another reason forgives them too and redials at
+     once. Once `down`, a returning connection publishes nothing until it proves itself: an answered
+     exchange (the session lends it to polls meanwhile), a line a listener claims (a push proves the
+     device talks, though it forgives no failures, so a device that pushes and drops still backs
+     off), or, unless answer timeouts were what failed, outliving the 10s window; so an accept-then-drop or hung device publishes no `up`/`down` pairs.
+     A caller abandoning an exchange (its own deadline or cancel) is not the device's timeout, and
+     the wait for a first dial has its own budget, so a slow dial never eats the exchange's. A held
+     connection carries a 15s TCP keepalive, whose failure is recorded as itself.
+  5. **An answer belongs to its ask.** One reader goroutine owns the connection: on an ask it
+     discards every byte already received (a banner, a stray line, plus a 2ms window for bytes in
+     flight), writes the line, and hands the next line it reads to that ask, keeping an answer whole
+     across segments. An ask whose answer does not come in time recycles the connection, since its
+     late reply would otherwise answer the next ask. One window remains: a line the device sends
+     after the drain and before it has read the request (a push landing in that instant) is taken
+     as the answer, since nothing on the wire tells the two apart. [ADR-0151](#adr-0151-a-held-line-session-routes-every-inbound-line-listeners-first-answers-by-reply-shape)
+     (#817) closes it for every request that declares a reply shape, and a line a listener claims is
+     never an answer at all. A listen task whose spec
+     changes (its content-addressed id re-hashes) keeps the healthy connection; only what the
+     connection depends on (transport, address, timeout, credentials) recycles it.
+- **Context:** The nodes page designed a `session_log` table of node-reported transitions with a
+  `session` view over it. A property series already gives transition-only history, latest-value
+  reads, staleness at read time, rules over it (an event rule can watch `session-state` as it watches
+  `endpoint-reachable`), and owner scope, with no new table, route, or permission noun; the free-text
+  reasons belong to the node's own narration, which `node_log` already lands. A session table stays
+  possible if per-session counters (commands, errors, last activity) earn one; nothing here forecloses it.
+
+### ADR-0151: A held line session routes every inbound line, listeners first, answers by reply shape
+
+- **Date:** 2026-10-23 | **Status:** Accepted | **Pages:** [collection](/architecture/collection/), [nodes](/architecture/nodes/), [drivers](/guides/admin/drivers/)
+- **Decision:** A driver's listeners come alive over the held session (#817), and one reader per
+  connection routes every inbound line:
+  1. **Arm on every connection.** A listener's `arm` commands are sent in order on each connection
+     before the session reads `up` (establish and every recover). They are plumbing, per the #603
+     ruling: a node self-log with the device's reply, never a command row. The ack is the first
+     line of any kind, one a listener claims included (both have it), since a device may ack a
+     subscribe with the push itself; no ack within the timeout is logged at warn ("armed,
+     unacknowledged") and does not fail the attempt, while the connection dying during the arm does.
+  2. **Listeners first.** Listeners are offered a line in function-name order; the first whose
+     `match` picks it claims it, and its emits land at once as samples under its listen task. A
+     claimed line is never an exchange's answer, unless the exchange declared a reply shape the
+     line matches, when both have it (a protocol whose answers look like its pushes still answers).
+  3. **Answers by reply shape.** A request may declare `reply` (a `prefix` or `regex`, the regex
+     Go RE2 with substring semantics, so anchored to mean a whole line); the exchange in flight
+     takes the first line it matches, or, with none declared, the first line no listener claims. A
+     reply may also declare an `error` shape: an unclaimed line matching it answers the exchange as
+     a refusal carrying the device's text, never a timeout. A shaped exchange that gets no answer in
+     time fails alone, keeping the connection and not charging the session, since shape routing
+     cannot misroute its late answer; an unshaped one still recycles (ADR-0150). A line begun
+     before the request was written is never its answer.
+  4. **The rest is unclaimed.** Counted and self-logged once per tick; a spec declaring
+     `unmatched: collection-failed` (default `discard`) also lands one `collection-failed` per tick.
+  5. **Commands ride the session.** A command delivery names its endpoint and carries its binding's
+     reply shape; a node holding a session there actuates over it, falling back to a throwaway
+     connection only when none is held. A refusal reports the device's text as both the execution
+     error and the reply, so the command fails at once with its reason (a response-settled binding
+     fails on the execution error before it reads the reply).
+  6. **Patterns compile once.** Every match, reply and extraction regex is compiled once per
+     process and reused by the reader, and refused at write when it does not compile.
+- **Context:** The nodes page designed an ordered matcher set trying an outstanding poll's response
+  matcher first. On a line protocol that order lets a push that happens to fit a loose answer (or
+  any line, when the poll declares no shape) be eaten as the answer, which loses a sample and
+  misreports a poll; a listener's rule is the more specific statement of what a line is. Declaring
+  reply shapes closes the window ADR-0150 point 5 left open for every request that declares one;
+  a request without one still takes the first unclaimed line, so a driver whose protocol mixes
+  unsolicited lines with answers declares its replies (the seeded `newtron-nvp` does).
+
+### ADR-0152: A driver poll runs on its declared schedule, at heartbeat granularity
+
+- **Date:** 2026-10-23 | **Status:** Accepted | **Pages:** [nodes](/architecture/nodes/), [collection](/architecture/collection/), [drivers](/guides/admin/drivers/)
+- **Decision:** The node honors a driver poll's `schedule.every` (#822). It keeps, per task id and for
+  the life of the run, when each poll is next due, and runs the poll on the first heartbeat tick at or
+  after that time. The next run is booked from the due time, so tick jitter does not drift the cadence;
+  a tick so late it missed whole intervals runs the poll once and books from now, never a catch-up
+  burst. A run that lands nothing because its fetch failed retries on a backoff instead of waiting
+  its interval: `min(every, max(heartbeat, backoff))`, the backoff starting at the heartbeat and
+  doubling per consecutive failure, so a 24h poll that fails during a device reboot retries within
+  seconds and a dead device is still asked no more often than every heartbeat; the first success
+  books from its due time again. A down held session is proven by a listener's push as well as by
+  an answered poll, so a gated poll never keeps a pushing device reading down. A task new to the
+  worklist runs at once; a task that leaves it is forgotten; a restart polls
+  at its first tick. The gate covers driver polls only: reachability probes still run every tick, and a
+  listener's pushes are never gated, since they ride the held session as they arrive.
+- **Context:** The schedule was validated and baked but unread, so `snmp-generic`'s `every: 60s` polled
+  every 30s heartbeat and a `24h` poll would have asked a device 2880 times a day. The nodes page left
+  per-task cadence within a tick as an open question; a per-task gate settles it for driver polls
+  without the tick scheduler's redesign (the overrun-aware loop and the bounded pool stay design), at
+  the cost of cadence precision bounded by the heartbeat.
+
+### ADR-0153: The held-session proof is the line protocol over tcp; other held transports are their own issues
+
+- **Date:** 2026-10-23 | **Status:** Accepted | **Pages:** [collection](/architecture/collection/), [nodes](/architecture/nodes/)
+- **Decision:** The stateful arc of #603 proves the held session on one transport: the line protocol
+  over `tcp` (sessions, #816; listeners and the shared reader, #817), against the simulator's NVP port
+  and end to end. #816's scope named SSH as the session-lifecycle integration carrier; the architect
+  accepted the arc on the line protocol instead and deferred SSH. Every other held transport is its
+  own issue under #603: #1032 (ssh), #1033 (telnet), #1034 (websocket), #1035 (tls), #1036 (mqtt),
+  #1037 (udp), #1038 (SSE over http), #1039 (modbus/tcp), #1040 (bacnet/ip), #1041 (knxnet/ip);
+  server-hosted ingress (syslog, SNMP trap, webhook) is #1024. **There is no serial transport**
+  (architect's ruling): a serial device (RS-232, RS-485) is reached through an IP-to-serial gateway,
+  which is the `tcp` transport (or `tls` or `telnet`, as the gateway speaks), so its driver is a line
+  protocol like any other and the node never owns a serial port.
+  **How a protocol is placed.** The first rule that fits decides. A protocol that rides a carrier
+  we already have with only payload differences (http with any body, a tcp line protocol, a
+  websocket, and udp datagrams once #1037 lands) is a **driver**: ONVIF is SOAP over http (#1042).
+  A driver that needs something its carrier cannot do yet (a body format, an auth scheme, a stream
+  mode, TLS) makes that **capability** on the existing transport, proven by the driver: SSE on http
+  (#1038), tls (#1035), sftp on ssh (#1045), and http fetching a body as a file (#1044). A
+  protocol that moves whole files rather than values lands as a **file sample** (#1043, the
+  primitive #1044 through #1047 depend on). A protocol with its own framing, addressing, or session handshake is a
+  **new transport** plus a generic driver on it, the `snmp` and `snmp-generic` pattern: ssh (#1032),
+  telnet (#1033), websocket (#1034), mqtt (#1036), udp (#1037), modbus/tcp (#1039), bacnet/ip
+  (#1040), knxnet/ip (#1041), ftp/ftps (#1046), and tftp on udp (#1047). A serial link is reached only through a gateway, as above. A
+  protocol that pushes to us rather than being reached is server-hosted **ingress** (#1024), not a
+  node transport. The `/scope-protocol` skill applies this placement rule when a new protocol comes up,
+  and files the issue in the house shape. The session machine, its
+  `session-state` surface (ADR-0150), and the routing (ADR-0151) are transport-agnostic behind the
+  `SessionDialer` and `HeldConn` seams, so each of those issues adds a dialer and its own
+  real-implementation integration test rather than a second machine.
+- **Context:** The #603 rulings set the line-protocol emulator as the stateful proving target, with
+  SSH to carry the session-lifecycle test. The line protocol exercised every part of the lifecycle
+  (establish, arm, operate, recover, teardown) over a real wire, and SSH adds authentication and
+  channel semantics that are a slice of their own; holding the arc for it would have delayed a proven
+  machine. The collection and nodes pages' transport fences now name these issues, so no deferred
+  transport is a fence without an owner.

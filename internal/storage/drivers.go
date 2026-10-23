@@ -48,12 +48,23 @@ func scanDriver(row pgx.Row) (*Driver, error) {
 }
 
 // UpsertDriver installs or updates a driver by id, the boot-seed phase's write.
-// Idempotent: re-seeding the same id updates it in place.
+// Idempotent: re-seeding the same id updates it in place, and re-derives the
+// tasks of every endpoint attached through it in the same transaction
+// (#823), so a spec a new binary ships reaches endpoints attached under the
+// old one. A re-seed that changes nothing writes nothing: the upsert's update
+// applies only when a field differs, and the re-derive runs only when it did,
+// so a boot does not walk every attached endpoint.
 func (p *PG) UpsertDriver(ctx context.Context, d Driver) error {
 	if err := p.validateDriverSpec(ctx, d.Spec); err != nil {
 		return fmt.Errorf("storage: upsert driver %q: %w", d.Name, err)
 	}
-	_, err := p.pool.Exec(ctx, `
+	tx, err := p.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("storage: begin upsert driver %q: %w", d.Name, err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	var id string
+	err = tx.QueryRow(ctx, `
 		insert into driver (name, label, version, official, spec)
 		values ($1, $2, $3, $4, $5)
 		on conflict (name) do update
@@ -61,10 +72,24 @@ func (p *PG) UpsertDriver(ctx context.Context, d Driver) error {
 			    version      = excluded.version,
 			    official     = excluded.official,
 			    spec         = excluded.spec,
-			    updated_at   = now()`,
-		d.Name, labelOrNull(d.Label), d.Version, d.Official, specOrNull(d.Spec))
+			    updated_at   = now()
+		where driver.label is distinct from excluded.label
+		   or driver.version is distinct from excluded.version
+		   or driver.official is distinct from excluded.official
+		   or driver.spec is distinct from excluded.spec
+		returning id`,
+		d.Name, labelOrNull(d.Label), d.Version, d.Official, specOrNull(d.Spec)).Scan(&id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil // unchanged: nothing written, nothing to re-derive
+	}
 	if err != nil {
 		return fmt.Errorf("storage: upsert driver %q: %w", d.Name, err)
+	}
+	if err := rederiveDriverTasks(ctx, tx, id); err != nil {
+		return fmt.Errorf("storage: upsert driver %q: %w", d.Name, err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("storage: commit upsert driver %q: %w", d.Name, err)
 	}
 	return nil
 }
@@ -139,7 +164,9 @@ func (p *PG) CreateDriver(ctx context.Context, actorID string, d Driver) (*Drive
 
 // UpdateDriver patches a custom driver's label, version or spec (nil fields
 // unchanged) and audits it. Official rows are read-only (ErrTypeOfficial); an
-// unknown id is ErrTypeNotFound.
+// unknown id is ErrTypeNotFound. The tasks of every endpoint attached through
+// it re-derive in the same transaction (#823; a version is baked into each
+// task too), audited by the update's own row.
 func (p *PG) UpdateDriver(ctx context.Context, actorID, id string, patch DriverPatch) (*Driver, error) {
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
@@ -177,6 +204,9 @@ func (p *PG) UpdateDriver(ctx context.Context, actorID, id string, patch DriverP
 			return nil, ErrTypeNotFound
 		}
 		return nil, fmt.Errorf("storage: update driver %q: %w", id, err)
+	}
+	if err := rederiveDriverTasks(ctx, tx, d.ID); err != nil {
+		return nil, err
 	}
 	after, err := registryAuditImage(ctx, tx, "driver", id)
 	if err != nil {

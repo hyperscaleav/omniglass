@@ -16,6 +16,8 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/transport"
@@ -44,7 +46,18 @@ type Spec struct {
 	Polls     []Poll           `json:"polls,omitempty"`
 	Listeners []Listener       `json:"listeners,omitempty"`
 	Commands  []CommandBinding `json:"commands,omitempty"`
+	// Unmatched is what becomes of an inbound line on a held session that no
+	// listener claims and no exchange is owed (#817): discard (the default;
+	// the node counts it) or collection-failed (the node lands one
+	// collection-failed per tick naming how many and the last).
+	Unmatched string `json:"unmatched,omitempty"`
 }
+
+// The unmatched-line policies.
+const (
+	UnmatchedDiscard          = "discard"
+	UnmatchedCollectionFailed = "collection-failed"
+)
 
 // Input is one parameter an attachment must supply. Kind "secret" carries a
 // reference to a secret row (by name), never a value; SecretType pins which
@@ -79,6 +92,43 @@ type Request struct {
 	Get  []string `json:"get,omitempty"`
 	Line string   `json:"line,omitempty"`
 	Path string   `json:"path,omitempty"`
+	// Reply is the protocol's answer shape for a line request (#817): over a
+	// held session, only a line it matches answers this request, so a push
+	// or a stray line is never taken as the answer. Absent, the first line
+	// no listener claims answers it.
+	Reply *Reply `json:"reply,omitempty"`
+}
+
+// Reply is a line request's declared answer: the shape of a good answer
+// (exactly one of a prefix or a regex) and, optionally, the shape of the
+// device's refusal, which answers the request as a failure carrying the
+// device's text. A regex is Go RE2 with substring semantics: anchor it
+// (^...$) or it also matches any line containing it, a push included.
+type Reply struct {
+	Prefix string `json:"prefix,omitempty"`
+	Regex  string `json:"regex,omitempty"`
+	Error  *Match `json:"error,omitempty"`
+	// any makes the shape match every line (AnyLine), never authored.
+	any bool
+}
+
+// AnyLine is the answer shape that takes the first line of any kind, one a
+// listener claims included (the listener has it too): a subscribe's
+// acknowledgement, which a device may send as a push.
+func AnyLine() *Reply { return &Reply{any: true} }
+
+// Accepts reads the declared answer shape against a line; no shape declared
+// accepts any line.
+func (r *Reply) Accepts(line string) bool {
+	if r == nil || r.any {
+		return true
+	}
+	return Match{Prefix: r.Prefix, Regex: r.Regex}.Matches(line)
+}
+
+// Fails reports a line matching the declared error shape.
+func (r *Reply) Fails(line string) bool {
+	return r != nil && r.Error != nil && r.Error.Matches(line)
 }
 
 // Empty reports whether the request says nothing at all.
@@ -198,12 +248,59 @@ func (b CommandBinding) JudgeReply(reply string) ReplyVerdict {
 }
 
 // matches applies a Match rule to a line.
-func matches(m Match, line string) bool {
+func matches(m Match, line string) bool { return m.Matches(line) }
+
+// Matches applies the rule to a line: the literal prefix, or the regex
+// (Go RE2, substring semantics; compiled once and reused).
+func (m Match) Matches(line string) bool {
 	if m.Prefix != "" {
 		return strings.HasPrefix(line, m.Prefix)
 	}
-	re, err := regexp.Compile(m.Regex)
+	if m.Regex == "" {
+		return false
+	}
+	re, err := compiled(m.Regex)
 	return err == nil && re.MatchString(line)
+}
+
+// compiledPatterns caches every compiled regex by its pattern: a held
+// session's reader matches each inbound line against the listeners and the
+// reply shapes, and a spec's patterns are a small fixed set, so each is
+// compiled once for the life of the process.
+var (
+	compiledPatterns sync.Map // pattern -> *regexp.Regexp
+	compileCount     atomic.Int64
+)
+
+func compiled(pattern string) (*regexp.Regexp, error) {
+	if re, ok := compiledPatterns.Load(pattern); ok {
+		return re.(*regexp.Regexp), nil
+	}
+	re, err := regexp.Compile(pattern)
+	if err != nil {
+		return nil, err
+	}
+	compileCount.Add(1)
+	actual, _ := compiledPatterns.LoadOrStore(pattern, re)
+	return actual.(*regexp.Regexp), nil
+}
+
+// validateReply refuses a reply shape on a request with no line, or a
+// malformed one.
+func validateReply(what string, req Request) error {
+	if req.Reply == nil {
+		return nil
+	}
+	if req.Line == "" {
+		return fmt.Errorf("driver: %s declares a reply shape, which only a line request has", what)
+	}
+	if err := validateMatch(what+" reply", Match{Prefix: req.Reply.Prefix, Regex: req.Reply.Regex}); err != nil {
+		return err
+	}
+	if req.Reply.Error != nil {
+		return validateMatch(what+" reply error shape", *req.Reply.Error)
+	}
+	return nil
 }
 
 // validateSettle refuses a malformed settle declaration.
@@ -266,6 +363,11 @@ func (s *Spec) Validate(cat Catalog) error {
 	if len(s.Polls) == 0 && len(s.Listeners) == 0 && len(s.Commands) == 0 {
 		return fmt.Errorf("driver: spec declares no function of any family")
 	}
+	switch s.Unmatched {
+	case "", UnmatchedDiscard, UnmatchedCollectionFailed:
+	default:
+		return fmt.Errorf("driver: unmatched policy %q; want discard or collection-failed", s.Unmatched)
+	}
 
 	inputs := map[string]bool{}
 	for i, in := range s.Inputs {
@@ -319,6 +421,9 @@ func (s *Spec) Validate(cat Catalog) error {
 		if err := validateEmits("poll", p.Name, p.Emits, cat); err != nil {
 			return err
 		}
+		if err := validateReply(fmt.Sprintf("poll %q", p.Name), p.Request); err != nil {
+			return err
+		}
 		if err := checkPollShape(s.Transport, p); err != nil {
 			return err
 		}
@@ -364,6 +469,9 @@ func (s *Spec) Validate(cat Catalog) error {
 			return fmt.Errorf("driver: command binding %q on tcp needs a line request", c.CommandType)
 		}
 		if err := validateSettle(c); err != nil {
+			return err
+		}
+		if err := validateReply(fmt.Sprintf("command binding %q", c.CommandType), c.Request); err != nil {
 			return err
 		}
 		// Template references are checked at write: only ${value} (the
