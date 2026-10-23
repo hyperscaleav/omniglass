@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -217,4 +218,151 @@ func TestReachabilityAPI(t *testing.T) {
 	c.do(viewerTok, http.MethodGet, "/components/disp-1/reachability", nil, http.StatusNotFound)
 	// In-scope, its own component reachability is visible (empty endpoints).
 	c.do(viewerTok, http.MethodGet, "/components/other-1/reachability", nil, http.StatusOK)
+}
+
+// sessionReachResp is the part of the reachability read a held session adds
+// (#1059): the endpoint's id (the address :retry takes), the session's state
+// with its reason, and the gate a terminal refusal holds.
+type sessionReachResp struct {
+	Endpoints []struct {
+		ID       string `json:"id"`
+		Endpoint string `json:"endpoint"`
+		Session  *struct {
+			State  string    `json:"state"`
+			TS     time.Time `json:"ts"`
+			Reason string    `json:"reason"`
+		} `json:"session"`
+		Rejection *struct {
+			Rung  string `json:"rung"`
+			Class string `json:"class"`
+		} `json:"rejection"`
+		Authenticated *struct {
+			Value string `json:"value"`
+		} `json:"authenticated"`
+	} `json:"endpoints"`
+}
+
+// TestReachabilityCarriesTheHeldSession drives the read the console's session
+// pill renders (#1059): a rejected session reads its state, its reason and the
+// rung its gate holds; the connection fingerprint the gate carries is never
+// served (a digest the read has no use for); a gate that lifted reads none
+// and serves nothing; an endpoint that never held a session carries no
+// session at all. Skipped under -short.
+func TestReachabilityCarriesTheHeldSession(t *testing.T) {
+	if testing.Short() {
+		t.Skip("integration test needs Postgres")
+	}
+	ctx := context.Background()
+	dsn := storagetest.NewDSN(t)
+	gw, err := storage.NewPG(ctx, dsn)
+	if err != nil {
+		t.Fatalf("open gateway: %v", err)
+	}
+	defer gw.Close()
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	ownerTok, hash, prefix, err := auth.NewBearerToken()
+	if err != nil {
+		t.Fatalf("mint owner: %v", err)
+	}
+	if _, err := gw.BootstrapOwner(ctx, storage.OwnerSpec{Username: "root", SecretHash: hash, Prefix: prefix}); err != nil {
+		t.Fatalf("bootstrap: %v", err)
+	}
+	all := scope.Set{All: true}
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "panel-1"}, all, all, all, all); err != nil {
+		t.Fatalf("create component: %v", err)
+	}
+	conn, err := pgx.Connect(ctx, dsn)
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	defer conn.Close(ctx)
+	if _, err := conn.Exec(ctx, `insert into endpoint (name, transport, component, params) values
+		('telnet', 'telnet', (select id from component where name = 'panel-1'), '{"target":"127.60.0.9:23"}'::jsonb),
+		('tcp', 'tcp', (select id from component where name = 'panel-1'), '{"target":"127.60.0.9:51325"}'::jsonb),
+		('icmp', 'icmp', (select id from component where name = 'panel-1'), '{"target":"127.60.0.9"}'::jsonb)`); err != nil {
+		t.Fatalf("insert endpoints: %v", err)
+	}
+	ids := map[string]string{}
+	rows, err := conn.Query(ctx, `select name, id::text from endpoint where component = (select id from component where name = 'panel-1')`)
+	if err != nil {
+		t.Fatalf("endpoint ids: %v", err)
+	}
+	for rows.Next() {
+		var n, id string
+		if err := rows.Scan(&n, &id); err != nil {
+			t.Fatalf("scan id: %v", err)
+		}
+		ids[n] = id
+	}
+	rows.Close()
+
+	const fingerprint = "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08"
+	at := time.Now().UTC().Add(-2 * time.Minute).Truncate(time.Microsecond)
+	prop := func(key, instance, value string, ts time.Time) storage.PropertySampleWrite {
+		return storage.PropertySampleWrite{OwnerKind: "component", OwnerID: "panel-1", Key: key, Instance: instance, Value: value, Source: "session", TS: ts}
+	}
+	if err := gw.InsertPropertySamples(ctx, []storage.PropertySampleWrite{
+		prop("session-state", "telnet", "establishing", at.Add(-time.Minute)),
+		prop("session-reason", "telnet", "", at.Add(-time.Minute)),
+		prop("session-state", "telnet", "rejected", at),
+		prop("session-reason", "telnet", "auth: auth rejected", at),
+		prop("endpoint-authenticated", "telnet", "no", at),
+		prop("endpoint-rejection", "telnet", "authenticated auth "+fingerprint, at),
+		prop("session-state", "tcp", "up", at),
+		prop("session-reason", "tcp", "", at),
+		prop("endpoint-rejection", "tcp", "responsive host-key "+fingerprint, at.Add(-time.Hour)),
+		prop("endpoint-rejection", "tcp", "none", at),
+	}); err != nil {
+		t.Fatalf("insert session samples: %v", err)
+	}
+
+	srv := httptest.NewServer(api.NewHandler(gw))
+	defer srv.Close()
+	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
+	out := c.do(ownerTok, http.MethodGet, "/components/panel-1/reachability", nil, http.StatusOK)
+	if strings.Contains(string(out), fingerprint) {
+		t.Fatalf("the read served the connection fingerprint: %s", out)
+	}
+	var r sessionReachResp
+	if err := json.Unmarshal(out, &r); err != nil {
+		t.Fatalf("decode reachability: %v", err)
+	}
+	byName := map[string]int{}
+	for i, e := range r.Endpoints {
+		byName[e.Endpoint] = i
+	}
+	telnet := r.Endpoints[byName["telnet"]]
+	if telnet.ID != ids["telnet"] {
+		t.Fatalf("telnet id: want %s (what :retry takes), got %q", ids["telnet"], telnet.ID)
+	}
+	if telnet.Session == nil || telnet.Session.State != "rejected" || telnet.Session.Reason != "auth: auth rejected" {
+		t.Fatalf("telnet session: want rejected with its reason, got %+v", telnet.Session)
+	}
+	if !telnet.Session.TS.Equal(at) {
+		t.Fatalf("telnet session ts: want the transition's %v, got %v", at, telnet.Session.TS)
+	}
+	if telnet.Rejection == nil || telnet.Rejection.Rung != "authenticated" || telnet.Rejection.Class != "auth" {
+		t.Fatalf("telnet rejection: want the authenticated rung, class auth, got %+v", telnet.Rejection)
+	}
+	if telnet.Authenticated == nil || telnet.Authenticated.Value != "no" {
+		t.Fatalf("telnet authenticated rung: want no, got %+v", telnet.Authenticated)
+	}
+
+	tcp := r.Endpoints[byName["tcp"]]
+	if tcp.Session == nil || tcp.Session.State != "up" || tcp.Session.Reason != "" {
+		t.Fatalf("tcp session: want up with no reason, got %+v", tcp.Session)
+	}
+	if tcp.Rejection != nil {
+		t.Fatalf("tcp rejection: a gate that lifted (none) is absent, got %+v", tcp.Rejection)
+	}
+
+	icmp := r.Endpoints[byName["icmp"]]
+	if icmp.Session != nil || icmp.Rejection != nil {
+		t.Fatalf("icmp: an endpoint that never held a session carries none, got %+v / %+v", icmp.Session, icmp.Rejection)
+	}
+	if icmp.ID != ids["icmp"] {
+		t.Fatalf("icmp id: want %s, got %q", ids["icmp"], icmp.ID)
+	}
 }
