@@ -35,7 +35,7 @@ type fakeHeldConn struct {
 
 func newFakeHeldConn() *fakeHeldConn { return &fakeHeldConn{done: make(chan struct{})} }
 
-func (c *fakeHeldConn) Exchange(ctx context.Context, line string, _ *driver.Match, timeout time.Duration) (string, error) {
+func (c *fakeHeldConn) Exchange(ctx context.Context, line string, _ *driver.Reply, timeout time.Duration) (string, error) {
 	select {
 	case <-c.done:
 		return "", errors.New("fake: connection is dead")

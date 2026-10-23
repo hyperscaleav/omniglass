@@ -4,6 +4,7 @@ package sim
 
 import (
 	"context"
+	"errors"
 	"net"
 	"strings"
 	"sync"
@@ -115,7 +116,7 @@ func TestPanelListenerHearsPushesAndReArms(t *testing.T) {
 	hear("EVT INPUT hdmi2")
 
 	// A GET poll interleaved with pushes gets its own answer every time.
-	reply := &driver.Match{Prefix: "INPUT "}
+	reply := &driver.Reply{Prefix: "INPUT "}
 	stop := make(chan struct{})
 	done := make(chan struct{})
 	go func() {
@@ -140,6 +141,28 @@ func TestPanelListenerHearsPushesAndReArms(t *testing.T) {
 	}
 	close(stop)
 	<-done
+
+	// Review of #817: the panel refuses an input it does not have with a
+	// -ERR line; the seeded error shape answers the command as a refusal
+	// carrying that text at once, and the session stays up.
+	shaped := &driver.Reply{Prefix: "INPUT ", Error: &driver.Match{Prefix: "-ERR"}}
+	start := time.Now()
+	_, err := s.Exchange(context.Background(), "SET INPUT bogus", shaped, 2*time.Second)
+	var refused *collection.RefusedError
+	if !errors.As(err, &refused) || !strings.HasPrefix(refused.Line, "-ERR unknown command") {
+		t.Fatalf("SET INPUT bogus = %v, want the panel's refusal", err)
+	}
+	if took := time.Since(start); took > time.Second {
+		t.Fatalf("the refusal took %v; it is an answer, not a timeout", took)
+	}
+	select {
+	case st := <-states:
+		t.Fatalf("a refusal moved the session to %s", st)
+	default:
+	}
+	if st, _ := s.State(); st != collection.SessionUp {
+		t.Fatalf("after a refusal the session reads %s", st)
+	}
 
 	// Recover re-arms: the listener dies and returns, the subscription is
 	// sent again, and a later change is heard again.

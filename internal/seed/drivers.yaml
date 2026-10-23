@@ -46,8 +46,9 @@ drivers:
         - name: status
           schedule: { every: 30s }
           # The reply shape picks GET INPUT's answer out of the EVT pushes
-          # sharing the held session (#817).
-          request: { line: "GET INPUT", reply: { prefix: "INPUT " } }
+          # sharing the held session (#817); the panel refuses with a -ERR
+          # line, which answers the ask as a failure rather than a timeout.
+          request: { line: "GET INPUT", reply: { prefix: "INPUT ", error: { prefix: "-ERR" } } }
           emits:
             - { name: video-input, extract: { regex: "^INPUT (\\S+)$" } }
       # The NVP conversation is line-oriented over a held TCP session: the
@@ -67,7 +68,7 @@ drivers:
         # The panel answers SET INPUT with the input it now shows, so the
         # reply settles the command (ADR-0141).
         - command_type: set-input
-          request: { line: "SET INPUT ${value}", reply: { prefix: "INPUT " } }
+          request: { line: "SET INPUT ${value}", reply: { prefix: "INPUT ", error: { prefix: "-ERR" } } }
           settle: { from: response, extract: { regex: "^INPUT (\\S+)$" } }
   - id: http-json
     label: HTTP JSON

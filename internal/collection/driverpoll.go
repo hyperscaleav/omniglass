@@ -32,7 +32,7 @@ type DriverPollTask struct {
 // HeldExchanger is the slice of a held session a poll borrows: one request,
 // its answer. *Session satisfies it.
 type HeldExchanger interface {
-	Exchange(ctx context.Context, line string, reply *driver.Match, timeout time.Duration) (string, error)
+	Exchange(ctx context.Context, line string, reply *driver.Reply, timeout time.Duration) (string, error)
 }
 
 // snmpCommunity is the engine's credential contract for the snmp transport:

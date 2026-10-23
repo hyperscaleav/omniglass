@@ -174,7 +174,7 @@ func locate(ex Extract, p Payload) (string, error) {
 		}
 		return v, nil
 	case ex.Regex != "":
-		re, err := regexp.Compile(ex.Regex)
+		re, err := compiled(ex.Regex)
 		if err != nil {
 			return "", fmt.Errorf("uncompilable regex: %v", err)
 		}

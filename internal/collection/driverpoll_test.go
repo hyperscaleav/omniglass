@@ -147,10 +147,10 @@ type fakeHeld struct {
 	answer string
 	err    error
 	sent   string
-	reply  *driver.Match
+	reply  *driver.Reply
 }
 
-func (f *fakeHeld) Exchange(_ context.Context, line string, reply *driver.Match, _ time.Duration) (string, error) {
+func (f *fakeHeld) Exchange(_ context.Context, line string, reply *driver.Reply, _ time.Duration) (string, error) {
 	f.sent, f.reply = line, reply
 	return f.answer, f.err
 }
@@ -161,7 +161,7 @@ func (f *fakeHeld) Exchange(_ context.Context, line string, reply *driver.Match,
 func TestCollectDriverPollLineOverHeldSession(t *testing.T) {
 	fn := &driver.BakedFunction{
 		Driver: "newtron-nvp", Function: "status",
-		Request: &driver.Request{Line: "GET INPUT", Reply: &driver.Match{Prefix: "INPUT "}},
+		Request: &driver.Request{Line: "GET INPUT", Reply: &driver.Reply{Prefix: "INPUT "}},
 		Emits: []driver.BakedEmit{
 			{Name: "video-input", Lane: "property", Extract: driver.Extract{Regex: `^INPUT (\S+)$`}},
 		},

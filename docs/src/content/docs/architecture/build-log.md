@@ -7390,3 +7390,14 @@ change made elsewhere heard within a second, thirty GET polls amid a stream of p
 their own answer, the subscription re-armed after the listener dies and returns) and end to end
 (`TestNodeLandsPushedSamplesThroughARecover`: with the node's tick at an hour, a change on the panel
 lands as the component's `video-input` within a second, and again after a recover).
+The slice's adversarial review, fixed before the rollup, each with a real-socket test that failed with
+the fix disabled. A reply may declare an `error` shape: the panel's `-ERR` refusal now answers a command
+at once as a refusal carrying the device's text (its execution error and its reply), not a timeout that
+recycled the session and charged its budget (`TestLineConnErrorReplyIsAFailureNotATimeout`, and over the
+simulator in the listener test); the seeded `newtron-nvp` declares it. A shaped exchange's timeout fails
+only that exchange and keeps the connection (`TestLineConnShapedTimeoutKeepsTheConnection`). An arm's ack
+is the first line of any kind, a listener's push included, and no ack within the timeout is logged as
+armed, unacknowledged rather than failing the attempt, so a device that acks with a push or not at all
+no longer stays down (`TestSessionArmAckedByAPushReadsUp`, `TestSessionArmNeverAckedStillReadsUp`).
+Regexes compile once per process (`TestRegexCompiledOnce`), and the drivers guide says a regex is an
+RE2 substring search to anchor (`TestLineConnUnanchoredReplyRegexMatchesAPush` pins it).

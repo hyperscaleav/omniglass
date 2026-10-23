@@ -27,8 +27,26 @@ import (
 // connection, since a late answer would otherwise answer the next ask.
 
 // ErrExchangeTimeout is the cause a held connection dies of when an
-// exchange's answer did not arrive in time.
+// exchange that declared no reply shape got no answer in time: its late
+// reply would answer the next ask, so the connection is recycled.
 var ErrExchangeTimeout = errors.New("exchange timed out; connection recycled")
+
+// ErrNoAnswer fails an exchange that declared a reply shape and got no
+// answer in time. Only that exchange fails: shape routing means a late
+// answer can never be taken for the next ask's, so the connection is kept
+// and the session is not charged.
+var ErrNoAnswer = errors.New("no answer in time")
+
+// RefusedError is an exchange answered by a line matching the request's
+// declared error shape: the device refused, and Line is what it said.
+type RefusedError struct {
+	Request string
+	Line    string
+}
+
+func (e *RefusedError) Error() string {
+	return fmt.Sprintf("device refused %q: %s", e.Request, e.Line)
+}
 
 // drainWindow is how long the reader waits for bytes already on their way
 // when it draws an ask's boundary. Bytes still in flight from before the ask
@@ -62,14 +80,27 @@ func (lineSessionDialer) Dial(ctx context.Context, target string, timeout time.D
 // its answer goes.
 type lineAsk struct {
 	line    string
-	reply   *driver.Match
+	reply   *driver.Reply
 	timeout time.Duration
 	answer  chan lineAnswer
+	// gone is closed when the exchange gave up without recycling the
+	// connection (a shaped timeout or abandonment): the reader drops it.
+	gone chan struct{}
+}
+
+func (a *lineAsk) abandoned() bool {
+	select {
+	case <-a.gone:
+		return true
+	default:
+		return false
+	}
 }
 
 type lineAnswer struct {
-	line string
-	err  error
+	line    string
+	refused bool
+	err     error
 }
 
 // lineConn is one held line connection. xmu serializes exchanges, so at most
@@ -114,6 +145,9 @@ func (c *lineConn) read() {
 			if !r.keep(raw) {
 				return
 			}
+			if r.armed != nil && r.armed.abandoned() {
+				r.armed = nil // the exchange gave up; the next ask may be waiting
+			}
 			if r.armed != nil {
 				// A late interrupt landed mid-answer: no ask can be pending
 				// while one is armed, so the partial bytes are kept and the
@@ -153,16 +187,25 @@ func (r *reader) keep(raw []byte) bool {
 // listener claims is the listener's, and an exchange is never handed it
 // unless the exchange declared a reply shape the line matches (then both
 // have it); an armed exchange otherwise takes the first line that matches
-// its declared reply shape, or, with none declared, the first line no
-// listener claims; a line that began before the ask was written is never its
-// answer; whatever is left is unclaimed.
+// its declared answer shape, or, with none declared, the first line no
+// listener claims; an unclaimed line matching its declared error shape
+// answers it as a refusal; a line that began before the ask was written is
+// never its answer; whatever is left is unclaimed.
 func (r *reader) complete() {
 	line, pre := trimLine(string(r.carry)), r.carryPre
 	r.carry, r.carryPre = r.carry[:0], false
 	claimed := r.c.in != nil && r.c.in.Claim(line)
+	if r.armed != nil && r.armed.abandoned() {
+		r.armed = nil
+	}
 	if a := r.armed; a != nil && !pre {
-		if (a.reply != nil && a.reply.Matches(line)) || (a.reply == nil && !claimed) {
+		switch {
+		case (a.reply != nil && a.reply.Accepts(line)) || (a.reply == nil && !claimed):
 			a.answer <- lineAnswer{line: line} // buffered: never blocks
+			r.armed = nil
+			return
+		case !claimed && a.reply.Fails(line):
+			a.answer <- lineAnswer{line: line, refused: true}
 			r.armed = nil
 			return
 		}
@@ -268,7 +311,7 @@ func (c *lineConn) Close() error {
 // cancel) is recycled too, but not as the device's timeout. Either way its
 // reply may still be on the way, and on a held connection it would answer
 // the next ask.
-func (c *lineConn) Exchange(ctx context.Context, line string, reply *driver.Match, timeout time.Duration) (string, error) {
+func (c *lineConn) Exchange(ctx context.Context, line string, reply *driver.Reply, timeout time.Duration) (string, error) {
 	if timeout <= 0 {
 		timeout = defaultSessionTimeout
 	}
@@ -279,7 +322,7 @@ func (c *lineConn) Exchange(ctx context.Context, line string, reply *driver.Matc
 		return "", fmt.Errorf("collection: line session %s: %w", c.target, c.Err())
 	default:
 	}
-	ask := lineAsk{line: line, reply: reply, timeout: timeout, answer: make(chan lineAnswer, 1)}
+	ask := lineAsk{line: line, reply: reply, timeout: timeout, answer: make(chan lineAnswer, 1), gone: make(chan struct{})}
 	c.asks <- ask // capacity 1, and xmu admits one ask at a time
 	// Interrupt the reader's blocked read so it takes the ask now.
 	_ = c.c.SetReadDeadline(time.Now())
@@ -290,16 +333,27 @@ func (c *lineConn) Exchange(ctx context.Context, line string, reply *driver.Matc
 		if a.err != nil {
 			return "", a.err
 		}
+		if a.refused {
+			return "", &RefusedError{Request: line, Line: a.line}
+		}
 		return a.line, nil
 	case <-c.done:
 		return "", fmt.Errorf("collection: line session %s: %w", c.target, c.Err())
 	case <-ctx.Done():
+		if reply != nil {
+			close(ask.gone) // shaped: the late answer cannot be misrouted
+			return "", fmt.Errorf("collection: line session %s: %w", c.target, ctx.Err())
+		}
 		// The caller gave up (its deadline or a cancel), not the device:
 		// recycled, since the reply may still come, but never recorded as
 		// the device's timeout.
 		c.fail(fmt.Errorf("exchange abandoned (%v); connection recycled", ctx.Err()))
 		return "", fmt.Errorf("collection: line session %s: %w", c.target, ctx.Err())
 	case <-t.C:
+		if reply != nil {
+			close(ask.gone)
+			return "", fmt.Errorf("collection: line session %s: %q got no answer within %s: %w", c.target, line, timeout, ErrNoAnswer)
+		}
 		c.fail(ErrExchangeTimeout)
 		return "", fmt.Errorf("collection: line session %s: no answer within %s: %w", c.target, timeout, ErrExchangeTimeout)
 	}

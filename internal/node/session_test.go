@@ -21,19 +21,22 @@ import (
 type heldFake struct {
 	mu      sync.Mutex
 	asked   []string
-	replies []*driver.Match
+	replies []*driver.Reply
 	done    chan struct{}
 	once    sync.Once
 	closed  bool
 }
 
-func (c *heldFake) Exchange(_ context.Context, line string, reply *driver.Match, _ time.Duration) (string, error) {
+func (c *heldFake) Exchange(_ context.Context, line string, reply *driver.Reply, _ time.Duration) (string, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.asked = append(c.asked, line)
 	c.replies = append(c.replies, reply)
 	if strings.HasPrefix(line, "SUBSCRIBE") {
 		return "OK", nil
+	}
+	if line == "SET INPUT bogus" {
+		return "", &collection.RefusedError{Request: line, Line: "-ERR unknown command: SET INPUT bogus"}
 	}
 	return "INPUT hdmi2", nil
 }
@@ -438,7 +441,7 @@ func TestExecuteDeliveryOverTheHeldSession(t *testing.T) {
 	throwaway := &lineRecorder{}
 	runner := &collection.Runner{Line: throwaway}
 	d := collection.CommandDelivery{ID: 9, CommandType: "set-input", Transport: "tcp", Target: "10.0.0.5:51325",
-		EndpointID: "ep-1", Line: "SET INPUT hdmi2", Reply: &driver.Match{Prefix: "INPUT "}}
+		EndpointID: "ep-1", Line: "SET INPUT hdmi2", Reply: &driver.Reply{Prefix: "INPUT "}}
 	reply, out := executeDelivery(t.Context(), runner, d, m)
 	if out != "" || reply != "INPUT hdmi2" {
 		t.Fatalf("held actuation = %q, %q", reply, out)
@@ -460,5 +463,22 @@ func TestExecuteDeliveryOverTheHeldSession(t *testing.T) {
 	}
 	if len(throwaway.sent) != 1 {
 		t.Fatalf("with no held session the command did not fall back: %v", throwaway.sent)
+	}
+}
+
+// Review of #817, finding 1: a command the device refuses reports the
+// device's text, both as the execution error and as the reply.
+func TestExecuteDeliveryCarriesTheRefusal(t *testing.T) {
+	dialer := &heldFakeDialer{}
+	log := &transitionLog{}
+	m := newSessionManager(map[string]collection.SessionDialer{"tcp": dialer}, sessionHooks{transition: log.record})
+	defer m.closeAll()
+	m.reconcile([]collection.TaskSpec{listenTask("l1", "ep-1", "10.0.0.5:51325")})
+	log.waitFor(t, "l1", collection.SessionUp)
+	d := collection.CommandDelivery{ID: 10, CommandType: "set-input", Transport: "tcp", Target: "10.0.0.5:51325",
+		EndpointID: "ep-1", Line: "SET INPUT bogus", Reply: &driver.Reply{Prefix: "INPUT ", Error: &driver.Match{Prefix: "-ERR"}}}
+	reply, out := executeDelivery(t.Context(), &collection.Runner{Line: &lineRecorder{}}, d, m)
+	if reply != "-ERR unknown command: SET INPUT bogus" || !strings.Contains(out, "-ERR unknown command") {
+		t.Fatalf("refused command reported reply %q, outcome %q; want the device's text in both", reply, out)
 	}
 }

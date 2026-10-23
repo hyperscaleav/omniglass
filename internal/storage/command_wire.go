@@ -48,7 +48,7 @@ type CommandDelivery struct {
 	// session there actuates over it, #817); Reply is the binding's declared
 	// reply shape.
 	EndpointID string
-	Reply      *driver.Match
+	Reply      *driver.Reply
 }
 
 // PendingNodeCommands resolves and marks dispatched the commands a node

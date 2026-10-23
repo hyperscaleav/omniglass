@@ -120,7 +120,7 @@ type CommandDelivery struct {
 	// declared reply shape, which picks the answer out of that session's
 	// pushes.
 	EndpointID string        `json:"endpoint_id,omitempty"`
-	Reply      *driver.Match `json:"reply,omitempty"`
+	Reply      *driver.Reply `json:"reply,omitempty"`
 }
 
 // CommandPullReply is the server's response to a command queue pull.

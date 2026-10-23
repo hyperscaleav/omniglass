@@ -3,6 +3,7 @@ package node
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"time"
 
@@ -89,6 +90,12 @@ func executeDelivery(ctx context.Context, runner *collection.Runner, d collectio
 	case "tcp":
 		if held := sessions.lookup(d.EndpointID); held != nil {
 			reply, err := held.Exchange(ctx, d.Line, d.Reply, 0)
+			var refused *collection.RefusedError
+			if errors.As(err, &refused) {
+				// The device answered with its refusal: the execution error
+				// carries its text, and the reply carries it too.
+				return refused.Line, err.Error()
+			}
 			if err != nil {
 				return "", err.Error()
 			}

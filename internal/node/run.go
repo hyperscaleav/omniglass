@@ -3,6 +3,7 @@ package node
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -142,6 +143,10 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 			_ = publishCollectionFailed(nc, cfg.Name, taskID, cause)
 		},
 		arm: func(taskID, endpoint, line, reply string, err error) {
+			if errors.Is(err, collection.ErrUnacknowledged) {
+				logger.Warn("session armed, unacknowledged", "facility", "session", "task", taskID, "endpoint", endpoint, "line", line)
+				return
+			}
 			if err != nil {
 				logger.Warn("session arm failed", "facility", "session", "task", taskID, "endpoint", endpoint, "line", line, "error", err.Error())
 				return

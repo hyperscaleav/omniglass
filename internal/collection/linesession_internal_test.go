@@ -201,7 +201,7 @@ func TestLineConnRoutesInbound(t *testing.T) {
 		t.Skip("real-socket integration test")
 	}
 	ctx := context.Background()
-	reply := &driver.Match{Prefix: "INPUT "}
+	reply := &driver.Reply{Prefix: "INPUT "}
 
 	t.Run("a declared reply shape picks the answer out of pushes and noise", func(t *testing.T) {
 		in := &fakeInbound{prefix: "EVT "}
@@ -263,7 +263,7 @@ func TestLineConnRoutesInbound(t *testing.T) {
 			t.Fatal(err)
 		}
 		defer func() { _ = hc.Close() }()
-		got, err := hc.Exchange(ctx, "GET BOTH", &driver.Match{Prefix: "EVT INPUT b"}, 2*time.Second)
+		got, err := hc.Exchange(ctx, "GET BOTH", &driver.Reply{Prefix: "EVT INPUT b"}, 2*time.Second)
 		if err != nil || got != "EVT INPUT both" {
 			t.Fatalf("answer = %q, %v", got, err)
 		}
@@ -271,4 +271,207 @@ func TestLineConnRoutesInbound(t *testing.T) {
 			t.Fatalf("claimed = %v, want the listener to have it too", c)
 		}
 	})
+}
+
+// Review of #817 over a real socket: a refusal is an answer, a shaped
+// timeout keeps the connection, and an arm acked by a push (or not at all)
+// still brings the session up.
+
+func reviewServer(t *testing.T) string {
+	t.Helper()
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = ln.Close() })
+	go func() {
+		for {
+			c, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			go func(c net.Conn) {
+				defer func() { _ = c.Close() }()
+				var wmu sync.Mutex
+				write := func(s string) {
+					wmu.Lock()
+					defer wmu.Unlock()
+					_, _ = c.Write([]byte(s + "\r\n"))
+				}
+				pushing := false
+				push := func(v string, after time.Duration) {
+					if pushing {
+						return
+					}
+					pushing = true
+					go func() {
+						time.Sleep(after)
+						for {
+							time.Sleep(50 * time.Millisecond)
+							wmu.Lock()
+							_, err := c.Write([]byte("EVT INPUT " + v + "\r\n"))
+							wmu.Unlock()
+							if err != nil {
+								return
+							}
+						}
+					}()
+				}
+				r := bufio.NewReader(c)
+				for {
+					line, err := r.ReadString('\n')
+					if err != nil {
+						return
+					}
+					switch cmd := strings.TrimRight(line, "\r\n"); cmd {
+					case "SET INPUT hdmi2":
+						write("INPUT hdmi2")
+					case "SLOW GET INPUT":
+						time.Sleep(300 * time.Millisecond)
+						write("INPUT slow")
+					case "GET VOLUME":
+						write("VOLUME 40")
+					case "SUBSCRIBE PUSHACK":
+						write("EVT INPUT hdmi1") // the ack is push-shaped
+						push("p1", 0)
+					case "SUBSCRIBE MUTE":
+						push("p2", 400*time.Millisecond) // never acks; pushes only after the arm timeout
+					default:
+						write("-ERR unknown command: " + cmd)
+					}
+				}
+			}(c)
+		}
+	}()
+	return ln.Addr().String()
+}
+
+func TestLineConnErrorReplyIsAFailureNotATimeout(t *testing.T) {
+	if testing.Short() {
+		t.Skip("real-socket integration test")
+	}
+	hc, err := NewLineSessionDialer().Dial(context.Background(), reviewServer(t), time.Second, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = hc.Close() }()
+	shape := &driver.Reply{Prefix: "INPUT ", Error: &driver.Match{Prefix: "-ERR"}}
+	start := time.Now()
+	_, err = hc.Exchange(context.Background(), "SET INPUT bogus", shape, 2*time.Second)
+	var refused *RefusedError
+	if !errors.As(err, &refused) || refused.Line != "-ERR unknown command: SET INPUT bogus" {
+		t.Fatalf("err = %v, want the refusal carrying the device's text", err)
+	}
+	if took := time.Since(start); took > time.Second {
+		t.Fatalf("a refusal took %v; it answers at once, it is not a timeout", took)
+	}
+	select {
+	case <-hc.Done():
+		t.Fatalf("a refusal recycled the connection: %v", hc.Err())
+	default:
+	}
+	if got, err := hc.Exchange(context.Background(), "SET INPUT hdmi2", shape, time.Second); err != nil || got != "INPUT hdmi2" {
+		t.Fatalf("the next ask = %q, %v", got, err)
+	}
+}
+
+func TestLineConnShapedTimeoutKeepsTheConnection(t *testing.T) {
+	if testing.Short() {
+		t.Skip("real-socket integration test")
+	}
+	hc, err := NewLineSessionDialer().Dial(context.Background(), reviewServer(t), time.Second, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = hc.Close() }()
+	_, err = hc.Exchange(context.Background(), "SLOW GET INPUT", &driver.Reply{Prefix: "INPUT "}, 100*time.Millisecond)
+	if err == nil {
+		t.Fatal("a slow answer arrived inside 100ms")
+	}
+	if errors.Is(err, ErrExchangeTimeout) {
+		t.Fatalf("a shaped timeout recycled the connection: %v", err)
+	}
+	time.Sleep(350 * time.Millisecond) // the late INPUT answer arrives, matching no ask
+	select {
+	case <-hc.Done():
+		t.Fatalf("a shaped timeout killed the connection: %v", hc.Err())
+	default:
+	}
+	if got, err := hc.Exchange(context.Background(), "GET VOLUME", &driver.Reply{Prefix: "VOLUME "}, time.Second); err != nil || got != "VOLUME 40" {
+		t.Fatalf("the ask after a shaped timeout = %q, %v; want its own answer", got, err)
+	}
+}
+
+func armedSession(t *testing.T, arm string) (*Session, *fakeInbound, chan error) {
+	t.Helper()
+	in := &fakeInbound{prefix: "EVT "}
+	armErrs := make(chan error, 8)
+	ups := make(chan struct{}, 8)
+	s := StartSession(SessionConfig{
+		Target: reviewServer(t), Timeout: 200 * time.Millisecond, Dialer: NewLineSessionDialer(),
+		Inbound: in, Arm: []string{arm},
+		OnArm: func(_, _ string, err error) { armErrs <- err },
+		OnTransition: func(tr SessionTransition) {
+			if tr.State == SessionUp {
+				ups <- struct{}{}
+			}
+		},
+	})
+	t.Cleanup(s.Close)
+	select {
+	case <-ups:
+	case <-time.After(3 * time.Second):
+		st, why := s.State()
+		t.Fatalf("an arm of %s kept the session %s (%s)", arm, st, why)
+	}
+	return s, in, armErrs
+}
+
+func TestSessionArmAckedByAPushReadsUp(t *testing.T) {
+	if testing.Short() {
+		t.Skip("real-socket integration test")
+	}
+	_, in, armErrs := armedSession(t, "SUBSCRIBE PUSHACK")
+	if err := <-armErrs; err != nil {
+		t.Fatalf("a push-shaped ack was not taken as the ack: %v", err)
+	}
+	waitFor(t, "the ack delivered to the listener too", func() bool { c, _ := in.seen(); return contains(c, "EVT INPUT hdmi1") })
+	waitFor(t, "pushes after the arm", func() bool { c, _ := in.seen(); return contains(c, "EVT INPUT p1") })
+}
+
+func TestSessionArmNeverAckedStillReadsUp(t *testing.T) {
+	if testing.Short() {
+		t.Skip("real-socket integration test")
+	}
+	_, in, armErrs := armedSession(t, "SUBSCRIBE MUTE")
+	if err := <-armErrs; !errors.Is(err, ErrUnacknowledged) {
+		t.Fatalf("arm report = %v, want armed-unacknowledged", err)
+	}
+	waitFor(t, "pushes after an unacknowledged arm", func() bool { c, _ := in.seen(); return contains(c, "EVT INPUT p2") })
+}
+
+// Review of #817, finding 3, over a real socket: a reply regex is a
+// substring search, so an unanchored one takes a push containing it as the
+// answer; the anchored one takes the real answer. The drivers guide says to
+// anchor.
+func TestLineConnUnanchoredReplyRegexMatchesAPush(t *testing.T) {
+	if testing.Short() {
+		t.Skip("real-socket integration test")
+	}
+	in := &fakeInbound{prefix: "EVT "}
+	addr := pushServer(t)
+	for _, tc := range []struct{ regex, want string }{
+		{`INPUT \S+`, "EVT INPUT mid"},
+		{`^INPUT \S+$`, "INPUT hdmi1"},
+	} {
+		hc, err := NewLineSessionDialer().Dial(context.Background(), addr, time.Second, in)
+		if err != nil {
+			t.Fatal(err)
+		}
+		got, err := hc.Exchange(context.Background(), "GET INPUT", &driver.Reply{Regex: tc.regex}, 2*time.Second)
+		_ = hc.Close()
+		if err != nil || got != tc.want {
+			t.Fatalf("reply regex %q answered %q, %v; want %q", tc.regex, got, err, tc.want)
+		}
+	}
 }

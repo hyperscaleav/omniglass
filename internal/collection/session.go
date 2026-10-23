@@ -111,7 +111,7 @@ type HeldConn interface {
 	// Exchange sends one line and returns its answer: the next line no
 	// listener claims, or, when reply declares the protocol's answer shape,
 	// the next line that shape matches.
-	Exchange(ctx context.Context, line string, reply *driver.Match, timeout time.Duration) (string, error)
+	Exchange(ctx context.Context, line string, reply *driver.Reply, timeout time.Duration) (string, error)
 	Done() <-chan struct{}
 	Err() error
 	Close() error
@@ -212,7 +212,7 @@ func (s *Session) State() (SessionState, string) {
 // its reason: a down device must not stall the node's tick, and a poll never
 // reconnects on its own (the session owns the connection). A down session
 // lends the connection it is proving, so an answer can prove it.
-func (s *Session) Exchange(ctx context.Context, line string, reply *driver.Match, timeout time.Duration) (string, error) {
+func (s *Session) Exchange(ctx context.Context, line string, reply *driver.Reply, timeout time.Duration) (string, error) {
 	if timeout <= 0 {
 		timeout = s.cfg.Timeout
 	}
@@ -426,19 +426,38 @@ func (s *Session) run(ctx context.Context) {
 	}
 }
 
+// ErrUnacknowledged is reported for an arm command the device sent nothing
+// back for within the timeout: armed, unacknowledged. Not a failure, since
+// many devices subscribe silently; only the connection dying fails the arm.
+var ErrUnacknowledged = errors.New("armed, unacknowledged")
+
 // armConn sends the instantiation commands over a fresh connection, in
-// order, reporting each.
+// order, reporting each. The ack is the first line of any kind: one a
+// listener claims counts (the listener has it too), since a device may
+// acknowledge a subscribe with the push it subscribes to.
 func (s *Session) armConn(ctx context.Context, conn HeldConn) error {
 	for _, line := range s.cfg.Arm {
-		reply, err := conn.Exchange(ctx, line, nil, s.cfg.Timeout)
+		reply, err := conn.Exchange(ctx, line, driver.AnyLine(), s.cfg.Timeout)
+		if err != nil && errors.Is(err, ErrNoAnswer) && !isDone(conn) {
+			err = ErrUnacknowledged
+		}
 		if s.cfg.OnArm != nil {
 			s.cfg.OnArm(line, reply, err)
 		}
-		if err != nil {
+		if err != nil && !errors.Is(err, ErrUnacknowledged) {
 			return fmt.Errorf("%s: %w", line, err)
 		}
 	}
 	return nil
+}
+
+func isDone(conn HeldConn) bool {
+	select {
+	case <-conn.Done():
+		return true
+	default:
+		return false
+	}
 }
 
 // firstDialDone ends the first-dial wait window after a failed first dial

@@ -173,7 +173,7 @@ protocol over `tcp` today), keyed by the endpoint's id, which the worklist carri
   `collection-failed` naming the state, so a down device never stalls the node's tick, and it never
   dials a connection of its own.
 - **recover**: a held connection that drops (the peer closed, a read failed, the TCP keepalive gave
-  up, an answer timed out) reads `recovering` at once, without waiting for a poll, and redials with
+  up, an unshaped answer timed out) reads `recovering` at once, without waiting for a poll, and redials with
   a jittered exponential backoff (250ms doubling, capped at 30s, 20% jitter). Five consecutive failed
   attempts read `down`, where an attempt fails if its dial fails, its connection drops unanswered
   within 10s, or an answer over it timed out; so a device that accepts and drops, or accepts and
@@ -272,7 +272,10 @@ node runs every listen task on an endpoint over that endpoint's one held session
 - **Instantiation commands** (`arm`): the subscribe conversation, sent in order on every connection
   before the session reads `up`, so on establish and again on each recover. They are **plumbing**,
   not command rows (the #603 ruling): each is a node self-log (`session armed`, with the device's
-  reply), and an arm the device does not answer is a failed attempt like any other.
+  reply). The ack is the first line of any kind, one a listener claims included (the listener has
+  it too), since a device may acknowledge a subscribe with the push itself; an arm with no ack
+  within the timeout is logged at warn (`session armed, unacknowledged`) and does not fail the
+  attempt, while the connection dying during the arm does.
 - **Match** (`prefix` or `regex`): classifies an inbound line. Listeners are offered a line in
   function-name order and the first whose rule picks it claims it.
 - **Extraction**: the claimed line runs through the same emit shape a poll's answer does (locate,
@@ -285,9 +288,11 @@ Every inbound line on a held session is routed by one precedence
 
 1. A line a listener claims is the listener's. It is never an exchange's answer, unless the
    exchange declared a reply shape the line matches, in which case both have it.
-2. An exchange in flight (a poll, a command, an arm command) takes the first line its declared
-   reply shape (`request.reply`, a `prefix` or `regex`) matches, or, when it declares none, the first
-   line no listener claims. A line that began before the request was written is never its answer.
+2. An exchange in flight (a poll, a command) takes the first line its declared reply shape
+   (`request.reply`, a `prefix` or `regex`) matches, or, when it declares none, the first line no
+   listener claims. When the shape also declares an `error` shape, an unclaimed line matching it
+   answers the exchange as a **refusal** carrying the device's text. A line that began before the
+   request was written is never its answer.
 3. Anything left is **unclaimed**: counted, and once per tick the node logs the count and the last
    such line; a spec declaring `unmatched: collection-failed` also lands one `collection-failed`
    per tick naming them (the default is `discard`).
@@ -295,9 +300,16 @@ Every inbound line on a held session is routed by one precedence
 A request with a reply shape closes the window #816 left open (a stray line arriving just before
 the device reads the request); without one, a line no listener claims in that instant can still be
 taken as the answer, so a driver whose protocol mixes unsolicited lines with answers declares its
-replies. Commands ride the held session too: a delivery names its endpoint, and a node holding a
-session there actuates over it (falling back to a throwaway connection only when none is held),
-the reply settling the command as before.
+replies. A shape's `regex` is Go RE2 with **substring** semantics, so anchor it (`^INPUT \S+$`), or it
+also matches a push containing it. Because shape routing cannot hand a late answer to the next ask,
+a shaped request that gets no answer in time fails only that exchange: the connection is kept and
+the session is not charged (an unshaped one still recycles the connection, ADR-0150). A poll whose
+answer is a refusal lands a `collection-failed` naming the device's text. Commands ride the held
+session too: a delivery names its endpoint, and a node holding a session there actuates over it
+(falling back to a throwaway connection only when none is held). A command the device answers
+settles from that answer as it did over a throwaway connection; one it refuses reports the
+device's text as both its execution error and its reply, so it fails at once with the reason on
+the row rather than timing out.
 
 ### Listeners and their config
 
