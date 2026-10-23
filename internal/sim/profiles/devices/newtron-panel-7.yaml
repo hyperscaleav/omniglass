@@ -134,6 +134,14 @@ interfaces:
     limits:
       max_sessions_per_device: 16
       out_buffer: 256
+    # The NVP line protocol rides this shell too (#1032): its verbs are the
+    # device's commands (declared on the nvp interface), and this subject
+    # makes SUBSCRIBE INPUT push here as it does on the raw port.
+    subjects:
+      - match: "status.video.input"
+        path: "status.video.input"
+        publish_token: "INPUT"
+        push_format: "EVT INPUT {{ .Raw }}"
     commands:
       - match: "show status"
         template: api/newtron-panel/cli-status.txt.gotempl

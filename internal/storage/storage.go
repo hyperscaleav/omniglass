@@ -425,7 +425,9 @@ type Gateway interface {
 	// RetryEndpoint is an operator's retry of the endpoint's held session
 	// (#1049): it moves the endpoint's revision, which wakes a rejected
 	// session for one attempt, and is audited.
-	RetryEndpoint(ctx context.Context, actorID, id string, read, action scope.Set) (*Endpoint, error)
+	// hostKey, when set, is the ssh host key fingerprint the operator now
+	// trusts (a replaced component's), declared as the endpoint's pin.
+	RetryEndpoint(ctx context.Context, actorID, id, hostKey string, read, action scope.Set) (*Endpoint, error)
 	DeleteEndpoint(ctx context.Context, actorID, id string, read, action scope.Set) error
 
 	// The task tier: read-only over DERIVED collection work. A task is not

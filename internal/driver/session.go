@@ -32,6 +32,10 @@ type SessionSpec struct {
 	// its own (ssh userauth, #1032); the login dialog names its secrets in
 	// its sends instead.
 	Credential string `json:"credential,omitempty"`
+	// PTY asks the ssh shell channel for a terminal; Exec runs a command as
+	// the channel instead of a shell (#1032). Both are ssh's alone.
+	PTY  bool   `json:"pty,omitempty"`
+	Exec string `json:"exec,omitempty"`
 }
 
 // Login is a declared login dialog: each step waits for its prompt and then
@@ -160,6 +164,9 @@ func (l *Login) Render(secrets map[string]map[string]string) ([]string, error) {
 func (s *Spec) validateSession() error {
 	ss := s.Session
 	if ss == nil {
+		if s.Transport == "ssh" && (len(s.Polls) > 0 || len(s.Listeners) > 0 || len(s.Commands) > 0) {
+			return fmt.Errorf("driver: an ssh session authenticates on every connection; declare session.credential (or a keyboard-interactive login)")
+		}
 		return nil
 	}
 	if !isLineTransport(s.Transport) {
@@ -210,6 +217,15 @@ func (s *Spec) validateSession() error {
 		if err != nil || d < MinReprobe {
 			return fmt.Errorf("driver: reprobe %q must be a duration of at least %s (a rejected session's own retry is slow by design)", ss.Reprobe, MinReprobe)
 		}
+	}
+	if s.Transport == "ssh" && ss.Credential == "" && ss.Login == nil {
+		return fmt.Errorf("driver: an ssh session authenticates on every connection; declare session.credential (or a keyboard-interactive login)")
+	}
+	if (ss.PTY || ss.Exec != "") && s.Transport != "ssh" {
+		return fmt.Errorf("driver: session pty and exec shape an ssh channel; %q has none", s.Transport)
+	}
+	if ss.PTY && ss.Exec != "" {
+		return fmt.Errorf("driver: a session runs a shell (with a pty) or an exec, not both")
 	}
 	if ss.Credential != "" {
 		if s.Transport != "ssh" {

@@ -33,6 +33,8 @@ type sessionHooks struct {
 	samples    func(taskID string, dps []collection.Sample)
 	fault      func(taskID string, err error)
 	arm        func(taskID, endpoint, line, reply string, err error)
+	// hostKey hears an ssh host key the session trusted (#1032).
+	hostKey func(taskID, endpoint, fingerprint string)
 }
 
 // sessionConn is what a held connection depends on: the transport, the
@@ -76,6 +78,10 @@ type sessionWant struct {
 	// revision is the endpoint's revision; a move retries a rejected
 	// session once.
 	revision int64
+	// hostKey is the ssh pin the worklist delivers; channel shapes the ssh
+	// channel (#1032).
+	hostKey string
+	channel collection.ChannelOptions
 }
 
 // holdsSession reports whether a task asks its endpoint's session to be held:
@@ -89,23 +95,48 @@ func holdsSession(task collection.TaskSpec) bool {
 	return driver.IsBaked(task.Spec) && (task.Session != nil || task.Transport != "tcp")
 }
 
+// channelOf reads the ssh channel the driver declares.
+func channelOf(ss *driver.SessionSpec) collection.ChannelOptions {
+	if ss == nil {
+		return collection.ChannelOptions{}
+	}
+	return collection.ChannelOptions{PTY: ss.PTY, Exec: ss.Exec}
+}
+
 // sessionAuthOf renders the driver's session block for one endpoint: the
 // login's sends from the delivered secrets. A credential the login needs and
 // the worklist did not deliver refuses the session, naming the reference.
 func sessionAuthOf(task collection.TaskSpec) (*collection.SessionAuth, error) {
 	ss := task.Session
-	if ss == nil || ss.Login == nil {
+	auth := &collection.SessionAuth{}
+	if ss != nil && ss.Login != nil {
+		sends, err := ss.Login.Render(task.Secrets)
+		if err != nil {
+			return nil, err
+		}
+		d := &collection.LoginDialog{Ready: ss.Login.Ready}
+		for i, st := range ss.Login.Steps {
+			d.Steps = append(d.Steps, collection.LoginPrompt{Expect: st.Expect, Send: sends[i]})
+		}
+		auth.Login = d
+	}
+	if task.Transport == "ssh" {
+		// The transport's own credential, from the secret input the driver
+		// names: a username with a password or a private key.
+		cred := &collection.SSHAuth{}
+		if ss != nil && ss.Credential != "" {
+			f := task.Secrets[ss.Credential]
+			cred.Username, cred.Password, cred.PrivateKey = f["username"], f["password"], f["private_key"]
+			if cred.Username == "" || (cred.Password == "" && cred.PrivateKey == "" && auth.Login == nil) {
+				return nil, fmt.Errorf("the ssh credential %s needs a username and a password or private_key, and no such credential was delivered", ss.Credential)
+			}
+		}
+		auth.SSH = cred
+	}
+	if auth.Login == nil && auth.SSH == nil {
 		return nil, nil
 	}
-	sends, err := ss.Login.Render(task.Secrets)
-	if err != nil {
-		return nil, err
-	}
-	d := &collection.LoginDialog{Ready: ss.Login.Ready}
-	for i, st := range ss.Login.Steps {
-		d.Steps = append(d.Steps, collection.LoginPrompt{Expect: st.Expect, Send: sends[i]})
-	}
-	return &collection.SessionAuth{Login: d}, nil
+	return auth, nil
 }
 
 // desiredSessions derives the held set from a worklist. Pure. A listen task
@@ -187,6 +218,8 @@ func desiredSessions(tasks []collection.TaskSpec, dialers map[string]collection.
 			terminal:  collection.TerminalClassifier(task.Session),
 			reprobe:   task.Session.ReprobeInterval(),
 			revision:  task.EndpointRevision,
+			hostKey:   task.HostKey,
+			channel:   channelOf(task.Session),
 		}
 	}
 	for id, w := range want {
@@ -303,6 +336,7 @@ type heldSession struct {
 	sess     *collection.Session
 	router   *listenerRouter
 	revision int64 // the endpoint revision last seen; a move retries a rejection
+	pin      *collection.HostKeyPin
 
 	mu       sync.Mutex
 	taskID   string
@@ -337,6 +371,10 @@ func (m *sessionManager) reconcile(tasks []collection.TaskSpec) {
 			m.teardown(id, h, "its listen task left the worklist")
 		case w.conn != h.conn:
 			m.teardown(id, h, "its endpoint changed")
+		case h.pin != nil && w.hostKey != "" && w.hostKey != h.pin.Get():
+			// The operator pinned a different key (a replaced component's,
+			// accepted with :retry): the session redials onto it.
+			m.teardown(id, h, "its host key pin changed")
 		default:
 			h.mu.Lock()
 			h.taskID, h.endpoint = w.taskID, w.endpoint
@@ -374,6 +412,19 @@ func (m *sessionManager) start(id string, w sessionWant) {
 	if w.conn.arm != "" {
 		arm = strings.Split(w.conn.arm, "\n")
 	}
+	if w.auth != nil && w.auth.SSH != nil {
+		h.pin = collection.NewHostKeyPin(w.hostKey)
+		last := ""
+		h.pin.OnTrust = func(fp string) {
+			if fp == last || hooks.hostKey == nil {
+				return
+			}
+			last = fp
+			taskID, endpoint := h.publishTo()
+			hooks.hostKey(taskID, endpoint, fp)
+		}
+		w.auth.SSH.Pin = h.pin
+	}
 	h.sess = collection.StartSession(collection.SessionConfig{
 		Target:   w.conn.target,
 		Timeout:  w.conn.timeout,
@@ -383,6 +434,7 @@ func (m *sessionManager) start(id string, w sessionWant) {
 		Auth:     w.auth,
 		Terminal: w.terminal,
 		Reprobe:  w.reprobe,
+		Channel:  w.channel,
 		OnAuth: func(v collection.AuthVerdict) {
 			if hooks.auth != nil {
 				taskID, endpoint := h.publishTo()

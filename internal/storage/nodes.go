@@ -85,6 +85,10 @@ type WorklistTask struct {
 	// moves on every write to the endpoint, an operator's :retry included,
 	// and a rejected session on the node redials once when it moves.
 	EndpointRevision int64
+	// HostKey is an ssh endpoint's host key pin (#1032): the operator's
+	// declared ssh-host-key, else the key the node trusted on first use (the
+	// observed one), else empty.
+	HostKey string
 }
 
 // Worklist is a node's resolved work plus the config generation (the max
@@ -401,6 +405,11 @@ func (p *PG) NodeWorklist(ctx context.Context, name string) (Worklist, error) {
 	var wl Worklist
 	type secretRef struct{ input, ref, componentID string }
 	pending := map[int][]secretRef{} // task index -> the secret inputs to unseal
+	type pinRef struct {
+		idx                   int
+		componentID, instance string
+	}
+	var pins []pinRef // ssh driver tasks, whose host key pin rides the worklist
 	for rows.Next() {
 		var wt WorklistTask
 		var epInputs, driverSpec []byte
@@ -432,6 +441,9 @@ func (p *PG) NodeWorklist(ctx context.Context, name string) (Worklist, error) {
 			for input, ref := range refs {
 				pending[len(wl.Tasks)] = append(pending[len(wl.Tasks)], secretRef{input, ref, cid})
 			}
+		}
+		if wt.Transport == "ssh" && componentID != nil && len(wt.Spec) > 2 {
+			pins = append(pins, pinRef{idx: len(wl.Tasks), componentID: *componentID, instance: wt.EndpointName})
 		}
 		wl.Tasks = append(wl.Tasks, wt)
 	}
@@ -476,6 +488,24 @@ func (p *PG) NodeWorklist(ctx context.Context, name string) (Worklist, error) {
 				wl.Tasks[idx].Secrets = map[string]map[string]string{}
 			}
 			wl.Tasks[idx].Secrets[r.input] = fields
+		}
+	}
+	// An ssh task's host key pin (#1032): the operator's declared key wins (a
+	// :retry accepting a replaced component's key, or a cleared one falling
+	// back), else the key the node trusted on first use.
+	for _, pr := range pins {
+		if err := p.pool.QueryRow(ctx, `
+			select coalesce(
+				(select nullif(value, 'null'::jsonb) #>> '{}' from property
+				 where owner_kind = 'component' and component_id = $1::uuid and instance = $2 and provenance = 'declared'
+				   and property_type_id = (select id from property_type where name = 'ssh-host-key')
+				 order by id desc limit 1),
+				(select value #>> '{}' from property
+				 where owner_kind = 'component' and component_id = $1::uuid and instance = $2 and provenance = 'observed'
+				   and property_type_id = (select id from property_type where name = 'ssh-host-key')
+				 order by ts desc, id desc limit 1),
+				'')`, pr.componentID, pr.instance).Scan(&wl.Tasks[pr.idx].HostKey); err != nil {
+			return Worklist{}, fmt.Errorf("storage: node worklist %q host key: %w", name, err)
 		}
 	}
 	// config_generation moves at operator-config pace: the max endpoint

@@ -89,9 +89,12 @@ func TestValidateSessionRefusals(t *testing.T) {
 
 // Polls, commands and listeners ride every held line transport, not only tcp.
 func TestValidateAcceptsTheLineFamiliesOnEveryLineTransport(t *testing.T) {
-	for _, tr := range []string{"tcp", "telnet"} {
+	for _, tr := range []string{"tcp", "telnet", "ssh"} {
 		s := validSpec()
 		s.Transport = tr
+		if tr == "ssh" {
+			s.Session = &driver.SessionSpec{Credential: "login"}
+		}
 		if err := s.Validate(catalog()); err != nil {
 			t.Errorf("a line spec on %s refused: %v", tr, err)
 		}
@@ -105,6 +108,41 @@ func TestValidateRefusesCommandsOnlyOverASessionOnlyTransport(t *testing.T) {
 	s.Transport, s.Polls, s.Listeners = "telnet", nil, nil
 	if err := s.Validate(catalog()); err == nil || !strings.Contains(err.Error(), "poll or a listener") {
 		t.Fatalf("a commands-only telnet driver = %v, want refused", err)
+	}
+}
+
+// An ssh session always authenticates, so its driver names the credential
+// (or a keyboard-interactive login); the channel options are ssh's alone.
+func TestValidateSSHSession(t *testing.T) {
+	base := func() *driver.Spec {
+		s := validSpec()
+		s.Transport = "ssh"
+		s.Session = &driver.SessionSpec{Credential: "login", PTY: true}
+		return s
+	}
+	if err := base().Validate(catalog()); err != nil {
+		t.Fatalf("an ssh session with a credential refused: %v", err)
+	}
+	cases := []struct {
+		name   string
+		mutate func(*driver.Spec)
+		want   string
+	}{
+		{"no session block", func(s *driver.Spec) { s.Session = nil }, "credential"},
+		{"no credential or login", func(s *driver.Spec) { s.Session.Credential = "" }, "credential"},
+		{"a credential that is not a secret", func(s *driver.Spec) { s.Session.Credential = "host" }, "host"},
+		{"both a pty and an exec", func(s *driver.Spec) { s.Session.Exec = "cli" }, "exec"},
+		{"a pty off ssh", func(s *driver.Spec) { s.Transport = "telnet"; s.Session.Credential = "" }, "pty"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			s := base()
+			tc.mutate(s)
+			err := s.Validate(catalog())
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("got %v, want a refusal naming %q", err, tc.want)
+			}
+		})
 	}
 }
 

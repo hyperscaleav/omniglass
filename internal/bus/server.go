@@ -225,6 +225,7 @@ func (s *Server) buildWorklistReply(node string) (collection.WorklistReply, erro
 			Secrets:          t.Secrets,
 			Session:          t.Session,
 			EndpointRevision: t.EndpointRevision,
+			HostKey:          t.HostKey,
 		})
 	}
 	return reply, nil

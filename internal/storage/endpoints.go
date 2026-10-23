@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"regexp"
 	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/scope"
@@ -437,7 +438,12 @@ func (p *PG) UpdateEndpoint(ctx context.Context, actorID, id string, patch Endpo
 // attempt; a session that is not rejected ignores it. The read/action split
 // runs through the owning component like every endpoint write, and the
 // retry is audited in the same transaction.
-func (p *PG) RetryEndpoint(ctx context.Context, actorID, id string, read, action scope.Set) (*Endpoint, error) {
+//
+// hostKey, when set, accepts a changed ssh host key (#1032): it lands as the
+// endpoint's declared ssh-host-key, the pin the worklist delivers ahead of
+// the key trusted on first use, so the node's session redials onto it. Only
+// an ssh endpoint takes one, and only a SHA256 fingerprint.
+func (p *PG) RetryEndpoint(ctx context.Context, actorID, id, hostKey string, read, action scope.Set) (*Endpoint, error) {
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("storage: begin retry endpoint: %w", err)
@@ -448,6 +454,20 @@ func (p *PG) RetryEndpoint(ctx context.Context, actorID, id string, read, action
 	if err != nil {
 		return nil, err
 	}
+	if hostKey != "" {
+		if before.Transport != "ssh" || before.ComponentID == nil {
+			return nil, fmt.Errorf("%w: only an ssh endpoint pins a host key", ErrRetryHostKey)
+		}
+		if !hostKeyFingerprint.MatchString(hostKey) {
+			return nil, fmt.Errorf("%w: a host key is a SHA256 fingerprint (SHA256: and 43 base64 characters)", ErrRetryHostKey)
+		}
+		if _, err := tx.Exec(ctx, `
+			insert into property (owner_kind, component_id, property_type_id, instance, provenance, value)
+			values ('component', $1::uuid, (select id from property_type where name = 'ssh-host-key'), $2, '`+declaredProvenance+`', to_jsonb($3::text))`,
+			*before.ComponentID, before.Name, hostKey); err != nil {
+			return nil, fmt.Errorf("storage: pin host key for endpoint %q: %w", before.ID, err)
+		}
+	}
 	// clock_timestamp, not now(): two retries in one transaction-start
 	// instant must still move the revision.
 	after, err := scanEndpoint(tx.QueryRow(ctx, `
@@ -457,7 +477,14 @@ func (p *PG) RetryEndpoint(ctx context.Context, actorID, id string, read, action
 	if err != nil {
 		return nil, mapEndpointWriteErr(err)
 	}
-	if err := writeAuditRes(ctx, tx, actorID, "retry", "endpoint", after.ID, before, after); err != nil {
+	audited := any(after)
+	if hostKey != "" {
+		audited = struct {
+			*Endpoint
+			HostKey string `json:"host_key"`
+		}{after, hostKey}
+	}
+	if err := writeAuditRes(ctx, tx, actorID, "retry", "endpoint", after.ID, before, audited); err != nil {
 		return nil, err
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -465,6 +492,12 @@ func (p *PG) RetryEndpoint(ctx context.Context, actorID, id string, read, action
 	}
 	return after, nil
 }
+
+// ErrRetryHostKey refuses a retry's host key: not an ssh endpoint, or not a
+// SHA256 fingerprint.
+var ErrRetryHostKey = errors.New("storage: retry host key")
+
+var hostKeyFingerprint = regexp.MustCompile(`^SHA256:[A-Za-z0-9+/]{43}$`)
 
 // DeleteEndpoint removes an endpoint by id with the read/action split (through
 // the owning component) and in-transaction audit. Its derived tasks cascade-delete

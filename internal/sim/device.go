@@ -13,6 +13,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"golang.org/x/crypto/ssh"
 	"io"
 	"log/slog"
 	"net"
@@ -274,13 +275,17 @@ type Device struct {
 	rand *deviceRand
 
 	// One listener per protocol. Future stages populate snmp/ssh/telnet/udp.
-	httpMu         sync.Mutex
-	httpServers    []*http.Server // one per declared http interface
-	httpListeners  []net.Listener // the sockets under httpServers, closed by StopHTTP itself
-	httpAddrs      []net.Addr
-	httpServing    sync.WaitGroup // one per running serve goroutine
-	snmpServer     snmpShutdowner // the SNMP read loop, kept as an interface so device.go doesn't import the server package
-	sshListener    net.Listener
+	httpMu        sync.Mutex
+	httpServers   []*http.Server // one per declared http interface
+	httpListeners []net.Listener // the sockets under httpServers, closed by StopHTTP itself
+	httpAddrs     []net.Addr
+	httpServing   sync.WaitGroup // one per running serve goroutine
+	snmpServer    snmpShutdowner // the SNMP read loop, kept as an interface so device.go doesn't import the server package
+	sshListener   net.Listener
+	// sshHostKey is the device's SSH host key, minted on the first StartSSH
+	// and kept across listener restarts, as a real device keeps its key; a
+	// test rotates it to model a replaced or reimaged device (#1032).
+	sshHostKey     ssh.Signer
 	telnetListener net.Listener
 	tcpMu          sync.Mutex
 	tcpListeners   []net.Listener // raw TCP, persistent-session-only (no one-shot equivalent), one per interface

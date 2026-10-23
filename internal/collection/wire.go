@@ -98,6 +98,10 @@ type TaskSpec struct {
 	// EndpointRevision moves on every write to the endpoint, an operator's
 	// :retry included; a rejected session redials once when it moves.
 	EndpointRevision int64 `json:"endpoint_revision,omitempty"`
+	// HostKey is the ssh host key the endpoint's session pins (#1032): the
+	// operator's declared key, else the key the node trusted on first use;
+	// empty before first use.
+	HostKey string `json:"host_key,omitempty"`
 }
 
 // WorklistReply is the server's response to a worklist request: the node's

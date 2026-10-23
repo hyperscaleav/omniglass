@@ -48,6 +48,9 @@ type Config struct {
 	// standing listen task over tcp holds its connection with. Nil defaults
 	// to the real collection.NewLineSessionDialer(); tests inject a fake.
 	LineSession collection.SessionDialer
+	// SSHSession is the held ssh dialer (#1032). Nil defaults to the real
+	// collection.NewSSHSessionDialer(); tests inject a fake.
+	SSHSession collection.SessionDialer
 	// TelnetSession is the held telnet dialer (#1033). Nil defaults to the
 	// real collection.NewTelnetSessionDialer(); tests inject a fake.
 	TelnetSession collection.SessionDialer
@@ -142,7 +145,11 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 	if telnetSession == nil {
 		telnetSession = collection.NewTelnetSessionDialer()
 	}
-	sessions := newSessionManager(map[string]collection.SessionDialer{"tcp": lineSession, "telnet": telnetSession}, sessionHooks{
+	sshSession := cfg.SSHSession
+	if sshSession == nil {
+		sshSession = collection.NewSSHSessionDialer()
+	}
+	sessions := newSessionManager(map[string]collection.SessionDialer{"tcp": lineSession, "telnet": telnetSession, "ssh": sshSession}, sessionHooks{
 		transition: func(taskID, endpoint string, tr collection.SessionTransition) {
 			// A rejection is logged once, at the transition, never per tick
 			// (#1049): the rejected session dials no more, so nothing repeats.
@@ -161,6 +168,16 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 			logger.Info("session authenticated", "facility", "session", "task", taskID, "endpoint", endpoint, "authenticated", v.Authenticated, "reason", v.Reason)
 			if err := publishBatch(nc, cfg.Name, taskID, []collection.Sample{authSample(v)}); err != nil {
 				logger.Warn("auth verdict not published", "facility", "session", "task", taskID, "error", err.Error())
+			}
+		},
+		hostKey: func(taskID, endpoint, fp string) {
+			// The ssh host key the session trusted: on first use this is the
+			// pin the server keeps and delivers back (#1032).
+			logger.Info("session host key trusted", "facility", "session", "task", taskID, "endpoint", endpoint, "fingerprint", fp)
+			if err := publishBatch(nc, cfg.Name, taskID, []collection.Sample{{
+				Name: collection.SignalSSHHostKey, Text: fp, IsText: true, TS: time.Now().UTC(),
+			}}); err != nil {
+				logger.Warn("host key not published", "facility", "session", "task", taskID, "error", err.Error())
 			}
 		},
 		samples: func(taskID string, dps []collection.Sample) {

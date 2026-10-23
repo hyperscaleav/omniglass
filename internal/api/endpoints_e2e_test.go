@@ -106,6 +106,9 @@ func TestEndpointAPI(t *testing.T) {
 	c.do(opBTok, http.MethodPost, "/endpoints/"+ifA.ID+":retry", nil, http.StatusNotFound)
 	c.do(opBTok, http.MethodPost, "/endpoints/"+ifB.ID+":retry", nil, http.StatusOK)
 	c.do(ownerTok, http.MethodPost, "/endpoints/"+ifA.ID+":retry", nil, http.StatusOK)
+	// A host key is an ssh endpoint's alone (#1032): a tcp endpoint refuses one.
+	c.do(ownerTok, http.MethodPost, "/endpoints/"+ifA.ID+":retry",
+		map[string]any{"host_key": "SHA256:" + strings.Repeat("A", 43)}, http.StatusUnprocessableEntity)
 }
 
 // TestEndpointCreateWithAmbiguousComponentIs409 closes I1's other half: the

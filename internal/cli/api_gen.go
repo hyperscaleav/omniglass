@@ -2236,17 +2236,23 @@ func generatedCommands() []*cobra.Command {
 		}())
 		parent.AddCommand(func() *cobra.Command {
 			cmd := func() *cobra.Command {
+				var fHostKey string
 				cmd := &cobra.Command{
 					Use:     "retry <id>",
 					Short:   "Retry an endpoint's rejected session",
-					Long:    "Wakes the endpoint's held session for one more attempt when it reads rejected (a refusal retrying cannot fix: a wrong credential, a changed host key, a reply its driver declares terminal). The session dials once and reads up, rejected again, or follows the ordinary backoff on a transient failure; a session that is not rejected is left alone. Fixing the credential or the address needs no retry: the edit itself recycles the session. Audited. Gated by endpoint:retry; read and retry scopes (through the component) drive the 404 versus 403 split.",
+					Long:    "Wakes the endpoint's held session for one more attempt when it reads rejected (a refusal retrying cannot fix: a wrong credential, a changed host key, a reply its driver declares terminal). The session dials once and reads up, rejected again, or follows the ordinary backoff on a transient failure; a session that is not rejected is left alone. Fixing the credential or the address needs no retry: the edit itself recycles the session. For an ssh endpoint rejected because its host key changed, host_key names the new key to trust (an audited acceptance of the change). Audited. Gated by endpoint:retry; read and retry scopes (through the component) drive the 404 versus 403 split.",
 					Example: "  omniglass endpoint retry <id>",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
 						path := fmt.Sprintf("/api/v1/endpoints/%s:retry", url.PathEscape(args[0]))
-						return runAPICommand(cmd, "POST", path, nil)
+						body := map[string]any{}
+						if cmd.Flags().Changed("host-key") {
+							body["host_key"] = fHostKey
+						}
+						return runAPICommand(cmd, "POST", path, body)
 					},
 				}
+				cmd.Flags().StringVar(&fHostKey, "host-key", "", "An ssh endpoint only: the SHA256 fingerprint of a changed host key the operator now trusts (the offered key a host-key rejection names). It becomes the endpoint's declared ssh-host-key pin, and the session redials onto it. Omit to retry with the pin unchanged")
 				return cmd
 			}()
 			return cmd

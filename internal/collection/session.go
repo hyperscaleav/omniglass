@@ -25,6 +25,7 @@ import (
 const (
 	SignalSessionState  = probekeys.SessionState
 	SignalSessionReason = probekeys.SessionReason
+	SignalSSHHostKey    = probekeys.SSHHostKey
 )
 
 // SessionState is the session's honest state, the session-state property's
@@ -166,15 +167,66 @@ type PendingConn interface {
 // SessionAuth is the session's auth step, declared by the driver or the
 // transport. Its fields carry credentials: it is never printed.
 type SessionAuth struct {
-	// Login is the driver's login dialog, its sends rendered.
+	// Login is the driver's login dialog, its sends rendered. Over ssh it
+	// answers keyboard-interactive questions.
 	Login *LoginDialog
+	// SSH is the transport's own credential and host key pin (#1032).
+	SSH *SSHAuth
+}
+
+// SSHAuth is an ssh session's credential and its host key pin.
+type SSHAuth struct {
+	Username   string
+	Password   string
+	PrivateKey string // PEM
+	// Pin is the host key the session trusts; empty on first use, when the
+	// first key offered is trusted and recorded.
+	Pin *HostKeyPin
+}
+
+// HostKeyPin is a host key fingerprint (ssh.FingerprintSHA256) a session
+// trusts, shared across its reconnects: trusted on first use, then held.
+type HostKeyPin struct {
+	mu sync.Mutex
+	fp string
+	// OnTrust hears a key the session trusted on first use, or the pinned
+	// key matching on a connection that authenticated.
+	OnTrust func(fingerprint string)
+}
+
+// NewHostKeyPin pins fp ("" trusts the first key offered).
+func NewHostKeyPin(fp string) *HostKeyPin { return &HostKeyPin{fp: fp} }
+
+// Get is the pinned fingerprint, "" before first use.
+func (p *HostKeyPin) Get() string {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.fp
+}
+
+// Trust records the key a connection authenticated with: on first use it
+// becomes the pin (it never replaces one), and OnTrust hears it.
+func (p *HostKeyPin) Trust(fp string) {
+	p.mu.Lock()
+	if p.fp == "" {
+		p.fp = fp
+	}
+	on := p.OnTrust
+	p.mu.Unlock()
+	if on != nil {
+		on(fp)
+	}
 }
 
 // String never prints a credential.
 func (a *SessionAuth) String() string { return "session auth" }
 
-// ChannelOptions shape the line channel a connection opens.
-type ChannelOptions struct{}
+// ChannelOptions shape the line channel a connection opens: over ssh, a
+// shell (with a PTY when asked) or an exec channel running Exec.
+type ChannelOptions struct {
+	PTY  bool
+	Exec string
+}
 
 // AuthVerdict is the auth step's outcome, the endpoint-authenticated rung:
 // Authenticated with the reason it passed, or refused with the device's
@@ -225,6 +277,8 @@ type SessionConfig struct {
 	// After is the clock's timer for the backoff and the re-probe; nil is
 	// time.After. Tests inject a fake clock.
 	After func(time.Duration) <-chan time.Time
+	// Channel shapes the line channel each connection opens (ssh).
+	Channel ChannelOptions
 }
 
 // Session holds one endpoint's connection. Start it with StartSession, borrow
@@ -711,7 +765,7 @@ func (s *Session) connect(ctx context.Context) (HeldConn, error) {
 		}
 		s.reportAuth(true, "the auth step passed on "+s.cfg.Target)
 	}
-	conn, err := pc.Open(provingInbound{s}, ChannelOptions{})
+	conn, err := pc.Open(provingInbound{s}, s.cfg.Channel)
 	if err != nil {
 		_ = pc.Close()
 		return nil, err

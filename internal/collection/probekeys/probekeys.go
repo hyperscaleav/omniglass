@@ -28,11 +28,15 @@ const (
 	// reason of its latest transition: `<class>: <device text>` when
 	// rejected, so an event rule can alarm on it.
 	SessionReason = "session-reason"
+	// SSHHostKey is the host key an ssh session trusted (#1032): the key
+	// trusted on first use and every matching key after, so the series is
+	// the pin's history and a change shows as a rejection beside it.
+	SSHHostKey = "ssh-host-key"
 )
 
 var native = []string{
 	TCPOpen, TCPConnectTime, ICMPReachable, ICMPRTTAvg, HTTPResponseTime, SSHHandshakeTime, TelnetResponseTime,
-	EndpointReachable, EndpointResponsive, EndpointAuthenticated, SessionState, SessionReason,
+	EndpointReachable, EndpointResponsive, EndpointAuthenticated, SessionState, SessionReason, SSHHostKey,
 }
 
 // Native is every key a native probe writes, sorted, a fresh slice each call.

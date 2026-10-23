@@ -90,6 +90,13 @@ type updateEndpointInput struct {
 	}
 }
 
+type retryEndpointInput struct {
+	ID   string `path:"id" doc:"The endpoint's surrogate id"`
+	Body struct {
+		HostKey string `json:"host_key,omitempty" doc:"An ssh endpoint only: the SHA256 fingerprint of a changed host key the operator now trusts (the offered key a host-key rejection names). It becomes the endpoint's declared ssh-host-key pin, and the session redials onto it. Omit to retry with the pin unchanged"`
+	}
+}
+
 type listTransportsOutput struct {
 	Body struct {
 		Transports []transport.Transport `json:"transports"`
@@ -200,9 +207,9 @@ func registerEndpointRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 		Method:      http.MethodPost,
 		Path:        "/endpoints/{id}:retry",
 		Summary:     "Retry an endpoint's rejected session",
-		Description: "Wakes the endpoint's held session for one more attempt when it reads rejected (a refusal retrying cannot fix: a wrong credential, a changed host key, a reply its driver declares terminal). The session dials once and reads up, rejected again, or follows the ordinary backoff on a transient failure; a session that is not rejected is left alone. Fixing the credential or the address needs no retry: the edit itself recycles the session. Audited. Gated by endpoint:retry; read and retry scopes (through the component) drive the 404 versus 403 split.",
-	}, "endpoint", "retry"), func(ctx context.Context, in *endpointPathInput) (*endpointOutput, error) {
-		it, err := gw.RetryEndpoint(ctx, actorID(ctx), in.ID,
+		Description: "Wakes the endpoint's held session for one more attempt when it reads rejected (a refusal retrying cannot fix: a wrong credential, a changed host key, a reply its driver declares terminal). The session dials once and reads up, rejected again, or follows the ordinary backoff on a transient failure; a session that is not rejected is left alone. Fixing the credential or the address needs no retry: the edit itself recycles the session. For an ssh endpoint rejected because its host key changed, host_key names the new key to trust (an audited acceptance of the change). Audited. Gated by endpoint:retry; read and retry scopes (through the component) drive the 404 versus 403 split.",
+	}, "endpoint", "retry"), func(ctx context.Context, in *retryEndpointInput) (*endpointOutput, error) {
+		it, err := gw.RetryEndpoint(ctx, actorID(ctx), in.ID, in.Body.HostKey,
 			a.scopeFor(ctx, "endpoint", "read"), a.scopeFor(ctx, "endpoint", "retry"))
 		if err != nil {
 			return nil, mapEndpointErr(err)
@@ -249,6 +256,8 @@ func mapEndpointErr(err error) error {
 		return huma.Error422UnprocessableEntity("component not found")
 	case errors.Is(err, storage.ErrEndpointNodeNotFound), errors.Is(err, storage.ErrNodeNotFound):
 		return huma.Error422UnprocessableEntity("node not found")
+	case errors.Is(err, storage.ErrRetryHostKey):
+		return huma.Error422UnprocessableEntity(strings.TrimPrefix(err.Error(), "storage: retry host key: "))
 	case errors.Is(err, storage.ErrEndpointDriverParams):
 		return huma.Error422UnprocessableEntity("a driver-attached endpoint's address is derived from its inputs; re-attach the driver to change it")
 	default:

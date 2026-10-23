@@ -51,6 +51,16 @@ property_types:
       transition. A rejected session's reason is its class and the component's
       own text (auth: auth rejected), so an event rule can alarm on it.
       Written beside session-state on every transition.
+  - name: ssh-host-key
+    data_type: string
+    label: SSH Host Key
+    description: >-
+      The SHA256 fingerprint of the host key an ssh session trusts, per
+      endpoint. The node records the first key it sees (trust on first use)
+      and every connection that matches it; a changed key is refused, and the
+      session reads rejected with class host-key naming both fingerprints
+      until an operator retries the endpoint with the new key, which lands
+      here as the declared value.
   - name: health
     data_type: string
     validation: { enum: [healthy, incomplete, degraded, outage] }
