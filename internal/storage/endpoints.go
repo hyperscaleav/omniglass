@@ -606,7 +606,7 @@ func (p *PG) rederiveAttached(ctx context.Context, tx pgx.Tx, driverID, endpoint
 
 // RetryEndpoint records an operator's retry of the endpoint's held session
 // (#1049): it increments the endpoint's session_retry counter, carried on
-// the worklist and part of the endpoint's connection fingerprint (ADR-0157),
+// the worklist and part of the endpoint's connection fingerprint (ADR-0158),
 // so the gate a terminal refusal holds lifts and the node attempts the
 // endpoint again. The read/action split
 // runs through the owning component like every endpoint write, and the

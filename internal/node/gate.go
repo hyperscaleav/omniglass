@@ -8,7 +8,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/driver"
 )
 
-// The layered gate (#1056 ruling, ADR-0157). Every connection to an endpoint
+// The layered gate (#1056 ruling, ADR-0158). Every connection to an endpoint
 // is verified bottom up on the existing ladder: reachable (ICMP, gating only
 // where a ping is expected), responsive (the transport: a TCP connect, or the
 // protocol's handshake: ssh key exchange, tls), authenticated (the session's

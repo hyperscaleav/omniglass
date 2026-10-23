@@ -7,7 +7,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/driver"
 )
 
-// The reachability ladder a driver declares (#1056 ruling, ADR-0157): whether
+// The reachability ladder a driver declares (#1056 ruling, ADR-0158): whether
 // to ping (informational only, never a gate), what the transport rung is (a
 // connect on the transport's port, the protocol's handshake, or a named
 // request answered), and whether a session rung exists. Defaults come from

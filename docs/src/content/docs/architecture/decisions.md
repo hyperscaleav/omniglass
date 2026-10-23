@@ -192,10 +192,11 @@ below from the project's history. From here it grows one slice at a time.
 | [ADR-0151](#adr-0151-a-held-line-session-routes-every-inbound-line-listeners-first-answers-by-reply-shape) | 2026-10-23 | Accepted | Listeners run over the held session (#817): `arm` commands on every connection before up (plumbing, self-logged), `match` claims a pushed line, its emits land as push samples under the listen task. Every inbound line is routed listeners first, then the exchange in flight by its declared `request.reply` shape (or the first unclaimed line), then unclaimed (counted; `unmatched: collection-failed` lands one fault per tick). Commands ride the held session. Reverses the designed matcher order (outstanding poll first) |
 | [ADR-0152](#adr-0152-a-driver-poll-runs-on-its-declared-schedule-at-heartbeat-granularity) | 2026-10-23 | Accepted | A driver poll runs on its declared `schedule.every` at heartbeat granularity (#822): a per-task next-due time kept for the run, the first tick at or after it runs the poll, a new task runs at once, a late tick never bursts; probes stay per tick and pushes are never gated. Settles the nodes page's open question for driver polls |
 | [ADR-0153](#adr-0153-the-held-session-proof-is-the-line-protocol-over-tcp-other-held-transports-are-their-own-issues) | 2026-10-23 | Accepted | The stateful arc proves the held session on the line protocol over `tcp` (sessions, listeners, the shared reader); SSH, which #816 named as the session-lifecycle carrier, and the other held transports are deferred, each to its own issue (#1032 ssh, #1033 telnet, #1034 websocket, #1035 tls, #1036 mqtt, #1037 udp, #1038 SSE over http, #1039 modbus/tcp, #1040 bacnet/ip, #1041 knxnet/ip, #1042 ONVIF as a driver on http, #1043 the file sample with #1044 to #1047 for file-moving protocols), with server-hosted ingress at #1024; there is no serial transport, serial being reached through an IP-to-serial gateway over tcp (or tls or telnet) |
-| [ADR-0154](#adr-0154-auth-is-a-layer-that-gates-a-held-session-and-a-terminal-refusal-reads-rejected) | 2026-10-23 | Accepted | Auth is a layer that gates a held session (#1049, the architect's ruling): each attempt runs dial, then the auth step (a driver's login dialog or a transport's own auth), then the arm, then `up`, and nothing borrows the connection before the step passes; its verdict is the existing `endpoint-authenticated` rung. A terminal refusal moves the session to `rejected` (amending ADR-0150's state set), which dials no more and fails polls and commands fast with no throwaway fallback, until the endpoint's session identity changes, an operator's audited `:retry` (gated by `endpoint:retry`) moves the retry counter in the connection fingerprint (ADR-0157), or the driver's slow re-probe comes due; an unrelated edit does nothing. Three silent hang-ups after the final secret are an `auth` refusal (the login budget). `session-reason` carries the reason as a property. One login dialog serves raw tcp, telnet and ssh keyboard-interactive |
-| [ADR-0155](#adr-0155-a-driver-declares-its-terminal-replies-and-a-transport-classifies-its-own-refusals) | 2026-10-23 | Accepted | Non-retryable errors are defined in drivers (#1049, the architect's ruling): a spec's `session.terminal` lists the replies retrying cannot fix, each a match with a class (`auth`, `host-key`, `certificate`, `protocol`, a code-held set), applied to the login and to every answer, refusal and arm reply; a transport classifies its own protocol refusals into the same classes. The primitive is `collection.TerminalError{Class, Reason}`; anything unclassified stays retryable, and a terminal poll fault waits its interval rather than the failure backoff |
-| [ADR-0156](#adr-0156-telnet-and-ssh-are-held-line-transports-their-login-is-the-drivers-and-the-ssh-host-key-is-pinned-on-first-use) | 2026-10-23 | Accepted | `telnet` (#1033) and `ssh` (#1032) are held line transports: the same session machine and line reader, telnet behind a filter refusing every option, ssh over a shell or exec channel. Their session's login is the driver's (`session.login`, `session.credential`), not endpoint params; the telnet probe never logs in, and the ssh probe's params login is a known gap (#1060). The ssh host key is pinned on first use as the `ssh-host-key` property (observed), delivered back by the worklist, overridden by a declared value an operator sets with `:retry` and `host_key`; a changed key is a `host-key` refusal |
-| [ADR-0157](#adr-0157-one-connection-fingerprint-gates-every-connection-on-a-ladder-the-driver-declares) | 2026-10-23 | Accepted | One **connection fingerprint** gates every connection, held or stateless (#1056 ruling): a digest the server computes over every input a connection is made with (transport, declared params, driver inputs, each secret's sealed version, the session block, the ladder, the ssh pin, the `:retry` counter), held in `internal/fingerprint`. Connections are verified bottom up on the existing ladder (reachable, informational ping; responsive, the transport rung and the gate; authenticated, the login), declared in the driver spec with registry defaults. A terminal refusal gates its rung and above for the fingerprint; lower rungs keep running; the gate is published as `endpoint-rejection` and carried back so a restart honours it |
+| [ADR-0154](#adr-0154-healthy-reads-green-tiered-so-a-calm-fleet-stays-calm) | 2026-10-23 | Accepted | Healthy reads green, reversing the grey healthy of [ADR-0137](#adr-0137-explore-is-the-fleets-door-and-it-is-an-outline-of-places) and [ADR-0139](#adr-0139-a-detail-view-is-one-per-system-its-place-a-card-of-context) (#1067): one `--og-healthy` token from the success hue, full weight on the health pill and the history strip, muted (`text-healthy`) on the outline's slots and the uptime figure; unknown keeps the grey chip |
+| [ADR-0155](#adr-0155-auth-is-a-layer-that-gates-a-held-session-and-a-terminal-refusal-reads-rejected) | 2026-10-23 | Accepted | Auth is a layer that gates a held session (#1049, the architect's ruling): each attempt runs dial, then the auth step (a driver's login dialog or a transport's own auth), then the arm, then `up`, and nothing borrows the connection before the step passes; its verdict is the existing `endpoint-authenticated` rung. A terminal refusal moves the session to `rejected` (amending ADR-0150's state set), which dials no more and fails polls and commands fast with no throwaway fallback, until the endpoint's session identity changes, an operator's audited `:retry` (gated by `endpoint:retry`) moves the retry counter in the connection fingerprint (ADR-0158), or the driver's slow re-probe comes due; an unrelated edit does nothing. Three silent hang-ups after the final secret are an `auth` refusal (the login budget). `session-reason` carries the reason as a property. One login dialog serves raw tcp, telnet and ssh keyboard-interactive |
+| [ADR-0156](#adr-0156-a-driver-declares-its-terminal-replies-and-a-transport-classifies-its-own-refusals) | 2026-10-23 | Accepted | Non-retryable errors are defined in drivers (#1049, the architect's ruling): a spec's `session.terminal` lists the replies retrying cannot fix, each a match with a class (`auth`, `host-key`, `certificate`, `protocol`, a code-held set), applied to the login and to every answer, refusal and arm reply; a transport classifies its own protocol refusals into the same classes. The primitive is `collection.TerminalError{Class, Reason}`; anything unclassified stays retryable, and a terminal poll fault waits its interval rather than the failure backoff |
+| [ADR-0157](#adr-0157-telnet-and-ssh-are-held-line-transports-their-login-is-the-drivers-and-the-ssh-host-key-is-pinned-on-first-use) | 2026-10-23 | Accepted | `telnet` (#1033) and `ssh` (#1032) are held line transports: the same session machine and line reader, telnet behind a filter refusing every option, ssh over a shell or exec channel. Their session's login is the driver's (`session.login`, `session.credential`), not endpoint params; the telnet probe never logs in, and the ssh probe's params login is a known gap (#1060). The ssh host key is pinned on first use as the `ssh-host-key` property (observed), delivered back by the worklist, overridden by a declared value an operator sets with `:retry` and `host_key`; a changed key is a `host-key` refusal |
+| [ADR-0158](#adr-0158-one-connection-fingerprint-gates-every-connection-on-a-ladder-the-driver-declares) | 2026-10-23 | Accepted | One **connection fingerprint** gates every connection, held or stateless (#1056 ruling): a digest the server computes over every input a connection is made with (transport, declared params, driver inputs, each secret's sealed version, the session block, the ladder, the ssh pin, the `:retry` counter), held in `internal/fingerprint`. Connections are verified bottom up on the existing ladder (reachable, informational ping; responsive, the transport rung and the gate; authenticated, the login), declared in the driver spec with registry defaults. A terminal refusal gates its rung and above for the fingerprint; lower rungs keep running; the gate is published as `endpoint-rejection` and carried back so a restart honours it |
 
 ## Entries
 
@@ -7007,7 +7008,24 @@ interface create form, since that name is the platform's to mint.
   machine. The collection and nodes pages' transport fences now name these issues, so no deferred
   transport is a fence without an owner.
 
-### ADR-0154: Auth is a layer that gates a held session, and a terminal refusal reads rejected
+### ADR-0154: Healthy reads green, tiered so a calm fleet stays calm
+
+- **Date:** 2026-10-23 | **Status:** Accepted | **Pages:** [health](/architecture/health/), [design system](/contributing/design-system/), [fleet guide](/guides/operator/fleet/)
+- **Decision:** A healthy verdict wears green, reversing the "healthy is grey, only trouble carries
+  a hue" rule of [ADR-0137](#adr-0137-explore-is-the-fleets-door-and-it-is-an-outline-of-places) and
+  [ADR-0139](#adr-0139-a-detail-view-is-one-per-system-its-place-a-card-of-context). One token,
+  `--og-healthy` (the theme's success hue), in three tiers: `badge-healthy` (the health pill, the
+  simulator's running pill) and `bg-healthy` (the history strip's healthy stretch) at the trouble hues'
+  weight, and `text-healthy`, a muted green, on the dense views (the outline's healthy slot and glyph,
+  a good uptime figure). Unknown keeps the grey `badge-ghost` chip.
+- **Context:** In use, the grey healthy chip and the grey unknown chip read as one state, so an
+  operator could not tell a system known to be fine from one never read (#1067). The concern #872 was
+  answering, that a fleet of loud green would bury the one amber branch, holds for the dense views, so
+  they take the muted tier; the single-subject surfaces (a pill, a strip) take the full hue, where there
+  is nothing for green to drown out. The word and the glyph still carry the state for a colour-blind
+  reader.
+
+### ADR-0155: Auth is a layer that gates a held session, and a terminal refusal reads rejected
 
 - **Date:** 2026-10-23 | **Status:** Accepted | **Pages:** [collection](/architecture/collection/), [nodes](/architecture/nodes/), [glossary](/architecture/glossary/), [drivers](/guides/admin/drivers/)
 - **Decision:** The architect's ruling, made in session on 2026-10-23 (#1049), applies the ladder
@@ -7027,13 +7045,13 @@ interface create form, since that name is the platform's to mint.
      is written only to the wire: render faults name the reference, never the value, and text the
      component sends is scrubbed of the sends before it reaches an error or a reason.
   3. **`rejected` joins the state set** (amending ADR-0150's establishing, up, recovering, down).
-     A terminal refusal ([ADR-0155](#adr-0155-a-driver-declares-its-terminal-replies-and-a-transport-classifies-its-own-refusals))
+     A terminal refusal ([ADR-0156](#adr-0156-a-driver-declares-its-terminal-replies-and-a-transport-classifies-its-own-refusals))
      moves the session there at once, without spending the budget; it closes the connection and
      dials no more. Polls and commands over it fail fast with the refusal, and neither falls back
      to a throwaway connection (a command delivery is `session_only` when its driver declares a
      session or its transport has no stateless line).
   4. **Leaving `rejected`** (amended in this PR by the #1056 ruling). A session leaves `rejected`
-     only when its connection fingerprint changes ([ADR-0157](#adr-0157-one-connection-fingerprint-gates-every-connection-on-a-ladder-the-driver-declares)): the attached
+     only when its connection fingerprint changes ([ADR-0158](#adr-0158-one-connection-fingerprint-gates-every-connection-on-a-ladder-the-driver-declares)): the attached
      secret rotated in the store, the address, port or transport, the driver's login or terminal
      declaration, a pin, or an operator's `POST /endpoints/{id}:retry` (gated by a new
      `endpoint:retry` action the operator role holds, audited), which moves an explicit
@@ -7053,7 +7071,7 @@ interface create form, since that name is the platform's to mint.
   see that nothing else moves; a component that drops a wrong password silently needed a bound no
   driver rule could give it (#1056).
 
-### ADR-0155: A driver declares its terminal replies, and a transport classifies its own refusals
+### ADR-0156: A driver declares its terminal replies, and a transport classifies its own refusals
 
 - **Date:** 2026-10-23 | **Status:** Accepted | **Pages:** [collection](/architecture/collection/), [glossary](/architecture/glossary/), [drivers](/guides/admin/drivers/)
 - **Decision:** The architect's ruling, made in session on 2026-10-23 (#1049): non-retryable errors
@@ -7063,7 +7081,7 @@ interface create form, since that name is the platform's to mint.
      `certificate`, `protocol`), refused at write when unknown, grown in code as transports need.
   2. A rule applies to every line the component sends the session's way: the login's lines, every
      exchange's answer and declared refusal, and every arm reply. A match fails that exchange with
-     the refusal and rejects the session ([ADR-0154](#adr-0154-auth-is-a-layer-that-gates-a-held-session-and-a-terminal-refusal-reads-rejected)).
+     the refusal and rejects the session ([ADR-0155](#adr-0155-auth-is-a-layer-that-gates-a-held-session-and-a-terminal-refusal-reads-rejected)).
   3. A transport classifies its own protocol-level refusals into the same classes (an ssh auth
      failure is `auth`, a changed host key `host-key`), so a driver need not declare what the
      protocol already says.
@@ -7076,10 +7094,10 @@ interface create form, since that name is the platform's to mint.
   refusals; a session machine guessing from text would misclassify both ways. A fixed class set
   keeps an event rule's vocabulary stable across drivers.
 
-### ADR-0156: Telnet and ssh are held line transports, their login is the driver's, and the ssh host key is pinned on first use
+### ADR-0157: Telnet and ssh are held line transports, their login is the driver's, and the ssh host key is pinned on first use
 
 - **Date:** 2026-10-23 | **Status:** Accepted | **Pages:** [collection](/architecture/collection/), [nodes](/architecture/nodes/), [glossary](/architecture/glossary/), [drivers](/guides/admin/drivers/)
-- **Decision:** (#1033, #1032, under the ruling ADR-0154 and ADR-0155 record.)
+- **Decision:** (#1033, #1032, under the ruling ADR-0155 and ADR-0156 record.)
   1. **Held line transports.** `telnet` and `ssh` join `tcp` as transports the line protocol rides
      over a held session (the registry's `line` flag): one session machine, one reader, one routing.
      Telnet is the line connection behind a filter that strips negotiation and refuses every option
@@ -7110,7 +7128,7 @@ interface create form, since that name is the platform's to mint.
   home the node can read after a restart without a new table; the property lanes already carry the
   observed-versus-declared split and the history an operator reads.
 
-### ADR-0157: One connection fingerprint gates every connection, on a ladder the driver declares
+### ADR-0158: One connection fingerprint gates every connection, on a ladder the driver declares
 
 - **Date:** 2026-10-23 | **Status:** Accepted | **Pages:** [collection](/architecture/collection/), [nodes](/architecture/nodes/), [glossary](/architecture/glossary/), [drivers](/guides/admin/drivers/), [api](/architecture/api/)
 - **Decision:** The architect's rulings of 2026-10-23 (on #1056 and #1049), for every connection to

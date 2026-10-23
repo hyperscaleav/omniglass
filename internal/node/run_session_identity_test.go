@@ -29,7 +29,7 @@ import (
 )
 
 // The connection fingerprint and the layered gate end to end (#1056 ruling,
-// ADR-0157): Postgres, the bus, real nodes, and the simulated panel.
+// ADR-0158): Postgres, the bus, real nodes, and the simulated panel.
 
 // gateStack is one test's server, panel and node.
 type gateStack struct {

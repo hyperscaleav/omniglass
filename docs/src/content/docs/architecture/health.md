@@ -24,8 +24,9 @@ official `reachability-lost` among them, so an unplugged component moves its sys
 writing anything. Severity is a [ranked registry](/architecture/alarms-actions/#severity-a-registry-of-named-levels):
 `high` and above is an outage, and every severity chip renders the level's label and color. The console
 ships **HealthBadge**, **HealthHistory**, and **AlarmsPanel** on the component, system, and
-place detail views; healthy reads grey there and in the outline, and only trouble carries a
-hue (#872). See [implementation status](/architecture/status/).
+place detail views; healthy reads green there and a muted green in the outline, so it never
+reads as the grey of an unknown verdict
+([ADR-0154](/architecture/decisions/#adr-0154-healthy-reads-green-tiered-so-a-calm-fleet-stays-calm)). See [implementation status](/architecture/status/).
 :::
 
 ## Two shapes of read: the explanation and the verdict

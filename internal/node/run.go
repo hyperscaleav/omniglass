@@ -175,7 +175,7 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 		},
 		rejection: func(taskID, endpoint, value string) {
 			// The endpoint's gate, published when it changes so the server
-			// carries it back to a restarted node (ADR-0157). The value holds
+			// carries it back to a restarted node (ADR-0158). The value holds
 			// the connection fingerprint, a digest only.
 			if err := publishBatch(nc, cfg.Name, taskID, []collection.Sample{{
 				Name: collection.SignalEndpointRejection, Text: value, IsText: true, TS: time.Now().UTC(),

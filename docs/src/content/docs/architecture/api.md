@@ -280,7 +280,7 @@ driver-attached endpoint's `inputs` in place (the host, the port, an attached se
 secrets under the editor's scope, audited, its tasks re-derived in the same transaction.
 `POST /endpoints/{id}:retry`
 (gated `endpoint:retry`, audited, #1049) moves the endpoint's retry counter, part of its connection
-fingerprint, so a gate a terminal refusal holds lifts and the endpoint is attempted again (ADR-0157); for an ssh endpoint whose host key changed, its optional `host_key`
+fingerprint, so a gate a terminal refusal holds lifts and the endpoint is attempted again (ADR-0158); for an ssh endpoint whose host key changed, its optional `host_key`
 body declares the new pin (#1032). The routes live in the
 [generated API reference](/reference/api/), rendered from the OpenAPI document on every build, each
 operation's description naming its permission gate verbatim (a guard test enforces that, alongside the

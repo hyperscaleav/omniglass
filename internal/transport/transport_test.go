@@ -80,7 +80,7 @@ func TestAllReturnsACopy(t *testing.T) {
 	}
 }
 
-// The transport rung each transport's ladder defaults to (ADR-0157): a
+// The transport rung each transport's ladder defaults to (ADR-0158): a
 // connect where an open port can be detected, the protocol's handshake for
 // ssh, a named request where it cannot (udp, snmp); icmp has none.
 func TestRegistryCarriesTheTransportRung(t *testing.T) {

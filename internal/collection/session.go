@@ -26,7 +26,7 @@ const (
 	SignalSessionState  = probekeys.SessionState
 	SignalSessionReason = probekeys.SessionReason
 	SignalSSHHostKey    = probekeys.SSHHostKey
-	// SignalEndpointRejection is the endpoint's gate (ADR-0157).
+	// SignalEndpointRejection is the endpoint's gate (ADR-0158).
 	SignalEndpointRejection = probekeys.EndpointRejection
 )
 

@@ -102,14 +102,14 @@ type TaskSpec struct {
 	// operator's declared key, else the key the node trusted on first use;
 	// empty before first use.
 	HostKey string `json:"host_key,omitempty"`
-	// Fingerprint is the connection fingerprint (#1056 ruling, ADR-0157):
+	// Fingerprint is the connection fingerprint (#1056 ruling, ADR-0158):
 	// a digest over every input a connection to the endpoint is made with.
 	// A gate holds while it is unchanged. Never logged.
 	Fingerprint string `json:"fingerprint,omitempty"`
 	// Rejection is the endpoint's last published endpoint-rejection, so a
 	// restarted node honors a gate it did not see happen.
 	Rejection string `json:"rejection,omitempty"`
-	// Ladder is the endpoint's resolved reachability ladder (ADR-0157);
+	// Ladder is the endpoint's resolved reachability ladder (ADR-0158);
 	// nil for a bare endpoint.
 	Ladder *driver.EffectiveLadder `json:"ladder,omitempty"`
 }

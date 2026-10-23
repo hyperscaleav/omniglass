@@ -7501,6 +7501,16 @@ collection page's stale hand-count of seeded catalog rows, and the roadmap. Badg
 collection, nodes, messaging, commands, and the glossary are each Partial, every one still carrying
 design.
 
+### Healthy reads green (#1067)
+
+The grey healthy verdict read as the grey unknown one, so it turns green
+([ADR-0154](/architecture/decisions/#adr-0154-healthy-reads-green-tiered-so-a-calm-fleet-stays-calm)).
+One `--og-healthy` token in `app.css` feeds three utilities: `badge-healthy` (the health pill and the
+simulator's running pill), `bg-healthy` (the history strip), and the muted `text-healthy` (the outline's
+healthy slot and a good uptime figure). Unknown keeps the grey chip. A guard in `theme-badges.test.ts`
+fails if any of the three is mixed from the base-content grey again. Badges are unchanged: health stays
+at its floor.
+
 ### Sessions authenticate before they act, and a refusal stops the retrying (#1049)
 
 The first slice of the protocol backlog under epic #603, under the architect's ruling of 2026-10-23:
@@ -7525,8 +7535,8 @@ behind a password prompt: the right password logs in before the first poll, the 
 exactly once and never arms), against Postgres (the worklist carries the session block and revision,
 `:retry` moves it and is audited, a login driver's command delivery is session-only), and over the API
 (a viewer is refused `:retry`, an out-of-scope operator gets a non-disclosing 404). Recorded as
-[ADR-0154](/architecture/decisions/#adr-0154-auth-is-a-layer-that-gates-a-held-session-and-a-terminal-refusal-reads-rejected)
-and [ADR-0155](/architecture/decisions/#adr-0155-a-driver-declares-its-terminal-replies-and-a-transport-classifies-its-own-refusals).
+[ADR-0155](/architecture/decisions/#adr-0155-auth-is-a-layer-that-gates-a-held-session-and-a-terminal-refusal-reads-rejected)
+and [ADR-0156](/architecture/decisions/#adr-0156-a-driver-declares-its-terminal-replies-and-a-transport-classifies-its-own-refusals).
 
 ### A telnet session with option negotiation and a login dialog (#1033)
 
@@ -7566,7 +7576,7 @@ the same key, down after the budget, a wrong password and a rotated key each rej
 attempt) and end to end (`run_ssh_session_test.go`: trust on first use lands `ssh-host-key` and the
 worklist pin, a rotated key reads `rejected` naming both keys, a malformed `host_key` refuses, and the
 accepted key reads `up`). Recorded as
-[ADR-0156](/architecture/decisions/#adr-0156-telnet-and-ssh-are-held-line-transports-their-login-is-the-drivers-and-the-ssh-host-key-is-pinned-on-first-use),
+[ADR-0157](/architecture/decisions/#adr-0157-telnet-and-ssh-are-held-line-transports-their-login-is-the-drivers-and-the-ssh-host-key-is-pinned-on-first-use),
 which also logs the designed endpoint-params login retiring. Prompt-delimited answers are #1057.
 
 ### The telnet review's fixes (#1033)
@@ -7610,8 +7620,8 @@ defaulted by the registry's new `rung`, a request rung proven over the line clie
 restart try nothing; a retry, a login-declaration change, a rotated secret and a re-attach over ssh
 each try again; a wrong port reads down on refused connects and tries no login; the ssh probe sends a
 wrong password once, across a restart, then authenticates after a params edit. Recorded as
-[ADR-0157](/architecture/decisions/#adr-0157-one-connection-fingerprint-gates-every-connection-on-a-ladder-the-driver-declares),
-with ADR-0154 amended.
+[ADR-0158](/architecture/decisions/#adr-0158-one-connection-fingerprint-gates-every-connection-on-a-ladder-the-driver-declares),
+with ADR-0155 amended.
 
 ### The fingerprint review's fixes (#1056, #1060)
 
@@ -7640,7 +7650,7 @@ API (a 400 naming `port`, the viewer refused), in vitest (only changed inputs se
 sends no inputs), and end to end (`TestADriverEndpointEditsItsAddressInPlace`: a wrong port reads
 down with no login; the port edited in place connects and authenticates within a tick; a label edit
 recycles nothing; the address edited in place moves the healthy session to the other component).
-Recorded in ADR-0157 point 6.
+Recorded in ADR-0158 point 6.
 
 The in-place edit's review, each with a test that failed first: a `params.timeout` value is parsed
 and refused by name unless it is a positive duration; an input a driver update dropped no longer

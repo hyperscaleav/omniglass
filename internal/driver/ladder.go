@@ -7,7 +7,7 @@ import (
 )
 
 // Ladder is the reachability ladder a driver declares (#1056 ruling,
-// ADR-0157), bottom up on the existing rungs: reachable (a ping,
+// ADR-0158), bottom up on the existing rungs: reachable (a ping,
 // informational only: an open, answering transport is what counts, so a
 // ping never gates), responsive (the transport rung, which is the gate) and
 // authenticated (the session rung, attempted only when the transport rung

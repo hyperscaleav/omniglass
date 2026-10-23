@@ -433,6 +433,20 @@ describe("the history tab (#792)", () => {
     expect(within(tab).getByTestId("health-history-full")).toBeTruthy();
   });
 
+  // A good uptime wears the muted healthy green (#1067), a figure that should
+  // worry someone the trouble hue: the tone answers the number shown.
+  it("tones a full uptime in the healthy green and a poor one in the trouble hue", () => {
+    const figure = () => within(screen.getByTestId("uptime-kpi")).getByText("%").parentElement!;
+    const steady = { ...health, verdict: "healthy", transitions: [{ ts: "2026-01-01T00:00:00Z", verdict: "healthy" }] } as unknown as FleetHealth;
+    const r = mount(`/web/systems/${uuidFor("szp-sys")}?tab=history`, steady);
+    expect(figure().textContent).toBe("100%");
+    expect(figure().className).toContain("text-healthy");
+    r.unmount();
+    mount(`/web/systems/${uuidFor("szp-sys")}?tab=history`);
+    expect(figure().className).toContain("text-error");
+    expect(figure().className).not.toContain("text-healthy");
+  });
+
   it("renders the ongoing unhealthy stretch as the first incident, expandable to the alarms that explain it", async () => {
     const r = mount(`/web/systems/${uuidFor("szp-sys")}?tab=history`);
     seedAlarms(r.qc);

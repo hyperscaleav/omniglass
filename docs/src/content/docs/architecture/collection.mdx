@@ -53,8 +53,8 @@ sample with no poll involved ([ADR-0151](/architecture/decisions/#adr-0151-a-hel
 The arc's closeout is #818. Built since: **auth is a layer that gates the session** (#1049): a
 driver's declared login runs as the session's auth step before anything rides the connection, its
 verdict the `endpoint-authenticated` rung, and a refusal retrying cannot fix reads `rejected` and
-stops dialing ([ADR-0154](/architecture/decisions/#adr-0154-auth-is-a-layer-that-gates-a-held-session-and-a-terminal-refusal-reads-rejected),
-[ADR-0155](/architecture/decisions/#adr-0155-a-driver-declares-its-terminal-replies-and-a-transport-classifies-its-own-refusals)). See
+stops dialing ([ADR-0155](/architecture/decisions/#adr-0155-auth-is-a-layer-that-gates-a-held-session-and-a-terminal-refusal-reads-rejected),
+[ADR-0156](/architecture/decisions/#adr-0156-a-driver-declares-its-terminal-replies-and-a-transport-classifies-its-own-refusals)). See
 [ADR-0037](/architecture/decisions/#adr-0037-telemetry-is-a-protobuf-event-over-jetstream-with-an-inline-owner-confining-consumer),
 [ADR-0038](/architecture/decisions/#adr-0038-the-reachability-verdict-is-a-built-in-state),
 [ADR-0039](/architecture/decisions/#adr-0039-an-endpoint-is-a-device-api-the-endpoint-type-is-its-transport-not-its-driver),
@@ -260,7 +260,7 @@ dials once more, a re-probe fires on its interval, a transient failure still spe
 
 ### The connection fingerprint and the layered gate
 
-Built (#1056 ruling, [ADR-0157](/architecture/decisions/#adr-0157-one-connection-fingerprint-gates-every-connection-on-a-ladder-the-driver-declares)). Every connection to an endpoint, held or
+Built (#1056 ruling, [ADR-0158](/architecture/decisions/#adr-0158-one-connection-fingerprint-gates-every-connection-on-a-ladder-the-driver-declares)). Every connection to an endpoint, held or
 stateless (the reachability probe, a throwaway poll or command, the held session), is verified
 bottom up on the existing ladder:
 
@@ -335,7 +335,7 @@ worklist, and a changed key reads `rejected`, class `host-key`, naming both fing
 operator who trusts the new key (a replaced component) retries the endpoint with it
 (`:retry` with `host_key`, audited), which declares the new pin and redials onto it. Proven against
 the simulated panel's ssh shell (poll, command, push, recover onto the same key, down after the
-budget, a wrong password and a rotated key each rejected) and end to end ([ADR-0156](/architecture/decisions/#adr-0156-telnet-and-ssh-are-held-line-transports-their-login-is-the-drivers-and-the-ssh-host-key-is-pinned-on-first-use)).
+budget, a wrong password and a rotated key each rejected) and end to end ([ADR-0157](/architecture/decisions/#adr-0157-telnet-and-ssh-are-held-line-transports-their-login-is-the-drivers-and-the-ssh-host-key-is-pinned-on-first-use)).
 The other held transports are each their own
 issue: #1034 (websocket), #1035 (tls), #1036 (mqtt), #1037 (udp), #1038 (SSE over http), #1039 (modbus/tcp), #1040 (bacnet/ip), #1041 (knxnet/ip). There is no serial transport: an RS-232 or RS-485 device is reached
 through an IP-to-serial gateway, which is the `tcp` transport (or `tls` or `telnet`), so its driver is

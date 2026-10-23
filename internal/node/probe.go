@@ -267,7 +267,7 @@ func collectProbe(ctx context.Context, runner *collection.Runner, task collectio
 				Labels: map[string]string{collection.ReasonLabel: "the held session is up"}},
 		}, nil
 	}
-	// The ladder a driver declares (ADR-0157): its transport rung, the gate,
+	// The ladder a driver declares (ADR-0158): its transport rung, the gate,
 	// is a connect, the protocol's handshake, or a named request answered.
 	if l := task.Ladder; l != nil {
 		switch {
@@ -322,7 +322,7 @@ func collectSSHProbe(ctx context.Context, runner *collection.Runner, task collec
 	return dps, nil
 }
 
-// collectRequestRung runs a request transport rung (ADR-0157): the driver's
+// collectRequestRung runs a request transport rung (ADR-0158): the driver's
 // named request, answered, is the transport proven where an open port cannot
 // be detected. The line protocol carries it here; snmp's own request is #821.
 func collectRequestRung(ctx context.Context, runner *collection.Runner, task collection.TaskSpec, req *driver.Request) ([]collection.Sample, error) {
@@ -363,7 +363,7 @@ func collectRequestRung(ctx context.Context, runner *collection.Runner, task col
 // it never holds a tick.
 const informationalPingTimeout = 500 * time.Millisecond
 
-// pingInformational lands the ladder's ping (ADR-0157) beside an endpoint's
+// pingInformational lands the ladder's ping (ADR-0158) beside an endpoint's
 // probe: icmp-reachable and its rtt, informational only. It is appended after
 // the verdict is judged, so a component that blocks ping never reads down
 // for it; a node that cannot ping lands nothing.

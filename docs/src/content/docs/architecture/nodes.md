@@ -179,7 +179,7 @@ demux on the shared connection (listeners first, answers by reply shape;
 [routing](/architecture/collection/#listeners-over-a-held-session)). Built with #1049:
 **authentication on establish**, as a layer that gates the session. The worklist carries each
 driver task's `session` block (read off the live driver spec) and the endpoint's connection
-fingerprint and published gate (ADR-0157); the node
+fingerprint and published gate (ADR-0158); the node
 renders the login against the delivered secrets (a credential it lacks refuses the session by
 reference, never by value), runs it on every connection before any poll, command, or arm, and
 publishes its verdict as `endpoint-authenticated`. A terminal refusal reads `rejected` and the node
@@ -192,7 +192,7 @@ against an unchanged fingerprint; a rotated secret, a new address, port or trans
 declaration, or an operator's `:retry` moves the fingerprint and lifts it
 ([auth and rejection](/architecture/collection/#auth-and-rejection),
 [the gate](/architecture/collection/#the-connection-fingerprint-and-the-layered-gate),
-[ADR-0154](/architecture/decisions/#adr-0154-auth-is-a-layer-that-gates-a-held-session-and-a-terminal-refusal-reads-rejected)).
+[ADR-0155](/architecture/decisions/#adr-0155-auth-is-a-layer-that-gates-a-held-session-and-a-terminal-refusal-reads-rejected)).
 Still design below: the pool knobs.
 
 ::::design[Target design: sessions and the session pool, tracked in #603; the held transports beyond the line protocol are #1034 (websocket), #1035 (tls), #1036 (mqtt), #1037 (udp), #1038 (SSE over http), #1039 (modbus/tcp), #1040 (bacnet/ip), #1041 (knxnet/ip)]
@@ -319,7 +319,7 @@ down from wrong-community. Cross-referencing does: host pings + UDP not refused 
 reading "host down or fully filtered." The ssh probe still tries a params credential every tick
 (#1060); the built telnet probe never logs in (it
 reads the first negotiation or banner bytes; the login is the held session's auth step, so a probe
-cannot retry a bad credential every tick, [ADR-0156](/architecture/decisions/#adr-0156-telnet-and-ssh-are-held-line-transports-their-login-is-the-drivers-and-the-ssh-host-key-is-pinned-on-first-use)). `params.liveness_oid` overrides the probe OID.
+cannot retry a bad credential every tick, [ADR-0157](/architecture/decisions/#adr-0157-telnet-and-ssh-are-held-line-transports-their-login-is-the-drivers-and-the-ssh-host-key-is-pinned-on-first-use)). `params.liveness_oid` overrides the probe OID.
 
 **Poller** tasks run only if the verdict is up; **listener** (`mode=listen`) tasks run ungated,
 never pinged; **inline probes** (`icmp`/`tcp` with the host on the task) *are* the check, ungated. A

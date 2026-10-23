@@ -99,7 +99,7 @@ type WorklistTask struct {
 	// ladder rung, the class, and the fingerprint a terminal refusal gated),
 	// so a restarted node honors a gate it did not see happen.
 	Rejection string
-	// Ladder is the endpoint's resolved reachability ladder (ADR-0157), for
+	// Ladder is the endpoint's resolved reachability ladder (ADR-0158), for
 	// every task of a driver-attached endpoint; nil for a bare endpoint,
 	// whose probe is its transport's own.
 	Ladder *driver.EffectiveLadder

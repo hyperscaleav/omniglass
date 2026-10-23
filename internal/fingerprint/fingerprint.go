@@ -1,4 +1,4 @@
-// Package fingerprint is the connection fingerprint (#1056 ruling, ADR-0157):
+// Package fingerprint is the connection fingerprint (#1056 ruling, ADR-0158):
 // one deterministic digest over every input a connection to an endpoint is
 // made with, held or stateless. A refusal retrying cannot fix gates the
 // endpoint at its ladder rung for the fingerprint it happened under; the

@@ -152,7 +152,7 @@ func TestTelemetryPushAPI(t *testing.T) {
 		t.Fatalf("reject-not-project failed: audio-level landed as %+v", m)
 	}
 
-	// A NODE'S CONTROL FACTS ARE NOT PUSHABLE (ADR-0157): the gate a node
+	// A NODE'S CONTROL FACTS ARE NOT PUSHABLE (ADR-0158): the gate a node
 	// publishes (endpoint-rejection) and the host key it trusted
 	// (ssh-host-key) steer what the node attempts, so the push lane rejects
 	// them by name rather than let a push plant or lift a gate.

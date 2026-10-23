@@ -55,7 +55,7 @@ type Spec struct {
 	// and its re-probe (#1049); absent, the session has no auth step and
 	// every failure is retryable.
 	Session *SessionSpec `json:"session,omitempty"`
-	// Ladder is the reachability ladder (ADR-0157); absent, the transport
+	// Ladder is the reachability ladder (ADR-0158); absent, the transport
 	// registry's defaults.
 	Ladder *Ladder `json:"ladder,omitempty"`
 }

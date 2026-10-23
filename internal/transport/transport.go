@@ -23,7 +23,7 @@ type Transport struct {
 	Held        bool   `json:"held"`
 	Built       bool   `json:"built"`
 	Line        bool   `json:"line"`
-	// Rung is the transport rung of the reachability ladder (ADR-0157): a
+	// Rung is the transport rung of the reachability ladder (ADR-0158): a
 	// connect on the transport's port, the protocol's handshake, or (where an
 	// open port cannot be detected, udp) a named request answered. It is the
 	// gate: a session rung is attempted only when it passes.

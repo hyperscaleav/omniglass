@@ -32,7 +32,7 @@ const (
 	// trusted on first use and every matching key after, so the series is
 	// the pin's history and a change shows as a rejection beside it.
 	SSHHostKey = "ssh-host-key"
-	// EndpointRejection is an endpoint's gate (#1056 ruling, ADR-0157): the
+	// EndpointRejection is an endpoint's gate (#1056 ruling, ADR-0158): the
 	// ladder rung a terminal refusal holds, its class, and the connection
 	// fingerprint it holds for ("authenticated auth <fingerprint>"), or
 	// "none". The worklist carries it back, so a restarted node honours it.
@@ -45,7 +45,7 @@ var native = []string{
 }
 
 // nodeControl are the keys whose values steer what a node attempts: the
-// gate it publishes and the host key it trusted (ADR-0157). Only a node's
+// gate it publishes and the host key it trusted (ADR-0158). Only a node's
 // own collection writes them; the push lane refuses them.
 var nodeControl = []string{EndpointRejection, SSHHostKey}
 

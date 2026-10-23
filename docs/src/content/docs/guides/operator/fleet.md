@@ -124,8 +124,8 @@ both, marked **also in** the other; a component in no system sits directly under
 **A collapsed row says what it holds.** The Detail column counts what is inside in your
 registry's own words (**2 buildings, 1 floor**, **19 components**, **Empty**), and the Health
 column counts the systems beneath it by verdict, in four fixed slots: healthy, incomplete,
-degraded, outage. Healthy stays grey and only trouble has a colour, so a red count stands out
-down the page without being read. The counts include everything beneath the row, so a
+degraded, outage. Healthy is a muted green and each kind of trouble wears its full colour, so a
+red count stands out down the page without being read. The counts include everything beneath the row, so a
 collapsed branch cannot hide an outage. They are counts rather than one worst-case colour
 because at any real failure rate almost every large place holds one fault somewhere, and a
 worst-wins light would be red everywhere and say nothing.
@@ -260,8 +260,8 @@ Cause before arithmetic:
 - **Why** leads, worst first: severity, message, the down component (click it to open its
   panel), the role it impairs, and how long it has been raised.
 - **Components** follow, as rows in the outline's idiom: the component, the **role** it
-  fills, its product, the alarm behind a red light, and its health (healthy grey, only
-  trouble in colour). Click a row to open its panel.
+  fills, its product, the alarm behind a red light, and its health (healthy a muted green,
+  trouble in its own colour). Click a row to open its panel.
 - **Role chrome appears only where it says something a column cannot.** A role that wants
   more than one occupant, is short, or is unstaffed heads a group with its arithmetic ("1
   of 2, 1 spare") and its occupants beneath; a seat nobody staffs draws as an **empty

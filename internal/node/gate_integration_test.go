@@ -159,7 +159,7 @@ func waitFor(t *testing.T, ok func() bool, what string) {
 	}
 }
 
-// The ladder's request rung (ADR-0157): where an open port cannot be
+// The ladder's request rung (ADR-0158): where an open port cannot be
 // detected, the driver's named request answered is the transport proven.
 // The line client carries it here; snmp's own request is #821.
 func TestRequestRungIsTheTransportProven(t *testing.T) {
