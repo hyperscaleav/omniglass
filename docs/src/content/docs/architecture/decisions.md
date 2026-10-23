@@ -6991,7 +6991,8 @@ interface create form, since that name is the platform's to mint.
   telnet (#1033), websocket (#1034), mqtt (#1036), udp (#1037), modbus/tcp (#1039), bacnet/ip
   (#1040), knxnet/ip (#1041), ftp/ftps (#1046), and tftp on udp (#1047). A serial link is reached only through a gateway, as above. A
   protocol that pushes to us rather than being reached is server-hosted **ingress** (#1024), not a
-  node transport. The session machine, its
+  node transport. The `/scope-protocol` skill applies this placement rule when a new protocol comes up,
+  and files the issue in the house shape. The session machine, its
   `session-state` surface (ADR-0150), and the routing (ADR-0151) are transport-agnostic behind the
   `SessionDialer` and `HeldConn` seams, so each of those issues adds a dialer and its own
   real-implementation integration test rather than a second machine.
