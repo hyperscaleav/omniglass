@@ -248,9 +248,16 @@ type Session struct {
 	// refusal is why the session is rejected, nil otherwise.
 	refusal *TerminalError
 	// retry wakes a rejected session for one more attempt (Retry);
-	// terminal carries a terminal reply an exchange met to the machine.
+	// retrying is set while that attempt is in flight, so a second retry
+	// buys no second dial.
 	retry    chan struct{}
-	terminal chan *TerminalError
+	retrying bool
+	// refused carries a terminal reply an exchange met on conn to the
+	// machine, and inflight counts the exchanges on conn: both belong to
+	// the connection, so a reply that arrives as the component hangs up is
+	// still judged against the connection it ended.
+	refused  chan *TerminalError
+	inflight *sync.WaitGroup
 	lastAuth string // the last auth verdict reported, so it reports changes only
 }
 
@@ -275,7 +282,7 @@ func StartSession(cfg SessionConfig) *Session {
 	ctx, cancel := context.WithCancel(context.Background())
 	s := &Session{
 		cfg: cfg, cancel: cancel, done: make(chan struct{}), changed: make(chan struct{}), dialing: true,
-		retry: make(chan struct{}, 1), terminal: make(chan *TerminalError, 1),
+		retry: make(chan struct{}, 1),
 	}
 	go s.run(ctx)
 	return s
@@ -288,7 +295,7 @@ func StartSession(cfg SessionConfig) *Session {
 // false.
 func (s *Session) Retry() bool {
 	s.mu.Lock()
-	rejected := s.state == SessionRejected && !s.closed
+	rejected := s.state == SessionRejected && !s.closed && !s.retrying
 	s.mu.Unlock()
 	if !rejected {
 		return false
@@ -328,10 +335,16 @@ func (s *Session) Exchange(ctx context.Context, line string, reply *driver.Reply
 			return "", ErrSessionClosed
 		}
 		conn, heard, state, reason, changed, dialing, refusal := s.conn, s.heard, s.state, s.reason, s.changed, s.dialing, s.refusal
+		refusedCh, inflight := s.refused, s.inflight
+		if conn != nil {
+			inflight.Add(1) // under the lock: the machine waits on it only after taking conn back
+		}
 		s.mu.Unlock()
 		if conn != nil {
 			answer, err := conn.Exchange(ctx, line, reply, timeout)
-			if terr := s.terminalReply(answer, err); terr != nil {
+			terr := s.terminalReply(answer, err, refusedCh)
+			inflight.Done()
+			if terr != nil {
 				return "", fmt.Errorf("collection: session to %s: %w", s.cfg.Target, terr)
 			}
 			if err == nil {
@@ -368,7 +381,7 @@ func (s *Session) Exchange(ctx context.Context, line string, reply *driver.Reply
 // terminalReply classifies an exchange's answer, or the device's refusal, by
 // the driver's terminal rules. A match is handed to the machine, which
 // rejects the session, and becomes the exchange's error.
-func (s *Session) terminalReply(answer string, err error) *TerminalError {
+func (s *Session) terminalReply(answer string, err error, refusedCh chan *TerminalError) *TerminalError {
 	line := answer
 	if err != nil {
 		var refused *RefusedError
@@ -382,7 +395,7 @@ func (s *Session) terminalReply(answer string, err error) *TerminalError {
 		return nil
 	}
 	select {
-	case s.terminal <- terr:
+	case refusedCh <- terr:
 	default:
 	}
 	return terr
@@ -413,6 +426,7 @@ func (s *Session) transition(state SessionState, reason string, conn HeldConn) {
 		return
 	}
 	s.state, s.reason = state, reason
+	s.retrying = false
 	if state != SessionRejected {
 		s.refusal = nil
 	}
@@ -462,11 +476,12 @@ func (p provingInbound) Unclaimed(line string) {
 }
 
 // lend makes conn the connection exchanges borrow, with heard as its
-// answered-exchange signal and pushed as its claimed-line signal, without
+// answered-exchange signal, pushed as its claimed-line signal, and refused
+// and inflight as its terminal-reply signal and exchange count, without
 // publishing anything.
-func (s *Session) lend(conn HeldConn, heard, pushed chan struct{}) {
+func (s *Session) lend(conn HeldConn, heard, pushed chan struct{}, refused chan *TerminalError, inflight *sync.WaitGroup) {
 	s.mu.Lock()
-	s.conn, s.heard, s.pushed = conn, heard, pushed
+	s.conn, s.heard, s.pushed, s.refused, s.inflight = conn, heard, pushed, refused, inflight
 	s.mu.Unlock()
 }
 
@@ -488,7 +503,9 @@ func (s *Session) run(ctx context.Context) {
 				state = SessionDown
 				s.transition(state, fmt.Sprintf("%d consecutive attempts failed, last: %s", failures, cause), nil)
 			}
-		case state == SessionUp:
+		case state == SessionUp, state == SessionRejected:
+			// From rejected, a retry's attempt met a transient failure: the
+			// old refusal no longer says why, so the session leaves rejected.
 			state = SessionRecovering
 			s.transition(state, cause, nil)
 		}
@@ -501,6 +518,12 @@ func (s *Session) run(ctx context.Context) {
 		s.mu.Lock()
 		s.refusal = terr
 		s.mu.Unlock()
+		// A retry asked for before this rejection (during the attempt that
+		// ended in it) is spent: it does not buy another dial.
+		select {
+		case <-s.retry:
+		default:
+		}
 		s.transition(state, terr.Error(), nil)
 		var reprobe <-chan time.Time
 		if s.cfg.Reprobe > 0 {
@@ -512,6 +535,9 @@ func (s *Session) run(ctx context.Context) {
 		case <-s.retry:
 		case <-reprobe:
 		}
+		s.mu.Lock()
+		s.retrying = true
+		s.mu.Unlock()
 		return true
 	}
 	for {
@@ -558,14 +584,9 @@ func (s *Session) run(ctx context.Context) {
 			fail("arming failed: " + err.Error())
 			continue
 		}
-		// A terminal reply met before this connection (on the last one) is
-		// stale: drop it.
-		select {
-		case <-s.terminal:
-		default:
-		}
 		heard, pushed := make(chan struct{}, 1), make(chan struct{}, 1)
-		s.lend(conn, heard, pushed)
+		refusedCh, inflight := make(chan *TerminalError, 1), &sync.WaitGroup{}
+		s.lend(conn, heard, pushed, refusedCh, inflight)
 		since := s.cfg.Now()
 		// A down session proves the connection before publishing up: an
 		// answer or a listener's push always proves it, outliving the stable
@@ -595,7 +616,7 @@ func (s *Session) run(ctx context.Context) {
 				stopTimer(stableTimer)
 				_ = conn.Close()
 				return
-			case refused = <-s.terminal:
+			case refused = <-refusedCh:
 				break held
 			case <-heard:
 				answered = true
@@ -625,7 +646,17 @@ func (s *Session) run(ctx context.Context) {
 		stopTimer(stableTimer)
 		cause := conn.Err()
 		_ = conn.Close()
-		s.lend(nil, nil, nil)
+		s.lend(nil, nil, nil, nil, nil)
+		// An exchange in flight when the connection died may yet classify a
+		// terminal reply (a component that refuses and hangs up): wait for
+		// them, which the closed connection makes prompt, then look.
+		inflight.Wait()
+		if refused == nil {
+			select {
+			case refused = <-refusedCh:
+			default:
+			}
+		}
 		if refused != nil {
 			if !reject(refused) {
 				return

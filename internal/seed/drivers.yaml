@@ -88,8 +88,8 @@ drivers:
       session:
         login:
           steps:
-            - { expect: { regex: "login: ?$" }, send: "${secret.login.username}" }
-            - { expect: { regex: "Password: ?$" }, send: "${secret.login.password}" }
+            - { expect: { regex: "^login: ?$" }, send: "${secret.login.username}" }
+            - { expect: { regex: "^Password: ?$" }, send: "${secret.login.password}" }
           ready: { prefix: "Newtron Panel 7 NVP ready" }
         terminal:
           - { class: auth, match: { prefix: "auth rejected" } }

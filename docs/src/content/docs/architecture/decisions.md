@@ -7018,11 +7018,12 @@ interface create form, since that name is the platform's to mint.
      then `Open`), so the line reader does not exist until the step passes. The verdict lands as
      the existing `endpoint-authenticated` property (`yes`/`no`, on change), no parallel vocabulary.
      A login that is silent or dropped decides nothing and is an ordinary failed attempt.
-  2. **One login dialog.** Steps wait for a prompt (matched on a partial line, since a prompt
-     ends no line) and send a line that may name a secret input's field
+  2. **One login dialog.** Steps wait for a prompt (matched on a partial line once the component
+     pauses on it, since a prompt ends no line) and send a line that may name a secret input's field
      (`${secret.<input>.<field>}`); `ready` says it passed; a prompt for a step already answered is
      an `auth` refusal. The same primitive answers ssh keyboard-interactive questions. A credential
-     is written only to the wire: render faults name the reference, never the value.
+     is written only to the wire: render faults name the reference, never the value, and text the
+     component sends is scrubbed of the sends before it reaches an error or a reason.
   3. **`rejected` joins the state set** (amending ADR-0150's establishing, up, recovering, down).
      A terminal refusal ([ADR-0155](#adr-0155-a-driver-declares-its-terminal-replies-and-a-transport-classifies-its-own-refusals))
      moves the session there at once, without spending the budget; it closes the connection and

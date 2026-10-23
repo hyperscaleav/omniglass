@@ -215,10 +215,12 @@ decides nothing: it is an ordinary failed attempt.
 
 **One login dialog.** A driver declares the prompts to wait for, what to send at each (a secret
 input's field, `${secret.<input>.<field>}`), and the match that means ready. A prompt need not end a
-line (`login: ` waits on the same line), and a prompt for a step already answered (the component
-asking again) is a refusal. The same primitive answers a raw tcp password prompt, a telnet login, and
+line (`login: ` waits on the same line): a partial line is judged once the component pauses on it,
+never at an arbitrary read boundary, so a banner arriving in pieces is read whole. A prompt for a step
+already answered (the component asking again) is a refusal. The same primitive answers a raw tcp password prompt, a telnet login, and
 ssh keyboard-interactive questions. A credential is only ever written to the wire: a refusal names
-the reference that was missing, never its value.
+the reference that was missing, never its value, and any text the component sends is scrubbed of
+what was sent before it reaches an error or a reason, so an echoing component cannot leak it.
 
 **Terminal or retryable.** A refusal retrying cannot fix is a **terminal error**, a class and the
 component's own text: the driver declares which replies are terminal (`session.terminal`, each a
@@ -236,7 +238,9 @@ neither falls back to a throwaway connection, which would retry the bad credenti
   transport, or the driver's session block): the session is recycled, so a fixed credential
   reconnects at the next worklist pull;
 - an operator retries it (`POST /endpoints/{id}:retry`, gated by `endpoint:retry` and audited): the
-  endpoint's revision moves, and the node's rejected session dials exactly once more;
+  endpoint's revision moves, and the node's rejected session dials exactly once more (a second retry
+  during that attempt buys nothing; an attempt that meets a transient failure leaves `rejected` for
+  `recovering` and follows the backoff);
 - the driver declares a slow re-probe (`session.reprobe`, at least 5m; the default is never).
 
 Each transition also lands `session-reason`, the reason as a property (`auth: auth rejected` when

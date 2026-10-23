@@ -450,6 +450,13 @@ func (s *Spec) Validate(cat Catalog) error {
 	if err := s.validateSession(); err != nil {
 		return err
 	}
+	// A held session is held for an endpoint's poll and listen tasks; command
+	// bindings derive none. Commands that ride only a held session (the driver
+	// declares one, or the transport has no stateless line) need a poll or a
+	// listener to hold it, or they could never run (#1049).
+	if len(s.Polls) == 0 && len(s.Listeners) == 0 && (s.Session != nil || (isLineTransport(s.Transport) && s.Transport != "tcp")) {
+		return fmt.Errorf("driver: commands that ride only a held session need a poll or a listener to hold it")
+	}
 
 	bindings := map[string]bool{}
 	for _, c := range s.Commands {

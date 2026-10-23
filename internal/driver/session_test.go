@@ -69,6 +69,8 @@ func TestValidateSessionRefusals(t *testing.T) {
 		{"an unparseable re-probe", func(s *driver.Spec) { s.Session.Reprobe = "sometimes" }, "reprobe"},
 		{"a re-probe too fast to be slow", func(s *driver.Spec) { s.Session.Reprobe = "30s" }, "reprobe"},
 		{"an ssh credential off ssh", func(s *driver.Spec) { s.Session.Credential = "login" }, "credential"},
+		// Commands derive no task, so nothing would hold the session they ride.
+		{"a session with only commands", func(s *driver.Spec) { s.Polls, s.Listeners = nil, nil }, "poll or a listener"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -93,6 +95,16 @@ func TestValidateAcceptsTheLineFamiliesOnEveryLineTransport(t *testing.T) {
 		if err := s.Validate(catalog()); err != nil {
 			t.Errorf("a line spec on %s refused: %v", tr, err)
 		}
+	}
+}
+
+// A commands-only driver over a transport with no stateless line has no
+// task to hold its session, so its commands could never run.
+func TestValidateRefusesCommandsOnlyOverASessionOnlyTransport(t *testing.T) {
+	s := validSpec()
+	s.Transport, s.Polls, s.Listeners = "telnet", nil, nil
+	if err := s.Validate(catalog()); err == nil || !strings.Contains(err.Error(), "poll or a listener") {
+		t.Fatalf("a commands-only telnet driver = %v, want refused", err)
 	}
 }
 

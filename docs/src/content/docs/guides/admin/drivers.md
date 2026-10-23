@@ -38,14 +38,19 @@ login passed. `session.terminal` lists the replies retrying cannot fix, each a `
 answering any request, moves the session to `rejected`, where the node dials no more until the
 endpoint's credential or address changes or an operator retries it (`omniglass endpoint retry <id>`,
 with `endpoint:retry`). `session.reprobe` (at least `5m`, default never) lets a
-rejected session try once more on its own. A wrong password then costs one attempt, never a lockout:
+rejected session try once more on its own. A wrong password the component answers with a declared
+refusal then costs one attempt rather than a retry every 30 seconds. A component that hangs up on a
+wrong password without saying so cannot be told apart from a dropped connection, and still follows
+the ordinary backoff (#1056). Anchor a prompt's regex (`^login: ?$`): a prompt is matched on a line
+the component pauses on, and an unanchored one also matches a banner such as `Last login: `. A spec
+whose session only commands would ride (no poll or listener to hold it) refuses at write:
 
 ```yaml
 session:
   login:
     steps:
-      - { expect: { regex: "login: ?$" }, send: "${secret.login.username}" }
-      - { expect: { regex: "Password: ?$" }, send: "${secret.login.password}" }
+      - { expect: { regex: "^login: ?$" }, send: "${secret.login.username}" }
+      - { expect: { regex: "^Password: ?$" }, send: "${secret.login.password}" }
     ready: { prefix: "Newtron Panel 7 NVP ready" }
   terminal:
     - { class: auth, match: { prefix: "auth rejected" } }

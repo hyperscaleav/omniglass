@@ -62,17 +62,22 @@ func RunLogin(ctx context.Context, conn net.Conn, d *LoginDialog, terminal Class
 
 	next := 0
 	var partial strings.Builder
+	judged := false // the partial line was judged after the component paused on it
 	last := ""
 	buf := make([]byte, 4096)
 	deadline := time.Now().Add(timeout)
 	// check judges one piece of text: a whole line, or the partial line a
-	// prompt sits on. It returns done when the dialog passed.
+	// prompt sits on. It returns done when the dialog passed. Every text that
+	// can reach an error or a reason is scrubbed of the sends first, so a
+	// component that echoes what it is sent never puts a credential there.
 	check := func(text string) (done bool, err error) {
 		if text == "" {
 			return false, nil
 		}
-		last = text
+		clean := d.scrub(text)
+		last = clean
 		if terr := terminal.classify(text); terr != nil {
+			terr.Reason = clean
 			return false, terr
 		}
 		if next == len(d.Steps) && d.Ready.Matches(text) {
@@ -80,7 +85,7 @@ func RunLogin(ctx context.Context, conn net.Conn, d *LoginDialog, terminal Class
 		}
 		for i := 0; i < next; i++ {
 			if d.Steps[i].Expect.Matches(text) {
-				return false, &TerminalError{Class: driver.ClassAuth, Reason: "the component prompted again: " + text}
+				return false, &TerminalError{Class: driver.ClassAuth, Reason: "the component prompted again: " + clean}
 			}
 		}
 		if next < len(d.Steps) && d.Steps[next].Expect.Matches(text) {
@@ -95,9 +100,19 @@ func RunLogin(ctx context.Context, conn net.Conn, d *LoginDialog, terminal Class
 		return false, nil
 	}
 	for {
-		_ = conn.SetReadDeadline(deadline)
+		// A partial line is judged only once the component pauses on it (a
+		// prompt waits for its answer), never at whatever byte boundary a
+		// read returns, so a banner arriving in pieces is read as a line.
+		readBy := deadline
+		if partial.Len() > 0 && !judged {
+			if q := time.Now().Add(loginQuietWindow); q.Before(readBy) {
+				readBy = q
+			}
+		}
+		_ = conn.SetReadDeadline(readBy)
 		n, rerr := conn.Read(buf)
 		if n > 0 {
+			judged = false
 			chunk := strings.ReplaceAll(string(buf[:n]), "\r", "")
 			for {
 				i := strings.IndexByte(chunk, '\n')
@@ -116,13 +131,24 @@ func RunLogin(ctx context.Context, conn net.Conn, d *LoginDialog, terminal Class
 			if partial.Len() > maxLineAnswer {
 				return fmt.Errorf("%w: a line exceeded %d bytes", errLoginFailed, maxLineAnswer)
 			}
-			if done, err := check(partial.String()); done || err != nil {
-				return err
-			}
 		}
 		if rerr != nil {
 			if ctx.Err() != nil {
 				return ctx.Err()
+			}
+			paused := errors.Is(rerr, os.ErrDeadlineExceeded) && time.Now().Before(deadline)
+			if partial.Len() > 0 && !judged {
+				// The component paused on a partial line, or hung up after
+				// one ("auth rejected" with no line ending): judge it.
+				judged = true
+				if done, err := check(partial.String()); done || err != nil {
+					return err
+				}
+				if paused {
+					continue
+				}
+			} else if paused {
+				continue
 			}
 			waiting := "ready"
 			if next < len(d.Steps) {
@@ -134,6 +160,22 @@ func RunLogin(ctx context.Context, conn net.Conn, d *LoginDialog, terminal Class
 			return fmt.Errorf("%w: the connection ended waiting for %s (last: %q): %v", errLoginFailed, waiting, last, rerr)
 		}
 	}
+}
+
+// loginQuietWindow is how long the component must pause on a partial line
+// before the dialog judges it as a prompt.
+const loginQuietWindow = 100 * time.Millisecond
+
+// scrub replaces every send in text with a mask: what the dialog writes is
+// a credential, and a component that echoes it must not carry it into an
+// error, a reason or a log line.
+func (d *LoginDialog) scrub(text string) string {
+	for _, st := range d.Steps {
+		if st.Send != "" {
+			text = strings.ReplaceAll(text, st.Send, "[redacted]")
+		}
+	}
+	return text
 }
 
 // Answer answers keyboard-interactive questions: each is answered by the
