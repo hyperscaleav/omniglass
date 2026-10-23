@@ -11616,7 +11616,6 @@ paths:
           application/json:
             schema:
               $ref: "#/components/schemas/RetryEndpointInputBody"
-        required: true
       responses:
         "200":
           content:
