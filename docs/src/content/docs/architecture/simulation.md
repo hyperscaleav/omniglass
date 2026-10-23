@@ -119,7 +119,9 @@ There is one bind path, so the two choices differ only in the port asked for:
 Whichever it binds, a face reports the port it bound everywhere it reports one: its hits, its
 session events, and the request detail SNMP publishes. A test that drives the run mode out of
 process (the end-to-end tests run `omniglass sim run` beside a node) cannot take an ephemeral
-port, because there the endpoint names the port and the simulator follows it; it claims a
+port: the run mode binds each face at its profile's port, lifted by `--port-offset`, on the
+address the endpoint targets, and has no way to tell the endpoints a port it picked, so the
+endpoints must target the profile's ports. Such a test keeps the fixed ports and claims a
 loopback address no other test holds instead (`simtest.ClaimLoopback`).
 
 ## Beside a node

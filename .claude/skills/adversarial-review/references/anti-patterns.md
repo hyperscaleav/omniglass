@@ -280,6 +280,7 @@ region and a mask line in the frontmatter, per the entity blade's duration masks
   parallel use it most needs to survive.
 - **Fix:** bind port 0 and read the address back: an in-process simulator serves on
   `sim.EphemeralPorts` and tests aim at `Device.Faces`; a face restarted mid-test rebinds the port
-  it reported. Where a port is fixed by design (the `sim run` mode follows the endpoint's port),
-  claim an address no other test holds (`simtest.ClaimLoopback`). The testcontainer form of the
-  class is `fixed-testcontainer-port`.
+  it reported. Where a port is fixed by design (the `sim run` mode binds the profile's ports on the
+  endpoint's address, so the endpoints must target those) or pinned on purpose (a port bound on one
+  address and rebound on another), claim an address no other test holds (`simtest.ClaimLoopback`).
+  The testcontainer form of the class is `fixed-testcontainer-port`.

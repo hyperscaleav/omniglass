@@ -7774,9 +7774,11 @@ detail), where a face asked for port 0 had reported 0; SNMP binds before it buil
 agent so it knows the port, and a device's raw-TCP faces find their session registry by the declared
 port rather than the mapped one. Every in-process simulator test (the sim package, the node's session
 tests) serves on ephemeral ports and aims its clients and endpoints at the reported addresses. The
-end-to-end and run-mode tests drive `omniglass sim run`, whose ports the endpoint names, so they stay
-on fixed ports and claim a loopback address no other test holds (`simtest.ClaimLoopback`, a sentinel
-listener held for the test's life). Proven by a test that serves one address from two engines at once
+end-to-end and run-mode tests drive `omniglass sim run`, which binds the profile's ports (lifted) on
+the address an endpoint targets and cannot tell the endpoints a port it picked, so they stay on fixed
+ports and claim a loopback address no other test holds (`simtest.ClaimLoopback`, a sentinel listener
+held for the test's life); so do the engine tests that pin a port on purpose (an address handed over
+or swapped, a squatted port released and rebound). Proven by a test that serves one address from two engines at once
 and finds every face of both bound, answering on its own engine at its reported address, with the
 bound port on its hits and session events (it failed first, the line protocol's session events
 reporting port 0), and by the sim, node and end-to-end packages run twice side by side with no

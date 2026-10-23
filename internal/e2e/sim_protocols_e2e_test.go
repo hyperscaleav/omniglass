@@ -151,8 +151,9 @@ func TestOperatorMonitorsAndConfiguresSimulatedDevices(t *testing.T) {
 	}
 	as("secret", "create", "--name", "sim-community", "--secret-type", "snmp-community",
 		"--owner-kind", "platform", "--fields", `{"community":"public"}`)
-	// The simulator serves fixed ports (the endpoints name them), so each
-	// device takes an address no other test process holds.
+	// The run mode binds the profiles' ports (lifted) on the endpoints'
+	// addresses, so the endpoints target them and each device takes an
+	// address no other test process holds.
 	displayIP, panelIP := simtest.ClaimLoopback(t), simtest.ClaimLoopback(t)
 	as("endpoint", "create", "--component", "sim-display", "--node", "edge-p", "--driver", "snmp-generic",
 		"--inputs", fmt.Sprintf(`{"host":%q,"port":"%d","community":"sim-community"}`, displayIP, 161+protocolsPortShift))

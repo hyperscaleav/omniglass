@@ -99,8 +99,9 @@ func TestSimulatorEndToEnd(t *testing.T) {
 	}
 	defer conn.Close(ctx)
 	product, port := e2eSimulatedProduct(t, ctx, conn)
-	// The simulator serves fixed ports (the endpoint names the port), so the
-	// device takes an address no other test process holds.
+	// The run mode binds the profile's ports (lifted) on the endpoint's
+	// address, so the endpoint targets them and the device takes an address
+	// no other test process holds.
 	target := net.JoinHostPort(simtest.ClaimLoopback(t), fmt.Sprint(port+simE2EPortShift))
 	for _, q := range []struct {
 		sql  string

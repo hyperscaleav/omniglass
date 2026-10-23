@@ -17,6 +17,7 @@ import (
 
 	"github.com/hyperscaleav/omniglass/internal/sim/profile"
 	"github.com/hyperscaleav/omniglass/internal/sim/profiles"
+	"github.com/hyperscaleav/omniglass/internal/sim/simtest"
 )
 
 // newCatalogEngine serves the embedded catalog on ephemeral ports, so a
@@ -138,7 +139,9 @@ func TestEngineSyncRestartsAMovedDevice(t *testing.T) {
 
 // squatHTTP holds a free port on ip and pins the engine's declared HTTP port
 // 80 to it, every other face ephemeral: a DSP on ip then cannot bind its
-// HTTP face. The squatter is the test's own, so no other run collides.
+// HTTP face. The squatter is the test's own, so no other run collides while
+// it holds the port; a test that releases it to rebind takes ip from
+// simtest.ClaimLoopback, so no other run can take the port in between.
 func squatHTTP(t *testing.T, e *Engine, ip string) net.Listener {
 	t.Helper()
 	squat, err := net.Listen("tcp", net.JoinHostPort(ip, "0"))
@@ -335,7 +338,9 @@ func TestEngineServesEachTCPInterfaceSeparately(t *testing.T) {
 
 // pinPorts fixes the engine's port map to the ports d's faces bound, so
 // every device after binds those same ports: a test of who holds an address
-// gets the contention of fixed ports, on ports the kernel handed this run.
+// gets the contention of fixed ports. The kernel handed those ports out on
+// d's address only, so a test binds them only on addresses it claimed
+// (simtest.ClaimLoopback), where no other run binds anything.
 func pinPorts(e *Engine, d *Device) {
 	held := map[int]int{}
 	for _, f := range d.Faces() {
@@ -348,7 +353,7 @@ func pinPorts(e *Engine, d *Device) {
 // it, on the same ports: removals stop before additions start.
 func TestEngineSyncHandsAnAddressToANewDevice(t *testing.T) {
 	e := newCatalogEngine(t)
-	ip := "127.88.6.1"
+	ip := simtest.ClaimLoopback(t)
 	if err := e.Sync([]DeviceSnapshot{dspSnapshot("old", ip)}); err != nil {
 		t.Fatal(err)
 	}
@@ -366,7 +371,7 @@ func TestEngineSyncHandsAnAddressToANewDevice(t *testing.T) {
 	}
 	// Two devices swapping addresses in one sync both serve, each taking the
 	// ports the other just left.
-	a, b := "127.88.6.2", "127.88.6.3"
+	a, b := simtest.ClaimLoopback(t), simtest.ClaimLoopback(t)
 	if err := e.Sync([]DeviceSnapshot{dspSnapshot("x", a), dspSnapshot("y", b)}); err != nil {
 		t.Fatal(err)
 	}
@@ -388,7 +393,7 @@ func TestEngineSyncHandsAnAddressToANewDevice(t *testing.T) {
 // sync tries it again.
 func TestEngineSyncRetriesADeviceThatFailedToStart(t *testing.T) {
 	e := newCatalogEngine(t)
-	ip := "127.88.7.1"
+	ip := simtest.ClaimLoopback(t)
 	squat := squatHTTP(t, e, ip)
 	if err := e.Sync([]DeviceSnapshot{dspSnapshot("dsp", ip)}); err == nil {
 		t.Fatal("sync with a squatted port reported no error")
