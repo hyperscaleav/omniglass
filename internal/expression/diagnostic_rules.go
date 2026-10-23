@@ -71,6 +71,9 @@ var sumOfBools = rule{
 		{env: calcNumFixture, source: "sum(pts)"},
 		{env: calcNumFixture, source: "sum(members, .value.pts)"},
 		{env: calcBoolFixture, source: "count(members, .has.pts) > 0"},
+		// Another refusal is left as it is.
+		{env: calcBoolFixture, source: "len(pts) + up > 0"},
+		{env: calcBoolFixture, source: "sum(pts) > 0 && nope"},
 	},
 }
 
@@ -126,7 +129,6 @@ var unusedAlias = rule{
 		{env: calcNumFixture, source: "count(up) + max(pts)"},
 		{env: calcBoolFixture, source: "all(members, .has.pts && .has.up)"},
 		{env: calcBoolFixture, source: "len(pts) > 0 && members[0].value.up"},
-		{env: criteriaFixture, source: "value > 1"},
 	},
 }
 

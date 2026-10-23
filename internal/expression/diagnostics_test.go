@@ -42,7 +42,11 @@ func identNamed(root ast.Node, name string) ast.Node {
 // testRule is a rule that flags the first use of name: a refine rule (an
 // error, offering to rename it to fix), or a lint rule of the given severity.
 func testRule(code string, trig trigger, sev Severity, name, fix string, sites ...string) rule {
-	env := MustEnv[sampleEnv](Bool, WithBuiltins(CriteriaBuiltins()...))
+	opts := []Option{WithBuiltins(CriteriaBuiltins()...)}
+	if len(sites) > 0 {
+		opts = append(opts, WithSite(sites[0]))
+	}
+	env := MustEnv[sampleEnv](Bool, opts...)
 	r := rule{
 		code: code, severity: sev, trigger: trig, sites: sites,
 		message: name + " is flagged",
@@ -267,8 +271,9 @@ func TestFixturesHoldARule(t *testing.T) {
 		"wrong fixed":       func(r *rule) { r.fixtures[0].fixed = "value > 1" },
 		"fix not declared":  func(r *rule) { r.fixtures[0].fixed = "" },
 		"fixed not compile": func(r *rule) { r.fixtures[0].fixed = "n >" },
+		// A positive fixture refused by anything but the rule.
 		"source not compile": func(r *rule) {
-			r.fixtures[1].source = "value >"
+			r.fixtures[0].source = "prior >"
 		},
 	} {
 		r := testRule("prior-read", triggerLint, SeverityWarning, "prior", "n")
@@ -353,5 +358,55 @@ func TestWithInputs(t *testing.T) {
 	}
 	if _, err := EnvOf[sampleEnv](Float, WithInputs("nope")); err == nil {
 		t.Error("an input that is no binding was accepted")
+	}
+}
+
+// A pass that panics is an engine bug, reported as one: no refine rule may
+// explain it away with a fix for an expression that was never wrong.
+func TestRefineLeavesEngineBugs(t *testing.T) {
+	rs := []rule{testRule("flags-arith", triggerRefine, SeverityError, "flags", "items")}
+	src := "flags + 1 > 0"
+	parsed, err := parser.Parse(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	bug := passRefusal(src, "typed checks", identNamed(parsed.Node, "flags"), "boom")
+	if got := refine(rs, src, parsed.Node, boolEnv(t), 0, bug); got != bug || got.Code != "" {
+		t.Fatalf("refine explained an engine bug: %+v", got)
+	}
+}
+
+// Fixtures run with the registry in its real order: a refine rule whose
+// positive fixture an earlier rule explains first fails, since production
+// would answer with the earlier rule's code.
+func TestFixturesRunInRegistryOrder(t *testing.T) {
+	first := testRule("first-refine", triggerRefine, SeverityError, "flags", "n")
+	second := testRule("second-refine", triggerRefine, SeverityError, "flags", "n")
+	useRules(t, first, second)
+	if err := second.checkFixtures(); err == nil {
+		t.Error("a fixture the first rule answers passed for the second")
+	}
+	if err := first.checkFixtures(); err != nil {
+		t.Errorf("the first rule's fixtures failed: %v", err)
+	}
+}
+
+// A negative fixture may be an expression refused by something else: the
+// rule leaving another refusal alone is exactly what it must pin.
+func TestNegativeFixtureMayBeRefused(t *testing.T) {
+	r := testRule("flags-arith", triggerRefine, SeverityError, "flags", "n")
+	r.fixtures = append(r.fixtures, fixture{env: r.fixtures[0].env, source: "state + 1 > 0"})
+	if err := r.checkFixtures(); err != nil {
+		t.Fatalf("a negative fixture refused by Expr failed: %v", err)
+	}
+}
+
+// A fixture compiled at a site the rule does not apply at proves nothing:
+// the registry refuses it.
+func TestFixtureSiteMustApply(t *testing.T) {
+	r := testRule("calc-only", triggerLint, SeverityWarning, "prior", "", "calc")
+	r.fixtures[1].env = MustEnv[sampleEnv](Bool, WithBuiltins(CriteriaBuiltins()...), WithSite("criteria"))
+	if err := validRules([]rule{r}); err == nil {
+		t.Error("a fixture at a site the rule does not apply at was accepted")
 	}
 }

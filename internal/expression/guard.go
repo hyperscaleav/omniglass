@@ -47,14 +47,20 @@ func fromCompilerPanic(err error) error {
 	return passRefusal("", "Expr compiler", nil, msg)
 }
 
+// errEngineBug marks a refusal that is the engine's fault, not the
+// expression's: a diagnostic rule never explains one away (diagnostics.go).
+var errEngineBug = errors.New("engine bug")
+
 func passRefusal(source, pass string, at ast.Node, cause string) *Error {
 	if at == nil {
 		return &Error{Phase: PhaseType, Line: 1, Column: 1, Message: fmt.Sprintf(
-			"the %s pass cannot compile this expression (%s); rewrite it, and report it as an engine bug", pass, cause)}
+			"the %s pass cannot compile this expression (%s); rewrite it, and report it as an engine bug", pass, cause), err: errEngineBug}
 	}
 	fe := (&file.Error{Location: at.Location(), Message: fmt.Sprintf(
 		"the %s pass cannot compile %s here (%s); rewrite it, and report it as an engine bug", pass, construct(at), cause)}).Bind(file.NewSource(source))
-	return fromExpr(PhaseType, fe)
+	e := fromExpr(PhaseType, fe)
+	e.err = errors.Join(errEngineBug, fe)
+	return e
 }
 
 // construct names a node for an operator: its kind, and its source form when

@@ -176,6 +176,9 @@ func validRules(rs []rule) error {
 			if f.env.typ == nil {
 				return fmt.Errorf("%s: fixture %q has no environment", r.code, f.source)
 			}
+			if !r.appliesAt(f.env.site) {
+				return fmt.Errorf("%s: fixture %q is at site %q, where the rule does not apply, so it proves nothing", r.code, f.source, f.env.site)
+			}
 			gives = gives || f.want
 			spares = spares || !f.want
 		}
@@ -205,7 +208,7 @@ func (r rule) run(s *subject) (out []finding) {
 // refine explains a refusal (e, pointing at from) with the first refine
 // rule at the site that recognises it, or returns e unchanged.
 func refine(rs []rule, source string, root ast.Node, env Env, from int, e *Error) *Error {
-	if root == nil || e.Phase != PhaseType {
+	if root == nil || e.Phase != PhaseType || errors.Is(e, errEngineBug) {
 		return e
 	}
 	s := &subject{source: source, root: root, env: env, fault: &fault{from: from, message: e.Message}}
@@ -429,14 +432,15 @@ func operands(n ast.Node) []ast.Node {
 func (r rule) checkFixtures() error {
 	for _, f := range r.fixtures {
 		got, err := r.findIn(f.source, f.env)
-		if err != nil {
-			return fmt.Errorf("fixture %q: %v", f.source, err)
-		}
 		if !f.want {
+			// Refused by something else is a case the rule must leave alone.
 			if got != nil {
 				return fmt.Errorf("fixture %q: gave %s, which it must not", f.source, r.code)
 			}
 			continue
+		}
+		if err != nil {
+			return fmt.Errorf("fixture %q: %v", f.source, err)
 		}
 		if got == nil {
 			return fmt.Errorf("fixture %q: did not give %s", f.source, r.code)
@@ -469,13 +473,14 @@ func (r rule) checkFixtures() error {
 }
 
 // findIn checks source and returns the rule's diagnostic in it, or nil; an
-// error when source is refused by anything but this rule.
+// error when source is refused by anything but this rule. A registered rule
+// runs in the registry's own order, so its fixtures prove the code the
+// engine answers with (an earlier refine rule that explains the same
+// refusal wins there too); a rule not registered runs first.
 func (r rule) findIn(source string, env Env) (*Diagnostic, error) {
-	rs := []rule{r}
-	for _, o := range registry {
-		if o.code != r.code {
-			rs = append(rs, o)
-		}
+	rs := registry
+	if !slices.ContainsFunc(registry, func(o rule) bool { return o.code == r.code }) {
+		rs = append([]rule{r}, registry...)
 	}
 	diags, err := check(source, env, rs)
 	if err != nil {
