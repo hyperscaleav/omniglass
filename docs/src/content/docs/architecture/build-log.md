@@ -7602,3 +7602,158 @@ Mod-Shift-M). A stored rule's warnings show on the calc and event rule blades as
 link), the field (`ExpressionField.test.tsx`: a warning leaves the field valid and the verdict ok, the fix
 button rewrites and undoes, the code links), and both blades' notes.
 
+### Sessions authenticate before they act, and a refusal stops the retrying (#1049)
+
+The first slice of the protocol backlog under epic #603, under the architect's ruling of 2026-10-23:
+auth is a layer that gates a held session, and non-retryable errors are defined in drivers. The
+session machine (`internal/collection/session.go`) runs each attempt as dial, then the **auth step**,
+then arm, then `up`, over a staged dialer (`Connect`, `Authenticate`, `Open`) so the line reader does
+not exist until the step passes; the real line dialer (`linesession.go`) is staged, running a declared
+**login dialog** (`login.go`, one primitive for raw tcp, telnet and ssh keyboard-interactive) over the
+raw connection, with prompts matched on a partial line. A **terminal error**
+(`collection.TerminalError`, `terminal.go`), declared by the driver's `session.terminal` rules
+(`internal/driver/session.go`) or classified by a transport, moves the session to the new
+**`rejected`** state without spending the budget: no dialing, polls and commands failing fast with
+the reason, never a throwaway connection. It leaves on an identity change (a fixed credential
+recycles it), an operator's audited `POST /endpoints/{id}:retry` (the new `endpoint:retry` action,
+moving the endpoint's revision, which the worklist now carries), or the driver's slow
+`session.reprobe`. The auth verdict lands as `endpoint-authenticated` and every transition as
+`session-reason` beside `session-state` (both seeded), and a poll fault that is terminal waits its
+interval instead of the failure backoff. Proven over fakes with a fake clock (a wrong credential dials
+once over an hour, a retry once more, a 20m re-probe three times an hour, a transient failure still
+spends the budget, nothing arms before the auth step), over a real socket (a raw tcp line protocol
+behind a password prompt: the right password logs in before the first poll, the wrong one is dialed
+exactly once and never arms), against Postgres (the worklist carries the session block and revision,
+`:retry` moves it and is audited, a login driver's command delivery is session-only), and over the API
+(a viewer is refused `:retry`, an out-of-scope operator gets a non-disclosing 404). Recorded as
+[ADR-0155](/architecture/decisions/#adr-0155-auth-is-a-layer-that-gates-a-held-session-and-a-terminal-refusal-reads-rejected)
+and [ADR-0156](/architecture/decisions/#adr-0156-a-driver-declares-its-terminal-replies-and-a-transport-classifies-its-own-refusals).
+
+### A telnet session with option negotiation and a login dialog (#1033)
+
+The second slice of the protocol backlog. `telnet` joins the transport registry as a held line
+transport (`internal/transport`), its reachability probe connecting and waiting for the first
+negotiation or banner bytes (`telnet-response-time`, seeded; a silent port reads reached but not
+responsive). The held session is the line protocol's own behind a filter (`internal/collection/telnet.go`):
+inbound IAC sequences are stripped (including one split across reads, and subnegotiations), DO is
+answered WONT and WILL is answered DONT, and a literal 0xFF is escaped. The login is the shared dialog
+from #1049, run as the session's auth step on establish and every recover. The simulated panel gains an
+`nvp-telnet` face (port 23, a login whose prompts end no line, the NVP verbs and pushes behind it), and
+the official `newtron-nvp-telnet` driver declares the login and the panel's terminal refusal. A poll
+that faulted on its session's refusal now runs at the first tick its session is up again, so a fixed
+credential lands data within a tick rather than an interval later. Proven against real sockets (the
+filter and the probe), against the simulator (`telnet_session_hold_test.go`: login, poll, command,
+push, a recover that logs in again and re-arms, and a wrong password connected exactly once and
+rejected with the panel's own text), and end to end (`run_telnet_session_test.go`: the shipped driver
+attached with a wrong password reads `rejected`, `session-reason` `auth: auth rejected` and
+`endpoint-authenticated` `no`, logs one rejection across twenty ticks, a `:retry` dials once more, and
+fixing the secret reads `up`, authenticated, and lands the polled value).
+
+### An ssh session holds a shell for the line protocol (#1032)
+
+The third slice of the protocol backlog. `ssh` becomes a held line transport
+(`internal/collection/sshsession.go`): a staged dialer whose auth step is ssh userauth with the
+credential the driver names (`session.credential`: a password, a private key, or keyboard-interactive
+answered by the shared login dialog), then a shell channel (a PTY on `session.pty`) or an exec channel
+(`session.exec`) bridged onto an in-memory pipe so the line reader keeps its read deadlines. A refused
+credential is terminal `auth`; the host key is **pinned on first use**: the node trusts the first key,
+publishes it as the seeded `ssh-host-key` property, and the worklist delivers it back as the pin (the
+declared value first), so a changed key reads `rejected`, class `host-key`, naming both fingerprints.
+`POST /endpoints/{id}:retry` takes an optional `host_key`, which declares the new pin (audited) and
+recycles the session onto it. The simulated panel keeps its ssh host key across listener restarts (a
+test rotates it to model a replaced component) and serves the NVP subject on its ssh shell; the
+official `newtron-nvp-ssh` driver ships. Proven against the simulator (poll, command, push, recover onto
+the same key, down after the budget, a wrong password and a rotated key each rejected after one
+attempt) and end to end (`run_ssh_session_test.go`: trust on first use lands `ssh-host-key` and the
+worklist pin, a rotated key reads `rejected` naming both keys, a malformed `host_key` refuses, and the
+accepted key reads `up`). Recorded as
+[ADR-0157](/architecture/decisions/#adr-0157-telnet-and-ssh-are-held-line-transports-their-login-is-the-drivers-and-the-ssh-host-key-is-pinned-on-first-use),
+which also logs the designed endpoint-params login retiring. Prompt-delimited answers are #1057.
+
+### The telnet review's fixes (#1033)
+
+Each with a test that failed first. A telnet negotiation reply carries its own write deadline, and the
+line reader and login dialog clear theirs after each write, so a component that sends `IAC DO
+TIMING-MARK` after an idle spell is answered rather than silently dropped (and the stale deadline can no
+longer surface from a read as the reader's own interrupt). The telnet probe reads a port that accepts
+and hangs up as `closed`, not `timeout`, and while the node holds an up telnet session the probe takes
+its verdict from the session instead of dialing a second connection. The design fences that still
+listed telnet and ssh as unbuilt, and their endpoint-params rows, are retired.
+
+### The ssh review's fixes (#1032)
+
+Each with a test that failed first. The trusted host key publishes on every authenticated connection
+and again on every tick the worklist delivers no pin, and the node carries it across a session's
+recycle, so a lost publish followed by a credential edit cannot reopen first use to whatever answers
+next. A keyboard-interactive question nothing declared answers (a one-time code) is an `auth`
+refusal, not a retry loop. An ssh session requires `session.credential` (the ssh user), and the
+`ssh-key` secret type ships so the private-key path works end to end, proven with the pty and exec
+channels against a real ssh server. The `:retry` route says a `host_key` recycles any session onto the
+new pin. The ssh probe's params login, which ignores the pin, is filed as #1060.
+
+### One connection fingerprint gates every connection (#1056, #1060)
+
+The architect's rulings on #1056 and #1049, folded into the rollup. A component that hangs up after
+the final secret with no refusal text charges a **login budget** (three in a row read `rejected` as
+`auth`; `ErrLoginDropped` in the login dialog, a sim telnet face that rejects silently proves it over
+the wire). The retry signal is an explicit `session_retry` counter on the endpoint (a migration), not
+`updated_at`, so a label edit no longer pulls a rejected session out. `internal/fingerprint` is the
+**connection fingerprint**: the worklist computes one per endpoint over every input a connection is
+made with, the attached secrets as digests of their sealed envelopes, and a reflection test and a
+table test hold its inputs complete. The node holds a **gate** per endpoint
+(`internal/node/gate.go`) at the ladder rung a terminal refusal holds, for that fingerprint, across
+its held session (started rejected), the ssh probe (#1060: its params credential tried once, and
+never past a changed pinned key), stateless polls and commands; the gate publishes as
+`endpoint-rejection` and is carried back, so a restarted node makes no attempt. The driver spec's
+`ladder` declares the rungs (an informational ping, the transport rung that gates, the session rung),
+defaulted by the registry's new `rung`, a request rung proven over the line client. Proven end to end
+(`run_session_identity_test.go`): a silent panel spends the login budget; a label edit and a node
+restart try nothing; a retry, a login-declaration change, a rotated secret and a re-attach over ssh
+each try again; a wrong port reads down on refused connects and tries no login; the ssh probe sends a
+wrong password once, across a restart, then authenticates after a params edit. Recorded as
+[ADR-0158](/architecture/decisions/#adr-0158-one-connection-fingerprint-gates-every-connection-on-a-ladder-the-driver-declares),
+with ADR-0155 amended.
+
+### The fingerprint review's fixes (#1056, #1060)
+
+Each with a test that failed first. The gate (`endpoint-rejection`) republishes every pull until the
+worklist reflects it, under a task chosen from the current worklist, so a lost publish or a
+re-derived driver can no longer leave a restarted node without it. A refusal reported for an attempt
+under an older fingerprint gates nothing. A host key trusted on first use stays out of the
+fingerprint (only the declared pin goes in), so first use no longer recycles a healthy session. The
+push lane refuses the node's control facts (`endpoint-rejection`, `ssh-host-key`). A request rung
+refuses at write anywhere but a line over tcp (#821, #1037). The informational ping runs beside the
+probe on a 500ms bound. Fixed-port simulator collisions are #1066.
+
+### A driver-attached endpoint's connection edits in place (#1061)
+
+The architect's ruling before merge: re-attach is not the path. `PATCH /endpoints/{id}` takes a
+driver-attached endpoint's `inputs` (the host, the port, an attached secret's reference), merged over
+the stored ones and checked against the driver's declared inputs (a non-number port, an undeclared
+input, a raw `params.target`, or a transport the driver does not speak is a 400 naming the field),
+every attached secret re-resolved under the editor's own secret scope (an editor cannot redirect a
+credential they could not use), audited, and the tasks re-derived in the same transaction through the
+one per-endpoint derivation #823's driver update now shares (`rederiveEndpoint`; ids move only where
+the derived spec does). The console's endpoint blade edits the declared inputs in place, sending only
+the ones changed, and `omniglass endpoint update <id> --inputs` regenerates. Proven against Postgres
+(the port and address and secret edits, task ids unchanged, the refusals, two audit rows), over the
+API (a 400 naming `port`, the viewer refused), in vitest (only changed inputs sent, a label-only edit
+sends no inputs), and end to end (`TestADriverEndpointEditsItsAddressInPlace`: a wrong port reads
+down with no login; the port edited in place connects and authenticates within a tick; a label edit
+recycles nothing; the address edited in place moves the healthy session to the other component).
+Recorded in ADR-0158 point 6.
+
+The in-place edit's review, each with a test that failed first: a `params.timeout` value is parsed
+and refused by name unless it is a positive duration; an input a driver update dropped no longer
+blocks an edit; an empty value clears an optional input (its default fills it again) and refuses a
+required one by name, the console sending a cleared field rather than dropping it; the row is locked
+before an edit merges over it, so two concurrent edits cannot lose one; a transport restatement is
+judged against the endpoint's own. End to end, an in-place swap of the attached secret now un-gates
+a session its stale credential had rejected, within a tick.
+
+CI on the rollup found two more. A telnet test's scripted peer hung up as soon as it reported, racing
+the test's peek at the connection; the peer now stays connected and the test proves the connection
+survived with a second exchange (a review catalog entry records the pattern). And a stateless poll
+kept the failure backoff it built up against an address since edited in place, so its first good
+fetch could wait tens of seconds: a poll whose endpoint's connection fingerprint moves now runs at
+the next tick. The `fix-an-endpoint-in-place` walkthrough ships on the operator collection guide.

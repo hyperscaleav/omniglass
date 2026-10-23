@@ -1303,9 +1303,29 @@ export interface paths {
         head?: never;
         /**
          * Update an endpoint
-         * @description Patches an endpoint's node placement, params or label; an empty label clears it and the surface falls back to the derived name. Gated by endpoint:update; read and update scopes (through the component) drive the 404 versus 403 split.
+         * @description Patches an endpoint's node placement, params, label, or (driver-attached) its connection inputs in place: the host, port and attached secret references, validated against the driver's declared inputs, the endpoint's tasks re-derived in the same transaction. A value the driver refuses is a 400 naming the field. An empty label clears it and the surface falls back to the derived name. Gated by endpoint:update; read and update scopes (through the component) drive the 404 versus 403 split.
          */
         patch: operations["update-endpoint"];
+        trace?: never;
+    };
+    "/endpoints/{id}:retry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Retry an endpoint's gated connections
+         * @description Moves the endpoint's retry counter, which is part of its connection fingerprint: a gate a refusal retrying cannot fix holds (a wrong credential, a changed host key, a reply its driver declares terminal) lifts, the node recycles the endpoint's held session, and every connection to it is attempted again. Fixing the secret, the address, the transport or the driver's login needs no retry: the change moves the fingerprint itself. An unrelated edit (a label) moves nothing. For an ssh endpoint, host_key names a host key to trust (the offered key a host-key rejection names): it becomes the declared pin and recycles the session onto it whatever its state, an audited acceptance of the change. Audited. Gated by endpoint:retry; read and retry scopes (through the component) drive the 404 versus 403 split.
+         */
+        post: operations["retry-endpoint"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/event-rules": {
@@ -8250,6 +8270,16 @@ export interface components {
             /** @description True for the resolved value; false for a shadowed candidate */
             winner: boolean;
         };
+        RetryEndpointInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/RetryEndpointInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description An ssh endpoint only: the SHA256 fingerprint of a changed host key the operator now trusts (the offered key a host-key rejection names). It becomes the endpoint's declared ssh-host-key pin, and the session redials onto it. Omit to retry with the pin unchanged */
+            host_key?: string;
+        };
         RevealSecretOutputBody: {
             /**
              * Format: uri
@@ -9283,7 +9313,9 @@ export interface components {
             built: boolean;
             description: string;
             held: boolean;
+            line: boolean;
             name: string;
+            rung?: string;
         };
         UISettings: {
             /**
@@ -9396,12 +9428,18 @@ export interface components {
              * @example /api/v1/schemas/UpdateEndpointInputBody.json
              */
             readonly $schema?: string;
+            /** @description A driver-attached endpoint's inputs, edited in place (#1061): the host, the port, an attached secret's reference name, any input the driver declares. Merged over the stored inputs and validated against the driver; a value it refuses is a 400 naming the input. Changing where a credential is sent needs the caller to be able to use that credential */
+            inputs?: {
+                [key: string]: string;
+            };
             /** @description A new label; an empty string clears it, and the surface falls back to the derived name. Omit to leave it alone */
             label?: string;
             /** @description Reassign the node placement, by name or id */
             node?: string;
-            /** @description Replace the address/target settings (jsonb) */
+            /** @description Replace the address/target settings (jsonb). On a driver-attached endpoint only the timeout is set here: its address derives from its host and port inputs */
             params?: unknown;
+            /** @description The transport: a driver-attached endpoint takes only one its driver speaks */
+            transport?: string;
         };
         UpdateEventRuleInputBody: {
             /**
@@ -12519,6 +12557,42 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["UpdateEndpointInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EndpointBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "retry-endpoint": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The endpoint's surrogate id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["RetryEndpointInputBody"];
             };
         };
         responses: {

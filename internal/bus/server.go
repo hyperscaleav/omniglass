@@ -157,7 +157,7 @@ func (s *Server) subscribe() error {
 		for _, d := range pending {
 			reply.Commands = append(reply.Commands, collection.CommandDelivery{
 				ID: d.ID, CommandType: d.CommandType, Transport: d.Transport, Target: d.Target, Line: d.Line,
-				EndpointID: d.EndpointID, Reply: d.Reply,
+				EndpointID: d.EndpointID, Reply: d.Reply, SessionOnly: d.SessionOnly,
 			})
 		}
 		b, err := json.Marshal(reply)
@@ -223,6 +223,12 @@ func (s *Server) buildWorklistReply(node string) (collection.WorklistReply, erro
 			EndpointParams: t.EndpointParams,
 			Spec:           t.Spec,
 			Secrets:        t.Secrets,
+			Session:        t.Session,
+			SessionRetry:   t.SessionRetry,
+			HostKey:        t.HostKey,
+			Fingerprint:    t.Fingerprint,
+			Rejection:      t.Rejection,
+			Ladder:         t.Ladder,
 		})
 	}
 	return reply, nil

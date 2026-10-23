@@ -1,0 +1,38 @@
+# Fix an endpoint in place (#1061): a driver attached with its host typed one
+# octet short collects nothing; the host is corrected on the endpoint itself,
+# checked against the driver's inputs, and samples arrive with no re-attach.
+# The walkthrough stack places bay-2-display (a Boreal Edge 55 in Bay 2, SNMP
+# on 127.60.9.9) with no endpoint (web/e2e/lib/stack.sh), as set-up-monitoring
+# uses it. The edit moves the endpoint's connection fingerprint, so the node's
+# poll runs at its next 2s check-in rather than waiting out the backoff the
+# wrong address built up.
+title: Fix an endpoint in place
+description: Attach the SNMP driver with its host typed one octet short, then correct the host on the endpoint itself and watch samples arrive, with no re-attach.
+steps:
+  - goto: /components/bay-2-display?tab=configure
+    caption: A display in Bay 2, with no endpoint yet.
+  - click: { role: button, name: Add endpoint }
+    caption: Add an endpoint, the way a node reaches the display.
+  - click: { role: tab, name: Attach a driver }
+    caption: Attach a driver.
+  - select: { target: '#new-iface-driver', value: snmp-generic }
+    caption: The SNMP driver reads the uptime any agent reports.
+  - type: { target: '#new-iface-input-host', text: 127.60.9 }
+    caption: The host is the display's address, typed one octet short.
+  - type: { target: '#new-iface-input-community', text: sim-community }
+    caption: The community is a secret's name, never its value.
+  - select: { target: '#new-iface-node', value: edge-hq }
+    caption: The node edge-hq collects it.
+  - click: { role: button, name: Attach driver }
+    caption: Attach it. The endpoint opens; nothing answers at that address, so nothing is collected.
+  - click: 'button:has-text("Edit") >> nth=-1'
+    caption: Its inputs edit in place, the same ones the attach asked for.
+  - type: { target: '#edit-iface-input-host', text: '.9' }
+    caption: Add the missing octet. The driver checks the value, and the target moves with it.
+  - click: 'button:has-text("Save") >> nth=-1'
+    caption: Save. No re-attach; the node reconnects on the new address at its next check-in.
+  - goto: /components/bay-2-display
+    caption: Its Overview reads the display as it is collected.
+  - wait: { selector: '[data-testid="leaf-vitals"]:has-text("Uptime")', timeout: 15000 }
+    caption: Samples arrived. The uptime the display reports now lands.
+    poster: true

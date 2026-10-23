@@ -152,6 +152,26 @@ func TestTelemetryPushAPI(t *testing.T) {
 		t.Fatalf("reject-not-project failed: audio-level landed as %+v", m)
 	}
 
+	// A NODE'S CONTROL FACTS ARE NOT PUSHABLE (ADR-0158): the gate a node
+	// publishes (endpoint-rejection) and the host key it trusted
+	// (ssh-host-key) steer what the node attempts, so the push lane rejects
+	// them by name rather than let a push plant or lift a gate.
+	ctl := c.do(ownerTok, http.MethodPost, "/telemetry:push", map[string]any{
+		"owner": map[string]any{"kind": "component", "ref": "bar-1"},
+		"properties": []map[string]any{
+			{"name": "endpoint-rejection", "instance": "ssh", "value": "none"},
+			{"name": "ssh-host-key", "instance": "ssh", "value": "SHA256:" + strings.Repeat("C", 43)},
+		},
+	}, http.StatusAccepted)
+	for _, name := range []string{"endpoint-rejection", "ssh-host-key"} {
+		if !strings.Contains(string(ctl), name) {
+			t.Fatalf("the push lane accepted the control fact %s: %s", name, ctl)
+		}
+	}
+	if s, _ := gw.LatestProperty(ctx, "bar-1", "endpoint-rejection", "ssh"); s != nil {
+		t.Fatalf("a pushed endpoint-rejection landed: %+v", s)
+	}
+
 	// SCHEMA VIOLATION IS A 422 (#594 acceptance): the name resolves, so the
 	// mistake is in the data, and the request is refused whole rather than
 	// half-landing a batch around it. video-input's seeded validation is an

@@ -13,12 +13,17 @@ type pollSchedule struct {
 	heartbeat time.Duration
 	next      map[string]time.Time
 	backoff   map[string]time.Duration // the last retry wait of a failing poll
+	// refused marks a poll whose last run met a terminal refusal (#1049): it
+	// waits its interval, unless its session reads up again first.
+	refused map[string]bool
+	// fingerprint is the connection fingerprint each poll was booked under.
+	fingerprint map[string]string
 }
 
 // newPollSchedule keeps the schedule for a node ticking every heartbeat,
 // which is also where a failed poll's retry backoff starts.
 func newPollSchedule(heartbeat time.Duration) *pollSchedule {
-	return &pollSchedule{heartbeat: heartbeat, next: map[string]time.Time{}, backoff: map[string]time.Duration{}}
+	return &pollSchedule{heartbeat: heartbeat, next: map[string]time.Time{}, backoff: map[string]time.Duration{}, refused: map[string]bool{}, fingerprint: map[string]string{}}
 }
 
 // failed rebooks a poll that ran at now and landed nothing (its fetch
@@ -46,7 +51,45 @@ func (s *pollSchedule) failed(taskID string, every time.Duration, now time.Time)
 
 // succeeded ends a poll's failing streak; its next run stays booked from
 // its due time.
-func (s *pollSchedule) succeeded(taskID string) { delete(s.backoff, taskID) }
+func (s *pollSchedule) succeeded(taskID string) {
+	delete(s.backoff, taskID)
+	delete(s.refused, taskID)
+}
+
+// refusedRun books a poll whose run met a terminal refusal (#1049): no
+// backoff, its next run at its interval, unless its session is up again
+// first (releaseRefused).
+func (s *pollSchedule) refusedRun(taskID string) {
+	delete(s.backoff, taskID)
+	s.refused[taskID] = true
+}
+
+// rebook forgets a poll's booking and failure backoff when its endpoint's
+// connection fingerprint moved (#1061): an address, port or secret edited in
+// place is new inputs, so the poll runs at the next tick rather than waiting
+// out a backoff built up against the old ones.
+func (s *pollSchedule) rebook(taskID, fingerprint string) {
+	prev, seen := s.fingerprint[taskID]
+	s.fingerprint[taskID] = fingerprint
+	if !seen || prev == fingerprint {
+		return
+	}
+	delete(s.next, taskID)
+	delete(s.backoff, taskID)
+	delete(s.refused, taskID)
+}
+
+// releaseRefused makes a refused poll due at once when its session is up
+// again: a fixed credential lands data at the next tick, not an interval
+// later. A poll that was not refused, or whose session is still down or
+// rejected, keeps its booking.
+func (s *pollSchedule) releaseRefused(taskID string, sessionUp bool) {
+	if !s.refused[taskID] || !sessionUp {
+		return
+	}
+	delete(s.refused, taskID)
+	delete(s.next, taskID)
+}
 
 // nextOf is when a poll is next due (for tests and logs).
 func (s *pollSchedule) nextOf(taskID string) (time.Time, bool) {
@@ -82,6 +125,8 @@ func (s *pollSchedule) retain(ids map[string]bool) {
 		if !ids[id] {
 			delete(s.next, id)
 			delete(s.backoff, id)
+			delete(s.refused, id)
+			delete(s.fingerprint, id)
 		}
 	}
 }

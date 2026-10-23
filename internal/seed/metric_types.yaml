@@ -49,3 +49,8 @@ metric_types:
     unit: ms
     label: SSH Handshake Time
     description: Time for the SSH key exchange to reach authentication; absent when the daemon never completed it.
+  - name: telnet-response-time
+    data_type: float
+    unit: ms
+    label: Telnet Response Time
+    description: Time for a telnet port to send its first bytes (an option negotiation or a banner) after the connection opened; absent when the port accepted and stayed silent.

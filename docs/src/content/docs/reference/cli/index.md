@@ -1617,6 +1617,26 @@ Example:
 omniglass endpoint list
 ```
 
+### `omniglass endpoint retry`
+
+Retry an endpoint's gated connections
+
+```
+omniglass endpoint retry <id> [flags]
+```
+
+Moves the endpoint's retry counter, which is part of its connection fingerprint: a gate a refusal retrying cannot fix holds (a wrong credential, a changed host key, a reply its driver declares terminal) lifts, the node recycles the endpoint's held session, and every connection to it is attempted again. Fixing the secret, the address, the transport or the driver's login needs no retry: the change moves the fingerprint itself. An unrelated edit (a label) moves nothing. For an ssh endpoint, host_key names a host key to trust (the offered key a host-key rejection names): it becomes the declared pin and recycles the session onto it whatever its state, an audited acceptance of the change. Audited. Gated by endpoint:retry; read and retry scopes (through the component) drive the 404 versus 403 split.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--host-key` | string | (none) | An ssh endpoint only: the SHA256 fingerprint of a changed host key the operator now trusts (the offered key a host-key rejection names). It becomes the endpoint's declared ssh-host-key pin, and the session redials onto it. Omit to retry with the pin unchanged |
+
+Example:
+
+```sh
+omniglass endpoint retry <id>
+```
+
 ### `omniglass endpoint update`
 
 Update an endpoint
@@ -1625,13 +1645,15 @@ Update an endpoint
 omniglass endpoint update <id> [flags]
 ```
 
-Patches an endpoint's node placement, params or label; an empty label clears it and the surface falls back to the derived name. Gated by endpoint:update; read and update scopes (through the component) drive the 404 versus 403 split.
+Patches an endpoint's node placement, params, label, or (driver-attached) its connection inputs in place: the host, port and attached secret references, validated against the driver's declared inputs, the endpoint's tasks re-derived in the same transaction. A value the driver refuses is a 400 naming the field. An empty label clears it and the surface falls back to the derived name. Gated by endpoint:update; read and update scopes (through the component) drive the 404 versus 403 split.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
+| `--inputs` | string | (none) | A driver-attached endpoint's inputs, edited in place (#1061): the host, the port, an attached secret's reference name, any input the driver declares. Merged over the stored inputs and validated against the driver; a value it refuses is a 400 naming the input. Changing where a credential is sent needs the caller to be able to use that credential |
 | `--label` | string | (none) | A new label; an empty string clears it, and the surface falls back to the derived name. Omit to leave it alone |
 | `--node` | string | (none) | Reassign the node placement, by name or id |
-| `--params` | string | (none) | Replace the address/target settings (jsonb) |
+| `--params` | string | (none) | Replace the address/target settings (jsonb). On a driver-attached endpoint only the timeout is set here: its address derives from its host and port inputs |
+| `--transport` | string | (none) | The transport: a driver-attached endpoint takes only one its driver speaks |
 
 Example:
 

@@ -30,6 +30,9 @@ const (
 	Prohibited Reachability = "prohibited"
 	// Unreachable: no route to the host or network (EHOSTUNREACH/ENETUNREACH).
 	Unreachable Reachability = "unreachable"
+	// Closed: the target accepted the connection and hung up before it
+	// answered (a session limit or an ACL on the service, #1033).
+	Closed Reachability = "closed"
 )
 
 // Up reports whether the outcome is a positive reachability answer (the only

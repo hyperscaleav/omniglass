@@ -20,10 +20,10 @@ credential is permitted only its own `<node>` subjects. Also built: running task
 `internal/bus/consumer.go`), and the raw self-log lane (ADR-0066: `internal/node/logs.go`,
 `GET /nodes/{name}/logs`, the console Self-logs panel), the command wire (a per-node pull, actuated
 over the driver's binding, [ADR-0136](/architecture/decisions/#adr-0136-actuation-is-a-per-node-pull-rendered-at-dispatch)),
-driver polls on their declared schedule (#822), and, for the line protocol over `tcp`, held sessions
+driver polls on their declared schedule (#822), and, for the line protocol over `tcp`, `telnet` (#1033) and `ssh` (#1032), held sessions
 (#816, [below](#sessions)) with their listeners and the inbound demux (#817). Still `Design`: the
 durable JetStream command queue, the session pool knobs and the held transports beyond the line
-protocol (#1032 (ssh), #1033 (telnet), #1034 (websocket), #1035 (tls), #1036 (mqtt), #1037 (udp), #1038 (SSE over http), #1039 (modbus/tcp), #1040 (bacnet/ip), #1041 (knxnet/ip), [ADR-0153](/architecture/decisions/#adr-0153-the-held-session-proof-is-the-line-protocol-over-tcp-other-held-transports-are-their-own-issues)), the layered `_check` reachability gate,
+protocol (#1034 (websocket), #1035 (tls), #1036 (mqtt), #1037 (udp), #1038 (SSE over http), #1039 (modbus/tcp), #1040 (bacnet/ip), #1041 (knxnet/ip), [ADR-0153](/architecture/decisions/#adr-0153-the-held-session-proof-is-the-line-protocol-over-tcp-other-held-transports-are-their-own-issues)), the layered `_check` reachability gate,
 config-generation-driven cache invalidation, node self-telemetry, the node-down sweep, the JetStream
 publish-ack delivery contract (telemetry publish is fire-and-forget today, #430), tick
 scheduling and concurrency knobs, and config apply (the `:apply` flow). The credential is a shared
@@ -165,19 +165,37 @@ The built endpoint types, their per-task params, and the fixed samples each emit
 ## Sessions
 
 Built (#816): the node holds one session per endpoint whose worklist carries a standing listen task
-over a transport with a session dialer (the line protocol over `tcp` today), reconciled against
-every worklist pull and torn down on task removal, re-address, or node shutdown. It establishes,
+over a transport with a session dialer (the line protocol over `tcp` today), or a driver poll whose
+driver declares a `session` block, reconciled against every worklist pull and torn down on task
+removal, re-address, or node shutdown. It establishes,
 lends its connection to the endpoint's line polls, recovers with a jittered, bounded backoff, and
 reports each transition as the `session-state` property (`establishing`, `up`, `recovering`,
-`down`) plus a self-log carrying the reason; there is no `session_log` table
+`down`, `rejected`) plus `session-reason` and a self-log carrying the reason; there is no
+`session_log` table
 ([ADR-0150](/architecture/decisions/#adr-0150-a-held-sessions-state-is-a-property-series-and-node-logs-not-a-session-table)).
 The machine's detail is on [collection](/architecture/collection/#sessions). Built with #817: the
 subscription on establish (a listener's instantiation commands, re-sent on every recover) and the
 demux on the shared connection (listeners first, answers by reply shape;
-[routing](/architecture/collection/#listeners-over-a-held-session)). Still design below: the pool
-knobs and authentication on establish.
+[routing](/architecture/collection/#listeners-over-a-held-session)). Built with #1049:
+**authentication on establish**, as a layer that gates the session. The worklist carries each
+driver task's `session` block (read off the live driver spec) and the endpoint's connection
+fingerprint and published gate (ADR-0158); the node
+renders the login against the delivered secrets (a credential it lacks refuses the session by
+reference, never by value), runs it on every connection before any poll, command, or arm, and
+publishes its verdict as `endpoint-authenticated`. A terminal refusal reads `rejected` and the node
+dials no more: a poll over it fails fast and waits its interval (or runs at the first tick its
+session is up again, so a fixed credential lands data within a tick), a command fails with the reason, and
+neither falls back to a throwaway connection. The node gates the endpoint at the refusal's ladder
+rung for its fingerprint, across its probes, polls, commands and session, publishes the gate as
+`endpoint-rejection`, and adopts it back from the worklist after a restart, so it makes no attempt
+against an unchanged fingerprint; a rotated secret, a new address, port or transport, a changed login
+declaration, or an operator's `:retry` moves the fingerprint and lifts it
+([auth and rejection](/architecture/collection/#auth-and-rejection),
+[the gate](/architecture/collection/#the-connection-fingerprint-and-the-layered-gate),
+[ADR-0155](/architecture/decisions/#adr-0155-auth-is-a-layer-that-gates-a-held-session-and-a-terminal-refusal-reads-rejected)).
+Still design below: the pool knobs.
 
-::::design[Target design: sessions and the session pool, tracked in #603; the held transports beyond the line protocol are #1032 (ssh), #1033 (telnet), #1034 (websocket), #1035 (tls), #1036 (mqtt), #1037 (udp), #1038 (SSE over http), #1039 (modbus/tcp), #1040 (bacnet/ip), #1041 (knxnet/ip)]
+::::design[Target design: sessions and the session pool, tracked in #603; the held transports beyond the line protocol are #1034 (websocket), #1035 (tls), #1036 (mqtt), #1037 (udp), #1038 (SSE over http), #1039 (modbus/tcp), #1040 (bacnet/ip), #1041 (knxnet/ip)]
 A stateful endpoint (`ssh`, `mqtt`, anything held open) becomes a **session** at runtime: one
 connection keyed by `(node, endpoint)`, shared by every task and command under it, handshake and
 auth paid once. A pool holds it open across ticks (reconnect, backoff, keepalive); a listener
@@ -298,8 +316,10 @@ opt-in (a differing liveness credential must not read as down).
 The honest limit: a v2c wrong community is a **silent drop**, so a get failure alone cannot separate
 down from wrong-community. Cross-referencing does: host pings + UDP not refused + get silent =
 "reachable, SNMP not answering this community"; with ICMP fully blocked the inference is lost,
-reading "host down or fully filtered." SSH verifies auth; telnet completes the `login:`/`Password:`
-chain (service-up, not a verified shell). `params.liveness_oid` overrides the probe OID.
+reading "host down or fully filtered." The ssh probe still tries a params credential every tick
+(#1060); the built telnet probe never logs in (it
+reads the first negotiation or banner bytes; the login is the held session's auth step, so a probe
+cannot retry a bad credential every tick, [ADR-0157](/architecture/decisions/#adr-0157-telnet-and-ssh-are-held-line-transports-their-login-is-the-drivers-and-the-ssh-host-key-is-pinned-on-first-use)). `params.liveness_oid` overrides the probe OID.
 
 **Poller** tasks run only if the verdict is up; **listener** (`mode=listen`) tasks run ungated,
 never pinged; **inline probes** (`icmp`/`tcp` with the host on the task) *are* the check, ungated. A

@@ -84,9 +84,18 @@ type createEndpointInput struct {
 type updateEndpointInput struct {
 	ID   string `path:"id"`
 	Body struct {
-		Node   *string         `json:"node,omitempty" doc:"Reassign the node placement, by name or id"`
-		Label  *string         `json:"label,omitempty" maxLength:"200" doc:"A new label; an empty string clears it, and the surface falls back to the derived name. Omit to leave it alone"`
-		Params json.RawMessage `json:"params,omitempty" doc:"Replace the address/target settings (jsonb)"`
+		Node      *string           `json:"node,omitempty" doc:"Reassign the node placement, by name or id"`
+		Label     *string           `json:"label,omitempty" maxLength:"200" doc:"A new label; an empty string clears it, and the surface falls back to the derived name. Omit to leave it alone"`
+		Params    json.RawMessage   `json:"params,omitempty" doc:"Replace the address/target settings (jsonb). On a driver-attached endpoint only the timeout is set here: its address derives from its host and port inputs"`
+		Inputs    map[string]string `json:"inputs,omitempty" doc:"A driver-attached endpoint's inputs, edited in place (#1061): the host, the port, an attached secret's reference name, any input the driver declares. Merged over the stored inputs and validated against the driver; a value it refuses is a 400 naming the input. Changing where a credential is sent needs the caller to be able to use that credential"`
+		Transport *string           `json:"transport,omitempty" doc:"The transport: a driver-attached endpoint takes only one its driver speaks"`
+	}
+}
+
+type retryEndpointInput struct {
+	ID   string `path:"id" doc:"The endpoint's surrogate id"`
+	Body *struct {
+		HostKey string `json:"host_key,omitempty" doc:"An ssh endpoint only: the SHA256 fingerprint of a changed host key the operator now trusts (the offered key a host-key rejection names). It becomes the endpoint's declared ssh-host-key pin, and the session redials onto it. Omit to retry with the pin unchanged"`
 	}
 }
 
@@ -182,13 +191,38 @@ func registerEndpointRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 		Method:      http.MethodPatch,
 		Path:        "/endpoints/{id}",
 		Summary:     "Update an endpoint",
-		Description: "Patches an endpoint's node placement, params or label; an empty label clears it and the surface falls back to the derived name. Gated by endpoint:update; read and update scopes (through the component) drive the 404 versus 403 split.",
+		Description: "Patches an endpoint's node placement, params, label, or (driver-attached) its connection inputs in place: the host, port and attached secret references, validated against the driver's declared inputs, the endpoint's tasks re-derived in the same transaction. A value the driver refuses is a 400 naming the field. An empty label clears it and the surface falls back to the derived name. Gated by endpoint:update; read and update scopes (through the component) drive the 404 versus 403 split.",
 	}, "endpoint", "update"), func(ctx context.Context, in *updateEndpointInput) (*endpointOutput, error) {
 		it, err := gw.UpdateEndpoint(ctx, actorID(ctx), in.ID, storage.EndpointPatch{
-			Node:   in.Body.Node,
-			Params: []byte(in.Body.Params),
-			Label:  in.Body.Label,
+			Node:      in.Body.Node,
+			Params:    []byte(in.Body.Params),
+			Label:     in.Body.Label,
+			Inputs:    in.Body.Inputs,
+			Transport: in.Body.Transport,
+			// An edit re-resolves every attached secret under the caller's own
+			// secret scope and admin tier, as an attach does.
+			SecretRead: a.scopeFor(ctx, "secret", "read"),
+			CanAdmin:   a.canSecretAdmin(ctx, "read"),
 		}, a.scopeFor(ctx, "endpoint", "read"), a.scopeFor(ctx, "endpoint", "update"))
+		if err != nil {
+			return nil, mapEndpointErr(err)
+		}
+		return &endpointOutput{Body: toEndpointBody(it)}, nil
+	})
+
+	huma.Register(api, a.gated(huma.Operation{
+		OperationID: "retry-endpoint",
+		Method:      http.MethodPost,
+		Path:        "/endpoints/{id}:retry",
+		Summary:     "Retry an endpoint's gated connections",
+		Description: "Moves the endpoint's retry counter, which is part of its connection fingerprint: a gate a refusal retrying cannot fix holds (a wrong credential, a changed host key, a reply its driver declares terminal) lifts, the node recycles the endpoint's held session, and every connection to it is attempted again. Fixing the secret, the address, the transport or the driver's login needs no retry: the change moves the fingerprint itself. An unrelated edit (a label) moves nothing. For an ssh endpoint, host_key names a host key to trust (the offered key a host-key rejection names): it becomes the declared pin and recycles the session onto it whatever its state, an audited acceptance of the change. Audited. Gated by endpoint:retry; read and retry scopes (through the component) drive the 404 versus 403 split.",
+	}, "endpoint", "retry"), func(ctx context.Context, in *retryEndpointInput) (*endpointOutput, error) {
+		hostKey := ""
+		if in.Body != nil {
+			hostKey = in.Body.HostKey
+		}
+		it, err := gw.RetryEndpoint(ctx, actorID(ctx), in.ID, hostKey,
+			a.scopeFor(ctx, "endpoint", "read"), a.scopeFor(ctx, "endpoint", "retry"))
 		if err != nil {
 			return nil, mapEndpointErr(err)
 		}
@@ -234,8 +268,10 @@ func mapEndpointErr(err error) error {
 		return huma.Error422UnprocessableEntity("component not found")
 	case errors.Is(err, storage.ErrEndpointNodeNotFound), errors.Is(err, storage.ErrNodeNotFound):
 		return huma.Error422UnprocessableEntity("node not found")
-	case errors.Is(err, storage.ErrEndpointDriverParams):
-		return huma.Error422UnprocessableEntity("a driver-attached endpoint's address is derived from its inputs; re-attach the driver to change it")
+	case errors.Is(err, storage.ErrRetryHostKey):
+		return huma.Error422UnprocessableEntity(strings.TrimPrefix(err.Error(), "storage: retry host key: "))
+	case errors.Is(err, storage.ErrEndpointPatchInvalid):
+		return huma.Error400BadRequest(strings.TrimPrefix(err.Error(), "storage: endpoint patch invalid: "))
 	default:
 		return huma.Error500InternalServerError("endpoint operation failed")
 	}

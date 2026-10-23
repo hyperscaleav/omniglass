@@ -10,7 +10,7 @@ import (
 func TestNative(t *testing.T) {
 	got := Native()
 	want := []string{EndpointAuthenticated, EndpointReachable, EndpointResponsive, HTTPResponseTime,
-		ICMPRTTAvg, ICMPReachable, SSHHandshakeTime, TCPConnectTime, TCPOpen, SessionState}
+		ICMPRTTAvg, ICMPReachable, SSHHandshakeTime, TelnetResponseTime, TCPConnectTime, TCPOpen, SessionState, SessionReason, SSHHostKey, EndpointRejection}
 	slices.Sort(want)
 	if !slices.Equal(got, want) {
 		t.Fatalf("Native() = %v, want %v", got, want)

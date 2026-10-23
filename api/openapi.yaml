@@ -6655,6 +6655,20 @@ components:
         - winner
         - value
       type: object
+    RetryEndpointInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/RetryEndpointInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        host_key:
+          description: "An ssh endpoint only: the SHA256 fingerprint of a changed host key the operator now trusts (the offered key a host-key rejection names). It becomes the endpoint's declared ssh-host-key pin, and the session redials onto it. Omit to retry with the pin unchanged"
+          type: string
+      type: object
     RevealSecretOutputBody:
       additionalProperties: false
       properties:
@@ -8567,13 +8581,18 @@ components:
           type: string
         held:
           type: boolean
+        line:
+          type: boolean
         name:
+          type: string
+        rung:
           type: string
       required:
         - name
         - description
         - held
         - built
+        - line
       type: object
     UISettings:
       additionalProperties: false
@@ -8739,6 +8758,11 @@ components:
           format: uri
           readOnly: true
           type: string
+        inputs:
+          additionalProperties:
+            type: string
+          description: "A driver-attached endpoint's inputs, edited in place (#1061): the host, the port, an attached secret's reference name, any input the driver declares. Merged over the stored inputs and validated against the driver; a value it refuses is a 400 naming the input. Changing where a credential is sent needs the caller to be able to use that credential"
+          type: object
         label:
           description: A new label; an empty string clears it, and the surface falls back to the derived name. Omit to leave it alone
           maxLength: 200
@@ -8747,7 +8771,10 @@ components:
           description: Reassign the node placement, by name or id
           type: string
         params:
-          description: Replace the address/target settings (jsonb)
+          description: "Replace the address/target settings (jsonb). On a driver-attached endpoint only the timeout is set here: its address derives from its host and port inputs"
+        transport:
+          description: "The transport: a driver-attached endpoint takes only one its driver speaks"
+          type: string
       type: object
     UpdateEventRuleInputBody:
       additionalProperties: false
@@ -11621,7 +11648,7 @@ paths:
       summary: Get an endpoint
       x-omniglass-permission: endpoint:read
     patch:
-      description: Patches an endpoint's node placement, params or label; an empty label clears it and the surface falls back to the derived name. Gated by endpoint:update; read and update scopes (through the component) drive the 404 versus 403 split.
+      description: "Patches an endpoint's node placement, params, label, or (driver-attached) its connection inputs in place: the host, port and attached secret references, validated against the driver's declared inputs, the endpoint's tasks re-derived in the same transaction. A value the driver refuses is a 400 naming the field. An empty label clears it and the surface falls back to the derived name. Gated by endpoint:update; read and update scopes (through the component) drive the 404 versus 403 split."
       operationId: update-endpoint
       parameters:
         - in: path
@@ -11650,6 +11677,38 @@ paths:
           description: Error
       summary: Update an endpoint
       x-omniglass-permission: endpoint:update
+  /endpoints/{id}:retry:
+    post:
+      description: "Moves the endpoint's retry counter, which is part of its connection fingerprint: a gate a refusal retrying cannot fix holds (a wrong credential, a changed host key, a reply its driver declares terminal) lifts, the node recycles the endpoint's held session, and every connection to it is attempted again. Fixing the secret, the address, the transport or the driver's login needs no retry: the change moves the fingerprint itself. An unrelated edit (a label) moves nothing. For an ssh endpoint, host_key names a host key to trust (the offered key a host-key rejection names): it becomes the declared pin and recycles the session onto it whatever its state, an audited acceptance of the change. Audited. Gated by endpoint:retry; read and retry scopes (through the component) drive the 404 versus 403 split."
+      operationId: retry-endpoint
+      parameters:
+        - description: The endpoint's surrogate id
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The endpoint's surrogate id
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RetryEndpointInputBody"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EndpointBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Retry an endpoint's gated connections
+      x-omniglass-permission: endpoint:retry
   /event-rules:
     get:
       description: "Lists the event rules, the authored config that raises alarms, each with its live state as counts (conditions_in_force, open_alarms, pending_streaks) read in the same query. Rules read like a registry: every rule is listed whatever the caller's scope, while the counts cover only components the caller may read. Gated by rule:read."

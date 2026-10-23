@@ -70,6 +70,77 @@ drivers:
         - command_type: set-input
           request: { line: "SET INPUT ${value}", reply: { prefix: "INPUT ", error: { prefix: "-ERR" } } }
           settle: { from: response, extract: { regex: "^INPUT (\\S+)$" } }
+  - id: newtron-nvp-telnet
+    label: Newtron NVP over Telnet
+    version: "1.0.0"
+    spec:
+      version: 1
+      transport: telnet
+      inputs:
+        - { name: host, kind: string, required: true }
+        - { name: port, kind: number, default: "23" }
+        - { name: login, kind: secret, secret_type: basic-auth, required: true }
+      # The same NVP conversation behind the panel's Telnet login (#1033).
+      # The login is the session's auth step (#1049): it runs on every
+      # connection before anything rides it, its prompts end no line, and
+      # the panel's refusal is terminal, so a wrong password is one attempt
+      # and the session reads rejected rather than locking the account.
+      session:
+        login:
+          steps:
+            - { expect: { regex: "^login: ?$" }, send: "${secret.login.username}" }
+            - { expect: { regex: "^Password: ?$" }, send: "${secret.login.password}" }
+          ready: { prefix: "Newtron Panel 7 NVP ready" }
+        terminal:
+          - { class: auth, match: { prefix: "auth rejected" } }
+      polls:
+        - name: status
+          schedule: { every: 30s }
+          request: { line: "GET INPUT", reply: { prefix: "INPUT ", error: { prefix: "-ERR" } } }
+          emits:
+            - { name: video-input, extract: { regex: "^INPUT (\\S+)$" } }
+      listeners:
+        - name: events
+          arm: ["SUBSCRIBE INPUT"]
+          match: { prefix: "EVT " }
+          emits:
+            - { name: video-input, extract: { regex: "^EVT INPUT (\\S+)$" } }
+      commands:
+        - command_type: set-input
+          request: { line: "SET INPUT ${value}", reply: { prefix: "INPUT ", error: { prefix: "-ERR" } } }
+          settle: { from: response, extract: { regex: "^INPUT (\\S+)$" } }
+  - id: newtron-nvp-ssh
+    label: Newtron NVP over SSH
+    version: "1.0.0"
+    spec:
+      version: 1
+      transport: ssh
+      inputs:
+        - { name: host, kind: string, required: true }
+        - { name: port, kind: number, default: "22" }
+        - { name: login, kind: secret, secret_type: basic-auth, required: true }
+      # The same NVP conversation over the panel's SSH shell (#1032). SSH's
+      # own userauth is the session's auth step (#1049), with the login
+      # secret as the credential; a refused credential and a changed host key
+      # are both terminal, and the host key is pinned on first use.
+      session:
+        credential: login
+      polls:
+        - name: status
+          schedule: { every: 30s }
+          request: { line: "GET INPUT", reply: { prefix: "INPUT ", error: { prefix: "-ERR" } } }
+          emits:
+            - { name: video-input, extract: { regex: "^INPUT (\\S+)$" } }
+      listeners:
+        - name: events
+          arm: ["SUBSCRIBE INPUT"]
+          match: { prefix: "EVT " }
+          emits:
+            - { name: video-input, extract: { regex: "^EVT INPUT (\\S+)$" } }
+      commands:
+        - command_type: set-input
+          request: { line: "SET INPUT ${value}", reply: { prefix: "INPUT ", error: { prefix: "-ERR" } } }
+          settle: { from: response, extract: { regex: "^INPUT (\\S+)$" } }
   - id: http-json
     label: HTTP JSON
     version: "1.0.0"

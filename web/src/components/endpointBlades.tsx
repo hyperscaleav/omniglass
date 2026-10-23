@@ -2,6 +2,7 @@ import { For, Show, createMemo, createSignal, type JSX } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import { Sliders } from "./icons";
 import KVStacked from "./KVStacked";
+import InfoTip from "./InfoTip";
 import BladeTitle from "./BladeTitle";
 import {
   type Endpoint,
@@ -92,6 +93,11 @@ function EndpointBladeBody(props: { id: string }): JSX.Element {
   const [node, setNode] = createSignal("");
   const [target, setTarget] = createSignal("");
   const [label, setLabel] = createSignal("");
+  // A driver-attached endpoint's inputs edit in place (#1061): the host, the
+  // port, an attached secret's reference name, as the driver declares them.
+  const [inputs, setInputs] = createSignal<Record<string, string>>({});
+  const drivers = useQuery(() => ({ queryKey: DRIVERS_KEY, queryFn: listDrivers }));
+  const declaredInputs = createMemo(() => drivers.data?.find((d) => d.name === i()?.driver)?.spec?.inputs ?? []);
   const [err, setErr] = createSignal<string | null>(null);
 
   // Invalidate the endpoints list and, when the endpoint is on a component, that
@@ -114,6 +120,7 @@ function EndpointBladeBody(props: { id: string }): JSX.Element {
     // The RAW column, never entityLabel: seeding the editor with the fallback
     // would turn "no label" into a label the operator never typed.
     setLabel(iface?.label ?? "");
+    setInputs({ ...(iface?.inputs ?? {}) });
     setErr(null);
   };
 
@@ -140,13 +147,24 @@ function EndpointBladeBody(props: { id: string }): JSX.Element {
     // unchanged: the API has no clear-placement, so an empty node would FK-fault (422).
     const patch: UpdateEndpoint = {};
     if (node() && node() !== (iface.node ?? "")) patch.node = node();
-    // A driver-attached endpoint's target is derived, and the server refuses a
-    // params patch on it; the editor above is read-only for one, so this only
-    // ever fires for a bare probe endpoint.
+    // A driver-attached endpoint's target derives from its host and port
+    // inputs (edited below, #1061), so a raw target patch is a bare probe
+    // endpoint's alone.
     if (!iface.driver && target() && target() !== endpointTarget(iface)) patch.params = { target: target().trim() };
     // The label is sent whenever it differs, including when it is now empty:
     // clearing one is an instruction, not an omission.
     if (label() !== (iface.label ?? "")) patch.label = label();
+    // A driver-attached endpoint sends only the inputs the operator changed;
+    // the server validates them against the driver and re-derives in place.
+    if (iface.driver) {
+      const changed: Record<string, string> = {};
+      for (const [k, v] of Object.entries(inputs())) {
+        // A cleared field is sent empty: the server clears an optional input
+        // (its default fills it) and refuses a required one by name.
+        if (v.trim() !== (iface.inputs?.[k] ?? "")) changed[k] = v.trim();
+      }
+      if (Object.keys(changed).length > 0) patch.inputs = changed;
+    }
     setErr(null);
     try {
       await updateEndpoint(iface.id, patch);
@@ -194,7 +212,7 @@ function EndpointBladeBody(props: { id: string }): JSX.Element {
             }
           >
             <div class="flex flex-col gap-3">
-              <p class="text-xs text-base-content/50">Set the label an operator reads, reassign the node placement, or change the probed target. The name, type, and component are fixed after creation.</p>
+              <p class="text-xs text-base-content/50">Set the label an operator reads, reassign the node placement, or change where the endpoint connects. The name, type, and component are fixed after creation.</p>
               <div>
                 <label class="eyebrow mb-1.5 block" for="edit-iface-label">Label</label>
                 <input id="edit-iface-label" autocomplete="off" class="input input-bordered w-full" value={label()} placeholder="Control processor" onInput={(e) => setLabel(e.currentTarget.value)} />
@@ -204,17 +222,37 @@ function EndpointBladeBody(props: { id: string }): JSX.Element {
                 <NodeSelect id="edit-iface-node" value={node()} onChange={setNode} />
               </div>
               {/* A driver-attached endpoint's target is DERIVED from its inputs
-                  (the host and port the attach resolved), not an operator fact,
-                  and the credential rides to the placed node; editing it here
-                  would desync the address from the inputs, so it is read-only
-                  for an attachment (re-attach to change it). */}
+                  (its host and port), so it edits through them, in place
+                  (#1061): the server validates each against the driver's
+                  declared inputs, and changing where a credential is sent
+                  needs the editor to be able to use that credential. */}
               <Show
                 when={!iface().driver}
                 fallback={
-                  <div>
-                    <span class="eyebrow mb-1.5 block">Target</span>
-                    <div class="input input-bordered flex w-full items-center font-data text-sm text-base-content/60">{endpointTarget(iface()) || "derived from inputs"}</div>
-                    <p class="mt-1 text-[11px] text-base-content/40">Derived from the driver's inputs. Re-attach the driver to change it.</p>
+                  <div class="flex flex-col gap-3">
+                    <For each={declaredInputs()}>
+                      {(decl) => (
+                        <div>
+                          <div class="mb-1.5 flex items-center gap-1.5">
+                            <label class="eyebrow block" for={`edit-iface-input-${decl.name}`}>{decl.name}</label>
+                            <Show when={decl.kind === "secret"}>
+                              <InfoTip label={decl.name} text="The name of a secret this endpoint authenticates with, never its value. Changing where a credential is sent needs you to be able to use it." />
+                            </Show>
+                            <Show when={decl.name === "host" || decl.name === "port"}>
+                              <InfoTip label={decl.name} text="The endpoint's target derives from its host and port. Saving reconnects the endpoint on the new address, and lifts a refusal it was held under." />
+                            </Show>
+                          </div>
+                          <input
+                            id={`edit-iface-input-${decl.name}`}
+                            autocomplete="off"
+                            class="input input-bordered w-full font-data"
+                            value={inputs()[decl.name] ?? ""}
+                            placeholder={decl.kind === "secret" ? `a ${decl.secret_type ?? "secret"} secret's name` : decl.default ?? ""}
+                            onInput={(e) => setInputs({ ...inputs(), [decl.name]: e.currentTarget.value })}
+                          />
+                        </div>
+                      )}
+                    </For>
                   </div>
                 }
               >

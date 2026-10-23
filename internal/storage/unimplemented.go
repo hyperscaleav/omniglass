@@ -306,6 +306,9 @@ func (UnimplementedGateway) GetEndpoint(context.Context, string, scope.Set) (*En
 func (UnimplementedGateway) CreateEndpoint(context.Context, string, EndpointSpec, scope.Set) (*Endpoint, error) {
 	return nil, nil
 }
+func (UnimplementedGateway) RetryEndpoint(context.Context, string, string, string, scope.Set, scope.Set) (*Endpoint, error) {
+	return nil, nil
+}
 func (UnimplementedGateway) UpdateEndpoint(context.Context, string, string, EndpointPatch, scope.Set, scope.Set) (*Endpoint, error) {
 	return nil, nil
 }

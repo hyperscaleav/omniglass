@@ -193,6 +193,10 @@ below from the project's history. From here it grows one slice at a time.
 | [ADR-0152](#adr-0152-a-driver-poll-runs-on-its-declared-schedule-at-heartbeat-granularity) | 2026-10-23 | Accepted | A driver poll runs on its declared `schedule.every` at heartbeat granularity (#822): a per-task next-due time kept for the run, the first tick at or after it runs the poll, a new task runs at once, a late tick never bursts; probes stay per tick and pushes are never gated. Settles the nodes page's open question for driver polls |
 | [ADR-0153](#adr-0153-the-held-session-proof-is-the-line-protocol-over-tcp-other-held-transports-are-their-own-issues) | 2026-10-23 | Accepted | The stateful arc proves the held session on the line protocol over `tcp` (sessions, listeners, the shared reader); SSH, which #816 named as the session-lifecycle carrier, and the other held transports are deferred, each to its own issue (#1032 ssh, #1033 telnet, #1034 websocket, #1035 tls, #1036 mqtt, #1037 udp, #1038 SSE over http, #1039 modbus/tcp, #1040 bacnet/ip, #1041 knxnet/ip, #1042 ONVIF as a driver on http, #1043 the file sample with #1044 to #1047 for file-moving protocols), with server-hosted ingress at #1024; there is no serial transport, serial being reached through an IP-to-serial gateway over tcp (or tls or telnet) |
 | [ADR-0154](#adr-0154-healthy-reads-green-tiered-so-a-calm-fleet-stays-calm) | 2026-10-23 | Accepted | Healthy reads green, reversing the grey healthy of [ADR-0137](#adr-0137-explore-is-the-fleets-door-and-it-is-an-outline-of-places) and [ADR-0139](#adr-0139-a-detail-view-is-one-per-system-its-place-a-card-of-context) (#1067): one `--og-healthy` token from the success hue, full weight on the health pill and the history strip, muted (`text-healthy`) on the outline's slots and the uptime figure; unknown keeps the grey chip |
+| [ADR-0155](#adr-0155-auth-is-a-layer-that-gates-a-held-session-and-a-terminal-refusal-reads-rejected) | 2026-10-23 | Accepted | Auth is a layer that gates a held session (#1049, the architect's ruling): each attempt runs dial, then the auth step (a driver's login dialog or a transport's own auth), then the arm, then `up`, and nothing borrows the connection before the step passes; its verdict is the existing `endpoint-authenticated` rung. A terminal refusal moves the session to `rejected` (amending ADR-0150's state set), which dials no more and fails polls and commands fast with no throwaway fallback, until the endpoint's session identity changes, an operator's audited `:retry` (gated by `endpoint:retry`) moves the retry counter in the connection fingerprint (ADR-0158), or the driver's slow re-probe comes due; an unrelated edit does nothing. Three silent hang-ups after the final secret are an `auth` refusal (the login budget). `session-reason` carries the reason as a property. One login dialog serves raw tcp, telnet and ssh keyboard-interactive |
+| [ADR-0156](#adr-0156-a-driver-declares-its-terminal-replies-and-a-transport-classifies-its-own-refusals) | 2026-10-23 | Accepted | Non-retryable errors are defined in drivers (#1049, the architect's ruling): a spec's `session.terminal` lists the replies retrying cannot fix, each a match with a class (`auth`, `host-key`, `certificate`, `protocol`, a code-held set), applied to the login and to every answer, refusal and arm reply; a transport classifies its own protocol refusals into the same classes. The primitive is `collection.TerminalError{Class, Reason}`; anything unclassified stays retryable, and a terminal poll fault waits its interval rather than the failure backoff |
+| [ADR-0157](#adr-0157-telnet-and-ssh-are-held-line-transports-their-login-is-the-drivers-and-the-ssh-host-key-is-pinned-on-first-use) | 2026-10-23 | Accepted | `telnet` (#1033) and `ssh` (#1032) are held line transports: the same session machine and line reader, telnet behind a filter refusing every option, ssh over a shell or exec channel. Their session's login is the driver's (`session.login`, `session.credential`), not endpoint params; the telnet probe never logs in, and the ssh probe's params login is a known gap (#1060). The ssh host key is pinned on first use as the `ssh-host-key` property (observed), delivered back by the worklist, overridden by a declared value an operator sets with `:retry` and `host_key`; a changed key is a `host-key` refusal |
+| [ADR-0158](#adr-0158-one-connection-fingerprint-gates-every-connection-on-a-ladder-the-driver-declares) | 2026-10-23 | Accepted | One **connection fingerprint** gates every connection, held or stateless (#1056 ruling): a digest the server computes over every input a connection is made with (transport, declared params, driver inputs, each secret's sealed version, the session block, the ladder, the ssh pin, the `:retry` counter), held in `internal/fingerprint`. Connections are verified bottom up on the existing ladder (reachable, informational ping; responsive, the transport rung and the gate; authenticated, the login), declared in the driver spec with registry defaults. A terminal refusal gates its rung and above for the fingerprint; lower rungs keep running; the gate is published as `endpoint-rejection` and carried back so a restart honours it |
 
 ## Entries
 
@@ -7026,3 +7030,170 @@ interface create form, since that name is the platform's to mint.
   wins; only an unknown one falls back to the staffing read (red when down, else grey), and an empty
   position keeps its hollow grey ring.
 
+### ADR-0155: Auth is a layer that gates a held session, and a terminal refusal reads rejected
+
+- **Date:** 2026-10-23 | **Status:** Accepted | **Pages:** [collection](/architecture/collection/), [nodes](/architecture/nodes/), [glossary](/architecture/glossary/), [drivers](/guides/admin/drivers/)
+- **Decision:** The architect's ruling, made in session on 2026-10-23 (#1049), applies the ladder
+  the stateless probes climb (dialed, responds, authenticated) to held sessions:
+  1. **Auth gates the session.** Every attempt runs dial, then the **auth step**, then the
+     listeners' arm, then `up`. The step is declared by the driver (a login dialog in the spec's
+     `session` block) or by the transport (one that authenticates on its own); a dialer that cannot
+     run a declared step is a `protocol` refusal. Nothing (a poll, a command, an arm) borrows a
+     connection whose step has not passed: the dialer is staged (`Connect`, then `Authenticate`,
+     then `Open`), so the line reader does not exist until the step passes. The verdict lands as
+     the existing `endpoint-authenticated` property (`yes`/`no`, on change), no parallel vocabulary.
+     A login that is silent or dropped decides nothing and is an ordinary failed attempt.
+  2. **One login dialog.** Steps wait for a prompt (matched on a partial line once the component
+     pauses on it, since a prompt ends no line) and send a line that may name a secret input's field
+     (`${secret.<input>.<field>}`); `ready` says it passed; a prompt for a step already answered is
+     an `auth` refusal. The same primitive answers ssh keyboard-interactive questions. A credential
+     is written only to the wire: render faults name the reference, never the value, and text the
+     component sends is scrubbed of the sends before it reaches an error or a reason.
+  3. **`rejected` joins the state set** (amending ADR-0150's establishing, up, recovering, down).
+     A terminal refusal ([ADR-0156](#adr-0156-a-driver-declares-its-terminal-replies-and-a-transport-classifies-its-own-refusals))
+     moves the session there at once, without spending the budget; it closes the connection and
+     dials no more. Polls and commands over it fail fast with the refusal, and neither falls back
+     to a throwaway connection (a command delivery is `session_only` when its driver declares a
+     session or its transport has no stateless line).
+  4. **Leaving `rejected`** (amended in this PR by the #1056 ruling). A session leaves `rejected`
+     only when its connection fingerprint changes ([ADR-0158](#adr-0158-one-connection-fingerprint-gates-every-connection-on-a-ladder-the-driver-declares)): the attached
+     secret rotated in the store, the address, port or transport, the driver's login or terminal
+     declaration, a pin, or an operator's `POST /endpoints/{id}:retry` (gated by a new
+     `endpoint:retry` action the operator role holds, audited), which moves an explicit
+     `session_retry` counter on the endpoint (a migration) that is part of the fingerprint. The
+     endpoint's `updated_at`, first used as the retry signal, moved on every edit, a label
+     included, and pulled a rejected session out; it no longer does. A driver may declare
+     `session.reprobe` (at least 5m; default never). A component that hangs up after the final
+     secret and before ready, with no refusal text, charges a **login budget** of its own: three
+     in a row are an `auth` refusal; a drop before the secret step stays an ordinary failure, and
+     a login that passes resets it.
+  5. **Visibility.** Each transition lands `session-reason` beside `session-state`, the reason as a
+     property an event rule can read (labels do not persist); the node logs a rejection once, at
+     warn, at the transition.
+- **Context:** Every session failure was retryable (ADR-0150): after the budget a session redialed
+  at the capped 30s pace forever, about 2,880 attempts a day, harmless for the tcp line protocol and
+  an account lockout for any transport with a login. The retry signal needed a home the node could
+  see that nothing else moves; a component that drops a wrong password silently needed a bound no
+  driver rule could give it (#1056).
+
+### ADR-0156: A driver declares its terminal replies, and a transport classifies its own refusals
+
+- **Date:** 2026-10-23 | **Status:** Accepted | **Pages:** [collection](/architecture/collection/), [glossary](/architecture/glossary/), [drivers](/guides/admin/drivers/)
+- **Decision:** The architect's ruling, made in session on 2026-10-23 (#1049): non-retryable errors
+  are defined in drivers.
+  1. A spec's `session.terminal` lists the replies retrying cannot fix, each a `match` (a prefix
+     or a regex) with a `class`. The classes are a code-held set (`auth`, `host-key`,
+     `certificate`, `protocol`), refused at write when unknown, grown in code as transports need.
+  2. A rule applies to every line the component sends the session's way: the login's lines, every
+     exchange's answer and declared refusal, and every arm reply. A match fails that exchange with
+     the refusal and rejects the session ([ADR-0155](#adr-0155-auth-is-a-layer-that-gates-a-held-session-and-a-terminal-refusal-reads-rejected)).
+  3. A transport classifies its own protocol-level refusals into the same classes (an ssh auth
+     failure is `auth`, a changed host key `host-key`), so a driver need not declare what the
+     protocol already says.
+  4. The primitive is `collection.TerminalError{Class, Reason}`, the reason the component's own
+     text; anything unclassified stays retryable and follows the backoff and budget. A stateless
+     or session poll whose fault is terminal waits its interval, never the failure backoff; one
+     its session refused runs at the first tick that session is up again.
+- **Context:** Only the driver knows what its component's refusal looks like ("auth rejected",
+  "Login incorrect", an "account locked" reply), and only the transport knows its protocol's
+  refusals; a session machine guessing from text would misclassify both ways. A fixed class set
+  keeps an event rule's vocabulary stable across drivers.
+
+### ADR-0157: Telnet and ssh are held line transports, their login is the driver's, and the ssh host key is pinned on first use
+
+- **Date:** 2026-10-23 | **Status:** Accepted | **Pages:** [collection](/architecture/collection/), [nodes](/architecture/nodes/), [glossary](/architecture/glossary/), [drivers](/guides/admin/drivers/)
+- **Decision:** (#1033, #1032, under the ruling ADR-0155 and ADR-0156 record.)
+  1. **Held line transports.** `telnet` and `ssh` join `tcp` as transports the line protocol rides
+     over a held session (the registry's `line` flag): one session machine, one reader, one routing.
+     Telnet is the line connection behind a filter that strips negotiation and refuses every option
+     (DO answered WONT, WILL answered DONT, a literal 0xFF escaped). Ssh bridges a shell channel
+     (with a PTY on `session.pty`) or an exec channel (`session.exec`) onto the reader.
+  2. **The session's login is the driver's.** The designed `endpoint.params` login fields
+     (`login_expect`, `password_expect`, `private_key`) are not built for a held session: a telnet or
+     raw tcp login is the driver's `session.login` dialog, and an ssh credential is the secret input
+     `session.credential` names (a `basic-auth` username and password, or an `ssh-key` username and
+     private key; a login dialog only answers keyboard-interactive questions beside it), delivered
+     unsealed on the worklist. A keyboard-interactive question nothing declared answers (a one-time
+     code) is an `auth` refusal. The telnet probe never logs in: it reads the first negotiation or
+     banner bytes (`telnet-response-time`), and while the node holds an up telnet session it takes
+     the verdict from the session rather than dial again. The ssh probe still tries a params
+     `username`/`password` on every tick without the pin, a gap filed as #1060.
+  3. **Trust on first use.** The node trusts the first ssh host key it sees and publishes it as the
+     observed `ssh-host-key` property; the worklist delivers the pin (the declared value, else the
+     observed one), so a node restart or reassignment keeps it. A changed key is a `host-key`
+     refusal naming both fingerprints and is never published as the pin. The node republishes the key
+     on every authenticated connection and while the worklist delivers no pin, and carries it across
+     a session's recycle, so one lost publish cannot reopen first use. An operator who trusts the
+     change retries the endpoint with `host_key` (gated by `endpoint:retry`, audited), which
+     declares the new pin; the node redials onto it, whatever state the session is in.
+- **Context:** The design fenced telnet and ssh as their own polled endpoint types with login
+  config on endpoint params. Under the 2026-10-23 ruling auth is a session layer declared by the
+  driver or the transport, so a login on params would have been a second, unclassified path, and a
+  probe that logged in every tick would retry a bad credential forever. A host key pin needed a
+  home the node can read after a restart without a new table; the property lanes already carry the
+  observed-versus-declared split and the history an operator reads.
+
+### ADR-0158: One connection fingerprint gates every connection, on a ladder the driver declares
+
+- **Date:** 2026-10-23 | **Status:** Accepted | **Pages:** [collection](/architecture/collection/), [nodes](/architecture/nodes/), [glossary](/architecture/glossary/), [drivers](/guides/admin/drivers/), [api](/architecture/api/)
+- **Decision:** The architect's rulings of 2026-10-23 (on #1056 and #1049), for every connection to
+  an endpoint, held or stateless (the reachability probe, a throwaway poll or command, the held
+  session):
+  1. **The fingerprint primitive.** `internal/fingerprint` digests (SHA-256 over canonical JSON)
+     every input a connection is made with: the transport, the declared params (the address as
+     declared, never a DNS result, the port, the timeout), the driver's inputs (secret reference
+     names, never values), a digest of each attached secret's sealed envelope and id (a rotation
+     re-seals, so it moves; nothing plaintext-derived is hashed), the driver's session block, the
+     resolved ladder, the ssh host key pin, and the endpoint's `:retry` counter. The server computes
+     it in the worklist, one per endpoint, so the node only compares. A reflection test holds that
+     every field moves it, and a table test that every field a task delivers is either one of its
+     inputs or declared not one, so a new transport cannot read an input the fingerprint misses. It
+     is never logged.
+  2. **The ladder, bottom up, on the existing rungs.** `reachable` is a ping and **never gates**:
+     an open, answering transport is what counts, so a component that blocks ping never reads down
+     for it (the ping lands `icmp-reachable` beside the probe, one observation per probe, after the
+     verdict). `responsive` is the transport rung and **the gate**: a TCP connect on the transport's
+     port, the protocol's handshake (ssh key exchange, tls), or, where an open port cannot be
+     detected (udp), the driver's named request answered (run as a line over tcp today; snmp's own
+     request is #821, a udp datagram's #1037). `authenticated` is the session rung, the
+     login, attempted only when the transport rung passes. A wrong host, address or port fails
+     the transport rung, retryably, and never reads as auth.
+  3. **Declared in the driver, defaulted by the registry.** The spec's `ladder` declares whether to
+     ping (`ping.enabled`; a cloud API says no), the transport rung (`transport.rung`, with its
+     `request`), and whether a session rung exists (`session.enabled`); the transport registry's
+     `rung` supplies the defaults, so most drivers declare nothing, and a rung a transport cannot
+     run refuses at write. Each rung is an object so per-family measurement toggles and a burst
+     count and interval (#1063) and a path rung (#1064) join without reshaping it, and a layer-2
+     presence rung (#1062) slots in below the ping, informational the same way.
+  4. **The gate.** A terminal refusal (`auth` at the authenticated rung; `host-key`,
+     `certificate`, `protocol` at the responsive rung) gates its rung and every rung above it for
+     the endpoint while the fingerprint is unchanged; the rungs below keep running, so reachability
+     stays observed while auth is rejected. The held session starts rejected, the ssh probe sends no
+     credential (#1060: tried once, never past a pinned key that changed), a stateless poll faults
+     without fetching, and a command fails fast. A changed fingerprint lifts the gate, and so does
+     the rung passing. The #1056 login budget (three silent hang-ups after the secret) feeds it.
+  5. **Restart safety.** The gate is published as the `endpoint-rejection` property (`<rung>
+     <class> <fingerprint>`, or `none`), republished every pull until the worklist reflects it, and
+     carried back, so a restarted node makes no attempt against an unchanged fingerprint. A refusal
+     reported for an attempt under an older fingerprint gates nothing. The ssh pin the node trusted
+     on first use is a learned fact and stays out of the fingerprint; only the operator's declared
+     pin goes in. `endpoint-rejection` and `ssh-host-key` are node control facts the push lane
+     refuses, so no push can plant or lift a gate.
+  6. **Connection inputs edit in place** (the architect's ruling on #1061). A driver-attached
+     endpoint's host, port and attached secret references are patched through `PATCH
+     /endpoints/{id}` `inputs`, validated against the driver's declared inputs (a refused value is a
+     400 naming the field), its tasks re-derived in the same transaction through #823's derivation,
+     audited; a transport is accepted only where the driver speaks it. Re-attach is not the path.
+     The confinement the earlier read-only rule bought (a credential never sent to an address its
+     attach did not name) is kept another way: the edit re-resolves every attached secret under the
+     editor's own secret scope and admin tier, so an editor who could not use a credential cannot
+     redirect it. The fingerprint moves, so a rejected session un-gates and a healthy one recycles
+     onto the new address within a tick.
+- **Context:** A refusal retrying cannot fix must stop every path that would retry it, not only the
+  held session: the ssh probe retried a params credential every tick (#1060), and a restarted node
+  forgot every rejection. Gating on "what changed" needed one definition of the inputs, computed
+  where the sealed secrets live so a published digest leaks nothing about a value. ICMP is blocked
+  on much installed gear, so only a transport answer can say a component is there. Follow-ons: the
+  udp request rung's snmp proof is #821; per-rung rtt, jitter and loss as driver toggles, stored as
+  one observation per probe with statistics from windowed calc rules, are #1063 and #1065; a path
+  rung (hop count, network path) is #1064; layer-2 presence is #1062.

@@ -51,6 +51,13 @@ type Spec struct {
 	// the node counts it) or collection-failed (the node lands one
 	// collection-failed per tick naming how many and the last).
 	Unmatched string `json:"unmatched,omitempty"`
+	// Session declares the held session's auth step, its terminal replies
+	// and its re-probe (#1049); absent, the session has no auth step and
+	// every failure is retryable.
+	Session *SessionSpec `json:"session,omitempty"`
+	// Ladder is the reachability ladder (ADR-0158); absent, the transport
+	// registry's defaults.
+	Ladder *Ladder `json:"ladder,omitempty"`
 }
 
 // The unmatched-line policies.
@@ -443,6 +450,19 @@ func (s *Spec) Validate(cat Catalog) error {
 			return err
 		}
 	}
+	if err := s.validateSession(); err != nil {
+		return err
+	}
+	if err := s.validateLadder(); err != nil {
+		return err
+	}
+	// A held session is held for an endpoint's poll and listen tasks; command
+	// bindings derive none. Commands that ride only a held session (the driver
+	// declares one, or the transport has no stateless line) need a poll or a
+	// listener to hold it, or they could never run (#1049).
+	if len(s.Polls) == 0 && len(s.Listeners) == 0 && (s.Session != nil || (isLineTransport(s.Transport) && s.Transport != "tcp")) {
+		return fmt.Errorf("driver: commands that ride only a held session need a poll or a listener to hold it")
+	}
 
 	bindings := map[string]bool{}
 	for _, c := range s.Commands {
@@ -462,11 +482,11 @@ func (s *Spec) Validate(cat Catalog) error {
 		// Only the line-protocol actuation wire exists today, so a binding on a
 		// transport it cannot reach refuses at write rather than dispatching a
 		// request no node can send.
-		if s.Transport != "tcp" {
-			return fmt.Errorf("driver: command binding %q rides transport %q, which has no actuation wire (only tcp actuates today)", c.CommandType, s.Transport)
+		if !isLineTransport(s.Transport) {
+			return fmt.Errorf("driver: command binding %q rides transport %q, which has no actuation wire (only the line transports actuate today)", c.CommandType, s.Transport)
 		}
 		if c.Request.Line == "" {
-			return fmt.Errorf("driver: command binding %q on tcp needs a line request", c.CommandType)
+			return fmt.Errorf("driver: command binding %q on %s needs a line request", c.CommandType, s.Transport)
 		}
 		if err := validateSettle(c); err != nil {
 			return err
@@ -545,9 +565,9 @@ func validateTransform(fn, name string, tr Transform) error {
 }
 
 // checkPollShape binds a poll's request and extractors to the transport it
-// rides, so an uninterpretable combination refuses at write. Only snmp and tcp
-// have wired poll fetchers today (internal/collection); a poll on any other
-// transport refuses rather than faulting every tick.
+// rides, so an uninterpretable combination refuses at write. Only snmp and the
+// line transports have wired poll fetchers today (internal/collection); a poll
+// on any other transport refuses rather than faulting every tick.
 func checkPollShape(tr string, p Poll) error {
 	switch tr {
 	case "snmp":
@@ -559,9 +579,12 @@ func checkPollShape(tr string, p Poll) error {
 				return fmt.Errorf("driver: snmp poll %q emit %q must locate by oid", p.Name, em.Name)
 			}
 		}
-	case "tcp":
+	case "tcp", "telnet", "ssh":
+		if !isLineTransport(tr) {
+			return fmt.Errorf("driver: poll %q rides transport %q, which has no poll fetcher yet", p.Name, tr)
+		}
 		if p.Request.Line == "" {
-			return fmt.Errorf("driver: tcp poll %q needs a line request", p.Name)
+			return fmt.Errorf("driver: %s poll %q needs a line request", tr, p.Name)
 		}
 		for _, em := range p.Emits {
 			// A line response is text: only a regex extractor can read it. An
@@ -570,11 +593,11 @@ func checkPollShape(tr string, p Poll) error {
 			// emit with no extractor at all is the general "exactly one extractor"
 			// refusal's job, not this one.
 			if em.Extract.OID != "" || em.Extract.Key != "" || em.Extract.JSONPath != "" {
-				return fmt.Errorf("driver: tcp poll %q emit %q must locate by regex (a line response carries no keyed or json body to read an oid, key, or jsonpath from)", p.Name, em.Name)
+				return fmt.Errorf("driver: %s poll %q emit %q must locate by regex (a line response carries no keyed or json body to read an oid, key, or jsonpath from)", tr, p.Name, em.Name)
 			}
 		}
 	default:
-		return fmt.Errorf("driver: poll %q rides transport %q, which has no poll fetcher (only snmp and tcp poll today)", p.Name, tr)
+		return fmt.Errorf("driver: poll %q rides transport %q, which has no poll fetcher (only snmp and the line transports poll today)", p.Name, tr)
 	}
 	return nil
 }

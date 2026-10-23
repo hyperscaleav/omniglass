@@ -73,6 +73,8 @@ type Runner struct {
 	SSH  SSHProber
 	SNMP SNMPGetter
 	Line LineExchanger
+	// Telnet is the telnet reachability probe (#1033).
+	Telnet TelnetProbe
 }
 
 // CollectTCP runs one tcp task and returns its samples. A tcp probe always
@@ -188,6 +190,7 @@ func (r *Runner) CollectICMP(ctx context.Context, t ICMPTask) ([]Sample, error) 
 const (
 	SignalHTTPResponseTime      = probekeys.HTTPResponseTime
 	SignalSSHHandshakeTime      = probekeys.SSHHandshakeTime
+	SignalTelnetResponseTime    = probekeys.TelnetResponseTime
 	SignalEndpointResponsive    = probekeys.EndpointResponsive
 	SignalEndpointAuthenticated = probekeys.EndpointAuthenticated
 	EventCollectionFailed       = "collection-failed"
@@ -200,6 +203,50 @@ type HTTPTask struct {
 	Timeout time.Duration
 }
 
+// TelnetTask is the parsed telnet reachability unit (#1033): the dial
+// target and the per-attempt timeout.
+type TelnetTask struct {
+	Target  string
+	Timeout time.Duration
+}
+
+// CollectTelnet runs one telnet task: the L4 dial facts, and the responds
+// rung (the component sent its first bytes, a negotiation or a banner:
+// telnet-response-time when it did) as endpoint-responsive. A port that
+// accepts and stays silent is reached but not responsive. The login is the
+// held session's auth step, never the probe's: a probe that logged in every
+// tick would retry a bad credential forever.
+func (r *Runner) CollectTelnet(ctx context.Context, t TelnetTask) ([]Sample, error) {
+	if t.Target == "" {
+		return nil, fmt.Errorf("collection: telnet task: empty target")
+	}
+	res, err := r.Telnet.Probe(ctx, t.Target, t.Timeout)
+	if err != nil {
+		return nil, err
+	}
+	now := time.Now().UTC()
+	openVal := 0.0
+	if res.Dialed {
+		openVal = 1.0
+	}
+	out := []Sample{{
+		Name:   SignalTCPOpen,
+		Value:  openVal,
+		TS:     now,
+		Labels: map[string]string{ReasonLabel: string(res.Reason)},
+	}}
+	if res.Dialed {
+		out = append(out, Sample{Name: SignalTCPConnectTime, Value: res.DialMS, TS: now})
+	}
+	responsive := "down"
+	if res.Responded {
+		responsive = "up"
+		out = append(out, Sample{Name: SignalTelnetResponseTime, Value: res.ResponseMS, TS: now})
+	}
+	out = append(out, ladderVerdict(SignalEndpointResponsive, responsive, res.Reason, now))
+	return out, nil
+}
+
 // SSHTask is the parsed ssh unit: the dial target, the optional credential the
 // auth rung tries (params today; secret references with #813), and the
 // per-attempt timeout.
@@ -208,6 +255,8 @@ type SSHTask struct {
 	Username string
 	Password string
 	Timeout  time.Duration
+	// HostKeyPin is the endpoint's pinned host key (#1060).
+	HostKeyPin string
 }
 
 // ladderVerdict renders one responds/auth verdict as a property-lane text
@@ -269,12 +318,19 @@ func (r *Runner) CollectHTTP(ctx context.Context, t HTTPTask) ([]Sample, error) 
 // never completes the exchange is reached-but-not-responsive; one that
 // completes it and refuses the credential is responded-but-not-authenticated.
 func (r *Runner) CollectSSH(ctx context.Context, t SSHTask) ([]Sample, error) {
+	out, _, err := r.CollectSSHResult(ctx, t)
+	return out, err
+}
+
+// CollectSSHResult is CollectSSH with the probe's own result, which the
+// node's gate reads (#1060): a refused credential, a changed host key.
+func (r *Runner) CollectSSHResult(ctx context.Context, t SSHTask) ([]Sample, SSHResult, error) {
 	if t.Target == "" {
-		return nil, fmt.Errorf("collection: ssh task: empty target")
+		return nil, SSHResult{}, fmt.Errorf("collection: ssh task: empty target")
 	}
-	res, err := r.SSH.Probe(ctx, t.Target, SSHCredential{Username: t.Username, Password: t.Password}, t.Timeout)
+	res, err := r.SSH.Probe(ctx, t.Target, SSHCredential{Username: t.Username, Password: t.Password, HostKeyPin: t.HostKeyPin}, t.Timeout)
 	if err != nil {
-		return nil, fmt.Errorf("collection: ssh probe %s: %w", t.Target, err)
+		return nil, SSHResult{}, fmt.Errorf("collection: ssh probe %s: %w", t.Target, err)
 	}
 	now := time.Now().UTC()
 	openVal := 0.0
@@ -303,5 +359,5 @@ func (r *Runner) CollectSSH(ctx context.Context, t SSHTask) ([]Sample, error) {
 		}
 		out = append(out, ladderVerdict(SignalEndpointAuthenticated, authed, res.Reason, now))
 	}
-	return out, nil
+	return out, res, nil
 }

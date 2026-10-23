@@ -92,6 +92,13 @@ new class appends one. Entries are never silently deleted; a fixed class is mark
   into sinks with no uniqueness key (the audit's P0-1).
 - **Fix:** until #430's staged contract lands, new code must not widen the gap: publish
   with ack where the API allows, and never assume dedup exists downstream.
+- **Single-shot trust publish** (found by the #1032 review, fixed): a security-relevant fact the
+  node learns once (an ssh host key trusted on first use) published once, deduped in memory, and
+  lost on the next recycle. Republish it until the server reflects it back, and carry it in
+  memory across recycles (`pins` in internal/node/session.go). The same holds for the gate a node
+  publishes (`endpoint-rejection`, found by the fingerprint review): republish until the worklist
+  reflects it, under a task chosen from the current worklist (a re-derived driver deletes old task
+  ids), never a cached "already published".
 
 ## hand-written-fact (live)
 
@@ -212,3 +219,51 @@ region and a mask line in the frontmatter, per the entity blade's duration masks
 - **Fix:** widen the range over the enclosing brackets by tokens before replacing it
   (`subject.bracketed`, internal/expression/diagnostics.go), and pin each bracketed shape as a
   fixture with its `fixed:` source, which the fixture runner recompiles.
+
+## terminal-reply-lost (fixed; found by the #1049 review)
+
+- **Cue:** a session-wide signal channel that an exchange goroutine feeds after the connection's
+  `Done` can already have fired, and that the next connect drains as stale.
+- **Failure:** a component answers with a reply the driver declares terminal and hangs up; the
+  machine sees the drop first, books an ordinary failure, discards the late signal on the next
+  connect, and redials into the lockout.
+- **Fix:** the signal belongs to the connection (allocated with it, `lend` in
+  internal/collection/session.go), and after `Done` the machine waits for the connection's
+  in-flight exchanges before deciding between fail and reject.
+
+## stale-write-deadline (fixed; found by the #1033 review)
+
+- **Cue:** a wrapper that writes on the read path (a negotiation reply, an ack, a keepalive answer)
+  beneath a caller that sets `SetWriteDeadline` per write and never clears it.
+- **Failure:** the wrapper's write inherits a long-expired deadline and fails at once, and its
+  timeout surfaces from `Read`, where a reader using read deadlines as interrupts takes it for its own.
+- **Fix:** clear the deadline after each bounded write, give the inner write its own deadline, and
+  never return an inner write's error as the read's (internal/collection/telnet.go `Read`).
+
+## node-control-key-pushable (fixed; found by the fingerprint review)
+
+- **Cue:** a property a node publishes to steer its own future attempts (a gate, a trusted key)
+  that is also a seeded property type, so the operator push lane accepts it.
+- **Failure:** a push grant plants a gate (commands fail, probes drop rungs) or lifts one with a
+  future-dated `none`, an unaudited bypass of the audited `:retry`.
+- **Fix:** refuse node-control keys on the push lane by name (`probekeys.IsNodeControl`,
+  internal/api/telemetry.go).
+
+
+## unvalidated-param-value (fixed; found by the #1061 in-place edit review)
+
+- **Cue:** a patch path that allow-lists a key but never parses its value.
+- **Failure:** the API answers 200 and the node refuses the value at run time (a `timeout` of
+  "five seconds"), so the endpoint stops collecting while the operator saw success.
+- **Fix:** parse the value where it is accepted and refuse it naming the field
+  (`patchedConnection`, internal/storage/endpoints.go).
+
+## fixture-hangs-up-before-the-check (fixed; found by CI on #1061)
+
+- **Cue:** a scripted peer in a real-wire test that reports over a channel and then returns, its
+  deferred `Close` racing a non-blocking check on the client's `Done()` or state.
+- **Failure:** under scheduler pressure the client sees the peer's EOF before the test looks, and
+  a correct EOF fails the test intermittently on CI while passing locally (`telnet_test.go`, CI run
+  40016892001). A 50ms pause before the check reproduces it deterministically.
+- **Fix:** hold the fixture open until the test ends (a `release` channel closed on return), and
+  prove liveness with an action over the connection (a second exchange answered), never a peek.

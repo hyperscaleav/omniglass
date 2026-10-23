@@ -15,13 +15,13 @@
   {
    "id": "operator",
    "label": "Operator",
-   "description": "Day-to-day operations: create or edit components, endpoints, secrets, variables, and the property, metric, event, and command catalogs, issue commands in scope, and impair simulated devices. Sees and reveals the device secrets in its scope (never the admin-sensitive platform credentials). Inherits Viewer.",
+   "description": "Day-to-day operations: create or edit components, endpoints (and retry an endpoint's rejected session), secrets, variables, and the property, metric, event, and command catalogs, issue commands in scope, and impair simulated devices. Sees and reveals the device secrets in its scope (never the admin-sensitive platform credentials). Inherits Viewer.",
    "inherits": [
     "viewer"
    ],
    "declared": [
     "component:create,update,rename,move",
-    "endpoint:create,update",
+    "endpoint:create,update,retry",
     "secret:read,reveal,create,update",
     "variable:create,update",
     "property_type:create,update",
@@ -41,6 +41,7 @@
     "component:move",
     "endpoint:create",
     "endpoint:update",
+    "endpoint:retry",
     "secret:read",
     "secret:reveal",
     "secret:create",
@@ -206,6 +207,7 @@
     "component:move",
     "endpoint:create",
     "endpoint:update",
+    "endpoint:retry",
     "secret:read",
     "secret:reveal",
     "secret:create",
@@ -264,7 +266,25 @@
    "name": "session-state",
    "data_type": "string",
    "label": "Session State",
-   "description": "A held session's state per endpoint: establishing (the first connection is being made), up (the connection is held and polls borrow it), recovering (a held connection dropped and the node is reconnecting with a bounded, jittered backoff), down (the attempt budget is spent; the node keeps retrying at the capped pace). Written on transitions only; the reason rides the node's own logs."
+   "description": "A held session's state per endpoint: establishing (the first connection is being made), up (the connection is held and polls borrow it), recovering (a held connection dropped and the node is reconnecting with a bounded, jittered backoff), down (the attempt budget is spent; the node keeps retrying at the capped pace), rejected (a refusal retrying cannot fix, such as a wrong credential or a changed host key; the node dials no more until the endpoint changes or an operator retries). Written on transitions only; session-reason carries why."
+  },
+  {
+   "name": "session-reason",
+   "data_type": "string",
+   "label": "Session Reason",
+   "description": "Why a held session is in its state: the reason of its latest transition. A rejected session's reason is its class and the component's own text (auth: auth rejected), so an event rule can alarm on it. Written beside session-state on every transition."
+  },
+  {
+   "name": "ssh-host-key",
+   "data_type": "string",
+   "label": "SSH Host Key",
+   "description": "The SHA256 fingerprint of the host key an ssh session trusts, per endpoint. The node records the first key it sees (trust on first use) and every connection that matches it; a changed key is refused, and the session reads rejected with class host-key naming both fingerprints until an operator retries the endpoint with the new key, which lands here as the declared value."
+  },
+  {
+   "name": "endpoint-rejection",
+   "data_type": "string",
+   "label": "Endpoint Rejection",
+   "description": "An endpoint's gate: the ladder rung a refusal retrying cannot fix holds (responsive for a host key, certificate or protocol refusal, authenticated for a credential), its class, and the connection fingerprint it holds for, or none. While the fingerprint is unchanged nothing at or above that rung is attempted again; a changed secret, address, port, transport, login declaration or pin, or an operator's retry, lifts it. The fingerprint is a digest only."
   },
   {
    "name": "health",
@@ -363,6 +383,13 @@
    "unit": "ms",
    "label": "SSH Handshake Time",
    "description": "Time for the SSH key exchange to reach authentication; absent when the daemon never completed it."
+  },
+  {
+   "name": "telnet-response-time",
+   "data_type": "float",
+   "unit": "ms",
+   "label": "Telnet Response Time",
+   "description": "Time for a telnet port to send its first bytes (an option negotiation or a banner) after the connection opened; absent when the port accepted and stayed silent."
   }
  ],
  "event_types": [
@@ -448,6 +475,25 @@
    ]
   },
   {
+   "id": "ssh-key",
+   "label": "SSH Key",
+   "default_admin_sensitive": false,
+   "fields": [
+    {
+     "name": "username",
+     "type": "string",
+     "secret": false,
+     "origin": "operator"
+    },
+    {
+     "name": "private_key",
+     "type": "string",
+     "secret": true,
+     "origin": "operator"
+    }
+   ]
+  },
+  {
    "id": "oauth2-client",
    "label": "OAuth2 Client",
    "default_admin_sensitive": true,
@@ -487,8 +533,14 @@
    "built": false
   },
   {
+   "name": "telnet",
+   "description": "Telnet: the line protocol over TCP with option negotiation (every option refused), its login the session's auth step; the probe connects and waits for the first negotiation or banner bytes (responds).",
+   "held": true,
+   "built": true
+  },
+  {
    "name": "ssh",
-   "description": "SSH transport; the probe runs a real key exchange (responds), and tries the endpoint credential when one is set (auth).",
+   "description": "SSH: the probe runs a real key exchange (responds) and tries the endpoint credential when one is set (auth); the line protocol holds a shell or exec channel over it, its userauth the session's auth step and its host key pinned on first use.",
    "held": true,
    "built": true
   },
@@ -1734,6 +1786,24 @@
    "label": "Newtron NVP",
    "version": "1.0.0",
    "transport": "tcp",
+   "polls": 1,
+   "listeners": 1,
+   "commands": 1
+  },
+  {
+   "id": "newtron-nvp-telnet",
+   "label": "Newtron NVP over Telnet",
+   "version": "1.0.0",
+   "transport": "telnet",
+   "polls": 1,
+   "listeners": 1,
+   "commands": 1
+  },
+  {
+   "id": "newtron-nvp-ssh",
+   "label": "Newtron NVP over SSH",
+   "version": "1.0.0",
+   "transport": "ssh",
    "polls": 1,
    "listeners": 1,
    "commands": 1

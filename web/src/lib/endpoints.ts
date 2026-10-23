@@ -95,7 +95,8 @@ export async function createEndpoint(body: CreateEndpoint): Promise<Endpoint> {
 // The node placement, the params and the label are mutable after creation (name,
 // transport, and owning component are set at creation). An empty label clears it;
 // omitting it leaves it alone. Addressed by the surrogate id.
-export type UpdateEndpoint = { node?: string; params?: EndpointParams; label?: string };
+// A driver-attached endpoint also takes its inputs in place (#1061).
+export type UpdateEndpoint = { node?: string; params?: EndpointParams; label?: string; inputs?: Record<string, string> };
 
 export async function updateEndpoint(id: string, body: UpdateEndpoint): Promise<Endpoint> {
   const { data, error } = await api.PATCH("/endpoints/{id}", { params: { path: { id } }, body });

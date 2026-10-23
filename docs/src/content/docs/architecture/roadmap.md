@@ -93,9 +93,10 @@ that describes the target:
    embedded bus, the probes up the layer-7 ladder (`http` and `ssh` prove a real answer, not only an
    open port), the declarative driver spec with poll interpretation, the command wire, and
    [endpoint](/architecture/collection/) and task authoring all shipped, and so did the stateful half:
-   held line sessions and the listeners that ride them (#603). Still ahead:
-   [templates](/architecture/templates/) (the reusable device shape, #827), the snmp driver, the held
-   transports beyond the line protocol (#1032 to #1041), protocols that move whole files (#1043 to
+   held line sessions and the listeners that ride them (#603), now over `tcp`, `telnet` and `ssh`,
+   each authenticating before it acts and stopping on a refusal it cannot fix (#1049, #1033, #1032).
+   Still ahead: [templates](/architecture/templates/) (the reusable device shape, #827), the snmp
+   driver, the held transports beyond those (#1034 to #1041), protocols that move whole files (#1043 to
    #1047), and server-hosted listeners (webhook, trap, syslog ingress, #1024).
 2. **The data model.** Landed except one piece: [properties](/architecture/properties/) (the
    canonical-signal registry and the exclusive-arc owner columns), the sample sinks,

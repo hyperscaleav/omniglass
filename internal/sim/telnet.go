@@ -59,6 +59,14 @@ func (d *Device) StartTelnet(port int, defaultUser, defaultPassword string, perm
 	return nil
 }
 
+// TelnetLogins counts the logins the telnet face was sent (a username and a
+// password), right or wrong: a test reads how often a credential was tried.
+func (d *Device) TelnetLogins() int64 { return d.telnetLogins.Load() }
+
+// SetTelnetSilentReject makes the telnet login hang up on a wrong password
+// without writing "auth rejected", as some devices do (#1056).
+func (d *Device) SetTelnetSilentReject(silent bool) { d.telnetSilentReject.Store(silent) }
+
 // StopTelnet closes the telnet listener and every connection it accepted.
 func (d *Device) StopTelnet() {
 	if d.telnetListener != nil {
@@ -109,9 +117,14 @@ func (d *Device) serveTelnetConn(conn net.Conn, defaultUser, defaultPassword str
 		return
 	}
 	_, _ = io.WriteString(w, "\r\n")
+	d.telnetLogins.Add(1)
 
 	if !telnetAuthOK(user, pass, defaultUser, defaultPassword, permissive) {
-		_, _ = io.WriteString(w, "auth rejected\r\n")
+		// A silent device hangs up on a wrong password without a word, the
+		// case a driver's terminal rule cannot match (#1056).
+		if !d.telnetSilentReject.Load() {
+			_, _ = io.WriteString(w, "auth rejected\r\n")
+		}
 		return
 	}
 

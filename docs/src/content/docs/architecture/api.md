@@ -274,7 +274,14 @@ exercise every convention above at once: the standard family per resource (`/nod
 (the code registry the endpoint picker consumes, `endpoint:read`-gated, #811). An endpoint
 create takes either a `transport` (a bare probe endpoint) or a `driver` plus `inputs` (an
 attach, #813: the driver's spec derives the transport, params, and tasks), and the `/drivers`
-family carries each driver's declarative `spec`, validated at write. The routes live in the
+family carries each driver's declarative `spec`, validated at write. `PATCH /endpoints/{id}` edits a
+driver-attached endpoint's `inputs` in place (the host, the port, an attached secret's reference;
+#1061), validated against the driver (a refused value is a 400 naming the field), re-resolving its
+secrets under the editor's scope, audited, its tasks re-derived in the same transaction.
+`POST /endpoints/{id}:retry`
+(gated `endpoint:retry`, audited, #1049) moves the endpoint's retry counter, part of its connection
+fingerprint, so a gate a terminal refusal holds lifts and the endpoint is attempted again (ADR-0158); for an ssh endpoint whose host key changed, its optional `host_key`
+body declares the new pin (#1032). The routes live in the
 [generated API reference](/reference/api/), rendered from the OpenAPI document on every build, each
 operation's description naming its permission gate verbatim (a guard test enforces that, alongside the
 spec-contract test that every gated operation carries its `x-omniglass-permission` stamp and

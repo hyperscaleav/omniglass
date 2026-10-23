@@ -14,12 +14,20 @@ package transport
 // whose driver holds a session open (establish, operate, recover, teardown)
 // rather than dialing per poll; Built marks that a node-side reachability
 // probe ships today, which is what the retired interface_type.built column
-// recorded.
+// recorded. Line marks a transport the line protocol rides over a held
+// session: a driver's polls, commands and listeners speak lines over it, and
+// its session may declare a login and terminal replies (#1049).
 type Transport struct {
 	Name        string `json:"name"`
 	Description string `json:"description"`
 	Held        bool   `json:"held"`
 	Built       bool   `json:"built"`
+	Line        bool   `json:"line"`
+	// Rung is the transport rung of the reachability ladder (ADR-0158): a
+	// connect on the transport's port, the protocol's handshake, or (where an
+	// open port cannot be detected, udp) a named request answered. It is the
+	// gate: a session rung is attempted only when it passes.
+	Rung string `json:"rung,omitempty"`
 }
 
 // registry is the one authoritative list, in the order surfaces render it:
@@ -27,11 +35,12 @@ type Transport struct {
 // line protocol a driver speaks over it holds a session (#817).
 var registry = []Transport{
 	{Name: "icmp", Description: "ICMP echo / ping reachability and RTT.", Held: false, Built: true},
-	{Name: "tcp", Description: "Raw TCP: the connect / port-open check, and the line protocol, which holds a session over it (polls, commands, and listeners share one connection).", Held: true, Built: true},
-	{Name: "udp", Description: "UDP datagram transport; probing arrives with its driver.", Held: false, Built: false},
-	{Name: "ssh", Description: "SSH transport; the probe runs a real key exchange (responds), and tries the endpoint credential when one is set (auth).", Held: true, Built: true},
-	{Name: "http", Description: "HTTP transport; the probe draws a real response off the API (responds), any status counting as an answer.", Held: true, Built: true},
-	{Name: "snmp", Description: "SNMP transport; the v2c scalar driver arrives with its slice.", Held: true, Built: false},
+	{Name: "tcp", Description: "Raw TCP: the connect / port-open check, and the line protocol, which holds a session over it (polls, commands, and listeners share one connection).", Held: true, Built: true, Line: true, Rung: "connect"},
+	{Name: "udp", Description: "UDP datagram transport; probing arrives with its driver.", Held: false, Built: false, Rung: "request"},
+	{Name: "telnet", Description: "Telnet: the line protocol over TCP with option negotiation (every option refused), its login the session's auth step; the probe connects and waits for the first negotiation or banner bytes (responds).", Held: true, Built: true, Line: true, Rung: "connect"},
+	{Name: "ssh", Description: "SSH: the probe runs a real key exchange (responds) and tries the endpoint credential when one is set (auth); the line protocol holds a shell or exec channel over it, its userauth the session's auth step and its host key pinned on first use.", Held: true, Built: true, Line: true, Rung: "handshake"},
+	{Name: "http", Description: "HTTP transport; the probe draws a real response off the API (responds), any status counting as an answer.", Held: true, Built: true, Rung: "connect"},
+	{Name: "snmp", Description: "SNMP transport; the v2c scalar driver arrives with its slice.", Held: true, Built: false, Rung: "request"},
 }
 
 // byName indexes the registry; built once at init since the registry is
