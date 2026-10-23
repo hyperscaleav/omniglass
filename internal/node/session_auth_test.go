@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"sync"
 	"testing"
@@ -95,9 +96,12 @@ func pollTaskWithLogin(id, endpointID, password string, revision int64) collecti
 		Spec: json.RawMessage(`{"driver":"newtron-nvp","function":"status","schedule":{"every":"30s"},
 			"request":{"line":"GET INPUT"},
 			"emits":[{"name":"video-input","lane":"property","extract":{"regex":"^INPUT (\\S+)$"}}]}`),
-		Secrets:          map[string]map[string]string{"login": {"username": "admin", "password": password}},
-		Session:          loginSession(),
-		EndpointRevision: revision,
+		Secrets:      map[string]map[string]string{"login": {"username": "admin", "password": password}},
+		Session:      loginSession(),
+		SessionRetry: revision,
+		// The server's fingerprint covers the credential and the retry
+		// counter; the test stands one in for it.
+		Fingerprint: fmt.Sprintf("fp-%s-%d", password, revision),
 	}
 }
 
@@ -353,5 +357,63 @@ func TestTelnetProbeDefersToAnUpSession(t *testing.T) {
 	}
 	if got["tcp-open"].Value != 1 || got["endpoint-responsive"].Text != "up" {
 		t.Fatalf("samples from the session = %+v", got)
+	}
+}
+
+// #1056 ruling: a session's identity is a digest over everything it connects
+// with (transport, address, timeout, the delivered secret values, the login
+// and terminal declarations). Any of them changing recycles the session,
+// which is how a rejected one leaves rejected on its own; the retry counter
+// is not part of it, and the identity holds no credential in the clear.
+func TestSessionIdentityIsADigestOverWhatItConnectsWith(t *testing.T) {
+	base := pollTaskWithLogin("p1", "ep-1", "wrong", 0)
+	identity := func(task collection.TaskSpec) sessionConn {
+		t.Helper()
+		want, refused := desiredSessions([]collection.TaskSpec{task}, map[string]collection.SessionDialer{"tcp": &authFakeDialer{}, "telnet": &authFakeDialer{}})
+		if len(refused) != 0 {
+			t.Fatalf("refused: %v", refused)
+		}
+		return want["ep-1"].conn
+	}
+	b := identity(base)
+	if s := fmt.Sprintf("%+v", b); strings.Contains(s, "wrong") || strings.Contains(s, "admin") {
+		t.Fatalf("the session identity carries a credential in the clear: %s", s)
+	}
+	// The retry counter is part of the fingerprint (#1056 ruling): an
+	// operator's :retry is a new identity, so a rejected session dials again.
+	retried := base
+	retried.SessionRetry = 7
+	if identity(retried) == b {
+		t.Fatal("the retry counter left the identity unchanged")
+	}
+	changes := map[string]func(*collection.TaskSpec){
+		"a rotated secret": func(t *collection.TaskSpec) {
+			t.Secrets = map[string]map[string]string{"login": {"username": "admin", "password": "newtron"}}
+		},
+		"a new address": func(t *collection.TaskSpec) { t.EndpointParams = json.RawMessage(`{"target":"10.0.0.6:23"}`) },
+		"a new port":    func(t *collection.TaskSpec) { t.EndpointParams = json.RawMessage(`{"target":"10.0.0.5:2323"}`) },
+		"a new timeout": func(t *collection.TaskSpec) {
+			t.EndpointParams = json.RawMessage(`{"target":"10.0.0.5:23","timeout":"9s"}`)
+		},
+		"a new transport": func(t *collection.TaskSpec) { t.Transport = "telnet" },
+		"a new login": func(t *collection.TaskSpec) {
+			ss := *loginSession()
+			l := *ss.Login
+			l.Ready = driver.Match{Prefix: "WELCOME"}
+			ss.Login = &l
+			t.Session = &ss
+		},
+		"a new terminal rule": func(t *collection.TaskSpec) {
+			ss := *loginSession()
+			ss.Terminal = []driver.TerminalRule{{Class: driver.ClassAuth, Match: driver.Match{Prefix: "Login incorrect"}}}
+			t.Session = &ss
+		},
+	}
+	for name, change := range changes {
+		task := base
+		change(&task)
+		if identity(task) == b {
+			t.Errorf("%s left the session identity unchanged", name)
+		}
 	}
 }

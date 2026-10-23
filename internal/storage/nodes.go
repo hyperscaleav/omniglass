@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/hyperscaleav/omniglass/internal/driver"
+	"github.com/hyperscaleav/omniglass/internal/fingerprint"
 	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/scope"
@@ -81,14 +82,27 @@ type WorklistTask struct {
 	// spec: the auth step, terminal replies and re-probe a held session
 	// runs. Nil for a driver that declares none and for non-driver tasks.
 	Session *driver.SessionSpec
-	// EndpointRevision is the endpoint's updated_at in microseconds: it
-	// moves on every write to the endpoint, an operator's :retry included,
-	// and a rejected session on the node redials once when it moves.
-	EndpointRevision int64
+	// SessionRetry counts the operator's :retry calls on the endpoint; a
+	// rejected session on the node redials once when it moves. Nothing else
+	// moves it, so an unrelated edit leaves a rejected session alone.
+	SessionRetry int64
 	// HostKey is an ssh endpoint's host key pin (#1032): the operator's
 	// declared ssh-host-key, else the key the node trusted on first use (the
 	// observed one), else empty.
 	HostKey string
+	// Fingerprint is the connection fingerprint (#1056 ruling): a digest
+	// over every input a connection to the endpoint is made with, computed
+	// here so it covers the sealed secret versions without the node ever
+	// hashing a plaintext.
+	Fingerprint string
+	// Rejection is the endpoint's last published endpoint-rejection (the
+	// ladder rung, the class, and the fingerprint a terminal refusal gated),
+	// so a restarted node honors a gate it did not see happen.
+	Rejection string
+	// Ladder is the endpoint's resolved reachability ladder (ADR-0157), for
+	// every task of a driver-attached endpoint; nil for a bare endpoint,
+	// whose probe is its transport's own.
+	Ladder *driver.EffectiveLadder
 }
 
 // Worklist is a node's resolved work plus the config generation (the max
@@ -392,7 +406,7 @@ func (p *PG) RecordHeartbeat(ctx context.Context, name string) error {
 func (p *PG) NodeWorklist(ctx context.Context, name string) (Worklist, error) {
 	rows, err := p.pool.Query(ctx, `
 		select t.id, t.mode, i.id::text, i.name, i.transport, i.params, t.spec, i.inputs, i.component, d.spec,
-			(extract(epoch from i.updated_at) * 1000000)::bigint
+			i.session_retry
 		from task t
 		join endpoint i on i.id = t.endpoint_id
 		left join driver d on d.id = i.driver_id
@@ -404,6 +418,12 @@ func (p *PG) NodeWorklist(ctx context.Context, name string) (Worklist, error) {
 	defer rows.Close()
 	var wl Worklist
 	type secretRef struct{ input, ref, componentID string }
+	// per task: the driver inputs and the secret versions the fingerprint
+	// hashes, and the component the endpoint's properties hang off.
+	epInputsOf := map[int][]byte{}
+	versions := map[string]map[string]string{} // endpoint id -> secret input -> sealed version
+	sessionOf := map[string]*driver.SessionSpec{}
+	componentOf := map[int]string{}
 	pending := map[int][]secretRef{} // task index -> the secret inputs to unseal
 	type pinRef struct {
 		idx                   int
@@ -414,15 +434,20 @@ func (p *PG) NodeWorklist(ctx context.Context, name string) (Worklist, error) {
 		var wt WorklistTask
 		var epInputs, driverSpec []byte
 		var componentID *string
-		if err := rows.Scan(&wt.ID, &wt.Mode, &wt.EndpointID, &wt.EndpointName, &wt.Transport, &wt.EndpointParams, &wt.Spec, &epInputs, &componentID, &driverSpec, &wt.EndpointRevision); err != nil {
+		if err := rows.Scan(&wt.ID, &wt.Mode, &wt.EndpointID, &wt.EndpointName, &wt.Transport, &wt.EndpointParams, &wt.Spec, &epInputs, &componentID, &driverSpec, &wt.SessionRetry); err != nil {
 			return Worklist{}, fmt.Errorf("storage: scan worklist task: %w", err)
 		}
 		// A driver task carries its driver's session block (#1049), read off
 		// the live spec so a re-authored login reaches the node at its next
 		// pull. A stored spec is validated at write; corruption delivers none.
-		if len(driverSpec) > 0 && len(wt.Spec) > 2 {
+		if len(driverSpec) > 0 {
 			if sp, err := driver.Parse(driverSpec); err == nil {
-				wt.Session = sp.Session
+				if len(wt.Spec) > 2 {
+					wt.Session = sp.Session
+				}
+				l := driver.ResolveLadder(wt.Transport, sp.Ladder, sp.Session)
+				wt.Ladder = &l
+				sessionOf[wt.EndpointID] = sp.Session
 			}
 		}
 		// A driver task's secret inputs travel with it: the spec says which
@@ -442,7 +467,11 @@ func (p *PG) NodeWorklist(ctx context.Context, name string) (Worklist, error) {
 				pending[len(wl.Tasks)] = append(pending[len(wl.Tasks)], secretRef{input, ref, cid})
 			}
 		}
-		if wt.Transport == "ssh" && componentID != nil && len(wt.Spec) > 2 {
+		epInputsOf[len(wl.Tasks)] = epInputs
+		if componentID != nil {
+			componentOf[len(wl.Tasks)] = *componentID
+		}
+		if wt.Transport == "ssh" && componentID != nil {
 			pins = append(pins, pinRef{idx: len(wl.Tasks), componentID: *componentID, instance: wt.EndpointName})
 		}
 		wl.Tasks = append(wl.Tasks, wt)
@@ -460,12 +489,13 @@ func (p *PG) NodeWorklist(ctx context.Context, name string) (Worklist, error) {
 	// nothing deliverable is delivered as absence: the node lands a
 	// collection-failed naming the missing credential.
 	unsealed := map[string]map[string]string{}
+	versionOf := map[string]string{}
 	for idx, refs := range pending {
 		for _, r := range refs {
 			key := r.ref + "\x00" + r.componentID
 			fields, ok := unsealed[key]
 			if !ok {
-				f, err := p.nodeSecretFields(ctx, r.ref, r.componentID)
+				f, version, err := p.nodeSecretFields(ctx, r.ref, r.componentID)
 				if err != nil {
 					// Absence is deliverable: a reference that resolves to nothing
 					// this component owns (ErrSecretNotFound), or to more than one
@@ -482,8 +512,13 @@ func (p *PG) NodeWorklist(ctx context.Context, name string) (Worklist, error) {
 					}
 					return Worklist{}, fmt.Errorf("storage: node worklist %q unseal %q: %w", name, r.ref, err)
 				}
-				fields, unsealed[key] = f, f
+				fields, unsealed[key], versionOf[key] = f, f, version
 			}
+			ep := wl.Tasks[idx].EndpointID
+			if versions[ep] == nil {
+				versions[ep] = map[string]string{}
+			}
+			versions[ep][r.input] = versionOf[key]
 			if wl.Tasks[idx].Secrets == nil {
 				wl.Tasks[idx].Secrets = map[string]map[string]string{}
 			}
@@ -507,6 +542,40 @@ func (p *PG) NodeWorklist(ctx context.Context, name string) (Worklist, error) {
 				'')`, pr.componentID, pr.instance).Scan(&wl.Tasks[pr.idx].HostKey); err != nil {
 			return Worklist{}, fmt.Errorf("storage: node worklist %q host key: %w", name, err)
 		}
+	}
+	// The rejection a node published for the endpoint (its gate), and the
+	// connection fingerprint each task is judged against (#1056 ruling).
+	rejections := map[string]string{}
+	for idx := range wl.Tasks {
+		t := &wl.Tasks[idx]
+		if cid, ok := componentOf[idx]; ok {
+			key := cid + "\x00" + t.EndpointName
+			rej, seen := rejections[key]
+			if !seen {
+				if err := p.pool.QueryRow(ctx, `
+					select coalesce((select value #>> '{}' from property
+					 where owner_kind = 'component' and component_id = $1::uuid and instance = $2 and provenance = 'observed'
+					   and property_type_id = (select id from property_type where name = 'endpoint-rejection')
+					 order by ts desc, id desc limit 1), '')`, cid, t.EndpointName).Scan(&rej); err != nil {
+					return Worklist{}, fmt.Errorf("storage: node worklist %q rejection: %w", name, err)
+				}
+				rejections[key] = rej
+			}
+			t.Rejection = rej
+		}
+		// One fingerprint per endpoint, every task of it the same: the
+		// endpoint's secret versions and its driver's session block, whether
+		// or not this task carries them (a probe task carries neither).
+		t.Fingerprint = fingerprint.Of(fingerprint.Inputs{
+			Transport:      t.Transport,
+			Params:         t.EndpointParams,
+			DriverInputs:   epInputsOf[idx],
+			SecretVersions: versions[t.EndpointID],
+			Session:        sessionOf[t.EndpointID],
+			Ladder:         t.Ladder,
+			HostKeyPin:     t.HostKey,
+			Retry:          t.SessionRetry,
+		})
 	}
 	// config_generation moves at operator-config pace: the max endpoint
 	// updated_at (epoch seconds) across the node's endpoints, 0 when none.

@@ -54,6 +54,7 @@ func (d *Device) StartSSH(port int, defaultUser, defaultPassword string, permiss
 
 	cfg := &ssh.ServerConfig{
 		PasswordCallback: func(conn ssh.ConnMetadata, pass []byte) (*ssh.Permissions, error) {
+			d.sshPasswordTries.Add(1)
 			if effectivePermissive {
 				return nil, nil
 			}
@@ -255,6 +256,10 @@ func (d *Device) runSSHShell(ch ssh.Channel, remote string) {
 	rd := bufio.NewReader(ch)
 	runShellSession(d, sess, rd, ch, d.sshPort(), "ssh")
 }
+
+// SSHPasswordTries counts the passwords the ssh face was sent, right or
+// wrong: a test reads how often a credential was tried (#1060).
+func (d *Device) SSHPasswordTries() int64 { return d.sshPasswordTries.Load() }
 
 // RotateSSHHostKey replaces the device's SSH host key; the next StartSSH
 // serves the new one. A real device's key changes when it is replaced or

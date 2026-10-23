@@ -173,6 +173,16 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 				logger.Warn("auth verdict not published", "facility", "session", "task", taskID, "error", err.Error())
 			}
 		},
+		rejection: func(taskID, endpoint, value string) {
+			// The endpoint's gate, published when it changes so the server
+			// carries it back to a restarted node (ADR-0157). The value holds
+			// the connection fingerprint, a digest only.
+			if err := publishBatch(nc, cfg.Name, taskID, []collection.Sample{{
+				Name: collection.SignalEndpointRejection, Text: value, IsText: true, TS: time.Now().UTC(),
+			}}); err != nil {
+				logger.Warn("endpoint rejection not published", "facility", "session", "task", taskID, "error", err.Error())
+			}
+		},
 		hostKey: func(taskID, endpoint, fp string) {
 			// The ssh host key the session trusted: on first use this is the
 			// pin the server keeps and delivers back (#1032). It publishes on

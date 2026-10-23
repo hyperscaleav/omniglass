@@ -228,20 +228,27 @@ match with a class: `auth`, `host-key`, `certificate`, `protocol`), and a transp
 protocol refusals. A terminal reply during the login, to a poll, a command, or a listener's arm
 rejects the session; anything unclassified stays retryable and follows the backoff and budget above.
 
+**The login budget.** A component that hangs up after the final secret and before ready, with no
+refusal text, cannot be told from a dropped connection one time; three such logins in a row are an
+`auth` refusal (the #1056 ruling). A drop before the secret step stays an ordinary failure, and a
+login that passes resets the budget.
+
 **Rejected.** A terminal error moves the session straight to `rejected`, without spending the
 budget: it closes the connection and dials no more. Polls fail fast with the refusal (a terminal
 fault waits the poll's interval, never the failure backoff), commands fail with the reason, and
 neither falls back to a throwaway connection, which would retry the bad credential. It leaves
-`rejected` when:
+`rejected` only when its **connection fingerprint** changes ([below](#the-connection-fingerprint-and-the-layered-gate)):
 
-- the endpoint's session identity changes (the credential the worklist delivers, the address, the
-  transport, or the driver's session block): the session is recycled, so a fixed credential
-  reconnects at the next worklist pull;
+- anything it connects with changes: the attached secret rotated in the secret store (the endpoint
+  row untouched), the address, port or transport (a driver-attached endpoint's change by
+  re-attaching), the driver's login or terminal declaration (re-derived to the endpoint, #823), or
+  its pin. The session is recycled and reconnects within a tick;
 - an operator retries it (`POST /endpoints/{id}:retry`, gated by `endpoint:retry` and audited): the
-  endpoint's revision moves, and the node's rejected session dials exactly once more (a second retry
-  during that attempt buys nothing; an attempt that meets a transient failure leaves `rejected` for
-  `recovering` and follows the backoff);
+  endpoint's retry counter, part of the fingerprint, moves;
 - the driver declares a slow re-probe (`session.reprobe`, at least 5m; the default is never).
+
+An unrelated edit (a label) moves nothing the fingerprint covers, and a rejected session stays
+rejected.
 
 Each transition also lands `session-reason`, the reason as a property (`auth: auth rejected` when
 rejected), so an event rule can alarm on it, and the node logs it once, at the transition. Proven
@@ -250,6 +257,39 @@ password prompt; the right password logs in before the first poll, a wrong one i
 once, never arms, and reads `rejected` with the component's text) and over fakes for the machine
 (`session_auth_test.go`: a wrong credential dials once over an hour of the session's clock, a retry
 dials once more, a re-probe fires on its interval, a transient failure still spends the budget).
+
+### The connection fingerprint and the layered gate
+
+Built (#1056 ruling, [ADR-0157](/architecture/decisions/#adr-0157-one-connection-fingerprint-gates-every-connection-on-a-ladder-the-driver-declares)). Every connection to an endpoint, held or
+stateless (the reachability probe, a throwaway poll or command, the held session), is verified
+bottom up on the existing ladder:
+
+- **reachable**: a ping, **informational only**. An open, answering transport is what counts, so a
+  component that blocks ping never reads down for it, and a cloud API is never pinged. The
+  driver's ladder lands `icmp-reachable` beside the endpoint's probe (one observation per probe),
+  after the verdict is judged. A layer-2 presence rung below it is #1062.
+- **responsive**, the transport rung and **the gate**: a TCP connect on the transport's port, the
+  protocol's handshake (the ssh key exchange, tls), or, where an open port cannot be detected
+  (udp), the driver's named request answered (snmp's own is #821). A wrong host, address or port
+  fails here, retryably, and never reads as auth.
+- **authenticated**, the session rung: the login, attempted only when the transport rung passes.
+
+The ladder is declared in the driver spec (`ladder.ping`, `ladder.transport`, `ladder.session`),
+its defaults from the transport registry's `rung`, so most drivers declare nothing; a rung a
+transport cannot run refuses at write. A terminal refusal gates its rung and every rung above it,
+for the endpoint, while the **connection fingerprint** is unchanged: a digest the server computes
+over every input a connection is made with (the transport, the declared params, the driver's
+inputs, a digest of each attached secret's sealed envelope, never its plaintext, the session block,
+the ladder, the ssh pin, and the `:retry` counter). The rungs below keep running, so reachability
+stays observed while auth is rejected. The gate is published as `endpoint-rejection` (`<rung>
+<class> <fingerprint>`, or `none`) and carried back on the worklist, so a restarted node makes no
+attempt against an unchanged fingerprint. The ssh probe's params credential rides the same gate
+(#1060): tried once, then the key exchange runs without it until the fingerprint moves, and never
+past a pinned key that changed. Proven end to end (`run_session_identity_test.go`): a silent panel
+spends the login budget, then a label edit and a node restart try nothing, while a retry, a
+login-declaration change, a rotated secret, and a re-attach over ssh each attempt again; a wrong
+port reads down on refused connects and tries no login; the ssh probe sends a wrong password once,
+across a restart too, and authenticates after a params edit.
 
 **Native push**: data pushed by smart senders is self-describing (it carries its key), its edge parse a near-identity pass-through marked `shape=native`; a failed parse keeps the raw on a `collection.failed` event.
 

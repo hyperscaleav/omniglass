@@ -233,8 +233,8 @@ omniglass endpoint get <id>                                     # endpoints are 
 omniglass endpoint update <id> --node edge-hq --params '{"target":"10.0.0.2:22"}'
 omniglass endpoint delete <id>                                  # refused (409) while its task references it
 
-# A held session a refusal rejected (session-state reads rejected) dials no more until
-# its credential or address changes, or an operator retries it once:
+# An endpoint a refusal gated (session-state reads rejected, endpoint-rejection names the rung)
+# is not attempted again until what it connects with changes, or an operator retries it:
 omniglass endpoint retry <id>                                   # needs endpoint:retry; audited
 omniglass endpoint retry <id> --host-key SHA256:...             # ssh: trust a replaced component's new key
 

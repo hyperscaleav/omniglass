@@ -433,9 +433,10 @@ func (p *PG) UpdateEndpoint(ctx context.Context, actorID, id string, patch Endpo
 }
 
 // RetryEndpoint records an operator's retry of the endpoint's held session
-// (#1049): it moves the endpoint's revision (updated_at, carried on the
-// worklist), which wakes a rejected session on the node for exactly one
-// attempt; a session that is not rejected ignores it. The read/action split
+// (#1049): it increments the endpoint's session_retry counter, carried on
+// the worklist and part of the endpoint's connection fingerprint (ADR-0157),
+// so the gate a terminal refusal holds lifts and the node attempts the
+// endpoint again. The read/action split
 // runs through the owning component like every endpoint write, and the
 // retry is audited in the same transaction.
 //
@@ -468,10 +469,10 @@ func (p *PG) RetryEndpoint(ctx context.Context, actorID, id, hostKey string, rea
 			return nil, fmt.Errorf("storage: pin host key for endpoint %q: %w", before.ID, err)
 		}
 	}
-	// clock_timestamp, not now(): two retries in one transaction-start
-	// instant must still move the revision.
+	// The counter, not updated_at: an unrelated edit (a label) moves
+	// updated_at and must leave a rejected session alone (#1056 ruling).
 	after, err := scanEndpoint(tx.QueryRow(ctx, `
-		update endpoint set updated_at = greatest(clock_timestamp(), updated_at + interval '1 microsecond')
+		update endpoint set session_retry = session_retry + 1
 		where id = $1
 		returning `+endpointCols, before.ID))
 	if err != nil {

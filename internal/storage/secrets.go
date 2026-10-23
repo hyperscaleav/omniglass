@@ -2,6 +2,8 @@ package storage
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -967,9 +969,31 @@ func mapSecretWriteErr(err error) error {
 // audited operator action) and no admin-sensitivity gate (that was the attach's
 // job). An ambiguous name after the cascade filter refuses rather than
 // guessing. The uuid-stable binding that removes the name-drift class is #820.
-func (p *PG) nodeSecretFields(ctx context.Context, name, componentID string) (map[string]string, error) {
+func (p *PG) nodeSecretFields(ctx context.Context, name, componentID string) (map[string]string, string, error) {
+	fields, version, err := p.nodeSecretFieldsVersioned(ctx, name, componentID)
+	return fields, version, err
+}
+
+// nodeSecretFieldsVersioned is nodeSecretFields with the secret's version: a
+// digest of its stored (sealed) value and id, which a rotation moves (it
+// re-seals under a fresh DEK) and which carries nothing derived from the
+// plaintext of a secret field (#1056 ruling: the connection fingerprint).
+func (p *PG) nodeSecretFieldsVersioned(ctx context.Context, name, componentID string) (map[string]string, string, error) {
+	f, row, err := p.nodeSecretRow(ctx, name, componentID)
+	if err != nil {
+		return nil, "", err
+	}
+	b, _ := json.Marshal(struct {
+		ID    string                     `json:"id"`
+		Value map[string]json.RawMessage `json:"value"`
+	}{row.id, row.value})
+	sum := sha256.Sum256(b)
+	return f, hex.EncodeToString(sum[:]), nil
+}
+
+func (p *PG) nodeSecretRow(ctx context.Context, name, componentID string) (map[string]string, *secretRow, error) {
 	if p.secret == nil {
-		return nil, ErrNoSecretProvider
+		return nil, nil, ErrNoSecretProvider
 	}
 	rows, err := p.pool.Query(ctx, `
 		select s.id, s.name, s.owner_kind,
@@ -978,7 +1002,7 @@ func (p *PG) nodeSecretFields(ctx context.Context, name, componentID string) (ma
 		from secret s join secret_type st on st.id = s.secret_type
 		where s.name = $1`, name)
 	if err != nil {
-		return nil, fmt.Errorf("storage: node secret %q: %w", name, err)
+		return nil, nil, fmt.Errorf("storage: node secret %q: %w", name, err)
 	}
 	defer rows.Close()
 	var found []struct {
@@ -990,12 +1014,12 @@ func (p *PG) nodeSecretFields(ctx context.Context, name, componentID string) (ma
 		var ownerID *string
 		var typeName string
 		if err := rows.Scan(&r.id, &r.name, &r.ownerKind, &ownerID, &r.value, &typeName); err != nil {
-			return nil, fmt.Errorf("storage: scan node secret %q: %w", name, err)
+			return nil, nil, fmt.Errorf("storage: scan node secret %q: %w", name, err)
 		}
 		r.ownerID = ownerID
 		covers, err := p.secretCoversComponent(ctx, r.ownerKind, ownerID, componentID)
 		if err != nil {
-			return nil, fmt.Errorf("storage: cascade node secret %q: %w", name, err)
+			return nil, nil, fmt.Errorf("storage: cascade node secret %q: %w", name, err)
 		}
 		if !covers {
 			continue
@@ -1006,21 +1030,21 @@ func (p *PG) nodeSecretFields(ctx context.Context, name, componentID string) (ma
 		}{r, typeName})
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("storage: node secret %q: %w", name, err)
+		return nil, nil, fmt.Errorf("storage: node secret %q: %w", name, err)
 	}
 	if len(found) == 0 {
-		return nil, ErrSecretNotFound
+		return nil, nil, ErrSecretNotFound
 	}
 	if len(found) > 1 {
-		return nil, &ErrAmbiguousName{Kind: "secret", Ref: name}
+		return nil, nil, &ErrAmbiguousName{Kind: "secret", Ref: name}
 	}
 	shapes, err := p.shapeIndex(ctx)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	shape, ok := shapes[found[0].typeName]
 	if !ok {
-		return nil, fmt.Errorf("storage: node secret %q: unknown secret type %q", name, found[0].typeName)
+		return nil, nil, fmt.Errorf("storage: node secret %q: unknown secret type %q", name, found[0].typeName)
 	}
 	row := found[0].row
 	out := make(map[string]string, len(row.value))
@@ -1032,20 +1056,20 @@ func (p *PG) nodeSecretFields(ctx context.Context, name, componentID string) (ma
 		if !f.Secret {
 			var v string
 			if err := json.Unmarshal(raw, &v); err != nil {
-				return nil, fmt.Errorf("storage: decode node secret field %q: %w", f.Name, err)
+				return nil, nil, fmt.Errorf("storage: decode node secret field %q: %w", f.Name, err)
 			}
 			out[f.Name] = v
 			continue
 		}
 		var env secret.Envelope
 		if err := json.Unmarshal(raw, &env); err != nil {
-			return nil, fmt.Errorf("storage: decode node secret envelope %q: %w", f.Name, err)
+			return nil, nil, fmt.Errorf("storage: decode node secret envelope %q: %w", f.Name, err)
 		}
 		pt, err := secret.Open(ctx, p.secret, env, secretAAD(row.ownerKind, row.ownerID, row.name, f.Name))
 		if err != nil {
-			return nil, fmt.Errorf("storage: unseal node secret field %q: %w", f.Name, err)
+			return nil, nil, fmt.Errorf("storage: unseal node secret field %q: %w", f.Name, err)
 		}
 		out[f.Name] = string(pt)
 	}
-	return out, nil
+	return out, &row, nil
 }

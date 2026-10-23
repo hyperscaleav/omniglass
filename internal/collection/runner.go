@@ -255,6 +255,8 @@ type SSHTask struct {
 	Username string
 	Password string
 	Timeout  time.Duration
+	// HostKeyPin is the endpoint's pinned host key (#1060).
+	HostKeyPin string
 }
 
 // ladderVerdict renders one responds/auth verdict as a property-lane text
@@ -316,12 +318,19 @@ func (r *Runner) CollectHTTP(ctx context.Context, t HTTPTask) ([]Sample, error) 
 // never completes the exchange is reached-but-not-responsive; one that
 // completes it and refuses the credential is responded-but-not-authenticated.
 func (r *Runner) CollectSSH(ctx context.Context, t SSHTask) ([]Sample, error) {
+	out, _, err := r.CollectSSHResult(ctx, t)
+	return out, err
+}
+
+// CollectSSHResult is CollectSSH with the probe's own result, which the
+// node's gate reads (#1060): a refused credential, a changed host key.
+func (r *Runner) CollectSSHResult(ctx context.Context, t SSHTask) ([]Sample, SSHResult, error) {
 	if t.Target == "" {
-		return nil, fmt.Errorf("collection: ssh task: empty target")
+		return nil, SSHResult{}, fmt.Errorf("collection: ssh task: empty target")
 	}
-	res, err := r.SSH.Probe(ctx, t.Target, SSHCredential{Username: t.Username, Password: t.Password}, t.Timeout)
+	res, err := r.SSH.Probe(ctx, t.Target, SSHCredential{Username: t.Username, Password: t.Password, HostKeyPin: t.HostKeyPin}, t.Timeout)
 	if err != nil {
-		return nil, fmt.Errorf("collection: ssh probe %s: %w", t.Target, err)
+		return nil, SSHResult{}, fmt.Errorf("collection: ssh probe %s: %w", t.Target, err)
 	}
 	now := time.Now().UTC()
 	openVal := 0.0
@@ -350,5 +359,5 @@ func (r *Runner) CollectSSH(ctx context.Context, t SSHTask) ([]Sample, error) {
 		}
 		out = append(out, ladderVerdict(SignalEndpointAuthenticated, authed, res.Reason, now))
 	}
-	return out, nil
+	return out, res, nil
 }

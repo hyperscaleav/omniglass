@@ -44,6 +44,11 @@ func (d *LoginDialog) String() string {
 // briefly unreachable device says nothing about the credential.
 var errLoginFailed = errors.New("login did not complete")
 
+// ErrLoginDropped marks a login the component hung up on after the final
+// secret was sent and before ready, with no refusal text (#1056 ruling): on
+// its own retryable, but it charges the session's login budget.
+var ErrLoginDropped = errors.New("the component hung up after the final secret, before ready")
+
 // RunLogin runs the dialog over conn before anything else reads it. Each
 // wait (a prompt, or ready after the last answer) has timeout. A line the
 // classifier names terminal, or a prompt for a step already answered (the
@@ -157,6 +162,9 @@ func RunLogin(ctx context.Context, conn net.Conn, d *LoginDialog, terminal Class
 			}
 			if errors.Is(rerr, os.ErrDeadlineExceeded) {
 				return fmt.Errorf("%w: no %s within %s (last: %q)", errLoginFailed, waiting, timeout, last)
+			}
+			if next == len(d.Steps) {
+				return fmt.Errorf("%w: %w (last: %q): %v", errLoginFailed, ErrLoginDropped, last, rerr)
 			}
 			return fmt.Errorf("%w: the connection ended waiting for %s (last: %q): %v", errLoginFailed, waiting, last, rerr)
 		}

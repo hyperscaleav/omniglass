@@ -401,3 +401,24 @@ func TestSessionTerminalReplyRejects(t *testing.T) {
 		t.Fatalf("dialed %d times after a terminal reply, want 1", n)
 	}
 }
+
+// A gate held across a node restart (#1056 ruling): a session started
+// already rejected dials nothing, and its transition carries the refusal.
+func TestSessionStartedRejectedDialsNothing(t *testing.T) {
+	d := &fakeSessionDialer{}
+	r, clock := newRecorder(), newFakeClock()
+	refusal := authRefusal()
+	s := collection.StartSession(collection.SessionConfig{
+		Target: "10.0.0.9:23", Dialer: d, OnTransition: r.onTransition, Backoff: r.backoff,
+		After: clock.After, Now: clock.Now, Rejected: refusal,
+	})
+	t.Cleanup(s.Close)
+	r.waitStates(t, rejected)
+	if tr := r.lastTransition(); tr.Refusal == nil || tr.Refusal.Class != driver.ClassAuth {
+		t.Fatalf("the rejected transition carries refusal %+v", tr.Refusal)
+	}
+	clock.Advance(time.Hour, time.Minute)
+	if n := d.dialCount(); n != 0 {
+		t.Fatalf("a session started rejected dialed %d times", n)
+	}
+}

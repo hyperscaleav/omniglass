@@ -178,15 +178,20 @@ subscription on establish (a listener's instantiation commands, re-sent on every
 demux on the shared connection (listeners first, answers by reply shape;
 [routing](/architecture/collection/#listeners-over-a-held-session)). Built with #1049:
 **authentication on establish**, as a layer that gates the session. The worklist carries each
-driver task's `session` block (read off the live driver spec) and the endpoint's revision; the node
+driver task's `session` block (read off the live driver spec) and the endpoint's connection
+fingerprint and published gate (ADR-0157); the node
 renders the login against the delivered secrets (a credential it lacks refuses the session by
 reference, never by value), runs it on every connection before any poll, command, or arm, and
 publishes its verdict as `endpoint-authenticated`. A terminal refusal reads `rejected` and the node
 dials no more: a poll over it fails fast and waits its interval (or runs at the first tick its
 session is up again, so a fixed credential lands data within a tick), a command fails with the reason, and
-neither falls back to a throwaway connection. A changed credential or address recycles the session;
-an operator's `:retry` moves the endpoint's revision, which wakes a rejected session for exactly one
-attempt ([auth and rejection](/architecture/collection/#auth-and-rejection),
+neither falls back to a throwaway connection. The node gates the endpoint at the refusal's ladder
+rung for its fingerprint, across its probes, polls, commands and session, publishes the gate as
+`endpoint-rejection`, and adopts it back from the worklist after a restart, so it makes no attempt
+against an unchanged fingerprint; a rotated secret, a new address, port or transport, a changed login
+declaration, or an operator's `:retry` moves the fingerprint and lifts it
+([auth and rejection](/architecture/collection/#auth-and-rejection),
+[the gate](/architecture/collection/#the-connection-fingerprint-and-the-layered-gate),
 [ADR-0154](/architecture/decisions/#adr-0154-auth-is-a-layer-that-gates-a-held-session-and-a-terminal-refusal-reads-rejected)).
 Still design below: the pool knobs.
 

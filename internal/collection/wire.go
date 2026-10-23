@@ -95,13 +95,23 @@ type TaskSpec struct {
 	// Session is the endpoint's driver's session block (#1049): its auth
 	// step, terminal replies and re-probe, read off the live driver spec.
 	Session *driver.SessionSpec `json:"session,omitempty"`
-	// EndpointRevision moves on every write to the endpoint, an operator's
-	// :retry included; a rejected session redials once when it moves.
-	EndpointRevision int64 `json:"endpoint_revision,omitempty"`
+	// SessionRetry counts the operator's :retry calls on the endpoint; a
+	// rejected session redials once when it moves, and nothing else moves it.
+	SessionRetry int64 `json:"session_retry,omitempty"`
 	// HostKey is the ssh host key the endpoint's session pins (#1032): the
 	// operator's declared key, else the key the node trusted on first use;
 	// empty before first use.
 	HostKey string `json:"host_key,omitempty"`
+	// Fingerprint is the connection fingerprint (#1056 ruling, ADR-0157):
+	// a digest over every input a connection to the endpoint is made with.
+	// A gate holds while it is unchanged. Never logged.
+	Fingerprint string `json:"fingerprint,omitempty"`
+	// Rejection is the endpoint's last published endpoint-rejection, so a
+	// restarted node honors a gate it did not see happen.
+	Rejection string `json:"rejection,omitempty"`
+	// Ladder is the endpoint's resolved reachability ladder (ADR-0157);
+	// nil for a bare endpoint.
+	Ladder *driver.EffectiveLadder `json:"ladder,omitempty"`
 }
 
 // WorklistReply is the server's response to a worklist request: the node's

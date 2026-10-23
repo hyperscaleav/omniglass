@@ -55,6 +55,9 @@ type Spec struct {
 	// and its re-probe (#1049); absent, the session has no auth step and
 	// every failure is retryable.
 	Session *SessionSpec `json:"session,omitempty"`
+	// Ladder is the reachability ladder (ADR-0157); absent, the transport
+	// registry's defaults.
+	Ladder *Ladder `json:"ladder,omitempty"`
 }
 
 // The unmatched-line policies.
@@ -448,6 +451,9 @@ func (s *Spec) Validate(cat Catalog) error {
 		}
 	}
 	if err := s.validateSession(); err != nil {
+		return err
+	}
+	if err := s.validateLadder(); err != nil {
 		return err
 	}
 	// A held session is held for an endpoint's poll and listen tasks; command

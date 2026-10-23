@@ -26,6 +26,8 @@ const (
 	SignalSessionState  = probekeys.SessionState
 	SignalSessionReason = probekeys.SessionReason
 	SignalSSHHostKey    = probekeys.SSHHostKey
+	// SignalEndpointRejection is the endpoint's gate (ADR-0157).
+	SignalEndpointRejection = probekeys.EndpointRejection
 )
 
 // SessionState is the session's honest state, the session-state property's
@@ -112,6 +114,9 @@ type SessionTransition struct {
 	State  SessionState
 	Reason string
 	At     time.Time
+	// Refusal is a rejected transition's terminal error (#1056 ruling), the
+	// class and text the node's gate holds.
+	Refusal *TerminalError
 }
 
 // HeldConn is one established connection a session holds: it serves
@@ -279,6 +284,10 @@ type SessionConfig struct {
 	After func(time.Duration) <-chan time.Time
 	// Channel shapes the line channel each connection opens (ssh).
 	Channel ChannelOptions
+	// Rejected starts the session already rejected (a gate the node holds
+	// for this connection fingerprint, from before a restart): it dials
+	// nothing until its re-probe, if any.
+	Rejected *TerminalError
 }
 
 // Session holds one endpoint's connection. Start it with StartSession, borrow
@@ -313,7 +322,16 @@ type Session struct {
 	refused  chan *TerminalError
 	inflight *sync.WaitGroup
 	lastAuth string // the last auth verdict reported, so it reports changes only
+	// loginDrops counts consecutive logins the component hung up on after
+	// the final secret (machine goroutine only).
+	loginDrops int
 }
+
+// LoginDropBudget is how many consecutive logins a component may hang up on
+// after the final secret, with no refusal text, before the session reads
+// rejected as an auth refusal (#1056 ruling): a component that drops a wrong
+// password silently would otherwise be retried forever.
+const LoginDropBudget = 3
 
 // StartSession starts the machine: it reports establishing at once and
 // dials in the background.
@@ -496,7 +514,11 @@ func (s *Session) transition(state SessionState, reason string, conn HeldConn) {
 	s.changed = make(chan struct{})
 	s.mu.Unlock()
 	if s.cfg.OnTransition != nil {
-		s.cfg.OnTransition(SessionTransition{State: state, Reason: reason, At: s.cfg.Now().UTC()})
+		tr := SessionTransition{State: state, Reason: reason, At: s.cfg.Now().UTC()}
+		if state == SessionRejected {
+			tr.Refusal = s.refusal
+		}
+		s.cfg.OnTransition(tr)
 	}
 }
 
@@ -546,7 +568,9 @@ func (s *Session) lend(conn HeldConn, heard, pushed chan struct{}, refused chan 
 // down session then leaves down only on an answer, never on age alone.
 func (s *Session) run(ctx context.Context) {
 	defer close(s.done)
-	s.transition(SessionEstablishing, "connecting to "+s.cfg.Target, nil)
+	if s.cfg.Rejected == nil {
+		s.transition(SessionEstablishing, "connecting to "+s.cfg.Target, nil)
+	}
 	state := SessionEstablishing
 	failures, needAnswer := 0, false
 	fail := func(cause string) {
@@ -593,6 +617,13 @@ func (s *Session) run(ctx context.Context) {
 		s.retrying = true
 		s.mu.Unlock()
 		return true
+	}
+	if s.cfg.Rejected != nil {
+		// A gate held from before (a node restart): rejected at once, no dial.
+		s.firstDialDone()
+		if !reject(s.cfg.Rejected) {
+			return
+		}
 	}
 	for {
 		if failures > 0 && !s.sleep(ctx, s.cfg.Backoff(failures)) {
@@ -758,11 +789,22 @@ func (s *Session) connect(ctx context.Context) (HeldConn, error) {
 	if s.cfg.Auth != nil {
 		if err := pc.Authenticate(ctx, s.cfg.Auth, s.cfg.Terminal, s.cfg.Timeout); err != nil {
 			_ = pc.Close()
+			if errors.Is(err, ErrLoginDropped) {
+				s.loginDrops++
+				if s.loginDrops >= LoginDropBudget {
+					// Spent: a retry that drops again re-rejects at once, so
+					// an operator's retry costs one attempt, not three.
+					s.loginDrops = LoginDropBudget - 1
+					err = &TerminalError{Class: driver.ClassAuth, Reason: fmt.Sprintf(
+						"the component hung up after the login %d times running, with no refusal text", LoginDropBudget)}
+				}
+			}
 			if terr, ok := AsTerminal(err); ok && terr.Class == driver.ClassAuth {
 				s.reportAuth(false, terr.Error())
 			}
 			return nil, err
 		}
+		s.loginDrops = 0
 		s.reportAuth(true, "the auth step passed on "+s.cfg.Target)
 	}
 	conn, err := pc.Open(provingInbound{s}, s.cfg.Channel)

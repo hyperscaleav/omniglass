@@ -1,6 +1,8 @@
 package node
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -33,6 +35,8 @@ type sessionHooks struct {
 	samples    func(taskID string, dps []collection.Sample)
 	fault      func(taskID string, err error)
 	arm        func(taskID, endpoint, line, reply string, err error)
+	// rejection hears an endpoint's endpoint-rejection change (#1056).
+	rejection func(taskID, endpoint, value string)
 	// hostKey hears an ssh host key the session trusted (#1032).
 	hostKey func(taskID, endpoint, fingerprint string)
 }
@@ -45,12 +49,34 @@ type sessionHooks struct {
 // listener's match or emits, re-hashing its task id) keeps the healthy
 // connection.
 type sessionConn struct {
-	transport   string
-	target      string
-	timeout     time.Duration
-	credentials string // canonical JSON of the task's delivered secrets
-	session     string // canonical JSON of the driver's session block
-	arm         string // the instantiation commands, in order, newline-joined
+	transport string
+	target    string
+	timeout   time.Duration
+	arm       string // the instantiation commands, in order, newline-joined
+	// identity is a SHA-256 digest over everything the session connects
+	// with (#1056 ruling): the transport, address, timeout, the delivered
+	// secret values, the driver's session block (its login and terminal
+	// declarations) and the arm conversation. A secret rotated in the secret
+	// store changes it, so a rejected session leaves rejected on its own; it
+	// holds no credential beyond the digest, and is never logged.
+	identity string
+}
+
+// sessionIdentity digests a session's connection inputs. Map keys marshal
+// sorted, so the JSON is canonical.
+func sessionIdentity(transport, target string, timeout time.Duration, secrets map[string]map[string]string, ss *driver.SessionSpec, arm, fingerprint string, retry int64) string {
+	b, _ := json.Marshal(struct {
+		Transport   string                       `json:"transport"`
+		Target      string                       `json:"target"`
+		Timeout     time.Duration                `json:"timeout"`
+		Secrets     map[string]map[string]string `json:"secrets"`
+		Session     *driver.SessionSpec          `json:"session"`
+		Arm         string                       `json:"arm"`
+		Fingerprint string                       `json:"fingerprint"`
+		Retry       int64                        `json:"retry"`
+	}{transport, target, timeout, secrets, ss, arm, fingerprint, retry})
+	sum := sha256.Sum256(b)
+	return hex.EncodeToString(sum[:])
 }
 
 // routedListener is one listener as the node runs it: its listen task and
@@ -75,9 +101,14 @@ type sessionWant struct {
 	auth     *collection.SessionAuth
 	terminal collection.Classifier
 	reprobe  time.Duration
-	// revision is the endpoint's revision; a move retries a rejected
-	// session once.
-	revision int64
+	// retry is the endpoint's :retry counter and fingerprint the server's
+	// connection fingerprint (which covers the counter): either moving is
+	// a new session identity, so a rejected session dials once more.
+	retry       int64
+	fingerprint string
+	// secrets and session feed the identity digest.
+	secrets map[string]map[string]string
+	session *driver.SessionSpec
 	// hostKey is the ssh pin the worklist delivers; channel shapes the ssh
 	// channel (#1032).
 	hostKey string
@@ -194,32 +225,25 @@ func desiredSessions(tasks []collection.TaskSpec, dialers map[string]collection.
 			}
 			timeout = d
 		}
-		creds := ""
-		if len(task.Secrets) > 0 {
-			b, _ := json.Marshal(task.Secrets) // map keys marshal sorted: canonical
-			creds = string(b)
-		}
-		session := ""
-		if task.Session != nil {
-			b, _ := json.Marshal(task.Session)
-			session = string(b)
-		}
 		auth, err := sessionAuthOf(task)
 		if err != nil {
 			refused[task.EndpointID] = fmt.Sprintf("session auth: %v", err)
 			continue
 		}
 		want[task.EndpointID] = sessionWant{
-			conn:      sessionConn{transport: task.Transport, target: p.Target, timeout: timeout, credentials: creds, session: session},
-			taskID:    task.ID,
-			endpoint:  task.EndpointName,
-			listeners: listener,
-			auth:      auth,
-			terminal:  collection.TerminalClassifier(task.Session),
-			reprobe:   task.Session.ReprobeInterval(),
-			revision:  task.EndpointRevision,
-			hostKey:   task.HostKey,
-			channel:   channelOf(task.Session),
+			conn:        sessionConn{transport: task.Transport, target: p.Target, timeout: timeout},
+			secrets:     task.Secrets,
+			session:     task.Session,
+			taskID:      task.ID,
+			endpoint:    task.EndpointName,
+			listeners:   listener,
+			auth:        auth,
+			terminal:    collection.TerminalClassifier(task.Session),
+			reprobe:     task.Session.ReprobeInterval(),
+			retry:       task.SessionRetry,
+			fingerprint: task.Fingerprint,
+			hostKey:     task.HostKey,
+			channel:     channelOf(task.Session),
 		}
 	}
 	for id, w := range want {
@@ -233,6 +257,8 @@ func desiredSessions(tasks []collection.TaskSpec, dialers map[string]collection.
 			}
 		}
 		w.conn.arm = strings.Join(arm, "\n")
+		w.conn.identity = sessionIdentity(w.conn.transport, w.conn.target, w.conn.timeout, w.secrets, w.session, w.conn.arm, w.fingerprint, w.retry)
+		w.secrets = nil // the digest is all the identity keeps
 		want[id] = w
 	}
 	return want, refused
@@ -332,11 +358,10 @@ func samplesOf(emitted []driver.Emitted) []collection.Sample {
 // its listeners, and where its transitions publish now (updated in place by
 // a re-hash).
 type heldSession struct {
-	conn     sessionConn
-	sess     *collection.Session
-	router   *listenerRouter
-	revision int64 // the endpoint revision last seen; a move retries a rejection
-	pin      *collection.HostKeyPin
+	conn   sessionConn
+	sess   *collection.Session
+	router *listenerRouter
+	pin    *collection.HostKeyPin
 
 	mu       sync.Mutex
 	taskID   string
@@ -359,14 +384,93 @@ type sessionManager struct {
 	// recycle (a credential edit, a revision), so a key trusted on first use
 	// stays the pin while the server does not yet hold it (#1032).
 	pins map[string]string
+	// gates is the layered gate per endpoint (#1056 ruling); published is
+	// the endpoint-rejection each endpoint last published, and pubTask the
+	// task (and endpoint name) it publishes under.
+	gates     *gates
+	pubMu     sync.Mutex
+	published map[string]string
+	pubTask   map[string][2]string
 }
 
 func newSessionManager(dialers map[string]collection.SessionDialer, hooks sessionHooks) *sessionManager {
-	return &sessionManager{dialers: dialers, hooks: hooks, held: map[string]*heldSession{}, refused: map[string]string{}, pins: map[string]string{}}
+	return &sessionManager{dialers: dialers, hooks: hooks, held: map[string]*heldSession{}, refused: map[string]string{}, pins: map[string]string{},
+		gates: newGates(), published: map[string]string{}, pubTask: map[string][2]string{}}
+}
+
+// syncRejection publishes the endpoint's endpoint-rejection when it differs
+// from what it last published (none once its gate lifts).
+func (m *sessionManager) syncRejection(endpointID string) {
+	if m == nil {
+		return
+	}
+	want := m.gates.rejectionOf(endpointID)
+	m.pubMu.Lock()
+	last, seen := m.published[endpointID]
+	if (seen && last == want) || (!seen && want == rejectionNone) {
+		m.pubMu.Unlock()
+		return
+	}
+	m.published[endpointID] = want
+	task := m.pubTask[endpointID]
+	m.pubMu.Unlock()
+	if m.hooks.rejection != nil && task[0] != "" {
+		m.hooks.rejection(task[0], task[1], want)
+	}
+}
+
+// refuse gates an endpoint for a terminal refusal and publishes it.
+func (m *sessionManager) refuse(endpointID string, terr *collection.TerminalError) {
+	if m == nil {
+		return
+	}
+	m.gates.record(endpointID, terr)
+	m.syncRejection(endpointID)
+}
+
+// pass lifts an endpoint's gate (its rung passed) and publishes none.
+func (m *sessionManager) pass(endpointID string) {
+	if m == nil {
+		return
+	}
+	m.gates.clear(endpointID)
+	m.syncRejection(endpointID)
+}
+
+// blocked is the gate that blocks rung r for the endpoint, if any.
+func (m *sessionManager) blocked(endpointID string, r rung) (gate, bool) {
+	if m == nil {
+		return gate{}, false
+	}
+	return m.gates.blocked(endpointID, r)
+}
+
+// observe takes each endpoint's fingerprint and published rejection off the
+// worklist: a gate under another fingerprint lifts, one carried back from
+// before a restart is adopted.
+func (m *sessionManager) observe(tasks []collection.TaskSpec) {
+	seen := map[string]bool{}
+	for _, t := range tasks {
+		if t.EndpointID == "" || seen[t.EndpointID] {
+			continue
+		}
+		seen[t.EndpointID] = true
+		m.gates.observe(t.EndpointID, t.Fingerprint, t.Rejection)
+		m.pubMu.Lock()
+		if _, ok := m.published[t.EndpointID]; !ok && t.Rejection != "" {
+			m.published[t.EndpointID] = t.Rejection
+		}
+		if cur := m.pubTask[t.EndpointID]; cur[0] == "" || t.ID < cur[0] {
+			m.pubTask[t.EndpointID] = [2]string{t.ID, t.EndpointName}
+		}
+		m.pubMu.Unlock()
+		m.syncRejection(t.EndpointID)
+	}
 }
 
 // reconcile brings the held set to what the worklist asks for.
 func (m *sessionManager) reconcile(tasks []collection.TaskSpec) {
+	m.observe(tasks)
 	want, refused := desiredSessions(tasks, m.dialers)
 	for id := range m.pins {
 		if _, ok := want[id]; !ok {
@@ -400,14 +504,6 @@ func (m *sessionManager) reconcile(tasks []collection.TaskSpec) {
 				// property lane's transition guard collapses repeats.
 				m.hooks.hostKey(w.taskID, w.endpoint, h.pin.Get())
 			}
-			if w.revision != h.revision {
-				// The endpoint was written to, an operator's :retry included:
-				// a rejected session tries once more; any other is left alone.
-				h.revision = w.revision
-				if h.sess.Retry() {
-					slog.Info("session retried", "facility", "session", "task", w.taskID, "endpoint", w.endpoint, "reason", "its endpoint's revision moved")
-				}
-			}
 		}
 	}
 	for id, w := range want {
@@ -426,7 +522,7 @@ func (m *sessionManager) reconcile(tasks []collection.TaskSpec) {
 
 func (m *sessionManager) start(id string, w sessionWant) {
 	hooks := m.hooks
-	h := &heldSession{conn: w.conn, taskID: w.taskID, endpoint: w.endpoint, router: newListenerRouter(hooks), revision: w.revision}
+	h := &heldSession{conn: w.conn, taskID: w.taskID, endpoint: w.endpoint, router: newListenerRouter(hooks)}
 	h.router.set(w.listeners, w.policy)
 	var arm []string
 	if w.conn.arm != "" {
@@ -449,7 +545,14 @@ func (m *sessionManager) start(id string, w sessionWant) {
 		}
 		w.auth.SSH.Pin = h.pin
 	}
+	var rejected *collection.TerminalError
+	if gt, ok := m.gates.blocked(id, rungAuthenticated); ok {
+		// A gate this node holds for this fingerprint, or carried back from
+		// before a restart: the session starts rejected and dials nothing.
+		rejected = gt.refusal()
+	}
 	h.sess = collection.StartSession(collection.SessionConfig{
+		Rejected: rejected,
 		Target:   w.conn.target,
 		Timeout:  w.conn.timeout,
 		Dialer:   m.dialers[w.conn.transport],
@@ -475,6 +578,12 @@ func (m *sessionManager) start(id string, w sessionWant) {
 			if hooks.transition != nil {
 				taskID, endpoint := h.publishTo()
 				hooks.transition(taskID, endpoint, tr)
+			}
+			switch {
+			case tr.State == collection.SessionRejected && tr.Refusal != nil:
+				m.refuse(id, tr.Refusal)
+			case tr.State == collection.SessionUp:
+				m.pass(id)
 			}
 		},
 	})

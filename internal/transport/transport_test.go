@@ -79,3 +79,15 @@ func TestAllReturnsACopy(t *testing.T) {
 		t.Fatal("All() exposes the registry's backing array")
 	}
 }
+
+// The transport rung each transport's ladder defaults to (ADR-0157): a
+// connect where an open port can be detected, the protocol's handshake for
+// ssh, a named request where it cannot (udp, snmp); icmp has none.
+func TestRegistryCarriesTheTransportRung(t *testing.T) {
+	want := map[string]string{"icmp": "", "tcp": "connect", "udp": "request", "telnet": "connect", "ssh": "handshake", "http": "connect", "snmp": "request"}
+	for _, tr := range transport.All() {
+		if tr.Rung != want[tr.Name] {
+			t.Errorf("%s: rung %q, want %q", tr.Name, tr.Rung, want[tr.Name])
+		}
+	}
+}

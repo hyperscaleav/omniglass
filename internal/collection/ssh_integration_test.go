@@ -5,6 +5,7 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 	"net"
+	"strings"
 	"testing"
 	"time"
 
@@ -137,4 +138,25 @@ func TestSSHProberReal(t *testing.T) {
 			t.Fatalf("want dialed and NOT responded, got %s", res)
 		}
 	})
+}
+
+// #1060: the probe honours the endpoint's host key pin. A key that differs
+// from the pin is a refusal the probe reports, and the credential is never
+// sent to whatever answered.
+func TestSSHProberNeverSendsTheCredentialPastAChangedKey(t *testing.T) {
+	if testing.Short() {
+		t.Skip("real-wire ssh probe")
+	}
+	addr := startSSHServer(t)
+	p := collection.NewSSHProber()
+	res, err := p.Probe(context.Background(), addr, collection.SSHCredential{Username: "probe", Password: "right-horse", HostKeyPin: "SHA256:" + strings.Repeat("A", 43)}, 3*time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !res.HostKeyChanged || res.AuthAttempted || res.Authenticated {
+		t.Fatalf("result = %+v, want the key change reported and no credential tried", res)
+	}
+	if !res.Responded {
+		t.Fatalf("result = %+v: the key exchange answered, so the responds rung is up", res)
+	}
 }

@@ -35,13 +35,14 @@ with no line ending, such as `login: `) and `send` a line, which may name a secr
 (`${secret.login.password}`, the input declared `kind: secret`), and its `ready` match says the
 login passed. `session.terminal` lists the replies retrying cannot fix, each a `match` with a
 `class` (`auth`, `host-key`, `certificate`, `protocol`): a line matching one, during the login or
-answering any request, moves the session to `rejected`, where the node dials no more until the
-endpoint's credential or address changes or an operator retries it (`omniglass endpoint retry <id>`,
-with `endpoint:retry`). `session.reprobe` (at least `5m`, default never) lets a
-rejected session try once more on its own. A wrong password the component answers with a declared
-refusal then costs one attempt rather than a retry every 30 seconds. A component that hangs up on a
-wrong password without saying so cannot be told apart from a dropped connection, and still follows
-the ordinary backoff (#1056). Anchor a prompt's regex (`^login: ?$`): a prompt is matched on a line
+answering any request, moves the session to `rejected`, where the node attempts nothing more until
+the endpoint's connection fingerprint changes (its secret is rotated, its address, port or transport
+changes, the driver's login declaration changes) or an operator retries it
+(`omniglass endpoint retry <id>`, with `endpoint:retry`); a label edit changes nothing. `session.reprobe`
+(at least `5m`, default never) lets a rejected session try once more on its own. A wrong password the
+component answers with a declared refusal then costs one attempt rather than a retry every 30 seconds;
+a component that hangs up on a wrong password without saying so costs three (the login budget), and
+then reads `rejected` as `auth`. Anchor a prompt's regex (`^login: ?$`): a prompt is matched on a line
 the component pauses on, and an unanchored one also matches a banner such as `Last login: `. A spec
 whose session only commands would ride (no poll or listener to hold it) refuses at write. Over `ssh`
 the session's auth step is the transport's own: `session.credential` names the secret input it
@@ -51,7 +52,26 @@ nothing declared answers, such as a one-time code, rejects the session), `sessio
 terminal and `session.exec` runs a command as the channel instead of a shell. The host key is trusted
 on first use and kept as the endpoint's `ssh-host-key`; when it changes the session reads `rejected`
 naming both keys, and `omniglass endpoint retry <id> --host-key <the offered key>` trusts the new
-one. A telnet driver:
+one.
+
+A spec may also declare its **reachability ladder** (`ladder`), bottom up: `ladder.ping.enabled`
+(whether to ping at all; a ping is informational only and never gates), `ladder.transport.rung` (the
+gate: `connect` on the transport's port, the protocol's `handshake`, or a named `request` answered,
+given as `ladder.transport.request`, where an open port cannot be detected) and
+`ladder.session.enabled` (whether a login rung exists). Every field defaults from the transport
+registry, so most drivers declare nothing, and a rung the transport cannot run refuses at write. A
+cloud API is never pinged, but its 443 is checked open before its session runs:
+
+```yaml
+transport: http
+ladder:
+  ping: { enabled: false }
+  transport: { rung: connect }
+```
+
+A refusal at a rung gates that rung and the ones above it for the endpoint; the rungs below keep
+reporting ([the gate](/architecture/collection/#the-connection-fingerprint-and-the-layered-gate)).
+A telnet driver:
 
 ```yaml
 session:

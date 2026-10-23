@@ -87,6 +87,11 @@ func runCommands(ctx context.Context, nc *nats.Conn, name string, runner *collec
 // server from the reply (when the binding settles from the response) or from
 // what is observed next.
 func executeDelivery(ctx context.Context, runner *collection.Runner, d collection.CommandDelivery, sessions *sessionManager) (reply, outcome string) {
+	if gt, gated := sessions.blocked(d.EndpointID, rungResponsive); gated {
+		// A gated endpoint (#1056 ruling): the command fails fast with the
+		// refusal on every path, never a dial under the refused fingerprint.
+		return "", "node: the endpoint is gated: " + gt.refusal().Error()
+	}
 	switch d.Transport {
 	case "tcp", "telnet", "ssh":
 		if held := sessions.lookup(d.EndpointID); held != nil {

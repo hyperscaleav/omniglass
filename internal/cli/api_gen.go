@@ -2239,8 +2239,8 @@ func generatedCommands() []*cobra.Command {
 				var fHostKey string
 				cmd := &cobra.Command{
 					Use:     "retry <id>",
-					Short:   "Retry an endpoint's rejected session",
-					Long:    "Wakes the endpoint's held session for one more attempt when it reads rejected (a refusal retrying cannot fix: a wrong credential, a changed host key, a reply its driver declares terminal). The session dials once and reads up, rejected again, or follows the ordinary backoff on a transient failure; a session that is not rejected is left alone. Fixing the credential or the address needs no retry: the edit itself recycles the session. For an ssh endpoint, host_key names a host key to trust (the offered key a host-key rejection names): it becomes the declared pin and recycles the session onto it whatever its state, an audited acceptance of the change. Audited. Gated by endpoint:retry; read and retry scopes (through the component) drive the 404 versus 403 split.",
+					Short:   "Retry an endpoint's gated connections",
+					Long:    "Moves the endpoint's retry counter, which is part of its connection fingerprint: a gate a refusal retrying cannot fix holds (a wrong credential, a changed host key, a reply its driver declares terminal) lifts, the node recycles the endpoint's held session, and every connection to it is attempted again. Fixing the secret, the address, the transport or the driver's login needs no retry: the change moves the fingerprint itself. An unrelated edit (a label) moves nothing. For an ssh endpoint, host_key names a host key to trust (the offered key a host-key rejection names): it becomes the declared pin and recycles the session onto it whatever its state, an audited acceptance of the change. Audited. Gated by endpoint:retry; read and retry scopes (through the component) drive the 404 versus 403 split.",
 					Example: "  omniglass endpoint retry <id>",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {

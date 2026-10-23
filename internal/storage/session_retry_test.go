@@ -114,8 +114,17 @@ func TestWorklistCarriesTheSessionBlockAndRetryMovesTheRevision(t *testing.T) {
 	if first.Secrets["login"]["password"] != "newtron" {
 		t.Fatalf("the login's credential was not delivered: %v", first.Secrets)
 	}
-	if first.EndpointRevision == 0 {
-		t.Fatal("the worklist carries no endpoint revision")
+	if first.SessionRetry != 0 {
+		t.Fatalf("a fresh endpoint's retry count = %d, want 0", first.SessionRetry)
+	}
+	// An unrelated edit (a label) moves nothing a rejected session reads: it
+	// must not pull the session out of rejected (#1056 ruling).
+	label := "Lobby panel"
+	if _, err := gw.UpdateEndpoint(ctx, "", ep.ID, storage.EndpointPatch{Label: &label}, all, all); err != nil {
+		t.Fatalf("label edit: %v", err)
+	}
+	if got := driverTask().SessionRetry; got != 0 {
+		t.Fatalf("a label edit moved the retry count to %d", got)
 	}
 
 	// A viewer-shaped caller (no action scope) cannot retry; out of read
@@ -131,8 +140,21 @@ func TestWorklistCarriesTheSessionBlockAndRetryMovesTheRevision(t *testing.T) {
 	if _, err := gw.RetryEndpoint(ctx, "", ep.ID, "", all, all); err != nil {
 		t.Fatalf("retry: %v", err)
 	}
-	if after := driverTask(); after.EndpointRevision <= first.EndpointRevision {
-		t.Fatalf("revision %d after a retry, want past %d", after.EndpointRevision, first.EndpointRevision)
+	if got := driverTask().SessionRetry; got != 1 {
+		t.Fatalf("retry count after one :retry = %d, want 1", got)
+	}
+	// Every task of the endpoint (its poll and its reachability probe) is
+	// judged against one fingerprint, which the retry moved.
+	wl, err := gw.NodeWorklist(ctx, "edge-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	fps := map[string]bool{}
+	for _, task := range wl.Tasks {
+		fps[task.Fingerprint] = true
+	}
+	if len(fps) != 1 || fps[first.Fingerprint] || fps[""] {
+		t.Fatalf("the endpoint's tasks carry fingerprints %v, want one, moved by the retry", fps)
 	}
 	conn, err := pgx.Connect(ctx, dsn)
 	if err != nil {

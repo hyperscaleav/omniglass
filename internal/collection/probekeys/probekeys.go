@@ -32,11 +32,16 @@ const (
 	// trusted on first use and every matching key after, so the series is
 	// the pin's history and a change shows as a rejection beside it.
 	SSHHostKey = "ssh-host-key"
+	// EndpointRejection is an endpoint's gate (#1056 ruling, ADR-0157): the
+	// ladder rung a terminal refusal holds, its class, and the connection
+	// fingerprint it holds for ("authenticated auth <fingerprint>"), or
+	// "none". The worklist carries it back, so a restarted node honours it.
+	EndpointRejection = "endpoint-rejection"
 )
 
 var native = []string{
 	TCPOpen, TCPConnectTime, ICMPReachable, ICMPRTTAvg, HTTPResponseTime, SSHHandshakeTime, TelnetResponseTime,
-	EndpointReachable, EndpointResponsive, EndpointAuthenticated, SessionState, SessionReason, SSHHostKey,
+	EndpointReachable, EndpointResponsive, EndpointAuthenticated, SessionState, SessionReason, SSHHostKey, EndpointRejection,
 }
 
 // Native is every key a native probe writes, sorted, a fresh slice each call.

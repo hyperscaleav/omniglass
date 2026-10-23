@@ -22,6 +22,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"text/template"
 	"time"
 
@@ -285,11 +286,18 @@ type Device struct {
 	// sshHostKey is the device's SSH host key, minted on the first StartSSH
 	// and kept across listener restarts, as a real device keeps its key; a
 	// test rotates it to model a replaced or reimaged device (#1032).
-	sshHostKey     ssh.Signer
-	telnetListener net.Listener
-	tcpMu          sync.Mutex
-	tcpListeners   []net.Listener // raw TCP, persistent-session-only (no one-shot equivalent), one per interface
-	udpConn        net.PacketConn
+	sshHostKey ssh.Signer
+	// telnetSilentReject makes the telnet login hang up on a wrong password
+	// with no text (#1056).
+	telnetSilentReject atomic.Bool
+	// telnetLogins counts the logins the telnet face was sent.
+	telnetLogins atomic.Int64
+	// sshPasswordTries counts the passwords the ssh face was sent.
+	sshPasswordTries atomic.Int64
+	telnetListener   net.Listener
+	tcpMu            sync.Mutex
+	tcpListeners     []net.Listener // raw TCP, persistent-session-only (no one-shot equivalent), one per interface
+	udpConn          net.PacketConn
 
 	// Persistent-session machinery. Populated by the engine when an
 	// interface is declared with persistent: true. The SSH registry
