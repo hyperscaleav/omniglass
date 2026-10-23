@@ -129,7 +129,11 @@ func TestValidateSSHSession(t *testing.T) {
 		want   string
 	}{
 		{"no session block", func(s *driver.Spec) { s.Session = nil }, "credential"},
-		{"no credential or login", func(s *driver.Spec) { s.Session.Credential = "" }, "credential"},
+		{"no credential", func(s *driver.Spec) { s.Session.Credential = "" }, "credential"},
+		{"a login with no credential", func(s *driver.Spec) {
+			s.Session.Credential = ""
+			s.Session.Login = &driver.Login{Steps: []driver.LoginStep{{Expect: driver.Match{Prefix: "Password"}, Send: "${secret.login.password}"}}, Ready: driver.Match{Prefix: "x"}}
+		}, "credential"},
 		{"a credential that is not a secret", func(s *driver.Spec) { s.Session.Credential = "host" }, "host"},
 		{"both a pty and an exec", func(s *driver.Spec) { s.Session.Exec = "cli" }, "exec"},
 		{"a pty off ssh", func(s *driver.Spec) { s.Transport = "telnet"; s.Session.Credential = "" }, "pty"},

@@ -138,3 +138,45 @@ func TestSSHHostKeyTrustedOnFirstUsePublishesAndAPinChangeRecycles(t *testing.T)
 		t.Fatalf("an operator's new pin did not recycle the session: %d connects", n)
 	}
 }
+
+// Review of #1032, finding 1: the trusted key reaches the server even when
+// its first publish is lost (it republishes while the worklist delivers no
+// pin), and a session recycled before the server holds the pin keeps the
+// key it trusted rather than trusting whatever is offered next.
+func TestSSHPinSurvivesALostPublishAndARecycle(t *testing.T) {
+	dialer := &sshFakeDialer{offered: "SHA256:first"}
+	log := &transitionLog{}
+	var mu sync.Mutex
+	published := 0
+	m := newSessionManager(map[string]collection.SessionDialer{"ssh": dialer}, sessionHooks{
+		transition: log.record,
+		hostKey: func(_, _ string, fp string) {
+			mu.Lock()
+			published++
+			mu.Unlock()
+		},
+	})
+	defer m.closeAll()
+	creds := map[string]map[string]string{"login": {"username": "admin", "password": "newtron"}}
+	m.reconcile([]collection.TaskSpec{sshPollTask("p1", "ep-1", "", creds)})
+	log.waitFor(t, "p1", collection.SessionUp)
+
+	// The server never got it: the next tick still delivers no pin, and the
+	// node publishes it again.
+	m.reconcile([]collection.TaskSpec{sshPollTask("p1", "ep-1", "", creds)})
+	mu.Lock()
+	n := published
+	mu.Unlock()
+	if n < 2 {
+		t.Fatalf("published the trusted key %d times with the server lacking it, want a republish", n)
+	}
+
+	// A credential edit recycles the session before the server holds the
+	// pin, and something else now answers: the carried pin refuses it.
+	dialer.mu.Lock()
+	dialer.offered = "SHA256:mitm"
+	dialer.mu.Unlock()
+	edited := map[string]map[string]string{"login": {"username": "admin", "password": "rotated"}}
+	m.reconcile([]collection.TaskSpec{sshPollTask("p1", "ep-1", "", edited)})
+	log.waitFor(t, "p1", collection.SessionRejected)
+}

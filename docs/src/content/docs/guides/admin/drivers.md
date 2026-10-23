@@ -45,7 +45,9 @@ the ordinary backoff (#1056). Anchor a prompt's regex (`^login: ?$`): a prompt i
 the component pauses on, and an unanchored one also matches a banner such as `Last login: `. A spec
 whose session only commands would ride (no poll or listener to hold it) refuses at write. Over `ssh`
 the session's auth step is the transport's own: `session.credential` names the secret input it
-authenticates with (a username with a `password` or a `private_key`), `session.pty` asks for a
+authenticates with (required: a `basic-auth` username and password, or an `ssh-key` username and
+private key; a `session.login` beside it only answers keyboard-interactive questions, and a question
+nothing declared answers, such as a one-time code, rejects the session), `session.pty` asks for a
 terminal and `session.exec` runs a command as the channel instead of a shell. The host key is trusted
 on first use and kept as the endpoint's `ssh-host-key`; when it changes the session reads `rejected`
 naming both keys, and `omniglass endpoint retry <id> --host-key <the offered key>` trusts the new

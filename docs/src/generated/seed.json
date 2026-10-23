@@ -469,6 +469,25 @@
    ]
   },
   {
+   "id": "ssh-key",
+   "label": "SSH Key",
+   "default_admin_sensitive": false,
+   "fields": [
+    {
+     "name": "username",
+     "type": "string",
+     "secret": false,
+     "origin": "operator"
+    },
+    {
+     "name": "private_key",
+     "type": "string",
+     "secret": true,
+     "origin": "operator"
+    }
+   ]
+  },
+  {
    "id": "oauth2-client",
    "label": "OAuth2 Client",
    "default_admin_sensitive": true,

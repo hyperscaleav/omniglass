@@ -311,7 +311,8 @@ opt-in (a differing liveness credential must not read as down).
 The honest limit: a v2c wrong community is a **silent drop**, so a get failure alone cannot separate
 down from wrong-community. Cross-referencing does: host pings + UDP not refused + get silent =
 "reachable, SNMP not answering this community"; with ICMP fully blocked the inference is lost,
-reading "host down or fully filtered." SSH verifies auth; the built telnet probe never logs in (it
+reading "host down or fully filtered." The ssh probe still tries a params credential every tick
+(#1060); the built telnet probe never logs in (it
 reads the first negotiation or banner bytes; the login is the held session's auth step, so a probe
 cannot retry a bad credential every tick, [ADR-0156](/architecture/decisions/#adr-0156-telnet-and-ssh-are-held-line-transports-their-login-is-the-drivers-and-the-ssh-host-key-is-pinned-on-first-use)). `params.liveness_oid` overrides the probe OID.
 

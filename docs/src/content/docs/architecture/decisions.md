@@ -194,7 +194,7 @@ below from the project's history. From here it grows one slice at a time.
 | [ADR-0153](#adr-0153-the-held-session-proof-is-the-line-protocol-over-tcp-other-held-transports-are-their-own-issues) | 2026-10-23 | Accepted | The stateful arc proves the held session on the line protocol over `tcp` (sessions, listeners, the shared reader); SSH, which #816 named as the session-lifecycle carrier, and the other held transports are deferred, each to its own issue (#1032 ssh, #1033 telnet, #1034 websocket, #1035 tls, #1036 mqtt, #1037 udp, #1038 SSE over http, #1039 modbus/tcp, #1040 bacnet/ip, #1041 knxnet/ip, #1042 ONVIF as a driver on http, #1043 the file sample with #1044 to #1047 for file-moving protocols), with server-hosted ingress at #1024; there is no serial transport, serial being reached through an IP-to-serial gateway over tcp (or tls or telnet) |
 | [ADR-0154](#adr-0154-auth-is-a-layer-that-gates-a-held-session-and-a-terminal-refusal-reads-rejected) | 2026-10-23 | Accepted | Auth is a layer that gates a held session (#1049, the architect's ruling): each attempt runs dial, then the auth step (a driver's login dialog or a transport's own auth), then the arm, then `up`, and nothing borrows the connection before the step passes; its verdict is the existing `endpoint-authenticated` rung. A terminal refusal moves the session to `rejected` (amending ADR-0150's state set), which dials no more and fails polls and commands fast with no throwaway fallback, until the endpoint's session identity changes, an operator's audited `:retry` (gated by `endpoint:retry`) moves the endpoint's revision, or the driver's slow re-probe comes due. `session-reason` carries the reason as a property. One login dialog serves raw tcp, telnet and ssh keyboard-interactive |
 | [ADR-0155](#adr-0155-a-driver-declares-its-terminal-replies-and-a-transport-classifies-its-own-refusals) | 2026-10-23 | Accepted | Non-retryable errors are defined in drivers (#1049, the architect's ruling): a spec's `session.terminal` lists the replies retrying cannot fix, each a match with a class (`auth`, `host-key`, `certificate`, `protocol`, a code-held set), applied to the login and to every answer, refusal and arm reply; a transport classifies its own protocol refusals into the same classes. The primitive is `collection.TerminalError{Class, Reason}`; anything unclassified stays retryable, and a terminal poll fault waits its interval rather than the failure backoff |
-| [ADR-0156](#adr-0156-telnet-and-ssh-are-held-line-transports-their-login-is-the-drivers-and-the-ssh-host-key-is-pinned-on-first-use) | 2026-10-23 | Accepted | `telnet` (#1033) and `ssh` (#1032) are held line transports: the same session machine and line reader, telnet behind a filter refusing every option, ssh over a shell or exec channel. Their login is the driver's (`session.login`, `session.credential`), not endpoint params, and their probes never log in. The ssh host key is pinned on first use as the `ssh-host-key` property (observed), delivered back by the worklist, overridden by a declared value an operator sets with `:retry` and `host_key`; a changed key is a `host-key` refusal |
+| [ADR-0156](#adr-0156-telnet-and-ssh-are-held-line-transports-their-login-is-the-drivers-and-the-ssh-host-key-is-pinned-on-first-use) | 2026-10-23 | Accepted | `telnet` (#1033) and `ssh` (#1032) are held line transports: the same session machine and line reader, telnet behind a filter refusing every option, ssh over a shell or exec channel. Their session's login is the driver's (`session.login`, `session.credential`), not endpoint params; the telnet probe never logs in, and the ssh probe's params login is a known gap (#1060). The ssh host key is pinned on first use as the `ssh-host-key` property (observed), delivered back by the worklist, overridden by a declared value an operator sets with `:retry` and `host_key`; a changed key is a `host-key` refusal |
 
 ## Entries
 
@@ -7079,18 +7079,24 @@ interface create form, since that name is the platform's to mint.
      Telnet is the line connection behind a filter that strips negotiation and refuses every option
      (DO answered WONT, WILL answered DONT, a literal 0xFF escaped). Ssh bridges a shell channel
      (with a PTY on `session.pty`) or an exec channel (`session.exec`) onto the reader.
-  2. **The login is the driver's.** The designed `endpoint.params` login fields (`username`,
-     `password`, `login_expect`, `password_expect`, `private_key`) are not built: a telnet or raw tcp
-     login is the driver's `session.login` dialog, an ssh credential the secret input
-     `session.credential` names, delivered unsealed on the worklist. The probes never log in: the
-     telnet probe reads the first negotiation or banner bytes (`telnet-response-time`), and while the
-     node holds an up telnet session it takes the verdict from the session rather than dial again.
+  2. **The session's login is the driver's.** The designed `endpoint.params` login fields
+     (`login_expect`, `password_expect`, `private_key`) are not built for a held session: a telnet or
+     raw tcp login is the driver's `session.login` dialog, and an ssh credential is the secret input
+     `session.credential` names (a `basic-auth` username and password, or an `ssh-key` username and
+     private key; a login dialog only answers keyboard-interactive questions beside it), delivered
+     unsealed on the worklist. A keyboard-interactive question nothing declared answers (a one-time
+     code) is an `auth` refusal. The telnet probe never logs in: it reads the first negotiation or
+     banner bytes (`telnet-response-time`), and while the node holds an up telnet session it takes
+     the verdict from the session rather than dial again. The ssh probe still tries a params
+     `username`/`password` on every tick without the pin, a gap filed as #1060.
   3. **Trust on first use.** The node trusts the first ssh host key it sees and publishes it as the
      observed `ssh-host-key` property; the worklist delivers the pin (the declared value, else the
      observed one), so a node restart or reassignment keeps it. A changed key is a `host-key`
-     refusal naming both fingerprints and is never published as the pin. An operator who trusts the
+     refusal naming both fingerprints and is never published as the pin. The node republishes the key
+     on every authenticated connection and while the worklist delivers no pin, and carries it across
+     a session's recycle, so one lost publish cannot reopen first use. An operator who trusts the
      change retries the endpoint with `host_key` (gated by `endpoint:retry`, audited), which
-     declares the new pin; the node redials onto it.
+     declares the new pin; the node redials onto it, whatever state the session is in.
 - **Context:** The design fenced telnet and ssh as their own polled endpoint types with login
   config on endpoint params. Under the 2026-10-23 ruling auth is a session layer declared by the
   driver or the transport, so a login on params would have been a second, unclassified path, and a

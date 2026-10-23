@@ -165,7 +165,7 @@ func (s *Spec) validateSession() error {
 	ss := s.Session
 	if ss == nil {
 		if s.Transport == "ssh" && (len(s.Polls) > 0 || len(s.Listeners) > 0 || len(s.Commands) > 0) {
-			return fmt.Errorf("driver: an ssh session authenticates on every connection; declare session.credential (or a keyboard-interactive login)")
+			return fmt.Errorf("driver: an ssh session authenticates on every connection; declare session.credential")
 		}
 		return nil
 	}
@@ -218,8 +218,10 @@ func (s *Spec) validateSession() error {
 			return fmt.Errorf("driver: reprobe %q must be a duration of at least %s (a rejected session's own retry is slow by design)", ss.Reprobe, MinReprobe)
 		}
 	}
-	if s.Transport == "ssh" && ss.Credential == "" && ss.Login == nil {
-		return fmt.Errorf("driver: an ssh session authenticates on every connection; declare session.credential (or a keyboard-interactive login)")
+	if s.Transport == "ssh" && ss.Credential == "" {
+		// The credential names the ssh user too; a login dialog only answers
+		// keyboard-interactive questions beside it.
+		return fmt.Errorf("driver: an ssh session authenticates on every connection; declare session.credential (the secret input with its username)")
 	}
 	if (ss.PTY || ss.Exec != "") && s.Transport != "ssh" {
 		return fmt.Errorf("driver: session pty and exec shape an ssh channel; %q has none", s.Transport)

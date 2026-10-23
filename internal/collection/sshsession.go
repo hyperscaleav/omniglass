@@ -59,6 +59,12 @@ type hostKeyChanged struct{ pinned, offered string }
 
 func (e *hostKeyChanged) Error() string { return "host key changed" }
 
+// unansweredQuestion is a keyboard-interactive question the declared
+// credential cannot answer. Its text is the server's, never a credential.
+type unansweredQuestion struct{ err error }
+
+func (e *unansweredQuestion) Error() string { return e.err.Error() }
+
 // passwordQuestion is the keyboard-interactive question a password answers
 // when the driver declares no login dialog.
 var passwordQuestion = regexp.MustCompile(`(?i)password`)
@@ -86,14 +92,18 @@ func (p *pendingSSH) Authenticate(ctx context.Context, auth *SessionAuth, _ Clas
 	switch {
 	case auth.Login != nil:
 		methods = append(methods, ssh.KeyboardInteractive(func(_, _ string, questions []string, _ []bool) ([]string, error) {
-			return auth.Login.Answer(questions)
+			answers, err := auth.Login.Answer(questions)
+			if err != nil {
+				return nil, &unansweredQuestion{err}
+			}
+			return answers, nil
 		}))
 	case cred.Password != "":
 		methods = append(methods, ssh.KeyboardInteractive(func(_, _ string, questions []string, _ []bool) ([]string, error) {
 			answers := make([]string, 0, len(questions))
 			for _, q := range questions {
 				if !passwordQuestion.MatchString(q) {
-					return nil, fmt.Errorf("the server asked %q, which a password does not answer", q)
+					return nil, &unansweredQuestion{fmt.Errorf("the server asked %q, which a password does not answer", q)}
 				}
 				answers = append(answers, cred.Password)
 			}
@@ -130,6 +140,12 @@ func (p *pendingSSH) Authenticate(ctx context.Context, auth *SessionAuth, _ Clas
 		if errors.As(err, &changed) {
 			return &TerminalError{Class: driver.ClassHostKey, Reason: fmt.Sprintf(
 				"the host key changed: pinned %s, offered %s; retry the endpoint with the offered key to trust it", changed.pinned, changed.offered)}
+		}
+		var unanswered *unansweredQuestion
+		if errors.As(err, &unanswered) {
+			// The server wants something the driver never declared (a
+			// one-time code): no retry can answer it.
+			return &TerminalError{Class: driver.ClassAuth, Reason: unanswered.err.Error()}
 		}
 		if strings.Contains(err.Error(), "unable to authenticate") {
 			return &TerminalError{Class: driver.ClassAuth, Reason: "the component refused the credential: " + strings.TrimPrefix(err.Error(), "ssh: handshake failed: ")}

@@ -92,6 +92,10 @@ new class appends one. Entries are never silently deleted; a fixed class is mark
   into sinks with no uniqueness key (the audit's P0-1).
 - **Fix:** until #430's staged contract lands, new code must not widen the gap: publish
   with ack where the API allows, and never assume dedup exists downstream.
+- **Single-shot trust publish** (found by the #1032 review, fixed): a security-relevant fact the
+  node learns once (an ssh host key trusted on first use) published once, deduped in memory, and
+  lost on the next recycle. Republish it until the server reflects it back, and carry it in
+  memory across recycles (`pins` in internal/node/session.go).
 
 ## hand-written-fact (live)
 

@@ -355,17 +355,31 @@ type sessionManager struct {
 	hooks   sessionHooks
 	held    map[string]*heldSession
 	refused map[string]string // last refusal per endpoint, so it logs once
+	// pins carries each ssh endpoint's trusted host key across a session's
+	// recycle (a credential edit, a revision), so a key trusted on first use
+	// stays the pin while the server does not yet hold it (#1032).
+	pins map[string]string
 }
 
 func newSessionManager(dialers map[string]collection.SessionDialer, hooks sessionHooks) *sessionManager {
-	return &sessionManager{dialers: dialers, hooks: hooks, held: map[string]*heldSession{}, refused: map[string]string{}}
+	return &sessionManager{dialers: dialers, hooks: hooks, held: map[string]*heldSession{}, refused: map[string]string{}, pins: map[string]string{}}
 }
 
 // reconcile brings the held set to what the worklist asks for.
 func (m *sessionManager) reconcile(tasks []collection.TaskSpec) {
 	want, refused := desiredSessions(tasks, m.dialers)
+	for id := range m.pins {
+		if _, ok := want[id]; !ok {
+			delete(m.pins, id)
+		}
+	}
 	for id, h := range m.held {
 		w, ok := want[id]
+		if h.pin != nil {
+			if fp := h.pin.Get(); fp != "" {
+				m.pins[id] = fp
+			}
+		}
 		switch {
 		case !ok:
 			m.teardown(id, h, "its listen task left the worklist")
@@ -380,6 +394,12 @@ func (m *sessionManager) reconcile(tasks []collection.TaskSpec) {
 			h.taskID, h.endpoint = w.taskID, w.endpoint
 			h.mu.Unlock()
 			h.router.set(w.listeners, w.policy)
+			if h.pin != nil && w.hostKey == "" && h.pin.Get() != "" && m.hooks.hostKey != nil {
+				// The worklist delivers no pin: the server never got the key
+				// this session trusted (a lost publish). Publish it again; the
+				// property lane's transition guard collapses repeats.
+				m.hooks.hostKey(w.taskID, w.endpoint, h.pin.Get())
+			}
 			if w.revision != h.revision {
 				// The endpoint was written to, an operator's :retry included:
 				// a rejected session tries once more; any other is left alone.
@@ -413,13 +433,17 @@ func (m *sessionManager) start(id string, w sessionWant) {
 		arm = strings.Split(w.conn.arm, "\n")
 	}
 	if w.auth != nil && w.auth.SSH != nil {
-		h.pin = collection.NewHostKeyPin(w.hostKey)
-		last := ""
+		pin := w.hostKey
+		if pin == "" {
+			pin = m.pins[id] // the key this node trusted, carried across a recycle
+		}
+		h.pin = collection.NewHostKeyPin(pin)
+		// Every authenticated connection publishes its key: one lost publish
+		// must not leave the server without the pin.
 		h.pin.OnTrust = func(fp string) {
-			if fp == last || hooks.hostKey == nil {
+			if hooks.hostKey == nil {
 				return
 			}
-			last = fp
 			taskID, endpoint := h.publishTo()
 			hooks.hostKey(taskID, endpoint, fp)
 		}

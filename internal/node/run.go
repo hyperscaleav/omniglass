@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/collection"
@@ -145,6 +146,8 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 	if telnetSession == nil {
 		telnetSession = collection.NewTelnetSessionDialer()
 	}
+	var hostKeyMu sync.Mutex
+	hostKeyLogged := map[string]string{}
 	sshSession := cfg.SSHSession
 	if sshSession == nil {
 		sshSession = collection.NewSSHSessionDialer()
@@ -172,8 +175,15 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 		},
 		hostKey: func(taskID, endpoint, fp string) {
 			// The ssh host key the session trusted: on first use this is the
-			// pin the server keeps and delivers back (#1032).
-			logger.Info("session host key trusted", "facility", "session", "task", taskID, "endpoint", endpoint, "fingerprint", fp)
+			// pin the server keeps and delivers back (#1032). It publishes on
+			// every authenticated connection; the log says it once per key.
+			hostKeyMu.Lock()
+			fresh := hostKeyLogged[taskID] != fp
+			hostKeyLogged[taskID] = fp
+			hostKeyMu.Unlock()
+			if fresh {
+				logger.Info("session host key trusted", "facility", "session", "task", taskID, "endpoint", endpoint, "fingerprint", fp)
+			}
 			if err := publishBatch(nc, cfg.Name, taskID, []collection.Sample{{
 				Name: collection.SignalSSHHostKey, Text: fp, IsText: true, TS: time.Now().UTC(),
 			}}); err != nil {
