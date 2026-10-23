@@ -23,8 +23,9 @@ import (
 //   - a declared id has its copied assets under docs/public/walkthroughs/<id>/,
 //     written by `make docs-walkthroughs`: the manifest, carrying the budget
 //     mark the recorder adds only when the recording passed, and every still it
-//     names, the poster one of them, and the animated preview (preview.webp)
-//     when the manifest records one;
+//     names, the poster one of them, the animated preview (preview.webp)
+//     when the manifest records one, and the video (<id>.mp4, #939), which
+//     the embed plays with controls;
 //   - the copied manifest has not drifted from the script: the same title,
 //     description, step count and captions;
 //   - no copied directory outlives its declaration.
@@ -229,8 +230,8 @@ func strconvQuote(s string) string { b, _ := json.Marshal(s); return string(b) }
 // declared ids (id to the page declaring it) and their scripts under
 // scriptDir: the manifest, carrying the budget mark the recorder writes only
 // when the recording passed; every still it names, its poster one of them;
-// the animated preview when the manifest records one; and no drift from the
-// script. Then any directory no page declares.
+// the animated preview when the manifest records one; the video the embed
+// plays; and no drift from the script. Then any directory no page declares.
 func scanWalkthroughAssets(dir, scriptDir string, declared map[string]string) []Finding {
 	var findings []Finding
 	ids := make([]string, 0, len(declared))
@@ -283,6 +284,9 @@ func scanWalkthroughAssets(dir, scriptDir string, declared map[string]string) []
 			if _, err := os.Stat(filepath.Join(dir, id, walkthroughPreview)); err != nil {
 				add("walkthrough \"" + id + "\" has no " + at(walkthroughPreview) + redo)
 			}
+		}
+		if _, err := os.Stat(filepath.Join(dir, id, id+".mp4")); err != nil {
+			add("walkthrough \"" + id + "\" has no " + at(id+".mp4") + ", the video its embed plays" + redo)
 		}
 		if script, err := os.ReadFile(filepath.Join(scriptDir, id+".yaml")); err == nil {
 			for _, d := range walkthroughDrift(script, b) {

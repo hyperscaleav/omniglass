@@ -3,14 +3,15 @@
 //
 //   - every walkthrough asset a built page references (a still, the animated
 //     preview, the video and its link) exists in the build output; and
-//   - every embed is what the shipped manifest renders now, with the video if
-//     and only if the build ships the mp4 (compared in canonical form, since
-//     Astro's serializer rewrites the same markup: canonicalEmbed).
+//   - every embed ships its video (#939): the mp4 is a declared walkthrough's
+//     asset, played with controls, never optional; and
+//   - every embed is what the shipped manifest renders now (compared in
+//     canonical form, since Astro's serializer rewrites the same markup:
+//     canonicalEmbed).
 //
 // Astro caches each rendered page keyed on the page's own content; it does not
-// know the embed depends on walkthrough.json or on whether the mp4 exists. So a
-// re-copied walkthrough (new captions, a new still count) or a video added or
-// removed leaves a cached render that says the old thing. `pnpm build` forces
+// know the embed depends on walkthrough.json. So a re-copied walkthrough (new
+// captions, a new still count) leaves a cached render that says the old thing. `pnpm build` forces
 // Astro whenever those inputs change (astro-build.mjs, #937), so through it this
 // check should never fire for staleness; it is the backstop that turns a stale
 // render from any other path (a bare `astro build`) into a failed build.
@@ -45,8 +46,11 @@ for (const page of html(dist)) {
     const dir = join(dist, BASE, id);
     let want;
     try {
+      if (!existsSync(join(dir, videoName(id)))) {
+        problems.push(`${where}: walkthrough "${id}" ships no ${BASE}/${id}/${videoName(id)}; re-run make docs-walkthroughs and commit the video`);
+      }
       const manifest = JSON.parse(readFileSync(join(dir, 'walkthrough.json'), 'utf8'));
-      want = renderWalkthrough(manifest, { video: existsSync(join(dir, videoName(id))) });
+      want = renderWalkthrough(manifest);
     } catch (e) {
       problems.push(`${where}: walkthrough "${id}" cannot be re-rendered from the shipped manifest: ${e.message}`);
       continue;

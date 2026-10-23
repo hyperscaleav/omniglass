@@ -7308,3 +7308,26 @@ Metrics and Properties pages name the rule in the row and on the blade, linked b
 name field now flags the name alone, rather than every field at once, which had moved the form under the
 pointer. The calc walkthrough is one flow: the rule, its output created inline, the expression, preview,
 save, then a component whose vitals show the derived value linked to the rule.
+
+### Walkthrough evidence lives off main, and its videos scrub (#939)
+
+The `run:walkthrough` job no longer pushes to the PR branch. It commits each passing walkthrough's
+mp4, animated preview, poster and stills under `<id>/` to the PR's own ref, `refs/walkthroughs/pr-<n>`,
+as a fresh tree built in a scratch index on top of the ref's last commit (so a re-run drops a removed
+script's files while an older comment's SHA stays reachable), and the comment reaches every file by that
+commit's SHA. The PR head and its checks are untouched, a squash-merge carries none of it into main, and
+a default clone never fetches it; the "push an empty commit to rerun checks" step is gone from the
+labels page, the walkthroughs page and `/ship-slice`. A ref was chosen over an orphan branch after
+probing both hosts: a commit pushed only to a `refs/walkthroughs/*` ref is served by SHA from GitHub's
+raw host and from jsDelivr, and the push needs no more than `contents: write`. Each walkthrough in the
+comment now leads with a **Watch (scrubbable)** link to its mp4 through jsDelivr, which serves it as
+`video/mp4` with range requests (the raw host serves an octet stream), so the browser's player seeks; the
+preview stays the inline glance. The ref, the files and both URL builders are pure functions in
+`web/e2e/walkthroughpr.mjs`, unit-tested in `make test-web`.
+
+The docs carry the video too: `make docs-walkthroughs` copies every declared walkthrough's mp4 (no
+longer opt-in, and no longer gitignored), and the embed renders `<video controls>` with the poster step's
+still as its poster frame and the reduced-motion picture as its fallback. The walkthrough lint and the
+post-build embed check both fail a declared walkthrough whose copy has no mp4, and the remark plugin
+fails the page. The six docs walkthroughs were re-recorded to get their videos, about 6 MB of mp4 in the
+repository, a cost [walkthroughs](/contributing/walkthroughs/) states.

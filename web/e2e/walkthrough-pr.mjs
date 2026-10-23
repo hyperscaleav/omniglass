@@ -4,13 +4,15 @@
 //   node web/e2e/walkthrough-pr.mjs select < changed.txt
 //       the ids to record, space-separated: the scripts among the changed paths
 //       (one per line on stdin), else every walkthrough in the tree
-//   node web/e2e/walkthrough-pr.mjs dir <pr> <id>
-//       where that walkthrough's animated preview, poster and stills are committed
-//   node web/e2e/walkthrough-pr.mjs root <pr>
-//       the directory all of the PR's walkthrough stills sit under
+//   node web/e2e/walkthrough-pr.mjs ref <pr>
+//       the ref the PR's walkthrough evidence is committed to
+//   node web/e2e/walkthrough-pr.mjs files <id>
+//       the files that walkthrough's evidence carries, one per line, each a
+//       path both under out/ and in the evidence commit's tree (read from its
+//       out/<id>/walkthrough.json)
 //   node web/e2e/walkthrough-pr.mjs comment
-//       the PR comment body, from env REPO, PR, SHA (the commit holding the
-//       stills), HEAD_SHA, RUN_URL, ARTIFACT_URL and IDS (the selected ids). A
+//       the PR comment body, from env REPO, PR, SHA (the evidence commit),
+//       HEAD_SHA, RUN_URL, ARTIFACT_URL and IDS (the selected ids). A
 //       selected walkthrough counts as recorded only if walkthroughs.sh did not
 //       list it in out/failed.txt and its walkthrough.json carries the budget
 //       mark the recorder writes only on a pass; with no
@@ -19,7 +21,7 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { commentBody, selectWalkthroughs, stillsDir, stillsRoot } from './walkthroughpr.mjs';
+import { commentBody, evidenceFiles, evidenceRef, selectWalkthroughs } from './walkthroughpr.mjs';
 
 const DIR = join(dirname(fileURLToPath(import.meta.url)), 'walkthroughs');
 const OUT = join(DIR, 'out');
@@ -32,12 +34,16 @@ function main([cmd, ...args]) {
       console.log(selectWalkthroughs(changed, all).join(' '));
       return 0;
     }
-    case 'dir':
-      console.log(stillsDir(Number(args[0]), args[1]));
+    case 'ref':
+      console.log(evidenceRef(Number(args[0])));
       return 0;
-    case 'root':
-      console.log(stillsRoot(Number(args[0])));
+    case 'files': {
+      const id = args[0];
+      const m = JSON.parse(readFileSync(join(OUT, id, 'walkthrough.json'), 'utf8'));
+      if (m.id !== id) throw new Error(`out/${id}/walkthrough.json is walkthrough "${m.id}", not "${id}"`);
+      console.log(evidenceFiles(m).join('\n'));
       return 0;
+    }
     case 'comment': {
       const env = (k) => {
         const v = process.env[k];
@@ -72,7 +78,7 @@ function main([cmd, ...args]) {
       return 0;
     }
     default:
-      console.error('usage: walkthrough-pr.mjs select | dir <pr> <id> | root <pr> | comment');
+      console.error('usage: walkthrough-pr.mjs select | ref <pr> | files <id> | comment');
       return 2;
   }
 }

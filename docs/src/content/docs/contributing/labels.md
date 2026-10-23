@@ -46,7 +46,7 @@ promise: if a label runs automation it is named `run:<task>`, and if a label is 
 | Label | Applying it | Wired |
 | --- | --- | --- |
 | `run:preview` | spins up a live [PR preview environment](/guides/pr-previews/); removing it tears the preview down | yes |
-| `run:walkthrough` | records the PR's walkthroughs in CI and upserts a comment that plays an animated preview of each, with its poster and stills below and the videos as a workflow artifact | yes |
+| `run:walkthrough` | records the PR's walkthroughs in CI and upserts a comment that links a scrubbable video of each and plays its animated preview, with its poster and stills below | yes |
 | `run:build` | rebuilds the release binaries and container image for the PR head on demand | reserved |
 | `run:test` | runs the full test suite on demand | reserved |
 
@@ -54,31 +54,29 @@ promise: if a label runs automation it is named `run:<task>`, and if a label is 
 `preview-comment.yml` is the workflow behind it). So is `run:walkthrough`
 (`walkthrough.yml`). Applying it records walkthroughs on the walkthrough stack: for a PR that
 changes nothing under `web/` but walkthrough scripts, just the scripts it adds or changes;
-otherwise every walkthrough, since any console change can move a flow. It then clears
-`.github/screenshots/<pr>/walkthroughs/` on the PR branch and commits each passing
-walkthrough's animated preview (`preview.webp`), poster and per-step stills under `<id>/` there
-(so a renamed or deleted script leaves no stale stills), and keeps one comment on the PR embedding
-them by commit SHA: each walkthrough leads with its preview, which plays on the PR page, then its
-poster and its captioned stills folded below. The comment links the full-quality mp4s as a
-workflow artifact (GitHub plays inline video only from a browser upload, which CI cannot make)
-and names any walkthrough that failed (a walkthrough is a
-test, so a failure fails the job; a stack that never came up is reported as that, not as every
-walkthrough failing).
+otherwise every walkthrough, since any console change can move a flow. It then commits each
+passing walkthrough's mp4, animated preview (`preview.webp`), poster and per-step stills under
+`<id>/` to the PR's own evidence ref, `refs/walkthroughs/pr-<n>`, as a fresh tree (so a renamed or
+deleted script leaves nothing behind) on top of the ref's last commit, and keeps one comment on the
+PR reaching them by that commit's SHA: each walkthrough leads with a **Watch (scrubbable)** link to
+its mp4 through jsDelivr, which serves it as video with range requests so the browser's player
+seeks, then its preview, which plays on the PR page, then its poster and its captioned stills folded
+below. The comment also links the run's workflow artifact (which keeps a failed walkthrough's
+partial stills) and names any walkthrough that failed (a walkthrough is a test, so a failure fails
+the job; a stack that never came up is reported as that, not as every walkthrough failing). Why a
+ref rather than a branch is in [walkthroughs](/contributing/walkthroughs/#show-it-on-the-pr).
 
-- **What it costs:** the committed evidence lands on main with the squash-merge. A preview is
-  about 0.6 to 0.9 MB and a walkthrough's poster and stills a further 0.8 to 1.6 MB, so each
-  walkthrough a PR records adds roughly 1.4 to 2.4 MB to the repository's history for good, and a re-run that
-  re-records adds it again. Apply the label when the PR changes a flow, not on every push.
+- **What it costs:** nothing on main. The evidence never touches the PR branch, so a squash-merge
+  carries none of it, and a default clone does not fetch the ref. It does sit in the repository's
+  object store on GitHub (about 2 to 3.5 MB per walkthrough per run, video included).
+- **The PR's checks:** untouched. The run pushes only the evidence ref, never the PR head, so there
+  is nothing to pull after a run and no check left un-run on the head.
 
 - **What it records:** the branch tip when the job runs, not the commit the label was applied
   at. The label stays on; re-run the job, or remove and re-add the label, to record the current
   head again, and the comment updates in place.
 - **Merge conflicts:** GitHub runs no `pull_request` workflow on a PR with merge conflicts, so
   the label does nothing until they are resolved.
-- **After a run:** pull, since the stills commit lands on your branch. GitHub starts no workflow
-  for a push made with the workflow token, so the PR's other checks have not run on that
-  commit; if it is the head, push an empty commit to run them
-  (`git commit --allow-empty -m "chore: rerun checks"`, then push).
 - **Forks:** fork PRs are skipped (their token cannot push).
 
 `run:build` and `run:test` are reserved:

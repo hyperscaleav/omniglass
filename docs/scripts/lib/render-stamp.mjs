@@ -1,7 +1,7 @@
 // @ts-check
 // The render stamp (#937): what the walkthrough embed reads that Astro's content
 // cache cannot see. Astro keys a cached page render on the page's own content,
-// so a re-copied walkthrough.json, a video added or removed, or a change to the
+// so a re-copied walkthrough.json, a file added or removed, or a change to the
 // plugin that renders the embed leaves a cached page saying the old thing. The
 // docs build (scripts/astro-build.mjs) digests these inputs, compares the digest
 // with the stamp it wrote beside Astro's cache after the last good build, and
@@ -55,7 +55,7 @@ export function astroBuildArgs(digest, stamp) {
 
 /**
  * The inputs under `repo`: every copied walkthrough.json, each walkthrough
- * directory's file listing (the video renders only when its file is present),
+ * directory's file listing (a file added or removed beside the manifest),
  * and the plugin sources. Names are repo-relative.
  * @param {string} repo the repository root
  * @returns {RenderInput[]}

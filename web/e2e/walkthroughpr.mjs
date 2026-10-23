@@ -8,16 +8,22 @@
 //
 // - which walkthroughs a PR records: the scripts a scripts-only PR adds or
 //   changes, else all;
-// - where their animated preview, poster and stills are committed:
-//   .github/screenshots/<pr>/walkthroughs/<id>/ (ruled on #884), so the evidence
-//   that matters for review renders inline and outlives the workflow artifact
-//   that carries the video (GitHub plays no inline video a workflow can attach,
-//   so the preview, an animated WebP, is what plays on the PR page, #937);
-// - the raw URL each still is embedded by: an immutable commit SHA, never a
-//   branch, so the link survives the branch being deleted on squash-merge;
+// - where their evidence is committed (#939): the PR's own ref,
+//   refs/walkthroughs/pr-<n>, never the PR branch, so the PR head's checks are
+//   untouched and a squash-merge carries none of it into main; a ref outside
+//   refs/heads/ is not fetched by a default clone either, yet GitHub's raw host
+//   and jsDelivr serve its commits by SHA like any other;
+// - which files that commit carries per walkthrough: the animated preview, the
+//   poster, every step's still and the mp4, under <id>/;
+// - the URLs they are reached by, each pinned to the evidence commit's SHA,
+//   never a ref: the raw host for the images that render inline (the preview,
+//   an animated WebP, is what plays on the PR page, #937), and jsDelivr for the
+//   video, which it serves as video/mp4 with range requests, so the browser's
+//   own player plays and seeks it (GitHub plays no inline video a workflow can
+//   attach);
 // - the one comment the workflow upserts, found again by its marker.
 
-import { PREVIEW, checkId, checkPreview, checkStill, plural } from './walkthroughcore.mjs';
+import { PREVIEW, checkId, checkPreview, checkStill, plural, videoName } from './walkthroughcore.mjs';
 
 /** @typedef {import('./walkthroughcore.mjs').ManifestStep} ManifestStep */
 /** @typedef {import('./walkthroughcore.mjs').Manifest} Manifest */
@@ -48,26 +54,53 @@ export function selectWalkthroughs(changed, all) {
   return picked.length ? picked : [...all];
 }
 
-// The directory every walkthrough still of PR `pr` sits under. A run clears it
-// before writing, so a renamed or deleted script leaves no stale stills.
+// The ref PR `pr`'s evidence is committed to. Each run commits a fresh tree on
+// top of the ref's last commit, so a renamed or deleted script leaves nothing
+// behind while an older comment's SHA stays reachable.
 /** @param {number} pr @returns {string} */
-export function stillsRoot(pr) {
+export function evidenceRef(pr) {
   if (!Number.isInteger(pr) || pr < 1) throw new Error(`PR number "${pr}" must be a positive integer`);
-  return `.github/screenshots/${pr}/walkthroughs`;
+  return `refs/walkthroughs/pr-${pr}`;
 }
 
-// Where a walkthrough's poster and stills are committed for PR `pr`.
-/** @param {number} pr @param {string} id @returns {string} */
-export function stillsDir(pr, id) {
-  return `${stillsRoot(pr)}/${checkId(id)}`;
+// The files a passing walkthrough's evidence carries, as paths in the evidence
+// commit's tree (each the recorder's file of that name under out/<id>/): the
+// animated preview when the recording has one, the poster, every step's
+// still, then the video.
+/** @param {Manifest} m @returns {string[]} */
+export function evidenceFiles(m) {
+  const id = checkId(m.id);
+  checkStill(id, m.poster);
+  m.steps.forEach((s) => checkStill(id, s.still));
+  if (m.preview !== undefined) checkPreview(id, m.preview);
+  const names = [...(m.preview !== undefined ? [PREVIEW] : []), 'poster.png', ...m.steps.map((s) => s.still), videoName(id)];
+  return names.map((f) => `${id}/${f}`);
 }
+
+/** @param {string} repo @param {string} sha */
+function checkPin(repo, sha) {
+  if (!REPO.test(repo)) throw new Error(`repository "${repo}" must be owner/name`);
+  if (!SHA.test(sha)) throw new Error(`"${sha}" must be a full commit SHA (an immutable link, never a branch)`);
+}
+
+/** @param {string} path @returns {string} */
+const encodePath = (path) => path.split('/').map(encodeURIComponent).join('/');
 
 // The raw URL of `path` at commit `sha` of `repo` (owner/name).
 /** @param {string} repo @param {string} sha @param {string} path @returns {string} */
 export function rawUrl(repo, sha, path) {
-  if (!REPO.test(repo)) throw new Error(`repository "${repo}" must be owner/name`);
-  if (!SHA.test(sha)) throw new Error(`"${sha}" must be a full commit SHA (an immutable link, never a branch)`);
-  return `https://raw.githubusercontent.com/${repo}/${sha}/${path.split('/').map(encodeURIComponent).join('/')}`;
+  checkPin(repo, sha);
+  return `https://raw.githubusercontent.com/${repo}/${sha}/${encodePath(path)}`;
+}
+
+// The jsDelivr URL of `path` at commit `sha` of `repo`: what a video is linked
+// by, since jsDelivr serves a public repository's mp4 as video/mp4 with range
+// requests (the raw host serves it as an octet stream, which a browser
+// downloads rather than plays).
+/** @param {string} repo @param {string} sha @param {string} path @returns {string} */
+export function cdnUrl(repo, sha, path) {
+  checkPin(repo, sha);
+  return `https://cdn.jsdelivr.net/gh/${repo}@${sha}/${encodePath(path)}`;
 }
 
 // Script text into Markdown, on one line: no HTML, no brackets that could open
@@ -84,19 +117,16 @@ function esc(s) {
     .replace(/([[\]])/g, '\\$1');
 }
 
-// One walkthrough's section: title, description, the animated preview when the
-// recording has one, the poster, then every step's caption over its still,
-// folded so the comment stays scannable.
-/** @param {string} repo @param {number} pr @param {string} sha @param {Manifest} m @returns {string[]} */
-function section(repo, pr, sha, m) {
-  checkStill(m.id, m.poster);
-  m.steps.forEach((s) => checkStill(m.id, s.still));
-  if (m.preview !== undefined) checkPreview(m.id, m.preview);
-  const dir = stillsDir(pr, m.id);
-  const url = (/** @type {string} */ f) => rawUrl(repo, sha, `${dir}/${f}`);
+// One walkthrough's section: title, description, the scrubbable video's link,
+// the animated preview when the recording has one, the poster, then every
+// step's caption over its still, folded so the comment stays scannable.
+/** @param {string} repo @param {string} sha @param {Manifest} m @returns {string[]} */
+function section(repo, sha, m) {
+  evidenceFiles(m); // validates the id, stills and preview before any reaches a URL
+  const url = (/** @type {string} */ f) => rawUrl(repo, sha, `${m.id}/${f}`);
   const lines = [`#### ${esc(m.title)}`, ''];
   if (m.description) lines.push(esc(m.description), '');
-  lines.push(`\`${m.id}\`, ${plural(m.steps.length, 'step')}`, '');
+  lines.push(`\`${m.id}\`, ${plural(m.steps.length, 'step')}: [Watch (scrubbable)](${cdnUrl(repo, sha, `${m.id}/${videoName(m.id)}`)})`, '');
   if (m.preview !== undefined) lines.push(`![${esc(m.title)}: animated preview](${url(PREVIEW)})`, '');
   lines.push(`![${esc(m.title)}: poster](${url('poster.png')})`, '');
   lines.push('<details><summary>Every step, as recorded</summary>', '');
@@ -107,8 +137,8 @@ function section(repo, pr, sha, m) {
   return lines;
 }
 
-// The comment body. `sha` is the commit holding the stills (what they are
-// embedded by), `headSha` the PR head they were recorded from; `recorded` the
+// The comment body. `sha` is the evidence commit (what every file is reached
+// by), `headSha` the PR head they were recorded from; `recorded` the
 // manifests (walkthrough.json) of the walkthroughs that passed, `failed` the ids
 // of those that did not. `stackUp` false means the walkthrough stack never came
 // up, so no walkthrough ran: the comment says so instead of blaming each one.
@@ -128,8 +158,8 @@ export function commentBody({ repo, pr, sha, headSha, runUrl, artifactUrl, recor
     '### Walkthroughs',
     '',
     `${tally} from \`${String(headSha).slice(0, 7)}\` in [this run](${runUrl}). ` +
-      `The videos are a [workflow artifact](${artifactUrl}) (an mp4 per walkthrough, kept while the artifact lives); ` +
-      `the animated preview, poster and stills are committed under \`.github/screenshots/${pr}/walkthroughs/\` and embedded by commit SHA.`,
+      `Each walkthrough's video, animated preview, poster and stills are committed to \`${evidenceRef(pr)}\` (off the PR branch, so none of it reaches main) ` +
+      `and reached by that commit's SHA; the [workflow artifact](${artifactUrl}) also keeps a failed walkthrough's partial stills.`,
     '',
   ];
   if (!stackUp) {
@@ -147,7 +177,7 @@ export function commentBody({ repo, pr, sha, headSha, runUrl, artifactUrl, recor
       '',
     );
   }
-  for (const m of recorded) lines.push(...section(repo, pr, sha, m));
+  for (const m of recorded) lines.push(...section(repo, sha, m));
   if (total === 0 && stackUp) lines.push('Nothing was recorded.', '');
   lines.push('Re-run the workflow, or remove and re-add the `run:walkthrough` label, to record the current head again; this comment is updated in place.');
   return lines.join('\n') + '\n';

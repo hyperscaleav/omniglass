@@ -1,7 +1,8 @@
 // copy-walkthroughs brings the walkthroughs the docs declare into the site
 // (#926): for every id under a page's `walkthroughs` frontmatter, it copies the
-// recorder's manifest, per-step stills and animated preview (preview.webp, when
-// the manifest records one, #937) from web/e2e/walkthroughs/out/<id>/
+// recorder's manifest, per-step stills, animated preview (preview.webp, when
+// the manifest records one, #937) and video (<id>.mp4, #939) from
+// web/e2e/walkthroughs/out/<id>/
 // (written by `make walkthroughs`) into public/walkthroughs/<id>/, which is
 // committed like public/screenshots/. The recorder's poster.png is not copied:
 // it is a byte copy of the poster step's still, which the manifest names.
@@ -10,10 +11,9 @@
 // mark the recorder writes after the budget gate passes, so a failed or
 // over-budget recording is refused even when out/failed.txt does not list it.
 //
-// The mp4 is not committed (size). DOCS_WALKTHROUGH_VIDEO=1 also copies it, for
-// a local build that plays the video; that copy is gitignored, and without the
-// flag a stale one is removed so the video never disagrees with the stills
-// beside it.
+// The mp4 is committed with the rest (about 1 MB per walkthrough per
+// re-record; contributing/walkthroughs states the cost), so the embed plays it
+// with controls on the deployed docs and their PR previews.
 //
 // Astro caches each rendered page by the page's own content, not by the
 // manifest it renders; the docs build (`corepack pnpm build`) sees the copy
@@ -25,12 +25,11 @@ import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, unlinkS
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { checkId } from '../../web/e2e/walkthroughcore.mjs';
-import { videoName, walkthroughAssets } from '../src/plugins/walkthrough-embed.mjs';
+import { walkthroughAssets } from '../src/plugins/walkthrough-embed.mjs';
 import { declaredIds, walkPages } from './lib/frontmatter-ids.mjs';
 
 const OUT = fileURLToPath(new URL('../../web/e2e/walkthroughs/out', import.meta.url));
 const DEST = fileURLToPath(new URL('../public/walkthroughs', import.meta.url));
-const withVideo = process.env.DOCS_WALKTHROUGH_VIDEO === '1';
 
 const ids = new Set();
 for (const path of walkPages()) {
@@ -60,7 +59,6 @@ function copyOne(id) {
   }
   if (manifest.id !== id) throw new Error(`${manifestPath} is walkthrough "${manifest.id}", not "${id}"`);
   const files = walkthroughAssets(manifest);
-  if (withVideo) files.push(videoName(id));
   const missing = files.filter((f) => !existsSync(join(src, f)));
   if (missing.length) {
     throw new Error(`walkthrough "${id}" is missing ${missing.join(', ')} under ${src}; re-run make walkthroughs ID=${id}`);
@@ -68,8 +66,8 @@ function copyOne(id) {
   const dest = join(DEST, id);
   mkdirSync(dest, { recursive: true });
   // Nothing but the copy lives here: a directory is refused rather than
-  // deleted, and a file from an older, longer recording (or a video the flag
-  // did not ask for) is removed so it cannot outlive the recording it came from.
+  // deleted, and a file from an older, longer recording is removed so it cannot
+  // outlive the recording it came from.
   const stale = [];
   for (const entry of readdirSync(dest, { withFileTypes: true })) {
     if (entry.isDirectory()) {
@@ -79,7 +77,7 @@ function copyOne(id) {
   }
   for (const f of stale) unlinkSync(join(dest, f));
   for (const f of files) copyFileSync(join(src, f), join(dest, f));
-  console.log(`docs-walkthroughs: ${id}: ${files.length} files into public/walkthroughs/${id}/${withVideo ? ' (with the video)' : ''}`);
+  console.log(`docs-walkthroughs: ${id}: ${files.length} files into public/walkthroughs/${id}/`);
 }
 
 const errors = [];

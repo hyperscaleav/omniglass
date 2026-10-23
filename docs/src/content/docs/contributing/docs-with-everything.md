@@ -183,7 +183,7 @@ PR carries as evidence) exactly as it embeds a screenshot: the id in `walkthroug
 `::walkthrough{#id}` where it belongs. The page declares only the id; the title, captions, animated
 preview and stills come from the recording, copied into `docs/public/walkthroughs/<id>/` by
 `make docs-walkthroughs`, so a re-recorded flow updates the docs by a copy, never by an edit. The
-video is not committed, and the embed renders it only when it is present at build time. Writing,
+video is copied and committed with them, and the embed plays it with controls. Writing,
 recording, reviewing and embedding one is [walkthroughs](/contributing/walkthroughs/).
 
 ## Style

@@ -302,11 +302,10 @@ docs-shots-verify:
 	node web/e2e/docs-shots-verify.mjs
 
 # Walkthroughs in the docs (#926): copy each walkthrough a page declares in its
-# `walkthroughs` frontmatter (manifest, per-step stills, animated preview) from
-# web/e2e/walkthroughs/out/<id>/ into docs/public/walkthroughs/<id>/, committed
-# like the screenshots. Record first (make walkthroughs ID=<id>). The mp4 stays
-# out of git; DOCS_WALKTHROUGH_VIDEO=1 copies it too, for a local build that
-# plays it (gitignored).
+# `walkthroughs` frontmatter (manifest, per-step stills, animated preview and
+# the mp4 the embed plays, #939) from web/e2e/walkthroughs/out/<id>/ into
+# docs/public/walkthroughs/<id>/, committed like the screenshots. Record first
+# (make walkthroughs ID=<id>).
 docs-walkthroughs:
 	node docs/scripts/copy-walkthroughs.mjs
 

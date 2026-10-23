@@ -9,10 +9,12 @@ import {
 } from "../../docs/src/plugins/walkthrough-embed.mjs";
 import { scanDirectives } from "../../docs/scripts/lib/embed-scan.mjs";
 
-// The docs embed of a walkthrough (#926): `::walkthrough{#id}` renders the
-// recorder's manifest (walkthrough.json) as a poster, a video only when the mp4
-// is present at build time, and every captioned still folded underneath. Which
-// files the docs carry, and the HTML, are pure and pinned here.
+// The docs embed of a walkthrough (#926, #939): `::walkthrough{#id}` renders the
+// recorder's manifest (walkthrough.json) as the video with controls (so a
+// reader scrubs it), its poster step as the poster frame, the animated preview
+// (or the poster step) as the fallback for a browser that plays no video, and
+// every captioned still folded underneath. Which files the docs carry, and the
+// HTML, are pure and pinned here.
 const manifest = (extra: Partial<Manifest> = {}): Manifest => ({
   id: "sample-simulation",
   title: "Read a simulated component's status",
@@ -27,8 +29,8 @@ const manifest = (extra: Partial<Manifest> = {}): Manifest => ({
 });
 
 describe("walkthroughAssets", () => {
-  it("lists the manifest and every step still, never the video or the poster copy", () => {
-    expect(walkthroughAssets(manifest())).toEqual(["walkthrough.json", "step-01.png", "step-02.png"]);
+  it("lists the manifest, every step still and the video, never the poster copy", () => {
+    expect(walkthroughAssets(manifest())).toEqual(["walkthrough.json", "step-01.png", "step-02.png", "sample-simulation.mp4"]);
   });
 
   it("refuses a still that is not a recorder still name", () => {
@@ -56,7 +58,13 @@ describe("walkthroughAssets", () => {
   });
 
   it("carries the animated preview when the manifest records one", () => {
-    expect(walkthroughAssets(manifest({ preview: "preview.webp" }))).toEqual(["walkthrough.json", "step-01.png", "step-02.png", "preview.webp"]);
+    expect(walkthroughAssets(manifest({ preview: "preview.webp" }))).toEqual([
+      "walkthrough.json",
+      "step-01.png",
+      "step-02.png",
+      "preview.webp",
+      "sample-simulation.mp4",
+    ]);
   });
 
   it("refuses a preview that is not the recorder's preview name", () => {
@@ -77,40 +85,45 @@ describe("videoName", () => {
 });
 
 describe("renderWalkthrough", () => {
-  it("renders the poster step and the captioned stills, with no video or link when the mp4 is absent", () => {
-    const html = renderWalkthrough(manifest(), { video: false });
-    expect(html).toContain('<img src="/walkthroughs/sample-simulation/step-02.png" alt="Read');
-    expect(html).toContain('src="/walkthroughs/sample-simulation/step-01.png"');
+  const dir = "/walkthroughs/sample-simulation";
+
+  it("renders the video with controls, the poster step as its poster frame, and a link to the mp4", () => {
+    const html = renderWalkthrough(manifest());
+    expect(html).toContain(`<video controls preload="none" poster="${dir}/step-02.png" src="${dir}/sample-simulation.mp4">`);
+    expect(html).toContain(`href="${dir}/sample-simulation.mp4"`);
     expect(html).not.toContain("poster.png");
-    expect(html).toContain("<details>");
-    expect(html).not.toContain(".mp4");
-    expect(html).not.toContain("<video");
   });
 
-  it("adds the video and its link only when the mp4 is present", () => {
-    const html = renderWalkthrough(manifest(), { video: true });
-    expect(html).toContain("<video");
-    expect(html).toContain('href="/walkthroughs/sample-simulation/sample-simulation.mp4"');
-    expect(html).toContain('poster="/walkthroughs/sample-simulation/step-02.png"');
-  });
-
-  it("plays the animated preview when the manifest records one, the poster step for a reader who prefers reduced motion", () => {
-    const html = renderWalkthrough(manifest({ preview: "preview.webp" }), { video: false });
+  it("falls back, inside the video, to the animated preview, or the poster step for a reader who prefers reduced motion", () => {
+    const html = renderWalkthrough(manifest({ preview: "preview.webp" }));
     expect(html).toContain(
-      '<picture><source media="(prefers-reduced-motion: no-preference)" srcset="/walkthroughs/sample-simulation/preview.webp" />' +
-        '<img src="/walkthroughs/sample-simulation/step-02.png" alt="Read a simulated component&#39;s status: preview" loading="lazy" /></picture>',
+      `<video controls preload="none" poster="${dir}/step-02.png" src="${dir}/sample-simulation.mp4">` +
+        `<picture><source media="(prefers-reduced-motion: no-preference)" srcset="${dir}/preview.webp" />` +
+        `<img src="${dir}/step-02.png" alt="Read a simulated component&#39;s status: preview" loading="lazy" /></picture>` +
+        `</video>`,
     );
-    expect(html).toContain('src="/walkthroughs/sample-simulation/step-02.png" alt="Step 2: ');
+  });
+
+  it("falls back to the poster step alone for a recording with no preview", () => {
+    const html = renderWalkthrough(manifest());
+    expect(html).toContain(`<img src="${dir}/step-02.png" alt="Read a simulated component&#39;s status: poster" loading="lazy" /></video>`);
+    expect(html).not.toContain("preview.webp");
+  });
+
+  it("folds every step's caption over its still beneath the video", () => {
+    const html = renderWalkthrough(manifest());
+    expect(html.indexOf("</video>")).toBeLessThan(html.indexOf("<details>"));
+    expect(html).toContain(`src="${dir}/step-01.png" alt="Step 1: `);
   });
 
   it("escapes script text, so a caption cannot inject markup", () => {
-    const html = renderWalkthrough(manifest(), { video: false });
+    const html = renderWalkthrough(manifest());
     expect(html).toContain("Its status &lt;says&gt; where &amp; how.");
     expect(html).not.toContain("<says>");
   });
 
   it("carries the title and description, and numbers every step", () => {
-    const html = renderWalkthrough(manifest(), { video: false });
+    const html = renderWalkthrough(manifest());
     expect(html).toContain("Read a simulated component&#39;s status");
     expect(html).toContain("Open one to see where it is served.");
     expect(html).toContain("2 steps");
@@ -119,15 +132,15 @@ describe("renderWalkthrough", () => {
   });
 
   it("omits the description when the script has none", () => {
-    const html = renderWalkthrough(manifest({ description: undefined }), { video: false });
+    const html = renderWalkthrough(manifest({ description: undefined }));
     expect(html).not.toContain("undefined");
   });
 });
 
 describe("findEmbeds", () => {
   it("finds every rendered embed in built HTML, by id, verbatim", () => {
-    const a = renderWalkthrough(manifest(), { video: false });
-    const b = renderWalkthrough(manifest({ id: "other" }), { video: true });
+    const a = renderWalkthrough(manifest());
+    const b = renderWalkthrough(manifest({ id: "other", preview: "preview.webp" }));
     const page = `<main><p>x</p>${a}<p>y</p>${b}</main>`;
     expect(findEmbeds(page)).toEqual([
       { id: "sample-simulation", html: a },
@@ -145,7 +158,7 @@ describe("findEmbeds", () => {
 // post-build check compares the two in a canonical form, so a serialization
 // difference passes and a content difference fails.
 describe("canonicalEmbed", () => {
-  const rendered = renderWalkthrough(manifest(), { video: false });
+  const rendered = renderWalkthrough(manifest());
   const serialized = rendered
     .replace(/ \/>/g, ">")
     .replace(/&#39;/g, "&#x27;")
@@ -160,17 +173,12 @@ describe("canonicalEmbed", () => {
   it("tells a changed caption apart", () => {
     const stale = renderWalkthrough(
       manifest({ steps: [{ n: 1, kind: "goto", caption: "Old words.", still: "step-01.png" }, manifest().steps[1]] }),
-      { video: false },
     );
     expect(canonicalEmbed(stale)).not.toBe(canonicalEmbed(rendered));
   });
 
   it("tells a preview added apart", () => {
-    expect(canonicalEmbed(renderWalkthrough(manifest({ preview: "preview.webp" }), { video: false }))).not.toBe(canonicalEmbed(rendered));
-  });
-
-  it("tells a video added apart", () => {
-    expect(canonicalEmbed(renderWalkthrough(manifest(), { video: true }))).not.toBe(canonicalEmbed(rendered));
+    expect(canonicalEmbed(renderWalkthrough(manifest({ preview: "preview.webp" })))).not.toBe(canonicalEmbed(rendered));
   });
 });
 
