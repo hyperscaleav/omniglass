@@ -8,6 +8,7 @@ import (
 
 	"github.com/hyperscaleav/omniglass/internal/rules"
 	"github.com/hyperscaleav/omniglass/internal/storage"
+	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 )
 
 // evalRig is a calc rig with a component to derive on.
@@ -399,7 +400,7 @@ func TestCalcIgnoresDeclaredInputs(t *testing.T) {
 // without waiting for a new sample.
 func TestCalcComponentRetype(t *testing.T) {
 	r := newEvalRig(t)
-	display, generic := "boreal-edge-55", "generic-device"
+	display, generic := storagetest.MintProduct(t, r.ctx, r.gw, "display").Name, "generic-device"
 	if _, err := r.gw.UpdateComponent(r.ctx, "", r.comp, storage.ComponentPatch{ProductName: &display}, r.all, r.all); err != nil {
 		t.Fatal(err)
 	}
@@ -457,7 +458,7 @@ func TestCalcComponentRetype(t *testing.T) {
 // selection after the retype commits, computes nothing and leaves no state.
 func TestCalcComponentRetypeWhileServing(t *testing.T) {
 	r := newEvalRig(t)
-	display, generic := "boreal-edge-55", "generic-device"
+	display, generic := storagetest.MintProduct(t, r.ctx, r.gw, "display").Name, "generic-device"
 	if _, err := r.gw.UpdateComponent(r.ctx, "", r.comp, storage.ComponentPatch{ProductName: &display}, r.all, r.all); err != nil {
 		t.Fatal(err)
 	}
