@@ -54,6 +54,10 @@ type Env struct {
 	builtins string // the admitted builtins, sorted, comma-joined (comparable)
 	lists    string // the admitted list functions (lists.go), the same way
 	budget   Budget
+	// site names the place the expression is written (criteria, calc), so
+	// the diagnostic rules for it run (diagnostics.go); empty runs only the
+	// rules for every site.
+	site string
 }
 
 // Binding is one name an expression may use at a site, read from the env
@@ -157,6 +161,18 @@ func (e Env) admits(name string) bool {
 
 // Option declares one more thing about a site.
 type Option func(*Env) error
+
+// WithSite names the site, so the diagnostic rules that apply there run
+// on its expressions (diagnostics.go).
+func WithSite(name string) Option {
+	return func(e *Env) error {
+		e.site = name
+		return nil
+	}
+}
+
+// Site is the site's name; empty for one that declared none.
+func (e Env) Site() string { return e.site }
 
 // WithBuiltins admits the named builtins at a site. Each must be vetted
 // (listed in vetted): a builtin whose cost is linear in what the run is charged for and

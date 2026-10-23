@@ -227,7 +227,7 @@ func TestUnboundNameNamed(t *testing.T) {
 			t.Errorf("%q: got %v, want an unbound name", src, e)
 		}
 	}
-	e = asError(t, Check("value > 1", listSite(t, Bool, true)))
+	e = asError(t, checkErr("value > 1", listSite(t, Bool, true)))
 	if e.Unbound != "value" {
 		t.Errorf("Check: unbound %q, want value", e.Unbound)
 	}

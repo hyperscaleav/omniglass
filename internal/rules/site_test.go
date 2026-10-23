@@ -130,3 +130,36 @@ func TestCalcNamesMatchCommitted(t *testing.T) {
 		t.Error("web/src/lib/calc_names.gen.ts drifted from the calc site: run make gen and commit the result")
 	}
 }
+
+// Each site names itself on every environment it compiles against, a calc
+// rule's built one included, so the diagnostic rules for that site run on
+// its expressions (#1021).
+func TestSitesNameThemselves(t *testing.T) {
+	for _, name := range SiteNames() {
+		s, _ := LookupSite(name)
+		for _, v := range s.Variants {
+			if got := v.Env.Site(); got != name {
+				t.Errorf("%s %s variant names site %q", name, v.ValueType, got)
+			}
+		}
+	}
+	env, err := CalcEnv(OwnerSystem, []TypedInput{{Alias: "t", Key: "k", ValueType: ValueNumber}}, ValueNumber)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if env.Site() != "calc" {
+		t.Errorf("a calc rule's env names site %q", env.Site())
+	}
+}
+
+// A diagnostic rule applies at registered sites only: a site name it gives
+// that no site has is a typo that would silently never run.
+func TestDiagnosticSitesAreRegistered(t *testing.T) {
+	for _, d := range expression.DiagnosticRules() {
+		for _, site := range d.Sites {
+			if _, ok := LookupSite(site); !ok {
+				t.Errorf("diagnostic %s applies at %q, which is not a registered site", d.Code, site)
+			}
+		}
+	}
+}

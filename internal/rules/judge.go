@@ -44,10 +44,16 @@ type BoolInput struct {
 // The criteria site's environments: the criteria builtins, the criteria
 // budget, a bool result.
 var (
-	metricEnv = expression.MustEnv[MetricInput](expression.Bool, expression.WithBuiltins(expression.CriteriaBuiltins()...))
-	textEnv   = expression.MustEnv[TextInput](expression.Bool, expression.WithBuiltins(expression.CriteriaBuiltins()...))
-	boolEnv   = expression.MustEnv[BoolInput](expression.Bool, expression.WithBuiltins(expression.CriteriaBuiltins()...))
+	metricEnv = expression.MustEnv[MetricInput](expression.Bool, criteriaOptions()...)
+	textEnv   = expression.MustEnv[TextInput](expression.Bool, criteriaOptions()...)
+	boolEnv   = expression.MustEnv[BoolInput](expression.Bool, criteriaOptions()...)
 )
+
+// criteriaOptions are the criteria site's declaration: its builtins, and
+// its name, so the diagnostic rules for criteria run on its expressions.
+func criteriaOptions() []expression.Option {
+	return []expression.Option{expression.WithBuiltins(expression.CriteriaBuiltins()...), expression.WithSite("criteria")}
+}
 
 // CriteriaEnv is the environment a criterion compiles against: the lane,
 // and for a property its data type.

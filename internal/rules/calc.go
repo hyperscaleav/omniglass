@@ -68,10 +68,11 @@ func CalcBudget() expression.Budget {
 }
 
 // calcOptions are the calc site's functions (the criteria builtins and every
-// list function, since an input binds as a list) and its budget.
+// list function, since an input binds as a list), its budget, and its name,
+// so the diagnostic rules for calc run on its expressions.
 func calcOptions() []expression.Option {
 	return []expression.Option{expression.WithBuiltins(expression.CriteriaBuiltins()...),
-		expression.WithListFunctions(expression.ListFunctions()...), expression.WithBudget(CalcBudget())}
+		expression.WithListFunctions(expression.ListFunctions()...), expression.WithBudget(CalcBudget()), expression.WithSite("calc")}
 }
 
 // CalcBuiltins are the functions the calc site admits, sorted, a fresh slice
@@ -297,9 +298,11 @@ func (c *CalcProgram) Aggregate() bool {
 }
 
 // CheckCalc is CompileCalc's check of a source against a built env without
-// the program cache (the validate route), its diagnostic said the same way.
-func CheckCalc(source string, env expression.Env) error {
-	return calcDiagnostic(expression.Check(source, env))
+// the program cache (the validate route), its refusal said the same way,
+// with the warnings and hints of one that compiles.
+func CheckCalc(source string, env expression.Env) ([]expression.Diagnostic, error) {
+	diags, err := expression.Check(source, env)
+	return diags, calcDiagnostic(err)
 }
 
 // calcDiagnostic says an unbound name in a calc rule's terms: a name no

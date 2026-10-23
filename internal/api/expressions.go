@@ -100,7 +100,7 @@ func registerExpressionRoutes(api huma.API, a *authenticator, gw storage.Gateway
 		if site.Bindings != "" {
 			check = rules.CheckCalc
 		}
-		if err := check(in.Body.Source, env); err != nil {
+		if _, err := check(in.Body.Source, env); err != nil {
 			d := expressionDiagnostic{Phase: "type", Message: err.Error()}
 			var ee *expression.Error
 			if errors.As(err, &ee) {

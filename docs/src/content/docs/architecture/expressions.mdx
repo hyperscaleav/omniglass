@@ -103,6 +103,33 @@ only by a page with an expression site; a page that cannot load it says so and r
 
 <ExpressionSites />
 
+## Diagnostics: clear messages and quick fixes
+
+Expr's own refusals are accurate but speak the checker's language (`sum(members, .has.t) > 0` is
+refused as an operator mismatch at the `>`, when the mistake is the `sum`), and an expression can compile
+and still probably be wrong. So the engine keeps a **registry of diagnostics** (#1021,
+`internal/expression/diagnostics.go`): each common mistake is one declared rule with
+
+- a stable **code** (`sum-of-bools`), a **severity** (an **error** refuses the expression; a **warning**,
+  probably wrong, and a **hint**, could be simpler, ride along with one that compiles and never refuse it),
+  and the **sites** it applies at (criteria, calc, or every site; a site names itself on its environment);
+- a **trigger**: a **refine** rule runs when the engine refuses an expression and recognises the shape
+  behind the refusal, replacing the message with a clearer one at the place the mistake is (it explains a
+  refusal, so it is always an error); a **lint** rule runs on an expression that compiles, on its checked
+  tree, and flags a likely mistake;
+- a **matcher**, a pure function over the typed tree (and, for a refine rule, the refusal), returning the
+  positions it found;
+- a **message**, and an optional **fix**: one text edit (a range and its replacement) an editor offers as
+  a quick fix;
+- **fixtures** beside it in Go: expressions it must give its diagnostic for and must not, each compiled
+  against a site-shaped environment, with the fixed source a fix must yield (which must compile without
+  it). A rule without both kinds of fixture refuses to register, and a fixture that disagrees with its rule
+  fails the build.
+
+`Compile` and `Check` run a site's rules once per compile, so a cached program carries its warnings and
+hints, and a matcher that panics is a bug in the rule: the expression is judged as if the rule were absent,
+never refused by it and never crashing the server.
+
 :::design[Omniglass functions, with the driver step and extractor sites, tracked in #827]
 
 ## Extended with Omniglass functions

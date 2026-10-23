@@ -11,6 +11,8 @@ import (
 	"github.com/expr-lang/expr"
 	"github.com/expr-lang/expr/ast"
 	"github.com/expr-lang/expr/builtin"
+	"github.com/expr-lang/expr/checker"
+	"github.com/expr-lang/expr/compiler"
 	"github.com/expr-lang/expr/conf"
 	"github.com/expr-lang/expr/file"
 	"github.com/expr-lang/expr/parser"
@@ -88,7 +90,12 @@ type Error struct {
 	// Unbound is the name the expression uses that nothing binds, when that
 	// is the fault; empty otherwise.
 	Unbound string
-	err     error
+	// Code is the diagnostic rule that made or explained the refusal
+	// (diagnostics.go); empty for the engine's own.
+	Code string
+	// Fix is the rule's quick fix, when it offers one.
+	Fix *Fix
+	err error
 }
 
 func (e *Error) Error() string {
@@ -125,8 +132,25 @@ func fromExpr(phase Phase, err error) *Error {
 // Program is a compiled expression, bound to the site it was compiled for.
 // Safe for concurrent use.
 type Program struct {
-	env  Env
-	prog *vm.Program
+	env   Env
+	prog  *vm.Program
+	diags []Diagnostic // the warnings and hints its compile gave
+}
+
+// Diagnostics are the warnings and hints the program's compile gave
+// (diagnostics.go), in source order; a fresh copy each call.
+func (p *Program) Diagnostics() []Diagnostic { return cloneDiagnostics(p.diags) }
+
+func cloneDiagnostics(ds []Diagnostic) []Diagnostic {
+	out := make([]Diagnostic, len(ds))
+	for i, d := range ds {
+		if d.Fix != nil {
+			f := *d.Fix
+			d.Fix = &f
+		}
+		out[i] = d
+	}
+	return out
 }
 
 var (
@@ -151,7 +175,7 @@ func Compile(source string, env Env) (*Program, error) {
 	if err := inspect(src, env, renamed); err != nil {
 		return nil, err
 	}
-	p, err := compile(src, env)
+	p, err := compile(src, source, env, registry)
 	if err != nil {
 		return nil, err
 	}
@@ -412,9 +436,16 @@ type visitFunc func(*ast.Node)
 
 func (f visitFunc) Visit(n *ast.Node) { f(n) }
 
-func compile(source string, env Env) (*Program, error) {
+// compile checks source (the author's, with its one-list forms renamed in
+// place) against env, runs the site's diagnostic rules on the checked tree
+// (authored is the source as written, which a fix edits), and compiles it.
+// It is expr.Compile's own sequence (configure, parse and check, compile;
+// the optimizer off) taken apart so the checked tree outlives a refusal: a
+// refine rule reads it, typed as far as the checker got.
+func compile(source, authored string, env Env, rs []rule) (*Program, error) {
 	compileCount.Add(1)
 	var prog *vm.Program
+	var tree *parser.Tree
 	err := guardPass(source, "Expr checker", func(p *pass) error {
 		opts := []expr.Option{
 			expr.Env(reflect.New(env.run).Elem().Interface()), chargeOption(p), functionsOption(env), expr.DisableAllBuiltins(),
@@ -441,8 +472,19 @@ func compile(source string, env Env) (*Program, error) {
 		case String:
 			opts = append(opts, expr.AsKind(reflect.String))
 		}
+		config := conf.CreateNew()
+		for _, opt := range opts {
+			opt(config)
+		}
+		for name := range config.Disabled {
+			delete(config.Builtins, name)
+		}
+		config.Check()
 		var err error
-		prog, err = expr.Compile(source, opts...)
+		if tree, err = checker.ParseCheck(source, config); err != nil {
+			return err
+		}
+		prog, err = compiler.Compile(tree, config)
 		if refused := fromCompilerPanic(err); refused != nil {
 			return refused
 		}
@@ -452,22 +494,43 @@ func compile(source string, env Env) (*Program, error) {
 	if errors.As(err, &refused) {
 		return nil, refused
 	}
+	var root ast.Node
+	if tree != nil {
+		root = tree.Node
+	}
 	if err != nil {
 		e := fromExpr(PhaseType, err)
 		e.Message = env.speak(e.Message)
 		named(e)
-		return nil, e
+		return nil, refine(rs, authored, root, env, faultAt(err), e)
 	}
-	if err := typedChecks(source, prog.Node()); err != nil {
+	if err := typedChecks(source, root); err != nil {
+		var e *Error
+		if errors.As(err, &e) {
+			return nil, refine(rs, authored, root, env, faultAt(err), e)
+		}
 		return nil, err
 	}
 	if env.result != Any {
-		if t := prog.Node().Type(); t == nil || t.Kind() == reflect.Interface {
-			return nil, &Error{Phase: PhaseType, Line: 1, Column: 1, Message: fmt.Sprintf(
-				"expected %s, but the expression's type is only known when it runs; compare or convert it", env.result)}
+		if t := root.Type(); t == nil || t.Kind() == reflect.Interface {
+			return nil, refine(rs, authored, root, env, -1, &Error{Phase: PhaseType, Line: 1, Column: 1, Message: fmt.Sprintf(
+				"expected %s, but the expression's type is only known when it runs; compare or convert it", env.result)})
 		}
 	}
-	return &Program{env: env, prog: prog}, nil
+	diags, e := lint(rs, authored, root, env)
+	if e != nil {
+		return nil, e
+	}
+	return &Program{env: env, prog: prog, diags: diags}, nil
+}
+
+// faultAt is the rune offset a refusal points at; -1 when it has none.
+func faultAt(err error) int {
+	var fe *file.Error
+	if errors.As(err, &fe) {
+		return fe.From
+	}
+	return -1
 }
 
 // Run evaluates the program against one prepared input: a value of the
@@ -517,23 +580,30 @@ func resultIs(r Result, out any) bool {
 	return true
 }
 
-// Check reports whether source compiles against env, with the diagnostics
-// Compile would give, without touching the shared program cache: a caller
-// that only validates (POST /expressions:validate) cannot evict the
-// programs the engine runs on, however many sources it cycles through.
-func Check(source string, env Env) error {
+// Check reports whether source compiles against env, with the refusal or
+// the warnings and hints Compile would give, without touching the shared
+// program cache: a caller that only validates (POST /expressions:validate)
+// cannot evict the programs the engine runs on, however many sources it
+// cycles through.
+func Check(source string, env Env) ([]Diagnostic, error) { return check(source, env, registry) }
+
+// check is Check with the rules rs in force.
+func check(source string, env Env, rs []rule) ([]Diagnostic, error) {
 	if env.typ == nil {
-		return errors.New("compile needs a declared environment (EnvOf), not the zero Env")
+		return nil, errors.New("compile needs a declared environment (EnvOf), not the zero Env")
 	}
 	if len(source) > MaxSourceBytes {
-		return &Error{Phase: PhaseLimit, Message: ErrSourceTooLong.Error(), err: ErrSourceTooLong}
+		return nil, &Error{Phase: PhaseLimit, Message: ErrSourceTooLong.Error(), err: ErrSourceTooLong}
 	}
 	src, renamed := oneListForms(source, env)
 	if err := inspect(src, env, renamed); err != nil {
-		return err
+		return nil, err
 	}
-	_, err := compile(src, env)
-	return err
+	p, err := compile(src, source, env, rs)
+	if err != nil {
+		return nil, err
+	}
+	return p.diags, nil
 }
 
 // named reads the two refusals an editor acts on from Expr's checker: a name
