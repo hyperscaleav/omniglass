@@ -391,3 +391,63 @@ func TestCalcIgnoresDeclaredInputs(t *testing.T) {
 		t.Fatalf("%d marks left after the drain, want none deferred", n)
 	}
 }
+
+// TestCalcComponentRetype proves a component's product change brings the
+// component rules in line (#1015), as markSystemCalcRules does for a system:
+// retyped out of a rule's selector, its state and any mark there go; retyped
+// back in, the rule is marked over the values it already holds and computes
+// without waiting for a new sample.
+func TestCalcComponentRetype(t *testing.T) {
+	r := newEvalRig(t)
+	display, generic := "boreal-edge-55", "generic-device"
+	if _, err := r.gw.UpdateComponent(r.ctx, "", r.comp, storage.ComponentPatch{ProductName: &display}, r.all, r.all); err != nil {
+		t.Fatal(err)
+	}
+	spec := avgSpec("display-mean")
+	spec.Selector = storage.CalcRuleSelector{ComponentTypes: []string{"display"}}
+	if _, err := r.create(spec); err != nil {
+		t.Fatal(err)
+	}
+	r.metric("room-temperature", "", 20)
+	r.drain()
+	state := `select count(*) from calc_rule_state where component_id = '` + r.comp + `'`
+	if n := count(t, r.conn, state); n != 1 {
+		t.Fatalf("%d state rows on the display, want 1", n)
+	}
+
+	// Out of the selector, with a mark pending: the state and the mark go.
+	r.metric("room-temperature", "", 21)
+	if r.pending() != 1 {
+		t.Fatal("the sample did not mark the rule")
+	}
+	if _, err := r.gw.UpdateComponent(r.ctx, "", r.comp, storage.ComponentPatch{ProductName: &generic}, r.all, r.all); err != nil {
+		t.Fatal(err)
+	}
+	if n := count(t, r.conn, state); n != 0 {
+		t.Fatalf("%d state rows after the retype out of the selector, want none", n)
+	}
+	if n := r.pending(); n != 0 {
+		t.Fatalf("%d marks after the retype out of the selector, want none", n)
+	}
+
+	// Back in: marked on the value it holds, and it computes.
+	if _, err := r.gw.UpdateComponent(r.ctx, "", r.comp, storage.ComponentPatch{ProductName: &display}, r.all, r.all); err != nil {
+		t.Fatal(err)
+	}
+	if n := r.pending(); n != 1 {
+		t.Fatalf("%d marks after the retype into the selector, want 1", n)
+	}
+	r.drain()
+	if got := r.calculated("avg-temp"); len(got) != 2 || got[1] != "21 display-mean 1" {
+		t.Fatalf("avg-temp rows %v, want 20 then 21 by display-mean v1", got)
+	}
+
+	// A product change within the selector, or a save that re-states the
+	// product, marks nothing it would not compute.
+	if _, err := r.gw.UpdateComponent(r.ctx, "", r.comp, storage.ComponentPatch{ProductName: &display}, r.all, r.all); err != nil {
+		t.Fatal(err)
+	}
+	if n := r.pending(); n != 0 {
+		t.Fatalf("%d marks after re-stating the product, want none", n)
+	}
+}

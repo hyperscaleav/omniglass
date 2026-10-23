@@ -682,6 +682,12 @@ func (p *PG) UpdateComponent(ctx context.Context, actorID, name string, patch Co
 	// A product swap no longer moves health (see the doc comment above): a
 	// component's verdict is its own active alarms, unaffected by what it is
 	// classified as. The next AssignRole is where a changed product matters.
+	// It does move which component calc rules select it (#1015).
+	if before.ProductID == nil || after.ProductID == nil || *before.ProductID != *after.ProductID {
+		if err := p.markComponentCalcRules(ctx, tx, after.ID); err != nil {
+			return nil, err
+		}
+	}
 	if err := tx.Commit(ctx); err != nil {
 		return nil, fmt.Errorf("storage: commit update component: %w", err)
 	}
