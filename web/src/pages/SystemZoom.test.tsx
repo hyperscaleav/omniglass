@@ -415,6 +415,31 @@ describe("the map tab (#791)", () => {
     expect(tip.textContent).toContain("No route to host");
   });
 
+  // A health poll that lands a fresh payload must not rebuild the markers
+  // (#1074 review): a rebuilt marker drops keyboard focus and closes an open
+  // tooltip every few seconds. Markers are keyed by their slot in the
+  // declaration, so the same position keeps its node across a poll.
+  it("keeps each marker's node across a health poll, so focus and an open tooltip survive", async () => {
+    const r = mount(`/web/systems/${uuidFor("szp-sys")}?tab=map`, health, [], MAPPED);
+    const before = screen.getByTestId("mapmarker-room-mic-1");
+    // A real change (a new transition), so structural sharing hands the page
+    // a new payload and everything derived from it recomputes.
+    r.qc.setQueryData([...systemHealthKey(uuidFor("szp-sys"))], {
+      ...health,
+      transitions: [...(health.transitions ?? []), { ts: "2026-08-16T09:00:00Z", verdict: "degraded" }],
+    });
+    // the query cache notifies observers on a later tick
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(screen.getByTestId("mapmarker-room-mic-1")).toBe(before);
+  });
+
+  // An empty position is reachable by keyboard too: its tooltip says nobody
+  // staffs it, and a mouse is not the only way to ask.
+  it("lets the keyboard reach an empty position", () => {
+    mount(`/web/systems/${uuidFor("szp-sys")}?tab=map`, health, [], MAPPED);
+    expect(screen.getByTestId("mapmarker-main-display-1").getAttribute("tabindex")).toBe("0");
+  });
+
   it("clicking an occupied marker opens its component blade (#799)", async () => {
     mount(`/web/systems/${uuidFor("szp-sys")}?tab=map`, health, [], MAPPED);
     fireEvent.click(screen.getByTestId(`mapmarker-room-mic-2`));

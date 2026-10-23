@@ -7527,8 +7527,11 @@ Each occupied position on the system map is now its component type's icon in its
 the component's label under it, read through one member context the Components rows also use, so a
 marker and its row cannot disagree. The role, product, health word, and any alarm ride a tooltip on
 hover or keyboard focus; an empty position is a dashed ring named for its role. A marker near a side
-anchors inward and one near the bottom puts its label above the icon (`markerAnchor`), which fixes
-the edge clipping half of #1072; label collision in a crowded room stays open there. `verdictHue`
+anchors inward and one near the bottom puts its label above the icon (`markerAnchor`), which eases
+#1072's edge clipping at desktop widths; a narrow map can still spill a label (the thresholds are
+fractions, the label is pixels), and label collision in a crowded room stays open there. Markers
+are keyed by their declaration slot, so a health poll updates them in place rather than remounting
+them under an open tooltip. `verdictHue`
 replaces #1071's `verdictDot` and the outline's own hue map, so one primitive tones every glyph that
 stands for a verdict
 ([ADR-0154](/architecture/decisions/#adr-0154-healthy-reads-green-tiered-so-a-calm-fleet-stays-calm)).

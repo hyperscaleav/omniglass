@@ -1,4 +1,4 @@
-import { For, Show } from "solid-js";
+import { Index, Show } from "solid-js";
 import { Dynamic } from "solid-js/web";
 import { useNavigate } from "@solidjs/router";
 import { Tooltip } from "@kobalte/core/tooltip";
@@ -20,16 +20,19 @@ import Eyebrow from "./Eyebrow";
 // product, health, the alarm behind a red one) rides a tooltip, never the
 // map itself. An empty position is a dashed ring named for its role.
 
-// How a marker hangs off its point: the icon's centre sits on the point, and
-// near an edge the marker anchors inward (lib/system_map's markerAnchor).
-// A label wraps to two lines rather than truncating, so "Wireless Microphone
-// 3" and "4" never collapse into the same "Wireless Micropho...".
+// How a marker hangs off its point: the icon's centre sits on the point (the
+// offsets are half the 18px icon plus the marker's px-1 / py-0.5 padding), and
+// near an edge the marker anchors inward (lib/system_map's markerAnchor). A
+// label wraps to two lines before it truncates, so "Wireless Microphone 3"
+// and "4" stay distinct; anything longer ellipsizes, its full text in the
+// tooltip.
 const ANCHOR_X = {
-  start: "-translate-x-[9px] items-start text-left",
+  start: "-translate-x-[13px] items-start text-left",
   center: "-translate-x-1/2 items-center text-center",
-  end: "translate-x-[calc(-100%+9px)] items-end text-right",
+  end: "translate-x-[calc(-100%+13px)] items-end text-right",
 } as const;
-const ANCHOR_Y = { below: "flex-col -translate-y-[9px]", above: "flex-col-reverse translate-y-[calc(-100%+9px)]" } as const;
+const ANCHOR_Y = { below: "flex-col -translate-y-[11px]", above: "flex-col-reverse translate-y-[calc(-100%+11px)]" } as const;
+const MARKER = "rounded px-1 py-0.5 outline-none focus-visible:shadow-[inset_0_0_0_1px_var(--color-primary)]";
 
 export default function SystemMap(props: {
   decl: StandardMapDecl;
@@ -42,34 +45,41 @@ export default function SystemMap(props: {
     <div class="flex flex-col gap-2 p-4">
       <Eyebrow
         label="Map"
-        hint="The standard declares where each role position sits in the room; every system built to it renders the same map. Each marker is the component holding that position, its icon in its own health colour; a dashed ring is a position nobody staffed. Hover a marker for its role and health, click it to open the component."
+        hint="The standard declares where each role position sits in the room; every system built to it renders the same map. Each marker is the component holding that position, its icon in its own health colour; a dashed ring is a position nobody staffed. Hover or focus a marker for its role and health; click it to open the component."
       />
       <div
         data-testid="system-map"
         class="relative w-full max-w-2xl rounded-box border border-base-300 bg-base-200"
         style={{ "aspect-ratio": String(props.decl.aspect) }}
       >
-        <For each={props.markers}>
+        {/* Index, not For: markers are keyed by their slot in the declaration,
+            so a health poll that rebuilds the marker objects updates each
+            marker in place instead of remounting it (which would drop focus
+            and close an open tooltip every few seconds). */}
+        <Index each={props.markers}>
           {(m) => {
             // The position number renders only when the role declares more
             // than one position: "Room Microphone 2", but never "Display 1".
             const role = () => {
-              const many = props.markers.filter((o) => o.role === m.role).length > 1;
-              return `${m.roleLabel}${many ? ` ${m.position}` : ""}`;
+              const many = props.markers.filter((o) => o.role === m().role).length > 1;
+              return `${m().roleLabel}${many ? ` ${m().position}` : ""}`;
             };
-            const a = markerAnchor(m.x, m.y);
-            const place = `absolute flex gap-0.5 ${ANCHOR_X[a.x]} ${ANCHOR_Y[a.y]}`;
-            const at = { left: `${m.x * 100}%`, top: `${m.y * 100}%` };
+            const place = () => {
+              const a = markerAnchor(m().x, m().y);
+              return `absolute flex gap-0.5 ${MARKER} ${ANCHOR_X[a.x]} ${ANCHOR_Y[a.y]}`;
+            };
+            const at = () => ({ left: `${m().x * 100}%`, top: `${m().y * 100}%` });
+            const testid = () => `mapmarker-${m().role}-${m().position}`;
             return (
               <Show
-                when={m.occupant}
+                when={m().occupant}
                 fallback={
                   <Tooltip openDelay={150} closeDelay={100} placement="top" gutter={4}>
-                    <Tooltip.Trigger as="span" data-testid={`mapmarker-${m.role}-${m.position}`} data-empty class={`${place} cursor-default`} style={at}>
+                    <Tooltip.Trigger as="span" tabIndex={0} data-testid={testid()} data-empty class={`${place()} cursor-default`} style={at()}>
                       <span data-glyph class={`inline-flex ${verdictHue(null)}`}>
                         <CircleDashed size={18} />
                       </span>
-                      <span data-maplabel class="line-clamp-2 w-max max-w-28 text-[11px] leading-tight text-base-content/50">{role()}</span>
+                      <span data-maplabel class="line-clamp-2 w-max max-w-28 text-balance text-[11px] leading-tight text-base-content/50">{role()}</span>
                     </Tooltip.Trigger>
                     <Tooltip.Portal>
                       <Tooltip.Content class="z-100 max-w-56 rounded-box border border-base-300 bg-base-100 px-2.5 py-1.5 text-xs leading-snug shadow-lg">
@@ -90,16 +100,16 @@ export default function SystemMap(props: {
                     <Tooltip openDelay={150} closeDelay={100} placement="top" gutter={4}>
                       <Tooltip.Trigger
                         type="button"
-                        data-testid={`mapmarker-${m.role}-${m.position}`}
+                        data-testid={testid()}
                         aria-label={`${label()}, ${role()}, ${health()}`}
-                        class={`${place} cursor-pointer rounded px-1 py-0.5 outline-none hover:bg-base-content/10 focus-visible:shadow-[inset_0_0_0_1px_var(--color-primary)]`}
-                        style={at}
+                        class={`${place()} cursor-pointer hover:bg-base-content/10`}
+                        style={at()}
                         onClick={() => (props.onOpen ? props.onOpen(id()) : navigate(`/components/${id()}`))}
                       >
                         <span data-glyph class={`inline-flex ${verdictHue(verdict(), occ().down)}`}>
                           <Dynamic component={resolveIcon(props.member?.icon(id()))} size={18} />
                         </span>
-                        <span data-maplabel class="line-clamp-2 w-max max-w-28 font-data text-[11px] leading-tight">{label()}</span>
+                        <span data-maplabel class="line-clamp-2 w-max max-w-28 text-balance font-data text-[11px] leading-tight">{label()}</span>
                       </Tooltip.Trigger>
                       <Tooltip.Portal>
                         <Tooltip.Content
@@ -123,7 +133,7 @@ export default function SystemMap(props: {
               </Show>
             );
           }}
-        </For>
+        </Index>
       </div>
     </div>
   );
