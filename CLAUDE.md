@@ -171,6 +171,10 @@ Procedural workflows live under [.claude/skills/](.claude/skills/). Invoke with
 - **`/docs-diagram`** - authoring docs diagrams in D2 (build-time inline SVG via astro-d2):
   the d2-binary prerequisite, the colors-live-in-CSS theming contract that tracks Starlight's
   light/dark toggle, the class to CSS-hook vocabulary, and the build/preview/verify loop.
+- **`/scope-protocol`** - placing a new device protocol before any code: a driver on a carrier we
+  already have, a capability that carrier gains (proven by a driver), or a new transport plus a
+  generic driver; serial is gateway-only and push-to-us is ingress. Then dedupe and file it under
+  the drivers epic with its sim and a failure that reads as its real cause.
 
 Reference skills auto-load by description when you touch the relevant code (not invoked by
 name): **`solidjs`** for the `web/` SPA reactivity model (eager-DOM JSX, signals, stores,
