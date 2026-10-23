@@ -18,9 +18,12 @@ request-reply (its enabled tasks plus a `config_generation`), and heartbeats on 
 credential is permitted only its own `<node>` subjects. Also built: running tasks (the probes,
 `internal/node/probe.go`), shipping telemetry (the JetStream `TelemetryBatch` ingested by
 `internal/bus/consumer.go`), and the raw self-log lane (ADR-0066: `internal/node/logs.go`,
-`GET /nodes/{name}/logs`, the console Self-logs panel), and held sessions (#816,
-[below](#sessions)). Still `Design`: commands and the durable
-command queue, the session pool and inbound demux, the layered `_check` reachability gate,
+`GET /nodes/{name}/logs`, the console Self-logs panel), the command wire (a per-node pull, actuated
+over the driver's binding, [ADR-0136](/architecture/decisions/#adr-0136-actuation-is-a-per-node-pull-rendered-at-dispatch)),
+driver polls on their declared schedule (#822), and, for the line protocol over `tcp`, held sessions
+(#816, [below](#sessions)) with their listeners and the inbound demux (#817). Still `Design`: the
+durable JetStream command queue, the session pool knobs and the held transports beyond the line
+protocol (#1032 (ssh), #1033 (telnet), #1034 (websocket), #1035 (tls), #1036 (mqtt), #1037 (udp), [ADR-0153](/architecture/decisions/#adr-0153-the-held-session-proof-is-the-line-protocol-over-tcp-other-held-transports-are-their-own-issues)), the layered `_check` reachability gate,
 config-generation-driven cache invalidation, node self-telemetry, the node-down sweep, the JetStream
 publish-ack delivery contract (telemetry publish is fire-and-forget today, #430), tick
 scheduling and concurrency knobs, and config apply (the `:apply` flow). The credential is a shared
@@ -142,6 +145,11 @@ callback URL resolves to the placed listener's address, never a hardcode.
 
 ## Running tasks
 
+Built for driver tasks: a poll runs its request on its schedule and a listen task claims pushed lines
+over its endpoint's held session, both locating and transforming each emit at the edge and landing a
+`collection-failed` for anything that does not parse ([collection](/architecture/collection/)). The
+Expr extraction and the cascading labels below remain design.
+
 :::design[Target design: edge normalization (locate + Expr) and the listen mode, tracked in #489]
 Per task the node runs the protocol over the endpoint's connection, then **normalizes at the
 edge**: the locate + Expr extraction ([collection](/architecture/collection/)) produces samples and
@@ -169,7 +177,7 @@ demux on the shared connection (listeners first, answers by reply shape;
 [routing](/architecture/collection/#listeners-over-a-held-session)). Still design below: the pool
 knobs and authentication on establish.
 
-::::design[Target design: sessions and the session pool, tracked in #489]
+::::design[Target design: sessions and the session pool, tracked in #489; the held transports beyond the line protocol are #1032 (ssh), #1033 (telnet), #1034 (websocket), #1035 (tls), #1036 (mqtt), #1037 (udp)]
 A stateful endpoint (`ssh`, `mqtt`, anything held open) becomes a **session** at runtime: one
 connection keyed by `(node, endpoint)`, shared by every task and command under it, handshake and
 auth paid once. A pool holds it open across ticks (reconnect, backoff, keepalive); a listener
@@ -183,7 +191,8 @@ size per endpoint, a shared versus dedicated session for a stream).
 :::
 
 Lifecycle: **establish** (connect, authenticate, subscribe if a stream rides the session),
-**operate** (pollers and stream events over the held connection, demuxed, next), **recover**
+**operate** (pollers and stream events over the held connection, demuxed; built for the line
+protocol, #817), **recover**
 (graceful retry with backoff, surfaced as `session-state` and a node log, never hammering: a rejected
 credential risks lockout; a subscription is session-scoped, so a reconnect **re-subscribes**),
 **teardown** (exit cleanly, set up again).
@@ -217,6 +226,10 @@ missing matcher surfaces, never fails silently.
 :::
 
 ## The component task queue
+
+Built: a standing listen task shares its endpoint's held session with the endpoint's polls and
+commands, demuxed by one reader (#817); the per-component lanes and the smart-wait gate below remain
+design.
 
 ::::design[Target design: the component task queue, tracked in #489; the durable command queue is ADR-0036]
 The node's work is the **component task queue** (distinct from the central **rule engine**;

@@ -22,7 +22,7 @@ Three surfaces carry the time axis, and this page ties them together:
 
 The platform half is well past its midpoint. The single binary runs in `server` / `node` / `migrate`
 modes over a BYO Postgres, and the tiers below are shipped, tested, and live in the console; the
-per-slice detail (136 entries at this update) is on [implementation status](/architecture/status/).
+per-slice detail is on [implementation status](/architecture/status/).
 
 - **Identity and access, end to end.** Password, session-cookie, and API-token auth with expiry,
   lockout, and password policy; the full principal lifecycle (disable, archive, purge); impersonation
@@ -37,9 +37,14 @@ per-slice detail (136 entries at this update) is on [implementation status](/arc
   the [settings](/architecture/settings/) engine (platform rung), and the unified resolution panel
   that explains which value won and why.
 - **The collection vertical.** The [node](/architecture/nodes/) runtime with enrollment and claim,
-  embedded NATS/JetStream with per-node subject isolation, the icmp and tcp probes, the
-  transition-only reachability verdict and its panel, endpoint and task authoring, and the raw-log
-  lane with node self-logs ([ADR-0066](/architecture/decisions/#adr-0066-logs-are-a-raw-ingest-lane-not-events)).
+  embedded NATS/JetStream with per-node subject isolation, the icmp and tcp probes and the layer-7
+  ladder (http and ssh respond, ssh authenticates), the transition-only reachability verdict and its
+  panel, endpoint and task authoring, and the raw-log lane with node self-logs
+  ([ADR-0066](/architecture/decisions/#adr-0066-logs-are-a-raw-ingest-lane-not-events)). On top, the
+  [driver](/architecture/collection/) epic (#603): a driver's spec is data that attaches to a
+  component and derives its tasks (re-derived when the spec changes), polls collect over SNMP and a
+  line protocol on their declared schedule, a command actuates the device and settles from its reply,
+  and the line protocol holds a session whose listeners land the device's pushes.
 - **The telemetry ontology.** The `metric_type` / `property_type` / `event_type` / `command_type`
   registries, the sample lanes (`metric`, `property`, `event`, `log_line`), current values derived
   from the series, and the
@@ -75,9 +80,10 @@ that describes the target:
 
 1. **Collection at the edge.** Substantially landed: the [node](/architecture/nodes/) runtime, the
    embedded bus, the icmp/tcp probes, edge parsing, and [endpoint](/architecture/collection/) and task
-   authoring all shipped. Still ahead: [templates](/architecture/templates/) (the reusable device
-   shape) and the richer transports (real snmp / http / ssh drivers, webhook listeners; today `ssh`
-   and `http` probe as tcp-connect only).
+   authoring all shipped, as did drivers with polls, held line sessions, listeners, and the command
+   wire (#603). Still ahead: [templates](/architecture/templates/) (the reusable device shape), the
+   held transports beyond the line protocol (#1032 (ssh), #1033 (telnet), #1034 (websocket), #1035 (tls), #1036 (mqtt), #1037 (udp)), and server-hosted ingress
+   (syslog, SNMP trap, webhook: #1024).
 2. **The data model.** Landed except one piece: [properties](/architecture/properties/) (the
    canonical-signal registry and the exclusive-arc owner columns), the sample sinks,
    [config and variables](/architecture/variables/) resolved down the
