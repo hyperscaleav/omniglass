@@ -18,8 +18,9 @@ request-reply (its enabled tasks plus a `config_generation`), and heartbeats on 
 credential is permitted only its own `<node>` subjects. Also built: running tasks (the probes,
 `internal/node/probe.go`), shipping telemetry (the JetStream `TelemetryBatch` ingested by
 `internal/bus/consumer.go`), and the raw self-log lane (ADR-0066: `internal/node/logs.go`,
-`GET /nodes/{name}/logs`, the console Self-logs panel). Still `Design`: commands and the durable
-command queue, sessions and inbound demux, the layered `_check` reachability gate,
+`GET /nodes/{name}/logs`, the console Self-logs panel), and held sessions (#816,
+[below](#sessions)). Still `Design`: commands and the durable
+command queue, the session pool and inbound demux, the layered `_check` reachability gate,
 config-generation-driven cache invalidation, node self-telemetry, the node-down sweep, the JetStream
 publish-ack delivery contract (telemetry publish is fire-and-forget today, #430), tick
 scheduling and concurrency knobs, and config apply (the `:apply` flow). The credential is a shared
@@ -155,13 +156,23 @@ The built endpoint types, their per-task params, and the fixed samples each emit
 
 ## Sessions
 
+Built (#816): the node holds one session per endpoint whose worklist carries a standing listen task
+over a transport with a session dialer (the line protocol over `tcp` today), reconciled against
+every worklist pull and torn down on task removal, re-address, or node shutdown. It establishes,
+lends its connection to the endpoint's line polls, recovers with a jittered, bounded backoff, and
+reports each transition as the `session-state` property (`establishing`, `up`, `recovering`,
+`down`) plus a self-log carrying the reason; there is no `session_log` table
+([ADR-0149](/architecture/decisions/#adr-0149-a-held-sessions-state-is-a-property-series-and-node-logs-not-a-session-table)).
+The machine's detail is on [collection](/architecture/collection/#sessions). Still design below:
+the pool knobs, authentication and subscription on establish (listeners, #817), and the demux.
+
 ::::design[Target design: sessions and the session pool, tracked in #489]
 A stateful endpoint (`ssh`, `mqtt`, anything held open) becomes a **session** at runtime: one
 connection keyed by `(node, endpoint)`, shared by every task and command under it, handshake and
 auth paid once. A pool holds it open across ticks (reconnect, backoff, keepalive); a listener
 runtime wakes on its inbound. The socket is ephemeral on the node, which **reports lifecycle
-transitions as `session_log` rows**; the `session` entity is a server-side projection (a
-view over `session_log`; [storage](/architecture/storage/)).
+transitions as the `session-state` property and its own logs** (ADR-0149 replaced the designed
+`session_log` rows and `session` view).
 
 :::caution[Open question]
 The exact `session` lifecycle state enum and pooling parameters (idle timeout, max lifetime, pool
@@ -170,11 +181,11 @@ size per endpoint, a shared versus dedicated session for a stream).
 
 Lifecycle: **establish** (connect, authenticate, subscribe if a stream rides the session),
 **operate** (pollers and stream events over the held connection, demuxed, next), **recover**
-(graceful retry with backoff, surfaced as a `session_log` error, never hammering: a rejected
+(graceful retry with backoff, surfaced as `session-state` and a node log, never hammering: a rejected
 credential risks lockout; a subscription is session-scoped, so a reconnect **re-subscribes**),
 **teardown** (exit cleanly, set up again).
 
-**Where failures land.** `session_log` owns **connection health** (cannot connect, auth rejected,
+**Where failures land.** `session-state` and the node's logs own **connection health** (cannot connect, auth rejected,
 dropped, timeout); the **data event owns parse health**: a parse failure emits a `collection.failed`
 event carrying the `raw` (plus the `action` row for commands), surfacing as an alertable
 collection-health sample. A command timeout can touch both.

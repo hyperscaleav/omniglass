@@ -35,10 +35,11 @@ type endpointParams struct {
 // never stalls the rest of the worklist. tcp and icmp are the wired probe types;
 // their samples ride the same pipeline (the ingest consumer does not branch
 // on probe type).
-func runTasks(ctx context.Context, nc *nats.Conn, node string, wl collection.WorklistReply, runner *collection.Runner, verdicts map[string]string, faultseen map[string]string) error {
+func runTasks(ctx context.Context, nc *nats.Conn, node string, wl collection.WorklistReply, runner *collection.Runner, sessions *sessionManager, verdicts map[string]string, faultseen map[string]string) error {
 	for _, task := range wl.Tasks {
-		// A standing listen task is inert until the stateful arc arms
-		// listeners over held sessions (#603 slices 6 and 7): skip without a
+		// A standing listen task runs no tick of its own: it is what holds
+		// its endpoint's session (the session manager reconciles it, #816),
+		// and its listeners arm over that session with #817. Skip without a
 		// collection-failed, since an armed-later task is not a fault.
 		if task.Mode == "listen" {
 			continue
@@ -52,7 +53,7 @@ func runTasks(ctx context.Context, nc *nats.Conn, node string, wl collection.Wor
 		// tick lands one event, not one per tick forever, so a stuck driver
 		// does not flood the event lane.
 		if driver.IsBaked(task.Spec) {
-			dps, faults := collectDriverTask(ctx, runner, task)
+			dps, faults := collectDriverTask(ctx, runner, task, sessions)
 			current := ""
 			for _, f := range faults {
 				current += f.Error() + "\n"
@@ -124,9 +125,11 @@ func publishBatch(nc *nats.Conn, node, taskID string, dps []collection.Sample) e
 
 // collectDriverTask parses one derived driver poll and runs it: the baked
 // function from the task spec, the target from the endpoint params, the
-// unsealed secret inputs from the worklist. Faults are the collection-failed
-// stories; a parse fault covers the whole task.
-func collectDriverTask(ctx context.Context, runner *collection.Runner, task collection.TaskSpec) ([]collection.Sample, []error) {
+// unsealed secret inputs from the worklist, and the endpoint's held session
+// when the node holds one (#816), which the poll borrows instead of dialing.
+// Faults are the collection-failed stories; a parse fault covers the whole
+// task.
+func collectDriverTask(ctx context.Context, runner *collection.Runner, task collection.TaskSpec, sessions *sessionManager) ([]collection.Sample, []error) {
 	fn, err := driver.ParseBaked(task.Spec)
 	if err != nil {
 		return nil, []error{fmt.Errorf("node: task %s: %w", task.ID, err)}
@@ -151,6 +154,7 @@ func collectDriverTask(ctx context.Context, runner *collection.Runner, task coll
 		Target:    p.Target,
 		Secrets:   task.Secrets,
 		Timeout:   timeout,
+		Session:   sessions.lookup(task.EndpointID),
 	})
 }
 

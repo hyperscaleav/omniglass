@@ -44,7 +44,10 @@ transport (a v2c scalar SNMP GET, a stateless line exchange over tcp), the node 
 emit (locate by OID, regex capture, dotted JSON path, or key; apply the declared transform; type
 by the baked lane), the worklist delivers a task's secret inputs unsealed on the per-node subject,
 and anything that does not parse lands a `collection-failed` event naming the task, never a silent
-drop and never a wrong-lane sample. Sessions and listeners are the stateful arc, next. See
+drop and never a wrong-lane sample. Also built, the first half of the stateful arc: a **session
+holds its connection** (#816) for an endpoint with a standing listen task, its line polls borrowing
+it, its state the `session-state` property per endpoint ([ADR-0149](/architecture/decisions/#adr-0149-a-held-sessions-state-is-a-property-series-and-node-logs-not-a-session-table)).
+Listeners over the held session are next (#817). See
 [ADR-0037](/architecture/decisions/#adr-0037-telemetry-is-a-protobuf-event-over-jetstream-with-an-inline-owner-confining-consumer),
 [ADR-0038](/architecture/decisions/#adr-0038-the-reachability-verdict-is-a-built-in-state),
 [ADR-0039](/architecture/decisions/#adr-0039-an-endpoint-is-a-device-api-the-endpoint-type-is-its-transport-not-its-driver),
@@ -136,7 +139,7 @@ for a targeted refetch.
 A **task** is a node's unit of collection work, described by two independent axes:
 
 - **Task mode** (on the task): **poll** (we ask) or **listen** (we wait), stated from *our* perspective on purpose, since "pull/push" inverts with the frame.
-- **Transport** (on the endpoint): **stateless** (a throwaway connection per shot) or **stateful** (a held-open connection, a `session` emitting `session_log` rows for connect/auth/drop/reconnect).
+- **Transport** (on the endpoint): **stateless** (a throwaway connection per shot) or **stateful** (a held-open connection, a **session** whose state is the `session-state` property per endpoint, its connect/drop/reconnect reasons in the node's own logs; [ADR-0149](/architecture/decisions/#adr-0149-a-held-sessions-state-is-a-property-series-and-node-logs-not-a-session-table)).
 
 All four cells are real:
 
@@ -146,6 +149,37 @@ All four cells are real:
 | **stateful** | SSH-exec or xAPI `xStatus` on a held session | MQTT subscribe, xAPI feedback |
 
 Waiting for a frame is one mode (**listen**) regardless of transport; statefulness lives on the endpoint.
+
+### Sessions
+
+Built (#816): a session **holds its connection** across ticks. The node holds one per endpoint
+whose worklist carries a standing listen task over a transport with a session dialer (the line
+protocol over `tcp` today), keyed by the endpoint's id, which the worklist carries beside its name
+(endpoint names are unique only per component). The machine runs on its own:
+
+- **establish**: the first dial; the session reads `establishing` until it connects.
+- **operate**: the session reads `up`, and the endpoint's line polls **borrow the held connection**
+  instead of dialing per tick (one request in flight, the next line its answer; a line nobody asked
+  for is unsolicited and dropped until listeners claim it, #817). A poll issued while the first dial
+  is in flight waits for it (at most its timeout); any other poll over a session that is not up
+  faults at once with a `collection-failed` naming the state, so a down device never stalls the
+  node's tick, and it never dials a connection of its own.
+- **recover**: a held connection that drops (the peer closed, a read failed, the TCP keepalive gave
+  up) reads `recovering` at once, without waiting for a poll, and redials with a jittered
+  exponential backoff (250ms doubling, capped at 30s, 20% jitter). Five consecutive failed dials
+  read `down`; the session keeps retrying at the capped pace, so a device that returns reads `up`
+  unattended. A connection that drops within 10s grows the next wait, so a device that accepts and
+  drops cannot make the node hot-loop.
+- **teardown**: a listen task that leaves the worklist, a re-addressed endpoint, or node shutdown
+  closes the connection; teardown publishes no state (the node stopped wanting the session, which
+  says nothing about the device).
+
+There is **no session table**: each transition lands as the `session-state` property on the
+endpoint's component (instance: the endpoint's name), published at the transition under the listen
+task, and as a node self-log (`facility: session`) carrying the reason
+([ADR-0149](/architecture/decisions/#adr-0149-a-held-sessions-state-is-a-property-series-and-node-logs-not-a-session-table)).
+Proven against the simulator's line protocol: kill the device's listener mid-session and the session
+reads `recovering`, then `up` once it returns, with the transitions landing on the server.
 
 **Native push**: data pushed by smart senders is self-describing (it carries its key), its edge parse a near-identity pass-through marked `shape=native`; a failed parse keeps the raw on a `collection.failed` event.
 
@@ -422,7 +456,7 @@ Drivers page renders each spec as the menu it is.
 **The interpreter runs the poll functions** (#814): the node tells a baked driver task from a
 probe task by its spec, fetches over the transport (the v2c scalar GET rides `gosnmp`, proven
 against a from-the-spec BER agent; a line poll runs one stateless ask over a throwaway
-connection until the stateful arc holds a session), and interprets the payload against the baked
+connection, or borrows the endpoint's [held session](#sessions) when the node holds one), and interprets the payload against the baked
 function: locate each emit by its one extractor, apply the declared transform (enum map, then
 scale, then cast), and type it by the baked lane. A metric-lane value that is not numeric is a
 fault, never a wrong-lane sample; a missing emit faults by name while the rest of the payload
@@ -430,8 +464,8 @@ still lands; a failed fetch lands nothing; every fault is a `collection-failed` 
 task. Secret inputs reach the node **unsealed in the worklist reply**: the server resolves each
 reference once per pull (the per-node NATS grant is the isolation boundary, and the attach that
 bound the reference is the audited operator action), and a reference that no longer resolves is
-delivered as absence, which the node reports as the missing credential. Sessions and listeners
-arrive with the stateful arc. The ship-with set:
+delivered as absence, which the node reports as the missing credential. Sessions are built
+([above](#sessions)); listeners arm over them with #817. The ship-with set:
 
 <SeededSet kind="drivers" />
 

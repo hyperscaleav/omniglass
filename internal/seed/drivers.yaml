@@ -50,9 +50,9 @@ drivers:
             - { name: video-input, extract: { regex: "^INPUT (\\S+)$" } }
       # The NVP conversation is line-oriented over a held TCP session: the
       # subscribe arms on establish (and re-arms on every recover), and the
-      # device pushes EVT lines the listener claims by prefix. The session and
-      # listener runtimes arrive with the stateful arc (slices 6 and 7); the
-      # standing listen task derives now so the worklist shape is complete.
+      # device pushes EVT lines the listener claims by prefix. The standing
+      # listen task is what makes the node hold the endpoint's session (#816),
+      # which the status poll borrows; the listener arms over it with #817.
       listeners:
         - name: events
           arm: ["SUBSCRIBE INPUT"]

@@ -261,6 +261,12 @@
    "description": "The auth rung: the credential the probe carried was accepted. Written only when a credential was actually tried, so an unauthenticated probe never reads as a failed login."
   },
   {
+   "name": "session-state",
+   "data_type": "string",
+   "label": "Session State",
+   "description": "A held session's state per endpoint: establishing (the first connection is being made), up (the connection is held and polls borrow it), recovering (a held connection dropped and the node is reconnecting with a bounded, jittered backoff), down (the attempt budget is spent; the node keeps retrying at the capped pace). Written on transitions only; the reason rides the node's own logs."
+  },
+  {
    "name": "health",
    "data_type": "string",
    "label": "Health",

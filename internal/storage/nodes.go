@@ -66,8 +66,11 @@ type NodePatch struct {
 // the node can present the credential to the device (#814); it is empty for
 // every non-driver task.
 type WorklistTask struct {
-	ID             string
-	Mode           string
+	ID   string
+	Mode string
+	// EndpointID is node-unique where EndpointName is unique only per
+	// component; the node keys a held session by it (#816).
+	EndpointID     string
 	EndpointName   string
 	Transport      string
 	EndpointParams []byte
@@ -375,7 +378,7 @@ func (p *PG) RecordHeartbeat(ctx context.Context, name string) error {
 // worklist subject. An unknown node returns an empty worklist, not an error.
 func (p *PG) NodeWorklist(ctx context.Context, name string) (Worklist, error) {
 	rows, err := p.pool.Query(ctx, `
-		select t.id, t.mode, i.name, i.transport, i.params, t.spec, i.inputs, i.component, d.spec
+		select t.id, t.mode, i.id::text, i.name, i.transport, i.params, t.spec, i.inputs, i.component, d.spec
 		from task t
 		join endpoint i on i.id = t.endpoint_id
 		left join driver d on d.id = i.driver_id
@@ -392,7 +395,7 @@ func (p *PG) NodeWorklist(ctx context.Context, name string) (Worklist, error) {
 		var wt WorklistTask
 		var epInputs, driverSpec []byte
 		var componentID *string
-		if err := rows.Scan(&wt.ID, &wt.Mode, &wt.EndpointName, &wt.Transport, &wt.EndpointParams, &wt.Spec, &epInputs, &componentID, &driverSpec); err != nil {
+		if err := rows.Scan(&wt.ID, &wt.Mode, &wt.EndpointID, &wt.EndpointName, &wt.Transport, &wt.EndpointParams, &wt.Spec, &epInputs, &componentID, &driverSpec); err != nil {
 			return Worklist{}, fmt.Errorf("storage: scan worklist task: %w", err)
 		}
 		// A driver task's secret inputs travel with it: the spec says which

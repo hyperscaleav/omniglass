@@ -141,6 +141,55 @@ func TestCollectDriverPollLine(t *testing.T) {
 	}
 }
 
+// fakeHeld is a held session's exchange seam: what a poll borrows instead
+// of dialing.
+type fakeHeld struct {
+	answer string
+	err    error
+	sent   string
+}
+
+func (f *fakeHeld) Exchange(_ context.Context, line string, _ time.Duration) (string, error) {
+	f.sent = line
+	return f.answer, f.err
+}
+
+// A line poll over a held session (#816) borrows the session and never
+// dials a throwaway connection; a session that is not up faults the poll
+// rather than falling back to a dial of its own.
+func TestCollectDriverPollLineOverHeldSession(t *testing.T) {
+	fn := &driver.BakedFunction{
+		Driver: "newtron-nvp", Function: "status",
+		Request: &driver.Request{Line: "GET INPUT"},
+		Emits: []driver.BakedEmit{
+			{Name: "video-input", Lane: "property", Extract: driver.Extract{Regex: `^INPUT (\S+)$`}},
+		},
+	}
+	throwaway := &fakeLineExchanger{answer: "INPUT wrong"}
+	r := &collection.Runner{Line: throwaway}
+	held := &fakeHeld{answer: "INPUT hdmi3"}
+	dps, faults := r.CollectDriverPoll(context.Background(), collection.DriverPollTask{
+		Transport: "tcp", Target: "10.20.4.50:51325", Fn: fn, Session: held,
+	})
+	if len(faults) != 0 || len(dps) != 1 || dps[0].Text != "hdmi3" {
+		t.Fatalf("dps %v faults %v, want the held session's answer", dps, faults)
+	}
+	if held.sent != "GET INPUT" || throwaway.sent != "" {
+		t.Fatalf("held sent %q, throwaway sent %q: the poll must borrow the session", held.sent, throwaway.sent)
+	}
+
+	notUp := &fakeHeld{err: errors.New("collection: session to 10.20.4.50:51325 is recovering: connection lost: EOF")}
+	dps, faults = r.CollectDriverPoll(context.Background(), collection.DriverPollTask{
+		Transport: "tcp", Target: "10.20.4.50:51325", Fn: fn, Session: notUp,
+	})
+	if len(dps) != 0 || len(faults) != 1 || !strings.Contains(faults[0].Error(), "recovering") {
+		t.Fatalf("dps %v faults %v, want one fault naming the session state", dps, faults)
+	}
+	if throwaway.sent != "" {
+		t.Fatal("a poll over a session that is not up dialed a throwaway connection")
+	}
+}
+
 func TestCollectDriverPollUnfetchableTransport(t *testing.T) {
 	r := &collection.Runner{}
 	task := snmpPollTask()

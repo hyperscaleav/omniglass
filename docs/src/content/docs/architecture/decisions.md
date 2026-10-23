@@ -187,6 +187,7 @@ below from the project's history. From here it grows one slice at a time.
 | [ADR-0146](#adr-0146-expressions-run-on-pinned-expr-with-an-allowlist-and-per-site-budgets-and-rule-criteria-are-expressions) | 2026-10-20 | Accepted | Expressions run on pinned Expr behind a per-site allowlist of vetted builtins and a per-site budget (after three adversarial passes); event rule criteria are stored as `{expr}`, the short form lowered on input and by a one-time backfill, with one approved bool divergence; compile errors show on the rule; validate and preview answer from the same declarations |
 | [ADR-0147](#adr-0147-a-calc-rule-is-a-typed-sibling-registry-checked-acyclic-at-authoring) | 2026-10-21 | Accepted, amended (#1018) | `calc_rule` is a sibling of `event_rule` with typed columns (inputs `{as, key}`, a named reducer or an expression, the output key by id); every write compiles the reduce against a calc expression site of its own and refuses a cycle in the key graph, a second enabled writer of a key, `health` as an input or output, and an output a collection declares (a native probe key or a driver's emits); a reduce that stops compiling reads back as `calc_error`; **Amended (#1018):** the reduce is always an expression, its named reducers now list functions, and inputs are held by uuid in `calc_rule_input`, each bound by an alias as the list of its values |
 | [ADR-0148](#adr-0148-calc-rules-run-on-a-durable-pending-set-and-a-server-tick-not-a-jetstream-consumer) | 2026-10-21 | Accepted, amended (#1018) | Component calc rules run on a durable `calc_pending` set marked in the sample-write transaction and drained by a 1s server tick (`SKIP LOCKED`, one transaction per mark), writing calculated samples through the same path so event rules judge them; marks are held by their writer until commit, the ingest retries a deadlock, a failing mark is deferred, a rule write recomputes its owners; a write never marks its own rule; a missing input writes nothing and is recorded in `calc_rule_state`; an unchanged result writes no row. Diverges from the JetStream calc consumer (#430). **Amended (#1018):** every input binds as the list of its per-instance values, an expression's included, and the marking probe reads `calc_rule_input` by key id |
+| [ADR-0149](#adr-0149-a-held-sessions-state-is-a-property-series-and-node-logs-not-a-session-table) | 2026-10-23 | Accepted | A held session (#816) surfaces as the `session-state` property per endpoint (establishing, up, recovering, down; transitions only, under the endpoint's standing listen task) plus the node's self-logs carrying the reasons; no `session_log` table and no `session` view. The session is held for an endpoint whose worklist carries a standing listen task over a transport with a session dialer (the line protocol over `tcp` today), polls on that endpoint borrow it, and recovery is a jittered exponential backoff with an attempt budget before down |
 
 ## Entries
 
@@ -6803,3 +6804,37 @@ interface create form, since that name is the platform's to mint.
   expression read the aggregate instance alone. A system member's record still carries its own
   aggregate value. The marking probe reads `calc_rule_input` by key id (the inputs' GIN index went with
   the jsonb column), so a property and a metric of one name mark only the rules reading that lane's key.
+
+### ADR-0149: A held session's state is a property series and node logs, not a session table
+
+- **Date:** 2026-10-23 | **Status:** Accepted | **Pages:** [collection](/architecture/collection/), [nodes](/architecture/nodes/), [datapoints](/architecture/properties/), [glossary](/architecture/glossary/), [storage](/architecture/storage/)
+- **Decision:** A stateful transport holds its connection (#816, epic #603's thin cut "no session
+  table"), and its lifecycle is surfaced without a new store:
+  1. **The state is a property.** `session-state` (seeded, `establishing`, `up`, `recovering`,
+     `down`) lands per endpoint on the endpoint's component (instance: the endpoint's name, as
+     `endpoint-reachable` does), published by the node at the moment of each transition under the
+     endpoint's standing listen task, so ownership binds server-side like every other sample and the
+     series is transitions only.
+  2. **The reasons are node logs.** Each transition is also a self-log (`facility: session`,
+     ADR-0066) carrying the reason (`connection lost: EOF`, `5 consecutive attempts failed, last:
+     ...`), and teardown logs why (`its listen task left the worklist`, `its endpoint changed`, `node
+     shutdown`). The reason also rides the sample as the `reason` label, which is not persisted.
+     Teardown publishes no state: the node stopped wanting the session, which says nothing about the
+     device.
+  3. **What holds a session.** An endpoint whose worklist carries a standing listen task over a
+     transport with a session dialer (the line protocol over `tcp` today; ssh is not wired). The
+     listen task is what needs the connection held (its listeners arm over it, #817); the endpoint's
+     line polls borrow the session instead of dialing, and a poll over a session that is not up
+     faults (`collection-failed` naming the state) rather than dialing a connection of its own. The
+     worklist carries each task's endpoint id, the node-unique key a session is held under.
+  4. **Recovery is bounded.** A failed attempt waits `SessionBackoff`: 250ms doubling per attempt,
+     capped at 30s, jittered 20% either way; five consecutive failed dials read `down`, and the
+     session keeps retrying at the capped pace so a device that returns reads `up` unattended. A
+     connection that drops within 10s counts as churn and grows the next wait, so a device that
+     accepts and drops cannot make the node hot-loop; a held connection carries a 15s TCP keepalive.
+- **Context:** The nodes page designed a `session_log` table of node-reported transitions with a
+  `session` view over it. A property series already gives transition-only history, latest-value
+  reads, staleness at read time, rules over it (an event rule can watch `session-state` as it watches
+  `endpoint-reachable`), and owner scope, with no new table, route, or permission noun; the free-text
+  reasons belong to the node's own narration, which `node_log` already lands. A session table stays
+  possible if per-session counters (commands, errors, last activity) earn one; nothing here forecloses it.

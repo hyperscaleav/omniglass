@@ -216,6 +216,7 @@ func (s *Server) buildWorklistReply(node string) (collection.WorklistReply, erro
 		reply.Tasks = append(reply.Tasks, collection.TaskSpec{
 			ID:             t.ID,
 			Mode:           t.Mode,
+			EndpointID:     t.EndpointID,
 			EndpointName:   t.EndpointName,
 			Transport:      t.Transport,
 			EndpointParams: t.EndpointParams,

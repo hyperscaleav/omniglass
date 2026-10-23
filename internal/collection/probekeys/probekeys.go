@@ -1,5 +1,6 @@
 // Package probekeys declares the sample keys the native collection probes
-// write (tcp, icmp, http, ssh and the endpoint verdicts they roll up into).
+// write (tcp, icmp, http, ssh, the endpoint verdicts they roll up into, and
+// a held session's state).
 // A leaf, so both the probes (internal/collection) and the storage gateway's
 // calc rule check (a calc rule may not write a key a collection writes) read
 // this one declaration. A driver's keys are declared in its spec instead.
@@ -19,11 +20,14 @@ const (
 	EndpointReachable     = "endpoint-reachable"
 	EndpointResponsive    = "endpoint-responsive"
 	EndpointAuthenticated = "endpoint-authenticated"
+	// SessionState is a held session's state per endpoint (#816), written
+	// by the node's session machine on each transition.
+	SessionState = "session-state"
 )
 
 var native = []string{
 	TCPOpen, TCPConnectTime, ICMPReachable, ICMPRTTAvg, HTTPResponseTime, SSHHandshakeTime,
-	EndpointReachable, EndpointResponsive, EndpointAuthenticated,
+	EndpointReachable, EndpointResponsive, EndpointAuthenticated, SessionState,
 }
 
 // Native is every key a native probe writes, sorted, a fresh slice each call.

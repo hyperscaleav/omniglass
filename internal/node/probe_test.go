@@ -241,7 +241,7 @@ func TestCollectDriverTask(t *testing.T) {
 		"1.3.6.1.2.1.1.1.0": "Boreal AirWall 3",
 		"1.3.6.1.2.1.1.3.0": "8123456",
 	}}}
-	dps, faults := collectDriverTask(t.Context(), runner, task)
+	dps, faults := collectDriverTask(t.Context(), runner, task, nil)
 	if len(faults) != 0 {
 		t.Fatalf("faults: %v", faults)
 	}
@@ -255,7 +255,7 @@ func TestCollectDriverTask(t *testing.T) {
 
 	// A silent agent is one fault covering the fetch, and no samples at all.
 	runner = &collection.Runner{SNMP: fakeGetter{err: context.DeadlineExceeded}}
-	dps, faults = collectDriverTask(t.Context(), runner, task)
+	dps, faults = collectDriverTask(t.Context(), runner, task, nil)
 	if len(dps) != 0 || len(faults) != 1 {
 		t.Fatalf("failed fetch: dps %v faults %v", dps, faults)
 	}
@@ -263,7 +263,7 @@ func TestCollectDriverTask(t *testing.T) {
 	// A missing credential faults by name before any wire work.
 	bare := task
 	bare.Secrets = nil
-	_, faults = collectDriverTask(t.Context(), &collection.Runner{SNMP: fakeGetter{}}, bare)
+	_, faults = collectDriverTask(t.Context(), &collection.Runner{SNMP: fakeGetter{}}, bare, nil)
 	if len(faults) != 1 || !strings.Contains(faults[0].Error(), "community") {
 		t.Fatalf("missing credential: faults %v", faults)
 	}
