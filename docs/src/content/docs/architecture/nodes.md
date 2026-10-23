@@ -162,7 +162,7 @@ every worklist pull and torn down on task removal, re-address, or node shutdown.
 lends its connection to the endpoint's line polls, recovers with a jittered, bounded backoff, and
 reports each transition as the `session-state` property (`establishing`, `up`, `recovering`,
 `down`) plus a self-log carrying the reason; there is no `session_log` table
-([ADR-0149](/architecture/decisions/#adr-0149-a-held-sessions-state-is-a-property-series-and-node-logs-not-a-session-table)).
+([ADR-0150](/architecture/decisions/#adr-0150-a-held-sessions-state-is-a-property-series-and-node-logs-not-a-session-table)).
 The machine's detail is on [collection](/architecture/collection/#sessions). Still design below:
 the pool knobs, authentication and subscription on establish (listeners, #817), and the demux.
 
@@ -171,7 +171,7 @@ A stateful endpoint (`ssh`, `mqtt`, anything held open) becomes a **session** at
 connection keyed by `(node, endpoint)`, shared by every task and command under it, handshake and
 auth paid once. A pool holds it open across ticks (reconnect, backoff, keepalive); a listener
 runtime wakes on its inbound. The socket is ephemeral on the node, which **reports lifecycle
-transitions as the `session-state` property and its own logs** (ADR-0149 replaced the designed
+transitions as the `session-state` property and its own logs** (ADR-0150 replaced the designed
 `session_log` rows and `session` view).
 
 :::caution[Open question]

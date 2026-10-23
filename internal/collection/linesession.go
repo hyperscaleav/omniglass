@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"os"
 	"sync"
 	"time"
 )
@@ -86,14 +87,23 @@ type lineConn struct {
 // read with nothing armed is unsolicited and dropped.
 func (c *lineConn) read() {
 	var armed chan lineAnswer
+	var partial []byte // an armed answer's bytes read before an interrupt
 	for {
 		raw, err := c.br.ReadSlice('\n')
 		if err != nil {
-			if isTimeout(err) {
-				// An exchange interrupted the read to hand over its ask (or a
-				// stale interrupt from one already served): clear the deadline
-				// before looking, so a later interrupt is never lost.
+			if isInterrupt(err) {
 				_ = c.c.SetReadDeadline(time.Time{})
+				if armed != nil {
+					// A late interrupt landed mid-answer: no ask can be
+					// pending while one is armed, so keep what arrived and
+					// read on.
+					partial = append(partial, raw...)
+					continue
+				}
+				// An exchange interrupted the read to hand over its ask (or a
+				// stale interrupt from one already served): the deadline is
+				// cleared before looking, so a later interrupt is never lost.
+				partial = nil
 				select {
 				case ask := <-c.asks:
 					armed = c.arm(ask)
@@ -110,8 +120,8 @@ func (c *lineConn) read() {
 		if armed == nil {
 			continue // unsolicited: dropped until listeners claim pushes (#817)
 		}
-		armed <- lineAnswer{line: trimLine(string(raw))} // buffered: never blocks
-		armed = nil
+		armed <- lineAnswer{line: trimLine(string(partial) + string(raw))} // buffered: never blocks
+		armed, partial = nil, nil
 	}
 }
 
@@ -124,7 +134,7 @@ func (c *lineConn) arm(ask lineAsk) chan lineAnswer {
 	_ = c.c.SetReadDeadline(time.Now().Add(drainWindow))
 	for {
 		if _, err := c.c.Read(scratch); err != nil {
-			if isTimeout(err) {
+			if isInterrupt(err) {
 				break
 			}
 			ask.answer <- lineAnswer{err: err}
@@ -142,10 +152,10 @@ func (c *lineConn) arm(ask lineAsk) chan lineAnswer {
 	return ask.answer
 }
 
-func isTimeout(err error) bool {
-	var ne net.Error
-	return errors.As(err, &ne) && ne.Timeout()
-}
+// isInterrupt reports a passed read deadline, the one timeout this
+// connection makes itself (an exchange's interrupt, the drain window). A
+// failed keepalive (ETIMEDOUT) is a real cause, not an interrupt.
+func isInterrupt(err error) bool { return errors.Is(err, os.ErrDeadlineExceeded) }
 
 func trimLine(s string) string {
 	for len(s) > 0 && (s[len(s)-1] == '\n' || s[len(s)-1] == '\r') {
@@ -182,9 +192,11 @@ func (c *lineConn) Close() error {
 }
 
 // Exchange hands one ask to the reader and waits for its answer. An answer
-// that does not arrive in time kills the connection with ErrExchangeTimeout
-// (an ask abandoned by its context is recycled too): its reply may still be
-// on the way, and on a held connection it would answer the next ask.
+// that does not arrive within the timeout kills the connection with
+// ErrExchangeTimeout; an ask its caller abandons (a context deadline or
+// cancel) is recycled too, but not as the device's timeout. Either way its
+// reply may still be on the way, and on a held connection it would answer
+// the next ask.
 func (c *lineConn) Exchange(ctx context.Context, line string, timeout time.Duration) (string, error) {
 	if timeout <= 0 {
 		timeout = defaultSessionTimeout
@@ -211,10 +223,9 @@ func (c *lineConn) Exchange(ctx context.Context, line string, timeout time.Durat
 	case <-c.done:
 		return "", fmt.Errorf("collection: line session %s: %w", c.target, c.Err())
 	case <-ctx.Done():
-		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-			c.fail(ErrExchangeTimeout) // the caller's deadline is the answer's
-			return "", fmt.Errorf("collection: line session %s: no answer in time: %w", c.target, ErrExchangeTimeout)
-		}
+		// The caller gave up (its deadline or a cancel), not the device:
+		// recycled, since the reply may still come, but never recorded as
+		// the device's timeout.
 		c.fail(fmt.Errorf("exchange abandoned (%v); connection recycled", ctx.Err()))
 		return "", fmt.Errorf("collection: line session %s: %w", c.target, ctx.Err())
 	case <-t.C:

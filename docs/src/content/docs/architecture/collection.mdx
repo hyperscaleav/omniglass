@@ -46,7 +46,7 @@ by the baked lane), the worklist delivers a task's secret inputs unsealed on the
 and anything that does not parse lands a `collection-failed` event naming the task, never a silent
 drop and never a wrong-lane sample. Also built, the first half of the stateful arc: a **session
 holds its connection** (#816) for an endpoint with a standing listen task, its line polls borrowing
-it, its state the `session-state` property per endpoint ([ADR-0149](/architecture/decisions/#adr-0149-a-held-sessions-state-is-a-property-series-and-node-logs-not-a-session-table)).
+it, its state the `session-state` property per endpoint ([ADR-0150](/architecture/decisions/#adr-0150-a-held-sessions-state-is-a-property-series-and-node-logs-not-a-session-table)).
 Listeners over the held session are next (#817). See
 [ADR-0037](/architecture/decisions/#adr-0037-telemetry-is-a-protobuf-event-over-jetstream-with-an-inline-owner-confining-consumer),
 [ADR-0038](/architecture/decisions/#adr-0038-the-reachability-verdict-is-a-built-in-state),
@@ -139,7 +139,7 @@ for a targeted refetch.
 A **task** is a node's unit of collection work, described by two independent axes:
 
 - **Task mode** (on the task): **poll** (we ask) or **listen** (we wait), stated from *our* perspective on purpose, since "pull/push" inverts with the frame.
-- **Transport** (on the endpoint): **stateless** (a throwaway connection per shot) or **stateful** (a held-open connection, a **session** whose state is the `session-state` property per endpoint, its connect/drop/reconnect reasons in the node's own logs; [ADR-0149](/architecture/decisions/#adr-0149-a-held-sessions-state-is-a-property-series-and-node-logs-not-a-session-table)).
+- **Transport** (on the endpoint): **stateless** (a throwaway connection per shot) or **stateful** (a held-open connection, a **session** whose state is the `session-state` property per endpoint, its connect/drop/reconnect reasons in the node's own logs; [ADR-0150](/architecture/decisions/#adr-0150-a-held-sessions-state-is-a-property-series-and-node-logs-not-a-session-table)).
 
 All four cells are real:
 
@@ -160,19 +160,24 @@ protocol over `tcp` today), keyed by the endpoint's id, which the worklist carri
 - **establish**: the first dial; the session reads `establishing` until it connects.
 - **operate**: the session reads `up`, and the endpoint's line polls **borrow the held connection**
   instead of dialing per tick. One reader goroutine owns the connection: on an ask it discards
-  whatever already arrived (a banner, a stray line; pushes are claimed by listeners in #817), writes
-  the line, and hands the next line to that ask. An ask whose answer does not come in time recycles
-  the connection, since its late reply would answer the next ask. A poll issued while the first dial
-  is in flight waits for it (at most its timeout); any other poll over a session that is not up
-  faults at once with a `collection-failed` naming the state, so a down device never stalls the
-  node's tick, and it never dials a connection of its own.
+  whatever already arrived (a banner, a stray line), writes the line, and hands the next line to
+  that ask. An ask whose answer does not come in time recycles the connection, since its late reply
+  would answer the next ask. One window remains until #817's reply matching: a push the device sends
+  after the drain and before it reads the request is taken as the answer. A poll issued while the
+  first dial is in flight waits for it (on a budget of its own, then the exchange gets its whole
+  timeout); any other poll over a session with no connection faults at once with a
+  `collection-failed` naming the state, so a down device never stalls the node's tick, and it never
+  dials a connection of its own.
 - **recover**: a held connection that drops (the peer closed, a read failed, the TCP keepalive gave
   up, an answer timed out) reads `recovering` at once, without waiting for a poll, and redials with
   a jittered exponential backoff (250ms doubling, capped at 30s, 20% jitter). Five consecutive failed
-  attempts read `down`, where an attempt fails if its dial fails, its connection drops within 10s,
-  or an answer over it timed out; so a device that accepts and drops, or accepts and never answers,
-  reads `down` rather than `up` forever. The session keeps retrying at the capped pace, so a device
-  that returns reads `up` unattended; a stable connection's drop redials at once.
+  attempts read `down`, where an attempt fails if its dial fails, its connection drops unanswered
+  within 10s, or an answer over it timed out; so a device that accepts and drops, or accepts and
+  never answers, reads `down` rather than `up` forever. An answered exchange forgives the failures
+  before it, so a healthy device's rare missed answer never reads `down`. The session keeps retrying
+  at the capped pace and leaves `down` only when a returning connection proves itself (an answer, or
+  outliving 10s unless answers were what failed), so a failing device publishes no flapping; a
+  stable connection's drop redials at once.
 - **teardown**: a listen task that leaves the worklist, a change to what the connection depends on
   (transport, address, timeout, credentials; a listen task's spec re-hash keeps it), or node
   shutdown closes the connection. Teardown publishes no state (the node stopped wanting the session,
@@ -182,7 +187,7 @@ protocol over `tcp` today), keyed by the endpoint's id, which the worklist carri
 There is **no session table**: each transition lands as the `session-state` property on the
 endpoint's component (instance: the endpoint's name), published at the transition under the listen
 task, and as a node self-log (`facility: session`) carrying the reason
-([ADR-0149](/architecture/decisions/#adr-0149-a-held-sessions-state-is-a-property-series-and-node-logs-not-a-session-table)).
+([ADR-0150](/architecture/decisions/#adr-0150-a-held-sessions-state-is-a-property-series-and-node-logs-not-a-session-table)).
 Proven against the simulator's line protocol: kill the device's listener mid-session and the session
 reads `recovering`, then `up` once it returns, with the transitions landing on the server.
 

@@ -181,7 +181,7 @@ The immutable, append-only records: the lineage targets and what a backtest read
 - **`audit_log`** (operator actions: actor, verb, resource, `old -> new`; the lineage target for operator writes; secret decrypts always recorded, [audit](/architecture/audit/)).
 
 :::design[Target design, tracked in #430]
-- **`session_log`** (connection-lifecycle transitions, node-reported, [nodes](/architecture/nodes/#sessions)); the built session (#816) needed none: its state is the `session-state` property and its reasons are node logs ([ADR-0149](/architecture/decisions/#adr-0149-a-held-sessions-state-is-a-property-series-and-node-logs-not-a-session-table)), so this table waits on per-session counters earning it;
+- **`session_log`** (connection-lifecycle transitions, node-reported, [nodes](/architecture/nodes/#sessions)); the built session (#816) needed none: its state is the `session-state` property and its reasons are node logs ([ADR-0150](/architecture/decisions/#adr-0150-a-held-sessions-state-is-a-property-series-and-node-logs-not-a-session-table)), so this table waits on per-session counters earning it;
 - **`internal_log`** (platform self-narration: startup / reconcile / migration / node-reg / config-sync, [workers](/architecture/workers/));
 - the **`collection_log`** companion (the cheap per-run execution record).
 :::
@@ -239,7 +239,7 @@ a bulk read of the series adds its index the same way: measured first, guarded s
 | Read model | Of | Shape | Notes |
 |---|---|---|---|
 | `current_value` | latest sample per series (owner, type, **instance**, **provenance**), fused across sources per the type's `fusion_policy` | **view** | the dashboard read; per-provenance so observed and intended are both visible (the divergence model needs both), per-instance so siblings of one name stay distinct, fusion applied on read. The one table candidate if a profile earns it, metric lane only |
-| `session` | `session_log` | **view** | low-volume; node, endpoint, status, opened_at, last_activity_at, command/error counts. Not built: the current state reads as the latest `session-state` per endpoint (ADR-0149) |
+| `session` | `session_log` | **view** | low-volume; node, endpoint, status, opened_at, last_activity_at, command/error counts. Not built: the current state reads as the latest `session-state` per endpoint (ADR-0150) |
 
 **When the view stops scaling.** A latest-per-series view's cost scales with the number of **distinct
 series** (a loose index scan), not total rows: point and scoped reads are a covering-index probe, fast

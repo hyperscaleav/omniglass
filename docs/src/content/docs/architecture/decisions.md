@@ -187,7 +187,7 @@ below from the project's history. From here it grows one slice at a time.
 | [ADR-0146](#adr-0146-expressions-run-on-pinned-expr-with-an-allowlist-and-per-site-budgets-and-rule-criteria-are-expressions) | 2026-10-20 | Accepted | Expressions run on pinned Expr behind a per-site allowlist of vetted builtins and a per-site budget (after three adversarial passes); event rule criteria are stored as `{expr}`, the short form lowered on input and by a one-time backfill, with one approved bool divergence; compile errors show on the rule; validate and preview answer from the same declarations |
 | [ADR-0147](#adr-0147-a-calc-rule-is-a-typed-sibling-registry-checked-acyclic-at-authoring) | 2026-10-21 | Accepted, amended (#1018) | `calc_rule` is a sibling of `event_rule` with typed columns (inputs `{as, key}`, a named reducer or an expression, the output key by id); every write compiles the reduce against a calc expression site of its own and refuses a cycle in the key graph, a second enabled writer of a key, `health` as an input or output, and an output a collection declares (a native probe key or a driver's emits); a reduce that stops compiling reads back as `calc_error`; **Amended (#1018):** the reduce is always an expression, its named reducers now list functions, and inputs are held by uuid in `calc_rule_input`, each bound by an alias as the list of its values |
 | [ADR-0148](#adr-0148-calc-rules-run-on-a-durable-pending-set-and-a-server-tick-not-a-jetstream-consumer) | 2026-10-21 | Accepted, amended (#1018) | Component calc rules run on a durable `calc_pending` set marked in the sample-write transaction and drained by a 1s server tick (`SKIP LOCKED`, one transaction per mark), writing calculated samples through the same path so event rules judge them; marks are held by their writer until commit, the ingest retries a deadlock, a failing mark is deferred, a rule write recomputes its owners; a write never marks its own rule; a missing input writes nothing and is recorded in `calc_rule_state`; an unchanged result writes no row. Diverges from the JetStream calc consumer (#430). **Amended (#1018):** every input binds as the list of its per-instance values, an expression's included, and the marking probe reads `calc_rule_input` by key id |
-| [ADR-0149](#adr-0149-a-held-sessions-state-is-a-property-series-and-node-logs-not-a-session-table) | 2026-10-23 | Accepted | A held session (#816) surfaces as the `session-state` property per endpoint (establishing, up, recovering, down; transitions only, under the endpoint's standing listen task) plus the node's self-logs carrying the reasons; no `session_log` table and no `session` view. The session is held for an endpoint whose worklist carries a standing listen task over a transport with a session dialer (the line protocol over `tcp` today), polls on that endpoint borrow it, and recovery is a jittered exponential backoff with an attempt budget before down |
+| [ADR-0150](#adr-0150-a-held-sessions-state-is-a-property-series-and-node-logs-not-a-session-table) | 2026-10-23 | Accepted | A held session (#816) surfaces as the `session-state` property per endpoint (establishing, up, recovering, down; transitions only, under the endpoint's standing listen task) plus the node's self-logs carrying the reasons; no `session_log` table and no `session` view. The session is held for an endpoint whose worklist carries a standing listen task over a transport with a session dialer (the line protocol over `tcp` today), polls on that endpoint borrow it, and recovery is a jittered exponential backoff with an attempt budget before down |
 
 ## Entries
 
@@ -6805,7 +6805,7 @@ interface create form, since that name is the platform's to mint.
   aggregate value. The marking probe reads `calc_rule_input` by key id (the inputs' GIN index went with
   the jsonb column), so a property and a metric of one name mark only the rules reading that lane's key.
 
-### ADR-0149: A held session's state is a property series and node logs, not a session table
+### ADR-0150: A held session's state is a property series and node logs, not a session table
 
 - **Date:** 2026-10-23 | **Status:** Accepted | **Pages:** [collection](/architecture/collection/), [nodes](/architecture/nodes/), [datapoints](/architecture/properties/), [glossary](/architecture/glossary/), [storage](/architecture/storage/)
 - **Decision:** A stateful transport holds its connection (#816, epic #603's thin cut "no session
@@ -6834,15 +6834,25 @@ interface create form, since that name is the platform's to mint.
   4. **Recovery is bounded.** A failed attempt waits `SessionBackoff`: 250ms doubling per attempt,
      capped at 30s, jittered 20% either way; five consecutive failed attempts read `down`, and the
      session keeps retrying at the capped pace so a device that returns reads `up` unattended. An
-     attempt fails when its dial fails, when its connection drops within 10s (a device that accepts
-     and drops cannot hot-loop or read `up` forever), or when an exchange over it timed out (a hung
-     device, however long the connection lived); only a connection that outlives 10s and drops for
-     another reason resets the count and redials at once. Once `down`, a connection that churns
-     reads `down` again, never `recovering`. A held connection carries a 15s TCP keepalive.
+     attempt fails when its dial fails, when its connection drops unanswered within 10s (a device
+     that accepts and drops cannot hot-loop or read `up` forever), or when an exchange over it timed
+     out (a hung device, however long the connection lived). An answered exchange forgives the
+     failures before it, so a healthy device's rare missed answer never adds up to `down`; a
+     connection that outlives 10s and drops for another reason forgives them too and redials at
+     once. Once `down`, a returning connection publishes nothing until it proves itself: an answered
+     exchange (the session lends it to polls meanwhile) or, unless answer timeouts were what failed,
+     outliving the 10s window; so an accept-then-drop or hung device publishes no `up`/`down` pairs.
+     A caller abandoning an exchange (its own deadline or cancel) is not the device's timeout, and
+     the wait for a first dial has its own budget, so a slow dial never eats the exchange's. A held
+     connection carries a 15s TCP keepalive, whose failure is recorded as itself.
   5. **An answer belongs to its ask.** One reader goroutine owns the connection: on an ask it
-     discards every byte already received (a banner, a stray line), writes the line, and hands the
-     next line it reads to that ask. An ask whose answer does not come in time recycles the
-     connection, since its late reply would otherwise answer the next ask. A listen task whose spec
+     discards every byte already received (a banner, a stray line, plus a 2ms window for bytes in
+     flight), writes the line, and hands the next line it reads to that ask, keeping an answer whole
+     across segments. An ask whose answer does not come in time recycles the connection, since its
+     late reply would otherwise answer the next ask. One window remains: a line the device sends
+     after the drain and before it has read the request (a push landing in that instant) is taken
+     as the answer, since nothing on the wire tells the two apart; #817's reply matching (a
+     listener's `match` claims pushes before an answer is taken) closes it. A listen task whose spec
      changes (its content-addressed id re-hashes) keeps the healthy connection; only what the
      connection depends on (transport, address, timeout, credentials) recycles it.
 - **Context:** The nodes page designed a `session_log` table of node-reported transitions with a

@@ -7329,7 +7329,7 @@ failed dials to `down` (still retrying at the cap), and churn (a connection drop
 the wait so an accept-and-drop device cannot hot-loop. The honest states land as the seeded
 `session-state` property per endpoint (`establishing`, `up`, `recovering`, `down`), published at each
 transition under the listen task, and each transition is a node self-log carrying the reason; there is
-no session table ([ADR-0149](/architecture/decisions/#adr-0149-a-held-sessions-state-is-a-property-series-and-node-logs-not-a-session-table)).
+no session table ([ADR-0150](/architecture/decisions/#adr-0150-a-held-sessions-state-is-a-property-series-and-node-logs-not-a-session-table)).
 Proven at three tiers: the state machine over fakes (`internal/collection/session_test.go`), the real
 held line connection over a real socket (`linesession_integration_test.go`) and against the
 simulator's NVP listener (`internal/sim/session_hold_test.go`: three polls ride one connection, the
@@ -7351,5 +7351,20 @@ accept-then-drop or a hung device reads down within the attempt budget instead o
 (`TestSessionAcceptThenDropReadsDownWithinTheBudget`, `TestHeldSessionToAHungDeviceReadsDown`), and a
 stable connection's drop still never does. The first dial's wait window closes inside the up
 transition, and a listen task's spec re-hash keeps a healthy connection while a credential change
-recycles it (`TestSessionManagerKeepsTheConnectionAcrossATaskRehash`). ADR-0149 now says the last
+recycles it (`TestSessionManagerKeepsTheConnectionAcrossATaskRehash`). ADR-0150 now says the last
 `session-state` outlives a teardown and is read by its age.
+
+### The held session forgives a healthy device's rare timeout (#816)
+
+The re-review of the review fixes, each with a regression test that failed first. The previous
+commit's title overclaimed: a line the device sends after the drain and before it reads the request
+is still taken as the answer, a window #817's reply matching closes (ADR-0150 point 5 now says so).
+An answered exchange now forgives the failures before it, so one missed answer in fifty never reads
+down (`TestSessionSporadicTimeoutsNeverReadDown`, 250 good exchanges); a down session publishes
+nothing until a returning connection proves itself by an answer, or by outliving the stable window
+unless answers were what failed, so an accept-then-drop or hung device no longer flaps up and down
+(`TestSessionHungDeviceStaysDownWithoutFlapping`, `TestSessionDownReadsUpOnceTheConnectionProvesStable`).
+On the wire: a late interrupt mid-answer keeps the partial bytes (`TestLineConnLateInterruptKeepsThePartialReply`),
+only a passed read deadline is an interrupt so a failed keepalive keeps its cause, a caller's own
+deadline is not recorded as the device's timeout, and the wait for a first dial has its own budget
+(`TestSessionFirstDialWaitHasItsOwnBudget`).

@@ -126,8 +126,8 @@ Every term below is committed architecture nothing in the code implements yet: n
 :::design[Data-plane terms, tracked in #430]
 | Term | Definition |
 |---|---|
-| **session** | A stateful endpoint's live held-open connection, held by the node; its state is the `session-state` property per endpoint (establishing, up, recovering, down), its reasons in the node's logs (ADR-0149). |
-| **session_log** | Design, not built: connection-lifecycle transitions as rows. ADR-0149 surfaces them as `session-state` plus node logs instead. |
+| **session** | A stateful endpoint's live held-open connection, held by the node; its state is the `session-state` property per endpoint (establishing, up, recovering, down), its reasons in the node's logs (ADR-0150). |
+| **session_log** | Design, not built: connection-lifecycle transitions as rows. ADR-0150 surfaces them as `session-state` plus node logs instead. |
 | **internal_log** | Platform self-narration (startup, reconcile, migration, node-reg, config-sync). |
 | **raw_sample** | An opt-in raw-retention policy, cascade-resolved on endpoint / task / template: `off` (default), `all`, or `1-in-N` (sampled). Short TTL, range-partitioned and cold-tierable like metric partitions. The kept window is re-parsable against the immutable function version, so a corrected extractor re-derives it; outside the window a wrong-but-conforming parse is forward-fixable only. Bounded, sampled, short-lived: not a telemetry table. See [collection](/architecture/collection/). |
 | **collection.failed** | The event emitted when a parse or validation rejects; carries the raw payload for diagnosis and backfill-after-fix. There is no stored telemetry table; raw is not otherwise persisted (a dev raw-mode taps it live). Today the ingest consumer terminates a rejected batch without emitting an event. |

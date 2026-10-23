@@ -20,19 +20,33 @@ import (
 type fakeHeldConn struct {
 	mu        sync.Mutex
 	exchanges int
-	done      chan struct{}
-	err       error
-	closed    bool
-	once      sync.Once
+	// timesOut, when set, says whether this exchange's answer never comes:
+	// the connection then dies of ErrExchangeTimeout, as the real one does.
+	timesOut    func() bool
+	gotTimeout  time.Duration
+	gotDeadline bool
+	done        chan struct{}
+	err         error
+	closed      bool
+	once        sync.Once
 }
 
 func newFakeHeldConn() *fakeHeldConn { return &fakeHeldConn{done: make(chan struct{})} }
 
-func (c *fakeHeldConn) Exchange(ctx context.Context, line string, _ time.Duration) (string, error) {
+func (c *fakeHeldConn) Exchange(ctx context.Context, line string, timeout time.Duration) (string, error) {
 	select {
 	case <-c.done:
 		return "", errors.New("fake: connection is dead")
 	default:
+	}
+	c.mu.Lock()
+	c.gotTimeout = timeout
+	_, c.gotDeadline = ctx.Deadline()
+	timesOut := c.timesOut
+	c.mu.Unlock()
+	if timesOut != nil && timesOut() {
+		c.kill(collection.ErrExchangeTimeout)
+		return "", collection.ErrExchangeTimeout
 	}
 	c.mu.Lock()
 	c.exchanges++
@@ -87,6 +101,7 @@ type fakeSessionDialer struct {
 	conns     []*fakeHeldConn
 	dials     int
 	gate      chan struct{} // non-nil: the first dial waits for it to close
+	timesOut  func() bool   // handed to every connection made
 }
 
 func (d *fakeSessionDialer) Dial(ctx context.Context, target string, _ time.Duration) (collection.HeldConn, error) {
@@ -108,6 +123,7 @@ func (d *fakeSessionDialer) Dial(ctx context.Context, target string, _ time.Dura
 		return nil, errors.New("connection refused")
 	}
 	c := newFakeHeldConn()
+	c.timesOut = d.timesOut
 	if d.dieAtOnce {
 		c.kill(errors.New("EOF"))
 	}
@@ -227,14 +243,13 @@ func steppingClock(step time.Duration) func() time.Time {
 }
 
 func startTestSessionAt(t *testing.T, d *fakeSessionDialer, r *recorder, now func() time.Time) *collection.Session {
+	return startTestSessionWith(t, d, r, collection.SessionConfig{Now: now})
+}
+
+func startTestSessionWith(t *testing.T, d *fakeSessionDialer, r *recorder, cfg collection.SessionConfig) *collection.Session {
 	t.Helper()
-	s := collection.StartSession(collection.SessionConfig{
-		Target:       "10.0.0.9:51325",
-		Dialer:       d,
-		OnTransition: r.onTransition,
-		Backoff:      r.backoff,
-		Now:          now,
-	})
+	cfg.Target, cfg.Dialer, cfg.OnTransition, cfg.Backoff = "10.0.0.9:51325", d, r.onTransition, r.backoff
+	s := collection.StartSession(cfg)
 	t.Cleanup(s.Close)
 	return s
 }
@@ -310,7 +325,7 @@ func TestSessionRecoversWhenTheConnectionDies(t *testing.T) {
 // the device returns.
 func TestSessionRecoveryIsBoundedThenDownThenUp(t *testing.T) {
 	d, r := &fakeSessionDialer{}, newRecorder()
-	startTestSession(t, d, r)
+	s := startTestSession(t, d, r)
 	r.waitStates(t, establishing, up)
 	d.setRefuse(true)
 	d.last().kill(errors.New("EOF"))
@@ -331,6 +346,18 @@ func TestSessionRecoveryIsBoundedThenDownThenUp(t *testing.T) {
 		}
 	}
 	d.setRefuse(false)
+	// Down holds until the returning connection proves itself: a dial alone
+	// publishes nothing, an answered exchange reads up.
+	for n := d.dialCount(); d.dialCount() == n; {
+		time.Sleep(time.Millisecond)
+	}
+	time.Sleep(20 * time.Millisecond)
+	if st, _ := s.State(); st != collection.SessionDown {
+		t.Fatalf("a dial alone moved a down session to %s", st)
+	}
+	if _, err := s.Exchange(context.Background(), "GET INPUT", time.Second); err != nil {
+		t.Fatalf("an exchange over the proving connection: %v", err)
+	}
 	r.waitStates(t, establishing, up, recovering, collection.SessionDown, up)
 }
 
@@ -391,19 +418,14 @@ func TestSessionAcceptThenDropReadsDownWithinTheBudget(t *testing.T) {
 			t.Fatalf("an accept-then-drop device never read down: %v", r.states())
 		}
 	}
-	// A few more churned connections after down.
-	for len(r.states()) < 2*collection.SessionAttemptBudget+6 {
-		select {
-		case <-r.notify:
-		case <-time.After(3 * time.Second):
-			t.Fatal("the machine stalled after down")
-		}
+	// Review re-check finding 2: more churned connections after down publish
+	// nothing at all; down holds until a connection proves itself.
+	atDown, dials := len(r.states()), d.dialCount()
+	for d.dialCount() < dials+3 {
+		time.Sleep(time.Millisecond)
 	}
-	st := r.states()
-	for _, s := range st[indexOf(st, down):] {
-		if s == recovering {
-			t.Fatalf("a churned connection after down read recovering: %v", st)
-		}
+	if st := r.states(); len(st) != atDown {
+		t.Fatalf("churned connections after down published %v", st[atDown-1:])
 	}
 	r.mu.Lock()
 	last := r.attempts[len(r.attempts)-1]
@@ -452,6 +474,94 @@ func TestSessionExchangeTimeoutsReadDown(t *testing.T) {
 		case <-deadline:
 			t.Fatalf("repeated exchange timeouts never read down: %v", r.states())
 		}
+	}
+}
+
+// Re-review finding 1: a healthy device that misses a rare answer never
+// reads down: an answered exchange forgives the failures before it.
+func TestSessionSporadicTimeoutsNeverReadDown(t *testing.T) {
+	var mu sync.Mutex
+	asked := 0
+	d := &fakeSessionDialer{timesOut: func() bool {
+		mu.Lock()
+		defer mu.Unlock()
+		asked++
+		return asked%50 == 0
+	}}
+	r := newRecorder()
+	s := startTestSession(t, d, r)
+	r.waitStates(t, establishing, up)
+	good := 0
+	deadline := time.Now().Add(10 * time.Second)
+	for good < 250 {
+		if time.Now().After(deadline) {
+			t.Fatalf("stalled at %d good exchanges: %v", good, r.states())
+		}
+		if _, err := s.Exchange(context.Background(), "GET INPUT", time.Second); err == nil {
+			good++
+			continue
+		}
+		time.Sleep(time.Millisecond) // the recycle redials
+	}
+	if i := indexOf(r.states(), down); i >= 0 {
+		t.Fatalf("one timeout in fifty read down: %v", r.states())
+	}
+}
+
+// Re-review finding 2: a hung device (connects, never answers) that reached
+// down stays down through every connection after, publishing nothing, even
+// one that lives past the stable window, since only an answer proves it.
+func TestSessionHungDeviceStaysDownWithoutFlapping(t *testing.T) {
+	d := &fakeSessionDialer{timesOut: func() bool { return true }}
+	r := newRecorder()
+	s := startTestSessionWith(t, d, r, collection.SessionConfig{StableAfter: 20 * time.Millisecond})
+	deadline := time.Now().Add(5 * time.Second)
+	for indexOf(r.states(), down) < 0 {
+		if time.Now().After(deadline) {
+			t.Fatalf("a hung device never read down: %v", r.states())
+		}
+		_, _ = s.Exchange(context.Background(), "GET INPUT", time.Second)
+		time.Sleep(time.Millisecond)
+	}
+	atDown := len(r.states())
+	for i := 0; i < 5; i++ {
+		time.Sleep(30 * time.Millisecond) // past the stable window
+		_, _ = s.Exchange(context.Background(), "GET INPUT", time.Second)
+	}
+	if st := r.states(); len(st) != atDown {
+		t.Fatalf("a hung device flapped after down: %v", st[atDown-1:])
+	}
+}
+
+// A down session whose returning connection is never asked (an endpoint with
+// listeners only) reads up once the connection outlives the stable window.
+func TestSessionDownReadsUpOnceTheConnectionProvesStable(t *testing.T) {
+	d, r := &fakeSessionDialer{refuse: true}, newRecorder()
+	startTestSessionWith(t, d, r, collection.SessionConfig{StableAfter: 20 * time.Millisecond})
+	r.waitStates(t, establishing, down)
+	d.setRefuse(false)
+	r.waitStates(t, establishing, down, up)
+}
+
+// Re-review note 5: a slow first dial does not eat the exchange's budget. The
+// exchange that waited on it still gets its whole timeout, and no deadline
+// of the wait's making, so a slow dial is never blamed on the device.
+func TestSessionFirstDialWaitHasItsOwnBudget(t *testing.T) {
+	gate := make(chan struct{})
+	d, r := &fakeSessionDialer{gate: gate}, newRecorder()
+	s := startTestSession(t, d, r)
+	go func() {
+		time.Sleep(60 * time.Millisecond)
+		close(gate)
+	}()
+	if _, err := s.Exchange(context.Background(), "GET INPUT", 100*time.Millisecond); err != nil {
+		t.Fatalf("exchange after a slow first dial: %v", err)
+	}
+	c := d.last()
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.gotTimeout != 100*time.Millisecond || c.gotDeadline {
+		t.Fatalf("the exchange got timeout %v (deadline %v); want its whole 100ms and no wait-made deadline", c.gotTimeout, c.gotDeadline)
 	}
 }
 

@@ -36,7 +36,10 @@ const (
 	// reconnecting inside its attempt budget.
 	SessionRecovering SessionState = "recovering"
 	// SessionDown: the attempt budget is spent. The session keeps retrying at
-	// the capped pace, so a device that returns reads up again unattended.
+	// the capped pace and holds down until a returning connection proves
+	// itself (an answered exchange, or, unless answers were what failed,
+	// outliving the stable window), so a device that returns reads up again
+	// unattended and one that keeps failing publishes nothing more.
 	SessionDown SessionState = "down"
 )
 
@@ -45,11 +48,13 @@ const (
 // jittered by SessionBackoffJitter either way, so a fleet of sessions that
 // lost one switch does not redial in lockstep. SessionAttemptBudget
 // consecutive failed attempts move a session to down. An attempt fails when
-// its dial fails, when its connection drops before SessionStableAfter (so a
-// device that accepts and drops cannot hot-loop or read up forever), or when
-// an exchange over it timed out (a hung device, however long the connection
-// lived). Only a connection that outlives SessionStableAfter and drops for
-// another reason resets the count, and redials at once.
+// its dial fails, when its connection drops unanswered before
+// SessionStableAfter (so a device that accepts and drops cannot hot-loop or
+// read up forever), or when an exchange over it timed out (a hung device,
+// however long the connection lived). An answered exchange forgives the
+// failures before it, so a healthy device's rare timeout never adds up to
+// down; a connection that outlives SessionStableAfter and drops for another
+// reason forgives them too, and redials at once.
 // SessionKeepAlive is the TCP keepalive on a held connection, which is what
 // notices a peer that vanished without closing.
 const (
@@ -123,6 +128,9 @@ type SessionConfig struct {
 	OnTransition func(SessionTransition)
 	Backoff      func(attempt int) time.Duration
 	Now          func() time.Time
+	// StableAfter is how long a connection must live to count as stable;
+	// zero is SessionStableAfter. Tests shorten it.
+	StableAfter time.Duration
 }
 
 // Session holds one endpoint's connection. Start it with StartSession, borrow
@@ -135,7 +143,8 @@ type Session struct {
 	mu      sync.Mutex
 	state   SessionState
 	reason  string
-	conn    HeldConn
+	conn    HeldConn      // the connection exchanges borrow, nil when none is held
+	heard   chan struct{} // signalled by each answered exchange on conn
 	changed chan struct{} // closed and replaced on every transition
 	closed  bool
 	// dialing is true while the first dial is in flight: the one window an
@@ -155,6 +164,9 @@ func StartSession(cfg SessionConfig) *Session {
 	if cfg.Now == nil {
 		cfg.Now = time.Now
 	}
+	if cfg.StableAfter <= 0 {
+		cfg.StableAfter = SessionStableAfter
+	}
 	ctx, cancel := context.WithCancel(context.Background())
 	s := &Session{cfg: cfg, cancel: cancel, done: make(chan struct{}), changed: make(chan struct{}), dialing: true}
 	go s.run(ctx)
@@ -169,35 +181,51 @@ func (s *Session) State() (SessionState, string) {
 }
 
 // Exchange borrows the held connection for one request and its answer.
-// While the first dial is in flight it waits (at most the timeout), so the
-// first poll after a start rides the connection being established. Any other
-// session that is not up fails the exchange at once, naming the state and its
-// reason: a down device must not stall the node's tick for a poll's timeout,
-// and a poll never reconnects on its own (the session owns the connection).
+// While the first dial is in flight it waits, on a budget of its own (the
+// timeout), so the first poll after a start rides the connection being
+// established; the exchange itself then gets its whole timeout and the
+// caller's context, so a slow dial is never blamed on the device. With no
+// connection held otherwise, the exchange fails at once naming the state and
+// its reason: a down device must not stall the node's tick, and a poll never
+// reconnects on its own (the session owns the connection). A down session
+// lends the connection it is proving, so an answer can prove it.
 func (s *Session) Exchange(ctx context.Context, line string, timeout time.Duration) (string, error) {
 	if timeout <= 0 {
 		timeout = s.cfg.Timeout
 	}
-	ctx, cancel := context.WithTimeout(ctx, timeout)
-	defer cancel()
+	var wait <-chan time.Time
 	for {
 		s.mu.Lock()
 		if s.closed {
 			s.mu.Unlock()
 			return "", ErrSessionClosed
 		}
-		conn, state, reason, changed, dialing := s.conn, s.state, s.reason, s.changed, s.dialing
+		conn, heard, state, reason, changed, dialing := s.conn, s.heard, s.state, s.reason, s.changed, s.dialing
 		s.mu.Unlock()
-		if state == SessionUp && conn != nil {
-			return conn.Exchange(ctx, line, timeout)
+		if conn != nil {
+			answer, err := conn.Exchange(ctx, line, timeout)
+			if err == nil {
+				select {
+				case heard <- struct{}{}:
+				default:
+				}
+			}
+			return answer, err
 		}
 		if !dialing {
 			return "", fmt.Errorf("collection: session to %s is %s: %s", s.cfg.Target, state, reason)
 		}
+		if wait == nil {
+			t := time.NewTimer(timeout)
+			defer t.Stop()
+			wait = t.C
+		}
 		select {
 		case <-changed:
-		case <-ctx.Done():
+		case <-wait:
 			return "", fmt.Errorf("collection: session to %s is %s: %s", s.cfg.Target, state, reason)
+		case <-ctx.Done():
+			return "", fmt.Errorf("collection: session to %s: %w", s.cfg.Target, ctx.Err())
 		}
 	}
 }
@@ -226,7 +254,10 @@ func (s *Session) transition(state SessionState, reason string, conn HeldConn) {
 		s.mu.Unlock()
 		return
 	}
-	s.state, s.reason, s.conn = state, reason, conn
+	s.state, s.reason = state, reason
+	if conn == nil {
+		s.conn, s.heard = nil, nil
+	}
 	if state == SessionUp {
 		// The first dial's wait window ends with the connection already
 		// lent, so a waiting exchange never sees the window closed first.
@@ -240,15 +271,24 @@ func (s *Session) transition(state SessionState, reason string, conn HeldConn) {
 	}
 }
 
+// lend makes conn the connection exchanges borrow, with heard as its
+// answered-exchange signal, without publishing anything.
+func (s *Session) lend(conn HeldConn, heard chan struct{}) {
+	s.mu.Lock()
+	s.conn, s.heard = conn, heard
+	s.mu.Unlock()
+}
+
 // run is the machine. failures counts the consecutive failed attempts
-// (failed dials, churned connections, answer timeouts); it is also the
-// backoff attempt before the next dial, zero (an immediate redial) after a
-// stable connection dropped.
+// (failed dials, unanswered churned connections, answer timeouts); it is
+// also the backoff attempt before the next dial, zero (an immediate redial)
+// once forgiven. needAnswer holds while answer timeouts are what failed: a
+// down session then leaves down only on an answer, never on age alone.
 func (s *Session) run(ctx context.Context) {
 	defer close(s.done)
 	s.transition(SessionEstablishing, "connecting to "+s.cfg.Target, nil)
 	state := SessionEstablishing
-	failures := 0
+	failures, needAnswer := 0, false
 	fail := func(cause string) {
 		failures++
 		switch {
@@ -278,17 +318,55 @@ func (s *Session) run(ctx context.Context) {
 			fail(err.Error())
 			continue
 		}
-		state = SessionUp
-		s.transition(state, "connected to "+s.cfg.Target, conn)
+		heard := make(chan struct{}, 1)
+		s.lend(conn, heard)
 		since := s.cfg.Now()
-		select {
-		case <-ctx.Done():
-			_ = conn.Close()
-			return
-		case <-conn.Done():
+		// A down session proves the connection before publishing up: an
+		// answer always proves it, outliving the stable window does unless
+		// answers were what failed.
+		proving := state == SessionDown
+		var stable <-chan time.Time
+		var stableTimer *time.Timer
+		if proving && !needAnswer {
+			stableTimer = time.NewTimer(s.cfg.StableAfter)
+			stable = stableTimer.C
 		}
+		promote := func(how string) {
+			failures, needAnswer, proving = 0, false, false
+			state = SessionUp
+			s.transition(state, "connected to "+s.cfg.Target+how, conn)
+		}
+		if !proving {
+			state = SessionUp
+			s.transition(state, "connected to "+s.cfg.Target, conn)
+		}
+		answered := false
+	held:
+		for {
+			select {
+			case <-ctx.Done():
+				stopTimer(stableTimer)
+				_ = conn.Close()
+				return
+			case <-heard:
+				answered = true
+				failures, needAnswer = 0, false
+				if proving {
+					promote("; it answered")
+				}
+			case <-stable:
+				stable = nil
+				if proving {
+					promote("; held past the stable window")
+				}
+			case <-conn.Done():
+				break held
+			}
+		}
+		stopTimer(stableTimer)
 		cause := conn.Err()
 		_ = conn.Close()
+		s.lend(nil, nil)
 		reason := "connection lost"
 		if cause != nil {
 			reason += ": " + cause.Error()
@@ -296,13 +374,16 @@ func (s *Session) run(ctx context.Context) {
 		lived := s.cfg.Now().Sub(since)
 		switch {
 		case errors.Is(cause, ErrExchangeTimeout):
+			needAnswer = true
 			fail(reason)
-		case lived < SessionStableAfter:
-			fail(fmt.Sprintf("%s (within %s of connecting)", reason, SessionStableAfter))
+		case lived < s.cfg.StableAfter && !answered:
+			fail(fmt.Sprintf("%s (unanswered, within %s of connecting)", reason, s.cfg.StableAfter))
 		default:
 			failures = 0
-			state = SessionRecovering
-			s.transition(state, reason, nil)
+			if state == SessionUp {
+				state = SessionRecovering
+				s.transition(state, reason, nil)
+			}
 		}
 	}
 }
@@ -319,6 +400,12 @@ func (s *Session) firstDialDone() {
 	s.dialing = false
 	close(s.changed)
 	s.changed = make(chan struct{})
+}
+
+func stopTimer(t *time.Timer) {
+	if t != nil {
+		t.Stop()
+	}
 }
 
 // sleepCtx waits d or until ctx ends; false means ctx ended.
