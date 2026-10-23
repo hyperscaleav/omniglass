@@ -164,6 +164,9 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 	// faultseen remembers each driver task's last fault set so a static
 	// misconfiguration lands one collection-failed, not one per tick (#814).
 	faultseen := map[string]string{}
+	// sched remembers when each driver poll is next due, so a poll runs on
+	// its declared schedule rather than every heartbeat (#822).
+	sched := newPollSchedule()
 
 	wl, err := pullWorklist(nc, cfg.Name)
 	if err != nil {
@@ -176,7 +179,7 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 	// lives here (the report repeats, the device is not touched twice). It is
 	// pruned past the redelivery window so it does not grow for the life of the run.
 	executedCommands := map[int64]commandOutcome{}
-	if err := runTasks(ctx, nc, cfg.Name, wl, runner, sessions, verdicts, faultseen); err != nil {
+	if err := runTasks(ctx, nc, cfg.Name, wl, runner, sessions, sched, verdicts, faultseen); err != nil {
 		return wl, err
 	}
 	runCommands(ctx, nc, cfg.Name, runner, sessions, executedCommands)
@@ -212,7 +215,7 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 			sessions.reconcile(wl.Tasks)
 			// Run the worklist's tcp tasks and publish their telemetry. A publish
 			// failure is non-fatal (retry next tick).
-			_ = runTasks(ctx, nc, cfg.Name, wl, runner, sessions, verdicts, faultseen)
+			_ = runTasks(ctx, nc, cfg.Name, wl, runner, sessions, sched, verdicts, faultseen)
 			// Pull and actuate the pending command queue (#815).
 			runCommands(ctx, nc, cfg.Name, runner, sessions, executedCommands)
 			// Report the inbound lines no listener claimed this tick.

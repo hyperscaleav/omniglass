@@ -340,9 +340,11 @@ dead targets is bounded by concurrency, not the serial sum of probe timeouts (a 
 `timeout * (retries+1)`, via `--snmp-timeout` / `--snmp-retries`, default 3s x2). Each poll task gets
 a per-task deadline (`--task-deadline`, default 30s).
 
-:::caution[Open question]
-Per-task schedule dispatch: the resolved `interval` exists, but honoring distinct per-task cadences
-within one node tick is unsettled.
+:::note[Settled for driver polls (#822)]
+A driver poll runs on its declared `schedule.every`, at heartbeat granularity: the node keeps each
+poll's next due time and runs it on the first tick at or after it (a task new to the worklist runs at
+once, a restart polls at its first tick). Reachability probes still run every tick, and a listener's
+pushes are never gated ([ADR-0152](/architecture/decisions/#adr-0152-a-driver-poll-runs-on-its-declared-schedule-at-heartbeat-granularity)).
 :::
 
 The loop is **overrun-aware**: it reschedules relative to each tick's finish, not a fixed ticker; a

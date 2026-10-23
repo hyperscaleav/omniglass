@@ -35,7 +35,13 @@ type endpointParams struct {
 // never stalls the rest of the worklist. tcp and icmp are the wired probe types;
 // their samples ride the same pipeline (the ingest consumer does not branch
 // on probe type).
-func runTasks(ctx context.Context, nc *nats.Conn, node string, wl collection.WorklistReply, runner *collection.Runner, sessions *sessionManager, verdicts map[string]string, faultseen map[string]string) error {
+func runTasks(ctx context.Context, nc *nats.Conn, node string, wl collection.WorklistReply, runner *collection.Runner, sessions *sessionManager, sched *pollSchedule, verdicts map[string]string, faultseen map[string]string) error {
+	now := time.Now()
+	present := make(map[string]bool, len(wl.Tasks))
+	for _, task := range wl.Tasks {
+		present[task.ID] = true
+	}
+	sched.retain(present)
 	for _, task := range wl.Tasks {
 		// A standing listen task runs no tick of its own: it is what holds
 		// its endpoint's session (the session manager reconciles it, #816),
@@ -53,6 +59,11 @@ func runTasks(ctx context.Context, nc *nats.Conn, node string, wl collection.Wor
 		// tick lands one event, not one per tick forever, so a stuck driver
 		// does not flood the event lane.
 		if driver.IsBaked(task.Spec) {
+			// A driver poll runs on its declared schedule (#822), not on
+			// every heartbeat.
+			if !sched.due(task.ID, pollInterval(task), now) {
+				continue
+			}
 			dps, faults := collectDriverTask(ctx, runner, task, sessions)
 			current := ""
 			for _, f := range faults {
@@ -107,6 +118,17 @@ func runTasks(ctx context.Context, nc *nats.Conn, node string, wl collection.Wor
 		}
 	}
 	return nil
+}
+
+// pollInterval reads a driver poll's declared cadence off its baked spec;
+// zero (run every tick) when it declares none or does not parse, where the
+// poll itself then faults by name.
+func pollInterval(task collection.TaskSpec) time.Duration {
+	fn, err := driver.ParseBaked(task.Spec)
+	if err != nil || fn.Schedule == nil {
+		return 0
+	}
+	return fn.Schedule.Interval()
 }
 
 // publishBatch maps samples to a per-lane TelemetryBatch and publishes it on

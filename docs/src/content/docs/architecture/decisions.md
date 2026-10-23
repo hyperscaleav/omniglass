@@ -189,6 +189,7 @@ below from the project's history. From here it grows one slice at a time.
 | [ADR-0148](#adr-0148-calc-rules-run-on-a-durable-pending-set-and-a-server-tick-not-a-jetstream-consumer) | 2026-10-21 | Accepted, amended (#1018) | Component calc rules run on a durable `calc_pending` set marked in the sample-write transaction and drained by a 1s server tick (`SKIP LOCKED`, one transaction per mark), writing calculated samples through the same path so event rules judge them; marks are held by their writer until commit, the ingest retries a deadlock, a failing mark is deferred, a rule write recomputes its owners; a write never marks its own rule; a missing input writes nothing and is recorded in `calc_rule_state`; an unchanged result writes no row. Diverges from the JetStream calc consumer (#430). **Amended (#1018):** every input binds as the list of its per-instance values, an expression's included, and the marking probe reads `calc_rule_input` by key id |
 | [ADR-0150](#adr-0150-a-held-sessions-state-is-a-property-series-and-node-logs-not-a-session-table) | 2026-10-23 | Accepted | A held session (#816) surfaces as the `session-state` property per endpoint (establishing, up, recovering, down; transitions only, under the endpoint's standing listen task) plus the node's self-logs carrying the reasons; no `session_log` table and no `session` view. The session is held for an endpoint whose worklist carries a standing listen task over a transport with a session dialer (the line protocol over `tcp` today), polls on that endpoint borrow it, and recovery is a jittered exponential backoff with an attempt budget before down |
 | [ADR-0151](#adr-0151-a-held-line-session-routes-every-inbound-line-listeners-first-answers-by-reply-shape) | 2026-10-23 | Accepted | Listeners run over the held session (#817): `arm` commands on every connection before up (plumbing, self-logged), `match` claims a pushed line, its emits land as push samples under the listen task. Every inbound line is routed listeners first, then the exchange in flight by its declared `request.reply` shape (or the first unclaimed line), then unclaimed (counted; `unmatched: collection-failed` lands one fault per tick). Commands ride the held session. Reverses the designed matcher order (outstanding poll first) |
+| [ADR-0152](#adr-0152-a-driver-poll-runs-on-its-declared-schedule-at-heartbeat-granularity) | 2026-10-23 | Accepted | A driver poll runs on its declared `schedule.every` at heartbeat granularity (#822): a per-task next-due time kept for the run, the first tick at or after it runs the poll, a new task runs at once, a late tick never bursts; probes stay per tick and pushes are never gated. Settles the nodes page's open question for driver polls |
 
 ## Entries
 
@@ -6904,3 +6905,19 @@ interface create form, since that name is the platform's to mint.
   reply shapes closes the window ADR-0150 point 5 left open for every request that declares one;
   a request without one still takes the first unclaimed line, so a driver whose protocol mixes
   unsolicited lines with answers declares its replies (the seeded `newtron-nvp` does).
+
+### ADR-0152: A driver poll runs on its declared schedule, at heartbeat granularity
+
+- **Date:** 2026-10-23 | **Status:** Accepted | **Pages:** [nodes](/architecture/nodes/), [collection](/architecture/collection/), [drivers](/guides/admin/drivers/)
+- **Decision:** The node honors a driver poll's `schedule.every` (#822). It keeps, per task id and for
+  the life of the run, when each poll is next due, and runs the poll on the first heartbeat tick at or
+  after that time. The next run is booked from the due time, so tick jitter does not drift the cadence;
+  a tick so late it missed whole intervals runs the poll once and books from now, never a catch-up
+  burst. A task new to the worklist runs at once; a task that leaves it is forgotten; a restart polls
+  at its first tick. The gate covers driver polls only: reachability probes still run every tick, and a
+  listener's pushes are never gated, since they ride the held session as they arrive.
+- **Context:** The schedule was validated and baked but unread, so `snmp-generic`'s `every: 60s` polled
+  every 30s heartbeat and a `24h` poll would have asked a device 2880 times a day. The nodes page left
+  per-task cadence within a tick as an open question; a per-task gate settles it for driver polls
+  without the tick scheduler's redesign (the overrun-aware loop and the bounded pool stay design), at
+  the cost of cadence precision bounded by the heartbeat.

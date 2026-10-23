@@ -157,11 +157,12 @@ func TestOperatorMonitorsAndConfiguresSimulatedDevices(t *testing.T) {
 		"--inputs", fmt.Sprintf(`{"host":%q}`, panelIP))
 
 	// The simulator and the collector beside each other, on the node's identity.
+	// The collector starts once the simulator serves both devices: a driver
+	// poll runs on its declared schedule (#822), so a first poll that found
+	// the device not yet up would wait its whole interval (60s for SNMP).
 	nodeEnv := append(os.Environ(), "OMNIGLASS_SERVER="+server, "OMNIGLASS_NODE_NAME=edge-p", "OMNIGLASS_NODE_TOKEN="+nodeTok)
-	for _, args := range [][]string{
-		{"sim", "run", "--port-offset", fmt.Sprint(protocolsPortShift), "--poll", "300ms"},
-		{"node", "run", "--server", server, "--name", "edge-p", "--token", nodeTok, "--heartbeat", "1s"},
-	} {
+	start := func(args ...string) {
+		t.Helper()
 		pctx, stop := context.WithCancel(ctx)
 		p := exec.CommandContext(pctx, binPath, args...)
 		p.Env = nodeEnv
@@ -171,6 +172,18 @@ func TestOperatorMonitorsAndConfiguresSimulatedDevices(t *testing.T) {
 		}
 		t.Cleanup(func() { stop(); _ = p.Wait() })
 	}
+	start("sim", "run", "--port-offset", fmt.Sprint(protocolsPortShift), "--poll", "300ms")
+	for _, addr := range []string{net.JoinHostPort(panelIP, "51325"), net.JoinHostPort(displayIP, fmt.Sprint(80+protocolsPortShift))} {
+		waitFor(t, "the simulator serving "+addr, func() bool {
+			c, err := net.DialTimeout("tcp", addr, 200*time.Millisecond)
+			if err != nil {
+				return false
+			}
+			_ = c.Close()
+			return true
+		})
+	}
+	start("node", "run", "--server", server, "--name", "edge-p", "--token", nodeTok, "--heartbeat", "1s")
 
 	// Monitoring: each driver's first poll lands observed values.
 	observed := func(component, property string) string {

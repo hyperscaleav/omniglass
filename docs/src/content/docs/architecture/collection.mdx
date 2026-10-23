@@ -519,8 +519,11 @@ driver row without a spec is a **stub** that cannot be attached. The console's e
 create offers both moves (a bare probe endpoint, or attach a driver and fill its inputs), and the
 Drivers page renders each spec as the menu it is.
 
-**The interpreter runs the poll functions** (#814): the node tells a baked driver task from a
-probe task by its spec, fetches over the transport (the v2c scalar GET rides `gosnmp`, proven
+**The interpreter runs the poll functions** (#814) **on their declared schedule** (#822): a poll's
+`schedule.every` is honored at heartbeat granularity, the node running it on the first tick at or
+after it is due (a new task at once), while reachability probes run every tick and a listener's
+pushes ride the held session as they arrive, never gated ([ADR-0152](/architecture/decisions/#adr-0152-a-driver-poll-runs-on-its-declared-schedule-at-heartbeat-granularity)).
+The node tells a baked driver task from a probe task by its spec, fetches over the transport (the v2c scalar GET rides `gosnmp`, proven
 against a from-the-spec BER agent; a line poll runs one stateless ask over a throwaway
 connection, or borrows the endpoint's [held session](#sessions) when the node holds one), and interprets the payload against the baked
 function: locate each emit by its one extractor, apply the declared transform (enum map, then
