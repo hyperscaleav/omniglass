@@ -233,13 +233,18 @@ omniglass endpoint get <id>                                     # endpoints are 
 omniglass endpoint update <id> --node edge-hq --params '{"target":"10.0.0.2:22"}'
 omniglass endpoint delete <id>                                  # refused (409) while its task references it
 
+# A held session a refusal rejected (session-state reads rejected) dials no more until
+# its credential or address changes, or an operator retries it once:
+omniglass endpoint retry <id>                                   # needs endpoint:retry; audited
+omniglass endpoint retry <id> --host-key SHA256:...             # ssh: trust a replaced component's new key
+
 # The poll task is derived from the endpoint, so the task surface is read-only.
 omniglass task list
 omniglass task get <id>
 ```
 
 The transports are a code registry the binary ships (`omniglass transport list` reads it):
-`icmp` and `tcp` probe layers 3 and 4, `ssh` and `http` climb to layer 7 (the probe draws a
+`icmp` and `tcp` probe layers 3 and 4, `telnet` reads its first bytes, `ssh` and `http` climb to layer 7 (the probe draws a
 real response, so reached-but-not-responsive and responded-but-not-authenticated are visible
 states), and `udp` and `snmp` carry no standalone probe (`snmp` collects through its driver).
 An endpoint is **named by its transport** (the `--transport`, or the attached driver's spec),
