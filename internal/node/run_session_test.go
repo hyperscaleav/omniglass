@@ -9,8 +9,10 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"net"
 	"net/http/httptest"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -64,7 +66,7 @@ func TestNodeHoldsASessionThroughADeviceOutage(t *testing.T) {
 	engine.SetPortMap(sim.PrivilegedPortShift(20000))
 	t.Cleanup(engine.StopAll)
 	if err := engine.Sync([]sim.DeviceSnapshot{{DeviceID: "panel", Hostname: "panel", LoopbackIP: panelIP,
-		ProfileName: "newtron-panel-7", Version: 1}}); err != nil {
+		ProfileName: nvpProfile(t, store), Version: 1}}); err != nil {
 		t.Fatalf("serve the panel: %v", err)
 	}
 	panel := engine.Devices()[0]
@@ -230,7 +232,7 @@ func TestNodeLandsPushedSamplesThroughARecover(t *testing.T) {
 	engine.SetPortMap(sim.PrivilegedPortShift(20000))
 	t.Cleanup(engine.StopAll)
 	if err := engine.Sync([]sim.DeviceSnapshot{{DeviceID: "panel", Hostname: "panel", LoopbackIP: panelIP,
-		ProfileName: "newtron-panel-7", Version: 1}}); err != nil {
+		ProfileName: nvpProfile(t, store), Version: 1}}); err != nil {
 		t.Fatalf("serve the panel: %v", err)
 	}
 	panel := engine.Devices()[0]
@@ -315,4 +317,38 @@ func TestNodeLandsPushedSamplesThroughARecover(t *testing.T) {
 
 	set("hdmi3")
 	waitValue("video-input", "hdmi3", time.Second) // re-armed on recover
+}
+
+// nvpProfile picks the simulator profile serving a product the shipped
+// newtron-nvp driver reads, derived from both catalogs rather than named, so
+// a catalog rename touches the YAML and nothing here (#804).
+func nvpProfile(t *testing.T, store *profile.Store) string {
+	t.Helper()
+	raw, err := seed.FactsJSON()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var facts struct {
+		Products []struct {
+			ID       string `json:"id"`
+			DriverID string `json:"driver_id"`
+		} `json:"products"`
+	}
+	if err := json.Unmarshal(raw, &facts); err != nil {
+		t.Fatal(err)
+	}
+	var names []string
+	for _, p := range facts.Products {
+		if p.DriverID != "newtron-nvp" {
+			continue
+		}
+		if name, _, ok := store.ForProduct(p.ID); ok {
+			names = append(names, name)
+		}
+	}
+	if len(names) == 0 {
+		t.Fatal("no simulator profile serves a newtron-nvp product")
+	}
+	sort.Strings(names)
+	return names[0]
 }
