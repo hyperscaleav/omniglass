@@ -1,0 +1,92 @@
+{
+  "id": "fix-an-endpoint-in-place",
+  "title": "Fix an endpoint in place",
+  "description": "Attach the SNMP driver with its host typed one octet short, then correct the host on the endpoint itself and watch samples arrive, with no re-attach.",
+  "steps": [
+    {
+      "n": 1,
+      "kind": "goto",
+      "caption": "A display in Bay 2, with no endpoint yet.",
+      "still": "step-01.png"
+    },
+    {
+      "n": 2,
+      "kind": "click",
+      "caption": "Add an endpoint, the way a node reaches the display.",
+      "still": "step-02.png"
+    },
+    {
+      "n": 3,
+      "kind": "click",
+      "caption": "Attach a driver.",
+      "still": "step-03.png"
+    },
+    {
+      "n": 4,
+      "kind": "select",
+      "caption": "The SNMP driver reads the uptime any agent reports.",
+      "still": "step-04.png"
+    },
+    {
+      "n": 5,
+      "kind": "type",
+      "caption": "The host is the display's address, typed one octet short.",
+      "still": "step-05.png"
+    },
+    {
+      "n": 6,
+      "kind": "type",
+      "caption": "The community is a secret's name, never its value.",
+      "still": "step-06.png"
+    },
+    {
+      "n": 7,
+      "kind": "select",
+      "caption": "The node edge-hq collects it.",
+      "still": "step-07.png"
+    },
+    {
+      "n": 8,
+      "kind": "click",
+      "caption": "Attach it. The endpoint opens; nothing answers at that address, so nothing is collected.",
+      "still": "step-08.png"
+    },
+    {
+      "n": 9,
+      "kind": "click",
+      "caption": "Its inputs edit in place, the same ones the attach asked for.",
+      "still": "step-09.png"
+    },
+    {
+      "n": 10,
+      "kind": "type",
+      "caption": "Add the missing octet. The driver checks the value, and the target moves with it.",
+      "still": "step-10.png"
+    },
+    {
+      "n": 11,
+      "kind": "click",
+      "caption": "Save. No re-attach; the node reconnects on the new address at its next check-in.",
+      "still": "step-11.png"
+    },
+    {
+      "n": 12,
+      "kind": "goto",
+      "caption": "Its Overview reads the display as it is collected.",
+      "still": "step-12.png"
+    },
+    {
+      "n": 13,
+      "kind": "wait",
+      "caption": "Samples arrived. The uptime the display reports now lands.",
+      "still": "step-13.png"
+    }
+  ],
+  "poster": "step-13.png",
+  "preview": "preview.webp",
+  "budget": {
+    "seconds": 45.9,
+    "bytes": 911524,
+    "previewBytes": 771882
+  }
+}

@@ -63,6 +63,7 @@ func runTasks(ctx context.Context, nc *nats.Conn, node string, wl collection.Wor
 			// A driver poll runs on its declared schedule (#822), not on
 			// every heartbeat.
 			interval := pollInterval(task)
+			sched.rebook(task.ID, task.Fingerprint)
 			sched.releaseRefused(task.ID, sessions.isUp(task.EndpointID))
 			if !sched.due(task.ID, interval, now) {
 				continue

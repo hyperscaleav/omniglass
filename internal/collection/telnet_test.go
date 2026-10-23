@@ -1,6 +1,7 @@
 package collection_test
 
 import (
+	"bufio"
 	"bytes"
 	"io"
 	"net"
@@ -110,7 +111,10 @@ func TestTelnetEscapesALiteralFF(t *testing.T) {
 
 // Review of #1033, finding 1: a negotiation that arrives long after the last
 // exchange's write deadline passed is still answered, and the stale deadline
-// never surfaces from Read as the line reader's own interrupt.
+// never surfaces from Read as the line reader's own interrupt. The scripted
+// component stays connected until the test ends, and the proof that the
+// connection survived is a second exchange answered over it (a fixture that
+// hung up after reporting raced the test's check, CI run 40016892001).
 func TestTelnetAnswersANegotiationAfterAnIdleSpell(t *testing.T) {
 	if testing.Short() {
 		t.Skip("real-wire test")
@@ -121,28 +125,34 @@ func TestTelnetAnswersANegotiationAfterAnIdleSpell(t *testing.T) {
 	}
 	defer ln.Close()
 	got := make(chan []byte, 1)
+	release := make(chan struct{})
+	defer close(release)
 	go func() {
 		c, err := ln.Accept()
 		if err != nil {
 			return
 		}
 		defer c.Close()
-		buf := make([]byte, 64)
-		n, _ := c.Read(buf) // GET INPUT
-		_ = n
-		_, _ = c.Write([]byte("INPUT hdmi1\r\n"))
+		rd := bufio.NewReader(c)
+		answer := func() bool {
+			if _, err := rd.ReadString('\n'); err != nil {
+				return false
+			}
+			_, err := c.Write([]byte("INPUT hdmi1\r\n"))
+			return err == nil
+		}
+		if !answer() {
+			return
+		}
 		time.Sleep(600 * time.Millisecond)
 		_, _ = c.Write([]byte{iac, do, 0x06})
 		_ = c.SetReadDeadline(time.Now().Add(2 * time.Second))
-		var reply []byte
-		for len(reply) < 3 {
-			k, err := c.Read(buf)
-			reply = append(reply, buf[:k]...)
-			if err != nil {
-				break
-			}
-		}
-		got <- reply
+		reply := make([]byte, 3)
+		n, _ := io.ReadFull(rd, reply)
+		_ = c.SetReadDeadline(time.Time{})
+		got <- reply[:n]
+		answer() // the second exchange: the connection survived
+		<-release
 	}()
 	conn, err := collection.NewTelnetSessionDialer().Dial(t.Context(), ln.Addr().String(), time.Second, nil)
 	if err != nil {
@@ -160,9 +170,7 @@ func TestTelnetAnswersANegotiationAfterAnIdleSpell(t *testing.T) {
 	case <-time.After(3 * time.Second):
 		t.Fatal("no answer to the late negotiation")
 	}
-	select {
-	case <-conn.Done():
-		t.Fatalf("the connection died: %v", conn.Err())
-	default:
+	if a, err := conn.Exchange(t.Context(), "GET INPUT", nil, 2*time.Second); err != nil || a != "INPUT hdmi1" {
+		t.Fatalf("an exchange after the late negotiation = %q, %v: the connection did not survive it", a, err)
 	}
 }

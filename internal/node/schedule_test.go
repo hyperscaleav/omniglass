@@ -118,3 +118,31 @@ func TestPollScheduleDoesNotDrift(t *testing.T) {
 		t.Fatal("the run after a late tick drifted: it is not due at t0+120s")
 	}
 }
+
+// A poll whose endpoint's connection fingerprint changes (an address, port or
+// secret edited in place, #1061) runs at the next tick: the failure backoff
+// it built up against the old inputs, and its booking, belong to inputs that
+// are gone.
+func TestPollScheduleRunsAtOnceWhenTheFingerprintMoves(t *testing.T) {
+	s := newPollSchedule(2 * time.Second)
+	now := time.Date(2026, 10, 23, 0, 0, 0, 0, time.UTC)
+	every := time.Minute
+	s.rebook("p1", "fp-wrong-port")
+	for i := 0; i < 5; i++ {
+		if s.due("p1", every, now) {
+			s.failed("p1", every, now)
+		}
+		now = now.Add(2 * time.Second)
+	}
+	if s.due("p1", every, now) {
+		t.Fatal("a failing poll ran inside its backoff")
+	}
+	s.rebook("p1", "fp-wrong-port")
+	if s.due("p1", every, now) {
+		t.Fatal("an unchanged fingerprint released the backoff")
+	}
+	s.rebook("p1", "fp-fixed-port")
+	if !s.due("p1", every, now) {
+		t.Fatal("a moved fingerprint did not run the poll at the next tick")
+	}
+}

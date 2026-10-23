@@ -3,6 +3,7 @@ title: Nodes and reachability
 description: "Enrolling a collection node, adding a transport-named endpoint to a component, and reading the per-endpoint reachability and the log events a node reports."
 walkthroughs:
   - id: set-up-monitoring
+  - id: fix-an-endpoint-in-place
 ---
 
 Collection is how the fleet learns whether a device is reachable and what it reports. An **edge
@@ -76,8 +77,10 @@ without one reads its transport name exactly.
 
   The owning component is the one you are on. Either face **derives the endpoint's tasks**
   for you, so a fresh endpoint is working collection with no second step.
-- With `endpoint:update`, editing an endpoint changes only its **node placement** and its
-  **target**; the transport (and so the name) is fixed at creation.
+- With `endpoint:update`, editing an endpoint changes its **node placement** and where it
+  connects: a bare probe's **target**, or an attached driver's **inputs** (its host, its port, the
+  name of the secret it authenticates with), edited in place and checked against the driver, with
+  no re-attach. The transport (and so the name) is fixed at creation.
 - With `endpoint:delete`, deleting an endpoint removes it and **cascades its derived task**.
 
 Setting up monitoring on a component nothing collects from yet is both faces in turn: the SNMP
@@ -87,6 +90,12 @@ own as they land, so there is nothing to reload. The walkthrough runs against a 
 component, so the node is really collecting.
 
 ::walkthrough{#set-up-monitoring}
+
+A driver attached with a mistake (an address typed one octet short) is fixed on the endpoint itself:
+correct the input, save, and the node reconnects at its next check-in, so samples arrive seconds
+later.
+
+::walkthrough{#fix-an-endpoint-in-place}
 
 Because an endpoint belongs to a component, it inherits that component's scope: an endpoint
 on a component outside your scope is not shown. A node **purge cascades** its endpoints and

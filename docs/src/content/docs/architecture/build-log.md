@@ -7649,3 +7649,10 @@ required one by name, the console sending a cleared field rather than dropping i
 before an edit merges over it, so two concurrent edits cannot lose one; a transport restatement is
 judged against the endpoint's own. End to end, an in-place swap of the attached secret now un-gates
 a session its stale credential had rejected, within a tick.
+
+CI on the rollup found two more. A telnet test's scripted peer hung up as soon as it reported, racing
+the test's peek at the connection; the peer now stays connected and the test proves the connection
+survived with a second exchange (a review catalog entry records the pattern). And a stateless poll
+kept the failure backoff it built up against an address since edited in place, so its first good
+fetch could wait tens of seconds: a poll whose endpoint's connection fingerprint moves now runs at
+the next tick. The `fix-an-endpoint-in-place` walkthrough ships on the operator collection guide.
