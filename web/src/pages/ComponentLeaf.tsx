@@ -366,7 +366,7 @@ export default function ComponentLeaf() {
                           return (
                             <li class="flex flex-col gap-1.5">
                               <div class="flex flex-wrap items-center gap-2 text-xs">
-                                <span class="font-medium">{iface().endpoint}</span>
+                                <span class="min-w-14 font-medium">{iface().endpoint}</span>
                                 {/* The ladder (#1059), so component-versus-path
                                     reads at a glance and the layered gate is
                                     visible: the ping answers the path, the

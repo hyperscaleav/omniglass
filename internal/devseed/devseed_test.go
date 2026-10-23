@@ -1807,10 +1807,11 @@ func TestSimulatedFleetAtRealPorts(t *testing.T) {
 
 // TestSeededFleetHoldsARejectedSession proves the dev fleet carries a held
 // session worth showing (#1059): the huddle's touch panel also answers NVP over
-// telnet behind a login, and the endpoint seeded on it logs in with a stale
-// password, so a live node reads its session rejected beside Retry. The
-// right credential is a second secret the endpoint's login can be pointed at,
-// which is the fix the walkthrough teaches. A second run adds nothing.
+// telnet behind a login, and the endpoint seeded on it logs in with the secret
+// holding the password from before a rotation, so a live node reads its
+// session rejected beside Retry. The rotated secret holds the right one, and
+// pointing the endpoint's login at it is the fix the walkthrough teaches. A
+// second run adds nothing.
 func TestSeededFleetHoldsARejectedSession(t *testing.T) {
 	ctx, conn, gw := seededFleet(t)
 	type ep struct{ host, port, login, node string }
@@ -1847,8 +1848,8 @@ func TestSeededFleetHoldsARejectedSession(t *testing.T) {
 	}
 	// The panel's own simulated address, its telnet port lifted as make dev
 	// lifts every port below 1024, on the dev node, with the stale login.
-	if got.host != nvpHost || got.port != "10023" || got.node != "edge-hq" || got.login != "sim-panel-login-old" {
-		t.Fatalf("huddle telnet endpoint = %+v, want host %s, port 10023, node edge-hq, login sim-panel-login-old", got, nvpHost)
+	if got.host != nvpHost || got.port != "10023" || got.node != "edge-hq" || got.login != "sim-panel-login" {
+		t.Fatalf("huddle telnet endpoint = %+v, want host %s, port 10023, node edge-hq, login sim-panel-login", got, nvpHost)
 	}
 
 	all := scope.Set{All: true}
@@ -1864,12 +1865,13 @@ func TestSeededFleetHoldsARejectedSession(t *testing.T) {
 		}
 		return fields
 	}
-	// The simulated panel's login is admin / newtron (its nvp-telnet face).
-	if right := reveal("sim-panel-login"); right["username"] != "admin" || right["password"] != "newtron" {
-		t.Errorf("sim-panel-login = %v, want the panel's admin / newtron", right)
+	// The simulated panel's login is admin / newtron (its nvp-telnet face):
+	// the rotated secret holds it, the one the endpoint uses does not.
+	if right := reveal("sim-panel-login-rotated"); right["username"] != "admin" || right["password"] != "newtron" {
+		t.Errorf("sim-panel-login-rotated = %v, want the panel's admin / newtron", right)
 	}
-	if stale := reveal("sim-panel-login-old"); stale["username"] != "admin" || stale["password"] == "newtron" || stale["password"] == "" {
-		t.Errorf("sim-panel-login-old = %v, want admin with a password the panel refuses", stale)
+	if stale := reveal("sim-panel-login"); stale["username"] != "admin" || stale["password"] == "newtron" || stale["password"] == "" {
+		t.Errorf("sim-panel-login = %v, want admin with a password the panel refuses", stale)
 	}
 
 	if err := devseed.Run(ctx, gw, ""); err != nil {

@@ -185,6 +185,17 @@ yellow `badge-warning`, red `badge-error`, and orange and darkred their own `bad
 from a high. The chip shows the level's label; whether it takes a component out is the level's
 `outage` flag, never a comparison against a level name.
 
+A held **session** wears `SessionPill` (#1059), on `HealthBadge`'s recipe of glyph, word and hue:
+establishing the incomplete look (a dashed ring: not yet, not broken), up `badge-success`,
+recovering `badge-info` (the node is working on it), down `badge-error`, and rejected
+`badge-warning` with a refusal glyph, because it is the one state that waits on an operator and must
+not read as down. Beside it sits its age, and a state whose endpoint has delivered nothing for the
+staleness window takes the grey `badge-ghost` chip, its tooltip saying what it last read. The
+**reachability ladder** (`ReachLadder`) is a row of rung chips, each an `InfoTip` trigger of its own
+(InfoTip takes children in place of its (i) for exactly this), the informational ping's chip dashed
+and a held rung amber with the refusal glyph. A list whose rows hold state (an expanded row, a retry
+waiting on its session) keys its rows by id, never by the objects a poll hands back.
+
 ## Primitives (the reuse target)
 
 `ListShell` (with its `FlatList` / `TreeList` bodies), `FilterBar`, `Drawer`, `PanelFooter`,

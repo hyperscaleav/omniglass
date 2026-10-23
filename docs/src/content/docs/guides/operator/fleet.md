@@ -352,8 +352,11 @@ on its label's tooltip.
 
 ::screenshot{#fleet-component}
 
-**Collection** shows each endpoint with its layer rungs (ping answers the path, the port
-answers the service), the node, its state, and when it was last seen: when the server last
+**Collection** shows each endpoint with its reachability ladder (the ping answers the path, the
+transport answers the service, the login answers the credential; each rung teaches itself on
+hover), a held session's state where the endpoint holds one, with why and **Retry** when it was
+rejected ([held sessions](/guides/operator/collection/#held-sessions)), the node, its state, and when
+it was last seen: when the server last
 received anything the endpoint's task delivered, not its last up/down change (hours old on an
 endpoint that never stopped answering) and not a time the node wrote on a sample. A driver
 endpoint (one attached to a driver, such as SNMP) has no reachability verdict, so what it delivers

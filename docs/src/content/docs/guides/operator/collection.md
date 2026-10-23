@@ -4,6 +4,7 @@ description: "Enrolling a collection node, adding a transport-named endpoint to 
 walkthroughs:
   - id: set-up-monitoring
   - id: fix-an-endpoint-in-place
+  - id: fix-a-rejected-session
 ---
 
 Collection is how the fleet learns whether a device is reachable and what it reports. An **edge
@@ -124,19 +125,61 @@ pill ages an endpoint by when the server last received anything its task deliver
 seen**, and an endpoint answering every probe stays responding however long ago it last changed
 state), an **availability strip** drawn from the
 verdict's up/down transitions over time, and an expandable **gate breakdown** with each probe's signal and timing, then the composed
-verdict (the endpoint is up only when every applicable probe passed). An `http` or `ssh`
-endpoint also wears its upper rungs as chips once a probe has climbed them: **responds** (the
-API drew a real answer) or **no response** (the port accepted but the service never spoke),
-and for `ssh` **auth ok** / **auth failed** (shown only when a credential was actually
-tried). A down endpoint also shows a plain-language **why** line. Every value is a real reading from the node, and the panel
-is also the authoring surface: its header carries **Add endpoint** (with `endpoint:create`)
-and each row that maps to an endpoint a **Manage** affordance opening that endpoint's detail.
+verdict (the endpoint is up only when every applicable probe passed). Every row also wears its
+**reachability ladder**, the rungs a connection is checked on bottom up: **reachable** (a ping,
+informational only, so its chip is dashed and a component that blocks ping never reads down for
+it), **responsive** (the transport answering: a connect, or the protocol's handshake; this is the
+gate, and nothing above it is tried until it passes) and **authenticated** (the login, shown once a
+credential was actually tried). Hover or focus a rung for what it checks and what it says now. A
+rung a refusal holds wears the refusal glyph and the rungs above it read untried, while the rungs
+below keep their readings: an endpoint whose login was refused still shows its ping and its
+transport answering. A down endpoint also shows a plain-language **why** line. Every value is a
+real reading from the node, and the panel is also the authoring surface: its header carries **Add
+endpoint** (with `endpoint:create`) and each row that maps to an endpoint a **Manage** affordance
+opening that endpoint's detail.
 
 To author a reachability check, add an **endpoint** to the component (above), from this
 panel's own header: a bare probe endpoint is the reachability check, and **attaching a
 driver** is the authoring flow for real collection (the spec's functions become the
 endpoint's tasks, and their samples land on the component). There is no standalone
 Endpoints page.
+
+### Held sessions
+
+An endpoint whose driver holds its connection open (a line protocol over `tcp`, `telnet` or
+`ssh`) is a **session**, and its state wears a pill beside the ladder on the component's
+**Collection** card, on the **Endpoints** panel, and on the endpoint's own detail: **establishing**
+(the first connection, dialing then logging in), **up** (held and logged in; polls and commands
+borrow it), **recovering** (it dropped and the node is redialing on a backoff), **down** (five
+attempts in a row failed; the node keeps redialing slowly, so a component that returns comes back
+on its own) or **rejected** (the component refused in a way retrying cannot fix, such as a wrong
+password or a changed host key; the node dials no more). Rejected is amber with a refusal glyph,
+apart from down's red, because it is the one state the node will not leave without someone acting.
+Beside the pill is how long ago the state changed. A state is stored only when it changes, so the
+pill is judged by the endpoint's last seen: an endpoint that has delivered nothing for a while
+turns the pill grey, and its tooltip says what it last read.
+
+A **down** or **rejected** session also says **why**, in the node's words for down and, for
+rejected, the refusal's class and the component's own text (`auth: auth rejected`), scrubbed by the
+node of anything it sent, so a credential never reaches the console. A rejected session offers two
+ways out:
+
+- **Retry**, with `endpoint:retry` (operators hold it), redials once with the endpoint as it is: the
+  right move when the component itself was fixed (its account unlocked, its password reset to what
+  the secret holds). It is audited, and the button holds its spinner until the session moves.
+  Without the permission the button is greyed and its tooltip says so, and the server refuses the
+  call anyway.
+- **Fix the endpoint**: on the Collection card and the Endpoints panel the notice opens the
+  endpoint, whose own notice offers **Edit credential** (with `endpoint:update`), its edit face with
+  the secret input focused. Pointing the login at the secret holding the right credential, rotating
+  that secret's value, or correcting the address or port changes what the endpoint connects with,
+  so the refusal no longer holds and the node tries again at its next check-in, with no retry.
+
+A component whose console password was rotated while its endpoint kept the old secret reads
+rejected; pointing the login at the rotated secret brings the session up seconds later. The
+walkthrough runs against a simulated touch panel, so the node really logs in.
+
+::walkthrough{#fix-a-rejected-session}
 
 ## Events
 

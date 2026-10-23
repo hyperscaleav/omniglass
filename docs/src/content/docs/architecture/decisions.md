@@ -6868,7 +6868,10 @@ interface create form, since that name is the platform's to mint.
      latest value of a session nobody holds), and a read must judge it by its age, as the
      property catalog already says of stale values. No surface reads `session-state` yet (the
      reachability panel reads the endpoint verdicts only); the console work that shows it, with
-     #817's listeners, must render it aged.
+     #817's listeners, must render it aged. **Amended (#1059):** the console reads it now, on the
+     component's reachability read beside `session-reason` and the gate's rung and class, aged by the
+     endpoint's `last_seen` (a state whose endpoint delivered nothing for the staleness window reads
+     grey), with Retry for a rejected one.
   3. **What holds a session.** An endpoint whose worklist carries a standing listen task over a
      transport with a session dialer (the line protocol over `tcp` today; ssh is not wired). The
      listen task is what needs the connection held (its listeners arm over it, #817); the endpoint's

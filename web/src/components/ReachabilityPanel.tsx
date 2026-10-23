@@ -142,8 +142,11 @@ function EndpointRow(p: { iface: ReachEndpoint; component: string; manageId?: st
             are buttons of their own beside the toggle, never inside it. The
             session pill, then the verdict pill, close the row. */}
         <div class="flex shrink-0 items-center gap-2 pr-3">
-          <ReachLadder iface={p.iface} />
-          <SessionPill iface={p.iface} now={now()} />
+          {/* Fixed slots, so the rungs, the pills and their ages line up down
+              the panel whatever each row holds (a tcp row has no login rung,
+              a probe endpoint no session). */}
+          <div class="w-72"><ReachLadder iface={p.iface} /></div>
+          <div class="w-36"><SessionPill iface={p.iface} now={now()} /></div>
           <span class={`badge badge-soft badge-sm shrink-0 ${pill().cls}`}>{pill().label}</span>
         </div>
         <Show when={canManage()}>
