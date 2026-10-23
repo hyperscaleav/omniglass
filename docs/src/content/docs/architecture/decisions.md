@@ -190,7 +190,7 @@ below from the project's history. From here it grows one slice at a time.
 | [ADR-0150](#adr-0150-a-held-sessions-state-is-a-property-series-and-node-logs-not-a-session-table) | 2026-10-23 | Accepted | A held session (#816) surfaces as the `session-state` property per endpoint (establishing, up, recovering, down; transitions only, under the endpoint's standing listen task) plus the node's self-logs carrying the reasons; no `session_log` table and no `session` view. The session is held for an endpoint whose worklist carries a standing listen task over a transport with a session dialer (the line protocol over `tcp` today), polls on that endpoint borrow it, and recovery is a jittered exponential backoff with an attempt budget before down |
 | [ADR-0151](#adr-0151-a-held-line-session-routes-every-inbound-line-listeners-first-answers-by-reply-shape) | 2026-10-23 | Accepted | Listeners run over the held session (#817): `arm` commands on every connection before up (plumbing, self-logged), `match` claims a pushed line, its emits land as push samples under the listen task. Every inbound line is routed listeners first, then the exchange in flight by its declared `request.reply` shape (or the first unclaimed line), then unclaimed (counted; `unmatched: collection-failed` lands one fault per tick). Commands ride the held session. Reverses the designed matcher order (outstanding poll first) |
 | [ADR-0152](#adr-0152-a-driver-poll-runs-on-its-declared-schedule-at-heartbeat-granularity) | 2026-10-23 | Accepted | A driver poll runs on its declared `schedule.every` at heartbeat granularity (#822): a per-task next-due time kept for the run, the first tick at or after it runs the poll, a new task runs at once, a late tick never bursts; probes stay per tick and pushes are never gated. Settles the nodes page's open question for driver polls |
-| [ADR-0153](#adr-0153-the-held-session-proof-is-the-line-protocol-over-tcp-other-held-transports-are-their-own-issues) | 2026-10-23 | Accepted | The stateful arc proves the held session on the line protocol over `tcp` (sessions, listeners, the shared reader); SSH, which #816 named as the session-lifecycle carrier, and the other held transports are deferred, each to its own issue (#1032 ssh, #1033 telnet, #1034 websocket, #1035 tls, #1036 mqtt, #1037 udp, #1038 SSE over http, #1039 modbus/tcp, #1040 bacnet/ip, #1041 knxnet/ip), with server-hosted ingress at #1024; there is no serial transport, serial being reached through an IP-to-serial gateway over tcp (or tls or telnet) |
+| [ADR-0153](#adr-0153-the-held-session-proof-is-the-line-protocol-over-tcp-other-held-transports-are-their-own-issues) | 2026-10-23 | Accepted | The stateful arc proves the held session on the line protocol over `tcp` (sessions, listeners, the shared reader); SSH, which #816 named as the session-lifecycle carrier, and the other held transports are deferred, each to its own issue (#1032 ssh, #1033 telnet, #1034 websocket, #1035 tls, #1036 mqtt, #1037 udp, #1038 SSE over http, #1039 modbus/tcp, #1040 bacnet/ip, #1041 knxnet/ip, #1042 ONVIF as a driver on http, #1043 the file sample with #1044 to #1047 for file-moving protocols), with server-hosted ingress at #1024; there is no serial transport, serial being reached through an IP-to-serial gateway over tcp (or tls or telnet) |
 
 ## Entries
 
@@ -6942,7 +6942,20 @@ interface create form, since that name is the platform's to mint.
   server-hosted ingress (syslog, SNMP trap, webhook) is #1024. **There is no serial transport**
   (architect's ruling): a serial device (RS-232, RS-485) is reached through an IP-to-serial gateway,
   which is the `tcp` transport (or `tls` or `telnet`, as the gateway speaks), so its driver is a line
-  protocol like any other and the node never owns a serial port. The session machine, its
+  protocol like any other and the node never owns a serial port.
+  **How a protocol is placed.** The first rule that fits decides. A protocol that rides a carrier
+  we already have with only payload differences (http with any body, a tcp line protocol, a
+  websocket, and udp datagrams once #1037 lands) is a **driver**: ONVIF is SOAP over http (#1042).
+  A driver that needs something its carrier cannot do yet (a body format, an auth scheme, a stream
+  mode, TLS) makes that **capability** on the existing transport, proven by the driver: SSE on http
+  (#1038), tls (#1035), sftp on ssh (#1045), and http fetching a body as a file (#1044). A
+  protocol that moves whole files rather than values lands as a **file sample** (#1043, the
+  primitive #1044 through #1047 depend on). A protocol with its own framing, addressing, or session handshake is a
+  **new transport** plus a generic driver on it, the `snmp` and `snmp-generic` pattern: ssh (#1032),
+  telnet (#1033), websocket (#1034), mqtt (#1036), udp (#1037), modbus/tcp (#1039), bacnet/ip
+  (#1040), knxnet/ip (#1041), ftp/ftps (#1046), and tftp on udp (#1047). A serial link is reached only through a gateway, as above. A
+  protocol that pushes to us rather than being reached is server-hosted **ingress** (#1024), not a
+  node transport. The session machine, its
   `session-state` surface (ADR-0150), and the routing (ADR-0151) are transport-agnostic behind the
   `SessionDialer` and `HeldConn` seams, so each of those issues adds a dialer and its own
   real-implementation integration test rather than a second machine.
