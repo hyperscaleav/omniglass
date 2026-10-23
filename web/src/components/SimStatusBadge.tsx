@@ -4,8 +4,8 @@ import { CircleCheck, CircleDashed, OctagonX, Plug, Sliders, WifiOff } from "./i
 import { simStatus, type SimComponent, type SimState } from "../lib/simulation";
 
 // SimStatusBadge is a simulated component's status, on HealthBadge's recipe:
-// every state wears its own glyph AND its word AND a hue, running stays grey (a
-// hue means "look here", #872), and starting wears the incomplete look, a dashed
+// every state wears its own glyph AND its word AND a hue, running wears the
+// healthy green (#1067), and starting wears the incomplete look, a dashed
 // ring on a cool hue, because a component the simulator has not picked up yet is
 // unfinished, not broken. The two not-served states share the error hue but
 // never a glyph: offline is the simulator gone quiet, failed is the simulator

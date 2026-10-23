@@ -13,8 +13,8 @@ import {
 
 // HealthBadge is the console's one health chip. Four verdicts, four distinct
 // states, never a single accent shade of "not fine": incomplete, degraded and
-// outage each get their own semantic hue, healthy stays grey (a hue means
-// "look here", #872), and every one carries its own glyph AND the word itself, so the state survives a colour-blind reader, a greyscale
+// outage each get their own semantic hue, healthy wears green (#1067; the grey
+// #872 gave it read as unknown), and every one carries its own glyph AND the word itself, so the state survives a colour-blind reader, a greyscale
 // screenshot, and a printout. The word is the primary carrier; the colour and the
 // shape only reinforce it.
 //

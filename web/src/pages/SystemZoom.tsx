@@ -208,8 +208,8 @@ export default function SystemZoom() {
   );
   const uptime = createMemo(() => uptimePct(verdictSpans()));
   const incidentList = createMemo(() => incidentsOf(verdictSpans(), historyNow()));
-  // Healthy stays grey (#872): only an uptime that should worry someone
-  // wears a hue.
+  // A good uptime wears the muted healthy green (#1067); one that should
+  // worry someone wears the trouble hue.
   const uptimeTone = () => {
     const u = uptime();
     if (u === null) return "none";
@@ -347,7 +347,8 @@ export default function SystemZoom() {
                 <span
                   class="font-mono text-3xl tabular-nums"
                   classList={{
-                                        "text-warning": uptimeTone() === "warn",
+                    "text-healthy": uptimeTone() === "good",
+                    "text-warning": uptimeTone() === "warn",
                     "text-error": uptimeTone() === "bad",
                   }}
                 >
