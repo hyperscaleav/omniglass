@@ -293,6 +293,8 @@ func ruleMessage(r EventRule) string {
 // and the sample itself still lands. An ingest is never refused for a rule's
 // sake.
 func (e *ruleEvaluator) observe(ctx context.Context, tx pgx.Tx, lane rules.Lane, ownerKind, ownerID, key, instance string, ts time.Time, value any) error {
+	// Event rules judge component-owned samples only; a system-owned sample
+	// (a system calc rule's output, #997) is not judged until #1002.
 	if e == nil || ownerKind != "component" || len(e.byKey[key]) == 0 {
 		return nil
 	}

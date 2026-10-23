@@ -1,0 +1,194 @@
+import { Compartment, EditorState } from "@codemirror/state";
+import { EditorView, hoverTooltip, keymap, placeholder as placeholderText, tooltips } from "@codemirror/view";
+import { HighlightStyle, StreamLanguage, syntaxHighlighting } from "@codemirror/language";
+import { autocompletion, completionKeymap, startCompletion } from "@codemirror/autocomplete";
+import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
+import { setDiagnostics } from "@codemirror/lint";
+import { Transaction } from "@codemirror/state";
+import { tags } from "@lezer/highlight";
+import type { ExpressionBinding, ExpressionDiagnostic } from "../lib/expressions";
+import { bindingAt, exprCompletions, exprTokens, toEditorDiagnostics, type Vocabulary } from "../lib/expressionEditor";
+
+// The CodeMirror half of ExpressionField (#1000), the only module that loads
+// CodeMirror. ExpressionField imports it on first render, so the editor is a
+// chunk of its own that only a page with an expression site downloads, not
+// part of every console load. It takes plain callbacks and hands back a
+// handle, so the Solid component keeps all of the field's state.
+
+// The content's accessible name: the visible label's id when the field has
+// one (labelledBy, so what an author sees is what assistive technology
+// says), else label.
+export type EditorAria = { label: string; labelledBy?: string; describedBy: string; invalid: boolean };
+
+export type ExpressionEditor = {
+  setDoc(text: string): void;
+  focus(): void;
+  setAria(a: EditorAria): void;
+  setPlaceholder(text: string): void;
+  // Replace the selection with text, the cursor left `cursor` characters
+  // into it, and offer completions there (a template's slot).
+  insert(text: string, cursor: number): void;
+  // Underline the diagnostics an answer gave for `source`; a name nothing
+  // binds carries the action onBind names.
+  setDiagnostics(source: string, ds: ExpressionDiagnostic[], onBind?: (name: string) => void): void;
+  destroy(): void;
+};
+
+export function mountExpressionEditor(
+  host: HTMLElement,
+  o: {
+    doc: string;
+    placeholder: string;
+    aria: EditorAria;
+    vocab: () => Vocabulary | null;
+    onInput: (text: string) => void;
+    bindingCard: (b: ExpressionBinding) => HTMLElement;
+  },
+): ExpressionEditor {
+  const aria = new Compartment();
+  const hint = new Compartment();
+  const ariaAttrs = (a: EditorAria) =>
+    EditorView.contentAttributes.of({
+      ...(a.labelledBy ? { "aria-labelledby": a.labelledBy } : { "aria-label": a.label }),
+      "aria-describedby": a.describedBy,
+      ...(a.invalid ? { "aria-invalid": "true" } : {}),
+    });
+  const view = new EditorView({
+    parent: host,
+    state: EditorState.create({
+      doc: o.doc,
+      extensions: [
+        history(),
+        keymap.of([...completionKeymap, ...defaultKeymap, ...historyKeymap]),
+        StreamLanguage.define(exprTokens),
+        syntaxHighlighting(exprHighlight),
+        autocompletion({ override: [exprCompletions(o.vocab)], icons: false }),
+        hoverTooltip((v, pos) => {
+          const b = bindingAt(v.state.doc.toString(), pos, o.vocab()?.bindings ?? []);
+          return b ? { pos, above: true, create: () => ({ dom: o.bindingCard(b) }) } : null;
+        }),
+        // Tooltips (completion, hover) mount on the dialog the field sits in,
+        // else the page, never inside the form's scrolling body, which would
+        // clip them at its edge (the portal rule overlays follow).
+        // They keep a margin from the window's edge, where a drawer's field
+        // would otherwise put them flush.
+        tooltips({
+          parent: (host.closest('[role="dialog"]') as HTMLElement | null) ?? document.body,
+          tooltipSpace: (v) => {
+            const w = v.dom.ownerDocument.defaultView ?? window;
+            return { top: 8, left: 8, bottom: w.innerHeight - 8, right: w.innerWidth - 8 };
+          },
+        }),
+        // A click in the empty space below the last line puts the caret at
+        // the end, as a textarea does, rather than at that x on the last line
+        // (the field is taller than one line, so that space is a target).
+        EditorView.domEventHandlers({
+          mousedown(e, v) {
+            const end = v.state.doc.length;
+            if (e.button !== 0 || e.clientY <= v.documentTop + v.lineBlockAt(end).bottom) return false;
+            e.preventDefault();
+            v.focus();
+            v.dispatch({ selection: { anchor: end }, scrollIntoView: true });
+            return true;
+          },
+        }),
+        EditorView.lineWrapping,
+        hint.of(placeholderText(o.placeholder)),
+        aria.of(ariaAttrs(o.aria)),
+        editorTheme,
+        EditorView.updateListener.of((u) => {
+          if (u.docChanged) o.onInput(u.state.doc.toString());
+        }),
+      ],
+    }),
+  });
+  return {
+    setDoc(text) {
+      if (text === view.state.doc.toString()) return;
+      // A value set from outside (a reset, the builder's expression) is not
+      // the author's edit: it stays out of the undo history, and the caret
+      // keeps its place as far as the new text reaches.
+      const sel = view.state.selection.main;
+      view.dispatch({
+        changes: { from: 0, to: view.state.doc.length, insert: text },
+        selection: { anchor: Math.min(sel.anchor, text.length), head: Math.min(sel.head, text.length) },
+        annotations: Transaction.addToHistory.of(false),
+      });
+    },
+    setAria(a) {
+      view.dispatch({ effects: aria.reconfigure(ariaAttrs(a)) });
+    },
+    setPlaceholder(text) {
+      view.dispatch({ effects: hint.reconfigure(placeholderText(text)) });
+    },
+    insert(text, cursor) {
+      const { from, to } = view.state.selection.main;
+      view.dispatch({ changes: { from, to, insert: text }, selection: { anchor: from + cursor }, userEvent: "input" });
+      view.focus();
+      startCompletion(view);
+    },
+    setDiagnostics(source, ds, onBind) {
+      // Typed past the source the answer was for, the editor keeps mapping
+      // the marks it has until the next answer lands.
+      if (ds.length > 0 && view.state.doc.toString() !== source) return;
+      view.dispatch(setDiagnostics(view.state, toEditorDiagnostics(source, ds, onBind)));
+    },
+    focus: () => view.focus(),
+    destroy: () => view.destroy(),
+  };
+}
+
+// The theme's colors, by token kind. Every color is a daisyUI theme variable,
+// so the editor follows the console's light and dark themes with no copy of
+// either palette.
+// The token colors are app.css's --og-code-* (per theme: the light theme's
+// are darker than its semantic colors, which fail text contrast at 14px on
+// its ground).
+const exprHighlight = HighlightStyle.define([
+  { tag: tags.keyword, color: "var(--og-code-keyword, var(--color-secondary))" },
+  { tag: tags.atom, color: "var(--og-code-atom, var(--color-warning))" },
+  { tag: tags.string, color: "var(--og-code-string, var(--color-success))" },
+  { tag: tags.number, color: "var(--og-code-number, var(--color-info))" },
+  { tag: tags.function(tags.variableName), color: "var(--og-code-function, var(--color-accent))" },
+  { tag: tags.variableName, color: "var(--color-base-content)" },
+  { tag: tags.operator, color: "color-mix(in oklab, var(--color-base-content) 70%, transparent)" },
+  { tag: tags.comment, color: "color-mix(in oklab, var(--color-base-content) 50%, transparent)", fontStyle: "italic" },
+]);
+
+// The editor sits inside a daisyUI textarea frame (the frame draws the border,
+// the focus ring and the error state); the theme only fits CodeMirror's own
+// parts to it and to the console's surfaces.
+const editorTheme = EditorView.theme({
+  "&": { backgroundColor: "transparent", color: "inherit", fontSize: "inherit" },
+  "&.cm-focused": { outline: "none" },
+  ".cm-scroller": { fontFamily: "var(--og-font-data)", lineHeight: "inherit", maxHeight: "11rem", overflow: "auto" },
+  // No ligatures: the field teaches what to type, and JetBrains Mono would
+  // draw != and == as single glyphs.
+  // Three lines tall, the whole frame is the content: a click anywhere in
+  // it lands in the editor, and below the text it lands past the end.
+  ".cm-content": { padding: "0", minHeight: "4.125em", caretColor: "var(--color-base-content)", fontVariantLigatures: "none" },
+  ".cm-line": { padding: "0" },
+  ".cm-placeholder": { color: "color-mix(in oklab, var(--color-base-content) 62%, transparent)" },
+  ".cm-lintRange-error": {
+    backgroundImage: "none",
+    textDecoration: "underline wavy var(--color-error)",
+    textDecorationSkipInk: "none",
+    textUnderlineOffset: "3px",
+  },
+  ".cm-tooltip": {
+    backgroundColor: "var(--color-base-200)",
+    color: "var(--color-base-content)",
+    border: "1px solid var(--color-base-300)",
+    borderRadius: "0.375rem",
+    fontFamily: "var(--og-font-ui)",
+  },
+  ".cm-tooltip.cm-tooltip-autocomplete > ul": { fontFamily: "var(--og-font-data)", fontSize: "12px", fontVariantLigatures: "none", padding: "0.25rem 0" },
+  ".cm-tooltip.cm-tooltip-autocomplete > ul > li": { padding: "0.125rem 0.625rem" },
+  ".cm-tooltip.cm-tooltip-autocomplete > ul > li[aria-selected]": {
+    backgroundColor: "var(--color-primary)",
+    color: "var(--color-primary-content)",
+  },
+  ".cm-completionDetail": { opacity: "0.6", marginLeft: "0.75em", fontStyle: "normal" },
+  ".cm-completionInfo": { maxWidth: "20rem", padding: "0.375rem 0.5rem", fontSize: "12px" },
+  ".cm-diagnostic-error": { borderLeftColor: "var(--color-error)" },
+});

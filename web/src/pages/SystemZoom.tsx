@@ -41,6 +41,7 @@ import { incidentReasons, incidentRows, incidentsOf, markerX, uptimePct, type Me
 import { spans as timelineSpans } from "../lib/timeline";
 import { systemEvents, systemEventsKey, systemLogs, systemLogsKey } from "../lib/system_activity";
 import { metricSeries, metricSeriesKey } from "../lib/series";
+import { CalcRuleLink } from "../components/RuleLink";
 import { memberModel, systemCrumbs, systemsAtPlace } from "../lib/detail";
 import TimeseriesChart from "../components/TimeseriesChart";
 import { systemMembers, systemMembersKey } from "../lib/members";
@@ -587,7 +588,11 @@ export default function SystemZoom() {
                             <TimeseriesChart spark samples={metricSeriesData()[i()] ?? []} now={historyNow()} windowMs={24 * 3600_000} />
                           </td>
                           <td class="text-right font-mono tabular-nums">{m.value === null || m.value === undefined ? "" : String(m.value)}</td>
-                          <td class="text-right text-[10px] text-base-content/45">{m.is_sampled ? "sampled" : "contract default"}</td>
+                          <td class="text-right text-[10px] text-base-content/45">
+                            <Show when={m.source_rule && m.source_rule_id} fallback={m.is_sampled ? "sampled" : "contract default"}>
+                              <span onClick={(e) => e.stopPropagation()}><CalcRuleLink name={m.source_rule!} id={m.source_rule_id!} /></span>
+                            </Show>
+                          </td>
                         </tr>
                         <Show when={seriesPick() === m.metric_type_name}>
                           <tr>

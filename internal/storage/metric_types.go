@@ -6,6 +6,8 @@ import (
 	"fmt"
 
 	"github.com/jackc/pgx/v5"
+
+	"github.com/hyperscaleav/omniglass/internal/rules"
 )
 
 // MetricType is a canonical registered signal on the metric lane of the catalog
@@ -25,6 +27,9 @@ type MetricType struct {
 	FusionPolicy []byte
 	Description  string
 	Official     bool
+	// WrittenBy is the calc rule that writes this metric, nil when none
+	// does (#1019). Read beside the type, never stored or audited.
+	WrittenBy *CalcWriter `json:"-"`
 }
 
 // Sentinels for metric_type CRUD. Official (seed-owned) metric types are read-only.
@@ -55,13 +60,16 @@ type MetricTypePatch struct {
 	Precision   *int
 }
 
-const metricTypeCols = `id, name, coalesce(label, ''), data_type, unit, "precision", fusion_policy, description, official`
+var metricTypeCols = `id, name, coalesce(label, ''), data_type, unit, "precision", fusion_policy, description, official, ` +
+	calcWriterCol("output_metric_type_id", "metric_type")
 
 func scanMetricType(row pgx.Row) (*MetricType, error) {
 	var mt MetricType
-	if err := row.Scan(&mt.ID, &mt.Name, &mt.Label, &mt.DataType, &mt.Unit, &mt.Precision, &mt.FusionPolicy, &mt.Description, &mt.Official); err != nil {
+	var writer []byte
+	if err := row.Scan(&mt.ID, &mt.Name, &mt.Label, &mt.DataType, &mt.Unit, &mt.Precision, &mt.FusionPolicy, &mt.Description, &mt.Official, &writer); err != nil {
 		return nil, err
 	}
+	mt.WrittenBy = parseCalcWriter(writer)
 	return &mt, nil
 }
 
@@ -94,11 +102,11 @@ func (p *PG) ListMetricTypes(ctx context.Context) ([]MetricType, error) {
 	defer rows.Close()
 	var out []MetricType
 	for rows.Next() {
-		var mt MetricType
-		if err := rows.Scan(&mt.ID, &mt.Name, &mt.Label, &mt.DataType, &mt.Unit, &mt.Precision, &mt.FusionPolicy, &mt.Description, &mt.Official); err != nil {
+		mt, err := scanMetricType(rows)
+		if err != nil {
 			return nil, fmt.Errorf("storage: scan metric type: %w", err)
 		}
-		out = append(out, mt)
+		out = append(out, *mt)
 	}
 	return out, rows.Err()
 }
@@ -260,7 +268,17 @@ func (p *PG) DeleteMetricType(ctx context.Context, actorID, name string) error {
 		}
 		return fmt.Errorf("storage: audit image metric_type %q: %w", name, err)
 	}
+	// A savepoint, so a refused delete leaves the transaction readable for
+	// naming the calc rules that hold the key.
+	if _, err := tx.Exec(ctx, `savepoint type_delete`); err != nil {
+		return fmt.Errorf("storage: savepoint: %w", err)
+	}
 	if _, err := tx.Exec(ctx, `delete from metric_type where name = $1`, name); err != nil {
+		if _, rerr := tx.Exec(ctx, `rollback to savepoint type_delete`); rerr == nil {
+			if inUse := calcOutputInUse(ctx, tx, rules.LaneMetric, name, err); inUse != nil {
+				return inUse
+			}
+		}
 		return fmt.Errorf("storage: delete metric type %q: %w", name, err)
 	}
 	if err := writeAuditRes(ctx, tx, actorID, "delete", "metric_type", auditImageID(before), before, nil); err != nil {

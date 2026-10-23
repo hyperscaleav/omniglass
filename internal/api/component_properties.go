@@ -32,8 +32,10 @@ type effectivePropertyBody struct {
 	FromContract     bool            `json:"from_contract" doc:"True when the component's product declares the property; false for one set directly on the component"`
 	DefaultValue     json.RawMessage `json:"default_value,omitempty" doc:"The contract default; omitted when the contract sets none"`
 	SetValue         json.RawMessage `json:"set_value,omitempty" doc:"The component's override; omitted when the property is unset"`
-	Value            json.RawMessage `json:"value,omitempty" doc:"The effective value: the override, or the contract default when unset"`
+	Value            json.RawMessage `json:"value,omitempty" doc:"The effective value: the override, else a calc rule's calculated value, else the contract default"`
 	ValueID          string          `json:"value_id,omitempty" doc:"The stored value's id when set; omitted when the property is unset"`
+	SourceRule       string          `json:"source_rule,omitempty" required:"false" doc:"The calc rule whose calculated sample is the value, by the name it was written under; absent when the value is a declared one or a default"`
+	SourceRuleID     string          `json:"source_rule_id,omitempty" required:"false" doc:"That calc rule's uuid, the stable form of source_rule"`
 }
 
 func toEffectivePropertyBody(e *storage.EffectiveProperty) effectivePropertyBody {
@@ -49,6 +51,8 @@ func toEffectivePropertyBody(e *storage.EffectiveProperty) effectivePropertyBody
 		SetValue:         json.RawMessage(e.SetValue),
 		Value:            json.RawMessage(e.Value),
 		ValueID:          e.ValueID,
+		SourceRule:       e.SourceRule,
+		SourceRuleID:     e.SourceRuleID,
 	}
 }
 

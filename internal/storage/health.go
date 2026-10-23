@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/health"
+	"github.com/hyperscaleav/omniglass/internal/rules"
 	"github.com/hyperscaleav/omniglass/internal/scope"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -57,7 +58,7 @@ import (
 // healthKey is the property sample key carrying a rolled-up verdict. There is
 // one series per owner and no instance dimension: an entity has exactly one
 // health.
-const healthKey = "health"
+const healthKey = rules.HealthKey
 
 // healthRule names the producer in the recorded row's lineage. provenance
 // 'calculated' requires a non-null source_rule (and a null event_id), so
@@ -755,11 +756,11 @@ func (p *PG) resolveHealthRoles(ctx context.Context, q txQuerier, systemID strin
 			select id, name, standard_id from system where id = $1::uuid
 		),
 		roles as (
+			-- a role of the system: declared on it or inherited from its
+			-- standard (roleOfSystemSQL, the same fact a system calc rule's
+			-- members read)
 			select r.id, r.name, coalesce(r.label, '') as label, r.quorum, r.impact, r.alternate_id
-			from sys join system_role r on r.owner_kind = 'standard' and r.standard_id = sys.standard_id
-			union all
-			select r.id, r.name, coalesce(r.label, '') as label, r.quorum, r.impact, r.alternate_id
-			from sys join system_role r on r.owner_kind = 'system' and r.system_id = sys.id
+			from sys join system_role r on `+roleOfSystemSQL("r", "sys")+`
 		)
 		select roles.id, roles.name, roles.label, roles.quorum, roles.impact,
 		       -- names for display, ids to look an assignee's own verdict up

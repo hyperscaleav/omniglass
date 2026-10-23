@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"reflect"
 	"strings"
 	"sync"
 	"testing"
@@ -858,6 +859,73 @@ func TestDiagnosticsSpeakInBindings(t *testing.T) {
 	}
 }
 
+// A site whose bindings are only known at authoring time (a calc rule's named
+// inputs) declares its environment from a struct type built at run time: it
+// compiles, runs and lists its bindings like a declared one, the same fields
+// give the same env (so the program cache is shared), and a type that is not
+// a data-only struct is refused as EnvOf refuses it.
+func TestEnvForBuiltType(t *testing.T) {
+	build := func() reflect.Type {
+		return reflect.StructOf([]reflect.StructField{
+			{Name: "In0", Type: reflect.TypeFor[float64](), Tag: `expr:"temp" doc:"room-temperature"`},
+			{Name: "In1", Type: reflect.TypeFor[bool](), Tag: `expr:"busy" doc:"in-call"`},
+		})
+	}
+	env, err := EnvFor(build(), Float, WithBuiltins("abs"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	again, err := EnvFor(build(), Float, WithBuiltins("abs"))
+	if err != nil || again != env {
+		t.Fatalf("the same fields built twice give a different env (%v)", err)
+	}
+	if got := env.Bindings(); len(got) != 2 || got[0].Name != "temp" || got[0].Type != "float64" || got[1].Name != "busy" {
+		t.Fatalf("bindings %+v, want temp then busy", got)
+	}
+	p, err := Compile("busy ? abs(temp) : 0.0", env)
+	if err != nil {
+		t.Fatal(err)
+	}
+	in := reflect.New(build()).Elem()
+	in.Field(0).SetFloat(-21.5)
+	in.Field(1).SetBool(true)
+	out, err := p.Run(in.Interface())
+	if err != nil || out != 21.5 {
+		t.Fatalf("run = %v (%v), want 21.5", out, err)
+	}
+	if _, err := Compile("nope > 1", env); err == nil {
+		t.Error("an unbound name compiled")
+	}
+	if _, err := EnvFor(reflect.TypeFor[int](), Float); err == nil {
+		t.Error("a non-struct type was accepted")
+	}
+	bad := reflect.StructOf([]reflect.StructField{{Name: "F", Type: reflect.TypeFor[func()](), Tag: `expr:"f"`}})
+	if _, err := EnvFor(bad, Float); err == nil {
+		t.Error("a struct carrying a func was accepted")
+	}
+	if _, err := EnvFor(nil, Float); err == nil {
+		t.Error("a nil type was accepted")
+	}
+}
+
+// A name a site binds at authoring time (a calc rule's input) is one an
+// expression can say and that means only the binding: an identifier, not a
+// keyword, not a builtin's name (admitted or not, so admitting one later
+// never changes what a stored rule means), and short.
+func TestBindableName(t *testing.T) {
+	for _, ok := range []string{"temp", "in_call", "power2", "_x", "Power"} {
+		if err := BindableName(ok); err != nil {
+			t.Errorf("%q: %v, want bindable", ok, err)
+		}
+	}
+	for _, bad := range []string{"", "2fast", "in-call", "a.b", "$env", "true", "nil", "and", "not", "in", "matches",
+		"contains", "let", "if", "len", "map", "now", "sum", "all", strings.Repeat("a", MaxBindingName+1)} {
+		if err := BindableName(bad); err == nil {
+			t.Errorf("%q was bindable", bad)
+		}
+	}
+}
+
 // memberEnv is a site over a list of records, the shape a calc rule reduces.
 type memberEnv struct {
 	Members []member `expr:"members" doc:"the members of the group"`
@@ -916,6 +984,26 @@ func TestIndexedFilterResult(t *testing.T) {
 		if err != nil || got != tc.want {
 			t.Errorf("%q = %v, %v; want %v", tc.src, got, err, tc.want)
 		}
+	}
+}
+
+// A list of records binds as the list and each record field by its path
+// under name[], the way the docs and the validate route list a calc
+// system rule's members.
+func TestBindingsListOfRecords(t *testing.T) {
+	type rec struct {
+		X int `expr:"x" doc:"the x"`
+	}
+	type env struct {
+		Pts []rec `expr:"pts" doc:"the points"`
+	}
+	e, err := EnvOf[env](Int)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b := e.Bindings()
+	if len(b) != 2 || b[0].Name != "pts" || b[0].Type != "[]record" || b[1].Name != "pts[].x" || b[1].Type != "int" || b[1].Doc != "the x" {
+		t.Fatalf("bindings %+v, want pts []record and pts[].x int", b)
 	}
 }
 

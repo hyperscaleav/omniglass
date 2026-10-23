@@ -2,6 +2,7 @@ import "@testing-library/jest-dom/vitest";
 import { describe, it, expect, afterEach, vi } from "vitest";
 import { render, fireEvent, screen, waitFor, within } from "@solidjs/testing-library";
 import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
+import { Router, Route } from "@solidjs/router";
 import Metrics from "./Metrics";
 import { METRICS_KEY, type MetricRow } from "../lib/metric_types";
 import { ME_KEY, type Me } from "../lib/auth";
@@ -15,7 +16,7 @@ import { ME_KEY, type Me } from "../lib/auth";
 const seed: MetricRow[] = [
   { name: "icmp-rtt-avg", data_type: "float", label: "ICMP RTT (avg)", unit: "ms", precision: 1, official: true },
   { name: "cpu-load", data_type: "float", label: "CPU load", unit: "percent", official: true },
-  { name: "boot-count", data_type: "int", official: false },
+  { name: "boot-count", written_by: { rule: "boot-count-calc", rule_id: "11111111-1111-7111-8111-111111111111" }, data_type: "int", official: false },
 ];
 
 const admin: Me = { principal: { id: "u-root", kind: "human" }, human: { username: "root" }, permissions: [">"], grants: [] };
@@ -37,7 +38,7 @@ function mount(me: Me = admin) {
   qc.setQueryData([...ME_KEY], me);
   return render(() => (
     <QueryClientProvider client={qc}>
-      <Metrics />
+      <Router><Route path="*" component={Metrics} /></Router>
     </QueryClientProvider>
   ));
 }
@@ -53,6 +54,23 @@ async function openBlade(rowText: string): Promise<HTMLElement> {
 
 describe("Metrics page", () => {
   afterEach(() => vi.restoreAllMocks());
+
+  // A metric a calc rule writes names its rule, linked by id, in the list and
+  // on its blade (#1019).
+  it("names the calc rule that writes a metric", async () => {
+    mount();
+    const row = screen.getByText("boot-count").closest("tr")!;
+    const link = within(row).getByRole("link", { name: "boot-count-calc" });
+    expect(link.getAttribute("href")).toContain("/calc-rules?rule=11111111-1111-7111-8111-111111111111");
+    fireEvent.click(screen.getByText("boot-count"));
+    const blade = await waitFor(() => {
+      const el = document.querySelectorAll("aside[data-blade]")[0];
+      if (!el) throw new Error("no blade yet");
+      return el as HTMLElement;
+    });
+    expect(within(blade).getByText(/Written by calc rule/)).toBeTruthy();
+    expect(within(blade).getByRole("link", { name: "boot-count-calc" })).toBeTruthy();
+  });
 
   it("lists the seeded metric types with their units", () => {
     mount();

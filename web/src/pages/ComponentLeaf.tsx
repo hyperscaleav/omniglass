@@ -25,6 +25,7 @@ import { REACHABILITY_KEY, getReachability, lastSeenAt, layerWord } from "../lib
 import { componentAlarmsRead, componentAlarmsReadKey, splitAlarms } from "../lib/alarms";
 import { effectiveProperties, effectivePropertiesKey } from "../lib/component_properties";
 import { effectiveMetrics, effectiveMetricsKey } from "../lib/component_metrics";
+import { CalcRuleLink } from "../components/RuleLink";
 import { durationText } from "../lib/timeline";
 import { getNode, nodeKey } from "../lib/nodes";
 import { PRODUCTS_KEY, listProducts } from "../lib/products";
@@ -282,7 +283,12 @@ export default function ComponentLeaf() {
                     {(row) => (
                       <>
                         <dt class="text-base-content/50">{row.label}</dt>
-                        <dd class="font-mono text-xs">{String(row.value)}</dd>
+                        <dd class="flex items-baseline gap-1.5 font-mono text-xs">
+                          <span>{String(row.value)}</span>
+                          <Show when={row.sourceRuleId}>
+                            <CalcRuleLink name={row.sourceRule!} id={row.sourceRuleId!} />
+                          </Show>
+                        </dd>
                       </>
                     )}
                   </For>
@@ -326,6 +332,9 @@ export default function ComponentLeaf() {
                           <span>{String(row.value)}</span>
                           <Show when={row.sampled} fallback={<span class="text-[10px] text-base-content/40">contract default</span>}>
                             <span class="h-1.5 w-1.5 flex-none self-center rounded-full bg-success" title="live series" />
+                          </Show>
+                          <Show when={row.sourceRuleId}>
+                            <CalcRuleLink name={row.sourceRule!} id={row.sourceRuleId!} />
                           </Show>
                         </dd>
                       </>

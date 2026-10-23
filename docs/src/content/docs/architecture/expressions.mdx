@@ -22,7 +22,11 @@ A site declares its environment as a Go struct (the names an expression may use,
 docs), the type an expression must yield (a criteria yields true or false), the builtins it admits
 and its run budget. An expression compiles against that declaration: a name outside it, a result of
 another type, or a parse error is refused with a **diagnostic** carrying the line, the column and an
-operator-readable message (a nested binding is named by its path, `component`, never by a Go type).
+operator-readable message (a nested binding is named by its path, `component`, never by a Go type). A
+name nothing binds is said by name (`unbound`, so an editor can offer to bind it), and a `let` that
+would shadow a binding is refused where it is declared. Expr trusts a function call's type on its final
+check without looking inside its arguments again, so the engine clears it, and a fault inside a call's
+argument (an unknown name in `max(fan)`) is never passed over.
 A compiled program is **cached** by its source and its site's declaration in a bounded cache, so a
 hot path (a criteria judged per sample) never recompiles; an event rule also holds its compiled
 criteria per rule version, a failed compile included.
@@ -39,7 +43,17 @@ Expressions are **sandboxed**: no I/O, no network, no unbounded loops, bounded e
   on numbers only, `lower` / `upper` / `trim` / `trimPrefix` / `trimSuffix`, and `all` / `any` /
   `none` / `one` / `count` / `filter` over a bound list with no predicate nested in another.
   Equality and `in` take scalars and lists of scalars (and a key in a map), never a record, a map,
-  or a list of lists, whose deep comparison no charge covers. Builders and encoders (`map`,
+  or a list of lists, whose deep comparison no charge covers.
+- **List functions** (#1018) are vetted the same way, each with its cost argument (one charged pass
+  over a list, one value out), and admitted by name where a site binds lists: `max` and `min` over one
+  list of numbers (or over numbers), `avg`, `sum` (with or without a predicate), `majority` (the most
+  common text or bool, its strings charged their bytes, a tie to the value that sorts first), and the
+  one-list `any` and `all` over bools beside their predicate forms. A list function given anything but
+  its list is refused at compile time on the argument. Their names, like every builtin's, can never be
+  bound, so admitting one later never changes what a stored expression means. Expr parses `any`, `all`
+  and `sum` as predicate builtins only, so a call of one with a single argument is told apart before
+  parsing, lexically, and renamed in place to the engine's own function of the same length, which keeps
+  every position in the source where the author wrote it. Builders and encoders (`map`,
   `reduce`, `repeat`, `replace`, `join`, `uniq`, `flatten`, `toJSON`, the range `..`) are never
   admitted: their cost is native work that no input charge bounds.
 - **Determinism.** The clock and zone builtins (**`now`**, **`date`**, **`duration`**,
@@ -69,11 +83,23 @@ Expressions are **sandboxed**: no I/O, no network, no unbounded loops, bounded e
 Each place an expression is written is a **site**, declared once in code. The tables below are
 generated from those declarations (`make gen`), and **`POST /expressions:validate`** (`omniglass
 expression validate`, gated `rule:read`) answers from the same ones: given a site, a source and,
-for criteria, the sample key, it says whether the expression compiles, with each diagnostic's line
-and column, and returns the site's bindings, builtins and budget. The console's **expression field**
-(the rule drawer's **Write as an expression**, #960) is that route's face: the source in a monospace
-field checked as it is typed, each diagnostic pointed at under its line and column, and the site's
-bindings and functions listed beneath with their docs. Built today:
+for criteria, the sample key (for calc, the output key and the rule's inputs), it says whether the
+expression compiles, with each diagnostic's line and column, and returns the site's bindings,
+builtins and budget. The **calc** site (#995) is the first whose bindings are authored with each
+expression: a calc rule's inputs, each bound by its alias as the list of its current values (#1018),
+from a struct type built when the rule is written, so its table describes them rather than listing them,
+with the list functions it admits and the names an alias may not take (both generated, and the
+console's alias check is generated from the same list). The console's **expression field**
+(the rule drawer's **Write as an expression**, #960, and the calc rule's reduce) is that route's face, a
+code editor on CodeMirror 6 (#1000) driven entirely by the route's answer: Expr highlighted as it is
+written, completion of exactly the site's bindings and builtins (as a word is begun, or on Ctrl-Space),
+a binding's doc on hover, and each diagnostic underlined where it sits as well as pointed at beneath under
+its line and column, with the site's bindings and functions listed under the field. The field asks for
+the site's vocabulary while the source is still empty, so the first word completes too. A site's form
+may offer start-from templates (the calc rule's list functions, inserted with the cursor in the slot)
+and an action on a name nothing binds (the calc rule's **Bind it to a key**, in the fault's tooltip and
+beside it). The editor is named by its field's visible label. The editor is a chunk of its own, loaded
+only by a page with an expression site; a page that cannot load it says so and refuses the source. Built today:
 
 <ExpressionSites />
 
@@ -107,7 +133,7 @@ expressions run.
 |---|---|---|
 | extractor | `value` | reshape a located raw value into the typed sample value |
 | step | `when` | the explicit branch guard (a false guard skips the step and dependents) |
-| `calc_rule` | `reduce` (escape), `filter` | the named reducers (`worst` / `majority` / `average`, plus windowed `time_in_state` for SLIs) and the Expr escape, with per-input filters |
+| `calc_rule` | `filter` | per-input filters, `worst` (once property types declare an order) and windowed `time_in_state` for SLIs, beside the built calc site's list functions |
 | rule | `scope` | which instances a rule fires for (the Expr scope escape) |
 | views / list | `filter` | the structured-query predicate operators compose |
 | dynamic group | membership `filter` | recomputed membership |

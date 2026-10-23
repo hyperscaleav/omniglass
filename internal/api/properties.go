@@ -22,12 +22,13 @@ type propertyBody struct {
 	Description string          `json:"description,omitempty"`
 	Validation  json.RawMessage `json:"validation,omitempty" doc:"A JSON Schema fragment constraining the value"`
 	Official    bool            `json:"official"`
+	WrittenBy   *calcWriterBody `json:"written_by,omitempty" required:"false" doc:"The calc rule that writes this property, absent when none does (one enabled rule writes a key; a disabled writer is named when no rule is enabled)"`
 }
 
 func toPropertyBody(p *storage.PropertyType) propertyBody {
 	b := propertyBody{
 		ID: p.ID, Name: p.Name, DataType: p.DataType, Label: p.Label,
-		Description: p.Description, Official: p.Official,
+		Description: p.Description, Official: p.Official, WrittenBy: toCalcWriterBody(p.WrittenBy),
 	}
 	if len(p.Validation) > 0 {
 		b.Validation = json.RawMessage(p.Validation)
@@ -159,7 +160,7 @@ func registerPropertyRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 		Path:          "/property-types/{name}",
 		DefaultStatus: http.StatusNoContent,
 		Summary:       "Delete a property",
-		Description:   "Removes a custom property by name. Official properties are read-only. Gated by property_type:delete.",
+		Description:   "Removes a custom property by name. Official properties are read-only. A property a calc rule writes is a 409 naming the rule. Gated by property_type:delete.",
 	}, "property_type", "delete"), func(ctx context.Context, in *propertyNameInput) (*struct{}, error) {
 		if err := gw.DeletePropertyType(ctx, actorID(ctx), in.Name); err != nil {
 			return nil, mapPropertyErr(err)
@@ -189,6 +190,10 @@ func marshalValidation(v any) ([]byte, error) {
 func mapPropertyErr(err error) error {
 	if refErr, ok := mapRefErr(err); ok {
 		return refErr
+	}
+	var inUse *storage.CalcOutputInUseError
+	if errors.As(err, &inUse) {
+		return huma.Error409Conflict(inUse.Error())
 	}
 	switch {
 	case errors.Is(err, storage.ErrPropertyTypeNotFound):

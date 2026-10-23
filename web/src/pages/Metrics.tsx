@@ -7,6 +7,7 @@ import FieldRow from "../components/FieldRow";
 import BladeField from "../components/BladeField";
 import { identityColumn } from "../components/IdentityCell";
 import KVStacked from "../components/KVStacked";
+import { CalcWriterCell, CalcWriterLine } from "../components/RuleLink";
 import { useFormActions } from "../lib/formactions";
 import { Plus } from "../components/icons";
 import {
@@ -46,6 +47,7 @@ const columns: FlatColumn<MetricRow>[] = [
   identityColumn<MetricRow>(),
   { key: "data_type", label: "Type", width: "90px", sortVal: (r) => r.data_type, cell: (r) => typeBadge(r.data_type) },
   { key: "unit", label: "Unit", width: "90px", sortVal: (r) => r.unit ?? "", cell: (r) => <span class="font-data">{r.unit ?? ""}</span> },
+  { key: "written_by", label: "Written by", width: "130px", sortVal: (r) => r.written_by?.rule ?? "", cell: (r) => <CalcWriterCell writer={r.written_by} /> },
   { key: "official", label: "Origin", width: "100px", sortVal: (r) => String(r.official), cell: (r) => originBadge(r.official) },
 ];
 
@@ -194,6 +196,7 @@ function MetricBladeBody(p: { name: string }): JSX.Element {
             <KVStacked label="Type" value={typeBadge(r().data_type)} />
             <KVStacked label="Origin" value={originBadge(r().official)} />
           </div>
+          <Show when={r().written_by}>{(w) => <CalcWriterLine writer={w()} />}</Show>
           <BladeField
             bind="label"
             value={() => r().label ?? ""}

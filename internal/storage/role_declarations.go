@@ -431,6 +431,10 @@ func (p *PG) SetSystemRole(ctx context.Context, actorID, ownerKind, ownerID stri
 	if err != nil {
 		return nil, err
 	}
+	// The systems' role sets moved, and with them their members.
+	if err := markSystemCalcRules(ctx, tx, ownerRefIDs(affected)...); err != nil {
+		return nil, err
+	}
 	if err := p.recomputeChain(ctx, tx, nil, affected, nil); err != nil {
 		return nil, err
 	}
@@ -482,6 +486,10 @@ func (p *PG) DeleteSystemRole(ctx context.Context, actorID, ownerKind, ownerID, 
 	// ownerArg, not ownerID; see SetSystemRole's comment on the same shape.
 	affected, err := p.systemsForRoleOwner(ctx, tx, ownerKind, ownerArg)
 	if err != nil {
+		return err
+	}
+	// The systems' role sets moved, and with them their members.
+	if err := markSystemCalcRules(ctx, tx, ownerRefIDs(affected)...); err != nil {
 		return err
 	}
 	if err := p.recomputeChain(ctx, tx, nil, affected, nil); err != nil {
@@ -546,4 +554,13 @@ func (p *PG) SeedSystemRole(ctx context.Context, ownerKind, ownerID string, spec
 		}
 	}
 	return nil
+}
+
+// ownerRefIDs is the refs' ids.
+func ownerRefIDs(refs []ownerRef) []string {
+	out := make([]string, len(refs))
+	for i, r := range refs {
+		out[i] = r.ID
+	}
+	return out
 }

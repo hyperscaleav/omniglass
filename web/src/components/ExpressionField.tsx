@@ -1,20 +1,33 @@
-import { For, Show, createEffect, createSignal, createUniqueId, on, onCleanup, type JSX } from "solid-js";
+import { For, Show, createEffect, createSignal, createUniqueId, on, onCleanup, untrack, type JSX } from "solid-js";
 import InfoTip from "./InfoTip";
+import Button from "./Button";
 import Eyebrow from "./Eyebrow";
-import { caretOf, validateExpression, type ExpressionCheck, type ValidateExpression } from "../lib/expressions";
+import { caretOf, validateExpression, type ExpressionBinding, type ExpressionCheck, type ValidateExpression } from "../lib/expressions";
+import { bindLabel, type Vocabulary } from "../lib/expressionEditor";
+import type { ExpressionEditor } from "./expressionEditorView";
 import { describeError } from "../lib/format";
 
-// ExpressionField is the console's one expression editor (#960): the source in a
-// monospace textarea, checked against its site as it is typed (POST
-// /expressions:validate, debounced), with each diagnostic pointed at under its
-// line and column the way a compiler points, and the site's bindings and
-// functions listed from the same answer, each with its doc a hover away. The
-// lists come from the server's declaration of the site, so the field teaches
-// exactly the language the engine runs, never a copy of it.
+// ExpressionField is the console's one expression editor (#960, #1000): the
+// source in a CodeMirror editor that reads Expr (highlighting), completes the
+// site's bindings and builtins, shows a binding's doc on hover, and underlines
+// each fault where it sits, all from one answer, POST /expressions:validate
+// for the site, checked as it is typed (debounced). Beneath it each diagnostic
+// is also pointed at under its line and column the way a compiler points, and
+// the site's bindings and functions are listed, each with its doc a hover
+// away. Everything it offers comes from the server's declaration of the site,
+// so the field teaches exactly the language the engine runs, never a copy.
 //
-// It renders the textarea FIRST and the rest beside it, so a FieldRow labels the
-// textarea itself. No native validation attributes (validation-guard): the
-// check is the server's, and the caller learns the verdict through onCheck.
+// It renders the editor FIRST and the rest beside it, so a FieldRow's label
+// is the field's: a click on it focuses the editor, and the editor's content
+// is named by that label (aria-labelledby; `label` names it where there is
+// no FieldRow). Tab is left to move focus on, so the field never traps the
+// keyboard. No native validation attributes (validation-guard): the check is
+// the server's, and the caller learns the verdict through onCheck.
+//
+// A caller may offer start-from templates (a calc rule's list functions,
+// inserted at the cursor with the cursor left in the slot) and an action on
+// a name nothing binds (onBind: a calc rule binds it by giving an input that
+// alias), beside the fault and in its underline's tooltip.
 export default function ExpressionField(p: {
   site: ValidateExpression["site"];
   // The sample key the expression reads (criteria types its value by it); the
@@ -26,85 +39,230 @@ export default function ExpressionField(p: {
   placeholder?: string;
   // How long typing must pause before a check (ms).
   debounce?: number;
+  // For the calc site (#999): the rule's inputs and owner kind, which give the
+  // expression its bindings (sampleKey is then the output key, which types the
+  // result).
+  inputs?: { alias: string; key: string }[];
+  ownerKind?: "component" | "system";
+  // What to say while there is no key to check against.
+  needsKey?: string;
   // The verdict, so a form can refuse a source that does not compile: true
   // when it compiles, false when it does not (or is empty, has no key to be
-  // checked against, or could not be checked), undefined while a check is
-  // pending.
+  // checked against, could not be checked, or the editor did not load),
+  // undefined while a check is pending.
   onCheck?: (ok: boolean | undefined) => void;
+  // Start-from templates, each inserted at the cursor, the cursor left
+  // `cursor` characters in (label draws the slot).
+  templates?: { label: string; text: string; cursor: number; title: string }[];
+  // Bind a name the expression uses that nothing binds.
+  onBind?: (name: string) => void;
 }): JSX.Element {
   const [check, setCheck] = createSignal<ExpressionCheck | null>(null);
   const [failed, setFailed] = createSignal<string | null>(null);
+  // What the site lets the expression name (its bindings and builtins),
+  // fetched apart from the source check, so completion has the site's words
+  // from the first one on.
+  const [vocab, setVocab] = createSignal<Vocabulary | null>(null);
+  // The editor's chunk failed to load (a tab holding an old build's chunk
+  // names): the field says so and is never ok.
+  const [unloaded, setUnloaded] = createSignal(false);
+  const verdict = (ok: boolean | undefined) => p.onCheck?.(unloaded() ? false : ok);
   const diagId = createUniqueId();
   let timer: ReturnType<typeof setTimeout> | undefined;
+  let vocabTimer: ReturnType<typeof setTimeout> | undefined;
   let seq = 0;
+  let vocabSeq = 0;
+  // The source the current check answered, so its faults are placed in that
+  // text and not in whatever has been typed since.
+  let checked = "";
+
+  const request = (source: string, key: string): ValidateExpression => {
+    const body: ValidateExpression = { site: p.site, source, key };
+    if (p.inputs) body.inputs = p.inputs.filter((i) => i.alias && i.key);
+    if (p.ownerKind) body.owner_kind = p.ownerKind;
+    return body;
+  };
+
+  // The vocabulary depends on the site, the key and the calc inputs, never on
+  // the source, so it is asked for (with an empty source) whenever those
+  // change, on its own clock: typing, which holds the source check back
+  // until a pause, never holds back the words the first one completes from.
+  createEffect(
+    on([() => p.sampleKey, () => JSON.stringify(p.inputs ?? null), () => p.ownerKind, () => p.site], ([key]) => {
+      clearTimeout(vocabTimer);
+      const n = ++vocabSeq;
+      if (!key) {
+        setVocab(null);
+        return;
+      }
+      vocabTimer = setTimeout(async () => {
+        try {
+          const r = await validateExpression(request("", key));
+          if (n === vocabSeq) setVocab({ bindings: r.bindings ?? [], builtins: r.builtins ?? [] });
+        } catch {
+          // Refused (a calc input the server no longer accepts, say): no
+          // vocabulary, so nothing offers a name the engine has just refused.
+          // The source check reports why.
+          if (n === vocabSeq) setVocab(null);
+        }
+      }, p.debounce ?? 300);
+    }),
+  );
 
   createEffect(
-    on([() => p.value, () => p.sampleKey], ([source, key]) => {
+    on([() => p.value, () => p.sampleKey, () => JSON.stringify(p.inputs ?? null), () => p.ownerKind, () => p.site], ([source, key]) => {
       clearTimeout(timer);
       const n = ++seq;
       if (!key || !source.trim()) {
         setCheck(null);
         setFailed(null);
-        p.onCheck?.(false);
+        verdict(false);
         return;
       }
-      p.onCheck?.(undefined);
+      verdict(undefined);
       timer = setTimeout(async () => {
         try {
-          const r = await validateExpression({ site: p.site, source, key });
+          const r = await validateExpression(request(source, key));
           if (n !== seq) return;
           setFailed(null);
+          checked = source;
           setCheck(r);
-          p.onCheck?.(r.ok);
+          verdict(r.ok);
         } catch (e) {
           if (n !== seq) return;
           setCheck(null);
           setFailed(describeError(e));
-          p.onCheck?.(false);
+          verdict(false);
         }
       }, p.debounce ?? 300);
     }),
   );
-  onCleanup(() => clearTimeout(timer));
+  onCleanup(() => {
+    clearTimeout(timer);
+    clearTimeout(vocabTimer);
+    // An answer in flight when the field goes is no one's: bumping the
+    // sequences drops it, so it never reaches a form that has moved on.
+    seq++;
+    vocabSeq++;
+  });
 
   const diagnostics = () => check()?.diagnostics ?? [];
-  const lines = () => Math.min(8, Math.max(2, p.value.split("\n").length));
+
+  const host = (
+    <div
+      class="textarea textarea-bordered min-h-0 w-full px-2 py-1.5 font-data text-sm leading-snug"
+      classList={{ "textarea-error": diagnostics().length > 0 }}
+    />
+  ) as HTMLDivElement;
+  // A FieldRow's <label for> points at the host, which is not labelable:
+  // the editor's content is named by that label (by id), and a click on it
+  // focuses the editor by hand (as it did the textarea).
+  let label: HTMLElement | null = null;
+  const [labelId, setLabelId] = createSignal<string | undefined>(undefined);
+  const aria = () => ({ label: p.label, labelledBy: labelId(), describedBy: diagId, invalid: diagnostics().length > 0 });
+  const [editor, setEditor] = createSignal<ExpressionEditor | null>(null);
+  let gone = false;
+  const focusEditor = () => editor()?.focus();
+  onCleanup(() => {
+    gone = true;
+    label?.removeEventListener("click", focusEditor);
+    editor()?.destroy();
+  });
+  // CodeMirror is its own chunk, loaded the first time a field renders.
+  import("./expressionEditorView")
+    .then(({ mountExpressionEditor }) => {
+      if (gone) return;
+      label = host.id ? document.querySelector<HTMLElement>(`label[for="${host.id}"]`) : null;
+      if (label) {
+        if (!label.id) label.id = `${diagId}-label`;
+        setLabelId(label.id);
+      }
+      setEditor(
+        mountExpressionEditor(host, {
+          doc: untrack(() => p.value),
+          placeholder: untrack(() => p.placeholder ?? ""),
+          aria: untrack(aria),
+          vocab,
+          onInput: (text) => {
+            if (text !== p.value) p.onInput(text);
+          },
+          bindingCard,
+        }),
+      );
+      label?.addEventListener("click", focusEditor);
+    })
+    .catch(() => {
+      if (gone) return;
+      setUnloaded(true);
+      verdict(false);
+    });
+
+  // The form's value is the source of truth: a value set from outside (the
+  // builder's expression, a reset) replaces the editor's.
+  createEffect(() => editor()?.setDoc(p.value));
+  createEffect(() => editor()?.setAria(aria()));
+  createEffect(on(() => p.placeholder ?? "", (ph) => editor()?.setPlaceholder(ph), { defer: true }));
+  // Each answer's faults underlined in the source it answered.
+  createEffect(() => {
+    const ds = diagnostics();
+    editor()?.setDiagnostics(checked, ds, p.onBind);
+  });
 
   return (
     <>
-      <textarea
-        aria-label={p.label}
-        aria-invalid={diagnostics().length > 0 ? "true" : undefined}
-        aria-describedby={diagId}
-        class="textarea textarea-bordered w-full font-data text-sm leading-snug"
-        classList={{ "textarea-error": diagnostics().length > 0 }}
-        rows={lines()}
-        spellcheck={false}
-        autocomplete="off"
-        placeholder={p.placeholder}
-        value={p.value}
-        onInput={(e) => p.onInput(e.currentTarget.value)}
-      />
+      {host}
+      <Show when={p.templates && p.templates.length > 0}>
+        <div class="flex flex-wrap items-center gap-1" role="group" aria-label="Start from">
+          <span class="text-[11px] text-base-content/50">Start from</span>
+          <For each={p.templates}>
+            {(t) => (
+              <Button
+                intent="quiet"
+                size="xs"
+                class="font-data text-[12px] font-normal [font-variant-ligatures:none]"
+                title={t.title}
+                disabled={!editor()}
+                onClick={() => editor()?.insert(t.text, t.cursor)}
+              >
+                {t.label}
+              </Button>
+            )}
+          </For>
+        </div>
+      </Show>
       <div id={diagId} role="status" aria-live="polite" class="flex flex-col gap-1">
+        <Show when={unloaded()}>
+          <span class="text-[11px] text-error">The expression editor did not load; reload the page to edit this expression.</span>
+        </Show>
         <Show when={!p.sampleKey}>
-          <span class="text-[11px] text-base-content/50">Choose what the rule reads to check this expression.</span>
+          <span class="text-[11px] text-base-content/50">{p.needsKey ?? "Choose what the rule reads to check this expression."}</span>
         </Show>
         <Show when={failed()}>{(m) => <span class="text-[11px] text-error">{m()}</span>}</Show>
         <For each={diagnostics()}>
           {(d) => {
-            const at = caretOf(p.value, d.line, d.column);
+            const at = caretOf(checked, d.line, d.column);
             return (
               <div data-testid="expression-diagnostic" class="flex flex-col gap-0.5">
                 <Show when={at}>
                   {(a) => (
-                    <pre class="overflow-x-auto rounded bg-base-200 px-2 py-1 font-data text-[12px] leading-snug text-base-content/80">
+                    <pre
+                      aria-hidden="true"
+                      class="overflow-x-auto rounded bg-base-200 px-2 py-1 font-data text-[12px] leading-snug text-base-content/80 [font-variant-ligatures:none]"
+                    >
                       {`${a().text}\n${a().caret}`}
                     </pre>
                   )}
                 </Show>
-                <span class="text-[11px] text-error">
-                  {d.line > 0 ? `Line ${d.line}, column ${d.column}: ` : ""}
-                  {d.message}
+                <span class="flex flex-wrap items-baseline gap-x-2 text-[11px] text-error">
+                  <span>
+                    {d.line > 0 ? `Line ${d.line}, column ${d.column}: ` : ""}
+                    {d.message}
+                  </span>
+                  <Show when={d.unbound && p.onBind}>
+                    <button type="button" class="link text-[11px] text-base-content/80" onClick={() => p.onBind!(d.unbound!)}>
+                      {bindLabel(d.unbound!)}
+                    </button>
+                  </Show>
                 </span>
               </div>
             );
@@ -114,15 +272,15 @@ export default function ExpressionField(p: {
           <span class="text-[11px] text-success" data-testid="expression-ok">Compiles; yields {check()!.result_type}.</span>
         </Show>
       </div>
-      <Show when={check()}>
+      <Show when={vocab()}>
         {(c) => (
           <div class="flex flex-col gap-1.5 rounded border border-base-300 px-2 py-1.5">
             <Eyebrow
               label="It may name"
-              hint="The bindings this expression can read, declared by the site and typed by what the rule reads."
+              hint="The bindings this expression can read, declared by the site and typed by what the rule reads. Ctrl-Space in the field offers them."
             />
             <div data-testid="expression-bindings" class="flex flex-wrap gap-1.5">
-              <For each={c().bindings ?? []}>
+              <For each={c().bindings}>
                 {(b) => (
                   <span class="inline-flex items-center gap-1">
                     <code class="font-data text-[12px]">{b.name}</code>
@@ -136,11 +294,24 @@ export default function ExpressionField(p: {
             </div>
             <Eyebrow label="Functions" hint="The builtins this site admits; any other function is refused when the rule is saved." />
             <div data-testid="expression-builtins" class="flex flex-wrap gap-x-2 gap-y-0.5 font-data text-[12px] text-base-content/70">
-              <For each={c().builtins ?? []}>{(f) => <span>{f}</span>}</For>
+              <For each={c().builtins}>{(f) => <span>{f}</span>}</For>
             </div>
           </div>
         )}
       </Show>
     </>
   );
+}
+
+// The hover card for a binding: its name and type, and what it holds.
+function bindingCard(b: ExpressionBinding): HTMLElement {
+  return (
+    <div class="flex max-w-xs flex-col gap-0.5 px-2 py-1.5">
+      <span class="inline-flex items-baseline gap-1.5">
+        <code class="font-data text-[12px]">{b.name}</code>
+        <span class="text-[11px] text-base-content/50">{b.type}</span>
+      </span>
+      {b.doc ? <span class="text-[12px] text-base-content/80">{b.doc}</span> : null}
+    </div>
+  ) as HTMLElement;
 }

@@ -6,6 +6,8 @@ import (
 	"slices"
 	"strings"
 	"time"
+
+	"github.com/expr-lang/expr/builtin"
 )
 
 // Result is the type a site pins for its expressions' value. A compiled
@@ -50,6 +52,7 @@ type Env struct {
 	run      reflect.Type // typ embedded with the run meter (budget.go)
 	result   Result
 	builtins string // the admitted builtins, sorted, comma-joined (comparable)
+	lists    string // the admitted list functions (lists.go), the same way
 	budget   Budget
 }
 
@@ -71,8 +74,16 @@ type Binding struct {
 // A site admits no builtin unless it names it (WithBuiltins), and runs on
 // CriteriaBudget() unless it asks for another (WithBudget).
 func EnvOf[T any](result Result, opts ...Option) (Env, error) {
-	t := reflect.TypeFor[T]()
-	if t.Kind() != reflect.Struct {
+	return EnvFor(reflect.TypeFor[T](), result, opts...)
+}
+
+// EnvFor is EnvOf for a struct type built at run time (reflect.StructOf), for
+// a site whose bindings are only known when an expression is authored: a calc
+// rule binds each of its named inputs. The same rules hold (a data-only
+// struct, a declared result), and the same fields give the same Env, so the
+// program cache is shared across rules that declare the same inputs.
+func EnvFor(t reflect.Type, result Result, opts ...Option) (Env, error) {
+	if t == nil || t.Kind() != reflect.Struct {
 		return Env{}, fmt.Errorf("an expression environment is a struct, not %s", t)
 	}
 	if result < Bool || result > Any {
@@ -104,21 +115,45 @@ func MustEnv[T any](result Result, opts ...Option) Env {
 	return env
 }
 
+// MustEnvFor is EnvFor for a site declared at package init.
+func MustEnvFor(t reflect.Type, result Result, opts ...Option) Env {
+	env, err := EnvFor(t, result, opts...)
+	if err != nil {
+		panic(err)
+	}
+	return env
+}
+
 // Result is the type this site's expressions must produce.
 func (e Env) Result() Result { return e.result }
 
 // Budget is what one run at this site may spend.
 func (e Env) Budget() Budget { return e.budget }
 
-// Builtins lists the builtins this site admits, sorted.
+// Builtins lists the functions this site admits, sorted: the Expr builtins
+// it names and its list functions (lists.go), each name once.
 func (e Env) Builtins() []string {
+	out := slices.Concat(e.exprBuiltins(), e.ListFunctions())
+	if len(out) == 0 {
+		return nil
+	}
+	slices.Sort(out)
+	return slices.Compact(out)
+}
+
+// exprBuiltins are the Expr builtins the site admits by WithBuiltins.
+func (e Env) exprBuiltins() []string {
 	if e.builtins == "" {
 		return nil
 	}
 	return strings.Split(e.builtins, ",")
 }
 
-func (e Env) admits(name string) bool { return slices.Contains(e.Builtins(), name) }
+// admits reports whether a builtin call (a BuiltinNode) is admitted: one of
+// the site's Expr builtins, or sum, Expr's builtin, among its list functions.
+func (e Env) admits(name string) bool {
+	return slices.Contains(e.exprBuiltins(), name) || (name == "sum" && e.admitsList(name))
+}
 
 // Option declares one more thing about a site.
 type Option func(*Env) error
@@ -129,7 +164,7 @@ type Option func(*Env) error
 // deliberately, with its cost argument and its tests, when a site needs it.
 func WithBuiltins(names ...string) Option {
 	return func(e *Env) error {
-		set := e.Builtins()
+		set := e.exprBuiltins()
 		for _, n := range names {
 			if _, ok := vetted[n]; !ok {
 				return fmt.Errorf("builtin %q is not vetted for expressions; vet it (a cost argument and tests) before a site admits it", n)
@@ -254,6 +289,13 @@ func bindingsAt(t reflect.Type, prefix string) []Binding {
 			out = append(out, bindingsAt(f.Type, prefix+name+".")...)
 			continue
 		}
+		// A list of records: the list itself, then each record's fields by
+		// their path under name[].
+		if f.Type.Kind() == reflect.Slice && f.Type.Elem().Kind() == reflect.Struct {
+			out = append(out, Binding{Name: prefix + name, Type: "[]record", Doc: f.Tag.Get("doc")})
+			out = append(out, bindingsAt(f.Type.Elem(), prefix+name+"[].")...)
+			continue
+		}
 		out = append(out, Binding{Name: prefix + name, Type: f.Type.String(), Doc: f.Tag.Get("doc")})
 	}
 	return out
@@ -333,4 +375,62 @@ func (e Env) speak(msg string) string {
 		return msg
 	}
 	return strings.NewReplacer(pairs...).Replace(msg)
+}
+
+// MaxBindingName is the longest name a site may bind at authoring time.
+const MaxBindingName = 64
+
+// keywords are the words Expr's grammar reserves.
+var keywords = map[string]bool{
+	"true": true, "false": true, "nil": true, "and": true, "or": true, "not": true, "in": true,
+	"matches": true, "contains": true, "startsWith": true, "endsWith": true, "let": true,
+	"if": true, "else": true,
+}
+
+// ReservedNames is every name an author may not bind (BindableName's
+// refusals by name): the keywords, and every Expr builtin and list function,
+// admitted at a site or not. Sorted, a fresh slice each call.
+func ReservedNames() []string {
+	var out []string
+	for k := range keywords {
+		out = append(out, k)
+	}
+	for k := range builtin.Index {
+		if !strings.HasPrefix(k, "$") {
+			out = append(out, k)
+		}
+	}
+	for k := range listFuncs {
+		out = append(out, k)
+	}
+	slices.Sort(out)
+	return slices.Compact(out)
+}
+
+// BindableName reports whether name may be bound as an expression name by an
+// author (a calc rule's input): an identifier (a letter or underscore, then
+// letters, digits or underscores), at most MaxBindingName long, and neither
+// a keyword nor the name of any Expr builtin or list function, admitted at a
+// site or not, so vetting a function later never changes what a stored
+// expression means.
+func BindableName(name string) error {
+	if name == "" || len(name) > MaxBindingName {
+		return fmt.Errorf("a name is 1 to %d characters, not %d", MaxBindingName, len(name))
+	}
+	for i, r := range name {
+		letter := r == '_' || (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z')
+		if !letter && (i == 0 || r < '0' || r > '9') {
+			return fmt.Errorf("%q is not an identifier: a letter or underscore, then letters, digits or underscores", name)
+		}
+	}
+	if keywords[name] {
+		return fmt.Errorf("%q is a keyword of the expression language", name)
+	}
+	if _, ok := builtin.Index[name]; ok {
+		return fmt.Errorf("%q is the name of a builtin function", name)
+	}
+	if _, ok := listFuncs[name]; ok {
+		return fmt.Errorf("%q is the name of a list function", name)
+	}
+	return nil
 }

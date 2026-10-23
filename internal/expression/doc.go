@@ -42,6 +42,12 @@
 // that depends on the machine, and it cannot interrupt a native call, which
 // is why the allowlist exists.
 //
+// A site may also admit list functions (lists.go, WithListFunctions): max,
+// min, avg, sum, majority, any and all over one list, each folding it into
+// one value in one charged pass, vetted like a builtin with its cost
+// argument. max and min also take numbers; any, all and sum keep their
+// predicate forms beside the one-list ones.
+//
 // Integer arithmetic is Expr's, which is Go's int: it wraps on overflow
 // rather than failing (MaxInt + 1 is MinInt).
 package expression

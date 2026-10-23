@@ -21,6 +21,8 @@ How the evaluator works is on [alarms and actions](/architecture/alarms-actions/
 
 Beside it, **Catalog, under Actions: Severity** (with `severity_level:read`) lists the levels a rule
 raises at, and is where you add your own (with `severity_level:create` on an all-scope grant).
+**Catalog, under Actions: Calc rules** derives values from others for rules like these to judge
+([calc rules](/guides/admin/calc-rules/)).
 
 Rules **read like a registry**: any grant carrying `rule:read`, wherever it is scoped, lists every
 rule. The live counts and a rule's open alarms and streaks name components, so they cover only the
@@ -106,9 +108,12 @@ sits.
 - **Write as an expression**: switches the criteria to an expression, starting from the one the
   comparison lowers to. Write any true-or-false expression over the sample: `value`, `key`,
   `instance`, and the `component` with its `name` and `type`, with comparisons, `&&`, `||`, `!` and a
-  few functions (`value == "down" && instance != "aux"`). It is checked as you type: a mistake is
-  pointed at under its line and column, and beneath the field are the names it may use and the
-  functions it may call, each with what it means. A rule written as an expression opens in this
+  few functions (`value == "down" && instance != "aux"`). The field is a code editor: it colors the
+  expression as you write it, offers the names it may use and the functions it may call as you begin a
+  word (Ctrl-Space asks at any point; Enter takes the highlighted one, Tab moves on to the next field),
+  and shows what a name holds when you hover it. It is checked as you type: a mistake is underlined
+  where it sits and pointed at under its line and column, and beneath the field are the names and
+  functions again, each with what it means. A rule written as an expression opens in this
   mode. Switching back to the builder keeps the comparison when the expression still is one; an
   expression the builder cannot say is kept, and comes back when you switch to an expression again. A rule whose criteria no
   longer compile (its key's data type changed, say) reads **criteria do not compile** in the list,

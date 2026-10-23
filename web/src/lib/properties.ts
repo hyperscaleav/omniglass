@@ -18,6 +18,8 @@ export type PropertyRow = {
   description?: string;
   validation?: unknown;
   official: boolean;
+  // The calc rule that writes this key, when one does (#1019).
+  written_by?: { rule: string; rule_id: string };
 };
 
 export const PROPERTIES_KEY = ["properties"] as const;

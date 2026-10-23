@@ -23,6 +23,9 @@ type PropertyType struct {
 	FusionPolicy []byte
 	Description  string
 	Official     bool
+	// WrittenBy is the calc rule that writes this property, nil when none
+	// does (#1019). Read beside the type, never stored or audited.
+	WrittenBy *CalcWriter `json:"-"`
 }
 
 // UpsertPropertyType installs an official property, authoritative on conflict (the
@@ -57,11 +60,11 @@ func (p *PG) ListPropertyTypes(ctx context.Context) ([]PropertyType, error) {
 	defer rows.Close()
 	var out []PropertyType
 	for rows.Next() {
-		var prop PropertyType
-		if err := rows.Scan(&prop.ID, &prop.Name, &prop.Label, &prop.DataType, &prop.Validation, &prop.FusionPolicy, &prop.Description, &prop.Official); err != nil {
+		prop, err := scanPropertyType(rows)
+		if err != nil {
 			return nil, fmt.Errorf("storage: scan property: %w", err)
 		}
-		out = append(out, prop)
+		out = append(out, *prop)
 	}
 	return out, rows.Err()
 }

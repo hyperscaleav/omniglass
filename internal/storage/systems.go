@@ -764,6 +764,11 @@ func (p *PG) createSystemTx(ctx context.Context, tx pgx.Tx, actorID string, spec
 	// resolution would then refuse the ambiguous reference (ErrAmbiguousName)
 	// for a create that has nothing ambiguous about it: the row it means is
 	// the one it is holding.
+	// A system born into a rule's selector: its calc rules compute on the next
+	// tick (over no members until roles are staffed).
+	if err := markSystemCalcRules(ctx, tx, s.ID); err != nil {
+		return nil, err
+	}
 	if err := p.recomputeSystems(ctx, tx, s.ID); err != nil {
 		return nil, err
 	}
@@ -931,6 +936,13 @@ func (p *PG) UpdateSystem(ctx context.Context, actorID, name string, patch Syste
 	// Detected against the before-image the update already loaded rather than
 	// against the patch (a patch that sets a field to what it already held
 	// changes nothing).
+	// A retype moves the system in or out of rules' selectors, a new standard
+	// moves its roles and members: either way its calc rules recompute.
+	if !sameOptional(before.SystemTypeID, after.SystemTypeID) || !sameOptional(before.StandardID, after.StandardID) {
+		if err := markSystemCalcRules(ctx, tx, after.ID); err != nil {
+			return nil, err
+		}
+	}
 	if !sameOptional(before.StandardID, after.StandardID) {
 		// after.ID, not after.Name: see CreateSystem's comment on the same
 		// shape. A rename in the same patch (not possible today, but the

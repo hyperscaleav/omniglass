@@ -1,5 +1,7 @@
 package collection
 
+import "github.com/hyperscaleav/omniglass/internal/collection/probekeys"
+
 // The interface reachability verdict: a built-in STATE sample, distinct from
 // the raw probe metrics (tcp-open, icmp-reachable). endpoint-reachable is gated
 // per interface and its value domain is up/down; availability is time_in_state
@@ -7,7 +9,7 @@ package collection
 // consumer routes it to state by its property_type lane membership.
 const (
 	// SignalEndpointReachable is the seeded state key the verdict lands under.
-	SignalEndpointReachable = "endpoint-reachable"
+	SignalEndpointReachable = probekeys.EndpointReachable
 	// VerdictUp / VerdictDown are the state's value domain.
 	VerdictUp   = "up"
 	VerdictDown = "down"

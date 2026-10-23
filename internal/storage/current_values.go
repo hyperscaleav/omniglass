@@ -55,7 +55,17 @@ func (p *PG) Reconciliation(ctx context.Context, ownerKind, ownerID string, read
 		if err != nil {
 			return nil, err
 		}
-		rec := PropertyReconciliation{PropertyTypeName: e.PropertyTypeName, Want: e.Value}
+		// Want is the declared cascade alone (the set value, else the
+		// contract default), never a calc rule's value: a calculated
+		// property is not what anyone asked for.
+		if e.SourceRuleID != "" && !e.FromContract {
+			continue
+		}
+		want := e.SetValue
+		if want == nil {
+			want = e.DefaultValue
+		}
+		rec := PropertyReconciliation{PropertyTypeName: e.PropertyTypeName, Want: want}
 		if is != nil {
 			rec.Is = is.Value
 		}

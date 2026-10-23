@@ -290,6 +290,8 @@ func registerRoutes(api huma.API, gw storage.Gateway, svc *settings.Service, o o
 	registerEventTypeRoutes(api, a, gw)
 	registerSeverityLevelRoutes(api, a, gw)
 	registerEventRuleRoutes(api, a, gw)
+	registerCalcRuleRoutes(api, a, gw)
+	registerCalcRuleStateRoutes(api, a, gw)
 	registerEventRuleStateRoute(api, a, gw)
 	registerEventRulePreviewRoute(api, a, gw)
 	registerExpressionRoutes(api, a, gw)

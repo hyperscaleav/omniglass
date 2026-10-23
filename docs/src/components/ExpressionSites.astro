@@ -7,11 +7,16 @@
 // binding is hand-listed here.
 //
 // A site's variants differ only in the type of value; the table lists each
-// binding once, with value's type per variant.
+// binding once, with value's type per variant. A site whose bindings are
+// authored with each expression (calc: a rule's named inputs) declares none,
+// so its description is rendered instead, with its result type per variant,
+// its list functions with their cost arguments, and the names an alias may
+// not take.
 import facts from '../generated/expressions.json';
 
 type Binding = { name: string; type: string; doc?: string };
 type Variant = { value_type: string; when: string; bindings: Binding[] };
+type Fn = { name: string; cost: string };
 
 function merged(variants: Variant[]) {
   const rows: { name: string; types: { type: string; when: string }[]; doc: string }[] = [];
@@ -38,6 +43,54 @@ function merged(variants: Variant[]) {
         </strong>
         : {s.summary}
       </p>
+      {s.bindings ? (
+        <p>
+          Bindings: {s.bindings} The result is{' '}
+          {(s.variants as Variant[]).map((v, i) => (
+            <>
+              {i > 0 ? (i === s.variants.length - 1 ? ' or ' : ', ') : ''}
+              <code>{v.value_type}</code> for {v.when}
+            </>
+          ))}.
+        </p>
+      ) : null}
+      {s.functions && s.functions.length > 0 ? (
+        <table>
+          <thead>
+            <tr>
+              <th>List function</th>
+              <th>Takes, and why it is bounded</th>
+            </tr>
+          </thead>
+          <tbody>
+            {(s.functions as Fn[]).map((f) => (
+              <tr>
+                <td>
+                  <code>{f.name}</code>
+                </td>
+                <td>{f.cost}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      ) : null}
+      {s.reserved_names && s.reserved_names.length > 0 ? (
+        <details>
+          <summary>
+            The {s.reserved_names.length} names an alias may not take (keywords, builtins, list functions and the
+            site's own bindings)
+          </summary>
+          <p>
+            {(s.reserved_names as string[]).map((n, i) => (
+              <>
+                {i > 0 ? ', ' : ''}
+                <code>{n}</code>
+              </>
+            ))}
+          </p>
+        </details>
+      ) : null}
+      {s.bindings ? null : (
       <table>
         <thead>
           <tr>
@@ -69,6 +122,7 @@ function merged(variants: Variant[]) {
           ))}
         </tbody>
       </table>
+      )}
       <p>
         Builtins it admits:{' '}
         {s.builtins.map((b, i) => (

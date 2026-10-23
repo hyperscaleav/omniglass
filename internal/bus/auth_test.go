@@ -32,6 +32,9 @@ func (f fakeStore) RecordCommandExecution(context.Context, string, int64, string
 }
 func (f fakeStore) SweepCommandSettlements(context.Context) error    { return nil }
 func (f fakeStore) SweepEventRules(context.Context, time.Time) error { return nil }
+func (f fakeStore) DrainCalcPending(context.Context, int) (storage.CalcDrain, error) {
+	return storage.CalcDrain{}, nil
+}
 func (f fakeStore) ReconcileEventRules(context.Context, *storage.RuleReconcileState) error {
 	return nil
 }

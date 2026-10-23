@@ -900,11 +900,42 @@ func (UnimplementedGateway) RenameEventRule(context.Context, string, string, str
 func (UnimplementedGateway) DeleteEventRule(context.Context, string, string, scope.Set) error {
 	return nil
 }
+func (UnimplementedGateway) ListCalcRules(context.Context) ([]CalcRule, error) { return nil, nil }
+func (UnimplementedGateway) GetCalcRule(context.Context, string) (*CalcRule, error) {
+	return nil, ErrCalcRuleNotFound
+}
+func (UnimplementedGateway) CreateCalcRule(context.Context, string, CalcRuleSpec, scope.Set) (*CalcRule, error) {
+	return nil, ErrCalcRuleInvalid
+}
+func (UnimplementedGateway) UpdateCalcRule(context.Context, string, string, CalcRulePatch, scope.Set) (*CalcRule, error) {
+	return nil, ErrCalcRuleNotFound
+}
+func (UnimplementedGateway) RenameCalcRule(context.Context, string, string, string, scope.Set) (*CalcRule, error) {
+	return nil, ErrCalcRuleNotFound
+}
+func (UnimplementedGateway) DrainCalcPending(context.Context, int) (CalcDrain, error) {
+	return CalcDrain{}, nil
+}
+func (UnimplementedGateway) CalcRuleCounts(context.Context, scope.Set, scope.Set) (map[string]CalcCounts, error) {
+	return map[string]CalcCounts{}, nil
+}
+func (UnimplementedGateway) CalcRuleState(context.Context, string, scope.Set, scope.Set, int) (*CalcRuleLive, error) {
+	return nil, ErrCalcRuleNotFound
+}
+func (UnimplementedGateway) PreviewCalcRule(context.Context, CalcRuleSpec, scope.Set, scope.Set) (*CalcPreview, error) {
+	return nil, ErrCalcRuleInvalid
+}
+func (UnimplementedGateway) DeleteCalcRule(context.Context, string, string, scope.Set) error {
+	return ErrCalcRuleNotFound
+}
 func (UnimplementedGateway) SweepEventRules(context.Context, time.Time) error { return nil }
 func (UnimplementedGateway) ReconcileEventRules(context.Context, *RuleReconcileState) error {
 	return nil
 }
 func (UnimplementedGateway) UpsertEventRule(context.Context, EventRuleSpec) error { return nil }
+func (UnimplementedGateway) ResolveSampleKey(context.Context, string) (SampleKeyRef, error) {
+	return SampleKeyRef{}, ErrSampleKeyNotFound
+}
 func (UnimplementedGateway) SampleKeyType(context.Context, string) (rules.Lane, string, error) {
 	return "", "", ErrSampleKeyNotFound
 }

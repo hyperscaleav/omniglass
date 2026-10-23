@@ -465,9 +465,32 @@ type Gateway interface {
 	// its uuid, so nothing inside the platform moves with it.
 	RenameEventRule(ctx context.Context, actorID, name, newName string, action scope.Set) (*EventRule, error)
 	DeleteEventRule(ctx context.Context, actorID, name string, action scope.Set) error
+	// Calc rules (#995): read like a registry, written with an all-scope
+	// grant; official rules read-only. A ref is a rule's name or uuid.
+	ListCalcRules(ctx context.Context) ([]CalcRule, error)
+	GetCalcRule(ctx context.Context, ref string) (*CalcRule, error)
+	CreateCalcRule(ctx context.Context, actorID string, spec CalcRuleSpec, create scope.Set) (*CalcRule, error)
+	UpdateCalcRule(ctx context.Context, actorID, ref string, patch CalcRulePatch, action scope.Set) (*CalcRule, error)
+	RenameCalcRule(ctx context.Context, actorID, ref, newName string, action scope.Set) (*CalcRule, error)
+	DeleteCalcRule(ctx context.Context, actorID, ref string, action scope.Set) error
+	// DrainCalcPending serves up to limit pending calc rule marks (#996):
+	// reduce each rule's inputs on its owner and write the output.
+	DrainCalcPending(ctx context.Context, limit int) (CalcDrain, error)
+	// CalcRuleCounts counts every calc rule's live state over the owners the
+	// read scopes admit (#999), keyed by rule id.
+	CalcRuleCounts(ctx context.Context, components, systems scope.Set) (map[string]CalcCounts, error)
+	// CalcRuleState reads a calc rule's live state on the owners the
+	// component and system read scopes admit (#998).
+	CalcRuleState(ctx context.Context, ref string, components, systems scope.Set, limit int) (*CalcRuleLive, error)
+	// PreviewCalcRule computes a candidate calc rule on the owners it
+	// selects in scope, writing nothing (#998).
+	PreviewCalcRule(ctx context.Context, spec CalcRuleSpec, components, systems scope.Set) (*CalcPreview, error)
 	// SampleKeyType reads which lane a sample key reads and, for a property,
 	// its data type: what types an expression's value (#958).
 	SampleKeyType(ctx context.Context, key string) (rules.Lane, string, error)
+	// ResolveSampleKey finds a sample key by name (a property first, then a
+	// metric) or by id, with its lane, data type, id and name (#1018).
+	ResolveSampleKey(ctx context.Context, ref string) (SampleKeyRef, error)
 	// PreviewEventRule judges a candidate rule over recent samples, writing
 	// nothing (#959).
 	PreviewEventRule(ctx context.Context, spec RulePreviewSpec, visible scope.Set) (*RulePreview, error)
@@ -864,6 +887,12 @@ type PG struct {
 	labelEngines label.EngineCache
 	// judges is each event rule's compiled criteria, per rule version.
 	judges ruleJudges
+	// calcs is each calc rule's reduce compile result, per rule version and
+	// key types.
+	calcs calcCompiles
+	// calcHook is a test seam on the calc drain (calc_export_test.go);
+	// nil in production.
+	calcHook func(stage string) error
 }
 
 // Option configures a PG at construction. The secret provider is optional so

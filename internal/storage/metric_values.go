@@ -27,6 +27,10 @@ type EffectiveMetric struct {
 	Value          json.RawMessage // coalesce(SampleValue, DefaultValue)
 	IsSampled      bool
 	FromContract   bool
+	// SourceRule and SourceRuleID name the calc rule the latest sample was
+	// derived by (its name when written, and its id), "" for any other.
+	SourceRule   string
+	SourceRuleID string
 }
 
 // EffectiveMetrics resolves an instance's declared metrics: every metric its
@@ -73,7 +77,9 @@ func (p *PG) EffectiveMetrics(ctx context.Context, ownerKind, ownerID string, re
 		sampled as (
 			select distinct on (m.metric_type_id)
 			       m.metric_type_id,
-			       to_jsonb(m.value) as value
+			       to_jsonb(m.value) as value,
+			       case when m.provenance = 'calculated' and m.source_rule_id is not null then m.source_rule end as source_rule,
+			       m.source_rule_id::text as source_rule_id
 			from metric m
 			join inst on m.%[1]s = inst.arc
 			where m.provenance in ('observed', 'calculated')
@@ -91,7 +97,8 @@ func (p *PG) EffectiveMetrics(ctx context.Context, ownerKind, ownerID string, re
 		       s.value as sample_value,
 		       s.value as effective_value,
 		       true as is_sampled,
-		       false as from_contract
+		       false as from_contract,
+		       coalesce(s.source_rule, ''), coalesce(s.source_rule_id, '')
 		from sampled s
 		join metric_type mt on mt.id = s.metric_type_id
 		order by 1`,
@@ -108,7 +115,8 @@ func (p *PG) EffectiveMetrics(ctx context.Context, ownerKind, ownerID string, re
 		       s.value as sample_value,
 		       coalesce(s.value, c.default_value) as effective_value,
 		       (s.value is not null) as is_sampled,
-		       true as from_contract
+		       true as from_contract,
+		       coalesce(s.source_rule, ''), coalesce(s.source_rule_id, '')
 		from inst
 		join %[3]s c on c.%[4]s = inst.classifier
 		join metric_type mt on mt.id = c.metric_type_id
@@ -118,7 +126,7 @@ func (p *PG) EffectiveMetrics(ctx context.Context, ownerKind, ownerID string, re
 		-- contract does not declare.
 		select mt.name, mt.id, mt.label, mt.data_type, false,
 		       null::jsonb,
-		       s.value, s.value, true, false
+		       s.value, s.value, true, false, coalesce(s.source_rule, ''), coalesce(s.source_rule_id, '')
 		from inst
 		cross join sampled s
 		join metric_type mt on mt.id = s.metric_type_id
@@ -144,7 +152,7 @@ func (p *PG) EffectiveMetrics(ctx context.Context, ownerKind, ownerID string, re
 			label            *string // NULL when unset
 		)
 		if err := rows.Scan(&e.MetricTypeName, &e.MetricTypeID, &label, &e.DataType, &e.Required,
-			&def, &sample, &val, &e.IsSampled, &e.FromContract); err != nil {
+			&def, &sample, &val, &e.IsSampled, &e.FromContract, &e.SourceRule, &e.SourceRuleID); err != nil {
 			return nil, fmt.Errorf("storage: scan effective metric: %w", err)
 		}
 		if label != nil {

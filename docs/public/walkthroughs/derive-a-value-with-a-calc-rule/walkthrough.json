@@ -1,0 +1,110 @@
+{
+  "id": "derive-a-value-with-a-calc-rule",
+  "title": "Derive a value with a calc rule",
+  "description": "Author a calc rule and the metric it writes in one drawer, write the expression that takes each component's slowest TCP connect time, preview and save it, and find the derived value on a component, linked to its rule.",
+  "steps": [
+    {
+      "n": 1,
+      "kind": "goto",
+      "caption": "Calc rules derive a value from others, on each component or each system.",
+      "still": "step-01.png"
+    },
+    {
+      "n": 2,
+      "kind": "click",
+      "caption": "New rule opens the drawer.",
+      "still": "step-02.png"
+    },
+    {
+      "n": 3,
+      "kind": "type",
+      "caption": "Name the rule.",
+      "still": "step-03.png"
+    },
+    {
+      "n": 4,
+      "kind": "select",
+      "caption": "It reads TCP connect time, one value per endpoint. Its alias, the name the expression uses, fills in from the key.",
+      "still": "step-04.png"
+    },
+    {
+      "n": 5,
+      "kind": "click",
+      "caption": "It writes a metric of its own. Register it here, without leaving the drawer.",
+      "still": "step-05.png"
+    },
+    {
+      "n": 6,
+      "kind": "type",
+      "caption": "Name the metric. Its values are numbers.",
+      "still": "step-06.png"
+    },
+    {
+      "n": 7,
+      "kind": "click",
+      "caption": "Create it. The rule now writes it, and the form says no other rule or collector may.",
+      "still": "step-07.png"
+    },
+    {
+      "n": 8,
+      "kind": "type",
+      "caption": "The alias is a list of the endpoints' values. Fold it with max; the editor offers the alias as it is typed.",
+      "still": "step-08.png"
+    },
+    {
+      "n": 9,
+      "kind": "press",
+      "caption": "Take the alias it offers.",
+      "still": "step-09.png"
+    },
+    {
+      "n": 10,
+      "kind": "type",
+      "caption": "Close it. The slowest endpoint wins, and the editor checks that it yields a number.",
+      "still": "step-10.png"
+    },
+    {
+      "n": 11,
+      "kind": "click",
+      "caption": "Preview computes the draft on each component now, writing nothing.",
+      "still": "step-11.png"
+    },
+    {
+      "n": 12,
+      "kind": "wait",
+      "caption": "The value it would write on each component.",
+      "still": "step-12.png"
+    },
+    {
+      "n": 13,
+      "kind": "click",
+      "caption": "Save it. The rule computes again whenever an input changes.",
+      "still": "step-13.png"
+    },
+    {
+      "n": 14,
+      "kind": "wait",
+      "caption": "Its blade shows the value it last computed on each component.",
+      "still": "step-14.png"
+    },
+    {
+      "n": 15,
+      "kind": "click",
+      "caption": "Open one of those components.",
+      "still": "step-15.png"
+    },
+    {
+      "n": 16,
+      "kind": "wait",
+      "caption": "Among its vitals is the derived value, linked to the calc rule that wrote it.",
+      "still": "step-16.png"
+    }
+  ],
+  "poster": "step-12.png",
+  "preview": "preview.webp",
+  "budget": {
+    "seconds": 51.2,
+    "bytes": 1242542,
+    "previewBytes": 1062728
+  }
+}

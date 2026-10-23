@@ -7106,3 +7106,205 @@ stage and the construct it was on, never a nil pointer and a stack (`TestPassPan
 ### The property lane maintains one series index, not two (#971)
 
 `property_owner_idx` (the #588 rename of `state_owner_idx`) and `property_series_idx` (#944) were the same index: btree on `(component_id, property_type_id, instance, ts desc)`, partial on `component_id is not null`, so every property insert maintained it twice. `20261022010000_drop_property_owner_idx.sql` drops the older name and keeps `property_series_idx`, the one `TestSeriesNewestIsAnIndexProbe` explains its reads against. `TestNoDuplicateIndexes` groups `pg_index` by table, access method, key columns, operator classes, collations, sort options, expressions, predicate and uniqueness and fails on any group of two, so a twin cannot land on any table again; this pair was the only one in the schema.
+
+### The calc_rule registry, with the cycle check (#995)
+
+The first slice of epic #525 ([ADR-0147](/architecture/decisions/#adr-0147-a-calc-rule-is-a-typed-sibling-registry-checked-acyclic-at-authoring)).
+`calc_rule` (migration `20261021060000`) is the event rule's sibling: a uuid id and a renameable name,
+`owner_kind` (component or system), the event rule's selector shape, `inputs` as `[{as, key}]`,
+`reduce` as a named reducer or an expression, and `output_key` held by id in the property or metric
+registry with its lane recorded. `/calc-rules` lists, gets (by name or uuid), creates, patches,
+renames (`:rename`, no version bump) and deletes, gated `rule:*` with writes on an all-scope grant,
+audited on the uuid; the CLI's `calc-rule` commands are generated. The **calc expression site**
+joins `criteria` in the site registry: its environment is built per rule from the inputs
+(`expression.EnvFor` over a struct type made at run time; a component binds each input as one value,
+a system as the list of its members' values), its result pinned to the output key's type, the
+criteria builtins and a larger budget (100,000 walk, 25ms), and an input's name refused when it is a
+keyword or any Expr builtin's name. Its named reducers are declared and type-checked there, and
+`POST /expressions:validate` answers for it given the output key and the inputs. Every write refuses
+a rule that would close a cycle in the graph of enabled rules' input keys to output keys (a 422 naming
+the chain, judged under a transaction lock), a second enabled writer of an output key, `health` as an
+input or output, and an output a collection declares: a native probe key (now declared once in
+`internal/collection/probekeys`, which the probes emit from) or a driver's declared emits. A stored
+reduce that stops compiling reads back as `calc_error` and cannot be enabled, and deleting a type a
+rule writes is a 409 naming it. Nothing runs a calc rule yet: the pending set,
+the tick and the reducers' folds are the next slice. The [calculations](/architecture/calculations/)
+page moves to `Partial`, its running half still fenced.
+
+### A calc rule derives component samples (#996)
+
+The second slice of epic #525 ([ADR-0148](/architecture/decisions/#adr-0148-calc-rules-run-on-a-durable-pending-set-and-a-server-tick-not-a-jetstream-consumer)).
+`calc_pending` and `calc_rule_state` (migration `20261021070000`) hold a rule's pending work and its last
+outcome per owner. The sample-write path (`writeMetricSamples`, `writePropertySamples`, shared by the
+ingest and the calc write) marks every enabled component rule reading the batch's keys on an owner its
+selector picks, before it inserts anything, skipping the rule that produced the batch. The server's calc
+tick (`internal/bus/server.go`, every second, 500 marks a pass under a 10s deadline) drains marks with
+`FOR UPDATE SKIP LOCKED`, one transaction each: reads the inputs' current values (every instance for a
+named reducer, the aggregate instance for an expression, never intended), reduces (`rules.CalcProgram.Reduce`:
+the eight reducers and the compiled calc expression), and writes a changed result as a calculated sample
+naming the rule and its version, where event rules judge it. A missing input writes nothing and is named
+in the state row. Proven: a cross-key rule writes once the tick runs and an unchanged input writes no
+row; an event rule fires on a derived property; a chain recomputes downstream and a rule never re-marks
+itself (a mutation that dropped the skip re-marked it forever); two replicas compute every mark once and
+a restart mid-backlog loses nothing; and end to end, a node's tcp probe on a simulated device is folded
+by a CLI-authored rule into a calculated metric whose event rule raises an alarm. System rules wait for
+#997. Review hardened it before merge: a mark the
+batch finds already present is updated, not skipped, so the batch holds it until commit and the tick
+cannot compute from the old value (a skipped conflict lost the change); the ingest retries its whole
+transaction on a deadlock with the tick (`sampleWriteAttempts`); a failing mark is recorded and deferred
+30s while the pass goes on, a held rule's marks are passed over, and a panicking pass is recovered; a
+rule's create, enable or edit marks the components already holding its inputs and resets its state; the
+output is written on the lane the rule holds it by; and a reducer folds named instances (the aggregate
+only when alone) and skips instances stale past an hour, naming them in the state.
+
+### System-level calc rules (#997)
+
+The third slice of epic #525. A system rule's selector names system types (subtypes included) or
+systems, resolved to ids, beside a component rule's component types and components. A system's members
+are its role-bound components, read through `roleOfSystemSQL`, the role-of-a-system predicate the health
+rollup's role resolution now shares. The sample write's probe finds rules of both kinds in one index
+probe (`TestCalcProbeUsesTheInputsIndex` holds it to `calc_rule_inputs_idx`), and one more statement
+marks each enabled system rule reading a sampled key on the selected systems the sampled component
+staffs. Role assignment and withdrawal, role declarations, and a system's create, retype or new
+standard mark its rules before the health recompute; a system leaving a rule's selector drops that
+rule's state there. Each input binds as the list of the members' values (a named reducer folds every
+member's per-instance values), a member with no value is named in the new `calc_rule_state.skipped`
+(migration `20261021090000`), and the output is a system-owned calculated sample with the rule's
+lineage. Event rules do not judge it yet (#1002). The calc tick now logs at Info only when it served
+marks or the backlog reaches `calcBacklogInfo`.
+Review tightened it before merge: a system expression reads `members`, one record per member (name,
+then id) with `value.<as>` and `has.<as>` per input, so a member's inputs stay aligned (the expression
+engine now lists a list of records' fields as `members[].<field>` bindings); `skipped` and stale entries name
+components by id; a system with no members keeps its last value and its state records
+`no_members_since`; and a retype out of a selector deletes the deselected marks first, skipping one a
+serve holds, while the serve rechecks the selection and drops its own work, so neither waits on the
+other and no stray state or output survives.
+
+### Calc rule state and preview (#998)
+
+The fourth slice of epic #525. `GET /calc-rules/{name}/state` reads `calc_rule_state` and `calc_pending`
+for one rule, fenced in SQL to the owners the component and system read scopes admit, the owner named at
+read time; skipped members and stale instances, stored by component id since #997's review, are named
+only when the caller may read that component and otherwise counted (`skipped_hidden`, `stale_hidden`);
+pending owners and a deferred mark's due time ride along, with the rule's fleet-wide pending depth.
+`POST /calc-rules:preview` runs a candidate through the save's own checks (`prepareCalcRule`: compile,
+cycle, one writer, collected output, health) inside a read-only transaction, selects the owners in
+scope (a selector naming an owner out of scope is refused as missing), and computes each with the
+tick's `reduceCalc`, the candidate compiled afresh rather than cached; it answers per owner the value it
+would write, the current output and whether they differ, up to `CalcPreviewOwnerCap` (200) owners.
+Proven: a scoped viewer sees only its owners and no out-of-scope member's name, on the gateway and over
+HTTP; the preview's value is what the tick then writes; truncation at the cap; row counts of the sample
+tables, `calc_pending`, `calc_rule_state`, `audit_log` and `calc_rule` unchanged by a preview; and a
+second writer, a broken reduce and a cycle refused by the preview as by a save.
+
+### Calc rules in the console (#999)
+
+The fifth slice of epic #525. **Catalog, Actions: Calc rules** (`/calc-rules`, `web/src/pages/CalcRules.tsx`)
+is the calc rule registry's page, a sibling of Rules and Severity as each registry in the Actions group is
+its own page. The list reads each rule's owner kind, inputs, reduce (a reducer in words, an expression as
+code) and output, with live counts the list route now carries (`owners_computed`, `owners_pending`,
+`owners_unsupported`, `owners_failed`, over the owners the caller may read, `CalcRuleCounts`). The blade
+shows the rule and its state per owner from `GET /calc-rules/{name}/state` (valued owners first, skipped
+members grouped by key and counted past four, out-of-scope members only counted, the no-members notice,
+pending and due), and the `calc_error` alert. The Drawer form creates, edits and renames (the owner kind
+fixed at create), with the selector of its kind, an inputs list, a reducer offered by the input's type or
+the shared expression field against the `calc` site (now sending the inputs and owner kind to validate),
+the output picker, and an on-demand preview (`POST /calc-rules:preview`, valued owners first, truncation
+said). A calculated sample now records its rule's id (`source_rule_id` on `metric` and `property`,
+migration `20261021110000`); the effective metric reads carry `source_rule` and `source_rule_id`, and a
+component's vitals and a system's data table link a calculated value to its rule (`CalcRuleLink`). The
+guide is [calc rules](/guides/admin/calc-rules/).
+Review of the preview and state routes (#998), fixed after the console slice: the preview resolves its
+selector's names in the caller's scope before the save checks, so a missing name and an out-of-scope
+name are the same 422 and a shared name means the one in scope; it skips the calc graph lock (a preview
+saves nothing, and held the lock through its computation); it types and compiles the candidate once,
+bounds total input reads (`CalcPreviewWorkCap`) beside the owner cap, and previews the components
+holding an input, as the tick marks them; the state's pending depth counts only the owners listed, and
+the state reads in one read-only snapshot.
+
+### The expression editor (#1000)
+
+The sixth slice of epic #525, the trigger #524's decision 5 set (a second expression site). The shared
+`ExpressionField` (`web/src/components/ExpressionField.tsx`) moves from a textarea to a CodeMirror 6
+editor, used unchanged by both sites (an event rule's fire and clear criteria, a calc rule's reduce), with
+no new server surface: everything it offers comes from `POST /expressions:validate`'s existing answer. The
+pure half is `web/src/lib/expressionEditor.ts`: Expr as a CodeMirror stream language (keywords, atoms,
+strings, numbers, operators, comments, a dotted path as one word, a word before `(` as a call),
+completion of the answer's bindings and builtins (silent inside a string and until a word is begun, on
+demand with Ctrl-Space), the binding a hover names (the longest binding a field path extends), and each
+diagnostic's 1-based line and column placed as an underline on the word there. The field now asks
+validate for the site's vocabulary while the source is empty (that answer gives no verdict and no
+diagnostic), so the first word completes; the diagnostic list, the caret pointer and the bindings and
+functions beneath the field are kept. Tab is not bound, so the field never traps the keyboard; the
+content carries the field's accessible name and `aria-invalid`. Colors are the daisyUI theme variables, so
+the editor follows both themes. CodeMirror is loaded with a dynamic import (`expressionEditorView.ts`, the
+console's first split chunk, about 112 KB gzipped), so a page without an expression site pays nothing for
+it. Tests read and type through the editor's state (`ExpressionField.testing.ts`).
+
+### The calc rules rollup review (#525)
+
+The review of the epic's rolled-up diff, fixed before the rollup. The preview withholds an expression over a
+system with a member the caller may not read: owners were scoped but members were not, and an expression
+reads a member by position (`members[1].value.t`), so a `rule:read` holder of the system could read an
+out-of-scope member's own value; the system's row now carries an `error` counting the members out of scope,
+while a named reducer, the aggregate the rule's state shows, is still previewed. A rule's inputs read
+`observed` and `calculated` values only, as the calculations page always said: the read also folded an
+operator's `declared` value, which marks no rule when it changes, and a cleared declaration's `null`
+tombstone failed the read and deferred the mark every 30s. Proven by `TestCalcRuleStateAndPreviewAPI` (the
+withheld expression, east viewer and fleet), `TestCalcIgnoresDeclaredInputs`, and a delete in
+`TestCalcDerivesComponentSamples` that keeps the deleted rule's calculated rows and their lineage.
+
+### A calc rule's reduce is always an expression over aliased inputs (#1018)
+
+Ruled by the architect in the rollup's review, reshaping #525 before it merges
+([ADR-0147](/architecture/decisions/#adr-0147-a-calc-rule-is-a-typed-sibling-registry-checked-acyclic-at-authoring)
+and [ADR-0148](/architecture/decisions/#adr-0148-calc-rules-run-on-a-durable-pending-set-and-a-server-tick-not-a-jetstream-consumer),
+amended). The reduce is `{expr}` only: the named reducers became **list functions** in the engine's
+vetting registry (`internal/expression/lists.go`, `WithListFunctions`): `max` and `min` over one list
+(or numbers), `avg`, `sum`, `majority`, and the one-list `any` and `all`, each with its cost argument and
+charged one pass (`majority` its strings' bytes too), a mistyped argument refused at compile time on the
+argument. Expr parses `any`, `all` and `sum` as predicate builtins only, so a one-argument call is told
+apart lexically and renamed in place to the engine's function of the same length. Each input binds by
+its **alias** as the **list** of its current values (per instance on a component, every member's on a
+system, `members` records kept), and each retired reducer is one expression proven equal to its fold on
+both owner kinds (`TestCalcListFunctionsEqualTheReducers`). Aliases are held to one rule set
+(`rules.CheckAlias`: an identifier of at most 64, not reserved, unique), whose reserved names `make gen`
+renders for the console (`web/src/lib/calc_names.gen.ts`, `TestCalcNamesMatchCommitted`). Inputs moved
+to **`calc_rule_input`**, holding each key by id on its lane (`20261022020000`), with a data backfill
+(`20261022030000`, `TestCalcRuleInputBackfill`) and the old column's drop (`20261022040000`): a key
+rename leaves the rule computing (`TestCalcInputsHeldByID`), a key a rule reads cannot be deleted, and the
+marking probe, graph and reads go by key id. A name no alias binds is a diagnostic carrying the name
+(`unbound`), and a `let` shadowing a binding is refused. Found while building it: Expr trusts a function
+call's type on its last check and never revisits its arguments, so an unknown name inside `max(...)`
+compiled; the charger now runs as a repeatable patcher and clears the call's type.
+
+The console's form is the inputs (a key, its alias filled from the key's name in snake_case and checked
+as the server checks it), then the expression editor with **Start from** templates and **Bind it to a
+key** on an unbound name; the list and blade show the expression as code. The #999 review's remaining
+fixes: a property a calc rule writes resolves through `EffectiveProperties` with `source_rule` and
+`source_rule_id` and links to its rule on the component and in the properties panel; the preview orders
+on the server (owners holding the output first, so the cap never hides one) and withholds only a reduce
+that can read one member's value; the state route orders failing, pending, missing, valued, takes a
+`limit` and answers the `total`, and the blade's **and N more** asks for the rest. The #1000 editor's
+review: the editor is named by its visible label, takes an outside value without entering undo history,
+follows a changing placeholder, refuses its verdict when its chunk fails to load, drops an answer landing
+after it is gone, hides its caret echo from assistive technology, and draws its tokens in colors that
+meet text contrast in the light theme. The walkthrough
+([derive a value with a calc rule](/guides/admin/calc-rules/)) is re-recorded on the new flow. The adversarial review's low findings were fixed after: a sum or an extreme over ints folds as an int
+(exact past 2^53, wrapping as Expr's ints do), a refusal of an unadmitted function lists the list
+functions too, and a follow-up backfill (`20261022050000`, `TestCalcRuleReservedAliasBackfill`) disables
+a moved rule whose alias is now reserved.
+
+### A calc rule's output is bound visibly (#1019)
+
+Folded into the calc rules rollup by the architect after the walkthrough hid the rule-to-output
+binding. The rule form's **Writes** offers **New metric** and **New property**: the output is registered
+from the drawer through the existing create routes (`POST /metric-types`, `POST /property-types`), a
+refusal shown at the inline field it names, and selected. The form and the blade state the binding,
+"Writes `<key>` on each component|system. No other rule or collector may write it.", with the why a tip
+away. A metric or property type a calc rule writes carries `written_by` (`rule`, `rule_id`) on its list
+and get, read from the rule's output reference in the same query (`TestKeyWrittenByCalcRule`), and the
+Metrics and Properties pages name the rule in the row and on the blade, linked by id. Leaving the rule's
+name field now flags the name alone, rather than every field at once, which had moved the form under the
+pointer. The calc walkthrough is one flow: the rule, its output created inline, the expression, preview,
+save, then a component whose vitals show the derived value linked to the rule.

@@ -16,8 +16,8 @@ func TestCriteriaSite(t *testing.T) {
 	if !ok {
 		t.Fatal("the criteria site is not registered")
 	}
-	if names := SiteNames(); !reflect.DeepEqual(names, []string{"criteria"}) {
-		t.Errorf("SiteNames() = %v, want [criteria]", names)
+	if names := SiteNames(); !reflect.DeepEqual(names, []string{"calc", "criteria"}) {
+		t.Errorf("SiteNames() = %v, want [calc criteria]", names)
 	}
 	if _, ok := LookupSite("filter"); ok {
 		t.Error("an unregistered site was found")
@@ -58,11 +58,11 @@ func TestSiteFactsAreTheEnvs(t *testing.T) {
 	if err := json.Unmarshal(raw, &doc); err != nil {
 		t.Fatal(err)
 	}
-	if len(doc.Sites) != 1 || doc.Sites[0].Name != "criteria" || !doc.Sites[0].KeyRequired {
+	if len(doc.Sites) != 2 || doc.Sites[0].Name != "calc" || doc.Sites[1].Name != "criteria" || !doc.Sites[1].KeyRequired {
 		t.Fatalf("sites = %+v", doc.Sites)
 	}
 	site, _ := LookupSite("criteria")
-	got := doc.Sites[0]
+	got := doc.Sites[1]
 	if len(got.Variants) != len(site.Variants) {
 		t.Fatalf("%d variants, want %d", len(got.Variants), len(site.Variants))
 	}
@@ -116,5 +116,17 @@ func TestBindingDocsAgreeAcrossVariants(t *testing.T) {
 				docs[b.Name] = b.Doc
 			}
 		}
+	}
+}
+
+// The committed alias rules the console imports equal a fresh render (make
+// gen), so the form refuses what the server refuses.
+func TestCalcNamesMatchCommitted(t *testing.T) {
+	committed, err := os.ReadFile("../../web/src/lib/calc_names.gen.ts")
+	if err != nil {
+		t.Fatalf("read committed calc_names.gen.ts (run make gen and commit it): %v", err)
+	}
+	if string(committed) != string(CalcNamesTS()) {
+		t.Error("web/src/lib/calc_names.gen.ts drifted from the calc site: run make gen and commit the result")
 	}
 }

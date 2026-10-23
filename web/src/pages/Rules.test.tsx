@@ -13,6 +13,7 @@ import { ME_KEY, type Me } from "../lib/auth";
 import { OFFICIAL_LOCK } from "../lib/catalog";
 import { uuidFor } from "../lib/testids";
 import { EVENT_TYPES_KEY, type EventTypeRow } from "../lib/event_types";
+import { expressionText, typeExpression } from "../components/ExpressionField.testing";
 
 // The Rules page (#921): a FlatList over /event-rules, each row reading its
 // criteria in words and its live state (open alarms, pending streaks); a row
@@ -381,15 +382,15 @@ describe("Rules page", () => {
     fireEvent.change(screen.getByLabelText("Reads"), { target: { value: "metric:temperature-c" } });
     fireEvent.input(screen.getByLabelText("Fire value"), { target: { value: "40" } });
     fireEvent.click(screen.getByLabelText("Write the fire criteria as an expression"));
-    const area = screen.getByLabelText("Fire expression") as HTMLTextAreaElement;
+    const area = await screen.findByLabelText("Fires when");
     // The builder's comparison (equals 40) is where the expression starts.
-    expect(area.value).toBe("value == 40.0");
-    fireEvent.input(area, { target: { value: "value > 40 &&\n  humidity > 2" } });
+    expect(expressionText(area)).toBe("value == 40.0");
+    typeExpression(area, "value > 40 &&\n  humidity > 2");
     const diag = await screen.findByTestId("expression-diagnostic", {}, { timeout: 2000 });
     expect(diag.textContent).toContain("Line 2, column 3");
     const submit = screen.getByText("Create rule").closest("button") as HTMLButtonElement;
     await waitFor(() => expect(submit.disabled).toBe(true));
-    fireEvent.input(area, { target: { value: "value > 40" } });
+    typeExpression(area, "value > 40");
     await screen.findByTestId("expression-ok", {}, { timeout: 2000 });
     await waitFor(() => expect(submit.disabled).toBe(false));
     fireEvent.click(submit);
@@ -404,8 +405,8 @@ describe("Rules page", () => {
     mount(admin, [reach, rich]);
     fireEvent.click(screen.getByText("Rich"));
     fireEvent.click(within(await blade()).getByText("Edit"));
-    const area = (await waitFor(() => screen.getByLabelText("Fire expression"))) as HTMLTextAreaElement;
-    expect(area.value).toBe('value > 40 && instance != "aux"');
+    const area = await waitFor(() => screen.getByLabelText("Fires when"));
+    expect(expressionText(area)).toBe('value > 40 && instance != "aux"');
     expect((screen.getByLabelText("Write the fire criteria as an expression") as HTMLInputElement).checked).toBe(true);
   });
 
@@ -417,9 +418,9 @@ describe("Rules page", () => {
     mount(admin, [reach, door]);
     fireEvent.click(screen.getByText("Door ajar"));
     fireEvent.click(within(await blade()).getByText("Edit"));
-    const area = (await waitFor(() => screen.getByLabelText("Fire expression"))) as HTMLTextAreaElement;
-    expect(area.value).toBe('value == "open"');
-    fireEvent.input(area, { target: { value: "value" } });
+    const area = await waitFor(() => screen.getByLabelText("Fires when"));
+    expect(expressionText(area)).toBe('value == "open"');
+    typeExpression(area, "value");
     const submit = screen.getByText("Save rule").closest("button") as HTMLButtonElement;
     await waitFor(() => expect(submit.disabled).toBe(false), { timeout: 2000 });
     fireEvent.click(submit);

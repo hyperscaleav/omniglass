@@ -91,6 +91,11 @@
    and density levers, and the live pulse.
    =================================================================== */
 [data-theme="omniglass-dark"] {
+  /* The expression editor's token colors (#1000): the semantic hues, which
+     read on the dark ground. */
+  --og-code-keyword: var(--color-secondary); --og-code-atom: var(--color-warning);
+  --og-code-string: var(--color-success); --og-code-number: var(--color-info);
+  --og-code-function: var(--color-accent);
   --og-up: #21cab9; --og-unknown: #8aa0c0; --og-snoozed: #a78bfa;
   --og-average: #fb923c; --og-disaster: #e11d48;
   /* incomplete: a commissioning gap, not a fault. Deliberately a cool indigo
@@ -102,6 +107,12 @@
   --tag-l: .80; --tag-c: .125;
 }
 [data-theme="omniglass-light"] {
+  /* Darker than the light theme's semantic hues, each at least 4.5:1 as
+     14px code text on the light ground, where success, warning and accent
+     fall short. */
+  --og-code-keyword: #a3168f; --og-code-atom: #87570c;
+  --og-code-string: #0e7a51; --og-code-number: #2c5bc4;
+  --og-code-function: #0a6e64;
   --og-up: #11a294; --og-unknown: #6b7f99; --og-snoozed: #7c5cd6;
   --og-average: #d97516; --og-disaster: #c81e3f;
   --og-incomplete: #5561b8;

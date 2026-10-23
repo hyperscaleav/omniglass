@@ -1,3 +1,4 @@
+import { CalcRuleLink } from "./RuleLink";
 import { entityLabel } from "../lib/entities";
 import { For, Show, createEffect, createMemo, on, onCleanup, type JSX } from "solid-js";
 import { createStore, reconcile } from "solid-js/store";
@@ -142,7 +143,12 @@ export default function PropertiesPanel(
   }));
   const rows = createMemo<EffectiveProperty[]>(() => q.data ?? []);
   const contract = createMemo(() => rows().filter((p) => p.from_contract));
-  const adhoc = createMemo(() => rows().filter((p) => !p.from_contract));
+  // A property a calc rule writes that nothing declares (#999, #1018): the
+  // owner's value as the rule derived it, not one it set, so it is shown
+  // apart and read-only, linked to the rule.
+  const calculatedOnly = (p: EffectiveProperty) => !p.from_contract && !p.is_set && !!p.source_rule_id;
+  const calculated = createMemo(() => rows().filter(calculatedOnly));
+  const adhoc = createMemo(() => rows().filter((p) => !p.from_contract && !calculatedOnly(p)));
   const editing = () => props.edit?.editing() ?? false;
   // Both writes are the owner's own: setting or clearing a property is an update of
   // the component / system / location, not of the classifier's contract.
@@ -228,7 +234,7 @@ export default function PropertiesPanel(
   // One row: the shared control, plus this property's write error when the last
   // flush could not commit it.
   const propRow = (p: EffectiveProperty, first: () => boolean) => (
-    <>
+    <div data-property={p.property_type_name}>
       <FieldControl
         label={entityLabel({ name: p.property_type_name, label: p.label })}
         dataType={p.data_type as ValueType}
@@ -246,10 +252,15 @@ export default function PropertiesPanel(
         onDrillIn={props.onOpen ? () => props.onOpen?.(p.property_type_name) : undefined}
         first={first()}
       />
+      <Show when={p.source_rule_id && !p.is_set}>
+        <div class="px-3 pb-2 text-[11px] text-base-content/50">
+          calculated <CalcRuleLink name={p.source_rule!} id={p.source_rule_id!} />
+        </div>
+      </Show>
       <Show when={errs[p.property_type_name]}>
         <div class="px-3 pb-2 text-[11px] text-error">{errs[p.property_type_name]}</div>
       </Show>
-    </>
+    </div>
   );
 
   return (
@@ -271,6 +282,25 @@ export default function PropertiesPanel(
       </Show>
       {/* Off-contract values are the owner's own, so they group apart behind a
           dashed border: nothing declares them, and clearing one removes it. */}
+      <Show when={calculated().length}>
+        <div class="flex flex-col gap-1" role="group" aria-label="Calculated properties">
+          <div class="flex items-baseline gap-2">
+            <span class="text-[10.5px] font-semibold uppercase tracking-wide text-base-content/50">Calculated</span>
+            <span class="text-[10.5px] text-base-content/40">Derived by a calc rule; change the rule, not the value.</span>
+          </div>
+          <div class="overflow-hidden rounded-box border border-base-300">
+            <For each={calculated()}>
+              {(p, i) => (
+                <div data-property={p.property_type_name} class="flex items-baseline gap-2 px-3 py-2 text-sm" classList={{ "border-t border-base-300": i() > 0 }}>
+                  <span class="text-base-content/70">{entityLabel({ name: p.property_type_name, label: p.label })}</span>
+                  <span class="font-data text-[12px]">{resolvedStr(p)}</span>
+                  <span class="ml-auto"><CalcRuleLink name={p.source_rule!} id={p.source_rule_id!} /></span>
+                </div>
+              )}
+            </For>
+          </div>
+        </div>
+      </Show>
       <Show when={adhoc().length}>
         <div class="flex flex-col gap-1" role="group" aria-label="Off contract properties">
           <div class="flex items-baseline gap-2">

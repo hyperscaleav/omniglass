@@ -13,20 +13,35 @@ import (
 // signal catalog (#587), carrying the numeric facts (unit, precision) the
 // property lane never holds. official marks a seed-owned, read-only type.
 type metricTypeBody struct {
-	ID          string  `json:"id" doc:"The metric type's uuid, the stable form the contract and telemetry keys store"`
-	Name        string  `json:"name"`
-	DataType    string  `json:"data_type"`
-	Label       string  `json:"label,omitempty"`
-	Description string  `json:"description,omitempty"`
-	Unit        *string `json:"unit,omitempty" doc:"The display unit of the series (ms, dB, percent)"`
-	Precision   *int    `json:"precision,omitempty" doc:"Decimal places a rendered value keeps"`
-	Official    bool    `json:"official"`
+	ID          string          `json:"id" doc:"The metric type's uuid, the stable form the contract and telemetry keys store"`
+	Name        string          `json:"name"`
+	DataType    string          `json:"data_type"`
+	Label       string          `json:"label,omitempty"`
+	Description string          `json:"description,omitempty"`
+	Unit        *string         `json:"unit,omitempty" doc:"The display unit of the series (ms, dB, percent)"`
+	Precision   *int            `json:"precision,omitempty" doc:"Decimal places a rendered value keeps"`
+	Official    bool            `json:"official"`
+	WrittenBy   *calcWriterBody `json:"written_by,omitempty" required:"false" doc:"The calc rule that writes this metric, absent when none does (one enabled rule writes a key; a disabled writer is named when no rule is enabled)"`
+}
+
+// calcWriterBody names the calc rule that writes a key (#1019).
+type calcWriterBody struct {
+	Rule   string `json:"rule" doc:"The calc rule's name now"`
+	RuleID string `json:"rule_id" doc:"The calc rule's uuid"`
+}
+
+func toCalcWriterBody(w *storage.CalcWriter) *calcWriterBody {
+	if w == nil {
+		return nil
+	}
+	return &calcWriterBody{Rule: w.Rule, RuleID: w.RuleID}
 }
 
 func toMetricTypeBody(mt *storage.MetricType) metricTypeBody {
 	return metricTypeBody{
 		ID: mt.ID, Name: mt.Name, DataType: mt.DataType, Label: mt.Label,
 		Description: mt.Description, Unit: mt.Unit, Precision: mt.Precision, Official: mt.Official,
+		WrittenBy: toCalcWriterBody(mt.WrittenBy),
 	}
 }
 
@@ -151,7 +166,7 @@ func registerMetricTypeRoutes(api huma.API, a *authenticator, gw storage.Gateway
 		Path:          "/metric-types/{name}",
 		DefaultStatus: http.StatusNoContent,
 		Summary:       "Delete a metric type",
-		Description:   "Removes a custom metric type by name. Official metric types are read-only. Gated by metric_type:delete.",
+		Description:   "Removes a custom metric type by name. Official metric types are read-only. A metric type a calc rule writes is a 409 naming the rule. Gated by metric_type:delete.",
 	}, "metric_type", "delete"), func(ctx context.Context, in *metricTypeNameInput) (*struct{}, error) {
 		if err := gw.DeleteMetricType(ctx, actorID(ctx), in.Name); err != nil {
 			return nil, mapMetricTypeErr(err)
@@ -168,6 +183,10 @@ func registerMetricTypeRoutes(api huma.API, a *authenticator, gw storage.Gateway
 func mapMetricTypeErr(err error) error {
 	if refErr, ok := mapRefErr(err); ok {
 		return refErr
+	}
+	var inUse *storage.CalcOutputInUseError
+	if errors.As(err, &inUse) {
+		return huma.Error409Conflict(inUse.Error())
 	}
 	switch {
 	case errors.Is(err, storage.ErrMetricTypeNotFound):

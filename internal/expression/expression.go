@@ -10,6 +10,7 @@ import (
 
 	"github.com/expr-lang/expr"
 	"github.com/expr-lang/expr/ast"
+	"github.com/expr-lang/expr/builtin"
 	"github.com/expr-lang/expr/conf"
 	"github.com/expr-lang/expr/file"
 	"github.com/expr-lang/expr/parser"
@@ -84,6 +85,9 @@ type Error struct {
 	Line    int
 	Column  int
 	Message string
+	// Unbound is the name the expression uses that nothing binds, when that
+	// is the fault; empty otherwise.
+	Unbound string
 	err     error
 }
 
@@ -143,10 +147,11 @@ func Compile(source string, env Env) (*Program, error) {
 	if p, ok := programs.get(key); ok {
 		return p, nil
 	}
-	if err := inspect(source, env); err != nil {
+	src, renamed := oneListForms(source, env)
+	if err := inspect(src, env, renamed); err != nil {
 		return nil, err
 	}
-	p, err := compile(source, env)
+	p, err := compile(src, env)
 	if err != nil {
 		return nil, err
 	}
@@ -161,14 +166,17 @@ func Compile(source string, env Env) (*Program, error) {
 // pattern must be a constant, so its regex compiles once, not per run. The
 // allowlist is enforced here too: a builtin the site does not admit, the
 // range operator, a predicate inside a predicate, and a long literal.
-func inspect(source string, env Env) error {
+func inspect(source string, env Env, renamed map[int]bool) error {
 	c := conf.CreateNew()
 	c.MaxNodes = 0
+	for name, f := range env.functions() {
+		c.Functions[name] = f
+	}
 	tree, err := parser.ParseWithConfig(source, c)
 	if err != nil {
 		return fromExpr(PhaseParse, err)
 	}
-	w := walker{env: env}
+	w := walker{env: env, funcs: c.Functions, renamed: renamed}
 	if err := guardPass(source, "inspect", func(p *pass) error {
 		w.at = p
 		ast.Walk(&tree.Node, &w)
@@ -191,6 +199,8 @@ func inspect(source string, env Env) error {
 
 type walker struct {
 	env      Env
+	funcs    map[string]*builtin.Function // the engine functions the site installs
+	renamed  map[int]bool                 // where oneListForms placed an engine name
 	nodes    int
 	fault    *file.Error // the first refusal met
 	phase    Phase
@@ -217,13 +227,18 @@ func (w *walker) Visit(node *ast.Node) {
 	w.at.at = *node
 	switch n := (*node).(type) {
 	case *ast.IdentifierNode:
-		if strings.HasPrefix(n.Value, "$") {
+		if strings.HasPrefix(n.Value, "$") && !w.renamed[n.Location().From] {
 			w.refuse(n, "unknown name %s", n.Value)
 		}
 	case *ast.CallNode:
 		name := "this value"
 		switch c := n.Callee.(type) {
 		case *ast.IdentifierNode:
+			// An engine function the site admits (lists.go) is a call it
+			// may make; a one-list form only where the rename put it.
+			if _, ok := w.funcs[c.Value]; ok && (!strings.HasPrefix(c.Value, "$") || w.renamed[c.Location().From]) {
+				return
+			}
 			name = c.Value
 		case *ast.MemberNode:
 			if s, ok := c.Property.(*ast.StringNode); ok {
@@ -245,11 +260,11 @@ func (w *walker) Visit(node *ast.Node) {
 		}
 	case *ast.BuiltinNode:
 		if !w.env.admits(n.Name) {
-			allowed := w.env.builtins
+			allowed := strings.Join(w.env.Builtins(), ", ")
 			if allowed == "" {
 				allowed = "none"
 			}
-			w.refuse(n, "%s is not available here (this site admits: %s)", n.Name, strings.ReplaceAll(allowed, ",", ", "))
+			w.refuse(n, "%s is not available here (this site admits: %s)", n.Name, allowed)
 		}
 	case *ast.PredicateNode:
 		var inner nested
@@ -310,6 +325,7 @@ func typedChecks(source string, root ast.Node) error {
 
 // typedCheck is typedChecks on one node.
 func typedCheck(node ast.Node, fail func(n ast.Node, format string, args ...any)) {
+	listCheck(node, fail)
 	switch n := node.(type) {
 	case *ast.BuiltinNode:
 		if scalarOnly[n.Name] {
@@ -321,7 +337,7 @@ func typedCheck(node ast.Node, fail func(n ast.Node, format string, args ...any)
 		}
 		if n.Name == "count" && len(n.Arguments) == 1 {
 			if t := n.Arguments[0].Type(); t == nil || (t.Kind() != reflect.Slice && t.Kind() != reflect.Array) || t.Elem().Kind() != reflect.Bool {
-				fail(n.Arguments[0], "count without a predicate counts true elements, so its list must be of bools; give a predicate")
+				fail(n.Arguments[0], "count without a predicate counts true elements, so its list must be of bools; give a predicate, or count values with len")
 			}
 		}
 	case *ast.BinaryNode:
@@ -401,7 +417,7 @@ func compile(source string, env Env) (*Program, error) {
 	var prog *vm.Program
 	err := guardPass(source, "Expr checker", func(p *pass) error {
 		opts := []expr.Option{
-			expr.Env(reflect.New(env.run).Elem().Interface()), chargeOption(p), expr.DisableAllBuiltins(),
+			expr.Env(reflect.New(env.run).Elem().Interface()), chargeOption(p), functionsOption(env), expr.DisableAllBuiltins(),
 			// Expr's optimizer is off: in v1.17.8 it rewrites filter(list, p)[0]
 			// and [-1] into find and findLast and drops the struct's field table
 			// from the type it copies onto the rewrite, so a field read on the
@@ -409,8 +425,11 @@ func compile(source string, env Env) (*Program, error) {
 			// #1006; this option comes off when upstream is fixed.
 			expr.Optimize(false),
 		}
-		for _, name := range env.Builtins() {
+		for _, name := range env.exprBuiltins() {
 			opts = append(opts, expr.EnableBuiltin(name))
+		}
+		if env.admitsList("sum") {
+			opts = append(opts, expr.EnableBuiltin("sum"))
 		}
 		switch env.result {
 		case Bool:
@@ -436,6 +455,7 @@ func compile(source string, env Env) (*Program, error) {
 	if err != nil {
 		e := fromExpr(PhaseType, err)
 		e.Message = env.speak(e.Message)
+		named(e)
 		return nil, e
 	}
 	if err := typedChecks(source, prog.Node()); err != nil {
@@ -468,6 +488,11 @@ func (p *Program) Run(input any) (any, error) {
 	if err != nil {
 		return nil, fromExpr(PhaseRun, err)
 	}
+	// A float site's int result widens (sum over an empty list is Expr's
+	// int 0, though the list is of float64).
+	if i, ok := out.(int); ok && p.env.result == Float {
+		out = float64(i)
+	}
 	if !resultIs(p.env.result, out) {
 		return nil, &Error{Phase: PhaseRun, Message: fmt.Sprintf("the expression produced %T, not %s", out, p.env.result)}
 	}
@@ -497,21 +522,39 @@ func resultIs(r Result, out any) bool {
 // that only validates (POST /expressions:validate) cannot evict the
 // programs the engine runs on, however many sources it cycles through.
 func Check(source string, env Env) error {
-	if err := precheck(source, env); err != nil {
-		return err
-	}
-	_, err := compile(source, env)
-	return err
-}
-
-// precheck is the part of a compile that needs no Expr: a declared env, the
-// length cap, and the tree walk (inspect).
-func precheck(source string, env Env) error {
 	if env.typ == nil {
 		return errors.New("compile needs a declared environment (EnvOf), not the zero Env")
 	}
 	if len(source) > MaxSourceBytes {
 		return &Error{Phase: PhaseLimit, Message: ErrSourceTooLong.Error(), err: ErrSourceTooLong}
 	}
-	return inspect(source, env)
+	src, renamed := oneListForms(source, env)
+	if err := inspect(src, env, renamed); err != nil {
+		return err
+	}
+	_, err := compile(src, env)
+	return err
+}
+
+// named reads the two refusals an editor acts on from Expr's checker: a name
+// nothing binds (Unbound, so an editor can offer to bind it), and a let that
+// would shadow a binding, said in the author's terms.
+func named(e *Error) {
+	if name, ok := strings.CutPrefix(e.Message, "unknown name "); ok && !strings.ContainsAny(name, " $") {
+		e.Unbound = name
+		return
+	}
+	if rest, ok := strings.CutPrefix(e.Message, "cannot redeclare "); ok {
+		name := rest[strings.LastIndex(rest, " ")+1:]
+		e.Message = fmt.Sprintf("%s is already a name here; a let may not shadow it", name)
+	}
+}
+
+// functionsOption installs a site's engine functions (lists.go).
+func functionsOption(env Env) expr.Option {
+	return func(c *conf.Config) {
+		for name, f := range env.functions() {
+			c.Functions[name] = f
+		}
+	}
 }
