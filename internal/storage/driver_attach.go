@@ -299,49 +299,150 @@ func bakeEmits(emits []driver.Emit, cat catalogMaps) ([]driver.BakedEmit, error)
 	return out, nil
 }
 
-// deriveDriverTasks writes the derived work of an attach inside the create
-// transaction: a poll task per poll function, a standing listen task per
-// listener (command bindings derive nothing; they actuate on demand). Ids are
-// the same content hash every derived task uses, so a re-derive dedupes.
-func deriveDriverTasks(ctx context.Context, tx pgx.Tx, endpointID string, plan *attachPlan) error {
-	insert := func(mode string, body any) error {
+// derivedTask is one task a driver spec derives on an endpoint: its content
+// hash id, its mode, and its baked spec.
+type derivedTask struct {
+	id   string
+	mode string
+	spec []byte
+}
+
+// derivedDriverTasks computes the derived work of a driver on an endpoint: a
+// poll task per poll function, a standing listen task per listener (command
+// bindings derive nothing; they actuate on demand). Ids are the content hash
+// every derived task uses, so the same spec always derives the same ids.
+func derivedDriverTasks(endpointID string, d *Driver, sp *driver.Spec, cat catalogMaps) ([]derivedTask, error) {
+	var out []derivedTask
+	add := func(mode string, body any) error {
 		spec, err := json.Marshal(body)
 		if err != nil {
 			return fmt.Errorf("storage: marshal derived task: %w", err)
 		}
-		id := taskID(endpointID, mode, spec)
-		if _, err := tx.Exec(ctx, `
-			insert into task (id, mode, endpoint_id, spec, enabled)
-			values ($1, $2, $3, $4, true)
-			on conflict (id) do nothing`, id, mode, endpointID, spec); err != nil {
-			return fmt.Errorf("storage: derive %s task for endpoint %q: %w", mode, endpointID, err)
-		}
+		out = append(out, derivedTask{id: taskID(endpointID, mode, spec), mode: mode, spec: spec})
 		return nil
 	}
-	for _, p := range plan.spec.Polls {
-		emits, err := bakeEmits(p.Emits, plan.catalog)
+	for _, p := range sp.Polls {
+		emits, err := bakeEmits(p.Emits, cat)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		sched, req := p.Schedule, p.Request
-		if err := insert("poll", driver.BakedFunction{
-			Driver: plan.driver.Name, Version: plan.driver.Version, Function: p.Name,
+		if err := add("poll", driver.BakedFunction{
+			Driver: d.Name, Version: d.Version, Function: p.Name,
 			Schedule: &sched, Request: &req, Emits: emits,
 		}); err != nil {
-			return err
+			return nil, err
 		}
 	}
-	for _, l := range plan.spec.Listeners {
-		emits, err := bakeEmits(l.Emits, plan.catalog)
+	for _, l := range sp.Listeners {
+		emits, err := bakeEmits(l.Emits, cat)
+		if err != nil {
+			return nil, err
+		}
+		match := l.Match
+		if err := add("listen", driver.BakedFunction{
+			Driver: d.Name, Version: d.Version, Function: l.Name,
+			Arm: l.Arm, Match: &match, Emits: emits, Unmatched: sp.Unmatched,
+		}); err != nil {
+			return nil, err
+		}
+	}
+	return out, nil
+}
+
+// insertDerivedTasks writes derived tasks, skipping any already present (an
+// unchanged function keeps its row), and reports how many it added.
+func insertDerivedTasks(ctx context.Context, tx pgx.Tx, endpointID string, tasks []derivedTask) (int64, error) {
+	var added int64
+	for _, t := range tasks {
+		tag, err := tx.Exec(ctx, `
+			insert into task (id, mode, endpoint_id, spec, enabled)
+			values ($1, $2, $3, $4, true)
+			on conflict (id) do nothing`, t.id, t.mode, endpointID, t.spec)
+		if err != nil {
+			return 0, fmt.Errorf("storage: derive %s task for endpoint %q: %w", t.mode, endpointID, err)
+		}
+		added += tag.RowsAffected()
+	}
+	return added, nil
+}
+
+// deriveDriverTasks writes the derived work of an attach inside the create
+// transaction.
+func deriveDriverTasks(ctx context.Context, tx pgx.Tx, endpointID string, plan *attachPlan) error {
+	tasks, err := derivedDriverTasks(endpointID, plan.driver, plan.spec, plan.catalog)
+	if err != nil {
+		return err
+	}
+	_, err = insertDerivedTasks(ctx, tx, endpointID, tasks)
+	return err
+}
+
+// rederiveDriverTasks brings every endpoint attached through a driver to the
+// driver's spec as it stands now (#823), inside the caller's transaction (a
+// driver update, or the boot seed's upsert): the tasks the spec derives are
+// written where missing, and the driver tasks it no longer derives are
+// retired. Ids are content hashes, so an unchanged function keeps its row and
+// a spec that changed nothing touches nothing; an endpoint whose tasks did
+// change has its updated_at bumped, which moves the node's config generation.
+func rederiveDriverTasks(ctx context.Context, tx pgx.Tx, driverID string) error {
+	d, err := scanDriver(tx.QueryRow(ctx, `select `+driverCols+` from driver where id = $1`, driverID))
+	if err != nil {
+		return fmt.Errorf("storage: load driver %q to re-derive: %w", driverID, err)
+	}
+	if len(d.Spec) == 0 {
+		return nil // a stub has nothing attached and derives nothing
+	}
+	sp, err := driver.Parse(d.Spec)
+	if err != nil {
+		return fmt.Errorf("storage: stored spec for driver %q does not parse: %w", d.Name, err)
+	}
+	cat, err := loadDriverCatalog(ctx, tx)
+	if err != nil {
+		return err
+	}
+	rows, err := tx.Query(ctx, `select id::text from endpoint where driver_id = $1 order by id`, driverID)
+	if err != nil {
+		return fmt.Errorf("storage: endpoints of driver %q: %w", d.Name, err)
+	}
+	var endpoints []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			rows.Close()
+			return fmt.Errorf("storage: scan endpoint of driver %q: %w", d.Name, err)
+		}
+		endpoints = append(endpoints, id)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("storage: endpoints of driver %q: %w", d.Name, err)
+	}
+	for _, ep := range endpoints {
+		tasks, err := derivedDriverTasks(ep, d, sp, cat)
 		if err != nil {
 			return err
 		}
-		match := l.Match
-		if err := insert("listen", driver.BakedFunction{
-			Driver: plan.driver.Name, Version: plan.driver.Version, Function: l.Name,
-			Arm: l.Arm, Match: &match, Emits: emits, Unmatched: plan.spec.Unmatched,
-		}); err != nil {
+		added, err := insertDerivedTasks(ctx, tx, ep, tasks)
+		if err != nil {
 			return err
+		}
+		keep := make([]string, 0, len(tasks))
+		for _, t := range tasks {
+			keep = append(keep, t.id)
+		}
+		// Only driver tasks retire: the reachability probe (a bare spec) is the
+		// endpoint's own and stays.
+		tag, err := tx.Exec(ctx, `
+			delete from task
+			where endpoint_id = $1 and spec->>'driver' is not null and not (id = any($2))`, ep, keep)
+		if err != nil {
+			return fmt.Errorf("storage: retire superseded tasks of endpoint %q: %w", ep, err)
+		}
+		if added+tag.RowsAffected() > 0 {
+			if _, err := tx.Exec(ctx, `update endpoint set updated_at = now() where id = $1`, ep); err != nil {
+				return fmt.Errorf("storage: bump endpoint %q after re-derive: %w", ep, err)
+			}
 		}
 	}
 	return nil

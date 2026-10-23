@@ -503,7 +503,12 @@ spec declares:
 defaults bake, and the spec's functions derive the endpoint's tasks in the same transaction: a
 poll task per poll function, a standing listen task per listener, each task's spec carrying the
 function **whole with its emit lanes resolved at attach** (the compile step: the node never
-looks up a catalog at runtime). Refusals name the fault as a 422: a missing required input, an
+looks up a catalog at runtime). The tasks **re-derive when the driver's spec changes** (#823): a
+driver update over the API, and the boot seed's upsert of an official spec, rewrite every attached
+endpoint's driver tasks in the same transaction, writing the ones the spec now derives and retiring
+the ones it no longer does. Task ids are content hashes, so an unchanged function keeps its row and
+a re-seed that changes nothing touches nothing; an endpoint whose tasks changed has its config
+generation moved, and its node runs the new spec from its next pull. Refusals name the fault as a 422: a missing required input, an
 input the spec does not declare, an ambiguous secret name. A secret input is resolved under the
 **caller's own secret read scope and admin tier**, so an attach can only bind a credential the
 operator could themselves read: an out-of-scope or admin-sensitive secret refuses
