@@ -3,6 +3,7 @@ title: Calc rules
 description: "Writing a calc rule: the value it derives on each component or system, the inputs it reads and the aliases its expression uses for them, the expression that folds them into one value, what it writes, previewing it before saving, and reading what it last computed on each owner, from the console, the CLI, or the API."
 walkthroughs:
   - id: derive-a-value-with-a-calc-rule
+  - id: fix-an-expression-with-a-quick-fix
 ---
 
 **Catalog, under Actions: Calc rules** (with `rule:read`) is where a value is **derived from others**:
@@ -93,6 +94,13 @@ TCP connect time), previews and saves it, then opens one of its components, wher
 shows among the vitals, linked to the rule.
 
 ::walkthrough{#derive-a-value-with-a-calc-rule}
+
+The next one writes a count of a component's slow endpoints as a `sum`, the most common first mistake:
+the field explains it on the `sum`, links its code to the
+[diagnostics table](/architecture/expressions/#diagnostics-clear-messages-and-quick-fixes), and **Use
+count** fixes it in one click before the rule is saved.
+
+::walkthrough{#fix-an-expression-with-a-quick-fix}
 
 ## From the CLI and the API
 
