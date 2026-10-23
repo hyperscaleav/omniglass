@@ -30,6 +30,12 @@ import { PREVIEW, checkId, checkPreview, checkStill, plural, videoName } from '.
 
 export const WALKTHROUGH_MARKER = '<!-- omniglass-walkthrough -->';
 
+// The SHA the record job writes the comment against, before the evidence
+// commit exists; the publish job (which runs nothing from the PR) replaces
+// every occurrence with the evidence commit's SHA. walkthrough.yml spells it
+// out in both jobs.
+export const PENDING_SHA = '0'.repeat(40);
+
 const SCRIPT_DIR = 'web/e2e/walkthroughs/';
 const SHA = /^[0-9a-f]{40}$/;
 const REPO = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
@@ -61,6 +67,31 @@ export function selectWalkthroughs(changed, all) {
 export function evidenceRef(pr) {
   if (!Number.isInteger(pr) || pr < 1) throw new Error(`PR number "${pr}" must be a positive integer`);
   return `refs/walkthroughs/pr-${pr}`;
+}
+
+// The evidence refs the scheduled prune (walkthrough-prune.yml) deletes: those
+// of PRs closed more than `days` ago. A ref outside refs/walkthroughs/pr-<n>,
+// one whose PR is not in `prs`, an open PR's, and a closed PR's with no
+// readable close time are all kept: the prune only ever deletes what it can
+// prove is stale. A deleted ref's files go stale in its PR's comment.
+/**
+ * @param {string[]} refs
+ * @param {{ number: number, state: string, closed_at: string | null }[]} prs
+ * @param {Date} now
+ * @param {number} days
+ * @returns {string[]}
+ */
+export function evidenceRefsToPrune(refs, prs, now, days) {
+  if (!Number.isInteger(days) || days < 1) throw new Error(`retention "${days}" must be a positive whole number of days`);
+  const byNumber = new Map(prs.map((p) => [p.number, p]));
+  const cutoff = now.getTime() - days * 86_400_000;
+  return refs.filter((ref) => {
+    const m = /^refs\/walkthroughs\/pr-([1-9][0-9]*)$/.exec(ref);
+    const pr = m ? byNumber.get(Number(m[1])) : undefined;
+    if (!pr || pr.state !== 'closed' || !pr.closed_at) return false;
+    const closed = Date.parse(pr.closed_at);
+    return Number.isFinite(closed) && closed < cutoff;
+  });
 }
 
 // The files a passing walkthrough's evidence carries, as paths in the evidence

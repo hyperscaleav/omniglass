@@ -1,10 +1,12 @@
 import { describe, it, expect } from "vitest";
 import {
+  PENDING_SHA,
   WALKTHROUGH_MARKER,
   cdnUrl,
   commentBody,
   evidenceFiles,
   evidenceRef,
+  evidenceRefsToPrune,
   rawUrl,
   selectWalkthroughs,
   type Manifest,
@@ -89,6 +91,42 @@ describe("where a PR's evidence is committed", () => {
   });
 });
 
+describe("which evidence refs the scheduled prune deletes", () => {
+  const now = new Date("2026-10-23T00:00:00Z");
+  const daysAgo = (d: number) => new Date(now.getTime() - d * 86_400_000).toISOString();
+  const refs = ["refs/walkthroughs/pr-1", "refs/walkthroughs/pr-2", "refs/walkthroughs/pr-3", "refs/walkthroughs/pr-4"];
+
+  it("deletes the ref of a PR closed more than the retention ago, and keeps a recently closed or open one", () => {
+    const prs = [
+      { number: 1, state: "closed", closed_at: daysAgo(31) },
+      { number: 2, state: "closed", closed_at: daysAgo(29) },
+      { number: 3, state: "open", closed_at: null },
+      { number: 4, state: "closed", closed_at: daysAgo(400) },
+    ];
+    expect(evidenceRefsToPrune(refs, prs, now, 30)).toEqual(["refs/walkthroughs/pr-1", "refs/walkthroughs/pr-4"]);
+  });
+
+  it("keeps a ref whose PR it was not told about, and never touches a ref outside the evidence pattern", () => {
+    const prs = [{ number: 9, state: "closed", closed_at: daysAgo(90) }];
+    expect(evidenceRefsToPrune(["refs/walkthroughs/pr-1", "refs/heads/main", "refs/walkthroughs/pr-9x", "refs/walkthroughs/pr-9"], prs, now, 30)).toEqual([
+      "refs/walkthroughs/pr-9",
+    ]);
+  });
+
+  it("keeps a closed PR whose close time is missing or unreadable", () => {
+    const prs = [
+      { number: 1, state: "closed", closed_at: null },
+      { number: 2, state: "closed", closed_at: "not a date" },
+    ];
+    expect(evidenceRefsToPrune(refs, prs, now, 30)).toEqual([]);
+  });
+
+  it("refuses a retention that is not a positive whole number of days", () => {
+    expect(() => evidenceRefsToPrune(refs, [], now, 0)).toThrow("retention");
+    expect(() => evidenceRefsToPrune(refs, [], now, 1.5)).toThrow("retention");
+  });
+});
+
 describe("the files a walkthrough's evidence carries", () => {
   it("is the poster, every step's still and the video, each under the walkthrough's directory", () => {
     expect(evidenceFiles(manifest("a"))).toEqual(["a/poster.png", "a/step-01.png", "a/step-02.png", "a/a.mp4"]);
@@ -137,6 +175,13 @@ describe("the CDN URL a video is linked by", () => {
 });
 
 describe("the walkthrough comment", () => {
+  it("written against the pending SHA, becomes the pinned comment once publish swaps in the evidence commit's", () => {
+    expect(PENDING_SHA).toBe("0000000000000000000000000000000000000000");
+    const recorded = [manifest("a", { preview: "preview.webp" }), manifest("b")];
+    const pending = commentBody({ repo: REPO, pr: 925, sha: PENDING_SHA, headSha: HEAD, runUrl: RUN, artifactUrl: ARTIFACT, recorded, failed: ["c"] });
+    expect(pending.replaceAll(PENDING_SHA, SHA)).toBe(body(recorded, ["c"]));
+  });
+
   it("opens with the marker the upsert finds it by", () => {
     expect(body([manifest("a")]).startsWith(`${WALKTHROUGH_MARKER}\n`)).toBe(true);
   });

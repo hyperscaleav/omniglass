@@ -8,35 +8,43 @@ name: walkthrough
 #   walkthrough's partial stills too);
 # - commits each passing walkthrough's mp4, animated preview (preview.webp,
 #   #937), poster and per-step stills under <id>/ to the PR's own evidence ref,
-#   refs/walkthroughs/pr-<n> (#939), never to the PR branch: the PR head and its
-#   checks are untouched, a squash-merge carries none of it into main, and a
-#   ref outside refs/heads/ is not fetched by a default clone, while GitHub's
-#   raw host and jsDelivr serve its commits by SHA like any other;
+#   refs/walkthroughs/pr-<n> (#939, ADR-0149), never to the PR branch: the PR
+#   head and its checks are untouched, a squash-merge carries none of it into
+#   main, and a ref outside refs/heads/ is not fetched by a default clone, while
+#   GitHub's raw host and jsDelivr serve its commits by SHA like any other;
 # - upserts one PR comment (found again by its marker, the preview comment's
 #   pattern) leading each walkthrough with a "Watch (scrubbable)" link to its
 #   mp4 through jsDelivr (video/mp4 with range requests, so the browser's player
 #   seeks), then its animated preview, its poster and folded stills by the raw
 #   host, all pinned to the evidence commit's SHA, linking the run and the
 #   artifact, and naming any walkthrough that failed. A failed walkthrough fails
-#   the job: a walkthrough is a test.
+#   the record job: a walkthrough is a test.
 #
 # Which walkthroughs: for a PR that changes nothing under web/ but scripts, the
 # scripts it adds or changes; otherwise every one (web/e2e/walkthroughpr.mjs,
-# unit-tested). The run records the branch tip at run time. Re-run the job, or
-# remove and re-add the label, to record the current head again; the comment
-# updates in place. GitHub runs no pull_request workflow on a PR with merge
-# conflicts, so resolve them first.
+# unit-tested). The run records the branch tip at run time. Re-run the
+# workflow, or remove and re-add the label, to record the current head again;
+# the comment updates in place. GitHub runs no pull_request workflow on a PR
+# with merge conflicts, so resolve them first. walkthrough-prune.yml deletes an
+# evidence ref 30 days after its PR closes.
+#
+# Two jobs, so no write token ever shares a runner with the PR's code. `record`
+# runs the PR's code (npm install scripts, the recorder, the walkthrough-pr.mjs
+# that stages the evidence and writes the comment) with a read-only token, and
+# hands the staged files and the comment body on as an artifact. `publish`
+# holds the write token, checks nothing out and runs nothing from the PR: it
+# builds the evidence commit in a fresh repository under a random temporary
+# directory with no global, system, hook or fsmonitor configuration, pushes
+# only to the ref it derives from the event's PR number, and upserts the
+# comment with gh. An earlier step on the same runner can plant a git config,
+# a hook, an env var or a PATH entry for every later step ($GITHUB_ENV,
+# $GITHUB_PATH, ~/.gitconfig); a separate job on a fresh runner shares none.
 #
 # No loop: the workflow runs only on the `labeled` event, never on a push, and
 # GitHub starts no workflow for a push made with the workflow token; the only
 # push is to the evidence ref anyway, which no workflow watches. Fork PRs are
-# skipped: their token is read-only, and this job pushes. No untrusted input
-# reaches a shell: event fields pass through env.
-#
-# The write token stays close: checkout persists no credential, so neither npm
-# install scripts nor the containers that mount the repo can read one, and only
-# the push step is handed the token. The upsert edits only a comment the
-# workflow's own bot wrote.
+# skipped. No untrusted input reaches a shell: event fields pass through env.
+# The upsert edits only a comment the workflow's own bot wrote.
 
 on:
   pull_request:
@@ -51,7 +59,7 @@ jobs:
     # and a workflow-level group would let an unrelated label's skipped run
     # cancel a recording in flight.
     concurrency:
-      group: walkthrough-${{ github.event.pull_request.number }}
+      group: walkthrough-record-${{ github.event.pull_request.number }}
       cancel-in-progress: true
     if: >-
       github.event.label.name == 'run:walkthrough' &&
@@ -63,8 +71,9 @@ jobs:
     # for the default six hours.
     timeout-minutes: 45
     permissions:
-      contents: write
-      pull-requests: write
+      contents: read
+    outputs:
+      staged: ${{ steps.stage.outputs.staged }}
     env:
       PR: ${{ github.event.pull_request.number }}
       HEAD_REF: ${{ github.event.pull_request.head.ref }}
@@ -126,27 +135,23 @@ jobs:
             !web/e2e/walkthroughs/out/_selftest/
           if-no-files-found: warn
 
-      # Each run commits a fresh tree (only this run's passing walkthroughs, so
-      # a removed step or a renamed or deleted script leaves nothing behind) on
-      # top of the evidence ref's last commit, so an older comment's SHA stays
-      # reachable, and fast-forwards the ref; an unchanged tree reuses the last
-      # commit. The tree is built in a scratch index from a staging directory,
-      # never from the checkout, so the PR branch is not touched. The token
-      # reaches git only here, as a per-command header, never written to
-      # .git/config.
-      - name: Commit the evidence
-        id: commit
+      # The evidence is staged here, by the PR's code and with no write token:
+      # the files each passing walkthrough's evidence carries (a fresh set, so
+      # a removed step or a renamed or deleted script leaves nothing behind),
+      # the ref they go to, and the comment body, written against a placeholder
+      # SHA that publish swaps for the evidence commit's once it exists.
+      - name: Stage the evidence
+        id: stage
         if: ${{ !cancelled() && steps.select.outcome == 'success' }}
         env:
           IDS: ${{ steps.select.outputs.ids }}
           HEAD_SHA: ${{ steps.select.outputs.head }}
-          PUSH_TOKEN: ${{ github.token }}
+          ARTIFACT_URL: ${{ steps.artifact.outputs.artifact-url || format('{0}/{1}/actions/runs/{2}', github.server_url, github.repository, github.run_id) }}
         run: |
           set -euo pipefail
           out=web/e2e/walkthroughs/out
-          ref=$(node web/e2e/walkthrough-pr.mjs ref "$PR")
           stage="$RUNNER_TEMP/evidence"
-          mkdir -p "$stage"
+          mkdir -p "$stage/tree"
           for id in $IDS; do
             if grep -qx "$id" "$out/failed.txt" 2>/dev/null || [ ! -f "$out/$id/walkthrough.json" ]; then
               continue
@@ -159,58 +164,23 @@ jobs:
                 echo "::warning::$id has no $f; it is left out of the evidence"
                 continue
               fi
-              mkdir -p "$stage/$(dirname "$f")"
-              cp "$out/$f" "$stage/$f"
+              mkdir -p "$stage/tree/$(dirname "$f")"
+              cp "$out/$f" "$stage/tree/$f"
             done
           done
-          auth="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$PUSH_TOKEN" | base64 -w0)"
-          echo "::add-mask::$auth"
-          authed() { git -c "http.https://github.com/.extraheader=$auth" "$@"; }
-          parent=$(authed ls-remote origin "$ref" | cut -f1)
-          parents=()
-          if [ -n "$parent" ]; then
-            authed fetch -q --no-tags origin "$parent"
-            parents=(-p "$parent")
-          fi
-          git_dir=$(git rev-parse --absolute-git-dir)
-          export GIT_INDEX_FILE="$RUNNER_TEMP/evidence.index"
-          git --git-dir="$git_dir" --work-tree="$stage" -C "$stage" add -A .
-          tree=$(git --git-dir="$git_dir" write-tree)
-          if [ -n "$parent" ] && [ "$(git rev-parse "${parent}^{tree}")" = "$tree" ]; then
-            sha=$parent
-            echo "evidence unchanged at $sha"
-          else
-            sha=$(git -c user.name=github-actions -c user.email=github-actions@users.noreply.github.com \
-                  commit-tree "$tree" "${parents[@]}" -m "ci: walkthrough evidence for #${PR} at ${HEAD_SHA:0:7}")
-            authed push -q origin "${sha}:${ref}"
-            echo "committed $sha to $ref"
-          fi
-          echo "sha=$sha" >>"$GITHUB_OUTPUT"
+          node web/e2e/walkthrough-pr.mjs ref "$PR" >"$stage/ref"
+          # walkthroughpr.mjs PENDING_SHA, which publish replaces.
+          SHA=0000000000000000000000000000000000000000 node web/e2e/walkthrough-pr.mjs comment >"$stage/body.md"
+          echo "staged=true" >>"$GITHUB_OUTPUT"
 
-      - name: Upsert the walkthrough comment
-        if: ${{ !cancelled() && steps.commit.outcome == 'success' }}
-        env:
-          GH_TOKEN: ${{ github.token }}
-          IDS: ${{ steps.select.outputs.ids }}
-          SHA: ${{ steps.commit.outputs.sha }}
-          HEAD_SHA: ${{ steps.select.outputs.head }}
-          ARTIFACT_URL: ${{ steps.artifact.outputs.artifact-url || format('{0}/{1}/actions/runs/{2}', github.server_url, github.repository, github.run_id) }}
-        run: |
-          set -euo pipefail
-          MARKER='<!-- omniglass-walkthrough -->'
-          node web/e2e/walkthrough-pr.mjs comment >"$RUNNER_TEMP/body.md"
-          # Slurp every page into one array and match the marker through a jq
-          # --arg, so it is never interpolated into the filter. Only the bot's
-          # own comment counts: anyone can paste the marker into theirs.
-          cid=$(gh api "repos/${REPO}/issues/${PR}/comments" --paginate \
-                | jq -rs --arg m "$MARKER" 'add | map(select(.user.login == "github-actions[bot]" and (.body | contains($m))))[0].id // empty')
-          if [ -n "$cid" ]; then
-            gh api "repos/${REPO}/issues/comments/${cid}" -X PATCH -F body=@"$RUNNER_TEMP/body.md" >/dev/null
-            echo "updated comment $cid"
-          else
-            gh api "repos/${REPO}/issues/${PR}/comments" -X POST -F body=@"$RUNNER_TEMP/body.md" >/dev/null
-            echo "created comment"
-          fi
+      - name: Upload the evidence
+        if: ${{ !cancelled() && steps.stage.outcome == 'success' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: walkthrough-evidence-pr${{ github.event.pull_request.number }}
+          path: ${{ runner.temp }}/evidence/
+          if-no-files-found: error
+          retention-days: 1
 
       - name: Fail on a failed walkthrough
         if: ${{ steps.record.outputs.failed == '1' }}
@@ -224,3 +194,105 @@ jobs:
             echo "the recording failed after the walkthroughs (see the Record step)" >&2
           fi
           exit 1
+
+  publish:
+    needs: record
+    # Runs whether or not a walkthrough failed (record then fails), so the
+    # passing ones still reach the PR; not when nothing was staged.
+    if: ${{ !cancelled() && needs.record.outputs.staged == 'true' }}
+    # Its own group, queued rather than cancelled, so a new run's recording
+    # never cancels an older run's publish mid-push, or the reverse.
+    concurrency:
+      group: walkthrough-publish-${{ github.event.pull_request.number }}
+      cancel-in-progress: false
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      pull-requests: write
+    env:
+      PR: ${{ github.event.pull_request.number }}
+      REPO: ${{ github.repository }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: walkthrough-evidence-pr${{ github.event.pull_request.number }}
+          path: ${{ runner.temp }}/evidence
+
+      # Each run commits the staged tree on top of the evidence ref's last
+      # commit, so an older comment's SHA stays reachable, and fast-forwards
+      # the ref; an unchanged tree reuses the last commit. Nothing from the PR
+      # runs here: git, in a fresh repository under a random directory, with
+      # no global or system config and hooks and fsmonitor off, so neither the
+      # staged files nor anything an earlier job wrote can configure it. The
+      # ref is derived from the event's PR number and must equal the staged
+      # one. The token reaches git only as a per-command header.
+      - name: Commit the evidence
+        id: commit
+        env:
+          PUSH_TOKEN: ${{ github.token }}
+          GIT_CONFIG_GLOBAL: /dev/null
+          GIT_CONFIG_NOSYSTEM: "1"
+        run: |
+          set -euo pipefail
+          staged="$RUNNER_TEMP/evidence"
+          ref="refs/walkthroughs/pr-${PR}"
+          if [ "$(cat "$staged/ref")" != "$ref" ]; then
+            echo "the staged ref is not $ref; refusing to push" >&2
+            exit 1
+          fi
+          repo=$(mktemp -d)
+          auth="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$PUSH_TOKEN" | base64 -w0)"
+          echo "::add-mask::$auth"
+          g() {
+            git --git-dir="$repo/.git" -c core.hooksPath=/dev/null -c core.fsmonitor=false \
+              -c user.name=github-actions -c user.email=github-actions@users.noreply.github.com "$@"
+          }
+          authed() { g -c "http.https://github.com/.extraheader=$auth" "$@"; }
+          git -c core.hooksPath=/dev/null init -q "$repo"
+          url="https://github.com/${REPO}.git"
+          parents=()
+          parent=""
+          if [ -n "$(authed ls-remote "$url" "$ref")" ]; then
+            authed fetch -q --no-tags --depth=1 "$url" "+${ref}:refs/evidence/parent"
+            parent=$(g rev-parse refs/evidence/parent)
+            parents=(-p "$parent")
+          fi
+          g --work-tree="$staged/tree" -C "$staged/tree" add -A .
+          tree=$(g write-tree)
+          if [ -n "$parent" ] && [ "$(g rev-parse "${parent}^{tree}")" = "$tree" ]; then
+            sha=$parent
+            echo "evidence unchanged at $sha"
+          else
+            sha=$(g commit-tree "$tree" "${parents[@]}" -m "ci: walkthrough evidence for #${PR}")
+            authed push -q "$url" "${sha}:${ref}"
+            echo "committed $sha to $ref"
+          fi
+          echo "sha=$sha" >>"$GITHUB_OUTPUT"
+
+      # The body was written by record against a placeholder SHA
+      # (walkthroughpr.mjs PENDING_SHA); it is pinned to the evidence commit
+      # here. Slurp every page into one array and match the marker through a
+      # jq --arg, so it is never interpolated into the filter. Only the bot's
+      # own comment counts: anyone can paste the marker into theirs.
+      - name: Upsert the walkthrough comment
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ steps.commit.outputs.sha }}
+        run: |
+          set -euo pipefail
+          MARKER='<!-- omniglass-walkthrough -->'
+          pending=0000000000000000000000000000000000000000
+          [[ "$SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "not a commit SHA: $SHA" >&2; exit 1; }
+          body=$(cat "$RUNNER_TEMP/evidence/body.md")
+          printf '%s\n' "${body//$pending/$SHA}" >"$RUNNER_TEMP/body.md"
+          grep -q "$MARKER" "$RUNNER_TEMP/body.md" || { echo "the staged body has no marker" >&2; exit 1; }
+          cid=$(gh api "repos/${REPO}/issues/${PR}/comments" --paginate \
+                | jq -rs --arg m "$MARKER" 'add | map(select(.user.login == "github-actions[bot]" and (.body | contains($m))))[0].id // empty')
+          if [ -n "$cid" ]; then
+            gh api "repos/${REPO}/issues/comments/${cid}" -X PATCH -F body=@"$RUNNER_TEMP/body.md" >/dev/null
+            echo "updated comment $cid"
+          else
+            gh api "repos/${REPO}/issues/${PR}/comments" -X POST -F body=@"$RUNNER_TEMP/body.md" >/dev/null
+            echo "created comment"
+          fi

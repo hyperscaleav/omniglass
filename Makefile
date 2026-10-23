@@ -302,8 +302,8 @@ docs-shots-verify:
 	node web/e2e/docs-shots-verify.mjs
 
 # Walkthroughs in the docs (#926): copy each walkthrough a page declares in its
-# `walkthroughs` frontmatter (manifest, per-step stills, animated preview and
-# the mp4 the embed plays, #939) from web/e2e/walkthroughs/out/<id>/ into
+# `walkthroughs` frontmatter (manifest, per-step stills and the mp4 the embed
+# plays, #939; not the animated preview, which is PR evidence only) from web/e2e/walkthroughs/out/<id>/ into
 # docs/public/walkthroughs/<id>/, committed like the screenshots. Record first
 # (make walkthroughs ID=<id>).
 docs-walkthroughs:

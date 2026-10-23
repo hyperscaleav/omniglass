@@ -1,11 +1,12 @@
 // copy-walkthroughs brings the walkthroughs the docs declare into the site
 // (#926): for every id under a page's `walkthroughs` frontmatter, it copies the
-// recorder's manifest, per-step stills, animated preview (preview.webp, when
-// the manifest records one, #937) and video (<id>.mp4, #939) from
+// recorder's manifest, per-step stills and video (<id>.mp4, #939) from
 // web/e2e/walkthroughs/out/<id>/
 // (written by `make walkthroughs`) into public/walkthroughs/<id>/, which is
 // committed like public/screenshots/. The recorder's poster.png is not copied:
-// it is a byte copy of the poster step's still, which the manifest names.
+// it is a byte copy of the poster step's still, which the manifest names. Nor
+// is the animated preview: the embed plays the video, so the preview is only
+// the PR comment's glance (one left from an older copy is removed).
 //
 // Only a recording that passed is accepted: its manifest must carry the budget
 // mark the recorder writes after the budget gate passes, so a failed or

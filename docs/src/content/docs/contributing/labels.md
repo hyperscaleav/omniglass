@@ -68,7 +68,8 @@ ref rather than a branch is in [walkthroughs](/contributing/walkthroughs/#show-i
 
 - **What it costs:** nothing on main. The evidence never touches the PR branch, so a squash-merge
   carries none of it, and a default clone does not fetch the ref. It does sit in the repository's
-  object store on GitHub (about 2 to 3.5 MB per walkthrough per run, video included).
+  object store on GitHub and in any mirror of every ref (about 2 to 3.5 MB per walkthrough per run,
+  video included), until `walkthrough-prune.yml` deletes the ref 30 days after the PR closes.
 - **The PR's checks:** untouched. The run pushes only the evidence ref, never the PR head, so there
   is nothing to pull after a run and no check left un-run on the head.
 

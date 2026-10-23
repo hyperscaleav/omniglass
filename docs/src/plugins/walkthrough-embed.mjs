@@ -11,7 +11,7 @@
 // recorder; its types and the id and still rules are the shared core the
 // run:walkthrough comment also reads (web/e2e/walkthroughcore.mjs). The docs
 // never restate a caption: they copy the manifest and render from it.
-import { PREVIEW, checkId, checkPreview, checkStep, checkStill, plural, videoName } from '../../../web/e2e/walkthroughcore.mjs';
+import { checkId, checkPreview, checkStep, checkStill, plural, videoName } from '../../../web/e2e/walkthroughcore.mjs';
 
 export { videoName };
 
@@ -21,11 +21,12 @@ export { videoName };
 export const BASE = '/walkthroughs';
 
 // The files a docs page carries for one walkthrough, in docs/public/walkthroughs/<id>/:
-// the manifest, a still per step, the animated preview when the manifest
-// records one (preview.webp, #937), and the video (<id>.mp4, #939), which the
+// the manifest, a still per step, and the video (<id>.mp4, #939), which the
 // embed plays with controls. Not the recorder's poster.png, a byte copy of the
-// poster step's still (the manifest names that step). A manifest whose
-// recording never passed the budget gate is refused.
+// poster step's still (the manifest names that step), and not the animated
+// preview: that is the PR comment's inline glance, and a page that plays the
+// video has no use for it. A manifest whose recording never passed the budget
+// gate, or that names a malformed preview, is refused.
 /** @param {Manifest} m @returns {string[]} */
 export function walkthroughAssets(m) {
   const id = checkId(m.id);
@@ -41,7 +42,7 @@ export function walkthroughAssets(m) {
     throw new Error(`walkthrough ${id}: poster "${m.poster}" is not one of its step stills`);
   }
   if (m.preview !== undefined) checkPreview(id, m.preview);
-  return ['walkthrough.json', ...stills, ...(m.preview !== undefined ? [PREVIEW] : []), videoName(id)];
+  return ['walkthrough.json', ...stills, videoName(id)];
 }
 
 /** @param {unknown} s @returns {string} */
@@ -56,13 +57,10 @@ function esc(s) {
 
 // The embed (#939): the video with controls, so a reader plays and scrubs it,
 // with the poster step's still as its poster frame (a still, so a reader who
-// asked for reduced motion sees nothing move until they press play); inside
-// it, for a browser that plays no video, the animated preview when the
-// manifest records one (the poster step's still for a reader who prefers
-// reduced motion, and wherever a <source> is not honored), else the poster
-// step's still. Then the title, the description and a link to the mp4, and
-// every step's caption over its still, folded. The mp4 is one of the
-// walkthrough's assets, so it is always there to play.
+// asked for reduced motion sees nothing move until they press play) and as the
+// fallback inside it for a browser that plays no video. Then the title, the
+// description and a link to the mp4, and every step's caption over its still,
+// folded. The mp4 is one of the walkthrough's assets, so it is always there.
 /** @param {Manifest} m @returns {string} */
 export function renderWalkthrough(m) {
   walkthroughAssets(m); // validates the id, step numbers and still names before any reaches the HTML
@@ -70,12 +68,9 @@ export function renderWalkthrough(m) {
   const title = esc(m.title);
   const poster = `${dir}/${m.poster}`;
   const video = `${dir}/${videoName(m.id)}`;
-  const fallback =
-    m.preview !== undefined
-      ? `<picture><source media="(prefers-reduced-motion: no-preference)" srcset="${dir}/${PREVIEW}" />` +
-        `<img src="${poster}" alt="${title}: preview" loading="lazy" /></picture>`
-      : `<img src="${poster}" alt="${title}: poster" loading="lazy" />`;
-  const media = `<video controls preload="none" poster="${poster}" src="${video}">${fallback}</video>`;
+  const media =
+    `<video controls preload="none" poster="${poster}" src="${video}">` +
+    `<img src="${poster}" alt="${title}: poster" loading="lazy" /></video>`;
   const caption =
     `<strong>${title}</strong>` +
     (m.description ? ` ${esc(m.description)}` : '') +

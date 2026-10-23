@@ -7322,12 +7322,20 @@ probing both hosts: a commit pushed only to a `refs/walkthroughs/*` ref is serve
 raw host and from jsDelivr, and the push needs no more than `contents: write`. Each walkthrough in the
 comment now leads with a **Watch (scrubbable)** link to its mp4 through jsDelivr, which serves it as
 `video/mp4` with range requests (the raw host serves an octet stream), so the browser's player seeks; the
-preview stays the inline glance. The ref, the files and both URL builders are pure functions in
-`web/e2e/walkthroughpr.mjs`, unit-tested in `make test-web`.
+preview stays the inline glance. The job is split so no write token shares a runner with the PR's
+code: `record` runs the PR's code with a read-only token and stages the files and the comment body
+(written against a placeholder SHA) as an artifact; `publish` holds the write token, checks nothing
+out, builds the evidence commit in a fresh repository with no global, system, hook or fsmonitor
+configuration, pushes only the ref derived from the event's PR number, and pins and upserts the
+comment. `walkthrough-prune.yml` deletes an evidence ref daily once its PR has been closed 30 days.
+The ref, the files, both URL builders and the prune choice are pure functions in
+`web/e2e/walkthroughpr.mjs`, unit-tested in `make test-web`; the hosting is
+[ADR-0149](/architecture/decisions/#adr-0149-walkthrough-evidence-lives-on-per-pr-refs-its-pr-video-plays-through-jsdelivr-and-the-docs-commit-the-mp4).
 
 The docs carry the video too: `make docs-walkthroughs` copies every declared walkthrough's mp4 (no
 longer opt-in, and no longer gitignored), and the embed renders `<video controls>` with the poster step's
-still as its poster frame and the reduced-motion picture as its fallback. The walkthrough lint and the
-post-build embed check both fail a declared walkthrough whose copy has no mp4, and the remark plugin
-fails the page. The six docs walkthroughs were re-recorded to get their videos, about 6 MB of mp4 in the
+still as its poster frame and fallback. The docs no longer carry the animated preview (the committed
+copies were removed; it stays PR evidence), and the lint flags a stray one. The walkthrough lint and
+the post-build embed check both fail a declared walkthrough whose copy has no mp4, and the remark
+plugin fails the page. The six docs walkthroughs were re-recorded to get their videos, about 6 MB of mp4 in the
 repository, a cost [walkthroughs](/contributing/walkthroughs/) states.

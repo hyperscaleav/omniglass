@@ -23,9 +23,9 @@ import (
 //   - a declared id has its copied assets under docs/public/walkthroughs/<id>/,
 //     written by `make docs-walkthroughs`: the manifest, carrying the budget
 //     mark the recorder adds only when the recording passed, and every still it
-//     names, the poster one of them, the animated preview (preview.webp)
-//     when the manifest records one, and the video (<id>.mp4, #939), which
-//     the embed plays with controls;
+//     names, the poster one of them, and the video (<id>.mp4, #939), which
+//     the embed plays with controls; never the animated preview, which is the
+//     PR comment's glance, not the docs' (a preview.webp in a copy is a stray);
 //   - the copied manifest has not drifted from the script: the same title,
 //     description, step count and captions;
 //   - no copied directory outlives its declaration.
@@ -230,8 +230,8 @@ func strconvQuote(s string) string { b, _ := json.Marshal(s); return string(b) }
 // declared ids (id to the page declaring it) and their scripts under
 // scriptDir: the manifest, carrying the budget mark the recorder writes only
 // when the recording passed; every still it names, its poster one of them;
-// the animated preview when the manifest records one; the video the embed
-// plays; and no drift from the script. Then any directory no page declares.
+// the video the embed plays; no stray animated preview; a well-formed preview
+// name in the manifest; and no drift from the script. Then any directory no page declares.
 func scanWalkthroughAssets(dir, scriptDir string, declared map[string]string) []Finding {
 	var findings []Finding
 	ids := make([]string, 0, len(declared))
@@ -270,20 +270,15 @@ func scanWalkthroughAssets(dir, scriptDir string, declared map[string]string) []
 		if !posterIsStill {
 			add(at("walkthrough.json") + " names poster " + strconvQuote(m.Poster) + ", which is none of its step stills")
 		}
-		// Absent is no preview; any present value but the recorder's name
-		// (empty and null included) is refused, as walkthroughcore.mjs refuses it.
+		// The docs carry no preview, but a manifest naming one must name the
+		// recorder's file (empty and null included), as walkthroughcore.mjs
+		// refuses any other.
 		var preview string
-		switch {
-		case len(m.Preview) == 0:
-			if _, err := os.Stat(filepath.Join(dir, id, walkthroughPreview)); err == nil {
-				add("walkthrough \"" + id + "\" has " + at(walkthroughPreview) + ", but its manifest names no preview (a stray from another recording)" + redo)
-			}
-		case json.Unmarshal(m.Preview, &preview) != nil || preview != walkthroughPreview:
+		if len(m.Preview) > 0 && (json.Unmarshal(m.Preview, &preview) != nil || preview != walkthroughPreview) {
 			add(at("walkthrough.json") + " names preview " + string(m.Preview) + ", not the recorder's " + walkthroughPreview)
-		default:
-			if _, err := os.Stat(filepath.Join(dir, id, walkthroughPreview)); err != nil {
-				add("walkthrough \"" + id + "\" has no " + at(walkthroughPreview) + redo)
-			}
+		}
+		if _, err := os.Stat(filepath.Join(dir, id, walkthroughPreview)); err == nil {
+			add("walkthrough \"" + id + "\" has " + at(walkthroughPreview) + ", which the docs do not carry (the embed plays the video); remove it" + redo)
 		}
 		if _, err := os.Stat(filepath.Join(dir, id, id+".mp4")); err != nil {
 			add("walkthrough \"" + id + "\" has no " + at(id+".mp4") + ", the video its embed plays" + redo)

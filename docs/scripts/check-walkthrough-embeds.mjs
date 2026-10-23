@@ -2,7 +2,7 @@
 // built walkthrough embed to the files this build shipped:
 //
 //   - every walkthrough asset a built page references (a still, the animated
-//     preview, the video and its link) exists in the build output; and
+//     video and its link) exists in the build output;
 //   - every embed ships its video (#939): the mp4 is a declared walkthrough's
 //     asset, played with controls, never optional; and
 //   - every embed is what the shipped manifest renders now (compared in

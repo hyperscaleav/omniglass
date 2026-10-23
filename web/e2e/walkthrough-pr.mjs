@@ -10,6 +10,10 @@
 //       the files that walkthrough's evidence carries, one per line, each a
 //       path both under out/ and in the evidence commit's tree (read from its
 //       out/<id>/walkthrough.json)
+//   node web/e2e/walkthrough-pr.mjs prune <days> < state.json
+//       the evidence refs to delete, one per line, from {"refs": [...], "prs":
+//       [{number, state, closed_at}, ...]} on stdin: those of PRs closed more
+//       than <days> ago (walkthrough-prune.yml)
 //   node web/e2e/walkthrough-pr.mjs comment
 //       the PR comment body, from env REPO, PR, SHA (the evidence commit),
 //       HEAD_SHA, RUN_URL, ARTIFACT_URL and IDS (the selected ids). A
@@ -21,7 +25,7 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { commentBody, evidenceFiles, evidenceRef, selectWalkthroughs } from './walkthroughpr.mjs';
+import { commentBody, evidenceFiles, evidenceRef, evidenceRefsToPrune, selectWalkthroughs } from './walkthroughpr.mjs';
 
 const DIR = join(dirname(fileURLToPath(import.meta.url)), 'walkthroughs');
 const OUT = join(DIR, 'out');
@@ -42,6 +46,12 @@ function main([cmd, ...args]) {
       const m = JSON.parse(readFileSync(join(OUT, id, 'walkthrough.json'), 'utf8'));
       if (m.id !== id) throw new Error(`out/${id}/walkthrough.json is walkthrough "${m.id}", not "${id}"`);
       console.log(evidenceFiles(m).join('\n'));
+      return 0;
+    }
+    case 'prune': {
+      const { refs, prs } = JSON.parse(readFileSync(0, 'utf8'));
+      const out = evidenceRefsToPrune(refs, prs, new Date(), Number(args[0]));
+      if (out.length) console.log(out.join('\n'));
       return 0;
     }
     case 'comment': {
@@ -78,7 +88,7 @@ function main([cmd, ...args]) {
       return 0;
     }
     default:
-      console.error('usage: walkthrough-pr.mjs select | ref <pr> | files <id> | comment');
+      console.error('usage: walkthrough-pr.mjs select | ref <pr> | files <id> | prune <days> | comment');
       return 2;
   }
 }
