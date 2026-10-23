@@ -6820,7 +6820,11 @@ interface create form, since that name is the platform's to mint.
      ...`), and teardown logs why (`its listen task left the worklist`, `its endpoint changed`, `node
      shutdown`). The reason also rides the sample as the `reason` label, which is not persisted.
      Teardown publishes no state: the node stopped wanting the session, which says nothing about the
-     device.
+     device. So the last `session-state` outlives a teardown or a node shutdown (an `up` stays the
+     latest value of a session nobody holds), and a read must judge it by its age, as the
+     property catalog already says of stale values. No surface reads `session-state` yet (the
+     reachability panel reads the endpoint verdicts only); the console work that shows it, with
+     #817's listeners, must render it aged.
   3. **What holds a session.** An endpoint whose worklist carries a standing listen task over a
      transport with a session dialer (the line protocol over `tcp` today; ssh is not wired). The
      listen task is what needs the connection held (its listeners arm over it, #817); the endpoint's
@@ -6828,10 +6832,19 @@ interface create form, since that name is the platform's to mint.
      faults (`collection-failed` naming the state) rather than dialing a connection of its own. The
      worklist carries each task's endpoint id, the node-unique key a session is held under.
   4. **Recovery is bounded.** A failed attempt waits `SessionBackoff`: 250ms doubling per attempt,
-     capped at 30s, jittered 20% either way; five consecutive failed dials read `down`, and the
-     session keeps retrying at the capped pace so a device that returns reads `up` unattended. A
-     connection that drops within 10s counts as churn and grows the next wait, so a device that
-     accepts and drops cannot make the node hot-loop; a held connection carries a 15s TCP keepalive.
+     capped at 30s, jittered 20% either way; five consecutive failed attempts read `down`, and the
+     session keeps retrying at the capped pace so a device that returns reads `up` unattended. An
+     attempt fails when its dial fails, when its connection drops within 10s (a device that accepts
+     and drops cannot hot-loop or read `up` forever), or when an exchange over it timed out (a hung
+     device, however long the connection lived); only a connection that outlives 10s and drops for
+     another reason resets the count and redials at once. Once `down`, a connection that churns
+     reads `down` again, never `recovering`. A held connection carries a 15s TCP keepalive.
+  5. **An answer belongs to its ask.** One reader goroutine owns the connection: on an ask it
+     discards every byte already received (a banner, a stray line), writes the line, and hands the
+     next line it reads to that ask. An ask whose answer does not come in time recycles the
+     connection, since its late reply would otherwise answer the next ask. A listen task whose spec
+     changes (its content-addressed id re-hashes) keeps the healthy connection; only what the
+     connection depends on (transport, address, timeout, credentials) recycles it.
 - **Context:** The nodes page designed a `session_log` table of node-reported transitions with a
   `session` view over it. A property series already gives transition-only history, latest-value
   reads, staleness at read time, rules over it (an event rule can watch `session-state` as it watches

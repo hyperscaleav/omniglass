@@ -159,20 +159,25 @@ protocol over `tcp` today), keyed by the endpoint's id, which the worklist carri
 
 - **establish**: the first dial; the session reads `establishing` until it connects.
 - **operate**: the session reads `up`, and the endpoint's line polls **borrow the held connection**
-  instead of dialing per tick (one request in flight, the next line its answer; a line nobody asked
-  for is unsolicited and dropped until listeners claim it, #817). A poll issued while the first dial
+  instead of dialing per tick. One reader goroutine owns the connection: on an ask it discards
+  whatever already arrived (a banner, a stray line; pushes are claimed by listeners in #817), writes
+  the line, and hands the next line to that ask. An ask whose answer does not come in time recycles
+  the connection, since its late reply would answer the next ask. A poll issued while the first dial
   is in flight waits for it (at most its timeout); any other poll over a session that is not up
   faults at once with a `collection-failed` naming the state, so a down device never stalls the
   node's tick, and it never dials a connection of its own.
 - **recover**: a held connection that drops (the peer closed, a read failed, the TCP keepalive gave
-  up) reads `recovering` at once, without waiting for a poll, and redials with a jittered
-  exponential backoff (250ms doubling, capped at 30s, 20% jitter). Five consecutive failed dials
-  read `down`; the session keeps retrying at the capped pace, so a device that returns reads `up`
-  unattended. A connection that drops within 10s grows the next wait, so a device that accepts and
-  drops cannot make the node hot-loop.
-- **teardown**: a listen task that leaves the worklist, a re-addressed endpoint, or node shutdown
-  closes the connection; teardown publishes no state (the node stopped wanting the session, which
-  says nothing about the device).
+  up, an answer timed out) reads `recovering` at once, without waiting for a poll, and redials with
+  a jittered exponential backoff (250ms doubling, capped at 30s, 20% jitter). Five consecutive failed
+  attempts read `down`, where an attempt fails if its dial fails, its connection drops within 10s,
+  or an answer over it timed out; so a device that accepts and drops, or accepts and never answers,
+  reads `down` rather than `up` forever. The session keeps retrying at the capped pace, so a device
+  that returns reads `up` unattended; a stable connection's drop redials at once.
+- **teardown**: a listen task that leaves the worklist, a change to what the connection depends on
+  (transport, address, timeout, credentials; a listen task's spec re-hash keeps it), or node
+  shutdown closes the connection. Teardown publishes no state (the node stopped wanting the session,
+  which says nothing about the device), so the last `session-state` outlives it and is read by its
+  age.
 
 There is **no session table**: each transition lands as the `session-state` property on the
 endpoint's component (instance: the endpoint's name), published at the transition under the listen

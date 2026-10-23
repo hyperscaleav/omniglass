@@ -127,7 +127,7 @@ func TestDesiredSessions(t *testing.T) {
 		t.Fatalf("desired = %+v, want one session (ep-1)", want)
 	}
 	got := want["ep-1"]
-	if got.target != "10.0.0.5:51325" || got.taskID != "l1" || got.endpoint != "tcp" {
+	if got.conn.target != "10.0.0.5:51325" || got.taskID != "l1" || got.endpoint != "tcp" {
 		t.Fatalf("ep-1 session = %+v, want its target and its lowest listen task", got)
 	}
 	if _, ok := refused["ep-4"]; !ok || len(refused) != 1 {
@@ -237,5 +237,42 @@ func TestSessionSample(t *testing.T) {
 	}
 	if ev.Properties[0].Labels[collection.ReasonLabel] != "connection lost: EOF" || !ev.Properties[0].Ts.AsTime().Equal(at) {
 		t.Fatalf("sample = %+v, want the reason label and the transition time", ev.Properties[0])
+	}
+}
+
+// Review finding 6: a listen task's spec change re-hashes its id but changes
+// nothing the connection depends on, so the healthy connection is kept and
+// later transitions publish under the new task id. A credential change does
+// recycle it.
+func TestSessionManagerKeepsTheConnectionAcrossATaskRehash(t *testing.T) {
+	dialer := &heldFakeDialer{}
+	log := &transitionLog{}
+	m := newSessionManager(map[string]collection.SessionDialer{"tcp": dialer}, log.record)
+	defer m.closeAll()
+	m.reconcile([]collection.TaskSpec{listenTask("l1", "ep-1", "10.0.0.5:51325")})
+	log.waitFor(t, "l1", collection.SessionUp)
+
+	rehashed := listenTask("l1-v2", "ep-1", "10.0.0.5:51325")
+	rehashed.Spec = json.RawMessage(`{"driver":"newtron-nvp","function":"events","match":{"prefix":"EVT "}}`)
+	m.reconcile([]collection.TaskSpec{rehashed})
+	conns := dialer.all()
+	if len(conns) != 1 || conns[0].isClosed() {
+		t.Fatalf("a task re-hash recycled the healthy connection (%d dials, closed=%v)", len(conns), conns[0].isClosed())
+	}
+	conns[0].Close() // the device drops it
+	log.waitFor(t, "l1-v2", collection.SessionRecovering)
+	for wait := time.Now().Add(3 * time.Second); len(dialer.all()) < 2 && time.Now().Before(wait); {
+		time.Sleep(2 * time.Millisecond) // the recovery redial
+	}
+
+	withCred := rehashed
+	withCred.Secrets = map[string]map[string]string{"login": {"password": "new"}}
+	m.reconcile([]collection.TaskSpec{withCred})
+	deadline := time.Now().Add(3 * time.Second)
+	for len(dialer.all()) < 3 && time.Now().Before(deadline) {
+		time.Sleep(2 * time.Millisecond)
+	}
+	if got := dialer.all(); len(got) < 3 || !got[1].isClosed() {
+		t.Fatalf("a credential change kept the old connection (%d dials)", len(got))
 	}
 }

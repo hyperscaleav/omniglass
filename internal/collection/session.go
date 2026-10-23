@@ -44,9 +44,12 @@ const (
 // exponential curve from SessionBackoffBase capped at SessionBackoffMax and
 // jittered by SessionBackoffJitter either way, so a fleet of sessions that
 // lost one switch does not redial in lockstep. SessionAttemptBudget
-// consecutive failed dials move a session to down. A connection that drops
-// before SessionStableAfter counts as churn and grows the next wait, so a
-// device that accepts and drops at once cannot make the node hot-loop.
+// consecutive failed attempts move a session to down. An attempt fails when
+// its dial fails, when its connection drops before SessionStableAfter (so a
+// device that accepts and drops cannot hot-loop or read up forever), or when
+// an exchange over it timed out (a hung device, however long the connection
+// lived). Only a connection that outlives SessionStableAfter and drops for
+// another reason resets the count, and redials at once.
 // SessionKeepAlive is the TCP keepalive on a held connection, which is what
 // notices a peer that vanished without closing.
 const (
@@ -224,6 +227,11 @@ func (s *Session) transition(state SessionState, reason string, conn HeldConn) {
 		return
 	}
 	s.state, s.reason, s.conn = state, reason, conn
+	if state == SessionUp {
+		// The first dial's wait window ends with the connection already
+		// lent, so a waiting exchange never sees the window closed first.
+		s.dialing = false
+	}
 	close(s.changed)
 	s.changed = make(chan struct{})
 	s.mu.Unlock()
@@ -232,20 +240,33 @@ func (s *Session) transition(state SessionState, reason string, conn HeldConn) {
 	}
 }
 
-// run is the machine. wait is the backoff attempt before the next dial: the
-// failed dials since the last success plus the churn of short-lived
-// connections, zero (an immediate redial) after a stable connection drops.
+// run is the machine. failures counts the consecutive failed attempts
+// (failed dials, churned connections, answer timeouts); it is also the
+// backoff attempt before the next dial, zero (an immediate redial) after a
+// stable connection dropped.
 func (s *Session) run(ctx context.Context) {
 	defer close(s.done)
 	s.transition(SessionEstablishing, "connecting to "+s.cfg.Target, nil)
 	state := SessionEstablishing
-	failures, churn, wait := 0, 0, 0
+	failures := 0
+	fail := func(cause string) {
+		failures++
+		switch {
+		case failures >= SessionAttemptBudget:
+			if state != SessionDown {
+				state = SessionDown
+				s.transition(state, fmt.Sprintf("%d consecutive attempts failed, last: %s", failures, cause), nil)
+			}
+		case state == SessionUp:
+			state = SessionRecovering
+			s.transition(state, cause, nil)
+		}
+	}
 	for {
-		if wait > 0 && !sleepCtx(ctx, s.cfg.Backoff(wait)) {
+		if failures > 0 && !sleepCtx(ctx, s.cfg.Backoff(failures)) {
 			return
 		}
 		conn, err := s.cfg.Dialer.Dial(ctx, s.cfg.Target, s.cfg.Timeout)
-		s.firstDialDone()
 		if ctx.Err() != nil {
 			if conn != nil {
 				_ = conn.Close()
@@ -253,15 +274,10 @@ func (s *Session) run(ctx context.Context) {
 			return
 		}
 		if err != nil {
-			failures++
-			wait = failures + churn
-			if failures >= SessionAttemptBudget && state != SessionDown {
-				state = SessionDown
-				s.transition(state, fmt.Sprintf("%d consecutive attempts failed, last: %v", failures, err), nil)
-			}
+			s.firstDialDone()
+			fail(err.Error())
 			continue
 		}
-		failures = 0
 		state = SessionUp
 		s.transition(state, "connected to "+s.cfg.Target, conn)
 		since := s.cfg.Now()
@@ -271,23 +287,28 @@ func (s *Session) run(ctx context.Context) {
 			return
 		case <-conn.Done():
 		}
+		cause := conn.Err()
+		_ = conn.Close()
 		reason := "connection lost"
-		if cause := conn.Err(); cause != nil {
+		if cause != nil {
 			reason += ": " + cause.Error()
 		}
-		_ = conn.Close()
-		if s.cfg.Now().Sub(since) < SessionStableAfter {
-			churn++
-		} else {
-			churn = 0
+		lived := s.cfg.Now().Sub(since)
+		switch {
+		case errors.Is(cause, ErrExchangeTimeout):
+			fail(reason)
+		case lived < SessionStableAfter:
+			fail(fmt.Sprintf("%s (within %s of connecting)", reason, SessionStableAfter))
+		default:
+			failures = 0
+			state = SessionRecovering
+			s.transition(state, reason, nil)
 		}
-		wait = churn
-		state = SessionRecovering
-		s.transition(state, reason, nil)
 	}
 }
 
-// firstDialDone ends the first-dial wait window and wakes its waiters.
+// firstDialDone ends the first-dial wait window after a failed first dial
+// and wakes its waiters; a successful one ends it inside the up transition.
 func (s *Session) firstDialDone() {
 	s.mu.Lock()
 	defer s.mu.Unlock()

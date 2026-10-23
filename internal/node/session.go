@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"sort"
+	"sync"
 	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/collection"
@@ -17,18 +18,27 @@ import (
 // per tick. The manager reconciles the held set against every worklist pull:
 // a new listen task starts a session, a removed one (or a re-addressed
 // endpoint) tears its session down, and node shutdown tears down them all.
-// It runs on the run loop's goroutine only, so it holds no lock; the
-// sessions themselves run their own goroutines.
+// It runs on the run loop's goroutine only; the one field a session's
+// goroutine reads back (where to publish) sits behind its own lock.
 
-// sessionWant is one session the worklist asks for: where, how long to wait,
-// and the listen task its transitions publish under (owner and instance bind
+// sessionConn is what a held connection depends on: the transport, the
+// address, the wait, and the credentials. A change to any of them recycles
+// the session; anything else (a listen task's spec re-hashing its id) keeps
+// the healthy connection.
+type sessionConn struct {
+	transport   string
+	target      string
+	timeout     time.Duration
+	credentials string // canonical JSON of the listen task's delivered secrets
+}
+
+// sessionWant is one session the worklist asks for: its connection, and the
+// listen task its transitions publish under (owner and instance bind
 // server-side from that task's endpoint, like every other sample).
 type sessionWant struct {
-	transport string
-	target    string
-	timeout   time.Duration
-	taskID    string
-	endpoint  string
+	conn     sessionConn
+	taskID   string
+	endpoint string
 }
 
 // desiredSessions derives the held set from a worklist. Pure. A listen task
@@ -69,15 +79,34 @@ func desiredSessions(tasks []collection.TaskSpec, dialers map[string]collection.
 			}
 			timeout = d
 		}
-		want[task.EndpointID] = sessionWant{transport: task.Transport, target: p.Target, timeout: timeout, taskID: task.ID, endpoint: task.EndpointName}
+		creds := ""
+		if len(task.Secrets) > 0 {
+			b, _ := json.Marshal(task.Secrets) // map keys marshal sorted: canonical
+			creds = string(b)
+		}
+		want[task.EndpointID] = sessionWant{
+			conn:   sessionConn{transport: task.Transport, target: p.Target, timeout: timeout, credentials: creds},
+			taskID: task.ID, endpoint: task.EndpointName,
+		}
 	}
 	return want, refused
 }
 
-// heldSession is one running session and what it was started for.
+// heldSession is one running session, the connection it was started for,
+// and where its transitions publish now (updated in place by a re-hash).
 type heldSession struct {
-	want sessionWant
+	conn sessionConn
 	sess *collection.Session
+
+	mu       sync.Mutex
+	taskID   string
+	endpoint string
+}
+
+func (h *heldSession) publishTo() (string, string) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return h.taskID, h.endpoint
 }
 
 // sessionManager owns the node's held sessions, keyed by endpoint id.
@@ -100,8 +129,12 @@ func (m *sessionManager) reconcile(tasks []collection.TaskSpec) {
 		switch {
 		case !ok:
 			m.teardown(id, h, "its listen task left the worklist")
-		case w != h.want:
+		case w.conn != h.conn:
 			m.teardown(id, h, "its endpoint changed")
+		default:
+			h.mu.Lock()
+			h.taskID, h.endpoint = w.taskID, w.endpoint
+			h.mu.Unlock()
 		}
 	}
 	for id, w := range want {
@@ -120,22 +153,26 @@ func (m *sessionManager) reconcile(tasks []collection.TaskSpec) {
 
 func (m *sessionManager) start(id string, w sessionWant) {
 	notify := m.onTransition
-	m.held[id] = &heldSession{want: w, sess: collection.StartSession(collection.SessionConfig{
-		Target:  w.target,
-		Timeout: w.timeout,
-		Dialer:  m.dialers[w.transport],
+	h := &heldSession{conn: w.conn, taskID: w.taskID, endpoint: w.endpoint}
+	h.sess = collection.StartSession(collection.SessionConfig{
+		Target:  w.conn.target,
+		Timeout: w.conn.timeout,
+		Dialer:  m.dialers[w.conn.transport],
 		OnTransition: func(tr collection.SessionTransition) {
 			if notify != nil {
-				notify(w.taskID, w.endpoint, tr)
+				taskID, endpoint := h.publishTo()
+				notify(taskID, endpoint, tr)
 			}
 		},
-	})}
+	})
+	m.held[id] = h
 }
 
 func (m *sessionManager) teardown(id string, h *heldSession, why string) {
 	h.sess.Close()
 	delete(m.held, id)
-	slog.Info("session torn down", "facility", "session", "task", h.want.taskID, "endpoint", h.want.endpoint, "target", h.want.target, "reason", why)
+	taskID, endpoint := h.publishTo()
+	slog.Info("session torn down", "facility", "session", "task", taskID, "endpoint", endpoint, "target", h.conn.target, "reason", why)
 }
 
 // lookup is the session a poll on endpointID borrows, or nil (a nil

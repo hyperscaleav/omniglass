@@ -210,12 +210,30 @@ func equalStates(a, b []collection.SessionState) bool {
 }
 
 func startTestSession(t *testing.T, d *fakeSessionDialer, r *recorder) *collection.Session {
+	return startTestSessionAt(t, d, r, nil)
+}
+
+// steppingClock returns a clock that moves step forward on every read, so
+// every held connection outlives (or not) the stable window by design.
+func steppingClock(step time.Duration) func() time.Time {
+	var mu sync.Mutex
+	at := time.Date(2026, 10, 23, 0, 0, 0, 0, time.UTC)
+	return func() time.Time {
+		mu.Lock()
+		defer mu.Unlock()
+		at = at.Add(step)
+		return at
+	}
+}
+
+func startTestSessionAt(t *testing.T, d *fakeSessionDialer, r *recorder, now func() time.Time) *collection.Session {
 	t.Helper()
 	s := collection.StartSession(collection.SessionConfig{
 		Target:       "10.0.0.9:51325",
 		Dialer:       d,
 		OnTransition: r.onTransition,
 		Backoff:      r.backoff,
+		Now:          now,
 	})
 	t.Cleanup(s.Close)
 	return s
@@ -350,6 +368,100 @@ func TestSessionFlappingConnectionBacksOff(t *testing.T) {
 			t.Fatalf("flapping connection asked backoff %v; it is hot-looping or stalled", attempts)
 		}
 	}
+}
+
+// Review finding 3: a device that accepts and drops at once reaches down
+// within the attempt budget (each churned connection is a failed attempt),
+// and once down a churned connection reads down again, never recovering.
+func TestSessionAcceptThenDropReadsDownWithinTheBudget(t *testing.T) {
+	d, r := &fakeSessionDialer{dieAtOnce: true}, newRecorder()
+	startTestSession(t, d, r)
+	deadline := time.After(3 * time.Second)
+	for {
+		st := r.states()
+		if i := indexOf(st, down); i >= 0 {
+			if i+1 > 2*collection.SessionAttemptBudget+1 {
+				t.Fatalf("down only after %d transitions %v, want within the budget", i+1, st)
+			}
+			break
+		}
+		select {
+		case <-r.notify:
+		case <-deadline:
+			t.Fatalf("an accept-then-drop device never read down: %v", r.states())
+		}
+	}
+	// A few more churned connections after down.
+	for len(r.states()) < 2*collection.SessionAttemptBudget+6 {
+		select {
+		case <-r.notify:
+		case <-time.After(3 * time.Second):
+			t.Fatal("the machine stalled after down")
+		}
+	}
+	st := r.states()
+	for _, s := range st[indexOf(st, down):] {
+		if s == recovering {
+			t.Fatalf("a churned connection after down read recovering: %v", st)
+		}
+	}
+	r.mu.Lock()
+	last := r.attempts[len(r.attempts)-1]
+	r.mu.Unlock()
+	if last < collection.SessionAttemptBudget {
+		t.Fatalf("backoff attempt after down = %d, want at least the budget (the waits stay at the curve)", last)
+	}
+}
+
+// A stable connection's drop is not a failure: it redials at once and the
+// session never reads down however often it happens.
+func TestSessionStableDropsNeverReadDown(t *testing.T) {
+	d, r := &fakeSessionDialer{}, newRecorder()
+	startTestSessionAt(t, d, r, steppingClock(collection.SessionStableAfter+time.Second))
+	r.waitStates(t, establishing, up)
+	for i := 0; i < 2*collection.SessionAttemptBudget; i++ {
+		d.last().kill(errors.New("EOF"))
+		want := len(r.states()) + 2
+		for len(r.states()) < want {
+			select {
+			case <-r.notify:
+			case <-time.After(3 * time.Second):
+				t.Fatalf("no recovery after drop %d: %v", i, r.states())
+			}
+		}
+	}
+	if indexOf(r.states(), down) >= 0 {
+		t.Fatalf("stable drops read down: %v", r.states())
+	}
+}
+
+// Review finding 1 at the machine: an exchange timeout is a failure however
+// long the connection lived, so a hung device reaches down.
+func TestSessionExchangeTimeoutsReadDown(t *testing.T) {
+	d, r := &fakeSessionDialer{}, newRecorder()
+	startTestSessionAt(t, d, r, steppingClock(collection.SessionStableAfter+time.Second))
+	r.waitStates(t, establishing, up)
+	deadline := time.After(3 * time.Second)
+	for indexOf(r.states(), down) < 0 {
+		if c := d.last(); c != nil {
+			c.kill(collection.ErrExchangeTimeout)
+		}
+		select {
+		case <-r.notify:
+		case <-time.After(5 * time.Millisecond):
+		case <-deadline:
+			t.Fatalf("repeated exchange timeouts never read down: %v", r.states())
+		}
+	}
+}
+
+func indexOf(st []collection.SessionState, want collection.SessionState) int {
+	for i, s := range st {
+		if s == want {
+			return i
+		}
+	}
+	return -1
 }
 
 // Teardown closes the held connection, stops the machine (no transition after
