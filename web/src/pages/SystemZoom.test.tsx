@@ -376,25 +376,68 @@ describe("the map tab (#791)", () => {
     const map = screen.getByTestId("system-map");
     const markers = within(map).getAllByTestId(/^mapmarker-/);
     expect(markers).toHaveLength(3);
-    expect(within(map).getByText(/Room Microphone 2 · mic-1/)).toBeTruthy();
-    expect(within(map).getByText(/Main Display · empty/)).toBeTruthy();
+    expect(within(screen.getByTestId("mapmarker-room-mic-2")).getByText("mic-1")).toBeTruthy();
+    expect(within(screen.getByTestId("mapmarker-main-display-1")).getByText("Main Display")).toBeTruthy();
   });
 
-  // Each occupied position's dot wears its component's own verdict (#1071),
-  // the same verdict the component rows beside it show: healthy the muted
-  // green, degraded amber, outage red. An empty position keeps its hollow
-  // grey ring, never a fill.
-  it("dots each occupant in its own verdict's colour, and leaves a gap hollow", () => {
-    const dot = (id: string) => screen.getByTestId(id).querySelector("span")!.className;
+  // A marker is its component's type icon in its own verdict's hue (#1074,
+  // the #1071 colours), its label under it: the same icon, label and verdict
+  // its row shows. An empty position is a dashed ring in the no-data grey,
+  // named for its role.
+  it("draws each occupant as its type icon in its verdict's hue, label under it, and a gap as a grey ring", () => {
+    const glyph = (id: string) => screen.getByTestId(id).querySelector("[data-glyph]")!;
     mount(`/web/systems/${uuidFor("szp-sys")}?tab=map`, health, [], MAPPED);
-    expect(dot("mapmarker-room-mic-1")).toContain("bg-healthy-muted");
-    expect(dot("mapmarker-room-mic-2")).toContain("bg-error");
-    expect(dot("mapmarker-main-display-1")).toContain("border-dashed");
-    expect(dot("mapmarker-main-display-1")).not.toMatch(/bg-(healthy|warning|error|incomplete)/);
+    expect(glyph("mapmarker-room-mic-1").getAttribute("class")).toContain("text-healthy");
+    expect(glyph("mapmarker-room-mic-1").querySelector("svg")).toBeTruthy();
+    expect(glyph("mapmarker-room-mic-2").getAttribute("class")).toContain("text-error");
+    expect(glyph("mapmarker-main-display-1").getAttribute("class")).toContain("text-base-content/35");
+    expect(screen.getByTestId("mapmarker-main-display-1").hasAttribute("data-empty")).toBe(true);
+    // label sits under the icon: icon first, then the label, in a column
+    const occ = screen.getByTestId("mapmarker-room-mic-1");
+    expect(occ.className).toContain("flex-col");
+    expect(occ.querySelector("[data-maplabel]")!.textContent).toBe("videobar-1");
     cleanup();
     mount(`/web/systems/${uuidFor("szp-sys")}?tab=map`, health, [], MAPPED, me, memberRowsOf(view, uuidFor("szp-sys"), { "videobar-1": "degraded" }));
-    expect(dot("mapmarker-room-mic-1")).toContain("bg-warning");
-    expect(dot("mapmarker-room-mic-1")).not.toContain("bg-healthy");
+    expect(glyph("mapmarker-room-mic-1").getAttribute("class")).toContain("text-warning");
+  });
+
+  // The detail rides a tooltip (#1074, tooltips not prose): the role and its
+  // position, the product, the health word, and the alarm behind a red one.
+  it("reveals a marker's role, health and alarm on focus, never inline", async () => {
+    mount(`/web/systems/${uuidFor("szp-sys")}?tab=map`, health, [], MAPPED);
+    const marker = screen.getByTestId("mapmarker-room-mic-2");
+    expect(marker.textContent).not.toContain("Room Microphone");
+    fireEvent.keyDown(document.body, { key: "Tab" });
+    marker.focus();
+    const tip = await screen.findByTestId("mapmarker-detail");
+    expect(tip.textContent).toContain("Room Microphone 2");
+    expect(tip.textContent).toContain("outage");
+    expect(tip.textContent).toContain("No route to host");
+  });
+
+  // A health poll that lands a fresh payload must not rebuild the markers
+  // (#1074 review): a rebuilt marker drops keyboard focus and closes an open
+  // tooltip every few seconds. Markers are keyed by their slot in the
+  // declaration, so the same position keeps its node across a poll.
+  it("keeps each marker's node across a health poll, so focus and an open tooltip survive", async () => {
+    const r = mount(`/web/systems/${uuidFor("szp-sys")}?tab=map`, health, [], MAPPED);
+    const before = screen.getByTestId("mapmarker-room-mic-1");
+    // A real change (a new transition), so structural sharing hands the page
+    // a new payload and everything derived from it recomputes.
+    r.qc.setQueryData([...systemHealthKey(uuidFor("szp-sys"))], {
+      ...health,
+      transitions: [...(health.transitions ?? []), { ts: "2026-08-16T09:00:00Z", verdict: "degraded" }],
+    });
+    // the query cache notifies observers on a later tick
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(screen.getByTestId("mapmarker-room-mic-1")).toBe(before);
+  });
+
+  // An empty position is reachable by keyboard too: its tooltip says nobody
+  // staffs it, and a mouse is not the only way to ask.
+  it("lets the keyboard reach an empty position", () => {
+    mount(`/web/systems/${uuidFor("szp-sys")}?tab=map`, health, [], MAPPED);
+    expect(screen.getByTestId("mapmarker-main-display-1").getAttribute("tabindex")).toBe("0");
   });
 
   it("clicking an occupied marker opens its component blade (#799)", async () => {

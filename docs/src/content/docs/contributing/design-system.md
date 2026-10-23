@@ -174,9 +174,9 @@ tinted from the text color, so it reads as a visible pill at the same weight as 
 same reason keeps `type` values (endpoint/task `type`) as plain `font-data` text, not a
 `badge-neutral` chip. A **healthy** verdict wears green from one token, `--og-healthy` (ADR-0154):
 `badge-healthy` on a pill and `bg-healthy` on a strip at the trouble hues' weight, `text-healthy`
-and its fill twin `bg-healthy-muted` (muted) on dense views such as the outline and the map's dots (a dot that stands for one
-component takes its fill from `verdictDot`, every verdict in its own hue), so a known healthy verdict never reads as the grey
-unknown chip.
+(muted) on dense views such as the outline and the map. A glyph that stands for one component (an
+outline slot, a map marker's icon) takes its hue from `verdictHue`, every verdict in its own colour,
+so a known healthy verdict never reads as the grey unknown chip.
 
 A **severity** wears its level's color, one map for the whole console (`SEVERITY_BADGE` beside
 `SeverityBadge`): gray is the `badge-ghost` neutral chip, blue `badge-info`, green `badge-success`,

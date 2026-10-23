@@ -42,7 +42,7 @@ import { spans as timelineSpans } from "../lib/timeline";
 import { systemEvents, systemEventsKey, systemLogs, systemLogsKey } from "../lib/system_activity";
 import { metricSeries, metricSeriesKey } from "../lib/series";
 import { CalcRuleLink } from "../components/RuleLink";
-import { memberModel, systemCrumbs, systemsAtPlace } from "../lib/detail";
+import { memberModel, systemCrumbs, systemsAtPlace, type MemberContext } from "../lib/detail";
 import TimeseriesChart from "../components/TimeseriesChart";
 import { systemMembers, systemMembersKey } from "../lib/members";
 import { LEAF_POLL_MS } from "../lib/component_leaf";
@@ -243,14 +243,15 @@ export default function SystemZoom() {
     const polled = new Map((membersQ.data ?? []).map((m) => [m.component_id, m.component_verdict] as const));
     return (cid: string) => verdictOf(polled.get(cid) ?? dots.get(cid)?.verdict);
   });
-  const members = createMemo(() => {
-    const b = bodyOf();
-    if (!b) return { rows: [], groups: [] };
+  // Each member's label, icon, product, alarm and verdict: one context shared
+  // by the component rows and the map (#1074), so a marker reads exactly like
+  // its row.
+  const memberCtx = createMemo((): MemberContext => {
     const comp = new Map((comps.data ?? []).map((c) => [c.id, c] as const));
     const prod = new Map((prods.data ?? []).map((p) => [p.name, p] as const));
     const types = new Map((ctypes.data ?? []).map((t) => [t.name, t] as const));
     const alarmOf = new Map(alarms().filter((a) => a.componentId).map((a) => [a.componentId!, a.message] as const));
-    return memberModel(b, {
+    return {
       verdict: componentVerdict(),
       alarm: (cid) => alarmOf.get(cid),
       product: (cid) => {
@@ -262,7 +263,11 @@ export default function SystemZoom() {
         return c ? entityLabel({ name: c.name, label: c.label }) : name;
       },
       icon: (cid) => resolveComponentTypeIcon(prod.get(comp.get(cid)?.product ?? "")?.component_type, types),
-    });
+    };
+  });
+  const members = createMemo(() => {
+    const b = bodyOf();
+    return b ? memberModel(b, memberCtx()) : { rows: [], groups: [] };
   });
   const componentCount = () => (system()?.dots ?? []).length;
 
@@ -564,7 +569,7 @@ export default function SystemZoom() {
                       // SystemMap pads itself; the negative margin lines its
                       // eyebrow up with the sections around it.
                       <div class="-m-4">
-                        <SystemMap decl={decl()} markers={mapMarkers(decl(), z())} verdict={componentVerdict()} onOpen={openComponent} />
+                        <SystemMap decl={decl()} markers={mapMarkers(decl(), z())} member={memberCtx()} onOpen={openComponent} />
                       </div>
                     )}
                   </Show>
