@@ -11,46 +11,109 @@
     {
      "source": "sum(members, .has.pts) > 0",
      "flags": true,
-     "fixed": "count(members, .has.pts) > 0"
+     "fixed": "count(members, .has.pts) > 0",
+     "site": "calc",
+     "inputs": [
+      "pts",
+      "up"
+     ],
+     "result": "bool"
     },
     {
      "source": "sum(up) >= 2",
      "flags": true,
-     "fixed": "count(up) >= 2"
+     "fixed": "count(up) >= 2",
+     "site": "calc",
+     "inputs": [
+      "pts",
+      "up"
+     ],
+     "result": "bool"
     },
     {
      "source": "len(pts) > 0 && sum(pts, # > 50) > 1",
      "flags": true,
-     "fixed": "len(pts) > 0 && count(pts, # > 50) > 1"
+     "fixed": "len(pts) > 0 && count(pts, # > 50) > 1",
+     "site": "calc",
+     "inputs": [
+      "pts",
+      "up"
+     ],
+     "result": "bool"
     },
     {
      "source": "sum(members, .has.up)",
      "flags": true,
-     "fixed": "count(members, .has.up)"
+     "fixed": "count(members, .has.up)",
+     "site": "calc",
+     "inputs": [
+      "pts",
+      "up"
+     ],
+     "result": "float64"
     },
     {
      "source": "sum(pts)",
-     "flags": false
+     "flags": false,
+     "site": "calc",
+     "inputs": [
+      "pts",
+      "up"
+     ],
+     "result": "float64"
     },
     {
      "source": "sum(members, .value.pts)",
-     "flags": false
+     "flags": false,
+     "site": "calc",
+     "inputs": [
+      "pts",
+      "up"
+     ],
+     "result": "float64"
     },
     {
      "source": "count(members, .has.pts) > 0",
-     "flags": false
+     "flags": false,
+     "site": "calc",
+     "inputs": [
+      "pts",
+      "up"
+     ],
+     "result": "bool"
     },
     {
      "source": "len(pts) + up > 0",
-     "flags": false
+     "flags": false,
+     "refused": true,
+     "site": "calc",
+     "inputs": [
+      "pts",
+      "up"
+     ],
+     "result": "bool"
     },
     {
      "source": "sum(pts) > 0 && nope",
-     "flags": false
+     "flags": false,
+     "refused": true,
+     "site": "calc",
+     "inputs": [
+      "pts",
+      "up"
+     ],
+     "result": "bool"
     },
     {
      "source": "sum(members, .has.pts && bogus) > 0",
-     "flags": false
+     "flags": false,
+     "refused": true,
+     "site": "calc",
+     "inputs": [
+      "pts",
+      "up"
+     ],
+     "result": "bool"
     }
    ]
   },
@@ -63,35 +126,62 @@
    "examples": [
     {
      "source": "value == 1.5",
-     "flags": true
+     "flags": true,
+     "site": "criteria",
+     "inputs": [],
+     "result": "bool"
     },
     {
      "source": "-0.1 != value",
-     "flags": true
+     "flags": true,
+     "site": "criteria",
+     "inputs": [],
+     "result": "bool"
     },
     {
      "source": "avg(pts) == 20.5",
-     "flags": true
+     "flags": true,
+     "site": "calc",
+     "inputs": [
+      "pts",
+      "up"
+     ],
+     "result": "bool"
     },
     {
      "source": "value == 80.0",
-     "flags": false
+     "flags": false,
+     "site": "criteria",
+     "inputs": [],
+     "result": "bool"
     },
     {
      "source": "value == 80",
-     "flags": false
+     "flags": false,
+     "site": "criteria",
+     "inputs": [],
+     "result": "bool"
     },
     {
      "source": "value > 1.5",
-     "flags": false
+     "flags": false,
+     "site": "criteria",
+     "inputs": [],
+     "result": "bool"
     },
     {
      "source": "abs(value - 1.5) < 0.01",
-     "flags": false
+     "flags": false,
+     "site": "criteria",
+     "inputs": [],
+     "result": "bool"
     },
     {
      "source": "1.5 == 1.5",
-     "flags": false
+     "flags": false,
+     "site": "criteria",
+     "inputs": [],
+     "result": "bool"
     }
    ]
   },
@@ -105,39 +195,87 @@
     {
      "source": "count(members, .has.pts) == len(members)",
      "flags": true,
-     "fixed": "all(members, .has.pts)"
+     "fixed": "all(members, .has.pts)",
+     "site": "calc",
+     "inputs": [
+      "pts",
+      "up"
+     ],
+     "result": "bool"
     },
     {
      "source": "len(pts) == count(pts, # > 20) && len(up) > 0",
      "flags": true,
-     "fixed": "all(pts, # > 20) && len(up) > 0"
+     "fixed": "all(pts, # > 20) && len(up) > 0",
+     "site": "calc",
+     "inputs": [
+      "pts",
+      "up"
+     ],
+     "result": "bool"
     },
     {
      "source": "(count(pts, # > 20)) == len(pts)",
      "flags": true,
-     "fixed": "all(pts, # > 20)"
+     "fixed": "all(pts, # > 20)",
+     "site": "calc",
+     "inputs": [
+      "pts",
+      "up"
+     ],
+     "result": "bool"
     },
     {
      "source": "count(pts, # > 20) == (len(pts))",
      "flags": true,
-     "fixed": "all(pts, # > 20)"
+     "fixed": "all(pts, # > 20)",
+     "site": "calc",
+     "inputs": [
+      "pts",
+      "up"
+     ],
+     "result": "bool"
     },
     {
      "source": "len(up) > 0 && ((count(pts, # > 20)) == len(pts))",
      "flags": true,
-     "fixed": "len(up) > 0 && (all(pts, # > 20))"
+     "fixed": "len(up) > 0 && (all(pts, # > 20))",
+     "site": "calc",
+     "inputs": [
+      "pts",
+      "up"
+     ],
+     "result": "bool"
     },
     {
      "source": "count(pts, # > 20) == len(up)",
-     "flags": false
+     "flags": false,
+     "site": "calc",
+     "inputs": [
+      "pts",
+      "up"
+     ],
+     "result": "bool"
     },
     {
      "source": "count(pts, # > 20) == len(pts) - 1",
-     "flags": false
+     "flags": false,
+     "site": "calc",
+     "inputs": [
+      "pts",
+      "up"
+     ],
+     "result": "bool"
     },
     {
      "source": "all(pts, # > 20)",
-     "flags": false
+     "flags": false,
+     "site": "calc",
+     "inputs": [
+      "pts",
+      "up"
+     ],
+     "result": "bool"
     }
    ]
   },
@@ -152,27 +290,61 @@
    "examples": [
     {
      "source": "max(pts)",
-     "flags": true
+     "flags": true,
+     "site": "calc",
+     "inputs": [
+      "pts",
+      "up"
+     ],
+     "result": "float64"
     },
     {
      "source": "count(up) + max(pts)",
-     "flags": false
+     "flags": false,
+     "site": "calc",
+     "inputs": [
+      "pts",
+      "up"
+     ],
+     "result": "float64"
     },
     {
      "source": "all(members, .has.pts && .has.up)",
-     "flags": false
+     "flags": false,
+     "site": "calc",
+     "inputs": [
+      "pts",
+      "up"
+     ],
+     "result": "bool"
     },
     {
      "source": "len(pts) > 0 && members[0].value.up",
-     "flags": false
+     "flags": false,
+     "site": "calc",
+     "inputs": [
+      "pts",
+      "up"
+     ],
+     "result": "bool"
     },
     {
      "source": "count(members, .name == \"a\") > 0",
-     "flags": true
+     "flags": true,
+     "site": "calc",
+     "inputs": [
+      "name"
+     ],
+     "result": "bool"
     },
     {
      "source": "len(name) > 0",
-     "flags": false
+     "flags": false,
+     "site": "calc",
+     "inputs": [
+      "name"
+     ],
+     "result": "bool"
     }
    ]
   }

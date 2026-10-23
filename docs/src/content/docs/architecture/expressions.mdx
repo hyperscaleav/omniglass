@@ -140,18 +140,16 @@ Tab; in the editor, F8 moves to the next diagnostic and Mod-Shift-M lists them w
 an edit of the author's own, so Ctrl-Z takes it back. A stored rule's warnings show on its blade as a note,
 never an alert.
 
-The first four rules (#1054) are the mistakes authors made first: **`sum-of-bools`** explains a `sum` over
-true-or-false values (`sum(members, .has.t) > 0`) as the count it meant, on the `sum`, with the fix
-`count(...)`; **`float-equality`** warns that `value == 1.5` is seldom exactly true of a measured number
-and suggests a range; **`count-equals-len`** hints that `count(xs, p) == len(xs)` is `all(xs, p)`, with
-that fix; and **`unused-alias`** warns of a calc rule's input the reduce never names (the site declares
-its aliases as the expression's inputs), which the rule reads for nothing. A warning never refuses a
-rule: `value == 1.5` still saves and judges.
+The first rules (#1054) are the mistakes authors made first: counting with `sum`, comparing a measured
+number to a decimal with `==`, spelling `all` as a count against a length, and an input the reduce never
+names (a calc site declares its aliases as the expression's inputs). Each is in the table below, with its
+severity and fix.
 
-Every registered diagnostic, generated from the registry (`make gen`), its examples read from its
-fixtures (what it flags, with what its fix gives, and what it leaves alone; the build holds the rule to
-each). The examples are written against a calc rule reading `pts` (numbers) and `up` (bools) on a
-system, or a criteria reading a metric's `value`. Built today:
+Every registered diagnostic, generated from the registry (`make gen`): its code, its severity and when it
+runs, its sites, a summary (the diagnostic itself says it in the expression's own terms), and its examples,
+read from its fixtures with the site, inputs and result each is written against: what it flags, with what
+its fix gives, and what it leaves alone, including another refusal the engine makes on its own. The build
+holds the rule to each. Built today:
 
 <ExpressionDiagnostics />
 

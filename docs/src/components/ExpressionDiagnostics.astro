@@ -2,16 +2,24 @@
 // The expression diagnostics (#1021), rendered from the generated registry
 // (docs/src/generated/expression-diagnostics.json, written by make gen via
 // cmd/exprgen from internal/expression/diagnostic_rules.go). Each rule's
-// code, severity, sites and message are its declaration, and its examples
-// are its fixtures (the build holds each rule to them), so no row or example
-// is hand-written here. Each row carries the anchor the console's expression
-// editor links a diagnostic's code to: #diagnostic-<code>.
+// code, severity, sites and summary are its declaration, and its examples
+// are its fixtures (the build holds each rule to them), each with the site,
+// inputs and result type it is written against and whether the engine
+// refuses it on its own, so no row, example or environment is hand-written
+// here. Each row carries the anchor the console's expression editor links a
+// diagnostic's code to: #diagnostic-<code>.
 import facts from '../generated/expression-diagnostics.json';
 
-type Example = { source: string; flags: boolean; fixed?: string };
+type Example = { source: string; flags: boolean; fixed?: string; refused?: boolean; site: string; inputs: string[]; result: string };
 type Rule = { code: string; severity: string; trigger: string; sites: string[]; message: string; examples: Example[] };
 
 const when = (r: Rule) => (r.trigger === 'refine' ? 'explains a refusal' : 'flags an expression that compiles');
+// Where an example is written: a calc rule's inputs, or a criteria's metric
+// value, and what it must yield.
+const where = (e: Example) =>
+  e.inputs.length > 0
+    ? `${e.site}, inputs ${e.inputs.join(', ')}, yields ${e.result}`
+    : `${e.site}, yields ${e.result}`;
 ---
 
 <table>
@@ -20,7 +28,7 @@ const when = (r: Rule) => (r.trigger === 'refine' ? 'explains a refusal' : 'flag
       <th>Code</th>
       <th>Severity</th>
       <th>Sites</th>
-      <th>What it says</th>
+      <th>In short</th>
       <th>Examples</th>
     </tr>
   </thead>
@@ -59,14 +67,16 @@ const when = (r: Rule) => (r.trigger === 'refine' ? 'explains a refusal' : 'flag
                         {' '}
                         (fix: <code>{e.fixed}</code>)
                       </>
-                    ) : null}
+                    ) : null}{' '}
+                    <small>({where(e)})</small>
                   </li>
                 ))}
               {r.examples
                 .filter((e) => !e.flags)
                 .map((e) => (
                   <li>
-                    Leaves <code>{e.source}</code>
+                    {e.refused ? "Leaves the engine's own refusal of " : 'Leaves '}
+                    <code>{e.source}</code> <small>({where(e)})</small>
                   </li>
                 ))}
             </ul>

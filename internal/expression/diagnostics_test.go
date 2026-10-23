@@ -3,6 +3,7 @@ package expression
 import (
 	"encoding/json"
 	"os"
+	"slices"
 	"strings"
 	"testing"
 
@@ -449,13 +450,24 @@ func TestDiagnosticsFacts(t *testing.T) {
 	}
 	for i, r := range registry {
 		d := doc.Diagnostics[i]
-		if d.Code != r.code || d.Severity != r.severity || d.Trigger != string(r.trigger) || d.Message != r.message || len(d.Examples) != len(r.fixtures) {
+		if d.Code != r.code || d.Severity != r.severity || d.Trigger != string(r.trigger) || d.Message != r.message ||
+			len(d.Examples) != len(r.fixtures) || !slices.Equal(d.Sites, append([]string{}, r.sites...)) {
 			t.Errorf("%s: facts %+v", r.code, d)
 			continue
 		}
 		for j, f := range r.fixtures {
-			if e := d.Examples[j]; e.Source != f.source || e.Flags != f.want || e.Fixed != f.fixed {
+			e := d.Examples[j]
+			if e.Source != f.source || e.Flags != f.want || e.Fixed != f.fixed {
 				t.Errorf("%s example %d = %+v, want fixture %q", r.code, j, e, f.source)
+			}
+			// Each example says where it is written, from its environment.
+			if e.Site != f.env.Site() || !slices.Equal(e.Inputs, append([]string{}, f.env.Inputs()...)) || e.Result != f.env.Result().String() {
+				t.Errorf("%s example %q at %q %v %q, want its fixture's environment", r.code, f.source, e.Site, e.Inputs, e.Result)
+			}
+			// A case left alone because the engine refuses it says so.
+			_, err := Check(f.source, f.env)
+			if e.Refused != (!f.want && err != nil) {
+				t.Errorf("%s example %q refused = %v, want %v", r.code, f.source, e.Refused, !f.want && err != nil)
 			}
 		}
 	}

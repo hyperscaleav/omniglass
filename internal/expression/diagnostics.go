@@ -567,13 +567,23 @@ type DiagnosticRule struct {
 	Examples []DiagnosticExample `json:"examples"`
 }
 
-// DiagnosticExample is one fixture as the docs show it.
+// DiagnosticExample is one fixture as the docs show it, with the
+// environment it is written against.
 type DiagnosticExample struct {
 	Source string `json:"source"`
 	// Flags is whether the rule gives its diagnostic for Source.
 	Flags bool `json:"flags"`
 	// Fixed is Source once the rule's fix is applied; empty for none.
 	Fixed string `json:"fixed,omitempty"`
+	// Refused is a case the rule leaves alone because the engine refuses it
+	// on its own (another mistake is the one to fix first).
+	Refused bool `json:"refused,omitempty"`
+	// Site, Inputs and Result are where it is written: the site, the
+	// inputs its author declared (a calc rule's aliases), and the type it
+	// must yield.
+	Site   string   `json:"site"`
+	Inputs []string `json:"inputs"`
+	Result string   `json:"result"`
 }
 
 // DiagnosticRules lists every registered rule, in the order they run; a
@@ -586,7 +596,9 @@ func DiagnosticRules() []DiagnosticRule {
 			d.Sites = []string{}
 		}
 		for _, f := range r.fixtures {
-			d.Examples = append(d.Examples, DiagnosticExample{Source: f.source, Flags: f.want, Fixed: f.fixed})
+			_, err := Check(f.source, f.env)
+			d.Examples = append(d.Examples, DiagnosticExample{Source: f.source, Flags: f.want, Fixed: f.fixed, Refused: !f.want && err != nil,
+				Site: f.env.Site(), Inputs: append([]string{}, f.env.Inputs()...), Result: f.env.Result().String()})
 		}
 		out[i] = d
 	}
