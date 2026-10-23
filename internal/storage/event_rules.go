@@ -68,6 +68,10 @@ type EventRule struct {
 	// property's data type changed under them, a row the backfill left in
 	// short form); nil when they compile. Read beside the rule, never stored.
 	CriteriaError *CriteriaFault `json:"-"`
+	// CriteriaWarnings are the warnings the stored criteria compile with
+	// (#1021): notes, never a fault; the rule judges all the same. Read
+	// beside the rule, never stored.
+	CriteriaWarnings []CriteriaFault `json:"-"`
 	// The event types' ids, resolved from their names on a write.
 	fireTypeID, clearTypeID string
 	// dataType is the sample key's property data type (string, bool, json)
@@ -76,14 +80,16 @@ type EventRule struct {
 	dataType string
 }
 
-// CriteriaFault is a rule's criteria compile error as a reader sees it:
-// which criteria, the 1-based line and column (0 when it has none), and
-// the message.
+// CriteriaFault is a rule's criteria compile error, or a warning, as a
+// reader sees it: which criteria, the 1-based line and column (0 when it has
+// none), the message, and the diagnostic's code when a registered rule
+// (#1021) gave it.
 type CriteriaFault struct {
 	Field   string
 	Line    int
 	Column  int
 	Message string
+	Code    string
 }
 
 // EventRuleSpec is a rule to create; its selector's components may be
@@ -498,7 +504,7 @@ func (p *PG) ListEventRules(ctx context.Context, visible scope.Set) ([]EventRule
 			return nil, err
 		}
 		r.OpenAlarms, r.PendingStreaks, r.ConditionsInForce, r.LastJudgedAt = open, pending, inForce, judged
-		r.CriteriaError = p.criteriaFault(r)
+		p.withCriteriaNotes(&r)
 		out = append(out, r)
 	}
 	return out, rows.Err()
@@ -532,7 +538,7 @@ func (p *PG) GetEventRule(ctx context.Context, name string, visible scope.Set) (
 		return nil, fmt.Errorf("storage: get event rule %q: %w", name, err)
 	}
 	r.LastJudgedAt = judged
-	r.CriteriaError = p.criteriaFault(r)
+	p.withCriteriaNotes(&r)
 	if err := countRuleState(ctx, p.pool, &r, visible); err != nil {
 		return nil, err
 	}
@@ -589,6 +595,7 @@ func (p *PG) CreateEventRule(ctx context.Context, actorID string, spec EventRule
 	if err := tx.Commit(ctx); err != nil {
 		return nil, fmt.Errorf("storage: commit create event rule: %w", err)
 	}
+	p.withCriteriaNotes(&created)
 	return &created, nil
 }
 
@@ -716,6 +723,7 @@ func (p *PG) UpdateEventRule(ctx context.Context, actorID, name string, patch Ev
 	if err := tx.Commit(ctx); err != nil {
 		return nil, fmt.Errorf("storage: commit update event rule: %w", err)
 	}
+	p.withCriteriaNotes(&updated)
 	return &updated, nil
 }
 

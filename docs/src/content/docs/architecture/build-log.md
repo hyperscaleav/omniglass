@@ -7521,3 +7521,84 @@ the one lookup the component rows also use, recorded as an amendment to
 [ADR-0154](/architecture/decisions/#adr-0154-healthy-reads-green-tiered-so-a-calm-fleet-stays-calm).
 The theme guard covers the new fill with the other three.
 
+### Expression diagnostics: the registry (#1051)
+
+The first slice of #1021. The engine gains a registry of diagnostics
+(`internal/expression/diagnostics.go`): each rule declares a stable code, a severity (error, warning or
+hint), the sites it applies at, a trigger (refine, which explains a refusal it recognises at the place
+the mistake is, or lint, which flags a likely mistake in an expression that compiles), a pure matcher
+over the typed tree, a message, an optional fix as one text edit, and fixtures beside it in Go. To give
+a refine rule the typed tree of an expression the checker refused, `compile` still goes through
+`expr.Compile` (the engine never reimplements Expr's pipeline, by the architect's ruling in review) with
+one more `expr.Patch` visitor that changes nothing and only records the slot the root sits in, read
+after a refusal: Expr's checker annotates those same nodes in place, as far as it got
+(`TestRefusedTreeKeepsCheckedTypes`). The recorder sits before the engine's charger, so the charger's
+walk stays the last before Expr's final check, and `TestCompileGoesThroughExprCompile` fails if the
+package imports Expr's checker or compiler. `Check` now returns the warnings and hints beside
+its refusal, and a compiled program carries them (`Program.Diagnostics`). Each site names itself on its
+environment (`WithSite`: criteria and calc), so a rule runs only where it applies. Proven with
+test-local rules (`internal/expression/diagnostics_test.go`): a refine rule's refusal replaces Expr's
+with its code and positioned fix, an unrecognised refusal is Expr's unchanged, warnings and hints ride
+along on `Check` and on the cached program, an error lint refuses, a rule runs only at its sites, a
+panicking matcher is skipped, the registry refuses a rule without both kinds of fixture, and the
+fixture runner fails a rule whose examples disagree with it (`TestFixturesHoldARule`,
+`TestEveryDiagnosticPassesItsFixtures`).
+
+### The starter diagnostics (#1054)
+
+The second slice of #1021, the registry's first rules, each in
+`internal/expression/diagnostic_rules.go` with its fixtures beside it (compiled against criteria-shaped
+and calc-shaped fixture environments that name their sites). `sum-of-bools` (refine, error) recognises
+Expr's refusal of a sum over bools, whether the operator mismatch where the sum is compared or the
+engine's own refusal of the list or predicate, and refuses on the `sum` with "sum adds numbers" and
+the fix to `count`; `float-equality` (lint, warning) flags `==` or `!=` between a number-typed value and
+a decimal that is not whole; `count-equals-len` (lint, hint) offers `all(xs, p)` for
+`count(xs, p) == len(xs)`; `unused-alias` (lint, warning, calc only) names each input the reduce never
+names, read through `WithInputs`, which a calc rule's environment now declares from its aliases. The
+existing refusal of `sum(pts, .has)` moved from the operator to the `sum` with the clearer message.
+Proven by the fixtures (`TestEveryDiagnosticPassesItsFixtures`, each fix applied and recompiled) and on
+the real sites (`internal/rules/diagnostics_test.go`: the acceptance example refused at validate and
+create alike and its fix compiling, the unused alias and the float equality never refusing).
+
+### Validate answers diagnostic codes, severities and fixes (#1052)
+
+The third slice of #1021. `POST /expressions:validate` answers every diagnostic with a `severity`
+(`error`, `warning`, `hint`) and, from a registered rule, its `code` and a quick `fix` (a range and its
+replacement); an expression that compiles answers `ok` with its warnings and hints (phase `lint`). A rule
+an error diagnostic refuses is a 422 carrying the `code`, at create and update alike. Stored rules carry
+their warnings as notes (definition decision 1): `criteria_warnings` on an event rule and
+`calc_warnings` on a calc rule, read from the same cached compile that gives `criteria_error` and
+`calc_error`, which gained the `code`; a warning never refuses a save, and a row that newly trips an
+error diagnostic reads it as its fault without being rewritten. Hints stay in the editor. Proven by
+`TestStoredRuleDiagnostics` (the gateway: the warning saved and read on get and list, the error refused at
+create and update, the out-of-band row read as `sum-of-bools` and left as stored) and
+`TestExpressionDiagnosticsAPI` (the route: each severity, the fix, the 422's code, both rules' warnings
+on create and get).
+
+### The generated diagnostics table (#1055)
+
+The fourth slice of #1021. `make gen` (`cmd/exprgen`) renders the diagnostics registry to
+`docs/src/generated/expression-diagnostics.json` (`expression.DiagnosticsFactsJSON`), and the expressions
+page renders it as a table (`ExpressionDiagnostics.astro`): each rule's code, severity and when it runs,
+its sites, its message, and its examples, which are its fixtures (what it flags, with the fix's result,
+and what it leaves alone), so no row or example is hand-written. Each row carries the anchor
+`#diagnostic-<code>` the console's editor links a code to. Proven by `TestDiagnosticsFacts` (every rule,
+its examples its fixtures) and the drift gate `TestDiagnosticsFactsMatchCommitted`.
+
+### The editor shows severities and offers quick fixes (#1053)
+
+The fifth slice of #1021, the console half. The shared expression field
+(`web/src/components/ExpressionField.tsx`) draws each diagnostic at its severity: an error a wavy red
+underline, a warning a wavy amber one, a hint a dotted info line (`toEditorDiagnostics` keeps the
+severity, underlines an operator whole, and names the diagnostic by its code). Only an error marks the
+field invalid (`textarea-error`, `aria-invalid`) or withholds the verdict, so a warning never stops a
+save. Beneath the field each diagnostic names its severity, links its code to the generated docs table
+(`diagnosticHref`), and offers its fix as a button that applies it as the author's own, undoable edit, only
+while the source is still the one the answer was for (`applyFix`, `fixRange`, columns counted in
+characters); the same fix rides the underline's tooltip, and the editor gains CodeMirror's lint keys (F8,
+Mod-Shift-M). A stored rule's warnings show on the calc and event rule blades as a note
+(`ExpressionNotes`), never an alert. Proven in `make test-web`: the pure half
+(`expressionEditor.test.ts`: severities, the fix in characters and its refusal on stale text, the docs
+link), the field (`ExpressionField.test.tsx`: a warning leaves the field valid and the verdict ok, the fix
+button rewrites and undoes, the code links), and both blades' notes.
+

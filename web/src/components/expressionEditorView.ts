@@ -3,11 +3,11 @@ import { EditorView, hoverTooltip, keymap, placeholder as placeholderText, toolt
 import { HighlightStyle, StreamLanguage, syntaxHighlighting } from "@codemirror/language";
 import { autocompletion, completionKeymap, startCompletion } from "@codemirror/autocomplete";
 import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
-import { setDiagnostics } from "@codemirror/lint";
+import { lintKeymap, setDiagnostics } from "@codemirror/lint";
 import { Transaction } from "@codemirror/state";
 import { tags } from "@lezer/highlight";
 import type { ExpressionBinding, ExpressionDiagnostic } from "../lib/expressions";
-import { bindingAt, exprCompletions, exprTokens, toEditorDiagnostics, type Vocabulary } from "../lib/expressionEditor";
+import { bindingAt, exprCompletions, exprTokens, fixRange, toEditorDiagnostics, type ExpressionFix, type Vocabulary } from "../lib/expressionEditor";
 
 // The CodeMirror half of ExpressionField (#1000), the only module that loads
 // CodeMirror. ExpressionField imports it on first render, so the editor is a
@@ -31,6 +31,9 @@ export type ExpressionEditor = {
   // Underline the diagnostics an answer gave for `source`; a name nothing
   // binds carries the action onBind names.
   setDiagnostics(source: string, ds: ExpressionDiagnostic[], onBind?: (name: string) => void): void;
+  // Apply a diagnostic's quick fix, given for `source`, as an edit of the
+  // author's own (undoable); nothing when the text has moved on since.
+  applyFix(source: string, fix: ExpressionFix): void;
   destroy(): void;
 };
 
@@ -59,7 +62,9 @@ export function mountExpressionEditor(
       doc: o.doc,
       extensions: [
         history(),
-        keymap.of([...completionKeymap, ...defaultKeymap, ...historyKeymap]),
+        // lintKeymap: F8 moves to the next diagnostic, Mod-Shift-m opens the
+        // list of them with each one's actions as buttons.
+        keymap.of([...completionKeymap, ...defaultKeymap, ...historyKeymap, ...lintKeymap]),
         StreamLanguage.define(exprTokens),
         syntaxHighlighting(exprHighlight),
         autocompletion({ override: [exprCompletions(o.vocab)], icons: false }),
@@ -133,6 +138,12 @@ export function mountExpressionEditor(
       if (ds.length > 0 && view.state.doc.toString() !== source) return;
       view.dispatch(setDiagnostics(view.state, toEditorDiagnostics(source, ds, onBind)));
     },
+    applyFix(source, fix) {
+      const r = view.state.doc.toString() === source ? fixRange(source, fix) : null;
+      if (!r) return;
+      view.dispatch({ changes: { from: r.from, to: r.to, insert: fix.replacement }, userEvent: "input.fix" });
+      view.focus();
+    },
     focus: () => view.focus(),
     destroy: () => view.destroy(),
   };
@@ -169,9 +180,23 @@ const editorTheme = EditorView.theme({
   ".cm-content": { padding: "0", minHeight: "4.125em", caretColor: "var(--color-base-content)", fontVariantLigatures: "none" },
   ".cm-line": { padding: "0" },
   ".cm-placeholder": { color: "color-mix(in oklab, var(--color-base-content) 62%, transparent)" },
+  // Each severity its own mark: an error a wavy red line, a warning a wavy
+  // amber one, a hint a dotted info line (it never says the source is wrong).
   ".cm-lintRange-error": {
     backgroundImage: "none",
     textDecoration: "underline wavy var(--color-error)",
+    textDecorationSkipInk: "none",
+    textUnderlineOffset: "3px",
+  },
+  ".cm-lintRange-warning": {
+    backgroundImage: "none",
+    textDecoration: "underline wavy var(--color-warning)",
+    textDecorationSkipInk: "none",
+    textUnderlineOffset: "3px",
+  },
+  ".cm-lintRange-hint, .cm-lintRange-info": {
+    backgroundImage: "none",
+    textDecoration: "underline dotted var(--color-info)",
     textDecorationSkipInk: "none",
     textUnderlineOffset: "3px",
   },
@@ -191,4 +216,15 @@ const editorTheme = EditorView.theme({
   ".cm-completionDetail": { opacity: "0.6", marginLeft: "0.75em", fontStyle: "normal" },
   ".cm-completionInfo": { maxWidth: "20rem", padding: "0.375rem 0.5rem", fontSize: "12px" },
   ".cm-diagnostic-error": { borderLeftColor: "var(--color-error)" },
+  ".cm-diagnostic-warning": { borderLeftColor: "var(--color-warning)" },
+  ".cm-diagnostic-hint, .cm-diagnostic-info": { borderLeftColor: "var(--color-info)" },
+  ".cm-diagnosticAction": {
+    backgroundColor: "var(--color-base-300)",
+    color: "var(--color-base-content)",
+    borderRadius: "0.25rem",
+    padding: "0.125rem 0.5rem",
+    marginLeft: "0.5rem",
+    font: "inherit",
+    fontSize: "12px",
+  },
 });

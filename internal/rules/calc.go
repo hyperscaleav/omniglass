@@ -68,10 +68,11 @@ func CalcBudget() expression.Budget {
 }
 
 // calcOptions are the calc site's functions (the criteria builtins and every
-// list function, since an input binds as a list) and its budget.
+// list function, since an input binds as a list), its budget, and its name,
+// so the diagnostic rules for calc run on its expressions.
 func calcOptions() []expression.Option {
 	return []expression.Option{expression.WithBuiltins(expression.CriteriaBuiltins()...),
-		expression.WithListFunctions(expression.ListFunctions()...), expression.WithBudget(CalcBudget())}
+		expression.WithListFunctions(expression.ListFunctions()...), expression.WithBudget(CalcBudget()), expression.WithSite("calc")}
 }
 
 // CalcBuiltins are the functions the calc site admits, sorted, a fresh slice
@@ -231,7 +232,11 @@ func calcEnv(ownerKind string, inputs []TypedInput, output string) (expression.E
 	if ownerKind == OwnerSystem {
 		typ = systemEnvType(inputs, lists)
 	}
-	env, err := expression.EnvFor(typ, result, calcOptions()...)
+	aliases := make([]string, len(inputs))
+	for i, x := range inputs {
+		aliases[i] = x.Alias
+	}
+	env, err := expression.EnvFor(typ, result, append(calcOptions(), expression.WithInputs(aliases...))...)
 	if err != nil {
 		return expression.Env{}, nil, calcErr("inputs", "%v", err)
 	}
@@ -283,6 +288,10 @@ func CompileCalc(ownerKind string, inputs []TypedInput, reduce CalcReduce, outpu
 	return &CalcProgram{Env: env, Program: p, ownerKind: ownerKind, inputs: slices.Clone(inputs), output: output, envType: typ}, nil
 }
 
+// Warnings are the warnings the reduce compiled with: notes on a rule that
+// computes all the same.
+func (c *CalcProgram) Warnings() []FieldDiagnostic { return warningsOf("reduce.expr", c.Program) }
+
 // Aggregate reports whether the reduce reads every input, and a system's
 // members, only as a whole list folded into one value (avg(t), max(t),
 // len(members)), never one element by position or through a predicate: its
@@ -297,9 +306,11 @@ func (c *CalcProgram) Aggregate() bool {
 }
 
 // CheckCalc is CompileCalc's check of a source against a built env without
-// the program cache (the validate route), its diagnostic said the same way.
-func CheckCalc(source string, env expression.Env) error {
-	return calcDiagnostic(expression.Check(source, env))
+// the program cache (the validate route), its refusal said the same way,
+// with the warnings and hints of one that compiles.
+func CheckCalc(source string, env expression.Env) ([]expression.Diagnostic, error) {
+	diags, err := expression.Check(source, env)
+	return diags, calcDiagnostic(err)
 }
 
 // calcDiagnostic says an unbound name in a calc rule's terms: a name no

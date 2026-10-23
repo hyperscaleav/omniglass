@@ -181,6 +181,22 @@ describe("Rules page", () => {
     expect(alert.textContent).toContain("mismatched types");
   });
 
+  it("shows criteria that compile with a warning as a note on the blade, not a fault", async () => {
+    const warned: EventRule = { ...hot, name: "exactly", label: "Exactly", enabled: true,
+      criteria_warnings: [{ field: "fire_criteria", line: 1, column: 7, code: "float-equality",
+        message: "a measured number seldom equals 21.5 exactly; compare a range instead, such as abs(value - 21.5) < 0.05" }] };
+    mount(admin, [reach, warned]);
+    expect(document.querySelector('[data-criteria-error="exactly"]')).toBeNull();
+    fireEvent.click(screen.getByText("Exactly"));
+    const b = await blade();
+    const note = within(b).getByTestId("rule-criteria-warnings");
+    expect(note.getAttribute("role")).toBe("note");
+    expect(note.textContent).toContain("fire criteria, line 1, column 7");
+    expect(note.textContent).toContain("seldom equals 21.5");
+    expect(within(note).getByRole("link", { name: "float-equality" }).getAttribute("href")).toContain("#diagnostic-float-equality");
+    expect(within(b).queryByTestId("rule-criteria-error")).toBeNull();
+  });
+
   // When it last judged a sample rides the Live cell's (i), a keyboard-reachable
   // tooltip like every hint (design system: a hover-only mark is not reachable),
   // and opening it does not open the row.
@@ -354,7 +370,7 @@ describe("Rules page", () => {
         const src = (body as { source: string }).source;
         const bad = src.includes("humidity");
         return json({ ok: !bad, site: "criteria", value_type: "number", result_type: "bool",
-          diagnostics: bad ? [{ line: 2, column: 3, phase: "type", message: "unknown name humidity" }] : [],
+          diagnostics: bad ? [{ line: 2, column: 3, phase: "type", severity: "error", message: "unknown name humidity" }] : [],
           bindings: [{ name: "value", type: "float64", doc: "The sample's value" }], builtins: ["abs"], budget: { iterations: 10000, memory: 10000, deadline: "5ms" } });
       }
       if (req.url.endsWith("/event-rules:preview")) return json(preview);
