@@ -321,6 +321,14 @@ describe("ExpressionField's verdict", () => {
     expect(v()).toBe("sum(c) > 0");
   });
 
+  it("disables a fix once the author types past the source it was for, until the next answer", async () => {
+    mount("sum(c) > 0");
+    const fix = (await screen.findByRole("button", { name: "Use count" })) as HTMLButtonElement;
+    expect(fix.disabled).toBe(false);
+    typeExpression(await screen.findByRole("textbox", { name: "Fires when" }), "sum(c) > 0 ");
+    expect(fix.disabled).toBe(true);
+  });
+
   it("links a diagnostic's code to its entry in the docs", async () => {
     mount("sum(c) > 0");
     const link = await screen.findByRole("link", { name: "sum-of-bools" });

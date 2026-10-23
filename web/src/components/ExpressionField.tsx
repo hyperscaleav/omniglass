@@ -278,7 +278,7 @@ export default function ExpressionField(p: {
                   </Show>
                   <Show when={d.fix}>
                     {(f) => (
-                      <Button intent="quiet" size="xs" class="font-data text-[12px] font-normal" disabled={!editor()} title={`Replace with ${f().replacement}`}
+                      <Button intent="quiet" size="xs" class="font-data text-[12px] font-normal" disabled={!editor() || p.value !== source} title={`Replace with ${f().replacement}`}
                         onClick={() => editor()?.applyFix(source, f())}>
                         {f().title}
                       </Button>
