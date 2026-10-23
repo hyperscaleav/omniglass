@@ -36,29 +36,30 @@ type selectorBody struct {
 }
 
 type eventRuleBody struct {
-	ID                string             `json:"id" doc:"The rule's uuid, the stable form of name"`
-	Name              string             `json:"name"`
-	Label             string             `json:"label,omitempty"`
-	Description       string             `json:"description,omitempty"`
-	Selector          selectorBody       `json:"selector" doc:"The components the rule watches; both lists empty is every component"`
-	SampleKey         string             `json:"sample_key" doc:"The property or metric the rule reads"`
-	SampleLane        string             `json:"sample_lane" enum:"property,metric" doc:"Which lane the key reads, derived from the registries"`
-	FireCriteria      criteriaBody       `json:"fire_criteria" doc:"When the sample meets this for fire_sustain, the rule's condition starts (and it opens an alarm when it names a severity)"`
-	ClearCriteria     *criteriaBody      `json:"clear_criteria,omitempty" doc:"When the sample meets this for clear_sustain, the condition ends (and the alarm clears); absent, the negation of fire_criteria"`
-	FireSustain       string             `json:"fire_sustain" doc:"How long the fire criteria must hold, a Go duration (0s fires at once)"`
-	ClearSustain      string             `json:"clear_sustain" doc:"How long the clear criteria must hold, a Go duration"`
-	Severity          string             `json:"severity,omitempty" doc:"The severity level the alarm is raised at, by name; absent, the rule is informational and raises no alarm"`
-	FireEventType     string             `json:"fire_event_type" doc:"The event type the rule writes when its condition starts, by name"`
-	ClearEventType    string             `json:"clear_event_type,omitempty" doc:"The event type the rule writes when its condition ends, by name; absent, it writes none"`
-	Message           string             `json:"message,omitempty" doc:"The alarm's message; empty uses the rule's label or name"`
-	Enabled           bool               `json:"enabled"`
-	Official          bool               `json:"official" doc:"Shipped with the platform and read-only"`
-	Version           int                `json:"version" doc:"Bumps on every update"`
-	OpenAlarms        int                `json:"open_alarms" doc:"How many alarms the rule raised are still open right now (its live state; GET /event-rules/{name}/state lists them)"`
-	PendingStreaks    int                `json:"pending_streaks" doc:"How many of the rule's streaks are waiting out a sustain right now"`
-	ConditionsInForce int                `json:"conditions_in_force" doc:"How many conditions the rule holds in force right now, one per component and instance, whether or not it raises an alarm (GET /event-rules/{name}/state lists them)"`
-	LastJudgedAt      *time.Time         `json:"last_judged_at,omitempty" required:"false" doc:"When an ingested sample was last judged by the rule, to within 5s; absent when it never has been. A fleet-wide fact about the rule, naming no component"`
-	CriteriaError     *criteriaErrorBody `json:"criteria_error,omitempty" required:"false" doc:"Why the rule's stored criteria do not compile (its key's data type changed under them, or a row the backfill left in short form); absent when they compile. While present the rule holds: it judges nothing"`
+	ID                string              `json:"id" doc:"The rule's uuid, the stable form of name"`
+	Name              string              `json:"name"`
+	Label             string              `json:"label,omitempty"`
+	Description       string              `json:"description,omitempty"`
+	Selector          selectorBody        `json:"selector" doc:"The components the rule watches; both lists empty is every component"`
+	SampleKey         string              `json:"sample_key" doc:"The property or metric the rule reads"`
+	SampleLane        string              `json:"sample_lane" enum:"property,metric" doc:"Which lane the key reads, derived from the registries"`
+	FireCriteria      criteriaBody        `json:"fire_criteria" doc:"When the sample meets this for fire_sustain, the rule's condition starts (and it opens an alarm when it names a severity)"`
+	ClearCriteria     *criteriaBody       `json:"clear_criteria,omitempty" doc:"When the sample meets this for clear_sustain, the condition ends (and the alarm clears); absent, the negation of fire_criteria"`
+	FireSustain       string              `json:"fire_sustain" doc:"How long the fire criteria must hold, a Go duration (0s fires at once)"`
+	ClearSustain      string              `json:"clear_sustain" doc:"How long the clear criteria must hold, a Go duration"`
+	Severity          string              `json:"severity,omitempty" doc:"The severity level the alarm is raised at, by name; absent, the rule is informational and raises no alarm"`
+	FireEventType     string              `json:"fire_event_type" doc:"The event type the rule writes when its condition starts, by name"`
+	ClearEventType    string              `json:"clear_event_type,omitempty" doc:"The event type the rule writes when its condition ends, by name; absent, it writes none"`
+	Message           string              `json:"message,omitempty" doc:"The alarm's message; empty uses the rule's label or name"`
+	Enabled           bool                `json:"enabled"`
+	Official          bool                `json:"official" doc:"Shipped with the platform and read-only"`
+	Version           int                 `json:"version" doc:"Bumps on every update"`
+	OpenAlarms        int                 `json:"open_alarms" doc:"How many alarms the rule raised are still open right now (its live state; GET /event-rules/{name}/state lists them)"`
+	PendingStreaks    int                 `json:"pending_streaks" doc:"How many of the rule's streaks are waiting out a sustain right now"`
+	ConditionsInForce int                 `json:"conditions_in_force" doc:"How many conditions the rule holds in force right now, one per component and instance, whether or not it raises an alarm (GET /event-rules/{name}/state lists them)"`
+	LastJudgedAt      *time.Time          `json:"last_judged_at,omitempty" required:"false" doc:"When an ingested sample was last judged by the rule, to within 5s; absent when it never has been. A fleet-wide fact about the rule, naming no component"`
+	CriteriaError     *criteriaErrorBody  `json:"criteria_error,omitempty" required:"false" doc:"Why the rule's stored criteria do not compile (its key's data type changed under them, a row the backfill left in short form, or an expression a newer diagnostic refuses); absent when they compile. While present the rule holds: it judges nothing"`
+	CriteriaWarnings  []criteriaErrorBody `json:"criteria_warnings,omitempty" required:"false" doc:"The warnings the stored criteria compile with (a likely mistake, such as == against a decimal), each with its code; notes only, never a fault: the rule judges all the same"`
 }
 
 // criteriaErrorBody is a stored rule's criteria compile error.
@@ -67,13 +68,22 @@ type criteriaErrorBody struct {
 	Line    int    `json:"line,omitempty" required:"false" doc:"The 1-based line of the fault, when it has one"`
 	Column  int    `json:"column,omitempty" required:"false" doc:"The 1-based column of the fault, when it has one"`
 	Message string `json:"message"`
+	Code    string `json:"code,omitempty" required:"false" doc:"The registered diagnostic that gave it, when one did (documented on the expressions page)"`
 }
 
 func toCriteriaErrorBody(f *storage.CriteriaFault) *criteriaErrorBody {
 	if f == nil {
 		return nil
 	}
-	return &criteriaErrorBody{Field: f.Field, Line: f.Line, Column: f.Column, Message: f.Message}
+	return &criteriaErrorBody{Field: f.Field, Line: f.Line, Column: f.Column, Message: f.Message, Code: f.Code}
+}
+
+func toCriteriaWarnings(ws []storage.CriteriaFault) []criteriaErrorBody {
+	var out []criteriaErrorBody
+	for i := range ws {
+		out = append(out, *toCriteriaErrorBody(&ws[i]))
+	}
+	return out
 }
 
 func toCriteriaBody(c rules.Criteria) criteriaBody {
@@ -99,7 +109,7 @@ func toEventRuleBody(r *storage.EventRule) eventRuleBody {
 		FireSustain: r.FireSustain.String(), ClearSustain: r.ClearSustain.String(), Severity: r.Severity,
 		FireEventType: r.FireEventType, ClearEventType: r.ClearEventType, Message: r.Message, Enabled: r.Enabled, Official: r.Official, Version: r.Version,
 		OpenAlarms: r.OpenAlarms, PendingStreaks: r.PendingStreaks, ConditionsInForce: r.ConditionsInForce, LastJudgedAt: r.LastJudgedAt,
-		CriteriaError: toCriteriaErrorBody(r.CriteriaError)}
+		CriteriaError: toCriteriaErrorBody(r.CriteriaError), CriteriaWarnings: toCriteriaWarnings(r.CriteriaWarnings)}
 	if r.ClearCriteria != nil {
 		c := toCriteriaBody(*r.ClearCriteria)
 		b.ClearCriteria = &c
@@ -430,7 +440,11 @@ func criteriaProblem(ce *rules.CriteriaError) error {
 	if errors.As(ce, &ee) {
 		d.Message = ee.Message
 		if ee.Line > 0 {
-			d.Value = map[string]any{"line": ee.Line, "column": ee.Column, "phase": string(ee.Phase)}
+			v := map[string]any{"line": ee.Line, "column": ee.Column, "phase": string(ee.Phase)}
+			if ee.Code != "" {
+				v["code"] = ee.Code
+			}
+			d.Value = v
 		}
 	}
 	return huma.Error422UnprocessableEntity(ce.Field+": "+d.Message, d)

@@ -378,6 +378,9 @@ components:
     CalcErrorBody:
       additionalProperties: false
       properties:
+        code:
+          description: The registered diagnostic that gave it, when one did (documented on the expressions page)
+          type: string
         column:
           description: The 1-based column of the fault, when it has a line
           format: int64
@@ -390,7 +393,7 @@ components:
           format: int64
           type: integer
         message:
-          description: Why it does not compile
+          description: Why it does not compile, or what it warns of
           type: string
       required:
         - field
@@ -707,7 +710,14 @@ components:
           type: string
         calc_error:
           $ref: "#/components/schemas/CalcErrorBody"
-          description: Why the stored reduce does not compile against the registries as they are now (an input key deleted or retyped); absent when it compiles. While present the rule cannot be enabled
+          description: Why the stored reduce does not compile against the registries as they are now (an input key deleted or retyped, or an expression a newer diagnostic refuses); absent when it compiles. While present the rule cannot be enabled
+        calc_warnings:
+          description: "The warnings the stored reduce compiles with (a likely mistake, such as an input it never names), each with its code; notes only, never a fault: the rule computes all the same"
+          items:
+            $ref: "#/components/schemas/CalcErrorBody"
+          type:
+            - array
+            - "null"
         created_at:
           description: When the rule was created
           format: date-time
@@ -2458,6 +2468,9 @@ components:
     CriteriaErrorBody:
       additionalProperties: false
       properties:
+        code:
+          description: The registered diagnostic that gave it, when one did (documented on the expressions page)
+          type: string
         column:
           description: The 1-based column of the fault, when it has one
           format: int64
@@ -3063,7 +3076,14 @@ components:
           type: integer
         criteria_error:
           $ref: "#/components/schemas/CriteriaErrorBody"
-          description: "Why the rule's stored criteria do not compile (its key's data type changed under them, or a row the backfill left in short form); absent when they compile. While present the rule holds: it judges nothing"
+          description: "Why the rule's stored criteria do not compile (its key's data type changed under them, a row the backfill left in short form, or an expression a newer diagnostic refuses); absent when they compile. While present the rule holds: it judges nothing"
+        criteria_warnings:
+          description: "The warnings the stored criteria compile with (a likely mistake, such as == against a decimal), each with its code; notes only, never a fault: the rule judges all the same"
+          items:
+            $ref: "#/components/schemas/CriteriaErrorBody"
+          type:
+            - array
+            - "null"
         description:
           type: string
         enabled:
@@ -3269,22 +3289,36 @@ components:
     ExpressionDiagnostic:
       additionalProperties: false
       properties:
+        code:
+          description: The registered diagnostic that gave it (sum-of-bools, float-equality, ...), stable across releases and documented on the expressions page; absent for the engine's own refusals
+          type: string
         column:
-          description: The 1-based column of the fault; 0 when it has none
+          description: The 1-based column of the diagnostic; 0 when it has none
           format: int64
           type: integer
+        fix:
+          $ref: "#/components/schemas/ExpressionFixBody"
+          description: "A quick fix the diagnostic offers: one text edit"
         line:
-          description: The 1-based line of the fault; 0 when it has none (a length cap)
+          description: The 1-based line of the diagnostic; 0 when it has none (a length cap, an input the expression never names)
           format: int64
           type: integer
         message:
           type: string
         phase:
-          description: "Where it failed: parse (syntax), type (an unknown name, a mismatched type, a result that is not the site's), or limit (a cap)"
+          description: "Where it arose: parse (syntax), type (an unknown name, a mismatched type, a result that is not the site's), limit (a cap), or lint (a warning or hint on an expression that compiles)"
           enum:
             - parse
             - type
             - limit
+            - lint
+          type: string
+        severity:
+          description: error refuses the expression; warning (probably wrong) and hint (could be simpler) ride along with one that compiles and never refuse it
+          enum:
+            - error
+            - warning
+            - hint
           type: string
         unbound:
           description: The name the expression uses that nothing binds, when that is the fault (an editor offers to bind it)
@@ -3293,7 +3327,41 @@ components:
         - line
         - column
         - phase
+        - severity
         - message
+      type: object
+    ExpressionFixBody:
+      additionalProperties: false
+      properties:
+        column:
+          description: The 1-based column it starts at, in characters
+          format: int64
+          type: integer
+        end_column:
+          description: The 1-based column it ends before
+          format: int64
+          type: integer
+        end_line:
+          description: The 1-based line it ends on
+          format: int64
+          type: integer
+        line:
+          description: The 1-based line the replaced range starts on
+          format: int64
+          type: integer
+        replacement:
+          description: The text that replaces the range
+          type: string
+        title:
+          description: What the fix does, as an action's label
+          type: string
+      required:
+        - title
+        - line
+        - column
+        - end_line
+        - end_column
+        - replacement
       type: object
     FileBody:
       additionalProperties: false
@@ -9250,14 +9318,14 @@ components:
             - array
             - "null"
         diagnostics:
-          description: Why it does not compile, with line and column; empty when ok
+          description: Why it does not compile (one error), or the warnings and hints it compiles with, each with its line and column; empty when it compiles clean
           items:
             $ref: "#/components/schemas/ExpressionDiagnostic"
           type:
             - array
             - "null"
         ok:
-          description: Whether the expression compiles at the site
+          description: Whether the expression compiles at the site (no diagnostic of severity error)
           type: boolean
         result_type:
           description: The type the site requires the expression to yield

@@ -10,6 +10,7 @@ import KVStacked from "../components/KVStacked";
 import Eyebrow from "../components/Eyebrow";
 import InfoTip from "../components/InfoTip";
 import ExpressionField from "../components/ExpressionField";
+import ExpressionNotes from "../components/ExpressionNotes";
 import Button from "../components/Button";
 import AlarmTimeline, { createTimelineToggles } from "../components/AlarmTimeline";
 import { EVENT_TYPES_KEY, listEventTypes } from "../lib/event_types";
@@ -582,6 +583,11 @@ function RuleBladeBody(p: { name: string }): JSX.Element {
                 </div>
               )}
             </Show>
+            <ExpressionNotes
+              testid="rule-criteria-warnings"
+              notes={r().criteria_warnings}
+              where={(n) => criteriaErrorWords(n as NonNullable<EventRule["criteria_error"]>)}
+            />
             <div class="grid grid-cols-[auto_1fr] items-baseline gap-x-3 gap-y-1 text-sm">
               <span class="text-[12px] text-base-content/50">Fires</span>
               <span data-testid="rule-fire">{fireWords(r(), unit(r()))}</span>

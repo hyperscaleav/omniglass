@@ -65,14 +65,23 @@ func (j *ruleJudges) judge(r EventRule) (*rules.Judge, error) {
 	return jj, err
 }
 
-// criteriaFault is why a rule's stored criteria do not compile, as a reader
-// sees it, or nil when they compile (by the same cached compile the
-// evaluator judges with).
-func (p *PG) criteriaFault(r EventRule) *CriteriaFault {
-	_, err := p.judges.judge(r)
-	if err == nil {
-		return nil
+// withCriteriaNotes sets r's CriteriaError and CriteriaWarnings from the
+// same cached compile the evaluator judges with: why its stored criteria do
+// not compile, or the warnings they compile with.
+func (p *PG) withCriteriaNotes(r *EventRule) {
+	j, err := p.judges.judge(*r)
+	r.CriteriaError, r.CriteriaWarnings = nil, nil
+	if err != nil {
+		r.CriteriaError = criteriaFault(err)
+		return
 	}
+	for _, w := range j.Warnings() {
+		r.CriteriaWarnings = append(r.CriteriaWarnings, CriteriaFault{Field: w.Field, Line: w.Line, Column: w.Column, Message: w.Message, Code: w.Code})
+	}
+}
+
+// criteriaFault is a criteria compile error as a reader sees it.
+func criteriaFault(err error) *CriteriaFault {
 	f := &CriteriaFault{Message: err.Error()}
 	var ce *rules.CriteriaError
 	if errors.As(err, &ce) {
@@ -80,7 +89,7 @@ func (p *PG) criteriaFault(r EventRule) *CriteriaFault {
 	}
 	var ee *expression.Error
 	if errors.As(err, &ee) {
-		f.Line, f.Column, f.Message = ee.Line, ee.Column, ee.Message
+		f.Line, f.Column, f.Message, f.Code = ee.Line, ee.Column, ee.Message, ee.Code
 	}
 	return f
 }

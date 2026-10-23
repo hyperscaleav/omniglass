@@ -348,14 +348,19 @@ lowered to its expression, and a rule always reads back as `{expr}`. An unknown 
 type, a missing fire event type, or a criterion that does not compile against its lane is a 422; for a
 criterion the problem's error is located at `body.fire_criteria.expr` (or `clear_criteria`), or at
 `body.fire_criteria` when the body gave the short form, and carries the `line` and `column` of the
-fault when it has one. A stored rule whose criteria no longer compile carries `criteria_error`
-(`field`, `line`, `column`, `message`) on the list, a get and its state, and holds until rewritten. `POST /expressions:validate` (gated `rule:read`; `omniglass expression validate`) compiles a
+fault when it has one, and the `code` of the [diagnostic](/architecture/expressions/#diagnostics-clear-messages-and-quick-fixes)
+that refused it when one did. A stored rule whose criteria no longer compile carries `criteria_error`
+(`field`, `line`, `column`, `message`, `code`) on the list, a get and its state, and holds until rewritten;
+criteria that compile with a warning carry it in `criteria_warnings` (the same shape), a note that never
+holds the rule or refuses its save. `POST /expressions:validate` (gated `rule:read`; `omniglass expression validate`) compiles a
 `source` against a registered expression `site` (`criteria`, for which the sample `key` is required
 and types the value, a metric a number and a property its data type, which so tells a `rule:read`
 holder a key's lane and data type, as the rule list does; or `calc`, for which `key` is the rule's
 output key, typing the result, and `inputs` with `owner_kind` give the bindings, an unknown or
 misnamed input, or `health` as one, being a 422) and answers `ok`,
-the value and result types, `diagnostics` with line, column and phase, and the site's `bindings`,
+the value and result types, `diagnostics` (the refusal, or the warnings and hints an expression that
+compiles carries, each with line, column, phase, `severity` and, from a registered diagnostic, its
+`code` and a quick `fix`: a range and its replacement), and the site's `bindings`,
 `builtins` and `budget`, generated from the site's declaration; it compiles without the engine's
 program cache, stores and runs nothing, and an unknown site or a missing or unknown key is a 422. `POST /event-rules:preview` (gated `rule:read`; `omniglass event-rule
 preview`) judges a candidate rule (sample key, selector, criteria) without writing anything, in a
@@ -398,8 +403,9 @@ alias binds); any other refusal is a 422 located at the field
 it names (`body.inputs[0].key`, `body.inputs[0].alias`, `body.output_key`, `body.selector`): an unknown
 key, an alias that is not an identifier of at most 64, is reserved or repeats, `health` as an input or
 output, an output a native probe or a driver's declared emits write, an output another enabled rule
-writes (the refusal names it; enabling a rule is checked too). A list or get carries `calc_error` (`field`, `line`, `column`, `message`) when a stored reduce no
-longer compiles against the registries, and such a rule cannot be enabled (422). Deleting a property
+writes (the refusal names it; enabling a rule is checked too). A list or get carries `calc_error` (`field`, `line`, `column`, `message`, `code`) when a stored reduce no
+longer compiles against the registries, and such a rule cannot be enabled (422); a reduce that compiles
+with a warning (an input it never names) carries it in `calc_warnings`, which never refuses a save. Deleting a property
 or metric type a calc rule writes or reads is a 409 naming the rule. A metric or property type a calc
 rule writes names it on `/metric-types` and `/property-types` (list and get) as `written_by`
 (`rule`, `rule_id`): the enabled writer, else a disabled one, read with the type and scope-free as the
