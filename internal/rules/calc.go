@@ -288,6 +288,10 @@ func CompileCalc(ownerKind string, inputs []TypedInput, reduce CalcReduce, outpu
 	return &CalcProgram{Env: env, Program: p, ownerKind: ownerKind, inputs: slices.Clone(inputs), output: output, envType: typ}, nil
 }
 
+// Warnings are the warnings the reduce compiled with: notes on a rule that
+// computes all the same.
+func (c *CalcProgram) Warnings() []FieldDiagnostic { return warningsOf("reduce.expr", c.Program) }
+
 // Aggregate reports whether the reduce reads every input, and a system's
 // members, only as a whole list folded into one value (avg(t), max(t),
 // len(members)), never one element by position or through a predicate: its

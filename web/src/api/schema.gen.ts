@@ -4738,6 +4738,8 @@ export interface components {
             image_base64: string;
         };
         CalcErrorBody: {
+            /** @description The registered diagnostic that gave it, when one did (documented on the expressions page) */
+            code?: string;
             /**
              * Format: int64
              * @description The 1-based column of the fault, when it has a line
@@ -4750,7 +4752,7 @@ export interface components {
              * @description The 1-based line of the fault, when the reduce's expression is what failed
              */
             line?: number;
-            /** @description Why it does not compile */
+            /** @description Why it does not compile, or what it warns of */
             message: string;
         };
         CalcInputBody: {
@@ -4931,8 +4933,10 @@ export interface components {
              * @example /api/v1/schemas/CalcRuleBody.json
              */
             readonly $schema?: string;
-            /** @description Why the stored reduce does not compile against the registries as they are now (an input key deleted or retyped); absent when it compiles. While present the rule cannot be enabled */
+            /** @description Why the stored reduce does not compile against the registries as they are now (an input key deleted or retyped, or an expression a newer diagnostic refuses); absent when it compiles. While present the rule cannot be enabled */
             calc_error?: components["schemas"]["CalcErrorBody"];
+            /** @description The warnings the stored reduce compiles with (a likely mistake, such as an input it never names), each with its code; notes only, never a fault: the rule computes all the same */
+            calc_warnings?: components["schemas"]["CalcErrorBody"][] | null;
             /**
              * Format: date-time
              * @description When the rule was created
@@ -5933,6 +5937,8 @@ export interface components {
             expr: string;
         };
         CriteriaErrorBody: {
+            /** @description The registered diagnostic that gave it, when one did (documented on the expressions page) */
+            code?: string;
             /**
              * Format: int64
              * @description The 1-based column of the fault, when it has one
@@ -6295,8 +6301,10 @@ export interface components {
              * @description How many conditions the rule holds in force right now, one per component and instance, whether or not it raises an alarm (GET /event-rules/{name}/state lists them)
              */
             conditions_in_force: number;
-            /** @description Why the rule's stored criteria do not compile (its key's data type changed under them, or a row the backfill left in short form); absent when they compile. While present the rule holds: it judges nothing */
+            /** @description Why the rule's stored criteria do not compile (its key's data type changed under them, a row the backfill left in short form, or an expression a newer diagnostic refuses); absent when they compile. While present the rule holds: it judges nothing */
             criteria_error?: components["schemas"]["CriteriaErrorBody"];
+            /** @description The warnings the stored criteria compile with (a likely mistake, such as == against a decimal), each with its code; notes only, never a fault: the rule judges all the same */
+            criteria_warnings?: components["schemas"]["CriteriaErrorBody"][] | null;
             description?: string;
             enabled: boolean;
             /** @description When the sample meets this for fire_sustain, the rule's condition starts (and it opens an alarm when it names a severity) */
@@ -6415,24 +6423,59 @@ export interface components {
             memory: number;
         };
         ExpressionDiagnostic: {
+            /** @description The registered diagnostic that gave it (sum-of-bools, float-equality, ...), stable across releases and documented on the expressions page; absent for the engine's own refusals */
+            code?: string;
             /**
              * Format: int64
-             * @description The 1-based column of the fault; 0 when it has none
+             * @description The 1-based column of the diagnostic; 0 when it has none
              */
             column: number;
+            /** @description A quick fix the diagnostic offers: one text edit */
+            fix?: components["schemas"]["ExpressionFixBody"];
             /**
              * Format: int64
-             * @description The 1-based line of the fault; 0 when it has none (a length cap)
+             * @description The 1-based line of the diagnostic; 0 when it has none (a length cap, an input the expression never names)
              */
             line: number;
             message: string;
             /**
-             * @description Where it failed: parse (syntax), type (an unknown name, a mismatched type, a result that is not the site's), or limit (a cap)
+             * @description Where it arose: parse (syntax), type (an unknown name, a mismatched type, a result that is not the site's), limit (a cap), or lint (a warning or hint on an expression that compiles)
              * @enum {string}
              */
-            phase: "parse" | "type" | "limit";
+            phase: "parse" | "type" | "limit" | "lint";
+            /**
+             * @description error refuses the expression; warning (probably wrong) and hint (could be simpler) ride along with one that compiles and never refuse it
+             * @enum {string}
+             */
+            severity: "error" | "warning" | "hint";
             /** @description The name the expression uses that nothing binds, when that is the fault (an editor offers to bind it) */
             unbound?: string;
+        };
+        ExpressionFixBody: {
+            /**
+             * Format: int64
+             * @description The 1-based column it starts at, in characters
+             */
+            column: number;
+            /**
+             * Format: int64
+             * @description The 1-based column it ends before
+             */
+            end_column: number;
+            /**
+             * Format: int64
+             * @description The 1-based line it ends on
+             */
+            end_line: number;
+            /**
+             * Format: int64
+             * @description The 1-based line the replaced range starts on
+             */
+            line: number;
+            /** @description The text that replaces the range */
+            replacement: string;
+            /** @description What the fix does, as an action's label */
+            title: string;
         };
         FileBody: {
             /**
@@ -9717,9 +9760,9 @@ export interface components {
             budget: components["schemas"]["ExpressionBudget"];
             /** @description The builtin functions the site admits */
             builtins: string[] | null;
-            /** @description Why it does not compile, with line and column; empty when ok */
+            /** @description Why it does not compile (one error), or the warnings and hints it compiles with, each with its line and column; empty when it compiles clean */
             diagnostics: components["schemas"]["ExpressionDiagnostic"][] | null;
-            /** @description Whether the expression compiles at the site */
+            /** @description Whether the expression compiles at the site (no diagnostic of severity error) */
             ok: boolean;
             /** @description The type the site requires the expression to yield */
             result_type: string;

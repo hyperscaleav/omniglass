@@ -136,6 +136,34 @@ func compileOne(c Criteria, lane Lane, dataType string, env expression.Env, fiel
 	return low, p, nil
 }
 
+// FieldDiagnostic is a diagnostic on one of a rule's expressions, naming
+// which (fire_criteria, clear_criteria, reduce.expr).
+type FieldDiagnostic struct {
+	Field string
+	expression.Diagnostic
+}
+
+// warningsOf are a program's warnings (its hints are the editor's alone),
+// each named for its field.
+func warningsOf(field string, p *expression.Program) []FieldDiagnostic {
+	var out []FieldDiagnostic
+	if p == nil {
+		return out
+	}
+	for _, d := range p.Diagnostics() {
+		if d.Severity == expression.SeverityWarning {
+			out = append(out, FieldDiagnostic{Field: field, Diagnostic: d})
+		}
+	}
+	return out
+}
+
+// Warnings are the warnings the rule's criteria compiled with, the fire
+// criteria's first: notes on a rule that judges all the same.
+func (j *Judge) Warnings() []FieldDiagnostic {
+	return append(warningsOf("fire_criteria", j.fireProg), warningsOf("clear_criteria", j.clearProg)...)
+}
+
 // Fire is the fire criterion, lowered.
 func (j *Judge) Fire() Criteria { return j.fire }
 

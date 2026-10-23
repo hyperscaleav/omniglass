@@ -318,8 +318,11 @@ A rule's criteria compile once per rule version, never per sample, and a compile
 the same way. Criteria that stop compiling (a key's `data_type` changed under them, or a short form
 the backfill left as it was because its expression would pass the engine's source cap) hold the rule,
 and the rule says so: its list entry, a get and its state carry **`criteria_error`** (which criteria,
-the line and column, the message), and the console shows the rule as one whose criteria do not
-compile until an operator rewrites them.
+the line and column, the message, and the [diagnostic](/architecture/expressions/#diagnostics-clear-messages-and-quick-fixes)'s
+code when a registered one refused them), and the console shows the rule as one whose criteria do not
+compile until an operator rewrites them. Criteria that compile with a warning (`value == 21.5`, which a
+measured number seldom equals exactly) carry it in **`criteria_warnings`**: a note on the rule's blade
+that never holds the rule or refuses its save.
 
 Before a rule is saved it can be **previewed** (`POST /event-rules:preview`, gated `rule:read`, #959):
 the candidate (its key, selector and criteria) is judged over the last 24 hours of its key's samples,

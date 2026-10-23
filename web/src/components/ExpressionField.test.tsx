@@ -21,7 +21,7 @@ function answer(source: string) {
   const bad = source.includes("humidity");
   return {
     ok: !bad, site: "criteria", value_type: "number", result_type: "bool",
-    diagnostics: bad ? [{ line: 2, column: 3, phase: "type", message: "unknown name humidity", unbound: "humidity" }] : [],
+    diagnostics: bad ? [{ line: 2, column: 3, phase: "type", severity: "error", message: "unknown name humidity", unbound: "humidity" }] : [],
     bindings, builtins: ["abs", "len"], budget: { iterations: 10000, memory: 10000, deadline: "5ms" },
   };
 }

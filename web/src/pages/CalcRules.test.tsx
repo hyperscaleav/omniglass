@@ -110,7 +110,7 @@ function routes(preview: unknown = { owners: [], owners_judged: 0, owners_total:
       const bound = new Set((b.inputs ?? []).map((i) => i.alias));
       const unbound = /\bfan\b/.test(b.source) && !bound.has("fan");
       return json({ ok: !unbound, site: "calc", value_type: "bool", result_type: "bool",
-        diagnostics: unbound ? [{ line: 1, column: b.source.indexOf("fan") + 1, phase: "type", message: "fan is not an input of this rule", unbound: "fan" }] : [],
+        diagnostics: unbound ? [{ line: 1, column: b.source.indexOf("fan") + 1, phase: "type", severity: "error", message: "fan is not an input of this rule", unbound: "fan" }] : [],
         bindings: (b.inputs ?? []).map((i) => ({ name: i.alias, type: "[]bool" })), builtins: ["any", "avg", "max"],
         budget: { iterations: 100000, memory: 50000, deadline: "25ms" } });
     }

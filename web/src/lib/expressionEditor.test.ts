@@ -163,7 +163,7 @@ describe("bindingAt", () => {
 describe("toEditorDiagnostics", () => {
   it("underlines the word at a diagnostic's line and column", () => {
     const doc = "value > 40 &&\n  humidity > 2";
-    const [d] = toEditorDiagnostics(doc, [{ line: 2, column: 3, phase: "type", message: "unknown name humidity" }]);
+    const [d] = toEditorDiagnostics(doc, [{ line: 2, column: 3, phase: "type", severity: "error", message: "unknown name humidity" }]);
     expect(doc.slice(d.from, d.to)).toBe("humidity");
     expect(d.severity).toBe("error");
     expect(d.message).toBe("unknown name humidity");
@@ -172,17 +172,17 @@ describe("toEditorDiagnostics", () => {
   it("counts the column in characters, as Expr does, not in UTF-16 units", () => {
     const doc = 'value == "\u{1F525}" && humidity > 2';
     const col = Array.from(doc).indexOf("h") + 1;
-    const [d] = toEditorDiagnostics(doc, [{ line: 1, column: col, phase: "type", message: "unknown name humidity" }]);
+    const [d] = toEditorDiagnostics(doc, [{ line: 1, column: col, phase: "type", severity: "error", message: "unknown name humidity" }]);
     expect(doc.slice(d.from, d.to)).toBe("humidity");
   });
 
   it("marks one character where no word starts, the end where the column runs past it, and skips a positionless one", () => {
     const doc = "value >";
     const ds = toEditorDiagnostics(doc, [
-      { line: 1, column: 7, phase: "parse", message: "unexpected" },
-      { line: 1, column: 9, phase: "parse", message: "unexpected end" },
-      { line: 0, column: 0, phase: "limit", message: "too long" },
-      { line: 4, column: 1, phase: "parse", message: "off the end" },
+      { line: 1, column: 7, phase: "parse", severity: "error", message: "unexpected" },
+      { line: 1, column: 9, phase: "parse", severity: "error", message: "unexpected end" },
+      { line: 0, column: 0, phase: "limit", severity: "error", message: "too long" },
+      { line: 4, column: 1, phase: "parse", severity: "error", message: "off the end" },
     ]);
     expect(ds.map((d) => [d.from, d.to])).toEqual([
       [6, 7],
@@ -227,11 +227,11 @@ describe("exprCompletions over a calc rule's vocabulary", () => {
 describe("toEditorDiagnostics' bind action", () => {
   it("offers to bind a name nothing binds, and only that", () => {
     const bound: string[] = [];
-    const [d] = toEditorDiagnostics("max(fan)", [{ line: 1, column: 5, phase: "type", message: "fan is not an input", unbound: "fan" }], (n) => bound.push(n));
+    const [d] = toEditorDiagnostics("max(fan)", [{ line: 1, column: 5, phase: "type", severity: "error", message: "fan is not an input", unbound: "fan" }], (n) => bound.push(n));
     expect(d.actions?.map((a) => a.name)).toEqual(["Bind fan to a key"]);
     d.actions![0].apply(null as never, d.from, d.to);
     expect(bound).toEqual(["fan"]);
-    const [plain] = toEditorDiagnostics("max(x)", [{ line: 1, column: 1, phase: "type", message: "expected bool" }], () => {});
+    const [plain] = toEditorDiagnostics("max(x)", [{ line: 1, column: 1, phase: "type", severity: "error", message: "expected bool" }], () => {});
     expect(plain.actions).toBeUndefined();
   });
 });

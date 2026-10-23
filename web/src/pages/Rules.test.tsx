@@ -354,7 +354,7 @@ describe("Rules page", () => {
         const src = (body as { source: string }).source;
         const bad = src.includes("humidity");
         return json({ ok: !bad, site: "criteria", value_type: "number", result_type: "bool",
-          diagnostics: bad ? [{ line: 2, column: 3, phase: "type", message: "unknown name humidity" }] : [],
+          diagnostics: bad ? [{ line: 2, column: 3, phase: "type", severity: "error", message: "unknown name humidity" }] : [],
           bindings: [{ name: "value", type: "float64", doc: "The sample's value" }], builtins: ["abs"], budget: { iterations: 10000, memory: 10000, deadline: "5ms" } });
       }
       if (req.url.endsWith("/event-rules:preview")) return json(preview);
