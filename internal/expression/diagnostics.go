@@ -208,7 +208,9 @@ func (r rule) run(s *subject) (out []finding) {
 // refine explains a refusal (e, pointing at from) with the first refine
 // rule at the site that recognises it, or returns e unchanged.
 func refine(rs []rule, source string, root ast.Node, env Env, from int, e *Error) *Error {
-	if root == nil || e.Phase != PhaseType || errors.Is(e, errEngineBug) {
+	// A name nothing binds is the fault to fix first: its refusal names it
+	// (Unbound), and an editor offers to bind it.
+	if root == nil || e.Phase != PhaseType || e.Unbound != "" || errors.Is(e, errEngineBug) {
 		return e
 	}
 	s := &subject{source: source, root: root, env: env, fault: &fault{from: from, message: e.Message}}
@@ -342,6 +344,22 @@ func (s *subject) span(n ast.Node) (int, int) {
 		}
 	}))
 	return from, to
+}
+
+// bracketed widens a span over the brackets that enclose exactly it
+// ((count(xs, p)) is the operand, brackets and all), so an edit that
+// replaces it leaves none unmatched.
+func (s *subject) bracketed(from, to int) (int, int) {
+	toks := s.tokens()
+	i := slices.IndexFunc(toks, func(t lexer.Token) bool { return t.From == from })
+	j := slices.IndexFunc(toks, func(t lexer.Token) bool { return t.To == to && t.Kind != lexer.EOF })
+	if i < 0 || j < 0 {
+		return from, to
+	}
+	for i > 0 && j+1 < len(toks) && toks[i-1].Is(lexer.Bracket, "(") && toks[j+1].Is(lexer.Bracket, ")") {
+		i, j = i-1, j+1
+	}
+	return toks[i].From, toks[j].To
 }
 
 // closing is the offset just past the bracket that closes the call whose

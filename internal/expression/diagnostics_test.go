@@ -410,3 +410,19 @@ func TestFixtureSiteMustApply(t *testing.T) {
 		t.Error("a fixture at a site the rule does not apply at was accepted")
 	}
 }
+
+// float-equality's advice is source that means what it says: the range is
+// the literal's own precision (the value rounds to it), and a compound
+// operand keeps its brackets.
+func TestFloatEqualityAdvice(t *testing.T) {
+	for src, want := range map[string]string{
+		"value == 1.5":         "abs(value - 1.5) < 0.05",
+		"value == 0.001":       "abs(value - 0.001) < 0.0005",
+		"(value + 1) == 21.25": "abs((value + 1) - 21.25) < 0.005",
+	} {
+		diags, err := Check(src, criteriaFixture)
+		if err != nil || len(diags) != 1 || !strings.Contains(diags[0].Message, want) {
+			t.Errorf("%q: %+v (%v), want advice %q", src, diags, err, want)
+		}
+	}
+}
