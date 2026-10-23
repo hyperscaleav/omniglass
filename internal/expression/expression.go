@@ -11,8 +11,6 @@ import (
 	"github.com/expr-lang/expr"
 	"github.com/expr-lang/expr/ast"
 	"github.com/expr-lang/expr/builtin"
-	"github.com/expr-lang/expr/checker"
-	"github.com/expr-lang/expr/compiler"
 	"github.com/expr-lang/expr/conf"
 	"github.com/expr-lang/expr/file"
 	"github.com/expr-lang/expr/parser"
@@ -436,19 +434,27 @@ type visitFunc func(*ast.Node)
 
 func (f visitFunc) Visit(n *ast.Node) { f(n) }
 
-// compile checks source (the author's, with its one-list forms renamed in
-// place) against env, runs the site's diagnostic rules on the checked tree
-// (authored is the source as written, which a fix edits), and compiles it.
-// It is expr.Compile's own sequence (configure, parse and check, compile;
-// the optimizer off) taken apart so the checked tree outlives a refusal: a
-// refine rule reads it, typed as far as the checker got.
+// compile checks and compiles source (the author's, with its one-list forms
+// renamed in place) against env through expr.Compile, and runs the site's
+// diagnostic rules on the checked tree (authored is the source as written,
+// which a fix edits). The engine never reimplements Expr's pipeline: a
+// refused expression's tree, which a refine rule reads, is kept by a patch
+// visitor that only records where the root sits (rootRecorder), and Expr's
+// checker annotates those same nodes in place as far as it got
+// (TestRefusedTreeKeepsCheckedTypes).
 func compile(source, authored string, env Env, rs []rule) (*Program, error) {
 	compileCount.Add(1)
 	var prog *vm.Program
-	var tree *parser.Tree
+	var rec rootRecorder
 	err := guardPass(source, "Expr checker", func(p *pass) error {
 		opts := []expr.Option{
-			expr.Env(reflect.New(env.run).Elem().Interface()), chargeOption(p), functionsOption(env), expr.DisableAllBuiltins(),
+			expr.Env(reflect.New(env.run).Elem().Interface()),
+			// The recorder goes before the charger: Expr type-checks the tree
+			// before each visitor's walk, and the charger's walk must be the
+			// last before the final check (budget.go), so no visitor may
+			// follow it.
+			expr.Patch(&rec),
+			chargeOption(p), functionsOption(env), expr.DisableAllBuiltins(),
 			// Expr's optimizer is off: in v1.17.8 it rewrites filter(list, p)[0]
 			// and [-1] into find and findLast and drops the struct's field table
 			// from the type it copies onto the rewrite, so a field read on the
@@ -472,19 +478,8 @@ func compile(source, authored string, env Env, rs []rule) (*Program, error) {
 		case String:
 			opts = append(opts, expr.AsKind(reflect.String))
 		}
-		config := conf.CreateNew()
-		for _, opt := range opts {
-			opt(config)
-		}
-		for name := range config.Disabled {
-			delete(config.Builtins, name)
-		}
-		config.Check()
 		var err error
-		if tree, err = checker.ParseCheck(source, config); err != nil {
-			return err
-		}
-		prog, err = compiler.Compile(tree, config)
+		prog, err = expr.Compile(source, opts...)
 		if refused := fromCompilerPanic(err); refused != nil {
 			return refused
 		}
@@ -494,9 +489,9 @@ func compile(source, authored string, env Env, rs []rule) (*Program, error) {
 	if errors.As(err, &refused) {
 		return nil, refused
 	}
-	var root ast.Node
-	if tree != nil {
-		root = tree.Node
+	root := rec.root()
+	if prog != nil {
+		root = prog.Node()
 	}
 	if err != nil {
 		e := fromExpr(PhaseType, err)
@@ -522,6 +517,23 @@ func compile(source, authored string, env Env, rs []rule) (*Program, error) {
 		return nil, e
 	}
 	return &Program{env: env, prog: prog, diags: diags}, nil
+}
+
+// rootRecorder is an expr.Patch visitor that records the slot the tree's
+// root sits in and changes nothing. ast.Walk visits in post-order, so the
+// last slot it is handed is the root's; read after expr.Compile returns, the
+// slot holds the root as the checker left it, the engine's charges patched
+// in. Nil when the source never parsed (a visitor runs only on a parsed
+// tree).
+type rootRecorder struct{ slot *ast.Node }
+
+func (r *rootRecorder) Visit(node *ast.Node) { r.slot = node }
+
+func (r *rootRecorder) root() ast.Node {
+	if r.slot == nil {
+		return nil
+	}
+	return *r.slot
 }
 
 // faultAt is the rune offset a refusal points at; -1 when it has none.

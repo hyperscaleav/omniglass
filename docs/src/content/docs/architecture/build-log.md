@@ -7518,9 +7518,13 @@ The first slice of #1021. The engine gains a registry of diagnostics
 hint), the sites it applies at, a trigger (refine, which explains a refusal it recognises at the place
 the mistake is, or lint, which flags a likely mistake in an expression that compiles), a pure matcher
 over the typed tree, a message, an optional fix as one text edit, and fixtures beside it in Go. To give
-a refine rule the typed tree of an expression the checker refused, `compile` now runs Expr's own
-sequence (configure, parse and check, compile, the optimizer still off) itself rather than through
-`expr.Compile`, which drops the tree with the refusal. `Check` now returns the warnings and hints beside
+a refine rule the typed tree of an expression the checker refused, `compile` still goes through
+`expr.Compile` (the engine never reimplements Expr's pipeline, by the architect's ruling in review) with
+one more `expr.Patch` visitor that changes nothing and only records the slot the root sits in, read
+after a refusal: Expr's checker annotates those same nodes in place, as far as it got
+(`TestRefusedTreeKeepsCheckedTypes`). The recorder sits before the engine's charger, so the charger's
+walk stays the last before Expr's final check, and `TestCompileGoesThroughExprCompile` fails if the
+package imports Expr's checker or compiler. `Check` now returns the warnings and hints beside
 its refusal, and a compiled program carries them (`Program.Diagnostics`). Each site names itself on its
 environment (`WithSite`: criteria and calc), so a rule runs only where it applies. Proven with
 test-local rules (`internal/expression/diagnostics_test.go`): a refine rule's refusal replaces Expr's

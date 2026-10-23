@@ -127,8 +127,9 @@ and still probably be wrong. So the engine keeps a **registry of diagnostics** (
   it). A rule without both kinds of fixture refuses to register, and a fixture that disagrees with its rule
   fails the build.
 
-`Compile` and `Check` run a site's rules once per compile, so a cached program carries its warnings and
-hints, and a matcher that panics is a bug in the rule: the expression is judged as if the rule were absent,
+`Compile` and `Check` run a site's rules once per compile, through `expr.Compile` itself (a refine rule
+reads the refused expression's tree, typed as far as Expr's checker got, through a visitor that only
+records its root), so a cached program carries its warnings and hints, and a matcher that panics is a bug in the rule: the expression is judged as if the rule were absent,
 never refused by it and never crashing the server.
 
 `POST /expressions:validate` answers each diagnostic's `severity`, and a registered one's `code` and `fix`,
