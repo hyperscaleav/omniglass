@@ -58,6 +58,10 @@ type Env struct {
 	// the diagnostic rules for it run (diagnostics.go); empty runs only the
 	// rules for every site.
 	site string
+	// inputs are the bindings the author declared for the expression (a
+	// calc rule's aliases), comma-joined, so a rule can tell one it never
+	// names.
+	inputs string
 }
 
 // Binding is one name an expression may use at a site, read from the env
@@ -173,6 +177,32 @@ func WithSite(name string) Option {
 
 // Site is the site's name; empty for one that declared none.
 func (e Env) Site() string { return e.site }
+
+// WithInputs names the bindings the author declared for the expression (a
+// calc rule's input aliases), each one a binding of the environment.
+func WithInputs(names ...string) Option {
+	return func(e *Env) error {
+		bound := map[string]bool{}
+		for _, b := range bindings(e.typ) {
+			bound[b.Name] = true
+		}
+		for _, n := range names {
+			if !bound[n] || strings.Contains(n, ",") {
+				return fmt.Errorf("input %q is not a binding of the environment", n)
+			}
+		}
+		e.inputs = strings.Join(names, ",")
+		return nil
+	}
+}
+
+// Inputs are the bindings the author declared for the expression, in order.
+func (e Env) Inputs() []string {
+	if e.inputs == "" {
+		return nil
+	}
+	return strings.Split(e.inputs, ",")
+}
 
 // WithBuiltins admits the named builtins at a site. Each must be vetted
 // (listed in vetted): a builtin whose cost is linear in what the run is charged for and

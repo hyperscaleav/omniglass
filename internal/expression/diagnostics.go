@@ -138,10 +138,9 @@ type fault struct {
 	message string
 }
 
-// registry is every rule, in the order they run (the first refine rule that
-// recognises a refusal explains it).
-var registry = mustRules()
-
+// mustRules is the registry (diagnostic_rules.go): every rule, in the order
+// they run (the first refine rule that recognises a refusal explains it),
+// refused at init when one cannot be stood behind.
 func mustRules(rs ...rule) []rule {
 	if err := validRules(rs); err != nil {
 		panic(err)
@@ -379,6 +378,11 @@ func (s *subject) closing(from, end int) int {
 func (s *subject) near(n ast.Node) bool {
 	if s.fault == nil {
 		return false
+	}
+	// A refusal of the whole expression (its result's type) is about the
+	// node that yields it.
+	if s.fault.from < 0 {
+		return unwrapCharge(s.root) == n
 	}
 	from, to := s.span(n)
 	if s.fault.from >= from && s.fault.from < to {

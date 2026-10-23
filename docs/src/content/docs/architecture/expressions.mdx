@@ -130,6 +130,14 @@ and still probably be wrong. So the engine keeps a **registry of diagnostics** (
 hints, and a matcher that panics is a bug in the rule: the expression is judged as if the rule were absent,
 never refused by it and never crashing the server.
 
+The first four rules (#1054) are the mistakes authors made first: **`sum-of-bools`** explains a `sum` over
+true-or-false values (`sum(members, .has.t) > 0`) as the count it meant, on the `sum`, with the fix
+`count(...)`; **`float-equality`** warns that `value == 1.5` is seldom exactly true of a measured number
+and suggests a range; **`count-equals-len`** hints that `count(xs, p) == len(xs)` is `all(xs, p)`, with
+that fix; and **`unused-alias`** warns of a calc rule's input the reduce never names (the site declares
+its aliases as the expression's inputs), which the rule reads for nothing. A warning never refuses a
+rule: `value == 1.5` still saves and judges.
+
 :::design[Omniglass functions, with the driver step and extractor sites, tracked in #827]
 
 ## Extended with Omniglass functions

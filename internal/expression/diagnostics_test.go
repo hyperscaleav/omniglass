@@ -340,3 +340,18 @@ func TestDiagnosticRulesListsTheRegistry(t *testing.T) {
 		t.Error("DiagnosticRules shares the registry's sites")
 	}
 }
+
+// A site declares the bindings its author named (a calc rule's aliases);
+// each must be one of its bindings.
+func TestWithInputs(t *testing.T) {
+	env := mustEnv(t, Float, WithInputs("value", "items"))
+	if got := strings.Join(env.Inputs(), ","); got != "value,items" {
+		t.Errorf("Inputs() = %q", got)
+	}
+	if len(boolEnv(t).Inputs()) != 0 {
+		t.Error("an environment that declared no inputs has some")
+	}
+	if _, err := EnvOf[sampleEnv](Float, WithInputs("nope")); err == nil {
+		t.Error("an input that is no binding was accepted")
+	}
+}

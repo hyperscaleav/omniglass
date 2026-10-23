@@ -113,7 +113,8 @@ func TestListFunctionsRefuseMistyped(t *testing.T) {
 		{"avg(nums, nums)", Float, 1, 1, "one list"},
 		{"max(nums, 2)", Float, 1, 5, "number"},
 		{"majority()", String, 1, 1, "one list"},
-		{"sum(pts, .has)", Bool, 1, 11, "number"},
+		// A sum of bools is explained as the counting it meant (#1021).
+		{"sum(pts, .has)", Bool, 1, 1, "count(...)"},
 	} {
 		_, err := Compile(tc.src, listSite(t, tc.r, true))
 		e := asError(t, err)

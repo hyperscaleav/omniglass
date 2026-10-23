@@ -232,7 +232,11 @@ func calcEnv(ownerKind string, inputs []TypedInput, output string) (expression.E
 	if ownerKind == OwnerSystem {
 		typ = systemEnvType(inputs, lists)
 	}
-	env, err := expression.EnvFor(typ, result, calcOptions()...)
+	aliases := make([]string, len(inputs))
+	for i, x := range inputs {
+		aliases[i] = x.Alias
+	}
+	env, err := expression.EnvFor(typ, result, append(calcOptions(), expression.WithInputs(aliases...))...)
 	if err != nil {
 		return expression.Env{}, nil, calcErr("inputs", "%v", err)
 	}
