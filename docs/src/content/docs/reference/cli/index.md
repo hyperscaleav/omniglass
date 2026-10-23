@@ -1645,13 +1645,15 @@ Update an endpoint
 omniglass endpoint update <id> [flags]
 ```
 
-Patches an endpoint's node placement, params or label; an empty label clears it and the surface falls back to the derived name. Gated by endpoint:update; read and update scopes (through the component) drive the 404 versus 403 split.
+Patches an endpoint's node placement, params, label, or (driver-attached) its connection inputs in place: the host, port and attached secret references, validated against the driver's declared inputs, the endpoint's tasks re-derived in the same transaction. A value the driver refuses is a 400 naming the field. An empty label clears it and the surface falls back to the derived name. Gated by endpoint:update; read and update scopes (through the component) drive the 404 versus 403 split.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
+| `--inputs` | string | (none) | A driver-attached endpoint's inputs, edited in place (#1061): the host, the port, an attached secret's reference name, any input the driver declares. Merged over the stored inputs and validated against the driver; a value it refuses is a 400 naming the input. Changing where a credential is sent needs the caller to be able to use that credential |
 | `--label` | string | (none) | A new label; an empty string clears it, and the surface falls back to the derived name. Omit to leave it alone |
 | `--node` | string | (none) | Reassign the node placement, by name or id |
-| `--params` | string | (none) | Replace the address/target settings (jsonb) |
+| `--params` | string | (none) | Replace the address/target settings (jsonb). On a driver-attached endpoint only the timeout is set here: its address derives from its host and port inputs |
+| `--transport` | string | (none) | The transport: a driver-attached endpoint takes only one its driver speaks |
 
 Example:
 

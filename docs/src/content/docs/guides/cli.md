@@ -231,6 +231,9 @@ omniglass endpoint create \
 omniglass endpoint list
 omniglass endpoint get <id>                                     # endpoints are addressed by id
 omniglass endpoint update <id> --node edge-hq --params '{"target":"10.0.0.2:22"}'
+# A driver-attached endpoint's address and secret edit in place, through its inputs
+# (validated against the driver; its tasks re-derive in the same transaction):
+omniglass endpoint update <id> --inputs '{"port":"2323","login":"panel-login-2"}'
 omniglass endpoint delete <id>                                  # refused (409) while its task references it
 
 # An endpoint a refusal gated (session-state reads rejected, endpoint-rejection names the rung)

@@ -7623,3 +7623,21 @@ fingerprint (only the declared pin goes in), so first use no longer recycles a h
 push lane refuses the node's control facts (`endpoint-rejection`, `ssh-host-key`). A request rung
 refuses at write anywhere but a line over tcp (#821, #1037). The informational ping runs beside the
 probe on a 500ms bound. Fixed-port simulator collisions are #1066.
+
+### A driver-attached endpoint's connection edits in place (#1061)
+
+The architect's ruling before merge: re-attach is not the path. `PATCH /endpoints/{id}` takes a
+driver-attached endpoint's `inputs` (the host, the port, an attached secret's reference), merged over
+the stored ones and checked against the driver's declared inputs (a non-number port, an undeclared
+input, a raw `params.target`, or a transport the driver does not speak is a 400 naming the field),
+every attached secret re-resolved under the editor's own secret scope (an editor cannot redirect a
+credential they could not use), audited, and the tasks re-derived in the same transaction through the
+one per-endpoint derivation #823's driver update now shares (`rederiveEndpoint`; ids move only where
+the derived spec does). The console's endpoint blade edits the declared inputs in place, sending only
+the ones changed, and `omniglass endpoint update <id> --inputs` regenerates. Proven against Postgres
+(the port and address and secret edits, task ids unchanged, the refusals, two audit rows), over the
+API (a 400 naming `port`, the viewer refused), in vitest (only changed inputs sent, a label-only edit
+sends no inputs), and end to end (`TestADriverEndpointEditsItsAddressInPlace`: a wrong port reads
+down with no login; the port edited in place connects and authenticates within a tick; a label edit
+recycles nothing; the address edited in place moves the healthy session to the other component).
+Recorded in ADR-0157 point 6.

@@ -98,7 +98,9 @@ authored over the API or CLI (`omniglass driver create --spec ...`) and **valida
 so a spec that references an unregistered sample name, an unknown secret shape, or a broken
 template refuses with the fault named (422). Attaching a driver to a component happens on the
 component's own detail ([nodes and reachability](/guides/operator/collection/)): the spec
-derives the endpoint and its tasks.
+derives the endpoint and its tasks. Its inputs (the host, the port, an attached secret's name) then
+edit in place on the endpoint's blade or with `omniglass endpoint update <id> --inputs ...`, checked
+against the spec's declared inputs; no re-attach.
 
 A driver is consumed by the [product](/guides/admin/products/) catalog: a `product` references
 its driver through an optional `driver_id` to say which driver reads it, chosen from a driver

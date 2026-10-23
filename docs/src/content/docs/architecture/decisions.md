@@ -7156,6 +7156,16 @@ interface create form, since that name is the platform's to mint.
      on first use is a learned fact and stays out of the fingerprint; only the operator's declared
      pin goes in. `endpoint-rejection` and `ssh-host-key` are node control facts the push lane
      refuses, so no push can plant or lift a gate.
+  6. **Connection inputs edit in place** (the architect's ruling on #1061). A driver-attached
+     endpoint's host, port and attached secret references are patched through `PATCH
+     /endpoints/{id}` `inputs`, validated against the driver's declared inputs (a refused value is a
+     400 naming the field), its tasks re-derived in the same transaction through #823's derivation,
+     audited; a transport is accepted only where the driver speaks it. Re-attach is not the path.
+     The confinement the earlier read-only rule bought (a credential never sent to an address its
+     attach did not name) is kept another way: the edit re-resolves every attached secret under the
+     editor's own secret scope and admin tier, so an editor who could not use a credential cannot
+     redirect it. The fingerprint moves, so a rejected session un-gates and a healthy one recycles
+     onto the new address within a tick.
 - **Context:** A refusal retrying cannot fix must stop every path that would retry it, not only the
   held session: the ssh probe retried a params credential every tick (#1060), and a restarted node
   forgot every rejection. Gating on "what changed" needed one definition of the inputs, computed

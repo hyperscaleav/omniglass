@@ -1303,7 +1303,7 @@ export interface paths {
         head?: never;
         /**
          * Update an endpoint
-         * @description Patches an endpoint's node placement, params or label; an empty label clears it and the surface falls back to the derived name. Gated by endpoint:update; read and update scopes (through the component) drive the 404 versus 403 split.
+         * @description Patches an endpoint's node placement, params, label, or (driver-attached) its connection inputs in place: the host, port and attached secret references, validated against the driver's declared inputs, the endpoint's tasks re-derived in the same transaction. A value the driver refuses is a 400 naming the field. An empty label clears it and the surface falls back to the derived name. Gated by endpoint:update; read and update scopes (through the component) drive the 404 versus 403 split.
          */
         patch: operations["update-endpoint"];
         trace?: never;
@@ -9385,12 +9385,18 @@ export interface components {
              * @example /api/v1/schemas/UpdateEndpointInputBody.json
              */
             readonly $schema?: string;
+            /** @description A driver-attached endpoint's inputs, edited in place (#1061): the host, the port, an attached secret's reference name, any input the driver declares. Merged over the stored inputs and validated against the driver; a value it refuses is a 400 naming the input. Changing where a credential is sent needs the caller to be able to use that credential */
+            inputs?: {
+                [key: string]: string;
+            };
             /** @description A new label; an empty string clears it, and the surface falls back to the derived name. Omit to leave it alone */
             label?: string;
             /** @description Reassign the node placement, by name or id */
             node?: string;
-            /** @description Replace the address/target settings (jsonb) */
+            /** @description Replace the address/target settings (jsonb). On a driver-attached endpoint only the timeout is set here: its address derives from its host and port inputs */
             params?: unknown;
+            /** @description The transport: a driver-attached endpoint takes only one its driver speaks */
+            transport?: string;
         };
         UpdateEventRuleInputBody: {
             /**

@@ -2,9 +2,12 @@ package storage
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/hyperscaleav/omniglass/internal/driver"
 	"regexp"
+	"strings"
 	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/scope"
@@ -24,7 +27,10 @@ var (
 	ErrUnknownTransport          = errors.New("storage: unknown transport")
 	ErrEndpointComponentNotFound = errors.New("storage: endpoint component not found")
 	ErrEndpointNodeNotFound      = errors.New("storage: endpoint node not found")
-	ErrEndpointDriverParams      = errors.New("storage: a driver-attached endpoint's params are derived; re-attach to change its address")
+	// ErrEndpointPatchInvalid refuses an edit naming the field: a value the
+	// driver's declared inputs refuse, an undeclared input, a transport the
+	// driver does not speak, or a raw target on a driver-attached endpoint.
+	ErrEndpointPatchInvalid = errors.New("storage: endpoint patch invalid")
 )
 
 // Endpoint is a named, placement-bound connection: Transport names the wire it
@@ -96,6 +102,18 @@ type EndpointPatch struct {
 	// empty string clears it. It is the only identity field an operator may
 	// move here, and moving it moves nothing else: the name stays derived.
 	Label *string
+	// Inputs patches a driver-attached endpoint's inputs in place (#1061):
+	// the host, the port, the attached secret references, any declared
+	// input. Merged over the stored ones and validated against the driver.
+	Inputs map[string]string
+	// Transport restates the transport; a driver-attached endpoint takes
+	// only a transport its driver speaks.
+	Transport *string
+	// SecretRead and CanAdmin are the caller's secret scope and admin tier:
+	// an edit re-resolves every attached secret under them, so it cannot
+	// send a credential the caller could not use to a new address.
+	SecretRead scope.Set
+	CanAdmin   bool
 }
 
 // endpointCols is the bare select list (scan order), for the un-aliased
@@ -403,8 +421,9 @@ func (p *PG) UpdateEndpoint(ctx context.Context, actorID, id string, patch Endpo
 	// params would send that credential to a target the inputs never named, so a
 	// params patch on an attached endpoint refuses: the re-attach is the write
 	// path for its address.
-	if before.DriverID != nil && len(patch.Params) > 0 {
-		return nil, ErrEndpointDriverParams
+	params, inputs, err := p.patchedConnection(ctx, tx, before, patch)
+	if err != nil {
+		return nil, err
 	}
 	nodeID, err := endpointNodeID(ctx, tx, patch.Node)
 	if err != nil {
@@ -415,13 +434,21 @@ func (p *PG) UpdateEndpoint(ctx context.Context, actorID, id string, patch Endpo
 		update endpoint set
 			node_name = coalesce($2, node_name),
 			params    = coalesce($3, params),
+			inputs    = coalesce($6, inputs),
 			label     = case when $5::boolean then $4 else label end,
 			updated_at = now()
 		where id = $1
 		returning `+endpointCols,
-		before.ID, nodeID, nullableJSON(patch.Params), labelVal, setLabel))
+		before.ID, nodeID, nullableJSON(params), labelVal, setLabel, nullableJSON(inputs)))
 	if err != nil {
 		return nil, mapEndpointWriteErr(err)
+	}
+	// An edited driver-attached endpoint re-derives its tasks in this
+	// transaction, through the one derivation the driver update uses (#823).
+	if before.DriverID != nil && (inputs != nil || patch.Transport != nil) {
+		if err := p.rederiveAttached(ctx, tx, *before.DriverID, before.ID); err != nil {
+			return nil, err
+		}
 	}
 	if err := writeAuditRes(ctx, tx, actorID, "update", "endpoint", after.ID, before, after); err != nil {
 		return nil, err
@@ -430,6 +457,105 @@ func (p *PG) UpdateEndpoint(ctx context.Context, actorID, id string, patch Endpo
 		return nil, fmt.Errorf("storage: commit update endpoint: %w", err)
 	}
 	return after, nil
+}
+
+// patchedConnection computes an edit's new params and inputs (nil for
+// unchanged). A bare endpoint takes params as given and refuses inputs. A
+// driver-attached one (#1061) takes its inputs in place, merged over the
+// stored ones and re-resolved against the driver's declared inputs under
+// the caller's secret scope, its target derived from them; a params patch
+// on it may set only the timeout, and a transport only the one its driver
+// speaks.
+func (p *PG) patchedConnection(ctx context.Context, tx pgx.Tx, before *Endpoint, patch EndpointPatch) (params, inputs []byte, err error) {
+	if before.DriverID == nil {
+		if len(patch.Inputs) > 0 {
+			return nil, nil, fmt.Errorf("%w: inputs: a bare endpoint has no driver inputs; set its params", ErrEndpointPatchInvalid)
+		}
+		if patch.Transport != nil && *patch.Transport != before.Transport {
+			return nil, nil, fmt.Errorf("%w: transport: an endpoint is named by its transport, which is fixed", ErrEndpointPatchInvalid)
+		}
+		return patch.Params, nil, nil
+	}
+	d, err := loadDriverRef(ctx, tx, *before.DriverID)
+	if err != nil {
+		return nil, nil, err
+	}
+	sp, err := driver.Parse(d.Spec)
+	if err != nil {
+		return nil, nil, fmt.Errorf("storage: stored spec for driver %q does not parse: %w", d.Name, err)
+	}
+	if patch.Transport != nil && *patch.Transport != sp.Transport {
+		return nil, nil, fmt.Errorf("%w: transport: driver %q speaks %s only", ErrEndpointPatchInvalid, d.Name, sp.Transport)
+	}
+	var current map[string]any
+	if len(patch.Params) > 0 {
+		var extra map[string]any
+		if err := json.Unmarshal(patch.Params, &extra); err != nil {
+			return nil, nil, fmt.Errorf("%w: params: %v", ErrEndpointPatchInvalid, err)
+		}
+		for k := range extra {
+			if k != "timeout" {
+				return nil, nil, fmt.Errorf("%w: params.%s: a driver-attached endpoint's address is derived from its host and port inputs; patch the inputs", ErrEndpointPatchInvalid, k)
+			}
+		}
+		current = extra
+	}
+	if len(patch.Inputs) == 0 && current == nil {
+		return nil, nil, nil
+	}
+	stored := map[string]string{}
+	if len(before.Inputs) > 0 {
+		if err := json.Unmarshal(before.Inputs, &stored); err != nil {
+			return nil, nil, fmt.Errorf("storage: stored inputs of endpoint %q: %w", before.ID, err)
+		}
+	}
+	for k, v := range patch.Inputs {
+		stored[k] = v
+	}
+	effective, err := p.resolveInputs(ctx, tx, d, sp, stored, patch.SecretRead, patch.CanAdmin)
+	if err != nil {
+		if errors.Is(err, ErrAttachInvalid) {
+			return nil, nil, fmt.Errorf("%w: %s", ErrEndpointPatchInvalid, strings.TrimPrefix(err.Error(), ErrAttachInvalid.Error()+": "))
+		}
+		return nil, nil, err
+	}
+	derived := map[string]any{}
+	for k, v := range attachParams(effective) {
+		derived[k] = v
+	}
+	var old map[string]any
+	_ = json.Unmarshal(before.Params, &old)
+	if t, ok := old["timeout"]; ok {
+		derived["timeout"] = t
+	}
+	for k, v := range current {
+		derived[k] = v
+	}
+	if params, err = json.Marshal(derived); err != nil {
+		return nil, nil, err
+	}
+	if inputs, err = json.Marshal(effective); err != nil {
+		return nil, nil, err
+	}
+	return params, inputs, nil
+}
+
+// rederiveAttached re-derives one attached endpoint's tasks from its
+// driver's current spec.
+func (p *PG) rederiveAttached(ctx context.Context, tx pgx.Tx, driverID, endpointID string) error {
+	d, err := loadDriverRef(ctx, tx, driverID)
+	if err != nil {
+		return err
+	}
+	sp, err := driver.Parse(d.Spec)
+	if err != nil {
+		return fmt.Errorf("storage: stored spec for driver %q does not parse: %w", d.Name, err)
+	}
+	cat, err := loadDriverCatalog(ctx, tx)
+	if err != nil {
+		return err
+	}
+	return rederiveEndpoint(ctx, tx, endpointID, d, sp, cat)
 }
 
 // RetryEndpoint records an operator's retry of the endpoint's held session

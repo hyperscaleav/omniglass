@@ -2259,18 +2259,23 @@ func generatedCommands() []*cobra.Command {
 		}())
 		parent.AddCommand(func() *cobra.Command {
 			cmd := func() *cobra.Command {
+				var fInputs string
 				var fLabel string
 				var fNode string
 				var fParams string
+				var fTransport string
 				cmd := &cobra.Command{
 					Use:     "update <id>",
 					Short:   "Update an endpoint",
-					Long:    "Patches an endpoint's node placement, params or label; an empty label clears it and the surface falls back to the derived name. Gated by endpoint:update; read and update scopes (through the component) drive the 404 versus 403 split.",
+					Long:    "Patches an endpoint's node placement, params, label, or (driver-attached) its connection inputs in place: the host, port and attached secret references, validated against the driver's declared inputs, the endpoint's tasks re-derived in the same transaction. A value the driver refuses is a 400 naming the field. An empty label clears it and the surface falls back to the derived name. Gated by endpoint:update; read and update scopes (through the component) drive the 404 versus 403 split.",
 					Example: "  omniglass endpoint update <id>",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
 						path := fmt.Sprintf("/api/v1/endpoints/%s", url.PathEscape(args[0]))
 						body := map[string]any{}
+						if cmd.Flags().Changed("inputs") {
+							body["inputs"] = jsonOrString(fInputs)
+						}
 						if cmd.Flags().Changed("label") {
 							body["label"] = fLabel
 						}
@@ -2280,12 +2285,17 @@ func generatedCommands() []*cobra.Command {
 						if cmd.Flags().Changed("params") {
 							body["params"] = jsonOrString(fParams)
 						}
+						if cmd.Flags().Changed("transport") {
+							body["transport"] = fTransport
+						}
 						return runAPICommand(cmd, "PATCH", path, body)
 					},
 				}
+				cmd.Flags().StringVar(&fInputs, "inputs", "", "A driver-attached endpoint's inputs, edited in place (#1061): the host, the port, an attached secret's reference name, any input the driver declares. Merged over the stored inputs and validated against the driver; a value it refuses is a 400 naming the input. Changing where a credential is sent needs the caller to be able to use that credential")
 				cmd.Flags().StringVar(&fLabel, "label", "", "A new label; an empty string clears it, and the surface falls back to the derived name. Omit to leave it alone")
 				cmd.Flags().StringVar(&fNode, "node", "", "Reassign the node placement, by name or id")
-				cmd.Flags().StringVar(&fParams, "params", "", "Replace the address/target settings (jsonb)")
+				cmd.Flags().StringVar(&fParams, "params", "", "Replace the address/target settings (jsonb). On a driver-attached endpoint only the timeout is set here: its address derives from its host and port inputs")
+				cmd.Flags().StringVar(&fTransport, "transport", "", "The transport: a driver-attached endpoint takes only one its driver speaks")
 				return cmd
 			}()
 			return cmd

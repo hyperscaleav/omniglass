@@ -38,6 +38,7 @@ type gateStack struct {
 	gw     *storage.PG
 	all    scope.Set
 	panel  *sim.Device
+	panels map[string]*sim.Device // by loopback address
 	ip     string
 	apiURL string
 	token  string
@@ -48,7 +49,7 @@ type gateStack struct {
 // (-count) never binds where the last run's panel is still letting go.
 var stackSeq atomic.Int32
 
-func newGateStack(t *testing.T, ip, nodeName string) *gateStack {
+func newGateStack(t *testing.T, ip, nodeName string, extraIPs ...string) *gateStack {
 	t.Helper()
 	if n := stackSeq.Add(1); n > 1 {
 		parts := strings.Split(ip, ".")
@@ -71,8 +72,12 @@ func newGateStack(t *testing.T, ip, nodeName string) *gateStack {
 	engine := sim.NewEngine(store, profiles.Templates())
 	engine.SetPortMap(sim.PrivilegedPortShift(20000))
 	t.Cleanup(engine.StopAll)
-	if err := engine.Sync([]sim.DeviceSnapshot{{DeviceID: "panel", Hostname: "panel", LoopbackIP: ip,
-		ProfileName: nvpProfile(t, store), Version: 1}}); err != nil {
+	snaps := []sim.DeviceSnapshot{{DeviceID: "panel", Hostname: "panel", LoopbackIP: ip, ProfileName: nvpProfile(t, store), Version: 1}}
+	for i, extra := range extraIPs {
+		snaps = append(snaps, sim.DeviceSnapshot{DeviceID: fmt.Sprintf("panel-%d", i+2), Hostname: fmt.Sprintf("panel-%d", i+2),
+			LoopbackIP: extra, ProfileName: nvpProfile(t, store), Version: 1})
+	}
+	if err := engine.Sync(snaps); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: nodeName}, all, all); err != nil {
@@ -90,7 +95,11 @@ func newGateStack(t *testing.T, ip, nodeName string) *gateStack {
 	t.Cleanup(srv.Shutdown)
 	apiSrv := httptest.NewServer(api.NewHandler(gw, api.WithNatsURL(srv.ClientURL())))
 	t.Cleanup(apiSrv.Close)
-	s := &gateStack{t: t, ctx: ctx, gw: gw, all: all, panel: engine.Devices()[0], ip: ip, apiURL: apiSrv.URL, token: token}
+	s := &gateStack{t: t, ctx: ctx, gw: gw, all: all, ip: ip, apiURL: apiSrv.URL, token: token, panels: map[string]*sim.Device{}}
+	for _, d := range engine.Devices() {
+		s.panels[d.LoopbackIP.String()] = d
+	}
+	s.panel = s.panels[ip]
 	t.Cleanup(func() {
 		if s.stop != nil {
 			s.stop()
@@ -312,4 +321,63 @@ func TestTheSSHProbeCredentialIsGated(t *testing.T) {
 	}
 	s.waitFor(comp, ep.Name, "endpoint-authenticated", is("yes"), "yes on the new fingerprint")
 	s.waitFor(comp, ep.Name, "endpoint-rejection", is("none"), "the gate lifted")
+}
+
+// TestADriverEndpointEditsItsAddressInPlace (#1061 ruling): no re-attach.
+// The endpoint starts on a wrong port (down at the transport, no login
+// tried); its port edited in place connects and authenticates within a
+// tick; a label edit through the same route recycles nothing; its address
+// edited in place moves the healthy session to the new component.
+func TestADriverEndpointEditsItsAddressInPlace(t *testing.T) {
+	if testing.Short() {
+		t.Skip("integration test needs Postgres + nats-server + the simulator")
+	}
+	n := 200 + stackSeq.Add(1)%50
+	ipA, ipB := fmt.Sprintf("127.91.%d.8", n), fmt.Sprintf("127.91.%d.9", n)
+	s := newGateStack(t, ipA, "edge-e", ipB)
+	s.ip = s.panel.LoopbackIP.String()
+	a := s.panel
+	var b *sim.Device
+	for addr, d := range s.panels {
+		if d != a {
+			b, ipB = d, addr
+		}
+	}
+	s.component("panel-e")
+	if _, err := s.gw.CreateSecret(s.ctx, "", storage.SecretSpec{
+		Name: "panel-login", SecretType: "basic-auth", OwnerKind: "platform",
+		Fields: map[string]string{"username": "admin", "password": "newtron"},
+	}, s.all, true); err != nil {
+		t.Fatal(err)
+	}
+	ep := s.attach("panel-e", "newtron-nvp-telnet", "edge-e", 2399)
+	s.runNode("edge-e")
+	edit := func(p storage.EndpointPatch) {
+		t.Helper()
+		p.SecretRead, p.CanAdmin = s.all, true
+		if _, err := s.gw.UpdateEndpoint(s.ctx, "", ep.ID, p, s.all, s.all); err != nil {
+			t.Fatalf("edit in place: %v", err)
+		}
+	}
+
+	s.waitFor("panel-e", ep.Name, "session-state", is("down"), "down on the wrong port")
+	if n := a.TelnetLogins(); n != 0 {
+		t.Fatalf("a wrong port tried %d logins", n)
+	}
+
+	edit(storage.EndpointPatch{Inputs: map[string]string{"port": fmt.Sprint(23 + 20000)}})
+	s.waitFor("panel-e", ep.Name, "session-state", is("up"), "up on the port edited in place")
+	s.waitFor("panel-e", ep.Name, "endpoint-authenticated", is("yes"), "authenticated")
+	logins := a.TelnetLogins()
+
+	label := "Lobby panel"
+	edit(storage.EndpointPatch{Label: &label})
+	s.settles("logins after a label edit", a.TelnetLogins, logins)
+
+	edit(storage.EndpointPatch{Inputs: map[string]string{"host": ipB}})
+	s.settles("logins on the new address", b.TelnetLogins, 1)
+	s.waitFor("panel-e", ep.Name, "session-state", is("up"), "up on the new address")
+	if reg := a.TelnetSession(); reg != nil && reg.SessionCount() != 0 {
+		t.Fatalf("the old address still holds %d sessions", reg.SessionCount())
+	}
 }

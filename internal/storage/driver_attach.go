@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/hyperscaleav/omniglass/internal/scope"
 	"net"
+	"strconv"
 
 	"github.com/hyperscaleav/omniglass/internal/driver"
 	"github.com/jackc/pgx/v5"
@@ -145,6 +147,46 @@ func (p *PG) resolveAttach(ctx context.Context, q querier, es EndpointSpec) (*at
 		return nil, fmt.Errorf("storage: stored spec for driver %q does not parse: %w", d.Name, err)
 	}
 
+	effective, err := p.resolveInputs(ctx, q, d, sp, es.Inputs, es.SecretRead, es.CanAdmin)
+	if err != nil {
+		return nil, err
+	}
+
+	params, err := json.Marshal(attachParams(effective))
+	if err != nil {
+		return nil, fmt.Errorf("storage: marshal attach params: %w", err)
+	}
+	inputs, err := json.Marshal(effective)
+	if err != nil {
+		return nil, fmt.Errorf("storage: marshal attach inputs: %w", err)
+	}
+	cat, err := loadDriverCatalog(ctx, q)
+	if err != nil {
+		return nil, err
+	}
+	return &attachPlan{
+		driverID:  d.ID,
+		driver:    d,
+		spec:      sp,
+		transport: sp.Transport,
+		params:    params,
+		inputs:    inputs,
+		catalog:   cat,
+	}, nil
+}
+
+// resolveInputs checks supplied inputs against a driver's declared ones and
+// returns the effective set (defaults baked): an undeclared input, a missing
+// required one, a number input that is not a number, or a secret reference
+// the caller cannot use (resolved under the caller's secret read scope and
+// admin tier) refuses with ErrAttachInvalid naming the input. The attach and
+// the in-place edit (#1061) share it.
+func (p *PG) resolveInputs(ctx context.Context, q querier, d *Driver, sp *driver.Spec, supplied map[string]string, secretRead scope.Set, canAdmin bool) (map[string]string, error) {
+	es := struct {
+		Inputs     map[string]string
+		SecretRead scope.Set
+		CanAdmin   bool
+	}{supplied, secretRead, canAdmin}
 	declared := map[string]driver.Input{}
 	for _, in := range sp.Inputs {
 		declared[in.Name] = in
@@ -167,6 +209,13 @@ func (p *PG) resolveAttach(ctx context.Context, q querier, es EndpointSpec) (*at
 		}
 	}
 	for _, in := range sp.Inputs {
+		if in.Kind == "number" {
+			if v, ok := effective[in.Name]; ok {
+				if _, err := strconv.ParseFloat(v, 64); err != nil {
+					return nil, fmt.Errorf("%w: input %q must be a number, and %q is not", ErrAttachInvalid, in.Name, v)
+				}
+			}
+		}
 		if in.Kind != "secret" {
 			continue
 		}
@@ -229,27 +278,7 @@ func (p *PG) resolveAttach(ctx context.Context, q querier, es EndpointSpec) (*at
 		}
 	}
 
-	params, err := json.Marshal(attachParams(effective))
-	if err != nil {
-		return nil, fmt.Errorf("storage: marshal attach params: %w", err)
-	}
-	inputs, err := json.Marshal(effective)
-	if err != nil {
-		return nil, fmt.Errorf("storage: marshal attach inputs: %w", err)
-	}
-	cat, err := loadDriverCatalog(ctx, q)
-	if err != nil {
-		return nil, err
-	}
-	return &attachPlan{
-		driverID:  d.ID,
-		driver:    d,
-		spec:      sp,
-		transport: sp.Transport,
-		params:    params,
-		inputs:    inputs,
-		catalog:   cat,
-	}, nil
+	return effective, nil
 }
 
 // attachParams derives the transport params from the effective inputs by the
@@ -427,30 +456,41 @@ func rederiveDriverTasks(ctx context.Context, tx pgx.Tx, driverID string) error 
 		return fmt.Errorf("storage: endpoints of driver %q: %w", d.Name, err)
 	}
 	for _, ep := range endpoints {
-		tasks, err := derivedDriverTasks(ep, d, sp, cat)
-		if err != nil {
+		if err := rederiveEndpoint(ctx, tx, ep, d, sp, cat); err != nil {
 			return err
 		}
-		added, err := insertDerivedTasks(ctx, tx, ep, tasks)
-		if err != nil {
-			return err
-		}
-		keep := make([]string, 0, len(tasks))
-		for _, t := range tasks {
-			keep = append(keep, t.id)
-		}
-		// Only driver tasks retire: the reachability probe (a bare spec) is the
-		// endpoint's own and stays.
-		tag, err := tx.Exec(ctx, `
-			delete from task
-			where endpoint_id = $1 and spec->>'driver' is not null and not (id = any($2))`, ep, keep)
-		if err != nil {
-			return fmt.Errorf("storage: retire superseded tasks of endpoint %q: %w", ep, err)
-		}
-		if added+tag.RowsAffected() > 0 {
-			if _, err := tx.Exec(ctx, `update endpoint set updated_at = now() where id = $1`, ep); err != nil {
-				return fmt.Errorf("storage: bump endpoint %q after re-derive: %w", ep, err)
-			}
+	}
+	return nil
+}
+
+// rederiveEndpoint brings one endpoint's driver tasks to what the spec
+// derives: new functions inserted, superseded ones retired, an unchanged one
+// kept (ids are content hashes over the spec, so an address edit moves none).
+// The driver update's re-derive (#823) and the in-place edit (#1061) share it.
+func rederiveEndpoint(ctx context.Context, tx pgx.Tx, ep string, d *Driver, sp *driver.Spec, cat catalogMaps) error {
+	tasks, err := derivedDriverTasks(ep, d, sp, cat)
+	if err != nil {
+		return err
+	}
+	added, err := insertDerivedTasks(ctx, tx, ep, tasks)
+	if err != nil {
+		return err
+	}
+	keep := make([]string, 0, len(tasks))
+	for _, t := range tasks {
+		keep = append(keep, t.id)
+	}
+	// Only driver tasks retire: the reachability probe (a bare spec) is the
+	// endpoint's own and stays.
+	tag, err := tx.Exec(ctx, `
+		delete from task
+		where endpoint_id = $1 and spec->>'driver' is not null and not (id = any($2))`, ep, keep)
+	if err != nil {
+		return fmt.Errorf("storage: retire superseded tasks of endpoint %q: %w", ep, err)
+	}
+	if added+tag.RowsAffected() > 0 {
+		if _, err := tx.Exec(ctx, `update endpoint set updated_at = now() where id = $1`, ep); err != nil {
+			return fmt.Errorf("storage: bump endpoint %q after re-derive: %w", ep, err)
 		}
 	}
 	return nil

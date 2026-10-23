@@ -1,10 +1,10 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, fireEvent, screen, waitFor } from "@solidjs/testing-library";
 import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
-import { CreateEndpointForm } from "./endpointBlades";
-import { BladeEditContext, createEditSlot } from "../lib/blades";
+import { CreateEndpointForm, endpointBlade } from "./endpointBlades";
+import { BladeEditContext, BladesContext, createEditSlot, type BladeController } from "../lib/blades";
 import { DRIVERS_KEY, type Driver } from "../lib/drivers";
-import { TRANSPORTS_KEY, type Transport } from "../lib/endpoints";
+import { ENDPOINTS_KEY, TRANSPORTS_KEY, type Transport } from "../lib/endpoints";
 import { COMPONENTS_KEY } from "../lib/components";
 import { uuidFor } from "../lib/testids";
 
@@ -122,5 +122,74 @@ describe("CreateEndpointForm", () => {
     const body = bodies[0] as Record<string, unknown>;
     // No leftover community key from the first driver.
     expect(body.inputs).toEqual({ host: "10.0.0.7" });
+  });
+});
+
+// The edit blade on a driver-attached endpoint (#1061 ruling): its inputs (the
+// host, the port, an attached secret's reference) edit in place, and only the
+// ones changed are sent; no re-attach.
+describe("endpoint edit blade, driver-attached", () => {
+  const telnet: Driver = {
+    id: uuidFor("newtron-nvp-telnet"), name: "newtron-nvp-telnet", label: "Newtron NVP over Telnet", official: true,
+    spec: { version: 1, transport: "telnet", inputs: [
+      { name: "host", kind: "string", required: true },
+      { name: "port", kind: "number", default: "23" },
+      { name: "login", kind: "secret", secret_type: "basic-auth", required: true },
+    ], polls: [] },
+  };
+  const row = {
+    id: uuidFor("ep-t"), name: "telnet", transport: "telnet", component: "panel-1", component_id: uuidFor("panel-1"),
+    params: { target: "10.0.0.5:2399" }, driver: "newtron-nvp-telnet", driver_id: uuidFor("newtron-nvp-telnet"),
+    inputs: { host: "10.0.0.5", port: "2399", login: "panel-login" },
+  };
+
+  function mountEdit() {
+    const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
+    qc.setQueryData([...ENDPOINTS_KEY], [row]);
+    qc.setQueryData([...DRIVERS_KEY], [telnet]);
+    const slot = createEditSlot();
+    const blades = { pop: () => {} } as unknown as BladeController;
+    render(() => (
+      <QueryClientProvider client={qc}>
+        <BladesContext.Provider value={blades}>
+          <BladeEditContext.Provider value={slot}>
+            <endpointBlade.Body id={row.id} />
+          </BladeEditContext.Provider>
+        </BladesContext.Provider>
+      </QueryClientProvider>
+    ));
+    slot.begin();
+    return slot;
+  }
+
+  it("sends only the inputs changed, in place", async () => {
+    const bodies: unknown[] = [];
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const req = input as Request;
+      if (req.method === "PATCH") bodies.push(await req.json());
+      return json(row);
+    });
+    const slot = mountEdit();
+    const port = (await screen.findByLabelText("port")) as HTMLInputElement;
+    expect(port.value).toBe("2399");
+    fireEvent.input(port, { target: { value: "23" } });
+    await slot.save();
+    await waitFor(() => expect(bodies.length).toBe(1));
+    expect(bodies[0]).toEqual({ inputs: { port: "23" } });
+    expect(screen.queryByText(/re-attach/i)).toBeNull();
+  });
+
+  it("a label-only edit sends no inputs", async () => {
+    const bodies: unknown[] = [];
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const req = input as Request;
+      if (req.method === "PATCH") bodies.push(await req.json());
+      return json(row);
+    });
+    const slot = mountEdit();
+    fireEvent.input(await screen.findByLabelText("Label"), { target: { value: "Lobby panel" } });
+    await slot.save();
+    await waitFor(() => expect(bodies.length).toBe(1));
+    expect(bodies[0]).toEqual({ label: "Lobby panel" });
   });
 });

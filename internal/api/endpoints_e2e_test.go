@@ -106,6 +106,31 @@ func TestEndpointAPI(t *testing.T) {
 	c.do(opBTok, http.MethodPost, "/endpoints/"+ifA.ID+":retry", nil, http.StatusNotFound)
 	c.do(opBTok, http.MethodPost, "/endpoints/"+ifB.ID+":retry", nil, http.StatusOK)
 	c.do(ownerTok, http.MethodPost, "/endpoints/"+ifA.ID+":retry", nil, http.StatusOK)
+	// A driver-attached endpoint's connection inputs edit in place (#1061
+	// ruling): its port moves its derived target; a value the driver refuses
+	// is a 400 naming the field; the viewer floor is refused.
+	nvp := "newtron-nvp"
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "comp-d"}, all, all, all, all); err != nil {
+		t.Fatal(err)
+	}
+	att := createEndpoint(c, ownerTok, map[string]any{"driver": nvp, "component": "comp-d", "inputs": map[string]any{"host": "10.0.0.7"}})
+	var edited struct {
+		Params json.RawMessage `json:"params"`
+	}
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodPatch, "/endpoints/"+att.ID, map[string]any{"inputs": map[string]any{"port": "4000"}}, http.StatusOK), &edited); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(edited.Params), "10.0.0.7:4000") {
+		t.Fatalf("the edited endpoint's params = %s, want the new port in its target", edited.Params)
+	}
+	bad := c.do(ownerTok, http.MethodPatch, "/endpoints/"+att.ID, map[string]any{"inputs": map[string]any{"port": "forty"}}, http.StatusBadRequest)
+	if !strings.Contains(string(bad), "port") {
+		t.Fatalf("a refused input value does not name the field: %s", bad)
+	}
+	c.do(ownerTok, http.MethodPatch, "/endpoints/"+att.ID, map[string]any{"transport": "ssh"}, http.StatusBadRequest)
+	c.do(ownerTok, http.MethodPatch, "/endpoints/"+att.ID, map[string]any{"params": map[string]any{"target": "9.9.9.9:1"}}, http.StatusBadRequest)
+	c.do(viewerAllTok, http.MethodPatch, "/endpoints/"+att.ID, map[string]any{"inputs": map[string]any{"port": "4001"}}, http.StatusForbidden)
+
 	// A host key is an ssh endpoint's alone (#1032): a tcp endpoint refuses one.
 	c.do(ownerTok, http.MethodPost, "/endpoints/"+ifA.ID+":retry",
 		map[string]any{"host_key": "SHA256:" + strings.Repeat("A", 43)}, http.StatusUnprocessableEntity)

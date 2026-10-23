@@ -240,8 +240,8 @@ neither falls back to a throwaway connection, which would retry the bad credenti
 `rejected` only when its **connection fingerprint** changes ([below](#the-connection-fingerprint-and-the-layered-gate)):
 
 - anything it connects with changes: the attached secret rotated in the secret store (the endpoint
-  row untouched), the address, port or transport (a driver-attached endpoint's change by
-  re-attaching), the driver's login or terminal declaration (re-derived to the endpoint, #823), or
+  row untouched), the address, port or attached secret (a driver-attached endpoint's inputs edit
+  in place, `PATCH /endpoints/{id}` with `inputs`), the transport, the driver's login or terminal declaration (re-derived to the endpoint, #823), or
   its pin. The session is recycled and reconnects within a tick;
 - an operator retries it (`POST /endpoints/{id}:retry`, gated by `endpoint:retry` and audited): the
   endpoint's retry counter, part of the fingerprint, moves;
@@ -287,8 +287,10 @@ attempt against an unchanged fingerprint. The ssh probe's params credential ride
 (#1060): tried once, then the key exchange runs without it until the fingerprint moves, and never
 past a pinned key that changed. Proven end to end (`run_session_identity_test.go`): a silent panel
 spends the login budget, then a label edit and a node restart try nothing, while a retry, a
-login-declaration change, a rotated secret, and a re-attach over ssh each attempt again; a wrong
-port reads down on refused connects and tries no login; the ssh probe sends a wrong password once,
+login-declaration change, a rotated secret, and an ssh attachment each attempt again; a wrong
+port reads down on refused connects and tries no login, and the port edited in place connects and
+authenticates within a tick, a label edit through the same route recycles nothing, and the address
+edited in place moves a healthy session to the new component; the ssh probe sends a wrong password once,
 across a restart too, and authenticates after a params edit.
 
 **Native push**: data pushed by smart senders is self-describing (it carries its key), its edge parse a near-identity pass-through marked `shape=native`; a failed parse keeps the raw on a `collection.failed` event.
@@ -637,8 +639,13 @@ input the spec does not declare, an ambiguous secret name. A secret input is res
 **caller's own secret read scope and admin tier**, so an attach can only bind a credential the
 operator could themselves read: an out-of-scope or admin-sensitive secret refuses
 indistinguishably from an absent one, no name or type oracle. The worklist delivery re-confines
-to a secret that cascades onto the endpoint's component, and a driver-attached endpoint's params
-are read-only afterwards (the address is derived from the inputs; re-attach to change it). A
+to a secret that cascades onto the endpoint's component. A driver-attached endpoint's address is
+derived from its inputs and edits in place through them (#1061): `PATCH /endpoints/{id}` takes
+`inputs` (the host, the port, an attached secret's reference), validated against the driver's
+declared inputs (a value it refuses is a 400 naming the field), every attached secret re-resolved
+under the editor's own secret scope (so an edit cannot send a credential its editor could not use to
+a new address), audited, and the tasks re-derived in the same transaction through #823's one
+derivation; a raw `params.target` on it, or a transport its driver does not speak, refuses. A
 driver row without a spec is a **stub** that cannot be attached. The console's endpoint
 create offers both moves (a bare probe endpoint, or attach a driver and fill its inputs), and the
 Drivers page renders each spec as the menu it is.
