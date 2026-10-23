@@ -32,7 +32,7 @@ type DriverPollTask struct {
 // HeldExchanger is the slice of a held session a poll borrows: one request,
 // its answer. *Session satisfies it.
 type HeldExchanger interface {
-	Exchange(ctx context.Context, line string, timeout time.Duration) (string, error)
+	Exchange(ctx context.Context, line string, reply *driver.Match, timeout time.Duration) (string, error)
 }
 
 // snmpCommunity is the engine's credential contract for the snmp transport:
@@ -74,7 +74,7 @@ func (r *Runner) CollectDriverPoll(ctx context.Context, t DriverPollTask) ([]Sam
 		payload.Values = values
 	case "tcp":
 		if t.Session != nil {
-			answer, err := t.Session.Exchange(ctx, t.Fn.Request.Line, t.Timeout)
+			answer, err := t.Session.Exchange(ctx, t.Fn.Request.Line, t.Fn.Request.Reply, t.Timeout)
 			if err != nil {
 				return nil, []error{fmt.Errorf("collection: driver poll %s/%s: %w", t.Fn.Driver, t.Fn.Function, err)}
 			}

@@ -81,14 +81,14 @@ func TestLineSessionReal(t *testing.T) {
 
 	t.Run("one dial serves many exchanges, a banner is not an answer", func(t *testing.T) {
 		addr, accepts, _ := lineServer(t, "PANEL READY")
-		conn, err := d.Dial(ctx, addr, 2*time.Second)
+		conn, err := d.Dial(ctx, addr, 2*time.Second, nil)
 		if err != nil {
 			t.Fatalf("dial: %v", err)
 		}
 		defer func() { _ = conn.Close() }()
 		time.Sleep(50 * time.Millisecond) // let the banner arrive before the first ask
 		for i := 0; i < 3; i++ {
-			got, err := conn.Exchange(ctx, "GET INPUT", 2*time.Second)
+			got, err := conn.Exchange(ctx, "GET INPUT", nil, 2*time.Second)
 			if err != nil {
 				t.Fatalf("exchange %d: %v", i, err)
 			}
@@ -103,7 +103,7 @@ func TestLineSessionReal(t *testing.T) {
 
 	t.Run("the peer closing is noticed without a poll", func(t *testing.T) {
 		addr, _, conns := lineServer(t, "")
-		conn, err := d.Dial(ctx, addr, 2*time.Second)
+		conn, err := d.Dial(ctx, addr, 2*time.Second, nil)
 		if err != nil {
 			t.Fatalf("dial: %v", err)
 		}
@@ -117,19 +117,19 @@ func TestLineSessionReal(t *testing.T) {
 		if conn.Err() == nil {
 			t.Error("a dead connection carries no cause")
 		}
-		if _, err := conn.Exchange(ctx, "GET INPUT", time.Second); err == nil {
+		if _, err := conn.Exchange(ctx, "GET INPUT", nil, time.Second); err == nil {
 			t.Fatal("an exchange over a dead connection succeeded")
 		}
 	})
 
 	t.Run("an unterminated flood kills the connection, bounded", func(t *testing.T) {
 		addr, _, _ := lineServer(t, "")
-		conn, err := d.Dial(ctx, addr, 2*time.Second)
+		conn, err := d.Dial(ctx, addr, 2*time.Second, nil)
 		if err != nil {
 			t.Fatalf("dial: %v", err)
 		}
 		defer func() { _ = conn.Close() }()
-		if _, err := conn.Exchange(ctx, "FLOOD", time.Second); err == nil {
+		if _, err := conn.Exchange(ctx, "FLOOD", nil, time.Second); err == nil {
 			t.Fatal("an unterminated flood answered")
 		}
 		select {
@@ -141,17 +141,17 @@ func TestLineSessionReal(t *testing.T) {
 
 	t.Run("each exchange takes exactly its own reply", func(t *testing.T) {
 		addr, _, _ := lineServer(t, "")
-		conn, err := d.Dial(ctx, addr, 2*time.Second)
+		conn, err := d.Dial(ctx, addr, 2*time.Second, nil)
 		if err != nil {
 			t.Fatalf("dial: %v", err)
 		}
 		defer func() { _ = conn.Close() }()
 		// An unknown command draws ERR, a known one its answer: an
 		// exchange takes exactly its own reply.
-		if got, err := conn.Exchange(ctx, "NOPE", time.Second); err != nil || got != "ERR" {
+		if got, err := conn.Exchange(ctx, "NOPE", nil, time.Second); err != nil || got != "ERR" {
 			t.Fatalf("unknown = %q, %v", got, err)
 		}
-		if got, err := conn.Exchange(ctx, "GET INPUT", time.Second); err != nil || got != "INPUT hdmi1" {
+		if got, err := conn.Exchange(ctx, "GET INPUT", nil, time.Second); err != nil || got != "INPUT hdmi1" {
 			t.Fatalf("after ERR = %q, %v", got, err)
 		}
 	})
@@ -161,11 +161,11 @@ func TestLineSessionReal(t *testing.T) {
 	t.Run("a banner on connect is never an answer", func(t *testing.T) {
 		addr, _, _ := lineServer(t, "PANEL READY")
 		for i := 0; i < 50; i++ {
-			conn, err := d.Dial(ctx, addr, 2*time.Second)
+			conn, err := d.Dial(ctx, addr, 2*time.Second, nil)
 			if err != nil {
 				t.Fatalf("dial %d: %v", i, err)
 			}
-			got, err := conn.Exchange(ctx, "GET INPUT", 2*time.Second)
+			got, err := conn.Exchange(ctx, "GET INPUT", nil, 2*time.Second)
 			_ = conn.Close()
 			if err != nil || got != "INPUT hdmi1" {
 				t.Fatalf("dial %d: first exchange = %q, %v; the banner was taken as the answer", i, got, err)
@@ -177,12 +177,12 @@ func TestLineSessionReal(t *testing.T) {
 	// the connection, since its late reply would answer the next ask.
 	t.Run("a timed-out exchange recycles the connection", func(t *testing.T) {
 		addr, _, _ := lineServer(t, "")
-		conn, err := d.Dial(ctx, addr, 2*time.Second)
+		conn, err := d.Dial(ctx, addr, 2*time.Second, nil)
 		if err != nil {
 			t.Fatalf("dial: %v", err)
 		}
 		defer func() { _ = conn.Close() }()
-		if _, err := conn.Exchange(ctx, "SLOW GET INPUT", 100*time.Millisecond); err == nil {
+		if _, err := conn.Exchange(ctx, "SLOW GET INPUT", nil, 100*time.Millisecond); err == nil {
 			t.Fatal("a slow answer arrived inside a 100ms timeout")
 		}
 		select {
@@ -202,7 +202,7 @@ func TestLineSessionReal(t *testing.T) {
 		}
 		addr := ln.Addr().String()
 		_ = ln.Close()
-		if _, err := d.Dial(ctx, addr, time.Second); err == nil {
+		if _, err := d.Dial(ctx, addr, time.Second, nil); err == nil {
 			t.Fatal("dialing a closed port succeeded")
 		}
 	})
@@ -224,13 +224,13 @@ func TestHeldSessionTimeoutNeverAnswersTheNextAsk(t *testing.T) {
 	})
 	defer s.Close()
 	awaitState(t, states, collection.SessionUp)
-	if _, err := s.Exchange(context.Background(), "SLOW GET INPUT", 100*time.Millisecond); err == nil {
+	if _, err := s.Exchange(context.Background(), "SLOW GET INPUT", nil, 100*time.Millisecond); err == nil {
 		t.Fatal("a slow answer arrived inside a 100ms timeout")
 	}
 	awaitState(t, states, collection.SessionRecovering)
 	awaitState(t, states, collection.SessionUp)
 	time.Sleep(350 * time.Millisecond) // past the slow reply's arrival
-	got, err := s.Exchange(context.Background(), "GET VOLUME", time.Second)
+	got, err := s.Exchange(context.Background(), "GET VOLUME", nil, time.Second)
 	if err != nil || got != "VOLUME 40" {
 		t.Fatalf("the ask after a timeout = %q, %v; want its own answer", got, err)
 	}
@@ -272,7 +272,7 @@ func TestHeldSessionToAHungDeviceReadsDown(t *testing.T) {
 	sawRecovering := false
 	deadline := time.Now().Add(10 * time.Second)
 	for time.Now().Before(deadline) {
-		_, _ = s.Exchange(context.Background(), "GET INPUT", 30*time.Millisecond)
+		_, _ = s.Exchange(context.Background(), "GET INPUT", nil, 30*time.Millisecond)
 		for drained := false; !drained; {
 			select {
 			case st := <-states:

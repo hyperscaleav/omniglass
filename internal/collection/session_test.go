@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/collection"
+	"github.com/hyperscaleav/omniglass/internal/driver"
 )
 
 // The session state machine (#816) over a faked held connection. The fake is
@@ -25,6 +26,7 @@ type fakeHeldConn struct {
 	timesOut    func() bool
 	gotTimeout  time.Duration
 	gotDeadline bool
+	asked       []string
 	done        chan struct{}
 	err         error
 	closed      bool
@@ -33,13 +35,14 @@ type fakeHeldConn struct {
 
 func newFakeHeldConn() *fakeHeldConn { return &fakeHeldConn{done: make(chan struct{})} }
 
-func (c *fakeHeldConn) Exchange(ctx context.Context, line string, timeout time.Duration) (string, error) {
+func (c *fakeHeldConn) Exchange(ctx context.Context, line string, _ *driver.Match, timeout time.Duration) (string, error) {
 	select {
 	case <-c.done:
 		return "", errors.New("fake: connection is dead")
 	default:
 	}
 	c.mu.Lock()
+	c.asked = append(c.asked, line)
 	c.gotTimeout = timeout
 	_, c.gotDeadline = ctx.Deadline()
 	timesOut := c.timesOut
@@ -104,7 +107,7 @@ type fakeSessionDialer struct {
 	timesOut  func() bool   // handed to every connection made
 }
 
-func (d *fakeSessionDialer) Dial(ctx context.Context, target string, _ time.Duration) (collection.HeldConn, error) {
+func (d *fakeSessionDialer) Dial(ctx context.Context, target string, _ time.Duration, _ collection.Inbound) (collection.HeldConn, error) {
 	d.mu.Lock()
 	gate := d.gate
 	d.gate = nil
@@ -280,7 +283,7 @@ func TestSessionExchangesReuseTheHeldConnection(t *testing.T) {
 	s := startTestSession(t, d, r)
 	r.waitStates(t, establishing, up)
 	for i := 0; i < 3; i++ {
-		got, err := s.Exchange(context.Background(), "GET INPUT", time.Second)
+		got, err := s.Exchange(context.Background(), "GET INPUT", nil, time.Second)
 		if err != nil {
 			t.Fatalf("exchange %d: %v", i, err)
 		}
@@ -314,7 +317,7 @@ func TestSessionRecoversWhenTheConnectionDies(t *testing.T) {
 	if d.last() == first {
 		t.Fatal("recovered onto the dead connection")
 	}
-	if got, err := s.Exchange(context.Background(), "GET INPUT", time.Second); err != nil || got != "echo GET INPUT" {
+	if got, err := s.Exchange(context.Background(), "GET INPUT", nil, time.Second); err != nil || got != "echo GET INPUT" {
 		t.Fatalf("exchange after recovery = %q, %v", got, err)
 	}
 }
@@ -355,7 +358,7 @@ func TestSessionRecoveryIsBoundedThenDownThenUp(t *testing.T) {
 	if st, _ := s.State(); st != collection.SessionDown {
 		t.Fatalf("a dial alone moved a down session to %s", st)
 	}
-	if _, err := s.Exchange(context.Background(), "GET INPUT", time.Second); err != nil {
+	if _, err := s.Exchange(context.Background(), "GET INPUT", nil, time.Second); err != nil {
 		t.Fatalf("an exchange over the proving connection: %v", err)
 	}
 	r.waitStates(t, establishing, up, recovering, collection.SessionDown, up)
@@ -497,7 +500,7 @@ func TestSessionSporadicTimeoutsNeverReadDown(t *testing.T) {
 		if time.Now().After(deadline) {
 			t.Fatalf("stalled at %d good exchanges: %v", good, r.states())
 		}
-		if _, err := s.Exchange(context.Background(), "GET INPUT", time.Second); err == nil {
+		if _, err := s.Exchange(context.Background(), "GET INPUT", nil, time.Second); err == nil {
 			good++
 			continue
 		}
@@ -520,13 +523,13 @@ func TestSessionHungDeviceStaysDownWithoutFlapping(t *testing.T) {
 		if time.Now().After(deadline) {
 			t.Fatalf("a hung device never read down: %v", r.states())
 		}
-		_, _ = s.Exchange(context.Background(), "GET INPUT", time.Second)
+		_, _ = s.Exchange(context.Background(), "GET INPUT", nil, time.Second)
 		time.Sleep(time.Millisecond)
 	}
 	atDown := len(r.states())
 	for i := 0; i < 5; i++ {
 		time.Sleep(30 * time.Millisecond) // past the stable window
-		_, _ = s.Exchange(context.Background(), "GET INPUT", time.Second)
+		_, _ = s.Exchange(context.Background(), "GET INPUT", nil, time.Second)
 	}
 	if st := r.states(); len(st) != atDown {
 		t.Fatalf("a hung device flapped after down: %v", st[atDown-1:])
@@ -554,7 +557,7 @@ func TestSessionFirstDialWaitHasItsOwnBudget(t *testing.T) {
 		time.Sleep(60 * time.Millisecond)
 		close(gate)
 	}()
-	if _, err := s.Exchange(context.Background(), "GET INPUT", 100*time.Millisecond); err != nil {
+	if _, err := s.Exchange(context.Background(), "GET INPUT", nil, 100*time.Millisecond); err != nil {
 		t.Fatalf("exchange after a slow first dial: %v", err)
 	}
 	c := d.last()
@@ -563,6 +566,86 @@ func TestSessionFirstDialWaitHasItsOwnBudget(t *testing.T) {
 	if c.gotTimeout != 100*time.Millisecond || c.gotDeadline {
 		t.Fatalf("the exchange got timeout %v (deadline %v); want its whole 100ms and no wait-made deadline", c.gotTimeout, c.gotDeadline)
 	}
+}
+
+func (c *fakeHeldConn) lines() []string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return append([]string(nil), c.asked...)
+}
+
+// #817: a session sends its instantiation commands on every connection it
+// makes (establish and each recover), before it reads up, and reports each
+// with its reply for the node's logs.
+func TestSessionArmsOnEstablishAndReArmsOnRecover(t *testing.T) {
+	d, r := &fakeSessionDialer{}, newRecorder()
+	var mu sync.Mutex
+	var story []string
+	startTestSessionWith(t, d, r, collection.SessionConfig{
+		Arm: []string{"SUBSCRIBE INPUT", "SUBSCRIBE VOLUME"},
+		OnArm: func(line, reply string, err error) {
+			mu.Lock()
+			story = append(story, "arm "+line+" -> "+reply)
+			mu.Unlock()
+		},
+	})
+	r.waitStates(t, establishing, up)
+	first := d.last()
+	if got := first.lines(); len(got) < 2 || got[0] != "SUBSCRIBE INPUT" || got[1] != "SUBSCRIBE VOLUME" {
+		t.Fatalf("the established connection was asked %v, want the arm commands first", got)
+	}
+	first.kill(errors.New("EOF"))
+	r.waitStates(t, establishing, up, recovering, up)
+	if got := d.last().lines(); len(got) < 2 || got[0] != "SUBSCRIBE INPUT" {
+		t.Fatalf("the recovered connection was asked %v, want the subscription re-armed", got)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	arms := 0
+	for _, e := range story {
+		if strings.HasPrefix(e, "arm SUBSCRIBE INPUT -> echo SUBSCRIBE INPUT") {
+			arms++
+		}
+	}
+	if arms != 2 {
+		t.Fatalf("arm reports = %v, want SUBSCRIBE INPUT reported on both connections", story)
+	}
+}
+
+// Up is published only once the connection is armed, so a listener's
+// subscription is in place whenever the session reads up.
+func TestSessionReadsUpOnlyAfterArming(t *testing.T) {
+	d := &fakeSessionDialer{}
+	armedAtUp := make(chan bool, 4)
+	var s *collection.Session
+	s = collection.StartSession(collection.SessionConfig{
+		Target: "10.0.0.9:51325", Dialer: d, Arm: []string{"SUBSCRIBE INPUT"},
+		Backoff: func(int) time.Duration { return time.Millisecond },
+		OnTransition: func(tr collection.SessionTransition) {
+			if tr.State == collection.SessionUp {
+				got := d.last().lines()
+				armedAtUp <- len(got) > 0 && got[0] == "SUBSCRIBE INPUT"
+			}
+		},
+	})
+	defer s.Close()
+	select {
+	case ok := <-armedAtUp:
+		if !ok {
+			t.Fatal("the session read up before its connection was armed")
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("the session never read up")
+	}
+}
+
+// An arm command the device never answers is a failed attempt: the session
+// never reads up and reaches down within the budget.
+func TestSessionArmFailureIsAFailedAttempt(t *testing.T) {
+	d := &fakeSessionDialer{timesOut: func() bool { return true }}
+	r := newRecorder()
+	startTestSessionWith(t, d, r, collection.SessionConfig{Arm: []string{"SUBSCRIBE INPUT"}})
+	r.waitStates(t, establishing, down)
 }
 
 func indexOf(st []collection.SessionState, want collection.SessionState) int {
@@ -593,7 +676,7 @@ func TestSessionCloseTearsDown(t *testing.T) {
 	if n := d.dialCount(); n != 1 {
 		t.Fatalf("redialed after teardown (%d dials)", n)
 	}
-	if _, err := s.Exchange(context.Background(), "GET INPUT", 50*time.Millisecond); err == nil {
+	if _, err := s.Exchange(context.Background(), "GET INPUT", nil, 50*time.Millisecond); err == nil {
 		t.Fatal("an exchange over a torn-down session succeeded")
 	}
 	s.Close() // idempotent
@@ -609,7 +692,7 @@ func TestSessionExchangeFailsFastNamingTheStateWhenNotUp(t *testing.T) {
 		time.Sleep(time.Millisecond)
 	}
 	start := time.Now()
-	_, err := s.Exchange(context.Background(), "GET INPUT", 2*time.Second)
+	_, err := s.Exchange(context.Background(), "GET INPUT", nil, 2*time.Second)
 	if err == nil {
 		t.Fatal("an exchange over an unconnected session succeeded")
 	}
@@ -631,7 +714,7 @@ func TestSessionExchangeWaitsForTheFirstDial(t *testing.T) {
 		time.Sleep(20 * time.Millisecond)
 		close(gate)
 	}()
-	got, err := s.Exchange(context.Background(), "GET INPUT", 2*time.Second)
+	got, err := s.Exchange(context.Background(), "GET INPUT", nil, 2*time.Second)
 	if err != nil || got != "echo GET INPUT" {
 		t.Fatalf("exchange during the first dial = %q, %v", got, err)
 	}

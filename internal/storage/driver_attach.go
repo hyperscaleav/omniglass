@@ -339,7 +339,7 @@ func deriveDriverTasks(ctx context.Context, tx pgx.Tx, endpointID string, plan *
 		match := l.Match
 		if err := insert("listen", driver.BakedFunction{
 			Driver: plan.driver.Name, Version: plan.driver.Version, Function: l.Name,
-			Arm: l.Arm, Match: &match, Emits: emits,
+			Arm: l.Arm, Match: &match, Emits: emits, Unmatched: plan.spec.Unmatched,
 		}); err != nil {
 			return err
 		}

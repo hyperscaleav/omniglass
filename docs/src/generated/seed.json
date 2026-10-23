@@ -476,8 +476,8 @@
   },
   {
    "name": "tcp",
-   "description": "Raw TCP connect / port-open check.",
-   "held": false,
+   "description": "Raw TCP: the connect / port-open check, and the line protocol, which holds a session over it (polls, commands, and listeners share one connection).",
+   "held": true,
    "built": true
   },
   {

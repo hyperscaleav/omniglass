@@ -9,6 +9,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"net"
 	"net/http/httptest"
 	"strings"
 	"testing"
@@ -16,6 +17,7 @@ import (
 
 	"github.com/hyperscaleav/omniglass/internal/api"
 	"github.com/hyperscaleav/omniglass/internal/bus"
+	"github.com/hyperscaleav/omniglass/internal/collection"
 	"github.com/hyperscaleav/omniglass/internal/node"
 	"github.com/hyperscaleav/omniglass/internal/scope"
 	"github.com/hyperscaleav/omniglass/internal/seed"
@@ -195,4 +197,122 @@ func TestNodeHoldsASessionThroughADeviceOutage(t *testing.T) {
 		}
 		time.Sleep(20 * time.Millisecond)
 	}
+}
+
+// TestNodeLandsPushedSamplesThroughARecover drives #817 end to end: the
+// shipped newtron-nvp driver's EVT listener comes alive over the held
+// session. The node's tick is an hour, so after its first poll nothing polls
+// again: a value that lands later can only have been pushed. A change made on
+// the panel lands as the component's video-input within a second; the
+// panel's listener dies and returns, the session re-arms its subscription,
+// and the next change lands within a second too.
+func TestNodeLandsPushedSamplesThroughARecover(t *testing.T) {
+	if testing.Short() {
+		t.Skip("integration test needs Postgres + nats-server + the simulator")
+	}
+	ctx := context.Background()
+	gw, err := storage.NewPG(ctx, storagetest.NewDSN(t))
+	if err != nil {
+		t.Fatalf("open gateway: %v", err)
+	}
+	defer gw.Close()
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	all := scope.Set{All: true}
+
+	panelIP := "127.89.16.2"
+	store, err := profile.LoadStoreFS(profiles.FS)
+	if err != nil {
+		t.Fatalf("load profiles: %v", err)
+	}
+	engine := sim.NewEngine(store, profiles.Templates())
+	engine.SetPortMap(sim.PrivilegedPortShift(20000))
+	t.Cleanup(engine.StopAll)
+	if err := engine.Sync([]sim.DeviceSnapshot{{DeviceID: "panel", Hostname: "panel", LoopbackIP: panelIP,
+		ProfileName: "newtron-panel-7", Version: 1}}); err != nil {
+		t.Fatalf("serve the panel: %v", err)
+	}
+	panel := engine.Devices()[0]
+	target := net.JoinHostPort(panelIP, "51325")
+	lx := collection.NewLineExchanger()
+	set := func(input string) time.Time {
+		t.Helper()
+		if got, err := lx.Exchange(ctx, target, "SET INPUT "+input, 2*time.Second); err != nil || got != "INPUT "+input {
+			t.Fatalf("SET INPUT %s on the panel = %q, %v", input, got, err)
+		}
+		return time.Now()
+	}
+
+	if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "edge-l"}, all, all); err != nil {
+		t.Fatalf("create node: %v", err)
+	}
+	token := "enroll-token-listener"
+	sum := sha256.Sum256([]byte(token))
+	if _, err := gw.SetEnrollmentToken(ctx, "", "edge-l", hex.EncodeToString(sum[:]), all); err != nil {
+		t.Fatalf("mint token: %v", err)
+	}
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "panel-2"}, all, all, all, all); err != nil {
+		t.Fatalf("create component: %v", err)
+	}
+	comp, drv, nodeName := "panel-2", "newtron-nvp", "edge-l"
+	ep, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{
+		Driver: &drv, Component: &comp, Node: &nodeName,
+		Inputs:     map[string]string{"host": panelIP},
+		SecretRead: all, CanAdmin: true,
+	}, all)
+	if err != nil {
+		t.Fatalf("attach newtron-nvp: %v", err)
+	}
+
+	srv, err := bus.New(bus.Config{Host: "127.0.0.1", Port: -1}, gw)
+	if err != nil {
+		t.Fatalf("start bus: %v", err)
+	}
+	defer srv.Shutdown()
+	apiSrv := httptest.NewServer(api.NewHandler(gw, api.WithNatsURL(srv.ClientURL())))
+	defer apiSrv.Close()
+
+	runCtx, stop := context.WithCancel(ctx)
+	ran := make(chan error, 1)
+	go func() {
+		_, err := node.Run(runCtx, node.Config{ServerURL: apiSrv.URL, Name: "edge-l", Token: token, HeartbeatEvery: time.Hour})
+		ran <- err
+	}()
+	defer func() { stop(); <-ran }()
+
+	latest := func(key string) string {
+		v, err := gw.LatestProperty(ctx, comp, key, ep.Name)
+		if err != nil || v == nil {
+			return ""
+		}
+		return v.Value
+	}
+	waitValue := func(key, want string, within time.Duration) {
+		t.Helper()
+		deadline := time.Now().Add(within)
+		for time.Now().Before(deadline) {
+			if latest(key) == want {
+				return
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+		t.Fatalf("%s on %s[%s] = %q, want %q within %s", key, comp, ep.Name, latest(key), want, within)
+	}
+
+	waitValue("session-state", "up", 15*time.Second)
+	waitValue("video-input", "hdmi1", 15*time.Second) // the first tick's poll
+
+	set("dp1")
+	waitValue("video-input", "dp1", time.Second) // pushed: nothing polls for an hour
+
+	panel.StopTCPSession()
+	waitValue("session-state", "recovering", 15*time.Second)
+	if err := panel.StartTCPSession(51325); err != nil {
+		t.Fatalf("restart the panel's listener: %v", err)
+	}
+	waitValue("session-state", "up", 15*time.Second)
+
+	set("hdmi3")
+	waitValue("video-input", "hdmi3", time.Second) // re-armed on recover
 }

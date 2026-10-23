@@ -122,13 +122,33 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 	if lineSession == nil {
 		lineSession = collection.NewLineSessionDialer()
 	}
-	sessions := newSessionManager(map[string]collection.SessionDialer{"tcp": lineSession},
-		func(taskID, endpoint string, tr collection.SessionTransition) {
+	// A listener's claimed push lands the same way, at once and under its
+	// listen task (#817); the arm conversation is plumbing, so it is a
+	// self-log and never a command row.
+	sessions := newSessionManager(map[string]collection.SessionDialer{"tcp": lineSession}, sessionHooks{
+		transition: func(taskID, endpoint string, tr collection.SessionTransition) {
 			logger.Info("session "+string(tr.State), "facility", "session", "task", taskID, "endpoint", endpoint, "reason", tr.Reason)
 			if err := publishBatch(nc, cfg.Name, taskID, []collection.Sample{sessionSample(tr)}); err != nil {
 				logger.Warn("session state not published", "facility", "session", "task", taskID, "error", err.Error())
 			}
-		})
+		},
+		samples: func(taskID string, dps []collection.Sample) {
+			if err := publishBatch(nc, cfg.Name, taskID, dps); err != nil {
+				logger.Warn("pushed samples not published", "facility", "session", "task", taskID, "error", err.Error())
+			}
+		},
+		fault: func(taskID string, cause error) {
+			logger.Warn("listener fault", "facility", "collection", "task", taskID, "error", cause.Error())
+			_ = publishCollectionFailed(nc, cfg.Name, taskID, cause)
+		},
+		arm: func(taskID, endpoint, line, reply string, err error) {
+			if err != nil {
+				logger.Warn("session arm failed", "facility", "session", "task", taskID, "endpoint", endpoint, "line", line, "error", err.Error())
+				return
+			}
+			logger.Info("session armed", "facility", "session", "task", taskID, "endpoint", endpoint, "line", line, "reply", reply)
+		},
+	})
 	defer sessions.closeAll()
 
 	// verdicts remembers the last reachability verdict per task (keyed by the
@@ -154,7 +174,7 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 	if err := runTasks(ctx, nc, cfg.Name, wl, runner, sessions, verdicts, faultseen); err != nil {
 		return wl, err
 	}
-	runCommands(ctx, nc, cfg.Name, runner, executedCommands)
+	runCommands(ctx, nc, cfg.Name, runner, sessions, executedCommands)
 	if err := publishHeartbeat(nc, cfg.Name); err != nil {
 		return wl, err
 	}
@@ -189,7 +209,9 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 			// failure is non-fatal (retry next tick).
 			_ = runTasks(ctx, nc, cfg.Name, wl, runner, sessions, verdicts, faultseen)
 			// Pull and actuate the pending command queue (#815).
-			runCommands(ctx, nc, cfg.Name, runner, executedCommands)
+			runCommands(ctx, nc, cfg.Name, runner, sessions, executedCommands)
+			// Report the inbound lines no listener claimed this tick.
+			sessions.flushUnclaimed()
 			// Ship whatever the node logged this tick as self-logs.
 			publishSelfLogs(nc, cfg.Name, sink)
 		}

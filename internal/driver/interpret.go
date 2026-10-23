@@ -38,6 +38,8 @@ type BakedFunction struct {
 	Arm      []string    `json:"arm,omitempty"`
 	Match    *Match      `json:"match,omitempty"`
 	Emits    []BakedEmit `json:"emits"`
+	// Unmatched rides listen tasks: the spec's unmatched-line policy (#817).
+	Unmatched string `json:"unmatched,omitempty"`
 }
 
 // ParseBaked decodes a derived task's spec. Strict like Parse: the writer is
@@ -306,5 +308,5 @@ func RenderRequest(req Request, value string, params map[string]any) (Request, e
 	if err != nil {
 		return Request{}, err
 	}
-	return Request{Get: req.Get, Line: line, Path: path}, nil
+	return Request{Get: req.Get, Line: line, Path: path, Reply: req.Reply}, nil
 }

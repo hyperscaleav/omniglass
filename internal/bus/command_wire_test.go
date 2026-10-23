@@ -182,6 +182,9 @@ func TestCommandWireActuates(t *testing.T) {
 	if d.ID != cmd.ID || d.Line != "SET INPUT hdmi-2" || d.Transport != "tcp" {
 		t.Fatalf("delivery = %+v", d)
 	}
+	if d.EndpointID == "" {
+		t.Fatalf("delivery carries no endpoint id; a node holding a session there actuates over it (#817)")
+	}
 
 	// Actuate over the real socket.
 	exchanger := collection.NewLineExchanger()

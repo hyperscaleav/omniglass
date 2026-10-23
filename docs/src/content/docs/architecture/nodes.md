@@ -163,8 +163,11 @@ lends its connection to the endpoint's line polls, recovers with a jittered, bou
 reports each transition as the `session-state` property (`establishing`, `up`, `recovering`,
 `down`) plus a self-log carrying the reason; there is no `session_log` table
 ([ADR-0150](/architecture/decisions/#adr-0150-a-held-sessions-state-is-a-property-series-and-node-logs-not-a-session-table)).
-The machine's detail is on [collection](/architecture/collection/#sessions). Still design below:
-the pool knobs, authentication and subscription on establish (listeners, #817), and the demux.
+The machine's detail is on [collection](/architecture/collection/#sessions). Built with #817: the
+subscription on establish (a listener's instantiation commands, re-sent on every recover) and the
+demux on the shared connection (listeners first, answers by reply shape;
+[routing](/architecture/collection/#listeners-over-a-held-session)). Still design below: the pool
+knobs and authentication on establish.
 
 ::::design[Target design: sessions and the session pool, tracked in #489]
 A stateful endpoint (`ssh`, `mqtt`, anything held open) becomes a **session** at runtime: one
@@ -192,6 +195,14 @@ collection-health sample. A command timeout can touch both.
 ::::
 
 ## Inbound handling on a shared connection
+
+Built for the line protocol (#817): one reader per held connection routes every inbound line,
+**listeners first** (a claimed line is never an answer unless it also matches the exchange's
+declared reply shape), then the exchange in flight by its reply shape (or, with none declared, the
+first unclaimed line), then unclaimed (counted, and a `collection-failed` per tick when the spec
+says so). This reverses the design's order below, which tried an outstanding poll's matcher first
+([ADR-0151](/architecture/decisions/#adr-0151-a-held-line-session-routes-every-inbound-line-listeners-first-answers-by-reply-shape)); the precedence and its reasons are on
+[collection](/architecture/collection/#listeners-over-a-held-session).
 
 :::design[Target design: the ordered matcher set, tracked in #489]
 One connection carrying heterogeneous inbound frames cannot assume an arriving frame answers the

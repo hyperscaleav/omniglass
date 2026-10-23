@@ -188,6 +188,7 @@ below from the project's history. From here it grows one slice at a time.
 | [ADR-0147](#adr-0147-a-calc-rule-is-a-typed-sibling-registry-checked-acyclic-at-authoring) | 2026-10-21 | Accepted, amended (#1018) | `calc_rule` is a sibling of `event_rule` with typed columns (inputs `{as, key}`, a named reducer or an expression, the output key by id); every write compiles the reduce against a calc expression site of its own and refuses a cycle in the key graph, a second enabled writer of a key, `health` as an input or output, and an output a collection declares (a native probe key or a driver's emits); a reduce that stops compiling reads back as `calc_error`; **Amended (#1018):** the reduce is always an expression, its named reducers now list functions, and inputs are held by uuid in `calc_rule_input`, each bound by an alias as the list of its values |
 | [ADR-0148](#adr-0148-calc-rules-run-on-a-durable-pending-set-and-a-server-tick-not-a-jetstream-consumer) | 2026-10-21 | Accepted, amended (#1018) | Component calc rules run on a durable `calc_pending` set marked in the sample-write transaction and drained by a 1s server tick (`SKIP LOCKED`, one transaction per mark), writing calculated samples through the same path so event rules judge them; marks are held by their writer until commit, the ingest retries a deadlock, a failing mark is deferred, a rule write recomputes its owners; a write never marks its own rule; a missing input writes nothing and is recorded in `calc_rule_state`; an unchanged result writes no row. Diverges from the JetStream calc consumer (#430). **Amended (#1018):** every input binds as the list of its per-instance values, an expression's included, and the marking probe reads `calc_rule_input` by key id |
 | [ADR-0150](#adr-0150-a-held-sessions-state-is-a-property-series-and-node-logs-not-a-session-table) | 2026-10-23 | Accepted | A held session (#816) surfaces as the `session-state` property per endpoint (establishing, up, recovering, down; transitions only, under the endpoint's standing listen task) plus the node's self-logs carrying the reasons; no `session_log` table and no `session` view. The session is held for an endpoint whose worklist carries a standing listen task over a transport with a session dialer (the line protocol over `tcp` today), polls on that endpoint borrow it, and recovery is a jittered exponential backoff with an attempt budget before down |
+| [ADR-0151](#adr-0151-a-held-line-session-routes-every-inbound-line-listeners-first-answers-by-reply-shape) | 2026-10-23 | Accepted | Listeners run over the held session (#817): `arm` commands on every connection before up (plumbing, self-logged), `match` claims a pushed line, its emits land as push samples under the listen task. Every inbound line is routed listeners first, then the exchange in flight by its declared `request.reply` shape (or the first unclaimed line), then unclaimed (counted; `unmatched: collection-failed` lands one fault per tick). Commands ride the held session. Reverses the designed matcher order (outstanding poll first) |
 
 ## Entries
 
@@ -6851,8 +6852,9 @@ interface create form, since that name is the platform's to mint.
      across segments. An ask whose answer does not come in time recycles the connection, since its
      late reply would otherwise answer the next ask. One window remains: a line the device sends
      after the drain and before it has read the request (a push landing in that instant) is taken
-     as the answer, since nothing on the wire tells the two apart; #817's reply matching (a
-     listener's `match` claims pushes before an answer is taken) closes it. A listen task whose spec
+     as the answer, since nothing on the wire tells the two apart. [ADR-0151](#adr-0151-a-held-line-session-routes-every-inbound-line-listeners-first-answers-by-reply-shape)
+     (#817) closes it for every request that declares a reply shape, and a line a listener claims is
+     never an answer at all. A listen task whose spec
      changes (its content-addressed id re-hashes) keeps the healthy connection; only what the
      connection depends on (transport, address, timeout, credentials) recycles it.
 - **Context:** The nodes page designed a `session_log` table of node-reported transitions with a
@@ -6861,3 +6863,32 @@ interface create form, since that name is the platform's to mint.
   `endpoint-reachable`), and owner scope, with no new table, route, or permission noun; the free-text
   reasons belong to the node's own narration, which `node_log` already lands. A session table stays
   possible if per-session counters (commands, errors, last activity) earn one; nothing here forecloses it.
+
+### ADR-0151: A held line session routes every inbound line, listeners first, answers by reply shape
+
+- **Date:** 2026-10-23 | **Status:** Accepted | **Pages:** [collection](/architecture/collection/), [nodes](/architecture/nodes/), [drivers](/guides/admin/drivers/)
+- **Decision:** A driver's listeners come alive over the held session (#817), and one reader per
+  connection routes every inbound line:
+  1. **Arm on every connection.** A listener's `arm` commands are sent in order on each connection
+     before the session reads `up` (establish and every recover). They are plumbing, per the #603
+     ruling: a node self-log with the device's reply, never a command row. An unanswered arm is a
+     failed attempt (ADR-0150 point 4).
+  2. **Listeners first.** Listeners are offered a line in function-name order; the first whose
+     `match` picks it claims it, and its emits land at once as samples under its listen task. A
+     claimed line is never an exchange's answer, unless the exchange declared a reply shape the
+     line matches, when both have it (a protocol whose answers look like its pushes still answers).
+  3. **Answers by reply shape.** A request may declare `reply` (a `prefix` or `regex`); the exchange
+     in flight takes the first line it matches, or, with none declared, the first line no listener
+     claims. A line begun before the request was written is never its answer.
+  4. **The rest is unclaimed.** Counted and self-logged once per tick; a spec declaring
+     `unmatched: collection-failed` (default `discard`) also lands one `collection-failed` per tick.
+  5. **Commands ride the session.** A command delivery names its endpoint and carries its binding's
+     reply shape; a node holding a session there actuates over it, falling back to a throwaway
+     connection only when none is held.
+- **Context:** The nodes page designed an ordered matcher set trying an outstanding poll's response
+  matcher first. On a line protocol that order lets a push that happens to fit a loose answer (or
+  any line, when the poll declares no shape) be eaten as the answer, which loses a sample and
+  misreports a poll; a listener's rule is the more specific statement of what a line is. Declaring
+  reply shapes closes the window ADR-0150 point 5 left open for every request that declares one;
+  a request without one still takes the first unclaimed line, so a driver whose protocol mixes
+  unsolicited lines with answers declares its replies (the seeded `newtron-nvp` does).

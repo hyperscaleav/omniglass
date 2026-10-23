@@ -290,7 +290,7 @@ func TestExecuteDelivery(t *testing.T) {
 	rec := &lineRecorder{}
 	runner := &collection.Runner{Line: rec}
 	d := collection.CommandDelivery{ID: 7, CommandType: "set-input", Transport: "tcp", Target: "10.0.0.5:4998", Line: "SET INPUT hdmi-2"}
-	reply, out := executeDelivery(t.Context(), runner, d)
+	reply, out := executeDelivery(t.Context(), runner, d, nil)
 	if out != "" {
 		t.Fatalf("actuation failed: %s", out)
 	}
@@ -300,11 +300,11 @@ func TestExecuteDelivery(t *testing.T) {
 	if len(rec.sent) != 1 || rec.sent[0] != "SET INPUT hdmi-2" {
 		t.Fatalf("device saw %v", rec.sent)
 	}
-	if _, out := executeDelivery(t.Context(), runner, collection.CommandDelivery{ID: 8, Transport: "snmp"}); out == "" {
+	if _, out := executeDelivery(t.Context(), runner, collection.CommandDelivery{ID: 8, Transport: "snmp"}, nil); out == "" {
 		t.Fatal("an unactuatable transport reported success")
 	}
 	rec.err = context.DeadlineExceeded
-	if _, out := executeDelivery(t.Context(), runner, d); out == "" {
+	if _, out := executeDelivery(t.Context(), runner, d, nil); out == "" {
 		t.Fatal("a dead device reported success")
 	}
 }

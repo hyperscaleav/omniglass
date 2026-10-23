@@ -19,7 +19,13 @@ a versioned declarative document (data, not code) naming the transport it rides,
 an attach must supply (host, port, credentials as secret references), and its three function
 families (poll functions, listeners, command bindings). The detail blade renders the spec as
 the **menu it is**: what each poll asks and what lands, what each listener waits for, what each
-command binding actuates. A row without a spec is a **stub** and cannot be attached; specs are
+command binding actuates. On a line protocol a listener's **arm** commands (the subscribe
+conversation) are sent on every connection the node holds, its **match** rule claims the
+device's pushes, and each claimed line lands as a sample with no poll involved; a request may
+declare its **reply** shape (`request.reply`, a `prefix` or `regex`) so its answer is picked out of
+those pushes, and `unmatched: collection-failed` makes a line nobody claims a collection fault
+rather than a counted discard ([routing](/architecture/collection/#listeners-over-a-held-session)).
+A row without a spec is a **stub** and cannot be attached; specs are
 authored over the API or CLI (`omniglass driver create --spec ...`) and **validate at write**,
 so a spec that references an unregistered sample name, an unknown secret shape, or a broken
 template refuses with the fault named (422). Attaching a driver to a component happens on the

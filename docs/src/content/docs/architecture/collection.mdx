@@ -44,10 +44,13 @@ transport (a v2c scalar SNMP GET, a stateless line exchange over tcp), the node 
 emit (locate by OID, regex capture, dotted JSON path, or key; apply the declared transform; type
 by the baked lane), the worklist delivers a task's secret inputs unsealed on the per-node subject,
 and anything that does not parse lands a `collection-failed` event naming the task, never a silent
-drop and never a wrong-lane sample. Also built, the first half of the stateful arc: a **session
-holds its connection** (#816) for an endpoint with a standing listen task, its line polls borrowing
-it, its state the `session-state` property per endpoint ([ADR-0150](/architecture/decisions/#adr-0150-a-held-sessions-state-is-a-property-series-and-node-logs-not-a-session-table)).
-Listeners over the held session are next (#817). See
+drop and never a wrong-lane sample. Also built, the stateful arc: a **session holds its
+connection** (#816) for an endpoint with a standing listen task, its line polls and commands
+borrowing it, its state the `session-state` property per endpoint ([ADR-0150](/architecture/decisions/#adr-0150-a-held-sessions-state-is-a-property-series-and-node-logs-not-a-session-table));
+and the driver's **listeners come alive** over it (#817): their instantiation commands arm every
+connection, their match rules claim the device's pushes, and the claimed line lands as a push
+sample with no poll involved ([ADR-0151](/architecture/decisions/#adr-0151-a-held-line-session-routes-every-inbound-line-listeners-first-answers-by-reply-shape)).
+The arc's closeout is #818. See
 [ADR-0037](/architecture/decisions/#adr-0037-telemetry-is-a-protobuf-event-over-jetstream-with-an-inline-owner-confining-consumer),
 [ADR-0038](/architecture/decisions/#adr-0038-the-reachability-verdict-is-a-built-in-state),
 [ADR-0039](/architecture/decisions/#adr-0039-an-endpoint-is-a-device-api-the-endpoint-type-is-its-transport-not-its-driver),
@@ -162,8 +165,9 @@ protocol over `tcp` today), keyed by the endpoint's id, which the worklist carri
   instead of dialing per tick. One reader goroutine owns the connection: on an ask it discards
   whatever already arrived (a banner, a stray line), writes the line, and hands the next line to
   that ask. An ask whose answer does not come in time recycles the connection, since its late reply
-  would answer the next ask. One window remains until #817's reply matching: a push the device sends
-  after the drain and before it reads the request is taken as the answer. A poll issued while the
+  would answer the next ask. A pushed line a listener claims is never an answer, and a request that
+  declares its reply shape takes only a line that shape matches ([routing, below](#listeners-over-a-held-session)).
+  A poll issued while the
   first dial is in flight waits for it (on a budget of its own, then the exchange gets its whole
   timeout); any other poll over a session with no connection faults at once with a
   `collection-failed` naming the state, so a down device never stalls the node's tick, and it never
@@ -259,6 +263,41 @@ text family persistently (prompt-expect, echo handling, Q-SYS-style framing), ss
 `exec`.
 
 :::
+
+### Listeners over a held session
+
+Built (#817): a listener declared in a driver's spec derives a standing listen task, and the
+node runs every listen task on an endpoint over that endpoint's one held session:
+
+- **Instantiation commands** (`arm`): the subscribe conversation, sent in order on every connection
+  before the session reads `up`, so on establish and again on each recover. They are **plumbing**,
+  not command rows (the #603 ruling): each is a node self-log (`session armed`, with the device's
+  reply), and an arm the device does not answer is a failed attempt like any other.
+- **Match** (`prefix` or `regex`): classifies an inbound line. Listeners are offered a line in
+  function-name order and the first whose rule picks it claims it.
+- **Extraction**: the claimed line runs through the same emit shape a poll's answer does (locate,
+  transform, type by the baked lane), and lands at once as a sample under the listen task: the
+  component owns it, the endpoint is its instance, and no poll schedule is involved. A claimed line
+  whose emits do not extract is a `collection-failed`, landed once per change.
+
+Every inbound line on a held session is routed by one precedence
+([ADR-0151](/architecture/decisions/#adr-0151-a-held-line-session-routes-every-inbound-line-listeners-first-answers-by-reply-shape)):
+
+1. A line a listener claims is the listener's. It is never an exchange's answer, unless the
+   exchange declared a reply shape the line matches, in which case both have it.
+2. An exchange in flight (a poll, a command, an arm command) takes the first line its declared
+   reply shape (`request.reply`, a `prefix` or `regex`) matches, or, when it declares none, the first
+   line no listener claims. A line that began before the request was written is never its answer.
+3. Anything left is **unclaimed**: counted, and once per tick the node logs the count and the last
+   such line; a spec declaring `unmatched: collection-failed` also lands one `collection-failed`
+   per tick naming them (the default is `discard`).
+
+A request with a reply shape closes the window #816 left open (a stray line arriving just before
+the device reads the request); without one, a line no listener claims in that instant can still be
+taken as the answer, so a driver whose protocol mixes unsolicited lines with answers declares its
+replies. Commands ride the held session too: a delivery names its endpoint, and a node holding a
+session there actuates over it (falling back to a throwaway connection only when none is held),
+the reply settling the command as before.
 
 ### Listeners and their config
 
@@ -474,8 +513,8 @@ still lands; a failed fetch lands nothing; every fault is a `collection-failed` 
 task. Secret inputs reach the node **unsealed in the worklist reply**: the server resolves each
 reference once per pull (the per-node NATS grant is the isolation boundary, and the attach that
 bound the reference is the audited operator action), and a reference that no longer resolves is
-delivered as absence, which the node reports as the missing credential. Sessions are built
-([above](#sessions)); listeners arm over them with #817. The ship-with set:
+delivered as absence, which the node reports as the missing credential. Sessions and the
+listeners over them are built ([above](#sessions)). The ship-with set:
 
 <SeededSet kind="drivers" />
 

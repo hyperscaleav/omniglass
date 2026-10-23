@@ -44,6 +44,11 @@ type CommandDelivery struct {
 	Transport   string
 	Target      string
 	Line        string
+	// EndpointID is the endpoint the command dispatches to (a node holding a
+	// session there actuates over it, #817); Reply is the binding's declared
+	// reply shape.
+	EndpointID string
+	Reply      *driver.Match
 }
 
 // PendingNodeCommands resolves and marks dispatched the commands a node
@@ -149,6 +154,8 @@ func (p *PG) PendingNodeCommands(ctx context.Context, node string) ([]CommandDel
 			Transport:   r.transport,
 			Target:      targetOf(r.endpointParams),
 			Line:        req.Line,
+			EndpointID:  r.endpointID,
+			Reply:       req.Reply,
 		})
 		delivered = append(delivered, dispatch{r.id, r.endpointID})
 	}

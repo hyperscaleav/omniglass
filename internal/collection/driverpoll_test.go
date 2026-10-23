@@ -147,10 +147,11 @@ type fakeHeld struct {
 	answer string
 	err    error
 	sent   string
+	reply  *driver.Match
 }
 
-func (f *fakeHeld) Exchange(_ context.Context, line string, _ time.Duration) (string, error) {
-	f.sent = line
+func (f *fakeHeld) Exchange(_ context.Context, line string, reply *driver.Match, _ time.Duration) (string, error) {
+	f.sent, f.reply = line, reply
 	return f.answer, f.err
 }
 
@@ -160,7 +161,7 @@ func (f *fakeHeld) Exchange(_ context.Context, line string, _ time.Duration) (st
 func TestCollectDriverPollLineOverHeldSession(t *testing.T) {
 	fn := &driver.BakedFunction{
 		Driver: "newtron-nvp", Function: "status",
-		Request: &driver.Request{Line: "GET INPUT"},
+		Request: &driver.Request{Line: "GET INPUT", Reply: &driver.Match{Prefix: "INPUT "}},
 		Emits: []driver.BakedEmit{
 			{Name: "video-input", Lane: "property", Extract: driver.Extract{Regex: `^INPUT (\S+)$`}},
 		},
@@ -173,6 +174,9 @@ func TestCollectDriverPollLineOverHeldSession(t *testing.T) {
 	})
 	if len(faults) != 0 || len(dps) != 1 || dps[0].Text != "hdmi3" {
 		t.Fatalf("dps %v faults %v, want the held session's answer", dps, faults)
+	}
+	if held.reply == nil || held.reply.Prefix != "INPUT " {
+		t.Fatalf("the poll passed reply shape %+v, want its declared one", held.reply)
 	}
 	if held.sent != "GET INPUT" || throwaway.sent != "" {
 		t.Fatalf("held sent %q, throwaway sent %q: the poll must borrow the session", held.sent, throwaway.sent)

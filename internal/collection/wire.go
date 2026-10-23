@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"strings"
 	"time"
+
+	"github.com/hyperscaleav/omniglass/internal/driver"
 )
 
 // The node-server control-plane wire, checkpoint 2: JSON over NATS. The
@@ -113,6 +115,12 @@ type CommandDelivery struct {
 	Transport   string `json:"transport"`
 	Target      string `json:"target"`
 	Line        string `json:"line,omitempty"`
+	// EndpointID is the endpoint the command dispatched to, so a node that
+	// holds a session there actuates over it (#817); Reply is the binding's
+	// declared reply shape, which picks the answer out of that session's
+	// pushes.
+	EndpointID string        `json:"endpoint_id,omitempty"`
+	Reply      *driver.Match `json:"reply,omitempty"`
 }
 
 // CommandPullReply is the server's response to a command queue pull.

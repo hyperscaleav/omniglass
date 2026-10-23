@@ -14,7 +14,7 @@ import (
 func TestRegistryCarriesTheSixTransports(t *testing.T) {
 	want := map[string]struct{ held, built bool }{
 		"icmp": {held: false, built: true},
-		"tcp":  {held: false, built: true},
+		"tcp":  {held: true, built: true}, // the line protocol holds a session over it (#817)
 		"udp":  {held: false, built: false},
 		"ssh":  {held: true, built: true},
 		"http": {held: true, built: true},

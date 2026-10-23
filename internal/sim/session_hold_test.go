@@ -81,7 +81,7 @@ func TestPanelHeldSessionSurvivesItsListenerDying(t *testing.T) {
 
 	// Polls over the held session ride its one connection.
 	for i := 0; i < 3; i++ {
-		got, err := s.Exchange(context.Background(), "GET INPUT", 2*time.Second)
+		got, err := s.Exchange(context.Background(), "GET INPUT", nil, 2*time.Second)
 		if err != nil || got != "INPUT hdmi1" {
 			t.Fatalf("poll %d over the held session = %q, %v", i, got, err)
 		}
@@ -97,7 +97,7 @@ func TestPanelHeldSessionSurvivesItsListenerDying(t *testing.T) {
 	if lost.Reason == "" {
 		t.Error("recovering carries no reason")
 	}
-	if _, err := s.Exchange(context.Background(), "GET INPUT", 100*time.Millisecond); err == nil {
+	if _, err := s.Exchange(context.Background(), "GET INPUT", nil, 100*time.Millisecond); err == nil {
 		t.Fatal("a poll over a recovering session answered")
 	}
 
@@ -106,7 +106,7 @@ func TestPanelHeldSessionSurvivesItsListenerDying(t *testing.T) {
 		t.Fatalf("restart the panel's listener: %v", err)
 	}
 	await(collection.SessionUp)
-	got, err := s.Exchange(context.Background(), "GET INPUT", 2*time.Second)
+	got, err := s.Exchange(context.Background(), "GET INPUT", nil, 2*time.Second)
 	if err != nil || got != "INPUT hdmi1" {
 		t.Fatalf("poll after recovery = %q, %v", got, err)
 	}

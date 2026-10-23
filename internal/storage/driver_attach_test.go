@@ -48,7 +48,7 @@ const lineProtoSpec = `{
 		]
 	}],
 	"commands": [
-		{"command_type": "set-input", "request": {"line": "SET INPUT ${value}"}}
+		{"command_type": "set-input", "request": {"line": "SET INPUT ${value}", "reply": {"prefix": "INPUT "}}}
 	]
 }`
 
@@ -620,6 +620,11 @@ func TestCommandWireDelivery(t *testing.T) {
 	}
 	if d.Target != "10.20.4.50:4998" {
 		t.Fatalf("target = %q, want the endpoint's derived target", d.Target)
+	}
+	// #817: the delivery names its endpoint (a node holding a session there
+	// actuates over it) and carries the binding's reply shape.
+	if d.EndpointID == "" || d.Reply == nil || d.Reply.Prefix != "INPUT " {
+		t.Fatalf("delivery endpoint %q reply %+v, want the endpoint and the declared reply shape", d.EndpointID, d.Reply)
 	}
 
 	// Dispatched: an immediate re-pull redelivers nothing (at-least-once

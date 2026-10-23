@@ -44,7 +44,18 @@ type Spec struct {
 	Polls     []Poll           `json:"polls,omitempty"`
 	Listeners []Listener       `json:"listeners,omitempty"`
 	Commands  []CommandBinding `json:"commands,omitempty"`
+	// Unmatched is what becomes of an inbound line on a held session that no
+	// listener claims and no exchange is owed (#817): discard (the default;
+	// the node counts it) or collection-failed (the node lands one
+	// collection-failed per tick naming how many and the last).
+	Unmatched string `json:"unmatched,omitempty"`
 }
+
+// The unmatched-line policies.
+const (
+	UnmatchedDiscard          = "discard"
+	UnmatchedCollectionFailed = "collection-failed"
+)
 
 // Input is one parameter an attachment must supply. Kind "secret" carries a
 // reference to a secret row (by name), never a value; SecretType pins which
@@ -79,6 +90,11 @@ type Request struct {
 	Get  []string `json:"get,omitempty"`
 	Line string   `json:"line,omitempty"`
 	Path string   `json:"path,omitempty"`
+	// Reply is the protocol's answer shape for a line request (#817): over a
+	// held session, only a line it matches answers this request, so a push
+	// or a stray line is never taken as the answer. Absent, the first line
+	// no listener claims answers it.
+	Reply *Match `json:"reply,omitempty"`
 }
 
 // Empty reports whether the request says nothing at all.
@@ -198,12 +214,34 @@ func (b CommandBinding) JudgeReply(reply string) ReplyVerdict {
 }
 
 // matches applies a Match rule to a line.
-func matches(m Match, line string) bool {
+func matches(m Match, line string) bool { return m.Matches(line) }
+
+// Matches applies the rule to a line: the literal prefix, or the regex.
+func (m Match) Matches(line string) bool {
 	if m.Prefix != "" {
 		return strings.HasPrefix(line, m.Prefix)
 	}
+	if m.Regex == "" {
+		return false
+	}
 	re, err := regexp.Compile(m.Regex)
 	return err == nil && re.MatchString(line)
+}
+
+// Accepts reads a request's declared reply shape against a line: no shape
+// declared accepts any line.
+func (m *Match) Accepts(line string) bool { return m == nil || m.Matches(line) }
+
+// validateReply refuses a reply shape on a request with no line, or a
+// malformed one.
+func validateReply(what string, req Request) error {
+	if req.Reply == nil {
+		return nil
+	}
+	if req.Line == "" {
+		return fmt.Errorf("driver: %s declares a reply shape, which only a line request has", what)
+	}
+	return validateMatch(what+" reply", *req.Reply)
 }
 
 // validateSettle refuses a malformed settle declaration.
@@ -266,6 +304,11 @@ func (s *Spec) Validate(cat Catalog) error {
 	if len(s.Polls) == 0 && len(s.Listeners) == 0 && len(s.Commands) == 0 {
 		return fmt.Errorf("driver: spec declares no function of any family")
 	}
+	switch s.Unmatched {
+	case "", UnmatchedDiscard, UnmatchedCollectionFailed:
+	default:
+		return fmt.Errorf("driver: unmatched policy %q; want discard or collection-failed", s.Unmatched)
+	}
 
 	inputs := map[string]bool{}
 	for i, in := range s.Inputs {
@@ -319,6 +362,9 @@ func (s *Spec) Validate(cat Catalog) error {
 		if err := validateEmits("poll", p.Name, p.Emits, cat); err != nil {
 			return err
 		}
+		if err := validateReply(fmt.Sprintf("poll %q", p.Name), p.Request); err != nil {
+			return err
+		}
 		if err := checkPollShape(s.Transport, p); err != nil {
 			return err
 		}
@@ -364,6 +410,9 @@ func (s *Spec) Validate(cat Catalog) error {
 			return fmt.Errorf("driver: command binding %q on tcp needs a line request", c.CommandType)
 		}
 		if err := validateSettle(c); err != nil {
+			return err
+		}
+		if err := validateReply(fmt.Sprintf("command binding %q", c.CommandType), c.Request); err != nil {
 			return err
 		}
 		// Template references are checked at write: only ${value} (the

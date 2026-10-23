@@ -7368,3 +7368,25 @@ On the wire: a late interrupt mid-answer keeps the partial bytes (`TestLineConnL
 only a passed read deadline is an interrupt so a failed keepalive keeps its cause, a caller's own
 deadline is not recorded as the device's timeout, and the wait for a first dial has its own budget
 (`TestSessionFirstDialWaitHasItsOwnBudget`).
+
+### Listeners and their instantiation commands (#817)
+
+The second slice of epic #603's stateful arc: a driver's listeners come alive over the held session.
+The session arms every connection with the listeners' `arm` commands before it reads up (on establish
+and on every recover; plumbing per the #603 ruling, each a `session armed` self-log with the device's
+reply, an unanswered one a failed attempt). The held line connection's one reader routes every inbound
+line by a documented precedence
+([ADR-0151](/architecture/decisions/#adr-0151-a-held-line-session-routes-every-inbound-line-listeners-first-answers-by-reply-shape)):
+a line a listener's `match` claims lands at once as a push sample under its listen task (the endpoint
+its instance, no poll involved), and is never an exchange's answer unless it also matches the
+exchange's declared reply shape; an exchange takes the first line its new `request.reply` shape
+matches (or the first unclaimed line); a line waiting in the socket when an ask begins is routed, not
+discarded; the rest is counted unclaimed, with a new spec-level `unmatched: collection-failed` policy
+landing one fault per tick. Commands ride the held session too (the delivery now names its endpoint
+and carries the binding's reply shape), falling back to a throwaway connection only when none is held,
+and the transport registry marks `tcp` as held. The seeded `newtron-nvp` declares its reply shapes.
+Proven over the simulator's NVP port (`internal/sim/listener_hold_test.go`: SUBSCRIBE INPUT armed, a
+change made elsewhere heard within a second, thirty GET polls amid a stream of pushes each getting
+their own answer, the subscription re-armed after the listener dies and returns) and end to end
+(`TestNodeLandsPushedSamplesThroughARecover`: with the node's tick at an hour, a change on the panel
+lands as the component's `video-input` within a second, and again after a recover).

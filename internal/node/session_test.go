@@ -4,11 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/collection"
+	"github.com/hyperscaleav/omniglass/internal/driver"
 )
 
 // The node's session manager (#816) over a faked held connection: which
@@ -17,17 +19,22 @@ import (
 // down. The real wire is the integration test's (run_session_test.go).
 
 type heldFake struct {
-	mu     sync.Mutex
-	asked  []string
-	done   chan struct{}
-	once   sync.Once
-	closed bool
+	mu      sync.Mutex
+	asked   []string
+	replies []*driver.Match
+	done    chan struct{}
+	once    sync.Once
+	closed  bool
 }
 
-func (c *heldFake) Exchange(_ context.Context, line string, _ time.Duration) (string, error) {
+func (c *heldFake) Exchange(_ context.Context, line string, reply *driver.Match, _ time.Duration) (string, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.asked = append(c.asked, line)
+	c.replies = append(c.replies, reply)
+	if strings.HasPrefix(line, "SUBSCRIBE") {
+		return "OK", nil
+	}
 	return "INPUT hdmi2", nil
 }
 func (c *heldFake) Done() <-chan struct{} { return c.done }
@@ -52,7 +59,7 @@ type heldFakeDialer struct {
 	targets []string
 }
 
-func (d *heldFakeDialer) Dial(_ context.Context, target string, _ time.Duration) (collection.HeldConn, error) {
+func (d *heldFakeDialer) Dial(_ context.Context, target string, _ time.Duration, _ collection.Inbound) (collection.HeldConn, error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	c := &heldFake{done: make(chan struct{})}
@@ -104,7 +111,9 @@ func listenTask(id, endpointID, target string) collection.TaskSpec {
 	return collection.TaskSpec{
 		ID: id, Mode: "listen", Transport: "tcp", EndpointID: endpointID, EndpointName: "tcp",
 		EndpointParams: json.RawMessage(`{"target":"` + target + `"}`),
-		Spec:           json.RawMessage(`{"driver":"newtron-nvp","function":"events"}`),
+		Spec: json.RawMessage(`{"driver":"newtron-nvp","function":"events","arm":["SUBSCRIBE INPUT"],
+			"match":{"prefix":"EVT "},
+			"emits":[{"name":"video-input","lane":"property","extract":{"regex":"^EVT INPUT (\\S+)$"}}]}`),
 	}
 }
 
@@ -138,7 +147,7 @@ func TestDesiredSessions(t *testing.T) {
 func TestSessionManagerHoldsBorrowsAndTearsDown(t *testing.T) {
 	dialer := &heldFakeDialer{}
 	log := &transitionLog{}
-	m := newSessionManager(map[string]collection.SessionDialer{"tcp": dialer}, log.record)
+	m := newSessionManager(map[string]collection.SessionDialer{"tcp": dialer}, sessionHooks{transition: log.record})
 	defer m.closeAll()
 
 	pollSpec := json.RawMessage(`{"driver": "newtron-nvp", "function": "status",
@@ -208,7 +217,7 @@ func TestSessionManagerHoldsBorrowsAndTearsDown(t *testing.T) {
 func TestSessionManagerCloseAllTearsDown(t *testing.T) {
 	dialer := &heldFakeDialer{}
 	log := &transitionLog{}
-	m := newSessionManager(map[string]collection.SessionDialer{"tcp": dialer}, log.record)
+	m := newSessionManager(map[string]collection.SessionDialer{"tcp": dialer}, sessionHooks{transition: log.record})
 	m.reconcile([]collection.TaskSpec{
 		listenTask("l1", "ep-1", "10.0.0.5:51325"),
 		listenTask("l2", "ep-2", "10.0.0.6:51325"),
@@ -247,13 +256,17 @@ func TestSessionSample(t *testing.T) {
 func TestSessionManagerKeepsTheConnectionAcrossATaskRehash(t *testing.T) {
 	dialer := &heldFakeDialer{}
 	log := &transitionLog{}
-	m := newSessionManager(map[string]collection.SessionDialer{"tcp": dialer}, log.record)
+	m := newSessionManager(map[string]collection.SessionDialer{"tcp": dialer}, sessionHooks{transition: log.record})
 	defer m.closeAll()
 	m.reconcile([]collection.TaskSpec{listenTask("l1", "ep-1", "10.0.0.5:51325")})
 	log.waitFor(t, "l1", collection.SessionUp)
 
 	rehashed := listenTask("l1-v2", "ep-1", "10.0.0.5:51325")
-	rehashed.Spec = json.RawMessage(`{"driver":"newtron-nvp","function":"events","match":{"prefix":"EVT "}}`)
+	// The listener's emits change (its id re-hashes); its arm conversation
+	// does not, so the connection is kept.
+	rehashed.Spec = json.RawMessage(`{"driver":"newtron-nvp","function":"events","arm":["SUBSCRIBE INPUT"],
+		"match":{"prefix":"EVT "},
+		"emits":[{"name":"video-input","lane":"property","extract":{"regex":"^EVT INPUT (\\w+)"}}]}`)
 	m.reconcile([]collection.TaskSpec{rehashed})
 	conns := dialer.all()
 	if len(conns) != 1 || conns[0].isClosed() {
@@ -274,5 +287,178 @@ func TestSessionManagerKeepsTheConnectionAcrossATaskRehash(t *testing.T) {
 	}
 	if got := dialer.all(); len(got) < 3 || !got[1].isClosed() {
 		t.Fatalf("a credential change kept the old connection (%d dials)", len(got))
+	}
+}
+
+// capture records what a router or manager published: samples and faults by
+// listen task, and the arm conversation.
+type capture struct {
+	mu      sync.Mutex
+	samples map[string][]collection.Sample
+	faults  map[string][]string
+	arms    []string
+}
+
+func newCapture() *capture {
+	return &capture{samples: map[string][]collection.Sample{}, faults: map[string][]string{}}
+}
+
+func (c *capture) hooks(log *transitionLog) sessionHooks {
+	return sessionHooks{
+		transition: log.record,
+		samples: func(taskID string, dps []collection.Sample) {
+			c.mu.Lock()
+			c.samples[taskID] = append(c.samples[taskID], dps...)
+			c.mu.Unlock()
+		},
+		fault: func(taskID string, err error) {
+			c.mu.Lock()
+			c.faults[taskID] = append(c.faults[taskID], err.Error())
+			c.mu.Unlock()
+		},
+		arm: func(taskID, endpoint, line, reply string, err error) {
+			c.mu.Lock()
+			c.arms = append(c.arms, line+" -> "+reply)
+			c.mu.Unlock()
+		},
+	}
+}
+
+func (c *capture) faultsOf(taskID string) []string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return append([]string(nil), c.faults[taskID]...)
+}
+
+func (c *capture) samplesOf(taskID string) []collection.Sample {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return append([]collection.Sample(nil), c.samples[taskID]...)
+}
+
+// #817: a listener claims the lines its match rule picks and lands them as
+// push samples under its listen task; a line no listener claims is counted,
+// and the spec's policy decides whether the tick lands a collection-failed.
+func TestListenerRouterClaimsAndCountsTheRest(t *testing.T) {
+	c := newCapture()
+	want, _ := desiredSessions([]collection.TaskSpec{listenTask("l1", "ep-1", "10.0.0.5:51325")},
+		map[string]collection.SessionDialer{"tcp": &heldFakeDialer{}})
+	w := want["ep-1"]
+	r := newListenerRouter(c.hooks(&transitionLog{}))
+	r.set(w.listeners, w.policy)
+
+	if !r.Claim("EVT INPUT hdmi2") {
+		t.Fatal("the listener did not claim its line")
+	}
+	got := c.samplesOf("l1")
+	if len(got) != 1 || got[0].Name != "video-input" || got[0].Text != "hdmi2" || !got[0].IsText {
+		t.Fatalf("pushed samples = %+v, want video-input hdmi2 under the listen task", got)
+	}
+	if r.Claim("INPUT hdmi1") {
+		t.Fatal("a line the match rule does not pick was claimed")
+	}
+	// A claimed line whose emit does not extract lands one fault, not one
+	// per repeat.
+	r.Claim("EVT VOLUME 3")
+	r.Claim("EVT VOLUME 3")
+	if f := c.faultsOf("l1"); len(f) != 1 {
+		t.Fatalf("faults = %v, want one for the unextractable push", f)
+	}
+
+	r.Unclaimed("NOISE 1")
+	r.Unclaimed("NOISE 2")
+	n, last, policy := r.drain()
+	if n != 2 || last != "NOISE 2" || policy != driver.UnmatchedDiscard {
+		t.Fatalf("drain = %d, %q, %q; want the count, the last line, and the default discard", n, last, policy)
+	}
+	if n, _, _ := r.drain(); n != 0 {
+		t.Fatalf("a second drain counted %d", n)
+	}
+}
+
+// The unclaimed policy: discard counts and logs; collection-failed lands one
+// fault per tick under the session's listen task naming the count.
+func TestSessionManagerFlushesUnclaimedByPolicy(t *testing.T) {
+	c := newCapture()
+	task := listenTask("l1", "ep-1", "10.0.0.5:51325")
+	task.Spec = json.RawMessage(`{"driver":"newtron-nvp","function":"events","arm":["SUBSCRIBE INPUT"],
+		"match":{"prefix":"EVT "}, "unmatched":"collection-failed",
+		"emits":[{"name":"video-input","lane":"property","extract":{"regex":"^EVT INPUT (\\S+)$"}}]}`)
+	m := newSessionManager(map[string]collection.SessionDialer{"tcp": &heldFakeDialer{}}, c.hooks(&transitionLog{}))
+	defer m.closeAll()
+	m.reconcile([]collection.TaskSpec{task})
+	h := m.held["ep-1"]
+	h.router.Unclaimed("NOISE")
+	h.router.Unclaimed("MORE NOISE")
+	m.flushUnclaimed()
+	f := c.faultsOf("l1")
+	if len(f) != 1 || !strings.Contains(f[0], "2 ") || !strings.Contains(f[0], "MORE NOISE") {
+		t.Fatalf("faults = %v, want one naming the count and the last line", f)
+	}
+	m.flushUnclaimed()
+	if f := c.faultsOf("l1"); len(f) != 1 {
+		t.Fatalf("an empty tick landed a fault: %v", f)
+	}
+}
+
+// The manager arms every connection with the listeners' instantiation
+// commands (plumbing: reported to the arm hook, never a command row).
+func TestSessionManagerArmsTheListeners(t *testing.T) {
+	dialer := &heldFakeDialer{}
+	c := newCapture()
+	log := &transitionLog{}
+	m := newSessionManager(map[string]collection.SessionDialer{"tcp": dialer}, c.hooks(log))
+	defer m.closeAll()
+	m.reconcile([]collection.TaskSpec{listenTask("l1", "ep-1", "10.0.0.5:51325")})
+	log.waitFor(t, "l1", collection.SessionUp)
+	conn := dialer.all()[0]
+	conn.mu.Lock()
+	asked := append([]string(nil), conn.asked...)
+	conn.mu.Unlock()
+	if len(asked) == 0 || asked[0] != "SUBSCRIBE INPUT" {
+		t.Fatalf("the connection was asked %v, want the subscription first", asked)
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if len(c.arms) != 1 || c.arms[0] != "SUBSCRIBE INPUT -> OK" {
+		t.Fatalf("arm reports = %v", c.arms)
+	}
+}
+
+// #817: a command whose endpoint has a held session actuates over it (with
+// its reply shape); with none held it falls back to a throwaway connection.
+func TestExecuteDeliveryOverTheHeldSession(t *testing.T) {
+	dialer := &heldFakeDialer{}
+	log := &transitionLog{}
+	m := newSessionManager(map[string]collection.SessionDialer{"tcp": dialer}, sessionHooks{transition: log.record})
+	defer m.closeAll()
+	m.reconcile([]collection.TaskSpec{listenTask("l1", "ep-1", "10.0.0.5:51325")})
+	log.waitFor(t, "l1", collection.SessionUp)
+
+	throwaway := &lineRecorder{}
+	runner := &collection.Runner{Line: throwaway}
+	d := collection.CommandDelivery{ID: 9, CommandType: "set-input", Transport: "tcp", Target: "10.0.0.5:51325",
+		EndpointID: "ep-1", Line: "SET INPUT hdmi2", Reply: &driver.Match{Prefix: "INPUT "}}
+	reply, out := executeDelivery(t.Context(), runner, d, m)
+	if out != "" || reply != "INPUT hdmi2" {
+		t.Fatalf("held actuation = %q, %q", reply, out)
+	}
+	if len(throwaway.sent) != 0 {
+		t.Fatalf("a held endpoint's command dialed a throwaway connection: %v", throwaway.sent)
+	}
+	conn := dialer.all()[0]
+	conn.mu.Lock()
+	last, shape := conn.asked[len(conn.asked)-1], conn.replies[len(conn.replies)-1]
+	conn.mu.Unlock()
+	if last != "SET INPUT hdmi2" || shape == nil || shape.Prefix != "INPUT " {
+		t.Fatalf("the held connection was asked %q with reply shape %+v", last, shape)
+	}
+
+	d.EndpointID = "ep-unheld"
+	if _, out := executeDelivery(t.Context(), runner, d, m); out != "" {
+		t.Fatalf("fallback actuation failed: %s", out)
+	}
+	if len(throwaway.sent) != 1 {
+		t.Fatalf("with no held session the command did not fall back: %v", throwaway.sent)
 	}
 }

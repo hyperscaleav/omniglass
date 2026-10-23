@@ -23,10 +23,11 @@ type Transport struct {
 }
 
 // registry is the one authoritative list, in the order surfaces render it:
-// the stateless wires first, the held ones after, each pair cheapest first.
+// cheapest first. tcp is both: its reachability probe dials per poll, and the
+// line protocol a driver speaks over it holds a session (#817).
 var registry = []Transport{
 	{Name: "icmp", Description: "ICMP echo / ping reachability and RTT.", Held: false, Built: true},
-	{Name: "tcp", Description: "Raw TCP connect / port-open check.", Held: false, Built: true},
+	{Name: "tcp", Description: "Raw TCP: the connect / port-open check, and the line protocol, which holds a session over it (polls, commands, and listeners share one connection).", Held: true, Built: true},
 	{Name: "udp", Description: "UDP datagram transport; probing arrives with its driver.", Held: false, Built: false},
 	{Name: "ssh", Description: "SSH transport; the probe runs a real key exchange (responds), and tries the endpoint credential when one is set (auth).", Held: true, Built: true},
 	{Name: "http", Description: "HTTP transport; the probe draws a real response off the API (responds), any status counting as an answer.", Held: true, Built: true},

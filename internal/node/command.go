@@ -45,7 +45,7 @@ func pruneCommandMemory(executed map[int64]commandOutcome, now time.Time) {
 // runCommands runs one pull-execute-report cycle. A pull failure is silent
 // (the next tick re-pulls, the server redelivers); a report publish failure is
 // also survivable, since the redelivered command finds its outcome remembered.
-func runCommands(ctx context.Context, nc *nats.Conn, name string, runner *collection.Runner, executed map[int64]commandOutcome) {
+func runCommands(ctx context.Context, nc *nats.Conn, name string, runner *collection.Runner, sessions *sessionManager, executed map[int64]commandOutcome) {
 	now := time.Now()
 	pruneCommandMemory(executed, now)
 	msg, err := nc.Request(collection.CommandSubject(name), nil, worklistTimeout)
@@ -60,7 +60,7 @@ func runCommands(ctx context.Context, nc *nats.Conn, name string, runner *collec
 		o, done := executed[d.ID]
 		outcome, reply := o.outcome, o.reply
 		if !done {
-			reply, outcome = executeDelivery(ctx, runner, d)
+			reply, outcome = executeDelivery(ctx, runner, d, sessions)
 			executed[d.ID] = commandOutcome{outcome: outcome, reply: reply, at: now}
 			if outcome == "" {
 				slog.Info("command actuated", "facility", "command", "command", d.ID, "type", d.CommandType)
@@ -77,13 +77,23 @@ func runCommands(ctx context.Context, nc *nats.Conn, name string, runner *collec
 }
 
 // executeDelivery actuates one rendered command over its transport, returning
-// the device's reply and the failure story (empty on success). Any answer
-// from the device counts as an actuation; whether the device DID it is
-// settlement's judgment, made on the server from the reply (when the binding
-// settles from the response) or from what is observed next.
-func executeDelivery(ctx context.Context, runner *collection.Runner, d collection.CommandDelivery) (reply, outcome string) {
+// the device's reply and the failure story (empty on success). A command on
+// an endpoint the node holds a session for rides that session (#817), its
+// answer picked by the binding's reply shape; with none held it falls back
+// to a throwaway connection. Any answer from the device counts as an
+// actuation; whether the device DID it is settlement's judgment, made on the
+// server from the reply (when the binding settles from the response) or from
+// what is observed next.
+func executeDelivery(ctx context.Context, runner *collection.Runner, d collection.CommandDelivery, sessions *sessionManager) (reply, outcome string) {
 	switch d.Transport {
 	case "tcp":
+		if held := sessions.lookup(d.EndpointID); held != nil {
+			reply, err := held.Exchange(ctx, d.Line, d.Reply, 0)
+			if err != nil {
+				return "", err.Error()
+			}
+			return reply, ""
+		}
 		if runner.Line == nil {
 			return "", "node: no line actuator wired"
 		}

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/collection/probekeys"
+	"github.com/hyperscaleav/omniglass/internal/driver"
 )
 
 // A session holds its connection (#816): a stateful transport keeps one
@@ -107,15 +108,28 @@ type SessionTransition struct {
 // (Err then says why). Faked in unit tests; the real line connection is
 // NewLineSessionDialer's.
 type HeldConn interface {
-	Exchange(ctx context.Context, line string, timeout time.Duration) (string, error)
+	// Exchange sends one line and returns its answer: the next line no
+	// listener claims, or, when reply declares the protocol's answer shape,
+	// the next line that shape matches.
+	Exchange(ctx context.Context, line string, reply *driver.Match, timeout time.Duration) (string, error)
 	Done() <-chan struct{}
 	Err() error
 	Close() error
 }
 
-// SessionDialer establishes a held connection to a target.
+// Inbound is how a held connection disposes of an inbound line (#817): Claim
+// offers it to the listeners (true when one took it, which also delivers
+// it), and Unclaimed reports a line nothing took, neither a listener nor an
+// exchange. Both are called on the connection's reader goroutine, in order.
+type Inbound interface {
+	Claim(line string) bool
+	Unclaimed(line string)
+}
+
+// SessionDialer establishes a held connection to a target, routing its
+// inbound lines through in (nil drops every line no exchange takes).
 type SessionDialer interface {
-	Dial(ctx context.Context, target string, timeout time.Duration) (HeldConn, error)
+	Dial(ctx context.Context, target string, timeout time.Duration, in Inbound) (HeldConn, error)
 }
 
 // SessionConfig is what a session needs: where to connect, how, and who hears
@@ -131,6 +145,15 @@ type SessionConfig struct {
 	// StableAfter is how long a connection must live to count as stable;
 	// zero is SessionStableAfter. Tests shorten it.
 	StableAfter time.Duration
+	// Inbound routes the connection's inbound lines to the listeners (#817).
+	Inbound Inbound
+	// Arm holds the instantiation commands (a listener's subscribe
+	// conversation), sent in order on every connection before the session
+	// reads up: on establish and again on each recover. Plumbing, per the
+	// #603 ruling: OnArm reports each with its reply for the node's logs,
+	// and nothing records a command row.
+	Arm   []string
+	OnArm func(line, reply string, err error)
 }
 
 // Session holds one endpoint's connection. Start it with StartSession, borrow
@@ -189,7 +212,7 @@ func (s *Session) State() (SessionState, string) {
 // its reason: a down device must not stall the node's tick, and a poll never
 // reconnects on its own (the session owns the connection). A down session
 // lends the connection it is proving, so an answer can prove it.
-func (s *Session) Exchange(ctx context.Context, line string, timeout time.Duration) (string, error) {
+func (s *Session) Exchange(ctx context.Context, line string, reply *driver.Match, timeout time.Duration) (string, error) {
 	if timeout <= 0 {
 		timeout = s.cfg.Timeout
 	}
@@ -203,7 +226,7 @@ func (s *Session) Exchange(ctx context.Context, line string, timeout time.Durati
 		conn, heard, state, reason, changed, dialing := s.conn, s.heard, s.state, s.reason, s.changed, s.dialing
 		s.mu.Unlock()
 		if conn != nil {
-			answer, err := conn.Exchange(ctx, line, timeout)
+			answer, err := conn.Exchange(ctx, line, reply, timeout)
 			if err == nil {
 				select {
 				case heard <- struct{}{}:
@@ -306,7 +329,7 @@ func (s *Session) run(ctx context.Context) {
 		if failures > 0 && !sleepCtx(ctx, s.cfg.Backoff(failures)) {
 			return
 		}
-		conn, err := s.cfg.Dialer.Dial(ctx, s.cfg.Target, s.cfg.Timeout)
+		conn, err := s.cfg.Dialer.Dial(ctx, s.cfg.Target, s.cfg.Timeout, s.cfg.Inbound)
 		if ctx.Err() != nil {
 			if conn != nil {
 				_ = conn.Close()
@@ -316,6 +339,21 @@ func (s *Session) run(ctx context.Context) {
 		if err != nil {
 			s.firstDialDone()
 			fail(err.Error())
+			continue
+		}
+		// Arm before anything borrows the connection or it reads up, so the
+		// listeners' subscriptions are in place whenever the session is up.
+		// An arm the device does not answer is a failed attempt.
+		if err := s.armConn(ctx, conn); err != nil {
+			_ = conn.Close()
+			if ctx.Err() != nil {
+				return
+			}
+			if errors.Is(err, ErrExchangeTimeout) {
+				needAnswer = true
+			}
+			s.firstDialDone()
+			fail("arming failed: " + err.Error())
 			continue
 		}
 		heard := make(chan struct{}, 1)
@@ -386,6 +424,21 @@ func (s *Session) run(ctx context.Context) {
 			}
 		}
 	}
+}
+
+// armConn sends the instantiation commands over a fresh connection, in
+// order, reporting each.
+func (s *Session) armConn(ctx context.Context, conn HeldConn) error {
+	for _, line := range s.cfg.Arm {
+		reply, err := conn.Exchange(ctx, line, nil, s.cfg.Timeout)
+		if s.cfg.OnArm != nil {
+			s.cfg.OnArm(line, reply, err)
+		}
+		if err != nil {
+			return fmt.Errorf("%s: %w", line, err)
+		}
+	}
+	return nil
 }
 
 // firstDialDone ends the first-dial wait window after a failed first dial
