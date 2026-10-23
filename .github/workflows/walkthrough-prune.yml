@@ -1,0 +1,84 @@
+name: walkthrough-prune
+
+# Deletes the walkthrough evidence refs (refs/walkthroughs/pr-<n>, written by
+# walkthrough.yml, #939, ADR-0149) of PRs closed more than 30 days ago. The
+# evidence matters while a PR is under review; after that it only costs
+# repository size on GitHub and in every mirror that fetches all refs. Not on
+# close: a merged or closed PR is still read for a while, and its comment's
+# inline images and video links go stale the moment its ref is gone (its
+# objects are then left for GitHub's garbage collection).
+#
+# Which refs is a pure function (walkthroughpr.mjs evidenceRefsToPrune,
+# unit-tested): only refs matching refs/walkthroughs/pr-<n> whose PR is closed
+# with a readable close time older than the retention; anything it cannot prove
+# stale is kept. A scheduled run checks out the default branch, so no PR's code
+# runs here, and only the delete step is handed the write token.
+
+on:
+  schedule:
+    - cron: "17 4 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  prune:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      pull-requests: read
+    env:
+      REPO: ${{ github.repository }}
+      RETENTION_DAYS: "30"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Choose the refs to prune
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          git ls-remote "https://github.com/${REPO}.git" 'refs/walkthroughs/pr-*' | cut -f2 >"$RUNNER_TEMP/refs.txt"
+          : >"$RUNNER_TEMP/prs.jsonl"
+          while read -r ref; do
+            n=${ref#refs/walkthroughs/pr-}
+            [[ "$n" =~ ^[0-9]+$ ]] || continue
+            gh api "repos/${REPO}/pulls/${n}" --jq '{number, state, closed_at}' >>"$RUNNER_TEMP/prs.jsonl" \
+              || echo "::warning::no PR #${n} for ${ref}; kept"
+          done <"$RUNNER_TEMP/refs.txt"
+          jq -n --rawfile refs "$RUNNER_TEMP/refs.txt" --slurpfile prs "$RUNNER_TEMP/prs.jsonl" \
+            '{refs: ($refs | split("\n") | map(select(length > 0))), prs: $prs}' \
+            | node web/e2e/walkthrough-pr.mjs prune "$RETENTION_DAYS" >"$RUNNER_TEMP/prune.txt"
+          echo "$(grep -c . "$RUNNER_TEMP/refs.txt" || true) evidence refs, $(grep -c . "$RUNNER_TEMP/prune.txt" || true) to prune"
+          cat "$RUNNER_TEMP/prune.txt"
+
+      # The token reaches git only here, as a per-command header, in a fresh
+      # repository with hooks off.
+      - name: Delete them
+        env:
+          PUSH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mapfile -t refs <"$RUNNER_TEMP/prune.txt"
+          if [ "${#refs[@]}" -eq 0 ]; then
+            echo "nothing to prune"
+            exit 0
+          fi
+          for ref in "${refs[@]}"; do
+            [[ "$ref" =~ ^refs/walkthroughs/pr-[0-9]+$ ]] || { echo "refusing to delete $ref" >&2; exit 1; }
+          done
+          repo=$(mktemp -d)
+          git -c core.hooksPath=/dev/null init -q "$repo"
+          auth="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$PUSH_TOKEN" | base64 -w0)"
+          echo "::add-mask::$auth"
+          git --git-dir="$repo/.git" -c core.hooksPath=/dev/null -c "http.https://github.com/.extraheader=$auth" \
+            push -q "https://github.com/${REPO}.git" --delete "${refs[@]}"
+          echo "deleted ${#refs[@]} evidence refs"

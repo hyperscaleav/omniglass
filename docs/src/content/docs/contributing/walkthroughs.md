@@ -45,8 +45,8 @@ Write it the way an operator would work:
 - **Captions teach.** Say why the operator takes the step, in the product's vocabulary
   (component, place, system), short enough to read in the caption bar.
 - **Mark the payoff.** `poster: true` on the step the walkthrough builds to makes its still the
-  poster, the still that stands for the whole flow below its animated preview; without it the
-  last step is the poster.
+  poster, the still that stands for the whole flow (the docs video's poster frame, and the PR
+  comment's still below its animated preview); without it the last step is the poster.
 
 `make test-web` validates every script in the tree, so a malformed one fails before a browser
 starts.
@@ -86,14 +86,40 @@ ffmpeg image, are in the [install guide](/guides/install/#recording-a-walkthroug
 
 ## Show it on the PR
 
-Push, then apply the **`run:walkthrough`** label. CI records the walkthroughs on the same stack,
-commits each one's animated preview, poster and stills to the PR branch, and keeps one PR comment
-that leads each walkthrough with its preview, playing on the PR page, then its poster and its
-stills folded below, with the full-quality videos as a workflow artifact (GitHub plays no inline
-video a workflow can attach, so the preview is what plays); a failed walkthrough fails the job and
-is named in the comment. What the label runs, and where the stills land, is described with the rest of the
-automation labels in [labels](/contributing/labels/). The PR body's Visual confirmation links that
-comment on its **Walkthrough** line.
+Push, then apply the **`run:walkthrough`** label. CI records the walkthroughs on the same stack and
+keeps one PR comment that, for each walkthrough, links its full-quality video as **Watch
+(scrubbable)**, which opens in the browser's own player and seeks, then shows its animated preview,
+playing on the PR page, its poster, and its stills folded below; a failed walkthrough fails the job
+and is named in the comment. The PR body's Visual confirmation links that comment on its
+**Walkthrough** line.
+
+**The evidence lives off main.** The video, preview, poster and stills are committed to the PR's
+own ref, `refs/walkthroughs/pr-<n>`, never to the PR branch, and the comment reaches each file by
+that commit's SHA. So the PR's head and its checks are untouched by the run (there is nothing to
+pull and nothing to re-run), a squash-merge carries none of it into main, and a default clone
+never fetches it (a clone fetches branches and tags, not other refs). The ref was chosen over an
+orphan branch for that last reason: GitHub's raw host and jsDelivr serve a commit on any ref of a
+public repository by its SHA, the workflow token can push the ref, and an orphan branch would sit
+in every clone and in the branch list. Each run commits a fresh tree on top of the ref's last
+commit, so an older comment's links keep resolving. The record job that runs the PR's code holds
+only a read-only token; a separate publish job, which checks nothing out and runs nothing from the
+PR, builds the evidence commit in a fresh repository and pushes it. The images are embedded from GitHub's raw
+host; the video is linked through jsDelivr
+(`https://cdn.jsdelivr.net/gh/<owner>/<repo>@<sha>/<id>/<id>.mp4`), because jsDelivr serves an mp4
+as `video/mp4` with range requests, which is what lets a browser play and seek it, while the raw
+host serves it as a download (GitHub plays no inline video a workflow can attach, so the preview
+stays the inline glance). jsDelivr serves only public repositories, so this depends on the
+repository staying public. What the label runs is described with the rest of the automation labels
+in [labels](/contributing/labels/), and why it is hosted this way in
+[ADR-0149](/architecture/decisions/#adr-0149-walkthrough-evidence-lives-on-per-pr-refs-its-pr-video-plays-through-jsdelivr-and-the-docs-commit-the-mp4).
+
+**The evidence refs have a cost, and are pruned.** A ref keeps its commits, so every run adds its
+files (about 2 to 3.5 MB per walkthrough, video included) to the repository's size on GitHub and to
+any mirror that fetches every ref (`git clone --mirror`, a backup, a fork sync of all refs), though
+not to a normal clone. `walkthrough-prune.yml` runs daily and deletes the evidence ref of every PR
+closed more than 30 days ago; GitHub's garbage collection reclaims the objects later. After that,
+the PR comment's images and video links stop resolving. Not deleting on close is deliberate: a
+just-merged PR is still read.
 
 ## Review the stills
 
@@ -121,9 +147,13 @@ walkthroughs:
 ```
 
 The declaration is only the id. The title, captions and stills come from the recording's manifest,
-so the page never restates a caption that could drift from the video. The embed renders the
-animated preview (the poster step's still for a reader whose system asks for reduced motion, and for
-a recording whose manifest names no preview), the title and description, and every step's caption over its still, folded under a disclosure. [Simulate a fleet](/guides/operator/simulation/#see-it) carries the first one.
+so the page never restates a caption that could drift from the video. The embed renders the video
+with controls, so a reader plays and scrubs it, with the poster step's still as its poster frame (a
+still, so nothing moves for a reader whose system asks for reduced motion until they press play),
+and that still again inside it for a browser that plays no video. The docs carry no animated
+preview: a page that plays the video has no use for it, so the preview stays PR evidence. Below the
+video come the title,
+the description, a link to the mp4, and every step's caption over its still, folded under a disclosure. [Simulate a fleet](/guides/operator/simulation/#see-it) carries the first one.
 
 The assets reach the site by a copy, committed like the screenshots:
 
@@ -132,39 +162,32 @@ make walkthroughs ID=sample-simulation   # record it
 make docs-walkthroughs                   # copy what the docs declare into docs/public/walkthroughs/<id>/
 ```
 
-`make docs-walkthroughs` copies, for every walkthrough a page declares, the manifest, the stills and
-the animated preview from `web/e2e/walkthroughs/out/<id>/` into `docs/public/walkthroughs/<id>/` (not the recorder's
-`poster.png`, a copy of the poster step's still), removes any file left from an older recording,
+`make docs-walkthroughs` copies, for every walkthrough a page declares, the manifest, the stills
+and the video from `web/e2e/walkthroughs/out/<id>/` into `docs/public/walkthroughs/<id>/` (not the recorder's
+`poster.png`, a copy of the poster step's still, nor the animated preview), removes any file left from an older recording,
 and fails on a declared walkthrough that is not recorded, whose recording failed, or whose manifest
 lacks the budget mark. Commit the copied files with the change.
 
 **The docs build forces itself after a copy.** Astro caches each rendered page keyed on the page's
-own content, and it has no way to learn that the embed also depends on the copied manifest and on
-whether the video exists, so a plain build after a re-copy would serve the old render. That cache
+own content, and it has no way to learn that the embed also depends on the copied manifest, so a
+plain build after a re-copy would serve the old render. That cache
 also survives between deploys: a Cloudflare Pages build restores Astro's content cache (under the docs `node_modules`) from
 the last one. So `corepack pnpm build` runs Astro through `docs/scripts/astro-build.mjs`, which
-digests every `docs/public/walkthroughs/*/walkthrough.json`, the files beside each one, and the
+digests every `docs/public/walkthroughs/*/walkthrough.json`, the names of the files beside each one, and the
 plugin sources that render the embed (`docs/scripts/lib/render-stamp.mjs`), compares the digest
 with the stamp it wrote beside Astro's cache after the last good build, and runs
 `astro build --force` only when they differ. Nothing to remember after a copy; only a bare
 `astro build` skips the stamp, and the post-build check below fails that build if it renders stale.
 
-**The video is not committed**: an mp4 per walkthrough (about 0.6 to 1.1 MB today) would grow the
-repository with every re-recording.
-
-**The preview is committed, and that is a cost.** Git keeps every version of a binary, so each
-re-copy of a walkthrough adds its new `preview.webp` (about 0.6 to 0.9 MB today) to the history
-beside its new stills, and that size never leaves the repository. The same holds on a PR: the
-`run:walkthrough` label commits each recorded walkthrough's preview with its stills under
-`.github/screenshots/<pr>/walkthroughs/`, and a squash-merge carries those files into main, so a PR
-that records four walkthroughs adds roughly 3 MB of previews on top of its stills. The trade is
-made on purpose: a preview is what lets a reviewer and a reader watch the flow inline, which no
-uncommitted file can do on GitHub or on a static docs site. Re-record and re-copy when a flow
-changes, not to refresh one that has not. Its place is `docs/public/walkthroughs/<id>/<id>.mp4` (gitignored), and the embed
-renders the video, with a link to it, only when that file is present at build time; without it
-the page shows the animated preview and the stills, and links nothing. Until the docs deploy carries
-the videos, the published pages show the preview and stills. To see the video in a local build, copy it
-too with `DOCS_WALKTHROUGH_VIDEO=1 make docs-walkthroughs`.
+**The video is committed, and that is a cost.** Git keeps every version of a binary, so each
+re-copy of a walkthrough adds its new mp4 (about 0.6 to 1.2 MB today) to the history beside its new
+stills, and that size never leaves the repository: roughly 1 MB per walkthrough per re-record, about
+6 MB for the six the docs carry today. The trade is made on purpose: the video is what lets a reader
+of the deployed docs, and of a docs PR preview, play and scrub the flow, which no uncommitted file
+can do on a static site. Earlier copies committed an animated preview beside the stills; those
+versions stay in the history, but the docs no longer carry one. Re-record and
+re-copy when a flow changes, not to refresh one that has not. A PR's own walkthrough evidence costs
+the repository nothing on main: it lives on the PR's evidence ref (above).
 
 Three checks keep the embed true to its recording:
 
@@ -173,12 +196,13 @@ Three checks keep the embed true to its recording:
 - **In `make test`**, the docs lint suite (`internal/docslint/walkthroughs.go`) fails a declared
   id with no script under `web/e2e/walkthroughs/`, a declaration no directive on its page uses, a
   copied manifest with no budget mark, a missing still, a poster that is none of the stills, a
-  preview the manifest names that is not `preview.webp` or was not copied, a copy
+  missing video, a `preview.webp` in a copy (the docs carry none), a preview name in the manifest
+  that is not `preview.webp`, a copy
   that has drifted from its script (title, description, step count or any caption), and a copied
   directory no page declares.
 - **After the build**, `docs/scripts/check-walkthrough-embeds.mjs` re-renders every built embed
-  from the manifest the build shipped, with the video only if the build shipped it, and fails on
-  any difference, and on any reference to a walkthrough file the build did not ship. Through `pnpm build` the
+  from the manifest the build shipped and fails on any difference, on an embed whose video the
+  build did not ship, and on any reference to a walkthrough file the build did not ship. Through `pnpm build` the
   stamp above keeps it from firing for staleness; it is the backstop for any build that skips it.
 
 Only a leaf directive alone on its line embeds (`::walkthrough{#id}`, attributes allowed); a
