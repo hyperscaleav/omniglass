@@ -311,6 +311,9 @@ func (r *reader) arm(ask lineAsk) bool {
 		c.fail(err)
 		return false
 	}
+	// The deadline bounded this write only: a later write on the connection
+	// (a telnet negotiation reply) must not inherit it once it has passed.
+	_ = c.c.SetWriteDeadline(time.Time{})
 	r.armed = &ask
 	return true
 }

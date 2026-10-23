@@ -2,9 +2,12 @@ package collection
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io"
 	"net"
 	"sync"
+	"syscall"
 	"time"
 )
 
@@ -24,6 +27,9 @@ const (
 	telnetSB   = 0xFA
 	telnetSE   = 0xF0
 )
+
+// telnetReplyTimeout bounds a negotiation reply's write.
+const telnetReplyTimeout = 5 * time.Second
 
 // telnetState is where the inbound filter is inside a command sequence.
 type telnetState int
@@ -55,12 +61,16 @@ func (t *telnetConn) Read(p []byte) (int, error) {
 		n, err := t.Conn.Read(p)
 		out, reply := t.filter(p[:n])
 		if len(reply) > 0 {
+			// The reply carries its own deadline: the session's last write
+			// deadline may have passed long ago on an idle connection. A reply
+			// that cannot be written is not this read's error (a timeout here
+			// would pass for the line reader's own interrupt); a dead
+			// connection fails the next read on its own.
 			t.wmu.Lock()
-			_, werr := t.Conn.Write(reply)
+			_ = t.Conn.SetWriteDeadline(time.Now().Add(telnetReplyTimeout))
+			_, _ = t.Conn.Write(reply)
+			_ = t.Conn.SetWriteDeadline(time.Time{})
 			t.wmu.Unlock()
-			if werr != nil && err == nil {
-				err = werr
-			}
 		}
 		// A read that carried only commands returns nothing to the caller:
 		// read again rather than hand back an empty, error-free read.
@@ -185,8 +195,15 @@ func (telnetProber) Probe(ctx context.Context, target string, timeout time.Durat
 	buf := make([]byte, 1)
 	if n, err := c.Read(buf); n == 0 {
 		res.Reason = Timedout
-		if reason, ok := Classify(err); ok {
-			res.Reason = reason
+		switch {
+		case errors.Is(err, io.EOF), errors.Is(err, syscall.ECONNRESET):
+			// Accepted, then hung up before a byte: a session limit or an
+			// ACL, not a slow component.
+			res.Reason = Closed
+		default:
+			if reason, ok := Classify(err); ok {
+				res.Reason = reason
+			}
 		}
 		return res, nil
 	}

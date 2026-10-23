@@ -43,7 +43,13 @@ refusal then costs one attempt rather than a retry every 30 seconds. A component
 wrong password without saying so cannot be told apart from a dropped connection, and still follows
 the ordinary backoff (#1056). Anchor a prompt's regex (`^login: ?$`): a prompt is matched on a line
 the component pauses on, and an unanchored one also matches a banner such as `Last login: `. A spec
-whose session only commands would ride (no poll or listener to hold it) refuses at write:
+whose session only commands would ride (no poll or listener to hold it) refuses at write. Over `ssh`
+the session's auth step is the transport's own: `session.credential` names the secret input it
+authenticates with (a username with a `password` or a `private_key`), `session.pty` asks for a
+terminal and `session.exec` runs a command as the channel instead of a shell. The host key is trusted
+on first use and kept as the endpoint's `ssh-host-key`; when it changes the session reads `rejected`
+naming both keys, and `omniglass endpoint retry <id> --host-key <the offered key>` trusts the new
+one. A telnet driver:
 
 ```yaml
 session:

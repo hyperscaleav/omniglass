@@ -311,3 +311,47 @@ func TestAuthSample(t *testing.T) {
 		t.Fatalf("properties = %+v", ev.Properties)
 	}
 }
+
+// countingTelnetProbe counts the probe dials it is asked for.
+type countingTelnetProbe struct{ n int }
+
+func (p *countingTelnetProbe) Probe(context.Context, string, time.Duration) (collection.TelnetResult, error) {
+	p.n++
+	return collection.TelnetResult{Dialed: true, Reason: collection.Refused}, nil
+}
+
+// Review of #1033, finding 2: while the node holds an endpoint's telnet
+// session and it reads up, the reachability probe does not dial a second
+// connection (gear that admits one telnet client would refuse it and read
+// not responsive beside an up session): the up session is the proof.
+func TestTelnetProbeDefersToAnUpSession(t *testing.T) {
+	probe := &countingTelnetProbe{}
+	runner := &collection.Runner{Telnet: probe}
+	task := collection.TaskSpec{ID: "r1", Mode: "poll", Transport: "telnet", EndpointID: "ep-1", EndpointName: "telnet",
+		EndpointParams: json.RawMessage(`{"target":"10.0.0.5:23"}`), Spec: json.RawMessage(`{}`)}
+
+	dps, err := collectProbe(t.Context(), runner, task, nil)
+	if err != nil || probe.n != 1 || len(dps) == 0 {
+		t.Fatalf("with no session the probe dials: n=%d dps=%v err=%v", probe.n, dps, err)
+	}
+
+	dialer := &authFakeDialer{}
+	log := &transitionLog{}
+	m := newSessionManager(map[string]collection.SessionDialer{"telnet": dialer}, sessionHooks{transition: log.record})
+	defer m.closeAll()
+	held := pollTaskWithLogin("p1", "ep-1", "newtron", 0)
+	held.Transport = "telnet"
+	m.reconcile([]collection.TaskSpec{held})
+	log.waitFor(t, "p1", collection.SessionUp)
+	dps, err = collectProbe(t.Context(), runner, task, m)
+	if err != nil || probe.n != 1 {
+		t.Fatalf("an up session's endpoint was probed again: n=%d err=%v", probe.n, err)
+	}
+	got := map[string]collection.Sample{}
+	for _, d := range dps {
+		got[d.Name] = d
+	}
+	if got["tcp-open"].Value != 1 || got["endpoint-responsive"].Text != "up" {
+		t.Fatalf("samples from the session = %+v", got)
+	}
+}

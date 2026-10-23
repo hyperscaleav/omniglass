@@ -194,6 +194,7 @@ below from the project's history. From here it grows one slice at a time.
 | [ADR-0153](#adr-0153-the-held-session-proof-is-the-line-protocol-over-tcp-other-held-transports-are-their-own-issues) | 2026-10-23 | Accepted | The stateful arc proves the held session on the line protocol over `tcp` (sessions, listeners, the shared reader); SSH, which #816 named as the session-lifecycle carrier, and the other held transports are deferred, each to its own issue (#1032 ssh, #1033 telnet, #1034 websocket, #1035 tls, #1036 mqtt, #1037 udp, #1038 SSE over http, #1039 modbus/tcp, #1040 bacnet/ip, #1041 knxnet/ip, #1042 ONVIF as a driver on http, #1043 the file sample with #1044 to #1047 for file-moving protocols), with server-hosted ingress at #1024; there is no serial transport, serial being reached through an IP-to-serial gateway over tcp (or tls or telnet) |
 | [ADR-0154](#adr-0154-auth-is-a-layer-that-gates-a-held-session-and-a-terminal-refusal-reads-rejected) | 2026-10-23 | Accepted | Auth is a layer that gates a held session (#1049, the architect's ruling): each attempt runs dial, then the auth step (a driver's login dialog or a transport's own auth), then the arm, then `up`, and nothing borrows the connection before the step passes; its verdict is the existing `endpoint-authenticated` rung. A terminal refusal moves the session to `rejected` (amending ADR-0150's state set), which dials no more and fails polls and commands fast with no throwaway fallback, until the endpoint's session identity changes, an operator's audited `:retry` (gated by `endpoint:retry`) moves the endpoint's revision, or the driver's slow re-probe comes due. `session-reason` carries the reason as a property. One login dialog serves raw tcp, telnet and ssh keyboard-interactive |
 | [ADR-0155](#adr-0155-a-driver-declares-its-terminal-replies-and-a-transport-classifies-its-own-refusals) | 2026-10-23 | Accepted | Non-retryable errors are defined in drivers (#1049, the architect's ruling): a spec's `session.terminal` lists the replies retrying cannot fix, each a match with a class (`auth`, `host-key`, `certificate`, `protocol`, a code-held set), applied to the login and to every answer, refusal and arm reply; a transport classifies its own protocol refusals into the same classes. The primitive is `collection.TerminalError{Class, Reason}`; anything unclassified stays retryable, and a terminal poll fault waits its interval rather than the failure backoff |
+| [ADR-0156](#adr-0156-telnet-and-ssh-are-held-line-transports-their-login-is-the-drivers-and-the-ssh-host-key-is-pinned-on-first-use) | 2026-10-23 | Accepted | `telnet` (#1033) and `ssh` (#1032) are held line transports: the same session machine and line reader, telnet behind a filter refusing every option, ssh over a shell or exec channel. Their login is the driver's (`session.login`, `session.credential`), not endpoint params, and their probes never log in. The ssh host key is pinned on first use as the `ssh-host-key` property (observed), delivered back by the worklist, overridden by a declared value an operator sets with `:retry` and `host_key`; a changed key is a `host-key` refusal |
 
 ## Entries
 
@@ -7062,8 +7063,37 @@ interface create form, since that name is the platform's to mint.
      protocol already says.
   4. The primitive is `collection.TerminalError{Class, Reason}`, the reason the component's own
      text; anything unclassified stays retryable and follows the backoff and budget. A stateless
-     or session poll whose fault is terminal waits its interval, never the failure backoff.
+     or session poll whose fault is terminal waits its interval, never the failure backoff; one
+     its session refused runs at the first tick that session is up again.
 - **Context:** Only the driver knows what its component's refusal looks like ("auth rejected",
   "Login incorrect", an "account locked" reply), and only the transport knows its protocol's
   refusals; a session machine guessing from text would misclassify both ways. A fixed class set
   keeps an event rule's vocabulary stable across drivers.
+
+### ADR-0156: Telnet and ssh are held line transports, their login is the driver's, and the ssh host key is pinned on first use
+
+- **Date:** 2026-10-23 | **Status:** Accepted | **Pages:** [collection](/architecture/collection/), [nodes](/architecture/nodes/), [glossary](/architecture/glossary/), [drivers](/guides/admin/drivers/)
+- **Decision:** (#1033, #1032, under the ruling ADR-0154 and ADR-0155 record.)
+  1. **Held line transports.** `telnet` and `ssh` join `tcp` as transports the line protocol rides
+     over a held session (the registry's `line` flag): one session machine, one reader, one routing.
+     Telnet is the line connection behind a filter that strips negotiation and refuses every option
+     (DO answered WONT, WILL answered DONT, a literal 0xFF escaped). Ssh bridges a shell channel
+     (with a PTY on `session.pty`) or an exec channel (`session.exec`) onto the reader.
+  2. **The login is the driver's.** The designed `endpoint.params` login fields (`username`,
+     `password`, `login_expect`, `password_expect`, `private_key`) are not built: a telnet or raw tcp
+     login is the driver's `session.login` dialog, an ssh credential the secret input
+     `session.credential` names, delivered unsealed on the worklist. The probes never log in: the
+     telnet probe reads the first negotiation or banner bytes (`telnet-response-time`), and while the
+     node holds an up telnet session it takes the verdict from the session rather than dial again.
+  3. **Trust on first use.** The node trusts the first ssh host key it sees and publishes it as the
+     observed `ssh-host-key` property; the worklist delivers the pin (the declared value, else the
+     observed one), so a node restart or reassignment keeps it. A changed key is a `host-key`
+     refusal naming both fingerprints and is never published as the pin. An operator who trusts the
+     change retries the endpoint with `host_key` (gated by `endpoint:retry`, audited), which
+     declares the new pin; the node redials onto it.
+- **Context:** The design fenced telnet and ssh as their own polled endpoint types with login
+  config on endpoint params. Under the 2026-10-23 ruling auth is a session layer declared by the
+  driver or the transport, so a login on params would have been a second, unclassified path, and a
+  probe that logged in every tick would retry a bad credential forever. A host key pin needed a
+  home the node can read after a restart without a new table; the property lanes already carry the
+  observed-versus-declared split and the history an operator reads.

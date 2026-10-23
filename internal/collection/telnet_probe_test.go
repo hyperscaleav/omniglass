@@ -87,3 +87,13 @@ func TestTelnetProbeClosedPortIsNotReached(t *testing.T) {
 		t.Fatalf("samples = %+v, want closed and not responsive", dps)
 	}
 }
+
+// Review of #1033, finding 2: a port that accepts and hangs up at once is a
+// hang-up, not a timeout.
+func TestTelnetProbeHangUpIsNotATimeout(t *testing.T) {
+	addr := listenWith(t, func(c net.Conn) { _ = c.Close() })
+	dps := telnetSamples(t, addr)
+	if got := dps["endpoint-responsive"].Labels[collection.ReasonLabel]; got != string(collection.Closed) {
+		t.Fatalf("responsive reason = %q, want closed", got)
+	}
+}

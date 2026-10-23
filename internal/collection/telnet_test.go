@@ -107,3 +107,62 @@ func TestTelnetEscapesALiteralFF(t *testing.T) {
 		t.Fatalf("wire = % x, want the 0xff doubled", b)
 	}
 }
+
+// Review of #1033, finding 1: a negotiation that arrives long after the last
+// exchange's write deadline passed is still answered, and the stale deadline
+// never surfaces from Read as the line reader's own interrupt.
+func TestTelnetAnswersANegotiationAfterAnIdleSpell(t *testing.T) {
+	if testing.Short() {
+		t.Skip("real-wire test")
+	}
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ln.Close()
+	got := make(chan []byte, 1)
+	go func() {
+		c, err := ln.Accept()
+		if err != nil {
+			return
+		}
+		defer c.Close()
+		buf := make([]byte, 64)
+		n, _ := c.Read(buf) // GET INPUT
+		_ = n
+		_, _ = c.Write([]byte("INPUT hdmi1\r\n"))
+		time.Sleep(600 * time.Millisecond)
+		_, _ = c.Write([]byte{iac, do, 0x06})
+		_ = c.SetReadDeadline(time.Now().Add(2 * time.Second))
+		var reply []byte
+		for len(reply) < 3 {
+			k, err := c.Read(buf)
+			reply = append(reply, buf[:k]...)
+			if err != nil {
+				break
+			}
+		}
+		got <- reply
+	}()
+	conn, err := collection.NewTelnetSessionDialer().Dial(t.Context(), ln.Addr().String(), time.Second, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	if a, err := conn.Exchange(t.Context(), "GET INPUT", nil, 200*time.Millisecond); err != nil || a != "INPUT hdmi1" {
+		t.Fatalf("exchange = %q, %v", a, err)
+	}
+	select {
+	case r := <-got:
+		if !bytes.Equal(r, []byte{iac, wont, 0x06}) {
+			t.Fatalf("the late negotiation got % x, want IAC WONT TIMING-MARK", r)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("no answer to the late negotiation")
+	}
+	select {
+	case <-conn.Done():
+		t.Fatalf("the connection died: %v", conn.Err())
+	default:
+	}
+}

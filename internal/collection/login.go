@@ -93,6 +93,7 @@ func RunLogin(ctx context.Context, conn net.Conn, d *LoginDialog, terminal Class
 			if _, err := conn.Write([]byte(d.Steps[next].Send + "\r\n")); err != nil {
 				return false, fmt.Errorf("%w: answering step %d: %v", errLoginFailed, next+1, err)
 			}
+			_ = conn.SetWriteDeadline(time.Time{})
 			next++
 			partial.Reset()
 			deadline = time.Now().Add(timeout)

@@ -89,7 +89,7 @@ func runTasks(ctx context.Context, nc *nats.Conn, node string, wl collection.Wor
 			}
 			continue
 		}
-		dps, err := collectTask(ctx, runner, task)
+		dps, err := collectProbe(ctx, runner, task, sessions)
 		if err != nil {
 			// A skipped task is the node's own operational story AND a
 			// collection fact (#812): log it as a self-log, and land a
@@ -229,6 +229,22 @@ func appendVerdict(dps []collection.Sample, taskID string, verdicts map[string]s
 		IsText: true,
 		TS:     time.Now().UTC(),
 	})
+}
+
+// collectProbe runs a reachability probe, except over an endpoint whose held
+// telnet session reads up (#1033): the up session is the proof the port and
+// the protocol answer, and a second dial would be refused by gear that admits
+// one telnet client, reading not responsive beside an up session.
+func collectProbe(ctx context.Context, runner *collection.Runner, task collection.TaskSpec, sessions *sessionManager) ([]collection.Sample, error) {
+	if task.Transport == "telnet" && sessions.isUp(task.EndpointID) {
+		now := time.Now().UTC()
+		return []collection.Sample{
+			{Name: collection.SignalTCPOpen, Value: 1, TS: now, Labels: map[string]string{collection.ReasonLabel: string(collection.Responded)}},
+			{Name: collection.SignalEndpointResponsive, Text: "up", IsText: true, TS: now,
+				Labels: map[string]string{collection.ReasonLabel: "the held session is up"}},
+		}, nil
+	}
+	return collectTask(ctx, runner, task)
 }
 
 // collectTask dispatches a task to its probe by transport and returns the
