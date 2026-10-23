@@ -18,7 +18,24 @@ import (
 // of GETNEXT calls so we do not need a separate path. Accepts the given
 // community plus "public" (convention for demo posture).
 func (d *Device) StartSNMP(port int, community string) error {
+	_, err := d.startSNMP(port, community)
+	return err
+}
+
+// startSNMP binds and serves the SNMP agent and returns the address it bound.
+// It binds before it builds the agent, so the requests it reports carry the
+// port it bound.
+func (d *Device) startSNMP(port int, community string) (net.Addr, error) {
 	addr := fmt.Sprintf("%s:%d", d.LoopbackIP.String(), port)
+	udpAddr, err := net.ResolveUDPAddr("udp", addr)
+	if err != nil {
+		return nil, fmt.Errorf("resolving %s: %w", addr, err)
+	}
+	conn, err := net.ListenUDP("udp", udpAddr)
+	if err != nil {
+		return nil, fmt.Errorf("listening on %s: %w", addr, err)
+	}
+	addr = conn.LocalAddr().String()
 
 	// Build a sorted snapshot of OIDs so GETNEXT can find successors in
 	// numeric lexicographic order.
@@ -32,21 +49,14 @@ func (d *Device) StartSNMP(port int, community string) error {
 		SubAgents: []*GoSNMPServer.SubAgent{
 			{
 				CommunityIDs: []string{community, "public"},
-				OIDs:         d.buildOIDEntries(oids, port, community),
+				OIDs:         d.buildOIDEntries(oids, boundPort(conn.LocalAddr()), community),
 			},
 		},
 	}
 
 	if err := handler.ReadyForWork(); err != nil {
-		return fmt.Errorf("snmp agent: %w", err)
-	}
-	udpAddr, err := net.ResolveUDPAddr("udp", addr)
-	if err != nil {
-		return fmt.Errorf("resolving %s: %w", addr, err)
-	}
-	conn, err := net.ListenUDP("udp", udpAddr)
-	if err != nil {
-		return fmt.Errorf("listening on %s: %w", addr, err)
+		_ = conn.Close()
+		return nil, fmt.Errorf("snmp agent: %w", err)
 	}
 	// The read loop is ours, around the library's request handler: the
 	// library's own listener nils its socket on Shutdown while its serve
@@ -57,7 +67,7 @@ func (d *Device) StartSNMP(port int, community string) error {
 		slog.Debug("device SNMP started", "device", d.Hostname, "addr", addr)
 		loop.serve(&handler)
 	}()
-	return nil
+	return conn.LocalAddr(), nil
 }
 
 // snmpLoop answers SNMP datagrams on one socket through the library's

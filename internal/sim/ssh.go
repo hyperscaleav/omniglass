@@ -35,10 +35,17 @@ import (
 // profile-declared Commands. Unknown commands return a one-line error
 // and a non-zero exit status.
 func (d *Device) StartSSH(port int, defaultUser, defaultPassword string, permissive bool) error {
+	_, err := d.startSSH(port, defaultUser, defaultPassword, permissive)
+	return err
+}
+
+// startSSH binds and serves the SSH listener and returns the address it
+// bound.
+func (d *Device) startSSH(port int, defaultUser, defaultPassword string, permissive bool) (net.Addr, error) {
 	if d.sshHostKey == nil {
 		k, err := generateHostKey()
 		if err != nil {
-			return fmt.Errorf("host key: %w", err)
+			return nil, fmt.Errorf("host key: %w", err)
 		}
 		d.sshHostKey = k
 	}
@@ -69,7 +76,11 @@ func (d *Device) StartSSH(port int, defaultUser, defaultPassword string, permiss
 	addr := fmt.Sprintf("%s:%d", d.LoopbackIP.String(), port)
 	lis, err := net.Listen("tcp", addr)
 	if err != nil {
-		return fmt.Errorf("listening on %s: %w", addr, err)
+		return nil, fmt.Errorf("listening on %s: %w", addr, err)
+	}
+	addr = lis.Addr().String()
+	if reg := d.sshSession; reg != nil {
+		reg.setPort(boundPort(lis.Addr()))
 	}
 	tracked := trackConns(lis, d.logConnect)
 	d.sshListener = tracked
@@ -87,7 +98,7 @@ func (d *Device) StartSSH(port int, defaultUser, defaultPassword string, permiss
 			go d.serveSSHConn(conn, cfg)
 		}
 	}()
-	return nil
+	return lis.Addr(), nil
 }
 
 // StopSSH closes the SSH listener and every connection it accepted.

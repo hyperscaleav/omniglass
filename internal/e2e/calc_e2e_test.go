@@ -18,6 +18,7 @@ import (
 
 	"github.com/hyperscaleav/omniglass/internal/auth"
 	"github.com/hyperscaleav/omniglass/internal/scope"
+	"github.com/hyperscaleav/omniglass/internal/sim/simtest"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 )
@@ -93,7 +94,9 @@ func TestCalcRuleEndToEnd(t *testing.T) {
 	}
 	defer conn.Close(ctx)
 	product, port := e2eSimulatedProduct(t, ctx, conn)
-	target := net.JoinHostPort("127.33.0.20", fmt.Sprint(port+calcE2EPortShift))
+	// The simulator serves fixed ports, so the device takes an address no
+	// other test process holds.
+	target := net.JoinHostPort(simtest.ClaimLoopback(t), fmt.Sprint(port+calcE2EPortShift))
 	for _, q := range []struct {
 		sql  string
 		args []any

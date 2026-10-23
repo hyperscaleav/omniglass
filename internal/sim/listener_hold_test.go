@@ -5,7 +5,6 @@ package sim
 import (
 	"context"
 	"errors"
-	"net"
 	"strings"
 	"sync"
 	"testing"
@@ -55,7 +54,7 @@ func TestPanelListenerHearsPushesAndReArms(t *testing.T) {
 		t.Fatal(err)
 	}
 	panel := e.Devices()[0]
-	target := net.JoinHostPort(ip, "51325")
+	target := faceAddr(t, panel, "nvp")
 	lx := collection.NewLineExchanger()
 	set := func(input string) {
 		t.Helper()
@@ -168,7 +167,7 @@ func TestPanelListenerHearsPushesAndReArms(t *testing.T) {
 	// sent again, and a later change is heard again.
 	panel.StopTCPSession()
 	await(collection.SessionRecovering)
-	if err := panel.StartTCPSession(51325); err != nil {
+	if err := panel.StartTCPSession(facePort(t, panel, "nvp")); err != nil {
 		t.Fatalf("restart the panel's listener: %v", err)
 	}
 	await(collection.SessionUp)

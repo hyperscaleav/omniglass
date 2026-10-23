@@ -43,7 +43,10 @@ unproven proves nothing about the capability.
 - **Unit:** pure logic, fast, no I/O. Expression compile/eval, decode, request shaping,
   mapping.
 - **Integration:** real Postgres, no mocking the database. `testcontainers-go` gives each
-  run an ephemeral instance on a random port; never bind a fixed host port.
+  run an ephemeral instance on a random port; never bind a fixed host port. The simulator
+  follows the same rule: a test serves it on `sim.EphemeralPorts` and aims its clients and
+  endpoints at the address each face reports
+  ([fixed and ephemeral ports](/architecture/simulation/#fixed-ports-and-ephemeral-ports)).
 - **End-to-end:** emulate the user at each entry point against the running stack: API
   (drive the contracts as a client), CLI (run the real commands), UI (browser-drive the
   SPA). Assert the user-observable outcome, not internals. The browser tier has a floor

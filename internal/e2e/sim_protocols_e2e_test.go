@@ -24,6 +24,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/seed"
 	"github.com/hyperscaleav/omniglass/internal/sim/profile"
 	"github.com/hyperscaleav/omniglass/internal/sim/profiles"
+	"github.com/hyperscaleav/omniglass/internal/sim/simtest"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 )
@@ -150,7 +151,9 @@ func TestOperatorMonitorsAndConfiguresSimulatedDevices(t *testing.T) {
 	}
 	as("secret", "create", "--name", "sim-community", "--secret-type", "snmp-community",
 		"--owner-kind", "platform", "--fields", `{"community":"public"}`)
-	displayIP, panelIP := "127.34.0.10", "127.34.0.11"
+	// The simulator serves fixed ports (the endpoints name them), so each
+	// device takes an address no other test process holds.
+	displayIP, panelIP := simtest.ClaimLoopback(t), simtest.ClaimLoopback(t)
 	as("endpoint", "create", "--component", "sim-display", "--node", "edge-p", "--driver", "snmp-generic",
 		"--inputs", fmt.Sprintf(`{"host":%q,"port":"%d","community":"sim-community"}`, displayIP, 161+protocolsPortShift))
 	as("endpoint", "create", "--component", "sim-panel", "--node", "edge-p", "--driver", "newtron-nvp",

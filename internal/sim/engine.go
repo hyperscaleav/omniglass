@@ -201,9 +201,6 @@ func (e *Engine) buildDevice(snap DeviceSnapshot, peersByRoom map[roomKey]map[st
 					return nil, fmt.Errorf("compiling session config for %q on %q: %w",
 						iface.Name, snap.Hostname, err)
 				}
-				// Session events report the port the listener binds, like
-				// every other hit, not the profile's declared port.
-				cfg.Port = e.port(iface.Port)
 				reg := NewSessionRegistry(dev, cfg, e.sessionPub)
 				switch iface.Protocol {
 				case "ssh":
@@ -260,10 +257,12 @@ func (e *Engine) buildDevice(snap DeviceSnapshot, peersByRoom map[roomKey]map[st
 	return dev, nil
 }
 
-// SetPortMap remaps profile ports at listen time (PrivilegedPortShift lifts
-// those below 1024), so a fleet can
-// serve unprivileged (shift ports below 1024 above it) without setcap.
-// Call before StartAll; nil restores the declared ports.
+// SetPortMap sets the port each face asks to bind, from the port its profile
+// declares: the choice between fixed ports and ephemeral ones. Fixed is nil
+// (the declared ports) or PrivilegedPortShift, which lifts those below 1024 so
+// a fleet serves unprivileged without setcap; EphemeralPorts binds every face
+// on port 0 and each reports the port it got (Device.Faces). Call before
+// StartAll or Sync.
 func (e *Engine) SetPortMap(f func(int) int) { e.portMap = f }
 
 // PrivilegedPortShift lifts ports below 1024 (the ones binding needs a
@@ -392,17 +391,30 @@ func (e *Engine) Sync(snapshots []DeviceSnapshot) error {
 }
 
 // startInterface dispatches one profile interface to the matching
-// per-protocol listener on the device. Returns nil silently for protocols
-// this simulator does not (yet) implement so LoadDevices never blocks on
-// declared-but-unimplemented interfaces.
+// per-protocol listener on the device, at the port the engine's port map
+// asks for, and records the face with the address it bound. Returns nil
+// silently for protocols this simulator does not (yet) implement so
+// LoadDevices never blocks on declared-but-unimplemented interfaces.
 func (e *Engine) startInterface(dev *Device, iface profile.Interface) error {
+	bound, err := e.bindInterface(dev, iface)
+	if err != nil || bound == nil {
+		return err
+	}
+	dev.addFace(Face{Name: iface.Name, Protocol: iface.Protocol, Declared: iface.Port, Addr: addrPort(bound)})
+	return nil
+}
+
+// bindInterface starts one interface's listener and returns the address it
+// bound, nil for an interface that binds nothing.
+func (e *Engine) bindInterface(dev *Device, iface profile.Interface) (net.Addr, error) {
+	port := e.port(iface.Port)
 	switch iface.Protocol {
 	case "http":
 		var cert *tls.Certificate
 		if iface.TLS {
 			c, err := e.certs.get()
 			if err != nil {
-				return fmt.Errorf("obtaining TLS cert: %w", err)
+				return nil, fmt.Errorf("obtaining TLS cert: %w", err)
 			}
 			cert = c
 		}
@@ -411,39 +423,38 @@ func (e *Engine) startInterface(dev *Device, iface profile.Interface) error {
 		// without gating traffic, which keeps existing devices
 		// open-by-default until they opt in.
 		dev.HTTPAuth = httpAuthFromProfile(iface.Auth)
-		return dev.StartHTTP(e.port(iface.Port), cert)
+		return dev.startHTTP(port, cert)
 	case "snmp":
 		community := iface.Auth.Community
 		if community == "" {
 			community = "public"
 		}
-		return dev.StartSNMP(e.port(iface.Port), community)
+		return dev.startSNMP(port, community)
 	case "ssh":
-		return dev.StartSSH(e.port(iface.Port), iface.Auth.DefaultUser, iface.Auth.DefaultPassword, iface.Auth.Permissive)
+		return dev.startSSH(port, iface.Auth.DefaultUser, iface.Auth.DefaultPassword, iface.Auth.Permissive)
 	case "telnet":
-		return dev.StartTelnet(e.port(iface.Port), iface.Auth.DefaultUser, iface.Auth.DefaultPassword, iface.Auth.Permissive)
+		return dev.startTelnet(port, iface.Auth.DefaultUser, iface.Auth.DefaultPassword, iface.Auth.Permissive)
 	case "tcp":
 		// Only persistent: true tcp interfaces actually start a
 		// listener; the LoadDevices path warned and skipped the
 		// non-persistent case, so the absence of a registry here
 		// is the same condition.
-		port := e.port(iface.Port)
 		for _, reg := range dev.TCPSessions() {
-			if reg.cfg.Port == port {
+			if reg.cfg.Port == iface.Port {
 				return dev.startTCPSession(port, reg)
 			}
 		}
-		return nil
+		return nil, nil
 	case "udp":
-		return dev.StartUDP(e.port(iface.Port))
+		return dev.startUDP(port)
 	case "icmp":
 		// Kernel answers ICMP in the shared netns; nothing to listen for.
-		return nil
+		return nil, nil
 	default:
 		slog.Warn("unknown interface protocol, skipping",
 			"device", dev.Hostname, "protocol", iface.Protocol, "name", iface.Name,
 		)
-		return nil
+		return nil, nil
 	}
 }
 
