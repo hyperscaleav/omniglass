@@ -137,11 +137,14 @@ describe("arrival", () => {
     expect(within(hq).getByTestId("health").getAttribute("aria-label")).toBe("2 healthy, 1 incomplete, 1 degraded");
   });
 
-  it("gives only trouble a hue: a healthy count stays grey", async () => {
+  // Healthy reads green (#1067), muted in the dense outline so a calm fleet
+  // stays calm and the one degraded branch still pops.
+  it("gives healthy its muted green and each trouble its own hue", async () => {
     mount();
     await screen.findByRole("tree");
     const slots = within(row("Headquarters")).getByTestId("health");
-    expect(slots.querySelector("[data-slot=healthy]")!.className).not.toMatch(/text-(success|warning|error|incomplete)/);
+    expect(slots.querySelector("[data-slot=healthy]")!.className).toContain("text-healthy");
+    expect(slots.querySelector("[data-slot=healthy]")!.className).not.toMatch(/text-base-content/);
     expect(slots.querySelector("[data-slot=degraded]")!.className).toContain("text-warning");
     expect(slots.querySelector("[data-slot=incomplete]")!.className).toContain("text-incomplete");
   });
