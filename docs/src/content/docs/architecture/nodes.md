@@ -23,7 +23,7 @@ over the driver's binding, [ADR-0136](/architecture/decisions/#adr-0136-actuatio
 driver polls on their declared schedule (#822), and, for the line protocol over `tcp`, held sessions
 (#816, [below](#sessions)) with their listeners and the inbound demux (#817). Still `Design`: the
 durable JetStream command queue, the session pool knobs and the held transports beyond the line
-protocol (#1032 (ssh), #1033 (telnet), #1034 (websocket), #1035 (tls), #1036 (mqtt), #1037 (udp), [ADR-0153](/architecture/decisions/#adr-0153-the-held-session-proof-is-the-line-protocol-over-tcp-other-held-transports-are-their-own-issues)), the layered `_check` reachability gate,
+protocol (#1032 (ssh), #1033 (telnet), #1034 (websocket), #1035 (tls), #1036 (mqtt), #1037 (udp), #1038 (SSE over http), #1039 (modbus/tcp), #1040 (bacnet/ip), #1041 (knxnet/ip), [ADR-0153](/architecture/decisions/#adr-0153-the-held-session-proof-is-the-line-protocol-over-tcp-other-held-transports-are-their-own-issues)), the layered `_check` reachability gate,
 config-generation-driven cache invalidation, node self-telemetry, the node-down sweep, the JetStream
 publish-ack delivery contract (telemetry publish is fire-and-forget today, #430), tick
 scheduling and concurrency knobs, and config apply (the `:apply` flow). The credential is a shared
@@ -177,7 +177,7 @@ demux on the shared connection (listeners first, answers by reply shape;
 [routing](/architecture/collection/#listeners-over-a-held-session)). Still design below: the pool
 knobs and authentication on establish.
 
-::::design[Target design: sessions and the session pool, tracked in #489; the held transports beyond the line protocol are #1032 (ssh), #1033 (telnet), #1034 (websocket), #1035 (tls), #1036 (mqtt), #1037 (udp)]
+::::design[Target design: sessions and the session pool, tracked in #489; the held transports beyond the line protocol are #1032 (ssh), #1033 (telnet), #1034 (websocket), #1035 (tls), #1036 (mqtt), #1037 (udp), #1038 (SSE over http), #1039 (modbus/tcp), #1040 (bacnet/ip), #1041 (knxnet/ip)]
 A stateful endpoint (`ssh`, `mqtt`, anything held open) becomes a **session** at runtime: one
 connection keyed by `(node, endpoint)`, shared by every task and command under it, handshake and
 auth paid once. A pool holds it open across ticks (reconnect, backoff, keepalive); a listener

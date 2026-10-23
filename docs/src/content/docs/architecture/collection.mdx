@@ -220,9 +220,11 @@ the endpoint's `params` JSON, unmarshalled on the node:
 
 The `raw-tcp` row below is built in its driver form: the line protocol over `tcp` holds a session
 (#816) that polls, commands, and listeners share (#817). The other held transports are each their own
-issue: #1032 (ssh), #1033 (telnet), #1034 (websocket), #1035 (tls), #1036 (mqtt), #1037 (udp) ([ADR-0153](/architecture/decisions/#adr-0153-the-held-session-proof-is-the-line-protocol-over-tcp-other-held-transports-are-their-own-issues)).
+issue: #1032 (ssh), #1033 (telnet), #1034 (websocket), #1035 (tls), #1036 (mqtt), #1037 (udp), #1038 (SSE over http), #1039 (modbus/tcp), #1040 (bacnet/ip), #1041 (knxnet/ip). There is no serial transport: an RS-232 or RS-485 device is reached
+through an IP-to-serial gateway, which is the `tcp` transport (or `tls` or `telnet`), so its driver is
+a line protocol like any other ([ADR-0153](/architecture/decisions/#adr-0153-the-held-session-proof-is-the-line-protocol-over-tcp-other-held-transports-are-their-own-issues)).
 
-:::design[The remaining transports and their per-task spec, tracked in #489 and #1032 (ssh), #1033 (telnet), #1034 (websocket), #1035 (tls), #1036 (mqtt), #1037 (udp)]
+:::design[The remaining transports and their per-task spec, tracked in #489 and #1032 (ssh), #1033 (telnet), #1034 (websocket), #1035 (tls), #1036 (mqtt), #1037 (udp), #1038 (SSE over http), #1039 (modbus/tcp), #1040 (bacnet/ip), #1041 (knxnet/ip)]
 
 | endpoint type | shape | host/target | per-task params | samples |
 |---|---|---|---|---|
@@ -236,7 +238,7 @@ issue: #1032 (ssh), #1033 (telnet), #1034 (websocket), #1035 (tls), #1036 (mqtt)
 
 `icmp`/`tcp` are inline probes (config on `endpoint.params`); the rest, in the design model, are held connections: the connection lives on the endpoint, the task names what to read. The ship-with registry seeds the probe built-ins above, the endpoint verdicts, and `session-state` (`internal/seed/metric_types.yaml`, `internal/seed/property_types.yaml`; the [metrics](/guides/admin/metrics/) and [properties](/guides/admin/properties/) guides render each set from the seed); the wider per-transport set (`udp-open`, `snmp-reachable`, the http trio, `<proto>-reachable`/`<proto>-response-time` for the text family) is Design, and unregistered names would be reject-not-project dropped at ingest.
 
-:::design[The held-connection transports in detail, tracked in #489 and #1032 (ssh), #1033 (telnet), #1034 (websocket), #1035 (tls), #1036 (mqtt), #1037 (udp)]
+:::design[The held-connection transports in detail, tracked in #489 and #1032 (ssh), #1033 (telnet), #1034 (websocket), #1035 (tls), #1036 (mqtt), #1037 (udp), #1038 (SSE over http), #1039 (modbus/tcp), #1040 (bacnet/ip), #1041 (knxnet/ip)]
 
 For `snmp`, each OID keeps its **native SNMP type**: numeric OIDs land as `metric`, string OIDs
 (OctetString / IPAddress / OID) as `property`, the lane decided at ingest by catalog membership;

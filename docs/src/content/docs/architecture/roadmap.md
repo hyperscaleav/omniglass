@@ -82,7 +82,7 @@ that describes the target:
    embedded bus, the icmp/tcp probes, edge parsing, and [endpoint](/architecture/collection/) and task
    authoring all shipped, as did drivers with polls, held line sessions, listeners, and the command
    wire (#603). Still ahead: [templates](/architecture/templates/) (the reusable device shape), the
-   held transports beyond the line protocol (#1032 (ssh), #1033 (telnet), #1034 (websocket), #1035 (tls), #1036 (mqtt), #1037 (udp)), and server-hosted ingress
+   held transports beyond the line protocol (#1032 (ssh), #1033 (telnet), #1034 (websocket), #1035 (tls), #1036 (mqtt), #1037 (udp), #1038 (SSE over http), #1039 (modbus/tcp), #1040 (bacnet/ip), #1041 (knxnet/ip)), and server-hosted ingress
    (syslog, SNMP trap, webhook: #1024).
 2. **The data model.** Landed except one piece: [properties](/architecture/properties/) (the
    canonical-signal registry and the exclusive-arc owner columns), the sample sinks,

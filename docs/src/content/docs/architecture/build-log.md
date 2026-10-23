@@ -7460,8 +7460,9 @@ instantiation commands as plumbing
 ([ADR-0151](/architecture/decisions/#adr-0151-a-held-line-session-routes-every-inbound-line-listeners-first-answers-by-reply-shape)
 point 1). One new decision records the arc's held-session proof
 ([ADR-0153](/architecture/decisions/#adr-0153-the-held-session-proof-is-the-line-protocol-over-tcp-other-held-transports-are-their-own-issues)):
-the line protocol over `tcp`, with SSH and the other held transports deferred to #1032 through #1037 and
-server-hosted ingress to #1024, which the collection and nodes pages' transport fences now name. The
+the line protocol over `tcp`, with SSH and the other held transports deferred to #1032 through #1041 and
+server-hosted ingress to #1024, and no serial transport (serial is reached through an IP-to-serial
+gateway over tcp, tls, or telnet), which the collection and nodes pages' transport fences now name. The
 sweep moved what the arc built out of design prose: the nodes page's status note (the command wire,
 scheduled polls, held line sessions, listeners and the demux), its listen-mode, sessions, and task-queue
 sections, the glossary (the endpoint row's rename note, and new listener and reply-shape rows), the

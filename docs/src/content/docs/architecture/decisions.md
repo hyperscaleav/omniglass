@@ -190,7 +190,7 @@ below from the project's history. From here it grows one slice at a time.
 | [ADR-0150](#adr-0150-a-held-sessions-state-is-a-property-series-and-node-logs-not-a-session-table) | 2026-10-23 | Accepted | A held session (#816) surfaces as the `session-state` property per endpoint (establishing, up, recovering, down; transitions only, under the endpoint's standing listen task) plus the node's self-logs carrying the reasons; no `session_log` table and no `session` view. The session is held for an endpoint whose worklist carries a standing listen task over a transport with a session dialer (the line protocol over `tcp` today), polls on that endpoint borrow it, and recovery is a jittered exponential backoff with an attempt budget before down |
 | [ADR-0151](#adr-0151-a-held-line-session-routes-every-inbound-line-listeners-first-answers-by-reply-shape) | 2026-10-23 | Accepted | Listeners run over the held session (#817): `arm` commands on every connection before up (plumbing, self-logged), `match` claims a pushed line, its emits land as push samples under the listen task. Every inbound line is routed listeners first, then the exchange in flight by its declared `request.reply` shape (or the first unclaimed line), then unclaimed (counted; `unmatched: collection-failed` lands one fault per tick). Commands ride the held session. Reverses the designed matcher order (outstanding poll first) |
 | [ADR-0152](#adr-0152-a-driver-poll-runs-on-its-declared-schedule-at-heartbeat-granularity) | 2026-10-23 | Accepted | A driver poll runs on its declared `schedule.every` at heartbeat granularity (#822): a per-task next-due time kept for the run, the first tick at or after it runs the poll, a new task runs at once, a late tick never bursts; probes stay per tick and pushes are never gated. Settles the nodes page's open question for driver polls |
-| [ADR-0153](#adr-0153-the-held-session-proof-is-the-line-protocol-over-tcp-other-held-transports-are-their-own-issues) | 2026-10-23 | Accepted | The stateful arc proves the held session on the line protocol over `tcp` (sessions, listeners, the shared reader); SSH, which #816 named as the session-lifecycle carrier, and the other held transports are deferred, each to its own issue (#1032 ssh, #1033 telnet, #1034 websocket, #1035 tls, #1036 mqtt, #1037 udp), with server-hosted ingress at #1024 |
+| [ADR-0153](#adr-0153-the-held-session-proof-is-the-line-protocol-over-tcp-other-held-transports-are-their-own-issues) | 2026-10-23 | Accepted | The stateful arc proves the held session on the line protocol over `tcp` (sessions, listeners, the shared reader); SSH, which #816 named as the session-lifecycle carrier, and the other held transports are deferred, each to its own issue (#1032 ssh, #1033 telnet, #1034 websocket, #1035 tls, #1036 mqtt, #1037 udp, #1038 SSE over http, #1039 modbus/tcp, #1040 bacnet/ip, #1041 knxnet/ip), with server-hosted ingress at #1024; there is no serial transport, serial being reached through an IP-to-serial gateway over tcp (or tls or telnet) |
 
 ## Entries
 
@@ -6938,7 +6938,11 @@ interface create form, since that name is the platform's to mint.
   and end to end. #816's scope named SSH as the session-lifecycle integration carrier; the architect
   accepted the arc on the line protocol instead and deferred SSH. Every other held transport is its
   own issue under #603: #1032 (ssh), #1033 (telnet), #1034 (websocket), #1035 (tls), #1036 (mqtt),
-  #1037 (udp); server-hosted ingress (syslog, SNMP trap, webhook) is #1024. The session machine, its
+  #1037 (udp), #1038 (SSE over http), #1039 (modbus/tcp), #1040 (bacnet/ip), #1041 (knxnet/ip);
+  server-hosted ingress (syslog, SNMP trap, webhook) is #1024. **There is no serial transport**
+  (architect's ruling): a serial device (RS-232, RS-485) is reached through an IP-to-serial gateway,
+  which is the `tcp` transport (or `tls` or `telnet`, as the gateway speaks), so its driver is a line
+  protocol like any other and the node never owns a serial port. The session machine, its
   `session-state` surface (ADR-0150), and the routing (ADR-0151) are transport-agnostic behind the
   `SessionDialer` and `HeldConn` seams, so each of those issues adds a dialer and its own
   real-implementation integration test rather than a second machine.
