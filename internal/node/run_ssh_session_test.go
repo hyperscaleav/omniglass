@@ -51,7 +51,7 @@ func TestNodeSSHSessionPinsTheHostKeyAndRefusesAChange(t *testing.T) {
 	}
 	all := scope.Set{All: true}
 
-	panelIP := "127.89.16.4"
+	panelIP := fmt.Sprintf("127.89.%d.4", 100+stackSeq.Add(1)%150)
 	store, err := profile.LoadStoreFS(profiles.FS)
 	if err != nil {
 		t.Fatal(err)

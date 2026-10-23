@@ -188,3 +188,56 @@ func TestRequestRungIsTheTransportProven(t *testing.T) {
 		}
 	}
 }
+
+// Review of the fingerprint slice, finding 1: the gate is republished until
+// the worklist reflects it (a lost publish must not leave a restarted node
+// without it), under a task from the current worklist (a re-derived driver
+// deletes the old task ids, and a sample under one is an orphan).
+func TestTheRejectionIsRepublishedUntilReflectedUnderACurrentTask(t *testing.T) {
+	rej := &rejectionLog{}
+	var mu sync.Mutex
+	var under []string
+	m := newSessionManager(nil, sessionHooks{rejection: func(taskID, _ string, v string) {
+		mu.Lock()
+		under = append(under, taskID)
+		mu.Unlock()
+		rej.record("", "", v)
+	}})
+	task := func(id, rejection string) collection.TaskSpec {
+		return withFingerprint(collection.TaskSpec{ID: id, Transport: "ssh", EndpointID: "ep-1", EndpointName: "ssh",
+			EndpointParams: json.RawMessage(`{"target":"10.0.0.5:22"}`), Spec: json.RawMessage(`{}`)}, "fp-1", rejection)
+	}
+	m.reconcile([]collection.TaskSpec{task("a-old", "")})
+	m.refuse("ep-1", "fp-1", &collection.TerminalError{Class: "auth", Reason: "refused"})
+	// The publish was lost: the server still reflects nothing. Each tick
+	// publishes it again, now under the current task.
+	m.reconcile([]collection.TaskSpec{task("b-new", "")})
+	m.reconcile([]collection.TaskSpec{task("b-new", "")})
+	mu.Lock()
+	got := append([]string(nil), under...)
+	mu.Unlock()
+	if len(got) < 3 || got[len(got)-1] != "b-new" {
+		t.Fatalf("published under %v, want a republish per tick under the current task", got)
+	}
+	// Reflected: no more publishes.
+	n := len(got)
+	m.reconcile([]collection.TaskSpec{task("b-new", "authenticated auth fp-1")})
+	mu.Lock()
+	defer mu.Unlock()
+	if len(under) != n {
+		t.Fatalf("published again after the worklist reflected the gate: %v", under)
+	}
+}
+
+// Finding 3: a refusal reported for an attempt made under an old
+// fingerprint never gates the new one.
+func TestARefusalUnderAnOldFingerprintIsDropped(t *testing.T) {
+	m := newSessionManager(nil, sessionHooks{})
+	task := withFingerprint(collection.TaskSpec{ID: "r1", Transport: "telnet", EndpointID: "ep-1", EndpointName: "telnet",
+		EndpointParams: json.RawMessage(`{"target":"10.0.0.5:23"}`), Spec: json.RawMessage(`{}`)}, "fp-new", "")
+	m.reconcile([]collection.TaskSpec{task})
+	m.refuse("ep-1", "fp-old", &collection.TerminalError{Class: "auth", Reason: "late"})
+	if _, ok := m.blocked("ep-1", rungAuthenticated); ok {
+		t.Fatal("a refusal from the old fingerprint's attempt gated the new fingerprint")
+	}
+}

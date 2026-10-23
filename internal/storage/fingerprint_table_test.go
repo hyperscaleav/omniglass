@@ -22,7 +22,7 @@ var taskFieldFingerprint = map[string]string{
 	"Secrets":        "SecretVersions", // the sealed envelopes' digests, never the values
 	"Session":        "Session",
 	"Ladder":         "Ladder",
-	"HostKey":        "HostKeyPin",
+	"HostKey":        "HostKeyPin", // its declared part; a key trusted on first use is a learned fact
 	"SessionRetry":   "Retry",
 	// not a connection input
 	"ID":           "-", // the task's own content hash

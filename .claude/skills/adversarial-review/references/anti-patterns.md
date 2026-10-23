@@ -95,7 +95,10 @@ new class appends one. Entries are never silently deleted; a fixed class is mark
 - **Single-shot trust publish** (found by the #1032 review, fixed): a security-relevant fact the
   node learns once (an ssh host key trusted on first use) published once, deduped in memory, and
   lost on the next recycle. Republish it until the server reflects it back, and carry it in
-  memory across recycles (`pins` in internal/node/session.go).
+  memory across recycles (`pins` in internal/node/session.go). The same holds for the gate a node
+  publishes (`endpoint-rejection`, found by the fingerprint review): republish until the worklist
+  reflects it, under a task chosen from the current worklist (a re-derived driver deletes old task
+  ids), never a cached "already published".
 
 ## hand-written-fact (live)
 
@@ -224,4 +227,13 @@ region and a mask line in the frontmatter, per the entity blade's duration masks
   timeout surfaces from `Read`, where a reader using read deadlines as interrupts takes it for its own.
 - **Fix:** clear the deadline after each bounded write, give the inner write its own deadline, and
   never return an inner write's error as the read's (internal/collection/telnet.go `Read`).
+
+## node-control-key-pushable (fixed; found by the fingerprint review)
+
+- **Cue:** a property a node publishes to steer its own future attempts (a gate, a trusted key)
+  that is also a seeded property type, so the operator push lane accepts it.
+- **Failure:** a push grant plants a gate (commands fail, probes drop rungs) or lifts one with a
+  future-dated `none`, an unaudited bypass of the audited `:retry`.
+- **Fix:** refuse node-control keys on the push lane by name (`probekeys.IsNodeControl`,
+  internal/api/telemetry.go).
 

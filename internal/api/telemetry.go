@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"github.com/hyperscaleav/omniglass/internal/collection/probekeys"
 	"net/http"
 	"time"
 
@@ -210,6 +211,12 @@ func registerTelemetryRoutes(api huma.API, a *authenticator, gw storage.Gateway,
 		}
 
 		for _, p := range in.Body.Properties {
+			if probekeys.IsNodeControl(p.Name) {
+				out.Body.Rejected = append(out.Body.Rejected, pushRejection{
+					Name: p.Name, Reason: "a node's control fact (its gate or trusted host key); only the node writes it",
+				})
+				continue
+			}
 			pt, ok := reg.Property(p.Name)
 			if !ok {
 				out.Body.Rejected = append(out.Body.Rejected, pushRejection{

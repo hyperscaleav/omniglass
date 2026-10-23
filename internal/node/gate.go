@@ -94,12 +94,26 @@ func (g *gates) observe(endpointID, fingerprint, rejection string) {
 	}
 }
 
-// record gates the endpoint at the refusal's rung under its current
-// fingerprint.
-func (g *gates) record(endpointID string, terr *collection.TerminalError) {
+// record gates the endpoint at the refusal's rung under the fingerprint the
+// refused attempt was made under. A refusal from an attempt under a
+// fingerprint that is no longer current (a late report from a session being
+// recycled onto a fixed secret) gates nothing: it is about inputs that are
+// gone. false when dropped.
+func (g *gates) record(endpointID, fingerprint string, terr *collection.TerminalError) bool {
 	g.mu.Lock()
 	defer g.mu.Unlock()
-	g.held[endpointID] = gate{fingerprint: g.current[endpointID], rung: rungOf(terr.Class), class: terr.Class, reason: terr.Error()}
+	if fingerprint != g.current[endpointID] {
+		return false
+	}
+	g.held[endpointID] = gate{fingerprint: fingerprint, rung: rungOf(terr.Class), class: terr.Class, reason: terr.Error()}
+	return true
+}
+
+// fingerprintOf is the endpoint's current fingerprint.
+func (g *gates) fingerprintOf(endpointID string) string {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	return g.current[endpointID]
 }
 
 // clear lifts the endpoint's gate (its rung passed); true when one held.

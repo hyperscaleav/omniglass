@@ -528,19 +528,28 @@ func (p *PG) NodeWorklist(ctx context.Context, name string) (Worklist, error) {
 	// An ssh task's host key pin (#1032): the operator's declared key wins (a
 	// :retry accepting a replaced component's key, or a cleared one falling
 	// back), else the key the node trusted on first use.
+	// The declared pin alone is a fingerprint input: it is the operator's
+	// act. A key the node trusted on first use is a learned fact, and moving
+	// the fingerprint on it would recycle a healthy session and lift a gate
+	// held under the first fingerprint.
+	declaredPin := map[int]string{}
 	for _, pr := range pins {
+		var declared string
 		if err := p.pool.QueryRow(ctx, `
 			select coalesce(
 				(select nullif(value, 'null'::jsonb) #>> '{}' from property
 				 where owner_kind = 'component' and component_id = $1::uuid and instance = $2 and provenance = 'declared'
 				   and property_type_id = (select id from property_type where name = 'ssh-host-key')
-				 order by id desc limit 1),
-				(select value #>> '{}' from property
+				 order by id desc limit 1), ''),
+				coalesce((select value #>> '{}' from property
 				 where owner_kind = 'component' and component_id = $1::uuid and instance = $2 and provenance = 'observed'
 				   and property_type_id = (select id from property_type where name = 'ssh-host-key')
-				 order by ts desc, id desc limit 1),
-				'')`, pr.componentID, pr.instance).Scan(&wl.Tasks[pr.idx].HostKey); err != nil {
+				 order by ts desc, id desc limit 1), '')`, pr.componentID, pr.instance).Scan(&declared, &wl.Tasks[pr.idx].HostKey); err != nil {
 			return Worklist{}, fmt.Errorf("storage: node worklist %q host key: %w", name, err)
+		}
+		declaredPin[pr.idx] = declared
+		if declared != "" {
+			wl.Tasks[pr.idx].HostKey = declared
 		}
 	}
 	// The rejection a node published for the endpoint (its gate), and the
@@ -573,7 +582,7 @@ func (p *PG) NodeWorklist(ctx context.Context, name string) (Worklist, error) {
 			SecretVersions: versions[t.EndpointID],
 			Session:        sessionOf[t.EndpointID],
 			Ladder:         t.Ladder,
-			HostKeyPin:     t.HostKey,
+			HostKeyPin:     declaredPin[idx],
 			Retry:          t.SessionRetry,
 		})
 	}

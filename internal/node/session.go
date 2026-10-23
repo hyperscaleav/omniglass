@@ -420,12 +420,23 @@ func (m *sessionManager) syncRejection(endpointID string) {
 }
 
 // refuse gates an endpoint for a terminal refusal and publishes it.
-func (m *sessionManager) refuse(endpointID string, terr *collection.TerminalError) {
+// fingerprint is the one the refused attempt was made under; a refusal
+// from an older one gates nothing.
+func (m *sessionManager) refuse(endpointID, fingerprint string, terr *collection.TerminalError) {
 	if m == nil {
 		return
 	}
-	m.gates.record(endpointID, terr)
-	m.syncRejection(endpointID)
+	if m.gates.record(endpointID, fingerprint, terr) {
+		m.syncRejection(endpointID)
+	}
+}
+
+// currentFingerprint is the fingerprint the endpoint is connected with now.
+func (m *sessionManager) currentFingerprint(endpointID string) string {
+	if m == nil {
+		return ""
+	}
+	return m.gates.fingerprintOf(endpointID)
 }
 
 // pass lifts an endpoint's gate (its rung passed) and publishes none.
@@ -449,22 +460,36 @@ func (m *sessionManager) blocked(endpointID string, r rung) (gate, bool) {
 // worklist: a gate under another fingerprint lifts, one carried back from
 // before a restart is adopted.
 func (m *sessionManager) observe(tasks []collection.TaskSpec) {
-	seen := map[string]bool{}
+	// The publishing task is chosen afresh from this worklist (a re-derived
+	// driver deletes old task ids, and a sample under one is an orphan).
+	pubTask := map[string][2]string{}
+	reflected := map[string]string{}
 	for _, t := range tasks {
-		if t.EndpointID == "" || seen[t.EndpointID] {
+		if t.EndpointID == "" {
 			continue
 		}
-		seen[t.EndpointID] = true
-		m.gates.observe(t.EndpointID, t.Fingerprint, t.Rejection)
-		m.pubMu.Lock()
-		if _, ok := m.published[t.EndpointID]; !ok && t.Rejection != "" {
-			m.published[t.EndpointID] = t.Rejection
+		if cur, ok := pubTask[t.EndpointID]; !ok || t.ID < cur[0] {
+			pubTask[t.EndpointID] = [2]string{t.ID, t.EndpointName}
 		}
-		if cur := m.pubTask[t.EndpointID]; cur[0] == "" || t.ID < cur[0] {
-			m.pubTask[t.EndpointID] = [2]string{t.ID, t.EndpointName}
+		if _, ok := reflected[t.EndpointID]; !ok {
+			reflected[t.EndpointID] = t.Rejection
+			m.gates.observe(t.EndpointID, t.Fingerprint, t.Rejection)
 		}
-		m.pubMu.Unlock()
-		m.syncRejection(t.EndpointID)
+	}
+	m.pubMu.Lock()
+	m.pubTask = pubTask
+	// What the server reflects back is what is published: a gate the node
+	// holds that the worklist does not reflect (a lost publish) goes out
+	// again on every pull until it does, as the trusted host key does.
+	m.published = map[string]string{}
+	for id, r := range reflected {
+		if r != "" {
+			m.published[id] = r
+		}
+	}
+	m.pubMu.Unlock()
+	for id := range reflected {
+		m.syncRejection(id)
 	}
 }
 
@@ -581,7 +606,7 @@ func (m *sessionManager) start(id string, w sessionWant) {
 			}
 			switch {
 			case tr.State == collection.SessionRejected && tr.Refusal != nil:
-				m.refuse(id, tr.Refusal)
+				m.refuse(id, w.fingerprint, tr.Refusal)
 			case tr.State == collection.SessionUp:
 				m.pass(id)
 			}

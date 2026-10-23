@@ -44,6 +44,14 @@ var native = []string{
 	EndpointReachable, EndpointResponsive, EndpointAuthenticated, SessionState, SessionReason, SSHHostKey, EndpointRejection,
 }
 
+// nodeControl are the keys whose values steer what a node attempts: the
+// gate it publishes and the host key it trusted (ADR-0157). Only a node's
+// own collection writes them; the push lane refuses them.
+var nodeControl = []string{EndpointRejection, SSHHostKey}
+
+// IsNodeControl reports a key only a node's own collection may write.
+func IsNodeControl(key string) bool { return slices.Contains(nodeControl, key) }
+
 // Native is every key a native probe writes, sorted, a fresh slice each call.
 func Native() []string {
 	out := slices.Clone(native)

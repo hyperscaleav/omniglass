@@ -78,7 +78,7 @@ func runTasks(ctx context.Context, nc *nats.Conn, node string, wl collection.Wor
 				if sessions.lookup(task.EndpointID) == nil {
 					for _, f := range faults {
 						if terr, ok := collection.AsTerminal(f); ok {
-							sessions.refuse(task.EndpointID, terr)
+							sessions.refuse(task.EndpointID, task.Fingerprint, terr)
 						}
 					}
 				}
@@ -105,7 +105,12 @@ func runTasks(ctx context.Context, nc *nats.Conn, node string, wl collection.Wor
 			}
 			continue
 		}
+		// The ladder's informational ping runs beside the probe, bounded,
+		// so gear that drops ICMP costs the tick nothing extra.
+		pinged := make(chan []collection.Sample, 1)
+		go func(task collection.TaskSpec) { pinged <- pingInformational(ctx, runner, task, nil) }(task)
 		dps, err := collectProbe(ctx, runner, task, sessions)
+		pings := <-pinged // joined here, before any path leaves the iteration
 		if err != nil {
 			// A skipped task is the node's own operational story AND a
 			// collection fact (#812): log it as a self-log, and land a
@@ -132,7 +137,7 @@ func runTasks(ctx context.Context, nc *nats.Conn, node string, wl collection.Wor
 		// content hash over the endpoint). The ingest-side latest-value guard is
 		// the net for a node restart.
 		dps = appendVerdict(dps, task.ID, verdicts)
-		dps = pingInformational(ctx, runner, task, dps)
+		dps = append(dps, pings...)
 		if err := publishBatch(nc, node, task.ID, dps); err != nil {
 			return err
 		}
@@ -306,10 +311,10 @@ func collectSSHProbe(ctx context.Context, runner *collection.Runner, task collec
 	}
 	switch {
 	case res.HostKeyChanged:
-		sessions.refuse(task.EndpointID, &collection.TerminalError{Class: driver.ClassHostKey, Reason: fmt.Sprintf(
+		sessions.refuse(task.EndpointID, task.Fingerprint, &collection.TerminalError{Class: driver.ClassHostKey, Reason: fmt.Sprintf(
 			"the host key changed: pinned %s, offered %s; retry the endpoint with the offered key to trust it", t.HostKeyPin, res.OfferedKey)})
 	case res.AuthAttempted && !res.Authenticated:
-		sessions.refuse(task.EndpointID, &collection.TerminalError{Class: driver.ClassAuth, Reason: "the component refused the probe's credential"})
+		sessions.refuse(task.EndpointID, task.Fingerprint, &collection.TerminalError{Class: driver.ClassAuth, Reason: "the component refused the probe's credential"})
 	case res.Authenticated:
 		sessions.pass(task.EndpointID)
 	}
@@ -353,6 +358,10 @@ func collectRequestRung(ctx context.Context, runner *collection.Runner, task col
 	}, nil
 }
 
+// informationalPingTimeout bounds the ladder's ping: it is informational, so
+// it never holds a tick.
+const informationalPingTimeout = 500 * time.Millisecond
+
 // pingInformational lands the ladder's ping (ADR-0157) beside an endpoint's
 // probe: icmp-reachable and its rtt, informational only. It is appended after
 // the verdict is judged, so a component that blocks ping never reads down
@@ -369,7 +378,7 @@ func pingInformational(ctx context.Context, runner *collection.Runner, task coll
 	if err != nil {
 		host = t.Target
 	}
-	pings, err := runner.CollectICMP(ctx, collection.ICMPTask{Target: host})
+	pings, err := runner.CollectICMP(ctx, collection.ICMPTask{Target: host, Timeout: informationalPingTimeout})
 	if err != nil {
 		return dps
 	}

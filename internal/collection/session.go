@@ -792,8 +792,10 @@ func (s *Session) connect(ctx context.Context) (HeldConn, error) {
 			if errors.Is(err, ErrLoginDropped) {
 				s.loginDrops++
 				if s.loginDrops >= LoginDropBudget {
-					// Spent: a retry that drops again re-rejects at once, so
-					// an operator's retry costs one attempt, not three.
+					// Spent: the driver's re-probe, on the same session, re-
+					// rejects at once if it drops again. An operator's :retry
+					// moves the fingerprint, so it is a fresh session with a
+					// fresh budget.
 					s.loginDrops = LoginDropBudget - 1
 					err = &TerminalError{Class: driver.ClassAuth, Reason: fmt.Sprintf(
 						"the component hung up after the login %d times running, with no refusal text", LoginDropBudget)}

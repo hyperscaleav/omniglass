@@ -5,7 +5,9 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/auth"
 	"github.com/hyperscaleav/omniglass/internal/scope"
@@ -192,5 +194,59 @@ func TestWorklistCarriesTheSessionBlockAndRetryMovesTheRevision(t *testing.T) {
 	}
 	if !got[0].SessionOnly {
 		t.Fatalf("delivery = %+v, want session-only for a driver that declares a login", got[0])
+	}
+}
+
+// Review of the fingerprint slice, finding 2: a host key the node trusted on
+// first use (the observed ssh-host-key) is a learned fact, not an input the
+// operator set, so it must not move the fingerprint (that would recycle a
+// healthy session once, and lift a gate held under the first fingerprint).
+// The operator's declared pin does.
+func TestATrustedOnFirstUseKeyLeavesTheFingerprint(t *testing.T) {
+	if testing.Short() {
+		t.Skip("integration test needs Postgres")
+	}
+	ctx := context.Background()
+	gw, err := storage.NewPG(ctx, storagetest.NewDSN(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer gw.Close()
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatal(err)
+	}
+	all := scope.Set{All: true}
+	comp, node := "codec-1", "edge-k"
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: comp}, all, all, all, all); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: node}, all, all); err != nil {
+		t.Fatal(err)
+	}
+	ep, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{Transport: "ssh", Component: &comp, Node: &node,
+		Params: []byte(`{"target":"10.0.0.9:22"}`)}, all)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fp := func() (string, string) {
+		t.Helper()
+		wl, err := gw.NodeWorklist(ctx, node)
+		if err != nil || len(wl.Tasks) == 0 {
+			t.Fatalf("worklist: %v %+v", err, wl)
+		}
+		return wl.Tasks[0].Fingerprint, wl.Tasks[0].HostKey
+	}
+	before, _ := fp()
+	key := "SHA256:" + strings.Repeat("B", 43)
+	if err := gw.InsertPropertySamples(ctx, []storage.PropertySampleWrite{{OwnerKind: "component", OwnerID: comp, Key: "ssh-host-key",
+		Instance: ep.Name, Value: key, Source: "ssh", TS: time.Now()}}); err != nil {
+		t.Fatal(err)
+	}
+	after, pin := fp()
+	if pin != key {
+		t.Fatalf("the worklist pin = %q, want the trusted key", pin)
+	}
+	if after != before {
+		t.Fatal("a key trusted on first use moved the fingerprint")
 	}
 }

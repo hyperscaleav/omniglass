@@ -58,6 +58,9 @@ func TestValidateLadderRefusesARungItsTransportCannotRun(t *testing.T) {
 		{"telnet", driver.Ladder{Transport: &driver.TransportRung{Rung: driver.RungHandshake}}, "handshake"},
 		{"tcp", driver.Ladder{Transport: &driver.TransportRung{Rung: driver.RungRequest}}, "request"}, // a request rung names its request
 		{"tcp", driver.Ladder{Transport: &driver.TransportRung{Rung: "teleport"}}, "teleport"},
+		// Until #821 builds snmp's own request, the node runs a request rung
+		// only as a line over tcp: one declared anywhere else refuses.
+		{"snmp", driver.Ladder{Transport: &driver.TransportRung{Rung: driver.RungRequest, Request: &driver.Request{Get: []string{"1.3.6.1.2.1.1.3.0"}}}}, "#821"},
 	}
 	for _, tc := range cases {
 		s := validSpec()

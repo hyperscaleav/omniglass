@@ -57,7 +57,8 @@ one.
 A spec may also declare its **reachability ladder** (`ladder`), bottom up: `ladder.ping.enabled`
 (whether to ping at all; a ping is informational only and never gates), `ladder.transport.rung` (the
 gate: `connect` on the transport's port, the protocol's `handshake`, or a named `request` answered,
-given as `ladder.transport.request`, where an open port cannot be detected) and
+given as `ladder.transport.request`, where an open port cannot be detected; it runs as a line over
+`tcp` today, with snmp's own request #821 and udp's #1037) and
 `ladder.session.enabled` (whether a login rung exists). Every field defaults from the transport
 registry, so most drivers declare nothing, and a rung the transport cannot run refuses at write. A
 cloud API is never pinged, but its 443 is checked open before its session runs:

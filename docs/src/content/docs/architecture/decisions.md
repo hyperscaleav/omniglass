@@ -7131,7 +7131,8 @@ interface create form, since that name is the platform's to mint.
      for it (the ping lands `icmp-reachable` beside the probe, one observation per probe, after the
      verdict). `responsive` is the transport rung and **the gate**: a TCP connect on the transport's
      port, the protocol's handshake (ssh key exchange, tls), or, where an open port cannot be
-     detected (udp), the driver's named request answered. `authenticated` is the session rung, the
+     detected (udp), the driver's named request answered (run as a line over tcp today; snmp's own
+     request is #821, a udp datagram's #1037). `authenticated` is the session rung, the
      login, attempted only when the transport rung passes. A wrong host, address or port fails
      the transport rung, retryably, and never reads as auth.
   3. **Declared in the driver, defaulted by the registry.** The spec's `ladder` declares whether to
@@ -7149,8 +7150,12 @@ interface create form, since that name is the platform's to mint.
      without fetching, and a command fails fast. A changed fingerprint lifts the gate, and so does
      the rung passing. The #1056 login budget (three silent hang-ups after the secret) feeds it.
   5. **Restart safety.** The gate is published as the `endpoint-rejection` property (`<rung>
-     <class> <fingerprint>`, or `none`) and carried back on the worklist, so a restarted node makes
-     no attempt against an unchanged fingerprint.
+     <class> <fingerprint>`, or `none`), republished every pull until the worklist reflects it, and
+     carried back, so a restarted node makes no attempt against an unchanged fingerprint. A refusal
+     reported for an attempt under an older fingerprint gates nothing. The ssh pin the node trusted
+     on first use is a learned fact and stays out of the fingerprint; only the operator's declared
+     pin goes in. `endpoint-rejection` and `ssh-host-key` are node control facts the push lane
+     refuses, so no push can plant or lift a gate.
 - **Context:** A refusal retrying cannot fix must stop every path that would retry it, not only the
   held session: the ssh probe retried a params credential every tick (#1060), and a restarted node
   forgot every rejection. Gating on "what changed" needed one definition of the inputs, computed

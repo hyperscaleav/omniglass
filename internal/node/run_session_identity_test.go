@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -43,8 +44,16 @@ type gateStack struct {
 	stop   func()
 }
 
+// stackSeq gives every stack its own loopback address, so a rerun
+// (-count) never binds where the last run's panel is still letting go.
+var stackSeq atomic.Int32
+
 func newGateStack(t *testing.T, ip, nodeName string) *gateStack {
 	t.Helper()
+	if n := stackSeq.Add(1); n > 1 {
+		parts := strings.Split(ip, ".")
+		ip = fmt.Sprintf("127.%d.%d.%s", 90+int(n)/250, int(n)%250, parts[3])
+	}
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, storagetest.NewDSN(t), storage.WithSecretProvider(secret.NewStaticProvider(bytes.Repeat([]byte{0x7}, 32))))
 	if err != nil {
