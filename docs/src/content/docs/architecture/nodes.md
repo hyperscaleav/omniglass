@@ -343,7 +343,8 @@ a per-task deadline (`--task-deadline`, default 30s).
 :::note[Settled for driver polls (#822)]
 A driver poll runs on its declared `schedule.every`, at heartbeat granularity: the node keeps each
 poll's next due time and runs it on the first tick at or after it (a task new to the worklist runs at
-once, a restart polls at its first tick). Reachability probes still run every tick, and a listener's
+once, a restart polls at its first tick, and a run whose fetch failed retries on a backoff from the
+heartbeat, doubling, capped at the interval). Reachability probes still run every tick, and a listener's
 pushes are never gated ([ADR-0152](/architecture/decisions/#adr-0152-a-driver-poll-runs-on-its-declared-schedule-at-heartbeat-granularity)).
 :::
 

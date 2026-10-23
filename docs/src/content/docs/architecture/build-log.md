@@ -7429,4 +7429,10 @@ is forgotten. Reachability probes still run every tick, and a listener's pushes 
 ([ADR-0152](/architecture/decisions/#adr-0152-a-driver-poll-runs-on-its-declared-schedule-at-heartbeat-granularity),
 settling the nodes page's open question for driver polls). Proven by `TestPollScheduleRunsOncePerInterval`
 (a 60s poll on a simulated 1s tick runs at 0, 60 and 120s) and `TestNodeHonorsThePollSchedule` (the real
-node on a 50ms heartbeat asks a device 4 times in 1.3s for a 400ms poll, where ungated it asked 26).
+node on a 50ms heartbeat asks a device about 4 times in 1.3s for a 400ms poll; the same test against an
+ungated stub measured 26). The review that followed added the retry: a run whose fetch failed retries on
+a backoff from the heartbeat, doubling, capped at the interval (`TestPollScheduleRetriesAFailureOnABackoff`;
+it also let the simulator end-to-end test drop the start-order workaround the gate had forced on it),
+pinned the anti-drift booking (`TestPollScheduleDoesNotDrift`), and let a listener's push prove a down
+held session, which a gated poll could otherwise keep reading down for its whole interval
+(`TestSessionDownReadsUpOnAPush`).

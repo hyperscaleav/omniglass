@@ -166,7 +166,11 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 	faultseen := map[string]string{}
 	// sched remembers when each driver poll is next due, so a poll runs on
 	// its declared schedule rather than every heartbeat (#822).
-	sched := newPollSchedule()
+	heartbeat := cfg.HeartbeatEvery
+	if heartbeat <= 0 {
+		heartbeat = 30 * time.Second
+	}
+	sched := newPollSchedule(heartbeat)
 
 	wl, err := pullWorklist(nc, cfg.Name)
 	if err != nil {

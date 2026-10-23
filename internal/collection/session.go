@@ -168,6 +168,7 @@ type Session struct {
 	reason  string
 	conn    HeldConn      // the connection exchanges borrow, nil when none is held
 	heard   chan struct{} // signalled by each answered exchange on conn
+	pushed  chan struct{} // signalled by each line a listener claims on conn
 	changed chan struct{} // closed and replaced on every transition
 	closed  bool
 	// dialing is true while the first dial is in flight: the one window an
@@ -279,7 +280,7 @@ func (s *Session) transition(state SessionState, reason string, conn HeldConn) {
 	}
 	s.state, s.reason = state, reason
 	if conn == nil {
-		s.conn, s.heard = nil, nil
+		s.conn, s.heard, s.pushed = nil, nil, nil
 	}
 	if state == SessionUp {
 		// The first dial's wait window ends with the connection already
@@ -294,11 +295,41 @@ func (s *Session) transition(state SessionState, reason string, conn HeldConn) {
 	}
 }
 
+// provingInbound routes a connection's inbound lines to the configured
+// listeners and lets a claimed line prove the connection, as an answered
+// exchange does: with polls gated by their schedule (#822), a device that
+// pushes must not wait a poll's interval to read up again.
+type provingInbound struct{ s *Session }
+
+func (p provingInbound) Claim(line string) bool {
+	in := p.s.cfg.Inbound
+	if in == nil || !in.Claim(line) {
+		return false
+	}
+	p.s.mu.Lock()
+	pushed := p.s.pushed
+	p.s.mu.Unlock()
+	if pushed != nil {
+		select {
+		case pushed <- struct{}{}:
+		default:
+		}
+	}
+	return true
+}
+
+func (p provingInbound) Unclaimed(line string) {
+	if in := p.s.cfg.Inbound; in != nil {
+		in.Unclaimed(line)
+	}
+}
+
 // lend makes conn the connection exchanges borrow, with heard as its
-// answered-exchange signal, without publishing anything.
-func (s *Session) lend(conn HeldConn, heard chan struct{}) {
+// answered-exchange signal and pushed as its claimed-line signal, without
+// publishing anything.
+func (s *Session) lend(conn HeldConn, heard, pushed chan struct{}) {
 	s.mu.Lock()
-	s.conn, s.heard = conn, heard
+	s.conn, s.heard, s.pushed = conn, heard, pushed
 	s.mu.Unlock()
 }
 
@@ -329,7 +360,7 @@ func (s *Session) run(ctx context.Context) {
 		if failures > 0 && !sleepCtx(ctx, s.cfg.Backoff(failures)) {
 			return
 		}
-		conn, err := s.cfg.Dialer.Dial(ctx, s.cfg.Target, s.cfg.Timeout, s.cfg.Inbound)
+		conn, err := s.cfg.Dialer.Dial(ctx, s.cfg.Target, s.cfg.Timeout, provingInbound{s})
 		if ctx.Err() != nil {
 			if conn != nil {
 				_ = conn.Close()
@@ -356,12 +387,12 @@ func (s *Session) run(ctx context.Context) {
 			fail("arming failed: " + err.Error())
 			continue
 		}
-		heard := make(chan struct{}, 1)
-		s.lend(conn, heard)
+		heard, pushed := make(chan struct{}, 1), make(chan struct{}, 1)
+		s.lend(conn, heard, pushed)
 		since := s.cfg.Now()
 		// A down session proves the connection before publishing up: an
-		// answer always proves it, outliving the stable window does unless
-		// answers were what failed.
+		// answer or a listener's push always proves it, outliving the stable
+		// window does unless answers were what failed.
 		proving := state == SessionDown
 		var stable <-chan time.Time
 		var stableTimer *time.Timer
@@ -392,6 +423,16 @@ func (s *Session) run(ctx context.Context) {
 				if proving {
 					promote("; it answered")
 				}
+			case <-pushed:
+				// A push proves the device talks, so a down session reads up
+				// (polls are gated by their schedule and may be minutes off).
+				// It forgives nothing: a device that pushes and drops still
+				// counts its churn, so it cannot hot-loop.
+				if proving {
+					proving = false
+					state = SessionUp
+					s.transition(state, "connected to "+s.cfg.Target+"; it pushed", conn)
+				}
 			case <-stable:
 				stable = nil
 				if proving {
@@ -404,7 +445,7 @@ func (s *Session) run(ctx context.Context) {
 		stopTimer(stableTimer)
 		cause := conn.Err()
 		_ = conn.Close()
-		s.lend(nil, nil)
+		s.lend(nil, nil, nil)
 		reason := "connection lost"
 		if cause != nil {
 			reason += ": " + cause.Error()

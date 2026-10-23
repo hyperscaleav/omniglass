@@ -6843,8 +6843,9 @@ interface create form, since that name is the platform's to mint.
      failures before it, so a healthy device's rare missed answer never adds up to `down`; a
      connection that outlives 10s and drops for another reason forgives them too and redials at
      once. Once `down`, a returning connection publishes nothing until it proves itself: an answered
-     exchange (the session lends it to polls meanwhile) or, unless answer timeouts were what failed,
-     outliving the 10s window; so an accept-then-drop or hung device publishes no `up`/`down` pairs.
+     exchange (the session lends it to polls meanwhile), a line a listener claims (a push proves the
+     device talks, though it forgives no failures, so a device that pushes and drops still backs
+     off), or, unless answer timeouts were what failed, outliving the 10s window; so an accept-then-drop or hung device publishes no `up`/`down` pairs.
      A caller abandoning an exchange (its own deadline or cancel) is not the device's timeout, and
      the wait for a first dial has its own budget, so a slow dial never eats the exchange's. A held
      connection carries a 15s TCP keepalive, whose failure is recorded as itself.
@@ -6913,7 +6914,13 @@ interface create form, since that name is the platform's to mint.
   the life of the run, when each poll is next due, and runs the poll on the first heartbeat tick at or
   after that time. The next run is booked from the due time, so tick jitter does not drift the cadence;
   a tick so late it missed whole intervals runs the poll once and books from now, never a catch-up
-  burst. A task new to the worklist runs at once; a task that leaves it is forgotten; a restart polls
+  burst. A run that lands nothing because its fetch failed retries on a backoff instead of waiting
+  its interval: `min(every, max(heartbeat, backoff))`, the backoff starting at the heartbeat and
+  doubling per consecutive failure, so a 24h poll that fails during a device reboot retries within
+  seconds and a dead device is still asked no more often than every heartbeat; the first success
+  books from its due time again. A down held session is proven by a listener's push as well as by
+  an answered poll, so a gated poll never keeps a pushing device reading down. A task new to the
+  worklist runs at once; a task that leaves it is forgotten; a restart polls
   at its first tick. The gate covers driver polls only: reachability probes still run every tick, and a
   listener's pushes are never gated, since they ride the held session as they arrive.
 - **Context:** The schedule was validated and baked but unread, so `snmp-generic`'s `every: 60s` polled

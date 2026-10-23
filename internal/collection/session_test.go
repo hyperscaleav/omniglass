@@ -27,6 +27,7 @@ type fakeHeldConn struct {
 	gotTimeout  time.Duration
 	gotDeadline bool
 	asked       []string
+	in          collection.Inbound
 	done        chan struct{}
 	err         error
 	closed      bool
@@ -107,7 +108,7 @@ type fakeSessionDialer struct {
 	timesOut  func() bool   // handed to every connection made
 }
 
-func (d *fakeSessionDialer) Dial(ctx context.Context, target string, _ time.Duration, _ collection.Inbound) (collection.HeldConn, error) {
+func (d *fakeSessionDialer) Dial(ctx context.Context, target string, _ time.Duration, in collection.Inbound) (collection.HeldConn, error) {
 	d.mu.Lock()
 	gate := d.gate
 	d.gate = nil
@@ -127,6 +128,7 @@ func (d *fakeSessionDialer) Dial(ctx context.Context, target string, _ time.Dura
 	}
 	c := newFakeHeldConn()
 	c.timesOut = d.timesOut
+	c.in = in
 	if d.dieAtOnce {
 		c.kill(errors.New("EOF"))
 	}
@@ -741,4 +743,38 @@ func TestSessionBackoffIsJitteredAndCapped(t *testing.T) {
 	if got := collection.SessionBackoff(0, 0.5); got != 0 {
 		t.Errorf("SessionBackoff(0) = %v, want no wait", got)
 	}
+}
+
+// push delivers an inbound line the way a real reader does: offered to the
+// listeners, unclaimed if none takes it.
+func (c *fakeHeldConn) push(line string) {
+	if c.in != nil && !c.in.Claim(line) {
+		c.in.Unclaimed(line)
+	}
+}
+
+type prefixInbound struct{ prefix string }
+
+func (p prefixInbound) Claim(line string) bool { return strings.HasPrefix(line, p.prefix) }
+func (p prefixInbound) Unclaimed(string)       {}
+
+// Review of #822 with sessions: polls are gated by their schedule, so a down
+// session must not wait for a poll to prove its returning connection. A line
+// a listener claims proves it too: a device that pushes reads up with no
+// exchange at all.
+func TestSessionDownReadsUpOnAPush(t *testing.T) {
+	d, r := &fakeSessionDialer{refuse: true}, newRecorder()
+	startTestSessionWith(t, d, r, collection.SessionConfig{Inbound: prefixInbound{prefix: "EVT "}})
+	r.waitStates(t, establishing, down)
+	dials := d.dialCount()
+	d.setRefuse(false)
+	for d.dialCount() == dials || d.last() == nil {
+		time.Sleep(time.Millisecond)
+	}
+	time.Sleep(10 * time.Millisecond)
+	if st, _ := r.lastTransition().State, 0; st != down {
+		t.Fatalf("a dial alone moved the down session to %s", st)
+	}
+	d.last().push("EVT INPUT hdmi2")
+	r.waitStates(t, establishing, down, up)
 }

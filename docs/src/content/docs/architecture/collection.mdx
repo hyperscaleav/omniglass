@@ -179,8 +179,8 @@ protocol over `tcp` today), keyed by the endpoint's id, which the worklist carri
   within 10s, or an answer over it timed out; so a device that accepts and drops, or accepts and
   never answers, reads `down` rather than `up` forever. An answered exchange forgives the failures
   before it, so a healthy device's rare missed answer never reads `down`. The session keeps retrying
-  at the capped pace and leaves `down` only when a returning connection proves itself (an answer, or
-  outliving 10s unless answers were what failed), so a failing device publishes no flapping; a
+  at the capped pace and leaves `down` only when a returning connection proves itself (an answer, a
+  listener's push, or outliving 10s unless answers were what failed), so a failing device publishes no flapping; a
   stable connection's drop redials at once.
 - **teardown**: a listen task that leaves the worklist, a change to what the connection depends on
   (transport, address, timeout, credentials; a listen task's spec re-hash keeps it), or node
@@ -521,7 +521,8 @@ Drivers page renders each spec as the menu it is.
 
 **The interpreter runs the poll functions** (#814) **on their declared schedule** (#822): a poll's
 `schedule.every` is honored at heartbeat granularity, the node running it on the first tick at or
-after it is due (a new task at once), while reachability probes run every tick and a listener's
+after it is due (a new task at once, and a run whose fetch failed retried on a backoff from the
+heartbeat, doubling, capped at the interval), while reachability probes run every tick and a listener's
 pushes ride the held session as they arrive, never gated ([ADR-0152](/architecture/decisions/#adr-0152-a-driver-poll-runs-on-its-declared-schedule-at-heartbeat-granularity)).
 The node tells a baked driver task from a probe task by its spec, fetches over the transport (the v2c scalar GET rides `gosnmp`, proven
 against a from-the-spec BER agent; a line poll runs one stateless ask over a throwaway

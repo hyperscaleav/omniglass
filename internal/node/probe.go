@@ -61,10 +61,18 @@ func runTasks(ctx context.Context, nc *nats.Conn, node string, wl collection.Wor
 		if driver.IsBaked(task.Spec) {
 			// A driver poll runs on its declared schedule (#822), not on
 			// every heartbeat.
-			if !sched.due(task.ID, pollInterval(task), now) {
+			interval := pollInterval(task)
+			if !sched.due(task.ID, interval, now) {
 				continue
 			}
 			dps, faults := collectDriverTask(ctx, runner, task, sessions)
+			// A run that landed nothing and faulted (the fetch failed) retries
+			// on a backoff rather than waiting its whole interval.
+			if len(dps) == 0 && len(faults) > 0 {
+				sched.failed(task.ID, interval, now)
+			} else {
+				sched.succeeded(task.ID)
+			}
 			current := ""
 			for _, f := range faults {
 				current += f.Error() + "\n"
