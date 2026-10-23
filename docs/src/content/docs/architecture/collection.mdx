@@ -57,7 +57,7 @@ The arc's closeout is #818. See
 and [ADR-0040](/architecture/decisions/#adr-0040-the-task-is-derived-read-only-plumbing-projected-from-its-endpoint).
 :::
 
-:::design[The template authoring model, tracked in #489]
+:::design[The template authoring model, tracked in #827]
 
 Collection is built from **functions**. A versioned `ComponentTemplate` declares how to reach a
 class of device (its endpoints) and a set of **functions**, each a discrete unit of device logic
@@ -118,7 +118,7 @@ endpoints:
 - **Codec and framing**: raw-TCP AV control planes wrap payloads (line terminators, length prefixes, NUL framing, JSON-RPC or TTP envelopes); the endpoint's codec frames outbound and parses inbound to the declared envelope, so a step sees structure, not wire bytes.
 - **Node placement is not declared here**; it is server-assigned from the component's location.
 
-:::design[Functions: a trigger plus a step DAG, tracked in #489]
+:::design[Functions: a trigger plus a step DAG, tracked in #827]
 
 ## Functions: a trigger plus a step DAG
 
@@ -224,7 +224,7 @@ issue: #1032 (ssh), #1033 (telnet), #1034 (websocket), #1035 (tls), #1036 (mqtt)
 through an IP-to-serial gateway, which is the `tcp` transport (or `tls` or `telnet`), so its driver is
 a line protocol like any other ([ADR-0153](/architecture/decisions/#adr-0153-the-held-session-proof-is-the-line-protocol-over-tcp-other-held-transports-are-their-own-issues)).
 
-:::design[The remaining transports and their per-task spec, tracked in #489 and #1032 (ssh), #1033 (telnet), #1034 (websocket), #1035 (tls), #1036 (mqtt), #1037 (udp), #1038 (SSE over http), #1039 (modbus/tcp), #1040 (bacnet/ip), #1041 (knxnet/ip)]
+:::design[The remaining transports and their per-task spec, tracked in #603 and #1032 (ssh), #1033 (telnet), #1034 (websocket), #1035 (tls), #1036 (mqtt), #1037 (udp), #1038 (SSE over http), #1039 (modbus/tcp), #1040 (bacnet/ip), #1041 (knxnet/ip)]
 
 | endpoint type | shape | host/target | per-task params | samples |
 |---|---|---|---|---|
@@ -238,7 +238,7 @@ a line protocol like any other ([ADR-0153](/architecture/decisions/#adr-0153-the
 
 `icmp`/`tcp` are inline probes (config on `endpoint.params`); the rest, in the design model, are held connections: the connection lives on the endpoint, the task names what to read. The ship-with registry seeds the probe built-ins above, the endpoint verdicts, and `session-state` (`internal/seed/metric_types.yaml`, `internal/seed/property_types.yaml`; the [metrics](/guides/admin/metrics/) and [properties](/guides/admin/properties/) guides render each set from the seed); the wider per-transport set (`udp-open`, `snmp-reachable`, the http trio, `<proto>-reachable`/`<proto>-response-time` for the text family) is Design, and unregistered names would be reject-not-project dropped at ingest.
 
-:::design[The held-connection transports in detail, tracked in #489 and #1032 (ssh), #1033 (telnet), #1034 (websocket), #1035 (tls), #1036 (mqtt), #1037 (udp), #1038 (SSE over http), #1039 (modbus/tcp), #1040 (bacnet/ip), #1041 (knxnet/ip)]
+:::design[The held-connection transports in detail, tracked in #603 and #1032 (ssh), #1033 (telnet), #1034 (websocket), #1035 (tls), #1036 (mqtt), #1037 (udp), #1038 (SSE over http), #1039 (modbus/tcp), #1040 (bacnet/ip), #1041 (knxnet/ip)]
 
 For `snmp`, each OID keeps its **native SNMP type**: numeric OIDs land as `metric`, string OIDs
 (OctetString / IPAddress / OID) as `property`, the lane decided at ingest by catalog membership;
@@ -356,7 +356,7 @@ bodies).
 
 :::
 
-:::design[The step DAG and extractors, tracked in #489]
+:::design[The step DAG and extractors, tracked in #827]
 
 ## Steps: the DAG
 
@@ -415,7 +415,7 @@ Compile-time validation resolves every key to a reachable scope; an unresolved k
 reject-not-project at ingest, so a template never silently collects a measurement no scope knows.
 :::
 
-:::design[Template inputs, tracked in #489]
+:::design[Template inputs, tracked in #827]
 
 ## Inputs: the template's typed parameters
 

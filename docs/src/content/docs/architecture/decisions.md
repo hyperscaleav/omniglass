@@ -187,6 +187,7 @@ below from the project's history. From here it grows one slice at a time.
 | [ADR-0146](#adr-0146-expressions-run-on-pinned-expr-with-an-allowlist-and-per-site-budgets-and-rule-criteria-are-expressions) | 2026-10-20 | Accepted | Expressions run on pinned Expr behind a per-site allowlist of vetted builtins and a per-site budget (after three adversarial passes); event rule criteria are stored as `{expr}`, the short form lowered on input and by a one-time backfill, with one approved bool divergence; compile errors show on the rule; validate and preview answer from the same declarations |
 | [ADR-0147](#adr-0147-a-calc-rule-is-a-typed-sibling-registry-checked-acyclic-at-authoring) | 2026-10-21 | Accepted, amended (#1018) | `calc_rule` is a sibling of `event_rule` with typed columns (inputs `{as, key}`, a named reducer or an expression, the output key by id); every write compiles the reduce against a calc expression site of its own and refuses a cycle in the key graph, a second enabled writer of a key, `health` as an input or output, and an output a collection declares (a native probe key or a driver's emits); a reduce that stops compiling reads back as `calc_error`; **Amended (#1018):** the reduce is always an expression, its named reducers now list functions, and inputs are held by uuid in `calc_rule_input`, each bound by an alias as the list of its values |
 | [ADR-0148](#adr-0148-calc-rules-run-on-a-durable-pending-set-and-a-server-tick-not-a-jetstream-consumer) | 2026-10-21 | Accepted, amended (#1018) | Component calc rules run on a durable `calc_pending` set marked in the sample-write transaction and drained by a 1s server tick (`SKIP LOCKED`, one transaction per mark), writing calculated samples through the same path so event rules judge them; marks are held by their writer until commit, the ingest retries a deadlock, a failing mark is deferred, a rule write recomputes its owners; a write never marks its own rule; a missing input writes nothing and is recorded in `calc_rule_state`; an unchanged result writes no row. Diverges from the JetStream calc consumer (#430). **Amended (#1018):** every input binds as the list of its per-instance values, an expression's included, and the marking probe reads `calc_rule_input` by key id |
+| [ADR-0149](#adr-0149-walkthrough-evidence-lives-on-per-pr-refs-its-pr-video-plays-through-jsdelivr-and-the-docs-commit-the-mp4) | 2026-10-23 | Accepted | A PR's walkthrough evidence (mp4, preview, poster, stills) is committed to `refs/walkthroughs/pr-<n>`, never the PR branch, and reached by that commit's SHA; the PR comment links each video through jsDelivr (a public-repo dependency) so it scrubs; the docs commit each declared walkthrough's mp4 and play it with controls, carrying no preview; a scheduled job deletes an evidence ref 30 days after its PR closes. Supersedes the #884 ruling that put evidence on the PR branch |
 | [ADR-0150](#adr-0150-a-held-sessions-state-is-a-property-series-and-node-logs-not-a-session-table) | 2026-10-23 | Accepted | A held session (#816) surfaces as the `session-state` property per endpoint (establishing, up, recovering, down; transitions only, under the endpoint's standing listen task) plus the node's self-logs carrying the reasons; no `session_log` table and no `session` view. The session is held for an endpoint whose worklist carries a standing listen task over a transport with a session dialer (the line protocol over `tcp` today), polls on that endpoint borrow it, and recovery is a jittered exponential backoff with an attempt budget before down |
 | [ADR-0151](#adr-0151-a-held-line-session-routes-every-inbound-line-listeners-first-answers-by-reply-shape) | 2026-10-23 | Accepted | Listeners run over the held session (#817): `arm` commands on every connection before up (plumbing, self-logged), `match` claims a pushed line, its emits land as push samples under the listen task. Every inbound line is routed listeners first, then the exchange in flight by its declared `request.reply` shape (or the first unclaimed line), then unclaimed (counted; `unmatched: collection-failed` lands one fault per tick). Commands ride the held session. Reverses the designed matcher order (outstanding poll first) |
 | [ADR-0152](#adr-0152-a-driver-poll-runs-on-its-declared-schedule-at-heartbeat-granularity) | 2026-10-23 | Accepted | A driver poll runs on its declared `schedule.every` at heartbeat granularity (#822): a per-task next-due time kept for the run, the first tick at or after it runs the poll, a new task runs at once, a late tick never bursts; probes stay per tick and pushes are never gated. Settles the nodes page's open question for driver polls |
@@ -6807,6 +6808,41 @@ interface create form, since that name is the platform's to mint.
   expression read the aggregate instance alone. A system member's record still carries its own
   aggregate value. The marking probe reads `calc_rule_input` by key id (the inputs' GIN index went with
   the jsonb column), so a property and a metric of one name mark only the rules reading that lane's key.
+
+### ADR-0149: Walkthrough evidence lives on per-PR refs, its PR video plays through jsDelivr, and the docs commit the mp4
+
+- **Date:** 2026-10-23 | **Status:** Accepted | **Pages:** [walkthroughs](/contributing/walkthroughs/), [labels](/contributing/labels/)
+- **Decision:** Walkthrough recordings (#884) are hosted three ways, by who reads them (#939):
+  1. **PR evidence on a per-PR ref.** The `run:walkthrough` job commits each passing walkthrough's mp4,
+     animated preview, poster and stills to `refs/walkthroughs/pr-<n>`, as a fresh tree on top of the
+     ref's last commit, and the PR comment reaches every file by that commit's SHA. Nothing is pushed
+     to the PR branch. A separate publish job holds the write token, checks nothing out and runs
+     nothing from the PR; the record job, which runs the PR's code, has a read-only token.
+  2. **Scrubbable PR video through jsDelivr.** The comment links each mp4 as
+     `https://cdn.jsdelivr.net/gh/<owner>/<repo>@<sha>/<id>/<id>.mp4`, which jsDelivr serves as
+     `video/mp4` with range requests, so a browser plays and seeks it; GitHub's raw host serves an mp4
+     as an octet stream, and GitHub plays no video a workflow can attach. The animated preview stays
+     the comment's inline glance, from the raw host.
+  3. **Docs commit the mp4.** `make docs-walkthroughs` copies every declared walkthrough's mp4 into
+     `docs/public/walkthroughs/<id>/`, and the embed is `<video controls>` with the poster step's still
+     as its poster frame and fallback. The docs carry no animated preview: a page that plays the video
+     has no use for it.
+  4. **Cleanup.** `walkthrough-prune.yml` runs daily and deletes the evidence ref of every PR closed
+     more than 30 days ago (and only those it can prove are), after which that PR comment's images
+     and links go stale.
+- **Context:** The #884 ruling committed PR evidence to the PR branch under
+  `.github/screenshots/<pr>/walkthroughs/`. A squash-merge then carried about 3 MB of review-only
+  binaries per labelled PR into main for good, and the bot's push to the PR head left that commit's
+  checks un-run (GitHub starts no workflow for the workflow token's push), so authors pushed empty
+  commits to run them. A ref outside `refs/heads/` touches neither: it is not fetched by a default clone
+  and not in the branch list, unlike an orphan branch, and a probe showed GitHub's raw host and jsDelivr
+  both serve a commit reachable only from such a ref, and that the workflow token may push one. The
+  refs still cost repository size on GitHub and in any mirror that fetches all refs (`git clone
+  --mirror`), about 2 to 3.5 MB per walkthrough per run, which the 30-day prune bounds; deleting on
+  close was rejected because a just-merged PR is still read. jsDelivr works only while the repository
+  is public; a private repository would need another host for scrubbable PR video. The docs mp4 costs
+  about 1 MB per walkthrough per re-record in main's history, accepted so the deployed docs and their PR
+  previews play the flow with controls. Supersedes the #884 ruling on where PR evidence lives.
 
 ### ADR-0150: A held session's state is a property series and node logs, not a session table
 

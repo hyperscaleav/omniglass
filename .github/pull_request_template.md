@@ -51,7 +51,7 @@ $ make test
      screenshots alone. Add or update its script under web/e2e/walkthroughs/,
      prove it locally with `make walkthroughs ID=<id>`, then apply the
      `run:walkthrough` label: CI records it and posts the walkthrough comment
-     (poster, stills, video artifact). Link that comment here, or write
+     (scrubbable video, preview, poster, stills). Link that comment here, or write
      "n/a (no operator flow changed)". -->
 
 - **Walkthrough:**

@@ -141,7 +141,7 @@ Every term below is committed architecture nothing in the code implements yet: n
 | **correlation_id (sample) / source_event_id** | Nullable trace columns on the sample tables, orthogonal to the exclusive-lineage CHECK (not lineage pointers), letting the cycle-guard walk cross a command -> device -> observed round trip. Today the trace pair (`correlation_id`, `source_event_id`) lives on the `event` table only; a sample carries `event_id` lineage but no trace columns. See [samples](/architecture/properties/). |
 :::
 
-:::design[The edge function, tracked in #489]
+:::design[The edge function, tracked in #827]
 | Term | Definition |
 |---|---|
 | **function** | A trigger plus a DAG of steps, declared by a collection template; the unit of edge collection. Triggered by a schedule (poll), incoming data (listen), or a command. See [collection](/architecture/collection/). |
@@ -168,7 +168,7 @@ Every term below is committed architecture nothing in the code implements yet: n
 | **SLA** | Service Level Agreement: meeting the SLO, an `event_rule` firing on breach; compliance over the window is itself an SLI. See [health](/architecture/health/). |
 :::
 
-:::design[The registry scope ladder, tracked in #317]
+:::design[The registry scope ladder, tracked in #827]
 | Term | Definition |
 |---|---|
 | **scope (registry)** | A key's uniqueness-and-trust axis on `property_type` and `event_type`: **template** (`(template_id, name)`, the template author's, local), **org** (`name` within the deployment, the operator's custom canonical), **official** (`name` globally, shipped with the distro). `official` as the top scope would fold in the `official` boolean, which is the only piece built today. Distinct from the ABAC scope the Storage Gateway injects (see **Storage Gateway** above). |

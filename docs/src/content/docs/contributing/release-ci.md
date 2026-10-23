@@ -36,8 +36,9 @@ Nine workflows carry it: `test`, `pr-title`, `image`, `docs-shots`, `gen-drift`,
 Three more PR workflows: **`image.yml`** builds the multi-arch container image (see
 [Container image](/guides/container-image/)), **`preview-comment.yml`** reacts to the
 `run:preview` label (see [PR previews](/guides/pr-previews/)), and **`walkthrough.yml`**
-reacts to the `run:walkthrough` label, recording the PR's walkthroughs and keeping one comment
-with their poster and stills (see [Labels](/contributing/labels/)).
+reacts to the `run:walkthrough` label, recording the PR's walkthroughs to the PR's evidence ref
+and keeping one comment with a scrubbable video, preview, poster and stills of each (see
+[Labels](/contributing/labels/)).
 
 ## Cutting a release (manual)
 

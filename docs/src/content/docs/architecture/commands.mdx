@@ -22,9 +22,11 @@ command queue and actuates the device through the driver's command binding (belo
 [ADR-0136](/architecture/decisions/#adr-0136-actuation-is-a-per-node-pull-rendered-at-dispatch)).
 :::
 
-:::design[The `derived` producers are the `event_rule` (ADR-0050), tracked in #393]
-Still directional: the `event_rule`-driven `derived` producers (a rule issuing commands), and
-scheduling, batching, and per-device queues beyond operator-issued actuation.
+:::design[Rule-issued and scheduled commands: the action layer (ADR-0050) and the clock, tracked in #419]
+Still directional: a rule issuing commands (the `run` action of the
+[action layer](/architecture/alarms-actions/), which reacts to what an event rule raises), and
+scheduling, batching, and per-device queues beyond operator-issued actuation; scheduled work
+rides the [time](/architecture/time/) primitive (#419).
 :::
 
 ## Actuation: the wire to the device

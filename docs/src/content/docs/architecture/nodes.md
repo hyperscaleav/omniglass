@@ -44,7 +44,7 @@ A node is a **taggable owner**: governed [tags](/architecture/tags/) whose `appl
 
 The node pulls a **worklist** (the tasks and commands resolved for the components **placed on it**) over a NATS request-reply config pull, and **heartbeats** separately on its own subject ([the protocol](#the-node-server-protocol)), so liveness tracks independently of the pull.
 
-:::design[Target design: the cascade-resolved worklist, tracked in #489]
+:::design[Target design: the cascade-resolved worklist, tracked in #603]
 The server, not the template, decides placement (next) and resolves the cascade (config / `$var:`
 values, effective `interval`, credentials) before handing the node concrete work. The node never
 sees a template, only materialized, resolved task and command instances.
@@ -52,7 +52,7 @@ sees a template, only materialized, resolved task and command instances.
 
 ### Config propagation (declared change to running node)
 
-:::design[Target design: config propagation to a running node (`:apply` and the generation-driven cache), tracked in #489]
+:::design[Target design: config propagation to a running node (`:apply` and the generation-driven cache), tracked in #827]
 An endpoint's connection config (endpoint, snmp community, http auth header) is a **projection** of
 the component's declared config through its template. The node re-pulls the worklist every tick but
 **caches endpoint config for its process lifetime**, so a changed input must propagate:
@@ -114,7 +114,7 @@ tree. A full buffer **sheds oldest metrics first and surfaces it** as a
 
 ### Credentials at the edge
 
-:::design[Target design: credentials at the edge, tracked in #489]
+:::design[Target design: credentials at the edge, tracked in #603]
 Worklist materialization resolves credentials server-side, so **device secrets travel to the
 node** (over TLS), held **decrypt-on-use**: in memory, or encrypted at rest in a scratch dir with
 the key from the [`SecretProvider`](/architecture/variables/), **never persisted in plaintext**,
@@ -125,7 +125,7 @@ scoped to the node's placement, re-fetched on the config-generation bump.
 
 A node is **created server-side first** (its `node.name` and properties), the UI mints a **per-node enrollment token**, and the node **claims its identity** on first connect, exchanging the token for its **NATS credential** (a per-node JWT signed for its nkey, scoped to the subjects its placement allows, [identity and access](/architecture/identity-access/)).
 
-:::design[Fleet auto-enrollment over a `discovery_rule`, tracked in #489]
+:::design[Fleet auto-enrollment over a `discovery_rule`, tracked in #1025]
 Later, a **shared enrollment token** plus a **`discovery_rule`** auto-enrolls a fleet: the node's
 own properties (stable facts, selected ENV) derive its name, editable server-side after deploy; a
 rollout mints no per-node token.
@@ -133,7 +133,7 @@ rollout mints no per-node token.
 
 ## Placement (ETL, cascaded)
 
-:::design[Target design: cascaded placement, tracked in #489]
+:::design[Target design: cascaded placement, tracked in #1024]
 Collection follows **ETL**: extract **and transform** (including the extractor's Expr transform)
 default to the **edge**; the shaped samples **load** to the server, where resolve / bind / calc /
 evaluate default to **central**. Placement is a **cascaded property**
@@ -150,7 +150,7 @@ over its endpoint's held session, both locating and transforming each emit at th
 `collection-failed` for anything that does not parse ([collection](/architecture/collection/)). The
 Expr extraction and the cascading labels below remain design.
 
-:::design[Target design: edge normalization (locate + Expr) and the listen mode, tracked in #489]
+:::design[Target design: edge normalization (locate + Expr) and the listen mode, tracked in #603]
 Per task the node runs the protocol over the endpoint's connection, then **normalizes at the
 edge**: the locate + Expr extraction ([collection](/architecture/collection/)) produces samples and
 stamps labels (cascading union + override), keeping the wire bytes as `raw` only on a parse or
@@ -177,7 +177,7 @@ demux on the shared connection (listeners first, answers by reply shape;
 [routing](/architecture/collection/#listeners-over-a-held-session)). Still design below: the pool
 knobs and authentication on establish.
 
-::::design[Target design: sessions and the session pool, tracked in #489; the held transports beyond the line protocol are #1032 (ssh), #1033 (telnet), #1034 (websocket), #1035 (tls), #1036 (mqtt), #1037 (udp), #1038 (SSE over http), #1039 (modbus/tcp), #1040 (bacnet/ip), #1041 (knxnet/ip)]
+::::design[Target design: sessions and the session pool, tracked in #603; the held transports beyond the line protocol are #1032 (ssh), #1033 (telnet), #1034 (websocket), #1035 (tls), #1036 (mqtt), #1037 (udp), #1038 (SSE over http), #1039 (modbus/tcp), #1040 (bacnet/ip), #1041 (knxnet/ip)]
 A stateful endpoint (`ssh`, `mqtt`, anything held open) becomes a **session** at runtime: one
 connection keyed by `(node, endpoint)`, shared by every task and command under it, handshake and
 auth paid once. A pool holds it open across ticks (reconnect, backoff, keepalive); a listener
@@ -213,7 +213,7 @@ says so). This reverses the design's order below, which tried an outstanding pol
 ([ADR-0151](/architecture/decisions/#adr-0151-a-held-line-session-routes-every-inbound-line-listeners-first-answers-by-reply-shape)); the precedence and its reasons are on
 [collection](/architecture/collection/#listeners-over-a-held-session).
 
-:::design[Target design: the ordered matcher set, tracked in #489]
+:::design[Target design: the ordered matcher set, tracked in #603]
 One connection carrying heterogeneous inbound frames cannot assume an arriving frame answers the
 last command. Frames route through an **ordered matcher set**: every task
 contributes a matcher (a poller's awaited-response shape, a listener/stream's `match:` predicate),
@@ -231,7 +231,7 @@ Built: a standing listen task shares its endpoint's held session with the endpoi
 commands, demuxed by one reader (#817); the per-component lanes and the smart-wait gate below remain
 design.
 
-::::design[Target design: the component task queue, tracked in #489; the durable command queue is ADR-0036]
+::::design[Target design: the component task queue, tracked in #603; the durable command queue is ADR-0036]
 The node's work is the **component task queue** (distinct from the central **rule engine**;
 [workers](/architecture/workers/)): **poll tasks** (produce samples) and **command tasks** (from
 `run` actions, producing a caused `event` + `action`-row status), split by shape:
@@ -263,7 +263,7 @@ resumes its durable consumer on the command queue, and replays unacked telemetry
 
 Any endpoint with a host address gets reachability for free: the node pings the host and checks the declared port(s), continuously and out of band; a smart default, **bypassable per endpoint** (for endpoints that drop ICMP or have no port).
 
-:::design[Target design: the layered availability gate, tracked in #489]
+:::design[Target design: the layered availability gate, tracked in #603 (the snmp gate is #821)]
 The results come back as `reachable` / `port_open` **samples** usable in rules and dashboards, and
 feed the smart-wait gate from the node's local copy: the connection detector and the dashboard
 signal are one always-on probe.
@@ -344,7 +344,7 @@ ship.
 
 ## Tick scheduling, concurrency, and self-observability
 
-::::design[Target design: the tick scheduler, `node.self`, and the node-down sweep, tracked in #489 and #430; the seeded node rules are the `event_rule` (ADR-0050)]
+::::design[Target design: the tick scheduler, `node.self`, and the node-down sweep, tracked in #430 (per-task driver poll schedules are built, #822); the seeded node rules are the `event_rule` (ADR-0050)]
 A tick groups the worklist **by endpoint** and runs three phases: the L3 ping pre-pass (batched per
 host), the gate-verdict pre-pass, the poll phase. The gate pre-passes run at a **high fixed
 concurrency** (`gateConcurrency`), the poll phase across the **bounded poll pool** (default 16,

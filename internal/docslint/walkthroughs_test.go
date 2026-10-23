@@ -74,10 +74,12 @@ func TestScanWalkthroughAssets(t *testing.T) {
 	script := "title: A\nsteps:\n  - goto: /x\n    caption: c1\n  - wait: { text: y }\n    caption: c2\n"
 	write(dir, "a/walkthrough.json", `{"id":"a","title":"A",`+steps+`,"poster":"step-02.png","budget":{"seconds":3,"bytes":9}}`)
 	write(dir, "a/step-01.png", "x")
+	write(dir, "a/a.mp4", "x")
 	write(scripts, "a.yaml", script)
 	write(dir, "c/walkthrough.json", `{"id":"c","title":"A",`+steps+`,"poster":"step-07.png"}`)
 	write(dir, "c/step-01.png", "x")
 	write(dir, "c/step-02.png", "x")
+	write(dir, "c/c.mp4", "x")
 	write(scripts, "c.yaml", script)
 	write(dir, "orphan/walkthrough.json", "{}")
 
@@ -93,11 +95,11 @@ func TestScanWalkthroughAssets(t *testing.T) {
 	}
 }
 
-// TestScanWalkthroughPreview pins the animated preview (#937): a copied
-// manifest that records one must name the recorder's preview.webp and carry the
-// file beside it, and any preview value other than that name (empty and null
-// included) is refused, as the shared JS core refuses it; a manifest that
-// records none needs none, and carries none.
+// TestScanWalkthroughPreview pins the animated preview in the docs (#937,
+// #939): the docs play the video, so a copy never needs preview.webp and any
+// preview.webp in one is a stray; a manifest's preview value other than the
+// recorder's name (empty and null included) is still refused, as the shared JS
+// core refuses it.
 func TestScanWalkthroughPreview(t *testing.T) {
 	dir, scripts := t.TempDir(), t.TempDir()
 	write := func(root, rel, body string) {
@@ -118,6 +120,7 @@ func TestScanWalkthroughPreview(t *testing.T) {
 	declared := map[string]string{}
 	for _, id := range ids {
 		write(dir, id+"/step-01.png", "x")
+		write(dir, id+"/"+id+".mp4", "x")
 		write(scripts, id+".yaml", script)
 		declared[id] = "p.md"
 	}
@@ -133,9 +136,11 @@ func TestScanWalkthroughPreview(t *testing.T) {
 	write(dir, "stray/preview.webp", "x")
 
 	got := scanWalkthroughAssets(dir, scripts, declared)
-	// Sorted by id: empty, missing, null, number, renamed, stray.
-	want := []string{`empty/walkthrough.json names preview ""`, "missing/preview.webp", "null/walkthrough.json names preview null",
-		"number/walkthrough.json names preview 7", `names preview "../poster.png"`, "stray/preview.webp, but its manifest names no preview"}
+	// Sorted by id: empty, null, number, ok, renamed, stray ("missing" and
+	// "none" carry no preview, which is right).
+	want := []string{`empty/walkthrough.json names preview ""`, "null/walkthrough.json names preview null",
+		"number/walkthrough.json names preview 7", "ok/preview.webp, which the docs do not carry", `names preview "../poster.png"`,
+		"stray/preview.webp, which the docs do not carry"}
 	if len(got) != len(want) {
 		t.Fatalf("findings = %v, want %d matching %v", got, len(want), want)
 	}
@@ -143,6 +148,37 @@ func TestScanWalkthroughPreview(t *testing.T) {
 		if !strings.Contains(got[i].Text, w) {
 			t.Errorf("finding %d = %q, want it to mention %q", i, got[i].Text, w)
 		}
+	}
+}
+
+// TestScanWalkthroughVideo pins the video (#939): the embed plays a declared
+// walkthrough's mp4 with controls, so its copy must carry <id>.mp4 beside the
+// manifest; a copy without it is a finding naming the file.
+func TestScanWalkthroughVideo(t *testing.T) {
+	dir, scripts := t.TempDir(), t.TempDir()
+	write := func(root, rel, body string) {
+		p := filepath.Join(root, rel)
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	manifest := func(id string) string {
+		return `{"id":"` + id + `","title":"A","steps":[{"n":1,"kind":"goto","caption":"c1","still":"step-01.png"}],"poster":"step-01.png","budget":{"seconds":3,"bytes":9}}`
+	}
+	for _, id := range []string{"played", "silent"} {
+		write(dir, id+"/walkthrough.json", manifest(id))
+		write(dir, id+"/step-01.png", "x")
+		write(scripts, id+".yaml", "title: A\nsteps:\n  - goto: /x\n    caption: c1\n")
+	}
+	write(dir, "played/played.mp4", "x")
+	write(dir, "silent/other.mp4", "x")
+
+	got := scanWalkthroughAssets(dir, scripts, map[string]string{"played": "p.md", "silent": "q.md"})
+	if len(got) != 1 || !strings.Contains(got[0].Text, "docs/public/walkthroughs/silent/silent.mp4") || got[0].File != "q.md" {
+		t.Fatalf("findings = %v, want one on q.md naming docs/public/walkthroughs/silent/silent.mp4", got)
 	}
 }
 
