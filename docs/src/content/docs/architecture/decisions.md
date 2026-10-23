@@ -7022,6 +7022,7 @@ interface create form, since that name is the platform's to mint.
   reader. **Amended (#1071):** the system map's occupied-position dot, missed in the first pass,
   wears its component's own verdict through one `verdictDot` primitive: healthy the muted tier
   (`bg-healthy-muted`, the fill twin of `text-healthy`), incomplete indigo, degraded amber, outage red,
-  read through the same lookup the component rows use so the two never disagree. Unknown is grey, a
-  down occupant is red whatever its verdict read says, and an empty position keeps its hollow grey ring.
+  read through the same lookup the component rows use so the two never disagree. A known verdict always
+  wins; only an unknown one falls back to the staffing read (red when down, else grey), and an empty
+  position keeps its hollow grey ring.
 
