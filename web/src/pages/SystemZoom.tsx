@@ -235,17 +235,23 @@ export default function SystemZoom() {
   const prods = useQuery(() => ({ queryKey: PRODUCTS_KEY, queryFn: listProducts }));
   const ctypes = useQuery(() => ({ queryKey: COMPONENT_TYPES_KEY, queryFn: listComponentTypes }));
 
+  // Each member's own verdict, one lookup shared by the component rows and the
+  // map, so the two never disagree: the polled members read first, the fleet
+  // view's dot as the fallback before the first poll lands.
+  const componentVerdict = createMemo(() => {
+    const dots = new Map((system()?.dots ?? []).map((d) => [d.component, d] as const));
+    const polled = new Map((membersQ.data ?? []).map((m) => [m.component_id, m.component_verdict] as const));
+    return (cid: string) => verdictOf(polled.get(cid) ?? dots.get(cid)?.verdict);
+  });
   const members = createMemo(() => {
     const b = bodyOf();
     if (!b) return { rows: [], groups: [] };
     const comp = new Map((comps.data ?? []).map((c) => [c.id, c] as const));
     const prod = new Map((prods.data ?? []).map((p) => [p.name, p] as const));
     const types = new Map((ctypes.data ?? []).map((t) => [t.name, t] as const));
-    const dots = new Map((system()?.dots ?? []).map((d) => [d.component, d] as const));
-    const polled = new Map((membersQ.data ?? []).map((m) => [m.component_id, m.component_verdict] as const));
     const alarmOf = new Map(alarms().filter((a) => a.componentId).map((a) => [a.componentId!, a.message] as const));
     return memberModel(b, {
-      verdict: (cid) => verdictOf(polled.get(cid) ?? dots.get(cid)?.verdict),
+      verdict: componentVerdict(),
       alarm: (cid) => alarmOf.get(cid),
       product: (cid) => {
         const h = comp.get(cid)?.product;
@@ -558,7 +564,7 @@ export default function SystemZoom() {
                       // SystemMap pads itself; the negative margin lines its
                       // eyebrow up with the sections around it.
                       <div class="-m-4">
-                        <SystemMap decl={decl()} markers={mapMarkers(decl(), z())} onOpen={openComponent} />
+                        <SystemMap decl={decl()} markers={mapMarkers(decl(), z())} verdict={componentVerdict()} onOpen={openComponent} />
                       </div>
                     )}
                   </Show>

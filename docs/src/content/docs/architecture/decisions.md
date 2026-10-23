@@ -7019,5 +7019,9 @@ interface create form, since that name is the platform's to mint.
   answering, that a fleet of loud green would bury the one amber branch, holds for the dense views, so
   they take the muted tier; the single-subject surfaces (a pill, a strip) take the full hue, where there
   is nothing for green to drown out. The word and the glyph still carry the state for a colour-blind
-  reader.
+  reader. **Amended (#1071):** the system map's occupied-position dot, missed in the first pass,
+  wears its component's own verdict through one `verdictDot` primitive: healthy the muted tier
+  (`bg-healthy-muted`, the fill twin of `text-healthy`), incomplete indigo, degraded amber, outage red,
+  read through the same lookup the component rows use so the two never disagree. Unknown is grey, a
+  down occupant is red whatever its verdict read says, and an empty position keeps its hollow grey ring.
 

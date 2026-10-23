@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
+  verdictDot,
   activeRoles,
   impactPhrase,
   inactiveRoles,
@@ -101,5 +102,22 @@ describe("quorumLabel and impactPhrase", () => {
     expect(impactPhrase("outage")).toBe("outage");
     expect(impactPhrase("degraded")).toBe("degraded");
     expect(impactPhrase("none")).toBe("no change");
+  });
+});
+
+// One verdict as a dot's fill (#1071): the map's markers, and any dot that
+// stands for one component's verdict. Unknown is the grey no-data fill, and a
+// component known down is red whatever its verdict read says.
+describe("verdictDot", () => {
+  it("fills each verdict with its own hue, healthy in the muted tier", () => {
+    expect(verdictDot("healthy")).toBe("bg-healthy-muted");
+    expect(verdictDot("incomplete")).toBe("bg-incomplete");
+    expect(verdictDot("degraded")).toBe("bg-warning");
+    expect(verdictDot("outage")).toBe("bg-error");
+  });
+  it("greys an unknown verdict, and reds a down one whatever it reads", () => {
+    expect(verdictDot(null)).toBe("bg-base-content/35");
+    expect(verdictDot(null, true)).toBe("bg-error");
+    expect(verdictDot("healthy", true)).toBe("bg-error");
   });
 });

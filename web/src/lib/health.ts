@@ -97,6 +97,23 @@ export function worstVerdict(list: (string | null | undefined)[]): Verdict | nul
   return worst;
 }
 
+// verdictDot is one verdict as a dot's fill (#1071): a marker that stands for
+// one component. Healthy wears the muted tier (a room of green dots reads calm,
+// the one amber dot does not); unknown is the grey no-data fill; a component
+// known down reads red whatever its verdict read says, so a lagging poll never
+// paints a dead device green.
+const DOT: Record<Verdict, string> = {
+  healthy: "bg-healthy-muted",
+  incomplete: "bg-incomplete",
+  degraded: "bg-warning",
+  outage: "bg-error",
+};
+
+export function verdictDot(v: Verdict | null, down = false): string {
+  if (down) return DOT.outage;
+  return v ? DOT[v] : "bg-base-content/35";
+}
+
 const roles = (h: FleetHealth | undefined): HealthRole[] => h?.roles ?? [];
 
 // activeRoles is every role whose own figures actually counted toward the
