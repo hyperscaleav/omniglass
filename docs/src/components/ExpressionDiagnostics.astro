@@ -1,0 +1,78 @@
+---
+// The expression diagnostics (#1021), rendered from the generated registry
+// (docs/src/generated/expression-diagnostics.json, written by make gen via
+// cmd/exprgen from internal/expression/diagnostic_rules.go). Each rule's
+// code, severity, sites and message are its declaration, and its examples
+// are its fixtures (the build holds each rule to them), so no row or example
+// is hand-written here. Each row carries the anchor the console's expression
+// editor links a diagnostic's code to: #diagnostic-<code>.
+import facts from '../generated/expression-diagnostics.json';
+
+type Example = { source: string; flags: boolean; fixed?: string };
+type Rule = { code: string; severity: string; trigger: string; sites: string[]; message: string; examples: Example[] };
+
+const when = (r: Rule) => (r.trigger === 'refine' ? 'explains a refusal' : 'flags an expression that compiles');
+---
+
+<table>
+  <thead>
+    <tr>
+      <th>Code</th>
+      <th>Severity</th>
+      <th>Sites</th>
+      <th>What it says</th>
+      <th>Examples</th>
+    </tr>
+  </thead>
+  <tbody>
+    {
+      (facts.diagnostics as Rule[]).map((r) => (
+        <tr id={`diagnostic-${r.code}`}>
+          <td>
+            <code>{r.code}</code>
+          </td>
+          <td>
+            {r.severity}
+            <br />
+            <small>{when(r)}</small>
+          </td>
+          <td>
+            {r.sites.length === 0
+              ? 'every site'
+              : r.sites.map((s, i) => (
+                  <>
+                    {i > 0 ? ', ' : ''}
+                    <code>{s}</code>
+                  </>
+                ))}
+          </td>
+          <td>{r.message}</td>
+          <td>
+            <ul>
+              {r.examples
+                .filter((e) => e.flags)
+                .map((e) => (
+                  <li>
+                    Flags <code>{e.source}</code>
+                    {e.fixed ? (
+                      <>
+                        {' '}
+                        (fix: <code>{e.fixed}</code>)
+                      </>
+                    ) : null}
+                  </li>
+                ))}
+              {r.examples
+                .filter((e) => !e.flags)
+                .map((e) => (
+                  <li>
+                    Leaves <code>{e.source}</code>
+                  </li>
+                ))}
+            </ul>
+          </td>
+        </tr>
+      ))
+    }
+  </tbody>
+</table>

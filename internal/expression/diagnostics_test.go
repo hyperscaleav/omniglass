@@ -1,6 +1,8 @@
 package expression
 
 import (
+	"encoding/json"
+	"os"
 	"strings"
 	"testing"
 
@@ -424,5 +426,52 @@ func TestFloatEqualityAdvice(t *testing.T) {
 		if err != nil || len(diags) != 1 || !strings.Contains(diags[0].Message, want) {
 			t.Errorf("%q: %+v (%v), want advice %q", src, diags, err, want)
 		}
+	}
+}
+
+// The docs table is the registry: every rule, in order, with its examples
+// read from its fixtures (what it flags, with the fix's result, and what it
+// leaves alone), so no example is hand-written.
+func TestDiagnosticsFacts(t *testing.T) {
+	raw, err := DiagnosticsFactsJSON()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc struct {
+		Comment     string           `json:"//"`
+		Diagnostics []DiagnosticRule `json:"diagnostics"`
+	}
+	if err := json.Unmarshal(raw, &doc); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(doc.Comment, "make gen") || len(doc.Diagnostics) != len(registry) {
+		t.Fatalf("facts %q with %d rules, want the registry's %d", doc.Comment, len(doc.Diagnostics), len(registry))
+	}
+	for i, r := range registry {
+		d := doc.Diagnostics[i]
+		if d.Code != r.code || d.Severity != r.severity || d.Trigger != string(r.trigger) || d.Message != r.message || len(d.Examples) != len(r.fixtures) {
+			t.Errorf("%s: facts %+v", r.code, d)
+			continue
+		}
+		for j, f := range r.fixtures {
+			if e := d.Examples[j]; e.Source != f.source || e.Flags != f.want || e.Fixed != f.fixed {
+				t.Errorf("%s example %d = %+v, want fixture %q", r.code, j, e, f.source)
+			}
+		}
+	}
+}
+
+// The committed facts are what make gen writes.
+func TestDiagnosticsFactsMatchCommitted(t *testing.T) {
+	fresh, err := DiagnosticsFactsJSON()
+	if err != nil {
+		t.Fatal(err)
+	}
+	committed, err := os.ReadFile("../../" + DiagnosticsFactsPath)
+	if err != nil {
+		t.Fatalf("read the committed diagnostics facts (run make gen and commit them): %v", err)
+	}
+	if string(committed) != string(fresh) {
+		t.Errorf("%s drifted from the diagnostics registry: run make gen and commit the result", DiagnosticsFactsPath)
 	}
 }

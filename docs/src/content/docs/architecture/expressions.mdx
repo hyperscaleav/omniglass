@@ -8,6 +8,7 @@ sidebar:
 ---
 
 import ExpressionSites from '../../../components/ExpressionSites.astro';
+import ExpressionDiagnostics from '../../../components/ExpressionDiagnostics.astro';
 
 Expressions let an operator reshape and judge collected values in plain text wherever the
 platform needs a small computation, with exactly one language to learn: every site goes through
@@ -137,6 +138,13 @@ and suggests a range; **`count-equals-len`** hints that `count(xs, p) == len(xs)
 that fix; and **`unused-alias`** warns of a calc rule's input the reduce never names (the site declares
 its aliases as the expression's inputs), which the rule reads for nothing. A warning never refuses a
 rule: `value == 1.5` still saves and judges.
+
+Every registered diagnostic, generated from the registry (`make gen`), its examples read from its
+fixtures (what it flags, with what its fix gives, and what it leaves alone; the build holds the rule to
+each). The examples are written against a calc rule reading `pts` (numbers) and `up` (bools) on a
+system, or a criteria reading a metric's `value`. Built today:
+
+<ExpressionDiagnostics />
 
 :::design[Omniglass functions, with the driver step and extractor sites, tracked in #827]
 
