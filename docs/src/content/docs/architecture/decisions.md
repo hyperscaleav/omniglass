@@ -7024,5 +7024,9 @@ interface create form, since that name is the platform's to mint.
   (`bg-healthy-muted`, the fill twin of `text-healthy`), incomplete indigo, degraded amber, outage red,
   read through the same lookup the component rows use so the two never disagree. A known verdict always
   wins; only an unknown one falls back to the staffing read (red when down, else grey), and an empty
-  position keeps its hollow grey ring.
+  position keeps its hollow grey ring. **Amended again (#1074):** the dot gives way to the component
+  type's icon, itself in the verdict's hue (`verdictHue`, the text twin, which the outline's slots now
+  share), with the component's label under it and its role, product, health and alarm in a tooltip;
+  `verdictDot` and `bg-healthy-muted` retire with the dot. An empty position is a dashed ring named for
+  its role.
 
