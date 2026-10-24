@@ -111,6 +111,19 @@ describe("reason", () => {
   it("is empty when the interface is not down", () => {
     expect(reason({ ...base, verdict: { value: "up", ts: ago(5_000) } }, now)).toBe("");
   });
+  // A udp endpoint has no port to open (#1037): its transport rung is the
+  // driver's request answered, so ping-up request-unanswered names that.
+  it("explains a ping-up endpoint whose request goes unanswered", () => {
+    const iface: ReachEndpoint = {
+      ...base,
+      endpoint: "udp",
+      transport: "udp",
+      responsive: { value: "down", ts: ago(5_000) },
+      layers: [{ layer: "ping", check: "icmp-reachable", value: 1, ts: ago(5_000) }],
+    };
+    expect(reason(iface, now)).toMatch(/request goes unanswered/i);
+    expect(reason(iface, now)).toMatch(/cannot be detected/i);
+  });
 });
 
 describe("layerWord", () => {

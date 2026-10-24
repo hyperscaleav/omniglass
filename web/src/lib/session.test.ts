@@ -146,6 +146,7 @@ describe("ladder", () => {
     expect(rungHint(reach)).toMatch(/informational/i);
     expect(rungHint(reach)).toMatch(/did not answer/i);
     expect(rungHint(resp)).toMatch(/gate/i);
+    expect(rungHint(resp)).toMatch(/request answered/i);
   });
 });
 

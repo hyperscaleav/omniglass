@@ -96,7 +96,7 @@ export function ladder(iface: ReachEndpoint): Rung[] {
 // so the ladder teaches itself one hover at a time.
 const RUNG_WHAT: Record<RungRole, string> = {
   informational: "Reachable: a ping, informational only. A component that blocks ping never reads down for it.",
-  gate: "Responsive: the transport answering (a connect, or the protocol's handshake). This is the gate: nothing above it is tried until it passes.",
+  gate: "Responsive: the transport answering (a connect, the protocol's handshake, or, where an open port cannot be detected, a named request answered). This is the gate: nothing above it is tried until it passes.",
   login: "Authenticated: the login, tried only once the transport answers.",
 };
 const ICMP_WHAT = "Reachable: a ping. For an icmp endpoint the ping is the probe, so it is the gate.";
