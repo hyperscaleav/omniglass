@@ -6,6 +6,7 @@ walkthroughs:
   - id: fix-an-endpoint-in-place
   - id: fix-a-rejected-session
   - id: trust-a-changed-host-key
+  - id: fix-a-refused-probe
 ---
 
 Collection is how the fleet learns whether a device is reachable and what it reports. An **edge
@@ -256,6 +257,8 @@ which every get carries), the Collection card reads **polls stopped** beside it.
 In the simulated fleet, the touch panel in the place named `auditorium` answers SNMP, and its
 endpoint reads its community from a secret holding the one the panel's agent refuses, so it reads
 refused, class `auth`; pointing its `community` input at `sim-community` lifts the gate.
+
+::walkthrough{#fix-a-refused-probe}
 
 ## Events
 
