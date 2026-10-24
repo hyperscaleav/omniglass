@@ -8047,3 +8047,35 @@ gate holds (the probe then connects only, so they froze and read as current), th
 refusal instead; a bare tls endpoint's `tls-mode` param is checked at create and edit
 (`ErrEndpointParamsInvalid`, a 422 naming the field); and the seeded `tls-certificate` description
 says what the node publishes (first use, again while the server lacks it).
+
+### The line protocol as datagrams over udp (#1037)
+
+The second slice of the protocol wave (#1076), under the architect's approval of its decisions 5
+and 7a ([ADR-0162](/architecture/decisions/#adr-0162-a-udp-endpoint-binds-its-own-socket-and-its-rung-is-a-request-answered)).
+`udp` is built in the transport registry, stateless, its rung a request. The datagram primitive,
+`collection.DatagramConn`, is one bound, unconnected socket per endpoint with the error queue on
+(`IP_RECVERR`, drained on every report): an exchange takes its reply by the declared shape with the
+held line connection's precedence, re-sends a lost datagram within the one timeout, reads a closed
+port `refused`, and counts and drops a datagram from any other source. The driver spec gains
+`request.retries` (udp only, 0 to 5; 2 for a poll and the request rung, none for a command unless
+its binding declares them) and the `listen-port` input (udp, a port), which the attach derives into
+the endpoint's params, so editing it moves the connection fingerprint and a bare endpoint's is
+checked at write; a udp driver must name its request rung and may declare only terminal replies in
+its session block. The node holds each udp endpoint's socket beside its sessions: the request rung,
+polls, commands and the arm conversation leave from it; the rung lands `endpoint-responsive` and one
+`udp-response-time` per answered probe (node-only), never `tcp-open` or `session-state`, and decides
+the verdict where no port can be opened; a terminal reply gates the transport rung; a recovered rung
+re-arms the listeners; another source's datagrams are self-logged once per tick. A command delivery
+carries its binding's retries. The console's ladder and why-line teach the request rung. The
+simulated panel serves NVP as datagrams (`nvp-udp`, 51327, per source address over the shell loop),
+dropping a share of datagrams each way, seeded per datagram so a lossy run repeats; the dev fleet
+attaches the new official `newtron-nvp-udp` to the huddle panel.
+
+Proven over real sockets (`udp_integration_test.go`: the shaped answer beside a push, the error
+shape, retries within the timeout, a command sent once, a refused port, a stranger counted, a
+terminal reply, the listen port), on the node against a real component socket (`datagram_test.go`:
+the rung and its verdict, refused, the gate, a poll through retries, commands once unless declared,
+arm at open and on recovery, the foreign flush, rebinding), against Postgres (`udp_test.go`: the
+listen port as a fingerprint input, a bare endpoint's check, a delivery's retries), and end to end
+against the simulated face dropping 30% each way (`run_udp_test.go`), passing with two runs at once.
+The layered-gate fence's `udp.open`, `pingGates` and per-check toggles retire into the ladder.

@@ -567,7 +567,7 @@
   },
   {
    "name": "udp",
-   "description": "UDP: the line protocol as datagrams, one line each, stateless: the probe sends the driver's named request and an answer is the rung (an open udp port cannot be detected), a refused port reads refused, and a lost datagram is retried; an endpoint with listeners binds its own local port, which its requests share.",
+   "description": "UDP: the line protocol as datagrams, one line each, stateless: the probe sends the driver's named request and an answer is the rung (an open udp port cannot be detected), a refused port reads refused, and a lost datagram is retried; each endpoint binds its own local port (its driver's listen-port input, else one the node picks), which its requests, replies and pushes share.",
    "held": false,
    "built": true
   },

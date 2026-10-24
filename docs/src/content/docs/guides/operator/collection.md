@@ -67,7 +67,8 @@ without one reads its transport name exactly.
     choose a **transport** (the picker reads the code registry the binary ships,
     `GET /transports`: `icmp` and `tcp` probe layers 3 and 4, `ssh` and `http` climb to
     layer 7 (the probe draws a real response, so reached-but-not-responsive and
-    responded-but-not-authenticated are visible states), `udp` and `snmp` have no standalone
+    responded-but-not-authenticated are visible states), `udp` proves its rung with its
+    driver's request, so attach a driver rather than probe it bare, and `snmp` has no standalone
     probe; there is no free-text name), a node placement, and a target (`host:port` for the
     tcp-family transports, `host` for icmp).
   - **Attach a driver**: pick a **driver** (only drivers whose declarative spec exists are

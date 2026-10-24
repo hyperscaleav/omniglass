@@ -305,24 +305,25 @@ their AND.
 | Layer | Check | Sample | Notes |
 |---|---|---|---|
 | L3 network | ICMP ping, **batched once per host** per tick | `icmp-reachable` / `icmp-rtt-avg` | **informational** (see verdict below); shared by every endpoint on the host |
-| L4 transport | TCP connect (tcp-family) **or** UDP presence (snmp/UDP) | `tcp-open`/`tcp-connect-time` · `udp.open` | a closed UDP port answers ICMP port-unreachable, so absence of that is "present"; this is why SNMP's transport check is L4, not its auth-dependent get |
+| L4 transport | TCP connect (tcp-family) | `tcp-open`/`tcp-connect-time` | udp has no presence check: an open udp port cannot be detected, so its transport rung is the driver's request answered (built, [ADR-0162](/architecture/decisions/#adr-0162-a-udp-endpoint-binds-its-own-socket-and-its-rung-is-a-request-answered)), and the host's port-unreachable report reads `refused` |
 | L7 app | protocol handshake: SNMP `sysUpTime` get (**`snmp.reachable`**, default-on) · SSH handshake+auth · telnet login chain | (verdict) | the SNMP get is the **primary, default** SNMP liveness (ICMP-independent); SSH/telnet are **opt-in** (`ssh_check`/`telnet_check="on"`) because their liveness credential can differ from the device's |
 
-**The verdict respects each layer's definitiveness.** A TCP connect and any L7 handshake are
-**definitive**, so the **ping is informational** (an ICMP-filtered host still reads up); a UDP
-"present" is a read timeout (open|filtered), ambiguous, and only the ping disambiguates it, so a
-failed ping fails the verdict ONLY for an SNMP endpoint opted out of the L7 get (`snmp_check=off`),
-the UDP probe its only signal (`pingGates`). A definitively down layer (TCP refused, UDP
-ICMP-unreachable, an L7 auth/no-answer) fails the verdict regardless; an inconclusive probe (a
+**The verdict respects each layer's definitiveness.** A TCP connect, any L7 handshake and a
+request answered are **definitive**, so the **ping is informational**, everywhere (an
+ICMP-filtered host still reads up). The UDP presence check this design once leaned on the ping to
+disambiguate (an ambiguous read timeout, `pingGates`) is retired: where no port can be opened (udp,
+and snmp with #821) the transport rung is a request answered. A definitively down layer (TCP refused,
+UDP ICMP-unreachable, an L7 auth/no-answer) fails the verdict regardless; an inconclusive probe (a
 setup/resolve error, a missing credential) does not gate.
 
-**Off gates.** Every check toggles via `params.<name>_check = "on" | "off"`; `params.liveness =
-"off"` disables the whole gate. Defaults split by **auth dependence**: auth-independent checks ON,
-opt-out (`ping_check`, `port_check`; the TLS handshake shipped as the tls transport's own rung,
-not a toggle, [ADR-0160](/architecture/decisions/#adr-0160-tls-is-its-own-transport-over-a-shared-primitive-and-its-pin-is-the-public-key)); **`snmp_check` ON**, the one
-auth-dependent exception (the get reuses the poll's community, so a failure means genuinely
-unpollable, and it is the only ICMP-independent SNMP signal); **`ssh_check` / `telnet_check` OFF**,
-opt-in (a differing liveness credential must not read as down).
+**The per-check toggles retire into the ladder.** The `params.<name>_check` toggles and
+`params.liveness` this design proposed are superseded by the ladder a driver declares
+([ADR-0158](/architecture/decisions/#adr-0158-one-connection-fingerprint-gates-every-connection-on-a-ladder-the-driver-declares)):
+`ladder.ping.enabled` turns the informational ping off, `ladder.transport` names the gate (a
+connect, the protocol's handshake, or a request answered: the tls handshake shipped as the tls
+transport's rung, [ADR-0160](/architecture/decisions/#adr-0160-tls-is-its-own-transport-over-a-shared-primitive-and-its-pin-is-the-public-key),
+and the udp request as udp's, [ADR-0162](/architecture/decisions/#adr-0162-a-udp-endpoint-binds-its-own-socket-and-its-rung-is-a-request-answered)), and `ladder.session.enabled` whether a login
+rung exists. Nothing is toggled per check on an endpoint; the snmp get as snmp's rung is #821.
 
 The honest limit: a v2c wrong community is a **silent drop**, so a get failure alone cannot separate
 down from wrong-community. Cross-referencing does: host pings + UDP not refused + get silent =
@@ -335,7 +336,7 @@ cannot retry a bad credential every tick, [ADR-0157](/architecture/decisions/#ad
 **Poller** tasks run only if the verdict is up; **listener** (`mode=listen`) tasks run ungated,
 never pinged; **inline probes** (`icmp`/`tcp` with the host on the task) *are* the check, ungated. A
 down endpoint's gate samples ship in **one** batched call. L5 (socket) and further L7 handshakes
-extend the stack: one `append` in `ifaceChecks`, gated by its own `_check` param.
+extend the stack as rungs a driver's ladder declares, not as toggles.
 :::
 
 ## Shipping samples
