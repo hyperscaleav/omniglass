@@ -85,7 +85,7 @@ const TONE_DOT: Record<Tone, string> = {
 // rows' idiom: the handshake the transport rung ran and its time, how long the
 // certificate has, and how the endpoint verifies it, each teaching itself on
 // hover. The pinned key rides its row in full on the title.
-function TlsRows(p: { tls: ReachTLS; responsive: boolean; refused: boolean }) {
+function TlsRows(p: { tls: ReachTLS; responsive?: boolean; refused: boolean }) {
   const mode = createMemo(() => tlsMode(p.tls.mode));
   const days = () => p.tls.days_left ?? undefined;
   // Under a certificate gate the read withholds the last accepted
@@ -94,12 +94,15 @@ function TlsRows(p: { tls: ReachTLS; responsive: boolean; refused: boolean }) {
   const tone = (): Tone => (p.refused ? "bad" : certTone(days()));
   return (
     <>
+      {/* The row follows the latest probe (endpoint-responsive): a handshake
+          time is shown only beside an answer, since the stored one may be
+          an earlier probe's. */}
       <div class="flex items-center gap-2">
-        <span class={`inline-block size-2 shrink-0 rounded-full ${p.tls.handshake_ms === undefined ? TONE_DOT.unknown : p.responsive ? "bg-success" : "bg-error"}`} />
+        <span class={`inline-block size-2 shrink-0 rounded-full ${p.responsive === undefined ? TONE_DOT.unknown : p.responsive ? "bg-success" : "bg-error"}`} />
         <span class="w-10 shrink-0 uppercase tracking-wide text-base-content/45 text-[10px]">tls</span>
         <span class="font-data text-base-content/70">handshake</span>
-        <span class="text-base-content/50">{p.tls.handshake_ms === undefined ? "not answered yet" : "answered"}</span>
-        <Show when={p.tls.handshake_ms !== undefined}>
+        <span class="text-base-content/50">{p.responsive === undefined ? "not answered yet" : p.responsive ? "answered" : "not answered"}</span>
+        <Show when={p.responsive && p.tls.handshake_ms !== undefined}>
           <span class="text-base-content/40">· {p.tls.handshake_ms!.toFixed(1)} ms</span>
         </Show>
         <InfoTip label="the tls handshake" text="The transport rung for tls: the node opens the port, then runs the TLS handshake and judges the certificate the component offers. A certificate it refuses holds this rung, and nothing above it is tried." />
@@ -159,7 +162,13 @@ function GateBreakdown(p: { iface: ReachEndpoint }) {
         }}
       </For>
       <Show when={p.iface.tls}>
-        {(tls) => <TlsRows tls={tls()} responsive={p.iface.responsive?.value === "up"} refused={p.iface.rejection?.class === "certificate"} />}
+        {(tls) => (
+          <TlsRows
+            tls={tls()}
+            responsive={p.iface.responsive ? p.iface.responsive.value === "up" : undefined}
+            refused={p.iface.rejection?.class === "certificate"}
+          />
+        )}
       </Show>
       <div class="flex items-center gap-2">
         <span class={`inline-block size-2 shrink-0 rounded-full ${verdictOk() ? "bg-success" : "bg-error"}`} />
@@ -193,17 +202,18 @@ function EndpointRow(p: { iface: ReachEndpoint; component: string; manageId?: st
             {/* The label over the derived name, through the one renderer. This
                 panel is where two endpoints of one transport sit beside each
                 other, so it is where the label earns its place (#613). */}
-            <span class="truncate text-sm">{entityLabel({ name: p.iface.endpoint, label: p.iface.label })}</span>
-            <span class="flex min-w-0 items-center gap-1.5 font-data text-[11px] text-base-content/50">
-              <span class="truncate">
-                {p.iface.transport}
-                <Show when={p.iface.address}> · {p.iface.address}</Show>
-              </span>
+            <span class="flex min-w-0 items-center gap-1.5">
+              <span class="truncate text-sm">{entityLabel({ name: p.iface.endpoint, label: p.iface.label })}</span>
               {/* A skipped verification is the operator's explicit choice,
-                  and it stays visible on the row (#1035). */}
+                  and it stays visible on the row (#1035), beside the label so
+                  the address keeps its whole width. */}
               <Show when={p.iface.tls?.mode === "skip"}>
-                <span class="badge badge-soft badge-warning badge-xs shrink-0 font-sans" title="TLS verification is skipped: anything answering at this address is trusted">unverified</span>
+                <span class="badge badge-soft badge-warning badge-xs shrink-0" title="TLS verification is skipped: anything answering at this address is trusted">unverified</span>
               </Show>
+            </span>
+            <span class="truncate font-data text-[11px] text-base-content/50">
+              {p.iface.transport}
+              <Show when={p.iface.address}> · {p.iface.address}</Show>
             </span>
           </div>
           <div class="min-w-0 flex-1">

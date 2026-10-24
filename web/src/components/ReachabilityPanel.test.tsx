@@ -315,6 +315,18 @@ describe("a tls endpoint", () => {
     expect(getByTitle(key)).toBeTruthy();
   });
 
+  // The handshake row follows the latest probe: a handshake time from an
+  // earlier answer is not this probe's, so a transport that stopped
+  // answering reads not answered, never "answered" beside a red dot.
+  it("reads a handshake the latest probe did not get as not answered", () => {
+    const row = { ...tlsRow("pin", 10), responsive: { value: "down", ts: nowIso } };
+    const { getByText, queryByText } = mount({ component: "panel-1", endpoints: [row] });
+    fireEvent.click(getByText("Panel over TLS"));
+    expect(getByText("not answered")).toBeTruthy();
+    expect(queryByText("answered")).toBeNull();
+    expect(queryByText(/12\.5 ms/)).toBeNull();
+  });
+
   it("marks a certificate inside a month amber", () => {
     const { getByText, getByTestId } = mount({ component: "panel-1", endpoints: [tlsRow("pin", 12)] });
     fireEvent.click(getByText("Panel over TLS"));
