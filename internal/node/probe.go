@@ -82,7 +82,7 @@ func runTasks(ctx context.Context, nc *nats.Conn, node string, wl collection.Wor
 				if sessions.lookup(task.EndpointID) == nil {
 					for _, f := range faults {
 						if terr, ok := collection.AsTerminal(f); ok {
-							sessions.refuse(task.EndpointID, task.Fingerprint, terr)
+							sessions.refuseOver(task.Transport, task.EndpointID, task.Fingerprint, terr)
 						}
 					}
 				}
@@ -217,7 +217,7 @@ func collectDriverTask(ctx context.Context, runner *collection.Runner, task coll
 		}
 		timeout = d
 	}
-	return runner.CollectDriverPoll(ctx, collection.DriverPollTask{
+	pt := collection.DriverPollTask{
 		Fn:          fn,
 		Transport:   task.Transport,
 		Target:      p.Target,
@@ -225,7 +225,15 @@ func collectDriverTask(ctx context.Context, runner *collection.Runner, task coll
 		Timeout:     timeout,
 		Session:     sessions.lookup(task.EndpointID),
 		SessionOnly: task.Session != nil,
-	})
+	}
+	if task.Transport == "udp" {
+		pt.Datagram = sessions.datagramOf(task.EndpointID)
+		pt.Retries = fn.Request.RetriesOr(driver.DefaultPollRetries)
+		if pt.Datagram == nil {
+			return nil, []error{fmt.Errorf("node: task %s: no udp socket is bound for the endpoint: %s", task.ID, sessions.datagramRefusal(task.EndpointID))}
+		}
+	}
+	return runner.CollectDriverPoll(ctx, pt)
 }
 
 // appendVerdict computes the endpoint reachability verdict from a probe's
@@ -274,6 +282,8 @@ func collectProbe(ctx context.Context, runner *collection.Runner, task collectio
 	// is a connect, the protocol's handshake, or a named request answered.
 	if l := task.Ladder; l != nil {
 		switch {
+		case l.Transport == driver.RungRequest && l.Request != nil && task.Transport == "udp":
+			return collectDatagramRung(ctx, task, l.Request, sessions)
 		case l.Transport == driver.RungRequest && l.Request != nil:
 			return collectRequestRung(ctx, runner, task, l.Request)
 		case l.Transport == driver.RungConnect && (task.Transport == "ssh" || task.Transport == "tls"):

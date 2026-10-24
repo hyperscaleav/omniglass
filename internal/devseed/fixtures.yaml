@@ -2093,6 +2093,14 @@ sim_endpoints:
   - component: huddle-touch
     driver: newtron-nvp-tls
     label: Panel over TLS
+  # And NVP as datagrams on 51327 (its nvp-udp face, #1037), which drops a
+  # seeded 5% of datagrams each way, so the driver's retries are always at
+  # work. No listen port: the node binds one of its own, and the panel
+  # pushes to the source of SUBSCRIBE INPUT. Setting the endpoint's
+  # listen-port input rebinds it there, and moves its fingerprint.
+  - component: huddle-touch
+    driver: newtron-nvp-udp
+    label: Panel over UDP
   # A changed host key worth showing (#1078). The briefing place's touch panel
   # also answers NVP over its ssh console (admin / newtron, the rotated
   # secret), and this endpoint pins the host key the panel presented before it

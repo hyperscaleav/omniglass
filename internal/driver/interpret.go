@@ -311,5 +311,5 @@ func RenderRequest(req Request, value string, params map[string]any) (Request, e
 	if err != nil {
 		return Request{}, err
 	}
-	return Request{Get: req.Get, Line: line, Path: path, Reply: req.Reply}, nil
+	return Request{Get: req.Get, Line: line, Path: path, Reply: req.Reply, Retries: req.Retries}, nil
 }

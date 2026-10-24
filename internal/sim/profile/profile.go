@@ -54,7 +54,9 @@ type Doc struct {
 // many commands and supports asynchronous push notifications via
 // Subscribe/Unsubscribe verbs declared in Commands. When false (the
 // default), the interface behaves exactly as before: open, run one
-// command, close. Persistent has no effect on http/snmp/udp/icmp.
+// command, close. On a udp interface it serves the line protocol as
+// datagrams, one session per source address (#1037), where without it the
+// face echoes. Persistent has no effect on http/snmp/icmp.
 //
 // Subjects is the subscription whitelist for a Persistent interface:
 // each Subject describes a state path that can be subscribed to and
@@ -70,14 +72,18 @@ type Interface struct {
 	TLS      bool   `yaml:"tls"`
 	// TLSValidityDays is a tls face's certificate validity window, counted
 	// from the face's start (#1035); zero is a year. Only on a face with tls.
-	TLSValidityDays int               `yaml:"tls_validity_days"`
-	Doc             Doc               `yaml:"doc"`
-	Auth            Auth              `yaml:"auth"`
-	APISurface      string            `yaml:"api_surface"`
-	Routes          []Route           `yaml:"routes"`
-	Commands        []Command         `yaml:"commands"`
-	OIDMap          map[string]string `yaml:"oid_map"`
-	ReachableWhen   string            `yaml:"reachable_when"`
+	TLSValidityDays int `yaml:"tls_validity_days"`
+	// LossPct is the share of datagrams a udp face drops, in percent, each
+	// way (#1037): seeded from the device and the face, so a run's losses
+	// repeat, and a loss test needs no NET_ADMIN. Only on a udp face.
+	LossPct       int               `yaml:"loss_pct"`
+	Doc           Doc               `yaml:"doc"`
+	Auth          Auth              `yaml:"auth"`
+	APISurface    string            `yaml:"api_surface"`
+	Routes        []Route           `yaml:"routes"`
+	Commands      []Command         `yaml:"commands"`
+	OIDMap        map[string]string `yaml:"oid_map"`
+	ReachableWhen string            `yaml:"reachable_when"`
 
 	// MIB names the SNMP MIB file this device's enterprise OID arc is
 	// defined in (e.g. the Boreal Edge). Empty for devices with no
@@ -606,6 +612,12 @@ func validateInterfaces(p *DeviceProfile) error {
 		}
 		if iface.TLSValidityDays < 0 {
 			return fmt.Errorf("interface %q sets a negative tls_validity_days", iface.Name)
+		}
+		if iface.LossPct != 0 && iface.Protocol != "udp" {
+			return fmt.Errorf("interface %q sets loss_pct but is not a udp face", iface.Name)
+		}
+		if iface.LossPct < 0 || iface.LossPct > 100 {
+			return fmt.Errorf("interface %q sets loss_pct %d; want 0 to 100", iface.Name, iface.LossPct)
 		}
 		if iface.Protocol != "ssh" && iface.Protocol != "telnet" && iface.Protocol != "snmp" {
 			continue

@@ -67,7 +67,8 @@ without one reads its transport name exactly.
     choose a **transport** (the picker reads the code registry the binary ships,
     `GET /transports`: `icmp` and `tcp` probe layers 3 and 4, `ssh` and `http` climb to
     layer 7 (the probe draws a real response, so reached-but-not-responsive and
-    responded-but-not-authenticated are visible states), `udp` and `snmp` have no standalone
+    responded-but-not-authenticated are visible states), `udp` proves its rung with its
+    driver's request, so attach a driver rather than probe it bare, and `snmp` has no standalone
     probe; there is no free-text name), a node placement, and a target (`host:port` for the
     tcp-family transports, `host` for icmp).
   - **Attach a driver**: pick a **driver** (only drivers whose declarative spec exists are
@@ -129,8 +130,9 @@ verdict's up/down transitions over time, and an expandable **gate breakdown** wi
 verdict (the endpoint is up only when every applicable probe passed). Every row also wears its
 **reachability ladder**, the rungs a connection is checked on bottom up: **reachable** (a ping,
 informational only, so its chip is dashed and a component that blocks ping never reads down for
-it), **responsive** (the transport answering: a connect, or the protocol's handshake; this is the
-gate, and nothing above it is tried until it passes) and **authenticated** (the login, shown once a
+it), **responsive** (the transport answering: a connect, the protocol's handshake, or, where an open
+port cannot be detected, a named request answered; this is the gate, and nothing above it is tried
+until it passes) and **authenticated** (the login, shown once a
 credential was actually tried). Hover or focus a rung for what it checks and what it says now. A
 rung a refusal holds wears the refusal glyph and the rungs above it read untried, while the rungs
 below keep their readings: an endpoint whose login was refused still shows its ping and its
@@ -150,6 +152,16 @@ mode is one of the endpoint's driver inputs (`tls-mode`), edited on the endpoint
 host or port. A pinned key that changes reads **rejected** with class `certificate`, naming both
 keys; once you know the component was replaced, `omniglass endpoint retry <id> --certificate <the
 offered key>` trusts the new one ([tls](/architecture/collection/#tls)).
+
+A **udp** endpoint has no port to open, so its breakdown lists its **request** rung beside the ping:
+the driver's named request, answered (with its round trip) or not, which is the layer its verdict
+follows. A component
+that answers ping but not the request reads down, and its why line says the request goes
+unanswered (the service is down, the port is closed, or the datagrams are lost); one that blocks
+ping but answers reads up. A lost datagram is re-sent within the endpoint's timeout, so a little
+loss never reads down. The endpoint binds its own port on the node (its driver's `listen-port`
+input, else one the node picks), which the component's pushes arrive on; edit it on the endpoint's
+detail like its host or port ([udp](/architecture/collection/#udp)).
 
 To author a reachability check, add an **endpoint** to the component (above), from this
 panel's own header: a bare probe endpoint is the reachability check, and **attaching a

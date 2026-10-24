@@ -59,6 +59,11 @@ metric_types:
     unit: ms
     label: TLS Handshake Time
     description: Time for the TLS handshake to reach the certificate after the connection opened, one observation per probe the component answered; absent when it never answered the handshake.
+  - name: udp-response-time
+    data_type: float
+    unit: ms
+    label: UDP Response Time
+    description: Time for a udp endpoint's request rung to be answered, from its first send, so a lost datagram's retry shows as time; one observation per probe the component answered, absent when every attempt was lost.
   - name: tls-certificate-days-left
     data_type: float
     unit: d

@@ -151,6 +151,9 @@ type CommandDelivery struct {
 	// stateless line. A throwaway connection would skip the auth step, or
 	// retry a credential the session was rejected for.
 	SessionOnly bool `json:"session_only,omitempty"`
+	// Retries is how many times a udp command is re-sent when no answer
+	// comes (#1037): its binding's declaration, else none.
+	Retries int `json:"retries,omitempty"`
 }
 
 // CommandPullReply is the server's response to a command queue pull.

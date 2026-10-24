@@ -31,6 +31,10 @@ type DriverPollTask struct {
 	// declares a session (a login a throwaway would skip, or retry once
 	// rejected), or the transport has no stateless line.
 	SessionOnly bool
+	// Datagram is a udp endpoint's own socket (#1037), which the poll's
+	// request rides, re-sent up to Retries times within the timeout.
+	Datagram DatagramExchanger
+	Retries  int
 }
 
 // HeldExchanger is the slice of a held session a poll borrows: one request,
@@ -76,6 +80,15 @@ func (r *Runner) CollectDriverPoll(ctx context.Context, t DriverPollTask) ([]Sam
 			return nil, []error{fmt.Errorf("collection: driver poll %s/%s: %w", t.Fn.Driver, t.Fn.Function, err)}
 		}
 		payload.Values = values
+	case t.Transport == "udp":
+		if t.Datagram == nil {
+			return nil, []error{fmt.Errorf("collection: driver poll %s/%s: no udp socket is bound for this endpoint", t.Fn.Driver, t.Fn.Function)}
+		}
+		ans, err := t.Datagram.Exchange(ctx, t.Fn.Request.Line, t.Fn.Request.Reply, t.Timeout, t.Retries)
+		if err != nil {
+			return nil, []error{fmt.Errorf("collection: driver poll %s/%s: %w", t.Fn.Driver, t.Fn.Function, err)}
+		}
+		payload.Text = ans.Line
 	case IsLineTransport(t.Transport):
 		if t.Session != nil {
 			answer, err := t.Session.Exchange(ctx, t.Fn.Request.Line, t.Fn.Request.Reply, t.Timeout)
