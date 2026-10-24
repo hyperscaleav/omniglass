@@ -449,14 +449,14 @@ func TestRunIdempotent(t *testing.T) {
 	if err := conn.QueryRow(ctx, `select count(*) from principal where kind = 'human'`).Scan(&humans); err != nil {
 		t.Fatalf("count humans: %v", err)
 	}
-	if humans != 3 {
-		t.Errorf("human principals = %d, want 3", humans)
+	if humans != 4 {
+		t.Errorf("human principals = %d, want 4", humans)
 	}
 	if err := conn.QueryRow(ctx, `select count(*) from principal_grant`).Scan(&grants); err != nil {
 		t.Fatalf("count grants: %v", err)
 	}
-	if grants != 3 {
-		t.Errorf("grants = %d, want 3", grants)
+	if grants != 4 {
+		t.Errorf("grants = %d, want 4", grants)
 	}
 
 	// The property primitive seeds one extra contract line on the QM55, one component
@@ -508,17 +508,20 @@ func TestRunIdempotent(t *testing.T) {
 		select count(*) from credential
 		where kind = 'password'
 		  and principal_id in (select principal_id from human
-		    where username in ('operator', 'viewer-hq', 'tech-east'))`).Scan(&pwCreds); err != nil {
+		    where username in ('operator', 'viewer', 'viewer-hq', 'tech-east'))`).Scan(&pwCreds); err != nil {
 		t.Fatalf("count password creds: %v", err)
 	}
-	if pwCreds != 3 {
-		t.Errorf("password credentials for seeded users = %d, want 3", pwCreds)
+	if pwCreds != 4 {
+		t.Errorf("password credentials for seeded users = %d, want 4", pwCreds)
 	}
 
-	// Grant shapes: operator is all-scoped; viewer-hq reads the hq subtree; tech-east
-	// deploys under the East campus excluding its root. The region-scoped users name
-	// their region; the all-scoped one does not.
+	// Grant shapes: operator is all-scoped; viewer reads the whole fleet and
+	// changes nothing (the one seeded user who sees a component and may not
+	// act on it, #1059); viewer-hq reads the hq subtree; tech-east deploys under
+	// the East campus excluding its root. The region-scoped users name their
+	// region; the all-scoped ones do not.
 	assertGrant(t, conn, ctx, "operator", "operator", "all", "", "subtree")
+	assertGrant(t, conn, ctx, "viewer", "viewer", "all", "", "subtree")
 	assertGrant(t, conn, ctx, "viewer-hq", "viewer", "location", "hq", "subtree")
 	assertGrant(t, conn, ctx, "tech-east", "deploy", "location", "east", "subtree_excl_root")
 
