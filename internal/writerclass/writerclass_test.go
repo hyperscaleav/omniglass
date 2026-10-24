@@ -111,18 +111,20 @@ func TestAdmits(t *testing.T) {
 			}
 		}
 	}
-	// The one declared row a node-probe key admits: the host key pin, on the
-	// host key alone.
-	if !Admits(NodeProbe, HostKeyPin, probekeys.SSHHostKey) {
-		t.Error("the host key pin is refused on ssh-host-key")
-	}
+	// The one declared row a node-probe key admits: a key pin, on the keys a
+	// transport's pin rides (the ssh host key, the tls certificate) alone.
+	pins := []string{probekeys.SSHHostKey, probekeys.TLSCertificate}
 	for _, key := range probekeys.NodeOnly() {
-		if key != probekeys.SSHHostKey && Admits(NodeProbe, HostKeyPin, key) {
-			t.Errorf("a host key pin is admitted on %s", key)
+		want := slices.Contains(pins, key)
+		if got := Admits(NodeProbe, KeyPin, key); got != want {
+			t.Errorf("Admits(node-probe, key-pin, %s) = %v, want %v", key, got, want)
 		}
-	}
-	if Admits(NodeProbe, Operator, probekeys.SSHHostKey) {
-		t.Error("an operator's plain declared value is admitted on ssh-host-key; only the :retry pin is")
+		if Pinnable(key) != want {
+			t.Errorf("Pinnable(%s) = %v, want %v", key, !want, want)
+		}
+		if Admits(NodeProbe, Operator, key) {
+			t.Errorf("an operator's plain declared value is admitted on %s; only the :retry pin is", key)
+		}
 	}
 	// Every class admits a writer and every writer is admitted somewhere, so
 	// no class is unwritable and no writer is dead weight.
@@ -132,7 +134,7 @@ func TestAdmits(t *testing.T) {
 		}
 	}
 	for _, w := range Writers() {
-		admitted := w == HostKeyPin
+		admitted := w == KeyPin
 		for _, c := range Classes() {
 			admitted = admitted || Admits(c, w, "")
 		}

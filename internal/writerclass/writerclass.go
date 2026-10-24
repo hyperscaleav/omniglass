@@ -72,16 +72,16 @@ const (
 	CommandReply Writer = "command-reply"
 	// Operator is an operator's declared value.
 	Operator Writer = "operator"
-	// HostKeyPin is an operator's ssh host key pin, declared through an
-	// endpoint's audited :retry.
-	HostKeyPin Writer = "host-key-pin"
+	// KeyPin is an operator's key pin (an ssh host key, a tls certificate's
+	// public key), declared through an endpoint's audited :retry.
+	KeyPin Writer = "key-pin"
 	// EventRule is an event rule's fire or clear event.
 	EventRule Writer = "event-rule"
 )
 
 // Writers is every writer.
 func Writers() []Writer {
-	return []Writer{Node, Push, CalcRule, Process, Command, CommandReply, Operator, HostKeyPin, EventRule}
+	return []Writer{Node, Push, CalcRule, Process, Command, CommandReply, Operator, KeyPin, EventRule}
 }
 
 // Health is the platform key the health rollup writes: the rolled-up verdict
@@ -110,12 +110,17 @@ var commandLifecycle = map[string]string{
 // path: a declared row is never the node's observation (the reads serve only
 // observed rows), and this one is a control input the worklist hands back.
 var pinnable = map[string]string{
-	probekeys.SSHHostKey: "an operator's pin, set with an endpoint's :retry (ADR-0157)",
+	probekeys.SSHHostKey:     "an operator's pin, set with an ssh endpoint's :retry (ADR-0157)",
+	probekeys.TLSCertificate: "an operator's pin, set with a tls endpoint's :retry (ADR-0160)",
 }
+
+// Pinnable reports a node-probe key an operator may pin through :retry: the
+// key a transport's key pin rides.
+func Pinnable(key string) bool { return pinnable[key] != "" }
 
 // admits is the whole ruling: the writers each class admits.
 //
-//   - node-probe: the node lane alone (and HostKeyPin on a pinnable key): a
+//   - node-probe: the node lane alone (and KeyPin on a pinnable key): a
 //     push, a calc rule, a command, an operator or an event rule never writes
 //     what the console reads as the node's own observation.
 //   - platform: the process alone.
@@ -139,7 +144,7 @@ func Admits(c Class, w Writer, key string) bool {
 	if slices.Contains(admits[c], w) {
 		return true
 	}
-	return c == NodeProbe && w == HostKeyPin && pinnable[key] != ""
+	return c == NodeProbe && w == KeyPin && pinnable[key] != ""
 }
 
 // Reserved returns the reserved class a key's name holds, if any. It matches
@@ -254,7 +259,7 @@ var writerDoc = map[Writer]string{
 	Command:      "a command's intended value and caused event",
 	CommandReply: "a command's reply, read through its driver binding",
 	Operator:     "an operator's declared value",
-	HostKeyPin:   "an operator's ssh host key pin, through an endpoint's :retry",
+	KeyPin:       "an operator's key pin (an ssh host key, a tls certificate's public key), through an endpoint's :retry",
 	EventRule:    "an event rule's fire or clear event",
 }
 
@@ -293,7 +298,7 @@ func Facts() []ClassFact {
 		case NodeProbe:
 			f.Keys = probekeys.NodeOnly()
 			for _, k := range slices.Sorted(maps.Keys(pinnable)) {
-				f.Pins = append(f.Pins, PinFact{Key: k, Writer: HostKeyPin, Doc: pinnable[k]})
+				f.Pins = append(f.Pins, PinFact{Key: k, Writer: KeyPin, Doc: pinnable[k]})
 			}
 		case Platform:
 			for k := range platform {

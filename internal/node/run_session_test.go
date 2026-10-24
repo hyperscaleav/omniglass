@@ -329,7 +329,11 @@ func panelPort(t *testing.T, panel *sim.Device, protocol string) int {
 	t.Helper()
 	var found []sim.Face
 	for _, f := range panel.Faces() {
-		if f.Protocol == protocol {
+		proto := f.Protocol
+		if proto == "tcp" && f.TLS {
+			proto = "tls" // the line protocol behind TLS (#1035)
+		}
+		if proto == protocol {
 			found = append(found, f)
 		}
 	}

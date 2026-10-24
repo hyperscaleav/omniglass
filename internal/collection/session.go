@@ -189,8 +189,10 @@ type SSHAuth struct {
 	Pin *HostKeyPin
 }
 
-// HostKeyPin is a host key fingerprint (ssh.FingerprintSHA256) a session
-// trusts, shared across its reconnects: trusted on first use, then held.
+// HostKeyPin is a host's public key fingerprint a session trusts, shared
+// across its reconnects: trusted on first use, then held. It pins an ssh host
+// key (ssh.FingerprintSHA256) or a tls certificate's public key
+// (PublicKeyFingerprint), both in the SHA256: form.
 type HostKeyPin struct {
 	mu sync.Mutex
 	fp string
@@ -221,6 +223,27 @@ func (p *HostKeyPin) Trust(fp string) {
 	if on != nil {
 		on(fp)
 	}
+}
+
+// Admit trusts fp on first use and reports whether fp is the pin (#1035):
+// an empty pin takes fp atomically, so two connections racing on first use
+// cannot each trust a different key. OnTrust hears the first use only; a
+// pin lost on its way to the server is republished by whoever holds it
+// (the node's session manager, while the worklist delivers no pin). pinned
+// is the pin after the call.
+func (p *HostKeyPin) Admit(fp string) (pinned string, ok bool) {
+	p.mu.Lock()
+	first := p.fp == ""
+	if first {
+		p.fp = fp
+	}
+	pinned, ok = p.fp, p.fp == fp
+	on := p.OnTrust
+	p.mu.Unlock()
+	if first && on != nil {
+		on(fp)
+	}
+	return pinned, ok
 }
 
 // String never prints a credential.
@@ -288,6 +311,11 @@ type SessionConfig struct {
 	// for this connection fingerprint, from before a restart): it dials
 	// nothing until its re-probe, if any.
 	Rejected *TerminalError
+	// TLS is the handshake every connection runs before anything else
+	// (#1035): the trust it decides the certificate by. A session that
+	// declares it over a dialer that cannot run one is a protocol refusal,
+	// never a plaintext connection.
+	TLS *TLSTrust
 }
 
 // Session holds one endpoint's connection. Start it with StartSession, borrow
@@ -775,6 +803,17 @@ func (s *Session) run(ctx context.Context) {
 // reported as the endpoint-authenticated rung. A session declaring an auth
 // step over a dialer that cannot run one is a protocol refusal.
 func (s *Session) connect(ctx context.Context) (HeldConn, error) {
+	if s.cfg.TLS != nil {
+		td, ok := s.cfg.Dialer.(TLSDialer)
+		if !ok {
+			return nil, &TerminalError{Class: driver.ClassProtocol, Reason: "the transport cannot run the declared tls handshake"}
+		}
+		pc, err := td.ConnectTLS(ctx, s.cfg.Target, s.cfg.Timeout, *s.cfg.TLS)
+		if err != nil {
+			return nil, err
+		}
+		return s.authenticateAndOpen(ctx, pc)
+	}
 	staged, ok := s.cfg.Dialer.(StagedDialer)
 	if !ok {
 		if s.cfg.Auth != nil {
@@ -786,6 +825,12 @@ func (s *Session) connect(ctx context.Context) (HeldConn, error) {
 	if err != nil {
 		return nil, err
 	}
+	return s.authenticateAndOpen(ctx, pc)
+}
+
+// authenticateAndOpen runs the auth step over a made connection, when one is
+// declared, and starts routing.
+func (s *Session) authenticateAndOpen(ctx context.Context, pc PendingConn) (HeldConn, error) {
 	if s.cfg.Auth != nil {
 		if err := pc.Authenticate(ctx, s.cfg.Auth, s.cfg.Terminal, s.cfg.Timeout); err != nil {
 			_ = pc.Close()

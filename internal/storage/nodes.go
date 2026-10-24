@@ -9,6 +9,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/fingerprint"
 	"time"
 
+	"github.com/hyperscaleav/omniglass/internal/collection/probekeys"
 	"github.com/hyperscaleav/omniglass/internal/scope"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -90,6 +91,10 @@ type WorklistTask struct {
 	// declared ssh-host-key, else the key the node trusted on first use (the
 	// observed one), else empty.
 	HostKey string
+	// CertificatePin is a tls endpoint's public key pin (#1035): the
+	// operator's declared tls-certificate, else the key the node trusted on
+	// first use, else empty.
+	CertificatePin string
 	// Fingerprint is the connection fingerprint (#1056 ruling): a digest
 	// over every input a connection to the endpoint is made with, computed
 	// here so it covers the sealed secret versions without the node ever
@@ -400,6 +405,11 @@ func (p *PG) RecordHeartbeat(ctx context.Context, name string) error {
 	return nil
 }
 
+// pinKeyOf names the property a transport's key pin rides (declared and
+// observed): the ssh host key (#1032) and the tls certificate's public key
+// (#1035).
+var pinKeyOf = map[string]string{"ssh": probekeys.SSHHostKey, "tls": probekeys.TLSCertificate}
+
 // NodeWorklist resolves a node's enabled tasks (joined to their endpoint) plus
 // the config generation. Keyed by the node name the server extracts from the
 // worklist subject. An unknown node returns an empty worklist, not an error.
@@ -428,8 +438,9 @@ func (p *PG) NodeWorklist(ctx context.Context, name string) (Worklist, error) {
 	type pinRef struct {
 		idx                   int
 		componentID, instance string
+		key                   string // the pin's property: ssh-host-key or tls-certificate
 	}
-	var pins []pinRef // ssh driver tasks, whose host key pin rides the worklist
+	var pins []pinRef // ssh and tls tasks, whose key pin rides the worklist
 	for rows.Next() {
 		var wt WorklistTask
 		var epInputs, driverSpec []byte
@@ -471,8 +482,8 @@ func (p *PG) NodeWorklist(ctx context.Context, name string) (Worklist, error) {
 		if componentID != nil {
 			componentOf[len(wl.Tasks)] = *componentID
 		}
-		if wt.Transport == "ssh" && componentID != nil {
-			pins = append(pins, pinRef{idx: len(wl.Tasks), componentID: *componentID, instance: wt.EndpointName})
+		if pinKey, pinned := pinKeyOf[wt.Transport]; pinned && componentID != nil {
+			pins = append(pins, pinRef{idx: len(wl.Tasks), componentID: *componentID, instance: wt.EndpointName, key: pinKey})
 		}
 		wl.Tasks = append(wl.Tasks, wt)
 	}
@@ -531,21 +542,26 @@ func (p *PG) NodeWorklist(ctx context.Context, name string) (Worklist, error) {
 			wl.Tasks[idx].Secrets[r.input] = fields
 		}
 	}
-	// An ssh task's host key pin (#1032): the operator's declared key wins (a
-	// :retry accepting a replaced component's key, or a cleared one falling
-	// back), else the key the node trusted on first use.
+	// An ssh task's host key pin (#1032), and a tls task's public key pin
+	// (#1035): the operator's declared key wins (a :retry accepting a
+	// replaced component's key, or a cleared one falling back), else the key
+	// the node trusted on first use.
 	// The declared pin alone is a fingerprint input: it is the operator's
 	// act. A key the node trusted on first use is a learned fact, and moving
 	// the fingerprint on it would recycle a healthy session and lift a gate
 	// held under the first fingerprint.
-	declaredPin := map[int]string{}
+	declaredPin, declaredCert := map[int]string{}, map[int]string{}
 	for _, pr := range pins {
-		declared, pin, err := hostKeyPin(ctx, p.pool, pr.componentID, pr.instance)
+		declared, pin, err := keyPin(ctx, p.pool, pr.componentID, pr.instance, pr.key)
 		if err != nil {
 			return Worklist{}, fmt.Errorf("storage: node worklist %q: %w", name, err)
 		}
-		declaredPin[pr.idx] = declared
-		wl.Tasks[pr.idx].HostKey = pin
+		switch pr.key {
+		case pinKeyOf["tls"]:
+			wl.Tasks[pr.idx].CertificatePin, declaredCert[pr.idx] = pin, declared
+		default:
+			wl.Tasks[pr.idx].HostKey, declaredPin[pr.idx] = pin, declared
+		}
 	}
 	// The rejection a node published for the endpoint (its gate), and the
 	// connection fingerprint each task is judged against (#1056 ruling).
@@ -575,6 +591,7 @@ func (p *PG) NodeWorklist(ctx context.Context, name string) (Worklist, error) {
 			Session:        sessionOf[t.EndpointID],
 			Ladder:         t.Ladder,
 			HostKeyPin:     declaredPin[idx],
+			CertificatePin: declaredCert[idx],
 			Retry:          t.SessionRetry,
 		})
 	}

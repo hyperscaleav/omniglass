@@ -161,7 +161,7 @@ func TestNodeTelnetSessionRejectsThenRecoversOnTheFix(t *testing.T) {
 	waitLogs("session rejected", 1)
 
 	// An operator's retry dials exactly once more, and is refused again.
-	if _, err := gw.RetryEndpoint(ctx, "", ep.ID, "", all, all); err != nil {
+	if _, err := gw.RetryEndpoint(ctx, "", ep.ID, storage.RetryPin{}, all, all); err != nil {
 		t.Fatalf("retry: %v", err)
 	}
 	waitLogs("session rejected", 2)

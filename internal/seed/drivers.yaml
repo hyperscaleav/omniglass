@@ -141,6 +141,40 @@ drivers:
         - command_type: set-input
           request: { line: "SET INPUT ${value}", reply: { prefix: "INPUT ", error: { prefix: "-ERR" } } }
           settle: { from: response, extract: { regex: "^INPUT (\\S+)$" } }
+  - id: newtron-nvp-tls
+    label: Newtron NVP over TLS
+    version: "1.0.0"
+    spec:
+      version: 1
+      transport: tls
+      inputs:
+        - { name: host, kind: string, required: true }
+        - { name: port, kind: number, default: "51326" }
+        # The panel self-signs its certificate, so this driver pins the
+        # public key on first use rather than verifying it against roots
+        # (#1035). An operator may edit the mode in place: verify for gear
+        # with a certificate a root vouches for, skip (never a default) for
+        # gear whose key changes on every boot.
+        - { name: tls-mode, kind: string, default: pin }
+      # The same NVP conversation over the panel's TLS port. The handshake is
+      # the transport rung: a changed key is a terminal certificate refusal,
+      # so nothing (a poll, a command, an arm) reaches a key nobody trusted.
+      polls:
+        - name: status
+          schedule: { every: 30s }
+          request: { line: "GET INPUT", reply: { prefix: "INPUT ", error: { prefix: "-ERR" } } }
+          emits:
+            - { name: video-input, extract: { regex: "^INPUT (\\S+)$" } }
+      listeners:
+        - name: events
+          arm: ["SUBSCRIBE INPUT"]
+          match: { prefix: "EVT " }
+          emits:
+            - { name: video-input, extract: { regex: "^EVT INPUT (\\S+)$" } }
+      commands:
+        - command_type: set-input
+          request: { line: "SET INPUT ${value}", reply: { prefix: "INPUT ", error: { prefix: "-ERR" } } }
+          settle: { from: response, extract: { regex: "^INPUT (\\S+)$" } }
   - id: http-json
     label: HTTP JSON
     version: "1.0.0"

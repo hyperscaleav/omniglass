@@ -482,3 +482,18 @@ func TestExecuteDeliveryCarriesTheRefusal(t *testing.T) {
 		t.Fatalf("refused command reported reply %q, outcome %q; want the device's text in both", reply, out)
 	}
 }
+
+// A tls command (#1035) rides the endpoint's held session or fails: tls has
+// no stateless line, since a throwaway handshake would bypass the pin.
+func TestExecuteDeliveryOverTLSNeverDialsAThrowaway(t *testing.T) {
+	throwaway := &lineRecorder{}
+	d := collection.CommandDelivery{ID: 11, CommandType: "set-input", Transport: "tls", Target: "10.0.0.5:51326",
+		EndpointID: "ep-unheld", Line: "SET INPUT hdmi2", Reply: &driver.Reply{Prefix: "INPUT "}}
+	_, out := executeDelivery(t.Context(), &collection.Runner{Line: throwaway}, d, nil)
+	if !strings.Contains(out, "ride only a held session") {
+		t.Fatalf("an unheld tls command = %q, want a refusal: it rides only a held session", out)
+	}
+	if len(throwaway.sent) != 0 {
+		t.Fatalf("a tls command dialed a throwaway connection: %v", throwaway.sent)
+	}
+}

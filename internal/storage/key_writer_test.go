@@ -53,8 +53,9 @@ func newWriterFixture(t *testing.T) writerFixture {
 	}
 	t.Cleanup(func() { conn.Close(ctx) })
 	if _, err := conn.Exec(ctx, `insert into endpoint (name, transport, component, node_name, params) values
-		('ssh', 'ssh', (select id from component where name = 'disp-1'), (select principal_id from node where name = 'node-a'), '{"target":"127.0.0.1:22"}'::jsonb)`); err != nil {
-		t.Fatalf("insert endpoint: %v", err)
+		('ssh', 'ssh', (select id from component where name = 'disp-1'), (select principal_id from node where name = 'node-a'), '{"target":"127.0.0.1:22"}'::jsonb),
+		('tls', 'tls', (select id from component where name = 'disp-1'), (select principal_id from node where name = 'node-a'), '{"target":"127.0.0.1:443","tls-mode":"pin"}'::jsonb)`); err != nil {
+		t.Fatalf("insert endpoints: %v", err)
 	}
 	if _, err := gw.BootstrapOwner(ctx, storage.OwnerSpec{Username: "root", SecretHash: make([]byte, 32), Prefix: "root0000"}); err != nil {
 		t.Fatalf("bootstrap owner: %v", err)
@@ -148,6 +149,7 @@ func TestDeclaredWriteRefusesAReservedKey(t *testing.T) {
 		"session-state":      `"up"`,
 		"endpoint-rejection": `"none"`,
 		"ssh-host-key":       `"SHA256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"`,
+		"tls-certificate":    `"SHA256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"`,
 		"health":             `"healthy"`,
 	} {
 		_, err := f.gw.SetProperty(f.ctx, "", "component", "disp-1", key, "ssh", json.RawMessage(value), all, all)
@@ -163,7 +165,7 @@ func TestDeclaredWriteRefusesAReservedKey(t *testing.T) {
 	if err := f.conn.QueryRow(f.ctx, `select id::text from endpoint where name = 'ssh'`).Scan(&epID); err != nil {
 		t.Fatalf("endpoint id: %v", err)
 	}
-	if _, err := f.gw.RetryEndpoint(f.ctx, "", epID, "SHA256:"+strings.Repeat("b", 43), all, all); err != nil {
+	if _, err := f.gw.RetryEndpoint(f.ctx, "", epID, storage.RetryPin{HostKey: "SHA256:" + strings.Repeat("b", 43)}, all, all); err != nil {
 		t.Fatalf("retry with a host key pin: %v", err)
 	}
 	if n := f.count(t, `select count(*) from property where provenance = 'declared'
@@ -250,9 +252,12 @@ func TestWriterMismatchRefused(t *testing.T) {
 	if err != nil {
 		t.Fatalf("get component: %v", err)
 	}
-	var epID string
+	var epID, tlsID string
 	if err := f.conn.QueryRow(f.ctx, `select id::text from endpoint where name = 'ssh'`).Scan(&epID); err != nil {
 		t.Fatalf("endpoint id: %v", err)
+	}
+	if err := f.conn.QueryRow(f.ctx, `select id::text from endpoint where name = 'tls'`).Scan(&tlsID); err != nil {
+		t.Fatalf("tls endpoint id: %v", err)
 	}
 	// A calc rule owns avg-uptime.
 	if _, err := f.gw.CreateMetricType(f.ctx, "", storage.MetricTypeSpec{Name: "avg-uptime", DataType: "float"}); err != nil {
@@ -344,6 +349,11 @@ func TestWriterMismatchRefused(t *testing.T) {
 				_, err := f.gw.SetProperty(f.ctx, f.actor, "component", comp.ID, "endpoint-rejection", "ssh", json.RawMessage(`"none"`), all, all)
 				return err
 			}},
+			{"a tls pin outside :retry", func() error {
+				_, err := f.gw.SetProperty(f.ctx, f.actor, "component", comp.ID, "tls-certificate", "tls",
+					json.RawMessage(`"SHA256:`+strings.Repeat("d", 43)+`"`), all, all)
+				return err
+			}},
 		},
 		"ClearProperty": {
 			{"a declared tombstone on the verdict", func() error {
@@ -352,9 +362,13 @@ func TestWriterMismatchRefused(t *testing.T) {
 		},
 		"RetryEndpoint": {
 			{"the pin on the gate", func() error {
-				return f.gw.AdmitWrite(f.ctx, "property", writerclass.HostKeyPin, "endpoint-rejection", "ssh")
+				return f.gw.AdmitWrite(f.ctx, "property", writerclass.KeyPin, "endpoint-rejection", "ssh")
 			}},
-			{"the pin on a collected key", func() error { return f.gw.AdmitWrite(f.ctx, "property", writerclass.HostKeyPin, "video-input", "ssh") }},
+			{"the pin on a collected key", func() error { return f.gw.AdmitWrite(f.ctx, "property", writerclass.KeyPin, "video-input", "ssh") }},
+			{"the pin on a tls certificate fact", func() error {
+				return f.gw.AdmitWrite(f.ctx, "property", writerclass.KeyPin, "tls-certificate-expiry", "tls")
+			}},
+			{"the pin on a tls timing", func() error { return f.gw.AdmitWrite(f.ctx, "metric", writerclass.KeyPin, "tls-handshake-time", "tls") }},
 		},
 		"writeRuleEvent": {
 			{"a rule firing collection-failed", func() error { return f.gw.WriteRuleEvent(f.ctx, ruleID, "collection-failed", comp.ID, "ssh") }},
@@ -398,8 +412,16 @@ func TestWriterMismatchRefused(t *testing.T) {
 		"a rule firing its event": func() error { return f.gw.WriteRuleEvent(f.ctx, ruleID, "condition-started", comp.ID, "ssh") },
 		"the process on health":   func() error { return f.gw.AdmitWrite(f.ctx, "property", writerclass.Process, "health", "") },
 		"the pin on the host key": func() error {
-			_, err := f.gw.RetryEndpoint(f.ctx, f.actor, epID, "SHA256:"+strings.Repeat("c", 43), all, all)
+			_, err := f.gw.RetryEndpoint(f.ctx, f.actor, epID, storage.RetryPin{HostKey: "SHA256:" + strings.Repeat("c", 43)}, all, all)
 			return err
+		},
+		"the pin on a tls certificate": func() error {
+			_, err := f.gw.RetryEndpoint(f.ctx, f.actor, tlsID, storage.RetryPin{Certificate: "SHA256:" + strings.Repeat("e", 43)}, all, all)
+			return err
+		},
+		"a node's own tls facts": func() error {
+			return f.gw.InsertMetricSamples(f.ctx, storage.NodeWriter(comp.ID, "tls"), []storage.MetricSampleWrite{
+				{OwnerKind: "component", OwnerID: comp.ID, Key: "tls-certificate-days-left", Instance: "tls", Value: 30}})
 		},
 	} {
 		if err := write(); err != nil {

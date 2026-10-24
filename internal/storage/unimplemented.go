@@ -306,7 +306,7 @@ func (UnimplementedGateway) GetEndpoint(context.Context, string, scope.Set) (*En
 func (UnimplementedGateway) CreateEndpoint(context.Context, string, EndpointSpec, scope.Set) (*Endpoint, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) RetryEndpoint(context.Context, string, string, string, scope.Set, scope.Set) (*Endpoint, error) {
+func (UnimplementedGateway) RetryEndpoint(context.Context, string, string, RetryPin, scope.Set, scope.Set) (*Endpoint, error) {
 	return nil, nil
 }
 func (UnimplementedGateway) UpdateEndpoint(context.Context, string, string, EndpointPatch, scope.Set, scope.Set) (*Endpoint, error) {
@@ -409,6 +409,9 @@ func (UnimplementedGateway) InsertPropertySamples(context.Context, KeyWriter, []
 }
 func (UnimplementedGateway) LatestProperty(context.Context, string, string, string) (*PropertySample, error) {
 	return nil, nil
+}
+func (UnimplementedGateway) EndpointKeyPin(context.Context, string, string, string) (string, error) {
+	return "", nil
 }
 func (UnimplementedGateway) PropertyTransitions(context.Context, string, string, string, time.Duration) ([]PropertySample, error) {
 	return nil, nil

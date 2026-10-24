@@ -390,7 +390,7 @@ func TestPlantedPinIsNeverDelivered(t *testing.T) {
 	}
 
 	// The :retry pin wins, and a pin planted after it changes nothing.
-	if _, err := f.gw.RetryEndpoint(f.ctx, f.actor, epID, trusted, all, all); err != nil {
+	if _, err := f.gw.RetryEndpoint(f.ctx, f.actor, epID, storage.RetryPin{HostKey: trusted}, all, all); err != nil {
 		t.Fatalf("retry with a key: %v", err)
 	}
 	afterRetry := f.sshTask(t)
@@ -404,7 +404,7 @@ func TestPlantedPinIsNeverDelivered(t *testing.T) {
 	// The pin a later trust replaces, as its audit row records it, is the
 	// :retry pin, never the planted one.
 	next := "SHA256:" + strings.Repeat("n", 43)
-	if _, err := f.gw.RetryEndpoint(f.ctx, f.actor, epID, next, all, all); err != nil {
+	if _, err := f.gw.RetryEndpoint(f.ctx, f.actor, epID, storage.RetryPin{HostKey: next}, all, all); err != nil {
 		t.Fatalf("retry with the next key: %v", err)
 	}
 	var replaced string

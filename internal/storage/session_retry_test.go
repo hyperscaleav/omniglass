@@ -132,14 +132,14 @@ func TestWorklistCarriesTheSessionBlockAndRetryMovesTheRevision(t *testing.T) {
 	// A viewer-shaped caller (no action scope) cannot retry; out of read
 	// scope it is not even told the endpoint exists.
 	none := scope.Set{}
-	if _, err := gw.RetryEndpoint(ctx, "", ep.ID, "", all, none); !errors.Is(err, storage.ErrEndpointForbidden) {
+	if _, err := gw.RetryEndpoint(ctx, "", ep.ID, storage.RetryPin{}, all, none); !errors.Is(err, storage.ErrEndpointForbidden) {
 		t.Fatalf("retry without action scope = %v, want forbidden", err)
 	}
-	if _, err := gw.RetryEndpoint(ctx, "", ep.ID, "", none, none); !errors.Is(err, storage.ErrEndpointNotFound) {
+	if _, err := gw.RetryEndpoint(ctx, "", ep.ID, storage.RetryPin{}, none, none); !errors.Is(err, storage.ErrEndpointNotFound) {
 		t.Fatalf("retry out of read scope = %v, want not found", err)
 	}
 
-	if _, err := gw.RetryEndpoint(ctx, "", ep.ID, "", all, all); err != nil {
+	if _, err := gw.RetryEndpoint(ctx, "", ep.ID, storage.RetryPin{}, all, all); err != nil {
 		t.Fatalf("retry: %v", err)
 	}
 	if got := driverTask().SessionRetry; got != 1 {
@@ -332,7 +332,7 @@ func TestTrustingAKeyChecksTheOfferedKeyAndAuditsBoth(t *testing.T) {
 	observe("ssh-host-key", first)
 	observe("endpoint-rejection", "responsive host-key "+task().Fingerprint+" "+first+" "+now)
 	before := task()
-	if _, err := gw.RetryEndpoint(ctx, actor, ep.ID, shown, all, all); !errors.Is(err, storage.ErrRetryHostKeyStale) {
+	if _, err := gw.RetryEndpoint(ctx, actor, ep.ID, storage.RetryPin{HostKey: shown}, all, all); !errors.Is(err, storage.ErrRetryHostKeyStale) {
 		t.Fatalf("trusting a key the component no longer offers = %v, want stale", err)
 	} else if !strings.Contains(err.Error(), now) || !strings.Contains(err.Error(), "on record") || !strings.Contains(err.Error(), "retry the endpoint without a host key") {
 		// The gate is the node's last word: a gated node dials no more, so
@@ -350,7 +350,7 @@ func TestTrustingAKeyChecksTheOfferedKeyAndAuditsBoth(t *testing.T) {
 
 	// The key the gate names is trusted: it becomes the pin, the retry
 	// counter moves, and the audit row carries both keys and the actor.
-	if _, err := gw.RetryEndpoint(ctx, actor, ep.ID, now, all, all); err != nil {
+	if _, err := gw.RetryEndpoint(ctx, actor, ep.ID, storage.RetryPin{HostKey: now}, all, all); err != nil {
 		t.Fatalf("trusting the offered key: %v", err)
 	}
 	if after := task(); after.HostKey != now || after.SessionRetry != before.SessionRetry+1 {
@@ -367,7 +367,7 @@ func TestTrustingAKeyChecksTheOfferedKeyAndAuditsBoth(t *testing.T) {
 
 	// With no key refusal held, a key is a pin declared ahead of time.
 	observe("endpoint-rejection", "none")
-	if _, err := gw.RetryEndpoint(ctx, actor, ep.ID, shown, all, all); err != nil {
+	if _, err := gw.RetryEndpoint(ctx, actor, ep.ID, storage.RetryPin{HostKey: shown}, all, all); err != nil {
 		t.Fatalf("declaring a pin with no key refusal held: %v", err)
 	}
 	if got := task().HostKey; got != shown {

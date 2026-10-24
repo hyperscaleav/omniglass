@@ -9,6 +9,7 @@ import (
 	"net"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/sim/fleet"
 	"github.com/hyperscaleav/omniglass/internal/sim/profile"
@@ -400,7 +401,7 @@ func (e *Engine) startInterface(dev *Device, iface profile.Interface) error {
 	if err != nil || bound == nil {
 		return err
 	}
-	dev.addFace(Face{Name: iface.Name, Protocol: iface.Protocol, Declared: iface.Port, Addr: addrPort(bound)})
+	dev.addFace(Face{Name: iface.Name, Protocol: iface.Protocol, TLS: iface.TLS, Declared: iface.Port, Addr: addrPort(bound)})
 	return nil
 }
 
@@ -441,7 +442,12 @@ func (e *Engine) bindInterface(dev *Device, iface profile.Interface) (net.Addr, 
 		// is the same condition.
 		for _, reg := range dev.TCPSessions() {
 			if reg.cfg.Port == iface.Port {
-				return dev.startTCPSession(port, reg)
+				if iface.TLS {
+					// The line protocol behind TLS (#1035), served with the
+					// device's own key, the profile's validity window.
+					return dev.startTLSFace(port, reg, time.Duration(iface.TLSValidityDays)*24*time.Hour)
+				}
+				return dev.startTCPSession(port, reg, nil)
 			}
 		}
 		return nil, nil

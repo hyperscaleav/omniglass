@@ -54,3 +54,13 @@ metric_types:
     unit: ms
     label: Telnet Response Time
     description: Time for a telnet port to send its first bytes (an option negotiation or a banner) after the connection opened; absent when the port accepted and stayed silent.
+  - name: tls-handshake-time
+    data_type: float
+    unit: ms
+    label: TLS Handshake Time
+    description: Time for the TLS handshake to reach the certificate after the connection opened, one observation per probe the component answered; absent when it never answered the handshake.
+  - name: tls-certificate-days-left
+    data_type: float
+    unit: d
+    label: TLS Certificate Days Left
+    description: Days from the probe to the not-after of the certificate a tls probe accepted, to the hundredth, negative once it has expired; one observation per probe, the number a threshold rule reads (an expression cannot read the clock).

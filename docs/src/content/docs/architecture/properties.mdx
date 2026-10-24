@@ -247,8 +247,8 @@ observer, which is why a collected key keeps all four provenances side by side.
 
 - **A node-probe key reads only as the node's observation.** The reachability panel, the session pill
   and the ingest's transition guard read the observed series alone, so no other provenance stands in
-  for the node's; the one declared row the family admits, the ssh host key pin, is set only through an
-  endpoint's audited `:retry` and read only as the pin. A node-probe sample dated more than five
+  for the node's; the one declared row the family admits, a key pin (the ssh host key, the tls
+  certificate), is set only through an endpoint's audited `:retry` and read only as the pin. A node-probe sample dated more than five
   minutes past the database's clock is stored at the database's now, so the node's account cannot
   outlive its tenure. Likewise the health reads serve the rollup's calculated rows alone.
 - **Fusion is within a class.** The same-key, multi-source reconcile [below](#fusion) is between the
