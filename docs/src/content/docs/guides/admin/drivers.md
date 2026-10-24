@@ -105,7 +105,9 @@ ladder:
 ```
 
 A refusal at a rung gates that rung and the ones above it for the endpoint; the rungs below keep
-reporting ([the gate](/architecture/collection/#the-connection-fingerprint-and-the-layered-gate)).
+reporting ([the gate](/architecture/collection/#the-connection-fingerprint-and-the-layered-gate)),
+except an snmp endpoint's get, which carries the community, so beneath its auth gate it is not sent
+and reads down, rejected.
 
 A udp driver speaks the line protocol as datagrams ([udp](/architecture/collection/#udp)). An open
 udp port cannot be detected, so it must name its request rung, and it may declare a `listen-port`

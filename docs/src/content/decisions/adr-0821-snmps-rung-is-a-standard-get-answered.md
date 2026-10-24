@@ -24,7 +24,7 @@ summary: "`snmp` is v2c, built and stateless (`held: true` was honoured by no co
      carries none. The secret's sealed version was already a fingerprint input, and the port rides
      the params; there is no version input to cover (v2c only, decision 6).
   4. **Any response is an answer.** A `noSuchObject` included, as any http status is: the rung reads
-     responsive, lands one `snmp-response-time` (decision 7a, a `node-probe` key folded into `rtt` by
+     responsive (on the tick that meets an `authorizationError` too), lands one `snmp-response-time` (decision 7a, a `node-probe` key folded into `rtt` by
      #1063), and `endpoint-authenticated yes`, since a v2c agent answers only a community it accepts.
      With no port to open, the rung is the verdict and no `tcp-open` lands; the ping stays
      informational.
@@ -34,8 +34,13 @@ summary: "`snmp` is v2c, built and stateless (`held: true` was honoured by no co
      timed, `endpoint-authenticated no`, and a terminal `auth` refusal that gates the **session
      rung** (not the transport rung, unlike udp's, since the community authenticates). Beneath it
      nothing is sent under that fingerprint: the probe lands its held `no` and a stateless snmp poll
-     is held too, since every v2c request carries the community. Rotating the community secret moves
-     the fingerprint and brings the endpoint up within a tick. SNMP v3 is #1083.
+     is held too, since every v2c request carries the community. The get is snmp's only transport
+     probe, so beneath the gate the agent is unobserved: the held rung reads `endpoint-responsive
+     down`, reason `rejected: auth`, and the verdict follows instead of freezing at the last answer.
+     Whether the probe or a poll meets the refusal first, the reading is the same from the next tick.
+     Rotating the community secret moves the fingerprint and brings the endpoint up within a tick.
+     An snmp driver must declare its community, a secret input named `community` of type
+     `snmp-community` (refused at write otherwise). SNMP v3 is #1083.
   6. **The simulated faces.** A v2c face is strict: it judges the community itself (the library,
      configured with no security, answered any) and drops any but its own silently; it may declare a
      `refused_community`, answered with `authorizationError`. The catalog's faces answer `public`

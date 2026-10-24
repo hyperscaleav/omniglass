@@ -30,3 +30,12 @@ Postgres (the probe task carries the community alone), on the reachability read,
 rejected, the refused community gated with no further get until the secret rotated, a stopped agent
 down), with loss injected through the impairments under NET_ADMIN (the netadmin end-to-end test's
 snmp leg reads down under 100% loss and up once it lifts).
+
+The review's fixes, each with a test that failed first: beneath the auth gate the get, snmp's only
+transport probe, was not sent and nothing landed, so the verdict froze at the last answer and the
+row read responding against a powered-off agent; the held rung now reads down, rejected, and the
+panel names the refusal. A restarted node's poll is proven held beneath an adopted gate (the
+suite had stayed green with the poll's gate check reverted). An snmp driver must declare its
+community input, since the rung and the poll both read it by name. And the fleet guide, the gate
+paragraph, the drivers guide and the transport table stop saying snmp has no verdict, that the rungs
+below always keep running, or that snmp is a held connection.
