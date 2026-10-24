@@ -261,9 +261,10 @@ dials once more, a re-probe fires on its interval, a transient failure still spe
 **In the console** (#1059). The component's reachability read carries each endpoint's latest
 `session-state` with the `session-reason` beside it, while the endpoint is configured to hold a
 session (teardown publishes nothing, so a session nobody holds is not served), and the rung and
-class of its `endpoint-rejection` (never the fingerprint, which is the node's to compare). Like the
-gate, a session's state and reason are the node's own facts, which the push lane refuses, so no
-push can read a rejected session up or plant a reason the node never scrubbed. So the component's
+class of its `endpoint-rejection` (never the fingerprint, which is the node's to compare). Like
+every native probe key, a session's state and reason are the node's own facts, which the push lane
+refuses ([only the node writes them](#only-the-node-writes-a-native-key)), so no push can read a
+rejected session up or plant a reason the node never scrubbed. So the component's
 Collection card, its Endpoints panel and the endpoint's detail show the session as a pill, the
 ladder with the held rung marked, and, for a down or rejected session, the reason. A state is stored
 only on a transition, so the pill is aged by the endpoint's `last_seen`, as ADR-0150 requires: a
@@ -309,6 +310,21 @@ edited in place moves a healthy session to the new component; the ssh probe send
 across a restart too, and authenticates after a params edit.
 
 **Native push**: data pushed by smart senders is self-describing (it carries its key), its edge parse a near-identity pass-through marked `shape=native`; a failed parse keeps the raw on a `collection.failed` event.
+
+### Only the node writes a native key
+
+Every key a native probe writes, its samples ([below](#poll-protocols-and-their-config)) and the
+node's account of its own connection (the verdict and its rungs, the probe metrics and their
+timings, a held session's state and reason, the host key it trusted, the gate it publishes), is the
+node's own observation, and the console reads it as one. So `POST /telemetry:push` refuses each by
+name (#1080, [ADR-0158](/architecture/decisions/#adr-0158-one-connection-fingerprint-gates-every-connection-on-a-ladder-the-driver-declares)
+point 5): on every lane, not just its own, under any instance and any casing, and the rejection's
+reason names the key. The set is not a second list: it is `internal/collection/probekeys`, the
+declaration the probes emit from, where each key is ruled node-only or pushable with the reason it
+may be pushed. None is pushable today, and a key added there without a ruling fails its test, so a
+new probe cannot ship a key a push may forge. The node's own lane never consults the ruling and
+lands every one of them. A pusher with a measurement of its own, an outside pinger's round trip
+say, registers a metric type for it rather than borrowing the node's.
 
 ## Endpoint types and their config
 

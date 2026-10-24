@@ -7823,3 +7823,23 @@ lives in the query cache under the endpoint, so the Collection card's notice and
 it together and cannot stack a second redial; the ladder no longer grows a login rung for a
 session with no login; and the rows-survive-a-poll tests now let the poll land and assert DOM
 identity, proven to fail against the unkeyed iteration (two review catalog entries record it).
+
+### The push lane refuses every key only a node can write (#1080)
+
+`POST /telemetry:push` refused a node's control facts (the gate, the trusted host key, a held
+session's state and reason) but took the rest of the native probe keys like any property, so a
+principal holding `telemetry:push` could write a reachability verdict, its rungs, or a probe metric
+or timing under an endpoint's name, and the console read it as the node's observation. Now every
+native key is refused by name, on every lane (a native name pushed as an event is refused as the
+node's, not as unregistered), under any instance and any casing, beside rows in the same batch that
+land; the rejection's reason names the key. The set is `internal/collection/probekeys` itself: each
+key is ruled there node-only or pushable with the one-line reason it may be pushed (none is
+pushable today), and a test reads the package's declared constants from source and fails on a key
+ruled neither, so a new probe key cannot ship pushable by omission. The node's own lane never
+consults the ruling. Proven against Postgres and a real bus (`TestTelemetryPushRefusesNativeKeys`:
+every node-only key on every lane and instance refused by name, a batch landing only its two
+pushable rows, casing and spacing variants refused, nothing native landing;
+`TestNodeLaneLandsEveryNativeKey`: a node publishing every native key on its own subject lands
+each one), and in unit tests (`TestEveryKeyRuled`, `TestIsNodeOnly`, `TestNodeOnlyRejection`).
+ADR-0158 point 5 is amended; the push tests that used `icmp-rtt-avg` as their sample metric now
+push `room-temperature` and `uptime`.

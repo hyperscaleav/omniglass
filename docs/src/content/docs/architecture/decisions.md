@@ -196,7 +196,7 @@ below from the project's history. From here it grows one slice at a time.
 | [ADR-0155](#adr-0155-auth-is-a-layer-that-gates-a-held-session-and-a-terminal-refusal-reads-rejected) | 2026-10-23 | Accepted | Auth is a layer that gates a held session (#1049, the architect's ruling): each attempt runs dial, then the auth step (a driver's login dialog or a transport's own auth), then the arm, then `up`, and nothing borrows the connection before the step passes; its verdict is the existing `endpoint-authenticated` rung. A terminal refusal moves the session to `rejected` (amending ADR-0150's state set), which dials no more and fails polls and commands fast with no throwaway fallback, until the endpoint's session identity changes, an operator's audited `:retry` (gated by `endpoint:retry`) moves the retry counter in the connection fingerprint (ADR-0158), or the driver's slow re-probe comes due; an unrelated edit does nothing. Three silent hang-ups after the final secret are an `auth` refusal (the login budget). `session-reason` carries the reason as a property. One login dialog serves raw tcp, telnet and ssh keyboard-interactive |
 | [ADR-0156](#adr-0156-a-driver-declares-its-terminal-replies-and-a-transport-classifies-its-own-refusals) | 2026-10-23 | Accepted | Non-retryable errors are defined in drivers (#1049, the architect's ruling): a spec's `session.terminal` lists the replies retrying cannot fix, each a match with a class (`auth`, `host-key`, `certificate`, `protocol`, a code-held set), applied to the login and to every answer, refusal and arm reply; a transport classifies its own protocol refusals into the same classes. The primitive is `collection.TerminalError{Class, Reason}`; anything unclassified stays retryable, and a terminal poll fault waits its interval rather than the failure backoff |
 | [ADR-0157](#adr-0157-telnet-and-ssh-are-held-line-transports-their-login-is-the-drivers-and-the-ssh-host-key-is-pinned-on-first-use) | 2026-10-23 | Accepted | `telnet` (#1033) and `ssh` (#1032) are held line transports: the same session machine and line reader, telnet behind a filter refusing every option, ssh over a shell or exec channel. Their session's login is the driver's (`session.login`, `session.credential`), not endpoint params; the telnet probe never logs in, and the ssh probe's params login is a known gap (#1060). The ssh host key is pinned on first use as the `ssh-host-key` property (observed), delivered back by the worklist, overridden by a declared value an operator sets with `:retry` and `host_key`; a changed key is a `host-key` refusal |
-| [ADR-0158](#adr-0158-one-connection-fingerprint-gates-every-connection-on-a-ladder-the-driver-declares) | 2026-10-23 | Accepted | One **connection fingerprint** gates every connection, held or stateless (#1056 ruling): a digest the server computes over every input a connection is made with (transport, declared params, driver inputs, each secret's sealed version, the session block, the ladder, the ssh pin, the `:retry` counter), held in `internal/fingerprint`. Connections are verified bottom up on the existing ladder (reachable, informational ping; responsive, the transport rung and the gate; authenticated, the login), declared in the driver spec with registry defaults. A terminal refusal gates its rung and above for the fingerprint; lower rungs keep running; the gate is published as `endpoint-rejection` and carried back so a restart honours it |
+| [ADR-0158](#adr-0158-one-connection-fingerprint-gates-every-connection-on-a-ladder-the-driver-declares) | 2026-10-23 | Accepted | One **connection fingerprint** gates every connection, held or stateless (#1056 ruling): a digest the server computes over every input a connection is made with (transport, declared params, driver inputs, each secret's sealed version, the session block, the ladder, the ssh pin, the `:retry` counter), held in `internal/fingerprint`. Connections are verified bottom up on the existing ladder (reachable, informational ping; responsive, the transport rung and the gate; authenticated, the login), declared in the driver spec with registry defaults. A terminal refusal gates its rung and above for the fingerprint; lower rungs keep running; the gate is published as `endpoint-rejection` and carried back so a restart honours it. **Amended (#1059, #1080):** the push lane refuses every native probe key by name, not only the gate and the host key |
 
 ## Entries
 
@@ -7138,7 +7138,7 @@ interface create form, since that name is the platform's to mint.
 
 ### ADR-0158: One connection fingerprint gates every connection, on a ladder the driver declares
 
-- **Date:** 2026-10-23 | **Status:** Accepted | **Pages:** [collection](/architecture/collection/), [nodes](/architecture/nodes/), [glossary](/architecture/glossary/), [drivers](/guides/admin/drivers/), [api](/architecture/api/)
+- **Date:** 2026-10-23 | **Status:** Accepted | **Pages:** [collection](/architecture/collection/), [nodes](/architecture/nodes/), [glossary](/architecture/glossary/), [drivers](/guides/admin/drivers/), [api](/architecture/api/), [properties](/architecture/properties/)
 - **Decision:** The architect's rulings of 2026-10-23 (on #1056 and #1049), for every connection to
   an endpoint, held or stateless (the reachability probe, a throwaway poll or command, the held
   session):
@@ -7184,7 +7184,15 @@ interface create form, since that name is the platform's to mint.
      refuses, so no push can plant or lift a gate. **Amended (#1059):** `session-state` and
      `session-reason` join them, since the console reads them as the node's account of its own
      connection: a push could otherwise read a rejected session up, hiding the refusal and its
-     Retry, or plant a reason the node never scrubbed.
+     Retry, or plant a reason the node never scrubbed. **Amended (#1080):** every native probe key
+     joins them. The reachability verdict and its rungs, the probe metrics and their rtt-style
+     timings are read by the console as the node's observation too, so they are no more a push's to
+     write than the gate. The refused set is `internal/collection/probekeys` itself, where each key
+     is ruled node-only or pushable with the reason it may be pushed; none is pushable today, and a
+     test fails on a key ruled neither, so a new probe key cannot ship pushable by omission. The
+     refusal holds on every lane (a native name pushed as an event is refused as the node's, not as
+     unregistered), under any instance and any casing, and its reason names the key. The node's own
+     lane never reads the ruling, so it writes every one of them as before.
   6. **Connection inputs edit in place** (the architect's ruling on #1061). A driver-attached
      endpoint's host, port and attached secret references are patched through `PATCH
      /endpoints/{id}` `inputs`, validated against the driver's declared inputs (a refused value is a
