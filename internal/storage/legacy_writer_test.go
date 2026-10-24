@@ -309,108 +309,134 @@ func TestContractsRefuseAReservedKey(t *testing.T) {
 	}
 }
 
-// pinFixture is the writer fixture's ssh endpoint with a task, so the node's
-// worklist carries it.
-func pinFixture(t *testing.T) (writerFixture, string) {
+// pinFixture is the writer fixture's ssh and tls endpoints, each with a task,
+// so the node's worklist carries both.
+func pinFixture(t *testing.T) writerFixture {
 	t.Helper()
 	f := newWriterFixture(t)
-	var epID string
-	if err := f.conn.QueryRow(f.ctx, `select id::text from endpoint where name = 'ssh'`).Scan(&epID); err != nil {
-		t.Fatalf("endpoint id: %v", err)
+	if _, err := f.conn.Exec(f.ctx, `insert into task (id, mode, endpoint_id, spec)
+		select 't-' || name || '-probe', 'poll', id, '{}'::jsonb from endpoint where name in ('ssh', 'tls')`); err != nil {
+		t.Fatalf("insert tasks: %v", err)
 	}
-	if _, err := f.conn.Exec(f.ctx, `insert into task (id, mode, endpoint_id, spec) values ('t-ssh-probe', 'poll', $1::uuid, '{}'::jsonb)`, epID); err != nil {
-		t.Fatalf("insert task: %v", err)
-	}
-	return f, epID
+	return f
 }
 
-func (f writerFixture) sshTask(t *testing.T) storage.WorklistTask {
+// pinCase is one transport's pin: the property it rides, the worklist field
+// that delivers it, and the :retry that sets it.
+type pinCase struct {
+	transport, property string
+	delivered           func(storage.WorklistTask) string
+	retry               func(key string) storage.RetryPin
+}
+
+var pinCases = []pinCase{
+	{"ssh", "ssh-host-key", func(t storage.WorklistTask) string { return t.HostKey },
+		func(key string) storage.RetryPin { return storage.RetryPin{HostKey: key} }},
+	{"tls", "tls-certificate", func(t storage.WorklistTask) string { return t.CertificatePin },
+		func(key string) storage.RetryPin { return storage.RetryPin{Certificate: key} }},
+}
+
+func (f writerFixture) endpointTask(t *testing.T, transport string) storage.WorklistTask {
 	t.Helper()
 	wl, err := f.gw.NodeWorklist(f.ctx, "node-a")
 	if err != nil {
 		t.Fatalf("worklist: %v", err)
 	}
 	for _, task := range wl.Tasks {
-		if task.Transport == "ssh" {
+		if task.Transport == transport {
 			return task
 		}
 	}
-	t.Fatalf("no ssh task on the worklist: %+v", wl.Tasks)
+	t.Fatalf("no %s task on the worklist: %+v", transport, wl.Tasks)
 	return storage.WorklistTask{}
 }
 
-// plantPin writes a declared ssh-host-key as the plain property route did
-// before the writer check refused it: declared, no source, no :retry audit
-// row beside it.
-func (f writerFixture) plantPin(t *testing.T, key string) {
+// plantPin writes a declared pin as the plain property route did before the
+// writer check refused it: declared, no source, no :retry audit row beside
+// it.
+func (f writerFixture) plantPin(t *testing.T, property, instance, key string) {
 	t.Helper()
 	if _, err := f.conn.Exec(f.ctx, `
 		insert into property (ts, owner_kind, component_id, property_type_id, instance, provenance, value)
 		values (clock_timestamp(), 'component', (select id from component where name = 'disp-1'),
-		        (select id from property_type where name = 'ssh-host-key'), 'ssh', 'declared', to_jsonb($1::text))`, key); err != nil {
+		        (select id from property_type where name = $1), $2, 'declared', to_jsonb($3::text))`, property, instance, key); err != nil {
 		t.Fatalf("plant a pin: %v", err)
 	}
 }
 
-// TestPlantedPinIsNeverDelivered: the worklist delivers a declared pin only
-// when it came through the endpoint's audited :retry. A pin planted through
-// the plain property route before the writer check is never delivered and
-// never moves the fingerprint, so the next connection trusts on first use (or
-// the key the node already learned); a :retry pin is delivered over a planted
-// one, before or after it.
+// TestPlantedPinIsNeverDelivered: the worklist delivers a declared pin (an
+// ssh host key, a tls certificate's public key) only when it came through the
+// endpoint's audited :retry. A pin planted through the plain property route
+// before the writer check is never delivered and never moves the fingerprint,
+// so the next connection trusts on first use (or the key the node already
+// learned); a :retry pin is delivered over a planted one, before or after it.
 func TestPlantedPinIsNeverDelivered(t *testing.T) {
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}
-	f, epID := pinFixture(t)
+	f := pinFixture(t)
 	all := scope.Set{All: true}
-	planted := "SHA256:" + strings.Repeat("p", 43)
-	learned := "SHA256:" + strings.Repeat("l", 43)
-	trusted := "SHA256:" + strings.Repeat("r", 43)
+	d1 := f.componentID(t, "disp-1")
+	for _, pc := range pinCases {
+		var epID string
+		if err := f.conn.QueryRow(f.ctx, `select id::text from endpoint where name = $1`, pc.transport).Scan(&epID); err != nil {
+			t.Fatalf("endpoint id: %v", err)
+		}
+		key := func(c string) string { return "SHA256:" + strings.Repeat(c, 43) }
+		planted, learned, trusted, next := key("p"), key("l"), key("r"), key("n")
 
-	base := f.sshTask(t)
-	if base.HostKey != "" {
-		t.Fatalf("a fresh endpoint delivers pin %q", base.HostKey)
-	}
-	f.plantPin(t, planted)
-	if got := f.sshTask(t); got.HostKey != "" || got.Fingerprint != base.Fingerprint {
-		t.Fatalf("a planted pin is delivered: pin %q, fingerprint moved %v; want trust on first use and nothing moved", got.HostKey, got.Fingerprint != base.Fingerprint)
-	}
+		base := f.endpointTask(t, pc.transport)
+		if got := pc.delivered(base); got != "" {
+			t.Fatalf("%s: a fresh endpoint delivers pin %q", pc.transport, got)
+		}
+		f.plantPin(t, pc.property, pc.transport, planted)
+		if got := f.endpointTask(t, pc.transport); pc.delivered(got) != "" || got.Fingerprint != base.Fingerprint {
+			t.Fatalf("%s: a planted pin is delivered: pin %q, fingerprint moved %v; want trust on first use and nothing moved",
+				pc.transport, pc.delivered(got), got.Fingerprint != base.Fingerprint)
+		}
+		if pin, err := f.gw.EndpointKeyPin(f.ctx, "disp-1", pc.transport, pc.transport); err != nil || pin != "" {
+			t.Fatalf("%s: the reachability read serves pin %q (%v), want none", pc.transport, pin, err)
+		}
 
-	// The key the node learned on first use is still the pin.
-	if err := f.gw.InsertPropertySamples(f.ctx, storage.NodeWriter(f.componentID(t, "disp-1"), "ssh"), []storage.PropertySampleWrite{
-		{OwnerKind: "component", OwnerID: "disp-1", Key: "ssh-host-key", Instance: "ssh", Value: learned}}); err != nil {
-		t.Fatalf("the node publishes its key: %v", err)
-	}
-	if got := f.sshTask(t); got.HostKey != learned || got.Fingerprint != base.Fingerprint {
-		t.Fatalf("pin %q (fingerprint moved %v), want the learned key and the fingerprint unmoved", got.HostKey, got.Fingerprint != base.Fingerprint)
-	}
+		// The key the node learned on first use is still the pin.
+		if err := f.gw.InsertPropertySamples(f.ctx, storage.NodeWriter(d1, pc.transport), []storage.PropertySampleWrite{
+			{OwnerKind: "component", OwnerID: d1, Key: pc.property, Instance: pc.transport, Value: learned}}); err != nil {
+			t.Fatalf("%s: the node publishes its key: %v", pc.transport, err)
+		}
+		if got := f.endpointTask(t, pc.transport); pc.delivered(got) != learned || got.Fingerprint != base.Fingerprint {
+			t.Fatalf("%s: pin %q (fingerprint moved %v), want the learned key and the fingerprint unmoved",
+				pc.transport, pc.delivered(got), got.Fingerprint != base.Fingerprint)
+		}
 
-	// The :retry pin wins, and a pin planted after it changes nothing.
-	if _, err := f.gw.RetryEndpoint(f.ctx, f.actor, epID, storage.RetryPin{HostKey: trusted}, all, all); err != nil {
-		t.Fatalf("retry with a key: %v", err)
-	}
-	afterRetry := f.sshTask(t)
-	if afterRetry.HostKey != trusted {
-		t.Fatalf("pin %q after :retry, want %q", afterRetry.HostKey, trusted)
-	}
-	f.plantPin(t, planted)
-	if got := f.sshTask(t); got.HostKey != trusted || got.Fingerprint != afterRetry.Fingerprint {
-		t.Fatalf("a pin planted after :retry: pin %q, fingerprint moved %v; want the :retry pin and nothing moved", got.HostKey, got.Fingerprint != afterRetry.Fingerprint)
-	}
-	// The pin a later trust replaces, as its audit row records it, is the
-	// :retry pin, never the planted one.
-	next := "SHA256:" + strings.Repeat("n", 43)
-	if _, err := f.gw.RetryEndpoint(f.ctx, f.actor, epID, storage.RetryPin{HostKey: next}, all, all); err != nil {
-		t.Fatalf("retry with the next key: %v", err)
-	}
-	var replaced string
-	if err := f.conn.QueryRow(f.ctx, `select coalesce(old->>'host_key', '') from audit_log where resource = 'endpoint' and verb = 'retry'
-		and new->>'host_key' = $1`, next).Scan(&replaced); err != nil {
-		t.Fatal(err)
-	}
-	if replaced != trusted {
-		t.Errorf("the audit row records replacing %q, want the :retry pin %q", replaced, trusted)
+		// The :retry pin wins, and a pin planted after it changes nothing.
+		if _, err := f.gw.RetryEndpoint(f.ctx, f.actor, epID, pc.retry(trusted), all, all); err != nil {
+			t.Fatalf("%s: retry with a key: %v", pc.transport, err)
+		}
+		afterRetry := f.endpointTask(t, pc.transport)
+		if pc.delivered(afterRetry) != trusted {
+			t.Fatalf("%s: pin %q after :retry, want %q", pc.transport, pc.delivered(afterRetry), trusted)
+		}
+		f.plantPin(t, pc.property, pc.transport, planted)
+		if got := f.endpointTask(t, pc.transport); pc.delivered(got) != trusted || got.Fingerprint != afterRetry.Fingerprint {
+			t.Fatalf("%s: a pin planted after :retry: pin %q, fingerprint moved %v; want the :retry pin and nothing moved",
+				pc.transport, pc.delivered(got), got.Fingerprint != afterRetry.Fingerprint)
+		}
+		if pin, err := f.gw.EndpointKeyPin(f.ctx, "disp-1", pc.transport, pc.transport); err != nil || pin != trusted {
+			t.Fatalf("%s: the reachability read serves pin %q (%v), want the :retry pin", pc.transport, pin, err)
+		}
+		// The pin a later trust replaces, as its audit row records it, is the
+		// :retry pin, never the planted one.
+		if _, err := f.gw.RetryEndpoint(f.ctx, f.actor, epID, pc.retry(next), all, all); err != nil {
+			t.Fatalf("%s: retry with the next key: %v", pc.transport, err)
+		}
+		var replaced string
+		if err := f.conn.QueryRow(f.ctx, `select coalesce(old->>'host_key', old->>'certificate', '') from audit_log
+			where resource = 'endpoint' and verb = 'retry' and $1 in (new->>'host_key', new->>'certificate')`, next).Scan(&replaced); err != nil {
+			t.Fatal(err)
+		}
+		if replaced != trusted {
+			t.Errorf("%s: the audit row records replacing %q, want the :retry pin %q", pc.transport, replaced, trusted)
+		}
 	}
 }
 
