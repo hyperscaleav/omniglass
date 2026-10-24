@@ -29,7 +29,8 @@ func TestVocabulary(t *testing.T) {
 // TestDecisionsFormat checks the decision log's mechanical structure, now one
 // file per decision under docs/src/content/decisions/ (#1095): the index row's
 // fields in each file's frontmatter, Date and Status in its body, one file per
-// number, and numbers from 0001 with no gap. The audit found a duplicate
+// number, the legacy range (0001 to 0163) with no gap, and every later number
+// one of its own refs, the issue it was decided under (#1108). The audit found a duplicate
 // ADR-0036, sixteen missing index rows, and entries with no status at all; the
 // index is generated from the files now, so a missing row cannot recur, and two
 // PRs that took the same number fail here naming both files.

@@ -161,7 +161,8 @@ describe('the decision log', () => {
         assert.match(err.message, /ADR-0002/);
         assert.match(err.message, /adr-0002-mine\.md/);
         assert.match(err.message, /adr-0002-theirs\.md/);
-        assert.match(err.message, /make adr-renumber/);
+        assert.match(err.message, /make adr-renumber FROM=0002 TO=<its issue number>/);
+        assert.match(err.message, /the legacy range is closed/);
         return true;
       },
     );
@@ -187,43 +188,43 @@ describe('issue-numbered decisions', () => {
     );
 
   it('numbers a decision past the legacy range by its issue, its refs naming it', () => {
-    const out = renderDecisionIndex([adrN('0162', 'Last legacy'), adrN('1100', 'By issue', [1100, 1095])]);
+    const out = renderDecisionIndex([adrN('0162', 'Last legacy'), adrN('990011', 'By issue', [990011, 1095])]);
     assert.match(out, /\| \[ADR-0162\]\(#adr-0162-last-legacy\) \|/);
-    assert.match(out, /\| \[ADR-1100\]\(#adr-1100-by-issue\) \|/);
+    assert.match(out, /\| \[ADR-990011\]\(#adr-990011-by-issue\) \|/);
     assert.equal(LEGACY_ADR_MAX, 163);
   });
 
   it('refuses an issue-numbered decision whose refs do not name its number', () => {
-    assert.throws(() => renderDecisionIndex([adrN('1100', 'Mismatch', [1099])]), /adr-1100-mismatch\.md: ADR-1100 is numbered by its issue, so its refs must include 1100/);
-    assert.throws(() => renderDecisionIndex([adrN('1100', 'No refs')]), /refs must include 1100/);
+    assert.throws(() => renderDecisionIndex([adrN('990011', 'Mismatch', [990010])]), /adr-990011-mismatch\.md: ADR-990011 is numbered by its issue, so its refs must include 990011/);
+    assert.throws(() => renderDecisionIndex([adrN('990011', 'No refs')]), /refs must include 990011/);
   });
 
   it('orders legacy and issue numbers by value, a suffix after its issue', () => {
     const out = renderDecisionLog([
-      adrN('10000', 'Five digits', [10000]),
-      adrN('1100.2', 'Second on the issue', [1100]),
-      adrN('1100', 'First on the issue', [1100]),
+      adrN('9900100', 'Five digits', [9900100]),
+      adrN('990011.2', 'Second on the issue', [990011]),
+      adrN('990011', 'First on the issue', [990011]),
       adrN('0163', 'Legacy'),
     ]);
     assert.deepEqual(
       out.split('\n').filter((l) => l.startsWith('### ')),
-      ['### ADR-0163: Legacy', '### ADR-1100: First on the issue', '### ADR-1100.2: Second on the issue', '### ADR-10000: Five digits'],
+      ['### ADR-0163: Legacy', '### ADR-990011: First on the issue', '### ADR-990011.2: Second on the issue', '### ADR-9900100: Five digits'],
     );
   });
 
   it('anchors a suffix where the heading renders it: the dot drops out of the slug', () => {
-    assert.equal(adrAnchor('1100.2', 'Second on the issue'), 'adr-11002-second-on-the-issue');
-    const out = renderDecisionIndex([adrN('1100', 'First', [1100]), adrN('1100.2', 'Second', [1100])]);
-    assert.match(out, /\| \[ADR-1100\.2\]\(#adr-11002-second\) \|/);
-    assert.deepEqual(missingLogIds('<h3 id="adr-1100-first"></h3><h3 id="adr-11002-second"></h3>', [adrN('1100', 'First', [1100]), adrN('1100.2', 'Second', [1100])]), []);
+    assert.equal(adrAnchor('990011.2', 'Second on the issue'), 'adr-9900112-second-on-the-issue');
+    const out = renderDecisionIndex([adrN('990011', 'First', [990011]), adrN('990011.2', 'Second', [990011])]);
+    assert.match(out, /\| \[ADR-990011\.2\]\(#adr-9900112-second\) \|/);
+    assert.deepEqual(missingLogIds('<h3 id="adr-990011-first"></h3><h3 id="adr-9900112-second"></h3>', [adrN('990011', 'First', [990011]), adrN('990011.2', 'Second', [990011])]), []);
   });
 
   it('refuses two files holding one suffixed number, naming both', () => {
     assert.throws(
-      () => renderDecisionLog([adrN('1100', 'First', [1100]), frag('adr-1100.2-mine.md', adrN('1100.2', 'Mine', [1100]).text), frag('adr-1100.2-theirs.md', adrN('1100.2', 'Theirs', [1100]).text)]),
+      () => renderDecisionLog([adrN('990011', 'First', [990011]), frag('adr-990011.2-mine.md', adrN('990011.2', 'Mine', [990011]).text), frag('adr-990011.2-theirs.md', adrN('990011.2', 'Theirs', [990011]).text)]),
       (err) => {
-        assert.match(err.message, /ADR-1100\.2 is taken by both adr-1100\.2-mine\.md and adr-1100\.2-theirs\.md/);
-        assert.match(err.message, /make adr-renumber FROM=1100\.2 TO=1100\.3 FILE=/);
+        assert.match(err.message, /ADR-990011\.2 is taken by both adr-990011\.2-mine\.md and adr-990011\.2-theirs\.md/);
+        assert.match(err.message, /make adr-renumber FROM=990011\.2 TO=990011\.3 FILE=/);
         return true;
       },
     );
@@ -231,8 +232,8 @@ describe('issue-numbered decisions', () => {
 
   for (const [why, f, msg] of [
     ['a number not written in four digits', adrN('163', 'Short', []), /adr-NNNN-<slug>\.md/],
-    ['a zero-padded issue number', adrN('01100', 'Padded', [1100]), /adr-NNNN-<slug>\.md/],
-    ['a suffix of one', adrN('1100.1', 'One', [1100]), /adr-NNNN-<slug>\.md/],
+    ['a zero-padded issue number', adrN('01100', 'Padded', [990011]), /adr-NNNN-<slug>\.md/],
+    ['a suffix of one', adrN('990011.1', 'One', [990011]), /adr-NNNN-<slug>\.md/],
     ['a suffix on a legacy number', adrN('0100.2', 'Legacy suffix'), /a legacy number takes no suffix/],
   ]) {
     it(`refuses ${why}`, () => {

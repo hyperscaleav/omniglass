@@ -31,7 +31,7 @@ architecture decision record (ADR), kept lightweight and append-only.
 - **Two numbering ranges.** ADR-0001 to ADR-0163 were numbered in sequence, and that range is closed.
   Every later decision takes the number of the issue it was decided under (ADR-1108 was decided under
   issue #1108), so two decisions made at once never compete for one number; a second decision on the
-  same issue takes a suffix (ADR-1108.2, anchored as `#adr-11082-...`). The index lists both ranges in
+  same issue takes a suffix (ADR-NNNN.2, anchored as `#adr-NNNN2-...`). The index lists both ranges in
   number order.
 - New reversals and divergences are added **per slice**, as part of the
   [ship gate](/contributing/slice-workflow/): if a slice changes a settled call or ships something that

@@ -1,11 +1,13 @@
 package docslint
 
-// RenumberADR is the one-command fix for two PRs that took the same next ADR
-// number (#1095). The decisions lint names both files, and the branch that
-// lands second moves its decision with `make adr-renumber FROM=NNNN TO=MMMM`,
-// which renames the decision file and rewrites every reference to the number
-// across the repository: the ADR-NNNN mentions in docs, code comments, and
-// skills, and the #adr-NNNN-<slug> anchors and adr-NNNN-<slug>.md file names.
+// RenumberADR moves a decision to another number (#1095, #1108). A decision
+// takes its issue's number, so two PRs clash only when both add one issue's next
+// suffix (both take ADR-NNNN.2); the decisions lint names both files, and the
+// branch that lands second moves its decision with
+// `make adr-renumber FROM=NNNN.2 TO=NNNN.3`, which renames the decision file and
+// rewrites every reference to the number across the repository: the ADR-NNNN.2
+// mentions in docs, code comments, and skills, the adr-NNNN.2-<slug>.md file
+// names, and the #adr-NNNN2-<slug> anchors.
 //
 // Before main is merged in, the number means only the branch's decision and
 // every reference is rewritten. Once both decisions are in the tree (after the

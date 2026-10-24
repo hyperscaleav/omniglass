@@ -197,7 +197,7 @@ export function renderBuildLog(sources) {
 // A decision is adr-<number>[.<suffix>]-<slug>.md. ADR-0001 to ADR-0163 are the
 // closed legacy range, numbered in sequence (#1108); every later decision takes
 // the number of the issue it was decided under, so two PRs never race for one,
-// and a second decision on the same issue a suffix from 2 (ADR-1100.2). The
+// and a second decision on the same issue a suffix from 2 (ADR-NNNN.2). The
 // number is written zero-padded to four digits, and only to four.
 const adrName = /^adr-(\d{4,9})(?:\.([2-9]|[1-9]\d+))?-[a-z0-9][a-z0-9-]*\.md$/;
 
@@ -223,17 +223,23 @@ function decisions(sources) {
     const f = parseFragment(name, text);
     checkKeys(f, ['title', 'date', 'status', 'summary'], ['refs']);
     checkNoDirectives(f);
-    if (f.data.refs !== undefined && !Array.isArray(f.data.refs)) throw new Error(`${name}: refs must be a list, like [1108]`);
+    if (f.data.refs !== undefined && !Array.isArray(f.data.refs)) throw new Error(`${name}: refs must be a list, like [NNNN]`);
     if (value <= LEGACY_ADR_MAX && m[2]) throw new Error(`${name}: a legacy number takes no suffix`);
     if (value > LEGACY_ADR_MAX && !(f.data.refs ?? []).includes(value)) {
       throw new Error(`${name}: ADR-${m[1]} is numbered by its issue, so its refs must include ${value}`);
     }
     const taken = byNumber.get(number);
+    if (taken && value <= LEGACY_ADR_MAX) {
+      throw new Error(
+        `ADR-${number} is taken by both ${taken} and ${name}: the legacy range is closed, so renumber the one ` +
+          `that landed second under its issue with make adr-renumber FROM=${number} TO=<its issue number> ` +
+          `FILE=<its file name>, and add the issue to its refs (see /record-decision)`,
+      );
+    }
     if (taken) {
-      const next = value > LEGACY_ADR_MAX ? `${m[1]}.${suffix + 1}` : '<the next free number>';
       throw new Error(
         `ADR-${number} is taken by both ${taken} and ${name}: renumber the one that landed second with ` +
-          `make adr-renumber FROM=${number} TO=${next} FILE=<its file name> (see /record-decision)`,
+          `make adr-renumber FROM=${number} TO=${m[1]}.${suffix + 1} FILE=<its file name> (see /record-decision)`,
       );
     }
     byNumber.set(number, name);

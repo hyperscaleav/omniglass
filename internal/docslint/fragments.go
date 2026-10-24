@@ -275,7 +275,7 @@ var (
 // LegacyADRMax closes the sequential range (#1108): ADR-0001 to ADR-0163 were
 // numbered in order and run with no gap. Every later decision takes the number
 // of the issue it was decided under, so two PRs never race for one, and a
-// second decision on one issue takes a suffix from .2 (ADR-1100.2).
+// second decision on one issue takes a suffix from .2 (ADR-NNNN.2).
 const LegacyADRMax = 163
 
 // adrKey is a decision's number as its heading writes it: 0042, 1108, 1108.2.
@@ -332,6 +332,9 @@ func scanDecisionsDir(dir string) ([]Finding, error) {
 		for _, msg := range checkFields(f, []string{"title", "date", "status", "summary"}, nil, []string{"refs"}) {
 			findings = append(findings, Finding{rel(s.name), 1, msg})
 		}
+		if _, scalar := f.Fields["refs"]; scalar {
+			findings = append(findings, Finding{rel(s.name), 1, "refs must be a list, like [NNNN]"})
+		}
 		switch {
 		case n <= LegacyADRMax && suffix > 1:
 			findings = append(findings, Finding{rel(s.name), 1, "a legacy number takes no suffix: a second decision is numbered by its own issue"})
@@ -376,26 +379,23 @@ func scanDecisionsDir(dir string) ([]Finding, error) {
 	for _, k := range keys {
 		key := adrKey(k.n, k.suffix)
 		names := holders[key]
-		if len(names) > 1 {
-			next := "<its issue number>"
-			if k.n <= LegacyADRMax && legacyMax < LegacyADRMax {
-				next = adrKey(legacyMax+1, 1)
-			}
-			if k.n > LegacyADRMax {
-				s := k.suffix + 1
-				for len(holders[adrKey(k.n, s)]) > 0 {
-					s++
-				}
-				next = adrKey(k.n, s)
+		switch {
+		case len(names) > 1 && k.n <= LegacyADRMax:
+			findings = append(findings, Finding{rel(names[1]), 1, fmt.Sprintf("ADR-%s is taken by both %s: the legacy range is closed, so renumber the one that landed second under its issue with make adr-renumber FROM=%s TO=<its issue number> FILE=<its file name>, and add the issue to its refs (see /record-decision)",
+				key, strings.Join(names, " and "), key)})
+		case len(names) > 1:
+			s := k.suffix + 1
+			for len(holders[adrKey(k.n, s)]) > 0 {
+				s++
 			}
 			findings = append(findings, Finding{rel(names[1]), 1, fmt.Sprintf("ADR-%s is taken by both %s: renumber the one that landed second with make adr-renumber FROM=%s TO=%s FILE=<its file name> (see /record-decision)",
-				key, strings.Join(names, " and "), key, next)})
+				key, strings.Join(names, " and "), key, adrKey(k.n, s))})
 		}
 		if k.suffix > 1 && len(holders[adrKey(k.n, k.suffix-1)]) == 0 {
 			findings = append(findings, Finding{rel(names[0]), 1, fmt.Sprintf("ADR-%s has no ADR-%s before it: an issue's decisions run ADR-%04d, ADR-%04d.2, ADR-%04d.3", key, adrKey(k.n, k.suffix-1), k.n, k.n, k.n)})
 		}
-		// The suffix's dot drops out of the heading's slug, so ADR-1100.2 anchors
-		// as #adr-11002-<slug>, the prefix ADR-11002 would take.
+		// The suffix's dot drops out of the heading's slug, so ADR-NNNN.2 anchors
+		// as #adr-NNNN2-<slug>, the prefix a decision numbered NNNN2 would take.
 		prefix := "#adr-" + strings.ReplaceAll(key, ".", "") + "-"
 		if other, clash := anchors[prefix]; clash {
 			findings = append(findings, Finding{rel(names[0]), 1, fmt.Sprintf("ADR-%s and ADR-%s share the anchor prefix %s: decide one of them under another issue", key, other, prefix)})
