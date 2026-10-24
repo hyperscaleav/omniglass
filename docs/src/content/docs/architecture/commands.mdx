@@ -78,7 +78,7 @@ The registry is seeded official and operator-extensible, official rows read-only
 Issuing is one transaction writing three things:
 
 1. the **`command`** row (the invocation: owner, command_type, params, actor, `status='issued'`), over the same [exclusive owner arc](/architecture/properties/#ownership-the-exclusive-arc) as every sample and event;
-2. a **caused `event`** ([`origin=caused`](/architecture/events/#events-caught-caused-derived-scheduled), typed `command-issued`), the record that a command happened, which only a command writes (its writer class is `command-lifecycle`, so a push, a node, a driver or an event rule landing one is refused, [ADR-0163](/architecture/decisions/#adr-0163-legacy-rows-and-stored-declarations-honor-the-one-writer-ruling)); and
+2. a **caused `event`** ([`origin=caused`](/architecture/events/#events-caught-caused-derived-scheduled), typed `command-issued`), the record that a command happened, which only a command writes (its writer class is `command-lifecycle`, so a push, a node, a driver or an event rule landing one is refused, [ADR-1100](/architecture/decisions/#adr-1100-legacy-rows-and-stored-declarations-honor-the-one-writer-ruling)); and
 3. for a settleable command, an **`intended`** series row in the target lane (`provenance=intended`, its `ts` the moment of issue, `command_id` naming this command as its lineage), the **told** in the want/told/is pivot.
 
 `POST /components/{name}/commands:issue` is the write, gated by `command:issue` and scope-injected

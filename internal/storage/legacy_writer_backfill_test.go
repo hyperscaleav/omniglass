@@ -16,7 +16,7 @@ import (
 )
 
 // The one-time backfill that holds legacy rows to the one-writer ruling
-// (ADR-0163), driven from the embedded migration text so the test runs the
+// (ADR-1100), driven from the embedded migration text so the test runs the
 // exact statements the migration applies. storagetest.NewDSN migrates to
 // head, so the backfill already ran once over an empty database; the test
 // seeds what releases before the ruling could have left, runs it again, and

@@ -1,7 +1,7 @@
 -- migrate:up
 
 -- One-time data backfill (#1100): rows written before the one-writer ruling
--- (ADR-0161) are held to it (ADR-0163). Each row of a reserved key whose
+-- (ADR-0161) are held to it (ADR-1100). Each row of a reserved key whose
 -- writer class would refuse it today is moved, whole, into retired_sample
 -- with its reason, so no read serves it and its record survives. The key
 -- lists are the reserved keys as of this migration; a reserved key declared

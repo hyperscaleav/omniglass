@@ -5,7 +5,7 @@ refs: [1100]
 ---
 
 What was written or declared before the one-writer ruling is held to it wherever it would still act
-([ADR-0163](/architecture/decisions/#adr-0163-legacy-rows-and-stored-declarations-honor-the-one-writer-ruling),
+([ADR-1100](/architecture/decisions/#adr-1100-legacy-rows-and-stored-declarations-honor-the-one-writer-ruling),
 amending ADR-0161). A declared key pin (the ssh host key, the tls certificate's public key) is trusted
 only as the endpoint's audited `:retry` wrote it: its row carries `source` `key-pin`, and the worklist,
 the fingerprint, the reachability read and the audit row's replaced pin read a declared pin by that

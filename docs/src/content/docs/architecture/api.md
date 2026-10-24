@@ -713,7 +713,7 @@ set for it, now off contract. An **official** classifier refuses the write (422)
 classifier is a 404, and a property the catalog does not know is a 422, as is a reserved key (a
 native probe key, `health`, `command-issued`) on this route or the metric contract's, naming the key
 and who writes it, since a contract default would stand in for its writer's value
-([ADR-0163](/architecture/decisions/#adr-0163-legacy-rows-and-stored-declarations-honor-the-one-writer-ruling)).
+([ADR-1100](/architecture/decisions/#adr-1100-legacy-rows-and-stored-declarations-honor-the-one-writer-ruling)).
 
 An instance's **values** are the other side of the contract, and unlike the classifier routes they are
 **ABAC-scoped through the instance**, so an out-of-read-scope instance is a non-disclosing **404** and

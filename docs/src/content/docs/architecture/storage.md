@@ -324,7 +324,7 @@ halves of what a node holds: the component its task collects for and the endpoin
 every row of a batch lands on that component, and a node-probe row under that endpoint.
 
 What was written or declared before the ruling is held to it as well
-([ADR-0163](/architecture/decisions/#adr-0163-legacy-rows-and-stored-declarations-honor-the-one-writer-ruling)).
+([ADR-1100](/architecture/decisions/#adr-1100-legacy-rows-and-stored-declarations-honor-the-one-writer-ruling)).
 A one-time backfill **retires** every row of a reserved key whose class would refuse it today: the row
 moves whole into `retired_sample`, with its lane, its id and the reason, so no read serves it and its
 record survives (a flag would need every read to remember it; a move leaves none to forget). A declared

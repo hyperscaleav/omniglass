@@ -656,7 +656,7 @@ func (p *PG) endCondition(ctx context.Context, tx pgx.Tx, actorID string, r Even
 	err = writeRuleEvent(ctx, tx, r, r.ClearEventType, comp, instance, alarmID, s)
 	if errors.Is(err, ErrKeyWriterRefused) {
 		// A rule stored with a clear event type the writer ruling now
-		// refuses (ADR-0163) still lets its condition go: the condition
+		// refuses (ADR-1100) still lets its condition go: the condition
 		// ends and its alarm clears, writing no event, so the rule can be
 		// released or deleted; the boot audit names it.
 		return nil
@@ -1414,7 +1414,7 @@ func (p *PG) reconcileSeries(ctx context.Context, c ruleCandidate) error {
 // rejudgeSeries is reconcileSeries, and with releaseEmpty a series left with
 // no sample at all lets go of what the rule holds on it (its condition, the
 // alarm with it, its streak): the boot heal's case, where a retirement took
-// the only samples a condition stood on (ADR-0163).
+// the only samples a condition stood on (ADR-1100).
 func (p *PG) rejudgeSeries(ctx context.Context, c ruleCandidate, releaseEmpty bool) error {
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {

@@ -2,6 +2,7 @@
 title: "Legacy rows and stored declarations honor the one-writer ruling"
 date: 2026-10-24
 status: "Accepted"
+refs: [1100]
 summary: "What was written or declared before the one-writer ruling is held to it (#1100, amending ADR-0161): a declared pin is trusted only from the endpoint's audited `:retry` (marked `source` `key-pin`, legacy ones stamped from their audit row) and a node forgets a pin the worklist stops delivering; rows the ruling refuses are retired whole into `retired_sample` with a reason, never deleted and never flagged; stored driver specs and derived tasks never hand a node a refused emit, and the boot audit names them; a node's writer binds its task's component as well as its endpoint; contracts refuse reserved keys; and `command-lifecycle` (`command-issued`) is a reserved class"
 ---
 

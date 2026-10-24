@@ -1,6 +1,6 @@
 -- migrate:up
 
--- The rows the one-writer ruling disowns (ADR-0161, ADR-0163): a sample or
+-- The rows the one-writer ruling disowns (ADR-0161, ADR-1100): a sample or
 -- event row a one-time backfill found its key's writer class would refuse
 -- today is moved here, whole, with the reason, rather than deleted. It leaves
 -- every read (none serves this table; the pin read only checks a retired
@@ -20,7 +20,7 @@ CREATE TABLE IF NOT EXISTS public.retired_sample (
 );
 
 -- A retired planted pin's key is never re-learned as the pin from the
--- observed series (ADR-0163): the pin read looks its endpoint up here.
+-- observed series (ADR-1100): the pin read looks its endpoint up here.
 CREATE INDEX IF NOT EXISTS retired_sample_pin_idx
     ON public.retired_sample ((sample->>'component_id'), (sample->>'instance'))
     WHERE lane = 'property' AND sample->>'provenance' = 'declared';

@@ -163,7 +163,7 @@ func startBus(c config.Config, gw storage.Gateway) (*bus.Server, error) {
 }
 
 // auditWriterRuling holds, once at boot, what was stored before the
-// one-writer ruling to it (ADR-0163). It re-judges every event rule series a
+// one-writer ruling to it (ADR-1100). It re-judges every event rule series a
 // retirement took rows from, so a condition a retired row raised lets go, and
 // flags every stored declaration the ruling now refuses (a driver spec or a
 // derived task emitting a key the node lane may not carry, a contract line on

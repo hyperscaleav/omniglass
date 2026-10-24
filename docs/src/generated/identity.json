@@ -251,7 +251,7 @@
     {
       "table": "retired_sample",
       "shape": "id only",
-      "reason": "a retired sample or event row kept for audit (ADR-0163), keyed by its lane and the row's own id; nothing addresses it by name",
+      "reason": "a retired sample or event row kept for audit (ADR-1100), keyed by its lane and the row's own id; nothing addresses it by name",
       "labelled": false
     },
     {

@@ -822,7 +822,7 @@ const pinSource = string(writerclass.KeyPin)
 // retiredPinSQL matches an observed pin row (aliased o; comp and inst are
 // the SQL its endpoint's component id, as text, and instance read from) whose
 // key a backfill retired as a declared pin no :retry set, published after
-// that declared row and never before it (ADR-0163): such a key is never taken
+// that declared row and never before it (ADR-1100): such a key is never taken
 // as the pin from the observed series, however it comes back (a node still
 // holding it in memory republishes it), until a :retry declares it. A key the
 // node learned before the plant stays its own, as the backfill's echo rule

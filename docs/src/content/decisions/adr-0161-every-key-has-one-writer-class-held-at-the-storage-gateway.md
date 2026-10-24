@@ -21,7 +21,7 @@ summary: "Every metric, property and event type has exactly one **writer class**
      `platform`, which takes its keys without restructuring. **Amended (#1100):** a third reserved
      class, `command-lifecycle` (`command-issued`, a command's alone), joins the family, and what
      was stored before this ruling is held to it
-     ([ADR-0163](#adr-0163-legacy-rows-and-stored-declarations-honor-the-one-writer-ruling)).
+     ([ADR-1100](#adr-1100-legacy-rows-and-stored-declarations-honor-the-one-writer-ruling)).
   2. **Each class admits a fixed set of writers**, the entry point a write comes through, each
      fixing the provenance it writes. `node-probe` admits the node lane alone, bound to the
      endpoint whose task the node ran; `platform` the process alone; `calc` the rule that outputs

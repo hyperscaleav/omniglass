@@ -255,7 +255,7 @@ observer, which is why a collected key keeps all four provenances side by side.
   minutes past the database's clock is stored at the database's now, so the node's account cannot
   outlive its tenure. Likewise the health reads serve the rollup's calculated rows alone. Rows written
   before the ruling that it refuses were retired into `retired_sample`
-  ([ADR-0163](/architecture/decisions/#adr-0163-legacy-rows-and-stored-declarations-honor-the-one-writer-ruling)).
+  ([ADR-1100](/architecture/decisions/#adr-1100-legacy-rows-and-stored-declarations-honor-the-one-writer-ruling)).
 - **Fusion is within a class.** The same-key, multi-source reconcile [below](#fusion) is between the
   perspectives of a `collected` key (a driver's emits on the node lane, a push), told apart by
   `source`: the class is the trust boundary, the source the sensor path within it. A reserved key has

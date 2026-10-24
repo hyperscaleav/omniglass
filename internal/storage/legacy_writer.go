@@ -251,7 +251,7 @@ func (p *PG) WriterRulingViolations(ctx context.Context) ([]RulingViolation, err
 }
 
 // HealRetiredSeries re-judges, at boot, every enabled event rule's series a
-// retirement took rows from (ADR-0163): a condition (and the alarm with it) a
+// retirement took rows from (ADR-1100): a condition (and the alarm with it) a
 // retired row raised would otherwise stand, since nothing re-reads a series
 // that lost rows rather than gained them. A series left with no sample lets
 // its condition go; one with samples is judged against its newest, as the

@@ -11,5 +11,5 @@
   the row and read by the mark (recovering history from an existing audit trail), retire rows the
   invariant refuses into a kept table rather than deleting or flagging them, re-check stored
   declarations where they are delivered and audit them at boot, and make the holder of delivered
-  state drop what is no longer delivered (ADR-0163; `keyPin`, internal/storage/endpoints.go;
+  state drop what is no longer delivered (ADR-1100; `keyPin`, internal/storage/endpoints.go;
   `rulingEmits`, internal/storage/legacy_writer.go; `HostKeyPin.Learned`, internal/collection/session.go).
