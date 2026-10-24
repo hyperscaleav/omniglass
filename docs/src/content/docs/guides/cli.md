@@ -277,7 +277,7 @@ The transports are a code registry the binary ships (`omniglass transport list` 
 certificate's expiry, `ssh` and `http` climb to layer 7 (the probe draws a
 real response, so reached-but-not-responsive and responded-but-not-authenticated are visible
 states), `udp` proves its rung with its driver's request (a bare udp endpoint has nothing to send),
-and `snmp` carries no standalone probe (it collects through its driver).
+and `snmp` proves its rung with a standard get (sysUpTime.0) carrying its driver's community.
 An endpoint is **named by its transport** (the `--transport`, or the attached driver's spec),
 unique within its component. An endpoint `update` changes only its node placement and
 params. A **task** is **derived** when its endpoint is created, so there is no

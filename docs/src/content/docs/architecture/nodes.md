@@ -293,7 +293,7 @@ resumes its durable consumer on the command queue, and replays unacked telemetry
 
 Any endpoint with a host address gets reachability for free: the node pings the host and checks the declared port(s), continuously and out of band; a smart default, **bypassable per endpoint** (for endpoints that drop ICMP or have no port).
 
-:::design[Target design: the layered availability gate, tracked in #603 (the snmp gate is #821)]
+:::design[Target design: the layered availability gate, tracked in #603]
 The results come back as `reachable` / `port_open` **samples** usable in rules and dashboards, and
 feed the smart-wait gate from the node's local copy: the connection detector and the dashboard
 signal are one always-on probe.
@@ -308,13 +308,13 @@ their AND.
 |---|---|---|---|
 | L3 network | ICMP ping, **batched once per host** per tick | `icmp-reachable` / `icmp-rtt-avg` | **informational** (see verdict below); shared by every endpoint on the host |
 | L4 transport | TCP connect (tcp-family) | `tcp-open`/`tcp-connect-time` | udp has no presence check: an open udp port cannot be detected, so its transport rung is the driver's request answered (built, [ADR-0163](/architecture/decisions/#adr-0163-a-udp-endpoint-binds-its-own-socket-and-its-rung-is-a-request-answered)), and the host's port-unreachable report reads `refused` |
-| L7 app | protocol handshake: SNMP `sysUpTime` get (**`snmp.reachable`**, default-on) · SSH handshake+auth · telnet login chain | (verdict) | the SNMP get is the **primary, default** SNMP liveness (ICMP-independent); SSH/telnet log in only where the driver's ladder declares a session rung, because their liveness credential can differ from the device's |
+| L7 app | protocol handshake: SNMP `sysUpTime` get (built as snmp's transport rung, [ADR-0821](/architecture/decisions/#adr-0821-snmps-rung-is-a-standard-get-answered-and-only-an-authorizationerror-reads-as-auth)) · SSH handshake+auth · telnet login chain | (verdict) | the SNMP get is the SNMP liveness (ICMP-independent); SSH/telnet log in only where the driver's ladder declares a session rung, because their liveness credential can differ from the device's |
 
 **The verdict respects each layer's definitiveness.** A TCP connect, any L7 handshake and a
 request answered are **definitive**, so the **ping is informational**, everywhere (an
 ICMP-filtered host still reads up). The UDP presence check this design once leaned on the ping to
 disambiguate (an ambiguous read timeout, `pingGates`) is retired: where no port can be opened (udp,
-and snmp with #821) the transport rung is a request answered. A definitively down layer (TCP refused,
+and snmp) the transport rung is a request answered. A definitively down layer (TCP refused,
 UDP ICMP-unreachable, an L7 auth/no-answer) fails the verdict regardless; an inconclusive probe (a
 setup/resolve error, a missing credential) does not gate.
 
@@ -325,15 +325,18 @@ setup/resolve error, a missing credential) does not gate.
 connect, the protocol's handshake, or a request answered: the tls handshake shipped as the tls
 transport's rung, [ADR-0160](/architecture/decisions/#adr-0160-tls-is-its-own-transport-over-a-shared-primitive-and-its-pin-is-the-public-key),
 and the udp request as udp's, [ADR-0163](/architecture/decisions/#adr-0163-a-udp-endpoint-binds-its-own-socket-and-its-rung-is-a-request-answered)), and `ladder.session.enabled` whether a login
-rung exists. Nothing is toggled per check on an endpoint; the snmp get as snmp's rung is #821.
+rung exists. Nothing is toggled per check on an endpoint; the snmp get shipped as snmp's rung
+([ADR-0821](/architecture/decisions/#adr-0821-snmps-rung-is-a-standard-get-answered-and-only-an-authorizationerror-reads-as-auth)).
 
-The honest limit: a v2c wrong community is a **silent drop**, so a get failure alone cannot separate
-down from wrong-community. Cross-referencing does: host pings + UDP not refused + get silent =
-"reachable, SNMP not answering this community"; with ICMP fully blocked the inference is lost,
-reading "host down or fully filtered." The ssh probe still tries a params credential every tick
+The honest limit, built as stated (#821): a v2c wrong community is a **silent drop**, so a get
+failure alone cannot separate down from wrong-community; the rung reads not responsive, timed out,
+retryable, never rejected. Only an agent that answers `authorizationError` refuses a community
+detectably, and that is a terminal `auth` refusal at the session rung. Cross-referencing the ping
+narrows it: host pings + get silent = "reachable, SNMP not answering this community, or stopped";
+with ICMP fully blocked even that is lost. The ssh probe still tries a params credential every tick
 (#1060); the built telnet probe never logs in (it
 reads the first negotiation or banner bytes; the login is the held session's auth step, so a probe
-cannot retry a bad credential every tick, [ADR-0157](/architecture/decisions/#adr-0157-telnet-and-ssh-are-held-line-transports-their-login-is-the-drivers-and-the-ssh-host-key-is-pinned-on-first-use)). `params.liveness_oid` overrides the probe OID.
+cannot retry a bad credential every tick, [ADR-0157](/architecture/decisions/#adr-0157-telnet-and-ssh-are-held-line-transports-their-login-is-the-drivers-and-the-ssh-host-key-is-pinned-on-first-use)). A driver's `ladder.transport.request.get` overrides the probe OID.
 
 **Poller** tasks run only if the verdict is up; **listener** (`mode=listen`) tasks run ungated,
 never pinged; **inline probes** (`icmp`/`tcp` with the host on the task) *are* the check, ungated. A
