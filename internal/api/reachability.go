@@ -5,11 +5,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"strings"
 	"time"
 	"unicode/utf8"
 
 	"github.com/danielgtaylor/huma/v2"
+	"github.com/hyperscaleav/omniglass/internal/collection/rejection"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 )
 
@@ -79,10 +79,13 @@ type reachSessionBody struct {
 }
 
 // reachRejectionBody is the gate a terminal refusal holds (ADR-0158): the
-// rung and the class of endpoint-rejection, never its fingerprint.
+// rung and the class of endpoint-rejection, never its fingerprint, and a key
+// refusal's two keys (#1078).
 type reachRejectionBody struct {
-	Rung  string `json:"rung" enum:"reachable,responsive,authenticated" doc:"The ladder rung the refusal holds: responsive for a host key, certificate or protocol refusal, authenticated for a credential. Nothing at or above it is attempted until the connection fingerprint moves"`
-	Class string `json:"class" doc:"The refusal's class: auth, host-key, certificate or protocol"`
+	Rung       string `json:"rung" enum:"reachable,responsive,authenticated" doc:"The ladder rung the refusal holds: responsive for a host key, certificate or protocol refusal, authenticated for a credential. Nothing at or above it is attempted until the connection fingerprint moves"`
+	Class      string `json:"class" doc:"The refusal's class: auth, host-key, certificate or protocol"`
+	PinnedKey  string `json:"pinned_key,omitempty" doc:"A refusal of a changed key only (class host-key, or certificate for a pinned tls key): the SHA256 fingerprint of the key the endpoint pins, as the node refused against it. Present with offered_key or not at all"`
+	OfferedKey string `json:"offered_key,omitempty" doc:"A refusal of a changed key only: the SHA256 fingerprint of the key the component offered instead. Trusting it is POST /endpoints/{id}:retry with this exact value as host_key; a value the component no longer offers is refused (409)"`
 }
 
 type reachEndpointBody struct {
@@ -264,21 +267,17 @@ func capReason(s string) string {
 	return string([]rune(s)[:maxReasonRunes]) + "…"
 }
 
-// parseRejection reads an endpoint-rejection value (`<rung> <class>
-// <fingerprint>`, or none) into the rung and class it holds at. The
-// fingerprint is dropped: a digest of the connection's inputs, it is the
-// node's to compare and says nothing an operator acts on. Anything else (none,
-// a malformed value, a rung the ladder does not have) is no gate.
+// parseRejection reads an endpoint-rejection value (rejection.Parse) into the
+// rung and class it holds at, with a key refusal's two keys. The fingerprint
+// is dropped: a digest of the connection's inputs, it is the node's to compare
+// and says nothing an operator acts on. Anything else (none, a malformed
+// value, a rung the ladder does not have) is no gate.
 func parseRejection(v string) *reachRejectionBody {
-	parts := strings.Fields(v)
-	if len(parts) != 3 {
+	g, ok := rejection.Parse(v)
+	if !ok {
 		return nil
 	}
-	switch parts[0] {
-	case "reachable", "responsive", "authenticated":
-		return &reachRejectionBody{Rung: parts[0], Class: parts[1]}
-	}
-	return nil
+	return &reachRejectionBody{Rung: g.Rung, Class: g.Class, PinnedKey: g.PinnedKey, OfferedKey: g.OfferedKey}
 }
 
 // addressFromParams renders the probed address from an endpoint's params

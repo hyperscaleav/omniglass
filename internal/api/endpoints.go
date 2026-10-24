@@ -95,7 +95,7 @@ type updateEndpointInput struct {
 type retryEndpointInput struct {
 	ID   string `path:"id" doc:"The endpoint's surrogate id"`
 	Body *struct {
-		HostKey string `json:"host_key,omitempty" doc:"An ssh endpoint only: the SHA256 fingerprint of a changed host key the operator now trusts (the offered key a host-key rejection names). It becomes the endpoint's declared ssh-host-key pin, and the session redials onto it. Omit to retry with the pin unchanged"`
+		HostKey string `json:"host_key,omitempty" doc:"An ssh endpoint only: the SHA256 fingerprint of a changed host key the operator now trusts (the offered_key a host-key rejection names on the component's reachability read). It becomes the endpoint's declared ssh-host-key pin, and the session redials onto it. While a key refusal holds, it must be that exact offered key: one the component no longer offers is a 409 that changes nothing. With no key refusal held it declares a pin ahead of time. Omit to retry with the pin unchanged"`
 	}
 }
 
@@ -215,7 +215,7 @@ func registerEndpointRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 		Method:      http.MethodPost,
 		Path:        "/endpoints/{id}:retry",
 		Summary:     "Retry an endpoint's gated connections",
-		Description: "Moves the endpoint's retry counter, which is part of its connection fingerprint: a gate a refusal retrying cannot fix holds (a wrong credential, a changed host key, a reply its driver declares terminal) lifts, the node recycles the endpoint's held session, and every connection to it is attempted again. Fixing the secret, the address, the transport or the driver's login needs no retry: the change moves the fingerprint itself. An unrelated edit (a label) moves nothing. For an ssh endpoint, host_key names a host key to trust (the offered key a host-key rejection names): it becomes the declared pin and recycles the session onto it whatever its state, an audited acceptance of the change. Audited. Gated by endpoint:retry; read and retry scopes (through the component) drive the 404 versus 403 split.",
+		Description: "Moves the endpoint's retry counter, which is part of its connection fingerprint: a gate a refusal retrying cannot fix holds (a wrong credential, a changed host key, a reply its driver declares terminal) lifts, the node recycles the endpoint's held session, and every connection to it is attempted again. Fixing the secret, the address, the transport or the driver's login needs no retry: the change moves the fingerprint itself. An unrelated edit (a label) moves nothing. For an ssh endpoint, host_key names a host key to trust (the offered key a host-key rejection names): it becomes the declared pin and recycles the session onto it whatever its state, an audited acceptance of the change. While the endpoint's gate names an offered key, host_key must be that key, so a trust confirmed against a key the component has since stopped offering is a 409 and changes nothing. Audited, a trusted key with the pin it replaced (old) and the pin it set (new). Gated by endpoint:retry; read and retry scopes (through the component) drive the 404 versus 403 split.",
 	}, "endpoint", "retry"), func(ctx context.Context, in *retryEndpointInput) (*endpointOutput, error) {
 		hostKey := ""
 		if in.Body != nil {
@@ -270,6 +270,8 @@ func mapEndpointErr(err error) error {
 		return huma.Error422UnprocessableEntity("node not found")
 	case errors.Is(err, storage.ErrRetryHostKey):
 		return huma.Error422UnprocessableEntity(strings.TrimPrefix(err.Error(), "storage: retry host key: "))
+	case errors.Is(err, storage.ErrRetryHostKeyStale):
+		return huma.Error409Conflict(strings.TrimPrefix(err.Error(), "storage: retry host key stale: "))
 	case errors.Is(err, storage.ErrEndpointPatchInvalid):
 		return huma.Error400BadRequest(strings.TrimPrefix(err.Error(), "storage: endpoint patch invalid: "))
 	default:

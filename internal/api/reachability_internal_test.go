@@ -7,16 +7,20 @@ import (
 )
 
 // TestParseRejection holds the endpoint-rejection read (#1059): a gate reads
-// its rung and class and never its fingerprint; none, a malformed value, and
-// a rung the ladder does not have read as no gate at all.
+// its rung and class and never its fingerprint; a key refusal reads both keys
+// as data (#1078); none, a malformed value, and a rung the ladder does not
+// have read as no gate at all.
 func TestParseRejection(t *testing.T) {
+	pinned, offered := "SHA256:"+strings.Repeat("A", 43), "SHA256:"+strings.Repeat("B", 43)
 	cases := []struct {
-		in          string
-		rung, class string
+		in              string
+		rung, class     string
+		pinned, offered string
 	}{
 		{in: "authenticated auth 9f86d081", rung: "authenticated", class: "auth"},
 		{in: "responsive host-key 9f86d081", rung: "responsive", class: "host-key"},
 		{in: "reachable protocol 9f86d081", rung: "reachable", class: "protocol"},
+		{in: "responsive host-key 9f86d081 " + pinned + " " + offered, rung: "responsive", class: "host-key", pinned: pinned, offered: offered},
 		{in: "none"},
 		{in: ""},
 		{in: "authenticated auth"},
@@ -31,8 +35,8 @@ func TestParseRejection(t *testing.T) {
 			}
 			continue
 		}
-		if got == nil || got.Rung != c.rung || got.Class != c.class {
-			t.Errorf("parseRejection(%q) = %+v, want %s %s", c.in, got, c.rung, c.class)
+		if got == nil || got.Rung != c.rung || got.Class != c.class || got.PinnedKey != c.pinned || got.OfferedKey != c.offered {
+			t.Errorf("parseRejection(%q) = %+v, want %s %s %q %q", c.in, got, c.rung, c.class, c.pinned, c.offered)
 		}
 	}
 }
