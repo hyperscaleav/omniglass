@@ -21,6 +21,7 @@ import (
 
 	"github.com/hyperscaleav/omniglass/internal/collection"
 	"github.com/hyperscaleav/omniglass/internal/driver"
+	"github.com/hyperscaleav/omniglass/internal/nettest"
 )
 
 // The TLS dial primitive (#1035): one handshake under one of three modes
@@ -392,10 +393,7 @@ func TestTLSProbeLandsTheHandshakeAndTheCertificateFacts(t *testing.T) {
 	}
 
 	// A closed port: not open, not responsive, nothing else.
-	ln, _ := net.Listen("tcp", "127.0.0.1:0")
-	closed := ln.Addr().String()
-	_ = ln.Close()
-	dps, _, err = r.CollectTLSResult(context.Background(), collection.TLSTask{Target: closed, Trust: collection.TLSTrust{Mode: driver.TLSModeSkip}})
+	dps, _, err = r.CollectTLSResult(context.Background(), collection.TLSTask{Target: nettest.RefusedAddr(t), Trust: collection.TLSTrust{Mode: driver.TLSModeSkip}})
 	if err != nil {
 		t.Fatal(err)
 	}

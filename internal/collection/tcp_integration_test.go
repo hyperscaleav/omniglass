@@ -7,13 +7,14 @@ import (
 	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/collection"
+	"github.com/hyperscaleav/omniglass/internal/nettest"
 )
 
 // TestTCPDialerReal is the capability-primitive closing gate: the REAL
 // NewTCPDialer against real sockets. A fake-green seam does not close the
 // increment; the environment risk (a real connect) is the point of the probe.
-// An open listener must read Responded (open, connect_time > 0); a bound-then-
-// closed port must read Refused (down), and a failed connect is DATA (nil err),
+// An open listener must read Responded (open, connect_time > 0); a port nothing
+// listens on must read Refused (down), and a failed connect is DATA (nil err),
 // not an error.
 func TestTCPDialerReal(t *testing.T) {
 	if testing.Short() {
@@ -48,16 +49,9 @@ func TestTCPDialerReal(t *testing.T) {
 		t.Fatalf("dial open: connect_ms should be non-negative, got %v", ms)
 	}
 
-	// Refused: bind a port, capture its address, then close it so the connect is
-	// actively refused (a RST) rather than timing out.
-	ln2, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatalf("listen 2: %v", err)
-	}
-	refusedAddr := ln2.Addr().String()
-	_ = ln2.Close()
-
-	_, reach, err = d.Dial(ctx, refusedAddr, 2*time.Second)
+	// Refused: a port held for the test that nothing listens on, so the
+	// connect is actively refused (a RST) rather than timing out.
+	_, reach, err = d.Dial(ctx, nettest.RefusedAddr(t), 2*time.Second)
 	if err != nil {
 		t.Fatalf("dial refused: a failed connect is data, want nil error, got %v", err)
 	}
