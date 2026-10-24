@@ -17,8 +17,11 @@ whether or not a session is held, the reason only while a gate holds. `SessionNo
 gate (`endpointNotice` in `lib/session`): the same notice, reason, Retry behind `endpoint:retry`, and
 Trust this key for a changed key, with no session pill, a retry waiting on the gate's publish time
 where no session exists (`retryMark`), captured when the retry is asked for. The Endpoints panel
-renders its notice slot only for a row with something to say. The dev seed gains a probe's gate: the
-auditorium's touch panel's `snmp-generic` endpoint reads the community the panel's agent refuses.
+renders its notice slot only for a row with something to say, and the Collection card reads `polls
+stopped` for a gate that holds the polls (`pollsHeld`, the node's stateless rung: any gate at the
+transport rung, and snmp's at the session rung). The dev seed gains a probe's gate: the
+auditorium's touch panel's `snmp-generic` endpoint reads the community the panel's agent refuses,
+which the `fix-a-refused-probe` walkthrough fixes from the console.
 
 Proven by tests that failed first: on the node (`TestAGatePublishesItsReasonBesideIt`,
 `TestRejectionSamplesCarryTheReasonBesideTheGate`, and the adopted gate's reasonless republish,

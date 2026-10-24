@@ -249,7 +249,9 @@ component's own words (`auth: the agent answered authorizationError for the comm
 input focused (an snmp endpoint's `community`). A changed key the probe met names both keys and
 offers **Trust this key**, as above. Retry holds its spinner until the refusal moves: the node lifts
 the gate at its next check-in and tries once, and a refusal met again sets it anew. Without
-`endpoint:retry` the button is greyed and its tooltip says so, while the reason still reads.
+`endpoint:retry` the button is greyed and its tooltip says so, while the reason still reads. Where
+the gate holds the endpoint's polls too (any refusal at the transport rung, and an snmp community,
+which every get carries), the Collection card reads **polls stopped** beside it.
 
 In the simulated fleet, the touch panel in the place named `auditorium` answers SNMP, and its
 endpoint reads its community from a secret holding the one the panel's agent refuses, so it reads
