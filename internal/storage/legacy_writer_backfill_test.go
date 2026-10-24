@@ -42,12 +42,12 @@ func legacyBackfillSQL(t *testing.T) (up, down string) {
 // so the frozen migration need not name it: a slice that declares a new
 // reserved key adds it here.
 var bornUnderTheRuling = map[string]bool{
-	// snmp's rung timing (#821, #1111) merged between the gateway's writer
-	// ruling (#1098) and this backfill (#1107), so every row of it was
-	// written under the ruling, enforced at the gateway from its first.
-	probekeys.SNMPResponseTime: true,
+	// #1111's snmp reachability rung, declared beside the backfill and merged
+	// before it, under the gateway's one-writer ruling: no row of it predates
+	// the ruling (#1117).
+	"snmp-response-time": true,
 	// Why a gate holds (#1110), declared after the backfill.
-	probekeys.EndpointRejectionReason: true,
+	"endpoint-rejection-reason": true,
 }
 
 // TestLegacyBackfillNamesTheRuling: the key lists the backfill holds rows to

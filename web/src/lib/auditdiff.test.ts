@@ -22,13 +22,19 @@ describe("diffFields", () => {
     expect(diffFields({ name: "x" }, null)).toEqual([{ key: "name", before: "x", after: undefined, state: "removed" }]);
   });
 
-  it("renders nested values as compact JSON, not [object Object]", () => {
+  it("renders nested values as indented JSON, not [object Object]", () => {
     const rows = diffFields(null, { locks: { theme: true } });
-    expect(rows[0].after).toBe('{"theme":true}');
+    expect(rows[0].after).toBe('{\n  "theme": true\n}');
+  });
+
+  it("reads a jsonb column as the JSON it is, and compares it by value (#1088)", () => {
+    const params = { target: "127.60.0.19:22", timeout: "5s" };
+    const [row] = diffFields({ Params: params }, { Params: { ...params } });
+    expect(row).toEqual({ key: "Params", before: '{\n  "target": "127.60.0.19:22",\n  "timeout": "5s"\n}', after: row.before, state: "same" });
   });
 
   it("collapses a non-object image to one synthetic value row", () => {
-    expect(diffFields(null, ["a", "b"])).toEqual([{ key: "value", before: undefined, after: '["a","b"]', state: "added" }]);
+    expect(diffFields(null, ["a", "b"])).toEqual([{ key: "value", before: undefined, after: '[\n  "a",\n  "b"\n]', state: "added" }]);
   });
 
   it("returns nothing when the event recorded no images", () => {

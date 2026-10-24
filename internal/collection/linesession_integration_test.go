@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/collection"
+	"github.com/hyperscaleav/omniglass/internal/nettest"
 )
 
 // The real held line connection over a real socket (the capability
@@ -196,13 +197,7 @@ func TestLineSessionReal(t *testing.T) {
 	})
 
 	t.Run("a refused dial is an error", func(t *testing.T) {
-		ln, err := net.Listen("tcp", "127.0.0.1:0")
-		if err != nil {
-			t.Fatal(err)
-		}
-		addr := ln.Addr().String()
-		_ = ln.Close()
-		if _, err := d.Dial(ctx, addr, time.Second, nil); err == nil {
+		if _, err := d.Dial(ctx, nettest.RefusedAddr(t), time.Second, nil); err == nil {
 			t.Fatal("dialing a closed port succeeded")
 		}
 	})

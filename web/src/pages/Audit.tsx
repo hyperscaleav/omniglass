@@ -61,14 +61,23 @@ const diffCellClass = (row: DiffRow, side: "before" | "after"): string => {
   return side === "before" ? "bg-error/10 text-error" : "text-base-content/30";
 };
 
+// A value cell keeps a JSON value's newlines and breaks a long unbroken one
+// (a base64 blob, a fingerprint) inside its column.
+const VALUE_CELL = "font-data text-xs align-top whitespace-pre-wrap wrap-break-word";
+
 // AuditDetail is the drawer body: who did what and when, then the field-level
 // before/after diff over the row images the write recorded. An auth event (no
 // images) says so instead of rendering an empty table; a create renders only
-// After values and a delete only Before, so the one-sided registry writes
-// (#228) still read honestly.
+// its After column and a delete only its Before, so the one-sided registry
+// writes (#228) still read honestly.
 function AuditDetail(p: { e: AuditEvent }): JSX.Element {
   const e = p.e;
   const rows = diffFields(e.old, e.new);
+  // A side with no image at all (a create has no Before, a delete no After)
+  // takes no column: a column of "(none)" would hold half the drawer while the
+  // side that carries the change wraps tight.
+  const hasBefore = e.old !== undefined && e.old !== null;
+  const hasAfter = e.new !== undefined && e.new !== null;
   return (
     <div class="flex flex-col gap-4">
       <div class="grid grid-cols-2 gap-3 text-sm">
@@ -93,22 +102,44 @@ function AuditDetail(p: { e: AuditEvent }): JSX.Element {
           when={rows.length}
           fallback={<span class="text-sm text-base-content/50">This event recorded no row images (auth events and credential changes carry none).</span>}
         >
-          <div class="overflow-x-auto rounded-box border border-base-300">
-            <table class="table table-xs">
+          {/* A fixed layout with declared widths: Field takes a label's width
+              and Before and After split the rest, each value wrapping in its
+              own cell with its newlines kept, so a long one (an endpoint's
+              params, a key fingerprint) grows the row downward and never pushes
+              After off the drawer (#1088). */}
+          <div class="rounded-box border border-base-300">
+            <table class="table table-xs table-fixed w-full">
+              <colgroup>
+                <col class="w-28" />
+                <Show when={hasBefore}>
+                  <col />
+                </Show>
+                <Show when={hasAfter}>
+                  <col />
+                </Show>
+              </colgroup>
               <thead>
                 <tr>
                   <th>Field</th>
-                  <th>Before</th>
-                  <th>After</th>
+                  <Show when={hasBefore}>
+                    <th>Before</th>
+                  </Show>
+                  <Show when={hasAfter}>
+                    <th>After</th>
+                  </Show>
                 </tr>
               </thead>
               <tbody>
                 <For each={rows}>
                   {(r) => (
                     <tr>
-                      <td class="font-data text-xs">{r.key}</td>
-                      <td class={`font-data text-xs ${diffCellClass(r, "before")}`}>{r.before ?? "(none)"}</td>
-                      <td class={`font-data text-xs ${diffCellClass(r, "after")}`}>{r.after ?? "(none)"}</td>
+                      <td class="font-data text-xs align-top wrap-break-word">{r.key}</td>
+                      <Show when={hasBefore}>
+                        <td class={`${VALUE_CELL} ${diffCellClass(r, "before")}`}>{r.before ?? "(none)"}</td>
+                      </Show>
+                      <Show when={hasAfter}>
+                        <td class={`${VALUE_CELL} ${diffCellClass(r, "after")}`}>{r.after ?? "(none)"}</td>
+                      </Show>
                     </tr>
                   )}
                 </For>
@@ -164,6 +195,7 @@ export default function Audit() {
         detail: (e) => ({
           title: <span class="font-data text-sm" title={e.resource_id || undefined}>{e.verb} {e.resource}{resourceLabel(e) ? ` ${resourceLabel(e)}` : ""}</span>,
           body: <AuditDetail e={e} />,
+          wide: true,
         }),
         footer: ({ shown, total, filtering }) => (
           <>

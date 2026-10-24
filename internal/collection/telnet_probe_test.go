@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/collection"
+	"github.com/hyperscaleav/omniglass/internal/nettest"
 )
 
 // The telnet reachability probe (#1033) over real sockets: a component that
@@ -76,13 +77,7 @@ func TestTelnetProbeSilentPortIsReachedButNotResponsive(t *testing.T) {
 }
 
 func TestTelnetProbeClosedPortIsNotReached(t *testing.T) {
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatal(err)
-	}
-	addr := ln.Addr().String()
-	_ = ln.Close()
-	dps := telnetSamples(t, addr)
+	dps := telnetSamples(t, nettest.RefusedAddr(t))
 	if dps["tcp-open"].Value != 0 || dps["endpoint-responsive"].Text != "down" {
 		t.Fatalf("samples = %+v, want closed and not responsive", dps)
 	}
