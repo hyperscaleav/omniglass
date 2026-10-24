@@ -1,7 +1,7 @@
 ---
 title: "The append-only logs are directories of one file per entry, spliced into their pages"
 date: 2026-10-24
-status: "Accepted"
+status: "Accepted; numbering amended by [ADR-1108](#adr-1108-an-adrs-number-is-the-number-of-the-issue-it-was-decided-under)"
 summary: "The build log, the decision log and the adversarial-review anti-pattern catalog keep one file per entry (`docs/src/content/build-log/<YYYY-MM-DD>-<slug>.md`, `docs/src/content/decisions/adr-NNNN-<slug>.md`, `references/anti-patterns/<id>.md`) instead of one shared file every PR appends to (#1095, the architect's request). The docs build splices the entries into the page where a directive sits (`::build-log`, `::decision-index`, `::decision-log`), before the parse, so the page renders as one document; the decision index is generated from the files' frontmatter. ADR numbers stay sequential: a collision fails the decisions lint naming both files, and `make adr-renumber` moves one and rewrites every reference. The generated OpenAPI JSON is written pretty-printed with sorted keys"
 ---
 
@@ -31,3 +31,6 @@ summary: "The build log, the decision log and the adversarial-review anti-patter
   because GitHub's server-side merge ignores it. The entries that predate the split keep their
   logged order under a four-digit sequence prefix (`0001-` to `0398-`) rather than a date, since
   their landing dates do not run in log order.
+- **Amended (#1108):** past ADR-0163 an ADR is no longer the next number in sequence but the
+  number of the issue it was decided under ([ADR-1108](#adr-1108-an-adrs-number-is-the-number-of-the-issue-it-was-decided-under)), so the collision this entry's
+  renumber tool repairs narrows to two PRs adding one issue's next suffix.

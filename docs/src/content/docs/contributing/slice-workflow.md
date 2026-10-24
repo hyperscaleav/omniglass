@@ -48,7 +48,8 @@ Not a vibe at each gate, a check:
   architecture-of-record stays consistent, and any divergence is stated, never silent.
 - **Status moves with the code.** A slice that advances a page flips its **status badge** to the new
   floor (`Design` to `Partial` to `Built`), adds the [build log](/architecture/build-log/) entry, and records any
-  divergence from the design both inline on the page and in the [decision log](/architecture/decisions/).
+  divergence from the design both inline on the page and in the [decision log](/architecture/decisions/),
+  the ADR numbered by the slice's issue (a decision on issue #NNNN is ADR-NNNN).
   Each log entry is a new file of its own, never an edit to the log page
   ([the logs are fragment directories](/contributing/docs-with-everything/#the-logs-are-one-file-per-entry)).
   A built capability behind a `Design` badge is a drift bug.

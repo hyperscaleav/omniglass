@@ -23,7 +23,7 @@ Treat every change as portfolio-quality and externally visible.
    the [decision log](docs/src/content/docs/architecture/decisions.md). Each log entry (and each
    adversarial-review anti-pattern) is **its own file** in a fragment directory
    (`docs/src/content/build-log/`, `docs/src/content/decisions/`), never an append to a shared page, so
-   PRs never conflict on them. A built capability behind a `Design` badge is drift. [docs/contributing/docs-with-everything.md](docs/src/content/docs/contributing/docs-with-everything.md).
+   PRs never conflict on them; an ADR takes the number of the issue it was decided under. A built capability behind a `Design` badge is drift. [docs/contributing/docs-with-everything.md](docs/src/content/docs/contributing/docs-with-everything.md).
 4. **Functional and pedagogical.** Omniglass is both a tool and a learning tool. Operator
    surfaces should also teach the concept they operate on, interactively, against real or
    simulated data. [docs/contributing/learning-tool.md](docs/src/content/docs/contributing/learning-tool.md).

@@ -28,6 +28,11 @@ architecture decision record (ADR), kept lightweight and append-only.
 - Entries are **never edited away**. A reversed decision is marked `Superseded` and points at the entry
   that replaced it, so the trail of reasoning survives. Nothing in this log is deleted when a page
   changes.
+- **Two numbering ranges.** ADR-0001 to ADR-0163 were numbered in sequence, and that range is closed.
+  Every later decision takes the number of the issue it was decided under (ADR-1108 was decided under
+  issue #1108), so two decisions made at once never compete for one number; a second decision on the
+  same issue takes a suffix (ADR-1108.2, anchored as `#adr-11082-...`). The index lists both ranges in
+  number order.
 - New reversals and divergences are added **per slice**, as part of the
   [ship gate](/contributing/slice-workflow/): if a slice changes a settled call or ships something that
   differs from its architecture page, the entry lands in the same PR.
