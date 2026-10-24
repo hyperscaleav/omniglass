@@ -96,6 +96,16 @@ describe("collectionState", () => {
   it("an ssh probe's refused credential holds no poll: the verdict still reads", () => {
     expect(collectionState(gated("ssh", "authenticated"), node(5), now).kind).toBe("down");
   });
+  // The node holds a stateless poll only where no session is held: a held
+  // session's polls ride it, so a probe's gate beside an up session (a tls
+  // certificate that expired under a long-lived connection) stops nothing,
+  // and beside a down one the polls are tried and failing.
+  it("a probe's gate beside a held session leaves its polls to the session", () => {
+    const up = { ...gated("tls", "responsive"), verdict: { value: "up", ts: iso(10) }, session: { state: "up", ts: iso(30) } } as ReachEndpoint;
+    expect(collectionState(up, node(5), now).kind).toBe("collecting");
+    const down = { ...gated("tls", "responsive"), session: { state: "down", ts: iso(30) } } as ReachEndpoint;
+    expect(collectionState(down, node(5), now).kind).toBe("session-down");
+  });
   it("a node that stopped heartbeating still reads offline, whatever the session last said", () => {
     const e = { ...held("rejected"), last_seen: iso(600) } as ReachEndpoint;
     expect(collectionState(e, node(600), now).kind).toBe("node-offline");

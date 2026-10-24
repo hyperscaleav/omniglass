@@ -323,6 +323,36 @@ func TestAnAdoptedGatesSessionReplayPublishesNoReason(t *testing.T) {
 	}
 }
 
+// Re-review of #1110, finding 1: a driver's re-probe redials a rejected
+// session under the gate's own fingerprint, and the refusal it meets is a
+// real one, so it records the component's words as the gate's reason, even
+// when the gate was adopted and its value does not change: the reason goes
+// out beside the unchanged value. Only the session's replay of the refusal
+// it was started with is not re-recorded.
+func TestAReprobedRefusalPublishesItsReasonUnderAnUnchangedGate(t *testing.T) {
+	dialer := &authFakeDialer{}
+	rej := &rejectionLog{}
+	m := newSessionManager(map[string]collection.SessionDialer{"tcp": dialer}, sessionHooks{rejection: rej.record})
+	defer m.closeAll()
+	task := withFingerprint(pollTaskWithLogin("p1", "ep-1", "wrong", 0), "fp-1", "authenticated auth fp-1")
+	task.Session.Reprobe = "30ms"
+	m.reconcile([]collection.TaskSpec{task})
+	waitFor(t, func() bool { return dialer.connectCount() >= 1 }, "the re-probe dialed under the gate")
+	waitFor(t, func() bool {
+		for _, p := range rej.each() {
+			if p.value == "authenticated auth fp-1" && p.reason == "auth: auth rejected" {
+				return true
+			}
+		}
+		return false
+	}, "the re-probed refusal's own words published beside the unchanged gate")
+	for _, p := range rej.each() {
+		if strings.Contains(p.reason, "before the node restarted") {
+			t.Fatalf("the adopted gate's placeholder went out as its reason: %+v", p)
+		}
+	}
+}
+
 // Finding 3: a refusal reported for an attempt made under an old
 // fingerprint never gates the new one.
 func TestARefusalUnderAnOldFingerprintIsDropped(t *testing.T) {

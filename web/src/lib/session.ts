@@ -140,10 +140,12 @@ export function ladder(iface: ReachEndpoint): Rung[] {
 // (#1110): a poll is sent at the transport rung, or for snmp at the session
 // rung, since every get carries the community (#821), and a gate at or below
 // that rung holds it (the node's statelessRung). A login refused over a
-// transport whose polls carry no credential holds none.
+// transport whose polls carry no credential holds none, and neither does a
+// gate beside a held session: its polls ride the session, which says for
+// itself whether they run.
 export function pollsHeld(iface: ReachEndpoint): boolean {
   const rung = iface.rejection?.rung;
-  if (!rung) return false;
+  if (!rung || iface.session) return false;
   return RANK[rung] <= RANK[iface.transport === "snmp" ? "authenticated" : "responsive"];
 }
 

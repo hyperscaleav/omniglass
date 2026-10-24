@@ -7,6 +7,11 @@
   node's held session started rejected under an adopted gate reported the gate's placeholder
   refusal back through `OnTransition`; `refuse` recorded it as a fresh gate, so the next publish
   sent the placeholder as `endpoint-rejection-reason`, overwriting the component's own words.
-- **Fix:** a record that matches an adopted entry's value is its replay and keeps the entry as it
-  is (`recordAt` in internal/node/gate.go); prove it with a session-backed restart test, not one
-  built with no dialers (`TestAnAdoptedGatesSessionReplayPublishesNoReason`).
+- **Fix:** tell the replay by identity, never by value: the session hands back the very refusal it
+  was started with, so `start` in internal/node/session.go skips the record when `tr.Refusal` is
+  that pointer. Value equality is the trap a second time: a driver's re-probe redials under the same
+  fingerprint and meets a real refusal with the same gate value, and its words must still record
+  and publish (`syncRejection` republishes a moved reason under an unchanged value). Prove both
+  with session-backed tests, not ones built with no dialers
+  (`TestAnAdoptedGatesSessionReplayPublishesNoReason`,
+  `TestAReprobedRefusalPublishesItsReasonUnderAnUnchangedGate`).

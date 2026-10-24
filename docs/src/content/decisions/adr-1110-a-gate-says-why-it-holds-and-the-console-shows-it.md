@@ -14,7 +14,9 @@ summary: "A gate publishes its reason beside it (#1110, amending ADR-0158 point 
      `session-reason` carries, scrubbed of anything the node sent). It goes out again with the gate
      until the worklist reflects it. A gate the node adopts from the worklist after a restart never
      saw its refusal, so it publishes no reason and the one on record stands, and a held session
-     started rejected under it does not re-record it from its own replay; a gate that lifts
+     started rejected under it does not re-record it from its own replay (told by the refusal's
+     identity, not its value); a driver's re-probe that meets a refusal under the same fingerprint
+     records its words, and the reason goes out again beside the unchanged gate. A gate that lifts
      publishes `none` and no reason. The key is native and node-only, so no push can plant a reason
      the node never scrubbed.
   2. **The read serves the gate whatever holds a session.** `rejection` already ignored the session;

@@ -145,17 +145,8 @@ func (g *gates) recordAt(endpointID, fingerprint string, terr *collection.Termin
 	if fingerprint != g.current[endpointID] {
 		return false
 	}
-	next := gate{fingerprint: fingerprint, rung: at, class: terr.Class, reason: terr.Error(),
+	g.held[endpointID] = gate{fingerprint: fingerprint, rung: at, class: terr.Class, reason: terr.Error(),
 		pinned: terr.Pinned, offered: terr.Offered}
-	if prev, ok := g.held[endpointID]; ok && prev.adopted && prev.value() == next.value() {
-		// The replay of a gate adopted from the worklist (a session started
-		// rejected under it reports the gate's own placeholder refusal): no
-		// refusal was met, since nothing at the gate's rung is attempted
-		// under its fingerprint, so it stays adopted and publishes no
-		// reason of its own (#1110).
-		return true
-	}
-	g.held[endpointID] = next
 	return true
 }
 

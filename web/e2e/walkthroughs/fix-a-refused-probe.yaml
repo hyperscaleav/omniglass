@@ -31,6 +31,6 @@ steps:
     caption: Name the secret holding the community the agent answers.
   - click: 'aside[data-blade] button:has-text("Save")'
     caption: Save. What the endpoint connects with changed, so the refusal no longer holds.
-  - wait: { selector: 'aside[data-blade] [data-testid=endpoint-session]:not(:has([data-testid=session-notice])) [data-testid=ladder-rung][data-rung=authenticated][data-status=pass]', timeout: 20000 }
+  - wait: { selector: 'aside[data-blade] [data-testid=endpoint-session]:not(:has([data-testid=session-notice])):has([data-testid=ladder-rung][data-rung=authenticated][data-status=pass])', timeout: 20000 }
     caption: The node asks again at its next check-in, the agent answers the community, and the refusal is gone.
     poster: true
