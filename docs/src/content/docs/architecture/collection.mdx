@@ -513,8 +513,9 @@ locked" body). Then:
 
 A body past 1 MiB (64 KiB for a command's reply) faults naming the cap.
 
-**The session rung is proven by the credentialed exchanges.** A credentialed answer lands
-`endpoint-authenticated`: `yes`, or `no` on the refusal (a 403 or a 5xx proves nothing either way).
+**The session rung is proven by the credentialed exchanges.** A credentialed 2xx lands
+`endpoint-authenticated` `yes`, and a refusal `no`; a redirect, a 403, another 4xx or a 5xx never
+judged the credential, so proves nothing either way.
 A refusal gates the endpoint at the session rung for its connection fingerprint: no credentialed
 poll or command is sent beneath it, across a node restart too, until the fingerprint moves (the
 secret rotated, an input edited in place, an operator's `:retry`). The reachability probe sends no

@@ -4,12 +4,15 @@ import (
 	"bytes"
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"html"
 	"io"
 	"net"
 	"net/http"
 	"net/url"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -143,8 +146,12 @@ func BuildHTTPRequest(ctx context.Context, x HTTPExchange) (*http.Request, error
 	}
 	u.RawQuery = q.Encode()
 	var body io.Reader
-	if len(r.Body) > 0 {
-		body = bytes.NewReader(r.Body)
+	encoded, err := r.BodyBytes()
+	if err != nil {
+		return nil, fmt.Errorf("collection: http request %s: %v", RedactedURL(u, c), err)
+	}
+	if len(encoded) > 0 {
+		body = bytes.NewReader(encoded)
 	}
 	req, err := http.NewRequestWithContext(ctx, r.MethodOf(), u.String(), body)
 	if err != nil {
@@ -203,7 +210,7 @@ func redactedRequestError(req *http.Request, x HTTPExchange, err error) error {
 	if errors.As(err, &uerr) {
 		cause = uerr.Err
 	}
-	return &httpTransportError{msg: fmt.Sprintf("collection: %s %s: %s", req.Method, RedactedURL(req.URL, x.Credential), Scrub(cause.Error(), x.Credential)), cause: cause}
+	return &httpTransportError{msg: fmt.Sprintf("collection: %s %s: %s", req.Method, RedactedURL(req.URL, x.Credential), Scrub(strings.ToValidUTF8(cause.Error(), "\uFFFD"), x.Credential)), cause: cause}
 }
 
 // httpTransportError is a request that drew no answer, its message free of
@@ -218,20 +225,32 @@ func (e *httpTransportError) Unwrap() error { return e.cause }
 
 // Scrub masks every form of the credential a component could echo back in
 // its text (the password, the token, the key, the basic authorization's
-// base64, a url-escaped key), so it never reaches an error or a reason.
+// base64, each raw, url-escaped, JSON-escaped with or without an escaped
+// slash, and html-escaped), so it never reaches an error or a reason. It
+// runs on the whole text before anything collapses or cuts it, so no
+// transform can hide a form from it.
 func Scrub(text string, c *driver.HTTPCredential) string {
 	if c == nil {
 		return text
 	}
+	secrets := []string{c.Password, c.Token, c.Key}
+	if c.Scheme == driver.SchemeBasic {
+		secrets = append(secrets, base64.StdEncoding.EncodeToString([]byte(c.Username+":"+c.Password)))
+	}
 	var forms []string
-	for _, v := range []string{c.Password, c.Token, c.Key} {
-		if v != "" {
-			forms = append(forms, v, url.QueryEscape(v))
+	for _, v := range secrets {
+		if v == "" {
+			continue
+		}
+		forms = append(forms, v, url.QueryEscape(v), url.PathEscape(v), html.EscapeString(v))
+		if b, err := json.Marshal(v); err == nil {
+			j := string(b[1 : len(b)-1])
+			forms = append(forms, j, strings.ReplaceAll(j, "/", `\/`))
 		}
 	}
-	if c.Scheme == driver.SchemeBasic {
-		forms = append(forms, base64.StdEncoding.EncodeToString([]byte(c.Username+":"+c.Password)))
-	}
+	// The longest form first, so a shorter one never leaves a longer one's
+	// remainder behind.
+	sort.Slice(forms, func(i, j int) bool { return len(forms[i]) > len(forms[j]) })
 	for _, f := range forms {
 		if f != "" {
 			text = strings.ReplaceAll(text, f, "[redacted]")
@@ -288,13 +307,17 @@ func RetryAfterOf(err error) (time.Duration, bool) {
 // snippetLimit bounds the component's text a reason carries.
 const snippetLimit = 200
 
-// snippet is the start of a body, one line, scrubbed of the credential.
+// snippet is the start of a body as one line of valid UTF-8, scrubbed of
+// the credential first (on the whole text, before whitespace collapses and
+// the cut), then cut on a character boundary, so a reason is always a string
+// a protobuf message carries and never carries a credential.
 func snippet(body []byte, c *driver.HTTPCredential) string {
-	s := strings.Join(strings.Fields(string(body)), " ")
-	if len(s) > snippetLimit {
-		s = s[:snippetLimit] + "..."
+	s := Scrub(strings.ToValidUTF8(string(body), "\uFFFD"), c)
+	s = strings.Join(strings.Fields(s), " ")
+	if r := []rune(s); len(r) > snippetLimit {
+		s = string(r[:snippetLimit]) + "..."
 	}
-	return Scrub(s, c)
+	return s
 }
 
 // JudgeHTTPAnswer reads an answer by the status table (decision 5 of #1113):
@@ -305,7 +328,7 @@ func snippet(body []byte, c *driver.HTTPCredential) string {
 // the request alone. Pure.
 func JudgeHTTPAnswer(a HTTPAnswer, x HTTPExchange) error {
 	text := snippet(a.Body, x.Credential)
-	if class, ok := x.Session.TerminalForResponse(a.Status, Scrub(string(a.Body), x.Credential)); ok {
+	if class, ok := x.Session.TerminalForResponse(a.Status, Scrub(strings.ToValidUTF8(string(a.Body), "\uFFFD"), x.Credential)); ok {
 		reason := fmt.Sprintf("the component answered %d", a.Status)
 		if text != "" {
 			reason += ": " + text
@@ -324,7 +347,7 @@ func JudgeHTTPAnswer(a HTTPAnswer, x HTTPExchange) error {
 	case a.Status >= 300 && a.Status < 400:
 		where := "elsewhere"
 		if a.Location != "" {
-			where = "to " + Scrub(a.Location, x.Credential)
+			where = "to " + snippet([]byte(a.Location), x.Credential)
 		}
 		return &RequestFault{Status: a.Status, Reason: "the component redirected " + where + ", and a request does not follow a redirect"}
 	default:
@@ -355,9 +378,10 @@ func parseRetryAfter(v string, now time.Time) time.Duration {
 }
 
 // Authenticated is the session rung an answer proves (decision 7 of #1113):
-// a credentialed request's answer says yes unless it was the credential's
-// refusal (a 401, or a rule the driver declares auth) or a 403, which says
-// nothing either way. ok is false when it proves nothing.
+// a credentialed 2xx says yes; a credentialed refusal (a 401, or a rule the
+// driver declares auth) says no; anything else (a redirect, a 403, another
+// 4xx, a 5xx) never judged the credential and proves nothing. ok is false
+// when it proves nothing.
 func Authenticated(a HTTPAnswer, judged error) (verdict string, ok bool) {
 	if !a.Credentialed {
 		return "", false
@@ -365,8 +389,8 @@ func Authenticated(a HTTPAnswer, judged error) (verdict string, ok bool) {
 	if terr, isTerm := AsTerminal(judged); isTerm && terr.Class == driver.ClassAuth {
 		return "no", true
 	}
-	if a.Status == http.StatusForbidden || a.Status >= 500 || a.Status == http.StatusRequestTimeout || a.Status == http.StatusTooManyRequests {
-		return "", false
+	if a.Status >= 200 && a.Status < 300 {
+		return "yes", true
 	}
-	return "yes", true
+	return "", false
 }

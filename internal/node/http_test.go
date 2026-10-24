@@ -10,6 +10,7 @@ import (
 
 	"github.com/hyperscaleav/omniglass/internal/collection"
 	"github.com/hyperscaleav/omniglass/internal/driver"
+	"google.golang.org/protobuf/proto"
 )
 
 // The node side of http polls and commands (#902) over fakes: the gate a
@@ -124,5 +125,19 @@ func TestBookPollRunForHTTPAnswers(t *testing.T) {
 	bookPollRun(s, "r", every, now, nil, []error{errors.New("refused")})
 	if next, _ := s.nextOf("r"); next.After(now.Add(2 * time.Second)) {
 		t.Fatalf("a failure rebooked at %v, want the heartbeat", next.Sub(now))
+	}
+}
+
+// A reason carrying a component's own text (an error page in Latin-1) still
+// marshals: a protobuf string refuses invalid UTF-8, which would fail the
+// whole batch (and, for a collection-failed, the tick).
+func TestABatchCarryingAComponentsBytesStillMarshals(t *testing.T) {
+	bad := string([]byte{0xe9, 'x', 0xff})
+	ev := buildBatch("t1", "n1", []collection.Sample{
+		{Name: collection.SignalEndpointAuthenticated, Text: "no", IsText: true, Labels: map[string]string{collection.ReasonLabel: bad}},
+		{Name: "volume", Value: 1, Labels: map[string]string{collection.ReasonLabel: bad}},
+	})
+	if _, err := proto.Marshal(ev); err != nil {
+		t.Fatalf("a batch with a component's bytes in a label does not marshal: %v", err)
 	}
 }

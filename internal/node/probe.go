@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net"
+	"strings"
 	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/collection"
@@ -94,13 +95,15 @@ func runTasks(ctx context.Context, nc *nats.Conn, node string, wl collection.Wor
 				current += f.Error() + "\n"
 			}
 			if current != faultseen[task.ID] {
-				faultseen[task.ID] = current
 				for _, f := range faults {
 					slog.Warn("driver poll fault", "facility", "collection", "task", task.ID, "error", f.Error())
 					if pubErr := publishCollectionFailed(nc, node, task.ID, f); pubErr != nil {
 						return pubErr
 					}
 				}
+				// Remembered only once published, so a fault set whose publish
+				// failed is told again next tick rather than lost.
+				faultseen[task.ID] = current
 			}
 			if len(dps) == 0 {
 				continue
@@ -644,7 +647,7 @@ func buildBatch(taskID, node string, dps []collection.Sample) *ogv1.TelemetryBat
 				Name:      d.Name,
 				ValueJson: string(vj),
 				Ts:        ts,
-				Labels:    d.Labels,
+				Labels:    validLabels(d.Labels),
 			})
 			continue
 		}
@@ -652,10 +655,24 @@ func buildBatch(taskID, node string, dps []collection.Sample) *ogv1.TelemetryBat
 			Name:   d.Name,
 			Value:  d.Value,
 			Ts:     ts,
-			Labels: d.Labels,
+			Labels: validLabels(d.Labels),
 		})
 	}
 	return ev
+}
+
+// validLabels is a sample's labels as valid UTF-8: a reason may carry a
+// component's own text (an http error page), and a protobuf string refuses
+// invalid UTF-8, which would fail the whole batch.
+func validLabels(labels map[string]string) map[string]string {
+	if len(labels) == 0 {
+		return labels
+	}
+	out := make(map[string]string, len(labels))
+	for k, v := range labels {
+		out[strings.ToValidUTF8(k, "\uFFFD")] = strings.ToValidUTF8(v, "\uFFFD")
+	}
+	return out
 }
 
 // publishCollectionFailed lands the collection-failed occurrence for a task
@@ -669,8 +686,10 @@ func publishCollectionFailed(nc *nats.Conn, node, taskID string, cause error) er
 		NodeId: node,
 		Ts:     timestamppb.New(time.Now().UTC()),
 		Events: []*ogv1.EventSample{{
-			Name:    collection.EventCollectionFailed,
-			Message: cause.Error(),
+			Name: collection.EventCollectionFailed,
+			// A cause may carry a component's own text; a protobuf string
+			// refuses invalid UTF-8.
+			Message: strings.ToValidUTF8(cause.Error(), "\uFFFD"),
 			Payload: payload,
 		}},
 	}

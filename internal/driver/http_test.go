@@ -106,6 +106,7 @@ func TestHTTPRefusals(t *testing.T) {
 		{"an authorization header", func(s *driver.Spec) { s.Polls[0].Request.Headers["Authorization"] = "Basic eA==" }, "Authorization"},
 		{"a cookie header", func(s *driver.Spec) { s.Polls[0].Request.Headers["cookie"] = "a=b" }, "cookie"},
 		{"a header name that is not a token", func(s *driver.Spec) { s.Polls[0].Request.Headers["X Bad"] = "1" }, "X Bad"},
+		{"a header value carrying a newline", func(s *driver.Spec) { s.Polls[0].Request.Headers["X-Note"] = "a\r\nX-Evil: y" }, "control"},
 		{"a template in a poll", func(s *driver.Spec) { s.Polls[0].Request.Query["v"] = "${value}" }, "template"},
 		{"a secret in a request", func(s *driver.Spec) {
 			s.Commands[0].Request.Headers = map[string]string{"X-Key": "${secret.login.password}"}
@@ -319,21 +320,44 @@ func TestRenderTypedIntendedValue(t *testing.T) {
 }
 
 func TestRenderFormAndXMLBodies(t *testing.T) {
-	form := driver.Request{Method: "POST", Path: "/f", BodyFormat: driver.BodyFormatForm, Body: json.RawMessage(`{"input":"${value}","fixed":"x y"}`)}
-	got, err := driver.RenderRequest(form, "a&b", nil)
-	if err != nil {
-		t.Fatal(err)
+	cases := []struct {
+		req   driver.Request
+		value string
+		want  string
+	}{
+		{driver.Request{Method: "POST", Path: "/f", BodyFormat: driver.BodyFormatForm, Body: json.RawMessage(`{"input":"${value}","fixed":"x y"}`)},
+			"a&b", "fixed=x+y&input=a%26b"},
+		{driver.Request{Method: "POST", Path: "/x", BodyFormat: driver.BodyFormatXML, Body: json.RawMessage(`"<set><input>${value}</input></set>"`)},
+			`</input><evil/>`, "<set><input>&lt;/input&gt;&lt;evil/&gt;</input></set>"},
+		{driver.Request{Method: "POST", Path: "/t", BodyFormat: driver.BodyFormatText, Body: json.RawMessage(`"SET ${value}"`)},
+			"hdmi1", "SET hdmi1"},
+		{driver.Request{Method: "POST", Path: "/j", Body: json.RawMessage(`{ "v" : "${value}" }`)},
+			"7", `{"v":"7"}`},
 	}
-	if string(got.Body) != "fixed=x+y&input=a%26b" {
-		t.Errorf("form body = %q", got.Body)
+	for _, tc := range cases {
+		got, err := driver.RenderRequest(tc.req, tc.value, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		// The rendered request rides the command wire as JSON whatever its
+		// body format, so it must marshal and come back whole.
+		wire, err := json.Marshal(got)
+		if err != nil {
+			t.Fatalf("a rendered %s body does not marshal: %v", tc.req.BodyFormatOf(), err)
+		}
+		var back driver.Request
+		if err := json.Unmarshal(wire, &back); err != nil {
+			t.Fatal(err)
+		}
+		body, err := back.BodyBytes()
+		if err != nil || string(body) != tc.want {
+			t.Errorf("%s body = %q, %v, want %q", tc.req.BodyFormatOf(), body, err, tc.want)
+		}
 	}
-	xml := driver.Request{Method: "POST", Path: "/x", BodyFormat: driver.BodyFormatXML, Body: json.RawMessage(`"<set><input>${value}</input></set>"`)}
-	got, err = driver.RenderRequest(xml, `</input><evil/>`, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if string(got.Body) != "<set><input>&lt;/input&gt;&lt;evil/&gt;</input></set>" {
-		t.Errorf("xml body = %q, want the value escaped as text", got.Body)
+	// A poll's body is never rendered, and still encodes in its format.
+	poll := driver.Request{Method: "POST", Path: "/f", BodyFormat: driver.BodyFormatForm, Body: json.RawMessage(`{"cmd":"status"}`)}
+	if body, err := poll.BodyBytes(); err != nil || string(body) != "cmd=status" {
+		t.Fatalf("a poll's form body = %q, %v", body, err)
 	}
 }
 

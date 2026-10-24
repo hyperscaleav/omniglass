@@ -38,8 +38,8 @@ refs: [902, 1113, 1115]
      other 4xx (a 403 unless declared) faults the request alone, waiting its interval and gating
      nothing. A body past 1 MiB (64 KiB for a command's reply) faults naming the cap.
   5. **The session rung is proven by the credentialed exchanges** (decision 7). A credentialed
-     answer lands `endpoint-authenticated` (yes, or no on the refusal; a 403 or a 5xx proves
-     nothing), and a refusal gates the session rung for the fingerprint, beneath which no
+     2xx lands `endpoint-authenticated` yes and a refusal no (a redirect, any other 4xx or a 5xx
+     never judged the credential, so proves nothing), and a refusal gates the session rung for the fingerprint, beneath which no
      credentialed poll or command is sent, across a restart. The probe sends no credential, so
      reachability stays observed beneath the gate. A credentialed probe request is #1120.
   6. **https is its own registry entry** (decision 4). It needs both things ADR-0160's placement

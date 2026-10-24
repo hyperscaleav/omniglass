@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"net/url"
 	"slices"
-	"sort"
 	"strconv"
 	"strings"
 
@@ -184,6 +183,9 @@ func validateHTTPRequest(what string, r Request, command bool, ss *SessionSpec) 
 		}
 		if ss != nil && ss.APIKey != nil && ss.APIKey.In == APIKeyInHeader && strings.EqualFold(name, ss.APIKey.Name) {
 			return fmt.Errorf("driver: %s header %s is where the session's api key rides", what, name)
+		}
+		if _, err := noControl(r.Headers[name]); err != nil {
+			return fmt.Errorf("driver: %s header %s value %v", what, name, err)
 		}
 	}
 	if !slices.Contains(BodyFormats(), r.BodyFormatOf()) {
@@ -560,7 +562,11 @@ func textOf(v any) string {
 	}
 }
 
-// renderBody renders a request body in its declared format.
+// renderBody renders a request body's substitutions, keeping it JSON: a
+// form body stays an object of strings, an xml or text body a string (its
+// substitutions already escaped for where they land), a json body the JSON
+// it renders to. The body stays JSON on the command wire so it marshals;
+// BodyBytes encodes it in its format at the moment it is sent.
 func renderBody(req Request, value string, typed json.RawMessage, params map[string]any) (json.RawMessage, error) {
 	dec := json.NewDecoder(bytes.NewReader(req.Body))
 	dec.UseNumber()
@@ -568,48 +574,86 @@ func renderBody(req Request, value string, typed json.RawMessage, params map[str
 	if err := dec.Decode(&v); err != nil {
 		return nil, fmt.Errorf("driver: request body is not JSON: %v", err)
 	}
+	var rendered any
 	switch req.BodyFormatOf() {
 	case BodyFormatForm:
 		obj, _ := v.(map[string]any)
-		form := url.Values{}
-		keys := make([]string, 0, len(obj))
-		for k := range obj {
-			keys = append(keys, k)
-		}
-		sort.Strings(keys)
-		for _, k := range keys {
-			s, _ := obj[k].(string)
-			r, err := renderTemplate(s, value, params, plain)
+		out := make(map[string]string, len(obj))
+		for k, raw := range obj {
+			str, _ := raw.(string)
+			r, err := renderTemplate(str, value, params, plain)
 			if err != nil {
 				return nil, err
 			}
-			form.Set(k, r)
+			out[k] = r
 		}
-		return json.RawMessage(form.Encode()), nil
+		rendered = out
 	case BodyFormatXML:
-		s, _ := v.(string)
-		r, err := renderTemplate(s, value, params, func(s string) (string, error) {
+		str, _ := v.(string)
+		r, err := renderTemplate(str, value, params, func(s string) (string, error) {
 			var b strings.Builder
 			if err := xml.EscapeText(&b, []byte(s)); err != nil {
 				return "", err
 			}
 			return b.String(), nil
 		})
-		return json.RawMessage(r), err
+		if err != nil {
+			return nil, err
+		}
+		rendered = r
 	case BodyFormatText:
-		s, _ := v.(string)
-		r, err := renderTemplate(s, value, params, plain)
-		return json.RawMessage(r), err
-	}
-	rendered, err := renderJSONValue(v, value, typed, params)
-	if err != nil {
-		return nil, err
+		str, _ := v.(string)
+		r, err := renderTemplate(str, value, params, plain)
+		if err != nil {
+			return nil, err
+		}
+		rendered = r
+	default:
+		r, err := renderJSONValue(v, value, typed, params)
+		if err != nil {
+			return nil, err
+		}
+		rendered = r
 	}
 	b, err := json.Marshal(rendered)
 	if err != nil {
 		return nil, fmt.Errorf("driver: request body: %v", err)
 	}
 	return b, nil
+}
+
+// BodyBytes encodes a request's body (the spec's, or a command's rendered
+// one, always JSON) in its body format for the wire: the JSON itself, a form
+// url-encoded from its object of strings (keys sorted), an xml or text
+// document from its string. nil for a request with no body.
+func (r Request) BodyBytes() ([]byte, error) {
+	if len(r.Body) == 0 {
+		return nil, nil
+	}
+	switch r.BodyFormatOf() {
+	case BodyFormatForm:
+		var obj map[string]string
+		if err := json.Unmarshal(r.Body, &obj); err != nil {
+			return nil, fmt.Errorf("driver: a form body is an object of strings: %v", err)
+		}
+		form := url.Values{}
+		for k, v := range obj {
+			form.Set(k, v)
+		}
+		return []byte(form.Encode()), nil
+	case BodyFormatXML, BodyFormatText:
+		var str string
+		if err := json.Unmarshal(r.Body, &str); err != nil {
+			return nil, fmt.Errorf("driver: a %s body is a string: %v", r.BodyFormatOf(), err)
+		}
+		return []byte(str), nil
+	default:
+		var buf bytes.Buffer
+		if err := json.Compact(&buf, r.Body); err != nil {
+			return nil, fmt.Errorf("driver: a json body is JSON: %v", err)
+		}
+		return buf.Bytes(), nil
+	}
 }
 
 // renderJSONValue renders every string leaf of a JSON body. A leaf that is
