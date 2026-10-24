@@ -49,7 +49,14 @@ unproven proves nothing about the capability.
   ([fixed and ephemeral ports](/architecture/simulation/#fixed-ports-and-ephemeral-ports)).
 - **End-to-end:** emulate the user at each entry point against the running stack: API
   (drive the contracts as a client), CLI (run the real commands), UI (browser-drive the
-  SPA). Assert the user-observable outcome, not internals. The browser tier has a floor
+  SPA). Assert the user-observable outcome, not internals. The real binary follows the same
+  port rule: every end-to-end test starts `omniglass server` through one helper,
+  `startServer` in `internal/e2e`, which asks for port 0 on both the API and the embedded bus
+  and reads the addresses the server bound back from its ready file
+  ([a server on ports it picks](/guides/cli/#a-server-on-ports-it-picks)). Nothing picks a
+  free port, releases it and hands the number to a later bind, which a concurrent run on the
+  host could take in between; a guard test in the package fails any test that starts the
+  server another way or sets its listen addresses. The browser tier has a floor
   no console route can dodge: the router renders from a route manifest
   (`web/src/lib/routemanifest.ts`) and the smoke spec (`web/e2e/routes.spec.ts`) drives
   the same manifest, visiting every route and failing on any page or console error, so

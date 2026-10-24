@@ -28,6 +28,13 @@ func newServerCmd(version string) *cobra.Command {
 	return &cobra.Command{
 		Use:   "server",
 		Short: "Run the control-plane server (HTTP API)",
+		Long: "Runs the control plane: applies pending migrations and the boot seed, then serves the HTTP " +
+			"API on OMNIGLASS_ADDR and hosts the embedded NATS bus nodes connect to on OMNIGLASS_NATS_ADDR. " +
+			"Either address may name port 0, which binds whatever free port the kernel hands out; set " +
+			"OMNIGLASS_READY_FILE to a path and, once both listeners are bound, the server writes the " +
+			"addresses it got there as JSON (addr, nats_addr, and the nats_url it advertises to nodes), " +
+			"removing the file at shutdown. A supervisor or a test reads the ports from that file rather " +
+			"than picking one and hoping it stays free. Configured by environment; see the deployment guides.",
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return runServer(cmd.Context(), version)
 		},
@@ -83,24 +90,46 @@ func runServer(ctx context.Context, _ string) error {
 		return err
 	}
 	defer busSrv.Shutdown()
-	log.Info("embedded nats-server listening", "addr", c.NatsAddr)
+	log.Info("embedded nats-server listening", "addr", busSrv.Addr().String())
+	// Unset, the advertised URL is the bus's own bound address, so a bus
+	// asked for port 0 tells nodes the port it got.
+	natsURL := c.NatsURL
+	if natsURL == "" {
+		natsURL = busSrv.LocalURL()
+	}
 
+	// Bind before serving, so the address the listener got (the kernel's
+	// pick, for port 0) is known and can be reported.
+	ln, err := net.Listen("tcp", c.Addr)
+	if err != nil {
+		return err
+	}
 	srv := &http.Server{
-		Addr:              c.Addr,
-		Handler:           api.NewHandler(gw, api.WithSecureCookies(c.SecureCookies), api.WithNatsURL(c.NatsURL), api.WithSettingsService(gw.Settings()), api.WithTelemetryPublisher(busSrv), api.WithSimHub(busSrv)),
+		Handler:           api.NewHandler(gw, api.WithSecureCookies(c.SecureCookies), api.WithNatsURL(natsURL), api.WithSettingsService(gw.Settings()), api.WithTelemetryPublisher(busSrv), api.WithSimHub(busSrv)),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
+	log.Info("http api listening", "addr", ln.Addr().String())
+
+	// Catch the stop signals before reporting ready: a supervisor that stops
+	// the server the moment the ready file lands gets a graceful shutdown.
+	sig := make(chan os.Signal, 1)
+	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
+
+	removeReady, err := writeReadyFile(c.ReadyFile, readyReport{
+		Addr: ln.Addr().String(), NatsAddr: busSrv.Addr().String(), NatsURL: natsURL,
+	})
+	if err != nil {
+		_ = ln.Close()
+		return err
+	}
+	defer removeReady()
 
 	errc := make(chan error, 1)
 	go func() {
-		log.Info("http api listening", "addr", srv.Addr)
-		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		if err := srv.Serve(ln); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			errc <- err
 		}
 	}()
-
-	sig := make(chan os.Signal, 1)
-	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
 
 	select {
 	case err := <-errc:

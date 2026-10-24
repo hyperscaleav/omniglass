@@ -20,8 +20,10 @@ import (
 )
 
 // TestServerHealthzEndToEnd builds the binary, points it at a fresh migrated
-// DB via OMNIGLASS_DSN on a free port, waits for the API to come up, and
-// asserts GET /api/v1/healthz returns 200 with db ok. Skipped under -short.
+// DB via OMNIGLASS_DSN, starts it the one way the end-to-end tests start a
+// server (both listeners on port 0, the addresses read back from its ready
+// file), and asserts GET /api/v1/healthz returns 200 with db ok at the address
+// it reported. Skipped under -short.
 func TestServerHealthzEndToEnd(t *testing.T) {
 	if testing.Short() {
 		t.Skip("server e2e: skipped under -short (Postgres testcontainer + go build)")
@@ -41,38 +43,28 @@ func TestServerHealthzEndToEnd(t *testing.T) {
 	// 2. Fresh migrated DB (storagetest re-runs migrate; the server re-runs it
 	//    too on boot, proving migrate is idempotent across the two callers).
 	dsn := storagetest.NewDSN(t)
-	addr := "127.0.0.1:" + freePort(t)
 
-	// 3. Run `omniglass server` as a child process.
-	srvCtx, cancel := context.WithCancel(ctx)
-	defer cancel()
-	cmd := exec.CommandContext(srvCtx, binPath, "server")
-	cmd.Env = append(os.Environ(),
-		"OMNIGLASS_DSN="+dsn,
-		"OMNIGLASS_ADDR="+addr,
-		// Ephemeral NATS on a free port with an isolated JetStream store, so the
-		// embedded bus never binds the fixed default port across parallel runs.
-		"OMNIGLASS_NATS_ADDR=127.0.0.1:"+freePort(t),
-		"OMNIGLASS_NATS_STORE_DIR="+t.TempDir(),
-		// Keep the fallback secret key out of the source tree (the server's cwd is
-		// this package dir under `go test`).
-		"OMNIGLASS_DATA_DIR="+t.TempDir(),
-	)
-	cmd.Stdout = os.Stderr
-	cmd.Stderr = os.Stderr
-	if err := cmd.Start(); err != nil {
-		t.Fatalf("start server: %v", err)
+	// 3. Run `omniglass server` as a child process on ports it picks.
+	srv := startServer(t, binPath, "OMNIGLASS_DSN="+dsn)
+
+	// 4. Each listener reports the port the kernel handed it, never the 0 it
+	//    was asked for nor the bus's fixed default, and answers there.
+	for name, addr := range map[string]string{"addr": srv.Addr, "nats_addr": srv.NatsAddr} {
+		_, port, err := net.SplitHostPort(addr)
+		if err != nil || port == "0" || port == "4222" {
+			t.Fatalf("ready file %s = %q (%v), want the port the kernel handed out", name, addr, err)
+		}
 	}
-	t.Cleanup(func() {
-		cancel()
-		_ = cmd.Wait()
-	})
+	if srv.NatsURL != "nats://"+srv.NatsAddr {
+		t.Errorf("ready file nats_url = %q, want the bus it bound (nats://%s)", srv.NatsURL, srv.NatsAddr)
+	}
+	c, err := net.Dial("tcp", srv.NatsAddr)
+	if err != nil {
+		t.Fatalf("the bus does not answer at its reported %s: %v", srv.NatsAddr, err)
+	}
+	_ = c.Close()
 
-	// 4. Poll healthz until the server is listening (build + boot can take a
-	//    moment), then assert the response shape.
-	url := "http://" + addr + "/api/v1/healthz"
-	body := pollHealthz(t, url)
-
+	body := pollHealthz(t, srv.URL+"/api/v1/healthz")
 	var got struct {
 		Status string `json:"status"`
 		DB     string `json:"db"`
@@ -85,6 +77,77 @@ func TestServerHealthzEndToEnd(t *testing.T) {
 	}
 	if got.DB != "ok" {
 		t.Errorf("db = %q, want ok", got.DB)
+	}
+}
+
+// runningServer is an `omniglass server` child and what its ready file
+// reported: the addresses it bound and the bus URL it advertises.
+type runningServer struct {
+	URL      string // http://<addr>, the API's base
+	Addr     string // the HTTP listener's bound address
+	NatsAddr string // the embedded bus's bound address
+	NatsURL  string // the bus URL the node-claim exchange advertises
+}
+
+// startServer is the one way an end-to-end test starts `omniglass server`.
+// Both listeners ask for port 0, so the kernel hands each a port no other
+// process holds, and the server writes the addresses it bound to its ready
+// file (OMNIGLASS_READY_FILE), which this waits for. Nothing picks a port,
+// releases it and hands the number to a later bind, so a concurrent run on
+// the host cannot take it first (#1077). The bus URL is left to the server
+// to derive from the address it bound, so a node is told the port it got.
+//
+// env is the caller's settings (the DSN, at least), laid over a fresh
+// JetStream store and data dir; the listen settings and the ready file are
+// the harness's own and come last, so neither the caller nor the developer's
+// shell can pin a port. The server is stopped when the test ends.
+func startServer(t *testing.T, bin string, env ...string) runningServer {
+	t.Helper()
+	ready := filepath.Join(t.TempDir(), "ready.json")
+	ctx, cancel := context.WithCancel(context.Background())
+	cmd := exec.CommandContext(ctx, bin, "server")
+	cmd.Env = append(os.Environ(),
+		"OMNIGLASS_NATS_STORE_DIR="+t.TempDir(),
+		// Keep the fallback secret key out of the source tree (the server's
+		// cwd is this package dir under `go test`).
+		"OMNIGLASS_DATA_DIR="+t.TempDir(),
+	)
+	cmd.Env = append(cmd.Env, env...)
+	cmd.Env = append(cmd.Env,
+		"OMNIGLASS_ADDR=127.0.0.1:0",
+		"OMNIGLASS_NATS_ADDR=127.0.0.1:0",
+		"OMNIGLASS_NATS_URL=",
+		"OMNIGLASS_READY_FILE="+ready,
+	)
+	cmd.Stdout, cmd.Stderr = os.Stderr, os.Stderr
+	if err := cmd.Start(); err != nil {
+		cancel()
+		t.Fatalf("start server: %v", err)
+	}
+	exited := make(chan error, 1)
+	go func() { exited <- cmd.Wait() }()
+	t.Cleanup(func() { cancel(); <-exited })
+
+	deadline := time.After(60 * time.Second)
+	for {
+		if b, err := os.ReadFile(ready); err == nil {
+			var r struct {
+				Addr     string `json:"addr"`
+				NatsAddr string `json:"nats_addr"`
+				NatsURL  string `json:"nats_url"`
+			}
+			if err := json.Unmarshal(b, &r); err != nil || r.Addr == "" || r.NatsAddr == "" || r.NatsURL == "" {
+				t.Fatalf("ready file %q (%v), want addr, nats_addr and nats_url", b, err)
+			}
+			return runningServer{URL: "http://" + r.Addr, Addr: r.Addr, NatsAddr: r.NatsAddr, NatsURL: r.NatsURL}
+		}
+		select {
+		case err := <-exited:
+			t.Fatalf("server exited before it was ready: %v", err)
+		case <-deadline:
+			t.Fatalf("server wrote no ready file within 60s (%s)", ready)
+		case <-time.After(50 * time.Millisecond):
+		}
 	}
 }
 
@@ -115,23 +178,6 @@ func readAllClose(t *testing.T, resp *http.Response) []byte {
 		t.Fatalf("read healthz body: %v", err)
 	}
 	return b
-}
-
-// freePort asks the OS for an unused TCP port and returns it as a string. The
-// listener is closed immediately; a brief race window before the server binds
-// is acceptable for a local test.
-func freePort(t *testing.T) string {
-	t.Helper()
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatalf("reserve port: %v", err)
-	}
-	defer ln.Close()
-	_, port, err := net.SplitHostPort(ln.Addr().String())
-	if err != nil {
-		t.Fatalf("split addr: %v", err)
-	}
-	return port
 }
 
 func repoRoot(t *testing.T) string {
