@@ -140,20 +140,27 @@ rail repainting fewer pixels than seed jitter (#398, #623). Two caveats: the com
 the pixels pixelmatch judges different at its default perceptual threshold, so a change
 confined to near-identical dark tones can still score zero (#774), and a real UI change that
 falls entirely inside a masked region is invisible to the gate, which is the price of masking
-and the reason a mask names the smallest element that moves.
+and the reason a mask names the smallest box that holds still around what moves.
 
-### A mask covers the cell, and says that it is there
+### A mask covers a box that holds still, and says that it is there
 
 Playwright paints a mask over **the element the selector resolves to**, so what a `mask` entry
 resolves to is the whole contract. A `text=/…/` selector resolves to the innermost element
-carrying the text, the value's own `<span>`, so the painted box is the size of the value. The
-console does not zero-pad everything it renders (the audit trail's `toLocaleString` leaves the
-hour bare, `fmtTime` leaves the day bare), which means the same unchanged table paints a box
-seven pixels narrower at 9 o'clock than at 11, and the gate reads that as drift on a PR that
-changed no UI. So a mask over text whose width can change names the **cell**, by appending
-`>> xpath=ancestor::td[1]`, and the cell's width is pinned by its column descriptor. A mask
-over text of fixed width (a uuid in a monospace face) stays on the text, which is also the
-only correct answer when the enclosing cell holds something the shot exists to show (#773).
+carrying the text, the value's own `<span>`, and so does a `data-testid` hook placed on that
+span, so the painted box is the size of the value. The console does not render a
+capture-relative value at one width (the audit trail's `toLocaleString` leaves the hour bare,
+`fmtTime` leaves the day bare and prints AM or PM, an age reads 9s or 17s), which means the
+same unchanged page paints a box seven pixels narrower at 9 o'clock than at 11, and the gate
+reads that as drift on a PR that changed no UI. So a mask over text whose width can change
+names a **container the layout pins**: the **cell**, by appending `>> xpath=ancestor::td[1]`,
+whose width its column descriptor pins (#773); or the **row** a since-line sits in, by
+appending `>> xpath=ancestor::div[1]` (or `span[1]`, whichever element the row is), a flex row
+stretched to its card's width (#1081). Check the row's height as well as its width: a wrapping
+row whose wrap depends on the value's width does not hold still. A row usually carries more
+than the value (a verdict, a name), which the baseline gives up and the clean render still
+shows; say so in the frontmatter comment. A mask over text of fixed width (a uuid in a
+monospace face) stays on the text, which is also the only correct answer when the enclosing
+cell holds something the shot exists to show.
 
 The fill is **deliberately visible** in the baseline: the console's own neutral surface, one
 step lighter than the card behind it, so a human reading a diff artifact sees a block placed
@@ -169,10 +176,11 @@ make docs-shots-check                              # the gate
 DOCS_SHOTS_TZ=Asia/Kolkata make docs-shots-check   # the same gate, an hour digit away
 ```
 
-Both halves of the contract (the selector resolves to the cell, and the raster survives a
-one-character change) are pinned at the browser tier by `web/e2e/shotmask.spec.ts`, which flips
-a digit on synthetic markup and so also covers the single-digit day a timezone shift cannot
-reach. Every capture logs what each mask resolved to (`mask 59x td 190x37 <- text=/…/`), so a
+Both halves of the contract (the page's declared selector resolves to a box the value cannot
+move, and the raster survives the value changing) are pinned at the browser tier by
+`web/e2e/shotmask.spec.ts`, which reads each mask from the page's own frontmatter, changes the
+value on synthetic markup, and so also covers the single-digit day a timezone shift cannot
+reach. A new mask over a varying value adds its case there. Every capture logs what each mask resolved to (`mask 59x td 190x37 <- text=/…/`), so a
 mask that lands on the wrong element shows up in the capture output rather than in a raster
 nobody diffs by hand.
 

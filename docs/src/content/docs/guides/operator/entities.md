@@ -12,8 +12,17 @@ screenshots:
         selector: "[role=treeitem]:has-text('Harbor Point')"
     # The blade renders one region no clock can pin: the since line's age
     # counts from the capture's own seed-to-shoot latency.
+    #
+    # The mask names the since line's ROW (`xpath=ancestor::div[1]`), not the
+    # since span. Playwright paints a mask over the element the selector
+    # resolves to, so a mask on the span is the size of its text, and the text
+    # moves with the clock (`fmtTime` prints AM or PM and leaves the day bare;
+    # the age reads 9s or 17s): the box repainted a pixel narrower or wider on
+    # an unchanged blade (#1081). The row stretches to the blade's fixed width,
+    # so its box does not move. It also covers the verdict beside the age,
+    # which the baseline gives up and the clean render still shows.
     mask:
-      - "[data-testid=blade-since]"
+      - "[data-testid=blade-since] >> xpath=ancestor::div[1]"
   - id: entity-edit-face
     path: /web/locations/east?edit=1
     alt: "An ?edit=1 deep link lands a place's view on its Configure tab, already editing."

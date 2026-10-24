@@ -119,10 +119,13 @@ for (const spec of specs) {
   // to the innermost element carrying the text, which is the value's own <span>:
   // the painted box is then the size of the text it hides, and a value one
   // character narrower (an hour that is not zero-padded, a single-digit day) moves
-  // the box, which is changed pixels against a budget of zero. A mask over text of
-  // varying width therefore names the containing CELL, whose width its column
-  // descriptor pins. The resolution is logged for every shot so a mask that lands
-  // on the wrong element is visible in the capture output, not just in the raster.
+  // the box, which is changed pixels against a budget of zero. A `data-testid` hook
+  // on the value's own span resolves the same way (#1081). A mask over text of
+  // varying width therefore names a container the layout pins: the CELL, whose
+  // width its column descriptor pins, or the ROW a since-line sits in, stretched to
+  // its card (web/e2e/shotmask.spec.ts holds those masks to it). The resolution is
+  // logged for every shot so a mask that lands on the wrong element (a `span` is the
+  // usual tell) is visible in the capture output, not just in the raster.
   const mask = [];
   for (const sel of spec.mask ?? []) {
     const locator = page.locator(sel);

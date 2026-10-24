@@ -195,8 +195,31 @@ console then differ, and the zero-tolerance shot gate (#623) reads the flap as U
 Detection cue: a diff adds `Date.now()`, `durationText`, `rel(`, or a spans/weight
 computation to a component any `screenshots:` frontmatter path renders, with no matching
 `mask:` selector in that page's entry. Fix: a stable hook (`data-testid`) on the moving
-region and a mask line in the frontmatter, per the entity blade's duration masks
+region and a mask line in the frontmatter that names a box the text cannot resize (see
+`text-sized-mask` below), per the entity blade's since-line mask
 (docs/src/content/docs/guides/operator/entities.md).
+
+## text-sized-mask (fixed by #1081; first met as #773, watch for regressions)
+
+- **Cue:** a `mask:` entry in a page's `screenshots:` frontmatter that resolves to the element
+  holding a value whose width varies: a bare `text=/…/` selector, or a `data-testid` hook on the
+  value's own span (a since-line, an age, a timestamp), with no `>> xpath=ancestor::…` hop to a
+  container. In the capture output, a mask line resolving to a `span`
+  (`mask 1x span 157x16 <- [data-testid=blade-since]`) is the tell: a span is sized by its text.
+- **Failure:** Playwright paints a mask at the bounding box of what the selector resolves to, so
+  the box is the size of the text, and the text's width moves with the clock (`fmtTime` prints AM
+  or PM and leaves the day bare, `toLocaleString` leaves the hour bare, `durationText` reads 9s or
+  17s). The baseline then moves by a column of pixels with no UI change, and the zero-tolerance
+  gate's verdict depends on when it runs: the audit trail's When column, 7px (#773); the entity
+  blade's and a system summary card's since-lines, 1px between 01:57 AM and 06:59 PM (#1081).
+- **Fix:** name a container the layout pins and the text cannot resize: the cell
+  (`>> xpath=ancestor::td[1]`, pinned by its column descriptor) or the row the value sits in
+  (`>> xpath=ancestor::div[1]`, a flex row stretched to its card), and check the container's
+  height holds too (a wrapping row whose wrap depends on the value's width is not fixed). The
+  text stays the target only where its width is fixed by construction (a 36-character uuid in a
+  monospace face). Prove it with the clock moved (`DOCS_SHOTS_TZ`, two captures minutes apart
+  share an hour and prove nothing) and add the value to `web/e2e/shotmask.spec.ts`, which reads
+  the page's own selector and fails a mask whose box tracks its value.
 
 ## scoped-owner-unscoped-member (fixed; found by the #525 rollup review)
 

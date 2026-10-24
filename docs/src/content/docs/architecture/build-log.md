@@ -7823,3 +7823,28 @@ lives in the query cache under the endpoint, so the Collection card's notice and
 it together and cannot stack a second redial; the ladder no longer grows a login rung for a
 session with no login; and the rows-survive-a-poll tests now let the poll land and assert DOM
 identity, proven to fail against the unkeyed iteration (two review catalog entries record it).
+
+### Docs-shot masks paint a fixed box, so baselines never move with the clock (#1081)
+
+Two masked baselines moved with the capture's wall clock though their masks exist to pin exactly
+that region: `entity-blade` masked `[data-testid=blade-since]` and `fleet-place-systems` masked
+`[data-testid=summary-since]`, each a hook on the since span itself, so Playwright painted each
+mask at the size of the text. The text moves with the clock (`fmtTime` prints AM or PM and leaves
+the day bare, the age reads 9s or 17s), so the same blade captured at 01:57 AM and at 06:59 PM
+painted a box one pixel apart and the zero-tolerance gate's verdict depended on when it ran: the
+class #773 fixed for table cells, met again on a `data-testid` hook. Each mask now names the row
+the since line sits in (`>> xpath=ancestor::div[1]` in the blade, `>> xpath=ancestor::span[1]` in
+the summary card), a flex row stretched to its card's width, so the painted box is 407 by 20 and
+285 by 44 whatever the line reads; the rows also hold the verdict (and in the card, the system's
+name), which the baselines give up and the clean renders still show. No console surface changed:
+a fixed-width since slot would have aligned nothing, since the line ends its row in both places.
+A sweep of every other mask found none of the class: the uuid masks stay on fixed-width monospace
+text, the timestamp masks name their cells, and every other since-line, age and timestamp mask
+already names a row or an incident entry stretched to its container (the uptime figure's box is
+pinned by its minimum width). Proven both ways. A recapture with the clock moved
+(`DOCS_SHOTS_TZ=America/Los_Angeles`) changed exactly these two baselines before the fix, every
+other mask resolving to the same box, and changes none after it. `web/e2e/shotmask.spec.ts` now
+reads each mask from its page's own frontmatter rather than a copy, and its two new cases (the
+blade's and the summary card's since lines) failed against the old selectors, the box moving
+from 164 to 179 pixels, and pass against the new. The review catalog gains `text-sized-mask`,
+and `unmasked-capture-relative-region` no longer points at the blade's mask as its exemplar.

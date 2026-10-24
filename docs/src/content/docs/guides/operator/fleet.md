@@ -17,6 +17,13 @@ screenshots:
         selector: "aside[data-blade] button[aria-label=Expand]"
     alt: "A component's view: its place as a card saying the place is its own, the verdict with its since-line, why, what it is, the systems it serves with its role in each, and collection."
     # The since-line and the alarm ages count from the capture's own clock.
+    #
+    # Every mask over a since-line, an age or a timestamp on this page names a
+    # container the layout pins rather than the text: the header or alarm row
+    # (`xpath=ancestor::div[1]`, stretched to its card) or the incident entry
+    # (`xpath=ancestor::li[1]`, stretched to its list). The text's width moves
+    # with the clock, and a mask is painted at the size of what it resolves to
+    # (#773, #1081).
     mask:
       - "[data-testid=since-line] >> xpath=ancestor::div[1]"
       - "text=/unacknowledged/ >> xpath=ancestor::div[1]"
@@ -81,8 +88,17 @@ screenshots:
   - id: fleet-place-systems
     path: /web/locations/media-lab
     alt: "A room holding two systems: its card, then a brief card per system with its verdict, standard and size, each opening that system's view."
+    # Each card's since line ages with the capture. The mask names the card's
+    # HEADER ROW (`xpath=ancestor::span[1]`), not the since span, so the painted
+    # box is the card's width, which the grid track pins, rather than the width
+    # of the text: `fmtTime` prints AM or PM and leaves the day bare, and the
+    # age reads 9s or 17s, so a mask sized to the text moved with the clock
+    # (#1081). The row's height holds too: in a track this narrow the since
+    # line always wraps to the row's second line. The row also carries the
+    # system's name and verdict, which the baseline gives up (the clean render
+    # shows them) because no smaller box holds still around the since line.
     mask:
-      - "[data-testid=summary-since]"
+      - "[data-testid=summary-since] >> xpath=ancestor::span[1]"
   # Opened down to one room so the shot shows every rule at once: folded
   # chains, contents lines, health counts, and a place wearing its system
   # with the components beneath it.
