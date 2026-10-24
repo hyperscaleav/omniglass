@@ -42,7 +42,8 @@ func (s *gateStack) attachSNMP(comp, nodeName, ip string, port int, community st
 // poll still lands. A wrong community meets the face's silence: not
 // responsive and never rejected. The face's refused community is answered
 // with authorizationError: rejected, class auth, no further get under that
-// fingerprint, and the secret rotated brings it up. A stopped agent reads not
+// fingerprint (across a node restart too), the verdict down beneath the
+// gate, and the secret rotated brings it up. A stopped agent reads not
 // responsive.
 func TestNodeSNMPRungIsAStandardGetAnswered(t *testing.T) {
 	if testing.Short() {
@@ -102,6 +103,15 @@ func TestNodeSNMPRungIsAStandardGetAnswered(t *testing.T) {
 	agent := s.panels[ipRefused]
 	time.Sleep(500 * time.Millisecond) // a get already in flight lands first
 	s.settles("gets to the refusing agent under the refused community", agent.SNMPRequests, agent.SNMPRequests())
+	// Beneath the gate the agent is unobserved and the endpoint not
+	// collectable: the verdict reads down, never frozen at the last answer.
+	s.waitFor("panel-refused", refused.Name, "endpoint-responsive", is("down"), "down: held beneath the gate")
+	s.waitFor("panel-refused", refused.Name, "endpoint-reachable", is("down"), "down")
+	// A restarted node adopts the gate from the worklist, and its poll, new
+	// to the schedule and due at once, is held too: still no get.
+	s.runNode("edge-snmp")
+	time.Sleep(500 * time.Millisecond)
+	s.settles("gets to the refusing agent after a node restart", agent.SNMPRequests, agent.SNMPRequests())
 
 	// The community rotated in the secret store: up within a tick.
 	if _, err := s.gw.UpdateSecret(s.ctx, "", revoked.ID, storage.SecretPatch{Fields: map[string]string{"community": "public"}}, s.all, s.all, true, true); err != nil {

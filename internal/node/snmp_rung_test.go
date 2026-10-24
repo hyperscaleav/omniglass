@@ -144,8 +144,19 @@ func TestAnSNMPAuthorizationErrorGatesTheSessionRungAndHoldsTheGet(t *testing.T)
 	if fake.count() != sent {
 		t.Fatal("a get went out beneath the auth gate")
 	}
-	if a := samplesByName(dps)[collection.SignalEndpointAuthenticated]; a.Text != "no" {
+	held := samplesByName(dps)
+	if a := held[collection.SignalEndpointAuthenticated]; a.Text != "no" {
 		t.Fatalf("held authenticated = %+v, want no", a)
+	}
+	// Beneath the gate the endpoint is not collectable under its
+	// fingerprint, and the agent's state is unobserved: the rung reads down,
+	// rejected, so the verdict follows rather than freezing at the last
+	// answer (review of #821, finding 1).
+	if r := held[collection.SignalEndpointResponsive]; r.Text != "down" || r.Labels[collection.ReasonLabel] != "rejected: auth" {
+		t.Fatalf("held responsive = %+v, want down, rejected: auth", r)
+	}
+	if up, ok := collection.EndpointVerdict(dps); !ok || up {
+		t.Fatalf("held verdict = %v, %v, want down", up, ok)
 	}
 	poll := collection.TaskSpec{ID: "p1", Mode: "poll", Transport: "snmp", EndpointID: "ep-s", EndpointName: "snmp", Fingerprint: "fp-1",
 		EndpointParams: json.RawMessage(`{"target":"10.0.0.9:161"}`),

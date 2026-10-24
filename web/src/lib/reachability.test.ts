@@ -143,6 +143,23 @@ describe("reason", () => {
     expect(why).toMatch(/community/i);
     expect(why).not.toMatch(/port/i);
   });
+  // Beneath snmp's auth gate the get is not sent (#821): the why names the
+  // refusal and the way out, never silence.
+  it("explains an snmp endpoint gated at the session rung as refused", () => {
+    const iface: ReachEndpoint = {
+      ...base,
+      endpoint: "snmp",
+      transport: "snmp",
+      responsive: { value: "down", ts: ago(5_000) },
+      rejection: { rung: "authenticated", class: "auth" },
+      layers: [
+        { layer: "ping", check: "icmp-reachable", value: 1, ts: ago(5_000) },
+        { layer: "request", check: "endpoint-responsive", value: 0, ts: ago(5_000) },
+      ],
+    };
+    expect(reason(iface, now)).toMatch(/refused/i);
+    expect(reason(iface, now)).not.toMatch(/does not answer/i);
+  });
   // A gated udp endpoint's request was answered with a refusal retrying
   // cannot fix, and the node sends nothing more (review of #1037, finding 5):
   // the why says that, never "unanswered".

@@ -122,10 +122,10 @@ export function reason(iface: ReachEndpoint, now: number = Date.now()): string {
   if (ping && ping.value >= 1 && port && port.value < 1) {
     return "Host answers ping but the control port is refused: service down, box up.";
   }
-  if (!port && iface.responsive && iface.rejection?.rung === "responsive") {
+  if (!port && iface.responsive && requestHeld(iface)) {
     // A gated request rung (#1037): the component answered with a refusal
     // retrying cannot fix, and the node sends nothing more under it.
-    return `The component refused the endpoint's request in a way retrying cannot fix (${iface.rejection.class}): nothing is sent to it until the endpoint changes or someone retries it.`;
+    return `The component refused the endpoint's request in a way retrying cannot fix (${iface.rejection?.class ?? "refused"}): nothing is sent to it until the endpoint changes or someone retries it.`;
   }
   if (ping && ping.value >= 1 && !port && iface.responsive?.value === "down" && iface.transport === "snmp") {
     // An snmp endpoint (#821): its rung is a get, and v2c drops a wrong
@@ -157,6 +157,14 @@ export function requestRung(iface: ReachEndpoint): boolean | undefined {
   if (layer) return layer.value >= 1;
   if (!iface.responsive) return undefined;
   return iface.responsive.value === "up";
+}
+
+// requestHeld reports a request rung a refusal holds, beneath which nothing
+// is sent: a gate at the transport rung, or for snmp at the session rung too,
+// since every v2c get carries the refused community (#821).
+export function requestHeld(iface: ReachEndpoint): boolean {
+  const rung = iface.rejection?.rung;
+  return rung === "responsive" || (iface.transport === "snmp" && rung === "authenticated");
 }
 
 // requestLayer is the request rung the read serves for a udp endpoint, with

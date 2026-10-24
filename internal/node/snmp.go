@@ -24,7 +24,8 @@ var errNoCommunity = errors.New("no community credential was delivered for the s
 // the agent refusing a community it knows: responsive, timed, authenticated
 // no, and a terminal auth refusal that gates the session rung, beneath which
 // no get is sent under that fingerprint (every v2c request carries the
-// community). Silence reads timeout and says nothing of the community: a
+// community) and the rung reads down, rejected, the verdict with it. Silence
+// reads timeout and says nothing of the community: a
 // wrong v2c community is dropped silently and cannot be told from a stopped
 // agent. No tcp-open lands, and the rung decides the verdict.
 func collectSNMPRung(ctx context.Context, runner *collection.Runner, task collection.TaskSpec, req *driver.Request, sessions *sessionManager) ([]collection.Sample, error) {
@@ -42,10 +43,18 @@ func collectSNMPRung(ctx context.Context, runner *collection.Runner, task collec
 		return collection.Sample{Name: collection.SignalEndpointAuthenticated, Text: verdict, IsText: true, TS: now,
 			Labels: map[string]string{collection.ReasonLabel: reason}}
 	}
+	responsive := func(verdict, reason string) collection.Sample {
+		return collection.Sample{Name: collection.SignalEndpointResponsive, Text: verdict, IsText: true, TS: now,
+			Labels: map[string]string{collection.ReasonLabel: reason}}
+	}
 	if gt, ok := sessions.blocked(task.EndpointID, rungAuthenticated); ok {
 		// Held: the community is refused under this fingerprint, and v2c
-		// has no request without it, so nothing is sent.
-		return []collection.Sample{authenticated("no", "held: "+gt.class)}, nil
+		// has no request without it, so nothing is sent. The get is the
+		// only transport probe snmp has, so beneath the gate the agent is
+		// unobserved and the endpoint not collectable: the rung reads down,
+		// rejected (as udp's gated rung does), and the verdict follows
+		// rather than freezing at the last answer.
+		return []collection.Sample{responsive("down", "rejected: "+gt.class), authenticated("no", "held: "+gt.class)}, nil
 	}
 	community, ok := task.Secrets["community"]["community"]
 	if !ok || community == "" {
@@ -61,10 +70,6 @@ func collectSNMPRung(ctx context.Context, runner *collection.Runner, task collec
 			return nil, fmt.Errorf("node: task %s: bad timeout %q: %w", task.ID, p.Timeout, err)
 		}
 		timeout = d
-	}
-	responsive := func(verdict, reason string) collection.Sample {
-		return collection.Sample{Name: collection.SignalEndpointResponsive, Text: verdict, IsText: true, TS: now,
-			Labels: map[string]string{collection.ReasonLabel: reason}}
 	}
 	start := time.Now()
 	_, err := runner.SNMP.Get(ctx, p.Target, community, req.Get, timeout)

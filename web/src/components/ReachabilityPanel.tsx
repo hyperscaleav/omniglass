@@ -23,6 +23,7 @@ import {
   layerWord,
   requestRung,
   requestLayer,
+  requestHeld,
   type ReachEndpoint,
   type VerdictWord,
 } from "../lib/reachability";
@@ -148,8 +149,8 @@ function GateBreakdown(p: { iface: ReachEndpoint }) {
   const why = createMemo(() => reason(p.iface, now()));
   const verdictOk = createMemo(() => p.iface.verdict?.value === "up");
   // A request rung a refusal holds: the component answered with a refusal
-  // retrying cannot fix, so beneath the gate nothing is sent (#1037).
-  const requestGated = () => p.iface.rejection?.rung === "responsive";
+  // retrying cannot fix, so beneath the gate nothing is sent (#1037, #821).
+  const requestGated = () => requestHeld(p.iface);
   return (
     <div class="flex flex-col gap-1.5 border-t border-base-300 bg-base-200/40 px-3 py-2.5 text-[12px]">
       {/* The request layer (udp) is drawn as its own row below, beside the
