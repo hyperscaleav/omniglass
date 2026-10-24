@@ -378,17 +378,23 @@ describe("a udp endpoint", () => {
     last_seen: nowIso,
     verdict: { value: answered ? "up" : "down", ts: nowIso },
     responsive: { value: answered ? "up" : "down", ts: nowIso },
-    layers: [{ layer: "ping", check: "icmp-reachable", value: 1, ts: nowIso }],
+    layers: [
+      { layer: "ping", check: "icmp-reachable", value: 1, ts: nowIso },
+      // The read serves the request rung as a layer, timed while answered.
+      { layer: "request", check: "endpoint-responsive", value: answered ? 1 : 0, detail: answered ? "0.7 ms" : undefined, ts: nowIso },
+    ],
     history: [{ ts: ago(120_000), value: answered ? "up" : "down" }],
   });
 
-  it("lists the request rung in the breakdown", () => {
-    const { getByText, getByTestId } = mount({ component: "panel-1", endpoints: [udpRow(true)] });
+  it("lists the request rung in the breakdown, once, with its round trip", () => {
+    const { getByText, getByTestId, queryAllByText } = mount({ component: "panel-1", endpoints: [udpRow(true)] });
     fireEvent.click(getByText("Panel over UDP"));
     const row = getByTestId("request-rung");
     expect(row.textContent).toMatch(/request/);
     expect(row.textContent).toMatch(/answered/);
     expect(row.textContent).not.toMatch(/not answered/);
+    expect(row.textContent).toMatch(/0\.7 ms/);
+    expect(queryAllByText("endpoint-responsive")).toHaveLength(0);
   });
 
   it("reads an unanswered request down and says why", () => {

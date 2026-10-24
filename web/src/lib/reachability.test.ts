@@ -162,6 +162,10 @@ describe("requestRung", () => {
     expect(requestRung({ ...base, responsive: { value: "up", ts: ago(0) } })).toBe(true);
     expect(requestRung({ ...base, responsive: { value: "down", ts: ago(0) } })).toBe(false);
   });
+  it("reads the request layer the read serves first", () => {
+    const layer = { layer: "request", check: "endpoint-responsive", value: 0, ts: ago(0) };
+    expect(requestRung({ ...base, layers: [ping, layer], responsive: { value: "up", ts: ago(0) } })).toBe(false);
+  });
   it("is undefined beside a port, before the rung lands, and for icmp", () => {
     expect(requestRung({ ...base, transport: "tls", layers: [ping, port], responsive: { value: "up", ts: ago(0) } })).toBeUndefined();
     expect(requestRung(base)).toBeUndefined();

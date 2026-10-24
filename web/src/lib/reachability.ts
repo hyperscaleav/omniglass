@@ -141,13 +141,23 @@ export function reason(iface: ReachEndpoint, now: number = Date.now()): string {
 }
 
 // requestRung is an endpoint's transport rung where it is a request answered
-// (#1037): an endpoint with no port to open (udp) whose responsive rung
-// landed. true answered, false not; undefined for an endpoint whose rung is a
-// connect or a handshake (a port layer), or an icmp endpoint.
+// (#1037): an endpoint with no port to open (udp), read off the request layer
+// the read serves (or, from a read that serves none, its responsive rung).
+// true answered, false not; undefined for an endpoint whose rung is a connect
+// or a handshake (a port layer), or an icmp endpoint.
 export function requestRung(iface: ReachEndpoint): boolean | undefined {
-  if (iface.transport === "icmp" || !iface.responsive) return undefined;
+  if (iface.transport === "icmp") return undefined;
   if (iface.layers.some((l) => l.check === "tcp-open")) return undefined;
+  const layer = requestLayer(iface);
+  if (layer) return layer.value >= 1;
+  if (!iface.responsive) return undefined;
   return iface.responsive.value === "up";
+}
+
+// requestLayer is the request rung the read serves for a udp endpoint, with
+// its round trip while answered.
+export function requestLayer(iface: ReachEndpoint): ReachLayer | undefined {
+  return iface.layers.find((l) => l.layer === "request");
 }
 
 // layerWord renders a probe layer's boolean signal as its per-layer word.

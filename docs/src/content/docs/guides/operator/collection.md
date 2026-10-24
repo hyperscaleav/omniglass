@@ -154,7 +154,8 @@ keys; once you know the component was replaced, `omniglass endpoint retry <id> -
 offered key>` trusts the new one ([tls](/architecture/collection/#tls)).
 
 A **udp** endpoint has no port to open, so its breakdown lists its **request** rung beside the ping:
-the driver's named request, answered or not, which is the layer its verdict follows. A component
+the driver's named request, answered (with its round trip) or not, which is the layer its verdict
+follows. A component
 that answers ping but not the request reads down, and its why line says the request goes
 unanswered (the service is down, the port is closed, or the datagrams are lost); one that blocks
 ping but answers reads up. A lost datagram is re-sent within the endpoint's timeout, so a little

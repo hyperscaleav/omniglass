@@ -22,6 +22,7 @@ import {
   reason,
   layerWord,
   requestRung,
+  requestLayer,
   type ReachEndpoint,
   type VerdictWord,
 } from "../lib/reachability";
@@ -100,7 +101,7 @@ function TlsRows(p: { tls: ReachTLS; responsive?: boolean; refused: boolean }) {
           an earlier probe's; beneath a certificate gate no handshake runs. */}
       <div class="flex items-center gap-2">
         <span class={`inline-block size-2 shrink-0 rounded-full ${p.refused || p.responsive === undefined ? TONE_DOT.unknown : p.responsive ? "bg-success" : "bg-error"}`} />
-        <span class="w-10 shrink-0 uppercase tracking-wide text-base-content/45 text-[10px]">tls</span>
+        <span class="w-16 shrink-0 uppercase tracking-wide text-base-content/45 text-[10px]">tls</span>
         <span class="font-data text-base-content/70">handshake</span>
         <span class="text-base-content/50">
           {p.refused ? "not tried beneath the gate" : p.responsive === undefined ? "not answered yet" : p.responsive ? "answered" : "not answered"}
@@ -112,7 +113,7 @@ function TlsRows(p: { tls: ReachTLS; responsive?: boolean; refused: boolean }) {
       </div>
       <div class="flex items-center gap-2" data-testid="tls-cert" data-tone={tone()}>
         <span class={`inline-block size-2 shrink-0 rounded-full ${TONE_DOT[tone()]}`} />
-        <span class="w-10 shrink-0 uppercase tracking-wide text-base-content/45 text-[10px]">cert</span>
+        <span class="w-16 shrink-0 uppercase tracking-wide text-base-content/45 text-[10px]">cert</span>
         <Show
           when={days() !== undefined}
           fallback={
@@ -128,7 +129,7 @@ function TlsRows(p: { tls: ReachTLS; responsive?: boolean; refused: boolean }) {
       </div>
       <div class="flex items-center gap-2">
         <span class={`inline-block size-2 shrink-0 rounded-full ${TONE_DOT[mode().tone]}`} />
-        <span class="w-10 shrink-0 uppercase tracking-wide text-base-content/45 text-[10px]">trust</span>
+        <span class="w-16 shrink-0 uppercase tracking-wide text-base-content/45 text-[10px]">trust</span>
         <span class={mode().tone === "warn" ? "text-warning" : "text-base-content/70"}>{mode().word}</span>
         <Show when={p.tls.key}>
           <span class="font-data text-base-content/40" title={p.tls.key}>· {shortKey(p.tls.key!)}</span>
@@ -151,13 +152,15 @@ function GateBreakdown(p: { iface: ReachEndpoint }) {
   const requestGated = () => p.iface.rejection?.rung === "responsive";
   return (
     <div class="flex flex-col gap-1.5 border-t border-base-300 bg-base-200/40 px-3 py-2.5 text-[12px]">
-      <For each={p.iface.layers}>
+      {/* The request layer (udp) is drawn as its own row below, beside the
+          gate it is, not as a probe layer. */}
+      <For each={p.iface.layers.filter((l) => l.layer !== "request")}>
         {(l) => {
           const up = l.value >= 1;
           return (
             <div class="flex items-center gap-2">
               <span class={`inline-block size-2 shrink-0 rounded-full ${up ? "bg-success" : "bg-error"}`} />
-              <span class="w-10 shrink-0 uppercase tracking-wide text-base-content/45 text-[10px]">{l.layer}</span>
+              <span class="w-16 shrink-0 uppercase tracking-wide text-base-content/45 text-[10px]">{l.layer}</span>
               <span class="font-data text-base-content/70">{l.check}</span>
               <span class="text-base-content/50">{layerWord(l)}</span>
               <Show when={l.detail}>
@@ -172,9 +175,12 @@ function GateBreakdown(p: { iface: ReachEndpoint }) {
             the driver's request answered, the layer its verdict follows. */}
         <div class="flex items-center gap-2" data-testid="request-rung">
           <span class={`inline-block size-2 shrink-0 rounded-full ${requestGated() ? TONE_DOT.unknown : requestRung(p.iface) ? "bg-success" : "bg-error"}`} />
-          <span class="w-10 shrink-0 uppercase tracking-wide text-base-content/45 text-[10px]">rung</span>
+          <span class="w-16 shrink-0 uppercase tracking-wide text-base-content/45 text-[10px]">rung</span>
           <span class="font-data text-base-content/70">request</span>
           <span class="text-base-content/50">{requestGated() ? "refused, not sent beneath the gate" : requestRung(p.iface) ? "answered" : "not answered"}</span>
+          <Show when={!requestGated() && requestRung(p.iface) && requestLayer(p.iface)?.detail}>
+            <span class="text-base-content/40">· {requestLayer(p.iface)!.detail}</span>
+          </Show>
           <InfoTip
             label="the request rung"
             text="The transport rung where an open port cannot be detected (udp): the node sends the driver's named request and an answer proves the protocol. Silence reads not answered (timed out), and a port the host reports closed reads refused. With no port to open, this rung is the endpoint's verdict."
@@ -192,7 +198,7 @@ function GateBreakdown(p: { iface: ReachEndpoint }) {
       </Show>
       <div class="flex items-center gap-2">
         <span class={`inline-block size-2 shrink-0 rounded-full ${verdictOk() ? "bg-success" : "bg-error"}`} />
-        <span class="w-10 shrink-0 uppercase tracking-wide text-base-content/45 text-[10px]">verdict</span>
+        <span class="w-16 shrink-0 uppercase tracking-wide text-base-content/45 text-[10px]">verdict</span>
         <span class="text-base-content/60">endpoint {verdictOk() ? "up" : "down"}</span>
       </div>
       <Show when={why()}>
