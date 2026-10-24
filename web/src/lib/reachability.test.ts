@@ -7,6 +7,7 @@ import {
   uptime,
   reason,
   layerWord,
+  requestRung,
   STALENESS_WINDOW_MS,
   type ReachEndpoint,
 } from "./reachability";
@@ -134,5 +135,20 @@ describe("layerWord", () => {
   it("renders up/down for the ping layer", () => {
     expect(layerWord({ layer: "ping", check: "icmp-reachable", value: 1, ts: ago(0) })).toBe("up");
     expect(layerWord({ layer: "ping", check: "icmp-reachable", value: 0, ts: ago(0) })).toBe("down");
+  });
+});
+
+describe("requestRung", () => {
+  const ping = { layer: "ping", check: "icmp-reachable", value: 1, ts: ago(0) };
+  const port = { layer: "port", check: "tcp-open", value: 1, ts: ago(0) };
+  const base: ReachEndpoint = { endpoint: "udp", transport: "udp", verdict: { value: "up", ts: ago(0) }, layers: [ping], history: [] };
+  it("is the responsive rung where there is no port to open", () => {
+    expect(requestRung({ ...base, responsive: { value: "up", ts: ago(0) } })).toBe(true);
+    expect(requestRung({ ...base, responsive: { value: "down", ts: ago(0) } })).toBe(false);
+  });
+  it("is undefined beside a port, before the rung lands, and for icmp", () => {
+    expect(requestRung({ ...base, transport: "tls", layers: [ping, port], responsive: { value: "up", ts: ago(0) } })).toBeUndefined();
+    expect(requestRung(base)).toBeUndefined();
+    expect(requestRung({ ...base, transport: "icmp", responsive: { value: "up", ts: ago(0) } })).toBeUndefined();
   });
 });
