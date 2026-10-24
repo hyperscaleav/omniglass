@@ -7341,8 +7341,8 @@ interface create form, since that name is the platform's to mint.
      it, and an operator's declared value (which resolves ahead of the calculated one, by design);
      `collected` every observer (a driver's emits on the node lane, a push, a command's reply), a
      command's intended value, an operator's declared value and an event rule's event. The one
-     declared row the reserved family admits is the ssh host key pin, set only through an
-     endpoint's audited `:retry` (ADR-0157). Operator and command are writers, not classes: a
+     declared row the reserved family admits is a key pin (the ssh host key, ADR-0157, and the tls
+     certificate's public key, ADR-0160), set only through an endpoint's audited `:retry`. Operator and command are writers, not classes: a
      declared or intended row is never an observation, so it contests no observer.
   3. **Held at the Storage Gateway, as scope is.** Every gateway function that writes a sample or
      an event row names its writer and holds every row to its key's class before anything lands;

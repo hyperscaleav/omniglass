@@ -272,12 +272,14 @@ func composeEndpoint(ctx context.Context, gw storage.Gateway, comp string, it st
 	return row, nil
 }
 
-// The tls facts a probe and a session land (#1035).
+// The tls facts a probe and a session land (#1035), each the probekeys
+// declaration the node emits from, ruled node-only there. tlsKeyKey is the
+// property the pin rides (served as the pin in force, EndpointKeyPin).
 const (
-	tlsKeyKey       = "tls-certificate"
-	tlsExpiryKey    = "tls-certificate-expiry"
-	tlsDaysLeftKey  = "tls-certificate-days-left"
-	tlsHandshakeKey = "tls-handshake-time"
+	tlsKeyKey       = probekeys.TLSCertificate
+	tlsExpiryKey    = probekeys.TLSCertificateExpiry
+	tlsDaysLeftKey  = probekeys.TLSCertificateDaysLeft
+	tlsHandshakeKey = probekeys.TLSHandshakeTime
 )
 
 // composeTLS reads a tls endpoint's facts: the mode off its params (verify
@@ -296,13 +298,16 @@ func composeTLS(ctx context.Context, gw storage.Gateway, comp string, it storage
 		out.Mode = "verify"
 	}
 	if out.Mode == "pin" {
-		key, err := gw.LatestProperty(ctx, comp, tlsKeyKey, it.Name)
+		// The pin in force: the operator's declared key (set through
+		// :retry), else the one the node trusted on first use. The
+		// observed series alone would keep the first-use key after an
+		// operator accepts a new one, since a delivered pin is not
+		// published back (ADR-0161).
+		key, err := gw.EndpointKeyPin(ctx, comp, it.Name, it.Transport)
 		if err != nil {
 			return nil, err
 		}
-		if key != nil {
-			out.Key = key.Value
-		}
+		out.Key = key
 	}
 	metrics := map[string]**float64{tlsHandshakeKey: &out.HandshakeMS}
 	if gate == nil || gate.Class != "certificate" {

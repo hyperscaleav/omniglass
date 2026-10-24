@@ -793,6 +793,25 @@ func latestRejection(ctx context.Context, q querier, componentID, instance strin
 	return v, nil
 }
 
+// EndpointKeyPin is the key an ssh or tls endpoint pins in force (keyPin):
+// the operator's declared pin, else the key the node trusted on first use, ""
+// for none or for a transport that pins nothing. An unknown component folds
+// into "" as LatestProperty's does.
+func (p *PG) EndpointKeyPin(ctx context.Context, componentRef, endpoint, transport string) (string, error) {
+	property, ok := pinKeyOf[transport]
+	if !ok {
+		return "", nil
+	}
+	c, err := scopedByName(ctx, p.pool, componentConfig, componentRef)
+	if errors.Is(err, ErrComponentNotFound) {
+		return "", nil
+	} else if err != nil {
+		return "", err
+	}
+	_, pin, err := keyPin(ctx, p.pool, c.ID, endpoint, property)
+	return pin, err
+}
+
 // keyPin is an endpoint's key pin under its property (ssh-host-key, #1032;
 // tls-certificate, #1035): the operator's declared key, and the pin in force
 // (the declared key, else the key the node trusted on first use).

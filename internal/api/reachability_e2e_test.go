@@ -475,6 +475,7 @@ func TestReachabilityCarriesTheTLSFacts(t *testing.T) {
 	type tlsResp struct {
 		Endpoints []struct {
 			Endpoint string `json:"endpoint"`
+			ID       string `json:"id"`
 			TLS      *struct {
 				Mode        string     `json:"mode"`
 				Key         string     `json:"key"`
@@ -532,6 +533,16 @@ func TestReachabilityCarriesTheTLSFacts(t *testing.T) {
 	}
 	if ep.TLS == nil || ep.TLS.Key != pinned || ep.TLS.Expires != nil || ep.TLS.DaysLeft != nil {
 		t.Fatalf("tls under a certificate gate = %+v, want the pin kept and the stale certificate facts withheld", ep.TLS)
+	}
+
+	// The operator accepts the offered key: the pin served is the pin in
+	// force, the declared key, though the node publishes no observation of
+	// a pin it is handed back (ADR-0161).
+	if _, err := gw.RetryEndpoint(ctx, "", ep.ID, storage.RetryPin{Certificate: offered}, all, all); err != nil {
+		t.Fatalf("accept the offered key: %v", err)
+	}
+	if ep := read("panel-1").Endpoints[0]; ep.TLS == nil || ep.TLS.Key != offered {
+		t.Fatalf("tls after the key is accepted = %+v, want the accepted key as the pin", ep.TLS)
 	}
 
 	// An endpoint with no mode set verifies; a key left from an earlier pin

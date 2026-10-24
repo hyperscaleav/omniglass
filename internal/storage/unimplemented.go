@@ -410,6 +410,9 @@ func (UnimplementedGateway) InsertPropertySamples(context.Context, KeyWriter, []
 func (UnimplementedGateway) LatestProperty(context.Context, string, string, string) (*PropertySample, error) {
 	return nil, nil
 }
+func (UnimplementedGateway) EndpointKeyPin(context.Context, string, string, string) (string, error) {
+	return "", nil
+}
 func (UnimplementedGateway) PropertyTransitions(context.Context, string, string, string, time.Duration) ([]PropertySample, error) {
 	return nil, nil
 }

@@ -8059,7 +8059,7 @@ catalogs and never stored (`internal/writerclass`): `node-probe` (the probekeys 
 is its planned consumer), `calc` (a calc rule's output, generalizing `WrittenBy`) and `collected`
 (every other key). Every gateway function that lands a sample or an event names its writer (the node
 lane bound to its task's endpoint, the push lane, a calc rule, the health rollup, a command and its
-reply, an operator's declared value, the ssh host key pin, an event rule) and holds every row to its
+reply, an operator's declared value, a key pin (the ssh host key, the tls certificate), an event rule) and holds every row to its
 key's class before anything lands; a refusal is a 422 naming the key and who writes it. The
 declaration points refuse first with the same ruling: a command type's target, a driver spec's emits
 (and the node's interpreter, for a task derived before), a calc rule's output, an event rule's event
@@ -8067,7 +8067,11 @@ types, and an operator-created type under a reserved name on any lane. On the no
 key lands only under the endpoint whose task the node ran; a driver's own keys keep their instance.
 The reachability, session and transition-guard reads serve a key's observed series only, the health
 reads the rollup's rows only, and a node-probe sample dated more than five minutes past the database's
-clock is stored at the database's now. The type
+clock is stored at the database's now. The tls
+keys (#1035) are `node-probe` like every native key; the driver spec's node-only emit check #1035
+added is now the writer-class ruling itself, the tls certificate's pin through `:retry` is admitted
+as the ssh host key's is, and the reachability read serves a tls endpoint's pin in force (the
+declared key, else the one trusted on first use). The type
 reads carry `writer_class`, and the properties page renders the ruling from the code
 (`cmd/writerclassgen`, `docs/src/generated/writerclass.json`). Proven test-first: a source guard reads
 every sample and event insert in the gateway and fails on a function that is not a registered write

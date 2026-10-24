@@ -567,6 +567,11 @@ type Gateway interface {
 	// reads; both read the observed series only.
 	InsertPropertySamples(ctx context.Context, w KeyWriter, evs []PropertySampleWrite) error
 	LatestProperty(ctx context.Context, componentName, key, instance string) (*PropertySample, error)
+	// EndpointKeyPin is the key an ssh or tls endpoint pins in force: the
+	// operator's declared pin, else the key the node trusted on first use.
+	// The declared row is the pin's path (ADR-0161), read here as the pin
+	// alone, never as the node's observation.
+	EndpointKeyPin(ctx context.Context, componentName, endpoint, transport string) (string, error)
 	PropertyTransitions(ctx context.Context, componentName, key, instance string, window time.Duration) ([]PropertySample, error)
 	// StampEndpointsSeen records that an ingest batch delivered by each
 	// endpoint landed, by the server's clock, coalesced (#933).
