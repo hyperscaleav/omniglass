@@ -43,12 +43,15 @@ var (
 // dialer with meaning, refusing a value it cannot use: a tls endpoint's mode
 // (#1035), which a driver-attached one has checked as an input instead.
 func checkBareParams(transportName string, params []byte) error {
-	if transportName != "tls" || len(params) == 0 {
+	if (transportName != "tls" && transportName != "udp") || len(params) == 0 {
 		return nil
 	}
 	var p map[string]any
 	if err := json.Unmarshal(params, &p); err != nil {
 		return nil // params are passed through as given; their shape is not this check's
+	}
+	if transportName == "udp" {
+		return checkListenPort(p)
 	}
 	raw, ok := p[driver.TLSModeInput]
 	if !ok {
@@ -57,6 +60,23 @@ func checkBareParams(transportName string, params []byte) error {
 	mode, isString := raw.(string)
 	if _, err := driver.ParseTLSMode(mode); err != nil || !isString {
 		return fmt.Errorf("params.%s must be one of %s, and %v is not", driver.TLSModeInput, strings.Join(driver.TLSModes(), ", "), raw)
+	}
+	return nil
+}
+
+// checkListenPort refuses a bare udp endpoint's listen port the node could
+// not bind (#1037), through the one reading the node itself uses.
+func checkListenPort(p map[string]any) error {
+	raw, ok := p[driver.ListenPortInput]
+	if !ok {
+		return nil
+	}
+	b, err := json.Marshal(raw)
+	if err != nil {
+		return fmt.Errorf("params.%s: %w", driver.ListenPortInput, err)
+	}
+	if _, err := driver.ParseListenPort(b); err != nil {
+		return fmt.Errorf("params.%s must be a port, 1 to 65535, and %v is not", driver.ListenPortInput, raw)
 	}
 	return nil
 }

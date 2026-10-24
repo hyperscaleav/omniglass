@@ -305,7 +305,12 @@ type Device struct {
 	telnetListener   net.Listener
 	tcpMu            sync.Mutex
 	tcpListeners     []net.Listener // raw TCP, persistent-session-only (no one-shot equivalent), one per interface
-	udpConn          net.PacketConn
+	// udpMu guards the udp faces: the echo responders, the datagram faces
+	// (#1037), and the datagram faces' session registries.
+	udpMu       sync.Mutex
+	udpConns    []net.PacketConn
+	udpFaces    []*udpFace
+	udpSessions []*SessionRegistry
 
 	// Persistent-session machinery. Populated by the engine when an
 	// interface is declared with persistent: true. The SSH registry
@@ -371,6 +376,9 @@ func (d *Device) fanoutToSessions(diffs map[string]any) {
 		d.telnetSession.Fanout(diffs)
 	}
 	for _, r := range d.TCPSessions() {
+		r.Fanout(diffs)
+	}
+	for _, r := range d.UDPSessions() {
 		r.Fanout(diffs)
 	}
 }

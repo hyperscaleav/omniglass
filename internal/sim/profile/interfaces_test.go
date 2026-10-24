@@ -50,3 +50,24 @@ func TestValidateInterfacesTLSValidity(t *testing.T) {
 		}
 	}
 }
+
+// A datagram face's loss (#1037) is a share of datagrams, so it belongs to
+// a udp face and lies between 0 and 100.
+func TestValidateInterfacesLoss(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		iface   Interface
+		wantErr bool
+	}{
+		{"a lossy udp face", Interface{Name: "a", Protocol: "udp", Port: 1, Persistent: true, LossPct: 30}, false},
+		{"a lossless udp face", Interface{Name: "a", Protocol: "udp", Port: 1, Persistent: true}, false},
+		{"loss on tcp", Interface{Name: "a", Protocol: "tcp", Port: 1, LossPct: 30}, true},
+		{"a negative loss", Interface{Name: "a", Protocol: "udp", Port: 1, LossPct: -1}, true},
+		{"over all of it", Interface{Name: "a", Protocol: "udp", Port: 1, LossPct: 101}, true},
+	} {
+		p := DeviceProfile{Interfaces: []Interface{tc.iface}}
+		if err := validateInterfaces(&p); (err != nil) != tc.wantErr {
+			t.Errorf("%s: err = %v, wantErr %v", tc.name, err, tc.wantErr)
+		}
+	}
+}

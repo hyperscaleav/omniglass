@@ -6253,7 +6253,7 @@ components:
           description: A human timing detail (rtt / connect time), when present
           type: string
         layer:
-          description: The probe layer word (ping, port)
+          description: "The probe layer word (ping, port, or request: a udp endpoint's request answered)"
           type: string
         ts:
           description: When the signal was observed

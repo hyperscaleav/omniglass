@@ -122,6 +122,15 @@ export function reason(iface: ReachEndpoint, now: number = Date.now()): string {
   if (ping && ping.value >= 1 && port && port.value < 1) {
     return "Host answers ping but the control port is refused: service down, box up.";
   }
+  if (!port && iface.responsive && iface.rejection?.rung === "responsive") {
+    // A gated request rung (#1037): the component answered with a refusal
+    // retrying cannot fix, and the node sends nothing more under it.
+    return `The component refused the endpoint's request in a way retrying cannot fix (${iface.rejection.class}): nothing is sent to it until the endpoint changes or someone retries it.`;
+  }
+  if (ping && ping.value >= 1 && !port && iface.responsive?.value === "down") {
+    // A udp endpoint (#1037): no port to open, so the rung is the request.
+    return "Host answers ping, but the endpoint's request goes unanswered: an open udp port cannot be detected, so a request answered is the transport rung. The service is down, the port is closed, or the datagrams are lost.";
+  }
   if (ping && ping.value < 1) {
     return "Host does not answer ping: unreachable on the network.";
   }
@@ -129,6 +138,26 @@ export function reason(iface: ReachEndpoint, now: number = Date.now()): string {
     return "The control port is refused or timing out.";
   }
   return "";
+}
+
+// requestRung is an endpoint's transport rung where it is a request answered
+// (#1037): an endpoint with no port to open (udp), read off the request layer
+// the read serves (or, from a read that serves none, its responsive rung).
+// true answered, false not; undefined for an endpoint whose rung is a connect
+// or a handshake (a port layer), or an icmp endpoint.
+export function requestRung(iface: ReachEndpoint): boolean | undefined {
+  if (iface.transport === "icmp") return undefined;
+  if (iface.layers.some((l) => l.check === "tcp-open")) return undefined;
+  const layer = requestLayer(iface);
+  if (layer) return layer.value >= 1;
+  if (!iface.responsive) return undefined;
+  return iface.responsive.value === "up";
+}
+
+// requestLayer is the request rung the read serves for a udp endpoint, with
+// its round trip while answered.
+export function requestLayer(iface: ReachEndpoint): ReachLayer | undefined {
+  return iface.layers.find((l) => l.layer === "request");
 }
 
 // layerWord renders a probe layer's boolean signal as its per-layer word.

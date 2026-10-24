@@ -459,7 +459,9 @@ out-of-scope component is a non-disclosing 404 (a deliberate early exception to
 [reads beyond one resource are views](#reads-beyond-one-resource-are-views)):
 
 - `GET /components/{name}/reachability` composes, per endpoint, the latest verdict state
-  (`endpoint-reachable`), the probe-layer signals that compose it (the raw `icmp`/`tcp` metrics),
+  (`endpoint-reachable`), the probe-layer signals that compose it (the raw `icmp`/`tcp` metrics,
+  and for a `udp` endpoint a `request` layer: its request answered, off `endpoint-responsive`, timed
+  by `udp-response-time` only while answered, #1037),
   the recent verdict transitions the availability strip reads, and `last_seen`, when ingest last
   landed a batch the endpoint's task delivered, by the server's clock and to within a few seconds,
   whatever the batch carried. A verdict is stored only on a transition, so its `ts` is when it last

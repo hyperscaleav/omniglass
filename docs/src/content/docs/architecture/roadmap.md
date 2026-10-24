@@ -95,8 +95,9 @@ that describes the target:
    [endpoint](/architecture/collection/) and task authoring all shipped, and so did the stateful half:
    held line sessions and the listeners that ride them (#603), now over `tcp`, `tls`, `telnet` and
    `ssh`, each authenticating before it acts and stopping on a refusal it cannot fix (#1049, #1035,
-   #1033, #1032). Still ahead: [templates](/architecture/templates/) (the reusable device shape, #827), the
-   protocol wave's udp and snmp rungs (#1076: #1037, #821), the held transports beyond those (#1034,
+   #1033, #1032), and the same line protocol as datagrams over `udp` (#1037). Still ahead:
+   [templates](/architecture/templates/) (the reusable device shape, #827), the protocol wave's snmp
+   rung (#1076: #821), the held transports beyond those (#1034,
    #1036, #1038 to #1041), protocols that move whole files (#1043 to
    #1047), and server-hosted listeners (webhook, trap, syslog ingress, #1024).
 2. **The data model.** Landed except one piece: [properties](/architecture/properties/) (the

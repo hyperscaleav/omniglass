@@ -157,7 +157,7 @@ All four cells are real:
 
 | | **poll** (we ask) | **listen** (we wait) |
 |---|---|---|
-| **stateless** | SNMP get, HTTP GET | webhook, SNMP trap, syslog |
+| **stateless** | SNMP get, HTTP GET, a udp datagram request | webhook, SNMP trap, syslog, a udp push to the endpoint's own port |
 | **stateful** | SSH-exec or xAPI `xStatus` on a held session | MQTT subscribe, xAPI feedback |
 
 Waiting for a frame is one mode (**listen**) regardless of transport; statefulness lives on the endpoint.
@@ -382,6 +382,7 @@ the endpoint's `params` JSON, unmarshalled on the node:
 | `telnet` | inline probe | `target` (`host:port`), `timeout` | the tcp pair, `telnet-response-time` (the first negotiation or banner bytes), `endpoint-responsive`; the login is the held session's auth step, never the probe's |
 | `ssh` | inline probe | `target` (`host:port`), `timeout`, optional `username`/`password` (secret references arrive with the driver spec) | the tcp pair, `ssh-handshake-time`, `endpoint-responsive`, `endpoint-authenticated` (only when a credential was tried) |
 | `tls` | inline probe | `target` (`host:port`), `timeout`, `tls-mode` (`verify`, `pin` or `skip`; derived from the driver's `tls-mode` input, verify when unset) | the tcp pair, `tls-handshake-time` (one per probe the component answered), `endpoint-responsive`, and for a certificate the mode accepted `tls-certificate-expiry` and `tls-certificate-days-left` |
+| `udp` | the driver's request rung | `target` (`host:port`), `timeout`, `listen-port` (derived from the driver's `listen-port` input; unset, the node picks one) | `endpoint-responsive` (here the verdict too), `udp-response-time` (one per probe the component answered); never `tcp-open`. A bare `udp` endpoint has no request to send and lands nothing |
 
 The `raw-tcp` row below is built in its driver form: the line protocol over `tcp` holds a session
 (#816) that polls, commands, and listeners share (#817). So is the `telnet` row (#1033): the same line
@@ -452,12 +453,67 @@ against the simulated panel's `nvp-tls` face over a real handshake (poll, comman
 onto the same key, a changed key held beneath the gate across a node restart and accepted with
 `:retry`, verify refusing the self-signed face as `certificate`, skip connecting) and end to end.
 
+#### udp
+
+Built (#1037, [ADR-0163](/architecture/decisions/#adr-0163-a-udp-endpoint-binds-its-own-socket-and-its-rung-is-a-request-answered)):
+`udp` is the line protocol as datagrams, one line each, and stateless: there is no connection to
+hold and no `session-state`. Each udp endpoint binds **its own socket** on the node, on its
+driver's `listen-port` input (unset, a port the kernel picks), and every request it makes leaves
+from that socket, so the component's replies and its pushes arrive on the one socket with no table
+of sources to keep. The operator configures the component to send to the node's address and the
+endpoint's port (and opens the node's firewall for it); a shared node port routed by source address
+was rejected, since two endpoints behind one address (the IP-to-serial gateway shape) would be
+indistinguishable. The listen port is derived into the endpoint's params as `host` and `port` are,
+so editing it moves the connection fingerprint. A datagram from any source but the endpoint's
+component is counted, self-logged once per tick (`foreign datagrams dropped`, with the count and the
+last source), and dropped, never published.
+
+An open udp port cannot be detected, so the **transport rung is the driver's named request
+answered** (`ladder.transport.request`, which a udp driver must name): an answer reads responsive, a
+silent component reads not responsive (`timeout`), and a port the host reports unreachable reads
+`refused`. The socket is not connected (a connected socket filters other sources in the kernel, and
+they must be counted), so the node turns on the socket's error queue (`IP_RECVERR`) to hear that
+report; it names a cause and never gates. With no port to open, the responsive rung is the
+endpoint's verdict too, and no `tcp-open` lands; the ping stays informational, so a component that
+blocks ping but answers reads up, and one that answers ping but not the request reads down. Each
+answered probe lands one `udp-response-time`, an error-shaped answer included, timed from the
+request's first send, so a lost datagram's retry shows as time (a rung-specific name until #1063 folds probe timings into `rtt`); loss shows through `endpoint-responsive` and its reason. The reachability read
+serves the rung as a `request` layer, timed by `udp-response-time` only while answered, and the
+Endpoints panel's breakdown lists it beside the ping, and a ping-up endpoint whose request goes
+unanswered says so in its why-line.
+
+An exchange takes its reply by the request's declared shape (`request.reply`, which every udp
+request must declare), with the held line connection's precedence, so a datagram that does not match
+is never the answer and a push arriving mid-exchange still reaches its listener; a reply matching
+the error shape fails it with the component's text. A component slower than a send's share answers every
+send, so an exchange whose answer came back too soon after its last send to be that send's reply
+(sooner than half the latency the socket learned from sends answered at once) leaves surplus
+replies behind; until they arrive, or its timeout passes again, a repeat of its answer is absorbed,
+never taken as the next ask's. A retry that loss caused leaves nothing, since a lost send draws no
+reply, so a next ask's identical answer (a common ack) is never starved. A reply later than the
+whole timeout is not told apart, so the endpoint's timeout should exceed the component's latency. A lost datagram is re-sent: `request.retries` (udp only, 0 to 5) defaults to 2 for
+a poll and for the request rung, and the attempts share the endpoint's one timeout, so loss never
+stretches a tick. A **command is sent once** unless its binding declares retries, since a command may
+be relative (a volume step) and a lost reply must not send it twice; the seeded `newtron-nvp-udp`
+declares them on `set-input`, which names the input. A reply the driver declares terminal (its
+session block, which over udp may declare only terminal replies) gates the endpoint at the transport
+rung, since nothing logs in over udp, and beneath the gate no request is sent under that fingerprint.
+Listeners ride the socket as they ride a held session: their instantiation commands are sent once
+each (a subscribe that adds a destination must not add one per retry) when the socket opens and
+again whenever the request rung recovers (a component that rebooted forgot its subscriber), and
+never beneath a gate. Text payloads only, unicast only. Proven over real sockets
+(`internal/collection/udp_integration_test.go`, `internal/node/datagram_test.go`) and end to end against the
+simulated panel's `nvp-udp` face dropping 30% of datagrams each way (`run_udp_test.go`: the rung up
+through the loss and its timing, the poll through its retries, a command actuated, a push with no
+poll, a stranger's datagram dropped, a silent face and a refused port down, no `tcp-open` and no
+`session-state`).
+
 The other held transports are each their own
-issue: #1034 (websocket), #1036 (mqtt), #1037 (udp), #1038 (SSE over http), #1039 (modbus/tcp), #1040 (bacnet/ip), #1041 (knxnet/ip). There is no serial transport: an RS-232 or RS-485 device is reached
+issue: #1034 (websocket), #1036 (mqtt), #1038 (SSE over http), #1039 (modbus/tcp), #1040 (bacnet/ip), #1041 (knxnet/ip). There is no serial transport: an RS-232 or RS-485 device is reached
 through an IP-to-serial gateway, which is the `tcp` transport (or `tls` or `telnet`), so its driver is
 a line protocol like any other ([ADR-0153](/architecture/decisions/#adr-0153-the-held-session-proof-is-the-line-protocol-over-tcp-other-held-transports-are-their-own-issues)).
 
-:::design[The remaining transports and their per-task spec, tracked in #603 and #1034 (websocket), #1036 (mqtt), #1037 (udp), #1038 (SSE over http), #1039 (modbus/tcp), #1040 (bacnet/ip), #1041 (knxnet/ip)]
+:::design[The remaining transports and their per-task spec, tracked in #603 and #1034 (websocket), #1036 (mqtt), #1038 (SSE over http), #1039 (modbus/tcp), #1040 (bacnet/ip), #1041 (knxnet/ip)]
 
 | endpoint type | shape | host/target | per-task params | samples |
 |---|---|---|---|---|
@@ -467,9 +523,9 @@ a line protocol like any other ([ADR-0153](/architecture/decisions/#adr-0153-the
 
 :::
 
-`icmp`/`tcp` are inline probes (config on `endpoint.params`); the rest, in the design model, are held connections: the connection lives on the endpoint, the task names what to read. The ship-with registry seeds the probe built-ins above, the endpoint verdicts, and `session-state` (`internal/seed/metric_types.yaml`, `internal/seed/property_types.yaml`; the [metrics](/guides/admin/metrics/) and [properties](/guides/admin/properties/) guides render each set from the seed); the wider per-transport set (`udp-open`, `snmp-reachable`, the http trio, `<proto>-reachable`/`<proto>-response-time` for the remaining text family; `telnet-response-time` is seeded) is Design, and unregistered names would be reject-not-project dropped at ingest.
+`icmp`/`tcp` are inline probes (config on `endpoint.params`); the rest, in the design model, are held connections: the connection lives on the endpoint, the task names what to read. The ship-with registry seeds the probe built-ins above, the endpoint verdicts, and `session-state` (`internal/seed/metric_types.yaml`, `internal/seed/property_types.yaml`; the [metrics](/guides/admin/metrics/) and [properties](/guides/admin/properties/) guides render each set from the seed); the wider per-transport set (`snmp-reachable`, the http trio, `<proto>-reachable`/`<proto>-response-time` for the remaining text family; `telnet-response-time` and `udp-response-time` are seeded, and there is no `udp-open`, since an open udp port cannot be detected) is Design, and unregistered names would be reject-not-project dropped at ingest.
 
-:::design[The held-connection transports in detail, tracked in #603 and #1034 (websocket), #1036 (mqtt), #1037 (udp), #1038 (SSE over http), #1039 (modbus/tcp), #1040 (bacnet/ip), #1041 (knxnet/ip)]
+:::design[The held-connection transports in detail, tracked in #603 and #1034 (websocket), #1036 (mqtt), #1038 (SSE over http), #1039 (modbus/tcp), #1040 (bacnet/ip), #1041 (knxnet/ip)]
 
 For `snmp`, each OID keeps its **native SNMP type**: numeric OIDs land as `metric`, string OIDs
 (OctetString / IPAddress / OID) as `property`, the lane decided at ingest by catalog membership;
@@ -494,8 +550,8 @@ are distinct alarm signals; the text family counts rejected credentials as conne
 errors, and `<proto>-response-time` is absent when unreachable. Auth resolves from endpoint params
 or an `auth_secret` credential everywhere (http via `header_*`, never the URL or body; ssh pins the
 host key); credentials are never labelled, and the `target` label strips query string and userinfo
-(http) or is the command (text). The transport swaps behind one boundary (`raw-udp` poll slots in as
-a fourth kind; UDP **listen** belongs to the listener runtime), and a held session carries the same
+(http) or is the command (text). The transport swaps behind one boundary (udp is built as its own
+transport, the line protocol as datagrams with its listen on the endpoint's own socket, [#1037](#udp)), and a held session carries the same
 text family persistently (prompt-expect, echo handling, Q-SYS-style framing), ssh as one-shot
 `exec`.
 

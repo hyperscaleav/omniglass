@@ -61,6 +61,9 @@ func (e *Engine) SetSessionPublisher(pub SessionEventPublisher) {
 		for _, reg := range d.TCPSessions() {
 			reg.SetBus(pub)
 		}
+		for _, reg := range d.UDPSessions() {
+			reg.SetBus(pub)
+		}
 	}
 }
 
@@ -174,7 +177,7 @@ func (e *Engine) buildDevice(snap DeviceSnapshot, peersByRoom map[roomKey]map[st
 					return nil, fmt.Errorf("adding route %q to %q: %w", route.Match, snap.Hostname, err)
 				}
 			}
-		case "ssh", "telnet", "tcp":
+		case "ssh", "telnet", "tcp", "udp":
 			for i := range iface.Commands {
 				cmd := &iface.Commands[i]
 				var tmplContent string
@@ -210,6 +213,8 @@ func (e *Engine) buildDevice(snap DeviceSnapshot, peersByRoom map[roomKey]map[st
 					dev.AttachTelnetSession(reg)
 				case "tcp":
 					dev.AttachTCPSession(reg)
+				case "udp":
+					dev.AttachUDPSession(reg)
 				}
 			} else if iface.Protocol == "tcp" {
 				// Raw-TCP listeners exist solely to host
@@ -452,6 +457,13 @@ func (e *Engine) bindInterface(dev *Device, iface profile.Interface) (net.Addr, 
 		}
 		return nil, nil
 	case "udp":
+		// A persistent udp interface serves the line protocol as datagrams
+		// (#1037); without persistent: true the face echoes.
+		for _, reg := range dev.UDPSessions() {
+			if reg.cfg.Port == iface.Port {
+				return dev.startUDPFace(port, reg, iface.Name, iface.LossPct)
+			}
+		}
 		return dev.startUDP(port)
 	case "icmp":
 		// Kernel answers ICMP in the shared netns; nothing to listen for.

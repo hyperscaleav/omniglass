@@ -94,7 +94,7 @@ A spec may also declare its **reachability ladder** (`ladder`), bottom up: `ladd
 (whether to ping at all; a ping is informational only and never gates), `ladder.transport.rung` (the
 gate: `connect` on the transport's port, the protocol's `handshake`, or a named `request` answered,
 given as `ladder.transport.request`, where an open port cannot be detected; it runs as a line over
-`tcp` today, with snmp's own request #821 and udp's #1037) and
+`tcp` or a datagram over `udp`, with snmp's own request #821) and
 `ladder.session.enabled` (whether a login rung exists). Every field defaults from the transport
 registry, so most drivers declare nothing, and a rung the transport cannot run refuses at write. A
 cloud API is never pinged, but its 443 is checked open before its session runs:
@@ -108,6 +108,35 @@ ladder:
 
 A refusal at a rung gates that rung and the ones above it for the endpoint; the rungs below keep
 reporting ([the gate](/architecture/collection/#the-connection-fingerprint-and-the-layered-gate)).
+
+A udp driver speaks the line protocol as datagrams ([udp](/architecture/collection/#udp)). An open
+udp port cannot be detected, so it must name its request rung, and it may declare a `listen-port`
+input, the local port its endpoint binds, which its requests leave from and the component's pushes
+arrive on (unset, the node picks one, which suits a component that answers to a request's source).
+Every udp request declares its reply's shape (`reply`), since a datagram's answer is told from a
+late reply to another ask only by it. A request may declare `retries` (udp only, 0 to 5), how many
+times a lost datagram is re-sent within
+the endpoint's timeout: a poll and the request rung default to 2, and a **command to none**, so
+declare them only on a command that is safe to send twice (one that names its value, never a
+relative step):
+
+```yaml
+transport: udp
+inputs:
+  - { name: host, kind: string, required: true }
+  - { name: port, kind: number, default: "51327" }
+  - { name: listen-port, kind: number }
+ladder:
+  transport:
+    request: { line: "GET INPUT", reply: { prefix: "INPUT " } }
+commands:
+  - command_type: set-input
+    request: { line: "SET INPUT ${value}", reply: { prefix: "INPUT " }, retries: 2 }
+```
+
+Over udp a `session` block may declare only `terminal` replies: nothing logs in or is held, and a
+reply it names gates the endpoint at the transport rung.
+
 A telnet driver:
 
 ```yaml
