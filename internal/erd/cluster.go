@@ -54,5 +54,8 @@ var Subsystems = []Cluster{
 	}},
 	{Name: "audit", Tables: []string{
 		"audit_log",
+		// retired_sample keeps, for audit, each row the one-writer ruling
+		// retired from the sample tables (ADR-0163); no read serves it.
+		"retired_sample",
 	}},
 }
