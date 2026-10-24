@@ -282,8 +282,8 @@ secrets under the editor's scope, audited, its tasks re-derived in the same tran
 (gated `endpoint:retry`, audited, #1049) moves the endpoint's retry counter, part of its connection
 fingerprint, so a gate a terminal refusal holds lifts and the endpoint is attempted again (ADR-0158); for an ssh endpoint whose host key changed, its optional `host_key`
 body declares the new pin (#1032). While the endpoint's gate names an offered key, `host_key` must be
-that key: one the component no longer offers is a 409 that writes nothing, so a trust confirmed
-against a stale view cannot pin a key nobody read, and the audit row carries the pin replaced
+that key: any other is a 409 that writes nothing, so a trust confirmed against a view the record has
+since moved past cannot pin a key nobody read, and the audit row carries the pin replaced
 (`old.host_key`), the pin set (`new.host_key`) and the actor (#1078,
 [ADR-0159](/architecture/decisions/#adr-0159-a-refused-keys-evidence-rides-its-gate-and-trusting-a-key-is-checked-against-the-one-offered)). The routes live in the
 [generated API reference](/reference/api/), rendered from the OpenAPI document on every build, each

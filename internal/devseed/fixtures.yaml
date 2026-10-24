@@ -2085,7 +2085,7 @@ sim_endpoints:
     driver: newtron-nvp-telnet
     label: Panel console
     inputs: { login: sim-panel-login }
-  # A changed host key worth showing (#1078). The briefing room's touch panel
+  # A changed host key worth showing (#1078). The briefing place's touch panel
   # also answers NVP over its ssh console (admin / newtron, the rotated
   # secret), and this endpoint pins the host key the panel presented before it
   # was reimaged. The simulated panel mints its own key when the simulator

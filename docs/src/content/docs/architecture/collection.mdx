@@ -274,8 +274,8 @@ at the right secret moves the fingerprint. The [collection guide](/guides/operat
 teaches it, and the `fix-a-rejected-session` walkthrough drives it against the simulated panel.
 A refusal of a changed key (#1078) names both keys, the pinned and the offered, which the gate
 carries as data, and offers **Trust this key**: a confirm that teaches why a key changes, then
-`:retry` with exactly the offered key it showed as `host_key`, which the server refuses (409) if the
-component no longer offers it ([ADR-0159](/architecture/decisions/#adr-0159-a-refused-keys-evidence-rides-its-gate-and-trusting-a-key-is-checked-against-the-one-offered));
+`:retry` with exactly the offered key it showed as `host_key`, which the server refuses (409) unless
+the refusal on record still names it ([ADR-0159](/architecture/decisions/#adr-0159-a-refused-keys-evidence-rides-its-gate-and-trusting-a-key-is-checked-against-the-one-offered));
 the `trust-a-changed-host-key` walkthrough drives it against the simulated panel's ssh console.
 
 ### The connection fingerprint and the layered gate
@@ -356,7 +356,7 @@ key it sees and publishes it as `ssh-host-key`, the server delivers it back as t
 worklist, and a changed key reads `rejected`, class `host-key`, naming both fingerprints, which
 the gate carries as data. An operator who trusts the new key (a replaced component) retries the
 endpoint with it (`:retry` with `host_key`, audited with both keys; the console's **Trust this
-key**), which declares the new pin and redials onto it; a key the component no longer offers is
+key**), which declares the new pin and redials onto it; a key the refusal on record does not name is
 refused. Proven against
 the simulated panel's ssh shell (poll, command, push, recover onto the same key, down after the
 budget, a wrong password and a rotated key each rejected) and end to end ([ADR-0157](/architecture/decisions/#adr-0157-telnet-and-ssh-are-held-line-transports-their-login-is-the-drivers-and-the-ssh-host-key-is-pinned-on-first-use)).

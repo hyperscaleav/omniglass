@@ -197,14 +197,17 @@ explained on hover, since only the first two are safe to trust. Compare the offe
 one the component's own console shows before trusting a change nobody can account for. On
 confirming, the node redials onto the new pin once and the session comes up; the audit log records
 the key replaced, the key trusted, and who trusted it. The confirm sends exactly the key it shows:
-if the component's offer moves while it is open, the confirm says so and will not send, and the
-server refuses a key the component no longer offers in any case. Without the permission the
+if the offer on record moves while it is open, the confirm says so and will not send, and the server
+refuses any key other than the one the refusal on record names. That record is the node's last word,
+and a refused node dials no more, so a component that changed again since (its own console shows a
+third key) needs a **Retry** first: the node reads the key it offers now, and that is the one to
+trust. Without the permission the
 button is greyed and its tooltip says so, while the two keys still read, so a viewer can tell an
 operator what changed. **Retry** stays beside it for the rarer case where the original component
 came back.
 
-The briefing room's touch panel in the simulated fleet pins the key it had before it was reimaged,
-so it reads rejected for a changed host key; trusting the offered key brings it up.
+In the simulated fleet, the touch panel in the place named `briefing` pins the key it had before it
+was reimaged, so it reads rejected for a changed host key; trusting the offered key brings it up.
 
 ::walkthrough{#trust-a-changed-host-key}
 

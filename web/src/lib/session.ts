@@ -226,9 +226,9 @@ export function trustRefusal(me: Me | null | undefined): string | null {
 
 // trustOfferedKey declares key as the endpoint's new pin and retries it (POST
 // /endpoints/{id}:retry with host_key): the node redials onto it once. key is
-// exactly the one the operator was shown; the server refuses (409) a key the
-// component no longer offers, so a confirm answered against a key that changed
-// since cannot pin it. Audited server-side with both keys and the actor.
+// exactly the one the operator was shown; the server refuses (409) any key the
+// refusal on record does not name, so a confirm answered against a record that
+// moved since cannot pin it. Audited server-side with both keys and the actor.
 export async function trustOfferedKey(id: string, key: string): Promise<void> {
   const { error } = await api.POST("/endpoints/{id}:retry", { params: { path: { id } }, body: { host_key: key } });
   if (error) throw error;

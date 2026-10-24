@@ -334,8 +334,12 @@ func TestTrustingAKeyChecksTheOfferedKeyAndAuditsBoth(t *testing.T) {
 	before := task()
 	if _, err := gw.RetryEndpoint(ctx, actor, ep.ID, shown, all, all); !errors.Is(err, storage.ErrRetryHostKeyStale) {
 		t.Fatalf("trusting a key the component no longer offers = %v, want stale", err)
-	} else if !strings.Contains(err.Error(), now) {
-		t.Fatalf("the stale refusal does not name the key offered now: %v", err)
+	} else if !strings.Contains(err.Error(), now) || !strings.Contains(err.Error(), "on record") || !strings.Contains(err.Error(), "retry the endpoint without a host key") {
+		// The gate is the node's last word: a gated node dials no more, so
+		// the component may have moved on since (review of #1078). The
+		// refusal says what the record names and how to read the key again,
+		// never that the component offers it now.
+		t.Fatalf("the stale refusal does not name the key on record and the way to read it again: %v", err)
 	}
 	if after := task(); after.HostKey != first || after.SessionRetry != before.SessionRetry || after.Fingerprint != before.Fingerprint {
 		t.Fatalf("a refused trust changed the endpoint: pin %q, retry %d", after.HostKey, after.SessionRetry)

@@ -618,8 +618,9 @@ func (p *PG) rederiveAttached(ctx context.Context, tx pgx.Tx, driverID, endpoint
 // the key trusted on first use, so the node's session redials onto it. Only
 // an ssh endpoint takes one, and only a SHA256 fingerprint. While the
 // endpoint's gate names an offered key (a key refusal's evidence, #1078),
-// hostKey must be that key: a trust confirmed against a key the component
-// has since stopped offering is ErrRetryHostKeyStale and changes nothing.
+// hostKey must be that key: any other is ErrRetryHostKeyStale and changes
+// nothing, so a trust confirmed against a view the record has since moved
+// past cannot pin a key nobody read.
 // The audit row carries the pin replaced (old) and the pin set (new).
 func (p *PG) RetryEndpoint(ctx context.Context, actorID, id, hostKey string, read, action scope.Set) (*Endpoint, error) {
 	tx, err := p.pool.Begin(ctx)
@@ -646,7 +647,11 @@ func (p *PG) RetryEndpoint(ctx context.Context, actorID, id, hostKey string, rea
 			return nil, err
 		}
 		if gate, ok := rejection.Parse(published); ok && gate.HasKeys() && gate.OfferedKey != hostKey {
-			return nil, fmt.Errorf("%w: the component now offers %s, not the key sent; review the key it offers before trusting it", ErrRetryHostKeyStale, gate.OfferedKey)
+			// The gate is the node's last word on what the component offers: a
+			// gated node dials no more, so the component may have moved on
+			// since. The refusal says what the record names, and how to read
+			// the key again, never that the component offers it now.
+			return nil, fmt.Errorf("%w: the refusal on record names the offered key %s, not the key sent; to trust another, retry the endpoint without a host key so the node reads the key the component offers now, then trust that one", ErrRetryHostKeyStale, gate.OfferedKey)
 		}
 		if _, replaced, err = hostKeyPin(ctx, tx, *before.ComponentID, before.Name); err != nil {
 			return nil, err
@@ -690,7 +695,7 @@ var ErrRetryHostKey = errors.New("storage: retry host key")
 
 // ErrRetryHostKeyStale refuses a retry's host key that is not the key the
 // endpoint's gate names as offered (#1078): the operator confirmed a key the
-// component no longer offers.
+// refusal on record no longer names.
 var ErrRetryHostKeyStale = errors.New("storage: retry host key stale")
 
 // latestRejection is the endpoint-rejection the node last published for an

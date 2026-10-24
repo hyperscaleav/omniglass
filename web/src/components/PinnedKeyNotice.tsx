@@ -113,7 +113,7 @@ export function TrustKeyButton(props: {
 
   async function trust() {
     const s = shown();
-    if (!s || moved() || refusal()) return;
+    if (!s || busy() || moved() || refusal()) return;
     setBusy(true);
     setErr(null);
     try {

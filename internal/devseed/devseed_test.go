@@ -1886,7 +1886,7 @@ func TestSeededFleetHoldsARejectedSession(t *testing.T) {
 }
 
 // TestSeededFleetHoldsAHostKeyRejection pins the changed host key make dev
-// shows (#1078): the briefing room's touch panel answers NVP over its ssh
+// shows (#1078): the touch panel in the briefing place answers NVP over its ssh
 // console, and its endpoint pins a host key from before the panel was
 // reimaged, so the simulated panel's own key (minted when the simulator
 // starts) never matches it and a live node reads the session rejected with

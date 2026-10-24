@@ -56,9 +56,9 @@ naming both keys, which the gate carries as data (`endpoint-rejection` ends with
 offered key). The console's **Trust this key** on the session's notice trusts the offered one after
 a confirm ([held sessions](/guides/operator/collection/#a-changed-key)), and so does
 `omniglass endpoint retry <id> --host-key <the offered key>`. While the refusal holds, the key must be
-the one offered (a key the component no longer offers is refused, 409, and changes nothing); with no
-refusal held, `--host-key` declares a pin ahead of time, for a replacement whose key you already
-know.
+the offered one it names (any other is refused, 409, and changes nothing; retry without a key first
+to have the node read a key the component presents since); with no refusal held, `--host-key`
+declares a pin ahead of time, for a replacement whose key you already know.
 
 A spec may also declare its **reachability ladder** (`ladder`), bottom up: `ladder.ping.enabled`
 (whether to ping at all; a ping is informational only and never gates), `ladder.transport.rung` (the

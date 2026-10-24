@@ -7223,11 +7223,15 @@ interface create form, since that name is the platform's to mint.
   2. **The read serves it.** The reachability read's `rejection` carries `pinned_key` and
      `offered_key`; the console names both and never parses a fingerprint out of `session-reason`,
      which keeps naming them in prose for the property's series and the CLI reader.
-  3. **A trust is checked against the offer.** `POST /endpoints/{id}:retry` with `host_key` must name
-     the gate's offered key while the gate carries one: a key the component no longer offers is a
-     409 naming the one it offers now, and nothing is written (no pin, no counter, no audit row).
-     With no key refusal held, `host_key` still declares a pin ahead of time. The audit row's `old`
-     carries the pin replaced and its `new` the pin set, beside the actor.
+  3. **A trust is checked against the offer on record.** `POST /endpoints/{id}:retry` with
+     `host_key` must name the gate's offered key while the gate carries one: any other is a 409
+     naming the one on record, and nothing is written (no pin, no counter, no audit row). The record
+     is the node's last word, not a live read: a refused node dials no more, so a component that
+     changed again since is read by a plain retry first, and the server does not compare the gate's
+     connection fingerprint (computing it means unsealing the endpoint's secrets), so a gate left
+     under an older fingerprint by an offline node holds the check until the node publishes again.
+     Both fail closed. With no key refusal held, `host_key` still declares a pin ahead of time. The
+     audit row's `old` carries the pin replaced and its `new` the pin set, beside the actor.
   4. **The console confirms.** Trust this key (gated `endpoint:retry`, greyed with its reason) opens
      a confirm that shows both keys and teaches why a key changes (a reinstall, a hardware swap, a
      man in the middle) through hover, holds the refusal as it was when it opened, sends exactly that

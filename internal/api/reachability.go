@@ -85,7 +85,7 @@ type reachRejectionBody struct {
 	Rung       string `json:"rung" enum:"reachable,responsive,authenticated" doc:"The ladder rung the refusal holds: responsive for a host key, certificate or protocol refusal, authenticated for a credential. Nothing at or above it is attempted until the connection fingerprint moves"`
 	Class      string `json:"class" doc:"The refusal's class: auth, host-key, certificate or protocol"`
 	PinnedKey  string `json:"pinned_key,omitempty" doc:"A refusal of a changed key only (class host-key, or certificate for a pinned tls key): the SHA256 fingerprint of the key the endpoint pins, as the node refused against it. Present with offered_key or not at all"`
-	OfferedKey string `json:"offered_key,omitempty" doc:"A refusal of a changed key only: the SHA256 fingerprint of the key the component offered instead. Trusting it is POST /endpoints/{id}:retry with this exact value as host_key; a value the component no longer offers is refused (409)"`
+	OfferedKey string `json:"offered_key,omitempty" doc:"A refusal of a changed key only: the SHA256 fingerprint of the key the component offered instead. Trusting it is POST /endpoints/{id}:retry with this exact value as host_key; while the refusal holds, any other value is refused (409)"`
 }
 
 type reachEndpointBody struct {
