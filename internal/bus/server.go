@@ -9,7 +9,10 @@ import (
 	"fmt"
 	"github.com/hyperscaleav/omniglass/internal/scope"
 	"log/slog"
+	"net"
+	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -24,9 +27,11 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-// Config configures the embedded NATS server. Port -1 binds an ephemeral port
-// (tests always use -1; a fixed host port is never bound). StoreDir holds the
-// JetStream state; empty means a fresh temp dir owned and cleaned by the Server.
+// Config configures the embedded NATS server. Port 0 (or -1) binds an
+// ephemeral port, as port 0 does for net.Listen; Addr reports the one the
+// kernel handed out. (nats-server alone reads 0 as its default 4222, the one
+// port every other bus on the host wants.) StoreDir holds the JetStream
+// state; empty means a fresh temp dir owned and cleaned by the Server.
 type Config struct {
 	Host     string
 	Port     int
@@ -70,9 +75,13 @@ func New(cfg Config, store Store) (*Server, error) {
 		s.ownStoreDir = d
 	}
 
+	port := cfg.Port
+	if port == 0 {
+		port = server.RANDOM_PORT
+	}
 	opts := &server.Options{
 		Host:                       cfg.Host,
-		Port:                       cfg.Port,
+		Port:                       port,
 		JetStream:                  true,
 		StoreDir:                   storeDir,
 		NoLog:                      true,
@@ -236,6 +245,28 @@ func (s *Server) buildWorklistReply(node string) (collection.WorklistReply, erro
 
 // ClientURL is the URL a node dials (nats://host:port).
 func (s *Server) ClientURL() string { return s.ns.ClientURL() }
+
+// Addr is the address the bus bound: the port the kernel handed it when it
+// was asked for port 0.
+func (s *Server) Addr() net.Addr { return s.ns.Addr() }
+
+// LocalURL is the URL a client on this host dials to reach the bus, the
+// default the node-claim exchange advertises when no URL is configured.
+func (s *Server) LocalURL() string { return localURL(s.Addr()) }
+
+// localURL is the nats:// URL of a bound address, a wildcard host (0.0.0.0,
+// ::, or none) read as loopback, since nothing dials a wildcard.
+func localURL(a net.Addr) string {
+	tcp, ok := a.(*net.TCPAddr)
+	if !ok {
+		return ""
+	}
+	ip := tcp.IP
+	if ip == nil || ip.IsUnspecified() {
+		ip = net.IPv4(127, 0, 0, 1)
+	}
+	return (&url.URL{Scheme: "nats", Host: net.JoinHostPort(ip.String(), strconv.Itoa(tcp.Port))}).String()
+}
 
 // Shutdown drains the internal client and stops the server, then removes an
 // owned JetStream store dir. Idempotent enough to defer.
