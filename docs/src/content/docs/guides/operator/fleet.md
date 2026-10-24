@@ -17,6 +17,16 @@ screenshots:
         selector: "aside[data-blade] button[aria-label=Expand]"
     alt: "A component's view: its place as a card saying the place is its own, the verdict with its since-line, why, what it is, the systems it serves with its role in each, and collection."
     # The since-line and the alarm ages count from the capture's own clock.
+    #
+    # A mask is painted at the size of what it resolves to, and a since-line
+    # or an age changes width with the clock (#773, #1081), so no mask on this
+    # page names the text alone. The header and alarm rows are masked whole
+    # (`xpath=ancestor::div[1]`, stretched to their card) because the standard,
+    # the size and the alarm's controls follow the age on the same line and
+    # move when it does. Activity's incident entries carry a stamp or a
+    # duration on every line and are masked whole (`xpath=ancestor::li[1]`),
+    # as are its logs and the charts. The summary card declares a box instead,
+    # since its since line ends its row.
     mask:
       - "[data-testid=since-line] >> xpath=ancestor::div[1]"
       - "text=/unacknowledged/ >> xpath=ancestor::div[1]"
@@ -81,8 +91,20 @@ screenshots:
   - id: fleet-place-systems
     path: /web/locations/media-lab
     alt: "A room holding two systems: its card, then a brief card per system with its verdict, standard and size, each opening that system's view."
+    # Each card's since line ages with the capture. The mask DECLARES its
+    # box (`width`): painted at the since span's top-left, as tall as the span
+    # and 208px wide, whatever the line reads. A mask on the span alone is the
+    # size of its text, and the text moves with the clock (`fmtTime` prints
+    # the month, a bare day and AM or PM; the age reads 9s or 17s), so the box
+    # moved with it (#1081). The card's header row holds still (the grid
+    # track pins its width, and the since line always wraps to its second
+    # line) but also holds the system's name and verdict, which the baseline
+    # keeps gating. The widest line a capture renders ("since May 28, 12:59 AM
+    # · 59m") is 186px in the console's face; a line wider than 208px fails
+    # the capture by name.
     mask:
-      - "[data-testid=summary-since]"
+      - selector: "[data-testid=summary-since]"
+        width: 208
   # Opened down to one room so the shot shows every rule at once: folded
   # chains, contents lines, health counts, and a place wearing its system
   # with the components beneath it.
