@@ -16,8 +16,11 @@ summary: "The build log, the decision log and the adversarial-review anti-patter
   entry, and smartypants and lists render exactly as they did inline; the docs loader keys a host
   page's cached render on its fragments so a restored cache or `pnpm dev` never serves a stale log.
   ADR numbers stay sequential and stable (`ADR-0001` onward, anchors unchanged); two PRs that take
-  the same next number fail `TestDecisionsFormat` naming both files, and the branch landing second
-  runs `make adr-renumber FROM=NNNN TO=MMMM` before merging main. `api/openapi.json` is written
+  the same next number fail `TestDecisionsFormat` naming both files, and the one landing second
+  runs `make adr-renumber FROM=NNNN TO=MMMM`, adding `FILE=` once both decisions are in the tree so
+  that git blame scopes the rewrite to its own lines. Git no longer conflicts on a collision, and
+  main does not require a PR to be up to date, so a collision can reach main; the tool repairs it
+  there too, and a required up-to-date check would prevent it. `api/openapi.json` is written
   pretty-printed with sorted keys, and `.gitattributes` marks the generated artifacts.
 - **Context:** In the thirty days to 2026-10-24, the build log was touched by 39 of 66 commits on
   main, the decision log by 21, the catalog by 8, and the one-line `openapi.json` by 21: every PR

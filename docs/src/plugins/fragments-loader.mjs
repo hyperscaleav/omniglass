@@ -44,8 +44,6 @@ function* pagesReading(dir, fragDir) {
   }
 }
 
-const watching = new WeakSet();
-
 /**
  * @param {import('astro/loaders').Loader} loader
  * @returns {import('astro/loaders').Loader}
@@ -60,9 +58,10 @@ export function withFragments(loader) {
         typeof data === 'string' && directivesIn(data).length > 0
           ? ctx.generateDigest(`${data}\0fragments:${fragmentDigest(srcDir, data)}`)
           : ctx.generateDigest(data);
+      // Registered on every load, as Astro's glob loader does: a full content
+      // re-sync removes every listener a loader added, then loads again.
       const { watcher } = ctx;
-      if (watcher && !watching.has(watcher)) {
-        watching.add(watcher);
+      if (watcher) {
         const dirs = [...new Set(Object.values(DIRECTIVES).map((d) => join(srcDir, 'content', d.dir)))];
         watcher.add(dirs);
         watcher.on('all', (_event, path) => {

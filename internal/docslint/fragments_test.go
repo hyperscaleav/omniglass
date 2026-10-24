@@ -2,6 +2,7 @@ package docslint
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -72,6 +73,11 @@ func TestParseFragment(t *testing.T) {
 		{"a list with a decimal", "---\nrefs: [1.0]\n---\nBody", "refs must be a list of positive integers"},
 		{"a list with an exponent", "---\nrefs: [1e3]\n---\nBody", "refs must be a list of positive integers"},
 		{"a zero in a list", "---\nrefs: [0]\n---\nBody", "refs must be a list of positive integers"},
+		{"a list with a leading zero", "---\nrefs: [01]\n---\nBody", "refs must be a list of positive integers"},
+		{"a number too long to be an issue", "---\nrefs: [1234567890]\n---\nBody", "refs must be a list of positive integers"},
+		{"a line separator in a value", "---\ntitle: A\u2028B\n---\nBody", "line 2 carries a control character"},
+		{"a lone carriage return in a value", "---\ntitle: A\rB\n---\nBody", "line 2 carries a control character"},
+		{"a newline escaped into a string", "---\ntitle: \"First\\nline two\"\n---\nBody", "title carries a control character"},
 		{"a bad single-quoted string", "---\ntitle: 'it's'\n---\nBody", "not a valid single-quoted string"},
 		{"an empty body", "---\ntitle: T\n---\n\n", "empty body"},
 	} {
@@ -136,6 +142,7 @@ func TestScanDecisionsDir(t *testing.T) {
 		{"an unknown key", "adr-0004-x.md", "---\ntitle: T\ndate: 2026-06-27\nstatus: Accepted\nsummary: S\nnumber: 4\n---\n\n- **Date:** 2026-06-27 | **Status:** Accepted\n", `unknown key "number"`},
 		{"a body with no Status field", "adr-0004-x.md", "---\ntitle: T\ndate: 2026-06-27\nstatus: Accepted\nsummary: S\n---\n\n- **Date:** 2026-06-27\n", "no **Status:** field"},
 		{"a body date that disagrees", "adr-0004-x.md", "---\ntitle: T\ndate: 2026-06-27\nstatus: Accepted\nsummary: S\n---\n\n- **Date:** 2026-06-28 | **Status:** Accepted\n", "body says **Date:** 2026-06-28 but the frontmatter says 2026-06-27"},
+		{"a directive in a body", "adr-0004-x.md", "---\ntitle: T\ndate: 2026-06-27\nstatus: Accepted\nsummary: S\n---\n\n- **Date:** 2026-06-27 | **Status:** Accepted\n\n::walkthrough{#x}\n", "cannot carry a directive"},
 		{"a second entry smuggled into a body", "adr-0004-x.md", "---\ntitle: T\ndate: 2026-06-27\nstatus: Accepted\nsummary: S\n---\n\n- **Date:** 2026-06-27 | **Status:** Accepted\n\n### ADR-0005: Another\n", "a heading inside a body"},
 	} {
 		t.Run(c.why, func(t *testing.T) {
@@ -161,6 +168,7 @@ func TestScanBuildLogDir(t *testing.T) {
 		"0002-second.md":      buildLogEntry("Second (#2)", "2026-06-28", "", "Body."),
 		"2026-10-25-later.md": buildLogEntry("Later (#3)", "2026-10-25", "", "Body."),
 		"2026-10-25-again.md": buildLogEntry("Again (#4)", "2026-10-25", "", "Body.\n\n#### A sub-heading is fine\n\nMore."),
+		"2026-10-25-shell.md": buildLogEntry("Shell (#5)", "2026-10-25", "", "Run:\n\n```bash\n# a comment is not a heading\nmake gen\n```\n\n```markdown\n::screenshot{#shown-not-embedded}\n```"),
 	}
 	if fs, err := scanBuildLogDir(decisionsFixture(t, good)); err != nil || len(fs) != 0 {
 		t.Fatalf("a clean log: err %v, findings:\n%s", err, texts(fs))
@@ -173,6 +181,9 @@ func TestScanBuildLogDir(t *testing.T) {
 		{"a heading in the body", "2026-10-25-x.md", buildLogEntry("T", "2026-10-25", "", "### Another entry\n\nB"), "a heading inside a body"},
 		{"a bullet whose lead is not its title", "0003-x.md", "---\ntitle: \"Third\"\ndate: 2026-06-29\nrefs: []\nform: bullet\n---\n\n- **Something else.** Text.\n", `must open with "- **Third"`},
 		{"a new sequence-numbered entry", "0003-x.md", "---\ntitle: \"Third\"\ndate: 2026-10-30\nrefs: []\nform: bullet\n---\n\n- **Third.** Text.\n", "the sequence-numbered entries are the history before the split"},
+		{"a new dated entry in the bullet form", "2026-10-26-x.md", "---\ntitle: \"T\"\ndate: 2026-10-26\nrefs: []\nform: bullet\n---\n\n- **T.** Text.\n", "form: bullet is the sequence-numbered history's"},
+		{"a directive in a body", "2026-10-25-x.md", buildLogEntry("T", "2026-10-25", "", "Text.\n\n::screenshot{#console-map}"), "cannot carry a directive"},
+		{"a design fence in a body", "2026-10-25-x.md", buildLogEntry("T", "2026-10-25", "", ":::design\nUnowned.\n:::"), "cannot carry a directive"},
 		{"a sequence gap", "0004-x.md", "---\ntitle: \"Fourth\"\ndate: 2026-06-29\nrefs: []\nform: bullet\n---\n\n- **Fourth.** Text.\n", "0003 is missing"},
 	} {
 		t.Run(c.why, func(t *testing.T) {
@@ -256,8 +267,10 @@ func TestRenumberADR(t *testing.T) {
 	writeFile(t, filepath.Join(root, "node_modules", "pkg", "x.md"), "ADR-0003\n")
 	writeFile(t, filepath.Join(root, ".claude", "worktrees", "other", "x.md"), "ADR-0003\n")
 	writeFile(t, filepath.Join(root, "docs", "public", "shot.png"), "ADR-0003")
+	writeFile(t, filepath.Join(root, "proto", "og", "v1", "telemetry.proto"), "// Per ADR-0003.\n")
+	writeFile(t, filepath.Join(root, "internal", "foo", "blob.bin"), "ADR-0003\x00\x01binary")
 
-	changed, err := RenumberADR(root, 3, 4)
+	changed, err := RenumberADR(root, 3, 4, RenumberOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -283,7 +296,10 @@ func TestRenumberADR(t *testing.T) {
 	if got := read(".claude/skills/s/SKILL.md"); got != "Read ADR-0004.\n" {
 		t.Errorf("skill: %q", got)
 	}
-	for _, rel := range []string{"node_modules/pkg/x.md", ".claude/worktrees/other/x.md", "docs/public/shot.png"} {
+	if got := read("proto/og/v1/telemetry.proto"); got != "// Per ADR-0004.\n" {
+		t.Errorf("a .proto comment was not rewritten: %q", got)
+	}
+	for _, rel := range []string{"node_modules/pkg/x.md", ".claude/worktrees/other/x.md", "docs/public/shot.png", "internal/foo/blob.bin"} {
 		if got := read(rel); !strings.Contains(got, "ADR-0003") {
 			t.Errorf("%s was rewritten: %q", rel, got)
 		}
@@ -293,25 +309,26 @@ func TestRenumberADR(t *testing.T) {
 		"docs/src/content/decisions/adr-0004-mine.md",
 		"docs/src/content/docs/architecture/x.md",
 		"internal/foo/foo.go",
+		"proto/og/v1/telemetry.proto",
 	}
 	if !reflect.DeepEqual(changed, want) {
 		t.Errorf("changed = %v, want %v", changed, want)
 	}
 
 	t.Run("refuses a number that is taken", func(t *testing.T) {
-		if _, err := RenumberADR(root, 4, 2); err == nil || !strings.Contains(err.Error(), "ADR-0002 is taken by adr-0002-second.md") {
+		if _, err := RenumberADR(root, 4, 2, RenumberOptions{}); err == nil || !strings.Contains(err.Error(), "ADR-0002 is taken by adr-0002-second.md") {
 			t.Errorf("err = %v", err)
 		}
 	})
 	t.Run("refuses a number no file holds", func(t *testing.T) {
-		if _, err := RenumberADR(root, 9, 10); err == nil || !strings.Contains(err.Error(), "no decision file holds ADR-0009") {
+		if _, err := RenumberADR(root, 9, 10, RenumberOptions{}); err == nil || !strings.Contains(err.Error(), "no decision file holds ADR-0009") {
 			t.Errorf("err = %v", err)
 		}
 	})
 	t.Run("refuses a number two files hold", func(t *testing.T) {
 		_, theirs := adrFile("0004", "theirs", "Theirs", "2026-10-24", "")
 		writeFile(t, filepath.Join(dec, "adr-0004-theirs.md"), theirs)
-		if _, err := RenumberADR(root, 4, 5); err == nil || !strings.Contains(err.Error(), "adr-0004-mine.md") || !strings.Contains(err.Error(), "adr-0004-theirs.md") || !strings.Contains(err.Error(), "before merging main") {
+		if _, err := RenumberADR(root, 4, 5, RenumberOptions{}); err == nil || !strings.Contains(err.Error(), "adr-0004-mine.md") || !strings.Contains(err.Error(), "adr-0004-theirs.md") || !strings.Contains(err.Error(), "FILE=") {
 			t.Errorf("err = %v", err)
 		}
 	})
@@ -347,5 +364,87 @@ func TestWalkDocsReadsLogEntries(t *testing.T) {
 	}
 	if vocabularyAllowed(filepath.Join("architecture", "ui.md")) {
 		t.Error("a current page is exempt")
+	}
+}
+
+// git runs a git command in dir for a fixture repository.
+func git(t *testing.T, dir string, args ...string) string {
+	t.Helper()
+	cmd := exec.Command("git", append([]string{"-C", dir, "-c", "user.name=fixture", "-c", "user.email=fixture@example.com", "-c", "commit.gpgsign=false"}, args...)...)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("git %v: %v\n%s", args, err, out)
+	}
+	return strings.TrimSpace(string(out))
+}
+
+// TestRenumberADRRepairsTwoHolders covers the state the plain mode refuses: two
+// PRs' decisions both landed (on main, or on a branch after merging main). With
+// FILE naming the decision to move, only the lines the commits after SINCE wrote
+// are rewritten, so the other decision's references keep their number.
+func TestRenumberADRRepairsTwoHolders(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not on PATH")
+	}
+	root := t.TempDir()
+	dec := filepath.Join(root, "docs", "src", "content", "decisions")
+	page := filepath.Join(root, "docs", "src", "content", "docs", "architecture", "x.md")
+	git(t, root, "init", "-q", "-b", "main")
+	name, text := adrFile("0001", "first", "First", "2026-06-27", "")
+	writeFile(t, filepath.Join(dec, name), text)
+	writeFile(t, page, "Intro.\n")
+	git(t, root, "add", "-A")
+	git(t, root, "commit", "-q", "-m", "base")
+
+	// PR A lands first: its decision 0002 and a reference to it.
+	_, a := adrFile("0002", "theirs", "Theirs", "2026-10-24", "")
+	writeFile(t, filepath.Join(dec, "adr-0002-theirs.md"), a)
+	writeFile(t, page, "Intro.\nTheirs is ADR-0002.\n")
+	git(t, root, "add", "-A")
+	git(t, root, "commit", "-q", "-m", "PR A")
+	since := git(t, root, "rev-parse", "HEAD")
+
+	// PR B lands second, also taking 0002, with references in the same page
+	// and in a code comment.
+	_, b := adrFile("0002", "mine", "Mine", "2026-10-24", "")
+	writeFile(t, filepath.Join(dec, "adr-0002-mine.md"), strings.Replace(b, "- **Decision:** Mine.", "- **Decision:** Mine, see [ADR-0002](#adr-0002-mine).", 1))
+	writeFile(t, page, "Intro.\nTheirs is ADR-0002.\nMine is [ADR-0002](/architecture/decisions/#adr-0002-mine).\n")
+	writeFile(t, filepath.Join(root, "internal", "foo", "foo.go"), "package foo\n\n// ADR-0002 (mine).\n")
+	git(t, root, "add", "-A")
+	git(t, root, "commit", "-q", "-m", "PR B")
+
+	if _, err := RenumberADR(root, 2, 3, RenumberOptions{File: "adr-0002-theirs.md", Since: since}); err == nil {
+		t.Error("moving a decision the commits after SINCE did not add was accepted")
+	}
+	changed, err := RenumberADR(root, 2, 3, RenumberOptions{File: "adr-0002-mine.md", Since: since})
+	if err != nil {
+		t.Fatal(err)
+	}
+	read := func(path string) string {
+		b, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return string(b)
+	}
+	if got, want := read(page), "Intro.\nTheirs is ADR-0002.\nMine is [ADR-0003](/architecture/decisions/#adr-0003-mine).\n"; got != want {
+		t.Errorf("page:\n got %q\nwant %q", got, want)
+	}
+	if got := read(filepath.Join(root, "internal", "foo", "foo.go")); !strings.Contains(got, "// ADR-0003 (mine).") {
+		t.Errorf("code comment: %q", got)
+	}
+	if got := read(filepath.Join(dec, "adr-0003-mine.md")); !strings.Contains(got, "see [ADR-0003](#adr-0003-mine)") {
+		t.Errorf("the moved decision's own reference: %q", got)
+	}
+	if got := read(filepath.Join(dec, "adr-0002-theirs.md")); got != a {
+		t.Errorf("the other decision changed:\n%s", got)
+	}
+	want := []string{
+		"docs/src/content/decisions/adr-0003-mine.md",
+		"docs/src/content/docs/architecture/x.md",
+		"internal/foo/foo.go",
+	}
+	if !reflect.DeepEqual(changed, want) {
+		t.Errorf("changed = %v, want %v", changed, want)
 	}
 }

@@ -34,7 +34,13 @@ type Fragment struct {
 
 var (
 	fragmentKeyLine = regexp.MustCompile(`^([a-z][a-z_]*):(?: (.*))?$`)
-	fragmentIntList = regexp.MustCompile(`^\[\s*(?:\d+\s*(?:,\s*\d+\s*)*)?\]$`)
+	// An issue or PR number: no leading zero, at most nine digits.
+	fragmentIntList = regexp.MustCompile(`^\[\s*(?:[1-9]\d{0,8}\s*(?:,\s*[1-9]\d{0,8}\s*)*)?\]$`)
+	// A lone carriage return or a Unicode line separator in a frontmatter line
+	// (JS and Go disagree on whether . matches them), and any control character
+	// in a decoded string, which would split the heading a title renders into.
+	fragmentLineBreakers = regexp.MustCompile("[\r\u2028\u2029]")
+	fragmentControlChar  = regexp.MustCompile("[\x00-\x1f\x7f\u2028\u2029]")
 )
 
 // ParseFragment parses one fragment file. Every error names the file.
@@ -56,6 +62,9 @@ func ParseFragment(name, text string) (Fragment, error) {
 	}
 	for i := 1; i < end; i++ {
 		line := lines[i]
+		if fragmentLineBreakers.MatchString(line) {
+			return f, fmt.Errorf("%s: line %d carries a control character", name, i+1)
+		}
 		if strings.TrimSpace(line) == "" {
 			continue
 		}
@@ -75,6 +84,9 @@ func ParseFragment(name, text string) (Fragment, error) {
 			var s string
 			if err := json.Unmarshal([]byte(raw), &s); err != nil {
 				return f, fmt.Errorf("%s: %s is not a valid double-quoted string: %s", name, key, raw)
+			}
+			if fragmentControlChar.MatchString(s) {
+				return f, fmt.Errorf("%s: %s carries a control character", name, key)
 			}
 			f.Fields[key] = s
 		case strings.HasPrefix(raw, "'"):
@@ -211,16 +223,42 @@ func checkFields(f Fragment, required, lists, optional []string) []string {
 	return out
 }
 
-// bodyHeading matches an h1 to h3 in an entry body: the render makes each entry
-// one section under its own heading, so a heading inside a body would split it
-// (and a ### ADR- heading would smuggle in a second decision).
-var bodyHeading = regexp.MustCompile(`(?m)^#{1,3} `)
+var (
+	// bodyHeading matches an h1 to h3 in an entry body: the render makes each
+	// entry one section under its own heading, so a heading inside a body would
+	// split it (and a ### ADR- heading would smuggle in a second decision).
+	bodyHeading = regexp.MustCompile(`^#{1,3} `)
+	// bodyDirective matches a directive line (::screenshot, ::walkthrough,
+	// :::design, ...). Those resolve against the page's own frontmatter and fail
+	// the render when they cannot, and a render error on a .md page is
+	// swallowed (the page publishes empty), so an entry only shows one in a fence.
+	bodyDirective = regexp.MustCompile(`^ {0,3}:{2,}[A-Za-z]`)
+	bodyFence     = regexp.MustCompile("^ {0,3}(`{3,}|~{3,})")
+)
 
-func checkBodyHeadings(f Fragment, rel string) []Finding {
+// checkBody reports the headings and directive lines in an entry body, outside
+// its fenced code blocks (a shell comment or an example directive is content).
+func checkBody(f Fragment, rel string) []Finding {
 	var out []Finding
-	for _, loc := range bodyHeading.FindAllStringIndex(f.Body, -1) {
-		line := f.BodyLine + strings.Count(f.Body[:loc[0]], "\n")
-		out = append(out, Finding{rel, line, "a heading inside a body splits the entry: an entry is one section, titled by its frontmatter"})
+	fence := ""
+	for i, line := range strings.Split(f.Body, "\n") {
+		m := bodyFence.FindStringSubmatch(line)
+		if fence != "" {
+			if m != nil && m[1][0] == fence[0] && len(m[1]) >= len(fence) && strings.TrimSpace(line) == m[1] {
+				fence = ""
+			}
+			continue
+		}
+		if m != nil {
+			fence = m[1]
+			continue
+		}
+		switch {
+		case bodyHeading.MatchString(line):
+			out = append(out, Finding{rel, f.BodyLine + i, "a heading inside a body splits the entry: an entry is one section, titled by its frontmatter"})
+		case bodyDirective.MatchString(line):
+			out = append(out, Finding{rel, f.BodyLine + i, "an entry body cannot carry a directive (" + strings.TrimSpace(line) + "); show one inside a code fence"})
+		}
 	}
 	return out
 }
@@ -271,7 +309,7 @@ func scanDecisionsDir(dir string) ([]Finding, error) {
 		if !adrStatus.MatchString(f.Body) {
 			findings = append(findings, Finding{rel(s.name), f.BodyLine, "the body has no **Status:** field"})
 		}
-		findings = append(findings, checkBodyHeadings(f, rel(s.name))...)
+		findings = append(findings, checkBody(f, rel(s.name))...)
 	}
 	max := 0
 	for n := range holders {
@@ -289,7 +327,7 @@ func scanDecisionsDir(dir string) ([]Finding, error) {
 			}
 			findings = append(findings, Finding{rel(holders[next][0]), 1, fmt.Sprintf("ADR-%04d is missing before it: the numbers run from 0001 with no gap, so a new decision takes the next after the highest", n)})
 		case len(names) > 1:
-			findings = append(findings, Finding{rel(names[1]), 1, fmt.Sprintf("ADR-%04d is taken by both %s: renumber the one your branch added (make adr-renumber FROM=%04d TO=%04d) before merging main",
+			findings = append(findings, Finding{rel(names[1]), 1, fmt.Sprintf("ADR-%04d is taken by both %s: renumber the one that landed second with make adr-renumber FROM=%04d TO=%04d FILE=<its file name> (see /record-decision)",
 				n, strings.Join(names, " and "), n, max+1)})
 		}
 	}
@@ -349,6 +387,9 @@ func scanBuildLogDir(dir string) ([]Finding, error) {
 		switch form := f.Fields["form"]; form {
 		case "":
 		case "bullet":
+			if m[1] != "" {
+				findings = append(findings, Finding{rel(s.name), 1, "form: bullet is the sequence-numbered history's: a bullet has no heading, so after a section it renders inside it; a new entry is a section (drop the form key)"})
+			}
 			lead := "- **" + f.Fields["title"]
 			if !strings.HasPrefix(strings.Join(strings.Fields(f.Body), " "), lead) {
 				findings = append(findings, Finding{rel(s.name), f.BodyLine, "a bullet entry's body must open with \"" + lead + "\" (its bold lead is its title)"})
@@ -356,7 +397,7 @@ func scanBuildLogDir(dir string) ([]Finding, error) {
 		default:
 			findings = append(findings, Finding{rel(s.name), 1, "form is \"bullet\" (the historical list entries) or absent"})
 		}
-		findings = append(findings, checkBodyHeadings(f, rel(s.name))...)
+		findings = append(findings, checkBody(f, rel(s.name))...)
 	}
 	for n := 1; n <= maxSeq; n++ {
 		if seq[n] == "" {

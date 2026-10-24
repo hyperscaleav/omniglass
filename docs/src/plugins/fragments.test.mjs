@@ -7,6 +7,7 @@ import {
   adrAnchor,
   directivesIn,
   expandFragments,
+  missingLogIds,
   parseFragment,
   renderBuildLog,
   renderDecisionIndex,
@@ -44,6 +45,11 @@ describe('parseFragment', () => {
     ['a list of non-integers', '---\nrefs: ["a"]\n---\nBody', /refs .*integers/],
     ['a list with a decimal', '---\nrefs: [1.0]\n---\nBody', /refs .*integers/],
     ['a list with an exponent', '---\nrefs: [1e3]\n---\nBody', /refs .*integers/],
+    ['a list with a leading zero', '---\nrefs: [01]\n---\nBody', /refs .*integers/],
+    ['a number too long to be an issue', '---\nrefs: [1234567890]\n---\nBody', /refs .*integers/],
+    ['a line separator in a value', '---\ntitle: A\u2028B\n---\nBody', /line 2 .*control character/],
+    ['a lone carriage return in a value', '---\ntitle: A\rB\n---\nBody', /line 2 .*control character/],
+    ['a newline escaped into a string', '---\ntitle: "First\\nline two"\n---\nBody', /title .*control character/],
     ['an empty body', '---\ntitle: T\n---\n\n', /empty body/],
   ]) {
     it(`refuses ${why}, naming the file`, () => {
@@ -61,6 +67,11 @@ describe('renderBuildLog', () => {
     frag(name, `---\ntitle: ${JSON.stringify(title)}\ndate: ${date}\nrefs: [1]\n---\n\n${body}\n`);
   const bullet = (name, title, date) =>
     frag(name, `---\ntitle: ${JSON.stringify(title)}\ndate: ${date}\nrefs: []\nform: bullet\n---\n\n- **${title}.** Text.\n  More.\n`);
+
+  it('lets a body show a directive inside a fenced code block', () => {
+    const body = 'A page embeds a shot with:\n\n```markdown\n::screenshot{#console-map}\n```';
+    assert.equal(renderBuildLog([section('2026-10-25-x.md', 'T (#1)', '2026-10-25', body)]), `### T (#1)\n\n${body}`);
+  });
 
   it('orders by file name, the historical sequence first, and joins with one blank line', () => {
     const out = renderBuildLog([
@@ -88,6 +99,9 @@ describe('renderBuildLog', () => {
     ['missing refs', frag('2026-10-25-x.md', '---\ntitle: T\ndate: 2026-10-25\n---\nB'), /needs refs/],
     ['an unknown key', frag('2026-10-25-x.md', '---\ntitle: T\ndate: 2026-10-25\nrefs: []\nauthor: me\n---\nB'), /unknown key "author"/],
     ['a bullet whose body is not a list item', frag('0001-x.md', '---\ntitle: T\ndate: 2026-06-27\nrefs: []\nform: bullet\n---\nNot a bullet.'), /bullet.*must start with "- "/],
+    ['a new dated entry in the bullet form', frag('2026-10-26-x.md', '---\ntitle: T\ndate: 2026-10-26\nrefs: []\nform: bullet\n---\n- **T.** Text.'), /form: bullet is the sequence-numbered history's/],
+    ['a directive in a body', section('2026-10-25-x.md', 'T (#1)', '2026-10-25', 'Text.\n\n::screenshot{#console-map}'), /2026-10-25-x\.md.*directive/],
+    ['a design fence in a body', section('2026-10-25-x.md', 'T (#1)', '2026-10-25', ':::design\nUnowned.\n:::'), /directive/],
   ]) {
     it(`refuses ${why}`, () => {
       assert.throws(() => renderBuildLog([f]), msg);
@@ -156,11 +170,28 @@ describe('the decision log', () => {
     ['a file name that is not adr-NNNN-<slug>.md', frag('adr-12-x.md', '---\ntitle: T\ndate: 2026-06-27\nstatus: A\nsummary: S\n---\nB'), /adr-NNNN-<slug>\.md/],
     ['a missing summary', frag('adr-0001-x.md', '---\ntitle: T\ndate: 2026-06-27\nstatus: A\n---\nB'), /needs a summary/],
     ['an unknown key', frag('adr-0001-x.md', '---\ntitle: T\ndate: 2026-06-27\nstatus: A\nsummary: S\nnumber: 1\n---\nB'), /unknown key "number"/],
+    ['a directive in a body', frag('adr-0001-x.md', '---\ntitle: T\ndate: 2026-06-27\nstatus: A\nsummary: S\n---\n- **Date:** 2026-06-27\n\n::walkthrough{#x}'), /adr-0001-x\.md.*directive/],
   ]) {
     it(`refuses ${why}`, () => {
       assert.throws(() => renderDecisionIndex([f]), msg);
     });
   }
+});
+
+describe('missingLogIds', () => {
+  const sources = [
+    frag('adr-0001-first.md', '---\ntitle: First\ndate: 2026-06-27\nstatus: Accepted\nsummary: S\n---\n\n- **Date:** 2026-06-27\n'),
+    frag('adr-0002-a-move-recomputes.md', '---\ntitle: "A move -- recomputes"\ndate: 2026-06-27\nstatus: Accepted\nsummary: S\n---\n\n- **Date:** 2026-06-27\n'),
+  ];
+  it('names each decision whose index link has no heading id on the built page', () => {
+    const html = '<h3 id="adr-0001-first">ADR-0001: First</h3><h3 id="adr-0002-a-move--recomputes">';
+    assert.deepEqual(missingLogIds(html, sources), [
+      'adr-0002-a-move-recomputes.md: the index links #adr-0002-a-move----recomputes, but the built page has no such heading',
+    ]);
+  });
+  it('names every decision when the page rendered empty', () => {
+    assert.equal(missingLogIds('<main></main>', sources).length, 2);
+  });
 });
 
 describe('expandFragments', () => {

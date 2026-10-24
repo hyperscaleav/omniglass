@@ -4,7 +4,9 @@
 // page render (remark-fragments.mjs) is swallowed by the content loader on a .md
 // page (logged, page rendered empty, exit zero), which would publish an empty
 // build log or decision log. It expands every page that uses a directive with
-// the renderer the page render uses, so passing here means the pages render.
+// the renderer the page render uses (which also refuses a directive line in an
+// entry body, the one way an entry could fail a remark plugin);
+// check-fragment-pages.mjs then proves the built pages carry every entry.
 import { readFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';

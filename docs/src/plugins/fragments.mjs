@@ -26,7 +26,14 @@ import { slug } from 'github-slugger';
 /** @typedef {{ name: string, data: Record<string, string | number[]>, body: string }} Fragment */
 
 const keyLine = /^([a-z][a-z_]*):(?: (.*))?$/;
-const intList = /^\[\s*(?:\d+\s*(?:,\s*\d+\s*)*)?\]$/;
+// An issue or PR number: no leading zero, at most nine digits.
+const intList = /^\[\s*(?:[1-9]\d{0,8}\s*(?:,\s*[1-9]\d{0,8}\s*)*)?\]$/;
+// Characters a frontmatter line or value may not carry: a lone carriage return
+// and the Unicode line separators (JS and Go disagree on whether `.` matches
+// them), and in a decoded string any control character, which would split the
+// heading a title renders into.
+const lineBreakers = /[\r\u2028\u2029]/;
+const controlChar = /[\u0000-\u001f\u007f\u2028\u2029]/;
 
 /**
  * Parse one fragment file. Throws an Error naming the file on any malformed line.
@@ -43,6 +50,7 @@ export function parseFragment(name, text) {
   const data = {};
   for (let i = 1; i < close; i++) {
     const line = lines[i];
+    if (lineBreakers.test(line)) throw new Error(`${name}: line ${i + 1} carries a control character`);
     if (line.trim() === '') continue;
     const m = keyLine.exec(line);
     if (!m) throw new Error(`${name}: line ${i + 1} is not a "key: value" line: ${line}`);
@@ -68,6 +76,7 @@ function parseValue(name, key, raw) {
       throw new Error(`${name}: ${key} is not a valid double-quoted string: ${raw}`);
     }
     if (typeof v !== 'string') throw new Error(`${name}: ${key} is not a string`);
+    if (controlChar.test(v)) throw new Error(`${name}: ${key} carries a control character`);
     return v;
   }
   if (raw.startsWith("'")) {
@@ -79,9 +88,12 @@ function parseValue(name, key, raw) {
   if (raw.startsWith('[')) {
     // Digits only, so this reader and the Go one accept exactly the same lists.
     if (!intList.test(raw)) throw new Error(`${name}: ${key} must be a list of positive integers, like [12, 34]`);
-    const v = JSON.parse(raw);
-    if (!v.every((n) => n > 0)) throw new Error(`${name}: ${key} must be a list of positive integers, like [12, 34]`);
-    return v;
+    return raw
+      .slice(1, -1)
+      .split(',')
+      .map((t) => t.trim())
+      .filter((t) => t !== '')
+      .map(Number);
   }
   return raw;
 }
@@ -102,6 +114,34 @@ export function readFragmentDir(dir) {
 const byName = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
 
 const isoDate = /^\d{4}-\d{2}-\d{2}$/;
+
+const bodyDirective = /^ {0,3}:{2,}[A-Za-z]/;
+const fenceOpen = /^ {0,3}(`{3,}|~{3,})/;
+
+/**
+ * Refuse a directive line (::screenshot, ::walkthrough, :::design, ...) in an
+ * entry body. Those resolve against the page's own frontmatter and fail the
+ * render when they cannot, and a render error on a .md page is swallowed (the
+ * page publishes empty), so an entry may only show one inside a code fence.
+ * @param {Fragment} f
+ */
+function checkNoDirectives(f) {
+  let fence = '';
+  for (const line of f.body.split('\n')) {
+    const m = fenceOpen.exec(line);
+    if (fence) {
+      if (m && m[1][0] === fence[0] && m[1].length >= fence.length && line.trim() === m[1]) fence = '';
+      continue;
+    }
+    if (m) {
+      fence = m[1];
+      continue;
+    }
+    if (bodyDirective.test(line)) {
+      throw new Error(`${f.name}: an entry body cannot carry a directive (${line.trim()}); show one inside a code fence`);
+    }
+  }
+}
 
 /**
  * @param {Fragment} f
@@ -142,8 +182,12 @@ export function renderBuildLog(sources) {
       checkKeys(f, ['title', 'date', 'refs'], ['form']);
       if (!Array.isArray(f.data.refs)) throw new Error(`${name}: refs must be a list, like [1095] or []`);
       if (m[1] && m[1] !== f.data.date) throw new Error(`${name}: the file name names ${m[1]} but its date is ${f.data.date}`);
+      checkNoDirectives(f);
       if (f.data.form === undefined) return `### ${f.data.title}\n\n${f.body}`;
       if (f.data.form !== 'bullet') throw new Error(`${name}: form is "bullet" or absent`);
+      // A bullet has no heading of its own, so after a section it would render
+      // inside that section: only the history before the split keeps the form.
+      if (m[1]) throw new Error(`${name}: form: bullet is the sequence-numbered history's; a new entry is a section (drop the form key)`);
       if (!f.body.startsWith('- ')) throw new Error(`${name}: a bullet entry's body must start with "- "`);
       return f.body;
     })
@@ -165,11 +209,12 @@ function decisions(sources) {
     if (!m) throw new Error(`${name}: a decision is named adr-NNNN-<slug>.md (four digits, lowercase slug)`);
     const f = parseFragment(name, text);
     checkKeys(f, ['title', 'date', 'status', 'summary']);
+    checkNoDirectives(f);
     const taken = byNumber.get(m[1]);
     if (taken) {
       throw new Error(
-        `ADR-${m[1]} is taken by both ${taken} and ${name}: renumber the one your branch added ` +
-          `(make adr-renumber FROM=${m[1]} TO=<next free number>) before merging main`,
+        `ADR-${m[1]} is taken by both ${taken} and ${name}: renumber the one that landed second with ` +
+          `make adr-renumber FROM=${m[1]} TO=<next free number> FILE=<its file name> (see /record-decision)`,
       );
     }
     byNumber.set(m[1], name);
@@ -218,6 +263,23 @@ export function renderDecisionLog(sources) {
   return decisions(sources)
     .map((d) => `### ADR-${d.number}: ${d.data.title}\n\n${d.body}`)
     .join('\n\n');
+}
+
+/**
+ * The post-build check of the decision log (scripts/check-fragment-pages.mjs):
+ * each decision whose index anchor names no heading id on the built page. That
+ * catches an anchor adrAnchor computes differently from the page (a title shape
+ * it does not reduce the way Astro does) and a page whose render was swallowed.
+ * @param {string} html the built decisions page
+ * @param {FragmentSource[]} sources
+ * @returns {string[]}
+ */
+export function missingLogIds(html, sources) {
+  const ids = new Set([...html.matchAll(/\sid="([^"]+)"/g)].map((m) => m[1]));
+  return decisions(sources)
+    .map((d) => ({ name: d.name, anchor: adrAnchor(d.number, d.data.title) }))
+    .filter((d) => !ids.has(d.anchor))
+    .map((d) => `${d.name}: the index links #${d.anchor}, but the built page has no such heading`);
 }
 
 /** Each directive, the fragment directory it reads (under src/content/), and its render. */

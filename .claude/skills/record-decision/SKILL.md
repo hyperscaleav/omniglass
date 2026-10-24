@@ -60,21 +60,44 @@ add two files and never conflict (#1095). Never write an entry or an index row i
 
 ## When another PR took the number
 
-Two open PRs can take the same next number. Whichever merges second sees
-`TestDecisionsFormat` name both files once main is merged in (the PR's CI runs on the merge
-with main). On that branch, **before merging main**, while the number still means only your
-decision:
+Two open PRs can take the same next number, and since the two decision files have different
+names, git merges them without a conflict. The decisions lint is what catches it, naming both
+files. Main does not require a branch to be up to date before it merges, so a PR's green
+check may predate the other decision landing. **Before asking for a merge, fetch and check that
+main has not taken your number**:
 
 ```bash
 git fetch origin main
-make adr-renumber FROM=NNNN TO=MMMM   # renames your file, rewrites every ADR-NNNN mention and #adr-NNNN- anchor
-git add -A docs/src/content/decisions/  # the renamed file is new to git
-git commit -am "Renumber my decision, whose number main took first"
-git merge origin/main
+git ls-tree --name-only origin/main docs/src/content/decisions/ | tail -1
 ```
 
-`NNNN` is the number both PRs took and `MMMM` the next free one. The tool rewrites references
-across docs, code comments, and skills, and refuses when the target number is taken or when two
-files already hold the source number (after a merge, the references can no longer be told apart:
-abort the merge, renumber, merge again). It rewrites every mention of the number, so write
-examples in prose with placeholders (`ADR-NNNN`), never a real next number.
+Then, on the branch whose decision lands second (`NNNN` the number both took, `MMMM` the next
+free one):
+
+- **Before merging main**, the number means only your decision, so every reference moves:
+
+  ```bash
+  make adr-renumber FROM=NNNN TO=MMMM
+  ```
+
+- **After merging main** (the merge is clean, so both files are now in the tree), name your
+  file; only the lines your branch's commits wrote (blamed to `origin/main..HEAD`, or not yet
+  committed) are rewritten, so the other decision's references keep the number:
+
+  ```bash
+  make adr-renumber FROM=NNNN TO=MMMM FILE=adr-NNNN-<your-slug>.md
+  ```
+
+- **If both landed on main**, repair it on a fix branch: name the later decision and set SINCE
+  to the commit before its PR landed, so only that PR's lines move:
+
+  ```bash
+  make adr-renumber FROM=NNNN TO=MMMM FILE=adr-NNNN-<later-slug>.md SINCE=<the commit before it landed>
+  ```
+
+Then stage the renamed file (`git add -A docs/src/content/decisions/`), review `git diff`, and
+run `go test ./internal/docslint/ -run TestDecisionsFormat -count=1`. The tool refuses a target
+number that is taken, a file that does not hold the number, and (with FILE) a file that already
+existed at SINCE, which is the decision that landed first. It rewrites every mention of the
+number in the lines it touches, so write examples in prose with placeholders (`ADR-NNNN`), never
+a real next number.

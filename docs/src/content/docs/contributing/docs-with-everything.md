@@ -101,13 +101,17 @@ adding entries add two files.
 - **A decision** is `docs/src/content/decisions/adr-NNNN-<slug>.md`, its frontmatter the index row (title,
   date, status, summary) and its body the entry; the index table is generated from the files. The
   `/record-decision` skill is the procedure. Two PRs that took the same next number fail the decisions lint
-  naming both files, and the one landing second runs `make adr-renumber FROM=NNNN TO=MMMM` before merging
-  main, which renames its file and rewrites every reference to the number across the docs, code comments,
-  and skills.
+  naming both files, and the one landing second runs `make adr-renumber FROM=NNNN TO=MMMM`, which renames
+  its file and rewrites every reference to the number across the docs, code comments, and skills. Once both
+  decisions are in the tree (after merging main, or on main), `FILE=adr-NNNN-<slug>.md` names the one to
+  move, and only the lines its own commits wrote are rewritten (git blame tells the two apart). Git cannot
+  see this collision, so check main's highest number before asking for a merge.
 
 The frontmatter is a small line grammar (a double-quoted or single-quoted string, a list of integers like
 `[1234]`, or a bare word), read identically by the docs build and by `internal/docslint`, which checks every
-entry's shape and fails an entry written into a log page instead of its own file. The adversarial-review
+entry's shape and fails an entry written into a log page instead of its own file. An entry body carries
+no headings of its own and no directive lines (`::screenshot`, `:::design`) outside a code fence: a
+directive resolves against the page's frontmatter, and an entry has none. The adversarial-review
 anti-pattern catalog follows the same pattern, one file per entry under the skill's `references/anti-patterns/`.
 
 ## The design fence

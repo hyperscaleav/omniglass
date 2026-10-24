@@ -5,10 +5,10 @@
   "private": true,
   "scripts": {
     "dev": "astro dev",
-    "build": "node --test src/plugins/fragments.test.mjs && node scripts/check-fragments.mjs && node scripts/check-design-fences.mjs && node scripts/check-embeds.mjs && node scripts/astro-build.mjs && node scripts/check-walkthrough-embeds.mjs",
+    "build": "node --test src/plugins/fragments.test.mjs src/plugins/fragments-loader.test.mjs && node scripts/check-fragments.mjs && node scripts/check-design-fences.mjs && node scripts/check-embeds.mjs && node scripts/astro-build.mjs && node scripts/check-fragment-pages.mjs && node scripts/check-walkthrough-embeds.mjs",
     "preview": "astro preview",
     "diagrams": "node scripts/gen-diagrams.mjs",
-    "test": "node --test src/plugins/fragments.test.mjs"
+    "test": "node --test src/plugins/fragments.test.mjs src/plugins/fragments-loader.test.mjs"
   },
   "dependencies": {
     "@astrojs/mdx": "^5.0.0",
