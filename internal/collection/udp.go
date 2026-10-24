@@ -372,7 +372,9 @@ func (c *DatagramConn) settle(line string, a lineAnswer, ans DatagramAnswer) (Da
 		return DatagramAnswer{}, terr
 	}
 	if a.refused {
-		return DatagramAnswer{}, &RefusedError{Request: line, Line: a.line}
+		// The component's refusal is still its answer: its round trip
+		// comes back beside the refusal.
+		return ans, &RefusedError{Request: line, Line: a.line}
 	}
 	return ans, nil
 }

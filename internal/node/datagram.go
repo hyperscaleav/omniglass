@@ -371,7 +371,7 @@ func (m *sessionManager) flushDatagrams() {
 // endpoint-responsive with its reason (responded, timeout, refused when the
 // host reports the port unreachable) and, when answered, one
 // udp-response-time; never tcp-open. A reply matching the request's error
-// shape is the component answering, so the rung passes; a reply the driver
+// shape is the component answering, so the rung passes and is timed; a reply the driver
 // declares terminal gates the endpoint, and beneath a gate no request is
 // sent under that fingerprint.
 func collectDatagramRung(ctx context.Context, task collection.TaskSpec, req *driver.Request, sessions *sessionManager) ([]collection.Sample, error) {
@@ -395,16 +395,14 @@ func collectDatagramRung(ctx context.Context, task collection.TaskSpec, req *dri
 	}
 	ans, err := sock.Exchange(ctx, req.Line, req.Reply, timeout, req.RetriesOr(driver.DefaultPollRetries))
 	var refused *collection.RefusedError
-	switch {
-	case err == nil:
+	if err == nil || errors.As(err, &refused) {
+		// An answer, the component's refusal by the error shape included:
+		// the rung passes and lands that answer's round trip.
 		sessions.datagramVerdict(task.EndpointID, true)
 		return []collection.Sample{
 			responsive(collection.VerdictUp, string(collection.Responded)),
 			{Name: collection.SignalUDPResponseTime, Value: float64(ans.RTT.Microseconds()) / 1000, TS: now},
 		}, nil
-	case errors.As(err, &refused):
-		sessions.datagramVerdict(task.EndpointID, true)
-		return []collection.Sample{responsive(collection.VerdictUp, string(collection.Responded))}, nil
 	}
 	if terr, ok := collection.AsTerminal(err); ok {
 		sessions.refuseOver(task.Transport, task.EndpointID, task.Fingerprint, terr)

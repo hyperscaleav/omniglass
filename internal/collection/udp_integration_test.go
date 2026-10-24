@@ -426,3 +426,18 @@ func TestDatagramLossLeavesNothingToAbsorb(t *testing.T) {
 		}
 	}
 }
+
+// A reply to the error shape is an answer, so it is timed: the rung that
+// reads it responsive lands its round trip too (ported from #1105).
+func TestDatagramErrorShapeAnswerCarriesItsRoundTrip(t *testing.T) {
+	if testing.Short() {
+		t.Skip("real-socket integration test")
+	}
+	peer := newUDPPeer(t, func(string) []string { return []string{"-ERR busy"} })
+	c := listenDatagram(t, collection.DatagramConfig{Target: peer.addr()})
+	ans, err := c.Exchange(context.Background(), "GET INPUT", &driver.Reply{Prefix: "INPUT ", Error: &driver.Match{Prefix: "-ERR"}}, time.Second, 2)
+	var refused *collection.RefusedError
+	if !errors.As(err, &refused) || ans.RTT <= 0 || ans.Attempts != 1 {
+		t.Fatalf("exchange = %+v, %v; want the refusal with its round trip", ans, err)
+	}
+}

@@ -31,8 +31,8 @@ summary: "`udp` is the line protocol as datagrams, built and stateless, its tran
      `ladder.transport.request`. An answer (or the component's refusal by the reply's error shape)
      reads responsive; silence reads `timeout`. With no port to open, `endpoint-reachable` is the
      responsive rung, no `tcp-open` lands, and the ping stays informational. Each answered probe
-     lands one `udp-response-time` (decision 7a; folded into `rtt` by #1063), timed from the first
-     send, since a reply may answer any send, a `node-probe` key
+     lands one `udp-response-time` (decision 7a; folded into `rtt` by #1063), an error-shaped
+     answer included, timed from the first send, since a reply may answer any send, a `node-probe` key
      ([ADR-0161](#adr-0161-every-key-has-one-writer-class-held-at-the-storage-gateway)).
   5. **Retries are declared, and a command is sent once.** `request.retries` (udp only, 0 to 5)
      re-sends a lost datagram, the attempts sharing the endpoint's one timeout: 2 by default for a

@@ -516,3 +516,24 @@ func TestAUDPArmIsSentOnce(t *testing.T) {
 		t.Fatalf("the component got SUBSCRIBE INPUT %d times, want once", n)
 	}
 }
+
+// A reply to the request's error shape is the component answering: the
+// rung reads responsive and lands that answer's round trip, so an endpoint
+// answering -ERR still has a timing series (ported from #1105).
+func TestTheUDPRequestRungTimesAnErrorShapedAnswer(t *testing.T) {
+	peer := newComponent(t, func(string) []string { return []string{"-ERR busy"} })
+	m := newDatagramManager(t, newCapture())
+	task := udpProbeTask("r1", "ep-1", udpParams(peer.addr()))
+	m.reconcile([]collection.TaskSpec{task})
+	dps, err := collectProbe(t.Context(), &collection.Runner{}, task, m)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := samplesByName(dps)
+	if r := got[collection.SignalEndpointResponsive]; r.Text != "up" {
+		t.Fatalf("responsive = %+v, want up: an error-shaped reply is an answer", r)
+	}
+	if rtt, ok := got[collection.SignalUDPResponseTime]; !ok || rtt.Value <= 0 {
+		t.Fatalf("udp-response-time = %+v, want the answer's time", rtt)
+	}
+}
