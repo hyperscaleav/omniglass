@@ -23,6 +23,8 @@ func udpSpec() *driver.Spec {
 		{Name: driver.ListenPortInput, Kind: "number"},
 	}
 	s.Ladder = &driver.Ladder{Transport: &driver.TransportRung{Request: &driver.Request{Line: "GET INPUT", Reply: &driver.Reply{Prefix: "INPUT "}}}}
+	s.Polls[0].Request.Reply = &driver.Reply{Prefix: "STATUS "}
+	s.Commands[0].Request.Reply = &driver.Reply{Prefix: "INPUT "}
 	return s
 }
 
@@ -50,7 +52,9 @@ func TestUDPRefusals(t *testing.T) {
 	}{
 		{"no request rung", func(s *driver.Spec) { s.Ladder = nil }, "ladder.transport.request"},
 		{"a request rung with no line", func(s *driver.Spec) { s.Ladder.Transport.Request = &driver.Request{Path: "/x"} }, "line"},
-		{"a poll with no line", func(s *driver.Spec) { s.Polls[0].Request = driver.Request{Get: []string{"1.3"}} }, "line"},
+		{"a poll with no line", func(s *driver.Spec) {
+			s.Polls[0].Request = driver.Request{Get: []string{"1.3"}, Reply: &driver.Reply{Prefix: "X"}}
+		}, "line"},
 		{"too many retries", func(s *driver.Spec) { s.Polls[0].Request.Retries = intp(9) }, "retries"},
 		{"negative retries", func(s *driver.Spec) { s.Polls[0].Request.Retries = intp(-1) }, "retries"},
 		{"a login", func(s *driver.Spec) {
@@ -60,6 +64,12 @@ func TestUDPRefusals(t *testing.T) {
 		{"a re-probe", func(s *driver.Spec) { s.Session = &driver.SessionSpec{Reprobe: "1h"} }, "terminal"},
 		{"a listen port that is not a number", func(s *driver.Spec) { s.Inputs[2].Kind = "string" }, driver.ListenPortInput},
 		{"a listen port default out of range", func(s *driver.Spec) { s.Inputs[2].Default = "70000" }, driver.ListenPortInput},
+		// Over udp a reply of any shape could be a late one to an earlier
+		// ask, so every request declares the shape of its answer (review of
+		// #1037, finding 2).
+		{"a poll with no reply shape", func(s *driver.Spec) { s.Polls[0].Request.Reply = nil }, "reply"},
+		{"a command with no reply shape", func(s *driver.Spec) { s.Commands[0].Request.Reply = nil }, "reply"},
+		{"a request rung with no reply shape", func(s *driver.Spec) { s.Ladder.Transport.Request.Reply = nil }, "reply"},
 	}
 	for _, tc := range cases {
 		s := udpSpec()

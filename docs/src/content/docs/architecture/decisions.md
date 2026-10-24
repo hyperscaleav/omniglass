@@ -7413,16 +7413,23 @@ interface create form, since that name is the platform's to mint.
      `ladder.transport.request`. An answer (or the component's refusal by the reply's error shape)
      reads responsive; silence reads `timeout`. With no port to open, `endpoint-reachable` is the
      responsive rung, no `tcp-open` lands, and the ping stays informational. Each answered probe
-     lands one `udp-response-time` (decision 7a; folded into `rtt` by #1063), a `node-probe` key
+     lands one `udp-response-time` (decision 7a; folded into `rtt` by #1063), timed from the first
+     send, since a reply may answer any send, a `node-probe` key
      ([ADR-0161](#adr-0161-every-key-has-one-writer-class-held-at-the-storage-gateway)).
   5. **Retries are declared, and a command is sent once.** `request.retries` (udp only, 0 to 5)
      re-sends a lost datagram, the attempts sharing the endpoint's one timeout: 2 by default for a
      poll and the request rung, none for a command unless its binding declares them, since a lost
-     reply must not send a relative command twice. The delivery carries the binding's retries.
+     reply must not send a relative command twice; an arm line is sent once too. The delivery
+     carries the binding's retries. Every udp request declares its reply's shape (refused at
+     write otherwise), and an exchange settled on a later send leaves a ghost that absorbs repeats
+     of its answer for one more timeout, so a slow component's surplus reply never answers the
+     next ask; a reply later than the whole timeout is not told apart.
   6. **Terminal replies gate the transport rung.** Over udp a driver's session block may declare
      only terminal replies. One that answers gates the endpoint at the transport rung whatever its
      class, since nothing logs in over udp (a transport whose rung is a request has no session
-     rung), and beneath the gate no request, poll, command or arm is sent under that fingerprint.
+     rung), and beneath the gate no request, poll, command or arm is sent under that fingerprint,
+     a node restarted onto a carried-back gate included; the first answered rung after it lifts
+     arms.
   7. **Listeners ride the socket.** The listeners' instantiation commands are sent when the socket
      opens and again whenever the request rung recovers, since a component that rebooted forgot its
      subscriber; claims follow the held line connection's precedence.

@@ -252,10 +252,22 @@ func (m *sessionManager) closeDatagram(id string, h *heldDatagram, why string) {
 
 // armDatagram sends the listeners' instantiation commands from the
 // endpoint's socket, in order, off the run loop, one conversation at a time
-// per endpoint. The ack is the first line of any kind; a component that
-// subscribes silently is armed, unacknowledged. A terminal reply gates the
-// endpoint, as it does a held session's.
+// per endpoint. Each is sent once, as a command is: a component whose
+// subscribe adds a destination per request must not get one per retry, and
+// a lost one is sent again when the rung next recovers. The ack is the first
+// line of any kind; a component that subscribes silently is armed,
+// unacknowledged. A terminal reply gates the endpoint, as it does a held
+// session's. Beneath a gate nothing is sent under its fingerprint, so the arm
+// waits: the rung reads down until the gate lifts, and its first answer then
+// arms, as a recovery does.
 func (m *sessionManager) armDatagram(id string, h *heldDatagram) {
+	if _, gated := m.blocked(id, rungResponsive); gated {
+		down := false
+		h.mu.Lock()
+		h.up = &down
+		h.mu.Unlock()
+		return
+	}
 	h.mu.Lock()
 	if len(h.arm) == 0 || h.arming {
 		h.mu.Unlock()
@@ -272,7 +284,7 @@ func (m *sessionManager) armDatagram(id string, h *heldDatagram) {
 			h.mu.Unlock()
 		}()
 		for _, line := range arm {
-			ans, err := h.sock.Exchange(context.Background(), line, driver.AnyLine(), timeout, driver.DefaultPollRetries)
+			ans, err := h.sock.Exchange(context.Background(), line, driver.AnyLine(), timeout, 0)
 			if errors.Is(err, collection.ErrNoAnswer) {
 				err = collection.ErrUnacknowledged
 			}

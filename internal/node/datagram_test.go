@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/collection"
+	"github.com/hyperscaleav/omniglass/internal/collection/rejection"
 	"github.com/hyperscaleav/omniglass/internal/driver"
 )
 
@@ -228,12 +229,8 @@ func TestTheUDPRequestRungIsTheTransportRung(t *testing.T) {
 }
 
 func TestTheUDPRequestRungReadsAClosedPortRefused(t *testing.T) {
-	probe, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1)})
-	if err != nil {
-		t.Fatal(err)
-	}
-	closed := probe.LocalAddr().String()
-	_ = probe.Close()
+	// A privileged port: no test process can bind it, so it stays closed.
+	closed := "127.0.0.1:1"
 	m := newDatagramManager(t, newCapture())
 	task := udpProbeTask("r1", "ep-1", udpParams(closed))
 	m.reconcile([]collection.TaskSpec{task})
@@ -418,14 +415,26 @@ func TestAUDPSocketRebindsOnlyWhenWhatItDependsOnChanges(t *testing.T) {
 	peer := newComponent(t, nvpAnswers)
 	other := newComponent(t, nvpAnswers)
 	m := newDatagramManager(t, newCapture())
-	free, err := net.ListenUDP("udp4", &net.UDPAddr{})
-	if err != nil {
-		t.Fatal(err)
+	// A port picked and released can be taken before the bind, by a
+	// concurrent run: pick again until the endpoint binds it.
+	var port int
+	var p string
+	for try := 0; ; try++ {
+		free, err := net.ListenUDP("udp4", &net.UDPAddr{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		port = free.LocalAddr().(*net.UDPAddr).Port
+		_ = free.Close()
+		p = udpParams(peer.addr(), fmt.Sprintf(`,"listen-port":"%d"`, port))
+		m.reconcile([]collection.TaskSpec{udpListenTask("l1", "ep-1", p)})
+		if m.datagrams["ep-1"] != nil {
+			break
+		}
+		if try == 5 {
+			t.Fatalf("no free port bound in %d tries: %v", try+1, m.datagramRefused)
+		}
 	}
-	port := free.LocalAddr().(*net.UDPAddr).Port
-	_ = free.Close()
-	p := udpParams(peer.addr(), fmt.Sprintf(`,"listen-port":"%d"`, port))
-	m.reconcile([]collection.TaskSpec{udpListenTask("l1", "ep-1", p)})
 	first := m.datagrams["ep-1"].sock
 	if got := first.LocalAddr().(*net.UDPAddr).Port; got != port {
 		t.Fatalf("bound %d, want the listen port %d", got, port)
@@ -455,5 +464,55 @@ func eventually(t *testing.T, what string, ok func() bool) {
 			t.Fatalf("timed out waiting for %s", what)
 		}
 		time.Sleep(5 * time.Millisecond)
+	}
+}
+
+// Beneath a gate nothing is sent under its fingerprint, the arm included: a
+// node restarted onto a carried-back gate opens the socket and arms nothing,
+// and once the gate lifts (an operator's :retry moves the fingerprint) the
+// first answered rung arms (review of #1037, finding 1).
+func TestAUDPEndpointArmsNothingBeneathAGate(t *testing.T) {
+	peer := newComponent(t, nvpAnswers)
+	m := newDatagramManager(t, newCapture())
+	p := udpParams(peer.addr())
+	gated := func(fp, rej string) []collection.TaskSpec {
+		probe, listen := udpProbeTask("r1", "ep-1", p), udpListenTask("l1", "ep-1", p)
+		probe.Fingerprint, listen.Fingerprint = fp, fp
+		probe.Rejection, listen.Rejection = rej, rej
+		return []collection.TaskSpec{probe, listen}
+	}
+	held := rejection.Gate{Rung: string(rungResponsive), Class: driver.ClassAuth, Fingerprint: "fp-1"}.String()
+	m.reconcile(gated("fp-1", held))
+	if _, ok := m.blocked("ep-1", rungResponsive); !ok {
+		t.Fatal("the carried-back gate was not adopted")
+	}
+	time.Sleep(300 * time.Millisecond)
+	if got := peer.lines(); len(got) != 0 {
+		t.Fatalf("the component got %v beneath the gate", got)
+	}
+	tasks := gated("fp-2", held)
+	m.reconcile(tasks)
+	if _, err := collectProbe(t.Context(), &collection.Runner{}, tasks[0], m); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "the arm once the gate lifted", func() bool { return peer.count("SUBSCRIBE INPUT") == 1 })
+}
+
+// An arm line is an instantiation command, sent once: a component that
+// subscribes silently gets one subscribe, never one per retry (finding 4).
+func TestAUDPArmIsSentOnce(t *testing.T) {
+	peer := newComponent(t, nvpAnswers)
+	peer.set(nvpAnswers, func(int32) bool { return true })
+	c := newCapture()
+	m := newDatagramManager(t, c)
+	m.reconcile([]collection.TaskSpec{udpListenTask("l1", "ep-1", udpParams(peer.addr()))})
+	eventually(t, "the arm reported", func() bool {
+		c.mu.Lock()
+		defer c.mu.Unlock()
+		return len(c.arms) == 1
+	})
+	time.Sleep(100 * time.Millisecond)
+	if n := peer.count("SUBSCRIBE INPUT"); n != 1 {
+		t.Fatalf("the component got SUBSCRIBE INPUT %d times, want once", n)
 	}
 }

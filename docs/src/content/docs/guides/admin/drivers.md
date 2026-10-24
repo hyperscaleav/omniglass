@@ -111,7 +111,9 @@ A udp driver speaks the line protocol as datagrams ([udp](/architecture/collecti
 udp port cannot be detected, so it must name its request rung, and it may declare a `listen-port`
 input, the local port its endpoint binds, which its requests leave from and the component's pushes
 arrive on (unset, the node picks one, which suits a component that answers to a request's source).
-A request may declare `retries` (udp only, 0 to 5), how many times a lost datagram is re-sent within
+Every udp request declares its reply's shape (`reply`), since a datagram's answer is told from a
+late reply to another ask only by it. A request may declare `retries` (udp only, 0 to 5), how many
+times a lost datagram is re-sent within
 the endpoint's timeout: a poll and the request rung default to 2, and a **command to none**, so
 declare them only on a command that is safe to send twice (one that names its value, never a
 relative step):

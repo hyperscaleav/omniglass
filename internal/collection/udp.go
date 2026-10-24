@@ -71,6 +71,30 @@ type datagramAsk struct {
 	answer chan lineAnswer
 }
 
+// datagramGhost is an answered exchange whose surplus replies may still be
+// on the way: each send a slow component answers draws a reply, so an
+// exchange settled on its third send can leave two behind. Until they are
+// absorbed, or the exchange's timeout has passed again, a line repeating its
+// answer is that surplus, never the next ask's answer. Only the repeat is
+// absorbed, so a next ask whose genuine answer differs (a command's new
+// value) is never starved; one whose answer is the same line loses at most a
+// share of its timeout to a retry. An exchange no send of which was answered
+// leaves no ghost: on a lossy wire its sends drew no replies, and a ghost
+// absorbing by shape would starve the asks after it. A reply later than the
+// whole timeout is therefore not told from the next ask's (the endpoint's
+// timeout should exceed the component's latency), which is why every udp
+// request declares its reply's shape.
+type datagramGhost struct {
+	answer    string
+	remaining int
+	until     time.Time
+}
+
+// absorbs reports a line that is the ghost's surplus.
+func (g *datagramGhost) absorbs(line string, now time.Time) bool {
+	return g != nil && g.remaining > 0 && !now.After(g.until) && line == g.answer
+}
+
 // DatagramConn is one endpoint's bound socket.
 type DatagramConn struct {
 	conn *net.UDPConn
@@ -80,6 +104,7 @@ type DatagramConn struct {
 
 	mu          sync.Mutex
 	armed       *datagramAsk
+	ghost       *datagramGhost
 	foreign     int
 	lastForeign string
 	err         error
@@ -207,6 +232,11 @@ func (c *DatagramConn) read() {
 func (c *DatagramConn) route(line string) {
 	claimed := c.cfg.Inbound != nil && c.cfg.Inbound.Claim(line)
 	c.mu.Lock()
+	if g := c.ghost; !claimed && g.absorbs(line, time.Now()) {
+		g.remaining--
+		c.mu.Unlock()
+		return // a surplus reply to an exchange already settled
+	}
 	a := c.armed
 	c.mu.Unlock()
 	if a != nil {
@@ -274,8 +304,8 @@ func (c *DatagramConn) Exchange(ctx context.Context, line string, reply *driver.
 	}()
 	share := timeout / time.Duration(retries+1)
 	payload := []byte(line + "\r\n")
+	first := time.Now()
 	for attempt := 1; attempt <= retries+1; attempt++ {
-		sent := time.Now()
 		if _, err := c.conn.WriteToUDP(payload, c.peer); err != nil {
 			return DatagramAnswer{}, fmt.Errorf("collection: udp send %s: %w", c.cfg.Target, err)
 		}
@@ -283,7 +313,13 @@ func (c *DatagramConn) Exchange(ctx context.Context, line string, reply *driver.
 		select {
 		case a := <-ask.answer:
 			t.Stop()
-			return c.settle(line, a, DatagramAnswer{Line: a.line, RTT: time.Since(sent), Attempts: attempt})
+			if a.err == nil && attempt > 1 {
+				c.haunt(&datagramGhost{answer: a.line, remaining: attempt - 1}, timeout)
+			}
+			// Timed from the first send: a reply may answer any send, so
+			// the time is what the exchange took, a lost datagram's retry
+			// included, and never less than the component's latency.
+			return c.settle(line, a, DatagramAnswer{Line: a.line, RTT: time.Since(first), Attempts: attempt})
 		case <-c.done:
 			t.Stop()
 			return DatagramAnswer{}, fmt.Errorf("collection: udp %s: %w", c.cfg.Target, c.cause())
@@ -294,6 +330,14 @@ func (c *DatagramConn) Exchange(ctx context.Context, line string, reply *driver.
 		}
 	}
 	return DatagramAnswer{}, &datagramTimeout{target: c.cfg.Target, line: line, timeout: timeout, attempts: retries + 1}
+}
+
+// haunt leaves an ended exchange's ghost for one more timeout.
+func (c *DatagramConn) haunt(g *datagramGhost, timeout time.Duration) {
+	g.until = time.Now().Add(timeout)
+	c.mu.Lock()
+	c.ghost = g
+	c.mu.Unlock()
 }
 
 // settle turns a delivered outcome into the exchange's result: an error

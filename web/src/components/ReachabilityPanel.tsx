@@ -146,6 +146,9 @@ function GateBreakdown(p: { iface: ReachEndpoint }) {
   const now = createClock(CLOCK_TICK_MS);
   const why = createMemo(() => reason(p.iface, now()));
   const verdictOk = createMemo(() => p.iface.verdict?.value === "up");
+  // A request rung a refusal holds: the component answered with a refusal
+  // retrying cannot fix, so beneath the gate nothing is sent (#1037).
+  const requestGated = () => p.iface.rejection?.rung === "responsive";
   return (
     <div class="flex flex-col gap-1.5 border-t border-base-300 bg-base-200/40 px-3 py-2.5 text-[12px]">
       <For each={p.iface.layers}>
@@ -168,10 +171,10 @@ function GateBreakdown(p: { iface: ReachEndpoint }) {
         {/* The transport rung of an endpoint with no port to open (udp):
             the driver's request answered, the layer its verdict follows. */}
         <div class="flex items-center gap-2" data-testid="request-rung">
-          <span class={`inline-block size-2 shrink-0 rounded-full ${requestRung(p.iface) ? "bg-success" : "bg-error"}`} />
+          <span class={`inline-block size-2 shrink-0 rounded-full ${requestGated() ? TONE_DOT.unknown : requestRung(p.iface) ? "bg-success" : "bg-error"}`} />
           <span class="w-10 shrink-0 uppercase tracking-wide text-base-content/45 text-[10px]">rung</span>
           <span class="font-data text-base-content/70">request</span>
-          <span class="text-base-content/50">{requestRung(p.iface) ? "answered" : "not answered"}</span>
+          <span class="text-base-content/50">{requestGated() ? "refused, not sent beneath the gate" : requestRung(p.iface) ? "answered" : "not answered"}</span>
           <InfoTip
             label="the request rung"
             text="The transport rung where an open port cannot be detected (udp): the node sends the driver's named request and an answer proves the protocol. Silence reads not answered (timed out), and a port the host reports closed reads refused. With no port to open, this rung is the endpoint's verdict."

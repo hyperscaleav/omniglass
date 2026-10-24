@@ -136,8 +136,14 @@ func (r Request) RetriesOr(def int) int {
 }
 
 // validateRetries refuses retries on a transport that does not resend (only
-// a datagram is lost silently) or outside 0 to MaxRetries.
+// a datagram is lost silently) or outside 0 to MaxRetries, and over udp a
+// request that declares no reply shape: a re-sent datagram draws a reply per
+// send, and a reply of any shape could be a late one to an earlier ask, so
+// only a declared shape tells this ask's answer from another's.
 func validateRetries(transportName, what string, r Request) error {
+	if transportName == "udp" && r.Reply == nil {
+		return fmt.Errorf("driver: %s over udp declares no reply shape (request.reply): a datagram's answer is told from a late reply to another ask only by its shape", what)
+	}
 	if r.Retries == nil {
 		return nil
 	}
@@ -167,6 +173,7 @@ type Reply struct {
 // listener claims included (the listener has it too): a subscribe's
 // acknowledgement, which a device may send as a push.
 func AnyLine() *Reply { return &Reply{any: true} }
+
 
 // Accepts reads the declared answer shape against a line; no shape declared
 // accepts any line.

@@ -472,24 +472,29 @@ they must be counted), so the node turns on the socket's error queue (`IP_RECVER
 report; it names a cause and never gates. With no port to open, the responsive rung is the
 endpoint's verdict too, and no `tcp-open` lands; the ping stays informational, so a component that
 blocks ping but answers reads up, and one that answers ping but not the request reads down. Each
-answered probe lands one `udp-response-time` (a rung-specific name until #1063 folds probe timings
-into `rtt`); loss shows through `endpoint-responsive` and its reason. The Endpoints panel's
+answered probe lands one `udp-response-time`, timed from the request's first send, so a lost
+datagram's retry shows as time (a rung-specific name until #1063 folds probe timings into `rtt`); loss shows through `endpoint-responsive` and its reason. The Endpoints panel's
 breakdown lists the request rung beside the ping, and a ping-up endpoint whose request goes
 unanswered says so in its why-line.
 
-An exchange takes its reply by the request's declared shape (`request.reply`), with the held line
-connection's precedence, so a datagram that does not match is never the answer and a push arriving
-mid-exchange still reaches its listener; a reply matching the error shape fails it with the
-component's text. A lost datagram is re-sent: `request.retries` (udp only, 0 to 5) defaults to 2 for
+An exchange takes its reply by the request's declared shape (`request.reply`, which every udp
+request must declare), with the held line connection's precedence, so a datagram that does not match
+is never the answer and a push arriving mid-exchange still reaches its listener; a reply matching
+the error shape fails it with the component's text. A slow component answers every send, so an
+exchange settled on a later send leaves surplus replies behind; until they arrive, or its timeout
+passes again, a repeat of its answer is absorbed, never taken as the next ask's (a reply later than
+the whole timeout is not told apart, so the endpoint's timeout should exceed the component's
+latency). A lost datagram is re-sent: `request.retries` (udp only, 0 to 5) defaults to 2 for
 a poll and for the request rung, and the attempts share the endpoint's one timeout, so loss never
 stretches a tick. A **command is sent once** unless its binding declares retries, since a command may
 be relative (a volume step) and a lost reply must not send it twice; the seeded `newtron-nvp-udp`
 declares them on `set-input`, which names the input. A reply the driver declares terminal (its
 session block, which over udp may declare only terminal replies) gates the endpoint at the transport
 rung, since nothing logs in over udp, and beneath the gate no request is sent under that fingerprint.
-Listeners ride the socket as they ride a held session: their instantiation commands are sent when
-the socket opens and again whenever the request rung recovers (a component that rebooted forgot its
-subscriber). Text payloads only, unicast only. Proven over real sockets
+Listeners ride the socket as they ride a held session: their instantiation commands are sent once
+each (a subscribe that adds a destination must not add one per retry) when the socket opens and
+again whenever the request rung recovers (a component that rebooted forgot its subscriber), and
+never beneath a gate. Text payloads only, unicast only. Proven over real sockets
 (`internal/collection/udp_integration_test.go`, `internal/node/datagram_test.go`) and end to end against the
 simulated panel's `nvp-udp` face dropping 30% of datagrams each way (`run_udp_test.go`: the rung up
 through the loss and its timing, the poll through its retries, a command actuated, a push with no

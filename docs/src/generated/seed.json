@@ -415,7 +415,7 @@
    "data_type": "float",
    "unit": "ms",
    "label": "UDP Response Time",
-   "description": "Time for a udp endpoint's request rung to be answered, from the send its answer answered, one observation per probe the component answered; absent when every attempt was lost."
+   "description": "Time for a udp endpoint's request rung to be answered, from its first send, so a lost datagram's retry shows as time; one observation per probe the component answered, absent when every attempt was lost."
   },
   {
    "name": "tls-certificate-days-left",

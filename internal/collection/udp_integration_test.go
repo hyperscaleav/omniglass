@@ -228,16 +228,10 @@ func TestDatagramToAClosedPortReadsRefused(t *testing.T) {
 	if testing.Short() {
 		t.Skip("real-socket integration test")
 	}
-	// A port nothing listens on: bind one, note it, close it.
-	probe, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1)})
-	if err != nil {
-		t.Fatal(err)
-	}
-	closed := probe.LocalAddr().String()
-	_ = probe.Close()
-	c := listenDatagram(t, collection.DatagramConfig{Target: closed})
+	// A privileged port: no test process can bind it, so it stays closed.
+	c := listenDatagram(t, collection.DatagramConfig{Target: "127.0.0.1:1"})
 	start := time.Now()
-	_, err = c.Exchange(context.Background(), "GET INPUT", nil, 2*time.Second, 2)
+	_, err := c.Exchange(context.Background(), "GET INPUT", nil, 2*time.Second, 2)
 	if r, ok := collection.Classify(err); !ok || r != collection.Refused {
 		t.Fatalf("err = %v (classified %q), want refused", err, r)
 	}
@@ -297,14 +291,24 @@ func TestDatagramBindsTheEndpointsListenPortAndItsRequestsShareIt(t *testing.T) 
 	if testing.Short() {
 		t.Skip("real-socket integration test")
 	}
-	free, err := net.ListenUDP("udp4", &net.UDPAddr{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	port := free.LocalAddr().(*net.UDPAddr).Port
-	_ = free.Close()
 	peer := newUDPPeer(t, func(string) []string { return []string{"OK"} })
-	c := listenDatagram(t, collection.DatagramConfig{Target: peer.addr(), LocalPort: port})
+	// A port picked and released can be taken before the bind, by a
+	// concurrent run: pick again until the endpoint binds it.
+	var c *collection.DatagramConn
+	var port int
+	for try := 0; c == nil; try++ {
+		free, err := net.ListenUDP("udp4", &net.UDPAddr{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		port = free.LocalAddr().(*net.UDPAddr).Port
+		_ = free.Close()
+		c, err = collection.ListenDatagram(collection.DatagramConfig{Target: peer.addr(), LocalPort: port})
+		if err != nil && try == 5 {
+			t.Fatalf("no free port bound in %d tries: %v", try+1, err)
+		}
+	}
+	t.Cleanup(func() { _ = c.Close() })
 	if got := c.LocalAddr().(*net.UDPAddr).Port; got != port {
 		t.Fatalf("bound port %d, want the listen port %d", got, port)
 	}
@@ -329,5 +333,59 @@ func TestDatagramCloseFailsALaterExchange(t *testing.T) {
 	_ = c.Close()
 	if _, err := c.Exchange(context.Background(), "GET INPUT", nil, 100*time.Millisecond, 0); err == nil {
 		t.Fatal("an exchange on a closed socket succeeded")
+	}
+}
+
+// A component slower than one attempt's share answers every send, so an
+// exchange that settles on a later attempt leaves surplus replies on the way
+// (review of #1037, finding 2). The next ask, of the same shape, must take its
+// own answer, never a surplus copy of the last one's; and the timing is from
+// the first send, so a slow component never reads faster than it is (finding 3).
+func TestDatagramSurplusRepliesNeverAnswerTheNextAsk(t *testing.T) {
+	if testing.Short() {
+		t.Skip("real-socket integration test")
+	}
+	var mu sync.Mutex
+	input := "hdmi1"
+	c, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = c.Close() })
+	go func() {
+		buf := make([]byte, 2048)
+		for {
+			n, from, err := c.ReadFromUDP(buf)
+			if err != nil {
+				return
+			}
+			line := strings.TrimRight(string(buf[:n]), "\r\n")
+			go func() {
+				time.Sleep(150 * time.Millisecond) // slower than one attempt's share
+				mu.Lock()
+				if v, ok := strings.CutPrefix(line, "SET INPUT "); ok {
+					input = v
+				}
+				out := "INPUT " + input
+				mu.Unlock()
+				_, _ = c.WriteToUDP([]byte(out+"\r\n"), from)
+			}()
+		}
+	}()
+	sock := listenDatagram(t, collection.DatagramConfig{Target: c.LocalAddr().String()})
+	shape := &driver.Reply{Prefix: "INPUT "}
+	poll, err := sock.Exchange(context.Background(), "GET INPUT", shape, 300*time.Millisecond, 2)
+	if err != nil || poll.Line != "INPUT hdmi1" {
+		t.Fatalf("poll = %+v, %v", poll, err)
+	}
+	if poll.Attempts < 2 {
+		t.Fatalf("attempts = %d; the peer is slower than a share, so a retry went out", poll.Attempts)
+	}
+	if poll.RTT < 150*time.Millisecond {
+		t.Fatalf("rtt = %s, below the peer's 150ms: timed from a later send", poll.RTT)
+	}
+	cmd, err := sock.Exchange(context.Background(), "SET INPUT hdmi3", shape, 2*time.Second, 0)
+	if err != nil || cmd.Line != "INPUT hdmi3" {
+		t.Fatalf("command = %+v, %v; want its own answer, never the poll's surplus INPUT hdmi1", cmd, err)
 	}
 }

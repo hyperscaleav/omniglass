@@ -53,8 +53,8 @@ const (
 	// one observation per probe, the number a threshold rule reads.
 	TLSCertificateDaysLeft = "tls-certificate-days-left"
 	// UDPResponseTime is the udp request rung's timing (#1037): from the
-	// send its answer answered to the answer, one observation per answered
-	// probe; a lost request lands none.
+	// first send to the answer (a retry's wait included), one observation
+	// per answered probe; a lost request lands none.
 	UDPResponseTime = "udp-response-time"
 	// EndpointRejection is an endpoint's gate (#1056 ruling, ADR-0158): the
 	// ladder rung a terminal refusal holds, its class, and the connection

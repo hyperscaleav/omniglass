@@ -398,6 +398,14 @@ describe("a udp endpoint", () => {
     expect(getByText(/request goes unanswered/)).toBeTruthy();
   });
 
+  it("reads a gated request rung as refused beneath the gate", () => {
+    const row = { ...udpRow(false), rejection: { rung: "responsive", class: "auth" } };
+    const { getByText, getByTestId } = mount({ component: "panel-1", endpoints: [row] });
+    fireEvent.click(getByText("Panel over UDP"));
+    expect(getByTestId("request-rung").textContent).toMatch(/refused/);
+    expect(getByTestId("request-rung").textContent).not.toMatch(/not answered/);
+  });
+
   it("lists no request rung on a row with a port", () => {
     const { getByText, queryByTestId } = mount();
     fireEvent.click(getByText("disp-1-tcp"));

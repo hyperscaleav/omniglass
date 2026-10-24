@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
+	"strings"
 	"testing"
 	"time"
 
@@ -17,16 +18,9 @@ import (
 // real node, and the simulated panel's NVP datagram face, on ephemeral
 // ports, so two runs from one worktree never collide.
 
-// freeUDPPort is a udp port nothing is bound to now.
-func freeUDPPort(t *testing.T) int {
-	t.Helper()
-	c, err := net.ListenUDP("udp4", &net.UDPAddr{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = c.Close() }()
-	return c.LocalAddr().(*net.UDPAddr).Port
-}
+// closedUDPPort is a port nothing in a test binds: privileged, so no
+// unprivileged process (a concurrent run's node or fixture) can hold it.
+const closedUDPPort = 1
 
 func (s *gateStack) attachUDP(comp, nodeName string, inputs map[string]string) *storage.Endpoint {
 	s.t.Helper()
@@ -70,8 +64,11 @@ func TestNodeUDPEndpointExchangesAndListensInDatagrams(t *testing.T) {
 	s.panel.SetDatagramLoss(30)
 	s.component("panel-1")
 	port := s.port("udp")
-	listen := freeUDPPort(t)
-	ep := s.attachUDP("panel-1", "edge-udp", map[string]string{"host": s.ip, "port": fmt.Sprint(port), "listen-port": fmt.Sprint(listen)})
+	// No listen port: the node binds one of its own (a port picked and
+	// released here could be taken by a concurrent run before the node binds
+	// it), and the test reads it back from the panel, which learned it from
+	// the subscribe.
+	ep := s.attachUDP("panel-1", "edge-udp", map[string]string{"host": s.ip, "port": fmt.Sprint(port)})
 	s.runNode("edge-udp")
 
 	s.waitFor("panel-1", ep.Name, "endpoint-responsive", is("up"), "up, through the loss")
@@ -120,7 +117,19 @@ func TestNodeUDPEndpointExchangesAndListensInDatagrams(t *testing.T) {
 	}
 
 	// A stranger sends the endpoint's port a push of its own: dropped.
-	node := &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1), Port: listen}
+	var sources []string
+	for _, src := range s.panel.DatagramSources() {
+		if src != other.LocalAddr().String() {
+			sources = append(sources, src)
+		}
+	}
+	if len(sources) != 1 {
+		t.Fatalf("the panel holds sources %v, want the endpoint's one socket", sources)
+	}
+	node, err := net.ResolveUDPAddr("udp4", sources[0])
+	if err != nil {
+		t.Fatal(err)
+	}
 	if _, err := other.WriteToUDP([]byte("EVT INPUT usbc\r\n"), node); err != nil {
 		t.Fatal(err)
 	}
@@ -136,10 +145,30 @@ func TestNodeUDPEndpointExchangesAndListensInDatagrams(t *testing.T) {
 	s.panel.SetDatagramLoss(0)
 	s.waitFor("panel-1", ep.Name, "endpoint-responsive", is("up"), "up again")
 
-	// A closed port: nothing listens there, so the host refuses the request.
+	// A closed port: a privileged one, which no test process can bind, so
+	// the host refuses the request, which the poll's fault names.
 	s.component("panel-2")
-	closed := freeUDPPort(t)
-	ep2 := s.attachUDP("panel-2", "edge-udp", map[string]string{"host": "127.0.0.1", "port": fmt.Sprint(closed)})
+	ep2 := s.attachUDP("panel-2", "edge-udp", map[string]string{"host": s.ip, "port": fmt.Sprint(closedUDPPort)})
 	s.waitFor("panel-2", ep2.Name, "endpoint-responsive", is("down"), "down: the port is refused")
 	s.waitFor("panel-2", ep2.Name, "endpoint-reachable", is("down"), "down")
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		evs, err := s.gw.ListComponentEvents(s.ctx, "panel-2", 0, 20)
+		if err != nil {
+			t.Fatal(err)
+		}
+		refused := false
+		for _, e := range evs {
+			if e.Key == "collection-failed" && strings.Contains(e.Message, "connection refused") {
+				refused = true
+			}
+		}
+		if refused {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("no collection-failed naming the refusal on panel-2: %+v", evs)
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
 }

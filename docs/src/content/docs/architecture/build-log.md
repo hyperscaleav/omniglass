@@ -8117,3 +8117,15 @@ arm at open and on recovery, the foreign flush, rebinding), against Postgres (`u
 listen port as a fingerprint input, a bare endpoint's check, a delivery's retries), and end to end
 against the simulated face dropping 30% each way (`run_udp_test.go`), passing with two runs at once.
 The layered-gate fence's `udp.open`, `pingGates` and per-check toggles retire into the ladder.
+
+The review's fixes, each with a test that failed first: a gate carried back to a restarted node now
+holds the arm too, which had subscribed to the component that refused (the first answered rung after
+the gate lifts arms); an exchange settled on a later send leaves a ghost absorbing repeats of its
+answer, since a slow component's surplus reply had answered the next ask (a command took a poll's
+reply), and every udp request now declares its reply's shape; `udp-response-time` is timed from the
+first send, since a reply may answer any send and the later send had read a slow component fast; an
+arm line is sent once, never once per retry; a gated request rung reads refused beneath the gate in
+the console, not unanswered; the tests pick no released port (a privileged port is the closed one,
+the end-to-end test reads the node's own port back from the panel, a listen port is picked again on
+a collision); and the nodes and simulation pages stop calling udp Design and an echo. Two catalog
+entries record the classes: `connectionless-late-answer` and `side-send-skips-gate`.

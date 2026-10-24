@@ -399,3 +399,29 @@ region and a mask line in the frontmatter that paints a box the text cannot resi
   readings are judged stale, and the control reads hand the new node the old one's gate and pin.
 - **Fix:** cap a node-probe sample's time at the database's now past a small skew
   (`sampleClock`, internal/storage/key_writer.go), or order control reads by arrival.
+
+## connectionless-late-answer (fixed; found by the #1037 review)
+
+- **Cue:** an exchange over a connectionless transport (a udp datagram) that re-sends, or that
+  takes a reply of any shape, with nothing that absorbs the replies still on the way once it
+  settles.
+- **Failure:** a component slower than one attempt's share answers every send, so a poll settled on
+  its second send leaves its first reply in flight; the command sent next, with the same reply
+  shape, took the poll's `INPUT hdmi1` as its own answer, and settlement judged it against the
+  wrong value. A held line connection recycles itself for this; a datagram socket has nothing to
+  recycle.
+- **Fix:** every udp request declares its reply's shape (refused at write otherwise,
+  `validateRetries`, internal/driver/spec.go), and an exchange settled on a later send leaves a
+  ghost that absorbs repeats of its answer for one more timeout (`datagramGhost`,
+  internal/collection/udp.go; `TestDatagramSurplusRepliesNeverAnswerTheNextAsk`).
+
+## side-send-skips-gate (fixed; found by the #1037 review)
+
+- **Cue:** a secondary send path (an arm or subscribe, a keepalive, a re-subscribe on recovery)
+  opened beside the gated primary path, without its own check of `gates.blocked`.
+- **Failure:** a udp endpoint gated for a terminal reply restarted its node: the carried-back gate
+  was adopted and every poll held off, but opening the socket armed the listeners, sending the
+  subscribe to the component that had refused, on every restart under the same fingerprint.
+- **Fix:** every send path checks the gate before it sends, as a held session starts rejected and
+  dials nothing (`armDatagram`, internal/node/datagram.go;
+  `TestAUDPEndpointArmsNothingBeneathAGate`).

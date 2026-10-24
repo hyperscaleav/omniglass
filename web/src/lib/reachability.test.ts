@@ -125,6 +125,22 @@ describe("reason", () => {
     expect(reason(iface, now)).toMatch(/request goes unanswered/i);
     expect(reason(iface, now)).toMatch(/cannot be detected/i);
   });
+  // A gated udp endpoint's request was answered with a refusal retrying
+  // cannot fix, and the node sends nothing more (review of #1037, finding 5):
+  // the why says that, never "unanswered".
+  it("explains a gated request rung as refused, not unanswered", () => {
+    const iface: ReachEndpoint = {
+      ...base,
+      endpoint: "udp",
+      transport: "udp",
+      responsive: { value: "down", ts: ago(5_000) },
+      rejection: { rung: "responsive", class: "auth" },
+      layers: [{ layer: "ping", check: "icmp-reachable", value: 1, ts: ago(5_000) }],
+    };
+    expect(reason(iface, now)).not.toMatch(/unanswered/i);
+    expect(reason(iface, now)).toMatch(/refused/i);
+    expect(reason(iface, now)).toMatch(/retry/i);
+  });
 });
 
 describe("layerWord", () => {
