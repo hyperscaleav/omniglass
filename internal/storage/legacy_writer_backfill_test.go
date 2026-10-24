@@ -1,0 +1,308 @@
+package storage_test
+
+import (
+	"encoding/json"
+	"regexp"
+	"slices"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/hyperscaleav/omniglass/db"
+	"github.com/hyperscaleav/omniglass/internal/collection/probekeys"
+	"github.com/hyperscaleav/omniglass/internal/scope"
+	"github.com/hyperscaleav/omniglass/internal/storage"
+	"github.com/hyperscaleav/omniglass/internal/writerclass"
+)
+
+// The one-time backfill that holds legacy rows to the one-writer ruling
+// (ADR-0163), driven from the embedded migration text so the test runs the
+// exact statements the migration applies. storagetest.NewDSN migrates to
+// head, so the backfill already ran once over an empty database; the test
+// seeds what releases before the ruling could have left, runs it again, and
+// runs it a third time to show it changes nothing more.
+
+const legacyBackfill = "migrations/20261024120100_legacy_writer_backfill.sql"
+
+func legacyBackfillSQL(t *testing.T) (up, down string) {
+	t.Helper()
+	raw, err := db.FS.ReadFile(legacyBackfill)
+	if err != nil {
+		t.Fatalf("read the backfill: %v", err)
+	}
+	up, down, ok := strings.Cut(string(raw), "-- migrate:down")
+	if !ok {
+		t.Fatal("the backfill has no -- migrate:down")
+	}
+	return strings.TrimPrefix(up, "-- migrate:up"), down
+}
+
+// TestLegacyBackfillNamesTheRuling: the key lists the backfill holds rows to
+// are the code's ruling as of the migration, so a typo cannot leave a class
+// of legacy rows untouched: every node-probe key and every pinnable key the
+// code declares today is listed, and nothing else.
+func TestLegacyBackfillNamesTheRuling(t *testing.T) {
+	up, _ := legacyBackfillSQL(t)
+	list := func(name string) []string {
+		t.Helper()
+		m := regexp.MustCompile(`(?s)` + name + ` text\[\] := ARRAY\[(.*?)\];`).FindStringSubmatch(up)
+		if m == nil {
+			t.Fatalf("the backfill declares no %s list", name)
+		}
+		var out []string
+		for _, q := range regexp.MustCompile(`'([^']+)'`).FindAllStringSubmatch(m[1], -1) {
+			out = append(out, q[1])
+		}
+		slices.Sort(out)
+		return out
+	}
+	if got, want := list("node_probe"), probekeys.NodeOnly(); !slices.Equal(got, want) {
+		t.Errorf("the backfill's node-probe keys %v, the ruling's %v", got, want)
+	}
+	var pins []string
+	for _, k := range writerclass.ReservedNames() {
+		if writerclass.Pinnable(k) {
+			pins = append(pins, k)
+		}
+	}
+	if got := list("pinnable"); !slices.Equal(got, pins) {
+		t.Errorf("the backfill's pinnable keys %v, the ruling's %v", got, pins)
+	}
+	for _, k := range []string{writerclass.Health, writerclass.CommandIssued} {
+		if !strings.Contains(up, "'"+k+"'") {
+			t.Errorf("the backfill does not hold %s rows to their writer", k)
+		}
+	}
+}
+
+// TestLegacyBackfillRetiresWhatTheRulingRefuses seeds the rows a release
+// before the ruling could have left beside honest ones, and proves the
+// backfill retires exactly the refused ones (each still on record in
+// retired_sample with its reason), that the reads stop serving them, that the
+// honest rows are untouched, and that a second run changes nothing.
+func TestLegacyBackfillRetiresWhatTheRulingRefuses(t *testing.T) {
+	if testing.Short() {
+		t.Skip("integration test needs Postgres")
+	}
+	f := pinFixture(t)
+	all := scope.Set{All: true}
+	d1 := f.componentID(t, "disp-1")
+	sys, err := f.gw.CreateSystem(f.ctx, "", storage.SystemSpec{Name: "room-1"}, all, all)
+	if err != nil {
+		t.Fatal(err)
+	}
+	up, _ := legacyBackfillSQL(t)
+	key := func(c string) string { return "SHA256:" + strings.Repeat(c, 43) }
+	exec := func(sql string, args ...any) {
+		t.Helper()
+		if _, err := f.conn.Exec(f.ctx, sql, args...); err != nil {
+			t.Fatalf("seed: %v\n%s", err, sql)
+		}
+	}
+	hour := time.Now().UTC().Add(-time.Hour)
+
+	// ssh: the node learned honest; then a pin was planted through the plain
+	// property route, and the node published the planted key it then held.
+	honest, planted := key("h"), key("p")
+	exec(`insert into property (ts, owner_kind, component_id, property_type_id, instance, provenance, source, value)
+		values ($1, 'component', $2::uuid, (select id from property_type where name = 'ssh-host-key'), 'ssh', 'observed', 'ssh', to_jsonb($3::text))`,
+		hour.Add(-time.Hour), d1, honest)
+	f.plantPin(t, "ssh-host-key", "ssh", planted)
+	exec(`insert into property (ts, owner_kind, component_id, property_type_id, instance, provenance, source, value)
+		values (clock_timestamp() + interval '1 second', 'component', $1::uuid, (select id from property_type where name = 'ssh-host-key'), 'ssh', 'observed', 'ssh', to_jsonb($2::text))`,
+		d1, planted)
+	if got := f.endpointTask(t, "ssh").HostKey; got != planted {
+		t.Fatalf("before the backfill the worklist delivers %q; the seed should leave the planted key in force through its echo", got)
+	}
+
+	// tls: an operator's :retry pin as the release before the ruling wrote
+	// it, with no source.
+	var tlsID string
+	if err := f.conn.QueryRow(f.ctx, `select id::text from endpoint where name = 'tls'`).Scan(&tlsID); err != nil {
+		t.Fatal(err)
+	}
+	trusted := key("t")
+	if _, err := f.gw.RetryEndpoint(f.ctx, f.actor, tlsID, storage.RetryPin{Certificate: trusted}, all, all); err != nil {
+		t.Fatalf("retry: %v", err)
+	}
+	exec(`update property set source = '' where provenance = 'declared'
+		and property_type_id = (select id from property_type where name = 'tls-certificate')`)
+	if got := f.endpointTask(t, "tls").CertificatePin; got != "" {
+		t.Fatalf("an unstamped :retry pin is delivered (%q) before the backfill; the stamp is what makes it trusted", got)
+	}
+
+	// Node-probe rows: the node's honest ones, and the refused kinds.
+	exec(`insert into property (ts, owner_kind, component_id, property_type_id, instance, provenance, source, value)
+		select v.ts, 'component', $1::uuid, (select id from property_type where name = v.key), v.instance, v.provenance, 'ssh', to_jsonb(v.value)
+		from (values
+			($2::timestamptz, 'endpoint-reachable', 'ssh', 'observed', 'down'),
+			(now() + interval '1 year', 'endpoint-reachable', 'ssh', 'observed', 'up'),
+			($2::timestamptz, 'endpoint-reachable', 'fake', 'observed', 'up'),
+			($2::timestamptz, 'session-state', 'ssh', 'declared', 'up')) v(ts, key, instance, provenance, value)`,
+		d1, hour)
+	exec(`insert into property (ts, owner_kind, system_id, property_type_id, instance, provenance, source, value)
+		values ($2, 'system', $1::uuid, (select id from property_type where name = 'endpoint-reachable'), 'ssh', 'observed', 'ssh', to_jsonb('up'::text))`,
+		sys.ID, hour)
+	exec(`insert into metric (ts, owner_kind, component_id, metric_type_id, instance, provenance, source, value)
+		select v.ts, 'component', $1::uuid, (select id from metric_type where name = 'tcp-open'), v.instance, 'observed', 'tcp', v.value
+		from (values ($2::timestamptz, 'ssh', 0), (now() + interval '1 year', 'ssh', 1), ($2::timestamptz, 'fake', 1)) v(ts, instance, value)`,
+		d1, hour)
+	exec(`insert into event (ts, owner_kind, component_id, event_type_id, instance, origin, message, provenance, source)
+		select $2, 'component', $1::uuid, (select id from event_type where name = v.key), v.instance, 'caught', v.message, 'observed', 'push'
+		from (values ('collection-failed', 'ssh', 'honest'), ('collection-failed', 'fake', 'refused'), ('command-issued', '', 'refused')) v(key, instance, message)`,
+		d1, hour)
+	if _, err := f.gw.IssueCommand(f.ctx, f.actor, "component", d1, "set-input", "", json.RawMessage(`"hdmi2"`), nil); err != nil {
+		t.Fatalf("issue a command: %v", err)
+	}
+	// Health: the rollup's verdict, and a row it did not write.
+	exec(`insert into property (ts, owner_kind, system_id, property_type_id, instance, value, provenance, source_rule)
+		values ($2, 'system', $1::uuid, (select id from property_type where name = 'health'), '', to_jsonb('outage'::text), 'calculated', 'health-rollup')`, sys.ID, hour)
+	exec(`insert into property (ts, owner_kind, system_id, property_type_id, instance, value, provenance)
+		values ($2, 'system', $1::uuid, (select id from property_type where name = 'health'), '', to_jsonb('healthy'::text), 'declared')`, sys.ID, hour.Add(time.Minute))
+
+	// Before: the refused rows are served.
+	if got, err := f.gw.LatestProperty(f.ctx, "disp-1", "endpoint-reachable", "ssh"); err != nil || got == nil || got.Value != "up" {
+		t.Fatalf("before the backfill LatestProperty = %+v (%v); the seed should leave the future-dated up in force", got, err)
+	}
+
+	if _, err := f.conn.Exec(f.ctx, up); err != nil {
+		t.Fatalf("run the backfill: %v", err)
+	}
+
+	// The pins: the planted one and its echo are retired, the node's honest
+	// key is the pin again, and the legacy :retry pin is stamped and
+	// delivered.
+	if got := f.endpointTask(t, "ssh").HostKey; got != honest {
+		t.Errorf("after the backfill the ssh pin is %q, want the key the node learned before the plant", got)
+	}
+	if got := f.endpointTask(t, "tls").CertificatePin; got != trusted {
+		t.Errorf("after the backfill the tls pin is %q, want the operator's :retry pin", got)
+	}
+	// The node-probe reads serve the node's honest rows.
+	if got, err := f.gw.LatestProperty(f.ctx, "disp-1", "endpoint-reachable", "ssh"); err != nil || got == nil || got.Value != "down" {
+		t.Errorf("LatestProperty = %+v (%v), want the node's down", got, err)
+	}
+	if got, err := f.gw.LatestMetricInstance(f.ctx, "disp-1", "tcp-open", "ssh"); err != nil || got == nil || got.Value != 0 {
+		t.Errorf("LatestMetricInstance = %+v (%v), want the node's 0", got, err)
+	}
+	evs, err := f.gw.ListComponentEvents(f.ctx, "disp-1", 0, 50)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var kept []string
+	for _, e := range evs {
+		kept = append(kept, e.Key+"/"+e.Message)
+	}
+	if !slices.Contains(kept, "collection-failed/honest") || slices.Contains(kept, "collection-failed/refused") || slices.Contains(kept, "command-issued/refused") {
+		t.Errorf("events after the backfill: %v, want the honest collection-failed and the issued command's event only", kept)
+	}
+	if n := f.count(t, `select count(*) from command c join event e on e.id = c.caused_event_id`); n != 1 {
+		t.Errorf("the issued command lost its event: %d", n)
+	}
+	vs, err := f.gw.SystemVerdicts(f.ctx, all)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, v := range vs {
+		if v.SystemID == sys.ID && v.Verdict != "outage" {
+			t.Errorf("the system reads %q, want the rollup's outage", v.Verdict)
+		}
+	}
+
+	// Every retired row is on record with its reason.
+	reasons := map[string]int{}
+	rows, err := f.conn.Query(f.ctx, `select reason from retired_sample`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for rows.Next() {
+		var r string
+		if err := rows.Scan(&r); err != nil {
+			t.Fatal(err)
+		}
+		reasons[r]++
+	}
+	rows.Close()
+	want := map[string]int{
+		"a declared pin not set through the endpoint's audited :retry":                    1,
+		"a key observed under a declared pin not set through :retry, and never before it": 1,
+		"a node-probe key on an owner no node writes for":                                 1,
+		"a node-probe key written by a writer other than the node":                        1,
+		"a node-probe key under an instance that names no endpoint of its component":      3,
+		"a node-probe key dated past the database clock":                                  2,
+		"a command lifecycle event no command issued":                                     1,
+		"a platform key the health rollup did not write":                                  1,
+	}
+	for r, n := range want {
+		if reasons[r] != n {
+			t.Errorf("retired %d rows for %q, want %d (all: %v)", reasons[r], r, n, reasons)
+		}
+	}
+	for r := range reasons {
+		if _, ok := want[r]; !ok {
+			t.Errorf("retired rows for an unexpected reason %q", r)
+		}
+	}
+	if n := f.count(t, `select count(*) from retired_sample where sample->>'id' is null or (sample->>'id')::bigint <> sample_id`); n != 0 {
+		t.Errorf("%d retired rows lost their record", n)
+	}
+
+	// A second run changes nothing.
+	snapshot := func() string {
+		var s string
+		if err := f.conn.QueryRow(f.ctx, `select (select count(*) from property) || '/' || (select count(*) from metric) || '/' ||
+			(select count(*) from event) || '/' || (select count(*) from retired_sample) || '/' ||
+			(select count(*) from property where source = 'key-pin')`).Scan(&s); err != nil {
+			t.Fatal(err)
+		}
+		return s
+	}
+	before := snapshot()
+	if _, err := f.conn.Exec(f.ctx, up); err != nil {
+		t.Fatalf("run the backfill again: %v", err)
+	}
+	if after := snapshot(); after != before {
+		t.Errorf("a second run changed the rows: %s, then %s", before, after)
+	}
+}
+
+// TestLegacyBackfillDownRestoresTheRows: the backfill's down puts every row
+// it retired back where it was, id and all, so the retirement is reversible
+// in full.
+func TestLegacyBackfillDownRestoresTheRows(t *testing.T) {
+	if testing.Short() {
+		t.Skip("integration test needs Postgres")
+	}
+	f := pinFixture(t)
+	d1 := f.componentID(t, "disp-1")
+	up, down := legacyBackfillSQL(t)
+	f.plantPin(t, "ssh-host-key", "ssh", "SHA256:"+strings.Repeat("p", 43))
+	if _, err := f.conn.Exec(f.ctx, `insert into metric (ts, owner_kind, component_id, metric_type_id, instance, provenance, source, value)
+		values (now(), 'component', $1::uuid, (select id from metric_type where name = 'tcp-open'), 'fake', 'observed', 'tcp', 1)`, d1); err != nil {
+		t.Fatal(err)
+	}
+	ids := func() string {
+		var s string
+		if err := f.conn.QueryRow(f.ctx, `select coalesce(string_agg(id::text, ',' order by id), '') from
+			(select id from property union all select id from metric) x`).Scan(&s); err != nil {
+			t.Fatal(err)
+		}
+		return s
+	}
+	before := ids()
+	if _, err := f.conn.Exec(f.ctx, up); err != nil {
+		t.Fatal(err)
+	}
+	if ids() == before {
+		t.Fatal("the backfill retired nothing")
+	}
+	if _, err := f.conn.Exec(f.ctx, down); err != nil {
+		t.Fatalf("run the down: %v", err)
+	}
+	if got := ids(); got != before {
+		t.Errorf("after the down the rows are %s, want %s", got, before)
+	}
+	if n := f.count(t, `select count(*) from retired_sample`); n != 0 {
+		t.Errorf("%d rows stay retired after the down", n)
+	}
+}

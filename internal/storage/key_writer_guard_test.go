@@ -169,6 +169,7 @@ func TestEverySampleWritePathAdmitsItsWriter(t *testing.T) {
 var sampleMigrations = map[string]string{
 	"20260805170000_state_becomes_property.sql":              "reshapes the value column of every existing property row in place (#591); no key, provenance or writer changes",
 	"20260805210000_command_status_and_intended_lineage.sql": "repoints the lineage of existing intended rows onto the command that opened them (command_id); no key, value or writer changes",
+	"20261024120100_legacy_writer_backfill.sql":              "holds legacy rows to the ruling (ADR-0163): stamps the source of a declared pin its audited :retry wrote, moves rows the ruling refuses into retired_sample, and its down restores them as they were; no key or value changes",
 }
 
 // TestMigrationsWriteNoSamples: a migration is a write path that runs outside
