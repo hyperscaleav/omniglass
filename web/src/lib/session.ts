@@ -59,16 +59,19 @@ export function retryMark(iface: ReachEndpoint): string {
 // so an endpoint refused by its reachability probe alone reads the same as a
 // rejected session (#1110), and a rejected session keeps showing once stale,
 // since the refusal is what needs fixing however old it is. Its reason is the
-// session's own words where a rejected session gave some, else the gate's,
-// else the class. A down session says why the node gave up for now, while it
-// is fresh. Everything else is not news.
+// gate's (the refusal's own words, which a restart never overwrites), else a
+// rejected session's (one published before the gate carried a reason), else
+// the class. A restarted node starts a session rejected under the gate it
+// adopted, and that session's reason is then the node's placeholder, which is
+// why the gate's leads. A down session says why the node gave up for now,
+// while it is fresh. Everything else is not news.
 export function endpointNotice(iface: ReachEndpoint, now: number = Date.now()): Notice | null {
   const s = iface.session;
   const gate = iface.rejection;
   if (gate || s?.state === "rejected") {
     const reason =
-      (s?.state === "rejected" && s.reason) ||
       gate?.reason ||
+      (s?.state === "rejected" && s.reason) ||
       (gate ? `${gate.class}: ${CLASS_REFUSED[gate.class] ?? "refused in a way retrying cannot fix"}` : "");
     return reason ? { kind: "rejected", reason, waitTS: retryMark(iface) } : null;
   }

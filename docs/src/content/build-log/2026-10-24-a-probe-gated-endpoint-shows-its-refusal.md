@@ -11,7 +11,9 @@ on a rejected session, and the node's reason for the refusal was logged and lost
 ([ADR-1110](/architecture/decisions/#adr-1110-a-gate-says-why-it-holds-and-the-console-shows-it-whatever-met-the-refusal)).
 The node now publishes `endpoint-rejection-reason` beside `endpoint-rejection` in one batch,
 whenever it records a gate (held session or not), republished with the gate until the worklist
-reflects it; a gate adopted after a restart publishes none, so the refusal's own words stand. The
+reflects it; a gate adopted after a restart publishes none, and a held session started rejected
+under it does not re-record it from its own replay, so the refusal's own words stand. The notice
+reads the gate's reason first, since such a session's reason is the node's placeholder. The
 key is seeded and node-only. The reachability read serves `rejection` with its `reason` and `ts`
 whether or not a session is held, the reason only while a gate holds. `SessionNotice` keys on the
 gate (`endpointNotice` in `lib/session`): the same notice, reason, Retry behind `endpoint:retry`, and

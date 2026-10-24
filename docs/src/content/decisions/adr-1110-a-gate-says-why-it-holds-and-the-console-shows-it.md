@@ -13,15 +13,17 @@ summary: "A gate publishes its reason beside it (#1110, amending ADR-0158 point 
      (`<class>: <the component's text>`, as the refusal reads; the same text a held session's
      `session-reason` carries, scrubbed of anything the node sent). It goes out again with the gate
      until the worklist reflects it. A gate the node adopts from the worklist after a restart never
-     saw its refusal, so it publishes no reason and the one on record stands; a gate that lifts
+     saw its refusal, so it publishes no reason and the one on record stands, and a held session
+     started rejected under it does not re-record it from its own replay; a gate that lifts
      publishes `none` and no reason. The key is native and node-only, so no push can plant a reason
      the node never scrubbed.
   2. **The read serves the gate whatever holds a session.** `rejection` already ignored the session;
      it now carries `reason` (read only while a gate holds, so a lifted gate's last reason is never
      served, cut to 500 characters like a session's) and `ts`, when the gate was last published.
   3. **The console keys the notice on the gate.** `SessionNotice` shows for a rejected session or a
-     held gate, its reason the session's own words where a rejected session gave some, else the
-     gate's, else the class. Retry (behind `endpoint:retry`) and Trust this key wait on what they
+     held gate, its reason the gate's, else a rejected session's (one published before the gate
+     carried a reason), else the class: a session restarted under an adopted gate carries the
+     node's placeholder as its reason, while the gate keeps the refusal's own words. Retry (behind `endpoint:retry`) and Trust this key wait on what they
      move: the session's transition time where a session is held, else the gate's publish time.
      There is one notice, not a second one for probes.
 - **Context:** A probe's refusal gated the endpoint (ADR-0158) and the ladder showed the held rung,

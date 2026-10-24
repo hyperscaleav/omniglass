@@ -295,6 +295,34 @@ func TestAGatePublishesItsReasonBesideIt(t *testing.T) {
 	}
 }
 
+// Review of #1110, finding 1: a restarted node's held session starts
+// rejected under the gate it adopted, and the session's replayed transition
+// carries the adopted gate's placeholder refusal. Re-recorded as a fresh
+// refusal, the placeholder would go out as the gate's reason and overwrite
+// the component's own words; the replay keeps the gate adopted, reasonless.
+func TestAnAdoptedGatesSessionReplayPublishesNoReason(t *testing.T) {
+	dialer := &authFakeDialer{}
+	log, rej := &transitionLog{}, &rejectionLog{}
+	m := newSessionManager(map[string]collection.SessionDialer{"tcp": dialer}, sessionHooks{transition: log.record, rejection: rej.record})
+	defer m.closeAll()
+	m.reconcile([]collection.TaskSpec{withFingerprint(pollTaskWithLogin("p1", "ep-1", "wrong", 0), "fp-1", "authenticated auth fp-1")})
+	log.waitFor(t, "p1", collection.SessionRejected)
+	// The transition hook runs before the gate hears the replay: give it a
+	// moment to land, so a re-record would have happened by the next look.
+	time.Sleep(50 * time.Millisecond)
+	if n := dialer.connectCount(); n != 0 {
+		t.Fatalf("the restarted session dialed %d times under the adopted gate", n)
+	}
+	// The worklist stops reflecting the gate: it goes out again, reasonless.
+	m.reconcile([]collection.TaskSpec{withFingerprint(pollTaskWithLogin("p1", "ep-1", "wrong", 0), "fp-1", "")})
+	waitFor(t, func() bool { return len(rej.each()) > 0 }, "the gate republished")
+	for _, p := range rej.each() {
+		if p.value != "authenticated auth fp-1" || p.reason != "" {
+			t.Fatalf("the adopted gate published %+v after its session's replay, want its value with no reason", p)
+		}
+	}
+}
+
 // Finding 3: a refusal reported for an attempt made under an old
 // fingerprint never gates the new one.
 func TestARefusalUnderAnOldFingerprintIsDropped(t *testing.T) {

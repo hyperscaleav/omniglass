@@ -434,9 +434,10 @@ runs the TCP connect and then the handshake under the endpoint's **verification 
 
 - **verify** checks the certificate against the node's system roots, with the host input as the
   server name. Any failure (an unknown authority, a name mismatch, an expiry) is a `certificate`
-  refusal carrying its reason, never a timeout: the held session's `session-reason`, and for an
-  endpoint with no held session a node self-log, said once when the probe meets it. A driver that
-  declares no mode verifies.
+  refusal carrying its reason, never a timeout: the gate's `endpoint-rejection-reason`, held session
+  or not, which the console's refusal notice shows (#1110), beside the held session's
+  `session-reason` where one is held, and a node self-log, said once when the probe meets it. A
+  driver that declares no mode verifies.
 - **pin** trusts the first public key the component offers and refuses any other, as the ssh host
   key is pinned. The pin is the key (its SubjectPublicKeyInfo, in the same `SHA256:` form as an ssh
   fingerprint), not the certificate, so a renewal that keeps the key is no change, and a certificate

@@ -54,9 +54,20 @@ describe("sessionWord", () => {
 describe("endpointNotice", () => {
   const gate = (over: Partial<NonNullable<ReachEndpoint["rejection"]>> = {}) => ({ rung: "authenticated" as const, class: "auth", ts: ago(20_000), ...over });
 
-  it("says why a rejected session was refused, in the session's own words", () => {
-    const e = ep({ session: { state: "rejected", ts: ago(1_000), reason: "auth: auth rejected" }, rejection: gate({ reason: "auth: auth rejected (gate)" }) });
+  it("says why a rejected session was refused, in its own words where its gate carries none", () => {
+    const e = ep({ session: { state: "rejected", ts: ago(1_000), reason: "auth: auth rejected" }, rejection: gate() });
     expect(endpointNotice(e, now)).toEqual({ kind: "rejected", reason: "auth: auth rejected", waitTS: ago(1_000) });
+  });
+
+  // A restarted node starts the session rejected under the gate it adopted,
+  // and the session's reason is then the node's placeholder; the gate keeps
+  // the refusal's own words (review of #1110), so they lead.
+  it("reads the gate's reason over a restarted session's placeholder", () => {
+    const e = ep({
+      session: { state: "rejected", ts: ago(1_000), reason: "auth: refused under this connection fingerprint before the node restarted" },
+      rejection: gate({ reason: "auth: auth rejected" }),
+    });
+    expect(endpointNotice(e, now)?.reason).toBe("auth: auth rejected");
   });
 
   it("says why a down session gave up, while it is fresh", () => {

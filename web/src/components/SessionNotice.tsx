@@ -23,9 +23,9 @@ import {
 } from "../lib/session";
 
 // SessionNotice says why an endpoint is refused or its held session down
-// (#1059): for a refusal, the reason (a rejected session's own words, else the
-// gate's: its class and the component's own text, scrubbed of anything the
-// node sent) and the two ways out. A refusal shows whatever met it: the gate
+// (#1059): for a refusal, the reason (the gate's: its class and the
+// component's own text, scrubbed of anything the node sent; else a rejected
+// session's own words) and the two ways out. A refusal shows whatever met it: the gate
 // holds whether or not a session is held, so an endpoint refused by its
 // reachability probe alone (a tls certificate, a udp terminal reply, an snmp
 // authorizationError, an ssh probe's credential) reads the same as a rejected
