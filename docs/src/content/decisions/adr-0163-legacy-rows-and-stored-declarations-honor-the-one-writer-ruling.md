@@ -17,9 +17,10 @@ summary: "What was written or declared before the one-writer ruling is held to i
      stamped by a one-time backfill; any other declared pin row is retired, with the observed rows
      of the same key a node published under it and never before it (ordered by arrival, never by a
      node's clock). The endpoint then pins the key its node learned before, or trusts on first use
-     again, under the gate as ever, and a retired pin's key is never taken as the pin from the
-     observed series again (a node still holding it may republish it) until a `:retry` declares
-     it. A node forgets a pin the worklist delivered and then stops delivering (it was withdrawn):
+     again, under the gate as ever, and a retired pin's key the node did not learn before the plant
+     is never taken as the pin from the observed series again (a node still holding it may
+     republish it) until a `:retry` declares it; the boot audit names an endpoint left pinning
+     nothing that way. A node forgets a pin the worklist delivered and then stops delivering (it was withdrawn):
      it carries and republishes only a key it learned on first use itself, and a session held under
      a withdrawn pin redials. A declared row the plain property route left, a clear among them, is
      not honored: the pin in force is the last one `:retry` set, which fails closed (a component
@@ -34,12 +35,13 @@ summary: "What was written or declared before the one-writer ruling is held to i
      reason (nothing true is lost) holds. The backfill's down restores every row it retired.
   3. **What retires.** A node-probe row on an owner that is not a component, written by a writer
      other than the node (a declared, intended or calculated row, a derived event, or a command's
-     reply, which carries its command's settlement instant), under an instance that names no
+     reply, which carries the instant its command executed), under an instance that names no
      endpoint of its component, or dated more than five minutes past the database clock (the cap new
      rows obey); a `health` row the rollup did not write; a `command-issued` event no command points
      at; and the pins of point 1. An event row another row references (a command's caused event, a
      derived event's source) stays. At boot, every event rule series a retirement took rows from is
-     judged again, so a condition, and the alarm with it, that a retired row raised lets go.
+     judged again, once, so a condition, and the alarm with it, that a retired row raised lets go;
+     a series that cannot be judged is logged and left to the reconcile pass.
   4. **Stored specs and tasks never reach a node with a refused emit.** The worklist strips from
      every driver task an emit whose key the node lane may not carry (a reserved key, a calc rule's
      output) and keeps the rest, logging each once; a re-derivation from a stored spec never bakes

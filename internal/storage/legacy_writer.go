@@ -119,8 +119,9 @@ type RulingViolation struct {
 // WriterRulingViolations audits the stored declarations against the ruling,
 // for the boot audit: every driver spec and derived task emitting a key the
 // node lane may not carry, every contract line on a reserved key, every event
-// rule firing or clearing with an event type a rule may not write, and every
-// command type targeting a key a command may not. Each is
+// rule firing or clearing with an event type a rule may not write, every
+// command type targeting a key a command may not, and every endpoint left
+// pinning nothing because its node offers a key retired as a pin. Each is
 // already inert where it would act (the worklist strips the emit, the
 // effective reads lend the contract no default); this names them so an
 // operator can mend them. Ordered by where, then key.
@@ -207,6 +208,39 @@ func (p *PG) WriterRulingViolations(ctx context.Context) ([]RulingViolation, err
 			out = append(out, RulingViolation{Where: d.where, Key: d.key, Class: c})
 		}
 	}
+	// An endpoint whose node offers a key retired as a pin no :retry set,
+	// with no :retry pin declared: it pins nothing until an operator trusts
+	// a key (the pin read never takes that one from the series).
+	var pins []string
+	for _, k := range writerclass.ReservedNames() {
+		if writerclass.Pinnable(k) {
+			pins = append(pins, k)
+		}
+	}
+	offered, err := p.pool.Query(ctx, `
+		select distinct 'endpoint ' || c.name || '/' || o.instance, t.name
+		from property o
+		join property_type t on t.id = o.property_type_id
+		join component c on c.id = o.component_id
+		where o.provenance = 'observed' and t.name = any($1)
+		  and exists (`+retiredPinSQL("o.component_id::text", "o.instance")+`)
+		  and not exists (select 1 from property d
+			where d.provenance = 'declared' and d.source = '`+pinSource+`' and d.component_id = o.component_id
+			  and d.instance = o.instance and d.property_type_id = o.property_type_id)`, pins)
+	if err != nil {
+		return nil, fmt.Errorf("storage: audit the endpoints offering a retired pin: %w", err)
+	}
+	unpinned, err := pgx.CollectRows(offered, func(r pgx.CollectableRow) (named, error) {
+		var n named
+		return n, r.Scan(&n.where, &n.key)
+	})
+	if err != nil {
+		return nil, fmt.Errorf("storage: audit the endpoints offering a retired pin: %w", err)
+	}
+	for _, n := range unpinned {
+		out = append(out, RulingViolation{Where: n.where + " (its node offers a key retired as a pin no :retry set; trust a key with :retry)",
+			Key: n.key, Class: writerclass.NodeProbe})
+	}
 	slices.SortFunc(out, func(a, b RulingViolation) int {
 		if c := strings.Compare(a.Where, b.Where); c != 0 {
 			return c
@@ -221,16 +255,27 @@ func (p *PG) WriterRulingViolations(ctx context.Context) ([]RulingViolation, err
 // retired row raised would otherwise stand, since nothing re-reads a series
 // that lost rows rather than gained them. A series left with no sample lets
 // its condition go; one with samples is judged against its newest, as the
-// reconcile pass judges a drifted series. Idempotent: a series that already
+// reconcile pass judges a drifted series. It runs once over what was retired
+// (a retired row it covered is marked healed), and a series that already
 // agrees changes nothing. It reports how many series it judged.
 func (p *PG) HealRetiredSeries(ctx context.Context) (int, error) {
+	// The heal covers every retirement up to now, whether or not a rule reads
+	// its key, and marks them all once done.
+	var through int64
+	if err := p.pool.QueryRow(ctx, `select coalesce(max(id), 0) from retired_sample where healed_at is null`).Scan(&through); err != nil {
+		return 0, fmt.Errorf("storage: read the unhealed retirements: %w", err)
+	}
+	if through == 0 {
+		return 0, nil
+	}
 	rows, err := p.pool.Query(ctx, `
-		select distinct r.id::text, r.name, rs.sample->>'component_id', rs.sample->>'instance'
+		select r.id::text, r.name, rs.sample->>'component_id', rs.sample->>'instance'
 		from retired_sample rs
 		join event_rule r on r.enabled and r.sample_lane = rs.lane
 		left join metric_type mt on rs.lane = 'metric' and mt.id::text = rs.sample->>'metric_type_id'
 		left join property_type pt on rs.lane = 'property' and pt.id::text = rs.sample->>'property_type_id'
-		where rs.sample->>'component_id' is not null and r.sample_key = coalesce(mt.name, pt.name)`)
+		where rs.healed_at is null and rs.id <= $1 and rs.sample->>'component_id' is not null and r.sample_key = coalesce(mt.name, pt.name)
+		group by 1, 2, 3, 4`, through)
 	if err != nil {
 		return 0, fmt.Errorf("storage: read the series a retirement touched: %w", err)
 	}
@@ -241,10 +286,19 @@ func (p *PG) HealRetiredSeries(ctx context.Context) (int, error) {
 	if err != nil {
 		return 0, fmt.Errorf("storage: read the series a retirement touched: %w", err)
 	}
+	// One series that cannot be healed (a lock held elsewhere, a legacy rule
+	// whose fire event the ruling now refuses) is logged and passed, never
+	// stopping the rest.
 	for _, c := range cands {
 		if err := p.rejudgeSeries(ctx, c, true); err != nil {
-			return 0, fmt.Errorf("storage: heal rule %s on %s/%s: %w", c.rule.Name, c.component, c.instance, err)
+			slog.Warn("a series a retirement touched could not be re-judged; the event rule reconcile takes it from here",
+				"facility", "rules", "rule", c.rule.Name, "component", c.component, "instance", c.instance, "error", err.Error())
 		}
+	}
+	// Once: every row this heal covered is marked, so a later boot judges
+	// only what a later retirement adds.
+	if _, err := p.pool.Exec(ctx, `update retired_sample set healed_at = now() where healed_at is null and id <= $1`, through); err != nil {
+		return 0, fmt.Errorf("storage: mark the healed retirements: %w", err)
 	}
 	return len(cands), nil
 }

@@ -18,8 +18,8 @@
 --    again until a :retry confirms it.
 -- 2. A node-probe row is retired when its owner is not a component, when a
 --    writer other than the node wrote it (a declared, intended or calculated
---    row, a derived event, or a command's reply, which carries its command's
---    settlement instant), when its instance names no endpoint of its
+--    row, a derived event, or a command's reply, which carries the instant
+--    its command executed), when its instance names no endpoint of its
 --    component, or when it is dated more than five minutes past the database
 --    clock (the cap new rows already obey).
 -- 3. A health row the rollup did not write, and a command-issued event no
@@ -85,23 +85,32 @@ BEGIN
     FROM gone g
     ON CONFLICT (lane, sample_id) DO NOTHING;
 
-    -- 2. Node-probe rows, on every lane.
-    WITH judged AS (
+    -- 2. Node-probe rows, on every lane. Every lookup is a join, so each
+    -- lane is one pass however long its history. A command's reply is the
+    -- observation its command's execution wrote: same component, target,
+    -- series and instant.
+    WITH replies AS (
+        SELECT DISTINCT c.component_id, ct.target_property_type_id AS type_id, c.executed_at AS ts,
+               coalesce(nullif(c.instance, ''), de.name) AS instance
+        FROM public.command c
+        JOIN public.command_type ct ON ct.id = c.command_type_id
+        LEFT JOIN public.endpoint de ON de.id = c.dispatched_endpoint_id
+        WHERE c.executed_at IS NOT NULL AND c.component_id IS NOT NULL AND ct.target_property_type_id IS NOT NULL
+    ), judged AS (
         SELECT p.id, CASE
             WHEN p.owner_kind <> 'component' THEN 'a node-probe key on an owner no node writes for'
             WHEN p.provenance <> 'observed'
                  AND NOT (p.provenance = 'declared' AND p.source = 'key-pin' AND t.name = ANY (pinnable))
                 THEN 'a node-probe key written by a writer other than the node'
-            WHEN p.provenance = 'observed' AND EXISTS (
-                    SELECT 1 FROM public.command c JOIN public.command_type ct ON ct.id = c.command_type_id
-                    WHERE ct.target_property_type_id = p.property_type_id AND c.component_id = p.component_id
-                      AND c.settled_at = p.ts)
-                THEN 'a node-probe key a command''s reply wrote'
-            WHEN NOT EXISTS (SELECT 1 FROM public.endpoint e WHERE e.component = p.component_id AND e.name = p.instance)
-                THEN 'a node-probe key under an instance that names no endpoint of its component'
+            WHEN rp.component_id IS NOT NULL THEN 'a node-probe key a command''s reply wrote'
+            WHEN e.id IS NULL THEN 'a node-probe key under an instance that names no endpoint of its component'
             WHEN p.ts > now() + interval '5 minutes' THEN 'a node-probe key dated past the database clock'
         END AS reason
-        FROM public.property p JOIN public.property_type t ON t.id = p.property_type_id
+        FROM public.property p
+        JOIN public.property_type t ON t.id = p.property_type_id
+        LEFT JOIN public.endpoint e ON e.component = p.component_id AND e.name = p.instance
+        LEFT JOIN replies rp ON p.provenance = 'observed' AND rp.component_id = p.component_id
+            AND rp.type_id = p.property_type_id AND rp.ts = p.ts AND rp.instance = p.instance
         WHERE t.name = ANY (node_probe)
     ), gone AS (
         DELETE FROM public.property p USING judged j
@@ -116,11 +125,12 @@ BEGIN
         SELECT m.id, CASE
             WHEN m.owner_kind <> 'component' THEN 'a node-probe key on an owner no node writes for'
             WHEN m.provenance <> 'observed' THEN 'a node-probe key written by a writer other than the node'
-            WHEN NOT EXISTS (SELECT 1 FROM public.endpoint e WHERE e.component = m.component_id AND e.name = m.instance)
-                THEN 'a node-probe key under an instance that names no endpoint of its component'
+            WHEN e.id IS NULL THEN 'a node-probe key under an instance that names no endpoint of its component'
             WHEN m.ts > now() + interval '5 minutes' THEN 'a node-probe key dated past the database clock'
         END AS reason
-        FROM public.metric m JOIN public.metric_type t ON t.id = m.metric_type_id
+        FROM public.metric m
+        JOIN public.metric_type t ON t.id = m.metric_type_id
+        LEFT JOIN public.endpoint e ON e.component = m.component_id AND e.name = m.instance
         WHERE t.name = ANY (node_probe)
     ), gone AS (
         DELETE FROM public.metric m USING judged j
@@ -132,24 +142,30 @@ BEGIN
     ON CONFLICT (lane, sample_id) DO NOTHING;
 
     -- 2 and 3 on the event lane: node-probe events, and command-issued events
-    -- no command points at.
-    WITH judged AS (
+    -- no command points at. A row another row references stays.
+    WITH caused AS (
+        SELECT DISTINCT caused_event_id AS id FROM public.command WHERE caused_event_id IS NOT NULL
+    ), sourced AS (
+        SELECT DISTINCT source_event_id AS id FROM public.event WHERE source_event_id IS NOT NULL
+    ), judged AS (
         SELECT ev.id, CASE
             WHEN t.name = 'command-issued' THEN
-                CASE WHEN NOT EXISTS (SELECT 1 FROM public.command c WHERE c.caused_event_id = ev.id)
-                     THEN 'a command lifecycle event no command issued' END
+                CASE WHEN cz.id IS NULL THEN 'a command lifecycle event no command issued' END
             WHEN ev.owner_kind <> 'component' THEN 'a node-probe key on an owner no node writes for'
             WHEN ev.provenance <> 'observed' OR ev.origin <> 'caught' OR ev.derived_by_rule_id IS NOT NULL
                  OR ev.source_rule IS NOT NULL
                 THEN 'a node-probe key written by a writer other than the node'
-            WHEN NOT EXISTS (SELECT 1 FROM public.endpoint e WHERE e.component = ev.component_id AND e.name = ev.instance)
-                THEN 'a node-probe key under an instance that names no endpoint of its component'
+            WHEN e.id IS NULL THEN 'a node-probe key under an instance that names no endpoint of its component'
             WHEN ev.ts > now() + interval '5 minutes' THEN 'a node-probe key dated past the database clock'
         END AS reason
-        FROM public.event ev JOIN public.event_type t ON t.id = ev.event_type_id
+        FROM public.event ev
+        JOIN public.event_type t ON t.id = ev.event_type_id
+        LEFT JOIN caused cz ON cz.id = ev.id
+        LEFT JOIN sourced sz ON sz.id = ev.id
+        LEFT JOIN public.endpoint e ON e.component = ev.component_id AND e.name = ev.instance
         WHERE (t.name = ANY (node_probe) OR t.name = 'command-issued')
-          AND NOT EXISTS (SELECT 1 FROM public.event x WHERE x.source_event_id = ev.id)
-          AND NOT EXISTS (SELECT 1 FROM public.command c WHERE c.caused_event_id = ev.id AND t.name <> 'command-issued')
+          AND sz.id IS NULL
+          AND (t.name = 'command-issued' OR cz.id IS NULL)
     ), gone AS (
         DELETE FROM public.event ev USING judged j
         WHERE j.id = ev.id AND j.reason IS NOT NULL

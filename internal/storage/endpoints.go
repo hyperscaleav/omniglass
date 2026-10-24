@@ -819,16 +819,25 @@ func (p *PG) EndpointKeyPin(ctx context.Context, componentRef, endpoint, transpo
 // it), and no read trusts it as the pin.
 const pinSource = string(writerclass.KeyPin)
 
-// retiredPinSQL matches an observed pin row (aliased o, its endpoint's
-// component and instance at $1 and $2) whose key is one a backfill retired as
-// a declared pin no :retry set (ADR-0163): such a key is never taken as the
-// pin from the observed series, however it comes back (a node still holding
-// it in memory republishes it), until a :retry declares it.
-const retiredPinSQL = `select 1 from retired_sample r
+// retiredPinSQL matches an observed pin row (aliased o; comp and inst are
+// the SQL its endpoint's component id, as text, and instance read from) whose
+// key a backfill retired as a declared pin no :retry set, published after
+// that declared row and never before it (ADR-0163): such a key is never taken
+// as the pin from the observed series, however it comes back (a node still
+// holding it in memory republishes it), until a :retry declares it. A key the
+// node learned before the plant stays its own, as the backfill's echo rule
+// keeps it.
+func retiredPinSQL(comp, inst string) string {
+	return `select 1 from retired_sample r
 	where r.lane = 'property' and r.sample->>'provenance' = 'declared'
 	  and coalesce(r.sample->>'source', '') <> '` + pinSource + `'
-	  and r.sample->>'component_id' = $1::text and r.sample->>'instance' = $2
-	  and r.sample->>'property_type_id' = o.property_type_id::text and r.sample->'value' = o.value`
+	  and r.sample->>'component_id' = ` + comp + ` and r.sample->>'instance' = ` + inst + `
+	  and r.sample->>'property_type_id' = o.property_type_id::text and r.sample->'value' = o.value
+	  and o.id > (r.sample->>'id')::bigint
+	  and not exists (select 1 from property h
+		where h.provenance = 'observed' and h.component_id = o.component_id and h.instance = o.instance
+		  and h.property_type_id = o.property_type_id and h.value = o.value and h.id < (r.sample->>'id')::bigint)`
+}
 
 // keyPin is an endpoint's key pin under its property (ssh-host-key, #1032;
 // tls-certificate, #1035): the operator's declared key, and the pin in force
@@ -848,7 +857,7 @@ func keyPin(ctx context.Context, q querier, componentID, instance, property stri
 			coalesce((select o.value #>> '{}' from property o
 			 where o.owner_kind = 'component' and o.component_id = $1::uuid and o.instance = $2 and o.provenance = 'observed'
 			   and o.property_type_id = (select id from property_type where name = $3)
-			   and not exists (`+retiredPinSQL+`)
+			   and not exists (`+retiredPinSQL("$1::text", "$2")+`)
 			 order by o.ts desc, o.id desc limit 1), '')`, componentID, instance, property).Scan(&declared, &pin); err != nil {
 		return "", "", fmt.Errorf("storage: %s pin: %w", property, err)
 	}

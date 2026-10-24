@@ -13,6 +13,9 @@ CREATE TABLE IF NOT EXISTS public.retired_sample (
     sample jsonb NOT NULL,
     reason text NOT NULL,
     retired_at timestamptz NOT NULL DEFAULT now(),
+    -- healed_at is when the boot heal re-judged the event rule series this
+    -- row's retirement touched; null until it has, so the heal runs once.
+    healed_at timestamptz,
     UNIQUE (lane, sample_id)
 );
 

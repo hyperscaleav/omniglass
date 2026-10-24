@@ -156,12 +156,14 @@ func TestLegacyBackfillRetiresWhatTheRulingRefuses(t *testing.T) {
 	}
 	// A command's reply, read off the device, recorded as an observation of
 	// a node-probe key a command type was let target before the ruling: the
-	// row carries the command's settlement instant. And a collection-failed
+	// row carries the instant the command executed. And a collection-failed
 	// an event rule derived.
 	exec(`insert into command_type (name, description, settle_window_seconds, target_property_type_id, official)
 		values ('legacy-reach', '', 30, (select id from property_type where name = 'endpoint-reachable'), false)`)
-	exec(`insert into command (ts, owner_kind, component_id, command_type_id, instance, status, settled_at)
-		values ($2, 'component', $1::uuid, (select id from command_type where name = 'legacy-reach'), 'ssh', 'settled', $2::timestamptz + interval '1 minute')`,
+	// The command settled at issue (no value), and its reply landed a
+	// minute later, stamped with its execution.
+	exec(`insert into command (ts, owner_kind, component_id, command_type_id, instance, status, settled_at, executed_at)
+		values ($2, 'component', $1::uuid, (select id from command_type where name = 'legacy-reach'), 'ssh', 'settled', $2, $2::timestamptz + interval '1 minute')`,
 		d1, hour)
 	exec(`insert into property (ts, owner_kind, component_id, property_type_id, instance, provenance, source, value)
 		values ($2::timestamptz + interval '1 minute', 'component', $1::uuid, (select id from property_type where name = 'endpoint-reachable'), 'ssh', 'observed', 'ssh', to_jsonb('up'::text))`,
@@ -370,6 +372,17 @@ func TestRetiredPlantedPinIsNeverRelearned(t *testing.T) {
 			t.Errorf("%s: the reachability read serves %q (%v), want none", pc.transport, pin, err)
 		}
 
+		// The boot audit names the endpoint left pinning nothing.
+		vs, err := f.gw.WriterRulingViolations(f.ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !slices.ContainsFunc(vs, func(v storage.RulingViolation) bool {
+			return v.Key == pc.property && strings.Contains(v.Where, "endpoint disp-1/"+pc.transport)
+		}) {
+			t.Errorf("%s: the boot audit does not name the endpoint whose node offers a retired pin's key: %+v", pc.transport, vs)
+		}
+
 		// An operator's :retry confirms the key: it is the pin again.
 		var epID string
 		if err := f.conn.QueryRow(f.ctx, `select id::text from endpoint where name = $1`, pc.transport).Scan(&epID); err != nil {
@@ -386,29 +399,52 @@ func TestRetiredPlantedPinIsNeverRelearned(t *testing.T) {
 
 // TestRetiredRowsReleaseTheConditionsTheyRaised: a condition, and the alarm
 // with it, that a now-retired row raised (one under an instance naming no
-// endpoint, one dated a year ahead) is released by the boot heal: the series
-// with nothing left ends its condition, the series whose newest sample is
-// the node's honest one is judged against it. A second heal changes nothing.
+// endpoint, one dated a year ahead) is released by the boot heal, and one a
+// retired row cleared is raised again: a series with nothing left ends its
+// condition, a series whose newest sample is the node's honest one is judged
+// against it. A series that cannot be healed (a legacy rule whose fire event
+// the ruling now reserves) is logged and skipped, never stopping the rest, and
+// the heal runs once over what was retired: a second heal judges nothing.
 func TestRetiredRowsReleaseTheConditionsTheyRaised(t *testing.T) {
 	r := newEdgeRig(t)
 	r.rule(storage.EventRuleSpec{Name: "edge", Severity: "high", ClearEventType: "condition-ended"})
+	if _, err := r.f.gw.CreateEventRule(r.ctx, "", storage.EventRuleSpec{Name: "legacy", SampleKey: "endpoint-reachable",
+		Fire: criteria("eq", "down"), Clear: ptrCriteria(criteria("eq", "up")), FireEventType: "condition-started",
+		Selector: storage.EventRuleSelector{Components: []string{"bar-1"}}}, r.f.all); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := r.f.conn.Exec(r.ctx, `insert into endpoint (name, transport, component, params)
-		values ('tcp', 'tcp', (select id from component where name = 'bar-1'), '{"target":"127.0.0.1:1"}'::jsonb)`); err != nil {
+		select v.name, v.name, (select id from component where name = 'bar-1'), '{"target":"127.0.0.1:1"}'::jsonb
+		from (values ('tcp'), ('http')) v(name)`); err != nil {
 		t.Fatal(err)
 	}
 	up, _ := legacyBackfillSQL(t)
+	forwardDate := func(instance string) {
+		t.Helper()
+		if _, err := r.f.conn.Exec(r.ctx, `update property set ts = now() + interval '1 year' where id = (select max(id) from property
+			where property_type_id = (select id from property_type where name = 'endpoint-reachable') and instance = $1)`, instance); err != nil {
+			t.Fatal(err)
+		}
+	}
 
-	// The node's honest up on tcp, then a down a year ahead; a down under an
-	// instance bar-1 has no endpoint for.
+	// tcp: the node's honest up, then a down a year ahead. ghost: a down
+	// under an instance bar-1 has no endpoint for. http: the node's honest
+	// down, then an up a year ahead that cleared it.
 	r.observe("tcp", "up")
 	r.observe("tcp", "down")
-	if _, err := r.f.conn.Exec(r.ctx, `update property set ts = now() + interval '1 year' where id = (select max(id) from property
-		where property_type_id = (select id from property_type where name = 'endpoint-reachable') and instance = 'tcp')`); err != nil {
-		t.Fatal(err)
-	}
+	forwardDate("tcp")
 	r.observe("ghost", "down")
-	if r.openAlarm("tcp") == "" || r.openAlarm("ghost") == "" || r.conditions() != 2 {
-		t.Fatalf("the seed raised alarms tcp %q, ghost %q with %d conditions; want both open", r.openAlarm("tcp"), r.openAlarm("ghost"), r.conditions())
+	r.observe("http", "down")
+	r.observe("http", "up")
+	forwardDate("http")
+	if r.openAlarm("tcp") == "" || r.openAlarm("ghost") == "" || r.openAlarm("http") != "" || r.conditions() != 2 {
+		t.Fatalf("the seed left alarms tcp %q, ghost %q, http %q with %d conditions; want tcp and ghost open",
+			r.openAlarm("tcp"), r.openAlarm("ghost"), r.openAlarm("http"), r.conditions())
+	}
+	// The legacy rule's fire event is one the ruling now reserves.
+	if _, err := r.f.conn.Exec(r.ctx, `update event_rule set fire_event_type_id = (select id from event_type where name = 'collection-failed')
+		where name = 'legacy'`); err != nil {
+		t.Fatal(err)
 	}
 	if _, err := r.f.conn.Exec(r.ctx, up); err != nil {
 		t.Fatalf("run the backfill: %v", err)
@@ -417,17 +453,52 @@ func TestRetiredRowsReleaseTheConditionsTheyRaised(t *testing.T) {
 	if err != nil {
 		t.Fatalf("heal: %v", err)
 	}
-	if n != 2 {
-		t.Errorf("the heal re-judged %d series, want 2", n)
+	if n != 6 {
+		t.Errorf("the heal judged %d series, want 6 (two rules on three series)", n)
 	}
-	if r.openAlarm("tcp") != "" || r.openAlarm("ghost") != "" || r.conditions() != 0 {
-		t.Errorf("after the heal alarms tcp %q, ghost %q with %d conditions; want none", r.openAlarm("tcp"), r.openAlarm("ghost"), r.conditions())
+	if r.openAlarm("tcp") != "" || r.openAlarm("ghost") != "" {
+		t.Errorf("after the heal alarms tcp %q, ghost %q stay open; want both released", r.openAlarm("tcp"), r.openAlarm("ghost"))
+	}
+	if r.openAlarm("http") == "" || r.conditions() != 1 {
+		t.Errorf("after the heal http's alarm is %q with %d conditions; want the honest down raised again", r.openAlarm("http"), r.conditions())
 	}
 	events := len(r.events())
-	if _, err := r.f.gw.HealRetiredSeries(r.ctx); err != nil {
-		t.Fatalf("heal again: %v", err)
+	if n, err := r.f.gw.HealRetiredSeries(r.ctx); err != nil || n != 0 {
+		t.Fatalf("a second heal judged %d series (%v), want none: it runs once over what was retired", n, err)
 	}
-	if got := len(r.events()); got != events || r.conditions() != 0 {
+	if got := len(r.events()); got != events {
 		t.Errorf("a second heal wrote %d more events", got-events)
+	}
+}
+
+// TestPinLearnedBeforeAPlantStaysThePin: a key the node learned on first use
+// before someone declared the same key through the plain property route is
+// the node's own, so retiring the declared row leaves it the pin in force.
+func TestPinLearnedBeforeAPlantStaysThePin(t *testing.T) {
+	if testing.Short() {
+		t.Skip("integration test needs Postgres")
+	}
+	f := pinFixture(t)
+	d1 := f.componentID(t, "disp-1")
+	up, _ := legacyBackfillSQL(t)
+	learned := "SHA256:" + strings.Repeat("k", 43)
+	observe := func() {
+		t.Helper()
+		if err := f.gw.InsertPropertySamples(f.ctx, storage.NodeWriter(d1, "ssh"), []storage.PropertySampleWrite{
+			{OwnerKind: "component", OwnerID: d1, Key: "ssh-host-key", Instance: "ssh", Value: learned}}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	observe()
+	f.plantPin(t, "ssh-host-key", "ssh", learned)
+	if _, err := f.conn.Exec(f.ctx, up); err != nil {
+		t.Fatalf("run the backfill: %v", err)
+	}
+	if got := f.endpointTask(t, "ssh").HostKey; got != learned {
+		t.Fatalf("after the backfill the pin is %q, want the key the node learned before the plant", got)
+	}
+	observe()
+	if got := f.endpointTask(t, "ssh").HostKey; got != learned {
+		t.Fatalf("after the node publishes it again the pin is %q, want the key it learned", got)
 	}
 }
