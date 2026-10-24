@@ -263,6 +263,30 @@ interfaces:
         publish_token: "INPUT"
         push_format: "EVT INPUT {{ .Raw }}"
 
+  # NVP as datagrams (#1037): the same line protocol over UDP, one line per
+  # datagram, the proving face for the udp transport. Each source address is
+  # its own session, so a node's endpoint, which sends every request from its
+  # own bound port, is the destination SUBSCRIBE INPUT pushes to. The face
+  # drops a seeded share of datagrams each way (loss_pct), so the driver's
+  # retries are exercised on a real wire with no NET_ADMIN. The NVP verbs are
+  # the device's commands (declared on the nvp interface above); this face
+  # declares the subject so SUBSCRIBE INPUT pushes here too.
+  - name: nvp-udp
+    protocol: udp
+    port: 51327
+    loss_pct: 5
+    doc:
+      summary: "NVP line protocol as UDP datagrams, with a seeded share lost"
+      tags: [control, udp]
+    api_surface: newtron-nvp
+    persistent: true
+    line_ending: "\r\n"
+    subjects:
+      - match: "status.video.input"
+        path: "status.video.input"
+        publish_token: "INPUT"
+        push_format: "EVT INPUT {{ .Raw }}"
+
   - name: snmp
     protocol: snmp
     port: 161
