@@ -1884,3 +1884,56 @@ func TestSeededFleetHoldsARejectedSession(t *testing.T) {
 		t.Fatalf("a second run changed the huddle's telnet endpoints: %d", n)
 	}
 }
+
+// TestSeededFleetHoldsATLSEndpoint proves the dev fleet carries the panel's
+// TLS face with an endpoint attached (#1035): the huddle's touch panel also
+// answers NVP over TLS, and the seeded newtron-nvp-tls endpoint targets its
+// simulated address at the driver's port, pinning the panel's key on first
+// use, on the dev node. A second run adds nothing.
+func TestSeededFleetHoldsATLSEndpoint(t *testing.T) {
+	ctx, conn, gw := seededFleet(t)
+	type ep struct{ host, port, mode, target, node string }
+	tlsEndpoints := func() ([]ep, error) {
+		rows, err := conn.Query(ctx, `
+			select e.inputs->>'host', e.inputs->>'port', coalesce(e.inputs->>'tls_mode', ''), e.params->>'target',
+				(select n.name from node n where n.principal_id = e.node_name)
+			from endpoint e join driver d on d.id = e.driver_id join component c on c.id = e.component join location l on l.id = c.location_id
+			where d.name = 'newtron-nvp-tls' and l.name = 'huddle' and e.name = 'tls'`)
+		if err != nil {
+			return nil, err
+		}
+		defer rows.Close()
+		var out []ep
+		for rows.Next() {
+			var e ep
+			if err := rows.Scan(&e.host, &e.port, &e.mode, &e.target, &e.node); err != nil {
+				return nil, err
+			}
+			out = append(out, e)
+		}
+		return out, rows.Err()
+	}
+	got, err := tlsEndpoints()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("huddle tls endpoints: want 1, got %+v", got)
+	}
+	var nvpHost string
+	if err := conn.QueryRow(ctx, `
+		select e.inputs->>'host'
+		from endpoint e join driver d on d.id = e.driver_id join component c on c.id = e.component join location l on l.id = c.location_id
+		where d.name = 'newtron-nvp' and l.name = 'huddle'`).Scan(&nvpHost); err != nil {
+		t.Fatalf("the huddle panel's nvp endpoint: %v", err)
+	}
+	if e := got[0]; e.host != nvpHost || e.port != "51326" || e.mode != "pin" || e.target != nvpHost+":51326" || e.node != "edge-hq" {
+		t.Fatalf("huddle tls endpoint = %+v, want host %s, port 51326, pin, on edge-hq", e, nvpHost)
+	}
+	if err := devseed.Run(ctx, gw, ""); err != nil {
+		t.Fatalf("second run: %v", err)
+	}
+	if again, err := tlsEndpoints(); err != nil || len(again) != 1 {
+		t.Fatalf("a second run changed the huddle's tls endpoints: %+v, %v", again, err)
+	}
+}

@@ -30,3 +30,23 @@ func TestValidateInterfaces(t *testing.T) {
 		}
 	}
 }
+
+// A certificate validity window shapes a face behind TLS (#1035): one on a
+// face with no tls is a profile mistake, and so is a negative one.
+func TestValidateInterfacesTLSValidity(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		iface   Interface
+		wantErr bool
+	}{
+		{"a tls line face with a window", Interface{Name: "a", Protocol: "tcp", Port: 1, TLS: true, TLSValidityDays: 10}, false},
+		{"a tls line face, the default window", Interface{Name: "a", Protocol: "tcp", Port: 1, TLS: true}, false},
+		{"a window with no tls", Interface{Name: "a", Protocol: "tcp", Port: 1, TLSValidityDays: 10}, true},
+		{"a negative window", Interface{Name: "a", Protocol: "tcp", Port: 1, TLS: true, TLSValidityDays: -1}, true},
+	} {
+		p := DeviceProfile{Interfaces: []Interface{tc.iface}}
+		if err := validateInterfaces(&p); (err != nil) != tc.wantErr {
+			t.Errorf("%s: err = %v, wantErr %v", tc.name, err, tc.wantErr)
+		}
+	}
+}

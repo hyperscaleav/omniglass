@@ -2,6 +2,7 @@ package sim
 
 import (
 	"bufio"
+	"crypto/tls"
 	"fmt"
 	"log/slog"
 	"net"
@@ -12,14 +13,15 @@ import (
 // loopback IP for its first attached registry. The engine starts each
 // persistent tcp interface with its own registry (startTCPSession).
 func (d *Device) StartTCPSession(port int) error {
-	_, err := d.startTCPSession(port, d.TCPSession())
+	_, err := d.startTCPSession(port, d.TCPSession(), nil)
 	return err
 }
 
 // startTCPSession binds one raw-TCP listener serving one registry's
-// sessions and returns the address it bound. A nil registry is a
+// sessions and returns the address it bound; with a tls config the line
+// protocol runs behind a TLS handshake (#1035). A nil registry is a
 // misconfiguration: every connect is closed.
-func (d *Device) startTCPSession(port int, reg *SessionRegistry) (net.Addr, error) {
+func (d *Device) startTCPSession(port int, reg *SessionRegistry, tlsConfig *tls.Config) (net.Addr, error) {
 	addr := fmt.Sprintf("%s:%d", d.LoopbackIP.String(), port)
 	lis, err := net.Listen("tcp", addr)
 	if err != nil {
@@ -34,11 +36,15 @@ func (d *Device) startTCPSession(port int, reg *SessionRegistry) (net.Addr, erro
 	d.tcpMu.Lock()
 	d.tcpListeners = append(d.tcpListeners, tracked)
 	d.tcpMu.Unlock()
+	var serving net.Listener = tracked
+	if tlsConfig != nil {
+		serving = tls.NewListener(tracked, tlsConfig)
+	}
 
 	go func() {
-		slog.Debug("device TCP-session started", "device", d.Hostname, "addr", addr)
+		slog.Debug("device TCP-session started", "device", d.Hostname, "addr", addr, "tls", tlsConfig != nil)
 		for {
-			conn, err := tracked.Accept()
+			conn, err := serving.Accept()
 			if err != nil {
 				if !strings.Contains(err.Error(), "closed") {
 					slog.Error("device TCP-session accept error", "device", d.Hostname, "error", err)
