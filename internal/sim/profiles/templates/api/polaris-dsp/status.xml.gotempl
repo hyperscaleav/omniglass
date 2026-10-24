@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<status xmlns="urn:polaris:dsp:1" xmlns:sys="urn:polaris:system:1">
+  <sys:device model="{{ .State | get "configuration" | get "device" | get "model" }}" serial="{{ .State | get "configuration" | get "device" | get "serial" }}">
+    <sys:firmware>{{ .State | get "configuration" | get "firmware" | get "version" }}</sys:firmware>
+    <sys:uptime unit="s">{{ .State | get "status" | get "device" | get "uptime" }}</sys:uptime>
+  </sys:device>
+  <dsp>
+    <cpuLoad unit="%">{{ .State | get "status" | get "dsp" | get "cpu_load" }}</cpuLoad>
+    <temperature unit="C">{{ .State | get "status" | get "dsp" | get "temperature" }}</temperature>
+    <fan rpm="{{ .State | get "status" | get "dsp" | get "fan_rpm" }}"/>
+  </dsp>
+</status>

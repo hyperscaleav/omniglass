@@ -257,6 +257,8 @@
             "",
             "basic",
             "header",
+            "bearer",
+            "query",
             "password"
           ]
         },
@@ -284,6 +286,10 @@
         },
         "header": {
           "type": "string"
+        },
+        "query": {
+          "type": "string",
+          "description": "The query parameter a query-auth http face reads its api key from; apikey when empty."
         },
         "realm": {
           "type": "string"

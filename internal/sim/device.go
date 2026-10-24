@@ -176,6 +176,16 @@ const (
 	// mismatched header returns 401 with a JSON error body. The
 	// request header name is configurable; default "X-API-Key".
 	HTTPAuthHeader HTTPAuthMode = "header"
+
+	// HTTPAuthBearer enforces a bearer token: Authorization: Bearer
+	// <APIKey> (#902). A missing or mismatched token returns 401 with a
+	// WWW-Authenticate bearer challenge.
+	HTTPAuthBearer HTTPAuthMode = "bearer"
+
+	// HTTPAuthQuery enforces an API key carried as a query parameter
+	// (#902), named by QueryName (default "apikey"), the shape some gear's
+	// web API takes its key in.
+	HTTPAuthQuery HTTPAuthMode = "query"
 )
 
 // HTTPAuth holds the per-device HTTP auth gate. Zero value (Mode = "")
@@ -194,6 +204,7 @@ type HTTPAuth struct {
 	Password    string
 	APIKey      string
 	HeaderName  string
+	QueryName   string
 	Realm       string
 	PublicPaths []string
 }
@@ -296,6 +307,10 @@ type Device struct {
 	// tlsID is the key and certificate the device's tls line face serves
 	// (#1035), derived from its id so it is the same on every run.
 	tlsID tlsIdentity
+	// httpsID is the key and certificate the device's https faces serve
+	// (#902): an ECDSA key derived from its id, so it is the same on every
+	// run and a pinned https endpoint survives a simulator restart.
+	httpsID tlsIdentity
 	// sshHostKey is the device's SSH host key, minted on the first StartSSH
 	// and kept across listener restarts, as a real device keeps its key; a
 	// test rotates it to model a replaced or reimaged device (#1032).
@@ -1319,9 +1334,29 @@ func (d *Device) StartHTTP(port int, tlsCert *tls.Certificate) error {
 	return err
 }
 
+// startHTTPS binds one https listener under the device's https identity
+// (#902) and returns the address it bound.
+func (d *Device) startHTTPS(port int) (net.Addr, error) {
+	cfg, err := d.httpsServerConfig(0)
+	if err != nil {
+		return nil, fmt.Errorf("https identity: %w", err)
+	}
+	return d.startHTTPWith(port, cfg)
+}
+
 // startHTTP binds and serves one HTTP listener and returns the address it
-// bound.
+// bound; a certificate serves it behind TLS.
 func (d *Device) startHTTP(port int, tlsCert *tls.Certificate) (net.Addr, error) {
+	var cfg *tls.Config
+	if tlsCert != nil {
+		cfg = &tls.Config{Certificates: []tls.Certificate{*tlsCert}}
+	}
+	return d.startHTTPWith(port, cfg)
+}
+
+// startHTTPWith binds and serves one HTTP listener, behind TLS when cfg is
+// set, and returns the address it bound.
+func (d *Device) startHTTPWith(port int, tlsCfg *tls.Config) (net.Addr, error) {
 	addr := fmt.Sprintf("%s:%d", d.LoopbackIP.String(), port)
 	lis, err := net.Listen("tcp", addr)
 	if err != nil {
@@ -1347,8 +1382,8 @@ func (d *Device) startHTTP(port int, tlsCert *tls.Certificate) (net.Addr, error)
 	d.httpServing.Add(1)
 	d.httpMu.Unlock()
 	scheme := "http"
-	if tlsCert != nil {
-		srv.TLSConfig = &tls.Config{Certificates: []tls.Certificate{*tlsCert}}
+	if tlsCfg != nil {
+		srv.TLSConfig = tlsCfg
 		scheme = "https"
 	}
 
@@ -1356,7 +1391,7 @@ func (d *Device) startHTTP(port int, tlsCert *tls.Certificate) (net.Addr, error)
 		defer d.httpServing.Done()
 		slog.Debug("device HTTP started", "device", d.Hostname, "scheme", scheme, "addr", addr)
 		var err error
-		if tlsCert != nil {
+		if tlsCfg != nil {
 			err = srv.ServeTLS(lis, "", "")
 		} else {
 			err = srv.Serve(lis)

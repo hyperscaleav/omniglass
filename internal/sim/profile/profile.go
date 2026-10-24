@@ -252,13 +252,16 @@ type Auth struct {
 	// RefusedCommunity is a community an snmp face knows and refuses: it
 	// answers it with authorizationError (#821), where any community but its
 	// own is dropped silently.
-	RefusedCommunity string   `yaml:"refused_community"`
-	Enforce          bool     `yaml:"enforce"`
-	Permissive       bool     `yaml:"permissive"`
-	APIKey           string   `yaml:"api_key"`
-	Header           string   `yaml:"header"`
-	Realm            string   `yaml:"realm"`
-	PublicPaths      []string `yaml:"public_paths"`
+	RefusedCommunity string `yaml:"refused_community"`
+	Enforce          bool   `yaml:"enforce"`
+	Permissive       bool   `yaml:"permissive"`
+	APIKey           string `yaml:"api_key"`
+	Header           string `yaml:"header"`
+	// Query names the query parameter a query-auth face reads its api key
+	// from (#902); empty is apikey.
+	Query       string   `yaml:"query"`
+	Realm       string   `yaml:"realm"`
+	PublicPaths []string `yaml:"public_paths"`
 }
 
 // Route defines an HTTP route match and its template.

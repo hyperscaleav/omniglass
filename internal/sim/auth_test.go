@@ -391,3 +391,43 @@ func TestHTTPAuthFromProfile_UnknownTypeIsOpen(t *testing.T) {
 		t.Errorf("Mode = %q, want HTTPAuthNone for unknown type", got.Mode)
 	}
 }
+
+// The bearer and query auth faces (#902): a token in the Authorization
+// header, or an api key in a named query parameter, each refusing a wrong or
+// missing credential with 401.
+func TestHTTPAuth_BearerAndQuery(t *testing.T) {
+	bearer := newAuthDevice(t, HTTPAuth{Mode: HTTPAuthBearer, APIKey: "tok-1"})
+	query := newAuthDevice(t, HTTPAuth{Mode: HTTPAuthQuery, APIKey: "k-1", QueryName: "key"})
+	cases := []struct {
+		dev   *Device
+		path  string
+		auth  string
+		want  int
+		label string
+	}{
+		{bearer, "/api/status", "Bearer tok-1", 200, "the right token"},
+		{bearer, "/api/status", "Bearer tok-2", 401, "a wrong token"},
+		{bearer, "/api/status", "", 401, "no token"},
+		{bearer, "/api/status", "tok-1", 401, "a token without its scheme"},
+		{query, "/api/status?key=k-1", "", 200, "the right key"},
+		{query, "/api/status?key=k-2", "", 401, "a wrong key"},
+		{query, "/api/status?apikey=k-1", "", 401, "the key under another name"},
+	}
+	for _, tc := range cases {
+		req := httptest.NewRequest("GET", tc.path, nil)
+		if tc.auth != "" {
+			req.Header.Set("Authorization", tc.auth)
+		}
+		w := httptest.NewRecorder()
+		tc.dev.ServeHTTP(w, req)
+		if w.Code != tc.want {
+			t.Errorf("%s: status %d, want %d", tc.label, w.Code, tc.want)
+		}
+	}
+	if got := httpAuthFromProfile(profile.Auth{Type: "query", APIKey: "k", Query: "token", Enforce: true}); got.Mode != HTTPAuthQuery || got.QueryName != "token" {
+		t.Fatalf("a query profile = %+v", got)
+	}
+	if got := httpAuthFromProfile(profile.Auth{Type: "bearer", APIKey: "t", Enforce: true}); got.Mode != HTTPAuthBearer || got.APIKey != "t" {
+		t.Fatalf("a bearer profile = %+v", got)
+	}
+}
