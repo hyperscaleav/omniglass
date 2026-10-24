@@ -150,6 +150,9 @@ func validateHTTPRequest(what string, r Request, command bool, ss *SessionSpec) 
 	if !strings.HasPrefix(r.Path, "/") {
 		return fmt.Errorf("driver: %s path %q must start with /", what, r.Path)
 	}
+	if strings.ContainsAny(r.Path, "?#") {
+		return fmt.Errorf("driver: %s path %q carries a query or a fragment; declare query parameters in query", what, r.Path)
+	}
 	if !slices.Contains(httpMethods, r.MethodOf()) {
 		return fmt.Errorf("driver: %s method %q is not one of %s", what, r.Method, strings.Join(httpMethods, ", "))
 	}

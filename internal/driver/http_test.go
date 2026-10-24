@@ -92,6 +92,7 @@ func TestHTTPRefusals(t *testing.T) {
 	}{
 		{"a poll with no path", func(s *driver.Spec) { s.Polls[0].Request.Path = "" }, "path"},
 		{"a relative path", func(s *driver.Spec) { s.Polls[0].Request.Path = "api/status" }, "/"},
+		{"a query in the path", func(s *driver.Spec) { s.Polls[0].Request.Path = "/api/status?x=1" }, "query"},
 		{"a line on http", func(s *driver.Spec) { s.Polls[0].Request.Line = "GET" }, "line"},
 		{"an oid emit", func(s *driver.Spec) { s.Polls[0].Emits[0].Extract = driver.Extract{OID: "1.3"} }, "oid"},
 		{"an xpath emit on a json response", func(s *driver.Spec) { s.Polls[0].Emits[0].Extract = driver.Extract{XPath: "//a"} }, "format"},
