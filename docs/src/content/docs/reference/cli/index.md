@@ -4121,6 +4121,8 @@ Run the control-plane server (HTTP API)
 omniglass server
 ```
 
+Runs the control plane: applies pending migrations and the boot seed, then serves the HTTP API on OMNIGLASS_ADDR and hosts the embedded NATS bus nodes connect to on OMNIGLASS_NATS_ADDR. Either address may name port 0, which binds whatever free port the kernel hands out; set OMNIGLASS_READY_FILE to a path and, once both listeners are bound, the server writes the addresses it got there as JSON (addr, nats_addr, and the nats_url it advertises to nodes). A file already at that path is cleared first thing at boot, and the server removes its own at a graceful shutdown (SIGINT or SIGTERM). A supervisor or a test reads the ports from that file rather than picking one and hoping it stays free. Configured by environment; see the deployment guides.
+
 ## `omniglass session`
 
 Commands for the session resource

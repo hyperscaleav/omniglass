@@ -45,21 +45,7 @@ func TestImpairingASimulatedDeviceShowsInCollection(t *testing.T) {
 		t.Fatalf("go build: %v\n%s", err, out)
 	}
 	dsn := storagetest.NewDSN(t)
-	addr := "127.0.0.1:" + freePort(t)
-	natsPort := freePort(t)
-	srvCtx, cancel := context.WithCancel(ctx)
-	defer cancel()
-	srv := exec.CommandContext(srvCtx, binPath, "server")
-	srv.Env = append(os.Environ(), "OMNIGLASS_DSN="+dsn, "OMNIGLASS_ADDR="+addr,
-		"OMNIGLASS_NATS_ADDR=127.0.0.1:"+natsPort, "OMNIGLASS_NATS_URL=nats://127.0.0.1:"+natsPort,
-		"OMNIGLASS_NATS_STORE_DIR="+t.TempDir(), "OMNIGLASS_DATA_DIR="+t.TempDir())
-	srv.Stdout, srv.Stderr = os.Stderr, os.Stderr
-	if err := srv.Start(); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { cancel(); _ = srv.Wait() })
-	server := "http://" + addr
-	pollHealthz(t, server+"/api/v1/healthz")
+	server := startServer(t, binPath, "OMNIGLASS_DSN="+dsn).URL
 
 	gw, err := storage.NewPG(ctx, dsn)
 	if err != nil {
