@@ -92,6 +92,9 @@ export function ladder(iface: ReachEndpoint): Rung[] {
   return rungs.map((r) => {
     if (r.key === gate.rung) return { ...r, status: "held" };
     if (RANK[r.key] > RANK[gate.rung]) return { ...r, status: "untried" };
+    // snmp's get carries the community (#821): beneath its auth gate the
+    // transport rung below is not sent, so it reads untried, not failed.
+    if (iface.transport === "snmp" && gate.rung === "authenticated" && r.key === "responsive") return { ...r, status: "untried" };
     return r;
   });
 }
@@ -117,7 +120,7 @@ const RUNG_NOW: Record<RungKey, Record<RungStatus, string>> = {
     pass: "The transport answered.",
     fail: "The transport did not answer.",
     held: "Refused in a way retrying cannot fix (a changed host key, a certificate, the protocol). Held until the endpoint changes or someone retries it.",
-    untried: "Not tried while a rung below is held.",
+    untried: "Not tried while a refusal holds the endpoint: a rung below it, or, for snmp, the community the get would carry.",
     unknown: "Nothing has measured it yet.",
   },
   authenticated: {
