@@ -69,6 +69,9 @@ func TestParseFragment(t *testing.T) {
 		{"a line that is not key: value", "---\ntitle T\n---\nBody", `line 2 is not a "key: value" line`},
 		{"a duplicate key", "---\ntitle: A\ntitle: B\n---\nBody", `duplicate key "title"`},
 		{"a list of non-integers", "---\nrefs: [\"a\"]\n---\nBody", "refs must be a list of positive integers"},
+		{"a list with a decimal", "---\nrefs: [1.0]\n---\nBody", "refs must be a list of positive integers"},
+		{"a list with an exponent", "---\nrefs: [1e3]\n---\nBody", "refs must be a list of positive integers"},
+		{"a zero in a list", "---\nrefs: [0]\n---\nBody", "refs must be a list of positive integers"},
 		{"a bad single-quoted string", "---\ntitle: 'it's'\n---\nBody", "not a valid single-quoted string"},
 		{"an empty body", "---\ntitle: T\n---\n\n", "empty body"},
 	} {

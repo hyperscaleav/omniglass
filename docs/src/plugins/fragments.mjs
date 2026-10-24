@@ -26,6 +26,7 @@ import { slug } from 'github-slugger';
 /** @typedef {{ name: string, data: Record<string, string | number[]>, body: string }} Fragment */
 
 const keyLine = /^([a-z][a-z_]*):(?: (.*))?$/;
+const intList = /^\[\s*(?:\d+\s*(?:,\s*\d+\s*)*)?\]$/;
 
 /**
  * Parse one fragment file. Throws an Error naming the file on any malformed line.
@@ -76,15 +77,10 @@ function parseValue(name, key, raw) {
     return raw.slice(1, -1).replace(/''/g, "'");
   }
   if (raw.startsWith('[')) {
-    let v;
-    try {
-      v = JSON.parse(raw);
-    } catch {
-      v = null;
-    }
-    if (!Array.isArray(v) || !v.every((n) => Number.isInteger(n) && n > 0)) {
-      throw new Error(`${name}: ${key} must be a list of positive integers, like [12, 34]`);
-    }
+    // Digits only, so this reader and the Go one accept exactly the same lists.
+    if (!intList.test(raw)) throw new Error(`${name}: ${key} must be a list of positive integers, like [12, 34]`);
+    const v = JSON.parse(raw);
+    if (!v.every((n) => n > 0)) throw new Error(`${name}: ${key} must be a list of positive integers, like [12, 34]`);
     return v;
   }
   return raw;

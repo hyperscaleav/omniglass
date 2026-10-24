@@ -20,6 +20,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"unicode"
 )
 
 // Fragment is one entry file of a fragment directory.
@@ -31,7 +32,10 @@ type Fragment struct {
 	BodyLine int               // the 1-indexed file line the body starts on
 }
 
-var fragmentKeyLine = regexp.MustCompile(`^([a-z][a-z_]*):(?: (.*))?$`)
+var (
+	fragmentKeyLine = regexp.MustCompile(`^([a-z][a-z_]*):(?: (.*))?$`)
+	fragmentIntList = regexp.MustCompile(`^\[\s*(?:\d+\s*(?:,\s*\d+\s*)*)?\]$`)
+)
 
 // ParseFragment parses one fragment file. Every error names the file.
 func ParseFragment(name, text string) (Fragment, error) {
@@ -83,16 +87,21 @@ func ParseFragment(name, text string) (Fragment, error) {
 			}
 			f.Fields[key] = strings.ReplaceAll(inner, "''", "'")
 		case strings.HasPrefix(raw, "["):
-			var ns []json.Number
-			bad := json.Unmarshal([]byte(raw), &ns) != nil
-			out := make([]int, 0, len(ns))
-			for _, n := range ns {
-				v, err := strconv.Atoi(n.String())
-				if err != nil || v <= 0 {
-					bad = true
-					break
+			// Digits only, so this reader and the docs build's accept the same lists.
+			bad := !fragmentIntList.MatchString(raw)
+			var out []int
+			if !bad {
+				for _, tok := range strings.FieldsFunc(strings.Trim(raw, "[]"), func(r rune) bool { return r == ',' || r == ' ' || r == '\t' }) {
+					v, err := strconv.Atoi(tok)
+					if err != nil || v <= 0 {
+						bad = true
+						break
+					}
+					out = append(out, v)
 				}
-				out = append(out, v)
+			}
+			if out == nil {
+				out = []int{}
 			}
 			if bad {
 				return f, fmt.Errorf("%s: %s must be a list of positive integers, like [12, 34]", name, key)
@@ -108,7 +117,7 @@ func ParseFragment(name, text string) (Fragment, error) {
 		start++
 	}
 	f.BodyLine = end + 2 + start
-	f.Body = strings.TrimRight(strings.Join(rest[start:], "\n"), " \t\n")
+	f.Body = strings.TrimRightFunc(strings.Join(rest[start:], "\n"), unicode.IsSpace)
 	if f.Body == "" {
 		return f, fmt.Errorf("%s: empty body", name)
 	}
