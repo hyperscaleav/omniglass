@@ -444,9 +444,10 @@ func newSessionManager(dialers map[string]collection.SessionDialer, hooks sessio
 
 // syncCertPins brings each tls endpoint's pin to what the worklist
 // delivers: a new endpoint takes the delivered pin (empty before first use),
-// a different delivered pin replaces it, and a pin the node holds that the
-// worklist does not deliver (a lost publish) is published again. An endpoint
-// that left the worklist forgets its pin.
+// a different delivered pin replaces it, a key the node learned on first use
+// that the worklist does not deliver (a lost publish) is published again, and
+// a delivered pin the worklist stops delivering (withdrawn) is forgotten. An
+// endpoint that left the worklist forgets its pin.
 func (m *sessionManager) syncCertPins(tasks []collection.TaskSpec) {
 	delivered := map[string]string{}
 	for _, t := range tasks {
@@ -467,6 +468,12 @@ func (m *sessionManager) syncCertPins(tasks []collection.TaskSpec) {
 		switch {
 		case held == nil, pin != "" && pin != held.Get():
 			m.certPins[id] = m.newCertPin(id, pin)
+		case pin == "" && held.Get() != "" && !held.Learned():
+			// A pin the server delivered and now withdraws (a declared pin
+			// the writer ruling retired, ADR-0161): forgotten, so the next
+			// connection trusts on first use; a session held under it
+			// redials, its pin no longer the endpoint's.
+			m.certPins[id] = m.newCertPin(id, "")
 		case pin == "" && held.Get() != "":
 			m.publishCertificate(id, held.Get())
 		}
@@ -611,7 +618,9 @@ func (m *sessionManager) reconcile(tasks []collection.TaskSpec) {
 	}
 	for id, h := range m.held {
 		w, ok := want[id]
-		if h.pin != nil {
+		// Only a key this node learned on first use is carried across a
+		// recycle; a delivered pin is the server's, delivered again or not.
+		if h.pin != nil && h.pin.Learned() {
 			if fp := h.pin.Get(); fp != "" {
 				m.pins[id] = fp
 			}
@@ -625,6 +634,13 @@ func (m *sessionManager) reconcile(tasks []collection.TaskSpec) {
 			// The operator pinned a different key (a replaced component's,
 			// accepted with :retry): the session redials onto it.
 			m.teardown(id, h, "its host key pin changed")
+		case h.pin != nil && w.hostKey == "" && h.pin.Get() != "" && !h.pin.Learned():
+			// The server delivered this pin and now delivers none: it was
+			// withdrawn (a declared pin the writer ruling retired, ADR-0161).
+			// The node forgets it, and the session redials trusting on first
+			// use rather than holding a key nobody vouches for.
+			delete(m.pins, id)
+			m.teardown(id, h, "its host key pin was withdrawn")
 		case h.certPin != nil && h.certPin != m.certPins[id]:
 			// The endpoint's tls pin was replaced (an operator's :retry with
 			// certificate): the session redials onto the new one.
@@ -634,10 +650,11 @@ func (m *sessionManager) reconcile(tasks []collection.TaskSpec) {
 			h.taskID, h.endpoint = w.taskID, w.endpoint
 			h.mu.Unlock()
 			h.router.set(w.listeners, w.policy)
-			if h.pin != nil && w.hostKey == "" && h.pin.Get() != "" && m.hooks.hostKey != nil {
+			if h.pin != nil && w.hostKey == "" && h.pin.Get() != "" && h.pin.Learned() && m.hooks.hostKey != nil {
 				// The worklist delivers no pin: the server never got the key
-				// this session trusted (a lost publish). Publish it again; the
-				// property lane's transition guard collapses repeats.
+				// this session trusted on first use (a lost publish). Publish
+				// it again; the property lane's transition guard collapses
+				// repeats. A delivered pin is never republished as learned.
 				m.hooks.hostKey(w.taskID, w.endpoint, h.pin.Get())
 			}
 		}
@@ -665,11 +682,11 @@ func (m *sessionManager) start(id string, w sessionWant) {
 		arm = strings.Split(w.conn.arm, "\n")
 	}
 	if w.auth != nil && w.auth.SSH != nil {
-		pin := w.hostKey
-		if pin == "" {
-			pin = m.pins[id] // the key this node trusted, carried across a recycle
+		h.pin = collection.NewHostKeyPin(w.hostKey)
+		if w.hostKey == "" {
+			// The key this node trusted on first use, carried across a recycle.
+			h.pin = collection.NewLearnedHostKeyPin(m.pins[id])
 		}
-		h.pin = collection.NewHostKeyPin(pin)
 		// Every authenticated connection publishes its key: one lost publish
 		// must not leave the server without the pin.
 		h.pin.OnTrust = func(fp string) {

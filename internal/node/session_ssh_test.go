@@ -3,6 +3,7 @@ package node
 import (
 	"context"
 	"encoding/json"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -220,5 +221,66 @@ func TestSSHHostKeyRefusalPublishesBothKeysWithItsGate(t *testing.T) {
 			t.Fatal("the host-key refusal published no gate")
 		}
 		time.Sleep(2 * time.Millisecond)
+	}
+}
+
+// A pin the worklist delivered and then stops delivering was withdrawn by the
+// server (a declared pin that never came through :retry, retired by the
+// writer ruling): the node forgets it, never republishes it as a key it
+// learned, and the next connection trusts on first use. A key the node
+// learned itself on first use is still carried (the lost-publish case above).
+func TestSSHWithdrawnPinIsForgottenAndTrustsOnFirstUseAgain(t *testing.T) {
+	dialer := &sshFakeDialer{offered: "SHA256:planted"}
+	log := &transitionLog{}
+	var mu sync.Mutex
+	var keys []string
+	m := newSessionManager(map[string]collection.SessionDialer{"ssh": dialer}, sessionHooks{
+		transition: log.record,
+		hostKey: func(_, _ string, fp string) {
+			mu.Lock()
+			keys = append(keys, fp)
+			mu.Unlock()
+		},
+	})
+	defer m.closeAll()
+	creds := map[string]map[string]string{"login": {"username": "admin", "password": "newtron"}}
+	m.reconcile([]collection.TaskSpec{sshPollTask("p1", "ep-1", "SHA256:planted", creds)})
+	log.waitFor(t, "p1", collection.SessionUp)
+
+	// The server retires the pin and delivers none; the component now offers
+	// its own key.
+	dialer.mu.Lock()
+	dialer.offered = "SHA256:real"
+	dialer.mu.Unlock()
+	mu.Lock()
+	keys = nil
+	mu.Unlock()
+	m.reconcile([]collection.TaskSpec{sshPollTask("p1", "ep-1", "", creds)})
+	deadline := time.Now().Add(3 * time.Second)
+	for dialer.count() < 2 && time.Now().Before(deadline) {
+		time.Sleep(2 * time.Millisecond)
+	}
+	if n := dialer.count(); n != 2 {
+		t.Fatalf("a withdrawn pin left the session held under it: %d connects, want a recycle", n)
+	}
+	deadline = time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline) {
+		mu.Lock()
+		got := append([]string(nil), keys...)
+		mu.Unlock()
+		if slices.Contains(got, "SHA256:real") {
+			break
+		}
+		time.Sleep(2 * time.Millisecond)
+	}
+	m.reconcile([]collection.TaskSpec{sshPollTask("p1", "ep-1", "", creds)})
+	mu.Lock()
+	got := append([]string(nil), keys...)
+	mu.Unlock()
+	if slices.Contains(got, "SHA256:planted") {
+		t.Fatalf("the node republished the withdrawn pin as its own key: %v", got)
+	}
+	if !slices.Contains(got, "SHA256:real") {
+		t.Fatalf("published %v, want the key trusted on first use after the withdrawal", got)
 	}
 }

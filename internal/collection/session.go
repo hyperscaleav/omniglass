@@ -196,13 +196,31 @@ type SSHAuth struct {
 type HostKeyPin struct {
 	mu sync.Mutex
 	fp string
+	// learned marks a key this node trusted on first use, as against one the
+	// worklist delivered: only a learned key is the node's to carry and to
+	// republish when the worklist delivers none.
+	learned bool
 	// OnTrust hears a key the session trusted on first use, or the pinned
 	// key matching on a connection that authenticated.
 	OnTrust func(fingerprint string)
 }
 
-// NewHostKeyPin pins fp ("" trusts the first key offered).
+// NewHostKeyPin pins fp, a key the worklist delivered ("" trusts the first
+// key offered).
 func NewHostKeyPin(fp string) *HostKeyPin { return &HostKeyPin{fp: fp} }
+
+// NewLearnedHostKeyPin pins fp, a key this node trusted on first use and
+// carries across a session's recycle while the server does not yet hold it.
+func NewLearnedHostKeyPin(fp string) *HostKeyPin { return &HostKeyPin{fp: fp, learned: fp != ""} }
+
+// Learned reports whether the pin is a key this node trusted on first use
+// rather than one the worklist delivered. A delivered pin the worklist stops
+// delivering was withdrawn by the server (ADR-0161): the node forgets it.
+func (p *HostKeyPin) Learned() bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.learned
+}
 
 // Get is the pinned fingerprint, "" before first use.
 func (p *HostKeyPin) Get() string {
@@ -216,7 +234,7 @@ func (p *HostKeyPin) Get() string {
 func (p *HostKeyPin) Trust(fp string) {
 	p.mu.Lock()
 	if p.fp == "" {
-		p.fp = fp
+		p.fp, p.learned = fp, true
 	}
 	on := p.OnTrust
 	p.mu.Unlock()
@@ -235,7 +253,7 @@ func (p *HostKeyPin) Admit(fp string) (pinned string, ok bool) {
 	p.mu.Lock()
 	first := p.fp == ""
 	if first {
-		p.fp = fp
+		p.fp, p.learned = fp, true
 	}
 	pinned, ok = p.fp, p.fp == fp
 	on := p.OnTrust
