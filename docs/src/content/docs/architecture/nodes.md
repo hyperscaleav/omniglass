@@ -21,9 +21,9 @@ credential is permitted only its own `<node>` subjects. Also built: running task
 `GET /nodes/{name}/logs`, the console Self-logs panel), the command wire (a per-node pull, actuated
 over the driver's binding, [ADR-0136](/architecture/decisions/#adr-0136-actuation-is-a-per-node-pull-rendered-at-dispatch)),
 driver polls on their declared schedule (#822), and, for the line protocol over `tcp`, `tls` (#1035), `telnet` (#1033) and `ssh` (#1032), held sessions
-(#816, [below](#sessions)) with their listeners and the inbound demux (#817). Still `Design`: the
+(#816, [below](#sessions)) with their listeners and the inbound demux (#817), and the line protocol as datagrams over `udp` (#1037), each endpoint on its own socket and stateless ([ADR-0162](/architecture/decisions/#adr-0162-a-udp-endpoint-binds-its-own-socket-and-its-rung-is-a-request-answered)). Still `Design`: the
 durable JetStream command queue, the session pool knobs and the held transports beyond the line
-protocol (#1034 (websocket), #1036 (mqtt), #1037 (udp), #1038 (SSE over http), #1039 (modbus/tcp), #1040 (bacnet/ip), #1041 (knxnet/ip), [ADR-0153](/architecture/decisions/#adr-0153-the-held-session-proof-is-the-line-protocol-over-tcp-other-held-transports-are-their-own-issues)), the layered `_check` reachability gate,
+protocol (#1034 (websocket), #1036 (mqtt), #1038 (SSE over http), #1039 (modbus/tcp), #1040 (bacnet/ip), #1041 (knxnet/ip), [ADR-0153](/architecture/decisions/#adr-0153-the-held-session-proof-is-the-line-protocol-over-tcp-other-held-transports-are-their-own-issues)),
 config-generation-driven cache invalidation, node self-telemetry, the node-down sweep, the JetStream
 publish-ack delivery contract (telemetry publish is fire-and-forget today, #430), tick
 scheduling and concurrency knobs, and config apply (the `:apply` flow). The credential is a shared
@@ -205,7 +205,7 @@ rung, beneath which the probe runs only the TCP connect
 [ADR-0160](/architecture/decisions/#adr-0160-tls-is-its-own-transport-over-a-shared-primitive-and-its-pin-is-the-public-key)).
 Still design below: the pool knobs.
 
-::::design[Target design: sessions and the session pool, tracked in #603; the held transports beyond the line protocol are #1034 (websocket), #1036 (mqtt), #1037 (udp), #1038 (SSE over http), #1039 (modbus/tcp), #1040 (bacnet/ip), #1041 (knxnet/ip)]
+::::design[Target design: sessions and the session pool, tracked in #603; the held transports beyond the line protocol are #1034 (websocket), #1036 (mqtt), #1038 (SSE over http), #1039 (modbus/tcp), #1040 (bacnet/ip), #1041 (knxnet/ip)]
 A stateful endpoint (`ssh`, `mqtt`, anything held open) becomes a **session** at runtime: one
 connection keyed by `(node, endpoint)`, shared by every task and command under it, handshake and
 auth paid once. A pool holds it open across ticks (reconnect, backoff, keepalive); a listener
@@ -306,7 +306,7 @@ their AND.
 |---|---|---|---|
 | L3 network | ICMP ping, **batched once per host** per tick | `icmp-reachable` / `icmp-rtt-avg` | **informational** (see verdict below); shared by every endpoint on the host |
 | L4 transport | TCP connect (tcp-family) | `tcp-open`/`tcp-connect-time` | udp has no presence check: an open udp port cannot be detected, so its transport rung is the driver's request answered (built, [ADR-0162](/architecture/decisions/#adr-0162-a-udp-endpoint-binds-its-own-socket-and-its-rung-is-a-request-answered)), and the host's port-unreachable report reads `refused` |
-| L7 app | protocol handshake: SNMP `sysUpTime` get (**`snmp.reachable`**, default-on) · SSH handshake+auth · telnet login chain | (verdict) | the SNMP get is the **primary, default** SNMP liveness (ICMP-independent); SSH/telnet are **opt-in** (`ssh_check`/`telnet_check="on"`) because their liveness credential can differ from the device's |
+| L7 app | protocol handshake: SNMP `sysUpTime` get (**`snmp.reachable`**, default-on) · SSH handshake+auth · telnet login chain | (verdict) | the SNMP get is the **primary, default** SNMP liveness (ICMP-independent, #821); the SSH and telnet login is the session rung, on when the driver declares a login (`ladder.session.enabled`, [ADR-0158](/architecture/decisions/#adr-0158-one-connection-fingerprint-gates-every-connection-on-a-ladder-the-driver-declares)) |
 
 **The verdict respects each layer's definitiveness.** A TCP connect, any L7 handshake and a
 request answered are **definitive**, so the **ping is informational**, everywhere (an

@@ -15,8 +15,8 @@ import (
 	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/collection"
-	"github.com/hyperscaleav/omniglass/internal/sim/simtest"
 	"github.com/hyperscaleav/omniglass/internal/driver"
+	"github.com/hyperscaleav/omniglass/internal/sim/simtest"
 )
 
 // The node's udp endpoints (#1037) against a real component socket on
