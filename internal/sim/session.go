@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"text/template"
 	"time"
 
@@ -258,9 +259,25 @@ type SessionRegistry struct {
 	device *Device
 	cfg    *SessionConfig
 	bus    SessionEventPublisher
+	// port is the port the listener hosting these sessions bound, set
+	// before it accepts; zero until a listener binds (a registry driven
+	// without one reports cfg's declared port).
+	port atomic.Int32
 
 	mu       sync.Mutex
 	sessions map[string]*Session
+}
+
+// setPort records the port the listener hosting these sessions bound.
+func (r *SessionRegistry) setPort(port int) { r.port.Store(int32(port)) }
+
+// eventPort is the port session events report: the one the listener bound,
+// as every hit reports, not the profile's declared port.
+func (r *SessionRegistry) eventPort() int {
+	if p := r.port.Load(); p != 0 {
+		return int(p)
+	}
+	return r.cfg.Port
 }
 
 // NewSessionRegistry returns a registry bound to a device + cfg. cfg
@@ -310,7 +327,7 @@ func (r *SessionRegistry) Open(remote string) (*Session, error) {
 			Kind:      "open",
 			SessionID: id,
 			Protocol:  r.cfg.Protocol,
-			Port:      r.cfg.Port,
+			Port:      r.eventPort(),
 			Remote:    remote,
 			DeviceID:  r.device.DeviceID,
 			Hostname:  r.device.Hostname,
@@ -340,7 +357,7 @@ func (r *SessionRegistry) Close(s *Session) {
 			Kind:      "close",
 			SessionID: s.ID,
 			Protocol:  r.cfg.Protocol,
-			Port:      r.cfg.Port,
+			Port:      r.eventPort(),
 			Remote:    s.Remote,
 			DeviceID:  r.device.DeviceID,
 			Hostname:  r.device.Hostname,
@@ -566,7 +583,7 @@ func (s *Session) emit(line []byte, sub *Subscription, value any) {
 				Kind:      "push",
 				SessionID: s.ID,
 				Protocol:  s.registry.cfg.Protocol,
-				Port:      s.registry.cfg.Port,
+				Port:      s.registry.eventPort(),
 				Remote:    s.Remote,
 				DeviceID:  s.registry.device.DeviceID,
 				Hostname:  s.registry.device.Hostname,

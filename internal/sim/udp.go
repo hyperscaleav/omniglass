@@ -12,11 +12,20 @@ import (
 // proof of UDP reachability and for vendor-specific request/response
 // protocols where the caller already controls both sides of the wire.
 func (d *Device) StartUDP(port int) error {
+	_, err := d.startUDP(port)
+	return err
+}
+
+// startUDP binds and serves the UDP echo responder and returns the address
+// it bound.
+func (d *Device) startUDP(port int) (net.Addr, error) {
 	addr := fmt.Sprintf("%s:%d", d.LoopbackIP.String(), port)
 	conn, err := net.ListenPacket("udp", addr)
 	if err != nil {
-		return fmt.Errorf("listening on %s: %w", addr, err)
+		return nil, fmt.Errorf("listening on %s: %w", addr, err)
 	}
+	addr = conn.LocalAddr().String()
+	port = boundPort(conn.LocalAddr()) // what its hits report
 	d.udpConn = conn
 
 	go func() {
@@ -41,13 +50,13 @@ func (d *Device) StartUDP(port int) error {
 					Method:    "ECHO",
 					Path:      fmt.Sprintf("%d bytes", n),
 					Remote:    from.String(),
-					LocalAddr: fmt.Sprintf("%s:%d", d.LoopbackIP.String(), port),
+					LocalAddr: addr,
 					Status:    200,
 				})
 			}
 		}
 	}()
-	return nil
+	return conn.LocalAddr(), nil
 }
 
 // StopUDP closes the UDP echo responder.

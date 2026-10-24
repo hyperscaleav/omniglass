@@ -17,10 +17,12 @@ import (
 
 	"github.com/hyperscaleav/omniglass/internal/sim/profile"
 	"github.com/hyperscaleav/omniglass/internal/sim/profiles"
+	"github.com/hyperscaleav/omniglass/internal/sim/simtest"
 )
 
-const syncPortShift = 21000
-
+// newCatalogEngine serves the embedded catalog on ephemeral ports, so a
+// test reads each face's address from the device and never collides with
+// another run on the host (#1066).
 func newCatalogEngine(t *testing.T) *Engine {
 	t.Helper()
 	store, err := profile.LoadStoreFS(profiles.FS)
@@ -28,17 +30,31 @@ func newCatalogEngine(t *testing.T) *Engine {
 		t.Fatalf("loading catalog: %v", err)
 	}
 	e := NewEngine(store, profiles.Templates())
-	e.SetPortMap(PrivilegedPortShift(syncPortShift))
+	e.SetPortMap(EphemeralPorts)
 	t.Cleanup(e.StopAll)
 	return e
+}
+
+// device returns the device the engine serves under id.
+func device(t *testing.T, e *Engine, id string) *Device {
+	t.Helper()
+	for _, d := range e.Devices() {
+		if d.DeviceID == id {
+			return d
+		}
+	}
+	t.Fatalf("the engine serves no %s", id)
+	return nil
 }
 
 func dspSnapshot(id, ip string) DeviceSnapshot {
 	return DeviceSnapshot{DeviceID: id, Hostname: id, LoopbackIP: ip, ProfileName: "polaris-dsp-16", Version: 1}
 }
 
-func dspURL(ip, path string) string {
-	return fmt.Sprintf("http://%s%s", net.JoinHostPort(ip, fmt.Sprint(80+syncPortShift)), path)
+// dspURL is a URL on the DSP's HTTP face, at the address it bound.
+func dspURL(t *testing.T, d *Device, path string) string {
+	t.Helper()
+	return "http://" + faceAddr(t, d, "http-api") + path
 }
 
 func dspDo(t *testing.T, method, url, body string) (int, string) {
@@ -66,27 +82,31 @@ func TestEngineSyncAddsAndRemovesDevicesKeepingState(t *testing.T) {
 	if err := e.Sync([]DeviceSnapshot{dspSnapshot("dsp-a", a)}); err != nil {
 		t.Fatalf("sync [a]: %v", err)
 	}
-	if code, body := dspDo(t, http.MethodPost, dspURL(a, "/api/channels/gain"), `{"index": 0, "gain": -21}`); code != http.StatusOK {
+	devA := device(t, e, "dsp-a")
+	if code, body := dspDo(t, http.MethodPost, dspURL(t, devA, "/api/channels/gain"), `{"index": 0, "gain": -21}`); code != http.StatusOK {
 		t.Fatalf("write to a: %d %s", code, body)
 	}
-	if code, _ := dspDo(t, http.MethodGet, dspURL(b, "/api/status"), ""); code != 0 {
-		t.Fatalf("b answered before it was synced in: %d", code)
+	if n := len(e.Devices()); n != 1 {
+		t.Fatalf("b served before it was synced in: %d devices", n)
 	}
 
 	if err := e.Sync([]DeviceSnapshot{dspSnapshot("dsp-a", a), dspSnapshot("dsp-b", b)}); err != nil {
 		t.Fatalf("sync [a b]: %v", err)
 	}
-	if code, _ := dspDo(t, http.MethodGet, dspURL(b, "/api/status"), ""); code != http.StatusOK {
+	if code, _ := dspDo(t, http.MethodGet, dspURL(t, device(t, e, "dsp-b"), "/api/status"), ""); code != http.StatusOK {
 		t.Fatalf("b after sync: %d", code)
 	}
-	if _, body := dspDo(t, http.MethodGet, dspURL(a, "/api/channels"), ""); !strings.Contains(body, "-21") {
+	if device(t, e, "dsp-a") != devA {
+		t.Fatal("a was rebuilt by a sync that left it unchanged")
+	}
+	if _, body := dspDo(t, http.MethodGet, dspURL(t, devA, "/api/channels"), ""); !strings.Contains(body, "-21") {
 		t.Fatalf("a lost its state across a sync: %s", body)
 	}
 
 	if err := e.Sync([]DeviceSnapshot{dspSnapshot("dsp-b", b)}); err != nil {
 		t.Fatalf("sync [b]: %v", err)
 	}
-	if code, _ := dspDo(t, http.MethodGet, dspURL(a, "/api/status"), ""); code != 0 {
+	if code, _ := dspDo(t, http.MethodGet, dspURL(t, devA, "/api/status"), ""); code != 0 {
 		t.Fatalf("a still answers after removal: %d", code)
 	}
 	if n := len(e.Devices()); n != 1 {
@@ -101,15 +121,42 @@ func TestEngineSyncRestartsAMovedDevice(t *testing.T) {
 	if err := e.Sync([]DeviceSnapshot{dspSnapshot("dsp", from)}); err != nil {
 		t.Fatal(err)
 	}
+	old := device(t, e, "dsp")
 	if err := e.Sync([]DeviceSnapshot{dspSnapshot("dsp", to)}); err != nil {
 		t.Fatal(err)
 	}
-	if code, _ := dspDo(t, http.MethodGet, dspURL(to, "/api/status"), ""); code != http.StatusOK {
+	moved := device(t, e, "dsp")
+	if got := faceOf(t, moved, "http-api").Addr.Addr().String(); got != to {
+		t.Fatalf("the moved device serves on %s, want %s", got, to)
+	}
+	if code, _ := dspDo(t, http.MethodGet, dspURL(t, moved, "/api/status"), ""); code != http.StatusOK {
 		t.Fatalf("new address: %d", code)
 	}
-	if code, _ := dspDo(t, http.MethodGet, dspURL(from, "/api/status"), ""); code != 0 {
+	if code, _ := dspDo(t, http.MethodGet, dspURL(t, old, "/api/status"), ""); code != 0 {
 		t.Fatalf("old address still answers: %d", code)
 	}
+}
+
+// squatHTTP holds a free port on ip and pins the engine's declared HTTP port
+// 80 to it, every other face ephemeral: a DSP on ip then cannot bind its
+// HTTP face. The squatter is the test's own, so no other run collides while
+// it holds the port; a test that releases it to rebind takes ip from
+// simtest.ClaimLoopback, so no other run can take the port in between.
+func squatHTTP(t *testing.T, e *Engine, ip string) net.Listener {
+	t.Helper()
+	squat, err := net.Listen("tcp", net.JoinHostPort(ip, "0"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { squat.Close() })
+	held := boundPort(squat.Addr())
+	e.SetPortMap(func(declared int) int {
+		if declared == 80 {
+			return held
+		}
+		return 0
+	})
+	return squat
 }
 
 // One listener that cannot bind does not keep the rest of the fleet dark; the
@@ -117,19 +164,19 @@ func TestEngineSyncRestartsAMovedDevice(t *testing.T) {
 func TestEngineSyncServesPastAFailedListener(t *testing.T) {
 	e := newCatalogEngine(t)
 	a, b := "127.88.2.1", "127.88.2.2"
-	squat, err := net.Listen("tcp", net.JoinHostPort(a, fmt.Sprint(80+syncPortShift)))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer squat.Close()
+	squatHTTP(t, e, a)
 
-	err = e.Sync([]DeviceSnapshot{dspSnapshot("dsp-a", a), dspSnapshot("dsp-b", b)})
+	// b is a video bar, which declares no port 80, so the pin is a's alone.
+	bar := DeviceSnapshot{DeviceID: "bar-b", Hostname: "bar-b", LoopbackIP: b, ProfileName: "kestrel-vroom", Version: 1}
+	err := e.Sync([]DeviceSnapshot{dspSnapshot("dsp-a", a), bar})
 	if err == nil || !strings.Contains(err.Error(), "dsp-a") {
 		t.Fatalf("sync error = %v, want one naming dsp-a", err)
 	}
-	if code, _ := dspDo(t, http.MethodGet, dspURL(b, "/api/status"), ""); code != http.StatusOK {
-		t.Fatalf("b dark because a failed: %d", code)
+	c, err := net.DialTimeout("tcp", faceAddr(t, device(t, e, "bar-b"), "http-api"), time.Second)
+	if err != nil {
+		t.Fatalf("b dark because a failed: %v", err)
 	}
+	c.Close()
 	for _, d := range e.Devices() {
 		if d.DeviceID == "dsp-a" {
 			t.Fatal("dsp-a held as served after it failed to start")
@@ -152,15 +199,16 @@ func TestEngineReportsHitsOnOneStream(t *testing.T) {
 	if err := e.Sync([]DeviceSnapshot{dspSnapshot("dsp", ip)}); err != nil {
 		t.Fatal(err)
 	}
-	dspDo(t, http.MethodGet, dspURL(ip, "/api/status"), "")
+	dsp := device(t, e, "dsp")
+	dspDo(t, http.MethodGet, dspURL(t, dsp, "/api/status"), "")
 	// A reachability probe connects and closes without a request; that is a
 	// hit too.
-	probe, err := net.Dial("tcp", net.JoinHostPort(ip, "1710"))
+	probe, err := net.Dial("tcp", faceAddr(t, dsp, "qrc"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	probe.Close()
-	g := &gosnmp.GoSNMP{Target: ip, Port: uint16(161 + syncPortShift), Community: "public",
+	g := &gosnmp.GoSNMP{Target: ip, Port: uint16(facePort(t, dsp, "snmp")), Community: "public",
 		Version: gosnmp.Version2c, Timeout: 2 * time.Second, Retries: 1}
 	if err := g.Connect(); err != nil {
 		t.Fatal(err)
@@ -169,7 +217,7 @@ func TestEngineReportsHitsOnOneStream(t *testing.T) {
 	if _, err := g.Get([]string{"1.3.6.1.4.1.55540.5.2.0"}); err != nil {
 		t.Fatalf("snmp get: %v", err)
 	}
-	out, code, err := sshExec(net.JoinHostPort(ip, fmt.Sprint(22+syncPortShift)), "admin", "polaris", "show dsp")
+	out, code, err := sshExec(faceAddr(t, dsp, "ssh-console"), "admin", "polaris", "show dsp")
 	if err != nil || code != 0 {
 		t.Fatalf("ssh: %v %d %q", err, code, out)
 	}
@@ -199,10 +247,13 @@ func TestEngineReportsHitsOnOneStream(t *testing.T) {
 			connects[h.Port] = true
 		}
 	}
-	for _, p := range []int{80 + syncPortShift, 1710, 22 + syncPortShift} {
-		if !connects[p] {
-			t.Errorf("no CONNECT hit on port %d; got %v", p, connects)
+	for _, name := range []string{"http-api", "qrc", "ssh-console"} {
+		if p := facePort(t, dsp, name); !connects[p] {
+			t.Errorf("no CONNECT hit on %s's port %d; got %v", name, p, connects)
 		}
+	}
+	if h := got["snmp"]; h.Port != facePort(t, dsp, "snmp") {
+		t.Errorf("snmp hit on port %d, want the bound %d", h.Port, facePort(t, dsp, "snmp"))
 	}
 }
 
@@ -216,7 +267,7 @@ func TestEngineSyncDerivesStateForAListedDevice(t *testing.T) {
 			t.Fatal(err)
 		}
 		defer e.StopAll()
-		_, body := dspDo(t, http.MethodGet, dspURL(ip, "/api/status"), "")
+		_, body := dspDo(t, http.MethodGet, dspURL(t, device(t, e, "dsp-stable"), "/api/status"), "")
 		i := strings.Index(body, `"serial": "`)
 		if i < 0 {
 			t.Fatalf("status has no serial: %s", body)
@@ -239,8 +290,17 @@ func TestEngineServesEachTCPInterfaceSeparately(t *testing.T) {
 		ProfileName: "tessellate-census-c1", Version: 1}}); err != nil {
 		t.Fatal(err)
 	}
-	ascii := net.JoinHostPort(ip, "5000")
-	c, err := net.DialTimeout("tcp", ascii, time.Second)
+	census := device(t, e, "census")
+	var lines []Face
+	for _, f := range census.Faces() {
+		if f.Protocol == "tcp" {
+			lines = append(lines, f)
+		}
+	}
+	if len(lines) != 2 || lines[0].Declared != 5000 || lines[1].Declared != 5001 || lines[0].Addr == lines[1].Addr {
+		t.Fatalf("census line faces = %+v, want 5000 and 5001 each on an address of its own", lines)
+	}
+	c, err := net.DialTimeout("tcp", lines[0].Addr.String(), time.Second)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -251,40 +311,79 @@ func TestEngineServesEachTCPInterfaceSeparately(t *testing.T) {
 	if !strings.Contains(string(buf[:n]), "FEED READY") {
 		t.Fatalf("port 5000 greeted %q, want the ASCII band's welcome", buf[:n])
 	}
+	// The hex band answers its own poll on its own face, though both faces
+	// asked the port map for the same port 0.
+	hex, err := net.DialTimeout("tcp", lines[1].Addr.String(), time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer hex.Close()
+	_ = hex.SetDeadline(time.Now().Add(2 * time.Second))
+	if _, err := hex.Write([]byte("\x02\xAA\x01\x03\r")); err != nil {
+		t.Fatal(err)
+	}
+	n, _ = hex.Read(buf)
+	if got := string(buf[:n]); !strings.HasPrefix(got, "\x02\xAA\x81") {
+		t.Fatalf("port 5001 answered the hex poll with %q, want the hex band's AA 81 reply", got)
+	}
 
 	e.StopAll()
-	for _, p := range []int{5000, 5001} {
-		if c, err := net.DialTimeout("tcp", net.JoinHostPort(ip, fmt.Sprint(p)), 300*time.Millisecond); err == nil {
+	for _, f := range lines {
+		if c, err := net.DialTimeout("tcp", f.Addr.String(), 300*time.Millisecond); err == nil {
 			c.Close()
-			t.Errorf("port %d still accepts after StopAll", p)
+			t.Errorf("the %d face (%s) still accepts after StopAll", f.Declared, f.Addr)
 		}
 	}
 }
 
+// pinPorts fixes the engine's port map to the ports d's faces bound, so
+// every device after binds those same ports: a test of who holds an address
+// gets the contention of fixed ports. The kernel handed those ports out on
+// d's address only, so a test binds them only on addresses it claimed
+// (simtest.ClaimLoopback), where no other run binds anything.
+func pinPorts(e *Engine, d *Device) {
+	held := map[int]int{}
+	for _, f := range d.Faces() {
+		held[f.Declared] = int(f.Addr.Port())
+	}
+	e.SetPortMap(func(declared int) int { return held[declared] })
+}
+
 // A device that takes over an address another device just left serves on
-// it: removals stop before additions start.
+// it, on the same ports: removals stop before additions start.
 func TestEngineSyncHandsAnAddressToANewDevice(t *testing.T) {
 	e := newCatalogEngine(t)
-	ip := "127.88.6.1"
+	ip := simtest.ClaimLoopback(t)
 	if err := e.Sync([]DeviceSnapshot{dspSnapshot("old", ip)}); err != nil {
 		t.Fatal(err)
 	}
+	old := device(t, e, "old")
+	pinPorts(e, old)
 	if err := e.Sync([]DeviceSnapshot{dspSnapshot("new", ip)}); err != nil {
 		t.Fatalf("handover: %v", err)
 	}
-	if code, _ := dspDo(t, http.MethodGet, dspURL(ip, "/api/status"), ""); code != http.StatusOK {
+	handed := device(t, e, "new")
+	if got, want := faceAddr(t, handed, "http-api"), faceAddr(t, old, "http-api"); got != want {
+		t.Fatalf("the new device serves on %s, want the %s the old one left", got, want)
+	}
+	if code, _ := dspDo(t, http.MethodGet, dspURL(t, handed, "/api/status"), ""); code != http.StatusOK {
 		t.Fatalf("new device on a freed address: %d", code)
 	}
-	// Two devices swapping addresses in one sync both serve.
-	a, b := "127.88.6.2", "127.88.6.3"
+	// Two devices swapping addresses in one sync both serve, each taking the
+	// ports the other just left.
+	a, b := simtest.ClaimLoopback(t), simtest.ClaimLoopback(t)
 	if err := e.Sync([]DeviceSnapshot{dspSnapshot("x", a), dspSnapshot("y", b)}); err != nil {
 		t.Fatal(err)
 	}
 	if err := e.Sync([]DeviceSnapshot{dspSnapshot("x", b), dspSnapshot("y", a)}); err != nil {
 		t.Fatalf("swap: %v", err)
 	}
-	for _, ip := range []string{a, b} {
-		if code, _ := dspDo(t, http.MethodGet, dspURL(ip, "/api/status"), ""); code != http.StatusOK {
+	for id, ip := range map[string]string{"x": b, "y": a} {
+		d := device(t, e, id)
+		if got := faceOf(t, d, "http-api").Addr.Addr().String(); got != ip {
+			t.Fatalf("after the swap %s serves on %s, want %s", id, got, ip)
+		}
+		if code, _ := dspDo(t, http.MethodGet, dspURL(t, d, "/api/status"), ""); code != http.StatusOK {
 			t.Fatalf("after the swap %s answers %d", ip, code)
 		}
 	}
@@ -294,11 +393,8 @@ func TestEngineSyncHandsAnAddressToANewDevice(t *testing.T) {
 // sync tries it again.
 func TestEngineSyncRetriesADeviceThatFailedToStart(t *testing.T) {
 	e := newCatalogEngine(t)
-	ip := "127.88.7.1"
-	squat, err := net.Listen("tcp", net.JoinHostPort(ip, fmt.Sprint(80+syncPortShift)))
-	if err != nil {
-		t.Fatal(err)
-	}
+	ip := simtest.ClaimLoopback(t)
+	squat := squatHTTP(t, e, ip)
 	if err := e.Sync([]DeviceSnapshot{dspSnapshot("dsp", ip)}); err == nil {
 		t.Fatal("sync with a squatted port reported no error")
 	}
@@ -309,7 +405,11 @@ func TestEngineSyncRetriesADeviceThatFailedToStart(t *testing.T) {
 	if err := e.Sync([]DeviceSnapshot{dspSnapshot("dsp", ip)}); err != nil {
 		t.Fatalf("retry: %v", err)
 	}
-	if code, _ := dspDo(t, http.MethodGet, dspURL(ip, "/api/status"), ""); code != http.StatusOK {
+	dsp := device(t, e, "dsp")
+	if got, want := faceAddr(t, dsp, "http-api"), squat.Addr().String(); got != want {
+		t.Fatalf("the retried device serves http on %s, want the freed %s", got, want)
+	}
+	if code, _ := dspDo(t, http.MethodGet, dspURL(t, dsp, "/api/status"), ""); code != http.StatusOK {
 		t.Fatalf("retried device: %d", code)
 	}
 }
@@ -369,13 +469,15 @@ func TestEngineSyncRebuildsADeviceWhoseProductChanged(t *testing.T) {
 func TestStopHTTPReleasesThePortBeforeItReturns(t *testing.T) {
 	defer runtime.GOMAXPROCS(runtime.GOMAXPROCS(1))
 	ip := "127.88.8.3"
+	port := 0 // the first round takes a port from the kernel; the rest rebind it
 	for i := range 50 {
 		dev := NewDevice("panel", "panel", net.ParseIP(ip), "p", 1, map[string]any{})
-		if err := dev.StartHTTP(21081, nil); err != nil {
+		if err := dev.StartHTTP(port, nil); err != nil {
 			t.Fatalf("round %d: start: %v", i, err)
 		}
+		port = boundPort(dev.HTTPAddrs()[0])
 		dev.StopHTTP()
-		lis, err := net.Listen("tcp", net.JoinHostPort(ip, "21081"))
+		lis, err := net.Listen("tcp", net.JoinHostPort(ip, fmt.Sprint(port)))
 		if err != nil {
 			t.Fatalf("round %d: the stopped listener still holds the port: %v", i, err)
 		}

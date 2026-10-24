@@ -54,12 +54,13 @@ func TestNodeTelnetSessionRejectsThenRecoversOnTheFix(t *testing.T) {
 		t.Fatalf("load profiles: %v", err)
 	}
 	engine := sim.NewEngine(store, profiles.Templates())
-	engine.SetPortMap(sim.PrivilegedPortShift(20000))
+	engine.SetPortMap(sim.EphemeralPorts)
 	t.Cleanup(engine.StopAll)
 	if err := engine.Sync([]sim.DeviceSnapshot{{DeviceID: "panel", Hostname: "panel", LoopbackIP: panelIP,
 		ProfileName: nvpProfile(t, store), Version: 1}}); err != nil {
 		t.Fatalf("serve the panel: %v", err)
 	}
+	telnetPort := panelPort(t, engine.Devices()[0], "telnet")
 
 	if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "edge-t"}, all, all); err != nil {
 		t.Fatalf("create node: %v", err)
@@ -82,7 +83,7 @@ func TestNodeTelnetSessionRejectsThenRecoversOnTheFix(t *testing.T) {
 	comp, drv, nodeName := "panel-1", "newtron-nvp-telnet", "edge-t"
 	ep, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{
 		Driver: &drv, Component: &comp, Node: &nodeName,
-		Inputs:     map[string]string{"host": panelIP, "port": fmt.Sprint(23 + 20000), "login": "panel-login"},
+		Inputs:     map[string]string{"host": panelIP, "port": fmt.Sprint(telnetPort), "login": "panel-login"},
 		SecretRead: all, CanAdmin: true,
 	}, all)
 	if err != nil {

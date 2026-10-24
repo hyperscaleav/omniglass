@@ -25,7 +25,7 @@ func TestPanelSpeaksTheNVPLineProtocol(t *testing.T) {
 		ProfileName: "newtron-panel-7", Version: 1}}); err != nil {
 		t.Fatal(err)
 	}
-	target := net.JoinHostPort(ip, fmt.Sprint(51325)) // not privileged, so not shifted
+	target := faceAddr(t, e.Devices()[0], "nvp")
 	lx := collection.NewLineExchanger()
 	ask := func(line string) string {
 		t.Helper()
@@ -58,7 +58,7 @@ func TestPanelPushesInputChangesAfterTheReply(t *testing.T) {
 		ProfileName: "newtron-panel-7", Version: 1}}); err != nil {
 		t.Fatal(err)
 	}
-	target := net.JoinHostPort(ip, "51325")
+	target := faceAddr(t, e.Devices()[0], "nvp")
 	dial := func() (net.Conn, *bufio.Reader) {
 		t.Helper()
 		c, err := net.DialTimeout("tcp", target, time.Second)

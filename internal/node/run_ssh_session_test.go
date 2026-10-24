@@ -51,19 +51,20 @@ func TestNodeSSHSessionPinsTheHostKeyAndRefusesAChange(t *testing.T) {
 	}
 	all := scope.Set{All: true}
 
-	panelIP := fmt.Sprintf("127.89.%d.4", 100+stackSeq.Add(1)%150)
+	panelIP := "127.89.16.4"
 	store, err := profile.LoadStoreFS(profiles.FS)
 	if err != nil {
 		t.Fatal(err)
 	}
 	engine := sim.NewEngine(store, profiles.Templates())
-	engine.SetPortMap(sim.PrivilegedPortShift(20000))
+	engine.SetPortMap(sim.EphemeralPorts)
 	t.Cleanup(engine.StopAll)
 	if err := engine.Sync([]sim.DeviceSnapshot{{DeviceID: "panel", Hostname: "panel", LoopbackIP: panelIP,
 		ProfileName: nvpProfile(t, store), Version: 1}}); err != nil {
 		t.Fatal(err)
 	}
 	panel := engine.Devices()[0]
+	sshPort := panelPort(t, panel, "ssh")
 
 	if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "edge-h"}, all, all); err != nil {
 		t.Fatal(err)
@@ -85,7 +86,7 @@ func TestNodeSSHSessionPinsTheHostKeyAndRefusesAChange(t *testing.T) {
 	comp, drv, nodeName := "panel-1", "newtron-nvp-ssh", "edge-h"
 	ep, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{
 		Driver: &drv, Component: &comp, Node: &nodeName,
-		Inputs:     map[string]string{"host": panelIP, "port": fmt.Sprint(22 + 20000), "login": "panel-login"},
+		Inputs:     map[string]string{"host": panelIP, "port": fmt.Sprint(sshPort), "login": "panel-login"},
 		SecretRead: all, CanAdmin: true,
 	}, all)
 	if err != nil {
@@ -161,7 +162,7 @@ func TestNodeSSHSessionPinsTheHostKeyAndRefusesAChange(t *testing.T) {
 	if err := panel.RotateSSHHostKey(); err != nil {
 		t.Fatal(err)
 	}
-	if err := panel.StartSSH(22+20000, "admin", "newtron", false); err != nil {
+	if err := panel.StartSSH(sshPort, "admin", "newtron", false); err != nil {
 		t.Fatal(err)
 	}
 	second := ssh.FingerprintSHA256(panel.SSHHostKey())

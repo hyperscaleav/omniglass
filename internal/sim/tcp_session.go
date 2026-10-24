@@ -12,16 +12,23 @@ import (
 // loopback IP for its first attached registry. The engine starts each
 // persistent tcp interface with its own registry (startTCPSession).
 func (d *Device) StartTCPSession(port int) error {
-	return d.startTCPSession(port, d.TCPSession())
+	_, err := d.startTCPSession(port, d.TCPSession())
+	return err
 }
 
 // startTCPSession binds one raw-TCP listener serving one registry's
-// sessions. A nil registry is a misconfiguration: every connect is closed.
-func (d *Device) startTCPSession(port int, reg *SessionRegistry) error {
+// sessions and returns the address it bound. A nil registry is a
+// misconfiguration: every connect is closed.
+func (d *Device) startTCPSession(port int, reg *SessionRegistry) (net.Addr, error) {
 	addr := fmt.Sprintf("%s:%d", d.LoopbackIP.String(), port)
 	lis, err := net.Listen("tcp", addr)
 	if err != nil {
-		return fmt.Errorf("listening on %s: %w", addr, err)
+		return nil, fmt.Errorf("listening on %s: %w", addr, err)
+	}
+	addr = lis.Addr().String()
+	port = boundPort(lis.Addr()) // what its hits and sessions report
+	if reg != nil {
+		reg.setPort(port)
 	}
 	tracked := trackConns(lis, d.logConnect)
 	d.tcpMu.Lock()
@@ -41,7 +48,7 @@ func (d *Device) startTCPSession(port int, reg *SessionRegistry) error {
 			go d.serveTCPSession(conn, port, reg)
 		}
 	}()
-	return nil
+	return lis.Addr(), nil
 }
 
 // StopTCPSession closes every raw-TCP listener and every connection they

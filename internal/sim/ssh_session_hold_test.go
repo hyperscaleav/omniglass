@@ -4,8 +4,6 @@ package sim
 
 import (
 	"context"
-	"fmt"
-	"net"
 	"strings"
 	"sync"
 	"testing"
@@ -25,11 +23,11 @@ import (
 // after the budget, and reads rejected for a wrong password (auth) or a
 // changed host key (host-key).
 
-func panelSSH(t *testing.T, ip, password string, pin *collection.HostKeyPin, dialer collection.SessionDialer, in collection.Inbound, arm []string) (*collection.Session, chan collection.SessionTransition) {
+func panelSSH(t *testing.T, panel *Device, password string, pin *collection.HostKeyPin, dialer collection.SessionDialer, in collection.Inbound, arm []string) (*collection.Session, chan collection.SessionTransition) {
 	t.Helper()
 	states := make(chan collection.SessionTransition, 64)
 	s := collection.StartSession(collection.SessionConfig{
-		Target: net.JoinHostPort(ip, fmt.Sprint(22+syncPortShift)), Timeout: 2 * time.Second, Dialer: dialer,
+		Target: faceAddr(t, panel, "ssh-console"), Timeout: 2 * time.Second, Dialer: dialer,
 		Auth:    &collection.SessionAuth{SSH: &collection.SSHAuth{Username: "admin", Password: password, Pin: pin}},
 		Inbound: in, Arm: arm,
 		Backoff:      func(int) time.Duration { return 20 * time.Millisecond },
@@ -43,8 +41,7 @@ func TestPanelSSHSessionOperatesRecoversAndReadsDown(t *testing.T) {
 	if testing.Short() {
 		t.Skip("real-wire ssh session test")
 	}
-	ip := "127.88.9.7"
-	panel := servePanel(t, ip)
+	panel := servePanel(t, "127.88.9.7")
 	var trustMu sync.Mutex
 	var trusted []string
 	pin := collection.NewHostKeyPin("")
@@ -54,7 +51,7 @@ func TestPanelSSHSessionOperatesRecoversAndReadsDown(t *testing.T) {
 		trustMu.Unlock()
 	}
 	in := &evtInbound{got: make(chan string, 256)}
-	s, states := panelSSH(t, ip, "newtron", pin, collection.NewSSHSessionDialer(), in, []string{"SUBSCRIBE INPUT"})
+	s, states := panelSSH(t, panel, "newtron", pin, collection.NewSSHSessionDialer(), in, []string{"SUBSCRIBE INPUT"})
 	awaitSessionState(t, states, collection.SessionUp)
 	if want := ssh.FingerprintSHA256(panel.SSHHostKey()); pin.Get() != want {
 		t.Fatalf("pinned %q on first use, want the panel's key %q", pin.Get(), want)
@@ -80,7 +77,7 @@ func TestPanelSSHSessionOperatesRecoversAndReadsDown(t *testing.T) {
 	// with the same key: the session recovers onto the same pin.
 	panel.StopSSH()
 	awaitSessionState(t, states, collection.SessionRecovering)
-	if err := panel.StartSSH(22+syncPortShift, "admin", "newtron", false); err != nil {
+	if err := panel.StartSSH(facePort(t, panel, "ssh-console"), "admin", "newtron", false); err != nil {
 		t.Fatal(err)
 	}
 	awaitSessionState(t, states, collection.SessionUp)
@@ -97,10 +94,9 @@ func TestPanelSSHWrongPasswordIsRejected(t *testing.T) {
 	if testing.Short() {
 		t.Skip("real-wire ssh session test")
 	}
-	ip := "127.88.9.8"
-	servePanel(t, ip)
+	panel := servePanel(t, "127.88.9.8")
 	dialer := &countingDialer{StagedDialer: collection.NewSSHSessionDialer()}
-	s, states := panelSSH(t, ip, "wrong", collection.NewHostKeyPin(""), dialer, nil, nil)
+	s, states := panelSSH(t, panel, "wrong", collection.NewHostKeyPin(""), dialer, nil, nil)
 	tr := awaitSessionState(t, states, collection.SessionRejected)
 	if !strings.HasPrefix(tr.Reason, "auth: the component refused the credential") || strings.Contains(tr.Reason, "wrong") {
 		t.Fatalf("rejected reason = %q", tr.Reason)
@@ -118,10 +114,9 @@ func TestPanelSSHHostKeyChangeIsRejected(t *testing.T) {
 	if testing.Short() {
 		t.Skip("real-wire ssh session test")
 	}
-	ip := "127.88.9.9"
-	panel := servePanel(t, ip)
+	panel := servePanel(t, "127.88.9.9")
 	pin := collection.NewHostKeyPin("")
-	_, states := panelSSH(t, ip, "newtron", pin, collection.NewSSHSessionDialer(), nil, nil)
+	_, states := panelSSH(t, panel, "newtron", pin, collection.NewSSHSessionDialer(), nil, nil)
 	awaitSessionState(t, states, collection.SessionUp)
 	pinned := pin.Get()
 
@@ -130,7 +125,7 @@ func TestPanelSSHHostKeyChangeIsRejected(t *testing.T) {
 	if err := panel.RotateSSHHostKey(); err != nil {
 		t.Fatal(err)
 	}
-	if err := panel.StartSSH(22+syncPortShift, "admin", "newtron", false); err != nil {
+	if err := panel.StartSSH(facePort(t, panel, "ssh-console"), "admin", "newtron", false); err != nil {
 		t.Fatal(err)
 	}
 	tr := awaitSessionState(t, states, collection.SessionRejected)
