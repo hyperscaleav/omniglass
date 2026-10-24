@@ -7831,8 +7831,11 @@ that region: `entity-blade` masked `[data-testid=blade-since]` and `fleet-place-
 `[data-testid=summary-since]`, each a hook on the since span itself, so Playwright painted each
 mask at the size of the text. The text moves with the clock (`fmtTime` prints AM or PM and leaves
 the day bare, the age reads 9s or 17s), so the same blade captured at 01:57 AM and at 06:59 PM
-painted a box one pixel apart and the zero-tolerance gate's verdict depended on when it ran: the
-class #773 fixed for table cells, met again on a `data-testid` hook. Each mask now names the row
+painted a box one pixel apart (64 changed pixels in the blade's baseline, 160 in the card's). Every
+recapture therefore rewrote both baselines with no UI change, which is how #1059 found them, and the
+gate passed only because its perceptual threshold happens to absorb a mask edge moving over a dark
+surface (#774), not because the bytes held: the class #773 fixed for table cells, met again on a
+`data-testid` hook. Each mask now names the row
 the since line sits in (`>> xpath=ancestor::div[1]` in the blade, `>> xpath=ancestor::span[1]` in
 the summary card), a flex row stretched to its card's width, so the painted box is 407 by 20 and
 285 by 44 whatever the line reads; the rows also hold the verdict (and in the card, the system's
@@ -7841,7 +7844,7 @@ a fixed-width since slot would have aligned nothing, since the line ends its row
 A sweep of every other mask found none of the class: the uuid masks stay on fixed-width monospace
 text, the timestamp masks name their cells, and every other since-line, age and timestamp mask
 already names a row or an incident entry stretched to its container (the uptime figure's box is
-pinned by its minimum width). Proven both ways. A recapture with the clock moved
+pinned by its minimum width). Proven both ways, by bytes rather than by the gate's score. A recapture with the clock moved
 (`DOCS_SHOTS_TZ=America/Los_Angeles`) changed exactly these two baselines before the fix, every
 other mask resolving to the same box, and changes none after it. `web/e2e/shotmask.spec.ts` now
 reads each mask from its page's own frontmatter rather than a copy, and its two new cases (the

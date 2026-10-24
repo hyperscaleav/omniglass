@@ -209,9 +209,12 @@ region and a mask line in the frontmatter that names a box the text cannot resiz
 - **Failure:** Playwright paints a mask at the bounding box of what the selector resolves to, so
   the box is the size of the text, and the text's width moves with the clock (`fmtTime` prints AM
   or PM and leaves the day bare, `toLocaleString` leaves the hour bare, `durationText` reads 9s or
-  17s). The baseline then moves by a column of pixels with no UI change, and the zero-tolerance
-  gate's verdict depends on when it runs: the audit trail's When column, 7px (#773); the entity
-  blade's and a system summary card's since-lines, 1px between 01:57 AM and 06:59 PM (#1081).
+  17s). The baseline then moves by a column of pixels with no UI change: every recapture rewrites
+  it, churning unrelated PRs, and the zero-tolerance gate holds only while its perceptual
+  threshold happens to absorb the moved edge (#774), failing outright when the edge crosses
+  pixels it can see. The audit trail's When column moved 7px and failed the gate (#773); the
+  entity blade's and a system summary card's since-lines moved 1px between 01:57 AM and 06:59 PM,
+  64 and 160 changed pixels the gate scored as zero (#1081).
 - **Fix:** name a container the layout pins and the text cannot resize: the cell
   (`>> xpath=ancestor::td[1]`, pinned by its column descriptor) or the row the value sits in
   (`>> xpath=ancestor::div[1]`, a flex row stretched to its card), and check the container's
