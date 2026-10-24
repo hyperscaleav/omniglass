@@ -157,6 +157,77 @@ func TestScanDecisionsDir(t *testing.T) {
 	}
 }
 
+// TestScanDecisionsIssueNumbers pins the numbering rule (#1108): the legacy
+// range runs from 0001 with no gap, and every later decision takes its issue's
+// number, named in its refs, a second decision on the issue a suffix from .2.
+func TestScanDecisionsIssueNumbers(t *testing.T) {
+	legacy := map[string]string{}
+	for _, d := range [][2]string{{"0001", "first"}, {"0002", "second"}, {"0003", "third"}} {
+		name, text := adrFile(d[0], d[1], d[1], "2026-06-27", "")
+		legacy[name] = text
+	}
+	with := func(extra map[string]string) map[string]string {
+		f := map[string]string{}
+		for k, v := range legacy {
+			f[k] = v
+		}
+		for k, v := range extra {
+			f[k] = v
+		}
+		return f
+	}
+	byIssue := func(num, slug, refs string) (string, string) {
+		return adrFile(num, slug, slug, "2026-10-24", "refs: ["+refs+"]\n")
+	}
+	clean := map[string]string{}
+	for _, d := range [][3]string{{"1100", "by-issue", "1100, 1095"}, {"1100.2", "second-on-the-issue", "1100"}, {"1200", "a-gap-above-the-legacy-range-is-fine", "1200"}, {"10000", "five-digits", "10000"}} {
+		name, text := byIssue(d[0], d[1], d[2])
+		clean[name] = text
+	}
+	if fs, err := scanDecisionsDir(decisionsFixture(t, with(clean))); err != nil || len(fs) != 0 {
+		t.Fatalf("legacy plus issue numbers: err %v, findings:\n%s", err, texts(fs))
+	}
+
+	for _, c := range []struct {
+		why   string
+		files [][3]string // number, slug, refs ("-" for no refs line)
+		want  []string
+	}{
+		{"refs that do not name the number", [][3]string{{"1100", "mismatch", "1099"}}, []string{"adr-1100-mismatch.md", "numbered by its issue, so its refs must include 1100"}},
+		{"no refs at all", [][3]string{{"1100", "no-refs", "-"}}, []string{"adr-1100-no-refs.md", "refs must include 1100"}},
+		{"two files holding one suffixed number", [][3]string{{"1100", "first", "1100"}, {"1100.2", "mine", "1100"}, {"1100.2", "theirs", "1100"}}, []string{"ADR-1100.2 is taken by both adr-1100.2-mine.md and adr-1100.2-theirs.md", "make adr-renumber FROM=1100.2 TO=1100.3 FILE="}},
+		{"two files holding one issue number", [][3]string{{"1100", "mine", "1100"}, {"1100", "theirs", "1100"}}, []string{"ADR-1100 is taken by both adr-1100-mine.md and adr-1100-theirs.md", "make adr-renumber FROM=1100 TO=1100.2 FILE="}},
+		{"a suffix with no plain decision before it", [][3]string{{"1100.2", "orphan", "1100"}}, []string{"adr-1100.2-orphan.md", "ADR-1100.2 has no ADR-1100 before it"}},
+		{"a suffix gap", [][3]string{{"1100", "first", "1100"}, {"1100.3", "third", "1100"}}, []string{"adr-1100.3-third.md", "ADR-1100.3 has no ADR-1100.2 before it"}},
+		{"a suffix on a legacy number", [][3]string{{"0003.2", "legacy-suffix", "-"}}, []string{"adr-0003.2-legacy-suffix.md", "a legacy number takes no suffix"}},
+		{"two numbers that share an anchor", [][3]string{{"1100", "first", "1100"}, {"1100.2", "second", "1100"}, {"11002", "issue", "11002"}}, []string{"ADR-11002 and ADR-1100.2 share the anchor prefix #adr-11002-"}},
+		{"a number not zero-padded to four digits", [][3]string{{"163", "short", "-"}}, []string{"adr-163-short.md", "adr-NNNN-<slug>.md"}},
+		{"an issue number padded past four digits", [][3]string{{"01100", "padded", "1100"}}, []string{"adr-01100-padded.md", "adr-NNNN-<slug>.md"}},
+		{"a suffix of one", [][3]string{{"1100.1", "one", "1100"}}, []string{"adr-1100.1-one.md", "adr-NNNN-<slug>.md"}},
+	} {
+		t.Run(c.why, func(t *testing.T) {
+			extra := map[string]string{}
+			for _, d := range c.files {
+				if d[2] == "-" {
+					name, text := adrFile(d[0], d[1], d[1], "2026-10-24", "")
+					extra[name] = text
+				} else {
+					name, text := byIssue(d[0], d[1], d[2])
+					extra[name] = text
+				}
+			}
+			fs, _ := scanDecisionsDir(decisionsFixture(t, with(extra)))
+			wantFinding(t, fs, c.want...)
+		})
+	}
+
+	t.Run("a gap below the legacy ceiling", func(t *testing.T) {
+		name, text := adrFile("0005", "skipped", "skipped", "2026-06-28", "")
+		fs, _ := scanDecisionsDir(decisionsFixture(t, with(map[string]string{name: text})))
+		wantFinding(t, fs, "ADR-0004 is missing")
+	})
+}
+
 func buildLogEntry(title, date, extra, body string) string {
 	return "---\ntitle: \"" + title + "\"\ndate: " + date + "\nrefs: [1]\n" + extra + "---\n\n" + body + "\n"
 }
@@ -270,7 +341,7 @@ func TestRenumberADR(t *testing.T) {
 	writeFile(t, filepath.Join(root, "proto", "og", "v1", "telemetry.proto"), "// Per ADR-0003.\n")
 	writeFile(t, filepath.Join(root, "internal", "foo", "blob.bin"), "ADR-0003\x00\x01binary")
 
-	changed, err := RenumberADR(root, 3, 4, RenumberOptions{})
+	changed, err := RenumberADR(root, "3", "4", RenumberOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -316,19 +387,19 @@ func TestRenumberADR(t *testing.T) {
 	}
 
 	t.Run("refuses a number that is taken", func(t *testing.T) {
-		if _, err := RenumberADR(root, 4, 2, RenumberOptions{}); err == nil || !strings.Contains(err.Error(), "ADR-0002 is taken by adr-0002-second.md") {
+		if _, err := RenumberADR(root, "4", "2", RenumberOptions{}); err == nil || !strings.Contains(err.Error(), "ADR-0002 is taken by adr-0002-second.md") {
 			t.Errorf("err = %v", err)
 		}
 	})
 	t.Run("refuses a number no file holds", func(t *testing.T) {
-		if _, err := RenumberADR(root, 9, 10, RenumberOptions{}); err == nil || !strings.Contains(err.Error(), "no decision file holds ADR-0009") {
+		if _, err := RenumberADR(root, "9", "10", RenumberOptions{}); err == nil || !strings.Contains(err.Error(), "no decision file holds ADR-0009") {
 			t.Errorf("err = %v", err)
 		}
 	})
 	t.Run("refuses a number two files hold", func(t *testing.T) {
 		_, theirs := adrFile("0004", "theirs", "Theirs", "2026-10-24", "")
 		writeFile(t, filepath.Join(dec, "adr-0004-theirs.md"), theirs)
-		if _, err := RenumberADR(root, 4, 5, RenumberOptions{}); err == nil || !strings.Contains(err.Error(), "adr-0004-mine.md") || !strings.Contains(err.Error(), "adr-0004-theirs.md") || !strings.Contains(err.Error(), "FILE=") {
+		if _, err := RenumberADR(root, "4", "5", RenumberOptions{}); err == nil || !strings.Contains(err.Error(), "adr-0004-mine.md") || !strings.Contains(err.Error(), "adr-0004-theirs.md") || !strings.Contains(err.Error(), "FILE=") {
 			t.Errorf("err = %v", err)
 		}
 	})
@@ -413,10 +484,10 @@ func TestRenumberADRRepairsTwoHolders(t *testing.T) {
 	git(t, root, "add", "-A")
 	git(t, root, "commit", "-q", "-m", "PR B")
 
-	if _, err := RenumberADR(root, 2, 3, RenumberOptions{File: "adr-0002-theirs.md", Since: since}); err == nil {
+	if _, err := RenumberADR(root, "2", "3", RenumberOptions{File: "adr-0002-theirs.md", Since: since}); err == nil {
 		t.Error("moving a decision the commits after SINCE did not add was accepted")
 	}
-	changed, err := RenumberADR(root, 2, 3, RenumberOptions{File: "adr-0002-mine.md", Since: since})
+	changed, err := RenumberADR(root, "2", "3", RenumberOptions{File: "adr-0002-mine.md", Since: since})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -446,5 +517,47 @@ func TestRenumberADRRepairsTwoHolders(t *testing.T) {
 	}
 	if !reflect.DeepEqual(changed, want) {
 		t.Errorf("changed = %v, want %v", changed, want)
+	}
+}
+
+// TestRenumberADRSuffix moves a suffixed decision (the rare clash between two
+// PRs adding a second decision to one issue, #1108): the dot form follows in
+// mentions and file names, the anchor form (the dot dropped) in links, and a
+// neighbour on the same issue keeps its number.
+func TestRenumberADRSuffix(t *testing.T) {
+	root := t.TempDir()
+	dec := filepath.Join(root, "docs", "src", "content", "decisions")
+	for _, d := range [][2]string{{"1100", "first"}, {"1100.2", "mine"}, {"1200", "plain"}} {
+		name, text := adrFile(d[0], d[1], d[1], "2026-10-24", "refs: ["+strings.Split(d[0], ".")[0]+"]\n")
+		writeFile(t, filepath.Join(dec, name), text)
+	}
+	page := filepath.Join(root, "docs", "src", "content", "docs", "architecture", "x.md")
+	writeFile(t, page, "[ADR-1100.2](/architecture/decisions/#adr-11002-mine) amends ADR-1100 (#adr-1100-first), not ADR-1100.25; adr-1100.2-mine.md.\n")
+	changed, err := RenumberADR(root, "1100.2", "1100.3", RenumberOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, _ := os.ReadFile(page)
+	if got, want := string(b), "[ADR-1100.3](/architecture/decisions/#adr-11003-mine) amends ADR-1100 (#adr-1100-first), not ADR-1100.25; adr-1100.3-mine.md.\n"; got != want {
+		t.Errorf("page:\n got %q\nwant %q", got, want)
+	}
+	if _, err := os.Stat(filepath.Join(dec, "adr-1100.3-mine.md")); err != nil {
+		t.Errorf("the suffixed file did not move: %v", err)
+	}
+	if !reflect.DeepEqual(changed, []string{"docs/src/content/decisions/adr-1100.3-mine.md", "docs/src/content/docs/architecture/x.md"}) {
+		t.Errorf("changed = %v", changed)
+	}
+
+	// A plain number moved to a suffix: the anchor drops the dot.
+	writeFile(t, page, "See [ADR-1200](/architecture/decisions/#adr-1200-plain), not ADR-1200.5.\n")
+	if _, err := RenumberADR(root, "1200", "1100.2", RenumberOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	b, _ = os.ReadFile(page)
+	if got, want := string(b), "See [ADR-1100.2](/architecture/decisions/#adr-11002-plain), not ADR-1200.5.\n"; got != want {
+		t.Errorf("plain to suffix:\n got %q\nwant %q", got, want)
+	}
+	if _, err := RenumberADR(root, "1100.2", "1100.1", RenumberOptions{}); err == nil {
+		t.Error("a suffix of one was accepted")
 	}
 }

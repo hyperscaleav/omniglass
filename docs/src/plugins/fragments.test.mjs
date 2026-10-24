@@ -4,6 +4,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
+  LEGACY_ADR_MAX,
   adrAnchor,
   directivesIn,
   expandFragments,
@@ -171,6 +172,68 @@ describe('the decision log', () => {
     ['a missing summary', frag('adr-0001-x.md', '---\ntitle: T\ndate: 2026-06-27\nstatus: A\n---\nB'), /needs a summary/],
     ['an unknown key', frag('adr-0001-x.md', '---\ntitle: T\ndate: 2026-06-27\nstatus: A\nsummary: S\nnumber: 1\n---\nB'), /unknown key "number"/],
     ['a directive in a body', frag('adr-0001-x.md', '---\ntitle: T\ndate: 2026-06-27\nstatus: A\nsummary: S\n---\n- **Date:** 2026-06-27\n\n::walkthrough{#x}'), /adr-0001-x\.md.*directive/],
+  ]) {
+    it(`refuses ${why}`, () => {
+      assert.throws(() => renderDecisionIndex([f]), msg);
+    });
+  }
+});
+
+describe('issue-numbered decisions', () => {
+  const adrN = (num, title, refs, extra = '') =>
+    frag(
+      `adr-${num}-${title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}.md`,
+      `---\ntitle: ${JSON.stringify(title)}\ndate: 2026-10-24\nstatus: Accepted\nsummary: "S"\n${refs === undefined ? '' : `refs: [${refs.join(', ')}]\n`}${extra}---\n\n- **Date:** 2026-10-24 | **Status:** Accepted\n`,
+    );
+
+  it('numbers a decision past the legacy range by its issue, its refs naming it', () => {
+    const out = renderDecisionIndex([adrN('0162', 'Last legacy'), adrN('1100', 'By issue', [1100, 1095])]);
+    assert.match(out, /\| \[ADR-0162\]\(#adr-0162-last-legacy\) \|/);
+    assert.match(out, /\| \[ADR-1100\]\(#adr-1100-by-issue\) \|/);
+    assert.equal(LEGACY_ADR_MAX, 163);
+  });
+
+  it('refuses an issue-numbered decision whose refs do not name its number', () => {
+    assert.throws(() => renderDecisionIndex([adrN('1100', 'Mismatch', [1099])]), /adr-1100-mismatch\.md: ADR-1100 is numbered by its issue, so its refs must include 1100/);
+    assert.throws(() => renderDecisionIndex([adrN('1100', 'No refs')]), /refs must include 1100/);
+  });
+
+  it('orders legacy and issue numbers by value, a suffix after its issue', () => {
+    const out = renderDecisionLog([
+      adrN('10000', 'Five digits', [10000]),
+      adrN('1100.2', 'Second on the issue', [1100]),
+      adrN('1100', 'First on the issue', [1100]),
+      adrN('0163', 'Legacy'),
+    ]);
+    assert.deepEqual(
+      out.split('\n').filter((l) => l.startsWith('### ')),
+      ['### ADR-0163: Legacy', '### ADR-1100: First on the issue', '### ADR-1100.2: Second on the issue', '### ADR-10000: Five digits'],
+    );
+  });
+
+  it('anchors a suffix where the heading renders it: the dot drops out of the slug', () => {
+    assert.equal(adrAnchor('1100.2', 'Second on the issue'), 'adr-11002-second-on-the-issue');
+    const out = renderDecisionIndex([adrN('1100', 'First', [1100]), adrN('1100.2', 'Second', [1100])]);
+    assert.match(out, /\| \[ADR-1100\.2\]\(#adr-11002-second\) \|/);
+    assert.deepEqual(missingLogIds('<h3 id="adr-1100-first"></h3><h3 id="adr-11002-second"></h3>', [adrN('1100', 'First', [1100]), adrN('1100.2', 'Second', [1100])]), []);
+  });
+
+  it('refuses two files holding one suffixed number, naming both', () => {
+    assert.throws(
+      () => renderDecisionLog([adrN('1100', 'First', [1100]), frag('adr-1100.2-mine.md', adrN('1100.2', 'Mine', [1100]).text), frag('adr-1100.2-theirs.md', adrN('1100.2', 'Theirs', [1100]).text)]),
+      (err) => {
+        assert.match(err.message, /ADR-1100\.2 is taken by both adr-1100\.2-mine\.md and adr-1100\.2-theirs\.md/);
+        assert.match(err.message, /make adr-renumber FROM=1100\.2 TO=1100\.3 FILE=/);
+        return true;
+      },
+    );
+  });
+
+  for (const [why, f, msg] of [
+    ['a number not written in four digits', adrN('163', 'Short', []), /adr-NNNN-<slug>\.md/],
+    ['a zero-padded issue number', adrN('01100', 'Padded', [1100]), /adr-NNNN-<slug>\.md/],
+    ['a suffix of one', adrN('1100.1', 'One', [1100]), /adr-NNNN-<slug>\.md/],
+    ['a suffix on a legacy number', adrN('0100.2', 'Legacy suffix'), /a legacy number takes no suffix/],
   ]) {
     it(`refuses ${why}`, () => {
       assert.throws(() => renderDecisionIndex([f]), msg);

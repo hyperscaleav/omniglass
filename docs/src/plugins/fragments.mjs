@@ -194,40 +194,60 @@ export function renderBuildLog(sources) {
     .join('\n\n');
 }
 
-const adrName = /^adr-(\d{4})-[a-z0-9][a-z0-9-]*\.md$/;
+// A decision is adr-<number>[.<suffix>]-<slug>.md. ADR-0001 to ADR-0163 are the
+// closed legacy range, numbered in sequence (#1108); every later decision takes
+// the number of the issue it was decided under, so two PRs never race for one,
+// and a second decision on the same issue a suffix from 2 (ADR-1100.2). The
+// number is written zero-padded to four digits, and only to four.
+const adrName = /^adr-(\d{4,9})(?:\.([2-9]|[1-9]\d+))?-[a-z0-9][a-z0-9-]*\.md$/;
+
+/** The highest number in the legacy, sequential range. */
+export const LEGACY_ADR_MAX = 163;
 
 /**
- * The decision log's entries, parsed, checked and in number order. Two files
- * holding one number (two PRs that each took the next free one) is refused by
- * name, since the second heading would silently take a -1 anchor.
+ * The decision log's entries, parsed, checked and in number order (by value,
+ * a suffix after its issue). Two files holding one number is refused by name,
+ * since the second heading would silently take a -1 anchor.
  * @param {FragmentSource[]} sources
  */
 function decisions(sources) {
   const byNumber = new Map();
   const out = sources.map(({ name, text }) => {
     const m = adrName.exec(name);
-    if (!m) throw new Error(`${name}: a decision is named adr-NNNN-<slug>.md (four digits, lowercase slug)`);
+    const value = m ? Number(m[1]) : NaN;
+    if (!m || m[1] !== String(value).padStart(4, '0')) {
+      throw new Error(`${name}: a decision is named adr-NNNN-<slug>.md: its issue number (or a legacy number), zero-padded to four digits, a suffix from .2 for a second decision on one issue, and a lowercase slug`);
+    }
+    const suffix = m[2] ? Number(m[2]) : 1;
+    const number = m[2] ? `${m[1]}.${m[2]}` : m[1];
     const f = parseFragment(name, text);
-    checkKeys(f, ['title', 'date', 'status', 'summary']);
+    checkKeys(f, ['title', 'date', 'status', 'summary'], ['refs']);
     checkNoDirectives(f);
-    const taken = byNumber.get(m[1]);
+    if (f.data.refs !== undefined && !Array.isArray(f.data.refs)) throw new Error(`${name}: refs must be a list, like [1108]`);
+    if (value <= LEGACY_ADR_MAX && m[2]) throw new Error(`${name}: a legacy number takes no suffix`);
+    if (value > LEGACY_ADR_MAX && !(f.data.refs ?? []).includes(value)) {
+      throw new Error(`${name}: ADR-${m[1]} is numbered by its issue, so its refs must include ${value}`);
+    }
+    const taken = byNumber.get(number);
     if (taken) {
+      const next = value > LEGACY_ADR_MAX ? `${m[1]}.${suffix + 1}` : '<the next free number>';
       throw new Error(
-        `ADR-${m[1]} is taken by both ${taken} and ${name}: renumber the one that landed second with ` +
-          `make adr-renumber FROM=${m[1]} TO=<next free number> FILE=<its file name> (see /record-decision)`,
+        `ADR-${number} is taken by both ${taken} and ${name}: renumber the one that landed second with ` +
+          `make adr-renumber FROM=${number} TO=${next} FILE=<its file name> (see /record-decision)`,
       );
     }
-    byNumber.set(m[1], name);
-    return { number: m[1], ...f };
+    byNumber.set(number, name);
+    return { number, value, suffix, ...f };
   });
-  return out.sort((a, b) => byName(a.number, b.number));
+  return out.sort((a, b) => a.value - b.value || a.suffix - b.suffix);
 }
 
 /**
  * The anchor a `### ADR-NNNN: <title>` heading renders with: github-slugger, as
  * Astro's heading ids use, over the heading's text with the inline markdown
  * (code spans, links, emphasis) reduced to its words.
- * @param {string} number four digits
+ * @param {string} number as the heading writes it: 0042, 1108, 1108.2 (the
+ *   suffix's dot drops out of the slug: #adr-NNNN2-<slug>)
  * @param {string} title the heading's markdown after "ADR-NNNN: "
  */
 export function adrAnchor(number, title) {
