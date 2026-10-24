@@ -461,8 +461,8 @@ func TestReachabilityCarriesTheTLSFacts(t *testing.T) {
 				DaysLeft    *float64   `json:"days_left"`
 			} `json:"tls"`
 			Rejection *struct {
-				Rung    string `json:"rung"`
-				Class   string `json:"class"`
+				Rung       string `json:"rung"`
+				Class      string `json:"class"`
 				PinnedKey  string `json:"pinned_key"`
 				OfferedKey string `json:"offered_key"`
 			} `json:"rejection"`
