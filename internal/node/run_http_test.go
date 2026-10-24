@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http/httptest"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -46,9 +47,11 @@ type httpStack struct {
 	ips     map[string]string      // by profile
 }
 
-// newHTTPStack serves each profile on a claimed loopback address; shape
-// adds variants to the catalog first.
-func newHTTPStack(t *testing.T, nodeName string, shape func(*profile.Store), names ...string) *httpStack {
+// newHTTPStack serves each profile pick names on a claimed loopback
+// address; shape adds variants to the catalog first. The profiles are
+// derived from the catalogs (pick), never named, so a catalog rename touches
+// the YAML and nothing here (#804).
+func newHTTPStack(t *testing.T, nodeName string, shape func(*profile.Store), pick func(*profile.Store) []string) *httpStack {
 	t.Helper()
 	ctx := context.Background()
 	dsn := storagetest.NewDSN(t)
@@ -68,6 +71,7 @@ func newHTTPStack(t *testing.T, nodeName string, shape func(*profile.Store), nam
 	if shape != nil {
 		shape(store)
 	}
+	names := pick(store)
 	engine := sim.NewEngine(store, profiles.Templates())
 	engine.SetPortMap(sim.EphemeralPorts)
 	t.Cleanup(engine.StopAll)
@@ -140,6 +144,60 @@ func (s *httpStack) attachHTTP(comp, drv, nodeName string, inputs map[string]str
 	return ep
 }
 
+// driverProfile is the simulator profile serving a product the shipped
+// driver reads, derived from both catalogs.
+func driverProfile(t *testing.T, store *profile.Store, driver string) string {
+	t.Helper()
+	raw, err := seed.FactsJSON()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var facts struct {
+		Products []struct {
+			ID       string `json:"id"`
+			DriverID string `json:"driver_id"`
+		} `json:"products"`
+	}
+	if err := json.Unmarshal(raw, &facts); err != nil {
+		t.Fatal(err)
+	}
+	var names []string
+	for _, p := range facts.Products {
+		if p.DriverID != driver {
+			continue
+		}
+		if name, _, ok := store.ForProduct(p.ID); ok {
+			names = append(names, name)
+		}
+	}
+	if len(names) == 0 {
+		t.Fatalf("no simulator profile serves a %s product", driver)
+	}
+	sort.Strings(names)
+	return names[0]
+}
+
+// xmlProfile is the simulator profile whose http face serves its status as
+// namespaced XML (GET /api/status.xml) beside an HTML dashboard.
+func xmlProfile(t *testing.T, store *profile.Store) string {
+	t.Helper()
+	var names []string
+	for name, d := range store.Devices {
+		for _, iface := range d.Interfaces {
+			for _, r := range iface.Routes {
+				if iface.Protocol == "http" && r.Match == "GET /api/status.xml" {
+					names = append(names, name)
+				}
+			}
+		}
+	}
+	if len(names) == 0 {
+		t.Fatal("no simulator profile serves GET /api/status.xml")
+	}
+	sort.Strings(names)
+	return names[0]
+}
+
 // commandStatus is the latest command of a type's recorded status.
 func (s *httpStack) commandStatus(typ string) string {
 	s.t.Helper()
@@ -173,12 +231,16 @@ func TestNodeHTTPSKestrelPollsActuatesAndPinsItsKey(t *testing.T) {
 	if testing.Short() {
 		t.Skip("integration test needs Postgres + nats-server + the simulator")
 	}
-	s := newHTTPStack(t, "edge-https", nil, "kestrel-vroom")
-	bar := s.devices["kestrel-vroom"]
+	var barProfile string
+	s := newHTTPStack(t, "edge-https", nil, func(store *profile.Store) []string {
+		barProfile = driverProfile(t, store, "kestrel-api")
+		return []string{barProfile}
+	})
+	bar := s.devices[barProfile]
 	s.component("bar-1")
 	s.secret("bar-login", "basic-auth", map[string]string{"username": "admin", "password": "kestrel"})
 	ep := s.attachHTTP("bar-1", "kestrel-api", "edge-https", map[string]string{
-		"host": s.ips["kestrel-vroom"], "port": fmt.Sprint(s.httpPort("kestrel-vroom")), "login": "bar-login"})
+		"host": s.ips[barProfile], "port": fmt.Sprint(s.httpPort(barProfile)), "login": "bar-login"})
 	if ep.Name != "https" {
 		t.Fatalf("endpoint name %q, want https", ep.Name)
 	}
@@ -187,7 +249,7 @@ func TestNodeHTTPSKestrelPollsActuatesAndPinsItsKey(t *testing.T) {
 	s.waitFor("bar-1", ep.Name, "endpoint-responsive", is("up"), "up: the handshake answered")
 	s.waitFor("bar-1", ep.Name, "tls-certificate", is(spkiOf(bar.HTTPSCertificate().RawSubjectPublicKeyInfo)), "the bar's key, trusted on first use")
 	s.waitFor("bar-1", ep.Name, "endpoint-authenticated", is("yes"), "yes: the bar accepted the login")
-	s.waitFor("bar-1", ep.Name, "model-number", is("VRoom"), "the bar's model, polled over https")
+	s.waitFor("bar-1", ep.Name, "model-number", is(fmt.Sprint(bar.ReadPath("configuration.device.model"))), "the bar's model, polled over https")
 	s.waitFor("bar-1", ep.Name, "call-state", func(v string) bool { return v == "active" || v == "idle" }, "the call state, mapped")
 	if v, ok := s.metric("bar-1", ep.Name, "volume"); !ok || fmt.Sprint(v) != fmt.Sprint(bar.ReadPath("status.audio.volume")) {
 		t.Fatalf("volume = %v (%v), want the bar's %v", v, ok, bar.ReadPath("status.audio.volume"))
@@ -286,7 +348,7 @@ func TestNodeHTTPAuthVariantsAndTheRefusedCredential(t *testing.T) {
 		t.Skip("integration test needs Postgres + nats-server + the simulator")
 	}
 	variant := func(store *profile.Store, name string, auth profile.Auth) {
-		base := *store.Devices["polaris-dsp-16"]
+		base := *store.Devices[xmlProfile(t, store)]
 		base.Name = name
 		base.Interfaces = append([]profile.Interface(nil), base.Interfaces...)
 		for i := range base.Interfaces {
@@ -296,17 +358,21 @@ func TestNodeHTTPAuthVariantsAndTheRefusedCredential(t *testing.T) {
 		}
 		store.Devices[name] = &base
 	}
+	var sensorProfile string
 	s := newHTTPStack(t, "edge-http", func(store *profile.Store) {
 		variant(store, "dsp-bearer", profile.Auth{Type: "bearer", APIKey: "dsp-token", Enforce: true})
 		variant(store, "dsp-query", profile.Auth{Type: "query", Query: "key", APIKey: "dsp-key", Enforce: true})
-	}, "tessellate-census-c1", "dsp-bearer", "dsp-query")
+	}, func(store *profile.Store) []string {
+		sensorProfile = driverProfile(t, store, "http-json")
+		return []string{sensorProfile, "dsp-bearer", "dsp-query"}
+	})
 
 	// The header key: the shipped http-json driver.
 	s.component("sensor-1")
 	census := s.secret("census-key", "api-key", map[string]string{"key": "wrong-key"})
-	sensor := s.devices["tessellate-census-c1"]
+	sensor := s.devices[sensorProfile]
 	sep := s.attachHTTP("sensor-1", "http-json", "edge-http", map[string]string{
-		"host": s.ips["tessellate-census-c1"], "port": fmt.Sprint(s.httpPort("tessellate-census-c1")), "key": "census-key"})
+		"host": s.ips[sensorProfile], "port": fmt.Sprint(s.httpPort(sensorProfile)), "key": "census-key"})
 
 	// A bearer token over namespaced XML, and a query key over HTML.
 	s.secret("dsp-token", "bearer-token", map[string]string{"token": "dsp-token"})
