@@ -142,7 +142,7 @@ func TestEndpointAPI(t *testing.T) {
 	// the offered key itself is trusted.
 	sshEp := createEndpoint(c, ownerTok, map[string]any{"transport": "ssh", "component": "comp-d", "params": map[string]any{"target": "10.0.0.7:22"}})
 	shown, offeredNow := "SHA256:"+strings.Repeat("S", 43), "SHA256:"+strings.Repeat("N", 43)
-	if err := gw.InsertPropertySamples(ctx, []storage.PropertySampleWrite{{OwnerKind: "component", OwnerID: "comp-d", Key: "endpoint-rejection",
+	if err := gw.InsertPropertySamples(ctx, storage.NodeWriter(sshEp.Name), []storage.PropertySampleWrite{{OwnerKind: "component", OwnerID: "comp-d", Key: "endpoint-rejection",
 		Instance: sshEp.Name, Value: "responsive host-key 9f86d081 SHA256:" + strings.Repeat("P", 43) + " " + offeredNow, Source: "ssh", TS: time.Now()}}); err != nil {
 		t.Fatal(err)
 	}
@@ -152,6 +152,42 @@ func TestEndpointAPI(t *testing.T) {
 		t.Fatalf("the stale refusal does not name the key offered now: %s", stale)
 	}
 	c.do(ownerTok, http.MethodPost, "/endpoints/"+sshEp.ID+":retry", map[string]any{"host_key": offeredNow}, http.StatusOK)
+
+	// A certificate key is a tls endpoint's alone (#1035): a tcp endpoint
+	// refuses one, a malformed one is refused, and the operator in scope
+	// accepts one under endpoint:retry, which a viewer lacks and an
+	// operator scoped elsewhere cannot see.
+	key := "SHA256:" + strings.Repeat("C", 43)
+	c.do(ownerTok, http.MethodPost, "/endpoints/"+ifA.ID+":retry", map[string]any{"certificate": key}, http.StatusUnprocessableEntity)
+	tlsA := createEndpoint(c, ownerTok, map[string]any{"transport": "tls", "component": "comp-a", "params": map[string]any{"target": "10.0.0.1:51326", "tls-mode": "pin"}})
+	c.do(ownerTok, http.MethodPost, "/endpoints/"+tlsA.ID+":retry", map[string]any{"certificate": "SHA256:short"}, http.StatusUnprocessableEntity)
+	c.do(viewerAllTok, http.MethodPost, "/endpoints/"+tlsA.ID+":retry", map[string]any{"certificate": key}, http.StatusForbidden)
+	c.do(opBTok, http.MethodPost, "/endpoints/"+tlsA.ID+":retry", map[string]any{"certificate": key}, http.StatusNotFound)
+	c.do(ownerTok, http.MethodPost, "/endpoints/"+tlsA.ID+":retry", map[string]any{"certificate": key}, http.StatusOK)
+	if got, err := gw.LatestValue(ctx, "component", "comp-a", "tls-certificate", "tls", "declared", scope.Set{All: true}); err != nil || got == nil || string(got.Value) != `"`+key+`"` {
+		t.Fatalf("the accepted key = %+v, %v; want it declared as the endpoint's pin", got, err)
+	}
+	if pin, err := gw.EndpointKeyPin(ctx, "comp-a", "tls", "tls"); err != nil || pin != key {
+		t.Fatalf("the pin in force = %q, %v; want the accepted key", pin, err)
+	}
+	// host_key names the key the endpoint's transport pins, so the field a
+	// key refusal's trust action sends works on a tls endpoint too (#1078).
+	again := "SHA256:" + strings.Repeat("E", 43)
+	c.do(ownerTok, http.MethodPost, "/endpoints/"+tlsA.ID+":retry", map[string]any{"host_key": again}, http.StatusOK)
+	if pin, err := gw.EndpointKeyPin(ctx, "comp-a", "tls", "tls"); err != nil || pin != again {
+		t.Fatalf("the key sent as host_key = %q (%v), want it declared as the tls pin", pin, err)
+	}
+	c.do(ownerTok, http.MethodPost, "/endpoints/"+tlsA.ID+":retry", map[string]any{"host_key": again, "certificate": key}, http.StatusUnprocessableEntity)
+	// The same rule holds for a tls key (#1035 on #1078's 409): while a
+	// certificate refusal names an offered key, only that key is trusted,
+	// through certificate or host_key alike.
+	tlsOffered := "SHA256:" + strings.Repeat("O", 43)
+	if err := insertProperties(ctx, gw, []storage.PropertySampleWrite{{OwnerKind: "component", OwnerID: "comp-a", Key: "endpoint-rejection",
+		Instance: tlsA.Name, Value: "responsive certificate 9f86d081 " + again + " " + tlsOffered, Source: "tls", TS: time.Now()}}); err != nil {
+		t.Fatal(err)
+	}
+	c.do(ownerTok, http.MethodPost, "/endpoints/"+tlsA.ID+":retry", map[string]any{"certificate": key}, http.StatusConflict)
+	c.do(ownerTok, http.MethodPost, "/endpoints/"+tlsA.ID+":retry", map[string]any{"host_key": tlsOffered}, http.StatusOK)
 }
 
 // TestEndpointCreateWithAmbiguousComponentIs409 closes I1's other half: the

@@ -21,9 +21,10 @@ import (
 // TestNodeLaneLandsEveryNativeKey is the other half of #1080: the push lane
 // refuses every key only a node may write, and the node itself still writes
 // each one. A node publishes every native key (read from probekeys, so a key
-// added there is covered here) on its own telemetry subject, for its own task,
-// and every one lands under the task's component, instanced by the endpoint.
-// The refusal lives in the push route alone; nothing on the node lane reads it.
+// added there is covered here, collection-failed on the event lane among them)
+// on its own telemetry subject, for its own task, and every one lands under
+// the task's component, instanced by the endpoint: the node's writer is the
+// one the node-probe class admits (ADR-0161).
 func TestNodeLaneLandsEveryNativeKey(t *testing.T) {
 	if testing.Short() {
 		t.Skip("integration test needs Postgres + nats-server")
@@ -108,11 +109,23 @@ func TestNodeLaneLandsEveryNativeKey(t *testing.T) {
 		}
 		propertyValue[pt.Name] = v
 	}
+	eventTypes, err := gw.ListEventTypes(ctx)
+	if err != nil {
+		t.Fatalf("event types: %v", err)
+	}
+	isEvent := map[string]bool{}
+	for _, et := range eventTypes {
+		isEvent[et.Name] = true
+	}
 	batch := &ogv1.TelemetryBatch{TaskId: "t-ssh", NodeId: "node-a"}
 	native := probekeys.Native()
 	for _, key := range native {
 		if isMetric[key] {
 			batch.Metrics = append(batch.Metrics, &ogv1.MetricSample{Name: key, Value: 7})
+			continue
+		}
+		if isEvent[key] {
+			batch.Events = append(batch.Events, &ogv1.EventSample{Name: key, Message: "from the node"})
 			continue
 		}
 		v, ok := propertyValue[key]
@@ -127,13 +140,22 @@ func TestNodeLaneLandsEveryNativeKey(t *testing.T) {
 		deadline := time.Now().Add(5 * time.Second)
 		for {
 			var landed bool
-			if isMetric[key] {
+			switch {
+			case isEvent[key]:
+				evs, err := gw.ListComponentEvents(ctx, "disp-1", 0, 10)
+				if err != nil {
+					t.Fatalf("events: %v", err)
+				}
+				for _, e := range evs {
+					landed = landed || (e.Key == key && e.Instance == "ssh" && e.Message == "from the node")
+				}
+			case isMetric[key]:
 				m, err := gw.LatestMetricInstance(ctx, "disp-1", key, "ssh")
 				if err != nil {
 					t.Fatalf("latest metric %s: %v", key, err)
 				}
 				landed = m != nil && m.Value == 7 && m.Provenance == "observed"
-			} else {
+			default:
 				p, err := gw.LatestProperty(ctx, "disp-1", key, "ssh")
 				if err != nil {
 					t.Fatalf("latest property %s: %v", key, err)

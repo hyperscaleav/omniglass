@@ -250,6 +250,9 @@ func TestCalcRules(t *testing.T) {
 func TestCalcRuleOutputCollected(t *testing.T) {
 	r := newCalcRig(t)
 	for _, key := range probekeys.Native() {
+		if key == probekeys.CollectionFailed {
+			continue // an event: no calc rule outputs one
+		}
 		lane, _, err := r.gw.SampleKeyType(r.ctx, key)
 		if err != nil || lane == "" {
 			t.Fatalf("native probe key %s is not a registered property or metric (%v)", key, err)
@@ -265,7 +268,7 @@ func TestCalcRuleOutputCollected(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := r.gw.InsertMetricSamples(r.ctx, []storage.MetricSampleWrite{{OwnerKind: "component", OwnerID: c.ID, Key: "avg-temp",
+	if err := insertMetrics(r.ctx, r.gw, []storage.MetricSampleWrite{{OwnerKind: "component", OwnerID: c.ID, Key: "avg-temp",
 		Value: 21, Source: "hand", TS: time.Now()}}); err != nil {
 		t.Fatal(err)
 	}

@@ -45,18 +45,18 @@ type Store interface {
 	// a registered event_type name routes a natively-published occurrence (an xAPI
 	// event, a trap) to the event sink (kind "event") as a caught event (ADR-0066).
 	ListEventTypes(ctx context.Context) ([]storage.EventType, error)
-	InsertMetricSamples(ctx context.Context, evs []storage.MetricSampleWrite) error
+	InsertMetricSamples(ctx context.Context, w storage.KeyWriter, evs []storage.MetricSampleWrite) error
 	// StampEndpointsSeen records that a batch an endpoint's task delivered
 	// landed, whatever it carried: an endpoint's freshness (#933).
 	StampEndpointsSeen(ctx context.Context, endpointIDs []string) error
 	// The property sink and its transition-only guard: a state-kind sample
 	// routes here (by registry kind), and LatestProperty lets the consumer skip
 	// a write whose value equals the latest stored value for the series.
-	InsertPropertySamples(ctx context.Context, evs []storage.PropertySampleWrite) error
+	InsertPropertySamples(ctx context.Context, w storage.KeyWriter, evs []storage.PropertySampleWrite) error
 	LatestProperty(ctx context.Context, componentName, key, instance string) (*storage.PropertySample, error)
 	// The log sink: a log-kind sample routes here (by registry kind) as an
 	// occurrence, instead of being dropped.
-	InsertEvents(ctx context.Context, evs []storage.EventWrite) error
+	InsertEvents(ctx context.Context, w storage.KeyWriter, evs []storage.EventWrite) error
 	// The raw log sinks (ADR-0066): untyped arrival off the ingest lane, no
 	// registry gate, split by origin (#589): a push's component-owned lines
 	// land on log_line, a node's self-logs on node_log.

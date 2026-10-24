@@ -14,6 +14,7 @@ import (
 
 	"github.com/hyperscaleav/omniglass/internal/rules"
 	"github.com/hyperscaleav/omniglass/internal/scope"
+	"github.com/hyperscaleav/omniglass/internal/writerclass"
 )
 
 // ruleEvaluator judges one ingest batch's samples against the enabled event
@@ -661,6 +662,12 @@ func (p *PG) endCondition(ctx context.Context, tx pgx.Tx, actorID string, r Even
 // opened or resolved ("" for none), with the rule's message and the sample's
 // key and value as attributes.
 func writeRuleEvent(ctx context.Context, tx pgx.Tx, r EventRule, eventType string, comp *Component, instance, alarmID string, s edgeSample) error {
+	// An event rule's event, held to the event type's writer class
+	// (ADR-0161): a rule stored before its fire type was refused at write
+	// still cannot write a node's collection-failed.
+	if err := admitWrites(ctx, tx, writeEvent, gatewayWriter(writerclass.EventRule), []keyedWrite{{key: eventType, instance: instance}}); err != nil {
+		return err
+	}
 	attrs := map[string]any{"rule": r.Name, "key": r.SampleKey}
 	if s.ok {
 		attrs["value"] = s.value

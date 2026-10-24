@@ -43,6 +43,11 @@ type Inputs struct {
 	Ladder *driver.EffectiveLadder `json:"ladder"`
 	// HostKeyPin is the ssh host key the endpoint pins.
 	HostKeyPin string `json:"host_key_pin"`
+	// CertificatePin is the tls public key the endpoint pins (#1035): the
+	// operator's declared key only, as for ssh; a key trusted on first use
+	// is a learned fact. The tls mode enters through DriverInputs and
+	// Params, and there is no per-endpoint CA bundle to cover.
+	CertificatePin string `json:"certificate_pin"`
 	// Retry is the operator's :retry counter.
 	Retry int64 `json:"retry"`
 }

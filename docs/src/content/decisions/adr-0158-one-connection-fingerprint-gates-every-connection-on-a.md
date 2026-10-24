@@ -61,7 +61,11 @@ summary: "One **connection fingerprint** gates every connection, held or statele
      unregistered), under any instance and any casing, and its reason names the key. The node's own
      lane never reads the ruling, so it writes every one of them as before. **Amended (#1078):** a refusal of a changed
      key appends its evidence, `<pinned-key> <offered-key>`, to the gate's value
-     ([ADR-0159](#adr-0159-a-refused-keys-evidence-rides-its-gate-and-trusting-a-key-is-checked-against-the-one-offered)).
+     ([ADR-0159](#adr-0159-a-refused-keys-evidence-rides-its-gate-and-trusting-a-key-is-checked-against-the-one-offered)). **Amended
+     ([ADR-0160](#adr-0160-tls-is-its-own-transport-over-a-shared-primitive-and-its-pin-is-the-public-key)):**
+     a tls certificate refusal for a changed key carries the same evidence; the tls keys
+     (`tls-certificate`, the handshake time and the certificate facts) are node-only, and a driver
+     may not emit a node-only key either.
   6. **Connection inputs edit in place** (the architect's ruling on #1061). A driver-attached
      endpoint's host, port and attached secret references are patched through `PATCH
      /endpoints/{id}` `inputs`, validated against the driver's declared inputs (a refused value is a

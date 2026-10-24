@@ -40,7 +40,7 @@ func TestCalcMarkHeldByUncommittedBatch(t *testing.T) {
 	r.metric("room-temperature", "", 31) // a mark waiting to be served
 	held, release, done := make(chan struct{}), make(chan struct{}), make(chan error, 1)
 	go func() {
-		done <- r.gw.WriteMetricHeld(r.ctx, []storage.MetricSampleWrite{{OwnerKind: "component", OwnerID: r.comp,
+		done <- r.gw.WriteMetricHeld(r.ctx, storage.PushWriter(), []storage.MetricSampleWrite{{OwnerKind: "component", OwnerID: r.comp,
 			Key: "room-temperature", Value: 99, TS: time.Now()}}, func() { close(held); <-release })
 	}()
 	<-held
@@ -102,7 +102,7 @@ func TestCalcIngestRetriesADeadlock(t *testing.T) {
 	r.gw.SetCalcServeHook(nil)
 	ingested := make(chan error, 1)
 	go func() {
-		ingested <- r.gw.InsertMetricSamples(r.ctx, []storage.MetricSampleWrite{{OwnerKind: "component", OwnerID: r.comp,
+		ingested <- r.gw.InsertMetricSamples(r.ctx, storage.PushWriter(), []storage.MetricSampleWrite{{OwnerKind: "component", OwnerID: r.comp,
 			Key: "room-temperature", Value: 12, TS: time.Now()}})
 	}()
 	// Wait until the batch is blocked on the tick's deleted mark, then let
@@ -184,7 +184,7 @@ func TestCalcStateFollowsTheSelector(t *testing.T) {
 	}
 	r.avgRule("echo", "room-temperature", "avg-temp")
 	r.metric("room-temperature", "", 20)
-	if err := r.gw.InsertMetricSamples(r.ctx, []storage.MetricSampleWrite{{OwnerKind: "component", OwnerID: other.ID,
+	if err := r.gw.InsertMetricSamples(r.ctx, storage.PushWriter(), []storage.MetricSampleWrite{{OwnerKind: "component", OwnerID: other.ID,
 		Key: "room-temperature", Value: 5, TS: time.Now()}}); err != nil {
 		t.Fatal(err)
 	}
@@ -266,7 +266,7 @@ func TestCalcReducerInstances(t *testing.T) {
 	}
 	r.metric("room-temperature", "", 100) // the aggregate, ignored beside instances
 	r.metric("room-temperature", "a", 10)
-	if err := r.gw.InsertMetricSamples(r.ctx, []storage.MetricSampleWrite{{OwnerKind: "component", OwnerID: r.comp,
+	if err := r.gw.InsertMetricSamples(r.ctx, storage.PushWriter(), []storage.MetricSampleWrite{{OwnerKind: "component", OwnerID: r.comp,
 		Key: "room-temperature", Instance: "old", Value: 1000, TS: time.Now().Add(-storage.CalcStaleAfter - time.Minute)}}); err != nil {
 		t.Fatal(err)
 	}

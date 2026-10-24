@@ -34,9 +34,9 @@ func TestInsertMetricSamples(t *testing.T) {
 	}
 
 	now := time.Now().UTC()
-	err = gw.InsertMetricSamples(ctx, []storage.MetricSampleWrite{
-		{OwnerKind: "component", OwnerID: "disp-1", Key: "tcp-open", Value: 1, Source: "tcp", TS: now},
-		{OwnerKind: "component", OwnerID: "disp-1", Key: "tcp-connect-time", Value: 3.2, Source: "tcp", TS: now},
+	err = insertMetrics(ctx, gw, []storage.MetricSampleWrite{
+		{OwnerKind: "component", OwnerID: "disp-1", Key: "tcp-open", Instance: "tcp", Value: 1, Source: "tcp", TS: now},
+		{OwnerKind: "component", OwnerID: "disp-1", Key: "tcp-connect-time", Instance: "tcp", Value: 3.2, Source: "tcp", TS: now},
 	})
 	if err != nil {
 		t.Fatalf("insert samples: %v", err)
@@ -51,8 +51,8 @@ func TestInsertMetricSamples(t *testing.T) {
 	}
 
 	// An owner component that does not exist violates the component FK.
-	err = gw.InsertMetricSamples(ctx, []storage.MetricSampleWrite{
-		{OwnerKind: "component", OwnerID: "ghost", Key: "tcp-open", Value: 0, Source: "tcp", TS: now},
+	err = insertMetrics(ctx, gw, []storage.MetricSampleWrite{
+		{OwnerKind: "component", OwnerID: "ghost", Key: "tcp-open", Instance: "tcp", Value: 0, Source: "tcp", TS: now},
 	})
 	if err == nil {
 		t.Fatal("insert with unknown owner: want error, got nil")

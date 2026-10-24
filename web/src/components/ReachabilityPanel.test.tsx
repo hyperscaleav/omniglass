@@ -285,3 +285,82 @@ describe("a held session on the row", () => {
     expect(screen.getByText(/probed by/)).toBeTruthy();
   });
 });
+
+// A tls endpoint (#1035): its breakdown teaches the handshake, the
+// certificate's days left and how the endpoint verifies, and a skipped
+// verification is visible on the row without expanding it.
+describe("a tls endpoint", () => {
+  const key = "SHA256:" + "Q".repeat(43);
+  const tlsRow = (mode: string, daysLeft?: number) => ({
+    endpoint: "tls",
+    label: "Panel over TLS",
+    transport: "tls",
+    address: "127.60.0.9:51326",
+    node: "node-a",
+    last_seen: nowIso,
+    verdict: { value: "up", ts: nowIso },
+    responsive: { value: "up", ts: nowIso },
+    layers: [{ layer: "port", check: "tcp-open", value: 1, detail: "0.4 ms", ts: nowIso }],
+    history: [{ ts: ago(120_000), value: "up" }],
+    tls: { mode, key: mode === "pin" ? key : undefined, handshake_ms: 12.5, expires: "2026-11-03T12:00:00Z", days_left: daysLeft },
+  });
+
+  it("lists the handshake, the days left and the pinned key in the breakdown", () => {
+    const { getByText, getByTitle } = mount({ component: "panel-1", endpoints: [tlsRow("pin", 10.02)] });
+    fireEvent.click(getByText("Panel over TLS"));
+    expect(getByText("handshake")).toBeTruthy();
+    expect(getByText(/12\.5 ms/)).toBeTruthy();
+    expect(getByText("10 days left")).toBeTruthy();
+    expect(getByText("pinned on first use")).toBeTruthy();
+    expect(getByTitle(key)).toBeTruthy();
+  });
+
+  // The handshake row follows the latest probe: a handshake time from an
+  // earlier answer is not this probe's, so a transport that stopped
+  // answering reads not answered, never "answered" beside a red dot.
+  it("reads a handshake the latest probe did not get as not answered", () => {
+    const row = { ...tlsRow("pin", 10), responsive: { value: "down", ts: nowIso } };
+    const { getByText, queryByText } = mount({ component: "panel-1", endpoints: [row] });
+    fireEvent.click(getByText("Panel over TLS"));
+    expect(getByText("not answered")).toBeTruthy();
+    expect(queryByText("answered")).toBeNull();
+    expect(queryByText(/12\.5 ms/)).toBeNull();
+  });
+
+  it("marks a certificate inside a month amber", () => {
+    const { getByText, getByTestId } = mount({ component: "panel-1", endpoints: [tlsRow("pin", 12)] });
+    fireEvent.click(getByText("Panel over TLS"));
+    expect(getByTestId("tls-cert").dataset.tone).toBe("warn");
+  });
+
+  it("shows a skipped verification on the row, unexpanded", () => {
+    const { getByText, queryByText } = mount({ component: "panel-1", endpoints: [tlsRow("skip", 300)] });
+    expect(getByText("unverified")).toBeTruthy();
+    expect(queryByText("handshake")).toBeNull();
+    fireEvent.click(getByText("Panel over TLS"));
+    expect(getByText("not verified")).toBeTruthy();
+  });
+
+  // Review of #1035, finding 4: under a certificate gate the probe connects
+  // only, so the read withholds the last accepted certificate's facts; the
+  // row says the offered certificate is refused rather than "none yet".
+  it("reads a refused certificate under a certificate gate", () => {
+    const row = { ...tlsRow("pin", undefined), rejection: { rung: "responsive" as const, class: "certificate", pinned_key: key, offered_key: "SHA256:" + "Z".repeat(43) } };
+    const { getByText, getByTestId, queryByText } = mount({ component: "panel-1", endpoints: [row] });
+    fireEvent.click(getByText("Panel over TLS"));
+    expect(getByText("the offered certificate is refused")).toBeTruthy();
+    expect(queryByText("no certificate accepted yet")).toBeNull();
+    expect(getByTestId("tls-cert").dataset.tone).toBe("bad");
+    // Beneath the gate only the TCP connect runs: the handshake row says so,
+    // rather than an earlier probe's answer or its absence.
+    expect(getByText("not tried beneath the gate")).toBeTruthy();
+    expect(queryByText(/12\.5 ms/)).toBeNull();
+  });
+
+  it("says nothing of tls on a row that is not tls", () => {
+    const { queryByText, getByText } = mount();
+    fireEvent.click(getByText("disp-1-tcp"));
+    expect(queryByText("handshake")).toBeNull();
+    expect(queryByText("unverified")).toBeNull();
+  });
+});

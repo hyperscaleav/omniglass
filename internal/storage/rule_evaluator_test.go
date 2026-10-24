@@ -29,7 +29,7 @@ func TestRuleEvaluator(t *testing.T) {
 	}
 	prop := func(component, instance, value string) {
 		t.Helper()
-		if err := gw.InsertPropertySamples(ctx, []storage.PropertySampleWrite{{OwnerKind: "component", OwnerID: component,
+		if err := insertProperties(ctx, gw, []storage.PropertySampleWrite{{OwnerKind: "component", OwnerID: component,
 			Key: "endpoint-reachable", Instance: instance, Value: value, TS: time.Now()}}); err != nil {
 			t.Fatal(err)
 		}
@@ -104,7 +104,7 @@ func TestRuleEvaluator(t *testing.T) {
 	}
 	metric := func(component string, v float64) {
 		t.Helper()
-		if err := gw.InsertMetricSamples(ctx, []storage.MetricSampleWrite{{OwnerKind: "component", OwnerID: component,
+		if err := insertMetrics(ctx, gw, []storage.MetricSampleWrite{{OwnerKind: "component", OwnerID: component,
 			Key: "room-temperature", Value: v, TS: time.Now()}}); err != nil {
 			t.Fatal(err)
 		}
@@ -161,16 +161,16 @@ func TestRuleEvaluatorJudgesOnlyTheNewestSample(t *testing.T) {
 	w := func(v string, at time.Time) storage.PropertySampleWrite {
 		return storage.PropertySampleWrite{OwnerKind: "component", OwnerID: "bar-1", Key: "endpoint-reachable", Instance: "tcp", Value: v, TS: at}
 	}
-	if err := gw.InsertPropertySamples(ctx, []storage.PropertySampleWrite{w("up", now)}); err != nil {
+	if err := insertProperties(ctx, gw, []storage.PropertySampleWrite{w("up", now)}); err != nil {
 		t.Fatal(err)
 	}
-	if err := gw.InsertPropertySamples(ctx, []storage.PropertySampleWrite{w("down", now.Add(-time.Minute))}); err != nil {
+	if err := insertProperties(ctx, gw, []storage.PropertySampleWrite{w("down", now.Add(-time.Minute))}); err != nil {
 		t.Fatal(err)
 	}
 	if got, _ := gw.ListAlarms(ctx, "bar-1", storage.AlarmFilter{}); len(got) != 0 {
 		t.Fatalf("a late down opened %d alarms", len(got))
 	}
-	if err := gw.InsertPropertySamples(ctx, []storage.PropertySampleWrite{w("up", now.Add(time.Minute)), w("down", now.Add(30*time.Second))}); err != nil {
+	if err := insertProperties(ctx, gw, []storage.PropertySampleWrite{w("up", now.Add(time.Minute)), w("down", now.Add(30*time.Second))}); err != nil {
 		t.Fatal(err)
 	}
 	if got, _ := gw.ListAlarms(ctx, "bar-1", storage.AlarmFilter{}); len(got) != 0 {
@@ -198,7 +198,7 @@ func TestRuleAlarmsBelongToTheirRule(t *testing.T) {
 	}
 	metric := func(component string, v float64) {
 		t.Helper()
-		if err := gw.InsertMetricSamples(ctx, []storage.MetricSampleWrite{{OwnerKind: "component", OwnerID: component, Key: "room-temperature", Value: v, TS: time.Now()}}); err != nil {
+		if err := insertMetrics(ctx, gw, []storage.MetricSampleWrite{{OwnerKind: "component", OwnerID: component, Key: "room-temperature", Value: v, TS: time.Now()}}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -260,11 +260,11 @@ func TestEventRuleState(t *testing.T) {
 		Fire: criteria("gt", 30), FireSustain: time.Minute, Severity: "info"}, all); err != nil {
 		t.Fatal(err)
 	}
-	if err := gw.InsertPropertySamples(ctx, []storage.PropertySampleWrite{{OwnerKind: "component", OwnerID: "bar-1",
+	if err := insertProperties(ctx, gw, []storage.PropertySampleWrite{{OwnerKind: "component", OwnerID: "bar-1",
 		Key: "endpoint-reachable", Instance: "tcp", Value: "down", TS: time.Now()}}); err != nil {
 		t.Fatal(err)
 	}
-	if err := gw.InsertMetricSamples(ctx, []storage.MetricSampleWrite{{OwnerKind: "component", OwnerID: "bar-1",
+	if err := insertMetrics(ctx, gw, []storage.MetricSampleWrite{{OwnerKind: "component", OwnerID: "bar-1",
 		Key: "room-temperature", Value: 35, TS: time.Now()}}); err != nil {
 		t.Fatal(err)
 	}
@@ -289,7 +289,7 @@ func TestEventRuleState(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := gw.InsertPropertySamples(ctx, []storage.PropertySampleWrite{{OwnerKind: "component", OwnerID: "other-c",
+	if err := insertProperties(ctx, gw, []storage.PropertySampleWrite{{OwnerKind: "component", OwnerID: "other-c",
 		Key: "endpoint-reachable", Instance: "tcp", Value: "down", TS: time.Now()}}); err != nil {
 		t.Fatal(err)
 	}

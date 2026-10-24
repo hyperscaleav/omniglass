@@ -107,6 +107,9 @@ func (fn *BakedFunction) Interpret(p Payload, ts time.Time) ([]Emitted, []error)
 }
 
 func interpretEmit(em BakedEmit, p Payload, ts time.Time) (Emitted, error) {
+	if err := emittable(em.Name); err != nil {
+		return Emitted{}, err
+	}
 	raw, err := locate(em.Extract, p)
 	if err != nil {
 		return Emitted{}, err

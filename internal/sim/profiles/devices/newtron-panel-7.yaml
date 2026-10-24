@@ -212,6 +212,30 @@ interfaces:
         subject: "status.video.input"
         response: "OK"
 
+  # NVP over TLS (#1035): the same line protocol behind a real TLS handshake,
+  # the proving face for the tls transport. The panel self-signs: its key is
+  # derived from the device's id, so it is the same on every run and a pinned
+  # endpoint stays pinned across a simulator restart, and its certificate is
+  # valid for tls_validity_days from the face's start. The NVP verbs are the
+  # device's commands (declared on the nvp interface above); this face
+  # declares the subject so SUBSCRIBE INPUT pushes here too.
+  - name: nvp-tls
+    protocol: tcp
+    port: 51326
+    tls: true
+    tls_validity_days: 397
+    doc:
+      summary: "NVP line protocol over TLS, the panel's own self-signed certificate"
+      tags: [control, persistent-session, tls]
+    api_surface: newtron-nvp
+    persistent: true
+    line_ending: "\r\n"
+    subjects:
+      - match: "status.video.input"
+        path: "status.video.input"
+        publish_token: "INPUT"
+        push_format: "EVT INPUT {{ .Raw }}"
+
   # NVP over Telnet (#1033): the same line protocol behind a login, the
   # proving face for the telnet transport and the shared login dialog
   # (#1049). The panel writes "login: " and "Password: " with no line ending,

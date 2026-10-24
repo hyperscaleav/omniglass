@@ -35,7 +35,7 @@ func TestDeriveMetrics(t *testing.T) {
 		},
 	}
 
-	metrics := deriveMetrics(ev, owner, reg)
+	metrics := deriveMetrics(ev, owner, reg, storage.NodeWriter(owner.EndpointName))
 	if len(metrics) != 2 {
 		t.Fatalf("derived %d metrics, want 2 (unregistered and cross-lane names dropped): %+v", len(metrics), metrics)
 	}
@@ -71,7 +71,7 @@ func TestDeriveProperties(t *testing.T) {
 		{Name: "not.registered", ValueJson: `"up"`},
 		{Name: "tcp-open", ValueJson: `"up"`}, // a metric name on the property lane: refused by name
 	}}
-	states := deriveProperties(ev, owner, reg)
+	states := deriveProperties(ev, owner, reg, storage.NodeWriter(owner.EndpointName))
 	if len(states) != 2 {
 		t.Fatalf("states = %+v, want exactly the valid up and SN-1", states)
 	}
@@ -106,7 +106,7 @@ func TestDeriveEvents(t *testing.T) {
 		{Name: "note"},                                         // neither message nor payload: dropped
 		{Name: "not.registered", Message: "x"},
 	}}
-	events := deriveEvents(ev, owner, reg)
+	events := deriveEvents(ev, owner, reg, storage.NodeWriter(owner.EndpointName))
 	if len(events) != 2 {
 		t.Fatalf("events = %+v, want exactly the valid call-started and note", events)
 	}
@@ -130,7 +130,7 @@ func TestSampleTimeRule(t *testing.T) {
 		[]storage.MetricType{{Name: "tcp-open"}},
 		[]storage.PropertyType{{Name: "serial-number", DataType: "string"}},
 		[]storage.EventType{{Name: "note"}})
-	owner := storage.TaskOwner{ComponentID: "disp-1"}
+	owner := storage.TaskOwner{ComponentID: "disp-1", EndpointName: "tcp"}
 	sampleTS := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
 	batchTS := time.Date(2026, 6, 7, 8, 9, 10, 0, time.UTC)
 
@@ -149,9 +149,9 @@ func TestSampleTimeRule(t *testing.T) {
 			{Name: "note", Message: "x"},
 		},
 	}
-	metrics := deriveMetrics(ev, owner, reg)
-	states := deriveProperties(ev, owner, reg)
-	events := deriveEvents(ev, owner, reg)
+	metrics := deriveMetrics(ev, owner, reg, storage.NodeWriter(owner.EndpointName))
+	states := deriveProperties(ev, owner, reg, storage.NodeWriter(owner.EndpointName))
+	events := deriveEvents(ev, owner, reg, storage.NodeWriter(owner.EndpointName))
 	if len(metrics) != 2 || len(states) != 2 || len(events) != 2 {
 		t.Fatalf("derived %d/%d/%d, want 2 per lane", len(metrics), len(states), len(events))
 	}
@@ -170,7 +170,7 @@ func TestSampleTimeRule(t *testing.T) {
 
 	// Both absent: zero, so the insert path stamps ingest time.
 	bare := &ogv1.TelemetryBatch{Metrics: []*ogv1.MetricSample{{Name: "tcp-open", Value: 1}}}
-	if got := deriveMetrics(bare, owner, reg); len(got) != 1 || !got[0].TS.IsZero() {
+	if got := deriveMetrics(bare, owner, reg, storage.NodeWriter(owner.EndpointName)); len(got) != 1 || !got[0].TS.IsZero() {
 		t.Fatalf("no ts anywhere: want the zero time for the insert path, got %+v", got)
 	}
 }

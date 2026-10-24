@@ -217,9 +217,9 @@ func TestSeriesReadsOnTheWire(t *testing.T) {
 		t.Fatalf("create component: %v", err)
 	}
 	now := time.Now().UTC()
-	if err := gw.InsertMetricSamples(ctx, []storage.MetricSampleWrite{
-		{OwnerKind: "component", OwnerID: "series-probe", Key: "icmp-rtt-avg", Value: 5.0, Source: "t", TS: now.Add(-2 * time.Hour)},
-		{OwnerKind: "component", OwnerID: "series-probe", Key: "icmp-rtt-avg", Value: 6.1, Source: "t", TS: now},
+	if err := insertMetrics(ctx, gw, []storage.MetricSampleWrite{
+		{OwnerKind: "component", OwnerID: "series-probe", Key: "icmp-rtt-avg", Instance: "icmp", Value: 5.0, Source: "t", TS: now.Add(-2 * time.Hour)},
+		{OwnerKind: "component", OwnerID: "series-probe", Key: "icmp-rtt-avg", Instance: "icmp", Value: 6.1, Source: "t", TS: now},
 	}); err != nil {
 		t.Fatalf("insert: %v", err)
 	}

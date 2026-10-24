@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/scope"
+	"github.com/hyperscaleav/omniglass/internal/writerclass"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 )
@@ -125,6 +126,11 @@ func (p *PG) SetProperty(ctx context.Context, actorID, ownerKind, ownerID, prope
 	if err != nil {
 		return nil, err
 	}
+	// An operator's declared value, held to the key's writer class
+	// (ADR-0161): never a node's observation or the platform's verdict.
+	if err := admitWrites(ctx, tx, writeProperty, gatewayWriter(writerclass.Operator), []keyedWrite{{key: propertyName, instance: instance}}); err != nil {
+		return nil, err
+	}
 
 	// cur is the series' current value (its latest row); the insert appends only
 	// when the declared value actually changes. value is the exact jsonb
@@ -207,6 +213,10 @@ func (p *PG) ClearProperty(ctx context.Context, actorID, ownerKind, ownerID, pro
 	// One scoped resolve, and its result IS the arc value: see SetProperty.
 	arc, err := p.resolveTargetID(ctx, tx, ownerKind, ownerID, read, action)
 	if err != nil {
+		return err
+	}
+	// A tombstone is a declared row too, held to the same writer check.
+	if err := admitWrites(ctx, tx, writeProperty, gatewayWriter(writerclass.Operator), []keyedWrite{{key: propertyName, instance: instance}}); err != nil {
 		return err
 	}
 

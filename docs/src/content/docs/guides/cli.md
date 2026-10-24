@@ -263,6 +263,9 @@ omniglass endpoint delete <id>                                  # refused (409) 
 # is not attempted again until what it connects with changes, or an operator retries it:
 omniglass endpoint retry <id>                                   # needs endpoint:retry; audited
 omniglass endpoint retry <id> --host-key SHA256:...             # ssh: trust the offered key the refusal names (409 for any other)
+omniglass endpoint retry <id> --certificate SHA256:...          # tls: the same for a certificate's public key (--host-key works too)
+# A tls endpoint's verification mode is one of its driver's inputs, edited in place:
+omniglass endpoint update <id> --inputs '{"tls-mode":"verify"}'  # verify, pin or skip
 
 # The poll task is derived from the endpoint, so the task surface is read-only.
 omniglass task list
@@ -270,7 +273,8 @@ omniglass task get <id>
 ```
 
 The transports are a code registry the binary ships (`omniglass transport list` reads it):
-`icmp` and `tcp` probe layers 3 and 4, `telnet` reads its first bytes, `ssh` and `http` climb to layer 7 (the probe draws a
+`icmp` and `tcp` probe layers 3 and 4, `telnet` reads its first bytes, `tls` runs the handshake and reports the
+certificate's expiry, `ssh` and `http` climb to layer 7 (the probe draws a
 real response, so reached-but-not-responsive and responded-but-not-authenticated are visible
 states), and `udp` and `snmp` carry no standalone probe (`snmp` collects through its driver).
 An endpoint is **named by its transport** (the `--transport`, or the attached driver's spec),
@@ -484,6 +488,11 @@ omniglass event-type get call-started
 omniglass event-type delete cable-unplugged                        # 409 on an official type
 ```
 
+Every metric, property and event type reads back its `writer_class` (`node-probe`, `platform`,
+`calc`, `collected`): who may write the key ([who writes a key](/architecture/properties/#who-writes-a-key-the-writer-class)).
+`omniglass event-type get collection-failed` reads `node-probe`, the node's own account; a create under
+a reserved name is a 422 on every catalog.
+
 ## Command types
 
 The [command type](/architecture/commands/#the-command_type-registry) commands cover the "do"
@@ -501,6 +510,9 @@ omniglass command-type create --name set-input --target-property-type video-inpu
 omniglass command-type get reboot
 omniglass component command issue disp-1 --command-type set-input --value '"hdmi2"'   # needs command:issue
 ```
+
+A target must be a key a command may write: a native probe key, `health` or a calc rule's output is
+refused (422) naming the key.
 
 ## Property contracts and values
 

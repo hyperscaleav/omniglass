@@ -165,6 +165,11 @@
         "tls": {
           "type": "boolean"
         },
+        "tls_validity_days": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "A tls face's certificate validity window in days, counted from the face's start; 0 (the default) is a year.  Only on a face with tls."
+        },
         "doc": {
           "$ref": "#/$defs/doc"
         },

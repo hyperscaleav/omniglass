@@ -21,7 +21,11 @@ summary: "The stateful arc proves the held session on the line protocol over `tc
   websocket, and udp datagrams once #1037 lands) is a **driver**: ONVIF is SOAP over http (#1042).
   A driver that needs something its carrier cannot do yet (a body format, an auth scheme, a stream
   mode, TLS) makes that **capability** on the existing transport, proven by the driver: SSE on http
-  (#1038), tls (#1035), sftp on ssh (#1045), and http fetching a body as a file (#1044). A
+  (#1038), tls (#1035), sftp on ssh (#1045), and http fetching a body as a file (#1044).
+  **Amended ([ADR-0159](#adr-0160-tls-is-its-own-transport-over-a-shared-primitive-and-its-pin-is-the-public-key)):**
+  tls is its own transport over a shared primitive, since a secure variant that needs its own
+  endpoint name and rung is its own registry entry; it stays a capability on http, websocket and
+  mqtt. A
   protocol that moves whole files rather than values lands as a **file sample** (#1043, the
   primitive #1044 through #1047 depend on). A protocol with its own framing, addressing, or session handshake is a
   **new transport** plus a generic driver on it, the `snmp` and `snmp-generic` pattern: ssh (#1032),

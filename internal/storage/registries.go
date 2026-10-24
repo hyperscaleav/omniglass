@@ -3,6 +3,8 @@ package storage
 import (
 	"context"
 	"fmt"
+
+	"github.com/hyperscaleav/omniglass/internal/writerclass"
 )
 
 // PropertyType is a canonical registered signal on the property lane of the
@@ -26,6 +28,10 @@ type PropertyType struct {
 	// WrittenBy is the calc rule that writes this property, nil when none
 	// does (#1019). Read beside the type, never stored or audited.
 	WrittenBy *CalcWriter `json:"-"`
+	// WriterClass is who may write this property (ADR-0161): resolved from
+	// its name and WrittenBy, never stored, so it cannot drift from what a
+	// write is held to.
+	WriterClass writerclass.Class `json:"-"`
 }
 
 // UpsertPropertyType installs an official property, authoritative on conflict (the

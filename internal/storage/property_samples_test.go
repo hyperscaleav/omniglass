@@ -37,12 +37,12 @@ func TestInsertPropertySamples(t *testing.T) {
 	t0 := time.Now().UTC().Add(-2 * time.Minute)
 	t1 := t0.Add(time.Minute)
 	// Two transitions for one series (disp-1, endpoint-reachable, if-1): up then down.
-	if err := gw.InsertPropertySamples(ctx, []storage.PropertySampleWrite{
+	if err := insertProperties(ctx, gw, []storage.PropertySampleWrite{
 		{OwnerKind: "component", OwnerID: "disp-1", Key: "endpoint-reachable", Instance: "if-1", Value: "up", Source: "tcp", TS: t0},
 	}); err != nil {
 		t.Fatalf("insert up: %v", err)
 	}
-	if err := gw.InsertPropertySamples(ctx, []storage.PropertySampleWrite{
+	if err := insertProperties(ctx, gw, []storage.PropertySampleWrite{
 		{OwnerKind: "component", OwnerID: "disp-1", Key: "endpoint-reachable", Instance: "if-1", Value: "down", Source: "tcp", TS: t1},
 	}); err != nil {
 		t.Fatalf("insert down: %v", err)
@@ -72,7 +72,7 @@ func TestInsertPropertySamples(t *testing.T) {
 	}
 
 	// An owner component that does not exist violates the component FK.
-	if err := gw.InsertPropertySamples(ctx, []storage.PropertySampleWrite{
+	if err := insertProperties(ctx, gw, []storage.PropertySampleWrite{
 		{OwnerKind: "component", OwnerID: "ghost", Key: "endpoint-reachable", Instance: "if-1", Value: "up", Source: "tcp", TS: t1},
 	}); err == nil {
 		t.Fatal("insert with unknown owner: want error, got nil")

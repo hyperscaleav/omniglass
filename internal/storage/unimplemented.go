@@ -306,7 +306,7 @@ func (UnimplementedGateway) GetEndpoint(context.Context, string, scope.Set) (*En
 func (UnimplementedGateway) CreateEndpoint(context.Context, string, EndpointSpec, scope.Set) (*Endpoint, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) RetryEndpoint(context.Context, string, string, string, scope.Set, scope.Set) (*Endpoint, error) {
+func (UnimplementedGateway) RetryEndpoint(context.Context, string, string, RetryPin, scope.Set, scope.Set) (*Endpoint, error) {
 	return nil, nil
 }
 func (UnimplementedGateway) UpdateEndpoint(context.Context, string, string, EndpointPatch, scope.Set, scope.Set) (*Endpoint, error) {
@@ -395,7 +395,7 @@ func (UnimplementedGateway) UpdateMetricType(context.Context, string, string, Me
 func (UnimplementedGateway) DeleteMetricType(context.Context, string, string) error {
 	return nil
 }
-func (UnimplementedGateway) InsertMetricSamples(context.Context, []MetricSampleWrite) error {
+func (UnimplementedGateway) InsertMetricSamples(context.Context, KeyWriter, []MetricSampleWrite) error {
 	return nil
 }
 func (UnimplementedGateway) LatestMetric(context.Context, string, string) (*MetricSample, error) {
@@ -404,11 +404,14 @@ func (UnimplementedGateway) LatestMetric(context.Context, string, string) (*Metr
 func (UnimplementedGateway) LatestMetricInstance(context.Context, string, string, string) (*MetricSample, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) InsertPropertySamples(context.Context, []PropertySampleWrite) error {
+func (UnimplementedGateway) InsertPropertySamples(context.Context, KeyWriter, []PropertySampleWrite) error {
 	return nil
 }
 func (UnimplementedGateway) LatestProperty(context.Context, string, string, string) (*PropertySample, error) {
 	return nil, nil
+}
+func (UnimplementedGateway) EndpointKeyPin(context.Context, string, string, string) (string, error) {
+	return "", nil
 }
 func (UnimplementedGateway) PropertyTransitions(context.Context, string, string, string, time.Duration) ([]PropertySample, error) {
 	return nil, nil
@@ -419,7 +422,7 @@ func (UnimplementedGateway) StampEndpointsSeen(context.Context, []string) error 
 func (UnimplementedGateway) ComponentVerdict(context.Context, string) (string, error) {
 	return "", nil
 }
-func (UnimplementedGateway) InsertEvents(context.Context, []EventWrite) error {
+func (UnimplementedGateway) InsertEvents(context.Context, KeyWriter, []EventWrite) error {
 	return nil
 }
 func (UnimplementedGateway) ListComponentEvents(context.Context, string, time.Duration, int) ([]Event, error) {

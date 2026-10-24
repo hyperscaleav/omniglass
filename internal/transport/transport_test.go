@@ -11,10 +11,11 @@ import (
 // source the storage validator, the API route, and the node's probe dispatch
 // all read. These tests pin the contract the rest of slice 1 hangs off.
 
-func TestRegistryCarriesTheSevenTransports(t *testing.T) {
+func TestRegistryCarriesTheEightTransports(t *testing.T) {
 	want := map[string]struct{ held, built bool }{
 		"icmp":   {held: false, built: true},
 		"tcp":    {held: true, built: true}, // the line protocol holds a session over it (#817)
+		"tls":    {held: true, built: true}, // the line protocol over a tls handshake (#1035)
 		"udp":    {held: false, built: false},
 		"telnet": {held: true, built: true}, // the line protocol behind a login (#1033)
 		"ssh":    {held: true, built: true},
@@ -50,7 +51,7 @@ func TestRegistryOrderIsStable(t *testing.T) {
 	for _, tr := range transport.All() {
 		names = append(names, tr.Name)
 	}
-	want := []string{"icmp", "tcp", "udp", "telnet", "ssh", "http", "snmp"}
+	want := []string{"icmp", "tcp", "tls", "udp", "telnet", "ssh", "http", "snmp"}
 	for i, n := range want {
 		if names[i] != n {
 			t.Fatalf("order = %v, want %v", names, want)
@@ -84,10 +85,25 @@ func TestAllReturnsACopy(t *testing.T) {
 // connect where an open port can be detected, the protocol's handshake for
 // ssh, a named request where it cannot (udp, snmp); icmp has none.
 func TestRegistryCarriesTheTransportRung(t *testing.T) {
-	want := map[string]string{"icmp": "", "tcp": "connect", "udp": "request", "telnet": "connect", "ssh": "handshake", "http": "connect", "snmp": "request"}
+	want := map[string]string{"icmp": "", "tcp": "connect", "tls": "handshake", "udp": "request", "telnet": "connect", "ssh": "handshake", "http": "connect", "snmp": "request"}
 	for _, tr := range transport.All() {
 		if tr.Rung != want[tr.Name] {
 			t.Errorf("%s: rung %q, want %q", tr.Name, tr.Rung, want[tr.Name])
 		}
+	}
+}
+
+// tls is its own transport over the shared TLS primitive (#1035, decision 1
+// of #1076): its endpoint is named tls, so a component can hold a raw control
+// port and a TLS one side by side, and its transport rung is the handshake.
+// The line protocol rides it, so a driver's polls, commands and listeners
+// speak lines over its held session.
+func TestTLSIsAHeldLineTransportWhoseRungIsTheHandshake(t *testing.T) {
+	tr, ok := transport.ByName("tls")
+	if !ok {
+		t.Fatal("the registry has no tls transport")
+	}
+	if !tr.Held || !tr.Built || !tr.Line || tr.Rung != "handshake" {
+		t.Fatalf("tls = %+v, want held, built, line, rung handshake", tr)
 	}
 }

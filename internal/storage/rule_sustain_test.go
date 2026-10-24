@@ -28,7 +28,7 @@ func TestRuleSustains(t *testing.T) {
 	// passing between two samples by moving the pending streaks back.
 	prop := func(instance, v string) {
 		t.Helper()
-		if err := gw.InsertPropertySamples(ctx, []storage.PropertySampleWrite{{OwnerKind: "component", OwnerID: "bar-1",
+		if err := insertProperties(ctx, gw, []storage.PropertySampleWrite{{OwnerKind: "component", OwnerID: "bar-1",
 			Key: "endpoint-reachable", Instance: instance, Value: v, TS: time.Now().UTC()}}); err != nil {
 			t.Fatal(err)
 		}

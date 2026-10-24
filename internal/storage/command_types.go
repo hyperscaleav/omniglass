@@ -7,6 +7,8 @@ import (
 	"strings"
 
 	"github.com/jackc/pgx/v5"
+
+	"github.com/hyperscaleav/omniglass/internal/writerclass"
 )
 
 // CommandType is a registered command in the driver-owned catalog: what a component
@@ -191,9 +193,17 @@ func checkSettleWindow(seconds int) error {
 }
 
 // resolveTarget checks a target name exists in the named classifier catalog and
-// returns its id, or an invalid error naming the target. An empty name is a nil
-// id (no target on that arm). The catalog is a compile-time constant at every
-// call site ("property_type" or "metric_type"), never caller input.
+// is a key a command may write, and returns its id, or an invalid error naming
+// the target. An empty name is a nil id (no target on that arm). The catalog is
+// a compile-time constant at every call site ("property_type" or
+// "metric_type"), never caller input.
+//
+// A command opens an intended value on its target and its reply lands as an
+// observation of it, so the target's writer class must admit a command
+// (ADR-0161): a native probe key is the node's observation, health the
+// rollup's, a calc rule's output that rule's. The create, the retarget and the
+// seed all resolve here, and the issue holds the stored target to the same
+// check, so a command type stored before this refusal opens nothing either.
 func resolveTarget(ctx context.Context, q querier, catalog, name string) (*string, error) {
 	if name == "" {
 		return nil, nil
@@ -206,6 +216,13 @@ func resolveTarget(ctx context.Context, q querier, catalog, name string) (*strin
 	}
 	if err != nil {
 		return nil, fmt.Errorf("storage: resolve target %s %q: %w", noun, name, err)
+	}
+	lane := writeProperty
+	if catalog == "metric_type" {
+		lane = writeMetric
+	}
+	if err := admitWrites(ctx, q, lane, gatewayWriter(writerclass.Command), []keyedWrite{{key: name}}); err != nil {
+		return nil, fmt.Errorf("%w: target %s %q: %w", ErrCommandTypeInvalid, noun, name, err)
 	}
 	return &id, nil
 }

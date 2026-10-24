@@ -102,6 +102,11 @@ type TaskSpec struct {
 	// operator's declared key, else the key the node trusted on first use;
 	// empty before first use.
 	HostKey string `json:"host_key,omitempty"`
+	// CertificatePin is the tls public key the endpoint pins (#1035): the
+	// operator's declared key, else the key the node trusted on first use,
+	// empty before first use. Delivered in every mode; only pin mode judges
+	// a handshake by it.
+	CertificatePin string `json:"certificate_pin,omitempty"`
 	// Fingerprint is the connection fingerprint (#1056 ruling, ADR-0158):
 	// a digest over every input a connection to the endpoint is made with.
 	// A gate holds while it is unchanged. Never logged.

@@ -185,13 +185,13 @@ func TestNodeSSHSessionPinsTheHostKeyAndRefusesAChange(t *testing.T) {
 	// A malformed key is refused at the door; a well-formed key the panel
 	// does not offer is stale (the operator confirmed a key that changed
 	// since); the offered one is accepted.
-	if _, err := gw.RetryEndpoint(ctx, "", ep.ID, "SHA256:nope", all, all); err == nil {
+	if _, err := gw.RetryEndpoint(ctx, "", ep.ID, storage.RetryPin{HostKey: "SHA256:nope"}, all, all); err == nil {
 		t.Fatal("a malformed host key was accepted")
 	}
-	if _, err := gw.RetryEndpoint(ctx, "", ep.ID, first, all, all); !errors.Is(err, storage.ErrRetryHostKeyStale) {
+	if _, err := gw.RetryEndpoint(ctx, "", ep.ID, storage.RetryPin{HostKey: first}, all, all); !errors.Is(err, storage.ErrRetryHostKeyStale) {
 		t.Fatalf("trusting a key the panel does not offer = %v, want stale", err)
 	}
-	if _, err := gw.RetryEndpoint(ctx, "", ep.ID, second, all, all); err != nil {
+	if _, err := gw.RetryEndpoint(ctx, "", ep.ID, storage.RetryPin{HostKey: second}, all, all); err != nil {
 		t.Fatalf("retry with the new key: %v", err)
 	}
 	waitFor("session-state", is("up"), "up on the accepted key")

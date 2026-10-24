@@ -1894,7 +1894,7 @@
             "type": "string"
           },
           "output_key": {
-            "description": "The property or metric the rule writes: its type pins the reduce's result. Not health, not a key a collection writes, and not one another enabled rule writes",
+            "description": "The property or metric the rule writes: its type pins the reduce's result. Not a reserved key (a native probe key, health), not a key a driver's emits or a command type write, and not one another enabled rule writes",
             "minLength": 1,
             "type": "string"
           },
@@ -4295,12 +4295,23 @@
           },
           "payload_schema": {
             "description": "A JSON Schema fragment for the occurrence payload"
+          },
+          "writer_class": {
+            "description": "Who may write this key (ADR-0161): node-probe (a node's own probe or session machine, under the endpoint it probed), platform (the Omniglass process itself: the health rollup), calc (the calc rule that outputs it), or collected (a driver's emits or a push, and a command's or an operator's value). The Storage Gateway refuses any write whose writer the class does not admit",
+            "enum": [
+              "node-probe",
+              "platform",
+              "calc",
+              "collected"
+            ],
+            "type": "string"
           }
         },
         "required": [
           "id",
           "name",
-          "official"
+          "official",
+          "writer_class"
         ],
         "type": "object"
       },
@@ -7199,6 +7210,16 @@
             "description": "The display unit of the series (ms, dB, percent)",
             "type": "string"
           },
+          "writer_class": {
+            "description": "Who may write this key (ADR-0161): node-probe (a node's own probe or session machine, under the endpoint it probed), platform (the Omniglass process itself: the health rollup), calc (the calc rule that outputs it), or collected (a driver's emits or a push, and a command's or an operator's value). The Storage Gateway refuses any write whose writer the class does not admit",
+            "enum": [
+              "node-probe",
+              "platform",
+              "calc",
+              "collected"
+            ],
+            "type": "string"
+          },
           "written_by": {
             "$ref": "#/components/schemas/CalcWriterBody",
             "description": "The calc rule that writes this metric, absent when none does (one enabled rule writes a key; a disabled writer is named when no rule is enabled)"
@@ -7208,7 +7229,8 @@
           "id",
           "name",
           "data_type",
-          "official"
+          "official",
+          "writer_class"
         ],
         "type": "object"
       },
@@ -7937,6 +7959,16 @@
           "validation": {
             "description": "A JSON Schema fragment constraining the value"
           },
+          "writer_class": {
+            "description": "Who may write this key (ADR-0161): node-probe (a node's own probe or session machine, under the endpoint it probed), platform (the Omniglass process itself: the health rollup), calc (the calc rule that outputs it), or collected (a driver's emits or a push, and a command's or an operator's value). The Storage Gateway refuses any write whose writer the class does not admit",
+            "enum": [
+              "node-probe",
+              "platform",
+              "calc",
+              "collected"
+            ],
+            "type": "string"
+          },
           "written_by": {
             "$ref": "#/components/schemas/CalcWriterBody",
             "description": "The calc rule that writes this property, absent when none does (one enabled rule writes a key; a disabled writer is named when no rule is enabled)"
@@ -7946,7 +7978,8 @@
           "id",
           "name",
           "data_type",
-          "official"
+          "official",
+          "writer_class"
         ],
         "type": "object"
       },
@@ -8352,6 +8385,10 @@
             "$ref": "#/components/schemas/ReachSessionBody",
             "description": "The endpoint's held session, while it is configured to hold one (a standing listen task, or a driver declaring a session): its latest state, when it changed, and why"
           },
+          "tls": {
+            "$ref": "#/components/schemas/ReachTLSBody",
+            "description": "A tls endpoint's handshake and certificate: its verification mode, pinned key, handshake time, expiry and days left; absent on every other transport"
+          },
           "transport": {
             "description": "The transport (icmp, tcp, ...)",
             "type": "string"
@@ -8430,7 +8467,7 @@
             "type": "string"
           },
           "offered_key": {
-            "description": "A refusal of a changed key only: the SHA256 fingerprint of the key the component offered instead. Trusting it is POST /endpoints/{id}:retry with this exact value as host_key; while the refusal holds, any other value is refused (409)",
+            "description": "A refusal of a changed key only: the SHA256 fingerprint of the key the component offered instead. Trusting it is POST /endpoints/{id}:retry with this exact value as host_key (a tls endpoint also takes it as certificate); while the refusal holds, any other value is refused (409)",
             "type": "string"
           },
           "pinned_key": {
@@ -8480,6 +8517,38 @@
         "required": [
           "state",
           "ts"
+        ],
+        "type": "object"
+      },
+      "ReachTLSBody": {
+        "additionalProperties": false,
+        "properties": {
+          "days_left": {
+            "description": "Days from the latest probe to that not-after (tls-certificate-days-left), negative once expired: the number a threshold rule reads. Absent when expires is",
+            "format": "double",
+            "type": "number"
+          },
+          "expires": {
+            "description": "The not-after of the certificate the latest probe accepted (tls-certificate-expiry); absent until one is accepted, and while a certificate gate holds (the probe then connects only, so the value would be the last accepted certificate's, not the one offered now)",
+            "format": "date-time",
+            "type": "string"
+          },
+          "handshake_ms": {
+            "description": "The latest probe's handshake time in milliseconds (tls-handshake-time); absent until the component answers one",
+            "format": "double",
+            "type": "number"
+          },
+          "key": {
+            "description": "The public key the endpoint pins (tls-certificate), a SHA256 fingerprint; served in pin mode alone, and absent before first use",
+            "type": "string"
+          },
+          "mode": {
+            "description": "How the endpoint's connections judge the certificate (its driver's tls-mode input, verify when none is set): verify (against the node's system roots, the server name the host), pin (the public key trusted on first use, any other refused) or skip (nothing checked, the operator's explicit choice)",
+            "type": "string"
+          }
+        },
+        "required": [
+          "mode"
         ],
         "type": "object"
       },
@@ -9069,8 +9138,12 @@
             "readOnly": true,
             "type": "string"
           },
+          "certificate": {
+            "description": "A tls endpoint only: the same as host_key, named for the certificate (the offered_key a certificate refusal names). It becomes the endpoint's declared tls-certificate pin, held to the same rule (the exact offered key while a key refusal holds), and the session redials onto it. Omit to retry with the pin unchanged",
+            "type": "string"
+          },
           "host_key": {
-            "description": "An ssh endpoint only: the SHA256 fingerprint of a changed host key the operator now trusts (the offered_key a host-key rejection names on the component's reachability read). It becomes the endpoint's declared ssh-host-key pin, and the session redials onto it. While a key refusal holds, it must be that exact offered key: any other is a 409 that changes nothing (the refusal on record is the node's last word, so to trust a key the component presents since, retry without a host key first). With no key refusal held it declares a pin ahead of time. Omit to retry with the pin unchanged",
+            "description": "The SHA256 fingerprint of a changed key the operator now trusts, the key the endpoint's transport pins (the offered_key a key refusal names on the component's reachability read): an ssh endpoint's host key, which becomes its declared ssh-host-key, or a tls endpoint's certificate public key, which becomes its declared tls-certificate. The session redials onto it. While a key refusal holds, it must be that exact offered key: any other is a 409 that changes nothing (the refusal on record is the node's last word, so to trust a key the component presents since, retry without a key first). With no key refusal held it declares a pin ahead of time. Omit to retry with the pin unchanged",
             "type": "string"
           }
         },
@@ -16337,7 +16410,7 @@
     },
     "/endpoints/{id}:retry": {
       "post": {
-        "description": "Moves the endpoint's retry counter, which is part of its connection fingerprint: a gate a refusal retrying cannot fix holds (a wrong credential, a changed host key, a reply its driver declares terminal) lifts, the node recycles the endpoint's held session, and every connection to it is attempted again. Fixing the secret, the address, the transport or the driver's login needs no retry: the change moves the fingerprint itself. An unrelated edit (a label) moves nothing. For an ssh endpoint, host_key names a host key to trust (the offered key a host-key rejection names): it becomes the declared pin and recycles the session onto it whatever its state, an audited acceptance of the change. While the endpoint's gate names an offered key, host_key must be that key, so a trust confirmed against a refusal the record has since moved past is a 409 and changes nothing. Audited, a trusted key with the pin it replaced (old) and the pin it set (new). Gated by endpoint:retry; read and retry scopes (through the component) drive the 404 versus 403 split.",
+        "description": "Moves the endpoint's retry counter, which is part of its connection fingerprint: a gate a refusal retrying cannot fix holds (a wrong credential, a changed host key or certificate, a reply its driver declares terminal) lifts, the node recycles the endpoint's held session, and every connection to it is attempted again. Fixing the secret, the address, the transport, the tls mode or the driver's login needs no retry: the change moves the fingerprint itself. An unrelated edit (a label) moves nothing. host_key names a key to trust, the one the endpoint's transport pins (the offered key a key refusal names): an ssh host key, or a tls endpoint's certificate public key, which a tls endpoint also takes as certificate. It becomes the declared pin and recycles the session onto it whatever its state, an audited acceptance of the change. While the endpoint's gate names an offered key, the key must be that key, so a trust confirmed against a refusal the record has since moved past is a 409 and changes nothing. Audited, a trusted key with the pin it replaced (old) and the pin it set (new). Gated by endpoint:retry; read and retry scopes (through the component) drive the 404 versus 403 split.",
         "operationId": "retry-endpoint",
         "parameters": [
           {
@@ -24988,7 +25061,7 @@
     },
     "/telemetry:push": {
       "post": {
-        "description": "Accepts per-lane observations (metrics, properties, events) and raw log lines for one owner and publishes them onto the ingest lane. Each lane validates against its own catalog: an unregistered name is rejected and reported in the response rather than silently dropped, and a property or event payload violating its type's schema refuses the batch with a 422. A key a native probe writes (a reachability verdict or rung, a probe metric or timing, a held session's state) is a node's own observation and is rejected by name on every lane; only the node writes it. Gated by telemetry:push, and the caller's scope must cover the declared owner; an out-of-scope owner is a non-disclosing 404.",
+        "description": "Accepts per-lane observations (metrics, properties, events) and raw log lines for one owner and publishes them onto the ingest lane. Each lane validates against its own catalog: an unregistered name is rejected and reported in the response rather than silently dropped, and a property or event payload violating its type's schema refuses the batch with a 422. Every key has one writer class, and a push writes only a collected key: a key a native probe writes (a reachability verdict or rung, a probe metric or timing, a held session's state, collection-failed) is a node's own observation and a platform key (health) is the platform's, each rejected by name on every lane; a key a calc rule outputs is rejected naming the rule. Gated by telemetry:push, and the caller's scope must cover the declared owner; an out-of-scope owner is a non-disclosing 404.",
         "operationId": "push-telemetry",
         "requestBody": {
           "content": {

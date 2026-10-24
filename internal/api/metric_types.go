@@ -22,6 +22,7 @@ type metricTypeBody struct {
 	Precision   *int            `json:"precision,omitempty" doc:"Decimal places a rendered value keeps"`
 	Official    bool            `json:"official"`
 	WrittenBy   *calcWriterBody `json:"written_by,omitempty" required:"false" doc:"The calc rule that writes this metric, absent when none does (one enabled rule writes a key; a disabled writer is named when no rule is enabled)"`
+	WriterClass string          `json:"writer_class" enum:"node-probe,platform,calc,collected" doc:"Who may write this key (ADR-0161): node-probe (a node's own probe or session machine, under the endpoint it probed), platform (the Omniglass process itself: the health rollup), calc (the calc rule that outputs it), or collected (a driver's emits or a push, and a command's or an operator's value). The Storage Gateway refuses any write whose writer the class does not admit"`
 }
 
 // calcWriterBody names the calc rule that writes a key (#1019).
@@ -41,7 +42,7 @@ func toMetricTypeBody(mt *storage.MetricType) metricTypeBody {
 	return metricTypeBody{
 		ID: mt.ID, Name: mt.Name, DataType: mt.DataType, Label: mt.Label,
 		Description: mt.Description, Unit: mt.Unit, Precision: mt.Precision, Official: mt.Official,
-		WrittenBy: toCalcWriterBody(mt.WrittenBy),
+		WrittenBy: toCalcWriterBody(mt.WrittenBy), WriterClass: string(mt.WriterClass),
 	}
 }
 

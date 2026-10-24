@@ -5,3 +5,6 @@
   "five seconds"), so the endpoint stops collecting while the operator saw success.
 - **Fix:** parse the value where it is accepted and refuse it naming the field
   (`patchedConnection`, internal/storage/endpoints.go).
+- **Also (#1035):** the bare-endpoint path takes params as given, so a key the dialer reads with
+  meaning (a tls endpoint's `tls-mode`) is parsed there too (`checkBareParams`), not only on the
+  driver path's inputs.

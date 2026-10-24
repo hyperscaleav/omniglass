@@ -7,6 +7,7 @@ import (
 	"fmt"
 
 	"github.com/hyperscaleav/omniglass/internal/key"
+	"github.com/hyperscaleav/omniglass/internal/writerclass"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 )
@@ -23,6 +24,10 @@ type EventType struct {
 	Description   string
 	PayloadSchema []byte
 	Official      bool
+	// WriterClass is who may write this event (ADR-0161): node-probe for
+	// collection-failed, collected otherwise (no calc rule outputs an event).
+	// Resolved from the name, never stored.
+	WriterClass writerclass.Class `json:"-"`
 }
 
 // Sentinels for event_type CRUD. Official (seed-owned) event types are read-only.
@@ -89,6 +94,7 @@ func (p *PG) ListEventTypes(ctx context.Context) ([]EventType, error) {
 		if err := rows.Scan(&et.ID, &et.Name, &et.Label, &et.Description, &et.PayloadSchema, &et.Official); err != nil {
 			return nil, fmt.Errorf("storage: scan event type: %w", err)
 		}
+		et.WriterClass = classOf(et.Name, nil)
 		out = append(out, et)
 	}
 	return out, rows.Err()
@@ -109,6 +115,7 @@ func (p *PG) GetEventType(ctx context.Context, name string) (*EventType, error) 
 	if err != nil {
 		return nil, fmt.Errorf("storage: get event type %q: %w", name, err)
 	}
+	et.WriterClass = classOf(et.Name, nil)
 	return &et, nil
 }
 
@@ -162,6 +169,9 @@ func checkSchemaFragment(fragment []byte, col string) error {
 // JSON. A duplicate name is ErrEventTypeExists.
 func (p *PG) CreateEventType(ctx context.Context, actorID string, spec EventTypeSpec) (*EventType, error) {
 	if err := ValidateName("event_type", spec.Name); err != nil {
+		return nil, fmt.Errorf("%w: %w", ErrEventTypeInvalid, err)
+	}
+	if err := reservedName(spec.Name); err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrEventTypeInvalid, err)
 	}
 	if err := checkSchemaFragment(spec.PayloadSchema, "payload_schema"); err != nil {

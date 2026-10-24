@@ -49,6 +49,13 @@ type gateStack struct {
 // serving; the endpoints take the ports the panel reports (#1066).
 func newGateStack(t *testing.T, ip, nodeName string, extraIPs ...string) *gateStack {
 	t.Helper()
+	return newGateStackWith(t, ip, nodeName, nil, extraIPs...)
+}
+
+// newGateStackWith is newGateStack over a catalog the test shapes first (a
+// face's certificate window, say).
+func newGateStackWith(t *testing.T, ip, nodeName string, shape func(*profile.Store), extraIPs ...string) *gateStack {
+	t.Helper()
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, storagetest.NewDSN(t), storage.WithSecretProvider(secret.NewStaticProvider(bytes.Repeat([]byte{0x7}, 32))))
 	if err != nil {
@@ -62,6 +69,9 @@ func newGateStack(t *testing.T, ip, nodeName string, extraIPs ...string) *gateSt
 	store, err := profile.LoadStoreFS(profiles.FS)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if shape != nil {
+		shape(store)
 	}
 	engine := sim.NewEngine(store, profiles.Templates())
 	engine.SetPortMap(sim.EphemeralPorts)
@@ -230,7 +240,7 @@ func TestTheGateLiftsOnlyWhenTheFingerprintChanges(t *testing.T) {
 	s.settles("logins after a node restart", logins, 3)
 
 	// An operator's retry moves the fingerprint: a fresh login budget.
-	if _, err := s.gw.RetryEndpoint(s.ctx, "", ep.ID, "", s.all, s.all); err != nil {
+	if _, err := s.gw.RetryEndpoint(s.ctx, "", ep.ID, storage.RetryPin{}, s.all, s.all); err != nil {
 		t.Fatal(err)
 	}
 	s.settles("logins after a retry", logins, 6)

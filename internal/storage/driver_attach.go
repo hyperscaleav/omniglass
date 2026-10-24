@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/hyperscaleav/omniglass/internal/driver"
+	"github.com/hyperscaleav/omniglass/internal/writerclass"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -31,6 +32,9 @@ type catalogMaps struct {
 	lanes    map[string]string
 	commands map[string]bool
 	secrets  map[string]bool
+	// calcOwned are the metric and property names a calc rule outputs: keys
+	// of the calc writer class, which a driver may not emit (ADR-0161).
+	calcOwned map[string]bool
 }
 
 func (c catalogMaps) LaneOf(name string) (string, bool) {
@@ -39,14 +43,18 @@ func (c catalogMaps) LaneOf(name string) (string, bool) {
 }
 func (c catalogMaps) CommandTypeExists(name string) bool { return c.commands[name] }
 func (c catalogMaps) SecretTypeExists(name string) bool  { return c.secrets[name] }
+func (c catalogMaps) WriterClass(name string) writerclass.Class {
+	return writerclass.Of(name, c.calcOwned[name])
+}
 
 // loadDriverCatalog snapshots the names a spec may reference: the metric and
 // property catalogs as emit lanes, the command types, the secret types.
 func loadDriverCatalog(ctx context.Context, q querier) (catalogMaps, error) {
 	cat := catalogMaps{
-		lanes:    map[string]string{},
-		commands: map[string]bool{},
-		secrets:  map[string]bool{},
+		lanes:     map[string]string{},
+		commands:  map[string]bool{},
+		secrets:   map[string]bool{},
+		calcOwned: map[string]bool{},
 	}
 	rows, err := q.Query(ctx, `
 		select name, 'metric' from metric_type
@@ -70,22 +78,26 @@ func loadDriverCatalog(ctx context.Context, q querier) (catalogMaps, error) {
 	if err := rows.Err(); err != nil {
 		return cat, fmt.Errorf("storage: read emit catalogs: %w", err)
 	}
-	for col, into := range map[string]map[string]bool{"command_type": cat.commands, "secret_type": cat.secrets} {
-		rows, err := q.Query(ctx, `select name from `+col)
+	for sql, into := range map[string]map[string]bool{
+		`select name from command_type`: cat.commands,
+		`select name from secret_type`:  cat.secrets,
+		calcOwnedNamesSQL:               cat.calcOwned,
+	} {
+		rows, err := q.Query(ctx, sql)
 		if err != nil {
-			return cat, fmt.Errorf("storage: load %s catalog: %w", col, err)
+			return cat, fmt.Errorf("storage: load driver catalog (%s): %w", sql, err)
 		}
 		for rows.Next() {
 			var name string
 			if err := rows.Scan(&name); err != nil {
 				rows.Close()
-				return cat, fmt.Errorf("storage: scan %s catalog: %w", col, err)
+				return cat, fmt.Errorf("storage: scan driver catalog (%s): %w", sql, err)
 			}
 			into[name] = true
 		}
 		rows.Close()
 		if err := rows.Err(); err != nil {
-			return cat, fmt.Errorf("storage: read %s catalog: %w", col, err)
+			return cat, fmt.Errorf("storage: read driver catalog (%s): %w", sql, err)
 		}
 	}
 	return cat, nil
@@ -212,6 +224,11 @@ func (p *PG) resolveInputs(ctx context.Context, q querier, d *Driver, sp *driver
 		}
 	}
 	for _, in := range sp.Inputs {
+		if v, ok := effective[in.Name]; ok {
+			if err := sp.CheckInputValue(in.Name, v); err != nil {
+				return nil, fmt.Errorf("%w: %v", ErrAttachInvalid, err)
+			}
+		}
 		if in.Kind == "number" {
 			if v, ok := effective[in.Name]; ok {
 				if _, err := strconv.ParseFloat(v, 64); err != nil {
@@ -286,10 +303,14 @@ func (p *PG) resolveInputs(ctx context.Context, q querier, d *Driver, sp *driver
 
 // attachParams derives the transport params from the effective inputs by the
 // engine's naming contract: an input named `host` is the address, an input
-// named `port` joins it. Everything else stays in inputs, read by the
+// named `port` joins it, and an input named `tls-mode` is the tls dialer's
+// verification mode (#1035). Everything else stays in inputs, read by the
 // interpreter, not the dialer.
 func attachParams(effective map[string]string) map[string]string {
 	params := map[string]string{}
+	if mode, ok := effective[driver.TLSModeInput]; ok {
+		params[driver.TLSModeInput] = mode
+	}
 	if host, ok := effective["host"]; ok {
 		if port, ok := effective["port"]; ok && port != "" {
 			params["target"] = net.JoinHostPort(host, port)

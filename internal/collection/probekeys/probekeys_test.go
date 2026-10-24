@@ -133,3 +133,14 @@ func TestIsNodeOnly(t *testing.T) {
 		}
 	}
 }
+
+// The tls keys (#1035) are the node's alone: its pin steers what it attempts,
+// as the ssh host key does, and its handshake timing and certificate facts are
+// observations only the probing node makes.
+func TestTheTLSKeysAreNodeOnly(t *testing.T) {
+	for _, key := range []string{TLSCertificate, TLSHandshakeTime, TLSCertificateExpiry, TLSCertificateDaysLeft} {
+		if !IsNodeOnly(key) {
+			t.Errorf("%s is pushable", key)
+		}
+	}
+}

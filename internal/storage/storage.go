@@ -425,9 +425,10 @@ type Gateway interface {
 	// RetryEndpoint is an operator's retry of the endpoint's held session
 	// (#1049): it moves the endpoint's revision, which wakes a rejected
 	// session for one attempt, and is audited.
-	// hostKey, when set, is the ssh host key fingerprint the operator now
-	// trusts (a replaced component's), declared as the endpoint's pin.
-	RetryEndpoint(ctx context.Context, actorID, id, hostKey string, read, action scope.Set) (*Endpoint, error)
+	// pin, when set, is the key the operator now trusts (a replaced
+	// component's ssh host key, or a tls certificate's public key),
+	// declared as the endpoint's pin.
+	RetryEndpoint(ctx context.Context, actorID, id string, pin RetryPin, read, action scope.Set) (*Endpoint, error)
 	DeleteEndpoint(ctx context.Context, actorID, id string, read, action scope.Set) error
 
 	// The task tier: read-only over DERIVED collection work. A task is not
@@ -547,21 +548,30 @@ type Gateway interface {
 	IssueCommand(ctx context.Context, actorID, ownerKind, ownerID, commandType, instance string, value, params json.RawMessage) (*Command, error)
 	CommandSettlement(ctx context.Context, ownerKind, ownerID, commandType, instance string) (SettlementVerdict, error)
 
-	// The observed-metric sink. reject-not-project is applied by the caller
-	// (collection.Registry) before the write.
-	InsertMetricSamples(ctx context.Context, evs []MetricSampleWrite) error
+	// The observed-metric sink, for the writer a batch speaks for (NodeWriter
+	// or PushWriter), held to each key's writer class (ADR-0161).
+	// reject-not-project is applied by the caller (collection.Registry) before
+	// the write. The reads serve the observed series only: the node's account,
+	// never a declared, intended or calculated row beside it.
+	InsertMetricSamples(ctx context.Context, w KeyWriter, evs []MetricSampleWrite) error
 	LatestMetric(ctx context.Context, componentName, key string) (*MetricSample, error)
 	// LatestMetricInstance is the instance-scoped LatestMetric: the reachability
 	// layer signals are per-interface, so each interface resolves its own latest.
 	LatestMetricInstance(ctx context.Context, componentName, key, instance string) (*MetricSample, error)
 
 	// The observed-property sink: the mirror of the metric sink for categorical
-	// verdicts (interface-reachable). reject-not-project and the transition-only
-	// guard are applied by the caller before the write. LatestProperty backs the
-	// ingest-side transition guard; PropertyTransitions is the ordered flip series
-	// the availability strip reads.
-	InsertPropertySamples(ctx context.Context, evs []PropertySampleWrite) error
+	// verdicts (interface-reachable), held to the same writer check.
+	// reject-not-project and the transition-only guard are applied by the caller
+	// before the write. LatestProperty backs the ingest-side transition guard;
+	// PropertyTransitions is the ordered flip series the availability strip
+	// reads; both read the observed series only.
+	InsertPropertySamples(ctx context.Context, w KeyWriter, evs []PropertySampleWrite) error
 	LatestProperty(ctx context.Context, componentName, key, instance string) (*PropertySample, error)
+	// EndpointKeyPin is the key an ssh or tls endpoint pins in force: the
+	// operator's declared pin, else the key the node trusted on first use.
+	// The declared row is the pin's path (ADR-0161), read here as the pin
+	// alone, never as the node's observation.
+	EndpointKeyPin(ctx context.Context, componentName, endpoint, transport string) (string, error)
 	PropertyTransitions(ctx context.Context, componentName, key, instance string, window time.Duration) ([]PropertySample, error)
 	// StampEndpointsSeen records that an ingest batch delivered by each
 	// endpoint landed, by the server's clock, coalesced (#933).
@@ -573,7 +583,7 @@ type Gateway interface {
 	// The observed-log sink: the mirror of the metric and property sinks for log-kind
 	// occurrences. reject-not-project and owner-confinement are applied by the caller
 	// before the write. ListComponentEvents backs the component event log panel.
-	InsertEvents(ctx context.Context, evs []EventWrite) error
+	InsertEvents(ctx context.Context, w KeyWriter, evs []EventWrite) error
 	ListComponentEvents(ctx context.Context, componentName string, window time.Duration, limit int) ([]Event, error)
 	// ListSystemEvents merges the system's own events with its members',
 	// newest first, each row naming its owner (#793).

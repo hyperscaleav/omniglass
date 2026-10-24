@@ -99,7 +99,7 @@ func TestCalcRuleStateAndPreviewAPI(t *testing.T) {
 		}
 	}
 	for comp, v := range map[string]float64{"e1": 20, "w2": 40} {
-		if err := gw.InsertMetricSamples(ctx, []storage.MetricSampleWrite{{OwnerKind: "component", OwnerID: comp, Key: "room-temperature", Value: v, TS: time.Now()}}); err != nil {
+		if err := gw.InsertMetricSamples(ctx, storage.PushWriter(), []storage.MetricSampleWrite{{OwnerKind: "component", OwnerID: comp, Key: "room-temperature", Value: v, TS: time.Now()}}); err != nil {
 			t.Fatal(err)
 		}
 	}

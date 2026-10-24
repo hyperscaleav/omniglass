@@ -46,6 +46,7 @@ func scanPropertyType(row pgx.Row) (*PropertyType, error) {
 		return nil, err
 	}
 	prop.WrittenBy = parseCalcWriter(writer)
+	prop.WriterClass = classOf(prop.Name, prop.WrittenBy)
 	return &prop, nil
 }
 
@@ -90,6 +91,9 @@ func guardPropertyMutable(ctx context.Context, q querier, name string) error {
 // duplicate name is ErrPropertyTypeExists.
 func (p *PG) CreatePropertyType(ctx context.Context, actorID string, spec PropertyTypeSpec) (*PropertyType, error) {
 	if err := ValidateName("property_type", spec.Name); err != nil {
+		return nil, fmt.Errorf("%w: %w", ErrPropertyTypeInvalid, err)
+	}
+	if err := reservedName(spec.Name); err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrPropertyTypeInvalid, err)
 	}
 	if err := checkSchemaFragment(spec.Validation, "validation"); err != nil {
