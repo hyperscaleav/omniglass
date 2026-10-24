@@ -154,7 +154,9 @@ func itoa(v int) string {
 // startSNMPAgent serves v2c GET on a random UDP port: community "lab-public",
 // sysDescr as an OctetString, sysUpTime as TimeTicks (8123456 hundredths).
 // A wrong community is silence, exactly as real agents behave; an unknown OID
-// answers noSuchObject (0x80).
+// answers noSuchObject (0x80); the community "revoked" is answered with
+// error-status authorizationError (16), as an agent whose access policy
+// refuses a known community does (#821).
 func startSNMPAgent(t *testing.T) string {
 	t.Helper()
 	pc, err := net.ListenPacket("udp", "127.0.0.1:0")
@@ -187,7 +189,12 @@ func startSNMPAgent(t *testing.T) string {
 			if vTag != 0x02 || berInt(t, vVal) != 1 || cTag != 0x04 || pTag != 0xa0 {
 				continue // not a v2c GetRequest
 			}
-			if string(cVal) != "lab-public" {
+			errStatus := int64(0)
+			switch string(cVal) {
+			case "lab-public":
+			case "revoked":
+				errStatus = 16 // authorizationError
+			default:
 				continue // wrong community: agents answer with silence
 			}
 			pdu := &tlvReader{b: pVal}
@@ -212,10 +219,10 @@ func startSNMPAgent(t *testing.T) string {
 			}
 			resp := tlv(0x30, append(append(
 				encInt(0x02, 1),
-				tlv(0x04, []byte("lab-public"))...),
+				tlv(0x04, cVal)...),
 				tlv(0xa2, append(append(append(
 					tlv(0x02, ridVal),
-					encInt(0x02, 0)...),
+					encInt(0x02, errStatus)...),
 					encInt(0x02, 0)...),
 					tlv(0x30, vbs)...))...))
 			_, _ = pc.WriteTo(resp, addr)
@@ -256,8 +263,25 @@ func TestSNMPGetterReal(t *testing.T) {
 	})
 
 	t.Run("a wrong community is an error, not silence read as data", func(t *testing.T) {
-		if _, err := g.Get(ctx, addr, "wrong-horse", []string{"1.3.6.1.2.1.1.1.0"}, 700*time.Millisecond); err == nil {
+		_, err := g.Get(ctx, addr, "wrong-horse", []string{"1.3.6.1.2.1.1.1.0"}, 700*time.Millisecond)
+		if err == nil {
 			t.Fatal("wrong community answered")
+		}
+		// v2c drops a wrong community silently: a timeout, retryable, never
+		// a refusal (it cannot be told from a stopped agent).
+		if _, terminal := collection.AsTerminal(err); terminal {
+			t.Fatalf("a silent drop read as a refusal: %v", err)
+		}
+		if r, ok := collection.Classify(err); !ok || r != collection.Timedout {
+			t.Fatalf("a silent drop classified %q, want timeout", r)
+		}
+	})
+
+	t.Run("an authorizationError is a terminal auth refusal", func(t *testing.T) {
+		_, err := g.Get(ctx, addr, "revoked", []string{"1.3.6.1.2.1.1.3.0"}, time.Second)
+		terr, ok := collection.AsTerminal(err)
+		if !ok || terr.Class != "auth" {
+			t.Fatalf("err = %v, want a terminal auth refusal", err)
 		}
 	})
 }
