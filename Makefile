@@ -1,7 +1,7 @@
 # Local dev loop + the build/run flow for the single binary. Production deploy
 # is BYO Postgres; tests use ephemeral testcontainer Postgres.
 
-.PHONY: build build-web web image gen gen-proto gen-web test test-web test-short test-e2e bench clean-testcontainers tidy up down dev release-plan release-apply release-snapshot docs-shots docs-shots-check docs-shots-verify docs-walkthroughs dev-sim bench-sim test-netadmin walkthrough-stack dev-sim-container test-walkthrough-stack walkthroughs test-walkthroughs probe
+.PHONY: build build-web web image gen gen-proto gen-web adr-renumber test test-web test-short test-e2e bench clean-testcontainers tidy up down dev release-plan release-apply release-snapshot docs-shots docs-shots-check docs-shots-verify docs-walkthroughs dev-sim bench-sim test-netadmin walkthrough-stack dev-sim-container test-walkthrough-stack walkthroughs test-walkthroughs probe
 
 # Build the single binary (no console embedded; serves the build-the-console
 # placeholder under /web).
@@ -60,6 +60,17 @@ gen-proto:
 gen-web:
 	go run ./cmd/openapigen
 	cd web && npm install && npm run gen:api
+
+# Renumber a decision another PR took the number of first (#1095). The
+# decisions lint names both files. On the branch that lands second, this renames
+# docs/src/content/decisions/adr-FROM-*.md and rewrites every ADR-FROM
+# reference and #adr-FROM- anchor (docs, code comments, skills). Before merging
+# main: make adr-renumber FROM=NNNN TO=MMMM. Once both decisions are in the tree
+# (after the merge, or on main): add FILE=adr-NNNN-<slug>.md, and only the lines
+# the commits after SINCE (default origin/main) wrote are rewritten.
+adr-renumber:
+	@test -n "$(FROM)" && test -n "$(TO)" || { echo "usage: make adr-renumber FROM=NNNN TO=MMMM [FILE=adr-NNNN-<slug>.md [SINCE=<rev>]]"; exit 2; }
+	go run ./cmd/adrrenumber -from $(FROM) -to $(TO) -file "$(FILE)" -since "$(SINCE)"
 
 # Full gate: every test, including the testcontainer-backed integration and
 # end-to-end tests (real Postgres) plus the SPA (vitest). Green before commit and

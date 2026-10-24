@@ -19,9 +19,11 @@ Treat every change as portfolio-quality and externally visible.
    failing regression test. Full loop: [docs/contributing/test-driven.md](docs/src/content/docs/contributing/test-driven.md).
 3. **Docs with everything.** A feature is not done until the docs that teach it ship in
    the same PR, and **status moves with the code**: advance the page's status badge to its new floor
-   (`Design`/`Partial`/`Built`), add the `build-log.md` build-progress note, and log any divergence from a
-   page's design in the [decision log](docs/src/content/docs/architecture/decisions.md). A built
-   capability behind a `Design` badge is drift. [docs/contributing/docs-with-everything.md](docs/src/content/docs/contributing/docs-with-everything.md).
+   (`Design`/`Partial`/`Built`), add the build-log entry, and log any divergence from a page's design in
+   the [decision log](docs/src/content/docs/architecture/decisions.md). Each log entry (and each
+   adversarial-review anti-pattern) is **its own file** in a fragment directory
+   (`docs/src/content/build-log/`, `docs/src/content/decisions/`), never an append to a shared page, so
+   PRs never conflict on them. A built capability behind a `Design` badge is drift. [docs/contributing/docs-with-everything.md](docs/src/content/docs/contributing/docs-with-everything.md).
 4. **Functional and pedagogical.** Omniglass is both a tool and a learning tool. Operator
    surfaces should also teach the concept they operate on, interactively, against real or
    simulated data. [docs/contributing/learning-tool.md](docs/src/content/docs/contributing/learning-tool.md).

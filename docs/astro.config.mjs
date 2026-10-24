@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 import remarkDirective from 'remark-directive';
 import starlightOpenAPI, { openAPISidebarGroups } from 'starlight-openapi';
 import { remarkDesignFence } from './src/plugins/remark-design-fence.mjs';
+import { remarkFragments } from './src/plugins/remark-fragments.mjs';
 import { remarkScreenshots } from './src/plugins/remark-screenshots.mjs';
 import { remarkWalkthroughs } from './src/plugins/remark-walkthroughs.mjs';
 
@@ -18,9 +19,12 @@ export default defineConfig({
   // embeds from the page's screenshots and walkthroughs frontmatter (the latter
   // reading the recorder's manifest under public/walkthroughs/), and
   // remarkDesignFence renders the fence into the target-design aside the docs
-  // lint suite keys on.
+  // lint suite keys on. remarkFragments splices the build log's and the decision
+  // log's entries (one file each under src/content/build-log/ and
+  // src/content/decisions/) into their pages before the parse (#1095).
   markdown: {
     remarkPlugins: [
+      [remarkFragments, { contentDir: fileURLToPath(new URL('./src/content', import.meta.url)) }],
       remarkDirective,
       remarkScreenshots,
       [remarkWalkthroughs, { publicDir: fileURLToPath(new URL('./public', import.meta.url)) }],

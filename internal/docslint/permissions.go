@@ -221,7 +221,7 @@ func ScanPermissionReferences() ([]Finding, error) {
 	resources, actions := stampVocab(stamps)
 	var findings []Finding
 	err = walkDocs(func(rel, content string) error {
-		if vocabularyAllowed[rel] {
+		if vocabularyAllowed(rel) {
 			return nil
 		}
 		for _, r := range Regions(content) {

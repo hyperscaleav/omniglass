@@ -26,16 +26,51 @@ func TestVocabulary(t *testing.T) {
 	report(t, "vocabulary", findings, enforceVocabulary)
 }
 
-// TestDecisionsFormat checks the decision log's mechanical structure: unique,
-// ordered ADR numbers, an index row per entry, and Date and Status fields.
-// The audit found a duplicate ADR-0036, sixteen missing index rows, and
-// entries with no status at all.
+// TestDecisionsFormat checks the decision log's mechanical structure, now one
+// file per decision under docs/src/content/decisions/ (#1095): the index row's
+// fields in each file's frontmatter, Date and Status in its body, one file per
+// number, and numbers from 0001 with no gap. The audit found a duplicate
+// ADR-0036, sixteen missing index rows, and entries with no status at all; the
+// index is generated from the files now, so a missing row cannot recur, and two
+// PRs that took the same number fail here naming both files.
 func TestDecisionsFormat(t *testing.T) {
 	findings, err := ScanDecisions()
 	if err != nil {
 		t.Fatalf("scan: %v", err)
 	}
 	report(t, "decisions-format", findings, enforceDecisions)
+}
+
+// TestBuildLogFormat checks the build log's entry files (#1095): named for
+// their date, carrying title, date and refs, one section each.
+func TestBuildLogFormat(t *testing.T) {
+	findings, err := ScanBuildLog()
+	if err != nil {
+		t.Fatalf("scan: %v", err)
+	}
+	report(t, "build-log-format", findings, true)
+}
+
+// TestLogsStayFragments is the monolith guard (#1095): the build log and the
+// decision log pages carry their directives and no entries, and the
+// anti-pattern catalog's single file stays gone. An entry appended to a page
+// is the merge conflict this layout exists to end.
+func TestLogsStayFragments(t *testing.T) {
+	findings, err := ScanLogHosts()
+	if err != nil {
+		t.Fatalf("scan: %v", err)
+	}
+	report(t, "log-hosts", findings, true)
+}
+
+// TestAntiPatternCatalog checks the adversarial-review catalog's entry files:
+// each opens with its own id and status (#1095).
+func TestAntiPatternCatalog(t *testing.T) {
+	findings, err := ScanAntiPatterns()
+	if err != nil {
+		t.Fatalf("scan: %v", err)
+	}
+	report(t, "anti-patterns", findings, true)
 }
 
 // TestBannedPatternsStaySane pins the denylist entries against over-matching:

@@ -1,6 +1,6 @@
 ---
 name: adversarial-review
-description: "Use for the per-slice review pass on any omniglass diff, and always before a feature-loop slice merges inward: a refute-not-confirm review that sweeps the repo's anti-pattern catalog (references/anti-patterns.md) against every hunk and admits only findings that carry a concrete failure scenario traced through the actual code. Generic praise and style nits are not output; catalog updates ride the same PR as the change that makes them."
+description: "Use for the per-slice review pass on any omniglass diff, and always before a feature-loop slice merges inward: a refute-not-confirm review that sweeps the repo's anti-pattern catalog (references/anti-patterns/, one file per entry) against every hunk and admits only findings that carry a concrete failure scenario traced through the actual code. Generic praise and style nits are not output; catalog updates ride the same PR as the change that makes them."
 ---
 
 # Adversarial review
@@ -29,8 +29,9 @@ a concrete failure scenario, or an explicit "swept, nothing survived". Anything 
 
 1. Read the slice's sub-issue (the scope contract) and the full diff.
 2. Sweep every hunk against the **anti-pattern catalog**
-   ([references/anti-patterns.md](references/anti-patterns.md)): each entry has a
-   detection cue; a cue that fires makes a candidate finding.
+   ([references/anti-patterns/](references/anti-patterns/)): one file per entry, so read
+   every file in the directory; each entry has a detection cue, and a cue that fires makes
+   a candidate finding.
 3. Beyond the catalog, interrogate the diff against the invariants: every route gated,
    every applicable query scoped, every privileged mutation audited in-transaction,
    migrations idempotent and never edited, no fixed test ports, tests prove behavior
@@ -52,9 +53,12 @@ a concrete failure scenario, or an explicit "swept, nothing survived". Anything 
    Merge-blocking: an invariant violation, a data-loss or authz failure scenario, a
    catalog entry with a live failure. Advisory: real but survivable (filed or fixed at
    the author's choice, stated which).
-7. **Maintain the catalog.** A slice that fixes an anti-pattern class flips that entry's
-   status in the same PR; a review that discovers a new class appends an entry. The
-   catalog is a living artifact and its staleness is itself a defect.
+7. **Maintain the catalog.** A slice that fixes an anti-pattern class flips the status in
+   that entry's file in the same PR; a review that discovers a new class adds a file,
+   `references/anti-patterns/<id>.md`, opening with `## <id> (<status>)` (the docs lint
+   checks the shape). Never append to a shared file: one file per entry is what keeps two
+   PRs' catalog updates from conflicting. The catalog is a living artifact and its
+   staleness is itself a defect.
 
 ## In a feature loop
 

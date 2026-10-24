@@ -364,14 +364,22 @@ var Banned = []BannedTerm{
 	},
 }
 
-// vocabularyAllowed lists files (relative to DocsRoot) exempt from the
+// vocabularyAllowedFiles lists files (relative to DocsRoot) exempt from the
 // banned-vocabulary lint: historical records where a retired term was true at
 // the time it was written, and generated files whose fix belongs in the
-// generator's source.
-var vocabularyAllowed = map[string]bool{
+// generator's source. The log pages' entries are their own files now (#1095);
+// vocabularyAllowed exempts those too.
+var vocabularyAllowedFiles = map[string]bool{
 	filepath.Join("architecture", "decisions.md"): true,
 	filepath.Join("architecture", "build-log.md"): true,
 	filepath.Join("reference", "cli", "index.md"): true,
+}
+
+// vocabularyAllowed reports whether rel is exempt from the vocabulary lint and
+// the existence lints that share its exemption: an allowlisted file, or a build
+// log or decision log entry.
+func vocabularyAllowed(rel string) bool {
+	return vocabularyAllowedFiles[rel] || isFragmentFile(rel)
 }
 
 // operatorStrings are the non-docs files whose text reaches an OPERATOR: seed
@@ -441,25 +449,40 @@ type Finding struct {
 	Text string // what and why
 }
 
-// walkDocs yields every .md/.mdx file under DocsRoot as (relative path, content).
+// walkDocs yields every .md/.mdx file under DocsRoot as (relative path,
+// content), then every entry file of the log fragment directories beside it
+// (#1095), relative to DocsRoot (../build-log/<file>), so a lint that read the
+// build log and the decision log when their entries sat in the pages still
+// reads every entry.
 func walkDocs(fn func(rel string, content string) error) error {
-	return filepath.Walk(DocsRoot, func(path string, info os.FileInfo, err error) error {
-		if err != nil || info.IsDir() {
-			return err
+	for _, root := range append([]string{DocsRoot}, fragmentRoots()...) {
+		if root != DocsRoot {
+			if _, err := os.Stat(root); os.IsNotExist(err) {
+				continue
+			}
 		}
-		if ext := filepath.Ext(path); ext != ".md" && ext != ".mdx" {
-			return nil
-		}
-		rel, err := filepath.Rel(DocsRoot, path)
+		err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+			if err != nil || info.IsDir() {
+				return err
+			}
+			if ext := filepath.Ext(path); ext != ".md" && ext != ".mdx" {
+				return nil
+			}
+			rel, err := filepath.Rel(DocsRoot, path)
+			if err != nil {
+				return err
+			}
+			b, err := os.ReadFile(path)
+			if err != nil {
+				return err
+			}
+			return fn(rel, string(b))
+		})
 		if err != nil {
 			return err
 		}
-		b, err := os.ReadFile(path)
-		if err != nil {
-			return err
-		}
-		return fn(rel, string(b))
-	})
+	}
+	return nil
 }
 
 // ScanVocabulary returns every banned-term hit in the docs content, excluding
@@ -467,7 +490,7 @@ func walkDocs(fn func(rel string, content string) error) error {
 func ScanVocabulary() ([]Finding, error) {
 	var findings []Finding
 	err := walkDocs(func(rel, content string) error {
-		if vocabularyAllowed[rel] {
+		if vocabularyAllowed(rel) {
 			return nil
 		}
 		for i, line := range strings.Split(content, "\n") {
@@ -547,67 +570,6 @@ func scanLine(line string) []string {
 		return []string{prose[loc[0]:loc[1]] + " is retired (" + term.Origin + "); write " + term.Replacement}
 	}
 	return nil
-}
-
-var (
-	adrHeading  = regexp.MustCompile(`(?m)^### ADR-(\d{4})\b`)
-	adrIndexRow = regexp.MustCompile(`(?m)^\|\s*\[ADR-(\d{4})\]`)
-	adrDate     = regexp.MustCompile(`(?i)\*\*Date:?\*\*`)
-	adrStatus   = regexp.MustCompile(`(?i)\*\*Status:?\*\*`)
-)
-
-// ScanDecisions checks the decision log's structure: unique ADR numbers in
-// ascending order, an index-table row per entry, and Date and Status fields on
-// each entry. (The status vocabulary itself is prose; uniqueness and presence
-// are what rot mechanically.)
-func ScanDecisions() ([]Finding, error) {
-	path := filepath.Join(DocsRoot, "architecture", "decisions.md")
-	b, err := os.ReadFile(path)
-	if err != nil {
-		return nil, err
-	}
-	content := string(b)
-	rel := filepath.Join("architecture", "decisions.md")
-	var findings []Finding
-
-	indexed := map[string]bool{}
-	for _, m := range adrIndexRow.FindAllStringSubmatch(content, -1) {
-		indexed[m[1]] = true
-	}
-
-	locs := adrHeading.FindAllStringSubmatchIndex(content, -1)
-	seen := map[string]int{}
-	prev := 0
-	for i, loc := range locs {
-		num := content[loc[2]:loc[3]]
-		line := 1 + strings.Count(content[:loc[0]], "\n")
-		if firstLine, dup := seen[num]; dup {
-			findings = append(findings, Finding{rel, line, "duplicate ADR-" + num + " (first at line " + itoa(firstLine) + ")"})
-		}
-		seen[num] = line
-		n := atoi(num)
-		if n < prev {
-			findings = append(findings, Finding{rel, line, "ADR-" + num + " is out of numeric order"})
-		}
-		if n > prev {
-			prev = n
-		}
-		if !indexed[num] {
-			findings = append(findings, Finding{rel, line, "ADR-" + num + " has no index-table row"})
-		}
-		end := len(content)
-		if i+1 < len(locs) {
-			end = locs[i+1][0]
-		}
-		entry := content[loc[0]:end]
-		if !adrDate.MatchString(entry) {
-			findings = append(findings, Finding{rel, line, "ADR-" + num + " has no Date field"})
-		}
-		if !adrStatus.MatchString(entry) {
-			findings = append(findings, Finding{rel, line, "ADR-" + num + " has no Status field"})
-		}
-	}
-	return findings, nil
 }
 
 func atoi(s string) int {
