@@ -712,3 +712,80 @@ func TestReachabilityServesTheSNMPRequestLayer(t *testing.T) {
 		t.Fatalf("layers = %+v, want the request layer unanswered and untimed", got)
 	}
 }
+
+// An https endpoint is read over the tls handshake too (#902): its
+// reachability carries the same tls facts the console's tls rows render
+// (the mode, the key it pins, the handshake time), and a plain http endpoint
+// beside it carries none. Skipped under -short.
+func TestReachabilityCarriesHTTPSTLSFacts(t *testing.T) {
+	if testing.Short() {
+		t.Skip("integration test needs Postgres")
+	}
+	ctx := context.Background()
+	gw, err := storage.NewPG(ctx, storagetest.NewDSN(t))
+	if err != nil {
+		t.Fatalf("open gateway: %v", err)
+	}
+	defer gw.Close()
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	ownerTok, hash, prefix, err := auth.NewBearerToken()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := gw.BootstrapOwner(ctx, storage.OwnerSpec{Username: "root", SecretHash: hash, Prefix: prefix}); err != nil {
+		t.Fatal(err)
+	}
+	all := scope.Set{All: true}
+	comp := "bar-1"
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: comp}, all, all, all, all); err != nil {
+		t.Fatal(err)
+	}
+	for tr, params := range map[string]string{"https": `{"target":"127.60.0.9:443","tls-mode":"pin"}`, "http": `{"target":"127.60.0.9:80"}`} {
+		if _, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{Transport: tr, Component: &comp, Params: []byte(params)}, all); err != nil {
+			t.Fatalf("%s endpoint: %v", tr, err)
+		}
+	}
+	key := "SHA256:" + strings.Repeat("A", 43)
+	at := time.Now().UTC().Add(-time.Minute).Truncate(time.Microsecond)
+	if err := insertProperties(ctx, gw, []storage.PropertySampleWrite{{OwnerKind: "component", OwnerID: comp, Key: "tls-certificate", Instance: "https", Value: key, Source: "https", TS: at}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := insertMetrics(ctx, gw, []storage.MetricSampleWrite{{OwnerKind: "component", OwnerID: comp, Key: "tls-handshake-time", Instance: "https", Value: 9.5, Source: "https", TS: at}}); err != nil {
+		t.Fatal(err)
+	}
+	srv := httptest.NewServer(api.NewHandler(gw))
+	defer srv.Close()
+	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
+	var r struct {
+		Endpoints []struct {
+			Endpoint string `json:"endpoint"`
+			TLS      *struct {
+				Mode        string   `json:"mode"`
+				Key         string   `json:"key"`
+				HandshakeMS *float64 `json:"handshake_ms"`
+			} `json:"tls"`
+		} `json:"endpoints"`
+	}
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/components/"+comp+"/reachability", nil, http.StatusOK), &r); err != nil {
+		t.Fatal(err)
+	}
+	seen := map[string]bool{}
+	for _, ep := range r.Endpoints {
+		seen[ep.Endpoint] = true
+		switch ep.Endpoint {
+		case "https":
+			if ep.TLS == nil || ep.TLS.Mode != "pin" || ep.TLS.Key != key || ep.TLS.HandshakeMS == nil || *ep.TLS.HandshakeMS != 9.5 {
+				t.Fatalf("the https endpoint's tls facts = %+v", ep.TLS)
+			}
+		case "http":
+			if ep.TLS != nil {
+				t.Fatalf("a plain http endpoint carries tls facts %+v", ep.TLS)
+			}
+		}
+	}
+	if !seen["https"] || !seen["http"] {
+		t.Fatalf("endpoints read: %v", seen)
+	}
+}
