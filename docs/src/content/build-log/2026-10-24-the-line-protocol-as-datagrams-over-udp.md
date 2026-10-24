@@ -48,3 +48,10 @@ the console, not unanswered; the tests pick no released port (a privileged port 
 the end-to-end test reads the node's own port back from the panel, a listen port is picked again on
 a collision); and the nodes and simulation pages stop calling udp Design and an echo. Two catalog
 entries record the classes: `connectionless-late-answer` and `side-send-skips-gate`.
+
+Four fixes ported from the duplicate #1105, each test-first: one listen-port reading for the write
+path and the node (`driver.ParseListenPort`; the write had taken `51400.0`, which the node refused,
+and refused null and `""`, which the node read as unset); an error-shaped answer timed, since it is
+the component's answer; the reachability read serving the request rung as a `request` layer, timed
+by `udp-response-time` only while answered, so the panel's row carries its round trip; and the
+breakdown's label column widened so its labels align.
