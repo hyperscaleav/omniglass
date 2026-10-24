@@ -99,7 +99,7 @@ function TlsRows(p: { tls: ReachTLS; responsive?: boolean; refused: boolean }) {
           an earlier probe's; beneath a certificate gate no handshake runs. */}
       <div class="flex items-center gap-2">
         <span class={`inline-block size-2 shrink-0 rounded-full ${p.refused || p.responsive === undefined ? TONE_DOT.unknown : p.responsive ? "bg-success" : "bg-error"}`} />
-        <span class="w-10 shrink-0 uppercase tracking-wide text-base-content/45 text-[10px]">tls</span>
+        <span class="w-16 shrink-0 uppercase tracking-wide text-base-content/45 text-[10px]">tls</span>
         <span class="font-data text-base-content/70">handshake</span>
         <span class="text-base-content/50">
           {p.refused ? "not tried beneath the gate" : p.responsive === undefined ? "not answered yet" : p.responsive ? "answered" : "not answered"}
@@ -111,7 +111,7 @@ function TlsRows(p: { tls: ReachTLS; responsive?: boolean; refused: boolean }) {
       </div>
       <div class="flex items-center gap-2" data-testid="tls-cert" data-tone={tone()}>
         <span class={`inline-block size-2 shrink-0 rounded-full ${TONE_DOT[tone()]}`} />
-        <span class="w-10 shrink-0 uppercase tracking-wide text-base-content/45 text-[10px]">cert</span>
+        <span class="w-16 shrink-0 uppercase tracking-wide text-base-content/45 text-[10px]">cert</span>
         <Show
           when={days() !== undefined}
           fallback={
@@ -127,7 +127,7 @@ function TlsRows(p: { tls: ReachTLS; responsive?: boolean; refused: boolean }) {
       </div>
       <div class="flex items-center gap-2">
         <span class={`inline-block size-2 shrink-0 rounded-full ${TONE_DOT[mode().tone]}`} />
-        <span class="w-10 shrink-0 uppercase tracking-wide text-base-content/45 text-[10px]">trust</span>
+        <span class="w-16 shrink-0 uppercase tracking-wide text-base-content/45 text-[10px]">trust</span>
         <span class={mode().tone === "warn" ? "text-warning" : "text-base-content/70"}>{mode().word}</span>
         <Show when={p.tls.key}>
           <span class="font-data text-base-content/40" title={p.tls.key}>· {shortKey(p.tls.key!)}</span>
@@ -153,7 +153,7 @@ function GateBreakdown(p: { iface: ReachEndpoint }) {
           return (
             <div class="flex items-center gap-2">
               <span class={`inline-block size-2 shrink-0 rounded-full ${up ? "bg-success" : "bg-error"}`} />
-              <span class="w-10 shrink-0 uppercase tracking-wide text-base-content/45 text-[10px]">{l.layer}</span>
+              <span class="w-16 shrink-0 uppercase tracking-wide text-base-content/45 text-[10px]">{l.layer}</span>
               <span class="font-data text-base-content/70">{l.check}</span>
               <span class="text-base-content/50">{layerWord(l)}</span>
               <Show when={l.detail}>
@@ -174,7 +174,7 @@ function GateBreakdown(p: { iface: ReachEndpoint }) {
       </Show>
       <div class="flex items-center gap-2">
         <span class={`inline-block size-2 shrink-0 rounded-full ${verdictOk() ? "bg-success" : "bg-error"}`} />
-        <span class="w-10 shrink-0 uppercase tracking-wide text-base-content/45 text-[10px]">verdict</span>
+        <span class="w-16 shrink-0 uppercase tracking-wide text-base-content/45 text-[10px]">verdict</span>
         <span class="text-base-content/60">endpoint {verdictOk() ? "up" : "down"}</span>
       </div>
       <Show when={why()}>
