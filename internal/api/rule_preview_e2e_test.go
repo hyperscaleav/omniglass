@@ -79,7 +79,7 @@ func TestPreviewEventRuleAPI(t *testing.T) {
 		comp, value string
 		ago         time.Duration
 	}{{"pa-1", "down", 3 * time.Hour}, {"pa-1", "up", 2 * time.Hour}, {"pa-2", "down", time.Hour}} {
-		if err := gw.InsertPropertySamples(ctx, []storage.PropertySampleWrite{{OwnerKind: "component", OwnerID: s.comp,
+		if err := insertProperties(ctx, gw, []storage.PropertySampleWrite{{OwnerKind: "component", OwnerID: s.comp,
 			Key: "endpoint-reachable", Instance: "tcp", Value: s.value, TS: now.Add(-s.ago)}}); err != nil {
 			t.Fatal(err)
 		}

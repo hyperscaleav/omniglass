@@ -131,6 +131,9 @@ func registerSystemPropertyRoutes(api huma.API, a *authenticator, gw storage.Gat
 // property or owner that does not exist is a request fault (422), and the system
 // sentinels keep the system routes' non-disclosing mapping.
 func mapSystemPropertyErr(err error) error {
+	if refused, ok := mapKeyWriterErr(err); ok {
+		return refused
+	}
 	switch {
 	case errors.Is(err, storage.ErrPropertyNotFound):
 		return huma.Error404NotFound("property not set on this system")

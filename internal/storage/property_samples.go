@@ -39,22 +39,33 @@ type PropertySample struct {
 	Source     string
 }
 
-// InsertPropertySamples writes observed property rows in one transaction. Each
-// row sets exactly its owner arc column (the CHECK enforces the rest) and
-// provenance observed. Callers apply reject-not-project (collection.Registry)
-// and the transition-only guard before calling; this is the durable write.
-func (p *PG) InsertPropertySamples(ctx context.Context, evs []PropertySampleWrite) error {
+// InsertPropertySamples writes observed property rows in one transaction, for
+// w: a node's lane (NodeWriter) or the push lane (PushWriter). Each row sets
+// exactly its owner arc column (the CHECK enforces the rest) and provenance
+// observed. Callers apply reject-not-project (collection.Registry) and the
+// transition-only guard before calling; this is the durable write, and it
+// refuses the whole batch, writing nothing, when a key's writer class does not
+// admit w (ADR-0161).
+func (p *PG) InsertPropertySamples(ctx context.Context, w KeyWriter, evs []PropertySampleWrite) error {
 	if len(evs) == 0 {
 		return nil
 	}
-	return p.sampleWrite(ctx, "insert property samples", func(tx pgx.Tx) error { return p.writePropertySamples(ctx, tx, evs, nil) })
+	return p.sampleWrite(ctx, "insert property samples", func(tx pgx.Tx) error { return p.writePropertySamples(ctx, tx, w, evs) })
 }
 
 // writePropertySamples is the property lane's sample-write path, in the
 // caller's transaction: the ingest's observed batch or a calc rule's
-// calculated output (lineage set), as writeMetricSamples is for metrics. An
-// observation may also settle a pending command.
-func (p *PG) writePropertySamples(ctx context.Context, tx pgx.Tx, evs []PropertySampleWrite, lineage *sampleLineage) error {
+// calculated output (a calc rule's writer), as writeMetricSamples is for
+// metrics, held to each key's writer class first. An observation may also
+// settle a pending command.
+func (p *PG) writePropertySamples(ctx context.Context, tx pgx.Tx, w KeyWriter, evs []PropertySampleWrite) error {
+	rows := make([]keyedWrite, len(evs))
+	for i, ev := range evs {
+		rows[i] = keyedWrite{key: ev.Key, instance: ev.Instance}
+	}
+	if err := admitWrites(ctx, tx, writeProperty, w, rows); err != nil {
+		return err
+	}
 	// Settlement only cares about properties a command type targets; learn
 	// which once per batch, and read the transaction's clock once.
 	now, err := dbNow(ctx, tx)
@@ -93,15 +104,19 @@ func (p *PG) writePropertySamples(ctx context.Context, tx pgx.Tx, evs []Property
 		marks.add(ev.OwnerKind, arc, rules.LaneProperty, ev.Key)
 	}
 	// Marked before any sample lands (writeMetricSamples says why).
-	if err := p.markCalcPending(ctx, tx, marks, lineage.rule()); err != nil {
+	if err := p.markCalcPending(ctx, tx, marks, w.rule()); err != nil {
 		return err
 	}
-	provenance, sourceRule, sourceVersion, sourceRuleID := lineage.provenanceArgs()
+	provenance, sourceRule, sourceVersion, sourceRuleID := w.provenanceArgs()
+	clock := sampleClock{q: tx, now: now}
 	for i, ev := range evs {
 		col, _ := ownerColumn(ev.OwnerKind)
 		ts := ev.TS
 		if ts.IsZero() {
 			ts = time.Now().UTC()
+		}
+		if ts, err = clock.cap(ctx, ev.Key, ts); err != nil {
+			return err
 		}
 		sql := fmt.Sprintf(`insert into property (ts, owner_kind, %s, property_type_id, instance, value, provenance, source, source_rule, source_rule_version, source_rule_id)
 			values ($1, $2, $3, (select id from property_type where name = $4), $5, to_jsonb($6::text), $7, $8, $9, $10, $11::uuid)`, col)
@@ -121,10 +136,13 @@ func (p *PG) writePropertySamples(ctx context.Context, tx pgx.Tx, evs []Property
 	return eval.stampJudged(ctx, tx)
 }
 
-// LatestProperty returns the most recent property row for a component series
-// (key + instance), or nil if none. It backs the ingest-side transition guard
-// (skip a write whose value equals the latest stored value) and the
-// reachability panel.
+// LatestProperty returns the most recent observed property row for a component
+// series (key + instance), or nil if none. It backs the ingest-side transition
+// guard (skip a write whose value equals the latest stored value) and the
+// reachability panel and session pill. Observed only (ADR-0161): the series a
+// guard compares against is the observed one, and the panel reads each value as
+// the node's own observation, so a declared, intended or calculated row beside
+// it never stands in for the node's.
 //
 // ts orders it, because an observed series carries the OBSERVATION time and a
 // late arrival must not displace a newer reading. id breaks the tie: a poll cycle
@@ -153,6 +171,7 @@ func (p *PG) LatestProperty(ctx context.Context, componentRef, key, instance str
 		from property
 		where component_id = $1::uuid
 		  and property_type_id = (select id from property_type where name = $2) and instance = $3
+		  and provenance = 'observed'
 		order by ts desc, id desc
 		limit 1`, c.ID, key, instance).Scan(&dp.TS, &dp.OwnerKind, &dp.Key, &dp.Instance, &dp.Value, &dp.Provenance, &dp.Source)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -163,9 +182,10 @@ func (p *PG) LatestProperty(ctx context.Context, componentRef, key, instance str
 	return &dp, nil
 }
 
-// PropertyTransitions returns a component series' property rows inside window,
-// ordered oldest-first: the ordered flip sequence the availability strip reads
-// (each row is one transition, since the write path is transition-only). The
+// PropertyTransitions returns a component series' observed property rows
+// inside window, ordered oldest-first: the ordered flip sequence the
+// availability strip reads (each row is one transition, since the write path is
+// transition-only), the node's observations alone (ADR-0161). The
 // window is counted back from the DATABASE's clock (tsSince, #719); a zero
 // window returns the whole series.
 // componentRef is resolved once, and an unknown component folds into a
@@ -185,7 +205,8 @@ func (p *PG) PropertyTransitions(ctx context.Context, componentRef, key, instanc
 			(select p.name from property_type p where p.id = property.property_type_id), instance, value #>> '{}', provenance, source
 		from property
 		where component_id = $1::uuid
-		  and property_type_id = (select id from property_type where name = $2) and instance = $3 and %s
+		  and property_type_id = (select id from property_type where name = $2) and instance = $3
+		  and provenance = 'observed' and %s
 		order by ts asc`, bound), args...)
 	if err != nil {
 		return nil, fmt.Errorf("storage: property transitions %s/%s[%s]: %w", componentRef, key, instance, err)

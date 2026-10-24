@@ -1,0 +1,29 @@
+---
+// The writer-class ruling rendered from the code (docs/src/generated/writerclass.json,
+// written by make gen via cmd/writerclassgen from internal/writerclass, ADR-0161):
+// every key's class, the keys a reserved class holds, and the writers each class
+// admits. The Storage Gateway enforces the same table, so the page cannot teach
+// a ruling the gateway does not hold.
+import facts from '../generated/writerclass.json';
+---
+
+<table class="seeded-set">
+  <thead><tr><th>Writer class</th><th>Holds</th><th>Admits</th></tr></thead>
+  <tbody>
+    {facts.map((c) => (
+      <tr>
+        <td><code>{c.class}</code>{c.reserved ? ' (reserved)' : ''}</td>
+        <td>
+          {c.doc}
+          {c.keys?.length ? <>: {c.keys.map((k, i) => (<>{i ? ', ' : ''}<code>{k}</code></>))}</> : null}
+        </td>
+        <td>
+          <ul>
+            {c.admits.map((w) => (<li><code>{w.writer}</code>: {w.doc}</li>))}
+            {(c.pins ?? []).map((p) => (<li><code>{p.writer}</code> on <code>{p.key}</code> alone: {p.doc}</li>))}
+          </ul>
+        </td>
+      </tr>
+    ))}
+  </tbody>
+</table>

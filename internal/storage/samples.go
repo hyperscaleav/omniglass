@@ -57,15 +57,17 @@ func ownerColumn(kind string) (string, error) {
 	}
 }
 
-// InsertMetricSamples writes observed metric rows in one transaction. Each
-// row sets exactly its owner arc column (the CHECK enforces the rest) and
-// provenance observed. Callers apply reject-not-project (collection.Registry)
-// before calling; this is the durable write.
-func (p *PG) InsertMetricSamples(ctx context.Context, evs []MetricSampleWrite) error {
+// InsertMetricSamples writes observed metric rows in one transaction, for w:
+// a node's lane (NodeWriter) or the push lane (PushWriter). Each row sets
+// exactly its owner arc column (the CHECK enforces the rest) and provenance
+// observed. Callers apply reject-not-project (collection.Registry) before
+// calling; this is the durable write, and it refuses the whole batch, writing
+// nothing, when a key's writer class does not admit w (ADR-0161).
+func (p *PG) InsertMetricSamples(ctx context.Context, w KeyWriter, evs []MetricSampleWrite) error {
 	if len(evs) == 0 {
 		return nil
 	}
-	return p.sampleWrite(ctx, "insert samples", func(tx pgx.Tx) error { return p.writeMetricSamples(ctx, tx, evs, nil) })
+	return p.sampleWrite(ctx, "insert samples", func(tx pgx.Tx) error { return p.writeMetricSamples(ctx, tx, w, evs) })
 }
 
 // sampleWriteAttempts bounds how often a sample-write transaction is retried
@@ -115,8 +117,8 @@ func isDeadlock(err error) bool {
 
 // sampleLineage is a calculated sample's producer: the calc rule, by id (so
 // the write never marks its own rule pending, ADR-0069) and by name and
-// version (the row's source_rule and source_rule_version). nil is an
-// observed sample.
+// version (the row's source_rule and source_rule_version). It rides a calc
+// rule's KeyWriter; nil is an observed sample.
 type sampleLineage struct {
 	ruleID   string
 	ruleName string
@@ -141,10 +143,19 @@ func (l *sampleLineage) rule() string {
 
 // writeMetricSamples is the metric lane's sample-write path, in the caller's
 // transaction: the ingest's observed batch, or a calc rule's calculated
-// output (lineage set). The event rules reading the batch's keys judge each
-// sample as it lands (#919), and the calc rules reading them are marked
-// pending on each owner (#996), never the rule that produced the batch.
-func (p *PG) writeMetricSamples(ctx context.Context, tx pgx.Tx, evs []MetricSampleWrite, lineage *sampleLineage) error {
+// output (a calc rule's writer, its lineage set). Every row is held to its
+// key's writer class first (ADR-0161). The event rules reading the batch's
+// keys judge each sample as it lands (#919), and the calc rules reading them
+// are marked pending on each owner (#996), never the rule that produced the
+// batch.
+func (p *PG) writeMetricSamples(ctx context.Context, tx pgx.Tx, w KeyWriter, evs []MetricSampleWrite) error {
+	rows := make([]keyedWrite, len(evs))
+	for i, ev := range evs {
+		rows[i] = keyedWrite{key: ev.Key, instance: ev.Instance}
+	}
+	if err := admitWrites(ctx, tx, writeMetric, w, rows); err != nil {
+		return err
+	}
 	keys := sampleKeys(evs, func(e MetricSampleWrite) string { return e.Key })
 	eval, err := p.newRuleEvaluator(ctx, tx, keys)
 	if err != nil {
@@ -168,15 +179,19 @@ func (p *PG) writeMetricSamples(ctx context.Context, tx pgx.Tx, evs []MetricSamp
 	}
 	// Marked before any sample lands, so the batch takes the pending rows'
 	// locks before any series or health lock (the calc tick's order).
-	if err := p.markCalcPending(ctx, tx, marks, lineage.rule()); err != nil {
+	if err := p.markCalcPending(ctx, tx, marks, w.rule()); err != nil {
 		return err
 	}
-	provenance, sourceRule, sourceVersion, sourceRuleID := lineage.provenanceArgs()
+	provenance, sourceRule, sourceVersion, sourceRuleID := w.provenanceArgs()
+	clock := sampleClock{q: tx}
 	for i, ev := range evs {
 		col, _ := ownerColumn(ev.OwnerKind)
 		ts := ev.TS
 		if ts.IsZero() {
 			ts = time.Now().UTC()
+		}
+		if ts, err = clock.cap(ctx, ev.Key, ts); err != nil {
+			return err
 		}
 		sql := fmt.Sprintf(`insert into metric (ts, owner_kind, %s, metric_type_id, instance, value, provenance, source, source_rule, source_rule_version, source_rule_id)
 			values ($1, $2, $3, (select id from metric_type where name = $4), $5, $6, $7, $8, $9, $10, $11::uuid)`, col)
@@ -190,8 +205,10 @@ func (p *PG) writeMetricSamples(ctx context.Context, tx pgx.Tx, evs []MetricSamp
 	return eval.stampJudged(ctx, tx)
 }
 
-// LatestMetric returns the most recent metric row for a component and key, or
-// nil if none. Read helper for the component reachability panel and tests.
+// LatestMetric returns the most recent observed metric row for a component and
+// key, or nil if none. Read helper for the component reachability panel and
+// tests. Observed only (ADR-0161): a calculated or intended row beside the
+// series is never read as the observation.
 // componentRef is resolved once (name or uuid, ADR-0062) rather than left for
 // the query to re-derive an id from a name a second row might now share (#627).
 // An unknown component folds into the same nil-no-error "nothing yet" result
@@ -217,6 +234,7 @@ func (p *PG) LatestMetric(ctx context.Context, componentRef, key string) (*Metri
 		from metric
 		where component_id = $1::uuid
 		  and metric_type_id = (select id from metric_type where name = $2)
+		  and provenance = 'observed'
 		order by ts desc
 		limit 1`, c.ID, key).Scan(&dp.TS, &dp.OwnerKind, &dp.Key, &dp.Instance, &dp.Value, &dp.Provenance, &dp.Source)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -227,11 +245,13 @@ func (p *PG) LatestMetric(ctx context.Context, componentRef, key string) (*Metri
 	return &dp, nil
 }
 
-// LatestMetricInstance returns the most recent metric row for a component series
-// (key + instance), or nil if none. The reachability panel's probe metrics
-// (tcp-open, icmp-reachable, and their rtt/connect_time companions) are
-// per-interface instance, so the layer signals must resolve one interface's
-// latest value, not the newest across every interface as LatestMetric does.
+// LatestMetricInstance returns the most recent observed metric row for a
+// component series (key + instance), or nil if none. The reachability panel's
+// probe metrics (tcp-open, icmp-reachable, and their rtt/connect_time
+// companions) are per-interface instance, so the layer signals must resolve one
+// interface's latest value, not the newest across every interface as
+// LatestMetric does. Observed only (ADR-0161): the panel reads each as the
+// node's own observation, so no other provenance stands in for it.
 func (p *PG) LatestMetricInstance(ctx context.Context, componentRef, key, instance string) (*MetricSample, error) {
 	// See LatestMetric: an unknown component folds into nil-no-error, matching
 	// the old inline subquery's silent no-match.
@@ -248,6 +268,7 @@ func (p *PG) LatestMetricInstance(ctx context.Context, componentRef, key, instan
 		from metric
 		where component_id = $1::uuid
 		  and metric_type_id = (select id from metric_type where name = $2) and instance = $3
+		  and provenance = 'observed'
 		order by ts desc
 		limit 1`, c.ID, key, instance).Scan(&dp.TS, &dp.OwnerKind, &dp.Key, &dp.Instance, &dp.Value, &dp.Provenance, &dp.Source)
 	if errors.Is(err, pgx.ErrNoRows) {

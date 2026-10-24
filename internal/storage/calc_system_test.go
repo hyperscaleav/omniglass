@@ -65,7 +65,7 @@ func (r *systemRig) assign(system, role, comp string) {
 
 func (r *systemRig) temp(comp, instance string, v float64) {
 	r.t.Helper()
-	if err := r.gw.InsertMetricSamples(r.ctx, []storage.MetricSampleWrite{{OwnerKind: "component", OwnerID: r.ids[comp],
+	if err := r.gw.InsertMetricSamples(r.ctx, storage.PushWriter(), []storage.MetricSampleWrite{{OwnerKind: "component", OwnerID: r.ids[comp],
 		Key: "room-temperature", Instance: instance, Value: v, TS: time.Now()}}); err != nil {
 		r.t.Fatal(err)
 	}

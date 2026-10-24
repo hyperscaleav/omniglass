@@ -64,8 +64,8 @@ func TestCollectionReferencesSurviveARename(t *testing.T) {
 	if err != nil {
 		t.Fatalf("interface: %v", err)
 	}
-	if err := gw.InsertMetricSamples(ctx, []storage.MetricSampleWrite{{
-		OwnerKind: "component", OwnerID: "old-codec", Key: "tcp-open", Value: 1, Source: "test"}}); err != nil {
+	if err := insertMetrics(ctx, gw, []storage.MetricSampleWrite{{
+		OwnerKind: "component", OwnerID: "old-codec", Key: "tcp-open", Instance: iface.Name, Value: 1, Source: "test"}}); err != nil {
 		t.Fatalf("sample: %v", err)
 	}
 

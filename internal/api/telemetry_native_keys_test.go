@@ -55,6 +55,13 @@ func TestTelemetryPushRefusesNativeKeys(t *testing.T) {
 	for _, pt := range propertyTypes {
 		seeded[pt.Name] = laned{"properties", validPropertyValue(t, pt)}
 	}
+	eventTypes, err := gw.ListEventTypes(ctx)
+	if err != nil {
+		t.Fatalf("event types: %v", err)
+	}
+	for _, et := range eventTypes {
+		seeded[et.Name] = laned{"events", nil}
+	}
 	item := func(lane, name, instance string, value any) map[string]any {
 		switch lane {
 		case "metrics":
@@ -120,19 +127,22 @@ func TestTelemetryPushRefusesNativeKeys(t *testing.T) {
 	// A batch: every node-only key on its seeded lane, one of them twice,
 	// beside one metric and one property a push may write. The two land; each
 	// node-only entry is reported by name and none is published.
-	var metrics, properties []map[string]any
+	var metrics, properties, events []map[string]any
 	for _, key := range append(slices.Clone(native), native[0]) {
 		s := seeded[key]
-		if s.lane == "metrics" {
+		switch s.lane {
+		case "metrics":
 			metrics = append(metrics, item("metrics", key, "ssh", nil))
-		} else {
+		case "properties":
 			properties = append(properties, item("properties", key, "ssh", s.value))
+		default:
+			events = append(events, item("events", key, "ssh", nil))
 		}
 	}
 	metrics = append(metrics, map[string]any{"name": "uptime", "instance": "ssh", "value": 4242})
 	properties = append(properties, map[string]any{"name": "video-input", "instance": "ssh", "value": "hdmi2"})
-	r := push(map[string]any{"metrics": metrics, "properties": properties})
-	if r.Accepted.Metrics != 1 || r.Accepted.Properties != 1 {
+	r := push(map[string]any{"metrics": metrics, "properties": properties, "events": events})
+	if r.Accepted.Metrics != 1 || r.Accepted.Properties != 1 || r.Accepted.Events != 0 {
 		t.Fatalf("batch accepted = %+v, want only uptime and video-input", r.Accepted)
 	}
 	var rejected []string
@@ -165,10 +175,22 @@ func TestTelemetryPushRefusesNativeKeys(t *testing.T) {
 		m, err := gw.LatestMetricInstance(ctx, "bar-1", "uptime", "ssh")
 		return err == nil && m != nil && m.Value == 4242
 	})
+	evs, err := gw.ListComponentEvents(ctx, "bar-1", 0, 100)
+	if err != nil {
+		t.Fatalf("events: %v", err)
+	}
 	for _, key := range native {
-		if seeded[key].lane == "metrics" {
+		switch seeded[key].lane {
+		case "metrics":
 			if m, err := gw.LatestMetric(ctx, "bar-1", key); err != nil || m != nil {
 				t.Errorf("a pushed native metric %s landed: %+v (err %v)", key, m, err)
+			}
+			continue
+		case "events":
+			for _, e := range evs {
+				if e.Key == key {
+					t.Errorf("a pushed native event %s landed: %+v", key, e)
+				}
 			}
 			continue
 		}

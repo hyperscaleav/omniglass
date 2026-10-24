@@ -10,13 +10,13 @@ func (p *PG) SetCalcServeHook(h func(stage string) error) { p.calcHook = h }
 
 // WriteMetricHeld is InsertMetricSamples with a pause before the commit: the
 // batch has marked and written, and holds its locks until hold returns.
-func (p *PG) WriteMetricHeld(ctx context.Context, evs []MetricSampleWrite, hold func()) error {
+func (p *PG) WriteMetricHeld(ctx context.Context, w KeyWriter, evs []MetricSampleWrite, hold func()) error {
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
 		return err
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
-	if err := p.writeMetricSamples(ctx, tx, evs, nil); err != nil {
+	if err := p.writeMetricSamples(ctx, tx, w, evs); err != nil {
 		return err
 	}
 	hold()

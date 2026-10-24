@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/expression"
+	"github.com/hyperscaleav/omniglass/internal/writerclass"
 )
 
 // The calc rule's pure core (#995, epic #525): a calc rule reads named
@@ -23,10 +24,11 @@ const (
 	OwnerSystem    = "system"
 )
 
-// HealthKey is the property the health rollup writes. A calc rule may not
-// read it (#525 decision 3: an alarm moves it, so a rule reading it could
-// feed back through an event rule) or write it (it has its own producer).
-const HealthKey = "health"
+// HealthKey is the property the health rollup writes, a platform key
+// (writerclass.Health, ADR-0161). A calc rule may not read it (#525 decision
+// 3: an alarm moves it, so a rule reading it could feed back through an event
+// rule) or write it (its writer class admits only the process).
+const HealthKey = writerclass.Health
 
 // MaxCalcInputs is the most inputs one rule may read.
 const MaxCalcInputs = 16

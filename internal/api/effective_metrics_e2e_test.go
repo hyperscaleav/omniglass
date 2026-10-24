@@ -83,9 +83,9 @@ func TestComponentMetricsAPI(t *testing.T) {
 
 	// A sample lands (through the gateway sink, the ingest path's write): the
 	// series wins over the default, and an off-contract series shows beside it.
-	if err := gw.InsertMetricSamples(ctx, []storage.MetricSampleWrite{
-		{OwnerKind: "component", OwnerID: "dsp-1", Key: "icmp-rtt-avg", Value: 3.25, Source: "test"},
-		{OwnerKind: "component", OwnerID: "dsp-1", Key: "tcp-connect-time", Value: 42, Source: "test"},
+	if err := insertMetrics(ctx, gw, []storage.MetricSampleWrite{
+		{OwnerKind: "component", OwnerID: "dsp-1", Key: "icmp-rtt-avg", Instance: "icmp", Value: 3.25, Source: "test"},
+		{OwnerKind: "component", OwnerID: "dsp-1", Key: "tcp-connect-time", Instance: "icmp", Value: 42, Source: "test"},
 	}); err != nil {
 		t.Fatalf("insert samples: %v", err)
 	}

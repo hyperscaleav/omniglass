@@ -185,7 +185,12 @@ func TestNodeTLSSessionPinsTheKeyAndRefusesAChange(t *testing.T) {
 		t.Fatalf("retry with the offered key: %v", err)
 	}
 	s.waitFor("panel-1", ep.Name, "session-state", is("up"), "up on the accepted key")
-	s.waitFor("panel-1", ep.Name, "tls-certificate", is(second), "the accepted key")
+	// The accepted key is the pin in force: the operator's declared one, which
+	// the node is handed back rather than publishing (ADR-0161 reads it as the
+	// pin, never as the node's observation).
+	if pin, err := s.gw.EndpointKeyPin(s.ctx, "panel-1", ep.Name, "tls"); err != nil || pin != second {
+		t.Fatalf("the pin in force = %q (%v), want the accepted key", pin, err)
+	}
 	s.waitFor("panel-1", ep.Name, "endpoint-rejection", is("none"), "the gate lifted")
 }
 

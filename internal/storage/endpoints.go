@@ -14,6 +14,7 @@ import (
 
 	"github.com/hyperscaleav/omniglass/internal/scope"
 	"github.com/hyperscaleav/omniglass/internal/transport"
+	"github.com/hyperscaleav/omniglass/internal/writerclass"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 )
@@ -715,6 +716,13 @@ func (p *PG) RetryEndpoint(ctx context.Context, actorID, id string, pin RetryPin
 		if _, replaced, err = keyPin(ctx, tx, *before.ComponentID, before.Name, pinKeyOf[before.Transport]); err != nil {
 			return nil, err
 		}
+		// A pin (the ssh host key, a tls certificate's public key) is the one
+		// declared row a node-probe key admits, and only through this path
+		// (ADR-0161).
+		if err := admitWrites(ctx, tx, writeProperty, gatewayWriter(writerclass.KeyPin),
+			[]keyedWrite{{key: pinKeyOf[before.Transport], instance: before.Name}}); err != nil {
+			return nil, err
+		}
 		if _, err := tx.Exec(ctx, `
 			insert into property (owner_kind, component_id, property_type_id, instance, provenance, value)
 			values ('component', $1::uuid, (select id from property_type where name = $4), $2, '`+declaredProvenance+`', to_jsonb($3::text))`,
@@ -809,6 +817,25 @@ func latestRejection(ctx context.Context, q querier, componentID, instance strin
 		return "", fmt.Errorf("storage: endpoint rejection: %w", err)
 	}
 	return v, nil
+}
+
+// EndpointKeyPin is the key an ssh or tls endpoint pins in force (keyPin):
+// the operator's declared pin, else the key the node trusted on first use, ""
+// for none or for a transport that pins nothing. An unknown component folds
+// into "" as LatestProperty's does.
+func (p *PG) EndpointKeyPin(ctx context.Context, componentRef, endpoint, transport string) (string, error) {
+	property, ok := pinKeyOf[transport]
+	if !ok {
+		return "", nil
+	}
+	c, err := scopedByName(ctx, p.pool, componentConfig, componentRef)
+	if errors.Is(err, ErrComponentNotFound) {
+		return "", nil
+	} else if err != nil {
+		return "", err
+	}
+	_, pin, err := keyPin(ctx, p.pool, c.ID, endpoint, property)
+	return pin, err
 }
 
 // keyPin is an endpoint's key pin under its property (ssh-host-key, #1032;

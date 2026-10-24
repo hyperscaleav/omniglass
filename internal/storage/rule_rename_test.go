@@ -247,18 +247,19 @@ func TestRuleLegacyKeyAlarmIsTheRules(t *testing.T) {
 		t.Fatalf("the recovery: cleared %v, %d open, events %+v; want the legacy alarm cleared by the clear event", cleared(a), openCount(), evs)
 	}
 
-	// With no condition row and no instance: in force for the live counts
-	// and the evaluator, and a recovery clears it.
-	b := legacy("", false)
+	// With no condition row: in force for the live counts and the evaluator,
+	// and a recovery clears it. On an instance: a node writes this key only
+	// under the endpoint its task ran (ADR-0161), so its series always has one.
+	b := legacy("panel", false)
 	got, err = r.f.gw.GetEventRule(r.ctx, "legacy", r.f.all)
 	if err != nil || got.ConditionsInForce != 1 || got.OpenAlarms != 1 {
 		t.Fatalf("an orphan legacy alarm counts %+v (%v), want 1 in force and 1 open", got, err)
 	}
-	r.observe("", "down")
+	r.observe("panel", "down")
 	if openCount() != 1 {
 		t.Fatalf("a down over an orphan legacy alarm left %d open, want 1", openCount())
 	}
-	r.observe("", "up")
+	r.observe("panel", "up")
 	if !cleared(b) || openCount() != 0 {
 		t.Fatalf("the recovery left the orphan legacy alarm open (%d open)", openCount())
 	}

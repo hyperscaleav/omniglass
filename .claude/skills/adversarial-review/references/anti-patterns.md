@@ -300,7 +300,28 @@ region and a mask line in the frontmatter that paints a box the text cannot resi
   `pushable` with a one-line reason. `TestEveryKeyRuled` fails on a declared key ruled neither,
   and `TestReachabilityReadsOnlyNodeOnlyKeys` on a key the reachability read serves that is not
   node-only. A new node-authored key is declared there, not as a literal elsewhere: a key
-  declared outside `probekeys` is invisible to the ruling (`collection-failed` is, #1086).
+  declared outside `probekeys` is invisible to the ruling (`collection-failed` was, #1086).
+- **Generalized (ADR-0161):** a per-route refusal is the class's weakest form. Every key now has one
+  writer class (`internal/writerclass`), and every gateway write path holds its rows to it
+  (`admitWrites`); `TestEverySampleWritePathAdmitsItsWriter` fails on a sample or event insert in
+  a function that is not a registered write path or skips the check, so the cue is now a new write
+  path, a new writer, or a new key a surface reads as the node's that is not declared in `probekeys`.
+
+## read-serves-any-provenance-as-observed (fixed; found by the #1080 review, closed by ADR-0161)
+
+- **Cue:** a read that serves a value as one producer's observation (the node's verdict, a session's
+  state, a probe timing, a gate) and selects the latest row of the key and instance with no
+  `provenance = 'observed'` filter; a transition or dedupe guard that compares a new observation
+  against the latest row of any provenance.
+- **Failure:** a declared, intended or calculated row beside the series, newer than the last
+  observation, is served as the observation, or makes the guard skip a real one. Refusing the writes
+  that could plant such a row narrows the hole but leaves every row written before the refusal, and
+  any future writer, read as the node's.
+- **Fix:** the read names the provenance it serves: `LatestProperty`, `LatestMetricInstance`,
+  `LatestMetric` and `PropertyTransitions` read the observed series only (a series is `(type, owner,
+  instance, provenance)`), and a read that wants another provenance asks for it by name
+  (`LatestValue`); the health reads serve the rollup's calculated rows alone. Pair it with the
+  write side: the key's writer class.
 
 
 ## unvalidated-param-value (fixed; found by the #1061 in-place edit review)
@@ -367,3 +388,14 @@ region and a mask line in the frontmatter that paints a box the text cannot resi
 - **Fix:** tie the fact to what can refresh it: withhold it (or label it with its age) while the
   gate holds (`composeTLS`, internal/api/reachability.go), and have the surface name the refusal
   instead of reading as nothing measured.
+
+## producer-clock-outlives-tenure (fixed; found by the ADR-0161 review)
+
+- **Cue:** a series whose latest row is read as a producer's current account (a node's verdict, its
+  gate, the key it trusted) ordered by a time the producer supplies, with nothing bounding that time
+  against the server's clock.
+- **Failure:** a producer dates its rows far ahead, so they stay "latest" after it stops being the
+  producer: a node moved off an endpoint keeps its verdict and gate current, the new node's
+  readings are judged stale, and the control reads hand the new node the old one's gate and pin.
+- **Fix:** cap a node-probe sample's time at the database's now past a small skew
+  (`sampleClock`, internal/storage/key_writer.go), or order control reads by arrival.

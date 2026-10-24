@@ -1,0 +1,107 @@
+[
+  {
+    "class": "node-probe",
+    "reserved": true,
+    "doc": "what a node's own probes and session machine write: the node's account of an endpoint",
+    "keys": [
+      "collection-failed",
+      "endpoint-authenticated",
+      "endpoint-reachable",
+      "endpoint-rejection",
+      "endpoint-responsive",
+      "http-response-time",
+      "icmp-reachable",
+      "icmp-rtt-avg",
+      "session-reason",
+      "session-state",
+      "ssh-handshake-time",
+      "ssh-host-key",
+      "tcp-connect-time",
+      "tcp-open",
+      "telnet-response-time",
+      "tls-certificate",
+      "tls-certificate-days-left",
+      "tls-certificate-expiry",
+      "tls-handshake-time",
+      "udp-response-time"
+    ],
+    "admits": [
+      {
+        "writer": "node",
+        "doc": "the node lane, under the endpoint whose task the node ran"
+      }
+    ],
+    "pins": [
+      {
+        "key": "ssh-host-key",
+        "writer": "key-pin",
+        "doc": "an operator's pin, set with an ssh endpoint's :retry (ADR-0157)"
+      },
+      {
+        "key": "tls-certificate",
+        "writer": "key-pin",
+        "doc": "an operator's pin, set with a tls endpoint's :retry (ADR-0160)"
+      }
+    ]
+  },
+  {
+    "class": "platform",
+    "reserved": true,
+    "doc": "what only the Omniglass process writes about itself or its rollups",
+    "keys": [
+      "health"
+    ],
+    "admits": [
+      {
+        "writer": "process",
+        "doc": "the Omniglass process (the health rollup)"
+      }
+    ]
+  },
+  {
+    "class": "calc",
+    "reserved": false,
+    "doc": "a key a calc rule names as its output",
+    "admits": [
+      {
+        "writer": "calc-rule",
+        "doc": "the calc rule's tick"
+      },
+      {
+        "writer": "operator",
+        "doc": "an operator's declared value"
+      }
+    ]
+  },
+  {
+    "class": "collected",
+    "reserved": false,
+    "doc": "every other key: what a driver's emits, a push, a command or an operator say",
+    "admits": [
+      {
+        "writer": "node",
+        "doc": "the node lane, under the endpoint whose task the node ran"
+      },
+      {
+        "writer": "push",
+        "doc": "the telemetry push lane"
+      },
+      {
+        "writer": "command",
+        "doc": "a command's intended value and caused event"
+      },
+      {
+        "writer": "command-reply",
+        "doc": "a command's reply, read through its driver binding"
+      },
+      {
+        "writer": "operator",
+        "doc": "an operator's declared value"
+      },
+      {
+        "writer": "event-rule",
+        "doc": "an event rule's fire or clear event"
+      }
+    ]
+  }
+]

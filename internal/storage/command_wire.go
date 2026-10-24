@@ -10,9 +10,11 @@ import (
 	"log/slog"
 	"strconv"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"github.com/hyperscaleav/omniglass/internal/driver"
+	"github.com/hyperscaleav/omniglass/internal/writerclass"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -315,13 +317,7 @@ func (p *PG) settleFromResponse(ctx context.Context, tx pgx.Tx, commandID int64,
 			return err
 		}
 		if latest == nil || !replyMatchesIntent(latest.Value, verdict.Value) {
-			col, err := ownerColumn(ownerKind)
-			if err != nil {
-				return err
-			}
-			sql := fmt.Sprintf(`insert into property (ts, owner_kind, %s, property_type_id, instance, value, provenance, source)
-				values ($1, $2, $3, (select id from property_type where name = $4), $5, to_jsonb($6::text), 'observed', $7)`, col)
-			if _, err := tx.Exec(ctx, sql, now, ownerKind, arc, ct.TargetPropertyType, series, verdict.Value, transport); err != nil {
+			if err := writeReplyObservation(ctx, tx, ownerKind, arc, ct.TargetPropertyType, series, verdict.Value, transport, now); err != nil {
 				return fmt.Errorf("storage: record command %d reply as an observation: %w", commandID, err)
 			}
 		}
@@ -335,6 +331,25 @@ func (p *PG) settleFromResponse(ctx context.Context, tx pgx.Tx, commandID int64,
 		status = "failed"
 	}
 	return markSettlement(ctx, tx, commandID, status, now)
+}
+
+// writeReplyObservation records a command's reply, read through its driver
+// binding, as an observation of the command's property target. It is held to
+// the target's writer class like every observation (ADR-0161): a command's
+// reply never writes a key a command may not, whatever its type was stored
+// targeting.
+func writeReplyObservation(ctx context.Context, tx pgx.Tx, ownerKind, arc, key, instance, value, source string, ts time.Time) error {
+	if err := admitWrites(ctx, tx, writeProperty, gatewayWriter(writerclass.CommandReply), []keyedWrite{{key: key, instance: instance}}); err != nil {
+		return err
+	}
+	col, err := ownerColumn(ownerKind)
+	if err != nil {
+		return err
+	}
+	sql := fmt.Sprintf(`insert into property (ts, owner_kind, %s, property_type_id, instance, value, provenance, source)
+		values ($1, $2, $3, (select id from property_type where name = $4), $5, to_jsonb($6::text), 'observed', $7)`, col)
+	_, err = tx.Exec(ctx, sql, ts, ownerKind, arc, key, instance, value, source)
+	return err
 }
 
 // replyJSON renders an extracted reply value as the JSON its property's data

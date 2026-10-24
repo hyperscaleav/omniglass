@@ -5,13 +5,14 @@ import (
 
 	"github.com/hyperscaleav/omniglass/internal/collection"
 	"github.com/hyperscaleav/omniglass/internal/storage"
+	"github.com/hyperscaleav/omniglass/internal/writerclass"
 	ogv1 "github.com/hyperscaleav/omniglass/proto/og/v1"
 )
 
 // testRegistry is the minimal registry these cases resolve against.
 func testRegistry(t *testing.T) collection.Registry {
 	t.Helper()
-	return collection.NewRegistry([]storage.MetricType{{Name: "icmp-rtt-avg"}}, nil, nil)
+	return collection.NewRegistry([]storage.MetricType{{Name: "icmp-rtt-avg"}, {Name: "audio-level"}}, nil, nil)
 }
 
 // pushOwner is what apiBinding produces: a component, and no interface labels.
@@ -73,6 +74,11 @@ func TestAPIBindingOwnsBothLanesOfTheBatch(t *testing.T) {
 	if bind.SampleOwner.EndpointName != "" || bind.SampleOwner.Transport != "" {
 		t.Fatalf("push binding invented interface labels: %+v", bind.SampleOwner)
 	}
+	// Its samples speak for the push lane, which the gateway holds every key
+	// to (ADR-0161).
+	if bind.Writer.Kind != writerclass.Push {
+		t.Fatalf("push binding writer = %q, want the push lane", bind.Writer.Kind)
+	}
 }
 
 // The wire value wins where supplied, else the interface-derived value. This is what
@@ -83,8 +89,8 @@ func TestDeriveMetricsInstanceAndSourcePrecedence(t *testing.T) {
 	t.Run("push supplies instance and source", func(t *testing.T) {
 		metrics := deriveMetrics(&ogv1.TelemetryBatch{
 			Source:  "webex-cloud",
-			Metrics: []*ogv1.MetricSample{{Name: "icmp-rtt-avg", Instance: "mic-1", Value: 12.4}},
-		}, pushOwner(), reg)
+			Metrics: []*ogv1.MetricSample{{Name: "audio-level", Instance: "mic-1", Value: 12.4}},
+		}, pushOwner(), reg, storage.PushWriter())
 		if len(metrics) != 1 {
 			t.Fatalf("got %d metrics, want 1", len(metrics))
 		}
@@ -93,10 +99,19 @@ func TestDeriveMetricsInstanceAndSourcePrecedence(t *testing.T) {
 		}
 	})
 
+	t.Run("a push never carries a native probe key", func(t *testing.T) {
+		metrics := deriveMetrics(&ogv1.TelemetryBatch{
+			Metrics: []*ogv1.MetricSample{{Name: "icmp-rtt-avg", Instance: "mic-1", Value: 12.4}},
+		}, pushOwner(), reg, storage.PushWriter())
+		if len(metrics) != 0 {
+			t.Fatalf("a pushed icmp-rtt-avg derived %+v, want it dropped", metrics)
+		}
+	})
+
 	t.Run("node lane falls back to the interface", func(t *testing.T) {
 		metrics := deriveMetrics(&ogv1.TelemetryBatch{
 			Metrics: []*ogv1.MetricSample{{Name: "icmp-rtt-avg", Value: 12.4}},
-		}, nodeOwner(), reg)
+		}, nodeOwner(), reg, storage.NodeWriter(nodeOwner().EndpointName))
 		if len(metrics) != 1 {
 			t.Fatalf("got %d metrics, want 1", len(metrics))
 		}

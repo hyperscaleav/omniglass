@@ -1411,7 +1411,7 @@ components:
           pattern: ^[a-z0-9][a-z0-9-]*$
           type: string
         output_key:
-          description: "The property or metric the rule writes: its type pins the reduce's result. Not health, not a key a collection writes, and not one another enabled rule writes"
+          description: "The property or metric the rule writes: its type pins the reduce's result. Not a reserved key (a native probe key, health), not a key a driver's emits or a command type write, and not one another enabled rule writes"
           minLength: 1
           type: string
         owner_kind:
@@ -3224,10 +3224,19 @@ components:
           type: boolean
         payload_schema:
           description: A JSON Schema fragment for the occurrence payload
+        writer_class:
+          description: "Who may write this key (ADR-0161): node-probe (a node's own probe or session machine, under the endpoint it probed), platform (the Omniglass process itself: the health rollup), calc (the calc rule that outputs it), or collected (a driver's emits or a push, and a command's or an operator's value). The Storage Gateway refuses any write whose writer the class does not admit"
+          enum:
+            - node-probe
+            - platform
+            - calc
+            - collected
+          type: string
       required:
         - id
         - name
         - official
+        - writer_class
       type: object
     EventsOutputBody:
       additionalProperties: false
@@ -5338,6 +5347,14 @@ components:
         unit:
           description: The display unit of the series (ms, dB, percent)
           type: string
+        writer_class:
+          description: "Who may write this key (ADR-0161): node-probe (a node's own probe or session machine, under the endpoint it probed), platform (the Omniglass process itself: the health rollup), calc (the calc rule that outputs it), or collected (a driver's emits or a push, and a command's or an operator's value). The Storage Gateway refuses any write whose writer the class does not admit"
+          enum:
+            - node-probe
+            - platform
+            - calc
+            - collected
+          type: string
         written_by:
           $ref: "#/components/schemas/CalcWriterBody"
           description: The calc rule that writes this metric, absent when none does (one enabled rule writes a key; a disabled writer is named when no rule is enabled)
@@ -5346,6 +5363,7 @@ components:
         - name
         - data_type
         - official
+        - writer_class
       type: object
     MoveComponentInputBody:
       additionalProperties: false
@@ -5882,6 +5900,14 @@ components:
           type: boolean
         validation:
           description: A JSON Schema fragment constraining the value
+        writer_class:
+          description: "Who may write this key (ADR-0161): node-probe (a node's own probe or session machine, under the endpoint it probed), platform (the Omniglass process itself: the health rollup), calc (the calc rule that outputs it), or collected (a driver's emits or a push, and a command's or an operator's value). The Storage Gateway refuses any write whose writer the class does not admit"
+          enum:
+            - node-probe
+            - platform
+            - calc
+            - collected
+          type: string
         written_by:
           $ref: "#/components/schemas/CalcWriterBody"
           description: The calc rule that writes this property, absent when none does (one enabled rule writes a key; a disabled writer is named when no rule is enabled)
@@ -5890,6 +5916,7 @@ components:
         - name
         - data_type
         - official
+        - writer_class
       type: object
     PropertySampleBody:
       additionalProperties: false
@@ -17341,7 +17368,7 @@ paths:
       x-omniglass-permission: task:read
   /telemetry:push:
     post:
-      description: "Accepts per-lane observations (metrics, properties, events) and raw log lines for one owner and publishes them onto the ingest lane. Each lane validates against its own catalog: an unregistered name is rejected and reported in the response rather than silently dropped, and a property or event payload violating its type's schema refuses the batch with a 422. A key a native probe writes (a reachability verdict or rung, a probe metric or timing, a held session's state) is a node's own observation and is rejected by name on every lane; only the node writes it. Gated by telemetry:push, and the caller's scope must cover the declared owner; an out-of-scope owner is a non-disclosing 404."
+      description: "Accepts per-lane observations (metrics, properties, events) and raw log lines for one owner and publishes them onto the ingest lane. Each lane validates against its own catalog: an unregistered name is rejected and reported in the response rather than silently dropped, and a property or event payload violating its type's schema refuses the batch with a 422. Every key has one writer class, and a push writes only a collected key: a key a native probe writes (a reachability verdict or rung, a probe metric or timing, a held session's state, collection-failed) is a node's own observation and a platform key (health) is the platform's, each rejected by name on every lane; a key a calc rule outputs is rejected naming the rule. Gated by telemetry:push, and the caller's scope must cover the declared owner; an out-of-scope owner is a non-disclosing 404."
       operationId: push-telemetry
       requestBody:
         content:

@@ -79,7 +79,8 @@ type FleetView struct {
 }
 
 // latestVerdict is the current recorded health for an owner column, the same
-// read subtreeSystemHealth makes: the highest id wins, not the newest ts,
+// read subtreeSystemHealth makes: the rollup's calculated rows alone (health is
+// a platform key, ADR-0161), the highest id wins, not the newest ts,
 // because a health row's ts is taken before its identity is assigned and two
 // concurrent writes can land with the two inverted (#356). An owner with
 // nothing recorded reads healthy: nothing has been claimed about it.
@@ -87,7 +88,7 @@ func latestVerdict(ownerCol, table string) string {
 	return `coalesce((select v.value #>> '{}' from property v
 		where v.` + ownerCol + ` = ` + table + `.id
 		  and v.property_type_id = (select id from property_type where name = 'health')
-		  and v.instance = ''
+		  and v.instance = '' and v.provenance = 'calculated'
 		order by v.id desc limit 1), 'healthy')`
 }
 

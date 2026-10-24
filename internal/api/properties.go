@@ -23,12 +23,14 @@ type propertyBody struct {
 	Validation  json.RawMessage `json:"validation,omitempty" doc:"A JSON Schema fragment constraining the value"`
 	Official    bool            `json:"official"`
 	WrittenBy   *calcWriterBody `json:"written_by,omitempty" required:"false" doc:"The calc rule that writes this property, absent when none does (one enabled rule writes a key; a disabled writer is named when no rule is enabled)"`
+	WriterClass string          `json:"writer_class" enum:"node-probe,platform,calc,collected" doc:"Who may write this key (ADR-0161): node-probe (a node's own probe or session machine, under the endpoint it probed), platform (the Omniglass process itself: the health rollup), calc (the calc rule that outputs it), or collected (a driver's emits or a push, and a command's or an operator's value). The Storage Gateway refuses any write whose writer the class does not admit"`
 }
 
 func toPropertyBody(p *storage.PropertyType) propertyBody {
 	b := propertyBody{
 		ID: p.ID, Name: p.Name, DataType: p.DataType, Label: p.Label,
 		Description: p.Description, Official: p.Official, WrittenBy: toCalcWriterBody(p.WrittenBy),
+		WriterClass: string(p.WriterClass),
 	}
 	if len(p.Validation) > 0 {
 		b.Validation = json.RawMessage(p.Validation)

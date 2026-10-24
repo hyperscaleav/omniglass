@@ -5,15 +5,17 @@ import (
 	"testing"
 
 	"github.com/hyperscaleav/omniglass/internal/driver"
+	"github.com/hyperscaleav/omniglass/internal/writerclass"
 )
 
 // fakeCatalog resolves emitted-sample and command names for validation the
 // way the storage gateway does against the live catalogs: lanes for emitted
 // names, existence for command types and secret types.
 type fakeCatalog struct {
-	lanes    map[string]string // emitted name -> lane ("metric" | "property")
-	commands map[string]bool
-	secrets  map[string]bool
+	lanes     map[string]string // emitted name -> lane ("metric" | "property")
+	commands  map[string]bool
+	secrets   map[string]bool
+	calcOwned map[string]bool // names a calc rule outputs
 }
 
 func (f fakeCatalog) LaneOf(name string) (string, bool) {
@@ -22,6 +24,9 @@ func (f fakeCatalog) LaneOf(name string) (string, bool) {
 }
 func (f fakeCatalog) CommandTypeExists(name string) bool { return f.commands[name] }
 func (f fakeCatalog) SecretTypeExists(name string) bool  { return f.secrets[name] }
+func (f fakeCatalog) WriterClass(name string) writerclass.Class {
+	return writerclass.Of(name, f.calcOwned[name])
+}
 
 func catalog() fakeCatalog {
 	return fakeCatalog{

@@ -95,6 +95,9 @@ func registerCommandRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 // a metric target or a params payload that violates the type's params_schema; an
 // out-of-scope component falls through to the component mapping (a non-disclosing 404).
 func mapCommandErr(err error) error {
+	if refused, ok := mapKeyWriterErr(err); ok {
+		return refused
+	}
 	switch {
 	case err == nil:
 		return nil
