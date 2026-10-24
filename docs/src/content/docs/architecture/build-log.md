@@ -8120,9 +8120,11 @@ The layered-gate fence's `udp.open`, `pingGates` and per-check toggles retire in
 
 The review's fixes, each with a test that failed first: a gate carried back to a restarted node now
 holds the arm too, which had subscribed to the component that refused (the first answered rung after
-the gate lifts arms); an exchange settled on a later send leaves a ghost absorbing repeats of its
-answer, since a slow component's surplus reply had answered the next ask (a command took a poll's
-reply), and every udp request now declares its reply's shape; `udp-response-time` is timed from the
+the gate lifts arms); an exchange whose answer came back too soon after its last send to be that
+send's reply leaves a ghost absorbing repeats of it, since a slow component's surplus reply had
+answered the next ask (a command took a poll's reply), while a retry loss caused leaves none (the
+re-review caught a first cut that starved a command's identical ack), and every udp request now
+declares its reply's shape; `udp-response-time` is timed from the
 first send, since a reply may answer any send and the later send had read a slow component fast; an
 arm line is sent once, never once per retry; a gated request rung reads refused beneath the gate in
 the console, not unanswered; the tests pick no released port (a privileged port is the closed one,

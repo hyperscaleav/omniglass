@@ -410,10 +410,15 @@ region and a mask line in the frontmatter that paints a box the text cannot resi
   shape, took the poll's `INPUT hdmi1` as its own answer, and settlement judged it against the
   wrong value. A held line connection recycles itself for this; a datagram socket has nothing to
   recycle.
+- **Counterpart:** a surplus guard keyed only on "settled after a re-send" eats genuine answers on
+  a lossy wire: a lost send draws no reply, so the guard absorbed the next ask's identical ack and a
+  command sent once read failed although it acted (found by the #1037 re-review).
 - **Fix:** every udp request declares its reply's shape (refused at write otherwise,
-  `validateRetries`, internal/driver/spec.go), and an exchange settled on a later send leaves a
-  ghost that absorbs repeats of its answer for one more timeout (`datagramGhost`,
-  internal/collection/udp.go; `TestDatagramSurplusRepliesNeverAnswerTheNextAsk`).
+  `validateRetries`, internal/driver/spec.go), and only an answer that came back too soon after the
+  last send to be its reply (sooner than half the latency learned from sends answered at once)
+  leaves a ghost absorbing repeats of it for one more timeout (`datagramGhost` and `learn`,
+  internal/collection/udp.go; `TestDatagramSurplusRepliesNeverAnswerTheNextAsk`,
+  `TestDatagramLossLeavesNothingToAbsorb`).
 
 ## side-send-skips-gate (fixed; found by the #1037 review)
 

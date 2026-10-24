@@ -7421,9 +7421,12 @@ interface create form, since that name is the platform's to mint.
      poll and the request rung, none for a command unless its binding declares them, since a lost
      reply must not send a relative command twice; an arm line is sent once too. The delivery
      carries the binding's retries. Every udp request declares its reply's shape (refused at
-     write otherwise), and an exchange settled on a later send leaves a ghost that absorbs repeats
-     of its answer for one more timeout, so a slow component's surplus reply never answers the
-     next ask; a reply later than the whole timeout is not told apart.
+     write otherwise). An exchange whose answer came back sooner after its last send than half the
+     component's latency (learned from sends answered at once) answered an earlier send, so it
+     leaves a ghost that absorbs repeats of its answer for one more timeout, and a slow
+     component's surplus reply never answers the next ask; a retry that loss caused leaves none,
+     since a lost send draws no reply, so an ask sent once is never starved of an identical
+     answer. A reply later than the whole timeout is not told apart.
   6. **Terminal replies gate the transport rung.** Over udp a driver's session block may declare
      only terminal replies. One that answers gates the endpoint at the transport rung whatever its
      class, since nothing logs in over udp (a transport whose rung is a request has no session

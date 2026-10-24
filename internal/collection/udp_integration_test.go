@@ -374,6 +374,11 @@ func TestDatagramSurplusRepliesNeverAnswerTheNextAsk(t *testing.T) {
 	}()
 	sock := listenDatagram(t, collection.DatagramConfig{Target: c.LocalAddr().String()})
 	shape := &driver.Reply{Prefix: "INPUT "}
+	// One send answered within its timeout teaches the socket the
+	// component's latency (an arm or a command is sent once).
+	if _, err := sock.Exchange(context.Background(), "GET INPUT", shape, 2*time.Second, 0); err != nil {
+		t.Fatal(err)
+	}
 	poll, err := sock.Exchange(context.Background(), "GET INPUT", shape, 300*time.Millisecond, 2)
 	if err != nil || poll.Line != "INPUT hdmi1" {
 		t.Fatalf("poll = %+v, %v", poll, err)
@@ -387,5 +392,37 @@ func TestDatagramSurplusRepliesNeverAnswerTheNextAsk(t *testing.T) {
 	cmd, err := sock.Exchange(context.Background(), "SET INPUT hdmi3", shape, 2*time.Second, 0)
 	if err != nil || cmd.Line != "INPUT hdmi3" {
 		t.Fatalf("command = %+v, %v; want its own answer, never the poll's surplus INPUT hdmi1", cmd, err)
+	}
+}
+
+// Plain loss settles an exchange on a later send too, but a lost send draws
+// no reply, so nothing is surplus: the next ask's answer is its own even when
+// it is the same line (a common ack), and an ask sent once is never starved
+// of it (re-review of #1037: a command reported failed although it acted
+// invites the operator to send it again).
+func TestDatagramLossLeavesNothingToAbsorb(t *testing.T) {
+	if testing.Short() {
+		t.Skip("real-socket integration test")
+	}
+	peer := newUDPPeer(t, func(string) []string { return []string{"OK"} })
+	sock := listenDatagram(t, collection.DatagramConfig{Target: peer.addr()})
+	ok := &driver.Reply{Prefix: "OK"}
+	for _, learned := range []bool{false, true} {
+		if learned {
+			// With the latency learned from a send answered at once.
+			if _, err := sock.Exchange(context.Background(), "HELLO", ok, time.Second, 0); err != nil {
+				t.Fatal(err)
+			}
+		}
+		base := peer.requests.Load()
+		peer.setDrop(func(n int32) bool { return n == base+1 }) // the next send is lost
+		first, err := sock.Exchange(context.Background(), "SET X 1", ok, 300*time.Millisecond, 2)
+		if err != nil || first.Attempts != 2 {
+			t.Fatalf("learned %v: first = %+v, %v; want it answered on the retry", learned, first, err)
+		}
+		peer.setDrop(nil)
+		if ans, err := sock.Exchange(context.Background(), "SET Y 2", ok, 300*time.Millisecond, 0); err != nil || ans.Line != "OK" {
+			t.Fatalf("learned %v: an ask sent once = %+v, %v; want its own OK", learned, ans, err)
+		}
 	}
 }

@@ -75,15 +75,21 @@ type datagramAsk struct {
 // on the way: each send a slow component answers draws a reply, so an
 // exchange settled on its third send can leave two behind. Until they are
 // absorbed, or the exchange's timeout has passed again, a line repeating its
-// answer is that surplus, never the next ask's answer. Only the repeat is
-// absorbed, so a next ask whose genuine answer differs (a command's new
-// value) is never starved; one whose answer is the same line loses at most a
-// share of its timeout to a retry. An exchange no send of which was answered
-// leaves no ghost: on a lossy wire its sends drew no replies, and a ghost
-// absorbing by shape would starve the asks after it. A reply later than the
-// whole timeout is therefore not told from the next ask's (the endpoint's
-// timeout should exceed the component's latency), which is why every udp
-// request declares its reply's shape.
+// answer is that surplus, never the next ask's answer.
+//
+// Loss settles an exchange on a later send too, but a lost send draws no
+// reply, and a ghost then would starve the next ask of its own answer when
+// that is the same line (a common ack), failing an ask sent once although the
+// component acted. So a ghost is left only when the answer came back too soon
+// after the last send to be that send's reply: sooner than half the
+// component's latency, which the socket learns from sends answered at once,
+// and only for a component slower than half a send's share (a faster one
+// answers each send before the next goes out, so it leaves no surplus).
+// Before the socket has learned the latency it leaves none. An exchange no
+// send of which was answered leaves none either. A reply later than the whole
+// timeout is therefore not told from the next ask's (the endpoint's timeout
+// should exceed the component's latency), which is why every udp request
+// declares its reply's shape.
 type datagramGhost struct {
 	answer    string
 	remaining int
@@ -105,6 +111,7 @@ type DatagramConn struct {
 	mu          sync.Mutex
 	armed       *datagramAsk
 	ghost       *datagramGhost
+	latency     time.Duration // learned from sends answered at once; zero until one is
 	foreign     int
 	lastForeign string
 	err         error
@@ -306,6 +313,7 @@ func (c *DatagramConn) Exchange(ctx context.Context, line string, reply *driver.
 	payload := []byte(line + "\r\n")
 	first := time.Now()
 	for attempt := 1; attempt <= retries+1; attempt++ {
+		sent := time.Now()
 		if _, err := c.conn.WriteToUDP(payload, c.peer); err != nil {
 			return DatagramAnswer{}, fmt.Errorf("collection: udp send %s: %w", c.cfg.Target, err)
 		}
@@ -313,8 +321,8 @@ func (c *DatagramConn) Exchange(ctx context.Context, line string, reply *driver.
 		select {
 		case a := <-ask.answer:
 			t.Stop()
-			if a.err == nil && attempt > 1 {
-				c.haunt(&datagramGhost{answer: a.line, remaining: attempt - 1}, timeout)
+			if a.err == nil {
+				c.learn(a.line, attempt, time.Since(sent), share, timeout)
 			}
 			// Timed from the first send: a reply may answer any send, so
 			// the time is what the exchange took, a lost datagram's retry
@@ -332,12 +340,25 @@ func (c *DatagramConn) Exchange(ctx context.Context, line string, reply *driver.
 	return DatagramAnswer{}, &datagramTimeout{target: c.cfg.Target, line: line, timeout: timeout, attempts: retries + 1}
 }
 
-// haunt leaves an ended exchange's ghost for one more timeout.
-func (c *DatagramConn) haunt(g *datagramGhost, timeout time.Duration) {
-	g.until = time.Now().Add(timeout)
+// learn takes an answered exchange's timing: a send answered at once is a
+// latency sample (averaged, so the estimate follows a component that slows),
+// and an answer on a later send that came back sooner than half that latency
+// after the last send answered an earlier one, so the sends after it may
+// still draw replies: their ghost is left for one more timeout.
+func (c *DatagramConn) learn(answer string, attempt int, sinceLast, share, timeout time.Duration) {
 	c.mu.Lock()
-	c.ghost = g
-	c.mu.Unlock()
+	defer c.mu.Unlock()
+	if attempt == 1 {
+		if c.latency == 0 {
+			c.latency = sinceLast
+		} else {
+			c.latency = (4*c.latency + sinceLast) / 5
+		}
+		return
+	}
+	if c.latency > share/2 && sinceLast < c.latency/2 {
+		c.ghost = &datagramGhost{answer: answer, remaining: attempt - 1, until: time.Now().Add(timeout)}
+	}
 }
 
 // settle turns a delivered outcome into the exchange's result: an error

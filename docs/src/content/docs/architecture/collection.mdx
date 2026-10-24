@@ -480,11 +480,13 @@ unanswered says so in its why-line.
 An exchange takes its reply by the request's declared shape (`request.reply`, which every udp
 request must declare), with the held line connection's precedence, so a datagram that does not match
 is never the answer and a push arriving mid-exchange still reaches its listener; a reply matching
-the error shape fails it with the component's text. A slow component answers every send, so an
-exchange settled on a later send leaves surplus replies behind; until they arrive, or its timeout
-passes again, a repeat of its answer is absorbed, never taken as the next ask's (a reply later than
-the whole timeout is not told apart, so the endpoint's timeout should exceed the component's
-latency). A lost datagram is re-sent: `request.retries` (udp only, 0 to 5) defaults to 2 for
+the error shape fails it with the component's text. A component slower than a send's share answers every
+send, so an exchange whose answer came back too soon after its last send to be that send's reply
+(sooner than half the latency the socket learned from sends answered at once) leaves surplus
+replies behind; until they arrive, or its timeout passes again, a repeat of its answer is absorbed,
+never taken as the next ask's. A retry that loss caused leaves nothing, since a lost send draws no
+reply, so a next ask's identical answer (a common ack) is never starved. A reply later than the
+whole timeout is not told apart, so the endpoint's timeout should exceed the component's latency. A lost datagram is re-sent: `request.retries` (udp only, 0 to 5) defaults to 2 for
 a poll and for the request rung, and the attempts share the endpoint's one timeout, so loss never
 stretches a tick. A **command is sent once** unless its binding declares retries, since a command may
 be relative (a volume step) and a lost reply must not send it twice; the seeded `newtron-nvp-udp`
