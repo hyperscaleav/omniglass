@@ -11,7 +11,6 @@ import (
 	"fmt"
 	"net/http/httptest"
 	"strings"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -45,16 +44,11 @@ type gateStack struct {
 	stop   func()
 }
 
-// stackSeq gives every stack its own loopback address, so a rerun
-// (-count) never binds where the last run's panel is still letting go.
-var stackSeq atomic.Int32
-
+// newGateStack serves the panel (and any extra panels) on ephemeral ports,
+// so a rerun or a second test process never binds where another panel is
+// serving; the endpoints take the ports the panel reports (#1066).
 func newGateStack(t *testing.T, ip, nodeName string, extraIPs ...string) *gateStack {
 	t.Helper()
-	if n := stackSeq.Add(1); n > 1 {
-		parts := strings.Split(ip, ".")
-		ip = fmt.Sprintf("127.%d.%d.%s", 90+int(n)/250, int(n)%250, parts[3])
-	}
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, storagetest.NewDSN(t), storage.WithSecretProvider(secret.NewStaticProvider(bytes.Repeat([]byte{0x7}, 32))))
 	if err != nil {
@@ -70,7 +64,7 @@ func newGateStack(t *testing.T, ip, nodeName string, extraIPs ...string) *gateSt
 		t.Fatal(err)
 	}
 	engine := sim.NewEngine(store, profiles.Templates())
-	engine.SetPortMap(sim.PrivilegedPortShift(20000))
+	engine.SetPortMap(sim.EphemeralPorts)
 	t.Cleanup(engine.StopAll)
 	snaps := []sim.DeviceSnapshot{{DeviceID: "panel", Hostname: "panel", LoopbackIP: ip, ProfileName: nvpProfile(t, store), Version: 1}}
 	for i, extra := range extraIPs {
@@ -169,6 +163,12 @@ func (s *gateStack) component(name string) {
 	}
 }
 
+// port is the port the stack's panel serves a protocol on.
+func (s *gateStack) port(protocol string) int {
+	s.t.Helper()
+	return panelPort(s.t, s.panel, protocol)
+}
+
 func (s *gateStack) attach(comp, drv, nodeName string, port int) *storage.Endpoint {
 	s.t.Helper()
 	ep, err := s.gw.CreateEndpoint(s.ctx, "", storage.EndpointSpec{
@@ -206,7 +206,7 @@ func TestTheGateLiftsOnlyWhenTheFingerprintChanges(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ep := s.attach("panel-1", "panel-telnet", "edge-i", 23+20000)
+	ep := s.attach("panel-1", "panel-telnet", "edge-i", s.port("telnet"))
 	logins := s.panel.TelnetLogins
 	s.runNode("edge-i")
 
@@ -256,7 +256,7 @@ func TestTheGateLiftsOnlyWhenTheFingerprintChanges(t *testing.T) {
 	if err := s.gw.DeleteEndpoint(s.ctx, "", ep.ID, s.all, s.all); err != nil {
 		t.Fatal(err)
 	}
-	sshEp := s.attach("panel-1", "newtron-nvp-ssh", "edge-i", 22+20000)
+	sshEp := s.attach("panel-1", "newtron-nvp-ssh", "edge-i", s.port("ssh"))
 	s.waitFor("panel-1", sshEp.Name, "session-state", is("up"), "up over ssh")
 }
 
@@ -302,7 +302,7 @@ func TestTheSSHProbeCredentialIsGated(t *testing.T) {
 	s.component("panel-3")
 	comp, nodeName := "panel-3", "edge-h"
 	params := func(pw string) json.RawMessage {
-		return json.RawMessage(fmt.Sprintf(`{"target":"%s:%d","username":"admin","password":%q}`, s.ip, 22+20000, pw))
+		return json.RawMessage(fmt.Sprintf(`{"target":"%s:%d","username":"admin","password":%q}`, s.ip, s.port("ssh"), pw))
 	}
 	ep, err := s.gw.CreateEndpoint(s.ctx, "", storage.EndpointSpec{Transport: "ssh", Component: &comp, Node: &nodeName, Params: params("wrong")}, s.all)
 	if err != nil {
@@ -333,17 +333,9 @@ func TestADriverEndpointEditsItsAddressInPlace(t *testing.T) {
 	if testing.Short() {
 		t.Skip("integration test needs Postgres + nats-server + the simulator")
 	}
-	n := 200 + stackSeq.Add(1)%50
-	ipA, ipB := fmt.Sprintf("127.91.%d.8", n), fmt.Sprintf("127.91.%d.9", n)
+	ipA, ipB := "127.89.16.8", "127.89.16.9"
 	s := newGateStack(t, ipA, "edge-e", ipB)
-	s.ip = s.panel.LoopbackIP.String()
-	a := s.panel
-	var b *sim.Device
-	for addr, d := range s.panels {
-		if d != a {
-			b, ipB = d, addr
-		}
-	}
+	a, b := s.panel, s.panels[ipB]
 	s.component("panel-e")
 	for name, pw := range map[string]string{"panel-login": "newtron", "stale-login": "wrong"} {
 		if _, err := s.gw.CreateSecret(s.ctx, "", storage.SecretSpec{
@@ -378,7 +370,7 @@ func TestADriverEndpointEditsItsAddressInPlace(t *testing.T) {
 
 	// The port edited in place: the transport rung passes, and the stale
 	// credential is refused, gating the session.
-	edit(storage.EndpointPatch{Inputs: map[string]string{"port": fmt.Sprint(23 + 20000)}})
+	edit(storage.EndpointPatch{Inputs: map[string]string{"port": fmt.Sprint(panelPort(t, a, "telnet"))}})
 	s.waitFor("panel-e", ep.Name, "session-state", is("rejected"), "rejected on the stale credential")
 	// The attached secret swapped in place: the fingerprint moves and the
 	// rejected session un-gates within a tick.
@@ -391,7 +383,9 @@ func TestADriverEndpointEditsItsAddressInPlace(t *testing.T) {
 	edit(storage.EndpointPatch{Label: &label})
 	s.settles("logins after a label edit", a.TelnetLogins, logins)
 
-	edit(storage.EndpointPatch{Inputs: map[string]string{"host": ipB}})
+	// Each panel's face bound a port of its own, so the address is the host
+	// and the port, moved together.
+	edit(storage.EndpointPatch{Inputs: map[string]string{"host": ipB, "port": fmt.Sprint(panelPort(t, b, "telnet"))}})
 	s.settles("logins on the new address", b.TelnetLogins, 1)
 	s.waitFor("panel-e", ep.Name, "session-state", is("up"), "up on the new address")
 	if reg := a.TelnetSession(); reg != nil && reg.SessionCount() != 0 {

@@ -23,6 +23,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/scope"
 	"github.com/hyperscaleav/omniglass/internal/sim/profile"
 	"github.com/hyperscaleav/omniglass/internal/sim/profiles"
+	"github.com/hyperscaleav/omniglass/internal/sim/simtest"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 )
@@ -98,7 +99,10 @@ func TestSimulatorEndToEnd(t *testing.T) {
 	}
 	defer conn.Close(ctx)
 	product, port := e2eSimulatedProduct(t, ctx, conn)
-	target := net.JoinHostPort("127.33.0.10", fmt.Sprint(port+simE2EPortShift))
+	// The run mode binds the profile's ports (lifted) on the endpoint's
+	// address, so the endpoint targets them and the device takes an address
+	// no other test process holds.
+	target := net.JoinHostPort(simtest.ClaimLoopback(t), fmt.Sprint(port+simE2EPortShift))
 	for _, q := range []struct {
 		sql  string
 		args []any

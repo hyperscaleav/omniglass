@@ -275,3 +275,20 @@ region and a mask line in the frontmatter, per the entity blade's duration masks
   40016892001). A 50ms pause before the check reproduces it deterministically.
 - **Fix:** hold the fixture open until the test ends (a `release` channel closed on return), and
   prove liveness with an action over the connection (a second exchange answered), never a peek.
+
+## fixture-binds-a-fixed-port (live; found by the #1061 review; the simulator fixed by #1066, the e2e servers' pick-and-release ports are #1077)
+
+- **Cue:** a test or fixture that serves on a literal address and port (a simulated component's face
+  at `127.x.y.z:20023`, a `StartTCPSession(51325)`, a port lifted by a fixed offset); a "fresh"
+  address from a package-level counter (it isolates a `-count` rerun, never a second process); a
+  pick-and-release free port handed to a server that binds it later.
+- **Failure:** two test processes on one host (two worktrees, a session beside `make test`) bind the
+  same address and one fails `bind: address already in use`, or worse, a client in one run reaches
+  the other run's server and asserts against the wrong state. The suite is flaky only under the
+  parallel use it most needs to survive.
+- **Fix:** bind port 0 and read the address back: an in-process simulator serves on
+  `sim.EphemeralPorts` and tests aim at `Device.Faces`; a face restarted mid-test rebinds the port
+  it reported. Where a port is fixed by design (the `sim run` mode binds the profile's ports on the
+  endpoint's address, so the endpoints must target those) or pinned on purpose (a port bound on one
+  address and rebound on another), claim an address no other test holds (`simtest.ClaimLoopback`).
+  The testcontainer form of the class is `fixed-testcontainer-port`.

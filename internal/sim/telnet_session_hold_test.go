@@ -4,8 +4,6 @@ package sim
 
 import (
 	"context"
-	"fmt"
-	"net"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -81,10 +79,9 @@ func TestPanelTelnetSessionLogsInOperatesAndRecovers(t *testing.T) {
 	if testing.Short() {
 		t.Skip("real-wire telnet session test")
 	}
-	ip := "127.88.9.5"
-	panel := servePanel(t, ip)
-	port := 23 + syncPortShift
-	target := net.JoinHostPort(ip, fmt.Sprint(port))
+	panel := servePanel(t, "127.88.9.5")
+	port := facePort(t, panel, "nvp-telnet")
+	target := faceAddr(t, panel, "nvp-telnet")
 
 	in := &evtInbound{got: make(chan string, 256)}
 	var armMu sync.Mutex
@@ -150,9 +147,8 @@ func TestPanelTelnetWrongPasswordIsRejectedAfterOneAttempt(t *testing.T) {
 	if testing.Short() {
 		t.Skip("real-wire telnet session test")
 	}
-	ip := "127.88.9.6"
-	panel := servePanel(t, ip)
-	target := net.JoinHostPort(ip, fmt.Sprint(23+syncPortShift))
+	panel := servePanel(t, "127.88.9.6")
+	target := faceAddr(t, panel, "nvp-telnet")
 	dialer := &countingDialer{StagedDialer: collection.NewTelnetSessionDialer()}
 	states := make(chan collection.SessionTransition, 64)
 	verdicts := make(chan collection.AuthVerdict, 8)

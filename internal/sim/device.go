@@ -275,6 +275,11 @@ type Device struct {
 	// deterministic, individually phased random walks across runs.
 	rand *deviceRand
 
+	// faces records the address each face the engine started bound, in
+	// profile order (Faces).
+	faceMu sync.Mutex
+	faces  []Face
+
 	// One listener per protocol. Future stages populate snmp/ssh/telnet/udp.
 	httpMu        sync.Mutex
 	httpServers   []*http.Server // one per declared http interface
@@ -1292,14 +1297,22 @@ func contentTypeFor(tmplName string) string {
 
 // StartHTTP starts the device's HTTP listener on its loopback IP. When
 // tlsCert is non-nil the listener serves HTTPS; otherwise it serves
-// plain HTTP.
+// plain HTTP. Port 0 takes a free port from the kernel (HTTPAddrs reads it).
 func (d *Device) StartHTTP(port int, tlsCert *tls.Certificate) error {
+	_, err := d.startHTTP(port, tlsCert)
+	return err
+}
+
+// startHTTP binds and serves one HTTP listener and returns the address it
+// bound.
+func (d *Device) startHTTP(port int, tlsCert *tls.Certificate) (net.Addr, error) {
 	addr := fmt.Sprintf("%s:%d", d.LoopbackIP.String(), port)
 	lis, err := net.Listen("tcp", addr)
 	if err != nil {
-		return fmt.Errorf("listening on %s: %w", addr, err)
+		return nil, fmt.Errorf("listening on %s: %w", addr, err)
 	}
-	d.Port = port
+	d.Port = boundPort(lis.Addr())
+	addr = lis.Addr().String()
 
 	srv := &http.Server{Handler: d,
 		// The server's own complaints (a TLS port check that never shakes
@@ -1336,7 +1349,7 @@ func (d *Device) StartHTTP(port int, tlsCert *tls.Certificate) error {
 			slog.Error("device HTTP error", "device", d.Hostname, "error", err)
 		}
 	}()
-	return nil
+	return lis.Addr(), nil
 }
 
 // HTTPAddrs returns the bound address of each HTTP listener the device is

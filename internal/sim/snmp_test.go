@@ -10,12 +10,6 @@ import (
 )
 
 func TestSNMPGet_ReturnsDeclaredOID(t *testing.T) {
-	// Pick an ephemeral UDP port, release it, then hand the number to
-	// GoSNMPServer. Classic port-race tolerated here: in practice the
-	// turnaround is microseconds, and the alternative is wiring a
-	// LocalAddr accessor into the upstream server.
-	port := pickFreeUDPPort(t)
-
 	dev := NewDevice("dev-1", "test-host", net.ParseIP("127.0.0.1"), "test-profile", 1,
 		map[string]any{
 			"status": map[string]any{
@@ -28,9 +22,12 @@ func TestSNMPGet_ReturnsDeclaredOID(t *testing.T) {
 		"1.3.6.1.4.1.99999.2.1.0": "status.audio.volume", // int (Integer per snmpTypeFor)
 	}
 
-	if err := dev.StartSNMP(port, "public"); err != nil {
+	// Port 0: the kernel picks a free port, and the agent reports it.
+	bound, err := dev.startSNMP(0, "public")
+	if err != nil {
 		t.Fatalf("StartSNMP: %v", err)
 	}
+	port := boundPort(bound)
 	t.Cleanup(dev.StopSNMP)
 
 	// Give the listener a moment to start accepting.
@@ -69,8 +66,6 @@ func TestSNMPGet_ReturnsDeclaredOID(t *testing.T) {
 // click-to-expand log entry, without this, SNMP probes would have no
 // payload visibility.
 func TestSNMPGet_PublishesRequestEvent(t *testing.T) {
-	port := pickFreeUDPPort(t)
-
 	dev := NewDevice("dev-1", "test-host", net.ParseIP("127.0.0.1"), "test-profile", 1,
 		map[string]any{
 			"status": map[string]any{
@@ -91,9 +86,11 @@ func TestSNMPGet_PublishesRequestEvent(t *testing.T) {
 		mu.Unlock()
 	}
 
-	if err := dev.StartSNMP(port, "private-community"); err != nil {
+	bound, err := dev.startSNMP(0, "private-community")
+	if err != nil {
 		t.Fatalf("StartSNMP: %v", err)
 	}
+	port := boundPort(bound)
 	t.Cleanup(dev.StopSNMP)
 	time.Sleep(50 * time.Millisecond)
 
@@ -134,17 +131,6 @@ func TestSNMPGet_PublishesRequestEvent(t *testing.T) {
 	if got.Details["asn1_type"] != "OctetString" {
 		t.Errorf("details.asn1_type = %v, want OctetString (string OID)", got.Details["asn1_type"])
 	}
-}
-
-func pickFreeUDPPort(t *testing.T) int {
-	t.Helper()
-	conn, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.ParseIP("127.0.0.1"), Port: 0})
-	if err != nil {
-		t.Fatalf("pick port: %v", err)
-	}
-	port := conn.LocalAddr().(*net.UDPAddr).Port
-	conn.Close()
-	return port
 }
 
 func snmpGet(t *testing.T, host string, port uint16, oid string) any {

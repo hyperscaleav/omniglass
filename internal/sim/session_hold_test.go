@@ -4,7 +4,6 @@ package sim
 
 import (
 	"context"
-	"net"
 	"sync"
 	"testing"
 	"time"
@@ -41,8 +40,9 @@ func TestPanelHeldSessionSurvivesItsListenerDying(t *testing.T) {
 
 	var mu sync.Mutex
 	opens := 0
+	nvp := faceOf(t, panel, "nvp")
 	e.SetSessionPublisher(func(ev SessionEvent) {
-		if ev.Kind == "open" && ev.Port == 51325 {
+		if ev.Kind == "open" && ev.Port == int(nvp.Addr.Port()) {
 			mu.Lock()
 			opens++
 			mu.Unlock()
@@ -56,7 +56,7 @@ func TestPanelHeldSessionSurvivesItsListenerDying(t *testing.T) {
 
 	states := make(chan collection.SessionTransition, 64)
 	s := collection.StartSession(collection.SessionConfig{
-		Target:       net.JoinHostPort(ip, "51325"),
+		Target:       nvp.Addr.String(),
 		Timeout:      2 * time.Second,
 		Dialer:       collection.NewLineSessionDialer(),
 		OnTransition: func(tr collection.SessionTransition) { states <- tr },
@@ -102,7 +102,7 @@ func TestPanelHeldSessionSurvivesItsListenerDying(t *testing.T) {
 	}
 
 	// The listener returns; the session reconnects on its own.
-	if err := panel.StartTCPSession(51325); err != nil {
+	if err := panel.StartTCPSession(int(nvp.Addr.Port())); err != nil {
 		t.Fatalf("restart the panel's listener: %v", err)
 	}
 	await(collection.SessionUp)

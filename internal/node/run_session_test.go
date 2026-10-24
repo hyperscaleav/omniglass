@@ -10,6 +10,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"net"
 	"net/http/httptest"
 	"sort"
@@ -54,22 +55,23 @@ func TestNodeHoldsASessionThroughADeviceOutage(t *testing.T) {
 	}
 	all := scope.Set{All: true}
 
-	// The device: the simulator's panel, its NVP listener on 51325.
+	// The device: the simulator's panel, its NVP listener on the port the
+	// kernel handed it (unprivileged, and never another run's), which the
+	// endpoint takes from the panel.
 	panelIP := "127.89.16.1"
 	store, err := profile.LoadStoreFS(profiles.FS)
 	if err != nil {
 		t.Fatalf("load profiles: %v", err)
 	}
 	engine := sim.NewEngine(store, profiles.Templates())
-	// Lift the privileged ports (http, ssh, snmp) so the test serves
-	// unprivileged; NVP's 51325 is above the lift and stays put.
-	engine.SetPortMap(sim.PrivilegedPortShift(20000))
+	engine.SetPortMap(sim.EphemeralPorts)
 	t.Cleanup(engine.StopAll)
 	if err := engine.Sync([]sim.DeviceSnapshot{{DeviceID: "panel", Hostname: "panel", LoopbackIP: panelIP,
 		ProfileName: nvpProfile(t, store), Version: 1}}); err != nil {
 		t.Fatalf("serve the panel: %v", err)
 	}
 	panel := engine.Devices()[0]
+	nvpPort := panelPort(t, panel, "tcp")
 
 	// The operator's configuration: a node, a component, the driver attach.
 	if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "edge-s"}, all, all); err != nil {
@@ -86,7 +88,7 @@ func TestNodeHoldsASessionThroughADeviceOutage(t *testing.T) {
 	comp, drv, nodeName := "panel-1", "newtron-nvp", "edge-s"
 	ep, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{
 		Driver: &drv, Component: &comp, Node: &nodeName,
-		Inputs:     map[string]string{"host": panelIP},
+		Inputs:     map[string]string{"host": panelIP, "port": fmt.Sprint(nvpPort)},
 		SecretRead: all, CanAdmin: true,
 	}, all)
 	if err != nil {
@@ -142,7 +144,7 @@ func TestNodeHoldsASessionThroughADeviceOutage(t *testing.T) {
 	// it returns.
 	panel.StopTCPSession()
 	waitValue("session-state", "recovering")
-	if err := panel.StartTCPSession(51325); err != nil {
+	if err := panel.StartTCPSession(nvpPort); err != nil {
 		t.Fatalf("restart the panel's listener: %v", err)
 	}
 	waitValue("session-state", "up")
@@ -229,14 +231,15 @@ func TestNodeLandsPushedSamplesThroughARecover(t *testing.T) {
 		t.Fatalf("load profiles: %v", err)
 	}
 	engine := sim.NewEngine(store, profiles.Templates())
-	engine.SetPortMap(sim.PrivilegedPortShift(20000))
+	engine.SetPortMap(sim.EphemeralPorts)
 	t.Cleanup(engine.StopAll)
 	if err := engine.Sync([]sim.DeviceSnapshot{{DeviceID: "panel", Hostname: "panel", LoopbackIP: panelIP,
 		ProfileName: nvpProfile(t, store), Version: 1}}); err != nil {
 		t.Fatalf("serve the panel: %v", err)
 	}
 	panel := engine.Devices()[0]
-	target := net.JoinHostPort(panelIP, "51325")
+	nvpPort := panelPort(t, panel, "tcp")
+	target := net.JoinHostPort(panelIP, fmt.Sprint(nvpPort))
 	lx := collection.NewLineExchanger()
 	set := func(input string) time.Time {
 		t.Helper()
@@ -260,7 +263,7 @@ func TestNodeLandsPushedSamplesThroughARecover(t *testing.T) {
 	comp, drv, nodeName := "panel-2", "newtron-nvp", "edge-l"
 	ep, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{
 		Driver: &drv, Component: &comp, Node: &nodeName,
-		Inputs:     map[string]string{"host": panelIP},
+		Inputs:     map[string]string{"host": panelIP, "port": fmt.Sprint(nvpPort)},
 		SecretRead: all, CanAdmin: true,
 	}, all)
 	if err != nil {
@@ -310,13 +313,30 @@ func TestNodeLandsPushedSamplesThroughARecover(t *testing.T) {
 
 	panel.StopTCPSession()
 	waitValue("session-state", "recovering", 15*time.Second)
-	if err := panel.StartTCPSession(51325); err != nil {
+	if err := panel.StartTCPSession(nvpPort); err != nil {
 		t.Fatalf("restart the panel's listener: %v", err)
 	}
 	waitValue("session-state", "up", 15*time.Second)
 
 	set("hdmi3")
 	waitValue("video-input", "hdmi3", time.Second) // re-armed on recover
+}
+
+// panelPort is the port the panel serves a protocol on (tcp for the NVP line
+// protocol, telnet, ssh), as its face reported binding it: the one face it
+// serves over that protocol.
+func panelPort(t *testing.T, panel *sim.Device, protocol string) int {
+	t.Helper()
+	var found []sim.Face
+	for _, f := range panel.Faces() {
+		if f.Protocol == protocol {
+			found = append(found, f)
+		}
+	}
+	if len(found) != 1 {
+		t.Fatalf("the panel serves %d %s faces (%+v), want one", len(found), protocol, panel.Faces())
+	}
+	return int(found[0].Addr.Port())
 }
 
 // nvpProfile picks the simulator profile serving a product the shipped

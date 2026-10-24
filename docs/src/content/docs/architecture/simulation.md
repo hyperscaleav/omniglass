@@ -95,7 +95,34 @@ Two facts shape where the simulator runs:
   ping to tell the truth, addresses without a device must be dropped by a firewall rule, which
   needs `NET_ADMIN`.
 - **Ports below 1024 need a privilege** (SNMP 161, SSH 22, HTTP 80 and 443). The engine can lift
-  the ports below 1024 at listen time, which is how the tests and the dev fleet serve unprivileged.
+  the ports below 1024 at listen time, which is how the dev fleet serves unprivileged; the tests
+  sidestep the question with ephemeral ports (below).
+
+### Fixed ports and ephemeral ports
+
+Each protocol surface a simulated component serves is a **face**: one listener, realizing one
+surface its profile declares. The engine asks every face for its port through one port map,
+which the caller picks; the face binds what it is asked for and records the address it actually
+got (`Device.Faces`, each with the surface's name, protocol, declared port and bound address).
+There is one bind path, so the two choices differ only in the port asked for:
+
+- **Fixed** (no map, or `sim.PrivilegedPortShift(offset)`): every face binds the port its
+  profile declares, ports below 1024 lifted by the offset. This is the operator-facing simulator:
+  `omniglass sim run`, `make dev-sim` and the dev fleet, where an operator, a seeded endpoint and
+  these docs all name the same port (a display's SNMP on 161, lifted to 10161 in the dev fleet;
+  a panel's line protocol on 51325, above the lift).
+- **Ephemeral** (`sim.EphemeralPorts`): every face binds port 0, so the kernel hands it a free
+  port, and the face reports the one it got. Tests serve this way and aim their endpoints and
+  clients at the reported address, so two test runs on one host (two worktrees, or a `-count`
+  rerun) never collide over a port, however many faces the protocol work adds.
+
+Whichever it binds, a face reports the port it bound everywhere it reports one: its hits, its
+session events, and the request detail SNMP publishes. A test that drives the run mode out of
+process (the end-to-end tests run `omniglass sim run` beside a node) cannot take an ephemeral
+port: the run mode binds each face at its profile's port, lifted by `--port-offset`, on the
+address the endpoint targets, and has no way to tell the endpoints a port it picked, so the
+endpoints must target the profile's ports. Such a test keeps the fixed ports and claims a
+loopback address no other test holds instead (`simtest.ClaimLoopback`).
 
 ## Beside a node
 

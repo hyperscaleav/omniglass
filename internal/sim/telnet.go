@@ -27,10 +27,22 @@ import (
 // After login, reads lines and dispatches through Device.RunCommand.
 // `exit` / `quit` / EOF close the session.
 func (d *Device) StartTelnet(port int, defaultUser, defaultPassword string, permissive bool) error {
+	_, err := d.startTelnet(port, defaultUser, defaultPassword, permissive)
+	return err
+}
+
+// startTelnet binds and serves the telnet listener and returns the address
+// it bound.
+func (d *Device) startTelnet(port int, defaultUser, defaultPassword string, permissive bool) (net.Addr, error) {
 	addr := fmt.Sprintf("%s:%d", d.LoopbackIP.String(), port)
 	lis, err := net.Listen("tcp", addr)
 	if err != nil {
-		return fmt.Errorf("listening on %s: %w", addr, err)
+		return nil, fmt.Errorf("listening on %s: %w", addr, err)
+	}
+	addr = lis.Addr().String()
+	port = boundPort(lis.Addr()) // what its hits and sessions report
+	if reg := d.telnetSession; reg != nil {
+		reg.setPort(port)
 	}
 	tracked := trackConns(lis, d.logConnect)
 	d.telnetListener = tracked
@@ -56,7 +68,7 @@ func (d *Device) StartTelnet(port int, defaultUser, defaultPassword string, perm
 			go d.serveTelnetConn(conn, defaultUser, defaultPassword, effectivePermissive, port)
 		}
 	}()
-	return nil
+	return lis.Addr(), nil
 }
 
 // TelnetLogins counts the logins the telnet face was sent (a username and a
