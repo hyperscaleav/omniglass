@@ -1,5 +1,5 @@
 // Package probekeys declares the sample keys the native collection probes
-// write (tcp, icmp, http, ssh, tls, the endpoint verdicts they roll up into,
+// write (tcp, icmp, http, ssh, tls, udp, the endpoint verdicts they roll up into,
 // and a held session's state), and who may write each.
 // A leaf, so the probes (internal/collection), the storage gateway's calc rule
 // check (a calc rule may not write a key a collection writes), the driver
@@ -51,6 +51,10 @@ const (
 	// TLSCertificateDaysLeft is the days from the probe to that not-after,
 	// one observation per probe, the number a threshold rule reads.
 	TLSCertificateDaysLeft = "tls-certificate-days-left"
+	// UDPResponseTime is the udp request rung's timing (#1037): from the
+	// send its answer answered to the answer, one observation per answered
+	// probe; a lost request lands none.
+	UDPResponseTime = "udp-response-time"
 	// EndpointRejection is an endpoint's gate (#1056 ruling, ADR-0158): the
 	// ladder rung a terminal refusal holds, its class, and the connection
 	// fingerprint it holds for ("authenticated auth <fingerprint>"), or
@@ -76,7 +80,7 @@ const (
 var nodeOnly = []string{
 	TCPOpen, TCPConnectTime, ICMPReachable, ICMPRTTAvg, HTTPResponseTime, SSHHandshakeTime, TelnetResponseTime,
 	EndpointReachable, EndpointResponsive, EndpointAuthenticated, SessionState, SessionReason, SSHHostKey, EndpointRejection,
-	TLSHandshakeTime, TLSCertificate, TLSCertificateExpiry, TLSCertificateDaysLeft,
+	TLSHandshakeTime, TLSCertificate, TLSCertificateExpiry, TLSCertificateDaysLeft, UDPResponseTime,
 }
 
 // pushable are the native keys a push may write too, each mapped to the

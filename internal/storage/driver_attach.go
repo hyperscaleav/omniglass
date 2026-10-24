@@ -299,6 +299,9 @@ func attachParams(effective map[string]string) map[string]string {
 	if mode, ok := effective[driver.TLSModeInput]; ok {
 		params[driver.TLSModeInput] = mode
 	}
+	if port, ok := effective[driver.ListenPortInput]; ok && port != "" {
+		params[driver.ListenPortInput] = port
+	}
 	if host, ok := effective["host"]; ok {
 		if port, ok := effective["port"]; ok && port != "" {
 			params["target"] = net.JoinHostPort(host, port)

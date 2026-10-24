@@ -53,6 +53,10 @@ type CommandDelivery struct {
 	// (#1049), since its driver declares a session or its transport has no
 	// stateless line.
 	SessionOnly bool
+	// Retries is how many times a udp command is re-sent when no answer
+	// comes (#1037): what its binding declares, else none, since a command
+	// sent twice may act twice.
+	Retries int
 }
 
 // PendingNodeCommands resolves and marks dispatched the commands a node
@@ -160,7 +164,8 @@ func (p *PG) PendingNodeCommands(ctx context.Context, node string) ([]CommandDel
 			Line:        req.Line,
 			EndpointID:  r.endpointID,
 			Reply:       req.Reply,
-			SessionOnly: sp.Session != nil || r.transport != "tcp",
+			SessionOnly: r.transport != "udp" && (sp.Session != nil || r.transport != "tcp"),
+			Retries:     req.RetriesOr(driver.DefaultCommandRetries),
 		})
 		delivered = append(delivered, dispatch{r.id, r.endpointID})
 	}

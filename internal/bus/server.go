@@ -166,7 +166,7 @@ func (s *Server) subscribe() error {
 		for _, d := range pending {
 			reply.Commands = append(reply.Commands, collection.CommandDelivery{
 				ID: d.ID, CommandType: d.CommandType, Transport: d.Transport, Target: d.Target, Line: d.Line,
-				EndpointID: d.EndpointID, Reply: d.Reply, SessionOnly: d.SessionOnly,
+				EndpointID: d.EndpointID, Reply: d.Reply, SessionOnly: d.SessionOnly, Retries: d.Retries,
 			})
 		}
 		b, err := json.Marshal(reply)

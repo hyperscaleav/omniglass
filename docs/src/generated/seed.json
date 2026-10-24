@@ -411,6 +411,13 @@
    "description": "Time for the TLS handshake to reach the certificate after the connection opened, one observation per probe the component answered; absent when it never answered the handshake."
   },
   {
+   "name": "udp-response-time",
+   "data_type": "float",
+   "unit": "ms",
+   "label": "UDP Response Time",
+   "description": "Time for a udp endpoint's request rung to be answered, from the send its answer answered, one observation per probe the component answered; absent when every attempt was lost."
+  },
+  {
    "name": "tls-certificate-days-left",
    "data_type": "float",
    "unit": "d",
@@ -560,9 +567,9 @@
   },
   {
    "name": "udp",
-   "description": "UDP datagram transport; probing arrives with its driver.",
+   "description": "UDP: the line protocol as datagrams, one line each, stateless: the probe sends the driver's named request and an answer is the rung (an open udp port cannot be detected), a refused port reads refused, and a lost datagram is retried; an endpoint with listeners binds its own local port, which its requests share.",
    "held": false,
-   "built": false
+   "built": true
   },
   {
    "name": "telnet",
@@ -1845,6 +1852,15 @@
    "label": "Newtron NVP over TLS",
    "version": "1.0.0",
    "transport": "tls",
+   "polls": 1,
+   "listeners": 1,
+   "commands": 1
+  },
+  {
+   "id": "newtron-nvp-udp",
+   "label": "Newtron NVP over UDP",
+   "version": "1.0.0",
+   "transport": "udp",
    "polls": 1,
    "listeners": 1,
    "commands": 1

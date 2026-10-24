@@ -113,3 +113,16 @@ func TestCheckInputValueListenPort(t *testing.T) {
 		}
 	}
 }
+
+// A rendered command request keeps its binding's retries: the delivery
+// reads them off the rendered request.
+func TestRenderRequestKeepsRetries(t *testing.T) {
+	two := 2
+	got, err := driver.RenderRequest(driver.Request{Line: "SET INPUT ${value}", Retries: &two}, "hdmi2", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Line != "SET INPUT hdmi2" || got.RetriesOr(driver.DefaultCommandRetries) != 2 {
+		t.Fatalf("rendered %+v, want the line and the declared retries", got)
+	}
+}
