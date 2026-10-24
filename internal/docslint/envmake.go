@@ -75,7 +75,7 @@ func loadEnvUniverse() (map[string]bool, error) {
 func scanUnfenced(fn func(rel, line string, inCode bool) []string) ([]Finding, error) {
 	var findings []Finding
 	err := walkDocs(func(rel, content string) error {
-		if vocabularyAllowed[rel] {
+		if vocabularyAllowed(rel) {
 			return nil
 		}
 		for _, r := range Regions(content) {

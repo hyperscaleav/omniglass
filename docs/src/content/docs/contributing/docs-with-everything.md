@@ -65,7 +65,8 @@ A slice that advances a page updates three surfaces in the **same PR**:
 
 - the page's **status badge** moves to its new floor (`Design` to `Partial` to `Built`), which the live
   grid on [implementation status](/architecture/status/) reads directly, so the grid never lies;
-- the [build log](/architecture/build-log/) gains the slice's entry; and
+- the [build log](/architecture/build-log/) gains the slice's entry, a new file of its own
+  ([one file per entry](#the-logs-are-one-file-per-entry)); and
 - if the shipped code **diverges** from a page's design, the page carries an inline note and a
   [decision-log](/architecture/decisions/) entry (an ADR) lands in the same PR.
 
@@ -73,6 +74,45 @@ Forward-looking intent that is not yet a slice lives in a GitHub epic and is ind
 [roadmap](/architecture/roadmap/); it is not written into a page as if built. This is the contract that
 keeps the published design describing what exists: a built capability never sits behind a `Design` badge,
 and a divergence is never silent.
+
+### The logs are one file per entry
+
+Nearly every PR adds a build-log entry and many add an ADR, so while each log was one page that every
+PR appended to, any two open PRs conflicted at the same line. The [build log](/architecture/build-log/)
+and the [decision log](/architecture/decisions/) are instead **fragment directories**: each entry is its
+own file, the page holds none, and the docs build splices the entries into the page where a directive sits
+(`::build-log`, `::decision-index`, `::decision-log`), rendered by `docs/src/plugins/fragments.mjs`. Two PRs
+adding entries add two files.
+
+- **A build-log entry** is `docs/src/content/build-log/<YYYY-MM-DD>-<slug>.md`, named for the day it lands
+  (entries of one day order by slug). Its frontmatter is the heading and the references, and its body is the
+  entry's prose:
+
+  ```markdown
+  ---
+  title: "The thing that landed, said as an outcome (#1234)"
+  date: 2026-10-24
+  refs: [1234]
+  ---
+
+  What shipped, how it is proven, and what was deferred where.
+  ```
+
+- **A decision** is `docs/src/content/decisions/adr-NNNN-<slug>.md`, its frontmatter the index row (title,
+  date, status, summary) and its body the entry; the index table is generated from the files. The
+  `/record-decision` skill is the procedure. Two PRs that took the same next number fail the decisions lint
+  naming both files, and the one landing second runs `make adr-renumber FROM=NNNN TO=MMMM`, which renames
+  its file and rewrites every reference to the number across the docs, code comments, and skills. Once both
+  decisions are in the tree (after merging main, or on main), `FILE=adr-NNNN-<slug>.md` names the one to
+  move, and only the lines its own commits wrote are rewritten (git blame tells the two apart). Git cannot
+  see this collision, so check main's highest number before asking for a merge.
+
+The frontmatter is a small line grammar (a double-quoted or single-quoted string, a list of integers like
+`[1234]`, or a bare word), read identically by the docs build and by `internal/docslint`, which checks every
+entry's shape and fails an entry written into a log page instead of its own file. An entry body carries
+no headings of its own and no directive lines (`::screenshot`, `:::design`) outside a code fence: a
+directive resolves against the page's frontmatter, and an entry has none. The adversarial-review
+anti-pattern catalog follows the same pattern, one file per entry under the skill's `references/anti-patterns/`.
 
 ## The design fence
 

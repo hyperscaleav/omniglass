@@ -229,7 +229,7 @@ func ScanRouteReferences() ([]Finding, error) {
 	}
 	var findings []Finding
 	err = walkDocs(func(rel, content string) error {
-		if vocabularyAllowed[rel] {
+		if vocabularyAllowed(rel) {
 			return nil
 		}
 		for _, f := range scanRoutesInDoc(content, routes) {

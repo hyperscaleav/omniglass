@@ -1,6 +1,7 @@
 import { docsLoader } from '@astrojs/starlight/loaders';
 import { docsSchema } from '@astrojs/starlight/schema';
 import { defineCollection, z } from 'astro:content';
+import { withFragments } from './plugins/fragments-loader.mjs';
 
 // A page declares the screenshots it teaches with, right beside its prose. This
 // frontmatter is the single source: the generator (web/e2e/docs-shots.mjs) reads
@@ -46,8 +47,10 @@ const walkthrough = z.object({
   id: z.string().regex(/^[a-z0-9][a-z0-9-]*$/),
 });
 
+// withFragments: a page splicing a fragment directory (the build log, the
+// decision log) re-renders when an entry file is added or changed (#1095).
 const docs = defineCollection({
-  loader: docsLoader(),
+  loader: withFragments(docsLoader()),
   schema: docsSchema({
     extend: z.object({
       screenshots: z.array(screenshot).optional(),

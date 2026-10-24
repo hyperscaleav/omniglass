@@ -53,7 +53,9 @@ skill is the run-book. The loop never merges to `main`; merge is the architect's
      DB path);
    - the docs lint suite (`go test ./internal/docslint/ -count=1`);
    - the docs that teach the slice, in the same slice (docs-with-everything does not wait
-     for the rollup);
+     for the rollup), its build-log entry and any ADR each **a new file** in their fragment
+     directories (`docs/src/content/build-log/`, `docs/src/content/decisions/`), never an
+     append to a shared page, so slices merging inward never conflict on the logs;
    - an `/adversarial-review` pass over the slice diff, findings fixed or refuted with
      evidence.
 5. Merge inward and **close the sub-issue** with the commit named in the closing comment.

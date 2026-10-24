@@ -56,7 +56,12 @@ List open PRs and split them by the marker line:
 - **Autopilot PRs** are yours to drive to green before any new work: merge conflicts
   resolved (merge the base in, never rebase a pushed branch), red CI root-caused and
   fixed, human review comments implemented or answered, reviewer re-requested after
-  pushing. A PR that is green, mergeable, and waiting only on the architect is left
+  pushing. The logs cannot conflict (each build-log entry, ADR, and anti-pattern is its own
+  file, #1095), so check by hand that main has not taken your ADR number: a decisions-lint
+  failure naming two files after the merge means it has, and
+  `make adr-renumber FROM=NNNN TO=MMMM FILE=adr-NNNN-<yours>.md` moves yours
+  (`/record-decision`). A conflict in a generated file is resolved by `make gen`, never by
+  hand. A PR that is green, mergeable, and waiting only on the architect is left
   alone; note it for the report.
 - **Every other PR belongs to the architect.** Never push to one. If it blocks the day's
   candidate slice (same files, same seam), pick a different slice rather than building a
