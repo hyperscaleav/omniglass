@@ -109,9 +109,15 @@ func TestNodeSNMPRungIsAStandardGetAnswered(t *testing.T) {
 	s.waitFor("panel-refused", refused.Name, "endpoint-reachable", is("down"), "down")
 	// A restarted node adopts the gate from the worklist, and its poll, new
 	// to the schedule and due at once, is held too: still no get.
+	// (The silent endpoint has served its part; it leaves, so a silent get's
+	// timeout does not hold the restarted node's first pass.)
+	if err := s.gw.DeleteEndpoint(s.ctx, "", wrong.ID, s.all, s.all); err != nil {
+		t.Fatal(err)
+	}
+	before := agent.SNMPRequests()
 	s.runNode("edge-snmp")
-	time.Sleep(500 * time.Millisecond)
-	s.settles("gets to the refusing agent after a node restart", agent.SNMPRequests, agent.SNMPRequests())
+	time.Sleep(2 * time.Second) // the restarted node's first ticks, its poll among them
+	s.settles("gets to the refusing agent after a node restart", agent.SNMPRequests, before)
 
 	// The community rotated in the secret store: up within a tick.
 	if _, err := s.gw.UpdateSecret(s.ctx, "", revoked.ID, storage.SecretPatch{Fields: map[string]string{"community": "public"}}, s.all, s.all, true, true); err != nil {
