@@ -64,6 +64,11 @@ metric_types:
     unit: ms
     label: UDP Response Time
     description: Time for a udp endpoint's request rung to be answered, from its first send, so a lost datagram's retry shows as time; one observation per probe the component answered, absent when every attempt was lost.
+  - name: snmp-response-time
+    data_type: float
+    unit: ms
+    label: SNMP Response Time
+    description: Time for an snmp endpoint's request rung, a get of a standard OID, to be answered, one observation per probe the agent answered (an authorizationError included); absent when the get went unanswered.
   - name: tls-certificate-days-left
     data_type: float
     unit: d

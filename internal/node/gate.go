@@ -7,7 +7,6 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/collection"
 	"github.com/hyperscaleav/omniglass/internal/collection/rejection"
 	"github.com/hyperscaleav/omniglass/internal/driver"
-	"github.com/hyperscaleav/omniglass/internal/transport"
 )
 
 // The layered gate (#1056 ruling, ADR-0158). Every connection to an endpoint
@@ -50,14 +49,25 @@ func rungOf(class string) rung {
 	return rungResponsive
 }
 
-// rungIn is the rung a terminal class refuses at over a transport: where the
-// transport rung is a request (udp, #1037), nothing logs in and there is no
-// session rung, so every refusal holds the transport rung.
+// rungIn is the rung a terminal class refuses at over a transport: over udp
+// (#1037) nothing authenticates and there is no session rung, so every
+// refusal holds the transport rung; elsewhere, snmp's community included
+// (#821), a credential's refusal holds the session rung.
 func rungIn(transportName, class string) rung {
-	if t, ok := transport.ByName(transportName); ok && t.Rung == driver.RungRequest {
+	if transportName == "udp" {
 		return rungResponsive
 	}
 	return rungOf(class)
+}
+
+// statelessRung is the rung a stateless poll on a transport sends at: the
+// transport's, except where every request carries the credential (an snmp
+// get carries the community, #821), so an auth gate holds the poll too.
+func statelessRung(transportName string) rung {
+	if transportName == "snmp" {
+		return rungAuthenticated
+	}
+	return rungResponsive
 }
 
 // rejectionNone is the endpoint-rejection value when no gate holds.

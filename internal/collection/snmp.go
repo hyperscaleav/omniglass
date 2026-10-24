@@ -9,6 +9,7 @@ import (
 
 	"github.com/gosnmp/gosnmp"
 
+	"github.com/hyperscaleav/omniglass/internal/collection/probekeys"
 	"github.com/hyperscaleav/omniglass/internal/driver"
 )
 
@@ -17,6 +18,10 @@ import (
 // getter is a capability wrapper like the pingers and probers: an interface
 // the runner consumes, a real implementation over the wire, and the real
 // implementation proven by an integration test against an actual agent.
+
+// SignalSNMPResponseTime is the snmp request rung's timing, one observation
+// per answered probe (decision 7a of #1076; folded into rtt by #1063).
+const SignalSNMPResponseTime = probekeys.SNMPResponseTime
 
 // SNMPGetter runs one v2c scalar GET and returns the response values keyed by
 // OID, every value rendered as a string (the interpreter types them by lane).
