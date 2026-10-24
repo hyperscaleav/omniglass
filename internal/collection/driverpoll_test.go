@@ -203,3 +203,34 @@ func TestCollectDriverPollUnfetchableTransport(t *testing.T) {
 		t.Fatalf("dps %v faults %v, want one fault naming the transport", dps, faults)
 	}
 }
+
+// A tls line poll (#1035) rides the held session like any line transport's,
+// and never a throwaway connection: tls has no stateless line, since a
+// throwaway handshake would bypass the pin the session holds.
+func TestCollectDriverPollLineOverTLSRidesOnlyTheSession(t *testing.T) {
+	fn := &driver.BakedFunction{
+		Driver: "newtron-nvp-tls", Function: "status",
+		Request: &driver.Request{Line: "GET INPUT", Reply: &driver.Reply{Prefix: "INPUT "}},
+		Emits: []driver.BakedEmit{
+			{Name: "video-input", Lane: "property", Extract: driver.Extract{Regex: `^INPUT (\S+)$`}},
+		},
+	}
+	throwaway := &fakeLineExchanger{answer: "INPUT wrong"}
+	r := &collection.Runner{Line: throwaway}
+	held := &fakeHeld{answer: "INPUT hdmi2"}
+	dps, faults := r.CollectDriverPoll(context.Background(), collection.DriverPollTask{
+		Transport: "tls", Target: "10.20.4.50:51326", Fn: fn, Session: held,
+	})
+	if len(faults) != 0 || len(dps) != 1 || dps[0].Text != "hdmi2" {
+		t.Fatalf("dps %v faults %v, want the held session's answer", dps, faults)
+	}
+	dps, faults = r.CollectDriverPoll(context.Background(), collection.DriverPollTask{
+		Transport: "tls", Target: "10.20.4.50:51326", Fn: fn,
+	})
+	if len(dps) != 0 || len(faults) != 1 || !strings.Contains(faults[0].Error(), "rides only a held session") {
+		t.Fatalf("dps %v faults %v, want a fault: no session held", dps, faults)
+	}
+	if throwaway.sent != "" {
+		t.Fatal("a tls poll dialed a throwaway connection")
+	}
+}

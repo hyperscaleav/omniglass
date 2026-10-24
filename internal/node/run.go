@@ -58,6 +58,12 @@ type Config struct {
 	// Telnet is the telnet reachability probe (#1033). Nil defaults to the
 	// real collection.NewTelnetProber().
 	Telnet collection.TelnetProbe
+	// TLS is the tls reachability probe (#1035). Nil defaults to the real
+	// collection.NewTLSProber().
+	TLS collection.TLSProber
+	// TLSSession is the held tls dialer (#1035). Nil defaults to the real
+	// collection.NewTLSSessionDialer(); tests inject a fake.
+	TLSSession collection.SessionDialer
 }
 
 // Run claims the node's NATS credential, connects outbound-only to the bus,
@@ -125,7 +131,11 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 	if telnetProber == nil {
 		telnetProber = collection.NewTelnetProber()
 	}
-	runner := &collection.Runner{TCP: dialer, Ping: pinger, HTTP: httpProber, SSH: sshProber, SNMP: snmpGetter, Line: lineExchanger, Telnet: telnetProber}
+	tlsProber := cfg.TLS
+	if tlsProber == nil {
+		tlsProber = collection.NewTLSProber()
+	}
+	runner := &collection.Runner{TCP: dialer, Ping: pinger, HTTP: httpProber, SSH: sshProber, SNMP: snmpGetter, Line: lineExchanger, Telnet: telnetProber, TLS: tlsProber}
 
 	// The held sessions (#816): one per endpoint whose worklist carries a
 	// standing listen task over a transport with a session dialer (or a
@@ -152,7 +162,12 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 	if sshSession == nil {
 		sshSession = collection.NewSSHSessionDialer()
 	}
-	sessions := newSessionManager(map[string]collection.SessionDialer{"tcp": lineSession, "telnet": telnetSession, "ssh": sshSession}, sessionHooks{
+	tlsSession := cfg.TLSSession
+	if tlsSession == nil {
+		tlsSession = collection.NewTLSSessionDialer()
+	}
+	certLogged := map[string]string{}
+	sessions := newSessionManager(map[string]collection.SessionDialer{"tcp": lineSession, "tls": tlsSession, "telnet": telnetSession, "ssh": sshSession}, sessionHooks{
 		transition: func(taskID, endpoint string, tr collection.SessionTransition) {
 			// A rejection is logged once, at the transition, never per tick
 			// (#1049): the rejected session dials no more, so nothing repeats.
@@ -198,6 +213,23 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 				Name: collection.SignalSSHHostKey, Text: fp, IsText: true, TS: time.Now().UTC(),
 			}}); err != nil {
 				logger.Warn("host key not published", "facility", "session", "task", taskID, "error", err.Error())
+			}
+		},
+		certificate: func(taskID, endpoint, fp string) {
+			// The tls public key the endpoint trusted on first use: the pin
+			// the server keeps and delivers back (#1035), republished while
+			// the server lacks it; the log says it once per key.
+			hostKeyMu.Lock()
+			fresh := certLogged[taskID] != fp
+			certLogged[taskID] = fp
+			hostKeyMu.Unlock()
+			if fresh {
+				logger.Info("tls certificate key trusted", "facility", "session", "task", taskID, "endpoint", endpoint, "fingerprint", fp)
+			}
+			if err := publishBatch(nc, cfg.Name, taskID, []collection.Sample{{
+				Name: collection.SignalTLSCertificate, Text: fp, IsText: true, TS: time.Now().UTC(),
+			}}); err != nil {
+				logger.Warn("certificate key not published", "facility", "session", "task", taskID, "error", err.Error())
 			}
 		},
 		samples: func(taskID string, dps []collection.Sample) {

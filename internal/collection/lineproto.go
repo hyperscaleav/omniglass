@@ -8,6 +8,8 @@ import (
 	"net"
 	"strings"
 	"time"
+
+	"github.com/hyperscaleav/omniglass/internal/transport"
 )
 
 // The stateless line-protocol client (#814): one ask over a throwaway TCP
@@ -59,4 +61,13 @@ func (e *lineExchanger) Exchange(ctx context.Context, target, line string, timeo
 		return "", fmt.Errorf("collection: line read %s: %w", target, err)
 	}
 	return strings.TrimRight(answer, "\r\n"), nil
+}
+
+// IsLineTransport reports a transport the line protocol rides (the
+// registry's line flag): tcp, tls, telnet, ssh. Its polls and commands speak
+// lines, over the endpoint's held session or, on tcp alone, a throwaway
+// connection.
+func IsLineTransport(name string) bool {
+	t, ok := transport.ByName(name)
+	return ok && t.Line
 }

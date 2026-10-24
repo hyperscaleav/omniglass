@@ -18,7 +18,11 @@
       "ssh-host-key",
       "tcp-connect-time",
       "tcp-open",
-      "telnet-response-time"
+      "telnet-response-time",
+      "tls-certificate",
+      "tls-certificate-days-left",
+      "tls-certificate-expiry",
+      "tls-handshake-time"
     ],
     "admits": [
       {
@@ -29,8 +33,13 @@
     "pins": [
       {
         "key": "ssh-host-key",
-        "writer": "host-key-pin",
-        "doc": "an operator's pin, set with an endpoint's :retry (ADR-0157)"
+        "writer": "key-pin",
+        "doc": "an operator's pin, set with an ssh endpoint's :retry (ADR-0157)"
+      },
+      {
+        "key": "tls-certificate",
+        "writer": "key-pin",
+        "doc": "an operator's pin, set with a tls endpoint's :retry (ADR-0160)"
       }
     ]
   },

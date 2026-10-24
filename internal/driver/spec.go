@@ -455,6 +455,9 @@ func (s *Spec) Validate(cat Catalog) error {
 			return err
 		}
 	}
+	if err := s.validateTLSInputs(); err != nil {
+		return err
+	}
 	if err := s.validateSession(); err != nil {
 		return err
 	}
@@ -522,6 +525,12 @@ func validateEmits(family, fn string, emits []Emit, cat Catalog) error {
 		if em.Name == "" {
 			return fmt.Errorf("driver: %s %q emits a sample with no name", family, fn)
 		}
+		// A reserved key (a pin, the gate, a held session's account of
+		// itself, a verdict or a probe timing, collection-failed, health) has
+		// one writer, never a driver's emits: emitted by a driver it would land
+		// as the observed value, and for a pin the worklist would deliver it
+		// back as the pin (#1035 review). The writer-class ruling decides it
+		// (ADR-0161), the one the push lane and the gateway read.
 		if err := emittable(em.Name); err != nil {
 			return fmt.Errorf("driver: %s %q may not emit %w", family, fn, err)
 		}
@@ -602,7 +611,7 @@ func checkPollShape(tr string, p Poll) error {
 				return fmt.Errorf("driver: snmp poll %q emit %q must locate by oid", p.Name, em.Name)
 			}
 		}
-	case "tcp", "telnet", "ssh":
+	case "tcp", "tls", "telnet", "ssh":
 		if !isLineTransport(tr) {
 			return fmt.Errorf("driver: poll %q rides transport %q, which has no poll fetcher yet", p.Name, tr)
 		}

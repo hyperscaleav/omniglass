@@ -1319,7 +1319,7 @@ export interface paths {
         put?: never;
         /**
          * Retry an endpoint's gated connections
-         * @description Moves the endpoint's retry counter, which is part of its connection fingerprint: a gate a refusal retrying cannot fix holds (a wrong credential, a changed host key, a reply its driver declares terminal) lifts, the node recycles the endpoint's held session, and every connection to it is attempted again. Fixing the secret, the address, the transport or the driver's login needs no retry: the change moves the fingerprint itself. An unrelated edit (a label) moves nothing. For an ssh endpoint, host_key names a host key to trust (the offered key a host-key rejection names): it becomes the declared pin and recycles the session onto it whatever its state, an audited acceptance of the change. While the endpoint's gate names an offered key, host_key must be that key, so a trust confirmed against a refusal the record has since moved past is a 409 and changes nothing. Audited, a trusted key with the pin it replaced (old) and the pin it set (new). Gated by endpoint:retry; read and retry scopes (through the component) drive the 404 versus 403 split.
+         * @description Moves the endpoint's retry counter, which is part of its connection fingerprint: a gate a refusal retrying cannot fix holds (a wrong credential, a changed host key or certificate, a reply its driver declares terminal) lifts, the node recycles the endpoint's held session, and every connection to it is attempted again. Fixing the secret, the address, the transport, the tls mode or the driver's login needs no retry: the change moves the fingerprint itself. An unrelated edit (a label) moves nothing. host_key names a key to trust, the one the endpoint's transport pins (the offered key a key refusal names): an ssh host key, or a tls endpoint's certificate public key, which a tls endpoint also takes as certificate. It becomes the declared pin and recycles the session onto it whatever its state, an audited acceptance of the change. While the endpoint's gate names an offered key, the key must be that key, so a trust confirmed against a refusal the record has since moved past is a 409 and changes nothing. Audited, a trusted key with the pin it replaced (old) and the pin it set (new). Gated by endpoint:retry; read and retry scopes (through the component) drive the 404 versus 403 split.
          */
         post: operations["retry-endpoint"];
         delete?: never;
@@ -8024,6 +8024,8 @@ export interface components {
             responsive?: components["schemas"]["ReachVerdictBody"];
             /** @description The endpoint's held session, while it is configured to hold one (a standing listen task, or a driver declaring a session): its latest state, when it changed, and why */
             session?: components["schemas"]["ReachSessionBody"];
+            /** @description A tls endpoint's handshake and certificate: its verification mode, pinned key, handshake time, expiry and days left; absent on every other transport */
+            tls?: components["schemas"]["ReachTLSBody"];
             /** @description The transport (icmp, tcp, ...) */
             transport: string;
             /** @description The latest reachability verdict, or null if none yet */
@@ -8055,7 +8057,7 @@ export interface components {
         ReachRejectionBody: {
             /** @description The refusal's class: auth, host-key, certificate or protocol */
             class: string;
-            /** @description A refusal of a changed key only: the SHA256 fingerprint of the key the component offered instead. Trusting it is POST /endpoints/{id}:retry with this exact value as host_key; while the refusal holds, any other value is refused (409) */
+            /** @description A refusal of a changed key only: the SHA256 fingerprint of the key the component offered instead. Trusting it is POST /endpoints/{id}:retry with this exact value as host_key (a tls endpoint also takes it as certificate); while the refusal holds, any other value is refused (409) */
             offered_key?: string;
             /** @description A refusal of a changed key only (class host-key, or certificate for a pinned tls key): the SHA256 fingerprint of the key the endpoint pins, as the node refused against it. Present with offered_key or not at all */
             pinned_key?: string;
@@ -8078,6 +8080,27 @@ export interface components {
              * @description When the session last changed state: a state is stored only on a transition, so a session is judged by the endpoint's last_seen, not by this
              */
             ts: string;
+        };
+        ReachTLSBody: {
+            /**
+             * Format: double
+             * @description Days from the latest probe to that not-after (tls-certificate-days-left), negative once expired: the number a threshold rule reads. Absent when expires is
+             */
+            days_left?: number;
+            /**
+             * Format: date-time
+             * @description The not-after of the certificate the latest probe accepted (tls-certificate-expiry); absent until one is accepted, and while a certificate gate holds (the probe then connects only, so the value would be the last accepted certificate's, not the one offered now)
+             */
+            expires?: string;
+            /**
+             * Format: double
+             * @description The latest probe's handshake time in milliseconds (tls-handshake-time); absent until the component answers one
+             */
+            handshake_ms?: number;
+            /** @description The public key the endpoint pins (tls-certificate), a SHA256 fingerprint; served in pin mode alone, and absent before first use */
+            key?: string;
+            /** @description How the endpoint's connections judge the certificate (its driver's tls-mode input, verify when none is set): verify (against the node's system roots, the server name the host), pin (the public key trusted on first use, any other refused) or skip (nothing checked, the operator's explicit choice) */
+            mode: string;
         };
         ReachVerdictBody: {
             /**
@@ -8325,7 +8348,9 @@ export interface components {
              * @example /api/v1/schemas/RetryEndpointInputBody.json
              */
             readonly $schema?: string;
-            /** @description An ssh endpoint only: the SHA256 fingerprint of a changed host key the operator now trusts (the offered_key a host-key rejection names on the component's reachability read). It becomes the endpoint's declared ssh-host-key pin, and the session redials onto it. While a key refusal holds, it must be that exact offered key: any other is a 409 that changes nothing (the refusal on record is the node's last word, so to trust a key the component presents since, retry without a host key first). With no key refusal held it declares a pin ahead of time. Omit to retry with the pin unchanged */
+            /** @description A tls endpoint only: the same as host_key, named for the certificate (the offered_key a certificate refusal names). It becomes the endpoint's declared tls-certificate pin, held to the same rule (the exact offered key while a key refusal holds), and the session redials onto it. Omit to retry with the pin unchanged */
+            certificate?: string;
+            /** @description The SHA256 fingerprint of a changed key the operator now trusts, the key the endpoint's transport pins (the offered_key a key refusal names on the component's reachability read): an ssh endpoint's host key, which becomes its declared ssh-host-key, or a tls endpoint's certificate public key, which becomes its declared tls-certificate. The session redials onto it. While a key refusal holds, it must be that exact offered key: any other is a 409 that changes nothing (the refusal on record is the node's last word, so to trust a key the component presents since, retry without a key first). With no key refusal held it declares a pin ahead of time. Omit to retry with the pin unchanged */
             host_key?: string;
         };
         RevealSecretOutputBody: {

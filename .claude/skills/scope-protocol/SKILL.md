@@ -19,27 +19,36 @@ transport registry (`internal/transport/transport.go`, generated into the docs).
 Ask in order; the first yes decides.
 
 1. **Does it ride a carrier we already have, with only payload differences?** HTTP (any
-   body format, REST, SOAP, GraphQL, SSE), a TCP line protocol, a WebSocket, or plain UDP
+   body format, REST, SOAP, GraphQL, SSE), a TCP line protocol (raw, or over tls), a WebSocket, or plain UDP
    datagrams (request and reply matched by shape; #1037, not built yet). Then it is a
    **driver**. Example: ONVIF is SOAP over HTTP; PJLink is a line protocol over TCP; a
    projector's ASCII control on a UDP port is a driver on udp. Check the transport registry
    for whether the carrier is built; a driver on an unbuilt carrier depends on that issue.
-2. **Does the driver need something the carrier cannot do yet** (a body format, an auth
-   scheme, a stream mode, a framing variant, TLS)? Then it is a **capability on the
-   existing transport**, proven by that driver, filed as one issue: "the <transport> gains
-   <capability>, proven by a <driver> driver". Example: XML plus WS-Security digest for
-   ONVIF; SSE on http; TLS on tcp; SFTP on ssh. A protocol that moves whole files (logs,
-   diagnostics, screenshots) rather than values lands its result as a file sample (#1043).
-3. **Does it have its own framing, addressing, or session handshake that no existing
+2. **Is it a secure variant of a carrier, needing its own endpoint name and its own rung?**
+   An endpoint is named by its transport and unique per component, so a variant a component
+   can expose beside the plain one (a raw control port and a TLS one), or whose transport
+   rung differs (the handshake rather than the connect), is **its own registry entry over a
+   shared primitive** ([ADR-0160](../../../docs/src/content/docs/architecture/decisions.md)).
+   Example: `tls`, the line protocol over the TLS primitive in `internal/collection`, its
+   rung the handshake. File it as a new transport that consumes the primitive.
+3. **Does the driver need something the carrier cannot do yet** (a body format, an auth
+   scheme, a stream mode, a framing variant, TLS where it needs neither its own endpoint name
+   nor its own rung)? Then it is a **capability on the existing transport**, proven by that
+   driver, filed as one issue: "the <transport> gains <capability>, proven by a <driver>
+   driver". Example: XML plus WS-Security digest for ONVIF; SSE on http; TLS on http (https),
+   websocket or mqtt, each consuming the shared TLS primitive; SFTP on ssh. A protocol that
+   moves whole files (logs, diagnostics, screenshots) rather than values lands its result as
+   a file sample (#1043).
+4. **Does it have its own framing, addressing, or session handshake that no existing
    transport carries?** Binary PDUs, register or object addressing, a tunnel connect, a
    broker protocol. Then it is a **new transport**, plus a generic driver on top where the
    operator supplies addresses (the `snmp` / `snmp-generic` pattern). Examples: Modbus/TCP,
    BACnet/IP, KNXnet/IP, MQTT.
-4. **Is it a physical link reached through a converter?** Serial (RS-232/422/485) is
+5. **Is it a physical link reached through a converter?** Serial (RS-232/422/485) is
    reached only through an IP-to-serial gateway, which is the tcp transport (or tls or
    telnet). No serial transport. Same reasoning for any field bus with an IP gateway: the
    gateway's IP protocol decides, not the bus.
-5. **Does the component push to us rather than us reaching it?** Syslog, SNMP traps,
+6. **Does the component push to us rather than us reaching it?** Syslog, SNMP traps,
    webhooks: server-hosted ingress (#1024), not a node transport.
 
 Discovery (WS-Discovery, Who-Is, mDNS, SSDP) is never part of a collection issue; it
@@ -73,7 +82,8 @@ carries, in prose:
 - **Acceptance:** user-observable behaviours, including one failure case that must read
   as its real cause (auth refused, exception code, certificate changed), not as a timeout.
   A refusal retrying cannot fix (credential, host key, certificate) is classified terminal
-  so the session reads `rejected` and stops dialing (#1049).
+  so the session reads `rejected` and stops dialing (#1049), gated at its ladder rung for the
+  endpoint's connection fingerprint (ADR-0158).
 - **Out of scope**, each with its home.
 
 No em dashes, no attribution, head-noun-last names. Report the issue number and the

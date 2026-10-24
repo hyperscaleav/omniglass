@@ -2085,6 +2085,14 @@ sim_endpoints:
     driver: newtron-nvp-telnet
     label: Panel console
     inputs: { login: sim-panel-login }
+  # The same panel answers NVP over TLS on 51326 (its nvp-tls face, #1035),
+  # its certificate self-signed with a key the simulator derives from the
+  # panel's id, so it is the same on every run. The driver pins that key on
+  # first use; editing the endpoint's tls-mode to verify reads rejected with
+  # class certificate (no root vouches for it), and skip connects.
+  - component: huddle-touch
+    driver: newtron-nvp-tls
+    label: Panel over TLS
   # A changed host key worth showing (#1078). The briefing place's touch panel
   # also answers NVP over its ssh console (admin / newtron, the rotated
   # secret), and this endpoint pins the host key the panel presented before it

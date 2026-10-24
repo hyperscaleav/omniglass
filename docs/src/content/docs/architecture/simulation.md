@@ -9,7 +9,7 @@ sidebar:
 
 Omniglass ships a device simulator in the same binary. It serves a whole fleet of fictional AV
 and IT devices, each on its own loopback address, speaking the protocols real gear speaks (HTTP
-and HTTPS, SNMP, SSH, Telnet, raw TCP line protocols, UDP) from one live state per device. A
+and HTTPS, SNMP, SSH, Telnet, raw TCP line protocols and the same over TLS, UDP) from one live state per device. A
 collector polls a simulated device as it would hardware, and the device answers from that state:
 a write over one protocol shows in every protocol that reads what it wrote. That makes the simulator both a
 test bed (the end-to-end and screenshot harnesses get a real fleet to collect from) and a
@@ -117,7 +117,23 @@ There is one bind path, so the two choices differ only in the port asked for:
   rerun) never collide over a port, however many faces the protocol work adds.
 
 Whichever it binds, a face reports the port it bound everywhere it reports one: its hits, its
-session events, and the request detail SNMP publishes. A test that drives the run mode out of
+session events, and the request detail SNMP publishes.
+
+### Faces behind TLS
+
+A raw TCP line face may declare `tls: true` (#1035): it serves the same line protocol behind a real
+TLS handshake, and reports itself as a tcp face with `TLS` set. The simulated panel's `nvp-tls` face
+on 51326 is the proving face for the `tls` transport. Its certificate is self-signed for the
+simulated component's hostname and address, and its key is **derived from its id**, so it is the same
+on every run: an endpoint that pinned it stays up across a simulator restart, where a key minted per run
+would reject every pinned endpoint each time the simulator came back. (The simulator protects
+nothing, and a key anyone can derive from a public id says so.) The certificate's validity window is
+the profile's `tls_validity_days` (a year when unset), counted from the face's first start, so a
+profile can serve a certificate ten days from expiry. A test replaces the key (`RotateTLSKey`, a
+replaced component) or the whole certificate (`SetTLSCertificate`, one a test root vouches for),
+restarts the face on its port (`StartTLSSession`), and counts the handshakes it was offered
+(`TLSHandshakes`, so a bare TCP connect is told from a handshake); these are test-harness hooks, not
+operator-facing simulator operations. A test that drives the run mode out of
 process (the end-to-end tests run `omniglass sim run` beside a node) cannot take an ephemeral
 port: the run mode binds each face at its profile's port, lifted by `--port-offset`, on the
 address the endpoint targets, and has no way to tell the endpoints a port it picked, so the
@@ -158,7 +174,10 @@ The dev seed simulates its own fleet. Every component whose product a profile se
 address in `127.60.0.0/16` (a component keeps the address it was given, and a new one takes the
 lowest address no endpoint already targets) and endpoints on the dev node, `edge-hq`. A product whose driver
 has a spec gets that driver attached: SNMP products through `snmp-generic` (with a seeded platform
-community secret), the Newtron panels through `newtron-nvp`'s line protocol. A product whose driver
+community secret), the Newtron panels through `newtron-nvp`'s line protocol. The huddle's panel
+also carries its line protocol over telnet behind a login (`newtron-nvp-telnet`, the
+rejected-session demonstration) and over TLS (`newtron-nvp-tls` on 51326, pinning the panel's key
+on first use). A product whose driver
 is still a stub gets a reachability probe on the port its profile serves. The endpoints target the
 devices' ports below 1024 lifted by 10000 (`devseed.SimPortOffset`), so the simulator runs without
 a privilege.
