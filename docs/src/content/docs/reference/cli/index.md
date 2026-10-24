@@ -289,7 +289,7 @@ Authors a rule that derives its output key on each owner (each component its sel
 | `--inputs` | string | (none) | The keys the rule reads, each by a unique alias its reduce uses; health may not be one |
 | `--label` | string | (none) | A human label |
 | `--name` | string | (none) | The rule's name (lowercase letters, digits, hyphens) |
-| `--output-key` | string | (none) | The property or metric the rule writes: its type pins the reduce's result. Not health, not a key a collection writes, and not one another enabled rule writes |
+| `--output-key` | string | (none) | The property or metric the rule writes: its type pins the reduce's result. Not a reserved key (a native probe key, health), not a key a driver's emits or a command type write, and not one another enabled rule writes |
 | `--owner-kind` | string | (none) | What the rule derives a value on: each component its selector picks, or each system its selector picks (read from the system's role-bound members). Fixed at create |
 | `--reduce` | string | (none) | An expression over the inputs by alias |
 | `--selector` | string | (none) | The owners the rule derives for: a component rule's component_types and components, or a system rule's system_types and systems; absent is every owner of its kind |

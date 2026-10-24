@@ -585,9 +585,11 @@ func writeCalcInputs(ctx context.Context, tx pgx.Tx, r CalcRule) error {
 // otherwise block a key forever): a stored driver whose spec declares the key
 // among a poll's or a listener's emits.
 //
-// The reverse order is held too (ADR-0161): a driver created or edited to emit
-// a key a rule already outputs is refused at its spec write (the key is of the
-// calc class), and a node lane carrying one is refused at the gateway.
+// A key a command type targets is refused the same way: a command writes its
+// intended value and its reply. The reverse order is held too (ADR-0161): a
+// driver created or edited to emit a key a rule already outputs is refused at
+// its spec write, a command type targeting one at its target (the key is of
+// the calc class), and a node lane or a push carrying one at the gateway.
 func collectedBy(ctx context.Context, q querier, key string) error {
 	var driver string
 	err := q.QueryRow(ctx, `select d.name from driver d
@@ -599,6 +601,20 @@ func collectedBy(ctx context.Context, q querier, key string) error {
 		return invalidCalc("output_key", "%q is collected: the driver %s emits it, and a calc rule may not write a key a collection writes", key, driver)
 	case !errors.Is(err, pgx.ErrNoRows):
 		return fmt.Errorf("storage: check calc output %q against the drivers: %w", key, err)
+	}
+	// A command type targeting the key writes its intended value and reads
+	// its reply back as an observation, neither of which a calc key admits
+	// (ADR-0161); the target refuses a calc key, and this is the other order.
+	var command string
+	err = q.QueryRow(ctx, `select c.name from command_type c
+		left join property_type p on p.id = c.target_property_type_id
+		left join metric_type m on m.id = c.target_metric_type_id
+		where p.name = $1 or m.name = $1 order by c.name limit 1`, key).Scan(&command)
+	switch {
+	case err == nil:
+		return invalidCalc("output_key", "%q is a command's target: the command type %s writes it, and a calc rule owns its output alone", key, command)
+	case !errors.Is(err, pgx.ErrNoRows):
+		return fmt.Errorf("storage: check calc output %q against the command types: %w", key, err)
 	}
 	return nil
 }

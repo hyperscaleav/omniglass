@@ -339,7 +339,7 @@ func TestReconcileMetricLaneAndSelector(t *testing.T) {
 	}
 	for _, c := range []string{"bar-1", "other-c"} {
 		if err := insertMetrics(ctx, f.gw, []storage.MetricSampleWrite{{OwnerKind: "component", OwnerID: c,
-			Key: "http-response-time", Value: 35, TS: time.Now()}}); err != nil {
+			Key: "http-response-time", Instance: "http", Value: 35, TS: time.Now()}}); err != nil {
 			t.Fatal(err)
 		}
 	}

@@ -205,8 +205,9 @@ func admitWrites(ctx context.Context, q querier, lane writeLane, w KeyWriter, ro
 func admitWrite(kw keyWriterOf, w KeyWriter, r keyedWrite) error {
 	refuse := &KeyWriterError{Key: r.key, Class: kw.class, Writer: w.Kind, Instance: r.instance, Endpoint: w.Endpoint}
 	for _, name := range kw.rules {
-		refuse.Rule = name
-		break
+		if refuse.Rule == "" || name < refuse.Rule {
+			refuse.Rule = name
+		}
 	}
 	if !writerclass.Admits(kw.class, w.Kind, r.key) {
 		return refuse

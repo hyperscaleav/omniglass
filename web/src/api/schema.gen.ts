@@ -5351,7 +5351,7 @@ export interface components {
             label?: string;
             /** @description The rule's name (lowercase letters, digits, hyphens) */
             name: string;
-            /** @description The property or metric the rule writes: its type pins the reduce's result. Not health, not a key a collection writes, and not one another enabled rule writes */
+            /** @description The property or metric the rule writes: its type pins the reduce's result. Not a reserved key (a native probe key, health), not a key a driver's emits or a command type write, and not one another enabled rule writes */
             output_key: string;
             /**
              * @description What the rule derives a value on: each component its selector picks, or each system its selector picks (read from the system's role-bound members). Fixed at create
@@ -6410,7 +6410,7 @@ export interface components {
             /** @description A JSON Schema fragment for the occurrence payload */
             payload_schema?: unknown;
             /**
-             * @description Who may write this key (ADR-0161): node-probe (a node's own probe or session machine, under the endpoint it probed), platform (the omniglass process itself: the health rollup), calc (the calc rule that outputs it), or collected (a driver's emits or a push, and a command's or an operator's value). The Storage Gateway refuses any write whose writer the class does not admit
+             * @description Who may write this key (ADR-0161): node-probe (a node's own probe or session machine, under the endpoint it probed), platform (the Omniglass process itself: the health rollup), calc (the calc rule that outputs it), or collected (a driver's emits or a push, and a command's or an operator's value). The Storage Gateway refuses any write whose writer the class does not admit
              * @enum {string}
              */
             writer_class: "node-probe" | "platform" | "calc" | "collected";
@@ -7536,7 +7536,7 @@ export interface components {
             /** @description The display unit of the series (ms, dB, percent) */
             unit?: string;
             /**
-             * @description Who may write this key (ADR-0161): node-probe (a node's own probe or session machine, under the endpoint it probed), platform (the omniglass process itself: the health rollup), calc (the calc rule that outputs it), or collected (a driver's emits or a push, and a command's or an operator's value). The Storage Gateway refuses any write whose writer the class does not admit
+             * @description Who may write this key (ADR-0161): node-probe (a node's own probe or session machine, under the endpoint it probed), platform (the Omniglass process itself: the health rollup), calc (the calc rule that outputs it), or collected (a driver's emits or a push, and a command's or an operator's value). The Storage Gateway refuses any write whose writer the class does not admit
              * @enum {string}
              */
             writer_class: "node-probe" | "platform" | "calc" | "collected";
@@ -7847,7 +7847,7 @@ export interface components {
             /** @description A JSON Schema fragment constraining the value */
             validation?: unknown;
             /**
-             * @description Who may write this key (ADR-0161): node-probe (a node's own probe or session machine, under the endpoint it probed), platform (the omniglass process itself: the health rollup), calc (the calc rule that outputs it), or collected (a driver's emits or a push, and a command's or an operator's value). The Storage Gateway refuses any write whose writer the class does not admit
+             * @description Who may write this key (ADR-0161): node-probe (a node's own probe or session machine, under the endpoint it probed), platform (the Omniglass process itself: the health rollup), calc (the calc rule that outputs it), or collected (a driver's emits or a push, and a command's or an operator's value). The Storage Gateway refuses any write whose writer the class does not admit
              * @enum {string}
              */
             writer_class: "node-probe" | "platform" | "calc" | "collected";

@@ -129,7 +129,7 @@ type createCalcRuleInput struct {
 		Selector    *calcSelectorBody `json:"selector,omitempty" required:"false" doc:"The owners the rule derives for: a component rule's component_types and components, or a system rule's system_types and systems; absent is every owner of its kind"`
 		Inputs      []calcInputBody   `json:"inputs" minItems:"1" maxItems:"16" doc:"The keys the rule reads, each by a unique alias its reduce uses; health may not be one"`
 		Reduce      calcReduceBody    `json:"reduce" doc:"An expression over the inputs by alias"`
-		OutputKey   string            `json:"output_key" minLength:"1" doc:"The property or metric the rule writes: its type pins the reduce's result. Not health, not a key a collection writes, and not one another enabled rule writes"`
+		OutputKey   string            `json:"output_key" minLength:"1" doc:"The property or metric the rule writes: its type pins the reduce's result. Not a reserved key (a native probe key, health), not a key a driver's emits or a command type write, and not one another enabled rule writes"`
 		Enabled     *bool             `json:"enabled,omitempty" required:"false" doc:"Defaults to true"`
 	}
 }

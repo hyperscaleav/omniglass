@@ -551,3 +551,34 @@ func TestDeclarationsRefuseAKeyTheirWriterDoesNot(t *testing.T) {
 		}
 	}
 }
+
+// TestCalcOutputAndCommandTargetExclude: a key is a calc rule's or a
+// command's, never both, whichever is declared first (ADR-0161).
+func TestCalcOutputAndCommandTargetExclude(t *testing.T) {
+	if testing.Short() {
+		t.Skip("integration test needs Postgres")
+	}
+	f := newWriterFixture(t)
+	all := scope.Set{All: true}
+	for _, name := range []string{"commanded", "calculated"} {
+		if _, err := f.gw.CreateMetricType(f.ctx, "", storage.MetricTypeSpec{Name: name, DataType: "float"}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := f.gw.CreateCommandType(f.ctx, "", storage.CommandTypeSpec{Name: "set-commanded", TargetMetricType: "commanded"}); err != nil {
+		t.Fatalf("a command type on a collected key: %v", err)
+	}
+	_, err := f.gw.CreateCalcRule(f.ctx, "", storage.CalcRuleSpec{Name: "takes-commanded", OwnerKind: "component",
+		Inputs: []rules.CalcInput{{Alias: "u", Key: "uptime"}}, Reduce: rules.CalcReduce{Expr: "avg(u)"}, OutputKey: "commanded"}, all)
+	if !errors.Is(err, storage.ErrCalcRuleInvalid) || !strings.Contains(err.Error(), "set-commanded") {
+		t.Errorf("a calc rule over a command's target = %v, want it refused naming the command type", err)
+	}
+	if _, err := f.gw.CreateCalcRule(f.ctx, "", storage.CalcRuleSpec{Name: "owns-calculated", OwnerKind: "component",
+		Inputs: []rules.CalcInput{{Alias: "u", Key: "uptime"}}, Reduce: rules.CalcReduce{Expr: "avg(u)"}, OutputKey: "calculated"}, all); err != nil {
+		t.Fatalf("a calc rule on a free key: %v", err)
+	}
+	_, err = f.gw.CreateCommandType(f.ctx, "", storage.CommandTypeSpec{Name: "set-calculated", TargetMetricType: "calculated"})
+	if !errors.Is(err, storage.ErrCommandTypeInvalid) || !refused(err) || !strings.Contains(err.Error(), "owns-calculated") {
+		t.Errorf("a command type over a calc output = %v, want it refused naming the rule", err)
+	}
+}

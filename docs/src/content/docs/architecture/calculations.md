@@ -109,12 +109,14 @@ Every write is refused, with a 422 naming the field at fault, when:
 - **its output is a key another enabled rule writes.** One enabled rule writes a key: two would mix
   their values on an owner by newest timestamp. The refusal names the other rule, and enabling a
   disabled rule is checked the same way.
-- **its output is a key a collection writes**, for the same reason. The check reads declarations, never
-  sample history: any stored driver whose spec declares the key among its emits. The reverse order is
-  held too, by the writer class
+- **its output is a key a collection or a command writes**, for the same reason. The check reads
+  declarations, never sample history: any stored driver whose spec declares the key among its emits,
+  and any command type that targets it (a command writes its intended value and reads its reply back).
+  The reverse order is held too, by the writer class
   ([ADR-0161](/architecture/decisions/#adr-0161-every-key-has-one-writer-class-held-at-the-storage-gateway)):
   once a rule outputs a key it is of the `calc` class, so a driver created or edited to emit it is
-  refused at its spec's write, and a push or a node lane carrying it is refused at the Storage Gateway.
+  refused at its spec's write, a command type targeting it at its target, and a push or a node lane
+  carrying it at the Storage Gateway.
 
 The graph and the one-writer check are key-level: they ignore owner kinds, so a component rule and a
 system rule writing or reading the same key are judged as one graph. That can refuse a rule that would

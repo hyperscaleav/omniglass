@@ -376,7 +376,7 @@ func generatedCommands() []*cobra.Command {
 				cmd.Flags().StringVar(&fLabel, "label", "", "A human label")
 				cmd.Flags().StringVar(&fName, "name", "", "The rule's name (lowercase letters, digits, hyphens)")
 				_ = cmd.MarkFlagRequired("name")
-				cmd.Flags().StringVar(&fOutputKey, "output-key", "", "The property or metric the rule writes: its type pins the reduce's result. Not health, not a key a collection writes, and not one another enabled rule writes")
+				cmd.Flags().StringVar(&fOutputKey, "output-key", "", "The property or metric the rule writes: its type pins the reduce's result. Not a reserved key (a native probe key, health), not a key a driver's emits or a command type write, and not one another enabled rule writes")
 				_ = cmd.MarkFlagRequired("output-key")
 				cmd.Flags().StringVar(&fOwnerKind, "owner-kind", "", "What the rule derives a value on: each component its selector picks, or each system its selector picks (read from the system's role-bound members). Fixed at create")
 				_ = cmd.MarkFlagRequired("owner-kind")

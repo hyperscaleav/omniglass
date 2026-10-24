@@ -403,7 +403,8 @@ reduce that does not compile, or yields a type other than the output key's, is a
 alias binds); any other refusal is a 422 located at the field
 it names (`body.inputs[0].key`, `body.inputs[0].alias`, `body.output_key`, `body.selector`): an unknown
 key, an alias that is not an identifier of at most 64, is reserved or repeats, `health` as an input or
-output, an output a native probe or a driver's declared emits write, an output another enabled rule
+output, an output of the reserved family (a native probe key, `health`), an output a driver's declared
+emits write or a command type targets, an output another enabled rule
 writes (the refusal names it; enabling a rule is checked too). A list or get carries `calc_error` (`field`, `line`, `column`, `message`, `code`) when a stored reduce no
 longer compiles against the registries, and such a rule cannot be enabled (422); a reduce that compiles
 with a warning (an input it never names) carries it in `calc_warnings`, which never refuses a save. Deleting a property
