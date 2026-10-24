@@ -45,6 +45,17 @@ func seedSimFleet(ctx context.Context, gw storage.Gateway, actorID string, portO
 	}, all, true); err != nil && !errors.Is(err, storage.ErrSecretExists) {
 		return fmt.Errorf("devseed: create simulator community secret: %w", err)
 	}
+	// The http attaches' credentials (#902): what the simulated faces demand.
+	for _, sec := range []storage.SecretSpec{
+		{Name: simfleet.KestrelLoginSecret, Label: "Simulated Kestrel bar login", SecretType: "basic-auth",
+			OwnerKind: "platform", Fields: map[string]string{"username": "admin", "password": "kestrel"}},
+		{Name: simfleet.CensusKeySecret, Label: "Simulated Tessellate sensor api key", SecretType: "api-key",
+			OwnerKind: "platform", Fields: map[string]string{"key": "census-lab-key"}},
+	} {
+		if _, err := gw.CreateSecret(ctx, actorID, sec, all, true); err != nil && !errors.Is(err, storage.ErrSecretExists) {
+			return fmt.Errorf("devseed: create simulator secret %s: %w", sec.Name, err)
+		}
+	}
 	products, err := gw.ListProducts(ctx)
 	if err != nil {
 		return fmt.Errorf("devseed: list products: %w", err)

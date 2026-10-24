@@ -311,6 +311,30 @@
    "description": "The selected video input on a display or switcher. A settable state: the set-input command tells the device which input to select (opening an intended value), and the device reports the observed input, so the two reconcile."
   },
   {
+   "name": "power-state",
+   "data_type": "string",
+   "label": "Power State",
+   "description": "Whether a component is on, off, or in standby. A settable state: the set-power command tells the component which to enter, and its report settles it."
+  },
+  {
+   "name": "mute",
+   "data_type": "string",
+   "label": "Mute",
+   "description": "Whether a component's audio is muted, as the component reports it (\"true\" or \"false\"). A settable state: the set-mute command tells the component which."
+  },
+  {
+   "name": "call-state",
+   "data_type": "string",
+   "label": "Call State",
+   "description": "Whether a conferencing component is in a call (active) or not (idle)."
+  },
+  {
+   "name": "occupancy-state",
+   "data_type": "string",
+   "label": "Occupancy State",
+   "description": "Whether a space reads occupied or vacant by its occupancy source."
+  },
+  {
    "name": "serial-number",
    "data_type": "string",
    "label": "Serial number",
@@ -381,6 +405,19 @@
    "unit": "s",
    "label": "Uptime",
    "description": "How long the device reports it has been running, in seconds (an SNMP sysUpTime scaled from timeticks, or the driver's equivalent)."
+  },
+  {
+   "name": "volume",
+   "data_type": "float",
+   "unit": "%",
+   "label": "Volume",
+   "description": "The output volume a component reports, as a percentage of its range. A settable quantity: the set-volume command opens an intended volume and settles when the component reports it."
+  },
+  {
+   "name": "participant-count",
+   "data_type": "int",
+   "label": "Participant Count",
+   "description": "The participants a component reports in its current call; 0 when no call is active."
   },
   {
    "name": "http-response-time",
@@ -479,6 +516,21 @@
    "name": "reboot",
    "label": "Reboot",
    "description": "Tell a component to restart. A fire-and-forget command: it records the invocation and a caused event, with no intended value to settle."
+  },
+  {
+   "name": "set-volume",
+   "label": "Set Volume",
+   "description": "Tell a component its output volume, as a percentage. A settleable command: it opens an intended volume and settles when the component reports it, or when its reply confirms the change."
+  },
+  {
+   "name": "set-mute",
+   "label": "Set Mute",
+   "description": "Tell a component to mute (\"true\") or unmute (\"false\") its audio. A settleable command against the mute state."
+  },
+  {
+   "name": "set-power",
+   "label": "Set Power",
+   "description": "Tell a component to turn on, turn off, or enter standby. A settleable command against the power state."
   }
  ],
  "secret_types": [
@@ -527,6 +579,32 @@
     },
     {
      "name": "private_key",
+     "type": "string",
+     "secret": true,
+     "origin": "operator"
+    }
+   ]
+  },
+  {
+   "id": "bearer-token",
+   "label": "Bearer Token",
+   "default_admin_sensitive": false,
+   "fields": [
+    {
+     "name": "token",
+     "type": "string",
+     "secret": true,
+     "origin": "operator"
+    }
+   ]
+  },
+  {
+   "id": "api-key",
+   "label": "API Key",
+   "default_admin_sensitive": false,
+   "fields": [
+    {
+     "name": "key",
      "type": "string",
      "secret": true,
      "origin": "operator"
@@ -592,8 +670,14 @@
   },
   {
    "name": "http",
-   "description": "HTTP transport; the probe draws a real response off the API (responds), any status counting as an answer.",
-   "held": true,
+   "description": "HTTP, stateless: a driver's polls and commands send real requests (method, path, query, headers, body) and read JSON, XML, HTML or text answers, authenticated by the endpoint's declared scheme (basic, bearer, an API key); the probe draws a real response off the API without a credential (responds), any status counting as an answer.",
+   "held": false,
+   "built": true
+  },
+  {
+   "name": "https",
+   "description": "HTTPS: http over a TLS connection, its own entry so a component can serve a plain web port beside a TLS one; the probe runs the handshake (responds), reports the certificate's expiry, then draws a response, the certificate verified against the node's roots, pinned to the public key on first use, or (by the operator's explicit choice) not verified.",
+   "held": false,
    "built": true
   },
   {
@@ -1825,7 +1909,11 @@
   },
   {
    "id": "kestrel-api",
-   "label": "Kestrel Device API"
+   "label": "Kestrel Device API",
+   "version": "1.0.0",
+   "transport": "https",
+   "polls": 3,
+   "commands": 3
   },
   {
    "id": "newtron-nvp",
@@ -1875,7 +1963,9 @@
   {
    "id": "http-json",
    "label": "HTTP JSON",
-   "version": "1.0.0"
+   "version": "1.0.0",
+   "transport": "http",
+   "polls": 2
   }
  ],
  "products": [

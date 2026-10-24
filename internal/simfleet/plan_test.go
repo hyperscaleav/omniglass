@@ -12,9 +12,12 @@ func TestPlan(t *testing.T) {
 		"x-panel":   {Interfaces: []profile.Interface{{Protocol: "tcp", Port: 51325}}},
 		"x-bar":     {Interfaces: []profile.Interface{{Protocol: "http", Port: 443, TLS: true}}},
 		"x-sensor":  {Interfaces: []profile.Interface{{Protocol: "http", Port: 80}, {Protocol: "tcp", Port: 5000}}},
+		"x-cam":     {Interfaces: []profile.Interface{{Protocol: "http", Port: 443, TLS: true}}},
+		"x-player":  {Interfaces: []profile.Interface{{Protocol: "http", Port: 80}}},
 	}
 	profileFor := func(p string) (*profile.DeviceProfile, bool) { d, ok := profiles[p]; return d, ok }
-	driverOf := map[string]string{"x-display": "snmp-generic", "x-panel": "newtron-nvp", "x-bar": "kestrel-api", "x-sensor": "http-json"}
+	driverOf := map[string]string{"x-display": "snmp-generic", "x-panel": "newtron-nvp", "x-bar": "kestrel-api", "x-sensor": "http-json",
+		"x-cam": "a-stub", "x-player": "a-stub"}
 
 	got, err := Plan([]Component{
 		{ID: "c3", Product: "x-panel"},
@@ -22,16 +25,18 @@ func TestPlan(t *testing.T) {
 		{ID: "c9", Product: "x-unsimulated"},
 		{ID: "c4", Product: "x-bar"},
 		{ID: "c5", Product: "x-sensor"},
+		{ID: "c6", Product: "x-cam"},
+		{ID: "c7", Product: "x-player"},
 	}, nil, Catalog{ProfileFor: profileFor, DriverOf: func(p string) string { return driverOf[p] }, PortOffset: 10000})
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if len(got) != 4 {
-		t.Fatalf("planned %d devices, want the four the simulator serves: %+v", len(got), got)
+	if len(got) != 6 {
+		t.Fatalf("planned %d devices, want the six the simulator serves: %+v", len(got), got)
 	}
 	// Ordered by id, addresses handed out in that order.
-	want := []struct{ id, addr string }{{"c1", "127.60.0.1"}, {"c3", "127.60.0.2"}, {"c4", "127.60.0.3"}, {"c5", "127.60.0.4"}}
+	want := []struct{ id, addr string }{{"c1", "127.60.0.1"}, {"c3", "127.60.0.2"}, {"c4", "127.60.0.3"}, {"c5", "127.60.0.4"}, {"c6", "127.60.0.5"}, {"c7", "127.60.0.6"}}
 	for i, w := range want {
 		if got[i].ComponentID != w.id || got[i].Address != w.addr {
 			t.Fatalf("device %d = %s at %s, want %s at %s", i, got[i].ComponentID, got[i].Address, w.id, w.addr)
@@ -45,13 +50,22 @@ func TestPlan(t *testing.T) {
 	if panel := got[1].Endpoints; len(panel) != 1 || panel[0].Driver != "newtron-nvp" || panel[0].Inputs["host"] != "127.60.0.2" {
 		t.Errorf("panel endpoints = %+v, want a newtron-nvp attach", panel)
 	}
+	// The http drivers attach with the credential the simulator's face
+	// demands (#902): the bar's https on the shifted 443, the sensor's http on
+	// the shifted 80.
+	if bar := got[2].Endpoints; len(bar) != 1 || bar[0].Driver != "kestrel-api" || bar[0].Inputs["port"] != "10443" || bar[0].Inputs["login"] != KestrelLoginSecret {
+		t.Errorf("bar endpoints = %+v, want a kestrel-api attach at the shifted 443", bar)
+	}
+	if sensor := got[3].Endpoints; len(sensor) != 1 || sensor[0].Driver != "http-json" || sensor[0].Inputs["port"] != "10080" || sensor[0].Inputs["key"] != CensusKeySecret {
+		t.Errorf("sensor endpoints = %+v, want an http-json attach at the shifted 80", sensor)
+	}
 	// Drivers with no spec yet get a reachability probe: plain HTTP where the
 	// device serves it, a TCP port check on a TLS-only device.
-	if bar := got[2].Endpoints; len(bar) != 1 || bar[0].Transport != "tcp" || bar[0].Target != "127.60.0.3:10443" {
-		t.Errorf("TLS-only device endpoints = %+v, want a tcp probe at the shifted port", bar)
+	if cam := got[4].Endpoints; len(cam) != 1 || cam[0].Transport != "tcp" || cam[0].Target != "127.60.0.5:10443" {
+		t.Errorf("TLS-only device endpoints = %+v, want a tcp probe at the shifted port", cam)
 	}
-	if sensor := got[3].Endpoints; len(sensor) != 1 || sensor[0].Transport != "http" || sensor[0].Target != "127.60.0.4:10080" {
-		t.Errorf("plain-HTTP device endpoints = %+v, want an http probe", sensor)
+	if player := got[5].Endpoints; len(player) != 1 || player[0].Transport != "http" || player[0].Target != "127.60.0.6:10080" {
+		t.Errorf("plain-HTTP device endpoints = %+v, want an http probe", player)
 	}
 }
 

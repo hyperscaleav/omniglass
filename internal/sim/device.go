@@ -307,6 +307,11 @@ type Device struct {
 	// tlsID is the key and certificate the device's tls line face serves
 	// (#1035), derived from its id so it is the same on every run.
 	tlsID tlsIdentity
+	// httpRequests and httpRefusals count the requests the device's http
+	// faces were sent and the ones its auth gate refused (401), so a test
+	// tells a gated collector (no credentialed request) from a retrying one.
+	httpRequests atomic.Int64
+	httpRefusals atomic.Int64
 	// httpsID is the key and certificate the device's https faces serve
 	// (#902): an ECDSA key derived from its id, so it is the same on every
 	// run and a pinned https endpoint survives a simulator restart.
@@ -1057,7 +1062,9 @@ func (d *Device) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// requests. The gate is a no-op when HTTPAuth.Mode is empty, which
 	// preserves the open-by-default behavior every existing profile
 	// relies on.
+	d.httpRequests.Add(1)
 	if !d.checkHTTPAuth(rec, r) {
+		d.httpRefusals.Add(1)
 		return
 	}
 
@@ -1402,6 +1409,12 @@ func (d *Device) startHTTPWith(port int, tlsCfg *tls.Config) (net.Addr, error) {
 	}()
 	return lis.Addr(), nil
 }
+
+// HTTPRequests counts the requests the device's http faces were sent.
+func (d *Device) HTTPRequests() int64 { return d.httpRequests.Load() }
+
+// HTTPRefusals counts the requests the device's http auth gate refused.
+func (d *Device) HTTPRefusals() int64 { return d.httpRefusals.Load() }
 
 // HTTPAddrs returns the bound address of each HTTP listener the device is
 // serving, in start order.

@@ -19,6 +19,23 @@ import (
 // community string.
 const CommunitySecret = "sim-community"
 
+// The platform secrets the http attaches reference (#902): the simulated
+// Kestrel bar's basic-auth login (admin / kestrel) and the simulated
+// Tessellate sensor's api key, each what the simulator's face demands.
+const (
+	KestrelLoginSecret = "sim-kestrel-login"
+	CensusKeySecret    = "sim-census-key"
+)
+
+// AttachSecret is the platform secret each driver's simulated attach
+// references, keyed by driver: an attach is offered only to a caller who can
+// read it.
+var AttachSecret = map[string]string{
+	"snmp-generic": CommunitySecret,
+	"kestrel-api":  KestrelLoginSecret,
+	"http-json":    CensusKeySecret,
+}
+
 // AddressCap is how many addresses the simulated block holds: 256 third
 // octets of 250 hosts each.
 const AddressCap = 256 * 250
@@ -125,6 +142,14 @@ var Attach = map[string]func(addr string, shift func(int) int) map[string]string
 	},
 	"newtron-nvp": func(addr string, _ func(int) int) map[string]string {
 		return map[string]string{"host": addr} // 51325, the spec's default, needs no privilege
+	},
+	// The Kestrel bar's https API on 443, its key pinned on first use (the
+	// spec's default mode), and the Tessellate sensor's http API on 80.
+	"kestrel-api": func(addr string, shift func(int) int) map[string]string {
+		return map[string]string{"host": addr, "port": strconv.Itoa(shift(443)), "login": KestrelLoginSecret}
+	},
+	"http-json": func(addr string, shift func(int) int) map[string]string {
+		return map[string]string{"host": addr, "port": strconv.Itoa(shift(80)), "key": CensusKeySecret}
 	},
 }
 
