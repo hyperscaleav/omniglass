@@ -126,3 +126,45 @@ func TestAnAuditImageOfAMapOrNothingIsUnchanged(t *testing.T) {
 		t.Fatalf("auditJSON(nil) = %v, %v, want nil, nil", b, err)
 	}
 }
+
+// The key is the field's only when encoding/json wrote the field there: a
+// tagged field that owns the name keeps its value, at the top or beside an
+// embed, so the image never gains bytes the row did not carry.
+func TestAnAuditImageInlinesOnlyAKeyTheFieldOwns(t *testing.T) {
+	type outer struct {
+		*Endpoint
+		Other string `json:"Params"`
+	}
+	image := imageOf(t, outer{Endpoint: &Endpoint{Params: []byte(`{"target":"h:22"}`)}, Other: "outer"})
+	if image["Params"] != "outer" {
+		t.Fatalf("Params = %#v, want the tagged field's \"outer\"", image["Params"])
+	}
+	type A struct{ Params []byte }
+	type B struct {
+		Other string `json:"Params"`
+	}
+	type sameDepth struct {
+		A
+		B
+	}
+	image = imageOf(t, sameDepth{A: A{Params: []byte(`{"a":1}`)}, B: B{Other: "tagged"}})
+	if image["Params"] != "tagged" {
+		t.Fatalf("Params = %#v, want the tagged field's \"tagged\"", image["Params"])
+	}
+}
+
+// Bytes Go accepts as JSON but a jsonb column refuses (invalid UTF-8 in a
+// string, a NUL escape) stay base64: inlined, they would fail the audit
+// insert and the write with it.
+func TestAnAuditImageLeavesJSONThatJSONBRefuses(t *testing.T) {
+	type row struct{ Bad, Nul []byte }
+	bad := []byte("{\"a\":\"\xff\"}")
+	nul := []byte(`{"a":"x\u0000y"}`)
+	image := imageOf(t, row{Bad: bad, Nul: nul})
+	if got, want := image["Bad"], base64.StdEncoding.EncodeToString(bad); got != want {
+		t.Fatalf("Bad = %#v, want the base64 %q", got, want)
+	}
+	if got, want := image["Nul"], base64.StdEncoding.EncodeToString(nul); got != want {
+		t.Fatalf("Nul = %#v, want the base64 %q", got, want)
+	}
+}

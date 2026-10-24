@@ -1,9 +1,11 @@
 package storage
 
 import (
+	"bytes"
 	"encoding/json"
 	"reflect"
 	"strings"
+	"unicode/utf8"
 )
 
 // bytesType is []byte, the Go type a jsonb column scans into raw.
@@ -48,7 +50,7 @@ func inlineJSONBytes(v any, b []byte) ([]byte, error) {
 			continue // reached through a nil embedded pointer: not in the image
 		}
 		raw := fv.Bytes()
-		if len(raw) == 0 || !json.Valid(raw) {
+		if !jsonbAccepts(raw) {
 			continue
 		}
 		if image == nil {
@@ -56,7 +58,11 @@ func inlineJSONBytes(v any, b []byte) ([]byte, error) {
 				return b, nil
 			}
 		}
-		if _, present := image[name]; !present {
+		// The key is this field's only if encoding/json wrote the field
+		// there: a tagged field can own the name instead, and its value
+		// stays.
+		written, err := json.Marshal(raw)
+		if err != nil || !bytes.Equal(image[name], written) {
 			continue
 		}
 		image[name] = json.RawMessage(raw)
@@ -66,6 +72,14 @@ func inlineJSONBytes(v any, b []byte) ([]byte, error) {
 		return b, nil
 	}
 	return json.Marshal(image)
+}
+
+// jsonbAccepts reports bytes that are JSON a jsonb column takes: valid
+// JSON, valid UTF-8 (Go's decoder lets invalid bytes through a string), and
+// no NUL escape (which jsonb refuses). Anything else stays base64, so an
+// image never fails the audit insert and the write with it.
+func jsonbAccepts(raw []byte) bool {
+	return len(raw) > 0 && json.Valid(raw) && utf8.Valid(raw) && !bytes.Contains(raw, []byte(`\u0000`))
 }
 
 // jsonFieldName is the key encoding/json writes a field under, false for a

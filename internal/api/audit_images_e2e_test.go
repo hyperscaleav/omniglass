@@ -82,8 +82,9 @@ func TestAnEndpointsAuditRowReadsAsJSON(t *testing.T) {
 }
 
 // An endpoint's secret input is audited by reference, never by value: no
-// row of the trail carries the secret's value, readable or encoded, while
-// the endpoint's rows name the secret it uses. Skipped under -short.
+// row of the trail carries the secret's value, readable or inside a base64
+// string, while the endpoint's rows name the secret it uses. Skipped under
+// -short.
 func TestAnEndpointsAuditRowNeverCarriesASecretValue(t *testing.T) {
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
@@ -93,16 +94,34 @@ func TestAnEndpointsAuditRowNeverCarriesASecretValue(t *testing.T) {
 	c.do(ownerTok, http.MethodPatch, "/endpoints/"+ep, map[string]any{"inputs": map[string]string{"host": "10.20.4.62"}}, http.StatusOK)
 	c.do(ownerTok, http.MethodPost, "/endpoints/"+ep+":retry", nil, http.StatusOK)
 
-	body := string(c.do(ownerTok, http.MethodGet, "/audit-log?limit=500", nil, http.StatusOK))
-	for _, form := range []string{
-		auditedSecretValue,
-		base64.StdEncoding.EncodeToString([]byte(auditedSecretValue)),
-		base64.StdEncoding.EncodeToString([]byte(`"` + auditedSecretValue + `"`)),
-	} {
-		if strings.Contains(body, form) {
-			t.Fatalf("the audit trail carries the secret value as %q", form)
+	raw := c.do(ownerTok, http.MethodGet, "/audit-log?limit=500", nil, http.StatusOK)
+	if strings.Contains(string(raw), auditedSecretValue) {
+		t.Fatal("the audit trail carries the secret value")
+	}
+	// Encoded is no better than readable: every string in the trail that is
+	// base64 is decoded and searched too, wherever the value sits in it.
+	var trail any
+	if err := json.Unmarshal(raw, &trail); err != nil {
+		t.Fatalf("decode audit-log: %v", err)
+	}
+	var walk func(v any)
+	walk = func(v any) {
+		switch v := v.(type) {
+		case map[string]any:
+			for _, e := range v {
+				walk(e)
+			}
+		case []any:
+			for _, e := range v {
+				walk(e)
+			}
+		case string:
+			if b, err := base64.StdEncoding.DecodeString(v); err == nil && strings.Contains(string(b), auditedSecretValue) {
+				t.Fatalf("the audit trail carries the secret value base64-encoded in %q", v)
+			}
 		}
 	}
+	walk(trail)
 	if update := auditImageRows(t, c, ownerTok, "endpoint")["update"]; update == nil || !hasEntries(update.New["Inputs"], map[string]any{"community": "lab-community"}) {
 		t.Fatalf("the endpoint's update row does not name its secret by reference: %+v", update)
 	}
