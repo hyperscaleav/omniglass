@@ -412,6 +412,22 @@ describe("a udp endpoint", () => {
     expect(getByTestId("request-rung").textContent).not.toMatch(/not answered/);
   });
 
+  it("names an snmp endpoint's rung its get", () => {
+    const row = { ...udpRow(true), endpoint: "snmp", label: "Panel SNMP", transport: "snmp" };
+    const { getByText, getByTestId } = mount({ component: "panel-1", endpoints: [row] });
+    fireEvent.click(getByText("Panel SNMP"));
+    expect(getByTestId("request-rung").textContent).toMatch(/get/);
+    expect(getByTestId("request-rung").textContent).toMatch(/answered/);
+  });
+
+  it("reads an snmp get beneath its auth gate as refused, not unanswered", () => {
+    const row = { ...udpRow(false), endpoint: "snmp", label: "Panel SNMP", transport: "snmp", rejection: { rung: "authenticated" as const, class: "auth" } };
+    const { getByText, getByTestId } = mount({ component: "panel-1", endpoints: [row] });
+    fireEvent.click(getByText("Panel SNMP"));
+    expect(getByTestId("request-rung").textContent).toMatch(/refused/);
+    expect(getByTestId("request-rung").textContent).not.toMatch(/not answered/);
+  });
+
   it("lists no request rung on a row with a port", () => {
     const { getByText, queryByTestId } = mount();
     fireEvent.click(getByText("disp-1-tcp"));

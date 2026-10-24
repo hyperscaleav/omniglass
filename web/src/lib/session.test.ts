@@ -127,6 +127,43 @@ describe("ladder", () => {
       ["authenticated", "untried"],
     ]);
   });
+  // The login is attempted only once the transport answers (ADR-0158): when
+  // the transport rung fails, the login above it was not tried this time, so
+  // an earlier yes is not shown as current (an snmp agent gone silent, #821).
+  it("reads the login above a failed transport rung as untried, not its last verdict", () => {
+    const rungs = ladder(
+      ep({
+        transport: "snmp",
+        layers: [ping(1)],
+        responsive: { value: "down", ts: ago(1) },
+        authenticated: { value: "yes", ts: ago(60_000) },
+      }),
+    );
+    expect(rungs.map((r) => [r.key, r.status])).toEqual([
+      ["reachable", "pass"],
+      ["responsive", "fail"],
+      ["authenticated", "untried"],
+    ]);
+  });
+  // Beneath snmp's auth gate the get carries the refused community, so it is
+  // not sent: the transport rung reads untried, not failed (#821).
+  it("reads an snmp transport rung beneath its auth gate as untried", () => {
+    const rungs = ladder(
+      ep({
+        transport: "snmp",
+        layers: [ping(1)],
+        responsive: { value: "down", ts: ago(1) },
+        authenticated: { value: "no", ts: ago(1) },
+        rejection: { rung: "authenticated", class: "auth" },
+      }),
+    );
+    expect(rungs.map((r) => [r.key, r.status])).toEqual([
+      ["reachable", "pass"],
+      ["responsive", "untried"],
+      ["authenticated", "held"],
+    ]);
+    expect(rungHint(rungs[1])).toMatch(/community/i);
+  });
   it("shows the login rung a gate holds even before an auth verdict landed", () => {
     const rungs = ladder(ep({ responsive: { value: "up", ts: ago(1) }, rejection: { rung: "authenticated", class: "auth" } }));
     expect(rungs.at(-1)).toMatchObject({ key: "authenticated", status: "held" });

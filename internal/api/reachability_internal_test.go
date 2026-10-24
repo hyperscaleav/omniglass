@@ -86,7 +86,7 @@ func TestCapReason(t *testing.T) {
 // here. A new key read here that is not ruled node-only fails this test.
 func TestReachabilityReadsOnlyNodeOnlyKeys(t *testing.T) {
 	keys := []string{verdictKey, responsiveKey, authKey, sessionStateKey, sessionReasonKey, rejectionKey,
-		tlsKeyKey, tlsExpiryKey, tlsDaysLeftKey, tlsHandshakeKey, udpResponseKey}
+		tlsKeyKey, tlsExpiryKey, tlsDaysLeftKey, tlsHandshakeKey, udpResponseKey, snmpResponseKey}
 	for _, l := range reachLayers {
 		keys = append(keys, l.SignalKey, l.TimingKey)
 	}

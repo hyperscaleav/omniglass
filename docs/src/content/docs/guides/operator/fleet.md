@@ -381,9 +381,10 @@ rejected, and both keys with **Trust this key** when what changed was the compon
 ([held sessions](/guides/operator/collection/#held-sessions)), the node, its state, and when
 it was last seen: when the server last
 received anything the endpoint's task delivered, not its last up/down change (hours old on an
-endpoint that never stopped answering) and not a time the node wrote on a sample. A driver
-endpoint (one attached to a driver, such as SNMP) has no reachability verdict, so what it delivers
-is what says it is collecting. A stale sample under a
+endpoint that never stopped answering) and not a time the node wrote on a sample. Every
+endpoint whose transport can probe has a reachability verdict, a driver's included: an SNMP
+endpoint's is its standard get answered, and a udp endpoint's its driver's request answered (a bare
+udp or snmp endpoint has nothing to send, so it needs a driver). A stale sample under a
 healthy node points at the component or the network path, not at collection. An offline node
 says nothing about the component. This card is the one place a node appears on these pages.
 

@@ -14,6 +14,7 @@
       "icmp-rtt-avg",
       "session-reason",
       "session-state",
+      "snmp-response-time",
       "ssh-handshake-time",
       "ssh-host-key",
       "tcp-connect-time",

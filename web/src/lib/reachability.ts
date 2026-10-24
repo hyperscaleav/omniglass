@@ -122,10 +122,15 @@ export function reason(iface: ReachEndpoint, now: number = Date.now()): string {
   if (ping && ping.value >= 1 && port && port.value < 1) {
     return "Host answers ping but the control port is refused: service down, box up.";
   }
-  if (!port && iface.responsive && iface.rejection?.rung === "responsive") {
+  if (!port && iface.responsive && requestHeld(iface)) {
     // A gated request rung (#1037): the component answered with a refusal
     // retrying cannot fix, and the node sends nothing more under it.
-    return `The component refused the endpoint's request in a way retrying cannot fix (${iface.rejection.class}): nothing is sent to it until the endpoint changes or someone retries it.`;
+    return `The component refused the endpoint's request in a way retrying cannot fix (${iface.rejection?.class ?? "refused"}): nothing is sent to it until the endpoint changes or someone retries it.`;
+  }
+  if (ping && ping.value >= 1 && !port && iface.responsive?.value === "down" && iface.transport === "snmp") {
+    // An snmp endpoint (#821): its rung is a get, and v2c drops a wrong
+    // community silently, so the cause cannot be narrowed.
+    return "Host answers ping, but the agent does not answer its get: the agent is stopped, the community is wrong (a v2c agent drops a wrong community silently, so the two cannot be told apart), or the datagrams are lost.";
   }
   if (ping && ping.value >= 1 && !port && iface.responsive?.value === "down") {
     // A udp endpoint (#1037): no port to open, so the rung is the request.
@@ -152,6 +157,14 @@ export function requestRung(iface: ReachEndpoint): boolean | undefined {
   if (layer) return layer.value >= 1;
   if (!iface.responsive) return undefined;
   return iface.responsive.value === "up";
+}
+
+// requestHeld reports a request rung a refusal holds, beneath which nothing
+// is sent: a gate at the transport rung, or for snmp at the session rung too,
+// since every v2c get carries the refused community (#821).
+export function requestHeld(iface: ReachEndpoint): boolean {
+  const rung = iface.rejection?.rung;
+  return rung === "responsive" || (iface.transport === "snmp" && rung === "authenticated");
 }
 
 // requestLayer is the request rung the read serves for a udp endpoint, with

@@ -92,7 +92,7 @@ A spec may also declare its **reachability ladder** (`ladder`), bottom up: `ladd
 (whether to ping at all; a ping is informational only and never gates), `ladder.transport.rung` (the
 gate: `connect` on the transport's port, the protocol's `handshake`, or a named `request` answered,
 given as `ladder.transport.request`, where an open port cannot be detected; it runs as a line over
-`tcp` or a datagram over `udp`, with snmp's own request #821) and
+`tcp`, a datagram over `udp`, or a get over `snmp`) and
 `ladder.session.enabled` (whether a login rung exists). Every field defaults from the transport
 registry, so most drivers declare nothing, and a rung the transport cannot run refuses at write. A
 cloud API is never pinged, but its 443 is checked open before its session runs:
@@ -105,7 +105,9 @@ ladder:
 ```
 
 A refusal at a rung gates that rung and the ones above it for the endpoint; the rungs below keep
-reporting ([the gate](/architecture/collection/#the-connection-fingerprint-and-the-layered-gate)).
+reporting ([the gate](/architecture/collection/#the-connection-fingerprint-and-the-layered-gate)),
+except an snmp endpoint's get, which carries the community, so beneath its auth gate it is not sent
+and reads down, rejected.
 
 A udp driver speaks the line protocol as datagrams ([udp](/architecture/collection/#udp)). An open
 udp port cannot be detected, so it must name its request rung, and it may declare a `listen-port`
@@ -134,6 +136,18 @@ commands:
 
 Over udp a `session` block may declare only `terminal` replies: nothing logs in or is held, and a
 reply it names gates the endpoint at the transport rung.
+
+An snmp driver's rung is a get of a standard OID, sysUpTime.0 unless it names another under
+`ladder.transport.request.get` (numeric OIDs only; a line is refused), sent with the endpoint's
+`community` secret. A v2c agent drops a wrong community silently, so it reads not answered and
+retryable; an agent answering `authorizationError` reads rejected, class `auth`:
+
+```yaml
+transport: snmp
+ladder:
+  transport:
+    request: { get: ["1.3.6.1.2.1.1.2.0"] }
+```
 
 A telnet driver:
 

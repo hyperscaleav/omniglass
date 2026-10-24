@@ -71,3 +71,22 @@ func TestValidateInterfacesLoss(t *testing.T) {
 		}
 	}
 }
+
+// A refused community (#821) is an snmp face's, and differs from the
+// community the face answers.
+func TestValidateInterfacesRefusedCommunity(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		iface   Interface
+		wantErr bool
+	}{
+		{"an snmp face refusing one", Interface{Name: "a", Protocol: "snmp", Port: 1, Auth: Auth{Community: "public", RefusedCommunity: "revoked"}}, false},
+		{"refusing its own", Interface{Name: "a", Protocol: "snmp", Port: 1, Auth: Auth{Community: "public", RefusedCommunity: "public"}}, true},
+		{"on another face", Interface{Name: "a", Protocol: "http", Port: 1, Auth: Auth{RefusedCommunity: "revoked"}}, true},
+	} {
+		p := DeviceProfile{Interfaces: []Interface{tc.iface}}
+		if err := validateInterfaces(&p); (err != nil) != tc.wantErr {
+			t.Errorf("%s: err = %v, wantErr %v", tc.name, err, tc.wantErr)
+		}
+	}
+}

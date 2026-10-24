@@ -294,6 +294,9 @@ interfaces:
     api_surface: newtron-panel
     auth:
       community: "public"
+      # A community the agent knows and refuses (#821): answered with
+      # authorizationError, where any other is dropped silently.
+      refused_community: "revoked"
     # DELIBERATELY DEAD SNMP. This panel answers only the two
     # standard MIB-2 system OIDs (sysDescr, sysUpTime) and exposes NO
     # enterprise telemetry, the entire 1.3.6.1.4.1.55510 arc that

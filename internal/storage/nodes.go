@@ -464,11 +464,17 @@ func (p *PG) NodeWorklist(ctx context.Context, name string) (Worklist, error) {
 		// A driver task's secret inputs travel with it: the spec says which
 		// inputs are secret, the endpoint's inputs say which secret row each
 		// references, and the unseal below turns the references into fields.
-		// The reachability probe (a bare spec) carries none.
-		if len(driverSpec) > 0 && len(wt.Spec) > 2 {
+		// The reachability probe (a bare spec) carries only the credential its
+		// rung sends: snmp's get carries the community (#821); every other
+		// probe carries none.
+		probe := len(wt.Spec) <= 2
+		if len(driverSpec) > 0 && (!probe || wt.Transport == "snmp") {
 			refs, err := secretRefsOf(driverSpec, epInputs)
 			if err != nil {
 				return Worklist{}, fmt.Errorf("storage: node worklist %q task %s: %w", name, wt.ID, err)
+			}
+			if probe {
+				refs = rungSecretRefs(refs)
 			}
 			cid := ""
 			if componentID != nil {
@@ -691,4 +697,15 @@ func nodeLocationID(ctx context.Context, q querier, ref *string, locationRead sc
 		return nil, err
 	}
 	return &l.ID, nil
+}
+
+// rungSecretRefs narrows an endpoint's secret references to the credential
+// its reachability rung sends: an snmp get's community, the input named
+// community (the engine's credential contract the poll reads too, #821).
+func rungSecretRefs(refs map[string]string) map[string]string {
+	out := map[string]string{}
+	if ref, ok := refs[driver.SNMPCommunityInput]; ok {
+		out[driver.SNMPCommunityInput] = ref
+	}
+	return out
 }

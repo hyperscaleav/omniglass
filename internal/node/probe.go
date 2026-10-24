@@ -73,7 +73,7 @@ func runTasks(ctx context.Context, nc *nats.Conn, node string, wl collection.Wor
 			}
 			var dps []collection.Sample
 			var faults []error
-			if gt, gated := sessions.blocked(task.EndpointID, rungResponsive); gated && sessions.lookup(task.EndpointID) == nil {
+			if gt, gated := sessions.blocked(task.EndpointID, statelessRung(task.Transport)); gated && sessions.lookup(task.EndpointID) == nil {
 				// A stateless poll on a gated endpoint is not retried under
 				// the fingerprint it was refused under (#1056 ruling).
 				faults = []error{fmt.Errorf("node: task %s: the endpoint is gated: %w", task.ID, gt.refusal())}
@@ -284,6 +284,8 @@ func collectProbe(ctx context.Context, runner *collection.Runner, task collectio
 		switch {
 		case l.Transport == driver.RungRequest && l.Request != nil && task.Transport == "udp":
 			return collectDatagramRung(ctx, task, l.Request, sessions)
+		case l.Transport == driver.RungRequest && l.Request != nil && task.Transport == "snmp":
+			return collectSNMPRung(ctx, runner, task, l.Request, sessions)
 		case l.Transport == driver.RungRequest && l.Request != nil:
 			return collectRequestRung(ctx, runner, task, l.Request)
 		case l.Transport == driver.RungConnect && (task.Transport == "ssh" || task.Transport == "tls"):

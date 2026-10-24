@@ -141,6 +141,17 @@ address the endpoint targets, and has no way to tell the endpoints a port it pic
 endpoints must target the profile's ports. Such a test keeps the fixed ports and claims a
 loopback address no other test holds instead (`simtest.ClaimLoopback`).
 
+### SNMP faces
+
+A v2c face's community is strict (#821): it answers its own community alone and drops any other
+silently, as a real v2c agent drops a wrong community (the library underneath, configured with no
+security, would answer any community, so the face judges the community itself before the library
+sees a request). A face may also declare a `refused_community` under its `auth`, a community it
+knows and refuses, which it answers with an `authorizationError` response, so the fleet can show
+the one auth refusal v2c makes detectable. The catalog's faces answer `public` and refuse
+`revoked`. A test counts the requests a face was sent (`SNMPRequests`, a test-harness hook), to
+prove a refused community is not sent again.
+
 ### Datagram faces
 
 A udp interface declared `persistent: true` (#1037) serves the line protocol as datagrams, one line

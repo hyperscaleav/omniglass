@@ -1,5 +1,5 @@
 // Package probekeys declares the keys a node's own collection writes: the
-// samples the native probes write (tcp, icmp, http, ssh, tls, udp, the
+// samples the native probes write (tcp, icmp, http, ssh, tls, udp, snmp, the
 // endpoint verdicts they roll up into, and a held session's state), the event
 // a task lands when it cannot collect, and who may write each.
 // A leaf, so the probes (internal/collection), the writer-class ruling
@@ -56,6 +56,10 @@ const (
 	// first send to the answer (a retry's wait included), one observation
 	// per answered probe; a lost request lands none.
 	UDPResponseTime = "udp-response-time"
+	// SNMPResponseTime is the snmp request rung's timing (#821): from the
+	// get to its answer, one observation per answered probe (an
+	// authorizationError included); an unanswered get lands none.
+	SNMPResponseTime = "snmp-response-time"
 	// EndpointRejection is an endpoint's gate (#1056 ruling, ADR-0158): the
 	// ladder rung a terminal refusal holds, its class, and the connection
 	// fingerprint it holds for ("authenticated auth <fingerprint>"), or
@@ -86,7 +90,7 @@ const (
 var nodeOnly = []string{
 	TCPOpen, TCPConnectTime, ICMPReachable, ICMPRTTAvg, HTTPResponseTime, SSHHandshakeTime, TelnetResponseTime,
 	EndpointReachable, EndpointResponsive, EndpointAuthenticated, SessionState, SessionReason, SSHHostKey, EndpointRejection,
-	TLSHandshakeTime, TLSCertificate, TLSCertificateExpiry, TLSCertificateDaysLeft, UDPResponseTime,
+	TLSHandshakeTime, TLSCertificate, TLSCertificateExpiry, TLSCertificateDaysLeft, UDPResponseTime, SNMPResponseTime,
 	CollectionFailed,
 }
 

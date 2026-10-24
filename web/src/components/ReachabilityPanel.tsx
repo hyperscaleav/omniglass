@@ -23,6 +23,7 @@ import {
   layerWord,
   requestRung,
   requestLayer,
+  requestHeld,
   type ReachEndpoint,
   type VerdictWord,
 } from "../lib/reachability";
@@ -148,8 +149,8 @@ function GateBreakdown(p: { iface: ReachEndpoint }) {
   const why = createMemo(() => reason(p.iface, now()));
   const verdictOk = createMemo(() => p.iface.verdict?.value === "up");
   // A request rung a refusal holds: the component answered with a refusal
-  // retrying cannot fix, so beneath the gate nothing is sent (#1037).
-  const requestGated = () => p.iface.rejection?.rung === "responsive";
+  // retrying cannot fix, so beneath the gate nothing is sent (#1037, #821).
+  const requestGated = () => requestHeld(p.iface);
   return (
     <div class="flex flex-col gap-1.5 border-t border-base-300 bg-base-200/40 px-3 py-2.5 text-[12px]">
       {/* The request layer (udp) is drawn as its own row below, beside the
@@ -176,14 +177,14 @@ function GateBreakdown(p: { iface: ReachEndpoint }) {
         <div class="flex items-center gap-2" data-testid="request-rung">
           <span class={`inline-block size-2 shrink-0 rounded-full ${requestGated() ? TONE_DOT.unknown : requestRung(p.iface) ? "bg-success" : "bg-error"}`} />
           <span class="w-16 shrink-0 uppercase tracking-wide text-base-content/45 text-[10px]">rung</span>
-          <span class="font-data text-base-content/70">request</span>
+          <span class="font-data text-base-content/70">{p.iface.transport === "snmp" ? "get" : "request"}</span>
           <span class="text-base-content/50">{requestGated() ? "refused, not sent beneath the gate" : requestRung(p.iface) ? "answered" : "not answered"}</span>
           <Show when={!requestGated() && requestRung(p.iface) && requestLayer(p.iface)?.detail}>
             <span class="text-base-content/40">· {requestLayer(p.iface)!.detail}</span>
           </Show>
           <InfoTip
             label="the request rung"
-            text="The transport rung where an open port cannot be detected (udp): the node sends the driver's named request and an answer proves the protocol. Silence reads not answered (timed out), and a port the host reports closed reads refused. With no port to open, this rung is the endpoint's verdict."
+            text="The transport rung where an open port cannot be detected (udp, snmp): the node sends the driver's named request (for snmp, a get of a standard OID with the endpoint's community) and an answer proves the protocol. Silence reads not answered (timed out), and a port the host reports closed reads refused; a v2c agent drops a wrong community silently, so it reads not answered too. With no port to open, this rung is the endpoint's verdict."
           />
         </div>
       </Show>

@@ -8041,7 +8041,7 @@ export interface components {
             check: string;
             /** @description A human timing detail (rtt / connect time), when present */
             detail?: string;
-            /** @description The probe layer word (ping, port, or request: a udp endpoint's request answered) */
+            /** @description The probe layer word (ping, port, or request: a udp endpoint's request or an snmp endpoint's get answered) */
             layer: string;
             /**
              * Format: date-time

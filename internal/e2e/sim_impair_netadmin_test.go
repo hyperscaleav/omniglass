@@ -23,6 +23,8 @@ import (
 
 	"github.com/hyperscaleav/omniglass/internal/auth"
 	"github.com/hyperscaleav/omniglass/internal/scope"
+	"github.com/hyperscaleav/omniglass/internal/sim/profile"
+	"github.com/hyperscaleav/omniglass/internal/sim/profiles"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 )
@@ -294,4 +296,37 @@ func TestImpairingASimulatedDeviceShowsInCollection(t *testing.T) {
 	slowed := time.Now()
 	as("component", "impairment", "set", "sim-dev", "--latency-ms", "300")
 	after("the delay to show in the TCP connect time", "tcp-connect-time", slowed, func(ms float64) bool { return ms >= 290 })
+
+	// snmp's rung under loss (#821): the device's v2c agent, collected with
+	// snmp-generic, reads up; every datagram toward it dropped, its get goes
+	// unanswered and the endpoint reads down; the loss lifted, up again.
+	as("component", "impairment", "set", "sim-dev")
+	as("secret", "create", "--name", "sim-community", "--secret-type", "snmp-community",
+		"--owner-kind", "platform", "--fields", `{"community":"public"}`)
+	as("endpoint", "create", "--component", "sim-dev", "--node", "edge-i", "--driver", "snmp-generic",
+		"--inputs", fmt.Sprintf(`{"host":%q,"port":"%d","community":"sim-community"}`, ip, e2eSNMPPort(t, product)))
+	snmp := func(v string) func() bool { return func() bool { return reach()["snmp"] == v } }
+	waitFor(t, "the snmp endpoint to read up", snmp("up"))
+	as("component", "impairment", "set", "sim-dev", "--loss-pct", "100")
+	waitFor(t, "the snmp endpoint to read down under loss", snmp("down"))
+	as("component", "impairment", "set", "sim-dev")
+	waitFor(t, "the snmp endpoint to read up once the loss lifted", snmp("up"))
+}
+
+// e2eSNMPPort is the port the product's simulator profile serves SNMP on.
+func e2eSNMPPort(t *testing.T, product string) int {
+	t.Helper()
+	store, err := profile.LoadStoreFS(profiles.FS)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p, ok := store.Devices[product]; ok {
+		for _, iface := range p.Interfaces {
+			if iface.Protocol == "snmp" {
+				return iface.Port
+			}
+		}
+	}
+	t.Fatalf("the simulated product %s serves no snmp face", product)
+	return 0
 }

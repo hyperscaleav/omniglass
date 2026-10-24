@@ -20,7 +20,7 @@ func TestRegistryCarriesTheEightTransports(t *testing.T) {
 		"telnet": {held: true, built: true},  // the line protocol behind a login (#1033)
 		"ssh":    {held: true, built: true},
 		"http":   {held: true, built: true},
-		"snmp":   {held: true, built: false},
+		"snmp":   {held: false, built: true}, // stateless: its rung is a standard get answered (#821)
 	}
 	all := transport.All()
 	if len(all) != len(want) {

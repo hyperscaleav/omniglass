@@ -1,4 +1,4 @@
-## frozen-fact-served-as-current (fixed; found by the #1035 review)
+## frozen-fact-served-as-current (fixed; found by the #1035 review, regressed and fixed in the #821 review)
 
 - **Cue:** a read that serves a latest-ever sample (a certificate's days left, a handshake's
   result) beside a gate or state that stops the probe from refreshing it.
@@ -8,3 +8,8 @@
 - **Fix:** tie the fact to what can refresh it: withhold it (or label it with its age) while the
   gate holds (`composeTLS`, internal/api/reachability.go), and have the surface name the refusal
   instead of reading as nothing measured.
+- **Second instance (#821):** a gate that stops a transport's only probe. Beneath an snmp auth
+  gate the get carries the refused community, so nothing was sent and nothing landed: the verdict
+  stayed up and the row read responding against a powered-off agent. Fix: give the held tick its
+  own reading (the held rung lands down, rejected, `collectSNMPRung`, internal/node/snmp.go; as
+  udp's gated rung does), so the verdict follows.

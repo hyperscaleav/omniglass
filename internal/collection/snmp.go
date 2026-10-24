@@ -8,6 +8,9 @@ import (
 	"time"
 
 	"github.com/gosnmp/gosnmp"
+
+	"github.com/hyperscaleav/omniglass/internal/collection/probekeys"
+	"github.com/hyperscaleav/omniglass/internal/driver"
 )
 
 // The SNMP transport client (#814): a v2c scalar GET, the generic driver's
@@ -16,8 +19,15 @@ import (
 // the runner consumes, a real implementation over the wire, and the real
 // implementation proven by an integration test against an actual agent.
 
+// SignalSNMPResponseTime is the snmp request rung's timing, one observation
+// per answered probe (decision 7a of #1076; folded into rtt by #1063).
+const SignalSNMPResponseTime = probekeys.SNMPResponseTime
+
 // SNMPGetter runs one v2c scalar GET and returns the response values keyed by
 // OID, every value rendered as a string (the interpreter types them by lane).
+// Any response is an answer, a noSuchObject included; an authorizationError
+// is a TerminalError of class auth; a wrong community, which v2c drops
+// silently, is a timeout.
 type SNMPGetter interface {
 	Get(ctx context.Context, target, community string, oids []string, timeout time.Duration) (map[string]string, error)
 }
@@ -58,6 +68,12 @@ func (g *snmpGetter) Get(ctx context.Context, target, community string, oids []s
 	res, err := client.Get(oids)
 	if err != nil {
 		return nil, fmt.Errorf("collection: snmp get %s: %w", target, err)
+	}
+	if res.Error == gosnmp.AuthorizationError {
+		// The agent knows the community and its access policy refuses it
+		// (#821): a refusal retrying cannot fix, where a wrong community is
+		// dropped silently and reads as a timeout.
+		return nil, &TerminalError{Class: driver.ClassAuth, Reason: "the agent answered authorizationError for the community"}
 	}
 	out := make(map[string]string, len(res.Variables))
 	for _, v := range res.Variables {

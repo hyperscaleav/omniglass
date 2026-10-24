@@ -435,6 +435,7 @@ func (e *Engine) bindInterface(dev *Device, iface profile.Interface) (net.Addr, 
 		if community == "" {
 			community = "public"
 		}
+		dev.SetSNMPRefusedCommunity(iface.Auth.RefusedCommunity)
 		return dev.startSNMP(port, community)
 	case "ssh":
 		return dev.startSSH(port, iface.Auth.DefaultUser, iface.Auth.DefaultPassword, iface.Auth.Permissive)
