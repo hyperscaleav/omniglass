@@ -7872,8 +7872,10 @@ once the handshake completes (`HostKeyPin.Admit`), published as `tls-certificate
 again while the worklist lacks it, replaced (recycling the session) when the worklist delivers a
 different one. Beneath a `certificate` gate the probe runs only the TCP connect, across a restart
 too. The gate value carries the two keys (`responsive certificate <fingerprint> <pinned>
-<offered>`, ADR-0158 point 5 amended), and the reachability read serves them as `rejection.pinned`
-and `rejection.offered`, so #1078's trust-this-key action reads them without parsing a reason. The
+<offered>`, ADR-0158 point 5 amended), and the reachability read serves them as `rejection.pinned_key`
+and `rejection.offered_key` (#1078's shape for a host key), so its trust-this-key action reads them
+without parsing a reason; `:retry` takes the key through `host_key` (the key the endpoint's
+transport pins) as well as `certificate`. The
 worklist delivers the pin as `CertificatePin` (declared first), the declared pin joins the connection
 fingerprint (`fingerprint.Inputs.CertificatePin`, the reflection and table tests green), and
 `POST /endpoints/{id}:retry` takes `certificate` (audited, a tls endpoint only, a `SHA256:`

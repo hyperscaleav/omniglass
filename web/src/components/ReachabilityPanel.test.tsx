@@ -345,7 +345,7 @@ describe("a tls endpoint", () => {
   // only, so the read withholds the last accepted certificate's facts; the
   // row says the offered certificate is refused rather than "none yet".
   it("reads a refused certificate under a certificate gate", () => {
-    const row = { ...tlsRow("pin", undefined), rejection: { rung: "responsive" as const, class: "certificate", pinned: key, offered: "SHA256:" + "Z".repeat(43) } };
+    const row = { ...tlsRow("pin", undefined), rejection: { rung: "responsive" as const, class: "certificate", pinned_key: key, offered_key: "SHA256:" + "Z".repeat(43) } };
     const { getByText, getByTestId, queryByText } = mount({ component: "panel-1", endpoints: [row] });
     fireEvent.click(getByText("Panel over TLS"));
     expect(getByText("the offered certificate is refused")).toBeTruthy();

@@ -310,7 +310,8 @@ attempt against an unchanged fingerprint. The ssh probe's params credential ride
 past a pinned key that changed. So does the tls probe: under a `certificate` gate it runs only the
 TCP connect, so no handshake reaches a key nobody trusted. A gate for a changed key carries the
 pinned and offered keys after the fingerprint (`responsive certificate <fingerprint> <pinned>
-<offered>`), which the reachability read serves as data. Proven end to end (`run_session_identity_test.go`): a silent panel
+<offered>`), which the reachability read serves as data (`rejection.pinned_key` and
+`rejection.offered_key`). Proven end to end (`run_session_identity_test.go`): a silent panel
 spends the login budget, then a label edit and a node restart try nothing, while a retry, a
 login-declaration change, a rotated secret, and an ssh attachment each attempt again; a wrong
 port reads down on refused connects and tries no login, and the port edited in place connects and

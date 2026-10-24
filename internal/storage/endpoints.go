@@ -663,24 +663,16 @@ func (p *PG) RetryEndpoint(ctx context.Context, actorID, id string, pin RetryPin
 	if err != nil {
 		return nil, err
 	}
-	for _, accept := range []struct{ value, transport, what, only string }{
-		{pin.HostKey, "ssh", "host key", "only an ssh endpoint pins a host key"},
-		{pin.Certificate, "tls", "certificate key", "only a tls endpoint pins a certificate key"},
-	} {
-		if accept.value == "" {
-			continue
-		}
-		if before.Transport != accept.transport || before.ComponentID == nil {
-			return nil, fmt.Errorf("%w: %s", ErrRetryPin, accept.only)
-		}
-		if !keyFingerprint.MatchString(accept.value) {
-			return nil, fmt.Errorf("%w: a %s is a SHA256 fingerprint (SHA256: and 43 base64 characters)", ErrRetryPin, accept.what)
-		}
+	key, err := pin.keyFor(before)
+	if err != nil {
+		return nil, err
+	}
+	if key != "" {
 		if _, err := tx.Exec(ctx, `
 			insert into property (owner_kind, component_id, property_type_id, instance, provenance, value)
 			values ('component', $1::uuid, (select id from property_type where name = $4), $2, '`+declaredProvenance+`', to_jsonb($3::text))`,
-			*before.ComponentID, before.Name, accept.value, pinKeyOf[accept.transport]); err != nil {
-			return nil, fmt.Errorf("storage: pin %s for endpoint %q: %w", accept.what, before.ID, err)
+			*before.ComponentID, before.Name, key, pinKeyOf[before.Transport]); err != nil {
+			return nil, fmt.Errorf("storage: pin a key for endpoint %q: %w", before.ID, err)
 		}
 	}
 	// The counter, not updated_at: an unrelated edit (a label) moves
@@ -693,12 +685,17 @@ func (p *PG) RetryEndpoint(ctx context.Context, actorID, id string, pin RetryPin
 		return nil, mapEndpointWriteErr(err)
 	}
 	audited := any(after)
-	if pin.HostKey != "" || pin.Certificate != "" {
+	switch {
+	case key != "" && before.Transport == "tls":
 		audited = struct {
 			*Endpoint
-			HostKey     string `json:"host_key,omitempty"`
-			Certificate string `json:"certificate,omitempty"`
-		}{after, pin.HostKey, pin.Certificate}
+			Certificate string `json:"certificate"`
+		}{after, key}
+	case key != "":
+		audited = struct {
+			*Endpoint
+			HostKey string `json:"host_key"`
+		}{after, key}
 	}
 	if err := writeAuditRes(ctx, tx, actorID, "retry", "endpoint", after.ID, before, audited); err != nil {
 		return nil, err
@@ -709,12 +706,40 @@ func (p *PG) RetryEndpoint(ctx context.Context, actorID, id string, pin RetryPin
 	return after, nil
 }
 
-// RetryPin is a key an operator's retry accepts as the endpoint's new pin:
-// a host key for an ssh endpoint, a certificate's public key for a tls one.
-// Both empty retries with the pin unchanged.
+// RetryPin is a key an operator's retry accepts as the endpoint's new pin.
+// HostKey names the key the endpoint's transport pins, whichever it is (an
+// ssh host key, a tls certificate's public key), which is the field a key
+// refusal's trust-this-key action sends (#1078); Certificate names a tls
+// endpoint's alone. Both empty retries with the pin unchanged.
 type RetryPin struct {
 	HostKey     string
 	Certificate string
+}
+
+// keyFor resolves the one key a retry pins on the endpoint, refusing a key
+// its transport does not pin, two different keys, or a value that is not a
+// SHA256 fingerprint.
+func (p RetryPin) keyFor(ep *Endpoint) (string, error) {
+	if p.HostKey == "" && p.Certificate == "" {
+		return "", nil
+	}
+	if p.Certificate != "" && ep.Transport != "tls" {
+		return "", fmt.Errorf("%w: only a tls endpoint pins a certificate key", ErrRetryPin)
+	}
+	if p.HostKey != "" && p.Certificate != "" && p.HostKey != p.Certificate {
+		return "", fmt.Errorf("%w: host_key and certificate name different keys; send the one key to trust", ErrRetryPin)
+	}
+	key := p.HostKey
+	if key == "" {
+		key = p.Certificate
+	}
+	if _, pinned := pinKeyOf[ep.Transport]; !pinned || ep.ComponentID == nil {
+		return "", fmt.Errorf("%w: only an ssh or tls endpoint pins a key", ErrRetryPin)
+	}
+	if !keyFingerprint.MatchString(key) {
+		return "", fmt.Errorf("%w: a key is a SHA256 fingerprint (SHA256: and 43 base64 characters)", ErrRetryPin)
+	}
+	return key, nil
 }
 
 // ErrRetryPin refuses a retry's key: one the endpoint's transport does not

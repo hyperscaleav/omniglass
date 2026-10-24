@@ -149,6 +149,14 @@ func TestEndpointAPI(t *testing.T) {
 	if got, err := gw.LatestProperty(ctx, "comp-a", "tls-certificate", "tls"); err != nil || got == nil || got.Value != key || got.Provenance != "declared" {
 		t.Fatalf("the accepted key = %+v, %v; want it declared as the endpoint's pin", got, err)
 	}
+	// host_key names the key the endpoint's transport pins, so the field a
+	// key refusal's trust action sends works on a tls endpoint too (#1078).
+	again := "SHA256:" + strings.Repeat("E", 43)
+	c.do(ownerTok, http.MethodPost, "/endpoints/"+tlsA.ID+":retry", map[string]any{"host_key": again}, http.StatusOK)
+	if got, _ := gw.LatestProperty(ctx, "comp-a", "tls-certificate", "tls"); got == nil || got.Value != again {
+		t.Fatalf("the key sent as host_key = %+v, want it declared as the tls pin", got)
+	}
+	c.do(ownerTok, http.MethodPost, "/endpoints/"+tlsA.ID+":retry", map[string]any{"host_key": again, "certificate": key}, http.StatusUnprocessableEntity)
 }
 
 // TestEndpointCreateWithAmbiguousComponentIs409 closes I1's other half: the

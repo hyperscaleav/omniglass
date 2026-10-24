@@ -50,10 +50,10 @@ func TestParseRejection(t *testing.T) {
 func TestParseRejectionCarriesTheRefusedKeys(t *testing.T) {
 	pinned, offered := "SHA256:"+strings.Repeat("A", 43), "SHA256:"+strings.Repeat("B", 43)
 	got := parseRejection("responsive certificate 9f86d081 " + pinned + " " + offered)
-	if got == nil || got.Rung != "responsive" || got.Class != "certificate" || got.Pinned != pinned || got.Offered != offered {
+	if got == nil || got.Rung != "responsive" || got.Class != "certificate" || got.PinnedKey != pinned || got.OfferedKey != offered {
 		t.Fatalf("parseRejection = %+v, want the rung, class and both keys", got)
 	}
-	if got := parseRejection("responsive certificate 9f86d081"); got == nil || got.Pinned != "" || got.Offered != "" {
+	if got := parseRejection("responsive certificate 9f86d081"); got == nil || got.PinnedKey != "" || got.OfferedKey != "" {
 		t.Fatalf("a refusal naming no key = %+v, want no keys", got)
 	}
 	if got := parseRejection("responsive certificate 9f86d081 " + pinned); got != nil {

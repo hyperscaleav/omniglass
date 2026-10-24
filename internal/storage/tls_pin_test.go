@@ -103,12 +103,12 @@ func TestTLSPinRidesTheWorklistAndRetryAcceptsAChangedKey(t *testing.T) {
 		t.Fatal("a key trusted on first use moved the fingerprint")
 	}
 
-	// Refused at the door: a malformed key, a host key on a tls endpoint.
+	// Refused at the door: a malformed key, and two different keys at once.
 	if _, err := f.gw.RetryEndpoint(f.ctx, "", ep.ID, storage.RetryPin{Certificate: "SHA256:nope"}, f.all, f.all); !errors.Is(err, storage.ErrRetryPin) {
 		t.Fatalf("a malformed certificate key = %v, want ErrRetryPin", err)
 	}
-	if _, err := f.gw.RetryEndpoint(f.ctx, "", ep.ID, storage.RetryPin{HostKey: key("B")}, f.all, f.all); !errors.Is(err, storage.ErrRetryPin) {
-		t.Fatalf("a host key on a tls endpoint = %v, want ErrRetryPin", err)
+	if _, err := f.gw.RetryEndpoint(f.ctx, "", ep.ID, storage.RetryPin{HostKey: key("B"), Certificate: key("C")}, f.all, f.all); !errors.Is(err, storage.ErrRetryPin) {
+		t.Fatalf("two different keys at once = %v, want ErrRetryPin", err)
 	}
 
 	// The operator accepts the offered key: it is declared, wins over the
@@ -144,6 +144,16 @@ func TestTLSPinRidesTheWorklistAndRetryAcceptsAChangedKey(t *testing.T) {
 	_ = json.Unmarshal(after, &audited)
 	if audited["certificate"] != key("C") {
 		t.Fatalf("the retry's audit row = %s, want the accepted certificate key", after)
+	}
+
+	// host_key names the key a tls endpoint pins too (#1078's console sends
+	// a key refusal's offered key there, whatever the transport): it lands as
+	// the declared tls-certificate.
+	if _, err := f.gw.RetryEndpoint(f.ctx, "", ep.ID, storage.RetryPin{HostKey: key("D")}, f.all, f.all); err != nil {
+		t.Fatalf("a tls endpoint's key through host_key: %v", err)
+	}
+	if got := f.task(t, ep.ID).CertificatePin; got != key("D") {
+		t.Fatalf("worklist pin = %q, want the key sent as host_key", got)
 	}
 }
 

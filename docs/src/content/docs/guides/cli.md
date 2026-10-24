@@ -240,7 +240,7 @@ omniglass endpoint delete <id>                                  # refused (409) 
 # is not attempted again until what it connects with changes, or an operator retries it:
 omniglass endpoint retry <id>                                   # needs endpoint:retry; audited
 omniglass endpoint retry <id> --host-key SHA256:...             # ssh: trust a replaced component's new key
-omniglass endpoint retry <id> --certificate SHA256:...          # tls: trust a replaced component's new public key
+omniglass endpoint retry <id> --certificate SHA256:...          # tls: trust a replaced component's new public key (--host-key works too)
 # A tls endpoint's verification mode is one of its driver's inputs, edited in place:
 omniglass endpoint update <id> --inputs '{"tls-mode":"verify"}'  # verify, pin or skip
 

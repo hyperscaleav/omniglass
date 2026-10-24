@@ -7256,9 +7256,11 @@ interface create form, since that name is the platform's to mint.
      too. For a changed key the gate value carries both keys, `endpoint-rejection` reading
      `<rung> <class> <fingerprint> <pinned> <offered>` (amending
      [ADR-0158](#adr-0158-one-connection-fingerprint-gates-every-connection-on-a-ladder-the-driver-declares)
-     point 5's grammar), and the reachability read serves them as fields, so a surface that offers
-     to trust the new key never parses a reason (#1078). An operator accepts it with `:retry` and
-     `certificate` (gated `endpoint:retry`, audited), which declares the pin.
+     point 5's grammar), and the reachability read serves them as `pinned_key` and `offered_key`,
+     the shape #1078 serves for a host key, so a surface that offers to trust the new key never
+     parses a reason. An operator accepts it with `:retry` and `certificate`, or `host_key` (the
+     key the endpoint's transport pins, the field a key refusal's trust action sends), gated
+     `endpoint:retry` and audited, which declares the pin.
   5. **What the probe lands.** `tcp-open` and the connect time, `endpoint-responsive`, one
      `tls-handshake-time` per probe the component answered (a rung-specific name until #1063 folds
      probe timings into `rtt`), and, for a certificate the mode accepted, both

@@ -281,9 +281,10 @@ secrets under the editor's scope, audited, its tasks re-derived in the same tran
 `POST /endpoints/{id}:retry`
 (gated `endpoint:retry`, audited, #1049) moves the endpoint's retry counter, part of its connection
 fingerprint, so a gate a terminal refusal holds lifts and the endpoint is attempted again (ADR-0158); for an ssh endpoint whose host key changed, its optional `host_key`
-body declares the new pin (#1032), and for a tls endpoint whose certificate's public key changed, its
-optional `certificate` does the same (#1035, ADR-0159); each is refused (422) on any other transport
-and when it is not a `SHA256:` fingerprint. The routes live in the
+body declares the new pin (#1032), and for a tls endpoint whose certificate's public key changed,
+`host_key` (the key the endpoint's transport pins) or its tls-only twin `certificate` does the same
+(#1035, ADR-0159); a key is refused (422) on a transport that pins none, as `certificate` is off a
+tls endpoint, two different keys at once, and anything not a `SHA256:` fingerprint. The routes live in the
 [generated API reference](/reference/api/), rendered from the OpenAPI document on every build, each
 operation's description naming its permission gate verbatim (a guard test enforces that, alongside the
 spec-contract test that every gated operation carries its `x-omniglass-permission` stamp and
@@ -461,7 +462,7 @@ out-of-scope component is a non-disclosing 404 (a deliberate early exception to
   session: the latest `session-state`, when it changed, and the `session-reason` beside it, cut to
   500 characters), and the `rejection` a terminal refusal holds (the rung and class of
   `endpoint-rejection`; the connection fingerprint it carries is never served, while a refusal of a
-  changed key adds the `pinned` and `offered` keys as fields, #1035), which the console's session
+  changed key adds the `pinned_key` and `offered_key` as fields, #1035), which the console's session
   pill and ladder render (#1059). A tls endpoint's row also carries `tls`: its verification mode, the
   key it pins (pin mode alone), the latest handshake time, and the certificate's expiry and days
   left, withheld while a certificate gate holds (#1035). Teardown publishes no state, which is why a

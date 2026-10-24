@@ -85,10 +85,11 @@ type reachSessionBody struct {
 type reachRejectionBody struct {
 	Rung  string `json:"rung" enum:"reachable,responsive,authenticated" doc:"The ladder rung the refusal holds: responsive for a host key, certificate or protocol refusal, authenticated for a credential. Nothing at or above it is attempted until the connection fingerprint moves"`
 	Class string `json:"class" doc:"The refusal's class: auth, host-key, certificate or protocol"`
-	// Pinned and Offered are a changed key's two keys (#1035), carried on
-	// the gate as data so no surface parses them out of the reason.
-	Pinned  string `json:"pinned,omitempty" doc:"For a refusal of a changed key (class certificate on a tls endpoint in pin mode): the public key the endpoint pins, a SHA256 fingerprint. Absent on every other refusal"`
-	Offered string `json:"offered,omitempty" doc:"For a refusal of a changed key: the public key the component now offers, a SHA256 fingerprint. Trusting it is POST /endpoints/{id}:retry with certificate set to this value"`
+	// PinnedKey and OfferedKey are a changed key's two keys (#1035, the
+	// shape #1078 serves for a host key), carried on the gate as data so no
+	// surface parses them out of the reason.
+	PinnedKey  string `json:"pinned_key,omitempty" doc:"A refusal of a changed key only (class certificate for a pinned tls key): the SHA256 fingerprint of the public key the endpoint pins, as the node refused against it. Present with offered_key or not at all"`
+	OfferedKey string `json:"offered_key,omitempty" doc:"A refusal of a changed key only: the SHA256 fingerprint of the key the component offered instead. Trusting it is POST /endpoints/{id}:retry with this value as host_key (or, for a tls endpoint, certificate)"`
 }
 
 // reachTLSBody is a tls endpoint's handshake and certificate (#1035): how it
@@ -360,7 +361,7 @@ func parseRejection(v string) *reachRejectionBody {
 	case "reachable", "responsive", "authenticated":
 		out := &reachRejectionBody{Rung: parts[0], Class: parts[1]}
 		if len(parts) == 5 {
-			out.Pinned, out.Offered = parts[3], parts[4]
+			out.PinnedKey, out.OfferedKey = parts[3], parts[4]
 		}
 		return out
 	}

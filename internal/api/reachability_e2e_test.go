@@ -463,8 +463,8 @@ func TestReachabilityCarriesTheTLSFacts(t *testing.T) {
 			Rejection *struct {
 				Rung    string `json:"rung"`
 				Class   string `json:"class"`
-				Pinned  string `json:"pinned"`
-				Offered string `json:"offered"`
+				PinnedKey  string `json:"pinned_key"`
+				OfferedKey string `json:"offered_key"`
 			} `json:"rejection"`
 		} `json:"endpoints"`
 	}
@@ -505,7 +505,7 @@ func TestReachabilityCarriesTheTLSFacts(t *testing.T) {
 		t.Fatal(err)
 	}
 	ep = read("panel-1").Endpoints[0]
-	if ep.Rejection == nil || ep.Rejection.Class != "certificate" || ep.Rejection.Pinned != pinned || ep.Rejection.Offered != offered {
+	if ep.Rejection == nil || ep.Rejection.Class != "certificate" || ep.Rejection.PinnedKey != pinned || ep.Rejection.OfferedKey != offered {
 		t.Fatalf("rejection = %+v, want class certificate with both keys", ep.Rejection)
 	}
 	if ep.TLS == nil || ep.TLS.Key != pinned || ep.TLS.Expires != nil || ep.TLS.DaysLeft != nil {
