@@ -445,7 +445,11 @@ func TestTLSSessionPinsAndRejectsAChangedKey(t *testing.T) {
 	// key and is refused for good.
 	_, nextCert := selfSigned(t, testKey(t), time.Time{})
 	srv.setCert(nextCert)
-	for len(srv.conns) > 0 {
+	// Close the connections held now, and only those: the session redials
+	// at once, and a drain that ran until the channel emptied could close
+	// that redial too, failing its handshake retryably and leaving the
+	// session waiting on a backoff the fake clock never fires (#1128).
+	for held := len(srv.conns); held > 0; held-- {
 		_ = (<-srv.conns).Close()
 	}
 	rec.waitStates(t, establishing, up, collection.SessionRecovering, rejected)

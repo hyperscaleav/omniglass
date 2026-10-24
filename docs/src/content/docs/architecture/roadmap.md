@@ -95,8 +95,10 @@ that describes the target:
    [endpoint](/architecture/collection/) and task authoring all shipped, and so did the stateful half:
    held line sessions and the listeners that ride them (#603), now over `tcp`, `tls`, `telnet` and
    `ssh`, each authenticating before it acts and stopping on a refusal it cannot fix (#1049, #1035,
-   #1033, #1032), the same line protocol as datagrams over `udp` (#1037), and snmp's reachability
-   rung, a standard get (#821). Still ahead: [templates](/architecture/templates/) (the reusable
+   #1033, #1032), the same line protocol as datagrams over `udp` (#1037), snmp's reachability
+   rung, a standard get (#821), and http and https polls and commands that read JSON, XML and HTML
+   through one extraction primitive, authenticated by a declared scheme (#902, the first slice of
+   #1113). Still ahead: [templates](/architecture/templates/) (the reusable
    device shape, #827), SNMP v3 (#1083), the held transports beyond those (#1034,
    #1036, #1038 to #1041), protocols that move whole files (#1043 to
    #1047), and server-hosted listeners (webhook, trap, syslog ingress, #1024).

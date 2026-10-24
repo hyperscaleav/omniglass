@@ -28,7 +28,7 @@ func TestHTTPProberReal(t *testing.T) {
 			w.WriteHeader(http.StatusInternalServerError)
 		}))
 		defer srv.Close()
-		res, err := p.Probe(ctx, srv.Listener.Addr().String(), 3*time.Second)
+		res, err := p.Probe(ctx, collection.HTTPTask{Target: srv.Listener.Addr().String(), Timeout: 3 * time.Second})
 		if err != nil {
 			t.Fatalf("probe: %v", err)
 		}
@@ -57,7 +57,7 @@ func TestHTTPProberReal(t *testing.T) {
 				defer func() { _ = conn.Close() }()
 			}
 		}()
-		res, err := p.Probe(ctx, ln.Addr().String(), 500*time.Millisecond)
+		res, err := p.Probe(ctx, collection.HTTPTask{Target: ln.Addr().String(), Timeout: 500 * time.Millisecond})
 		if err != nil {
 			t.Fatalf("probe: %v", err)
 		}
@@ -67,7 +67,7 @@ func TestHTTPProberReal(t *testing.T) {
 	})
 
 	t.Run("port closed classifies on the dial rung", func(t *testing.T) {
-		res, err := p.Probe(ctx, nettest.RefusedAddr(t), 2*time.Second)
+		res, err := p.Probe(ctx, collection.HTTPTask{Target: nettest.RefusedAddr(t), Timeout: 2 * time.Second})
 		if err != nil {
 			t.Fatalf("probe: %v", err)
 		}

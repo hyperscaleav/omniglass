@@ -29,14 +29,16 @@ Ask in order; the first yes decides.
    can expose beside the plain one (a raw control port and a TLS one), or whose transport
    rung differs (the handshake rather than the connect), is **its own registry entry over a
    shared primitive** ([ADR-0160](../../../docs/src/content/docs/architecture/decisions.md)).
-   Example: `tls`, the line protocol over the TLS primitive in `internal/collection`, its
-   rung the handshake. File it as a new transport that consumes the primitive.
+   Examples: `tls`, the line protocol over the TLS primitive in `internal/collection`, its
+   rung the handshake; `https`, http over the same primitive (#902). File it as a new
+   transport that consumes the primitive.
 3. **Does the driver need something the carrier cannot do yet** (a body format, an auth
    scheme, a stream mode, a framing variant, TLS where it needs neither its own endpoint name
    nor its own rung)? Then it is a **capability on the existing transport**, proven by that
    driver, filed as one issue: "the <transport> gains <capability>, proven by a <driver>
-   driver". Example: XML plus WS-Security digest for ONVIF; SSE on http; TLS on http (https),
-   websocket or mqtt, each consuming the shared TLS primitive; SFTP on ssh. A protocol that
+   driver". Example: WS-Security digest for ONVIF; SSE on http; TLS on websocket or mqtt where
+   it needs neither its own endpoint name nor its own rung; SFTP on ssh. (An http body format,
+   an auth scheme and a selector are already capabilities of http, #902: a driver declares them.) A protocol that
    moves whole files (logs, diagnostics, screenshots) rather than values lands its result as
    a file sample (#1043).
 4. **Does it have its own framing, addressing, or session handshake that no existing

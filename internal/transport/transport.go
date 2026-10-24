@@ -28,6 +28,11 @@ type Transport struct {
 	// open port cannot be detected, udp) a named request answered. It is the
 	// gate: a session rung is attempted only when it passes.
 	Rung string `json:"rung,omitempty"`
+	// TLS marks a transport whose every connection runs the TLS handshake
+	// over the shared primitive (#1035, #902): its endpoint takes the
+	// tls-mode input, pins the certificate's public key on first use, and
+	// accepts a changed key through :retry with certificate.
+	TLS bool `json:"tls,omitempty"`
 }
 
 // registry is the one authoritative list, in the order surfaces render it:
@@ -37,14 +42,17 @@ type Transport struct {
 // an option on tcp, since an endpoint is named by its transport (so a
 // component can hold a raw port and a TLS one) and its rung is the handshake,
 // over the TLS primitive in internal/collection that other carriers consume.
+// https is the same placement for http (#902, ADR-0160's rule): a component
+// may serve a plain web port beside a TLS one, and its rung is the handshake.
 var registry = []Transport{
 	{Name: "icmp", Description: "ICMP echo / ping reachability and RTT.", Held: false, Built: true},
 	{Name: "tcp", Description: "Raw TCP: the connect / port-open check, and the line protocol, which holds a session over it (polls, commands, and listeners share one connection).", Held: true, Built: true, Line: true, Rung: "connect"},
-	{Name: "tls", Description: "TLS: the line protocol over a TLS connection, held exactly as it is over tcp; the probe runs the handshake (responds) and reports the certificate's expiry, verified against the node's roots, pinned to the public key on first use, or (by the operator's explicit choice) not verified.", Held: true, Built: true, Line: true, Rung: "handshake"},
+	{Name: "tls", Description: "TLS: the line protocol over a TLS connection, held exactly as it is over tcp; the probe runs the handshake (responds) and reports the certificate's expiry, verified against the node's roots, pinned to the public key on first use, or (by the operator's explicit choice) not verified.", Held: true, Built: true, Line: true, Rung: "handshake", TLS: true},
 	{Name: "udp", Description: "UDP: the line protocol as datagrams, one line each, stateless: the probe sends the driver's named request and an answer is the rung (an open udp port cannot be detected), a refused port reads refused, and a lost datagram is retried; each endpoint binds its own local port (its driver's listen-port input, else one the node picks), which its requests, replies and pushes share.", Held: false, Built: true, Rung: "request"},
 	{Name: "telnet", Description: "Telnet: the line protocol over TCP with option negotiation (every option refused), its login the session's auth step; the probe connects and waits for the first negotiation or banner bytes (responds).", Held: true, Built: true, Line: true, Rung: "connect"},
 	{Name: "ssh", Description: "SSH: the probe runs a real key exchange (responds) and tries the endpoint credential when one is set (auth); the line protocol holds a shell or exec channel over it, its userauth the session's auth step and its host key pinned on first use.", Held: true, Built: true, Line: true, Rung: "handshake"},
-	{Name: "http", Description: "HTTP transport; the probe draws a real response off the API (responds), any status counting as an answer.", Held: true, Built: true, Rung: "connect"},
+	{Name: "http", Description: "HTTP, stateless: a driver's polls and commands send real requests (method, path, query, headers, body) and read JSON, XML, HTML or text answers, authenticated by the endpoint's declared scheme (basic, bearer, an API key); the probe draws a real response off the API without a credential (responds), any status counting as an answer.", Held: false, Built: true, Rung: "connect"},
+	{Name: "https", Description: "HTTPS: http over a TLS connection, its own entry so a component can serve a plain web port beside a TLS one; the probe runs the handshake (responds), reports the certificate's expiry, then draws a response, the certificate verified against the node's roots, pinned to the public key on first use, or (by the operator's explicit choice) not verified.", Held: false, Built: true, Rung: "handshake", TLS: true},
 	{Name: "snmp", Description: "SNMP v2c, stateless: the probe gets a standard OID (sysUpTime.0 unless the driver names another) with the endpoint's community, and an answer is the rung; a wrong community is dropped silently and reads as no answer, while an authorizationError reads as an auth refusal.", Held: false, Built: true, Rung: "request"},
 }
 
@@ -64,6 +72,13 @@ func All() []Transport {
 	out := make([]Transport, len(registry))
 	copy(out, registry)
 	return out
+}
+
+// UsesTLS reports whether a transport's connections run the TLS handshake
+// (tls, https): false for an unknown name.
+func UsesTLS(name string) bool {
+	t, ok := byName[name]
+	return ok && t.TLS
 }
 
 // ByName resolves one transport; ok is false for a name the binary does not

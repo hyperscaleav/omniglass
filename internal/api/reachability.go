@@ -12,6 +12,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/collection/probekeys"
 	"github.com/hyperscaleav/omniglass/internal/collection/rejection"
 	"github.com/hyperscaleav/omniglass/internal/storage"
+	"github.com/hyperscaleav/omniglass/internal/transport"
 )
 
 // The reachability read BFF: a per-component, per-endpoint composition of the
@@ -87,12 +88,12 @@ type reachRejectionBody struct {
 	Rung       string `json:"rung" enum:"reachable,responsive,authenticated" doc:"The ladder rung the refusal holds: responsive for a host key, certificate or protocol refusal, authenticated for a credential. Nothing at or above it is attempted until the connection fingerprint moves"`
 	Class      string `json:"class" doc:"The refusal's class: auth, host-key, certificate or protocol"`
 	PinnedKey  string `json:"pinned_key,omitempty" doc:"A refusal of a changed key only (class host-key, or certificate for a pinned tls key): the SHA256 fingerprint of the key the endpoint pins, as the node refused against it. Present with offered_key or not at all"`
-	OfferedKey string `json:"offered_key,omitempty" doc:"A refusal of a changed key only: the SHA256 fingerprint of the key the component offered instead. Trusting it is POST /endpoints/{id}:retry with this exact value as host_key (a tls endpoint also takes it as certificate); while the refusal holds, any other value is refused (409)"`
+	OfferedKey string `json:"offered_key,omitempty" doc:"A refusal of a changed key only: the SHA256 fingerprint of the key the component offered instead. Trusting it is POST /endpoints/{id}:retry with this exact value as host_key (a tls or https endpoint also takes it as certificate); while the refusal holds, any other value is refused (409)"`
 }
 
-// reachTLSBody is a tls endpoint's handshake and certificate (#1035): how it
-// verifies, the key it pins, the latest handshake time, and the certificate's
-// expiry and days left.
+// reachTLSBody is the handshake and certificate of an endpoint over the tls
+// handshake (tls #1035, https #902): how it verifies, the key it pins, the
+// latest handshake time, and the certificate's expiry and days left.
 type reachTLSBody struct {
 	Mode        string     `json:"mode" doc:"How the endpoint's connections judge the certificate (its driver's tls-mode input, verify when none is set): verify (against the node's system roots, the server name the host), pin (the public key trusted on first use, any other refused) or skip (nothing checked, the operator's explicit choice)"`
 	Key         string     `json:"key,omitempty" doc:"The public key the endpoint pins (tls-certificate), a SHA256 fingerprint; served in pin mode alone, and absent before first use"`
@@ -114,7 +115,7 @@ type reachEndpointBody struct {
 	Authenticated *reachVerdictBody   `json:"authenticated,omitempty" doc:"The auth rung (the probe's credential was accepted, or a held session's login passed), present only when a credential was tried"`
 	Session       *reachSessionBody   `json:"session,omitempty" doc:"The endpoint's held session, while it is configured to hold one (a standing listen task, or a driver declaring a session): its latest state, when it changed, and why"`
 	Rejection     *reachRejectionBody `json:"rejection,omitempty" doc:"The gate a terminal refusal holds on the endpoint, its rung and class; absent when none holds"`
-	TLS           *reachTLSBody       `json:"tls,omitempty" doc:"A tls endpoint's handshake and certificate: its verification mode, pinned key, handshake time, expiry and days left; absent on every other transport"`
+	TLS           *reachTLSBody       `json:"tls,omitempty" doc:"A tls or https endpoint's handshake and certificate: its verification mode, pinned key, handshake time, expiry and days left; absent on every other transport"`
 	Layers        []reachLayerBody    `json:"layers" doc:"The per-layer probe signals that compose the verdict"`
 	History       []reachHistoryBody  `json:"history" doc:"The recent verdict transitions, oldest first, for the availability strip"`
 }
@@ -237,7 +238,7 @@ func composeEndpoint(ctx context.Context, gw storage.Gateway, comp string, it st
 	if gate != nil {
 		row.Rejection = parseRejection(gate.Value)
 	}
-	if it.Transport == "tls" {
+	if transport.UsesTLS(it.Transport) {
 		if row.TLS, err = composeTLS(ctx, gw, comp, it, row.Rejection); err != nil {
 			return row, err
 		}

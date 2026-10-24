@@ -96,7 +96,7 @@ func TestTLSPortCheckLogsNothing(t *testing.T) {
 	defer log.SetOutput(os.Stderr)
 
 	d := NewDevice("d", "h", net.ParseIP("127.0.0.1"), "p", 1, map[string]any{})
-	cert, err := (&certCache{}).get()
+	cert, err := generateSelfSignedCert()
 	if err != nil {
 		t.Fatal(err)
 	}

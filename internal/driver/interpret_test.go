@@ -245,7 +245,7 @@ func TestValidateTransportShape(t *testing.T) {
 	}{
 		{"snmp poll without get", `{"version":1,"transport":"snmp","polls":[{"name":"p","schedule":{"every":"60s"},"request":{"line":"X"},"emits":[{"name":"uptime","extract":{"oid":"1.3"}}]}]}`, "get request"},
 		{"snmp emit not by oid", `{"version":1,"transport":"snmp","polls":[{"name":"p","schedule":{"every":"60s"},"request":{"get":["1.3"]},"emits":[{"name":"uptime","extract":{"regex":"x"}}]}]}`, "oid"},
-		{"poll on an unfetchable transport", `{"version":1,"transport":"http","polls":[{"name":"p","schedule":{"every":"60s"},"request":{"path":"/"},"emits":[{"name":"uptime","extract":{"jsonpath":"a"}}]}]}`, "no poll fetcher"},
+		{"poll on an unfetchable transport", `{"version":1,"transport":"icmp","polls":[{"name":"p","schedule":{"every":"60s"},"request":{"line":"x"},"emits":[{"name":"uptime","extract":{"regex":"a"}}]}]}`, "no poll fetcher"},
 		{"command binding on non-tcp", `{"version":1,"transport":"snmp","polls":[{"name":"p","schedule":{"every":"60s"},"request":{"get":["1.3"]},"emits":[{"name":"uptime","extract":{"oid":"1.3"}}]}],"commands":[{"command_type":"set-input","request":{"line":"X ${value}"}}]}`, "no actuation wire"},
 		{"tcp emit not by regex", `{"version":1,"transport":"tcp","polls":[{"name":"p","schedule":{"every":"60s"},"request":{"line":"STATUS"},"emits":[{"name":"video-input","extract":{"key":"in"}}]}]}`, "must locate by regex"},
 	}

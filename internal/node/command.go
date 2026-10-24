@@ -4,10 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/collection"
+	"github.com/hyperscaleav/omniglass/internal/driver"
 	"github.com/nats-io/nats.go"
 )
 
@@ -93,6 +95,8 @@ func executeDelivery(ctx context.Context, runner *collection.Runner, d collectio
 		return "", "node: the endpoint is gated: " + gt.refusal().Error()
 	}
 	switch {
+	case driver.IsHTTP(d.Transport):
+		return executeHTTP(ctx, runner, d, sessions)
 	case d.Transport == "udp":
 		// A datagram from the endpoint's own socket (#1037), re-sent only
 		// as often as the binding declares: a command sent twice may act
@@ -147,4 +151,68 @@ func executeDelivery(ctx context.Context, runner *collection.Runner, d collectio
 	default:
 		return "", "node: no actuator for transport " + d.Transport
 	}
+}
+
+// commandBodyCap bounds an http command's answer: a reply is read to settle
+// the command and travels back on the status subject, so it is a small
+// document, never a page.
+const commandBodyCap = 64 << 10
+
+// executeHTTP actuates an http command (#902): its rendered request, the
+// endpoint's credential applied by the scheme its worklist delivered (the
+// delivery never carries one), over plain http or the https trust its probe
+// and polls share. The answer is judged by the same status table a poll is:
+// a refused credential or certificate gates the endpoint, and the reply (the
+// answer's body, scrubbed of the credential) goes back for the server to
+// settle from.
+func executeHTTP(ctx context.Context, runner *collection.Runner, d collection.CommandDelivery, sessions *sessionManager) (reply, outcome string) {
+	if d.Request == nil {
+		return "", "node: the http command delivery carries no request"
+	}
+	if runner.HTTPFetch == nil {
+		return "", "node: no http actuator wired"
+	}
+	if gt, gated := sessions.blocked(d.EndpointID, rungAuthenticated); gated {
+		// Every http request carries the credential, so a refused one holds
+		// the command too (#1056 ruling), as it holds the poll.
+		return "", "node: the endpoint is gated: " + gt.refusal().Error()
+	}
+	ep, ok := sessions.httpEndpointOf(d.EndpointID)
+	if !ok {
+		return "", "node: endpoint " + d.EndpointID + " carries no task on this node, so no credential or trust for its command"
+	}
+	cred, err := driver.ResolveHTTPCredential(ep.session, ep.secrets)
+	if err != nil {
+		return "", err.Error()
+	}
+	target := d.Target
+	if target == "" {
+		target = ep.params.Target
+	}
+	x := collection.HTTPExchange{Target: target, Request: *d.Request, Credential: cred, Session: ep.session, Timeout: ep.timeout, BodyCap: commandBodyCap}
+	if d.Transport == "https" {
+		trust, err := tlsTrustOf(ep.params)
+		if err != nil {
+			return "", fmt.Sprintf("node: %v", err)
+		}
+		if trust.Mode == driver.TLSModePin {
+			trust.Pin = sessions.certPinOf(ep.task)
+		}
+		x.TLS = &trust
+	}
+	ans, err := runner.HTTPFetch.Exchange(ctx, x)
+	if err != nil {
+		if terr, ok := collection.AsTerminal(err); ok {
+			sessions.refuseOver(d.Transport, d.EndpointID, sessions.currentFingerprint(d.EndpointID), terr)
+		}
+		return "", err.Error()
+	}
+	body := collection.Scrub(string(ans.Body), cred)
+	if judged := collection.JudgeHTTPAnswer(ans, x); judged != nil {
+		if terr, ok := collection.AsTerminal(judged); ok {
+			sessions.refuseOver(d.Transport, d.EndpointID, sessions.currentFingerprint(d.EndpointID), terr)
+		}
+		return body, judged.Error()
+	}
+	return body, ""
 }

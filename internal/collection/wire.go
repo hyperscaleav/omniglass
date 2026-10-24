@@ -154,6 +154,11 @@ type CommandDelivery struct {
 	// Retries is how many times a udp command is re-sent when no answer
 	// comes (#1037): its binding's declaration, else none.
 	Retries int `json:"retries,omitempty"`
+	// Request is an http command's rendered request (#902): its method,
+	// path, query, headers, body and the format its answer is read in. It
+	// never carries a credential: the node applies the endpoint's declared
+	// scheme from what its worklist delivered.
+	Request *driver.Request `json:"request,omitempty"`
 }
 
 // CommandPullReply is the server's response to a command queue pull.

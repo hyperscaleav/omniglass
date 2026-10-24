@@ -19,3 +19,26 @@ command_types:
       Tell a component to restart. A fire-and-forget command: it records the
       invocation and a caused event, with no intended value to settle.
     settle_window_seconds: 0
+  # The http drivers' actuations (#902).
+  - name: set-volume
+    label: Set Volume
+    description: >-
+      Tell a component its output volume, as a percentage. A settleable command: it
+      opens an intended volume and settles when the component reports it, or when its
+      reply confirms the change.
+    target_metric_type: volume
+    settle_window_seconds: 15
+  - name: set-mute
+    label: Set Mute
+    description: >-
+      Tell a component to mute ("true") or unmute ("false") its audio. A settleable
+      command against the mute state.
+    target_property_type: mute
+    settle_window_seconds: 15
+  - name: set-power
+    label: Set Power
+    description: >-
+      Tell a component to turn on, turn off, or enter standby. A settleable command
+      against the power state.
+    target_property_type: power-state
+    settle_window_seconds: 15

@@ -75,10 +75,13 @@ func simDrivers(products []storage.Product) map[string]string {
 }
 
 // simAttachable says whether a driver can be attached for this caller: an
-// SNMP attach needs the community secret to exist in the caller's reach.
+// attach that references a platform secret (the SNMP community, the http
+// drivers' credentials, #902) needs that secret to exist in the caller's
+// reach.
 func simAttachable(ctx context.Context, a *authenticator, gw storage.Gateway) func(string) bool {
 	return func(driver string) bool {
-		if driver != "snmp-generic" {
+		name, needs := simfleet.AttachSecret[driver]
+		if !needs {
 			return true
 		}
 		secrets, err := gw.ListSecrets(ctx, a.scopeFor(ctx, "secret", "read"), a.canSecretAdmin(ctx, "read"))
@@ -86,7 +89,7 @@ func simAttachable(ctx context.Context, a *authenticator, gw storage.Gateway) fu
 			return false
 		}
 		for _, s := range secrets {
-			if s.Name == simfleet.CommunitySecret {
+			if s.Name == name {
 				return true
 			}
 		}

@@ -46,7 +46,7 @@ func TestCommandTypeAPI(t *testing.T) {
 
 	// Register a custom, settleable command type targeting a seeded property.
 	created := c.do(ownerTok, http.MethodPost, "/command-types", map[string]any{
-		"name": "set-volume", "label": "Set volume",
+		"name": "set-dimmer", "label": "Set dimmer",
 		"settle_window_seconds": 5, "target_property_type": "video-input",
 	}, http.StatusCreated)
 	var ct struct {
@@ -56,12 +56,12 @@ func TestCommandTypeAPI(t *testing.T) {
 		Official            bool   `json:"official"`
 	}
 	json.Unmarshal(created, &ct)
-	if ct.Name != "set-volume" || ct.SettleWindowSeconds != 5 || ct.TargetPropertyType != "video-input" || ct.Official {
+	if ct.Name != "set-dimmer" || ct.SettleWindowSeconds != 5 || ct.TargetPropertyType != "video-input" || ct.Official {
 		t.Fatalf("created = %+v", ct)
 	}
 
 	// Get it back; list includes the custom + the seeded official ones.
-	c.do(ownerTok, http.MethodGet, "/command-types/set-volume", nil, http.StatusOK)
+	c.do(ownerTok, http.MethodGet, "/command-types/set-dimmer", nil, http.StatusOK)
 	var listed struct {
 		CommandTypes []struct {
 			Name string `json:"name"`
@@ -72,12 +72,12 @@ func TestCommandTypeAPI(t *testing.T) {
 	for _, e := range listed.CommandTypes {
 		names[e.Name] = true
 	}
-	if !names["set-volume"] || !names["set-input"] || !names["reboot"] {
+	if !names["set-dimmer"] || !names["set-input"] || !names["reboot"] {
 		t.Fatalf("list missing command types: %v", names)
 	}
 
 	// Update the settle window.
-	c.do(ownerTok, http.MethodPatch, "/command-types/set-volume", map[string]any{"settle_window_seconds": 10}, http.StatusOK)
+	c.do(ownerTok, http.MethodPatch, "/command-types/set-dimmer", map[string]any{"settle_window_seconds": 10}, http.StatusOK)
 
 	// A malformed name is a 422; an unknown target property is a 422.
 	c.do(ownerTok, http.MethodPost, "/command-types", map[string]any{"name": "Bad-Name"}, http.StatusUnprocessableEntity)
@@ -90,12 +90,12 @@ func TestCommandTypeAPI(t *testing.T) {
 	// the SCHEMA, so the generated client and CLI carry it too, and in the
 	// gateway, so a direct-gateway caller cannot write one either.
 	c.do(ownerTok, http.MethodPost, "/command-types", map[string]any{"name": "neg-window", "settle_window_seconds": -5}, http.StatusUnprocessableEntity)
-	c.do(ownerTok, http.MethodPatch, "/command-types/set-volume", map[string]any{"settle_window_seconds": -1}, http.StatusUnprocessableEntity)
+	c.do(ownerTok, http.MethodPatch, "/command-types/set-dimmer", map[string]any{"settle_window_seconds": -1}, http.StatusUnprocessableEntity)
 	// The refused patch changed nothing: the window is still the 10 set above.
 	var kept struct {
 		SettleWindowSeconds int `json:"settle_window_seconds"`
 	}
-	json.Unmarshal(c.do(ownerTok, http.MethodGet, "/command-types/set-volume", nil, http.StatusOK), &kept)
+	json.Unmarshal(c.do(ownerTok, http.MethodGet, "/command-types/set-dimmer", nil, http.StatusOK), &kept)
 	if kept.SettleWindowSeconds != 10 {
 		t.Fatalf("window after the refused patch = %d, want the 10 the accepted patch set", kept.SettleWindowSeconds)
 	}
@@ -104,7 +104,7 @@ func TestCommandTypeAPI(t *testing.T) {
 	c.do(ownerTok, http.MethodPost, "/command-types", map[string]any{"name": "fire-and-forget-x", "settle_window_seconds": 0}, http.StatusCreated)
 
 	// A duplicate name is a 409.
-	c.do(ownerTok, http.MethodPost, "/command-types", map[string]any{"name": "set-volume"}, http.StatusConflict)
+	c.do(ownerTok, http.MethodPost, "/command-types", map[string]any{"name": "set-dimmer"}, http.StatusConflict)
 
 	// The other arm of the exclusive arc (#596): a metric-targeted type created by
 	// name round-trips through the read, on the create response and on GET.
@@ -163,7 +163,7 @@ func TestCommandTypeAPI(t *testing.T) {
 	c.do(ownerTok, http.MethodGet, "/command-types/nope", nil, http.StatusNotFound)
 
 	// Delete the custom command type.
-	c.do(ownerTok, http.MethodDelete, "/command-types/set-volume", nil, http.StatusNoContent)
+	c.do(ownerTok, http.MethodDelete, "/command-types/set-dimmer", nil, http.StatusNoContent)
 
 	// An ungranted principal is forbidden to create.
 	noneTok := principalWithGrants(t, ctx, dsn, "nocmds", nil)

@@ -183,7 +183,7 @@ func TestCollectTaskDispatchesTheLadder(t *testing.T) {
 
 type dispatchHTTPFake struct{}
 
-func (dispatchHTTPFake) Probe(_ context.Context, _ string, _ time.Duration) (collection.HTTPResult, error) {
+func (dispatchHTTPFake) Probe(_ context.Context, _ collection.HTTPTask) (collection.HTTPResult, error) {
 	return collection.HTTPResult{Dialed: true, Responded: true, DialMS: 1, ResponseMS: 2, Reason: collection.Responded}, nil
 }
 
