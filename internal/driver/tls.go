@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+
+	"github.com/hyperscaleav/omniglass/internal/transport"
 )
 
 // The tls transport's verification mode (#1035, decision 3 of #1076) is a
@@ -51,7 +53,7 @@ func (s *Spec) validateTLSInputs() error {
 		if in.Name != TLSModeInput {
 			continue
 		}
-		if s.Transport != "tls" {
+		if !transport.UsesTLS(s.Transport) {
 			return fmt.Errorf("driver: input %s sets the tls verification mode, and %q has no tls", TLSModeInput, s.Transport)
 		}
 		if in.Kind != "string" {
@@ -74,7 +76,7 @@ func (s *Spec) validateTLSInputs() error {
 // an input the engine reads with meaning: the tls mode must be a mode, a udp
 // listen port a port. Any other input's value is the driver's to read.
 func (s *Spec) CheckInputValue(name, value string) error {
-	if name == TLSModeInput && s.Transport == "tls" {
+	if name == TLSModeInput && transport.UsesTLS(s.Transport) {
 		if _, err := ParseTLSMode(value); err != nil {
 			return fmt.Errorf("input %s: %v", TLSModeInput, err)
 		}

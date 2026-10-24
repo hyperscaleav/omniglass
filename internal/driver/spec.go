@@ -98,12 +98,27 @@ func (s Schedule) Interval() time.Duration {
 }
 
 // Request is what a function sends, shaped by the transport it rides: scalar
-// OIDs for an SNMP get, a line for a line protocol, a path for HTTP. Exactly
-// the fields the transport needs; an all-empty request is refused.
+// OIDs for an SNMP get, a line for a line protocol, a request for http (its
+// method, path, query, headers and body, and the format its answer is read
+// in, #902). Exactly the fields the transport needs; an all-empty request is
+// refused.
 type Request struct {
 	Get  []string `json:"get,omitempty"`
 	Line string   `json:"line,omitempty"`
 	Path string   `json:"path,omitempty"`
+	// Method is an http request's method (GET when absent); Query its query
+	// parameters and Headers its headers, each value a template a command
+	// renders; Body its body, a JSON value rendered in its BodyFormat (json,
+	// form, xml, text). Format is how the answer is read (json, xml, html,
+	// text), and Namespaces binds the prefixes an xpath over an xml answer
+	// names.
+	Method     string            `json:"method,omitempty"`
+	Query      map[string]string `json:"query,omitempty"`
+	Headers    map[string]string `json:"headers,omitempty"`
+	Body       json.RawMessage   `json:"body,omitempty"`
+	BodyFormat string            `json:"body_format,omitempty"`
+	Format     string            `json:"format,omitempty"`
+	Namespaces map[string]string `json:"namespaces,omitempty"`
 	// Reply is the protocol's answer shape for a line request (#817): over a
 	// held session, only a line it matches answers this request, so a push
 	// or a stray line is never taken as the answer. Absent, the first line
@@ -190,17 +205,19 @@ func (r *Reply) Fails(line string) bool {
 
 // Empty reports whether the request says nothing at all.
 func (r Request) Empty() bool {
-	return len(r.Get) == 0 && r.Line == "" && r.Path == ""
+	return len(r.Get) == 0 && r.Line == "" && r.Path == "" && !r.hasHTTPFields()
 }
 
 // Extract locates one emitted value in a response: exactly one of the
-// extractor kinds (an OID, a regex capture, a JSONPath, a key of a key-value
-// body).
+// selector kinds of the one extraction primitive (an OID, a regex capture, a
+// JSONPath, a key of a key-value body, an XPath over an xml or html answer,
+// #902), never a second extractor per format.
 type Extract struct {
 	OID      string `json:"oid,omitempty"`
 	Regex    string `json:"regex,omitempty"`
 	JSONPath string `json:"jsonpath,omitempty"`
 	Key      string `json:"key,omitempty"`
+	XPath    string `json:"xpath,omitempty"`
 }
 
 // Transform is the declared minimal shaping applied after extraction: a cast,
@@ -292,7 +309,7 @@ func (b CommandBinding) JudgeReply(reply string) ReplyVerdict {
 		return ReplyVerdict{}
 	}
 	if st.Extract != nil {
-		v, err := locate(*st.Extract, Payload{Text: reply})
+		v, err := locate(*st.Extract, b.replyPayload(reply))
 		if err != nil {
 			return ReplyVerdict{Judged: true}
 		}
@@ -302,6 +319,17 @@ func (b CommandBinding) JudgeReply(reply string) ReplyVerdict {
 		return ReplyVerdict{Judged: true, Succeeded: matches(*st.Success, reply)}
 	}
 	return ReplyVerdict{Judged: true}
+}
+
+// replyPayload is a reply in the forms its binding reads it: a line as text,
+// an http answer in its request's declared format.
+func (b CommandBinding) replyPayload(reply string) Payload {
+	if b.Request.Path == "" {
+		return Payload{Text: reply}
+	}
+	p := HTTPPayload([]byte(reply), &b.Request)
+	p.docs = &parsedDocs{}
+	return p
 }
 
 // matches applies a Match rule to a line.
@@ -360,8 +388,9 @@ func validateReply(what string, req Request) error {
 	return nil
 }
 
-// validateSettle refuses a malformed settle declaration.
-func validateSettle(c CommandBinding) error {
+// validateSettle refuses a malformed settle declaration; httpBinding reads
+// the reply as an http answer.
+func validateSettle(c CommandBinding, httpBinding bool) error {
 	st := c.Settle
 	if st == nil {
 		return nil
@@ -380,8 +409,16 @@ func validateSettle(c CommandBinding) error {
 		return fmt.Errorf("driver: command binding %q settles from its response and needs exactly one of extract or success", c.CommandType)
 	}
 	if st.Extract != nil {
+		if httpBinding {
+			// An http reply is read in its request's format, by any selector
+			// that format admits (#902).
+			if err := validateExtract(c.CommandType, Emit{Name: "settle", Extract: *st.Extract}); err != nil {
+				return err
+			}
+			return checkHTTPEmit(fmt.Sprintf("command binding %q settle", c.CommandType), *st.Extract, c.Request)
+		}
 		// A reply is a line of text, so a regex is the extractor that applies.
-		if st.Extract.Regex == "" || st.Extract.OID != "" || st.Extract.JSONPath != "" || st.Extract.Key != "" {
+		if st.Extract.Regex == "" || st.Extract.OID != "" || st.Extract.JSONPath != "" || st.Extract.Key != "" || st.Extract.XPath != "" {
 			return fmt.Errorf("driver: command binding %q extracts its reply's value with a regex", c.CommandType)
 		}
 		if _, err := regexp.Compile(st.Extract.Regex); err != nil {
@@ -478,6 +515,14 @@ func (s *Spec) Validate(cat Catalog) error {
 		if err := validateEmits("poll", p.Name, p.Emits, cat); err != nil {
 			return err
 		}
+		if err := validateHTTPFieldsOff(s.Transport, fmt.Sprintf("poll %q", p.Name), p.Request); err != nil {
+			return err
+		}
+		if IsHTTP(s.Transport) {
+			if err := validateHTTPRequest(fmt.Sprintf("poll %q", p.Name), p.Request, false, s.Session); err != nil {
+				return err
+			}
+		}
 		if err := validateReply(fmt.Sprintf("poll %q", p.Name), p.Request); err != nil {
 			return err
 		}
@@ -496,6 +541,9 @@ func (s *Spec) Validate(cat Catalog) error {
 			return fmt.Errorf("driver: duplicate function name %q", l.Name)
 		}
 		functions[l.Name] = true
+		if !canListen(s.Transport) {
+			return fmt.Errorf("driver: listener %q rides %q, which has no listen path (a listener runs over a held line session or a udp socket), so no node would run it", l.Name, s.Transport)
+		}
 		if err := validateMatch(fmt.Sprintf("listener %q", l.Name), l.Match); err != nil {
 			return err
 		}
@@ -519,7 +567,12 @@ func (s *Spec) Validate(cat Catalog) error {
 	// bindings derive none. Commands that ride only a held session (the driver
 	// declares one, or the transport has no stateless line) need a poll or a
 	// listener to hold it, or they could never run (#1049).
-	if len(s.Polls) == 0 && len(s.Listeners) == 0 && (s.Session != nil || (isLineTransport(s.Transport) && s.Transport != "tcp")) {
+	if IsHTTP(s.Transport) && len(s.Polls) == 0 && s.Session != nil && s.Session.Credential != "" {
+		// A credential reaches a node only with a task (#902): a credentialed
+		// http driver with commands alone could never authenticate one.
+		return fmt.Errorf("driver: a credentialed http driver needs a poll to carry its credential to the node; its commands alone derive no task")
+	}
+	if !IsHTTP(s.Transport) && len(s.Polls) == 0 && len(s.Listeners) == 0 && (s.Session != nil || (isLineTransport(s.Transport) && s.Transport != "tcp")) {
 		return fmt.Errorf("driver: commands that ride only a held session need a poll or a listener to hold it")
 	}
 
@@ -542,16 +595,29 @@ func (s *Spec) Validate(cat Catalog) error {
 		// transport, or as a datagram over udp, #1037), so a binding on a
 		// transport it cannot reach refuses at write rather than dispatching a
 		// request no node can send.
-		if !isLineTransport(s.Transport) && s.Transport != "udp" {
-			return fmt.Errorf("driver: command binding %q rides transport %q, which has no actuation wire (only the line transports and udp actuate today)", c.CommandType, s.Transport)
+		if !isLineTransport(s.Transport) && s.Transport != "udp" && !IsHTTP(s.Transport) {
+			return fmt.Errorf("driver: command binding %q rides transport %q, which has no actuation wire (only the line transports, udp and http actuate today)", c.CommandType, s.Transport)
 		}
 		if err := validateRetries(s.Transport, fmt.Sprintf("command binding %q", c.CommandType), c.Request); err != nil {
 			return err
 		}
+		what := fmt.Sprintf("command binding %q", c.CommandType)
+		if err := validateHTTPFieldsOff(s.Transport, what, c.Request); err != nil {
+			return err
+		}
+		if IsHTTP(s.Transport) {
+			if err := validateHTTPRequest(what, c.Request, true, s.Session); err != nil {
+				return err
+			}
+			if err := validateSettle(c, true); err != nil {
+				return err
+			}
+			continue
+		}
 		if c.Request.Line == "" {
 			return fmt.Errorf("driver: command binding %q on %s needs a line request", c.CommandType, s.Transport)
 		}
-		if err := validateSettle(c); err != nil {
+		if err := validateSettle(c, false); err != nil {
 			return err
 		}
 		if err := validateReply(fmt.Sprintf("command binding %q", c.CommandType), c.Request); err != nil {
@@ -626,7 +692,7 @@ func emittable(name string) error {
 
 func validateExtract(fn string, em Emit) error {
 	set := 0
-	for _, v := range []string{em.Extract.OID, em.Extract.Regex, em.Extract.JSONPath, em.Extract.Key} {
+	for _, v := range []string{em.Extract.OID, em.Extract.Regex, em.Extract.JSONPath, em.Extract.Key, em.Extract.XPath} {
 		if v != "" {
 			set++
 		}
@@ -655,9 +721,9 @@ func validateTransform(fn, name string, tr Transform) error {
 }
 
 // checkPollShape binds a poll's request and extractors to the transport it
-// rides, so an uninterpretable combination refuses at write. Only snmp and the
-// line transports have wired poll fetchers today (internal/collection); a poll
-// on any other transport refuses rather than faulting every tick.
+// rides, so an uninterpretable combination refuses at write. snmp, udp, http,
+// https and the line transports have wired poll fetchers (internal/collection);
+// a poll on any other transport refuses rather than faulting every tick.
 func checkPollShape(tr string, p Poll) error {
 	switch tr {
 	case "snmp":
@@ -669,6 +735,14 @@ func checkPollShape(tr string, p Poll) error {
 				return fmt.Errorf("driver: snmp poll %q emit %q must locate by oid", p.Name, em.Name)
 			}
 		}
+	case "http", "https":
+		// The request is checked whole by validateHTTPRequest; here each
+		// emit's selector is bound to the response's declared format.
+		for _, em := range p.Emits {
+			if err := checkHTTPEmit(fmt.Sprintf("http poll %q emit %q", p.Name, em.Name), em.Extract, p.Request); err != nil {
+				return err
+			}
+		}
 	case "udp":
 		// A datagram carries one line (#1037): the request is a line, and an
 		// answer is text a regex reads.
@@ -676,7 +750,7 @@ func checkPollShape(tr string, p Poll) error {
 			return fmt.Errorf("driver: udp poll %q needs a line request (the datagram it sends)", p.Name)
 		}
 		for _, em := range p.Emits {
-			if em.Extract.OID != "" || em.Extract.Key != "" || em.Extract.JSONPath != "" {
+			if em.Extract.OID != "" || em.Extract.Key != "" || em.Extract.JSONPath != "" || em.Extract.XPath != "" {
 				return fmt.Errorf("driver: udp poll %q emit %q must locate by regex (a datagram's line carries no keyed or json body)", p.Name, em.Name)
 			}
 		}
@@ -693,12 +767,12 @@ func checkPollShape(tr string, p Poll) error {
 			// would validate clean yet fault every tick, so refuse it here. An
 			// emit with no extractor at all is the general "exactly one extractor"
 			// refusal's job, not this one.
-			if em.Extract.OID != "" || em.Extract.Key != "" || em.Extract.JSONPath != "" {
-				return fmt.Errorf("driver: %s poll %q emit %q must locate by regex (a line response carries no keyed or json body to read an oid, key, or jsonpath from)", tr, p.Name, em.Name)
+			if em.Extract.OID != "" || em.Extract.Key != "" || em.Extract.JSONPath != "" || em.Extract.XPath != "" {
+				return fmt.Errorf("driver: %s poll %q emit %q must locate by regex (a line response carries no keyed or json body to read an oid, key, jsonpath or xpath from)", tr, p.Name, em.Name)
 			}
 		}
 	default:
-		return fmt.Errorf("driver: poll %q rides transport %q, which has no poll fetcher (only snmp, udp and the line transports poll today)", p.Name, tr)
+		return fmt.Errorf("driver: poll %q rides transport %q, which has no poll fetcher (only snmp, udp, http, https and the line transports poll today)", p.Name, tr)
 	}
 	return nil
 }

@@ -68,12 +68,34 @@ func IsBaked(raw []byte) bool {
 
 // Payload is one fetched response in the forms extractors read: Values for
 // keyed lookups (OID to value for SNMP, key to value for a key-value body),
-// Text for regex capture, JSON for path extraction. A fetcher fills the forms
-// its transport produces and leaves the rest zero.
+// Text for regex capture, JSON for path extraction, and Body in its declared
+// Format (with the Namespaces its xpaths bind) for an xpath over an xml or
+// html answer (#902). A fetcher fills the forms its transport produces and
+// leaves the rest zero.
 type Payload struct {
-	Values map[string]string
-	Text   string
-	JSON   []byte
+	Values     map[string]string
+	Text       string
+	JSON       []byte
+	Body       []byte
+	Format     string
+	Namespaces map[string]string
+	// docs caches the parsed documents, so a payload is parsed once however
+	// many emits read it.
+	docs *parsedDocs
+}
+
+// HTTPPayload is an http answer's body in every form its request's format
+// admits: always the text a regex reads, the JSON a jsonpath reads when the
+// format is json, and the body an xpath reads when it is xml or html.
+func HTTPPayload(body []byte, req *Request) Payload {
+	p := Payload{Text: string(body), Body: body, Format: FormatJSON}
+	if req != nil {
+		p.Format, p.Namespaces = req.FormatOf(), req.Namespaces
+	}
+	if p.Format == FormatJSON {
+		p.JSON = body
+	}
+	return p
 }
 
 // Emitted is one interpreted sample: the emit's catalog name, its baked lane,
@@ -93,6 +115,9 @@ type Emitted struct {
 // silently dropping it or shipping a wrong-lane sample. The two lists are
 // independent: a payload missing one emit still lands the rest.
 func (fn *BakedFunction) Interpret(p Payload, ts time.Time) ([]Emitted, []error) {
+	if p.docs == nil {
+		p.docs = &parsedDocs{}
+	}
 	var out []Emitted
 	var faults []error
 	for _, em := range fn.Emits {
@@ -191,6 +216,8 @@ func locate(ex Extract, p Payload) (string, error) {
 		return m[0], nil
 	case ex.JSONPath != "":
 		return jsonPath(p.JSON, ex.JSONPath)
+	case ex.XPath != "":
+		return xpathValue(p, ex.XPath)
 	default:
 		return "", fmt.Errorf("no extractor declared")
 	}
@@ -269,6 +296,17 @@ func substituted(v any) (string, error) {
 // A reference nothing supplies, or a value carrying a control character,
 // refuses, so a half-rendered or injected line is never sent to a device.
 func RenderRequest(req Request, value string, params map[string]any) (Request, error) {
+	return RenderRequestTyped(req, value, nil, params)
+}
+
+// RenderRequestTyped is RenderRequest with the intended value's own JSON
+// (typed): an http JSON body leaf that is exactly ${value} takes it with its
+// type (an intended metric's number), where any other placement renders the
+// text (#902). nil typed renders the text everywhere.
+func RenderRequestTyped(req Request, value string, typed json.RawMessage, params map[string]any) (Request, error) {
+	if req.hasHTTPFields() {
+		return renderHTTP(req, value, typed, params)
+	}
 	render := func(s string) (string, error) {
 		var fault error
 		out := argPattern.ReplaceAllStringFunc(s, func(m string) string {
