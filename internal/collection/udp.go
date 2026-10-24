@@ -247,6 +247,10 @@ func (c *DatagramConn) answer(want *datagramAsk, ans lineAnswer) bool {
 // reply matching the error shape fails it with the component's text, and
 // one the driver declares terminal fails it with a refusal retrying cannot
 // fix; neither is retried, nor is the host's report of an unreachable port.
+// The answer's round trip runs from the first send: a line cannot say which
+// attempt it answers, so a late reply is timed as an upper bound, never as
+// the retry it did not answer. A reply to the error shape is still an
+// answer, so its round trip comes back beside the refusal.
 func (c *DatagramConn) Exchange(ctx context.Context, line string, reply *driver.Reply, timeout time.Duration, retries int) (DatagramAnswer, error) {
 	if timeout <= 0 {
 		timeout = defaultSessionTimeout
@@ -274,8 +278,8 @@ func (c *DatagramConn) Exchange(ctx context.Context, line string, reply *driver.
 	}()
 	share := timeout / time.Duration(retries+1)
 	payload := []byte(line + "\r\n")
+	first := time.Now()
 	for attempt := 1; attempt <= retries+1; attempt++ {
-		sent := time.Now()
 		if _, err := c.conn.WriteToUDP(payload, c.peer); err != nil {
 			return DatagramAnswer{}, fmt.Errorf("collection: udp send %s: %w", c.cfg.Target, err)
 		}
@@ -283,7 +287,7 @@ func (c *DatagramConn) Exchange(ctx context.Context, line string, reply *driver.
 		select {
 		case a := <-ask.answer:
 			t.Stop()
-			return c.settle(line, a, DatagramAnswer{Line: a.line, RTT: time.Since(sent), Attempts: attempt})
+			return c.settle(line, a, DatagramAnswer{Line: a.line, RTT: time.Since(first), Attempts: attempt})
 		case <-c.done:
 			t.Stop()
 			return DatagramAnswer{}, fmt.Errorf("collection: udp %s: %w", c.cfg.Target, c.cause())
@@ -307,7 +311,7 @@ func (c *DatagramConn) settle(line string, a lineAnswer, ans DatagramAnswer) (Da
 		return DatagramAnswer{}, terr
 	}
 	if a.refused {
-		return DatagramAnswer{}, &RefusedError{Request: line, Line: a.line}
+		return ans, &RefusedError{Request: line, Line: a.line}
 	}
 	return ans, nil
 }

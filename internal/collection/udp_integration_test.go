@@ -184,6 +184,46 @@ func TestDatagramExchangeReadsTheErrorShapeAsTheComponentsRefusal(t *testing.T) 
 	}
 }
 
+// A reply to the error shape is an answer, so it is timed: the rung that
+// reads it responsive lands its round trip too.
+func TestDatagramErrorShapeAnswerCarriesItsRoundTrip(t *testing.T) {
+	if testing.Short() {
+		t.Skip("real-socket integration test")
+	}
+	peer := newUDPPeer(t, func(string) []string { return []string{"-ERR busy"} })
+	c := listenDatagram(t, collection.DatagramConfig{Target: peer.addr()})
+	ans, err := c.Exchange(context.Background(), "GET INPUT", &driver.Reply{Prefix: "INPUT ", Error: &driver.Match{Prefix: "-ERR"}}, time.Second, 2)
+	var refused *collection.RefusedError
+	if !errors.As(err, &refused) || ans.RTT <= 0 || ans.Attempts != 1 {
+		t.Fatalf("exchange = %+v, %v; want the refusal with its round trip", ans, err)
+	}
+}
+
+// A late reply is never timed against a retry it did not answer: a request
+// is a text line, so its reply cannot say which attempt it answers, and the
+// round trip runs from the first send, an upper bound, never an
+// understatement that loss would grow.
+func TestDatagramRoundTripRunsFromTheFirstSend(t *testing.T) {
+	if testing.Short() {
+		t.Skip("real-socket integration test")
+	}
+	var n atomic.Int32
+	peer := newUDPPeer(t, func(string) []string {
+		if n.Add(1) == 1 {
+			time.Sleep(450 * time.Millisecond) // the first reply arrives during the second attempt
+		}
+		return []string{"INPUT hdmi1"}
+	})
+	c := listenDatagram(t, collection.DatagramConfig{Target: peer.addr()})
+	ans, err := c.Exchange(context.Background(), "GET INPUT", &driver.Reply{Prefix: "INPUT "}, 900*time.Millisecond, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ans.Attempts != 2 || ans.RTT < 450*time.Millisecond {
+		t.Fatalf("attempts %d, rtt %s; want the second attempt's window, timed from the first send (>= 450ms)", ans.Attempts, ans.RTT)
+	}
+}
+
 func TestDatagramRetriesALostRequestWithinTheTimeout(t *testing.T) {
 	if testing.Short() {
 		t.Skip("real-socket integration test")

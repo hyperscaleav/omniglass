@@ -7347,7 +7347,8 @@ interface create form, since that name is the platform's to mint.
      `ladder.transport.request`. An answer (or the component's refusal by the reply's error shape)
      reads responsive; silence reads `timeout`. With no port to open, `endpoint-reachable` is the
      responsive rung, no `tcp-open` lands, and the ping stays informational. Each answered probe
-     lands one `udp-response-time` (decision 7a; folded into `rtt` by #1063), a node-only key.
+     lands one `udp-response-time` (decision 7a; folded into `rtt` by #1063), a node-only key,
+     timed from the first send, since a line cannot say which attempt it answers.
   5. **Retries are declared, and a command is sent once.** `request.retries` (udp only, 0 to 5)
      re-sends a lost datagram, the attempts sharing the endpoint's one timeout: 2 by default for a
      poll and the request rung, none for a command unless its binding declares them, since a lost
