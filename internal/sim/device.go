@@ -292,7 +292,7 @@ type Device struct {
 	snmpRefused string
 	// snmpRequests counts the datagrams the SNMP face was sent.
 	snmpRequests atomic.Int64
-	sshListener   net.Listener
+	sshListener  net.Listener
 	// tlsID is the key and certificate the device's tls line face serves
 	// (#1035), derived from its id so it is the same on every run.
 	tlsID tlsIdentity
