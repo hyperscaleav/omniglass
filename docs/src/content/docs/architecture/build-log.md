@@ -7771,8 +7771,8 @@ operator-facing simulator, whose ports an operator, a seeded endpoint and the do
 `sim.EphemeralPorts` for tests, where every face binds port 0 and the kernel hands it a free port. A
 face reports the port it bound everywhere it reports one (its hits, its session events, SNMP's request
 detail), where a face asked for port 0 had reported 0; SNMP binds before it builds its
-agent so it knows the port, and a device's raw-TCP faces find their session registry by the declared
-port rather than the mapped one. Every in-process simulator test (the sim package, the node's session
+agent so it knows the port, and a simulated component's raw-TCP faces find their session registry by
+the declared port rather than the mapped one. Every in-process simulator test (the sim package, the node's session
 tests) serves on ephemeral ports and aims its clients and endpoints at the reported addresses. The
 end-to-end and run-mode tests drive `omniglass sim run`, which binds the profile's ports (lifted) on
 the address an endpoint targets and cannot tell the endpoints a port it picked, so they stay on fixed
