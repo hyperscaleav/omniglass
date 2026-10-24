@@ -154,6 +154,21 @@ func TestLegacyBackfillRetiresWhatTheRulingRefuses(t *testing.T) {
 	if _, err := f.gw.IssueCommand(f.ctx, f.actor, "component", d1, "set-input", "", json.RawMessage(`"hdmi2"`), nil); err != nil {
 		t.Fatalf("issue a command: %v", err)
 	}
+	// A command's reply, read off the device, recorded as an observation of
+	// a node-probe key a command type was let target before the ruling: the
+	// row carries the command's settlement instant. And a collection-failed
+	// an event rule derived.
+	exec(`insert into command_type (name, description, settle_window_seconds, target_property_type_id, official)
+		values ('legacy-reach', '', 30, (select id from property_type where name = 'endpoint-reachable'), false)`)
+	exec(`insert into command (ts, owner_kind, component_id, command_type_id, instance, status, settled_at)
+		values ($2, 'component', $1::uuid, (select id from command_type where name = 'legacy-reach'), 'ssh', 'settled', $2::timestamptz + interval '1 minute')`,
+		d1, hour)
+	exec(`insert into property (ts, owner_kind, component_id, property_type_id, instance, provenance, source, value)
+		values ($2::timestamptz + interval '1 minute', 'component', $1::uuid, (select id from property_type where name = 'endpoint-reachable'), 'ssh', 'observed', 'ssh', to_jsonb('up'::text))`,
+		d1, hour)
+	exec(`insert into event (ts, owner_kind, component_id, event_type_id, instance, origin, message, provenance, source, source_rule)
+		values ($2, 'component', $1::uuid, (select id from event_type where name = 'collection-failed'), 'ssh', 'derived', 'derived', 'observed', 'rule', 'legacy-rule')`,
+		d1, hour)
 	// Health: the rollup's verdict, and a row it did not write.
 	exec(`insert into property (ts, owner_kind, system_id, property_type_id, instance, value, provenance, source_rule)
 		values ($2, 'system', $1::uuid, (select id from property_type where name = 'health'), '', to_jsonb('outage'::text), 'calculated', 'health-rollup')`, sys.ID, hour)
@@ -193,7 +208,8 @@ func TestLegacyBackfillRetiresWhatTheRulingRefuses(t *testing.T) {
 	for _, e := range evs {
 		kept = append(kept, e.Key+"/"+e.Message)
 	}
-	if !slices.Contains(kept, "collection-failed/honest") || slices.Contains(kept, "collection-failed/refused") || slices.Contains(kept, "command-issued/refused") {
+	if !slices.Contains(kept, "collection-failed/honest") || slices.Contains(kept, "collection-failed/refused") ||
+		slices.Contains(kept, "collection-failed/derived") || slices.Contains(kept, "command-issued/refused") {
 		t.Errorf("events after the backfill: %v, want the honest collection-failed and the issued command's event only", kept)
 	}
 	if n := f.count(t, `select count(*) from command c join event e on e.id = c.caused_event_id`); n != 1 {
@@ -227,7 +243,8 @@ func TestLegacyBackfillRetiresWhatTheRulingRefuses(t *testing.T) {
 		"a declared pin not set through the endpoint's audited :retry":                    1,
 		"a key observed under a declared pin not set through :retry, and never before it": 1,
 		"a node-probe key on an owner no node writes for":                                 1,
-		"a node-probe key written by a writer other than the node":                        1,
+		"a node-probe key written by a writer other than the node":                        2,
+		"a node-probe key a command's reply wrote":                                        1,
 		"a node-probe key under an instance that names no endpoint of its component":      3,
 		"a node-probe key dated past the database clock":                                  2,
 		"a command lifecycle event no command issued":                                     1,

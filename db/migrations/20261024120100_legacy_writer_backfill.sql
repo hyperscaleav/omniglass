@@ -17,9 +17,11 @@
 --    retired pin's key is never taken as the pin from the observed series
 --    again until a :retry confirms it.
 -- 2. A node-probe row is retired when its owner is not a component, when a
---    writer other than the node wrote it, when its instance names no
---    endpoint of its component, or when it is dated more than five minutes
---    past the database clock (the cap new rows already obey).
+--    writer other than the node wrote it (a declared, intended or calculated
+--    row, a derived event, or a command's reply, which carries its command's
+--    settlement instant), when its instance names no endpoint of its
+--    component, or when it is dated more than five minutes past the database
+--    clock (the cap new rows already obey).
 -- 3. A health row the rollup did not write, and a command-issued event no
 --    command points at, are retired.
 --
@@ -90,6 +92,11 @@ BEGIN
             WHEN p.provenance <> 'observed'
                  AND NOT (p.provenance = 'declared' AND p.source = 'key-pin' AND t.name = ANY (pinnable))
                 THEN 'a node-probe key written by a writer other than the node'
+            WHEN p.provenance = 'observed' AND EXISTS (
+                    SELECT 1 FROM public.command c JOIN public.command_type ct ON ct.id = c.command_type_id
+                    WHERE ct.target_property_type_id = p.property_type_id AND c.component_id = p.component_id
+                      AND c.settled_at = p.ts)
+                THEN 'a node-probe key a command''s reply wrote'
             WHEN NOT EXISTS (SELECT 1 FROM public.endpoint e WHERE e.component = p.component_id AND e.name = p.instance)
                 THEN 'a node-probe key under an instance that names no endpoint of its component'
             WHEN p.ts > now() + interval '5 minutes' THEN 'a node-probe key dated past the database clock'
@@ -132,7 +139,9 @@ BEGIN
                 CASE WHEN NOT EXISTS (SELECT 1 FROM public.command c WHERE c.caused_event_id = ev.id)
                      THEN 'a command lifecycle event no command issued' END
             WHEN ev.owner_kind <> 'component' THEN 'a node-probe key on an owner no node writes for'
-            WHEN ev.provenance <> 'observed' THEN 'a node-probe key written by a writer other than the node'
+            WHEN ev.provenance <> 'observed' OR ev.origin <> 'caught' OR ev.derived_by_rule_id IS NOT NULL
+                 OR ev.source_rule IS NOT NULL
+                THEN 'a node-probe key written by a writer other than the node'
             WHEN NOT EXISTS (SELECT 1 FROM public.endpoint e WHERE e.component = ev.component_id AND e.name = ev.instance)
                 THEN 'a node-probe key under an instance that names no endpoint of its component'
             WHEN ev.ts > now() + interval '5 minutes' THEN 'a node-probe key dated past the database clock'
