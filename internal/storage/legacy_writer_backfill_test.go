@@ -383,3 +383,51 @@ func TestRetiredPlantedPinIsNeverRelearned(t *testing.T) {
 		}
 	}
 }
+
+// TestRetiredRowsReleaseTheConditionsTheyRaised: a condition, and the alarm
+// with it, that a now-retired row raised (one under an instance naming no
+// endpoint, one dated a year ahead) is released by the boot heal: the series
+// with nothing left ends its condition, the series whose newest sample is
+// the node's honest one is judged against it. A second heal changes nothing.
+func TestRetiredRowsReleaseTheConditionsTheyRaised(t *testing.T) {
+	r := newEdgeRig(t)
+	r.rule(storage.EventRuleSpec{Name: "edge", Severity: "high", ClearEventType: "condition-ended"})
+	if _, err := r.f.conn.Exec(r.ctx, `insert into endpoint (name, transport, component, params)
+		values ('tcp', 'tcp', (select id from component where name = 'bar-1'), '{"target":"127.0.0.1:1"}'::jsonb)`); err != nil {
+		t.Fatal(err)
+	}
+	up, _ := legacyBackfillSQL(t)
+
+	// The node's honest up on tcp, then a down a year ahead; a down under an
+	// instance bar-1 has no endpoint for.
+	r.observe("tcp", "up")
+	r.observe("tcp", "down")
+	if _, err := r.f.conn.Exec(r.ctx, `update property set ts = now() + interval '1 year' where id = (select max(id) from property
+		where property_type_id = (select id from property_type where name = 'endpoint-reachable') and instance = 'tcp')`); err != nil {
+		t.Fatal(err)
+	}
+	r.observe("ghost", "down")
+	if r.openAlarm("tcp") == "" || r.openAlarm("ghost") == "" || r.conditions() != 2 {
+		t.Fatalf("the seed raised alarms tcp %q, ghost %q with %d conditions; want both open", r.openAlarm("tcp"), r.openAlarm("ghost"), r.conditions())
+	}
+	if _, err := r.f.conn.Exec(r.ctx, up); err != nil {
+		t.Fatalf("run the backfill: %v", err)
+	}
+	n, err := r.f.gw.HealRetiredSeries(r.ctx)
+	if err != nil {
+		t.Fatalf("heal: %v", err)
+	}
+	if n != 2 {
+		t.Errorf("the heal re-judged %d series, want 2", n)
+	}
+	if r.openAlarm("tcp") != "" || r.openAlarm("ghost") != "" || r.conditions() != 0 {
+		t.Errorf("after the heal alarms tcp %q, ghost %q with %d conditions; want none", r.openAlarm("tcp"), r.openAlarm("ghost"), r.conditions())
+	}
+	events := len(r.events())
+	if _, err := r.f.gw.HealRetiredSeries(r.ctx); err != nil {
+		t.Fatalf("heal again: %v", err)
+	}
+	if got := len(r.events()); got != events || r.conditions() != 0 {
+		t.Errorf("a second heal wrote %d more events", got-events)
+	}
+}

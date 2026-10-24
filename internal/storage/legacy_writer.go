@@ -215,3 +215,36 @@ func (p *PG) WriterRulingViolations(ctx context.Context) ([]RulingViolation, err
 	})
 	return slices.Compact(out), nil
 }
+
+// HealRetiredSeries re-judges, at boot, every enabled event rule's series a
+// retirement took rows from (ADR-0163): a condition (and the alarm with it) a
+// retired row raised would otherwise stand, since nothing re-reads a series
+// that lost rows rather than gained them. A series left with no sample lets
+// its condition go; one with samples is judged against its newest, as the
+// reconcile pass judges a drifted series. Idempotent: a series that already
+// agrees changes nothing. It reports how many series it judged.
+func (p *PG) HealRetiredSeries(ctx context.Context) (int, error) {
+	rows, err := p.pool.Query(ctx, `
+		select distinct r.id::text, r.name, rs.sample->>'component_id', rs.sample->>'instance'
+		from retired_sample rs
+		join event_rule r on r.enabled and r.sample_lane = rs.lane
+		left join metric_type mt on rs.lane = 'metric' and mt.id::text = rs.sample->>'metric_type_id'
+		left join property_type pt on rs.lane = 'property' and pt.id::text = rs.sample->>'property_type_id'
+		where rs.sample->>'component_id' is not null and r.sample_key = coalesce(mt.name, pt.name)`)
+	if err != nil {
+		return 0, fmt.Errorf("storage: read the series a retirement touched: %w", err)
+	}
+	cands, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (ruleCandidate, error) {
+		var c ruleCandidate
+		return c, r.Scan(&c.rule.ID, &c.rule.Name, &c.component, &c.instance)
+	})
+	if err != nil {
+		return 0, fmt.Errorf("storage: read the series a retirement touched: %w", err)
+	}
+	for _, c := range cands {
+		if err := p.rejudgeSeries(ctx, c, true); err != nil {
+			return 0, fmt.Errorf("storage: heal rule %s on %s/%s: %w", c.rule.Name, c.component, c.instance, err)
+		}
+	}
+	return len(cands), nil
+}

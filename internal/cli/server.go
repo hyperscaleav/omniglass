@@ -162,12 +162,21 @@ func startBus(c config.Config, gw storage.Gateway) (*bus.Server, error) {
 	return bus.New(bus.Config{Host: host, Port: port, StoreDir: c.NatsStoreDir}, gw)
 }
 
-// auditWriterRuling flags, once at boot, every stored declaration the
-// one-writer ruling now refuses (ADR-0161): a driver spec or a derived task
-// emitting a key the node lane may not carry, a contract line on a reserved
-// key. Each is already inert where it would act; the warning names it so an
-// operator can mend it. A failed audit is logged, never fatal.
+// auditWriterRuling holds, once at boot, what was stored before the
+// one-writer ruling to it (ADR-0163). It re-judges every event rule series a
+// retirement took rows from, so a condition a retired row raised lets go, and
+// flags every stored declaration the ruling now refuses (a driver spec or a
+// derived task emitting a key the node lane may not carry, a contract line on
+// a reserved key, an event rule's event or a command type's target its writer
+// may not write). Each declaration is already inert where it would act; the
+// warning names it so an operator can mend it. A failure is logged, never
+// fatal.
 func auditWriterRuling(ctx context.Context, log *slog.Logger, gw *storage.PG) {
+	if n, err := gw.HealRetiredSeries(ctx); err != nil {
+		log.Warn("retired series heal failed", "error", err.Error())
+	} else if n > 0 {
+		log.Info("re-judged the event rule series a retirement touched", "series", n)
+	}
 	vs, err := gw.WriterRulingViolations(ctx)
 	if err != nil {
 		log.Warn("writer ruling audit failed", "error", err.Error())
