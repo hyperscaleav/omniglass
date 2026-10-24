@@ -15,9 +15,10 @@ export type DiffRow = {
 };
 
 // show renders a field value for the diff cell: strings bare, everything else
-// as compact JSON, so nested objects stay readable without pretending to be
-// scalars.
-const show = (v: unknown): string => (typeof v === "string" ? v : JSON.stringify(v));
+// as JSON indented two spaces, so a nested object (an endpoint's params, a
+// driver's spec) reads as the structure it is rather than one long line, and
+// never pretends to be a scalar. The cell keeps the newlines (#1088).
+const show = (v: unknown): string => (typeof v === "string" ? v : JSON.stringify(v, null, 2));
 
 const isObj = (v: unknown): v is Record<string, unknown> =>
   typeof v === "object" && v !== null && !Array.isArray(v);

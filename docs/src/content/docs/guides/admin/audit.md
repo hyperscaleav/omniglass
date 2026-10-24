@@ -47,7 +47,10 @@ carry no name (an older registry delete) falls back to that raw uuid.
 Pick a row to open its **detail drawer**: who acted (and, for an impersonated action, who was behind
 it), when, and the **field-level before/after diff** of the change itself. Changed fields highlight
 both sides, an added field only its After, a removed one only its Before, and unchanged fields dim. A
-create shows only After values and a delete only Before. Registry mutations record the full row on
+create shows only an After column and a delete only a Before. A value that is JSON (an endpoint's params
+and inputs, a driver's spec) reads as indented JSON, and a long value wraps inside its own column, so
+both sides of a change stay on screen however long either is. Rows written before that shipped carried
+those JSON columns as base64 and still read that way: the trail keeps each row as it was written. Registry mutations record the full row on
 both sides (an update carries the row as it stood and as it became, a delete the whole row it
 removed); rows written before that shipped carried only an id, so an old row can still read
 one-sided. Auth events (sign-ins, password changes)

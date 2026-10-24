@@ -16,6 +16,17 @@ const seed: AuditEvent[] = [
   { id: uuidFor("4"), ts: "2026-07-07T09:59:00Z", actor: "u-bob", actor_name: "bob", verb: "create", resource: "secret", resource_id: "00000000-0000-4000-8000-00000000aaaa", new: { name: "core-snmp", secret_type: "snmp-community" } },
   { id: uuidFor("5"), ts: "2026-07-07T09:58:00Z", actor: "u-bob", actor_name: "bob", verb: "set", resource: "tag_binding", resource_id: "hq" },
   { id: uuidFor("6"), ts: "2026-07-07T09:57:00Z", actor: "u-bob", actor_name: "bob", verb: "somenewverb", resource: "widget", resource_id: "w-1" },
+  // An endpoint retry that trusted a host key (#1088): its jsonb columns
+  // arrive as the objects they are, the values long enough to need wrapping.
+  {
+    id: uuidFor("7"), ts: "2026-07-07T09:56:00Z", actor: "u-dev", actor_name: "dev", verb: "retry", resource: "endpoint",
+    resource_id: "00000000-0000-4000-8000-00000000eeee",
+    old: { Name: "ssh", Params: { target: "127.60.0.19:22", timeout: "5s" }, Inputs: { host: "127.60.0.19", login: "touch-panel-login" } },
+    new: {
+      Name: "ssh", host_key: "SHA256:7yS0pJqk0m3wQ2v9W6dXn1bT8cHf4LrZ5aEoGuKiMNs",
+      Params: { target: "127.60.0.19:22", timeout: "5s" }, Inputs: { host: "127.60.0.19", login: "touch-panel-login" },
+    },
+  },
 ];
 
 const beforeParams: (string | null)[] = [];
@@ -105,12 +116,31 @@ describe("Audit drawer (#473)", () => {
     expect(screen.getByText("Alice Cooper")).toBeTruthy();
   });
 
-  it("a delete renders only the Before side, After reads (none)", async () => {
+  it("a delete renders only its Before column: there is no After image to give room to", async () => {
     const { findByText } = render(() => <Audit />);
     fireEvent.click(await findByText("delete"));
-    expect(await screen.findByText("Change")).toBeTruthy();
+    const dialog = await screen.findByRole("dialog");
     expect(screen.getAllByText("encoder").length).toBeGreaterThan(0);
-    expect(screen.getByText("(none)")).toBeTruthy();
+    expect([...dialog.querySelectorAll("th")].map((th) => th.textContent)).toEqual(["Field", "Before"]);
+    expect(dialog.querySelectorAll("col")).toHaveLength(2);
+    expect(screen.queryByText("(none)")).toBeNull();
+  });
+
+  it("a create renders only its After column (#1088)", async () => {
+    const { findByText } = render(() => <Audit />);
+    fireEvent.click(await findByText("core-snmp"));
+    const dialog = await screen.findByRole("dialog");
+    expect([...dialog.querySelectorAll("th")].map((th) => th.textContent)).toEqual(["Field", "After"]);
+    const row = [...dialog.querySelectorAll("tr")].find((tr) => tr.firstElementChild?.textContent === "secret_type")!;
+    expect([...row.children].map((td) => td.textContent)).toEqual(["secret_type", "snmp-community"]);
+  });
+
+  it("an update with a field only one side carries still reads (none) on the other", async () => {
+    const { findByText } = render(() => <Audit />);
+    fireEvent.click(await findByText("retry"));
+    const dialog = await screen.findByRole("dialog");
+    const row = [...dialog.querySelectorAll("tr")].find((tr) => tr.firstElementChild?.textContent === "host_key")!;
+    expect(row.children[1].textContent).toBe("(none)");
   });
 
   it("an event that recorded no images says so instead of an empty table", async () => {
@@ -157,5 +187,39 @@ describe("Audit action badge consistency", () => {
       const badge = getByText(verb, { selector: ".badge" });
       expect(badge.className, `verb ${verb}`).toContain("badge-soft");
     }
+  });
+});
+
+// An endpoint's audit row reads as JSON and shows its whole change (#1088):
+// a jsonb column renders as indented JSON, never base64, and the change table
+// is laid out to fit the drawer, so the After column is never pushed off it.
+describe("Audit drawer fits a jsonb change (#1088)", () => {
+  it("renders an endpoint's params and inputs as indented JSON", async () => {
+    const { findByText } = render(() => <Audit />);
+    fireEvent.click(await findByText("retry"));
+    const dialog = await screen.findByRole("dialog");
+    const row = (field: string) => [...dialog.querySelectorAll("tr")].find((tr) => tr.firstElementChild?.textContent === field)!;
+    const params = row("Params").children;
+    expect(params[1].textContent).toBe('{\n  "target": "127.60.0.19:22",\n  "timeout": "5s"\n}');
+    expect(params[2].textContent).toBe(params[1].textContent);
+    expect(row("Inputs").children[2].textContent).toContain('"login": "touch-panel-login"');
+  });
+
+  it("lays the change table out to the drawer's width, its values wrapping in place", async () => {
+    const { findByText } = render(() => <Audit />);
+    fireEvent.click(await findByText("retry"));
+    const dialog = await screen.findByRole("dialog");
+    // The wide drawer, the one a body that reads more than a form takes.
+    expect(dialog.className).toContain("max-w-2xl");
+    const table = dialog.querySelector("table")!;
+    expect(table.className).toContain("table-fixed");
+    expect(table.className).toContain("w-full");
+    expect([...dialog.querySelectorAll("th")].map((th) => th.textContent)).toEqual(["Field", "Before", "After"]);
+    const added = [...dialog.querySelectorAll("tr")].find((tr) => tr.firstElementChild?.textContent === "host_key")!;
+    for (const cell of [...added.children].slice(1)) {
+      expect(cell.className).toContain("whitespace-pre-wrap");
+      expect(cell.className).toContain("wrap-break-word");
+    }
+    expect(added.children[2].textContent).toBe("SHA256:7yS0pJqk0m3wQ2v9W6dXn1bT8cHf4LrZ5aEoGuKiMNs");
   });
 });

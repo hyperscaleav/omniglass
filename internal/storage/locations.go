@@ -1563,12 +1563,17 @@ func writeAuditRes(ctx context.Context, tx pgx.Tx, actorID, verb, resource, reso
 	return nil
 }
 
+// auditJSON marshals a row image for audit_log, a jsonb column held as
+// JSON bytes inline rather than base64 (inlineJSONBytes).
 func auditJSON(v any) (any, error) {
 	if v == nil {
 		return nil, nil
 	}
 	b, err := json.Marshal(v)
 	if err != nil {
+		return nil, fmt.Errorf("storage: marshal audit: %w", err)
+	}
+	if b, err = inlineJSONBytes(v, b); err != nil {
 		return nil, fmt.Errorf("storage: marshal audit: %w", err)
 	}
 	return b, nil
