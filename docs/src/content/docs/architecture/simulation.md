@@ -74,7 +74,8 @@ every listener reads and writes the same state tree. The DSP's HTTP gain route w
 `status.channels.0.gain`; the SSH `show channels` renders it; a line-protocol session subscribed to
 that path receives a push; SNMP answers its mapped OIDs from the same tree. Routes and commands
 match exactly. SNMP is read-only (v1 and v2c GET, GETNEXT, GETBULK and walk; no SET, no traps),
-and UDP is an echo.
+and a UDP face is an echo unless it is persistent, when it speaks a line protocol as datagrams
+([datagram faces](#datagram-faces)).
 
 Every request a device answers (an HTTP route, an SNMP GET, a CLI command) arrives on one hit
 stream with the device, protocol, operation, port and status, plus the peer address where the
@@ -139,6 +140,21 @@ port: the run mode binds each face at its profile's port, lifted by `--port-offs
 address the endpoint targets, and has no way to tell the endpoints a port it picked, so the
 endpoints must target the profile's ports. Such a test keeps the fixed ports and claims a
 loopback address no other test holds instead (`simtest.ClaimLoopback`).
+
+### Datagram faces
+
+A udp interface declared `persistent: true` (#1037) serves the line protocol as datagrams, one line
+each, where without it the face is a bare echo (the dsp's `udp-echo`). Each source address is its own
+session, run by the same shell loop as the tcp face, so a source that subscribes is the destination
+its pushes are sent to, and a session ends after five minutes with no datagram from its source. The
+simulated panel's `nvp-udp` face on 51327 is the proving face for the `udp` transport. The face drops
+a share of datagrams each way, the profile's `loss_pct` (a udp face only, 0 to 100), so a driver's
+retries are exercised on a real wire with no `NET_ADMIN`. The loss is **seeded per datagram**: a
+datagram's fate is fixed by the device, the face, its direction, its bytes and how many times those
+bytes have crossed, so the third `SET INPUT hdmi2` in meets the same fate on every run however other
+traffic interleaves with it, and a test on a lossy face repeats. The panel declares 5%, so the dev
+fleet's udp endpoint always has retries at work; a test sets the share (`SetDatagramLoss`, which
+restarts the counts), a test-harness hook like the TLS ones.
 
 ## Beside a node
 

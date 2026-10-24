@@ -175,6 +175,51 @@ drivers:
         - command_type: set-input
           request: { line: "SET INPUT ${value}", reply: { prefix: "INPUT ", error: { prefix: "-ERR" } } }
           settle: { from: response, extract: { regex: "^INPUT (\\S+)$" } }
+  - id: newtron-nvp-udp
+    label: Newtron NVP over UDP
+    version: "1.0.0"
+    spec:
+      version: 1
+      transport: udp
+      inputs:
+        - { name: host, kind: string, required: true }
+        - { name: port, kind: number, default: "51327" }
+        # The local port this endpoint binds, which its requests leave from
+        # and the panel's pushes arrive on (#1037). No default: the node
+        # binds a port of its own and the panel pushes to the source of
+        # SUBSCRIBE INPUT. Set it where the component is configured with a
+        # fixed destination, and open the node's firewall for it.
+        - { name: listen-port, kind: number }
+      # The same NVP conversation as datagrams. An open udp port cannot be
+      # detected, so the transport rung is GET INPUT answered: an answer
+      # reads responsive, silence reads timed out, and a port the host
+      # refuses reads refused. A lost request is re-sent twice (the default)
+      # within the endpoint's timeout.
+      ladder:
+        transport:
+          request: { line: "GET INPUT", reply: { prefix: "INPUT ", error: { prefix: "-ERR" } } }
+      polls:
+        - name: status
+          schedule: { every: 30s }
+          request: { line: "GET INPUT", reply: { prefix: "INPUT ", error: { prefix: "-ERR" } } }
+          emits:
+            - { name: video-input, extract: { regex: "^INPUT (\\S+)$" } }
+      # SUBSCRIBE INPUT arms when the socket opens and again whenever the
+      # request rung recovers (a panel that rebooted forgot its subscriber);
+      # the EVT pushes arrive on the endpoint's own port.
+      listeners:
+        - name: events
+          arm: ["SUBSCRIBE INPUT"]
+          match: { prefix: "EVT " }
+          emits:
+            - { name: video-input, extract: { regex: "^EVT INPUT (\\S+)$" } }
+      commands:
+        # SET INPUT names the input, so sending it twice selects it once:
+        # the binding declares retries, which a command never gets by
+        # default (a relative step sent twice would step twice).
+        - command_type: set-input
+          request: { line: "SET INPUT ${value}", reply: { prefix: "INPUT ", error: { prefix: "-ERR" } }, retries: 2 }
+          settle: { from: response, extract: { regex: "^INPUT (\\S+)$" } }
   - id: http-json
     label: HTTP JSON
     version: "1.0.0"

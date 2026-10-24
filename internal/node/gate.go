@@ -7,6 +7,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/collection"
 	"github.com/hyperscaleav/omniglass/internal/collection/rejection"
 	"github.com/hyperscaleav/omniglass/internal/driver"
+	"github.com/hyperscaleav/omniglass/internal/transport"
 )
 
 // The layered gate (#1056 ruling, ADR-0158). Every connection to an endpoint
@@ -47,6 +48,16 @@ func rungOf(class string) rung {
 		return rungAuthenticated
 	}
 	return rungResponsive
+}
+
+// rungIn is the rung a terminal class refuses at over a transport: where the
+// transport rung is a request (udp, #1037), nothing logs in and there is no
+// session rung, so every refusal holds the transport rung.
+func rungIn(transportName, class string) rung {
+	if t, ok := transport.ByName(transportName); ok && t.Rung == driver.RungRequest {
+		return rungResponsive
+	}
+	return rungOf(class)
 }
 
 // rejectionNone is the endpoint-rejection value when no gate holds.
@@ -110,12 +121,17 @@ func (g *gates) observe(endpointID, fingerprint, published string) {
 // recycled onto a fixed secret) gates nothing: it is about inputs that are
 // gone. false when dropped.
 func (g *gates) record(endpointID, fingerprint string, terr *collection.TerminalError) bool {
+	return g.recordAt(endpointID, fingerprint, terr, rungOf(terr.Class))
+}
+
+// recordAt is record at a rung the caller names.
+func (g *gates) recordAt(endpointID, fingerprint string, terr *collection.TerminalError, at rung) bool {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	if fingerprint != g.current[endpointID] {
 		return false
 	}
-	g.held[endpointID] = gate{fingerprint: fingerprint, rung: rungOf(terr.Class), class: terr.Class, reason: terr.Error(),
+	g.held[endpointID] = gate{fingerprint: fingerprint, rung: at, class: terr.Class, reason: terr.Error(),
 		pinned: terr.Pinned, offered: terr.Offered}
 	return true
 }

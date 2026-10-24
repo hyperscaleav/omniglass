@@ -435,11 +435,17 @@ type sessionManager struct {
 	// operator's :retry with certificate). Touched on the run loop only; the
 	// pin itself is safe across goroutines.
 	certPins map[string]*collection.HostKeyPin
+	// datagrams is each udp endpoint's bound socket (#1037), and
+	// datagramRefused the last reason each endpoint has none, so it logs
+	// once. Touched on the run loop only.
+	datagrams       map[string]*heldDatagram
+	datagramRefused map[string]string
 }
 
 func newSessionManager(dialers map[string]collection.SessionDialer, hooks sessionHooks) *sessionManager {
 	return &sessionManager{dialers: dialers, hooks: hooks, held: map[string]*heldSession{}, refused: map[string]string{}, pins: map[string]string{},
-		gates: newGates(), published: map[string]string{}, pubTask: map[string][2]string{}, certPins: map[string]*collection.HostKeyPin{}}
+		gates: newGates(), published: map[string]string{}, pubTask: map[string][2]string{}, certPins: map[string]*collection.HostKeyPin{},
+		datagrams: map[string]*heldDatagram{}, datagramRefused: map[string]string{}}
 }
 
 // syncCertPins brings each tls endpoint's pin to what the worklist
@@ -537,6 +543,18 @@ func (m *sessionManager) refuse(endpointID, fingerprint string, terr *collection
 	}
 }
 
+// refuseOver gates an endpoint for a terminal refusal met over a transport,
+// at the rung the refusal holds there: over a transport whose rung is a
+// request (udp), nothing logs in, so every refusal holds the transport rung.
+func (m *sessionManager) refuseOver(transportName, endpointID, fingerprint string, terr *collection.TerminalError) {
+	if m == nil {
+		return
+	}
+	if m.gates.recordAt(endpointID, fingerprint, terr, rungIn(transportName, terr.Class)) {
+		m.syncRejection(endpointID)
+	}
+}
+
 // currentFingerprint is the fingerprint the endpoint is connected with now.
 func (m *sessionManager) currentFingerprint(endpointID string) string {
 	if m == nil {
@@ -603,6 +621,7 @@ func (m *sessionManager) observe(tasks []collection.TaskSpec) {
 func (m *sessionManager) reconcile(tasks []collection.TaskSpec) {
 	m.observe(tasks)
 	m.syncCertPins(tasks)
+	m.reconcileDatagrams(tasks)
 	want, refused := desiredSessions(tasks, m.dialers)
 	for id := range m.pins {
 		if _, ok := want[id]; !ok {
@@ -755,6 +774,7 @@ func (m *sessionManager) flushUnclaimed() {
 	if m == nil {
 		return
 	}
+	m.flushDatagrams()
 	for _, h := range m.held {
 		n, last, policy := h.router.drain()
 		if n == 0 {
@@ -797,6 +817,9 @@ func (m *sessionManager) isUp(endpointID string) bool {
 func (m *sessionManager) closeAll() {
 	for id, h := range m.held {
 		m.teardown(id, h, "node shutdown")
+	}
+	for id, h := range m.datagrams {
+		m.closeDatagram(id, h, "node shutdown")
 	}
 }
 

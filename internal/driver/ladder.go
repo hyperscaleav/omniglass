@@ -124,12 +124,15 @@ func (s *Spec) validateLadder() error {
 		if req == nil || req.Empty() {
 			return fmt.Errorf("driver: a request transport rung names its request (ladder.transport.request)")
 		}
-		// The node runs a declared request rung as a line over tcp today; an
-		// snmp request is #821's, a udp datagram #1037's.
-		if s.Transport != "tcp" || req.Line == "" {
-			return fmt.Errorf("driver: a request rung runs as a line over tcp today; snmp's own request is #821, udp's #1037")
+		// The node runs a declared request rung as a line over tcp or a
+		// datagram over udp (#1037); snmp's own request is #821.
+		if (s.Transport != "tcp" && s.Transport != "udp") || req.Line == "" {
+			return fmt.Errorf("driver: a request rung runs as a line over tcp or a datagram over udp; snmp's own request is #821")
 		}
 		if err := validateReply("ladder request", *req); err != nil {
+			return err
+		}
+		if err := validateRetries(s.Transport, "the ladder request", *req); err != nil {
 			return err
 		}
 	} else if req != nil {

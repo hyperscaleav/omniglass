@@ -170,6 +170,12 @@
           "minimum": 0,
           "description": "A tls face's certificate validity window in days, counted from the face's start; 0 (the default) is a year.  Only on a face with tls."
         },
+        "loss_pct": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100,
+          "description": "The share of datagrams a udp face drops, in percent, each way, seeded from the device and the face so a run's losses repeat. Only on a udp face."
+        },
         "doc": {
           "$ref": "#/$defs/doc"
         },

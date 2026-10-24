@@ -22,7 +22,8 @@
       "tls-certificate",
       "tls-certificate-days-left",
       "tls-certificate-expiry",
-      "tls-handshake-time"
+      "tls-handshake-time",
+      "udp-response-time"
     ],
     "admits": [
       {

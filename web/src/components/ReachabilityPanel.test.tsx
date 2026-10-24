@@ -364,3 +364,57 @@ describe("a tls endpoint", () => {
     expect(queryByText("unverified")).toBeNull();
   });
 });
+
+// A udp endpoint has no port to open (#1037): its transport rung is the
+// driver's request answered, so the breakdown lists that rung (the layer the
+// verdict follows), and a down one explains itself.
+describe("a udp endpoint", () => {
+  const udpRow = (answered: boolean) => ({
+    endpoint: "udp",
+    label: "Panel over UDP",
+    transport: "udp",
+    address: "127.60.0.9:51327",
+    node: "node-a",
+    last_seen: nowIso,
+    verdict: { value: answered ? "up" : "down", ts: nowIso },
+    responsive: { value: answered ? "up" : "down", ts: nowIso },
+    layers: [
+      { layer: "ping", check: "icmp-reachable", value: 1, ts: nowIso },
+      // The read serves the request rung as a layer, timed while answered.
+      { layer: "request", check: "endpoint-responsive", value: answered ? 1 : 0, detail: answered ? "0.7 ms" : undefined, ts: nowIso },
+    ],
+    history: [{ ts: ago(120_000), value: answered ? "up" : "down" }],
+  });
+
+  it("lists the request rung in the breakdown, once, with its round trip", () => {
+    const { getByText, getByTestId, queryAllByText } = mount({ component: "panel-1", endpoints: [udpRow(true)] });
+    fireEvent.click(getByText("Panel over UDP"));
+    const row = getByTestId("request-rung");
+    expect(row.textContent).toMatch(/request/);
+    expect(row.textContent).toMatch(/answered/);
+    expect(row.textContent).not.toMatch(/not answered/);
+    expect(row.textContent).toMatch(/0\.7 ms/);
+    expect(queryAllByText("endpoint-responsive")).toHaveLength(0);
+  });
+
+  it("reads an unanswered request down and says why", () => {
+    const { getByText, getByTestId } = mount({ component: "panel-1", endpoints: [udpRow(false)] });
+    fireEvent.click(getByText("Panel over UDP"));
+    expect(getByTestId("request-rung").textContent).toMatch(/not answered/);
+    expect(getByText(/request goes unanswered/)).toBeTruthy();
+  });
+
+  it("reads a gated request rung as refused beneath the gate", () => {
+    const row = { ...udpRow(false), rejection: { rung: "responsive" as const, class: "auth" } };
+    const { getByText, getByTestId } = mount({ component: "panel-1", endpoints: [row] });
+    fireEvent.click(getByText("Panel over UDP"));
+    expect(getByTestId("request-rung").textContent).toMatch(/refused/);
+    expect(getByTestId("request-rung").textContent).not.toMatch(/not answered/);
+  });
+
+  it("lists no request rung on a row with a port", () => {
+    const { getByText, queryByTestId } = mount();
+    fireEvent.click(getByText("disp-1-tcp"));
+    expect(queryByTestId("request-rung")).toBeNull();
+  });
+});
