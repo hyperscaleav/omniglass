@@ -287,6 +287,11 @@ type Device struct {
 	httpAddrs     []net.Addr
 	httpServing   sync.WaitGroup // one per running serve goroutine
 	snmpServer    snmpShutdowner // the SNMP read loop, kept as an interface so device.go doesn't import the server package
+	// snmpRefused is the community the SNMP face answers with
+	// authorizationError (#821): one the agent knows and refuses.
+	snmpRefused string
+	// snmpRequests counts the datagrams the SNMP face was sent.
+	snmpRequests atomic.Int64
 	sshListener   net.Listener
 	// tlsID is the key and certificate the device's tls line face serves
 	// (#1035), derived from its id so it is the same on every run.

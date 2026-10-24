@@ -94,7 +94,7 @@ func TestSNMPGet_PublishesRequestEvent(t *testing.T) {
 	t.Cleanup(dev.StopSNMP)
 	time.Sleep(50 * time.Millisecond)
 
-	_ = snmpGet(t, "127.0.0.1", uint16(port), "1.3.6.1.4.1.99999.1.1.0")
+	_ = snmpGetAs(t, "127.0.0.1", uint16(port), "private-community", "1.3.6.1.4.1.99999.1.1.0")
 
 	// gosnmp client returns synchronously, but the OnGet path invokes
 	// the publisher inline, capture should be visible immediately.
@@ -135,10 +135,16 @@ func TestSNMPGet_PublishesRequestEvent(t *testing.T) {
 
 func snmpGet(t *testing.T, host string, port uint16, oid string) any {
 	t.Helper()
+	return snmpGetAs(t, host, port, "public", oid)
+}
+
+// snmpGetAs gets one OID with a community: a face answers its own alone.
+func snmpGetAs(t *testing.T, host string, port uint16, community, oid string) any {
+	t.Helper()
 	g := &gosnmp.GoSNMP{
 		Target:    host,
 		Port:      port,
-		Community: "public",
+		Community: community,
 		Version:   gosnmp.Version2c,
 		Timeout:   2 * time.Second,
 		Retries:   1,

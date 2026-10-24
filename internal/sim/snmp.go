@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/gosnmp/gosnmp"
@@ -15,8 +16,10 @@ import (
 
 // StartSNMP binds an SNMPv2c listener on <LoopbackIP>:port. Handles GET
 // and GETNEXT against the device's OIDMap; WALK is a client-driven loop
-// of GETNEXT calls so we do not need a separate path. Accepts the given
-// community plus "public" (convention for demo posture).
+// of GETNEXT calls so we do not need a separate path. The community is
+// strict (#821): the face answers its own alone, and any other meets the
+// silence a real v2c agent gives a wrong community; the refused community,
+// if one is set, is answered with authorizationError.
 func (d *Device) StartSNMP(port int, community string) error {
 	_, err := d.startSNMP(port, community)
 	return err
@@ -48,7 +51,7 @@ func (d *Device) startSNMP(port int, community string) (net.Addr, error) {
 		},
 		SubAgents: []*GoSNMPServer.SubAgent{
 			{
-				CommunityIDs: []string{community, "public"},
+				CommunityIDs: []string{community},
 				OIDs:         d.buildOIDEntries(oids, boundPort(conn.LocalAddr()), community),
 			},
 		},
@@ -61,7 +64,7 @@ func (d *Device) startSNMP(port int, community string) (net.Addr, error) {
 	// The read loop is ours, around the library's request handler: the
 	// library's own listener nils its socket on Shutdown while its serve
 	// loop reads it, a data race. Owning the socket, a stop only closes it.
-	loop := &snmpLoop{conn: conn}
+	loop := &snmpLoop{conn: conn, community: community, refused: d.snmpRefused, requests: &d.snmpRequests}
 	d.snmpServer = loop
 	go func() {
 		slog.Debug("device SNMP started", "device", d.Hostname, "addr", addr)
@@ -72,7 +75,12 @@ func (d *Device) startSNMP(port int, community string) (net.Addr, error) {
 
 // snmpLoop answers SNMP datagrams on one socket through the library's
 // request handler until the socket closes.
-type snmpLoop struct{ conn *net.UDPConn }
+type snmpLoop struct {
+	conn      *net.UDPConn
+	community string
+	refused   string
+	requests  *atomic.Int64
+}
 
 func (l *snmpLoop) serve(agent *GoSNMPServer.MasterAgent) {
 	var buf [65535]byte
@@ -80,6 +88,14 @@ func (l *snmpLoop) serve(agent *GoSNMPServer.MasterAgent) {
 		n, from, err := l.conn.ReadFromUDP(buf[:])
 		if err != nil {
 			return // closed by Shutdown
+		}
+		l.requests.Add(1)
+		refusal, admit := l.adjudicate(buf[:n])
+		if refusal != nil {
+			_, _ = l.conn.WriteToUDP(refusal, from)
+		}
+		if !admit {
+			continue
 		}
 		reply, err := agent.ResponseForBuffer(append([]byte(nil), buf[:n]...))
 		if err != nil {
@@ -90,6 +106,46 @@ func (l *snmpLoop) serve(agent *GoSNMPServer.MasterAgent) {
 		}
 	}
 }
+
+// adjudicate judges a request's community before the library sees it (the
+// library, with no security configured, answers any community): the face's
+// own is admitted; the refused one is answered with authorizationError
+// (#821); any other is dropped silently, as a real v2c agent drops a wrong
+// community. A datagram that does not decode is handed on, for the library
+// to judge.
+func (l *snmpLoop) adjudicate(raw []byte) (reply []byte, admit bool) {
+	var g gosnmp.GoSNMP
+	pkt, err := g.SnmpDecodePacket(append([]byte(nil), raw...))
+	switch {
+	case err != nil, pkt.Community == l.community:
+		return nil, true
+	case l.refused != "" && pkt.Community == l.refused:
+		return l.refusal(pkt), false
+	default:
+		return nil, false
+	}
+}
+
+// refusal renders the authorizationError answer to a request.
+func (l *snmpLoop) refusal(pkt *gosnmp.SnmpPacket) []byte {
+	pkt.PDUType = gosnmp.GetResponse
+	pkt.Error = gosnmp.AuthorizationError
+	pkt.ErrorIndex = 0
+	out, err := pkt.MarshalMsg()
+	if err != nil {
+		slog.Debug("snmp refusal not marshalled", "error", err)
+		return nil
+	}
+	return out
+}
+
+// SetSNMPRefusedCommunity sets the community the SNMP face answers with
+// authorizationError; it takes effect when the face next starts.
+func (d *Device) SetSNMPRefusedCommunity(c string) { d.snmpRefused = c }
+
+// SNMPRequests counts the datagrams the SNMP face was sent: a test-harness
+// hook, so a test can prove a refused community is not sent again.
+func (d *Device) SNMPRequests() int64 { return d.snmpRequests.Load() }
 
 // Shutdown closes the socket, which ends the read loop.
 func (l *snmpLoop) Shutdown() { _ = l.conn.Close() }

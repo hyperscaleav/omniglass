@@ -245,16 +245,20 @@ func (l SessionLimits) WithDefaults() SessionLimits {
 //     a profile that intentionally wants to accept any credentials,
 //     for example a fixture used by an integration test.
 type Auth struct {
-	Type            string   `yaml:"type"`
-	DefaultUser     string   `yaml:"default_user"`
-	DefaultPassword string   `yaml:"default_password"`
-	Community       string   `yaml:"community"`
-	Enforce         bool     `yaml:"enforce"`
-	Permissive      bool     `yaml:"permissive"`
-	APIKey          string   `yaml:"api_key"`
-	Header          string   `yaml:"header"`
-	Realm           string   `yaml:"realm"`
-	PublicPaths     []string `yaml:"public_paths"`
+	Type            string `yaml:"type"`
+	DefaultUser     string `yaml:"default_user"`
+	DefaultPassword string `yaml:"default_password"`
+	Community       string `yaml:"community"`
+	// RefusedCommunity is a community an snmp face knows and refuses: it
+	// answers it with authorizationError (#821), where any community but its
+	// own is dropped silently.
+	RefusedCommunity string   `yaml:"refused_community"`
+	Enforce          bool     `yaml:"enforce"`
+	Permissive       bool     `yaml:"permissive"`
+	APIKey           string   `yaml:"api_key"`
+	Header           string   `yaml:"header"`
+	Realm            string   `yaml:"realm"`
+	PublicPaths      []string `yaml:"public_paths"`
 }
 
 // Route defines an HTTP route match and its template.
@@ -612,6 +616,12 @@ func validateInterfaces(p *DeviceProfile) error {
 		}
 		if iface.TLSValidityDays < 0 {
 			return fmt.Errorf("interface %q sets a negative tls_validity_days", iface.Name)
+		}
+		if iface.Auth.RefusedCommunity != "" && iface.Protocol != "snmp" {
+			return fmt.Errorf("interface %q sets a refused_community but is not an snmp face", iface.Name)
+		}
+		if iface.Auth.RefusedCommunity != "" && iface.Auth.RefusedCommunity == iface.Auth.Community {
+			return fmt.Errorf("interface %q refuses its own community", iface.Name)
 		}
 		if iface.LossPct != 0 && iface.Protocol != "udp" {
 			return fmt.Errorf("interface %q sets loss_pct but is not a udp face", iface.Name)

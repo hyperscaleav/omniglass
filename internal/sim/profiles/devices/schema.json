@@ -269,6 +269,10 @@
         "community": {
           "type": "string"
         },
+        "refused_community": {
+          "type": "string",
+          "description": "A community an snmp face knows and refuses: answered with authorizationError, where any community but its own is dropped silently. Only on an snmp face."
+        },
         "enforce": {
           "type": "boolean"
         },
