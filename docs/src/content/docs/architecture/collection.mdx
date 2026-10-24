@@ -375,7 +375,9 @@ runs the TCP connect and then the handshake under the endpoint's **verification 
 
 - **verify** checks the certificate against the node's system roots, with the host input as the
   server name. Any failure (an unknown authority, a name mismatch, an expiry) is a `certificate`
-  refusal carrying its reason, never a timeout. A driver that declares no mode verifies.
+  refusal carrying its reason, never a timeout: the held session's `session-reason`, and for an
+  endpoint with no held session a node self-log, said once when the probe meets it. A driver that
+  declares no mode verifies.
 - **pin** trusts the first public key the component offers and refuses any other, as the ssh host
   key is pinned. The pin is the key (its SubjectPublicKeyInfo, in the same `SHA256:` form as an ssh
   fingerprint), not the certificate, so a renewal that keeps the key is no change, and a certificate
@@ -393,7 +395,11 @@ runs the TCP connect and then the handshake under the endpoint's **verification 
 The probe lands the handshake rung's timing (`tls-handshake-time`, one observation per probe the
 component answered) and, for a certificate the mode accepted, its not-after as the
 `tls-certificate-expiry` property and the days left as the `tls-certificate-days-left` metric, the
-number a threshold rule reads (an expression cannot read the clock). TLS 1.2 is the floor, and the
+number a threshold rule reads (an expression cannot read the clock). Under a `certificate` gate the
+probe connects only, so those freeze at the last accepted certificate; the reachability read
+withholds them while the gate holds rather than show them as current, and serves the pinned key in
+pin mode alone. A bare `tls` endpoint's `tls-mode` param is checked where it is written, as a
+driver's input is. TLS 1.2 is the floor, and the
 component is authenticated alone: no client certificates, and no per-endpoint CA bundle. Proven
 against the simulated panel's `nvp-tls` face over a real handshake (poll, command, push, recovery
 onto the same key, a changed key held beneath the gate across a node restart and accepted with

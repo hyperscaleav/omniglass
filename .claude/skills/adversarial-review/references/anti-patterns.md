@@ -244,14 +244,19 @@ region and a mask line in the frontmatter, per the entity blade's duration masks
 - **Fix:** clear the deadline after each bounded write, give the inner write its own deadline, and
   never return an inner write's error as the read's (internal/collection/telnet.go `Read`).
 
-## node-control-key-pushable (fixed; found by the fingerprint review)
+## node-control-key-pushable (fixed; found by the fingerprint review; the driver-emit lane by the #1035 review)
 
 - **Cue:** a property a node publishes to steer its own future attempts (a gate, a trusted key)
-  that is also a seeded property type, so the operator push lane accepts it.
+  that is also a seeded property type, so any lane that lands a named sample accepts it: the
+  operator push lane, a driver's emits (a poll or listener emit named after it lands as the
+  observed value through the poll path), a calc rule's output.
 - **Failure:** a push grant plants a gate (commands fail, probes drop rungs) or lifts one with a
   future-dated `none`, an unaudited bypass of the audited `:retry`.
-- **Fix:** refuse node-control keys on the push lane by name (`probekeys.IsNodeControl`,
-  internal/api/telemetry.go).
+- **Fix:** refuse node-control keys by name on every lane: the push lane
+  (`probekeys.IsNodeControl`, internal/api/telemetry.go), driver emits at spec write
+  (`validateEmits`, internal/driver/spec.go), calc outputs (`probekeys.IsNative`,
+  internal/storage/calc_rules.go). A driver emitting `tls-certificate` would have had the
+  worklist deliver its constant as the pin, bypassing the audited `:retry`.
 - **Also (#1059):** a node's account of itself that a surface reads as the node's (a held
   session's `session-state` and `session-reason`) is the same class: a push read a rejected
   session up, hiding its Retry, or planted a reason the node never scrubbed. Any new
@@ -265,6 +270,9 @@ region and a mask line in the frontmatter, per the entity blade's duration masks
   "five seconds"), so the endpoint stops collecting while the operator saw success.
 - **Fix:** parse the value where it is accepted and refuse it naming the field
   (`patchedConnection`, internal/storage/endpoints.go).
+- **Also (#1035):** the bare-endpoint path takes params as given, so a key the dialer reads with
+  meaning (a tls endpoint's `tls-mode`) is parsed there too (`checkBareParams`), not only on the
+  driver path's inputs.
 
 ## fixture-hangs-up-before-the-check (fixed; found by CI on #1061)
 
@@ -292,3 +300,14 @@ region and a mask line in the frontmatter, per the entity blade's duration masks
   endpoint's address, so the endpoints must target those) or pinned on purpose (a port bound on one
   address and rebound on another), claim an address no other test holds (`simtest.ClaimLoopback`).
   The testcontainer form of the class is `fixed-testcontainer-port`.
+
+## frozen-fact-served-as-current (fixed; found by the #1035 review)
+
+- **Cue:** a read that serves a latest-ever sample (a certificate's days left, a handshake's
+  result) beside a gate or state that stops the probe from refreshing it.
+- **Failure:** under a certificate gate the tls probe connects only, so the last accepted
+  certificate's expiry and days left freeze; the panel kept showing "212 days left" in green
+  beside a rejected endpoint whose component now offers another certificate entirely.
+- **Fix:** tie the fact to what can refresh it: withhold it (or label it with its age) while the
+  gate holds (`composeTLS`, internal/api/reachability.go), and have the surface name the refusal
+  instead of reading as nothing measured.

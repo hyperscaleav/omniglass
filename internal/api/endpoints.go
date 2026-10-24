@@ -273,6 +273,8 @@ func mapEndpointErr(err error) error {
 		return huma.Error422UnprocessableEntity(strings.TrimPrefix(err.Error(), "storage: retry pin: "))
 	case errors.Is(err, storage.ErrEndpointPatchInvalid):
 		return huma.Error400BadRequest(strings.TrimPrefix(err.Error(), "storage: endpoint patch invalid: "))
+	case errors.Is(err, storage.ErrEndpointParamsInvalid):
+		return huma.Error422UnprocessableEntity(strings.TrimPrefix(err.Error(), "storage: endpoint params invalid: "))
 	default:
 		return huma.Error500InternalServerError("endpoint operation failed")
 	}

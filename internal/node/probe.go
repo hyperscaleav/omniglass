@@ -356,6 +356,11 @@ func collectTLSProbe(ctx context.Context, runner *collection.Runner, task collec
 		return nil, err
 	}
 	if res.Refusal != nil {
+		// The reason (an unknown authority, a name mismatch, an expiry, a
+		// changed key) is what an operator acts on, and an endpoint with no
+		// held session has no session-reason to carry it: say it once, here,
+		// since beneath the gate this handshake is not tried again.
+		slog.Warn("tls certificate refused", "facility", "collection", "task", task.ID, "endpoint", task.EndpointName, "reason", res.Refusal.Error())
 		sessions.refuse(task.EndpointID, task.Fingerprint, res.Refusal)
 	}
 	return dps, nil

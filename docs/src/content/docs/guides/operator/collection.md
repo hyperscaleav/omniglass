@@ -140,7 +140,8 @@ opening that endpoint's detail.
 
 A **tls** endpoint's breakdown adds three rows, each teaching itself on hover: the **handshake** (the
 transport rung, the TLS handshake answered, and how long it took), the **certificate** (its days
-left, amber inside a month and red once expired, and its expiry date) and **trust**, how the endpoint
+left, amber inside a month and red once expired, and its expiry date; while a certificate is
+refused it says so rather than show the last accepted one's) and **trust**, how the endpoint
 judges the certificate: verified against the node's roots, pinned on first use (with the key it
 pins), or **not verified**. Skipping verification is an operator's choice, never a driver's default,
 so its row reads it in amber and the endpoint's row wears **unverified** without being expanded. The

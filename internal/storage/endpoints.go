@@ -31,7 +31,33 @@ var (
 	// driver's declared inputs refuse, an undeclared input, a transport the
 	// driver does not speak, or a raw target on a driver-attached endpoint.
 	ErrEndpointPatchInvalid = errors.New("storage: endpoint patch invalid")
+	// ErrEndpointParamsInvalid refuses a bare endpoint's create whose params
+	// carry a value its transport's dialer cannot read (a tls mode that is
+	// not a mode), naming the field.
+	ErrEndpointParamsInvalid = errors.New("storage: endpoint params invalid")
 )
+
+// checkBareParams reads what a bare endpoint's params hand its transport's
+// dialer with meaning, refusing a value it cannot use: a tls endpoint's mode
+// (#1035), which a driver-attached one has checked as an input instead.
+func checkBareParams(transportName string, params []byte) error {
+	if transportName != "tls" || len(params) == 0 {
+		return nil
+	}
+	var p map[string]any
+	if err := json.Unmarshal(params, &p); err != nil {
+		return nil // params are passed through as given; their shape is not this check's
+	}
+	raw, ok := p[driver.TLSModeInput]
+	if !ok {
+		return nil
+	}
+	mode, isString := raw.(string)
+	if _, err := driver.ParseTLSMode(mode); err != nil || !isString {
+		return fmt.Errorf("params.%s must be one of %s, and %v is not", driver.TLSModeInput, strings.Join(driver.TLSModes(), ", "), raw)
+	}
+	return nil
+}
 
 // Endpoint is a named, placement-bound connection: Transport names the wire it
 // speaks over (a code-registry fact, internal/transport, ADR-0073), Component
@@ -372,6 +398,11 @@ func (p *PG) createEndpointTx(ctx context.Context, tx pgx.Tx, actorID string, sp
 	if _, ok := transport.ByName(spec.Transport); !ok {
 		return nil, ErrUnknownTransport
 	}
+	if plan == nil {
+		if err := checkBareParams(spec.Transport, params); err != nil {
+			return nil, fmt.Errorf("%w: %v", ErrEndpointParamsInvalid, err)
+		}
+	}
 	it, err := scanEndpoint(tx.QueryRow(ctx, `
 		insert into endpoint (name, transport, component, node_name, params, label, driver_id, inputs)
 		values ($1, $1, $2, $3, $4, $5, $6, $7)
@@ -484,6 +515,9 @@ func (p *PG) patchedConnection(ctx context.Context, tx pgx.Tx, before *Endpoint,
 		}
 		if patch.Transport != nil && *patch.Transport != before.Transport {
 			return nil, nil, fmt.Errorf("%w: transport: an endpoint is named by its transport, which is fixed", ErrEndpointPatchInvalid)
+		}
+		if err := checkBareParams(before.Transport, patch.Params); err != nil {
+			return nil, nil, fmt.Errorf("%w: %v", ErrEndpointPatchInvalid, err)
 		}
 		return patch.Params, nil, nil
 	}

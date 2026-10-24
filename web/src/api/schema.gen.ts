@@ -8069,12 +8069,12 @@ export interface components {
         ReachTLSBody: {
             /**
              * Format: double
-             * @description Days from the latest probe to that not-after (tls-certificate-days-left), negative once expired: the number a threshold rule reads
+             * @description Days from the latest probe to that not-after (tls-certificate-days-left), negative once expired: the number a threshold rule reads. Absent when expires is
              */
             days_left?: number;
             /**
              * Format: date-time
-             * @description The not-after of the certificate the latest probe accepted (tls-certificate-expiry); absent until one is accepted
+             * @description The not-after of the certificate the latest probe accepted (tls-certificate-expiry); absent until one is accepted, and while a certificate gate holds (the probe then connects only, so the value would be the last accepted certificate's, not the one offered now)
              */
             expires?: string;
             /**
@@ -8082,7 +8082,7 @@ export interface components {
              * @description The latest probe's handshake time in milliseconds (tls-handshake-time); absent until the component answers one
              */
             handshake_ms?: number;
-            /** @description The public key the endpoint pins (tls-certificate), a SHA256 fingerprint; absent before first use and in verify or skip mode */
+            /** @description The public key the endpoint pins (tls-certificate), a SHA256 fingerprint; served in pin mode alone, and absent before first use */
             key?: string;
             /** @description How the endpoint's connections judge the certificate (its driver's tls-mode input, verify when none is set): verify (against the node's system roots, the server name the host), pin (the public key trusted on first use, any other refused) or skip (nothing checked, the operator's explicit choice) */
             mode: string;

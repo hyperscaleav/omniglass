@@ -7871,3 +7871,15 @@ command, push, recovery onto the same key, a changed key held beneath the gate w
 across a node restart, the operator's accepted key, verify refusing the self-signed face as
 `certificate` and skip connecting, each mode edit lifting the gate). The collection page's probe
 table gains its tls row by hand; rendering it from the registry is #1087.
+
+The review's fixes, each with a test that failed first: a driver may not emit a node-control key
+(`tls-certificate`, `ssh-host-key`, `endpoint-rejection`, `session-state`, `session-reason`), refused
+at spec write, since a poll emitting the pin key would have had the worklist deliver a driver's
+constant as the pin, bypassing the audited `:retry` (a lane open for `ssh-host-key` since #1032; the
+catalog entry now covers every lane); a probe-only endpoint's certificate refusal self-logs its
+reason once, since it has no `session-reason`; the reachability read serves the pinned key in pin
+mode alone and withholds the last accepted certificate's expiry and days left while a certificate
+gate holds (the probe then connects only, so they froze and read as current), the panel naming the
+refusal instead; a bare tls endpoint's `tls-mode` param is checked at create and edit
+(`ErrEndpointParamsInvalid`, a 422 naming the field); and the seeded `tls-certificate` description
+says what the node publishes (first use, again while the server lacks it).

@@ -387,9 +387,11 @@ func TestReachabilityCarriesTheHeldSession(t *testing.T) {
 
 // TestReachabilityCarriesTheTLSFacts drives the read the console's tls rows
 // render (#1035): a tls endpoint reads its verification mode (from its
-// params, verify when none is set), the key it pins, the latest handshake
-// time, and the certificate's expiry and days left; a gate for a changed key
-// carries the pinned and offered keys as data. Skipped under -short.
+// params, verify when none is set), the key it pins (in pin mode alone), the
+// latest handshake time, and the certificate's expiry and days left; a gate
+// for a changed key carries the pinned and offered keys as data, and while a
+// certificate gate holds the last accepted certificate's facts are withheld
+// rather than shown as current. Skipped under -short.
 func TestReachabilityCarriesTheTLSFacts(t *testing.T) {
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
@@ -433,7 +435,8 @@ func TestReachabilityCarriesTheTLSFacts(t *testing.T) {
 	if err := gw.InsertPropertySamples(ctx, []storage.PropertySampleWrite{
 		prop("tls-certificate", pinned),
 		prop("tls-certificate-expiry", expiry.Format(time.RFC3339)),
-		prop("endpoint-rejection", "responsive certificate "+fingerprint+" "+pinned+" "+offered),
+		// panel-2 verifies, yet holds a key from an earlier pin: not served.
+		{OwnerKind: "component", OwnerID: "panel-2", Key: "tls-certificate", Instance: "tls", Value: pinned, Source: "tls", TS: at},
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -489,11 +492,29 @@ func TestReachabilityCarriesTheTLSFacts(t *testing.T) {
 	if ep.TLS.Expires == nil || !ep.TLS.Expires.Equal(expiry) {
 		t.Fatalf("tls expires = %v, want %v", ep.TLS.Expires, expiry)
 	}
+	if ep.Rejection != nil {
+		t.Fatalf("rejection = %+v before any gate", ep.Rejection)
+	}
+
+	// The component is replaced: a certificate gate holds, carrying both
+	// keys, and the last accepted certificate's facts are no longer served
+	// as current (under the gate the probe connects only, so they freeze).
+	if err := gw.InsertPropertySamples(ctx, []storage.PropertySampleWrite{
+		{OwnerKind: "component", OwnerID: "panel-1", Key: "endpoint-rejection", Instance: "tls", Value: "responsive certificate " + fingerprint + " " + pinned + " " + offered, Source: "tls", TS: at.Add(time.Second)},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	ep = read("panel-1").Endpoints[0]
 	if ep.Rejection == nil || ep.Rejection.Class != "certificate" || ep.Rejection.Pinned != pinned || ep.Rejection.Offered != offered {
 		t.Fatalf("rejection = %+v, want class certificate with both keys", ep.Rejection)
 	}
-	// An endpoint with no mode set verifies, and has measured nothing yet.
+	if ep.TLS == nil || ep.TLS.Key != pinned || ep.TLS.Expires != nil || ep.TLS.DaysLeft != nil {
+		t.Fatalf("tls under a certificate gate = %+v, want the pin kept and the stale certificate facts withheld", ep.TLS)
+	}
+
+	// An endpoint with no mode set verifies; a key left from an earlier pin
+	// plays no part in verifying, so it is not served; nothing is measured.
 	if ep := read("panel-2").Endpoints[0]; ep.TLS == nil || ep.TLS.Mode != "verify" || ep.TLS.Key != "" || ep.TLS.DaysLeft != nil {
-		t.Fatalf("panel-2 tls = %+v, want verify and nothing measured", ep.TLS)
+		t.Fatalf("panel-2 tls = %+v, want verify, no key, nothing measured", ep.TLS)
 	}
 }

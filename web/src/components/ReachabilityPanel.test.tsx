@@ -329,6 +329,18 @@ describe("a tls endpoint", () => {
     expect(getByText("not verified")).toBeTruthy();
   });
 
+  // Review of #1035, finding 4: under a certificate gate the probe connects
+  // only, so the read withholds the last accepted certificate's facts; the
+  // row says the offered certificate is refused rather than "none yet".
+  it("reads a refused certificate under a certificate gate", () => {
+    const row = { ...tlsRow("pin", undefined), rejection: { rung: "responsive" as const, class: "certificate", pinned: key, offered: "SHA256:" + "Z".repeat(43) } };
+    const { getByText, getByTestId, queryByText } = mount({ component: "panel-1", endpoints: [row] });
+    fireEvent.click(getByText("Panel over TLS"));
+    expect(getByText("the offered certificate is refused")).toBeTruthy();
+    expect(queryByText("no certificate accepted yet")).toBeNull();
+    expect(getByTestId("tls-cert").dataset.tone).toBe("bad");
+  });
+
   it("says nothing of tls on a row that is not tls", () => {
     const { queryByText, getByText } = mount();
     fireEvent.click(getByText("disp-1-tcp"));

@@ -85,9 +85,13 @@ const TONE_DOT: Record<Tone, string> = {
 // rows' idiom: the handshake the transport rung ran and its time, how long the
 // certificate has, and how the endpoint verifies it, each teaching itself on
 // hover. The pinned key rides its row in full on the title.
-function TlsRows(p: { tls: ReachTLS; responsive: boolean }) {
+function TlsRows(p: { tls: ReachTLS; responsive: boolean; refused: boolean }) {
   const mode = createMemo(() => tlsMode(p.tls.mode));
   const days = () => p.tls.days_left ?? undefined;
+  // Under a certificate gate the read withholds the last accepted
+  // certificate's facts (the probe connects only), so the row names the
+  // refusal instead of reading as nothing accepted yet.
+  const tone = (): Tone => (p.refused ? "bad" : certTone(days()));
   return (
     <>
       <div class="flex items-center gap-2">
@@ -100,10 +104,15 @@ function TlsRows(p: { tls: ReachTLS; responsive: boolean }) {
         </Show>
         <InfoTip label="the tls handshake" text="The transport rung for tls: the node opens the port, then runs the TLS handshake and judges the certificate the component offers. A certificate it refuses holds this rung, and nothing above it is tried." />
       </div>
-      <div class="flex items-center gap-2" data-testid="tls-cert" data-tone={certTone(days())}>
-        <span class={`inline-block size-2 shrink-0 rounded-full ${TONE_DOT[certTone(days())]}`} />
+      <div class="flex items-center gap-2" data-testid="tls-cert" data-tone={tone()}>
+        <span class={`inline-block size-2 shrink-0 rounded-full ${TONE_DOT[tone()]}`} />
         <span class="w-10 shrink-0 uppercase tracking-wide text-base-content/45 text-[10px]">cert</span>
-        <Show when={days() !== undefined} fallback={<span class="text-base-content/50">no certificate accepted yet</span>}>
+        <Show
+          when={days() !== undefined}
+          fallback={
+            <span class="text-base-content/50">{p.refused ? "the offered certificate is refused" : "no certificate accepted yet"}</span>
+          }
+        >
           <span class="text-base-content/70">{daysLeftWord(days()!)}</span>
         </Show>
         <Show when={p.tls.expires}>
@@ -150,7 +159,7 @@ function GateBreakdown(p: { iface: ReachEndpoint }) {
         }}
       </For>
       <Show when={p.iface.tls}>
-        {(tls) => <TlsRows tls={tls()} responsive={p.iface.responsive?.value === "up"} />}
+        {(tls) => <TlsRows tls={tls()} responsive={p.iface.responsive?.value === "up"} refused={p.iface.rejection?.class === "certificate"} />}
       </Show>
       <div class="flex items-center gap-2">
         <span class={`inline-block size-2 shrink-0 rounded-full ${verdictOk() ? "bg-success" : "bg-error"}`} />

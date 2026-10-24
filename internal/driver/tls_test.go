@@ -107,3 +107,25 @@ func TestCheckInputValue(t *testing.T) {
 		t.Fatalf("a plain input refused: %v", err)
 	}
 }
+
+// Review of #1035, finding 1: a key the node publishes to steer its own
+// attempts (a pin, the gate, a held session's account of itself) is the
+// node's alone. A driver emit named after one would land as the observed
+// value through the poll path, so the worklist would deliver a driver's
+// constant as the pin, bypassing the audited :retry. Refused at write.
+func TestADriverMayNotEmitANodeControlKey(t *testing.T) {
+	for _, key := range []string{"tls-certificate", "ssh-host-key", "endpoint-rejection", "session-state", "session-reason"} {
+		cat := catalog()
+		cat.lanes[key] = "property"
+		s := tlsSpec()
+		s.Polls[0].Emits = append(s.Polls[0].Emits, driver.Emit{Name: key, Extract: driver.Extract{Regex: `^INPUT (\S+)$`}})
+		if err := s.Validate(cat); err == nil || !strings.Contains(err.Error(), key) {
+			t.Errorf("a poll emitting %s = %v, want refused naming it", key, err)
+		}
+		s = tlsSpec()
+		s.Listeners[0].Emits = append(s.Listeners[0].Emits, driver.Emit{Name: key, Extract: driver.Extract{Regex: `^EVT (\S+)$`}})
+		if err := s.Validate(cat); err == nil || !strings.Contains(err.Error(), key) {
+			t.Errorf("a listener emitting %s = %v, want refused naming it", key, err)
+		}
+	}
+}

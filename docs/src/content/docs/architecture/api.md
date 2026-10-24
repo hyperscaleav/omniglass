@@ -463,7 +463,8 @@ out-of-scope component is a non-disclosing 404 (a deliberate early exception to
   `endpoint-rejection`; the connection fingerprint it carries is never served, while a refusal of a
   changed key adds the `pinned` and `offered` keys as fields, #1035), which the console's session
   pill and ladder render (#1059). A tls endpoint's row also carries `tls`: its verification mode, the
-  key it pins, the latest handshake time, and the certificate's expiry and days left (#1035). Teardown publishes no state, which is why a session is
+  key it pins (pin mode alone), the latest handshake time, and the certificate's expiry and days
+  left, withheld while a certificate gate holds (#1035). Teardown publishes no state, which is why a session is
   served only while one is held; and like the gate, a session's state and reason are the node's
   own facts, which `POST /telemetry:push` refuses.
 - `GET /components/{name}/events` is the log-kind mirror: the component's recent **log occurrences**

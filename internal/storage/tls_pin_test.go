@@ -218,3 +218,33 @@ func TestTLSModeIsADriverInputThatEditsInPlace(t *testing.T) {
 		t.Fatalf("cleared params %s, want the default back", cleared.Params)
 	}
 }
+
+// Review of #1035, finding 5: a bare tls endpoint's params carry its mode
+// as given, so a value the node cannot read is refused where it is written,
+// naming the field, at create and at an edit; a good one is taken.
+func TestABareTLSEndpointsModeIsCheckedAtWrite(t *testing.T) {
+	f := newTLSFixture(t)
+	if _, err := f.gw.CreateEndpoint(f.ctx, "", storage.EndpointSpec{Transport: "tls", Component: &f.component, Node: &f.node,
+		Params: []byte(`{"target":"10.0.0.9:51326","tls-mode":"pinned"}`)}, f.all); !errors.Is(err, storage.ErrEndpointParamsInvalid) || !strings.Contains(err.Error(), "tls-mode") {
+		t.Fatalf("a bare tls endpoint with mode pinned = %v, want ErrEndpointParamsInvalid naming tls-mode", err)
+	}
+	ep, err := f.gw.CreateEndpoint(f.ctx, "", storage.EndpointSpec{Transport: "tls", Component: &f.component, Node: &f.node,
+		Params: []byte(`{"target":"10.0.0.9:51326","tls-mode":"skip"}`)}, f.all)
+	if err != nil {
+		t.Fatalf("a bare tls endpoint with mode skip: %v", err)
+	}
+	if _, err := f.gw.UpdateEndpoint(f.ctx, "", ep.ID, storage.EndpointPatch{Params: []byte(`{"target":"10.0.0.9:51326","tls-mode":"trust"}`)}, f.all, f.all); !errors.Is(err, storage.ErrEndpointPatchInvalid) || !strings.Contains(err.Error(), "tls-mode") {
+		t.Fatalf("an edit to mode trust = %v, want ErrEndpointPatchInvalid naming tls-mode", err)
+	}
+	if _, err := f.gw.UpdateEndpoint(f.ctx, "", ep.ID, storage.EndpointPatch{Params: []byte(`{"target":"10.0.0.9:51326","tls-mode":"verify"}`)}, f.all, f.all); err != nil {
+		t.Fatalf("an edit to verify: %v", err)
+	}
+	// Another transport's params never carry a tls mode worth checking.
+	comp := "panel-u"
+	if _, err := f.gw.CreateComponent(f.ctx, "", storage.ComponentSpec{Name: comp}, f.all, f.all, f.all, f.all); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.gw.CreateEndpoint(f.ctx, "", storage.EndpointSpec{Transport: "tcp", Component: &comp, Params: []byte(`{"target":"10.0.0.9:1","tls-mode":"anything"}`)}, f.all); err != nil {
+		t.Fatalf("a tcp endpoint's stray key refused: %v", err)
+	}
+}

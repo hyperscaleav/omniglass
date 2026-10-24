@@ -1,8 +1,10 @@
 package node
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"log/slog"
 	"strings"
 	"sync"
 	"testing"
@@ -356,5 +358,45 @@ func TestGateRendersAndParsesTheRefusedKeys(t *testing.T) {
 	g.record("ep-1", "fp-a", &collection.TerminalError{Class: driver.ClassCertificate, Reason: "the certificate failed verification"})
 	if got := g.rejectionOf("ep-1"); got != "responsive certificate fp-a" {
 		t.Fatalf("a verification refusal published %q", got)
+	}
+}
+
+// verifyRefusingProber answers every handshake with a verification refusal.
+type verifyRefusingProber struct{ fakeTLSProber }
+
+func (p *verifyRefusingProber) Probe(ctx context.Context, target string, trust collection.TLSTrust, timeout time.Duration) (collection.TLSResult, error) {
+	res, _ := p.fakeTLSProber.Probe(ctx, target, trust, timeout)
+	res.Accepted = false
+	res.Refusal = &collection.TerminalError{Class: driver.ClassCertificate, Reason: "the certificate failed verification: x509: certificate signed by unknown authority"}
+	return res, nil
+}
+
+// Review of #1035, finding 2: an endpoint with no held session (a bare tls
+// endpoint) has no session-reason, so the reason a certificate was refused
+// (an unknown authority, a name mismatch, an expiry, each its own fix) is
+// self-logged once, when the probe meets it; beneath the gate nothing
+// repeats it.
+func TestTLSProbeLogsTheRefusalsReasonOnce(t *testing.T) {
+	var buf bytes.Buffer
+	prior := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug})))
+	defer slog.SetDefault(prior)
+
+	runner := &collection.Runner{TLS: &verifyRefusingProber{}, TCP: &countingTCPDialer{}}
+	m := newSessionManager(nil, sessionHooks{})
+	task := withFingerprint(tlsPollTask("r1", "ep-1", `{"target":"10.0.0.5:51326","tls-mode":"verify"}`, ""), "fp-1", "")
+	task.Spec = json.RawMessage(`{}`)
+	for i := 0; i < 3; i++ {
+		m.reconcile([]collection.TaskSpec{task})
+		if _, err := collectProbe(t.Context(), runner, task, m); err != nil {
+			t.Fatal(err)
+		}
+	}
+	out := buf.String()
+	if n := strings.Count(out, "unknown authority"); n != 1 {
+		t.Fatalf("the refusal's reason was logged %d times, want once:\n%s", n, out)
+	}
+	if !strings.Contains(out, "level=WARN") || !strings.Contains(out, "endpoint=tls") {
+		t.Fatalf("the refusal log = %s, want a warning naming the endpoint", out)
 	}
 }

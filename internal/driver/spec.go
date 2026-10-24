@@ -20,6 +20,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/hyperscaleav/omniglass/internal/collection/probekeys"
 	"github.com/hyperscaleav/omniglass/internal/transport"
 )
 
@@ -519,6 +520,13 @@ func validateEmits(family, fn string, emits []Emit, cat Catalog) error {
 	for _, em := range emits {
 		if em.Name == "" {
 			return fmt.Errorf("driver: %s %q emits a sample with no name", family, fn)
+		}
+		if probekeys.IsNodeControl(em.Name) {
+			// A key the node publishes to steer its own attempts (a pin, the
+			// gate, a held session's account of itself) is the node's alone:
+			// emitted by a driver it would land as the observed value, and the
+			// worklist would deliver it back as the pin (#1035 review).
+			return fmt.Errorf("driver: %s %q emits %q, a key only the node's own collection writes", family, fn, em.Name)
 		}
 		if cat != nil {
 			if _, ok := cat.LaneOf(em.Name); !ok {

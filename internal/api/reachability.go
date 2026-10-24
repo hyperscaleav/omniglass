@@ -94,10 +94,10 @@ type reachRejectionBody struct {
 // expiry and days left.
 type reachTLSBody struct {
 	Mode        string     `json:"mode" doc:"How the endpoint's connections judge the certificate (its driver's tls-mode input, verify when none is set): verify (against the node's system roots, the server name the host), pin (the public key trusted on first use, any other refused) or skip (nothing checked, the operator's explicit choice)"`
-	Key         string     `json:"key,omitempty" doc:"The public key the endpoint pins (tls-certificate), a SHA256 fingerprint; absent before first use and in verify or skip mode"`
+	Key         string     `json:"key,omitempty" doc:"The public key the endpoint pins (tls-certificate), a SHA256 fingerprint; served in pin mode alone, and absent before first use"`
 	HandshakeMS *float64   `json:"handshake_ms,omitempty" doc:"The latest probe's handshake time in milliseconds (tls-handshake-time); absent until the component answers one"`
-	Expires     *time.Time `json:"expires,omitempty" doc:"The not-after of the certificate the latest probe accepted (tls-certificate-expiry); absent until one is accepted"`
-	DaysLeft    *float64   `json:"days_left,omitempty" doc:"Days from the latest probe to that not-after (tls-certificate-days-left), negative once expired: the number a threshold rule reads"`
+	Expires     *time.Time `json:"expires,omitempty" doc:"The not-after of the certificate the latest probe accepted (tls-certificate-expiry); absent until one is accepted, and while a certificate gate holds (the probe then connects only, so the value would be the last accepted certificate's, not the one offered now)"`
+	DaysLeft    *float64   `json:"days_left,omitempty" doc:"Days from the latest probe to that not-after (tls-certificate-days-left), negative once expired: the number a threshold rule reads. Absent when expires is"`
 }
 
 type reachEndpointBody struct {
@@ -237,7 +237,7 @@ func composeEndpoint(ctx context.Context, gw storage.Gateway, comp string, it st
 		row.Rejection = parseRejection(gate.Value)
 	}
 	if it.Transport == "tls" {
-		if row.TLS, err = composeTLS(ctx, gw, comp, it); err != nil {
+		if row.TLS, err = composeTLS(ctx, gw, comp, it, row.Rejection); err != nil {
 			return row, err
 		}
 	}
@@ -280,9 +280,12 @@ const (
 )
 
 // composeTLS reads a tls endpoint's facts: the mode off its params (verify
-// when none is set), the pinned key, and the latest handshake, expiry and
-// days left.
-func composeTLS(ctx context.Context, gw storage.Gateway, comp string, it storage.ComponentEndpoint) (*reachTLSBody, error) {
+// when none is set), the pinned key (in pin mode alone: a key left from an
+// earlier pin plays no part in verifying or skipping), and the latest
+// handshake, expiry and days left. While a certificate gate holds, the probe
+// connects only, so the last accepted certificate's facts freeze: they are
+// withheld rather than served as the certificate the component offers now.
+func composeTLS(ctx context.Context, gw storage.Gateway, comp string, it storage.ComponentEndpoint, gate *reachRejectionBody) (*reachTLSBody, error) {
 	var p struct {
 		Mode string `json:"tls-mode"`
 	}
@@ -291,23 +294,29 @@ func composeTLS(ctx context.Context, gw storage.Gateway, comp string, it storage
 	if out.Mode == "" {
 		out.Mode = "verify"
 	}
-	key, err := gw.LatestProperty(ctx, comp, tlsKeyKey, it.Name)
-	if err != nil {
-		return nil, err
-	}
-	if key != nil {
-		out.Key = key.Value
-	}
-	expiry, err := gw.LatestProperty(ctx, comp, tlsExpiryKey, it.Name)
-	if err != nil {
-		return nil, err
-	}
-	if expiry != nil {
-		if at, err := time.Parse(time.RFC3339, expiry.Value); err == nil {
-			out.Expires = &at
+	if out.Mode == "pin" {
+		key, err := gw.LatestProperty(ctx, comp, tlsKeyKey, it.Name)
+		if err != nil {
+			return nil, err
+		}
+		if key != nil {
+			out.Key = key.Value
 		}
 	}
-	for key, into := range map[string]**float64{tlsHandshakeKey: &out.HandshakeMS, tlsDaysLeftKey: &out.DaysLeft} {
+	metrics := map[string]**float64{tlsHandshakeKey: &out.HandshakeMS}
+	if gate == nil || gate.Class != "certificate" {
+		expiry, err := gw.LatestProperty(ctx, comp, tlsExpiryKey, it.Name)
+		if err != nil {
+			return nil, err
+		}
+		if expiry != nil {
+			if at, err := time.Parse(time.RFC3339, expiry.Value); err == nil {
+				out.Expires = &at
+			}
+		}
+		metrics[tlsDaysLeftKey] = &out.DaysLeft
+	}
+	for key, into := range metrics {
 		m, err := gw.LatestMetricInstance(ctx, comp, key, it.Name)
 		if err != nil {
 			return nil, err

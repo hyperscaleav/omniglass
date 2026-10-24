@@ -36,8 +36,8 @@ const (
 	// observation per answered probe.
 	TLSHandshakeTime = "tls-handshake-time"
 	// TLSCertificate is the public key a tls endpoint pins (#1035): the key
-	// a pin-mode connection trusted on first use and every matching key
-	// after, or the operator's declared key.
+	// a pin-mode connection trusted on first use (published again while the
+	// worklist does not deliver it back), or the operator's declared key.
 	TLSCertificate = "tls-certificate"
 	// TLSCertificateExpiry is the not-after of the certificate a tls probe
 	// accepted (RFC 3339), transition-only.
