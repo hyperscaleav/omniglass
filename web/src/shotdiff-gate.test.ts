@@ -49,4 +49,48 @@ describe("shot freshness gate", () => {
     const r = compareShot(base, png(W + 2, H), { maxRatio: 0 });
     expect(r.status).toBe("size");
   });
+
+  // The gate's zero is a zero COUNT of pixels pixelmatch judges different at
+  // threshold 0.1 (#774), and a mask edge moving over the console's dark surface
+  // is below that threshold: #1081's since-line masks moved a column of pixels
+  // (64 and 160 changed) and the gate scored both 0.000%. Proving a mask holds
+  // needs the exact comparison, opted into with DOCS_SHOTS_EXACT=1.
+  describe("the exact comparison", () => {
+    const SURFACE = [12, 19, 32], MASK = [26, 35, 54];
+    // A dark card with a mask panel whose right edge sits at `edge`.
+    const masked = (edge: number) =>
+      png(W, H, (d) => {
+        for (let y = 0; y < H; y++)
+          for (let x = 0; x < W; x++) {
+            const [r, g, b] = x >= 40 && x < edge && y >= 80 && y < 100 ? MASK : SURFACE;
+            const i = (y * W + x) * 4;
+            d[i] = r; d[i + 1] = g; d[i + 2] = b;
+          }
+      });
+
+    it("documents the blindness: a mask edge moved one pixel scores zero by default", () => {
+      const r = compareShot(masked(200), masked(201), { maxRatio: 0 });
+      if (r.status === "size") throw new Error("unexpected size mismatch");
+      expect(r.status).toBe("ok");
+      expect(r.diffPixels).toBe(0);
+    });
+
+    it("fails the same move, counting every pixel that differs at all", () => {
+      const r = compareShot(masked(200), masked(201), { exact: true });
+      if (r.status === "size") throw new Error("unexpected size mismatch");
+      expect(r.status).toBe("changed");
+      expect(r.diffPixels).toBe(20);
+    });
+
+    it("passes an identical capture, and ignores the ratio it was not asked for", () => {
+      const r = compareShot(masked(200), masked(200), { exact: true, maxRatio: 0.5 });
+      if (r.status === "size") throw new Error("unexpected size mismatch");
+      expect(r.status).toBe("ok");
+      expect(r.diffPixels).toBe(0);
+    });
+
+    it("still reports a size change as its own failure", () => {
+      expect(compareShot(base, png(W + 2, H), { exact: true }).status).toBe("size");
+    });
+  });
 });
