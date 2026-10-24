@@ -544,8 +544,8 @@ func (p *PG) NodeWorklist(ctx context.Context, name string) (Worklist, error) {
 	}
 	// An ssh task's host key pin (#1032), and a tls task's public key pin
 	// (#1035): the operator's declared key wins (a :retry accepting a
-	// replaced component's key, or a cleared one falling back), else the key
-	// the node trusted on first use.
+	// replaced component's key; a declared row any other path left is never
+	// the pin, ADR-0163), else the key the node trusted on first use.
 	// The declared pin alone is a fingerprint input: it is the operator's
 	// act. A key the node trusted on first use is a learned fact, and moving
 	// the fingerprint on it would recycle a healthy session and lift a gate

@@ -489,9 +489,10 @@ omniglass event-type delete cable-unplugged                        # 409 on an o
 ```
 
 Every metric, property and event type reads back its `writer_class` (`node-probe`, `platform`,
-`calc`, `collected`): who may write the key ([who writes a key](/architecture/properties/#who-writes-a-key-the-writer-class)).
-`omniglass event-type get collection-failed` reads `node-probe`, the node's own account; a create under
-a reserved name is a 422 on every catalog.
+`command-lifecycle`, `calc`, `collected`): who may write the key ([who writes a key](/architecture/properties/#who-writes-a-key-the-writer-class)).
+`omniglass event-type get collection-failed` reads `node-probe`, the node's own account, and
+`command-issued` reads `command-lifecycle`, a command's alone; a create under a reserved name is a 422
+on every catalog.
 
 ## Command types
 
