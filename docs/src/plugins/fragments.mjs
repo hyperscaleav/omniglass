@@ -232,6 +232,32 @@ export const DIRECTIVES = {
 };
 
 const directiveLine = /^::([a-z-]+)[ \t]*$/;
+const codeFence = /^ {0,3}(`{3,}|~{3,})/;
+
+/**
+ * Each line with the directive it carries, or undefined; a line inside a fenced
+ * code block carries none, so a page can show a directive as an example.
+ * @param {string} text
+ * @returns {{ line: string, directive: string | undefined }[]}
+ */
+function scanLines(text) {
+  let fence = '';
+  return text.split('\n').map((line) => {
+    const bare = line.replace(/\r$/, '');
+    const f = codeFence.exec(bare);
+    if (fence) {
+      // A closing fence is the opener's character, at least as long, and nothing after.
+      if (f && f[1][0] === fence[0] && f[1].length >= fence.length && bare.trim() === f[1]) fence = '';
+      return { line, directive: undefined };
+    }
+    if (f) {
+      fence = f[1];
+      return { line, directive: undefined };
+    }
+    const name = directiveLine.exec(bare)?.[1];
+    return { line, directive: name !== undefined && Object.hasOwn(DIRECTIVES, name) ? name : undefined };
+  });
+}
 
 /**
  * The fragment directives a page uses, in page order.
@@ -239,10 +265,9 @@ const directiveLine = /^::([a-z-]+)[ \t]*$/;
  * @returns {string[]}
  */
 export function directivesIn(text) {
-  return text
-    .split('\n')
-    .map((line) => directiveLine.exec(line.replace(/\r$/, ''))?.[1])
-    .filter((name) => name !== undefined && Object.hasOwn(DIRECTIVES, name));
+  return scanLines(text)
+    .map((l) => l.directive)
+    .filter((d) => d !== undefined);
 }
 
 /**
@@ -252,13 +277,12 @@ export function directivesIn(text) {
  * @returns {string}
  */
 export function expandFragments(text, load) {
-  if (directivesIn(text).length === 0) return text;
-  return text
-    .split('\n')
-    .map((line) => {
-      const name = directiveLine.exec(line.replace(/\r$/, ''))?.[1];
-      if (name === undefined || !Object.hasOwn(DIRECTIVES, name)) return line;
-      const { dir, render } = DIRECTIVES[name];
+  const lines = scanLines(text);
+  if (!lines.some((l) => l.directive)) return text;
+  return lines
+    .map(({ line, directive }) => {
+      if (!directive) return line;
+      const { dir, render } = DIRECTIVES[directive];
       return render(load(dir));
     })
     .join('\n');

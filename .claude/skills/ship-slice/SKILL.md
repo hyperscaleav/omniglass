@@ -28,10 +28,14 @@ Each is a gate; a red one blocks the ship.
    diff; scan the commit messages and the PR body).
 4. **Docs with everything, status, and decisions.** The teaching docs ship in this PR, and the
    architecture-of-record stays consistent. Three status surfaces move with the code, never
-   silently: the `build-log.md` entry is added; **each architecture page the slice
+   silently: the build-log entry is added as **its own file**,
+   `docs/src/content/build-log/<YYYY-MM-DD>-<slug>.md` (frontmatter `title`, `date`, `refs`;
+   the body is the entry's prose, the title becomes its heading); **each architecture page the slice
    advances has its status badge flipped to its new floor** (`Design` to `Partial` to `Built`); and
    if the build diverges from a page's present-tense design, the page carries an inline note **and**
-   a [decision-log](/architecture/decisions/) entry (an ADR) lands in the same PR. A page that
+   a [decision-log](/architecture/decisions/) entry (an ADR) lands in the same PR, as its own file
+   via `/record-decision`. Never append to `build-log.md` or `decisions.md`: they hold no entries,
+   and one file per entry is what keeps two PRs from conflicting (#1095). A page that
    gained a built capability but kept a `Design` badge is a red gate.
    Beyond status, **every operator surface the diff moves takes its guide in the same PR**. Grep
    the diff and walk the surfaces, mapping each to its home; a surface that moved while its guide
@@ -45,7 +49,7 @@ Each is a gate; a red one blocks the ship.
      live screenshots (item 9).
 
    Mechanically, run the docs lint suite; it must be green:
-   `go test ./internal/docslint/ ./internal/cli/ -run 'TestVocabulary|TestDecisionsFormat|TestDocsOnlyNameRealCommands' -count=1`.
+   `go test ./internal/docslint/ ./internal/cli/ -run 'TestVocabulary|TestDecisionsFormat|TestBuildLogFormat|TestLogsStayFragments|TestDocsOnlyNameRealCommands' -count=1`.
    Then sweep the architecture pages the slice touches for `Still Design`, `later slice`,
    `not yet`, `soon`, and `deferred` fences and confirm none of them describes what the slice
    just built; a fence still hedging a shipped capability is a red gate. And if the slice
@@ -180,7 +184,7 @@ Dev seed:  <new-entity example rows added to internal/devseed | n/a>
 
 Docs:      <what shipped; arch-of-record consistent | divergence note; lint: green;
             neighbor-check hits and how resolved | none>
-Status:    <pages advanced (page: Design->Partial); build-log entry; ADR-#### if diverged;
+Status:    <pages advanced (page: Design->Partial); build-log entry file; ADR-#### file if diverged;
             fences swept: <pages | n/a>>
 Review:    <reviewer findings + how addressed; security: n/a | note>
 

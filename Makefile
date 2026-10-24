@@ -64,7 +64,7 @@ gen-web:
 # decisions lint names both files; on the branch that lands second, before
 # merging main, this renames docs/src/content/decisions/adr-FROM-*.md and
 # rewrites every ADR-FROM reference and #adr-FROM- anchor (docs, code comments,
-# skills). Usage: make adr-renumber FROM=0160 TO=0161
+# skills). Usage: make adr-renumber FROM=NNNN TO=MMMM
 adr-renumber:
 	@test -n "$(FROM)" && test -n "$(TO)" || { echo "usage: make adr-renumber FROM=NNNN TO=MMMM"; exit 2; }
 	go run ./cmd/adrrenumber -from $(FROM) -to $(TO)

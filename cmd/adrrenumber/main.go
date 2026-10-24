@@ -3,7 +3,7 @@
 // which the decisions lint reports naming both files. Run it from the
 // repository root on the branch that lands second, before merging main:
 //
-//	make adr-renumber FROM=0160 TO=0161
+//	make adr-renumber FROM=NNNN TO=MMMM
 package main
 
 import (
@@ -16,8 +16,8 @@ import (
 )
 
 func main() {
-	from := flag.String("from", "", "the ADR number to move, like 0160")
-	to := flag.String("to", "", "the free ADR number to move it to, like 0161")
+	from := flag.String("from", "", "the ADR number to move (four digits)")
+	to := flag.String("to", "", "the free ADR number to move it to (four digits)")
 	flag.Parse()
 	f, errF := strconv.Atoi(*from)
 	t, errT := strconv.Atoi(*to)

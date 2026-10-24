@@ -74,8 +74,9 @@ func RenumberADR(root string, from, to int) ([]string, error) {
 		return nil, err
 	}
 
-	// ADR-0160, adr-0160-<slug> (an anchor or a file name): the prefix keeps its
-	// case, and the word boundaries keep ADR-01601 and ADR-0016 out.
+	// ADR-NNNN and adr-NNNN-<slug> (an anchor or a file name): the prefix keeps
+	// its case, and the word boundaries keep a five-digit run or a shorter
+	// number out.
 	ref := regexp.MustCompile(fmt.Sprintf(`(?i)\b(adr-)%04d\b`, from))
 	repl := fmt.Sprintf("${1}%04d", to)
 	var changed []string

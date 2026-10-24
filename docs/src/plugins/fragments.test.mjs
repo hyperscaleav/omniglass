@@ -139,11 +139,11 @@ describe('the decision log', () => {
 
   it('refuses two files that take the same number, naming both', () => {
     assert.throws(
-      () => renderDecisionLog([adr('0160', 'Mine', { slug: 'mine' }), adr('0160', 'Theirs', { slug: 'theirs' })]),
+      () => renderDecisionLog([adr('0002', 'Mine', { slug: 'mine' }), adr('0002', 'Theirs', { slug: 'theirs' })]),
       (err) => {
-        assert.match(err.message, /ADR-0160/);
-        assert.match(err.message, /adr-0160-mine\.md/);
-        assert.match(err.message, /adr-0160-theirs\.md/);
+        assert.match(err.message, /ADR-0002/);
+        assert.match(err.message, /adr-0002-mine\.md/);
+        assert.match(err.message, /adr-0002-theirs\.md/);
         assert.match(err.message, /make adr-renumber/);
         return true;
       },
@@ -181,6 +181,12 @@ describe('expandFragments', () => {
 
   it('expands the build log', () => {
     assert.equal(expandFragments('Intro.\n\n::build-log\n', load), 'Intro.\n\n### X (#1)\n\nThe entry.\n');
+  });
+
+  it('leaves a directive shown inside a fenced code block alone', () => {
+    const page = 'A host page looks like:\n\n```markdown\n::build-log\n```\n\n~~~\n::decision-log\n~~~\n';
+    assert.deepEqual(directivesIn(page), []);
+    assert.equal(expandFragments(page, load), page);
   });
 
   it('leaves a page with no directive untouched, and an inline mention alone', () => {

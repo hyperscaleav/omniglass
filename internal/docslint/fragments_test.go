@@ -206,8 +206,8 @@ func TestScanLogHostsRefusesAnEntryInThePage(t *testing.T) {
 	}
 	wantFinding(t, host(t, cleanLog+"\n### A new slice (#1)\n\nBody.\n", cleanDecisions), "build-log.md", "an entry written into the page")
 	wantFinding(t, host(t, cleanLog+"\n- **A new slice.** Body.\n", cleanDecisions), "build-log.md", "an entry written into the page")
-	wantFinding(t, host(t, cleanLog, cleanDecisions+"\n### ADR-0160: Mine\n\nBody.\n"), "decisions.md", "an entry written into the page")
-	wantFinding(t, host(t, cleanLog, strings.Replace(cleanDecisions, "::decision-index\n", "::decision-index\n| [ADR-0160](#adr-0160-mine) | 2026-10-24 | Accepted | Mine |\n", 1)), "decisions.md", "an entry written into the page")
+	wantFinding(t, host(t, cleanLog, cleanDecisions+"\n### ADR-0003: Mine\n\nBody.\n"), "decisions.md", "an entry written into the page")
+	wantFinding(t, host(t, cleanLog, strings.Replace(cleanDecisions, "::decision-index\n", "::decision-index\n| [ADR-0003](#adr-0003-mine) | 2026-10-24 | Accepted | Mine |\n", 1)), "decisions.md", "an entry written into the page")
 	wantFinding(t, host(t, "---\ntitle: Build log\n---\n\nIntro.\n", cleanDecisions), "build-log.md", "::build-log")
 
 	root := t.TempDir()
@@ -312,4 +312,37 @@ func TestRenumberADR(t *testing.T) {
 			t.Errorf("err = %v", err)
 		}
 	})
+}
+
+// TestWalkDocsReadsLogEntries pins the corpus lints' coverage of the history:
+// walkDocs yields the log entry files beside the docs root, and they keep the
+// historical-record exemption the log pages carried.
+func TestWalkDocsReadsLogEntries(t *testing.T) {
+	root := t.TempDir()
+	docs := filepath.Join(root, "content", "docs")
+	writeFile(t, filepath.Join(docs, "architecture", "build-log.md"), "---\ntitle: Build log\n---\n\n::build-log\n")
+	writeFile(t, filepath.Join(root, "content", "build-log", "2026-10-24-x.md"), "---\ntitle: X\ndate: 2026-10-24\nrefs: []\n---\n\nBody.\n")
+	writeFile(t, filepath.Join(root, "content", "decisions", "adr-0001-x.md"), "---\ntitle: X\n---\n\nBody.\n")
+	old := DocsRoot
+	DocsRoot = docs
+	defer func() { DocsRoot = old }()
+	var got []string
+	if err := walkDocs(func(rel, _ string) error {
+		got = append(got, filepath.ToSlash(rel))
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"architecture/build-log.md", "../build-log/2026-10-24-x.md", "../decisions/adr-0001-x.md"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("walkDocs = %v, want %v", got, want)
+	}
+	for _, rel := range want[1:] {
+		if !vocabularyAllowed(filepath.FromSlash(rel)) {
+			t.Errorf("%s lost the historical-record exemption", rel)
+		}
+	}
+	if vocabularyAllowed(filepath.Join("architecture", "ui.md")) {
+		t.Error("a current page is exempt")
+	}
 }
