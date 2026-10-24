@@ -7256,7 +7256,7 @@ interface create form, since that name is the platform's to mint.
      `tls-certificate-expiry` (the not-after, a property) and `tls-certificate-days-left` (a
      metric, one observation per probe). A refused certificate lands no certificate fact.
   6. **The simulated face.** The panel serves NVP over TLS (`nvp-tls`) with a key derived from
-     the device's id, so it is the same on every run and a pinned endpoint survives a simulator
+     the simulated component's id, so it is the same on every run and a pinned endpoint survives a simulator
      restart; the profile sets the certificate's validity window.
 - **Context:** #1035 and the `/scope-protocol` skill placed tls as an option on tcp. An endpoint's
   name is its transport and unique per component, so an option would have let a component hold

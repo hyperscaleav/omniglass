@@ -7859,7 +7859,7 @@ keys the push lane refuses. The probe lands the tcp pair, `endpoint-responsive`,
 and `tls-certificate-days-left`; the reachability read serves a tls row's mode, key, handshake,
 expiry and days left, and the console's breakdown teaches them (amber inside a month) with
 **unverified** on a skipped row. The simulated panel serves NVP over TLS (`nvp-tls`, 51326) with a
-key derived from the device id, so a pin survives a simulator restart, its validity window the
+key derived from the simulated component's id, so a pin survives a simulator restart, its validity window the
 profile's `tls_validity_days`; the dev fleet attaches `newtron-nvp-tls` to the huddle panel.
 
 Proven over real sockets (`internal/collection/tls_test.go`: pin, verify with an unknown authority,

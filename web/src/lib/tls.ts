@@ -63,3 +63,11 @@ export function shortKey(key: string): string {
   const m = /^SHA256:(.{12}).+$/.exec(key);
   return m ? `SHA256:${m[1]}…` : key;
 }
+
+// expiryDay renders a certificate's not-after as its day, with the year: a
+// certificate routinely outlives the calendar year, so a date without one
+// misleads.
+export function expiryDay(iso: string): string {
+  const d = new Date(iso);
+  return isNaN(d.getTime()) ? iso : d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric", timeZone: "UTC" });
+}

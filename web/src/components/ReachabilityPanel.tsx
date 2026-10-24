@@ -7,8 +7,8 @@ import SessionPill from "./SessionPill";
 import ReachLadder from "./ReachLadder";
 import SessionNotice from "./SessionNotice";
 import InfoTip from "./InfoTip";
-import { fmtTime, rel } from "../lib/format";
-import { certTone, daysLeftWord, shortKey, tlsMode, type ReachTLS, type Tone } from "../lib/tls";
+import { rel } from "../lib/format";
+import { certTone, daysLeftWord, expiryDay, shortKey, tlsMode, type ReachTLS, type Tone } from "../lib/tls";
 import { CLOCK_TICK_MS, createClock } from "../lib/clock";
 import { entityLabel } from "../lib/entities";
 import { ENDPOINTS_KEY, listEndpoints } from "../lib/endpoints";
@@ -107,7 +107,7 @@ function TlsRows(p: { tls: ReachTLS; responsive: boolean }) {
           <span class="text-base-content/70">{daysLeftWord(days()!)}</span>
         </Show>
         <Show when={p.tls.expires}>
-          <span class="text-base-content/40">· expires {fmtTime(p.tls.expires!)}</span>
+          <span class="text-base-content/40">· expires {expiryDay(p.tls.expires!)}</span>
         </Show>
         <InfoTip label="the certificate's days left" text="Days from the latest probe to the certificate's not-after (tls-certificate-days-left), the number a threshold rule reads; the not-after itself is tls-certificate-expiry. Amber inside a month, red once expired." />
       </div>

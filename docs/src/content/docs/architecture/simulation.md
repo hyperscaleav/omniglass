@@ -124,8 +124,8 @@ session events, and the request detail SNMP publishes.
 A raw TCP line face may declare `tls: true` (#1035): it serves the same line protocol behind a real
 TLS handshake, and reports itself as a tcp face with `TLS` set. The simulated panel's `nvp-tls` face
 on 51326 is the proving face for the `tls` transport. Its certificate is self-signed for the
-device's hostname and address, and its key is **derived from the device's id**, so it is the same on
-every run: an endpoint that pinned it stays up across a simulator restart, where a key minted per run
+simulated component's hostname and address, and its key is **derived from its id**, so it is the same
+on every run: an endpoint that pinned it stays up across a simulator restart, where a key minted per run
 would reject every pinned endpoint each time the simulator came back. (The simulator protects
 nothing, and a key anyone can derive from a public id says so.) The certificate's validity window is
 the profile's `tls_validity_days` (a year when unset), counted from the face's first start, so a

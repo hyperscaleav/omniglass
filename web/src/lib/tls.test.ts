@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { daysLeftWord, certTone, tlsMode, shortKey } from "./tls";
+import { daysLeftWord, certTone, tlsMode, shortKey, expiryDay } from "./tls";
 
 // The tls rows of the reachability breakdown (#1035): what the verification
 // mode means, how long the certificate has, and the key the endpoint pins,
@@ -52,5 +52,17 @@ describe("shortKey", () => {
   it("keeps the SHA256 prefix and the first characters of the digest", () => {
     expect(shortKey("SHA256:" + "A".repeat(43))).toBe("SHA256:AAAAAAAAAAAA…");
     expect(shortKey("short")).toBe("short");
+  });
+});
+
+describe("expiryDay", () => {
+  it("names the day with its year, since a certificate outlives the calendar year", () => {
+    const day = expiryDay("2027-11-25T02:33:43Z");
+    expect(day).toMatch(/2027/);
+    expect(day).toMatch(/Nov/);
+    expect(day).not.toMatch(/02:33/);
+  });
+  it("keeps an unparseable value as it came", () => {
+    expect(expiryDay("not a date")).toBe("not a date");
   });
 });

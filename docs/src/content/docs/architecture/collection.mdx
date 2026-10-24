@@ -378,7 +378,9 @@ runs the TCP connect and then the handshake under the endpoint's **verification 
   refusal carrying its reason, never a timeout. A driver that declares no mode verifies.
 - **pin** trusts the first public key the component offers and refuses any other, as the ssh host
   key is pinned. The pin is the key (its SubjectPublicKeyInfo, in the same `SHA256:` form as an ssh
-  fingerprint), not the certificate, so a renewal that keeps the key is no change. The node publishes
+  fingerprint), not the certificate, so a renewal that keeps the key is no change, and a certificate
+  past its not-after still connects under its pinned key (its days left read negative, which a rule
+  alarms on). The node publishes
   the key it trusted as `tls-certificate`, the server delivers it back as the pin on every worklist,
   and the node keeps one pin per endpoint, shared by its session and its probe and carried across a
   session's recycle. A changed key reads `rejected`, class `certificate`, naming both keys, and an
