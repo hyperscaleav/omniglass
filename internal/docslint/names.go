@@ -57,7 +57,8 @@ var (
 )
 
 // exampleNameAllowed lists files exempt from this lint: historical records where
-// an illegal name was the vocabulary at the time it was written.
+// an illegal name was the vocabulary at the time it was written. The log pages'
+// entries are their own files now (#1095), exempt the same way.
 //
 // The generated CLI reference is deliberately NOT here, unlike in
 // vocabularyAllowed. An illegal name in it is a real defect with a real fix (the
@@ -138,7 +139,7 @@ func eachFenceLine(content string, fn func(n int, line string)) {
 func ScanExampleNames() ([]Finding, error) {
 	var findings []Finding
 	err := walkDocs(func(rel, content string) error {
-		if exampleNameAllowed[rel] {
+		if exampleNameAllowed[rel] || isFragmentFile(rel) {
 			return nil
 		}
 		eachFenceLine(content, func(n int, line string) {
