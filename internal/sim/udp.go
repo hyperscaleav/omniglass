@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"math/rand"
 	"net"
 	"strings"
 	"sync"
@@ -100,8 +99,8 @@ func (d *Device) UDPSessions() []*SessionRegistry {
 }
 
 // SetDatagramLoss sets the share of datagrams every datagram face on the
-// device drops, in percent, each way, and restarts the seeded sequence, so
-// the same calls on a fresh face drop the same datagrams.
+// device drops, in percent, each way, and restarts the seeded counts, so the
+// same datagrams on a fresh face meet the same fates.
 func (d *Device) SetDatagramLoss(pct int) {
 	d.udpMu.Lock()
 	faces := append([]*udpFace(nil), d.udpFaces...)
@@ -116,15 +115,19 @@ func (d *Device) SetDatagramLoss(pct int) {
 // that went away (a node restarted onto another port) stops being pushed to.
 const udpIdle = 5 * time.Minute
 
-// datagramLoss drops a seeded share of datagrams.
+// datagramLoss drops a seeded share of datagrams. A datagram's fate is fixed
+// by the seed, its direction, its bytes and how many times those bytes have
+// crossed the face that way: the third "SET INPUT hdmi2" in meets the same
+// fate on every run, however other traffic interleaves with it, so a test
+// on a lossy face is repeatable.
 type datagramLoss struct {
 	mu   sync.Mutex
-	seed int64
+	seed string
 	pct  int
-	rng  *rand.Rand
+	seen map[string]uint64
 }
 
-func newDatagramLoss(seed int64, pct int) *datagramLoss {
+func newDatagramLoss(seed string, pct int) *datagramLoss {
 	l := &datagramLoss{seed: seed}
 	l.set(pct)
 	return l
@@ -134,23 +137,28 @@ func (l *datagramLoss) set(pct int) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	l.pct = pct
-	l.rng = rand.New(rand.NewSource(l.seed)) //nolint:gosec // a repeatable simulation, not a secret
+	l.seen = map[string]uint64{}
 }
 
-// drop draws whether the next datagram is lost.
-func (l *datagramLoss) drop() bool {
+// drop decides whether a datagram crossing the face in direction dir is
+// lost.
+func (l *datagramLoss) drop(dir string, payload []byte) bool {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	if l.pct <= 0 {
 		return false
 	}
-	return l.rng.Intn(100) < l.pct
+	key := dir + "\x00" + string(payload)
+	l.seen[key]++
+	var n [8]byte
+	binary.BigEndian.PutUint64(n[:], l.seen[key])
+	sum := sha256.Sum256(append([]byte(l.seed+"\x00"+key+"\x00"), n[:]...))
+	return binary.BigEndian.Uint64(sum[:8])%100 < uint64(l.pct)
 }
 
 // lossSeed derives a face's loss seed from the device and the face.
-func lossSeed(deviceID, face string) int64 {
-	sum := sha256.Sum256([]byte("omniglass-sim-udp-loss\x00" + deviceID + "\x00" + face))
-	return int64(binary.BigEndian.Uint64(sum[:8]))
+func lossSeed(deviceID, face string) string {
+	return "omniglass-sim-udp-loss\x00" + deviceID + "\x00" + face
 }
 
 // udpFace serves a persistent udp interface: the line protocol as
@@ -220,7 +228,7 @@ func (f *udpFace) serve() {
 			f.stop()
 			return
 		}
-		if f.loss.drop() {
+		if f.loss.drop("in", buf[:n]) {
 			continue
 		}
 		src := f.source(from)
@@ -328,7 +336,7 @@ type datagramWriter struct {
 }
 
 func (w datagramWriter) Write(p []byte) (int, error) {
-	if w.f.loss.drop() {
+	if w.f.loss.drop("out", p) {
 		return len(p), nil
 	}
 	if _, err := w.f.conn.WriteToUDP(p, w.to); err != nil {
