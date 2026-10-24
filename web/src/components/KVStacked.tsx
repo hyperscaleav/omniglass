@@ -1,4 +1,5 @@
 import { Show, type JSX } from "solid-js";
+import InfoTip from "./InfoTip";
 import ProvenanceDot from "./ProvenanceDot";
 import { IDENTITY_LABELS, type IdentityBinding } from "../lib/entities";
 
@@ -23,6 +24,10 @@ type KVStackedBase = {
   // A string rather than an element, for the reason FieldRow's copy of this prop
   // records.
   provenance?: string;
+  // What the fact is, taught through an (i) beside the label (InfoTip), the
+  // tooltips-not-prose rule FieldRow's `info` follows for a field. A string,
+  // for the reason `provenance` records.
+  hint?: string;
 };
 
 // A fact either names one of the identity facts, taking its label from
@@ -40,6 +45,9 @@ export default function KVStacked(props: KVStackedProps): JSX.Element {
     <div>
       <div class="eyebrow mb-1.5 flex items-center gap-1.5">
         {label()}
+        <Show when={props.hint}>
+          {(hint) => <InfoTip text={hint()} label={label()} />}
+        </Show>
         <Show when={props.provenance}>
           {(from) => <ProvenanceDot label={label()} from={from()} />}
         </Show>

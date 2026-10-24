@@ -898,3 +898,83 @@ func markSystemCalcRules(ctx context.Context, tx pgx.Tx, systemIDs ...string) er
 	}
 	return nil
 }
+
+// markComponentCalcRules is markSystemCalcRules for a component whose
+// product changed, and with it the type its rules select by (#1015): every
+// enabled component rule selecting it is marked there when it holds a value
+// of one of the rule's inputs (the condition a written rule marks by, so a
+// rule it came into computes over the values already stored), and a rule
+// that no longer selects it drops its mark and state there. Selection is the
+// event rules' component matcher, the one the serve rechecks by.
+func (p *PG) markComponentCalcRules(ctx context.Context, tx pgx.Tx, componentID string) error {
+	rows, err := tx.Query(ctx, `select r.id::text, r.selector, exists (select 1 from calc_rule_input i where i.rule_id = r.id and (
+			exists (select 1 from metric m where m.component_id = $1::uuid and m.metric_type_id = i.metric_type_id)
+			or exists (select 1 from property x where x.component_id = $1::uuid and x.property_type_id = i.property_type_id)))
+		from calc_rule r where r.enabled and r.owner_kind = 'component' order by r.id`, componentID)
+	if err != nil {
+		return fmt.Errorf("storage: find component calc rules: %w", err)
+	}
+	type candidate struct {
+		id   string
+		sel  CalcRuleSelector
+		held bool
+	}
+	var found []candidate
+	for rows.Next() {
+		var c candidate
+		var sel []byte
+		if err := rows.Scan(&c.id, &sel, &c.held); err != nil {
+			rows.Close()
+			return fmt.Errorf("storage: find component calc rules: %w", err)
+		}
+		if err := json.Unmarshal(sel, &c.sel); err != nil {
+			rows.Close()
+			return fmt.Errorf("storage: calc rule %s selector: %w", c.id, err)
+		}
+		found = append(found, c)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	m := newRuleMatcher(p, nil)
+	o, err := m.ownerFacts(ctx, tx, componentID)
+	if err != nil {
+		return err
+	}
+	marked, dropped := []string{}, []string{}
+	for _, c := range found {
+		ok, err := m.selects(ctx, tx, EventRule{ID: c.id, Selector: c.sel.components()}, o)
+		if err != nil {
+			return err
+		}
+		switch {
+		case !ok:
+			dropped = append(dropped, c.id)
+		case c.held:
+			marked = append(marked, c.id)
+		}
+	}
+	if len(marked) > 0 {
+		if _, err := tx.Exec(ctx, `insert into calc_pending (rule_id, owner_kind, component_id)
+			select r, 'component', $2::uuid from unnest($1::uuid[]) as r order by r
+			on conflict on constraint calc_pending_key do update set marked_at = calc_pending.marked_at`, marked, componentID); err != nil {
+			return fmt.Errorf("storage: mark component calc rules: %w", err)
+		}
+	}
+	if len(dropped) == 0 {
+		return nil
+	}
+	// Marks first, skipping one a serve holds (it rechecks selection and
+	// drops its own work), then the state rows: the system path's order.
+	if _, err := tx.Exec(ctx, `delete from calc_pending d where (d.rule_id, d.component_id) in (
+			select p.rule_id, p.component_id from calc_pending p where p.component_id = $2::uuid and p.rule_id = any($1::uuid[])
+			for update of p skip locked)`, dropped, componentID); err != nil {
+		return fmt.Errorf("storage: drop deselected component calc marks: %w", err)
+	}
+	if _, err := tx.Exec(ctx, `delete from calc_rule_state where component_id = $2::uuid and rule_id = any($1::uuid[])`,
+		dropped, componentID); err != nil {
+		return fmt.Errorf("storage: drop deselected component calc state: %w", err)
+	}
+	return nil
+}

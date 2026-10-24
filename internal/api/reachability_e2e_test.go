@@ -233,8 +233,10 @@ type sessionReachResp struct {
 			Reason string    `json:"reason"`
 		} `json:"session"`
 		Rejection *struct {
-			Rung  string `json:"rung"`
-			Class string `json:"class"`
+			Rung       string `json:"rung"`
+			Class      string `json:"class"`
+			PinnedKey  string `json:"pinned_key"`
+			OfferedKey string `json:"offered_key"`
 		} `json:"rejection"`
 		Authenticated *struct {
 			Value string `json:"value"`
@@ -282,14 +284,15 @@ func TestReachabilityCarriesTheHeldSession(t *testing.T) {
 		('telnet', 'telnet', (select id from component where name = 'panel-1'), '{"target":"127.60.0.9:23"}'::jsonb),
 		('tcp', 'tcp', (select id from component where name = 'panel-1'), '{"target":"127.60.0.9:51325"}'::jsonb),
 		('icmp', 'icmp', (select id from component where name = 'panel-1'), '{"target":"127.60.0.9"}'::jsonb),
-		('http', 'http', (select id from component where name = 'panel-1'), '{"target":"127.60.0.9:80"}'::jsonb)`); err != nil {
+		('http', 'http', (select id from component where name = 'panel-1'), '{"target":"127.60.0.9:80"}'::jsonb),
+		('ssh', 'ssh', (select id from component where name = 'panel-1'), '{"target":"127.60.0.9:22"}'::jsonb)`); err != nil {
 		t.Fatalf("insert endpoints: %v", err)
 	}
 	// A standing listen task is what holds an endpoint's session (ADR-0150
 	// point 3): telnet and tcp hold one; http's listen task was removed (its
 	// driver lost the listener), so the node tore its session down.
 	if _, err := conn.Exec(ctx, `insert into task (id, mode, endpoint_id, spec) select 'listen-' || name, 'listen', id, '{}'::jsonb
-		from endpoint where name in ('telnet', 'tcp') and component = (select id from component where name = 'panel-1')`); err != nil {
+		from endpoint where name in ('telnet', 'tcp', 'ssh') and component = (select id from component where name = 'panel-1')`); err != nil {
 		t.Fatalf("insert listen tasks: %v", err)
 	}
 	ids := map[string]string{}
@@ -307,6 +310,8 @@ func TestReachabilityCarriesTheHeldSession(t *testing.T) {
 	rows.Close()
 
 	const fingerprint = "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08"
+	pinnedKey, offeredKey := "SHA256:"+strings.Repeat("P", 43), "SHA256:"+strings.Repeat("O", 43)
+	decoyPinned, decoyOffered := "SHA256:"+strings.Repeat("x", 43), "SHA256:"+strings.Repeat("y", 43)
 	at := time.Now().UTC().Add(-2 * time.Minute).Truncate(time.Microsecond)
 	prop := func(key, instance, value string, ts time.Time) storage.PropertySampleWrite {
 		return storage.PropertySampleWrite{OwnerKind: "component", OwnerID: "panel-1", Key: key, Instance: instance, Value: value, Source: "session", TS: ts}
@@ -324,6 +329,12 @@ func TestReachabilityCarriesTheHeldSession(t *testing.T) {
 		prop("endpoint-rejection", "tcp", "none", at),
 		prop("session-state", "http", "rejected", at),
 		prop("session-reason", "http", "auth: auth rejected", at),
+		// A changed host key (#1078): the gate carries both keys as data,
+		// and the reason names different ones, so a read that parsed the
+		// prose would show the wrong keys.
+		prop("session-state", "ssh", "rejected", at),
+		prop("session-reason", "ssh", "host-key: the host key changed: pinned "+decoyPinned+", offered "+decoyOffered, at),
+		prop("endpoint-rejection", "ssh", "responsive host-key "+fingerprint+" "+pinnedKey+" "+offeredKey, at),
 	}); err != nil {
 		t.Fatalf("insert session samples: %v", err)
 	}
@@ -374,6 +385,17 @@ func TestReachabilityCarriesTheHeldSession(t *testing.T) {
 	// never stands beside a Retry that can change nothing.
 	if http := r.Endpoints[byName["http"]]; http.Session != nil {
 		t.Fatalf("http: an endpoint no longer holding a session carries its last state: %+v", http.Session)
+	}
+
+	// A key refusal's gate serves both keys from the gate, never from the
+	// reason; an auth gate serves none.
+	sshEp := r.Endpoints[byName["ssh"]]
+	if sshEp.Rejection == nil || sshEp.Rejection.Class != "host-key" || sshEp.Rejection.Rung != "responsive" ||
+		sshEp.Rejection.PinnedKey != pinnedKey || sshEp.Rejection.OfferedKey != offeredKey {
+		t.Fatalf("ssh rejection: want the host-key gate with the gate's own keys, got %+v", sshEp.Rejection)
+	}
+	if telnet.Rejection.PinnedKey != "" || telnet.Rejection.OfferedKey != "" {
+		t.Fatalf("telnet: an auth gate served keys: %+v", telnet.Rejection)
 	}
 
 	icmp := r.Endpoints[byName["icmp"]]

@@ -195,8 +195,43 @@ console then differ, and the zero-tolerance shot gate (#623) reads the flap as U
 Detection cue: a diff adds `Date.now()`, `durationText`, `rel(`, or a spans/weight
 computation to a component any `screenshots:` frontmatter path renders, with no matching
 `mask:` selector in that page's entry. Fix: a stable hook (`data-testid`) on the moving
-region and a mask line in the frontmatter, per the entity blade's duration masks
+region and a mask line in the frontmatter that paints a box the text cannot resize (see
+`text-sized-mask` below), per the entity blade's declared-box since-line mask
 (docs/src/content/docs/guides/operator/entities.md).
+
+## text-sized-mask (fixed by #1081; first met as #773, watch for regressions)
+
+- **Cue:** a `mask:` entry in a page's `screenshots:` frontmatter that is a bare selector
+  resolving to the element holding a value whose width varies: a `text=/…/` selector, or a
+  `data-testid` hook on the value's own span (a since-line, an age, a timestamp), with neither a
+  `>> xpath=ancestor::…` hop to a container the layout pins nor a declared `width`. In the
+  capture output, a selector mask whose box is as wide as its text is the tell
+  (`mask 1x span 157x16 <- [data-testid=blade-since]`, the span exactly its line's width).
+  The opposite overcorrection is a cue too: a container hop that swallows what the shot exists
+  to show (a since-line's whole row, verdict included) where a declared box would do.
+- **Failure:** a mask is painted at the bounding box of what the selector resolves to, so the box
+  is the size of the text, and the text's width moves with the clock (`fmtTime` prints a month
+  name, a bare day and AM or PM; `toLocaleString` leaves the hour bare; `durationText` reads 9s
+  or 17s). The baseline then moves by a column of pixels with no UI change: every recapture
+  rewrites it, churning unrelated PRs, and the zero-tolerance gate holds only while its
+  perceptual threshold happens to absorb the moved edge (#774), and would fail outright once the
+  edge crossed pixels it can see. The audit trail's When column moved 7px, 8,400 changed pixels
+  the gate scored 0.000% (#773); the entity blade's and a system summary card's since-lines moved
+  1px between 01:57 AM and 06:59 PM, 64 and 160 changed pixels the gate scored as zero too
+  (#1081). The overcorrection fails silently the other way: the row mask that first fixed #1081
+  hid the verdict badge from the last two baselines that still gated it.
+- **Fix:** paint a box the text cannot resize. Name a container the layout pins (the cell,
+  `>> xpath=ancestor::td[1]`, pinned by its column descriptor; a whole row only where what follows
+  the value on its line moves with it), checking the container's height as well as its width; or
+  declare the box (`{ selector, width }`, painted at the value's top-left, so only for a value
+  whose left edge stays put: not right-aligned or centered), sized from the widest value a
+  capture can render in the console's face, which the capture refuses by name if the value
+  outgrows it. The text stays the target only where its width is fixed by construction (a
+  36-character uuid in a monospace face). Prove it exactly with the clock moved
+  (`DOCS_SHOTS_EXACT=1 DOCS_SHOTS_TZ=… make docs-shots-check`; the gate's default comparison
+  scores the defect zero, and two captures minutes apart share an hour and prove nothing), and
+  add the value to `web/e2e/shotmask.spec.ts`, which reads the page's own entry, drives the
+  capture's mask code, and fails a mask whose box tracks its value or covers what it keeps.
 
 ## scoped-owner-unscoped-member (fixed; found by the #525 rollup review)
 
@@ -301,7 +336,7 @@ region and a mask line in the frontmatter, per the entity blade's duration masks
 - **Fix:** hold the fixture open until the test ends (a `release` channel closed on return), and
   prove liveness with an action over the connection (a second exchange answered), never a peek.
 
-## fixture-binds-a-fixed-port (live; found by the #1061 review; the simulator fixed by #1066, the e2e servers' pick-and-release ports are #1077)
+## fixture-binds-a-fixed-port (fixed; found by the #1061 review; the simulator fixed by #1066, the e2e servers' pick-and-release ports by #1077; watch for regressions)
 
 - **Cue:** a test or fixture that serves on a literal address and port (a simulated component's face
   at `127.x.y.z:20023`, a `StartTCPSession(51325)`, a port lifted by a fixed offset); a "fresh"
@@ -316,4 +351,20 @@ region and a mask line in the frontmatter, per the entity blade's duration masks
   it reported. Where a port is fixed by design (the `sim run` mode binds the profile's ports on the
   endpoint's address, so the endpoints must target those) or pinned on purpose (a port bound on one
   address and rebound on another), claim an address no other test holds (`simtest.ClaimLoopback`).
+  An out-of-process server binds port 0 too and reports what it got: `omniglass server` takes
+  port 0 on `OMNIGLASS_ADDR` and `OMNIGLASS_NATS_ADDR` and writes the bound addresses to
+  `OMNIGLASS_READY_FILE`, and the e2e tests start it only through `startServer`, which a guard
+  test (`TestOnlyStartServerStartsAServer`) holds them to. Mind a library that reads port 0 as
+  its own default: nats-server binds 4222 for 0, so the bus maps 0 to its ephemeral `-1`.
   The testcontainer form of the class is `fixed-testcontainer-port`.
+
+## exit-value-consumed-twice (fixed; found by the #1077 review)
+
+- **Cue:** a single-send result channel (`ch <- cmd.Wait()`, a buffered `chan error` written once)
+  read both by a failure branch (a wait that gives up when the process dies) and by a cleanup or
+  teardown that waits for the same exit.
+- **Failure:** whichever reader sees the exit first takes the only value; when the failure branch
+  wins, the cleanup blocks forever, so one fast boot failure becomes a suite-wide timeout panic that
+  aborts every later test and never prints the error that started it.
+- **Fix:** broadcast the exit by closing a channel and keep the result in a field read after it
+  closes (`process` and `watch`, internal/e2e/server_e2e_test.go; `TestADeadServerFailsTheWaitAndFreesItsCleanup`).

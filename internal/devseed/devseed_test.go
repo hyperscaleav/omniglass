@@ -1884,3 +1884,78 @@ func TestSeededFleetHoldsARejectedSession(t *testing.T) {
 		t.Fatalf("a second run changed the huddle's telnet endpoints: %d", n)
 	}
 }
+
+// TestSeededFleetHoldsAHostKeyRejection pins the changed host key make dev
+// shows (#1078): the touch panel in the briefing place answers NVP over its ssh
+// console, and its endpoint pins a host key from before the panel was
+// reimaged, so the simulated panel's own key (minted when the simulator
+// starts) never matches it and a live node reads the session rejected with
+// class host-key, both keys named, beside Trust this key. The login is the
+// panel's right one, so trusting the offered key brings the session up. A
+// second run neither adds an endpoint nor moves the pin an operator may have
+// trusted since.
+func TestSeededFleetHoldsAHostKeyRejection(t *testing.T) {
+	ctx, conn, gw := seededFleet(t)
+	type ep struct{ id, name, host, port, login, node string }
+	sshEndpoints := func() []ep {
+		t.Helper()
+		rows, err := conn.Query(ctx, `
+			select e.id::text, e.name, e.inputs->>'host', e.inputs->>'port', e.inputs->>'login', (select n.name from node n where n.principal_id = e.node_name)
+			from endpoint e join driver d on d.id = e.driver_id join component c on c.id = e.component join location l on l.id = c.location_id
+			where d.name = 'newtron-nvp-ssh' and l.name = 'briefing'`)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer rows.Close()
+		var out []ep
+		for rows.Next() {
+			var e ep
+			if err := rows.Scan(&e.id, &e.name, &e.host, &e.port, &e.login, &e.node); err != nil {
+				t.Fatal(err)
+			}
+			out = append(out, e)
+		}
+		return out
+	}
+	got := sshEndpoints()
+	if len(got) != 1 {
+		t.Fatalf("briefing ssh endpoints: want 1, got %d", len(got))
+	}
+	e := got[0]
+	if !strings.HasPrefix(e.host, "127.60.") || e.port != "10022" || e.node != "edge-hq" || e.login != "sim-panel-login-rotated" {
+		t.Fatalf("briefing ssh endpoint = %+v, want the panel's simulated address, port 10022, node edge-hq, the panel's right login", e)
+	}
+	const stalePin = "SHA256:twSJOxqCcLND44UmG2UgaA2xfebMGW5hCWNq2eHE16M"
+	pin := func() string {
+		t.Helper()
+		wl, err := gw.NodeWorklist(ctx, "edge-hq")
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, task := range wl.Tasks {
+			if task.EndpointID == e.id && task.HostKey != "" {
+				return task.HostKey
+			}
+		}
+		return ""
+	}
+	if got := pin(); got != stalePin {
+		t.Fatalf("briefing ssh pin = %q, want the key from before the reimage %q", got, stalePin)
+	}
+
+	// An operator trusts the panel's key; a second run leaves it.
+	trusted := "SHA256:" + strings.Repeat("T", 43)
+	all := scope.Set{All: true}
+	if _, err := gw.RetryEndpoint(ctx, "", e.id, trusted, all, all); err != nil {
+		t.Fatalf("trust: %v", err)
+	}
+	if err := devseed.Run(ctx, gw, ""); err != nil {
+		t.Fatalf("second run: %v", err)
+	}
+	if n := len(sshEndpoints()); n != 1 {
+		t.Fatalf("a second run changed the briefing's ssh endpoints: %d", n)
+	}
+	if got := pin(); got != trusted {
+		t.Fatalf("a second run moved the pin to %q, want the trusted %q", got, trusted)
+	}
+}

@@ -15,6 +15,7 @@ import matter from 'gray-matter';
 import { mkdir, readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { assertFontsRendered, watchFontRequests } from './fontguard.mjs';
+import { describeMask, planMasks, shootBaseline } from './shotmasklib.mjs';
 
 const BASE = process.env.OG_E2E_BASE ?? 'http://localhost:8080';
 const TOKEN = process.env.OG_TOKEN ?? '';
@@ -41,8 +42,10 @@ const BASELINE = process.env.DOCS_SHOTS_BASELINE ?? 'docs/screenshots/baseline';
 // not depend on the text it hides, and the only honest way to prove that is to
 // recapture with the clock moved far enough that a rendered timestamp changes
 // character count: `d.toLocaleString()` does not zero-pad the hour, so 9:47 PM is
-// one character narrower than 11:47 PM. Two captures minutes apart share an hour
-// and a day, so they are structurally blind to exactly that class of jitter.
+// one character narrower than 11:47 PM, and fmtTime's AM is wider than its PM.
+// Two captures minutes apart share an hour and a day, so they are structurally
+// blind to exactly that class of jitter. Run the proof with DOCS_SHOTS_EXACT=1:
+// the gate's default comparison cannot see a one-pixel mask move (#774, #1081).
 const TZ = process.env.DOCS_SHOTS_TZ ?? '';
 
 async function walk(dir) {
@@ -114,38 +117,29 @@ for (const spec of specs) {
   // animations/caret disabled and non-deterministic regions masked so the raster
   // is byte-stable for the diff gate.
   //
-  // Playwright paints each mask from the RESOLVED element's bounding box, so what
-  // a selector resolves to is the whole game (#773). A `text=/…/` selector resolves
-  // to the innermost element carrying the text, which is the value's own <span>:
-  // the painted box is then the size of the text it hides, and a value one
-  // character narrower (an hour that is not zero-padded, a single-digit day) moves
-  // the box, which is changed pixels against a budget of zero. A mask over text of
-  // varying width therefore names the containing CELL, whose width its column
-  // descriptor pins. The resolution is logged for every shot so a mask that lands
-  // on the wrong element is visible in the capture output, not just in the raster.
-  const mask = [];
-  for (const sel of spec.mask ?? []) {
-    const locator = page.locator(sel);
-    const shapes = await locator.evaluateAll((els) =>
-      els.map((el) => {
-        const r = el.getBoundingClientRect();
-        return `${el.tagName.toLowerCase()} ${Math.round(r.width)}x${Math.round(r.height)}`;
-      }),
-    );
-    // A mask that matches nothing hides nothing: the region it was written for
-    // renders live into the raster and the gate fails somewhere else, blaming the
-    // UI. Fail here instead, naming the selector.
-    if (shapes.length === 0) {
-      console.error(`docs-shots: mask matched no element on ${spec.id}: ${sel}`);
-      process.exit(1);
-    }
-    const distinct = [...new Set(shapes)];
-    console.log(
-      `  mask ${String(shapes.length).padStart(2)}x ${distinct.slice(0, 3).join(' | ')}` +
-        `${distinct.length > 3 ? ` | +${distinct.length - 3} more` : ''}  <- ${sel}`,
-    );
-    mask.push(locator);
+  // A mask is painted at the size of what it resolves to, so what a selector
+  // resolves to is the whole game (#773). A `text=/…/` selector resolves to the
+  // innermost element carrying the text, the value's own <span>, and so does a
+  // `data-testid` hook placed on it (#1081): the painted box is then the size of
+  // the text it hides, and a value one character narrower (an hour that is not
+  // zero-padded, a single-digit day, PM for AM) moves the box. A mask over text of
+  // varying width therefore names a container the layout pins (a table CELL), or
+  // DECLARES its box ({ selector, width }) where the only pinned container also
+  // holds what the shot exists to show. shotmasklib.mjs plans and paints both, and
+  // web/e2e/shotmask.spec.ts tests that same code. Each mask's resolution is
+  // logged so a mask that lands on the wrong element (a box as wide as its text is
+  // the tell) shows in the capture output, not just in the raster.
+  let plan;
+  try {
+    plan = await planMasks(page, spec.mask ?? []);
+  } catch (e) {
+    // A mask that matches nothing hides nothing, and a value wider than its
+    // declared box leaves its tail live: either way the region renders into the
+    // raster and the gate fails somewhere else, blaming the UI. Fail here.
+    console.error(`docs-shots: ${e.message} (on ${spec.id})`);
+    process.exit(1);
   }
+  for (const m of plan) console.log(describeMask(m));
   // Two renders of the same settled page (#789 review): the CLEAN shot is what
   // the docs embed, every region live, because a masked strip teaches nothing;
   // the MASKED twin is the gate's baseline, where the capture-relative regions
@@ -158,16 +152,12 @@ for (const spec of specs) {
     animations: 'disabled',
     caret: 'hide',
   });
-  await page.screenshot({
-    path: join(BASELINE, `${spec.id}.png`),
-    animations: 'disabled',
-    caret: 'hide',
-    mask,
-    // A DELIBERATE redaction panel over the baseline, the console's own neutral
-    // surface (--color-neutral in web/src/app.css), so a diff artifact viewed by
-    // a human still reads as a block placed over a value.
-    maskColor: '#1a2336',
-  });
+  try {
+    await shootBaseline(page, plan, { path: join(BASELINE, `${spec.id}.png`) });
+  } catch (e) {
+    console.error(`docs-shots: ${e.message} (on ${spec.id})`);
+    process.exit(1);
+  }
   await ctx.close();
   console.log('wrote', join(OUT, `${spec.id}.png`), `+ baseline (${spec.path})`);
 }

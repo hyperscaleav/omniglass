@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/hyperscaleav/omniglass/internal/collection/rejection"
 	"github.com/hyperscaleav/omniglass/internal/driver"
 	"regexp"
 	"strings"
@@ -617,7 +618,12 @@ func (p *PG) rederiveAttached(ctx context.Context, tx pgx.Tx, driverID, endpoint
 // hostKey, when set, accepts a changed ssh host key (#1032): it lands as the
 // endpoint's declared ssh-host-key, the pin the worklist delivers ahead of
 // the key trusted on first use, so the node's session redials onto it. Only
-// an ssh endpoint takes one, and only a SHA256 fingerprint.
+// an ssh endpoint takes one, and only a SHA256 fingerprint. While the
+// endpoint's gate names an offered key (a key refusal's evidence, #1078),
+// hostKey must be that key: any other is ErrRetryHostKeyStale and changes
+// nothing, so a trust confirmed against a view the record has since moved
+// past cannot pin a key nobody read.
+// The audit row carries the pin replaced (old) and the pin set (new).
 func (p *PG) RetryEndpoint(ctx context.Context, actorID, id, hostKey string, read, action scope.Set) (*Endpoint, error) {
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
@@ -629,12 +635,28 @@ func (p *PG) RetryEndpoint(ctx context.Context, actorID, id, hostKey string, rea
 	if err != nil {
 		return nil, err
 	}
+	// replaced is the pin a trusted key replaces, for the audit row.
+	replaced := ""
 	if hostKey != "" {
 		if before.Transport != "ssh" || before.ComponentID == nil {
 			return nil, fmt.Errorf("%w: only an ssh endpoint pins a host key", ErrRetryHostKey)
 		}
 		if !hostKeyFingerprint.MatchString(hostKey) {
 			return nil, fmt.Errorf("%w: a host key is a SHA256 fingerprint (SHA256: and 43 base64 characters)", ErrRetryHostKey)
+		}
+		published, err := latestRejection(ctx, tx, *before.ComponentID, before.Name)
+		if err != nil {
+			return nil, err
+		}
+		if gate, ok := rejection.Parse(published); ok && gate.HasKeys() && gate.OfferedKey != hostKey {
+			// The gate is the node's last word on what the component offers: a
+			// gated node dials no more, so the component may have moved on
+			// since. The refusal says what the record names, and how to read
+			// the key again, never that the component offers it now.
+			return nil, fmt.Errorf("%w: the refusal on record names the offered key %s, not the key sent; to trust another, retry the endpoint without a host key so the node reads the key the component offers now, then trust that one", ErrRetryHostKeyStale, gate.OfferedKey)
+		}
+		if _, replaced, err = hostKeyPin(ctx, tx, *before.ComponentID, before.Name); err != nil {
+			return nil, err
 		}
 		// The pin is the one declared row a node-probe key admits, and only
 		// through this path (ADR-0161).
@@ -658,14 +680,15 @@ func (p *PG) RetryEndpoint(ctx context.Context, actorID, id, hostKey string, rea
 	if err != nil {
 		return nil, mapEndpointWriteErr(err)
 	}
-	audited := any(after)
-	if hostKey != "" {
-		audited = struct {
-			*Endpoint
-			HostKey string `json:"host_key"`
-		}{after, hostKey}
+	type pinned struct {
+		*Endpoint
+		HostKey string `json:"host_key,omitempty"`
 	}
-	if err := writeAuditRes(ctx, tx, actorID, "retry", "endpoint", after.ID, before, audited); err != nil {
+	audited, prior := any(after), any(before)
+	if hostKey != "" {
+		audited, prior = pinned{after, hostKey}, pinned{before, replaced}
+	}
+	if err := writeAuditRes(ctx, tx, actorID, "retry", "endpoint", after.ID, prior, audited); err != nil {
 		return nil, err
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -677,6 +700,47 @@ func (p *PG) RetryEndpoint(ctx context.Context, actorID, id, hostKey string, rea
 // ErrRetryHostKey refuses a retry's host key: not an ssh endpoint, or not a
 // SHA256 fingerprint.
 var ErrRetryHostKey = errors.New("storage: retry host key")
+
+// ErrRetryHostKeyStale refuses a retry's host key that is not the key the
+// endpoint's gate names as offered (#1078): the operator confirmed a key the
+// refusal on record no longer names.
+var ErrRetryHostKeyStale = errors.New("storage: retry host key stale")
+
+// latestRejection is the endpoint-rejection the node last published for an
+// endpoint (its gate), or "" when none was.
+func latestRejection(ctx context.Context, q querier, componentID, instance string) (string, error) {
+	var v string
+	if err := q.QueryRow(ctx, `
+		select coalesce((select value #>> '{}' from property
+		 where owner_kind = 'component' and component_id = $1::uuid and instance = $2 and provenance = 'observed'
+		   and property_type_id = (select id from property_type where name = 'endpoint-rejection')
+		 order by ts desc, id desc limit 1), '')`, componentID, instance).Scan(&v); err != nil {
+		return "", fmt.Errorf("storage: endpoint rejection: %w", err)
+	}
+	return v, nil
+}
+
+// hostKeyPin is an ssh endpoint's host key pin (#1032): the operator's
+// declared ssh-host-key, and the pin in force (the declared key, else the key
+// the node trusted on first use).
+func hostKeyPin(ctx context.Context, q querier, componentID, instance string) (declared, pin string, err error) {
+	if err := q.QueryRow(ctx, `
+		select coalesce(
+			(select nullif(value, 'null'::jsonb) #>> '{}' from property
+			 where owner_kind = 'component' and component_id = $1::uuid and instance = $2 and provenance = 'declared'
+			   and property_type_id = (select id from property_type where name = 'ssh-host-key')
+			 order by id desc limit 1), ''),
+			coalesce((select value #>> '{}' from property
+			 where owner_kind = 'component' and component_id = $1::uuid and instance = $2 and provenance = 'observed'
+			   and property_type_id = (select id from property_type where name = 'ssh-host-key')
+			 order by ts desc, id desc limit 1), '')`, componentID, instance).Scan(&declared, &pin); err != nil {
+		return "", "", fmt.Errorf("storage: host key pin: %w", err)
+	}
+	if declared != "" {
+		pin = declared
+	}
+	return declared, pin, nil
+}
 
 var hostKeyFingerprint = regexp.MustCompile(`^SHA256:[A-Za-z0-9+/]{43}$`)
 

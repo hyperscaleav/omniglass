@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/collection"
+	"github.com/hyperscaleav/omniglass/internal/collection/rejection"
 	"github.com/hyperscaleav/omniglass/internal/driver"
 )
 
@@ -81,7 +82,7 @@ type sshFakePending struct {
 func (p *sshFakePending) Authenticate(_ context.Context, auth *collection.SessionAuth, _ collection.Classifier, _ time.Duration) error {
 	pin := auth.SSH.Pin
 	if pinned := pin.Get(); pinned != "" && pinned != p.d.offered {
-		return &collection.TerminalError{Class: driver.ClassHostKey, Reason: "the host key changed"}
+		return collection.HostKeyRefusal(pinned, p.d.offered)
 	}
 	pin.Trust(p.d.offered)
 	return nil
@@ -179,4 +180,45 @@ func TestSSHPinSurvivesALostPublishAndARecycle(t *testing.T) {
 	edited := map[string]map[string]string{"login": {"username": "admin", "password": "rotated"}}
 	m.reconcile([]collection.TaskSpec{sshPollTask("p1", "ep-1", "", edited)})
 	log.waitFor(t, "p1", collection.SessionRejected)
+}
+
+// A held session refused for a changed host key publishes its gate with both
+// keys (#1078): the endpoint-rejection the server stores, and the console
+// reads, names the pin and the key the component offered as data.
+func TestSSHHostKeyRefusalPublishesBothKeysWithItsGate(t *testing.T) {
+	dialer := &sshFakeDialer{offered: "SHA256:replaced"}
+	log := &transitionLog{}
+	var mu sync.Mutex
+	var published []string
+	m := newSessionManager(map[string]collection.SessionDialer{"ssh": dialer}, sessionHooks{
+		transition: log.record,
+		rejection: func(_, _ string, v string) {
+			mu.Lock()
+			published = append(published, v)
+			mu.Unlock()
+		},
+	})
+	defer m.closeAll()
+	creds := map[string]map[string]string{"login": {"username": "admin", "password": "newtron"}}
+	task := sshPollTask("p1", "ep-1", "SHA256:pinned", creds)
+	task.Fingerprint = "fp-a"
+	m.reconcile([]collection.TaskSpec{task})
+	log.waitFor(t, "p1", collection.SessionRejected)
+	deadline := time.Now().Add(3 * time.Second)
+	for {
+		mu.Lock()
+		got := append([]string(nil), published...)
+		mu.Unlock()
+		if len(got) > 0 {
+			gt, ok := rejection.Parse(got[len(got)-1])
+			if !ok || gt.Class != driver.ClassHostKey || gt.PinnedKey != "SHA256:pinned" || gt.OfferedKey != "SHA256:replaced" {
+				t.Fatalf("published %q, want the host-key gate naming both keys", got[len(got)-1])
+			}
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("the host-key refusal published no gate")
+		}
+		time.Sleep(2 * time.Millisecond)
+	}
 }

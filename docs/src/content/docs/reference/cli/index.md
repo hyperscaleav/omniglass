@@ -1625,11 +1625,11 @@ Retry an endpoint's gated connections
 omniglass endpoint retry <id> [flags]
 ```
 
-Moves the endpoint's retry counter, which is part of its connection fingerprint: a gate a refusal retrying cannot fix holds (a wrong credential, a changed host key, a reply its driver declares terminal) lifts, the node recycles the endpoint's held session, and every connection to it is attempted again. Fixing the secret, the address, the transport or the driver's login needs no retry: the change moves the fingerprint itself. An unrelated edit (a label) moves nothing. For an ssh endpoint, host_key names a host key to trust (the offered key a host-key rejection names): it becomes the declared pin and recycles the session onto it whatever its state, an audited acceptance of the change. Audited. Gated by endpoint:retry; read and retry scopes (through the component) drive the 404 versus 403 split.
+Moves the endpoint's retry counter, which is part of its connection fingerprint: a gate a refusal retrying cannot fix holds (a wrong credential, a changed host key, a reply its driver declares terminal) lifts, the node recycles the endpoint's held session, and every connection to it is attempted again. Fixing the secret, the address, the transport or the driver's login needs no retry: the change moves the fingerprint itself. An unrelated edit (a label) moves nothing. For an ssh endpoint, host_key names a host key to trust (the offered key a host-key rejection names): it becomes the declared pin and recycles the session onto it whatever its state, an audited acceptance of the change. While the endpoint's gate names an offered key, host_key must be that key, so a trust confirmed against a refusal the record has since moved past is a 409 and changes nothing. Audited, a trusted key with the pin it replaced (old) and the pin it set (new). Gated by endpoint:retry; read and retry scopes (through the component) drive the 404 versus 403 split.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--host-key` | string | (none) | An ssh endpoint only: the SHA256 fingerprint of a changed host key the operator now trusts (the offered key a host-key rejection names). It becomes the endpoint's declared ssh-host-key pin, and the session redials onto it. Omit to retry with the pin unchanged |
+| `--host-key` | string | (none) | An ssh endpoint only: the SHA256 fingerprint of a changed host key the operator now trusts (the offered_key a host-key rejection names on the component's reachability read). It becomes the endpoint's declared ssh-host-key pin, and the session redials onto it. While a key refusal holds, it must be that exact offered key: any other is a 409 that changes nothing (the refusal on record is the node's last word, so to trust a key the component presents since, retry without a host key first). With no key refusal held it declares a pin ahead of time. Omit to retry with the pin unchanged |
 
 Example:
 
@@ -4120,6 +4120,8 @@ Run the control-plane server (HTTP API)
 ```
 omniglass server
 ```
+
+Runs the control plane: applies pending migrations and the boot seed, then serves the HTTP API on OMNIGLASS_ADDR and hosts the embedded NATS bus nodes connect to on OMNIGLASS_NATS_ADDR. Either address may name port 0, which binds whatever free port the kernel hands out; set OMNIGLASS_READY_FILE to a path and, once both listeners are bound, the server writes the addresses it got there as JSON (addr, nats_addr, and the nats_url it advertises to nodes). A file already at that path is cleared first thing at boot, and the server removes its own at a graceful shutdown (SIGINT or SIGTERM). A supervisor or a test reads the ports from that file rather than picking one and hoping it stays free. Configured by environment; see the deployment guides.
 
 ## `omniglass session`
 

@@ -68,6 +68,10 @@ type SimEndpoint struct {
 	Driver    string            `yaml:"driver"`
 	Label     string            `yaml:"label"`
 	Inputs    map[string]string `yaml:"inputs"`
+	// HostKey pins an ssh endpoint's host key when it is created (#1078),
+	// declared the way an operator declares one (endpoint retry with a host
+	// key), so the simulated face's own key is refused until it is trusted.
+	HostKey string `yaml:"host_key"`
 }
 
 // System is one example system: a thing in a room that either works or does not.

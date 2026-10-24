@@ -48,24 +48,10 @@ func TestCLIEndToEnd(t *testing.T) {
 	}
 
 	// Run the server against the same DB.
-	addr := "127.0.0.1:" + freePort(t)
-	srvCtx, cancel := context.WithCancel(ctx)
-	defer cancel()
-	srv := exec.CommandContext(srvCtx, binPath, "server")
-	srv.Env = append(dbEnv,
-		"OMNIGLASS_ADDR="+addr,
-		"OMNIGLASS_NATS_ADDR=127.0.0.1:"+freePort(t),
-		"OMNIGLASS_NATS_STORE_DIR="+t.TempDir(),
-	)
-	srv.Stdout, srv.Stderr = os.Stderr, os.Stderr
-	if err := srv.Start(); err != nil {
-		t.Fatalf("start server: %v", err)
-	}
-	t.Cleanup(func() { cancel(); _ = srv.Wait() })
-	pollHealthz(t, "http://"+addr+"/api/v1/healthz")
+	server := startServer(t, binPath, dbEnv...).URL
 
 	// Generated commands run against the live server with the connection flags.
-	base := []string{"--server", "http://" + addr, "--token", tok}
+	base := []string{"--server", server, "--token", tok}
 	cli := func(args ...string) (string, int) {
 		return runCLI(t, root, binPath, os.Environ())(append(base, args...)...)
 	}
@@ -143,7 +129,7 @@ func TestCLIEndToEnd(t *testing.T) {
 	}
 
 	// healthz needs no token.
-	if out, code := runCLI(t, root, binPath, os.Environ())("--server", "http://"+addr, "healthz"); code != 0 || !strings.Contains(out, `"status": "ok"`) {
+	if out, code := runCLI(t, root, binPath, os.Environ())("--server", server, "healthz"); code != 0 || !strings.Contains(out, `"status": "ok"`) {
 		t.Fatalf("healthz exit %d:\n%s", code, out)
 	}
 

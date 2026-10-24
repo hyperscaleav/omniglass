@@ -140,20 +140,43 @@ rail repainting fewer pixels than seed jitter (#398, #623). Two caveats: the com
 the pixels pixelmatch judges different at its default perceptual threshold, so a change
 confined to near-identical dark tones can still score zero (#774), and a real UI change that
 falls entirely inside a masked region is invisible to the gate, which is the price of masking
-and the reason a mask names the smallest element that moves.
+and the reason a mask names the smallest box that holds still around what moves.
 
-### A mask covers the cell, and says that it is there
+### A mask covers a box that holds still, and says that it is there
 
-Playwright paints a mask over **the element the selector resolves to**, so what a `mask` entry
+A mask is painted over **the element the selector resolves to**, so what a `mask` entry
 resolves to is the whole contract. A `text=/…/` selector resolves to the innermost element
-carrying the text, the value's own `<span>`, so the painted box is the size of the value. The
-console does not zero-pad everything it renders (the audit trail's `toLocaleString` leaves the
-hour bare, `fmtTime` leaves the day bare), which means the same unchanged table paints a box
-seven pixels narrower at 9 o'clock than at 11, and the gate reads that as drift on a PR that
-changed no UI. So a mask over text whose width can change names the **cell**, by appending
-`>> xpath=ancestor::td[1]`, and the cell's width is pinned by its column descriptor. A mask
-over text of fixed width (a uuid in a monospace face) stays on the text, which is also the
-only correct answer when the enclosing cell holds something the shot exists to show (#773).
+carrying the text, the value's own `<span>`, and so does a `data-testid` hook placed on that
+span, so the painted box is the size of the value. The console does not render a
+capture-relative value at one width (the audit trail's `toLocaleString` leaves the hour bare,
+`fmtTime` prints a month name, leaves the day bare and prints AM or PM, an age reads 9s or
+17s), which means the same unchanged page paints a box seven pixels narrower at 9 o'clock than
+at 11, and every recapture rewrites the baseline on a PR that changed no UI. So a mask over
+text whose width can change paints a **box the text cannot move**, one of two ways:
+
+- **Name a container the layout pins.** The table **cell**, by appending
+  `>> xpath=ancestor::td[1]`, whose width its column descriptor pins (#773); or a whole row,
+  when the values that follow the text on its line move with it (a system header's standard
+  and size after its since-line). Check the container's height as well as its width: a
+  wrapping row whose wrap depends on the value's width does not hold still.
+- **Declare the box**, when the only container that holds still also holds what the shot
+  exists to show (a since-line beside the verdict it qualifies, #1081):
+
+  ```yaml
+  mask:
+    - selector: "[data-testid=blade-since]"
+      width: 184
+  ```
+
+  The box is painted at the value's top-left, as tall as the value and `width` CSS pixels
+  wide, whatever the value reads; it suits a value whose left edge stays put (not right-aligned
+  or centered, which moves the left edge with the text) and which ends its line. Size it from
+  the widest value a capture can render, measured in the console's own face, with some
+  headroom, and say the measurement in the frontmatter comment. A value wider than its box
+  fails the capture by name rather than leaving its tail live.
+
+A mask over text of fixed width (a uuid in a monospace face) stays on the text, which is also
+the only correct answer when the enclosing cell holds something the shot exists to show.
 
 The fill is **deliberately visible** in the baseline: the console's own neutral surface, one
 step lighter than the card behind it, so a human reading a diff artifact sees a block placed
@@ -162,19 +185,25 @@ fill; they embed the clean render.
 
 Prove a mask holds by recapturing **with the clock moved**, never by capturing twice a few
 minutes apart: two captures in the same hour of the same day are structurally blind to exactly
-the jitter a mask exists to absorb.
+the jitter a mask exists to absorb. And prove it **exactly**: the gate's comparison counts the
+pixels pixelmatch judges different at threshold 0.1 (#774), which scores a mask edge moving one
+pixel over a dark surface as zero, so the gate alone passes a mask that moves. `DOCS_SHOTS_EXACT=1`
+compares every pixel instead:
 
 ```bash
-make docs-shots-check                              # the gate
-DOCS_SHOTS_TZ=Asia/Kolkata make docs-shots-check   # the same gate, an hour digit away
+make docs-shots-check                                                # the gate
+DOCS_SHOTS_EXACT=1 DOCS_SHOTS_TZ=Asia/Kolkata make docs-shots-check  # the proof: the clock moved, every pixel equal
 ```
 
-Both halves of the contract (the selector resolves to the cell, and the raster survives a
-one-character change) are pinned at the browser tier by `web/e2e/shotmask.spec.ts`, which flips
-a digit on synthetic markup and so also covers the single-digit day a timezone shift cannot
-reach. Every capture logs what each mask resolved to (`mask 59x td 190x37 <- text=/…/`), so a
-mask that lands on the wrong element shows up in the capture output rather than in a raster
-nobody diffs by hand.
+The contract (the page's declared mask paints a box the value cannot move, leaves what the shot
+shows live, and the raster survives the value changing) is pinned at the browser tier by
+`web/e2e/shotmask.spec.ts`. It reads each mask from the page's own frontmatter and drives the
+capture's own mask code (`web/e2e/shotmasklib.mjs`) against synthetic markup, changing the value
+on demand, so it also covers the single-digit day a timezone shift cannot reach. A new mask over
+a varying value adds its case there. Every capture logs what each mask resolved to
+(`mask 59x td 190x37 <- text=/…/`, `mask  1x box 184x16 over span 157 <- [data-testid=blade-since]`),
+so a mask that lands on the wrong element shows up in the capture output rather than in a raster
+nobody diffs by hand: a selector mask whose box is as wide as its text is the tell.
 
 ## Walkthroughs embed the same way
 

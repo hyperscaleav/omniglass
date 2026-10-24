@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/hyperscaleav/omniglass/internal/collection"
+	"github.com/hyperscaleav/omniglass/internal/collection/rejection"
 	"github.com/hyperscaleav/omniglass/internal/driver"
 )
 
@@ -73,5 +74,39 @@ func TestGateClearsWhenTheRungPasses(t *testing.T) {
 	}
 	if g.clear("ep-1") {
 		t.Fatal("clearing twice reported a change")
+	}
+}
+
+// A refusal of a changed key carries both keys as data (#1078): the gate
+// publishes them with itself, so the console names the pinned and the offered
+// key without parsing the reason, and a restarted node that adopts the gate
+// adopts its evidence too, republishing the same value rather than one that
+// drops the keys.
+func TestAKeyRefusalPublishesBothKeysAndARestartKeepsThem(t *testing.T) {
+	const pinned, offered = "SHA256:" + "pinnedpinnedpinnedpinnedpinnedpinnedpinned1", "SHA256:" + "offeredofferedofferedofferedofferedoffered1"
+	g := newGates()
+	g.observe("ep-1", "fp-a", "")
+	g.record("ep-1", "fp-a", collection.HostKeyRefusal(pinned, offered))
+	published := g.rejectionOf("ep-1")
+	gt, ok := rejection.Parse(published)
+	if !ok || gt.Class != driver.ClassHostKey || gt.Rung != "responsive" || gt.PinnedKey != pinned || gt.OfferedKey != offered {
+		t.Fatalf("published %q, want the host-key gate with both keys", published)
+	}
+	if held, _ := g.blocked("ep-1", rungResponsive); held.refusal().Offered != offered || held.refusal().Pinned != pinned {
+		t.Fatalf("a gated attempt's refusal lost the keys: %+v", held.refusal())
+	}
+
+	restarted := newGates()
+	restarted.observe("ep-1", "fp-a", published)
+	if got := restarted.rejectionOf("ep-1"); got != published {
+		t.Fatalf("a restarted node republishes %q, want the adopted %q", got, published)
+	}
+
+	// A refusal that is not about a key carries none.
+	plain := newGates()
+	plain.observe("ep-2", "fp-b", "")
+	plain.record("ep-2", "fp-b", &collection.TerminalError{Class: driver.ClassAuth, Reason: "auth rejected"})
+	if gt, _ := rejection.Parse(plain.rejectionOf("ep-2")); gt.HasKeys() {
+		t.Fatalf("an auth refusal published keys: %+v", gt)
 	}
 }

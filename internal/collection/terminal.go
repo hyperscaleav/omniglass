@@ -2,6 +2,7 @@ package collection
 
 import (
 	"errors"
+	"fmt"
 
 	"github.com/hyperscaleav/omniglass/internal/driver"
 )
@@ -16,9 +17,25 @@ import (
 type TerminalError struct {
 	Class  string
 	Reason string
+	// Pinned and Offered are set on a refusal of a changed key (an ssh host
+	// key, #1078; a tls certificate's public key, #1035): the key the
+	// endpoint pins and the key the component now offers, each a SHA256
+	// fingerprint, carried as data so no surface parses them out of Reason.
+	// Empty on every other refusal.
+	Pinned  string
+	Offered string
 }
 
 func (e *TerminalError) Error() string { return e.Class + ": " + e.Reason }
+
+// HostKeyRefusal is the refusal of an ssh host key that differs from the pin
+// (#1032): class host-key, both keys as data (#1078), and a reason naming
+// them for the property's series and the CLI reader. The held session's
+// dialer and the probe both refuse with it.
+func HostKeyRefusal(pinned, offered string) *TerminalError {
+	return &TerminalError{Class: driver.ClassHostKey, Pinned: pinned, Offered: offered, Reason: fmt.Sprintf(
+		"the host key changed: pinned %s, offered %s; retry the endpoint with the offered key to trust it", pinned, offered)}
+}
 
 // AsTerminal reports whether err is, or wraps, a TerminalError.
 func AsTerminal(err error) (*TerminalError, bool) {

@@ -138,8 +138,7 @@ func (p *pendingSSH) Authenticate(ctx context.Context, auth *SessionAuth, _ Clas
 		}
 		var changed *hostKeyChanged
 		if errors.As(err, &changed) {
-			return &TerminalError{Class: driver.ClassHostKey, Reason: fmt.Sprintf(
-				"the host key changed: pinned %s, offered %s; retry the endpoint with the offered key to trust it", changed.pinned, changed.offered)}
+			return HostKeyRefusal(changed.pinned, changed.offered)
 		}
 		var unanswered *unansweredQuestion
 		if errors.As(err, &unanswered) {

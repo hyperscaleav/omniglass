@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/api"
 	"github.com/hyperscaleav/omniglass/internal/auth"
@@ -134,6 +135,23 @@ func TestEndpointAPI(t *testing.T) {
 	// A host key is an ssh endpoint's alone (#1032): a tcp endpoint refuses one.
 	c.do(ownerTok, http.MethodPost, "/endpoints/"+ifA.ID+":retry",
 		map[string]any{"host_key": "SHA256:" + strings.Repeat("A", 43)}, http.StatusUnprocessableEntity)
+
+	// Trusting a changed key (#1078): the console sends the offered key its
+	// read showed. Without endpoint:retry the viewer floor is refused; a key
+	// the component no longer offers is a 409 naming the one it offers now;
+	// the offered key itself is trusted.
+	sshEp := createEndpoint(c, ownerTok, map[string]any{"transport": "ssh", "component": "comp-d", "params": map[string]any{"target": "10.0.0.7:22"}})
+	shown, offeredNow := "SHA256:"+strings.Repeat("S", 43), "SHA256:"+strings.Repeat("N", 43)
+	if err := gw.InsertPropertySamples(ctx, storage.NodeWriter(sshEp.Name), []storage.PropertySampleWrite{{OwnerKind: "component", OwnerID: "comp-d", Key: "endpoint-rejection",
+		Instance: sshEp.Name, Value: "responsive host-key 9f86d081 SHA256:" + strings.Repeat("P", 43) + " " + offeredNow, Source: "ssh", TS: time.Now()}}); err != nil {
+		t.Fatal(err)
+	}
+	c.do(viewerAllTok, http.MethodPost, "/endpoints/"+sshEp.ID+":retry", map[string]any{"host_key": offeredNow}, http.StatusForbidden)
+	stale := c.do(ownerTok, http.MethodPost, "/endpoints/"+sshEp.ID+":retry", map[string]any{"host_key": shown}, http.StatusConflict)
+	if !strings.Contains(string(stale), offeredNow) {
+		t.Fatalf("the stale refusal does not name the key offered now: %s", stale)
+	}
+	c.do(ownerTok, http.MethodPost, "/endpoints/"+sshEp.ID+":retry", map[string]any{"host_key": offeredNow}, http.StatusOK)
 }
 
 // TestEndpointCreateWithAmbiguousComponentIs409 closes I1's other half: the

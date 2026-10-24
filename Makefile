@@ -288,7 +288,9 @@ docs-shots:
 # masked in the baseline through each page's frontmatter, so the pinned
 # browser's rasters are byte-stable and a nonzero diff is a real,
 # un-recaptured UI change. The clean shots the docs embed are not diffed;
-# their masked regions legitimately move every capture.
+# their masked regions legitimately move every capture. DOCS_SHOTS_EXACT=1
+# compares every pixel instead of through pixelmatch's perceptual threshold
+# (#774): with DOCS_SHOTS_TZ, it is how a mask is proven to hold (#1081).
 # The temp dirs are repo-relative so they land inside the capture container's mount.
 docs-shots-check:
 	@tmp=.docs-shots-tmp; mkdir -p $$tmp/clean $$tmp/baseline; \
