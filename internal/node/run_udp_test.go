@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/auth"
+	"github.com/hyperscaleav/omniglass/internal/sim/simtest"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 )
 
@@ -17,15 +18,14 @@ import (
 // real node, and the simulated panel's NVP datagram face, on ephemeral
 // ports, so two runs from one worktree never collide.
 
-// freeUDPPort is a udp port nothing is bound to now.
-func freeUDPPort(t *testing.T) int {
+// closedUDPAddr is a udp address nothing can be listening on: port 9 (a
+// privileged port no test binds) on a loopback address this test claims, so
+// a request there is refused by the host and never reaches another run's
+// socket. A pick-and-release free port could be bound by a concurrent run
+// before the request lands.
+func closedUDPAddr(t *testing.T) (string, int) {
 	t.Helper()
-	c, err := net.ListenUDP("udp4", &net.UDPAddr{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = c.Close() }()
-	return c.LocalAddr().(*net.UDPAddr).Port
+	return simtest.ClaimLoopback(t), 9
 }
 
 func (s *gateStack) attachUDP(comp, nodeName string, inputs map[string]string) *storage.Endpoint {
@@ -70,8 +70,10 @@ func TestNodeUDPEndpointExchangesAndListensInDatagrams(t *testing.T) {
 	s.panel.SetDatagramLoss(30)
 	s.component("panel-1")
 	port := s.port("udp")
-	listen := freeUDPPort(t)
-	ep := s.attachUDP("panel-1", "edge-udp", map[string]string{"host": s.ip, "port": fmt.Sprint(port), "listen-port": fmt.Sprint(listen)})
+	// No listen-port: the kernel picks the endpoint's port, read back from
+	// the face's sources below. Binding a declared port is proven at the
+	// collection tier, where the bind is immediate.
+	ep := s.attachUDP("panel-1", "edge-udp", map[string]string{"host": s.ip, "port": fmt.Sprint(port)})
 	s.runNode("edge-udp")
 
 	s.waitFor("panel-1", ep.Name, "endpoint-responsive", is("up"), "up, through the loss")
@@ -119,8 +121,21 @@ func TestNodeUDPEndpointExchangesAndListensInDatagrams(t *testing.T) {
 		t.Fatalf("the change took %s, a poll's pace, not a push's", took)
 	}
 
-	// A stranger sends the endpoint's port a push of its own: dropped.
-	node := &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1), Port: listen}
+	// A stranger sends the endpoint's port a push of its own: dropped. The
+	// endpoint's port is the one source the face holds a session for besides
+	// the stranger.
+	var node *net.UDPAddr
+	for _, src := range s.panel.UDPSources() {
+		if src != other.LocalAddr().String() {
+			node, err = net.ResolveUDPAddr("udp4", src)
+			if err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	if node == nil {
+		t.Fatalf("the face holds no session for the endpoint: %v", s.panel.UDPSources())
+	}
 	if _, err := other.WriteToUDP([]byte("EVT INPUT usbc\r\n"), node); err != nil {
 		t.Fatal(err)
 	}
@@ -138,8 +153,8 @@ func TestNodeUDPEndpointExchangesAndListensInDatagrams(t *testing.T) {
 
 	// A closed port: nothing listens there, so the host refuses the request.
 	s.component("panel-2")
-	closed := freeUDPPort(t)
-	ep2 := s.attachUDP("panel-2", "edge-udp", map[string]string{"host": "127.0.0.1", "port": fmt.Sprint(closed)})
+	host, closed := closedUDPAddr(t)
+	ep2 := s.attachUDP("panel-2", "edge-udp", map[string]string{"host": host, "port": fmt.Sprint(closed)})
 	s.waitFor("panel-2", ep2.Name, "endpoint-responsive", is("down"), "down: the port is refused")
 	s.waitFor("panel-2", ep2.Name, "endpoint-reachable", is("down"), "down")
 }

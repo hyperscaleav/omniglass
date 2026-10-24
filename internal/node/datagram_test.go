@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/collection"
+	"github.com/hyperscaleav/omniglass/internal/sim/simtest"
 	"github.com/hyperscaleav/omniglass/internal/driver"
 )
 
@@ -228,12 +229,10 @@ func TestTheUDPRequestRungIsTheTransportRung(t *testing.T) {
 }
 
 func TestTheUDPRequestRungReadsAClosedPortRefused(t *testing.T) {
-	probe, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1)})
-	if err != nil {
-		t.Fatal(err)
-	}
-	closed := probe.LocalAddr().String()
-	_ = probe.Close()
+	// Port 9 on a claimed loopback address: nothing can be bound there, so
+	// the host refuses the request (a pick-and-release port could be bound
+	// by a concurrent run first).
+	closed := net.JoinHostPort(simtest.ClaimLoopback(t), "9")
 	m := newDatagramManager(t, newCapture())
 	task := udpProbeTask("r1", "ep-1", udpParams(closed))
 	m.reconcile([]collection.TaskSpec{task})

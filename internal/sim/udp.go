@@ -8,6 +8,7 @@ import (
 	"io"
 	"log/slog"
 	"net"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -108,6 +109,25 @@ func (d *Device) SetDatagramLoss(pct int) {
 	for _, f := range faces {
 		f.loss.set(pct)
 	}
+}
+
+// UDPSources returns the source addresses every datagram face on the device
+// holds a session for, sorted: a test reads which port a node's endpoint
+// sends from (and so where the face pushes) without picking one for it.
+func (d *Device) UDPSources() []string {
+	d.udpMu.Lock()
+	faces := append([]*udpFace(nil), d.udpFaces...)
+	d.udpMu.Unlock()
+	var out []string
+	for _, f := range faces {
+		f.mu.Lock()
+		for key := range f.sources {
+			out = append(out, key)
+		}
+		f.mu.Unlock()
+	}
+	sort.Strings(out)
+	return out
 }
 
 // udpIdle is how long a source's session outlives its last datagram. A
