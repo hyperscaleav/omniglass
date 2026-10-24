@@ -130,8 +130,9 @@ verdict's up/down transitions over time, and an expandable **gate breakdown** wi
 verdict (the endpoint is up only when every applicable probe passed). Every row also wears its
 **reachability ladder**, the rungs a connection is checked on bottom up: **reachable** (a ping,
 informational only, so its chip is dashed and a component that blocks ping never reads down for
-it), **responsive** (the transport answering: a connect, or the protocol's handshake; this is the
-gate, and nothing above it is tried until it passes) and **authenticated** (the login, shown once a
+it), **responsive** (the transport answering: a connect, the protocol's handshake, or, where an
+open port cannot be detected, the driver's request answered; this is the gate, and nothing above it
+is tried until it passes) and **authenticated** (the login, shown once a
 credential was actually tried). Hover or focus a rung for what it checks and what it says now. A
 rung a refusal holds wears the refusal glyph and the rungs above it read untried, while the rungs
 below keep their readings: an endpoint whose login was refused still shows its ping and its
@@ -139,6 +140,12 @@ transport answering. A down endpoint also shows a plain-language **why** line. E
 real reading from the node, and the panel is also the authoring surface: its header carries **Add
 endpoint** (with `endpoint:create`) and each row that maps to an endpoint a **Manage** affordance
 opening that endpoint's detail.
+
+A **udp** endpoint has no port to open, so its breakdown shows a **request** row in its place:
+the driver's request **answered** (with its round trip) or **unanswered**, which is the gate and
+decides the verdict. When the host answers ping but the request goes unanswered, the why line says
+the service is down, the port is closed, or the datagrams are lost; it cannot tell those apart,
+since udp reports nothing for a dropped datagram.
 
 A **tls** endpoint's breakdown adds three rows, each teaching itself on hover: the **handshake** (the
 transport rung, the TLS handshake answered, and how long it took), the **certificate** (its days

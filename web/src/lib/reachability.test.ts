@@ -119,7 +119,10 @@ describe("reason", () => {
       endpoint: "udp",
       transport: "udp",
       responsive: { value: "down", ts: ago(5_000) },
-      layers: [{ layer: "ping", check: "icmp-reachable", value: 1, ts: ago(5_000) }],
+      layers: [
+        { layer: "ping", check: "icmp-reachable", value: 1, ts: ago(5_000) },
+        { layer: "request", check: "endpoint-responsive", value: 0, ts: ago(5_000) },
+      ],
     };
     expect(reason(iface, now)).toMatch(/request goes unanswered/i);
     expect(reason(iface, now)).toMatch(/cannot be detected/i);
@@ -133,7 +136,10 @@ describe("reason", () => {
       transport: "udp",
       responsive: { value: "down", ts: ago(5_000) },
       rejection: { rung: "responsive", class: "protocol" },
-      layers: [{ layer: "ping", check: "icmp-reachable", value: 1, ts: ago(5_000) }],
+      layers: [
+        { layer: "ping", check: "icmp-reachable", value: 1, ts: ago(5_000) },
+        { layer: "request", check: "endpoint-responsive", value: 0, ts: ago(5_000) },
+      ],
     };
     expect(reason(iface, now)).not.toMatch(/unanswered/i);
   });
@@ -147,5 +153,9 @@ describe("layerWord", () => {
   it("renders up/down for the ping layer", () => {
     expect(layerWord({ layer: "ping", check: "icmp-reachable", value: 1, ts: ago(0) })).toBe("up");
     expect(layerWord({ layer: "ping", check: "icmp-reachable", value: 0, ts: ago(0) })).toBe("down");
+  });
+  it("renders answered/unanswered for a udp endpoint's request layer", () => {
+    expect(layerWord({ layer: "request", check: "endpoint-responsive", value: 1, ts: ago(0) })).toBe("answered");
+    expect(layerWord({ layer: "request", check: "endpoint-responsive", value: 0, ts: ago(0) })).toBe("unanswered");
   });
 });

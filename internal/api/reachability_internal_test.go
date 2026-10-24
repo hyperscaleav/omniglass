@@ -85,7 +85,7 @@ func TestCapReason(t *testing.T) {
 // gate) is one the push lane refuses, so no push can stand in for the node
 // here. A new key read here that is not ruled node-only fails this test.
 func TestReachabilityReadsOnlyNodeOnlyKeys(t *testing.T) {
-	keys := []string{verdictKey, responsiveKey, authKey, sessionStateKey, sessionReasonKey, rejectionKey}
+	keys := []string{verdictKey, responsiveKey, authKey, sessionStateKey, sessionReasonKey, rejectionKey, udpResponseKey}
 	for _, l := range reachLayers {
 		keys = append(keys, l.SignalKey, l.TimingKey)
 	}

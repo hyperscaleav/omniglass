@@ -122,7 +122,8 @@ export function reason(iface: ReachEndpoint, now: number = Date.now()): string {
   if (ping && ping.value >= 1 && port && port.value < 1) {
     return "Host answers ping but the control port is refused: service down, box up.";
   }
-  if (ping && ping.value >= 1 && !port && iface.responsive?.value === "down" && !iface.rejection) {
+  const request = iface.layers.find((l) => l.layer === "request");
+  if (ping && ping.value >= 1 && request && request.value < 1 && !iface.rejection) {
     // A udp endpoint (#1037): no port to open, so the rung is the request.
     // A gated one did answer (a terminal reply); its gate row says why.
     return "Host answers ping, but the endpoint's request goes unanswered: an open udp port cannot be detected, so a request answered is the transport rung. The service is down, the port is closed, or the datagrams are lost.";
@@ -140,5 +141,6 @@ export function reason(iface: ReachEndpoint, now: number = Date.now()): string {
 export function layerWord(l: ReachLayer): string {
   const up = l.value >= 1;
   if (l.check === "tcp-open") return up ? "open" : "closed";
+  if (l.layer === "request") return up ? "answered" : "unanswered";
   return up ? "up" : "down";
 }

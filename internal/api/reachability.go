@@ -60,7 +60,7 @@ type reachVerdictBody struct {
 }
 
 type reachLayerBody struct {
-	Layer  string    `json:"layer" doc:"The probe layer word (ping, port)"`
+	Layer  string    `json:"layer" doc:"The probe layer word (ping, port, or request: a udp endpoint's request answered)"`
 	Check  string    `json:"check" doc:"The property_type key of the primary signal"`
 	Value  float64   `json:"value" doc:"The latest signal value (1 = reachable/open, 0 = not)"`
 	Detail string    `json:"detail,omitempty" doc:"A human timing detail (rtt / connect time), when present"`
@@ -262,6 +262,14 @@ func composeEndpoint(ctx context.Context, gw storage.Gateway, comp string, it st
 		row.Layers = append(row.Layers, lb)
 	}
 
+	if it.Transport == "udp" && row.Responsive != nil {
+		lb, err := composeRequestLayer(ctx, gw, comp, it.Name, row.Responsive)
+		if err != nil {
+			return row, err
+		}
+		row.Layers = append(row.Layers, lb)
+	}
+
 	transitions, err := gw.PropertyTransitions(ctx, comp, verdictKey, it.Name, window)
 	if err != nil {
 		return row, err
@@ -270,6 +278,30 @@ func composeEndpoint(ctx context.Context, gw storage.Gateway, comp string, it st
 		row.History = append(row.History, reachHistoryBody{TS: tr.TS, Value: tr.Value})
 	}
 	return row, nil
+}
+
+// udpResponseKey times a udp endpoint's answered request (#1037).
+const udpResponseKey = probekeys.UDPResponseTime
+
+// composeRequestLayer serves a udp endpoint's transport rung (#1037): an open
+// udp port cannot be detected, so the gate is the driver's request answered,
+// read off endpoint-responsive. It is timed by the latest udp-response-time
+// only while answered: an unanswered probe lands no time, so the last one
+// belongs to an earlier answer and is not served as this probe's.
+func composeRequestLayer(ctx context.Context, gw storage.Gateway, comp, instance string, responsive *reachVerdictBody) (reachLayerBody, error) {
+	lb := reachLayerBody{Layer: "request", Check: responsiveKey, TS: responsive.TS}
+	if responsive.Value != "up" {
+		return lb, nil
+	}
+	lb.Value = 1
+	timing, err := gw.LatestMetricInstance(ctx, comp, udpResponseKey, instance)
+	if err != nil {
+		return lb, err
+	}
+	if timing != nil {
+		lb.Detail = fmt.Sprintf("%.1f ms", timing.Value)
+	}
+	return lb, nil
 }
 
 // The tls facts a probe and a session land (#1035).
