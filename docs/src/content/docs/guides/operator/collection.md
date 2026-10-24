@@ -139,6 +139,18 @@ real reading from the node, and the panel is also the authoring surface: its hea
 endpoint** (with `endpoint:create`) and each row that maps to an endpoint a **Manage** affordance
 opening that endpoint's detail.
 
+A **tls** endpoint's breakdown adds three rows, each teaching itself on hover: the **handshake** (the
+transport rung, the TLS handshake answered, and how long it took), the **certificate** (its days
+left, amber inside a month and red once expired, and its expiry date; while a certificate is
+refused it says so rather than show the last accepted one's) and **trust**, how the endpoint
+judges the certificate: verified against the node's roots, pinned on first use (with the key it
+pins), or **not verified**. Skipping verification is an operator's choice, never a driver's default,
+so its row reads it in amber and the endpoint's row wears **unverified** without being expanded. The
+mode is one of the endpoint's driver inputs (`tls-mode`), edited on the endpoint's detail like its
+host or port. A pinned key that changes reads **rejected** with class `certificate`, naming both
+keys; once you know the component was replaced, `omniglass endpoint retry <id> --certificate <the
+offered key>` trusts the new one ([tls](/architecture/collection/#tls)).
+
 To author a reachability check, add an **endpoint** to the component (above), from this
 panel's own header: a bare probe endpoint is the reachability check, and **attaching a
 driver** is the authoring flow for real collection (the spec's functions become the
@@ -147,14 +159,14 @@ Endpoints page.
 
 ### Held sessions
 
-An endpoint whose driver holds its connection open (a line protocol over `tcp`, `telnet` or
+An endpoint whose driver holds its connection open (a line protocol over `tcp`, `tls`, `telnet` or
 `ssh`) is a **session**, and its state wears a pill beside the ladder on the component's
 **Collection** card, on the **Endpoints** panel, and on the endpoint's own detail: **establishing**
 (the first connection, dialing then logging in), **up** (held and logged in; polls and commands
 borrow it), **recovering** (it dropped and the node is redialing on a backoff), **down** (five
 attempts in a row failed; the node keeps redialing slowly, so a component that returns comes back
 on its own) or **rejected** (the component refused in a way retrying cannot fix, such as a wrong
-password or a changed host key; the node dials no more). Rejected is amber with a refusal glyph,
+password, a changed host key or a certificate; the node dials no more). Rejected is amber with a refusal glyph,
 apart from down's red, because it is the one state the node will not leave without someone acting.
 Beside the pill is how long ago the state changed. A state is stored only when it changes, so the
 pill is judged by the endpoint's last seen: an endpoint that has delivered nothing for a while

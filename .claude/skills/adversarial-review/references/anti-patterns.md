@@ -279,14 +279,19 @@ region and a mask line in the frontmatter that paints a box the text cannot resi
 - **Fix:** clear the deadline after each bounded write, give the inner write its own deadline, and
   never return an inner write's error as the read's (internal/collection/telnet.go `Read`).
 
-## node-control-key-pushable (fixed; found by the fingerprint review)
+## node-control-key-pushable (fixed; found by the fingerprint review; the driver-emit lane by the #1035 review)
 
 - **Cue:** a property a node publishes to steer its own future attempts (a gate, a trusted key)
-  that is also a seeded property type, so the operator push lane accepts it.
+  that is also a seeded property type, so any lane that lands a named sample accepts it: the
+  operator push lane, a driver's emits (a poll or listener emit named after it lands as the
+  observed value through the poll path), a calc rule's output.
 - **Failure:** a push grant plants a gate (commands fail, probes drop rungs) or lifts one with a
   future-dated `none`, an unaudited bypass of the audited `:retry`.
-- **Fix:** refuse every node-only key on the push lane by name, on every lane
-  (`nodeOnlyRejection` over `probekeys.IsNodeOnly`, internal/api/telemetry.go).
+- **Fix:** refuse every node-only key by name on every lane that lands a named sample: the push
+  lane (`nodeOnlyRejection` over `probekeys.IsNodeOnly`, internal/api/telemetry.go), driver emits
+  at spec write (`validateEmits`, internal/driver/spec.go, #1035: a driver emitting
+  `tls-certificate` would have had the worklist deliver its constant as the pin, bypassing the
+  audited `:retry`), calc outputs (`probekeys.IsNative`, internal/storage/calc_rules.go).
 - **Also (#1059):** a node's account of itself that a surface reads as the node's (a held
   session's `session-state` and `session-reason`) is the same class: a push read a rejected
   session up, hiding its Retry, or planted a reason the node never scrubbed.
@@ -305,6 +310,9 @@ region and a mask line in the frontmatter that paints a box the text cannot resi
   "five seconds"), so the endpoint stops collecting while the operator saw success.
 - **Fix:** parse the value where it is accepted and refuse it naming the field
   (`patchedConnection`, internal/storage/endpoints.go).
+- **Also (#1035):** the bare-endpoint path takes params as given, so a key the dialer reads with
+  meaning (a tls endpoint's `tls-mode`) is parsed there too (`checkBareParams`), not only on the
+  driver path's inputs.
 
 ## fixture-hangs-up-before-the-check (fixed; found by CI on #1061)
 
@@ -348,3 +356,14 @@ region and a mask line in the frontmatter that paints a box the text cannot resi
   aborts every later test and never prints the error that started it.
 - **Fix:** broadcast the exit by closing a channel and keep the result in a field read after it
   closes (`process` and `watch`, internal/e2e/server_e2e_test.go; `TestADeadServerFailsTheWaitAndFreesItsCleanup`).
+
+## frozen-fact-served-as-current (fixed; found by the #1035 review)
+
+- **Cue:** a read that serves a latest-ever sample (a certificate's days left, a handshake's
+  result) beside a gate or state that stops the probe from refreshing it.
+- **Failure:** under a certificate gate the tls probe connects only, so the last accepted
+  certificate's expiry and days left freeze; the panel kept showing "212 days left" in green
+  beside a rejected endpoint whose component now offers another certificate entirely.
+- **Fix:** tie the fact to what can refresh it: withhold it (or label it with its age) while the
+  gate holds (`composeTLS`, internal/api/reachability.go), and have the surface name the refusal
+  instead of reading as nothing measured.

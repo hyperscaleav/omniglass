@@ -270,7 +270,7 @@ func seedSimEndpoints(ctx context.Context, gw storage.Gateway, actorID string, d
 		// Pinned once, at creation: a re-run skips the endpoint above, so a
 		// key an operator trusted since is never put back.
 		if se.HostKey != "" {
-			if _, err := gw.RetryEndpoint(ctx, actorID, created.ID, se.HostKey, all, all); err != nil {
+			if _, err := gw.RetryEndpoint(ctx, actorID, created.ID, storage.RetryPin{HostKey: se.HostKey}, all, all); err != nil {
 				return fmt.Errorf("devseed: pin the host key of the simulated %s endpoint on %s: %w", se.Driver, se.Component, err)
 			}
 		}

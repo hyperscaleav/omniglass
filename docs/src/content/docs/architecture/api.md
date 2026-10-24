@@ -281,10 +281,14 @@ secrets under the editor's scope, audited, its tasks re-derived in the same tran
 `POST /endpoints/{id}:retry`
 (gated `endpoint:retry`, audited, #1049) moves the endpoint's retry counter, part of its connection
 fingerprint, so a gate a terminal refusal holds lifts and the endpoint is attempted again (ADR-0158); for an ssh endpoint whose host key changed, its optional `host_key`
-body declares the new pin (#1032). While the endpoint's gate names an offered key, `host_key` must be
-that key: any other is a 409 that writes nothing, so a trust confirmed against a view the record has
-since moved past cannot pin a key nobody read, and the audit row carries the pin replaced
-(`old.host_key`), the pin set (`new.host_key`) and the actor (#1078,
+body declares the new pin (#1032), and for a tls endpoint whose certificate's public key changed,
+`host_key` (the key the endpoint's transport pins) or its tls-only twin `certificate` does the same
+(#1035, ADR-0160); a key is refused (422) on a transport that pins none, as `certificate` is off a
+tls endpoint, two different keys at once, and anything not a `SHA256:` fingerprint. While the
+endpoint's gate names an offered key, the key must be that key: any other is a 409 that writes
+nothing, so a trust confirmed against a view the record has since moved past cannot pin a key nobody
+read, and the audit row carries the pin replaced (`old.host_key`, or `old.certificate` for tls), the
+pin set (`new.host_key`, `new.certificate`) and the actor (#1078,
 [ADR-0159](/architecture/decisions/#adr-0159-a-refused-keys-evidence-rides-its-gate-and-trusting-a-key-is-checked-against-the-one-offered)). The routes live in the
 [generated API reference](/reference/api/), rendered from the OpenAPI document on every build, each
 operation's description naming its permission gate verbatim (a guard test enforces that, alongside the
@@ -464,12 +468,15 @@ out-of-scope component is a non-disclosing 404 (a deliberate early exception to
   500 characters), and the `rejection` a terminal refusal holds (the rung and class of
   `endpoint-rejection`; the connection fingerprint it carries is never served), which the console's
   session pill and ladder render (#1059). A refusal of a changed key adds `pinned_key` and
-  `offered_key`, both or neither, read off the gate as data (#1078): the console names them and
-  trusts the exact `offered_key` it showed, never a fingerprint parsed out of the reason. Teardown
-  publishes no state, which is why a session is served only while one is held. Every key this read
-  composes is a native probe key, the node's own observation: the verdict and its rungs, the probe
-  metrics and timings, a session's state and reason, the gate. `POST /telemetry:push` refuses each by
-  name on every lane, whatever instance it names (#1080, [ADR-0158](/architecture/decisions/#adr-0158-one-connection-fingerprint-gates-every-connection-on-a-ladder-the-driver-declares)
+  `offered_key`, both or neither, read off the gate as data (#1078; a tls certificate refusal the
+  same way, #1035): the console names them and trusts the exact `offered_key` it showed, never a
+  fingerprint parsed out of the reason. A tls endpoint's row also carries `tls`: its verification
+  mode, the key it pins (pin mode alone), the latest handshake time, and the certificate's expiry and
+  days left, withheld while a certificate gate holds (#1035). Teardown publishes no state, which is
+  why a session is served only while one is held. Every key this read composes is a native probe
+  key, the node's own observation: the verdict and its rungs, the probe metrics and timings, a
+  session's state and reason, the gate, a tls endpoint's pin and certificate facts. `POST
+  /telemetry:push` refuses each by name on every lane, whatever instance it names (#1080, [ADR-0158](/architecture/decisions/#adr-0158-one-connection-fingerprint-gates-every-connection-on-a-ladder-the-driver-declares)
   point 5), so no push can stand in for the node in any of it.
 - `GET /components/{name}/events` is the log-kind mirror: the component's recent **log occurrences**
   (the [`event` log sink](/architecture/core-entities/#the-event-sink-the-first-arc-owned-occurrence)),

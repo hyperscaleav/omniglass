@@ -64,17 +64,20 @@ type Doc struct {
 // the push line. Empty Subjects means the interface accepts no
 // subscriptions even if it is Persistent.
 type Interface struct {
-	Name          string            `yaml:"name"`
-	Protocol      string            `yaml:"protocol"`
-	Port          int               `yaml:"port"`
-	TLS           bool              `yaml:"tls"`
-	Doc           Doc               `yaml:"doc"`
-	Auth          Auth              `yaml:"auth"`
-	APISurface    string            `yaml:"api_surface"`
-	Routes        []Route           `yaml:"routes"`
-	Commands      []Command         `yaml:"commands"`
-	OIDMap        map[string]string `yaml:"oid_map"`
-	ReachableWhen string            `yaml:"reachable_when"`
+	Name     string `yaml:"name"`
+	Protocol string `yaml:"protocol"`
+	Port     int    `yaml:"port"`
+	TLS      bool   `yaml:"tls"`
+	// TLSValidityDays is a tls face's certificate validity window, counted
+	// from the face's start (#1035); zero is a year. Only on a face with tls.
+	TLSValidityDays int               `yaml:"tls_validity_days"`
+	Doc             Doc               `yaml:"doc"`
+	Auth            Auth              `yaml:"auth"`
+	APISurface      string            `yaml:"api_surface"`
+	Routes          []Route           `yaml:"routes"`
+	Commands        []Command         `yaml:"commands"`
+	OIDMap          map[string]string `yaml:"oid_map"`
+	ReachableWhen   string            `yaml:"reachable_when"`
 
 	// MIB names the SNMP MIB file this device's enterprise OID arc is
 	// defined in (e.g. the Boreal Edge). Empty for devices with no
@@ -598,6 +601,12 @@ func (s *Store) loadDevices(fsys fs.FS, dir string) error {
 func validateInterfaces(p *DeviceProfile) error {
 	seen := map[string]string{}
 	for _, iface := range p.Interfaces {
+		if iface.TLSValidityDays != 0 && !iface.TLS {
+			return fmt.Errorf("interface %q sets tls_validity_days but serves no tls", iface.Name)
+		}
+		if iface.TLSValidityDays < 0 {
+			return fmt.Errorf("interface %q sets a negative tls_validity_days", iface.Name)
+		}
 		if iface.Protocol != "ssh" && iface.Protocol != "telnet" && iface.Protocol != "snmp" {
 			continue
 		}

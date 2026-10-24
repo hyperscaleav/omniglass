@@ -1,10 +1,11 @@
 // Package probekeys declares the sample keys the native collection probes
-// write (tcp, icmp, http, ssh, the endpoint verdicts they roll up into, and
-// a held session's state), and who may write each.
+// write (tcp, icmp, http, ssh, tls, the endpoint verdicts they roll up into,
+// and a held session's state), and who may write each.
 // A leaf, so the probes (internal/collection), the storage gateway's calc rule
-// check (a calc rule may not write a key a collection writes) and the push
-// lane (which refuses a key only a node may write) read this one declaration.
-// A driver's keys are declared in its spec instead.
+// check (a calc rule may not write a key a collection writes), the driver
+// spec's emit check (a driver may not emit a key only a node writes) and the
+// push lane (which refuses a key only a node may write) read this one
+// declaration. A driver's keys are declared in its spec instead.
 package probekeys
 
 import (
@@ -37,6 +38,19 @@ const (
 	// trusted on first use and every matching key after, so the series is
 	// the pin's history and a change shows as a rejection beside it.
 	SSHHostKey = "ssh-host-key"
+	// TLSHandshakeTime is the tls probe's handshake timing (#1035), one
+	// observation per answered probe.
+	TLSHandshakeTime = "tls-handshake-time"
+	// TLSCertificate is the public key a tls endpoint pins (#1035): the key
+	// a pin-mode connection trusted on first use (published again while the
+	// worklist does not deliver it back), or the operator's declared key.
+	TLSCertificate = "tls-certificate"
+	// TLSCertificateExpiry is the not-after of the certificate a tls probe
+	// accepted (RFC 3339), transition-only.
+	TLSCertificateExpiry = "tls-certificate-expiry"
+	// TLSCertificateDaysLeft is the days from the probe to that not-after,
+	// one observation per probe, the number a threshold rule reads.
+	TLSCertificateDaysLeft = "tls-certificate-days-left"
 	// EndpointRejection is an endpoint's gate (#1056 ruling, ADR-0158): the
 	// ladder rung a terminal refusal holds, its class, and the connection
 	// fingerprint it holds for ("authenticated auth <fingerprint>"), or
@@ -54,13 +68,15 @@ const (
 // (#1080): the reachability verdicts and their rungs, the probe metrics and
 // their timings, and the node's account of its own connection (a held
 // session's state and reason, the host key it trusted, the gate it
-// publishes). The console reads each as the node's observation, and the gate
-// and the host key steer what the node attempts (ADR-0158), so the push lane
-// refuses every one by name: a push may not forge a verdict or a timing, plant
-// or lift a gate, or read a rejected session up.
+// publishes, a tls endpoint's pin and certificate facts). The console reads
+// each as the node's observation, and the gate and the pins (the ssh host key,
+// the tls certificate's public key) steer what the node attempts (ADR-0158,
+// ADR-0160), so the push lane refuses every one by name: a push may not forge
+// a verdict or a timing, plant or lift a gate, or read a rejected session up.
 var nodeOnly = []string{
 	TCPOpen, TCPConnectTime, ICMPReachable, ICMPRTTAvg, HTTPResponseTime, SSHHandshakeTime, TelnetResponseTime,
 	EndpointReachable, EndpointResponsive, EndpointAuthenticated, SessionState, SessionReason, SSHHostKey, EndpointRejection,
+	TLSHandshakeTime, TLSCertificate, TLSCertificateExpiry, TLSCertificateDaysLeft,
 }
 
 // pushable are the native keys a push may write too, each mapped to the

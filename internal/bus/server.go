@@ -235,6 +235,7 @@ func (s *Server) buildWorklistReply(node string) (collection.WorklistReply, erro
 			Session:        t.Session,
 			SessionRetry:   t.SessionRetry,
 			HostKey:        t.HostKey,
+			CertificatePin: t.CertificatePin,
 			Fingerprint:    t.Fingerprint,
 			Rejection:      t.Rejection,
 			Ladder:         t.Ladder,

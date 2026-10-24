@@ -20,6 +20,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/hyperscaleav/omniglass/internal/collection/probekeys"
 	"github.com/hyperscaleav/omniglass/internal/transport"
 )
 
@@ -450,6 +451,9 @@ func (s *Spec) Validate(cat Catalog) error {
 			return err
 		}
 	}
+	if err := s.validateTLSInputs(); err != nil {
+		return err
+	}
 	if err := s.validateSession(); err != nil {
 		return err
 	}
@@ -517,6 +521,15 @@ func validateEmits(family, fn string, emits []Emit, cat Catalog) error {
 		if em.Name == "" {
 			return fmt.Errorf("driver: %s %q emits a sample with no name", family, fn)
 		}
+		if probekeys.IsNodeOnly(em.Name) {
+			// A key only a node's own probe writes (a pin, the gate, a held
+			// session's account of itself, a verdict or a probe timing) is the
+			// node's alone: emitted by a driver it would land as the observed
+			// value, and for a pin the worklist would deliver it back as the
+			// pin (#1035 review), so it is refused here as the push lane
+			// refuses it (#1080).
+			return fmt.Errorf("driver: %s %q emits %q, a key only the node's own collection writes", family, fn, em.Name)
+		}
 		if cat != nil {
 			if _, ok := cat.LaneOf(em.Name); !ok {
 				return fmt.Errorf("driver: %s %q emits %q, which no catalog holds", family, fn, em.Name)
@@ -579,7 +592,7 @@ func checkPollShape(tr string, p Poll) error {
 				return fmt.Errorf("driver: snmp poll %q emit %q must locate by oid", p.Name, em.Name)
 			}
 		}
-	case "tcp", "telnet", "ssh":
+	case "tcp", "tls", "telnet", "ssh":
 		if !isLineTransport(tr) {
 			return fmt.Errorf("driver: poll %q rides transport %q, which has no poll fetcher yet", p.Name, tr)
 		}

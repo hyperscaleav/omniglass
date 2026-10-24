@@ -32,10 +32,15 @@ type Transport struct {
 
 // registry is the one authoritative list, in the order surfaces render it:
 // cheapest first. tcp is both: its reachability probe dials per poll, and the
-// line protocol a driver speaks over it holds a session (#817).
+// line protocol a driver speaks over it holds a session (#817). tls is the
+// same line protocol over a TLS connection (#1035): its own entry rather than
+// an option on tcp, since an endpoint is named by its transport (so a
+// component can hold a raw port and a TLS one) and its rung is the handshake,
+// over the TLS primitive in internal/collection that other carriers consume.
 var registry = []Transport{
 	{Name: "icmp", Description: "ICMP echo / ping reachability and RTT.", Held: false, Built: true},
 	{Name: "tcp", Description: "Raw TCP: the connect / port-open check, and the line protocol, which holds a session over it (polls, commands, and listeners share one connection).", Held: true, Built: true, Line: true, Rung: "connect"},
+	{Name: "tls", Description: "TLS: the line protocol over a TLS connection, held exactly as it is over tcp; the probe runs the handshake (responds) and reports the certificate's expiry, verified against the node's roots, pinned to the public key on first use, or (by the operator's explicit choice) not verified.", Held: true, Built: true, Line: true, Rung: "handshake"},
 	{Name: "udp", Description: "UDP datagram transport; probing arrives with its driver.", Held: false, Built: false, Rung: "request"},
 	{Name: "telnet", Description: "Telnet: the line protocol over TCP with option negotiation (every option refused), its login the session's auth step; the probe connects and waits for the first negotiation or banner bytes (responds).", Held: true, Built: true, Line: true, Rung: "connect"},
 	{Name: "ssh", Description: "SSH: the probe runs a real key exchange (responds) and tries the endpoint credential when one is set (auth); the line protocol holds a shell or exec channel over it, its userauth the session's auth step and its host key pinned on first use.", Held: true, Built: true, Line: true, Rung: "handshake"},

@@ -75,6 +75,8 @@ type Runner struct {
 	Line LineExchanger
 	// Telnet is the telnet reachability probe (#1033).
 	Telnet TelnetProbe
+	// TLS is the tls reachability probe (#1035).
+	TLS TLSProber
 }
 
 // CollectTCP runs one tcp task and returns its samples. A tcp probe always

@@ -212,6 +212,11 @@ func (p *PG) resolveInputs(ctx context.Context, q querier, d *Driver, sp *driver
 		}
 	}
 	for _, in := range sp.Inputs {
+		if v, ok := effective[in.Name]; ok {
+			if err := sp.CheckInputValue(in.Name, v); err != nil {
+				return nil, fmt.Errorf("%w: %v", ErrAttachInvalid, err)
+			}
+		}
 		if in.Kind == "number" {
 			if v, ok := effective[in.Name]; ok {
 				if _, err := strconv.ParseFloat(v, 64); err != nil {
@@ -286,10 +291,14 @@ func (p *PG) resolveInputs(ctx context.Context, q querier, d *Driver, sp *driver
 
 // attachParams derives the transport params from the effective inputs by the
 // engine's naming contract: an input named `host` is the address, an input
-// named `port` joins it. Everything else stays in inputs, read by the
+// named `port` joins it, and an input named `tls-mode` is the tls dialer's
+// verification mode (#1035). Everything else stays in inputs, read by the
 // interpreter, not the dialer.
 func attachParams(effective map[string]string) map[string]string {
 	params := map[string]string{}
+	if mode, ok := effective[driver.TLSModeInput]; ok {
+		params[driver.TLSModeInput] = mode
+	}
 	if host, ok := effective["host"]; ok {
 		if port, ok := effective["port"]; ok && port != "" {
 			params["target"] = net.JoinHostPort(host, port)

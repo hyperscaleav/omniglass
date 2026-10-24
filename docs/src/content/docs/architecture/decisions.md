@@ -198,6 +198,7 @@ below from the project's history. From here it grows one slice at a time.
 | [ADR-0157](#adr-0157-telnet-and-ssh-are-held-line-transports-their-login-is-the-drivers-and-the-ssh-host-key-is-pinned-on-first-use) | 2026-10-23 | Accepted | `telnet` (#1033) and `ssh` (#1032) are held line transports: the same session machine and line reader, telnet behind a filter refusing every option, ssh over a shell or exec channel. Their session's login is the driver's (`session.login`, `session.credential`), not endpoint params; the telnet probe never logs in, and the ssh probe's params login is a known gap (#1060). The ssh host key is pinned on first use as the `ssh-host-key` property (observed), delivered back by the worklist, overridden by a declared value an operator sets with `:retry` and `host_key`; a changed key is a `host-key` refusal |
 | [ADR-0158](#adr-0158-one-connection-fingerprint-gates-every-connection-on-a-ladder-the-driver-declares) | 2026-10-23 | Accepted | One **connection fingerprint** gates every connection, held or stateless (#1056 ruling): a digest the server computes over every input a connection is made with (transport, declared params, driver inputs, each secret's sealed version, the session block, the ladder, the ssh pin, the `:retry` counter), held in `internal/fingerprint`. Connections are verified bottom up on the existing ladder (reachable, informational ping; responsive, the transport rung and the gate; authenticated, the login), declared in the driver spec with registry defaults. A terminal refusal gates its rung and above for the fingerprint; lower rungs keep running; the gate is published as `endpoint-rejection` and carried back so a restart honours it. **Amended (#1059, #1080):** the push lane refuses every native probe key by name, not only the gate and the host key |
 | [ADR-0159](#adr-0159-a-refused-keys-evidence-rides-its-gate-and-trusting-a-key-is-checked-against-the-one-offered) | 2026-10-24 | Accepted | A refusal of a changed key carries both keys as data on its gate (#1078, amending ADR-0158 point 5): `endpoint-rejection` appends `<pinned-key> <offered-key>`, both or neither, declared once in `internal/collection/rejection`, adopted with the gate on a restart, and served as the reachability read's `pinned_key` and `offered_key`, so no surface parses a fingerprint out of `session-reason`. `:retry` with `host_key` must name the gate's offered key while one is held (409 otherwise, nothing written) and audits the pin replaced and the pin set. The console's Trust this key confirms first and sends exactly the key it showed |
+| [ADR-0160](#adr-0160-tls-is-its-own-transport-over-a-shared-primitive-and-its-pin-is-the-public-key) | 2026-10-24 | Accepted | `tls` is its own held line transport (rung `handshake`) over one TLS dial primitive the http, websocket and mqtt carriers consume later, so a component holds a raw port and a TLS one side by side (#1035). The verification mode is the driver input `tls-mode` (verify, pin, skip), the driver's default, verify when none, skip never a default. The pin is the public key (SPKI, the ssh `SHA256:` form), trusted on first use as `tls-certificate`, delivered back by the worklist, one per endpoint shared by its session and probe; a changed key or a failed verification is a terminal `certificate` refusal at the transport rung, the gate carrying the pinned and offered keys as data; `:retry` with `certificate` accepts a new key. The probe lands one `tls-handshake-time` per answered probe and, for an accepted certificate, `tls-certificate-expiry` and `tls-certificate-days-left` |
 
 ## Entries
 
@@ -6993,7 +6994,11 @@ interface create form, since that name is the platform's to mint.
   websocket, and udp datagrams once #1037 lands) is a **driver**: ONVIF is SOAP over http (#1042).
   A driver that needs something its carrier cannot do yet (a body format, an auth scheme, a stream
   mode, TLS) makes that **capability** on the existing transport, proven by the driver: SSE on http
-  (#1038), tls (#1035), sftp on ssh (#1045), and http fetching a body as a file (#1044). A
+  (#1038), tls (#1035), sftp on ssh (#1045), and http fetching a body as a file (#1044).
+  **Amended ([ADR-0159](#adr-0160-tls-is-its-own-transport-over-a-shared-primitive-and-its-pin-is-the-public-key)):**
+  tls is its own transport over a shared primitive, since a secure variant that needs its own
+  endpoint name and rung is its own registry entry; it stays a capability on http, websocket and
+  mqtt. A
   protocol that moves whole files rather than values lands as a **file sample** (#1043, the
   primitive #1044 through #1047 depend on). A protocol with its own framing, addressing, or session handshake is a
   **new transport** plus a generic driver on it, the `snmp` and `snmp-generic` pattern: ssh (#1032),
@@ -7195,7 +7200,11 @@ interface create form, since that name is the platform's to mint.
      unregistered), under any instance and any casing, and its reason names the key. The node's own
      lane never reads the ruling, so it writes every one of them as before. **Amended (#1078):** a refusal of a changed
      key appends its evidence, `<pinned-key> <offered-key>`, to the gate's value
-     ([ADR-0159](#adr-0159-a-refused-keys-evidence-rides-its-gate-and-trusting-a-key-is-checked-against-the-one-offered)).
+     ([ADR-0159](#adr-0159-a-refused-keys-evidence-rides-its-gate-and-trusting-a-key-is-checked-against-the-one-offered)). **Amended
+     ([ADR-0160](#adr-0160-tls-is-its-own-transport-over-a-shared-primitive-and-its-pin-is-the-public-key)):**
+     a tls certificate refusal for a changed key carries the same evidence; the tls keys
+     (`tls-certificate`, the handshake time and the certificate facts) are node-only, and a driver
+     may not emit a node-only key either.
   6. **Connection inputs edit in place** (the architect's ruling on #1061). A driver-attached
      endpoint's host, port and attached secret references are patched through `PATCH
      /endpoints/{id}` `inputs`, validated against the driver's declared inputs (a refused value is a
@@ -7252,3 +7261,59 @@ interface create form, since that name is the platform's to mint.
   the refusal it gates; and it is per key, not per transport, so the tls slice reuses it unchanged.
   A trust confirmed against a stale view (another operator retried, and the component now offers a
   third key) would pin a key nobody read; the server's check is what makes "the key shown" binding.
+
+### ADR-0160: TLS is its own transport over a shared primitive, and its pin is the public key
+
+- **Date:** 2026-10-24 | **Status:** Accepted | **Pages:** [collection](/architecture/collection/), [nodes](/architecture/nodes/), [glossary](/architecture/glossary/), [drivers](/guides/admin/drivers/), [simulation](/architecture/simulation/), [api](/architecture/api/)
+- **Decision:** (#1035, under the architect's approval of epic #1076, decisions 1 to 4 and 7a.)
+  1. **A distinct transport over a shared primitive.** `tls` joins the registry as a held line
+     transport with the handshake as its rung: the line protocol rides it exactly as it rides
+     `tcp`, one session machine, one reader, one routing. The handshake is one primitive in
+     `internal/collection` (`HandshakeTLS`), which the http (https), websocket and mqtt carriers
+     consume later as a capability on their own transport. **The placement rule:** a secure
+     variant of a carrier that needs its own endpoint name and its own rung is its own registry
+     entry over a shared primitive; one that needs neither is a capability on the carrier. This
+     amends [ADR-0153](#adr-0153-the-held-session-proof-is-the-line-protocol-over-tcp-other-held-transports-are-their-own-issues),
+     which placed tls as a capability on tcp.
+  2. **The mode is a driver input.** `tls-mode` (`verify`, `pin`, `skip`) is derived into the
+     endpoint's params as `host` and `port` are, so it edits in place (`PATCH /endpoints/{id}`
+     `inputs`) and moves the connection fingerprint. The driver declares its default (the
+     seeded `newtron-nvp-tls` pins, since its gear self-signs); a driver that declares none
+     verifies; a spec defaulting to `skip` is refused at write, so skip is only ever an
+     operator's choice, shown on the endpoint. Verify checks the chain against the node's
+     system roots and the host input as the server name. TLS 1.2 is the floor.
+  3. **The pin is the public key.** The fingerprint of the leaf's SubjectPublicKeyInfo, in the
+     `SHA256:` form ssh fingerprints a host key in, so a renewal that keeps the key is no change.
+     Pin on first use follows [ADR-0157](#adr-0157-telnet-and-ssh-are-held-line-transports-their-login-is-the-drivers-and-the-ssh-host-key-is-pinned-on-first-use)
+     point 3: the node trusts the first key, publishes it as the observed `tls-certificate` (a
+     node-only key the push lane refuses and no driver may emit), and the worklist delivers it back (the declared
+     value first); the declared pin alone is a fingerprint input. The node keeps **one pin per
+     endpoint, shared by its held session and its probe**, admitted atomically and only once the
+     handshake completes, so neither trusts a key the other refused.
+  4. **A refusal retrying cannot fix is `certificate`, at the transport rung.** A changed key and
+     any verification failure (an unknown authority, a name mismatch, an expired certificate)
+     reject with their reason, never a timeout; beneath the gate only the TCP connect runs, so no
+     handshake (and so no login, poll, command or arm) reaches the new key, across a node restart
+     too. For a changed key the gate value carries both keys as the evidence
+     [ADR-0159](#adr-0159-a-refused-keys-evidence-rides-its-gate-and-trusting-a-key-is-checked-against-the-one-offered)
+     gives a refused host key (`<rung> <class> <fingerprint> <pinned-key> <offered-key>`), and the
+     reachability read serves them as `pinned_key` and `offered_key`, so the console's trust-this-key
+     notice renders a certificate refusal unchanged and never parses a reason. An operator accepts it with `:retry` and `certificate`, or `host_key` (the
+     key the endpoint's transport pins, the field a key refusal's trust action sends), gated
+     `endpoint:retry`, held to ADR-0159's rule (the exact offered key while a refusal names one, else
+     a 409), and audited, which declares the pin.
+  5. **What the probe lands.** `tcp-open` and the connect time, `endpoint-responsive`, one
+     `tls-handshake-time` per probe the component answered (a rung-specific name until #1063 folds
+     probe timings into `rtt`), and, for a certificate the mode accepted, both
+     `tls-certificate-expiry` (the not-after, a property) and `tls-certificate-days-left` (a
+     metric, one observation per probe). A refused certificate lands no certificate fact.
+  6. **The simulated face.** The panel serves NVP over TLS (`nvp-tls`) with a key derived from
+     the simulated component's id, so it is the same on every run and a pinned endpoint survives a simulator
+     restart; the profile sets the certificate's validity window.
+- **Context:** #1035 and the `/scope-protocol` skill placed tls as an option on tcp. An endpoint's
+  name is its transport and unique per component, so an option would have let a component hold
+  only one of a raw port and a TLS one, and made the handshake rung a conditional default. A
+  certificate pin rejects every renewal, even one that keeps the key; the key is what ssh pins
+  too. An expression cannot read the clock, so a rule cannot turn a not-after into "fewer than 30
+  days": the property is the fact and the metric is the number a threshold rule reads. A per-run
+  simulator certificate would reject every pinned endpoint on each restart.

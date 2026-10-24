@@ -288,6 +288,9 @@ type Device struct {
 	httpServing   sync.WaitGroup // one per running serve goroutine
 	snmpServer    snmpShutdowner // the SNMP read loop, kept as an interface so device.go doesn't import the server package
 	sshListener   net.Listener
+	// tlsID is the key and certificate the device's tls line face serves
+	// (#1035), derived from its id so it is the same on every run.
+	tlsID tlsIdentity
 	// sshHostKey is the device's SSH host key, minted on the first StartSSH
 	// and kept across listener restarts, as a real device keeps its key; a
 	// test rotates it to model a replaced or reimaged device (#1032).

@@ -54,7 +54,12 @@ The arc's closeout is #818. Built since: **auth is a layer that gates the sessio
 driver's declared login runs as the session's auth step before anything rides the connection, its
 verdict the `endpoint-authenticated` rung, and a refusal retrying cannot fix reads `rejected` and
 stops dialing ([ADR-0155](/architecture/decisions/#adr-0155-auth-is-a-layer-that-gates-a-held-session-and-a-terminal-refusal-reads-rejected),
-[ADR-0156](/architecture/decisions/#adr-0156-a-driver-declares-its-terminal-replies-and-a-transport-classifies-its-own-refusals)). See
+[ADR-0156](/architecture/decisions/#adr-0156-a-driver-declares-its-terminal-replies-and-a-transport-classifies-its-own-refusals)).
+Built since: **the line protocol over tls** (#1035): `tls` is its own held line transport whose
+transport rung is the handshake, verified against the node's roots, pinned to the public key on
+first use, or (by the operator's choice) not verified, a refused certificate reading `rejected`
+with class `certificate` ([below](#tls),
+[ADR-0160](/architecture/decisions/#adr-0160-tls-is-its-own-transport-over-a-shared-primitive-and-its-pin-is-the-public-key)). See
 [ADR-0037](/architecture/decisions/#adr-0037-telemetry-is-a-protobuf-event-over-jetstream-with-an-inline-owner-confining-consumer),
 [ADR-0038](/architecture/decisions/#adr-0038-the-reachability-verdict-is-a-built-in-state),
 [ADR-0039](/architecture/decisions/#adr-0039-an-endpoint-is-a-device-api-the-endpoint-type-is-its-transport-not-its-driver),
@@ -161,7 +166,7 @@ Waiting for a frame is one mode (**listen**) regardless of transport; statefulne
 
 Built (#816): a session **holds its connection** across ticks. The node holds one per endpoint
 whose worklist carries a standing listen task over a transport with a session dialer (the line
-protocol over `tcp`, `telnet` (#1033) and `ssh` (#1032)), or any driver poll over `telnet` or `ssh`, or a driver poll whose driver declares a `session` block (a login a
+protocol over `tcp`, `tls` (#1035), `telnet` (#1033) and `ssh` (#1032)), or any driver poll over `tls`, `telnet` or `ssh`, or a driver poll whose driver declares a `session` block (a login a
 throwaway connection would skip, #1049), keyed by the endpoint's id, which the worklist carries
 beside its name (endpoint names are unique only per component). The machine runs on its own:
 
@@ -301,14 +306,19 @@ transport cannot run refuses at write. A terminal refusal gates its rung and eve
 for the endpoint, while the **connection fingerprint** is unchanged: a digest the server computes
 over every input a connection is made with (the transport, the declared params, the driver's
 inputs, a digest of each attached secret's sealed envelope, never its plaintext, the session block,
-the ladder, the ssh pin, and the `:retry` counter). The rungs below keep running, so reachability
+the ladder, the ssh and tls pins an operator declared, and the `:retry` counter). A tls endpoint's
+verification mode is one of its driver's inputs, so editing it moves the fingerprint too. The rungs below keep running, so reachability
 stays observed while auth is rejected. The gate is published as `endpoint-rejection` (`<rung>
 <class> <fingerprint>`, or `none`; a refusal of a changed key appends `<pinned-key> <offered-key>`,
 its evidence, [ADR-0159](/architecture/decisions/#adr-0159-a-refused-keys-evidence-rides-its-gate-and-trusting-a-key-is-checked-against-the-one-offered))
 and carried back on the worklist, so a restarted node makes no attempt against an unchanged
 fingerprint and keeps the evidence it adopts. The ssh probe's params credential rides the same gate
 (#1060): tried once, then the key exchange runs without it until the fingerprint moves, and never
-past a pinned key that changed. Proven end to end (`run_session_identity_test.go`): a silent panel
+past a pinned key that changed. So does the tls probe: under a `certificate` gate it runs only the
+TCP connect, so no handshake reaches a key nobody trusted. A gate for a changed key carries the
+pinned and offered keys after the fingerprint (`responsive certificate <fingerprint> <pinned>
+<offered>`), which the reachability read serves as data (`rejection.pinned_key` and
+`rejection.offered_key`). Proven end to end (`run_session_identity_test.go`): a silent panel
 spends the login budget, then a label edit and a node restart try nothing, while a retry, a
 login-declaration change, a rotated secret, and an ssh attachment each attempt again; a wrong
 port reads down on refused connects and tries no login, and the port edited in place connects and
@@ -322,8 +332,9 @@ across a restart too, and authenticates after a params edit.
 
 Every key a native probe writes, its samples ([below](#poll-protocols-and-their-config)) and the
 node's account of its own connection (the verdict and its rungs, the probe metrics and their
-timings, a held session's state and reason, the host key it trusted, the gate it publishes), is the
-node's own observation, and the console reads it as one. So `POST /telemetry:push` refuses each by
+timings, a held session's state and reason, the host key or tls public key it trusted, a tls
+endpoint's certificate facts, the gate it publishes), is the node's own observation, and the console
+reads it as one. So `POST /telemetry:push` refuses each by
 name (#1080, [ADR-0158](/architecture/decisions/#adr-0158-one-connection-fingerprint-gates-every-connection-on-a-ladder-the-driver-declares)
 point 5): on every lane, not just its own, under any instance and any casing, and the rejection's
 reason names the key. The set is not a second list: it is `internal/collection/probekeys`, the
@@ -332,7 +343,8 @@ may be pushed. None is pushable today, and a key declared there without a ruling
 as does a key the reachability read serves that is not ruled node-only. The node's own lane never
 consults the ruling and lands every one of them. A pusher with a measurement of its own, an outside
 pinger's round trip say, registers a metric type for it rather than borrowing the node's. The push
-lane is one write surface; hardening the others that can reach a native key's series is #1084.
+lane is one write surface; a driver's emits are another, and a spec emitting a node-only key is
+refused at write (#1035); hardening the others that can reach a native key's series is #1084.
 
 ## Endpoint types and their config
 
@@ -355,6 +367,7 @@ the endpoint's `params` JSON, unmarshalled on the node:
 | `http` | inline probe | `target` (`host:port`), `timeout` | the tcp pair, `http-response-time`, `endpoint-responsive` |
 | `telnet` | inline probe | `target` (`host:port`), `timeout` | the tcp pair, `telnet-response-time` (the first negotiation or banner bytes), `endpoint-responsive`; the login is the held session's auth step, never the probe's |
 | `ssh` | inline probe | `target` (`host:port`), `timeout`, optional `username`/`password` (secret references arrive with the driver spec) | the tcp pair, `ssh-handshake-time`, `endpoint-responsive`, `endpoint-authenticated` (only when a credential was tried) |
+| `tls` | inline probe | `target` (`host:port`), `timeout`, `tls-mode` (`verify`, `pin` or `skip`; derived from the driver's `tls-mode` input, verify when unset) | the tcp pair, `tls-handshake-time` (one per probe the component answered), `endpoint-responsive`, and for a certificate the mode accepted `tls-certificate-expiry` and `tls-certificate-days-left` |
 
 The `raw-tcp` row below is built in its driver form: the line protocol over `tcp` holds a session
 (#816) that polls, commands, and listeners share (#817). So is the `telnet` row (#1033): the same line
@@ -377,12 +390,56 @@ key**), which declares the new pin and redials onto it; a key the refusal on rec
 refused. Proven against
 the simulated panel's ssh shell (poll, command, push, recover onto the same key, down after the
 budget, a wrong password and a rotated key each rejected) and end to end ([ADR-0157](/architecture/decisions/#adr-0157-telnet-and-ssh-are-held-line-transports-their-login-is-the-drivers-and-the-ssh-host-key-is-pinned-on-first-use)).
+
+#### tls
+
+Built (#1035,
+[ADR-0160](/architecture/decisions/#adr-0160-tls-is-its-own-transport-over-a-shared-primitive-and-its-pin-is-the-public-key)):
+`tls` is the line protocol over a TLS connection, its own transport rather than an option on `tcp`, since an
+endpoint is named by its transport (a component holds a raw control port and a TLS one side by side)
+and its rung is the handshake. The handshake is one primitive the http, websocket and mqtt carriers
+consume later as a capability of their own. Each connection, the held session's and the probe's,
+runs the TCP connect and then the handshake under the endpoint's **verification mode**, its driver's
+`tls-mode` input, edited in place like a host or a port:
+
+- **verify** checks the certificate against the node's system roots, with the host input as the
+  server name. Any failure (an unknown authority, a name mismatch, an expiry) is a `certificate`
+  refusal carrying its reason, never a timeout: the held session's `session-reason`, and for an
+  endpoint with no held session a node self-log, said once when the probe meets it. A driver that
+  declares no mode verifies.
+- **pin** trusts the first public key the component offers and refuses any other, as the ssh host
+  key is pinned. The pin is the key (its SubjectPublicKeyInfo, in the same `SHA256:` form as an ssh
+  fingerprint), not the certificate, so a renewal that keeps the key is no change, and a certificate
+  past its not-after still connects under its pinned key (its days left read negative, which a rule
+  alarms on). The node publishes
+  the key it trusted as `tls-certificate`, the server delivers it back as the pin on every worklist,
+  and the node keeps one pin per endpoint, shared by its session and its probe and carried across a
+  session's recycle. A changed key reads `rejected`, class `certificate`, naming both keys, and an
+  operator who trusts it (a replaced component) retries the endpoint with it (`:retry` with
+  `certificate`, audited), which declares the new pin. The seeded `newtron-nvp-tls` pins by default,
+  since the gear it speaks to self-signs.
+- **skip** checks nothing: an operator's explicit choice, never a driver's default (a spec defaulting
+  to it is refused at write), shown on the endpoint's row as **unverified**.
+
+The probe lands the handshake rung's timing (`tls-handshake-time`, one observation per probe the
+component answered) and, for a certificate the mode accepted, its not-after as the
+`tls-certificate-expiry` property and the days left as the `tls-certificate-days-left` metric, the
+number a threshold rule reads (an expression cannot read the clock). Under a `certificate` gate the
+probe connects only, so those freeze at the last accepted certificate; the reachability read
+withholds them while the gate holds rather than show them as current, and serves the pinned key in
+pin mode alone. A bare `tls` endpoint's `tls-mode` param is checked where it is written, as a
+driver's input is. TLS 1.2 is the floor, and the
+component is authenticated alone: no client certificates, and no per-endpoint CA bundle. Proven
+against the simulated panel's `nvp-tls` face over a real handshake (poll, command, push, recovery
+onto the same key, a changed key held beneath the gate across a node restart and accepted with
+`:retry`, verify refusing the self-signed face as `certificate`, skip connecting) and end to end.
+
 The other held transports are each their own
-issue: #1034 (websocket), #1035 (tls), #1036 (mqtt), #1037 (udp), #1038 (SSE over http), #1039 (modbus/tcp), #1040 (bacnet/ip), #1041 (knxnet/ip). There is no serial transport: an RS-232 or RS-485 device is reached
+issue: #1034 (websocket), #1036 (mqtt), #1037 (udp), #1038 (SSE over http), #1039 (modbus/tcp), #1040 (bacnet/ip), #1041 (knxnet/ip). There is no serial transport: an RS-232 or RS-485 device is reached
 through an IP-to-serial gateway, which is the `tcp` transport (or `tls` or `telnet`), so its driver is
 a line protocol like any other ([ADR-0153](/architecture/decisions/#adr-0153-the-held-session-proof-is-the-line-protocol-over-tcp-other-held-transports-are-their-own-issues)).
 
-:::design[The remaining transports and their per-task spec, tracked in #603 and #1034 (websocket), #1035 (tls), #1036 (mqtt), #1037 (udp), #1038 (SSE over http), #1039 (modbus/tcp), #1040 (bacnet/ip), #1041 (knxnet/ip)]
+:::design[The remaining transports and their per-task spec, tracked in #603 and #1034 (websocket), #1036 (mqtt), #1037 (udp), #1038 (SSE over http), #1039 (modbus/tcp), #1040 (bacnet/ip), #1041 (knxnet/ip)]
 
 | endpoint type | shape | host/target | per-task params | samples |
 |---|---|---|---|---|
@@ -394,7 +451,7 @@ a line protocol like any other ([ADR-0153](/architecture/decisions/#adr-0153-the
 
 `icmp`/`tcp` are inline probes (config on `endpoint.params`); the rest, in the design model, are held connections: the connection lives on the endpoint, the task names what to read. The ship-with registry seeds the probe built-ins above, the endpoint verdicts, and `session-state` (`internal/seed/metric_types.yaml`, `internal/seed/property_types.yaml`; the [metrics](/guides/admin/metrics/) and [properties](/guides/admin/properties/) guides render each set from the seed); the wider per-transport set (`udp-open`, `snmp-reachable`, the http trio, `<proto>-reachable`/`<proto>-response-time` for the remaining text family; `telnet-response-time` is seeded) is Design, and unregistered names would be reject-not-project dropped at ingest.
 
-:::design[The held-connection transports in detail, tracked in #603 and #1034 (websocket), #1035 (tls), #1036 (mqtt), #1037 (udp), #1038 (SSE over http), #1039 (modbus/tcp), #1040 (bacnet/ip), #1041 (knxnet/ip)]
+:::design[The held-connection transports in detail, tracked in #603 and #1034 (websocket), #1036 (mqtt), #1037 (udp), #1038 (SSE over http), #1039 (modbus/tcp), #1040 (bacnet/ip), #1041 (knxnet/ip)]
 
 For `snmp`, each OID keeps its **native SNMP type**: numeric OIDs land as `metric`, string OIDs
 (OctetString / IPAddress / OID) as `property`, the lane decided at ingest by catalog membership;
