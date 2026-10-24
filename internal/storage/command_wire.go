@@ -59,6 +59,9 @@ type CommandDelivery struct {
 	// comes (#1037): what its binding declares, else none, since a command
 	// sent twice may act twice.
 	Retries int
+	// Request is an http command's rendered request (#902), never carrying
+	// a credential: the node applies the endpoint's scheme.
+	Request *driver.Request
 }
 
 // PendingNodeCommands resolves and marks dispatched the commands a node
@@ -147,7 +150,7 @@ func (p *PG) PendingNodeCommands(ctx context.Context, node string) ([]CommandDel
 		if binding == nil {
 			continue // the jsonb predicate already ensured this, defensively kept
 		}
-		req, err := driver.RenderRequest(binding.Request, intendedString(r.intendedProp, r.intendedMetric), paramsMap(r.params))
+		req, err := driver.RenderRequestTyped(binding.Request, intendedString(r.intendedProp, r.intendedMetric), intendedJSON(r.intendedProp, r.intendedMetric), paramsMap(r.params))
 		if err != nil {
 			// An unrenderable binding is terminal, not retryable, and there is
 			// exactly one delivery endpoint per command, so recording the fault
@@ -158,7 +161,7 @@ func (p *PG) PendingNodeCommands(ctx context.Context, node string) ([]CommandDel
 			}
 			continue
 		}
-		out = append(out, CommandDelivery{
+		d := CommandDelivery{
 			ID:          r.id,
 			CommandType: r.commandType,
 			Transport:   r.transport,
@@ -168,7 +171,13 @@ func (p *PG) PendingNodeCommands(ctx context.Context, node string) ([]CommandDel
 			Reply:       req.Reply,
 			SessionOnly: r.transport != "udp" && (sp.Session != nil || r.transport != "tcp"),
 			Retries:     req.RetriesOr(driver.DefaultCommandRetries),
-		})
+		}
+		if driver.IsHTTP(r.transport) {
+			// An http command is its own request (#902): no session to ride,
+			// no line, the rendered request whole.
+			d.Line, d.SessionOnly, d.Retries, d.Request = "", false, 0, &req
+		}
+		out = append(out, d)
 		delivered = append(delivered, dispatch{r.id, r.endpointID})
 	}
 	for _, d := range delivered {
@@ -404,6 +413,19 @@ func intendedString(prop []byte, metric *float64) string {
 		return strconv.FormatFloat(*metric, 'f', -1, 64)
 	}
 	return ""
+}
+
+// intendedJSON is the intended value's own JSON, which an http body leaf
+// that is exactly ${value} takes with its type (#902): a metric's number, a
+// property's stored JSON. nil when the command carries none.
+func intendedJSON(prop []byte, metric *float64) json.RawMessage {
+	if len(prop) > 0 {
+		return json.RawMessage(prop)
+	}
+	if metric != nil {
+		return json.RawMessage(strconv.FormatFloat(*metric, 'f', -1, 64))
+	}
+	return nil
 }
 
 // paramsMap decodes a command's params for template args; nil on none. Numbers

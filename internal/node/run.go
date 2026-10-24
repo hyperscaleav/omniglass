@@ -36,6 +36,9 @@ type Config struct {
 	// HTTP is the layer-7 http probe primitive (#812). Nil defaults to the
 	// real collection.NewHTTPProber(); tests inject a fake.
 	HTTP collection.HTTPProber
+	// HTTPFetch sends a driver's http and https requests (#902). Nil
+	// defaults to the real collection.NewHTTPFetcher().
+	HTTPFetch collection.HTTPFetcher
 	// SSH is the layer-7 ssh probe primitive (#812). Nil defaults to the
 	// real collection.NewSSHProber(); tests inject a fake.
 	SSH collection.SSHProber
@@ -135,7 +138,11 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 	if tlsProber == nil {
 		tlsProber = collection.NewTLSProber()
 	}
-	runner := &collection.Runner{TCP: dialer, Ping: pinger, HTTP: httpProber, SSH: sshProber, SNMP: snmpGetter, Line: lineExchanger, Telnet: telnetProber, TLS: tlsProber}
+	httpFetcher := cfg.HTTPFetch
+	if httpFetcher == nil {
+		httpFetcher = collection.NewHTTPFetcher()
+	}
+	runner := &collection.Runner{TCP: dialer, Ping: pinger, HTTP: httpProber, SSH: sshProber, SNMP: snmpGetter, Line: lineExchanger, Telnet: telnetProber, TLS: tlsProber, HTTPFetch: httpFetcher}
 
 	// The held sessions (#816): one per endpoint whose worklist carries a
 	// standing listen task over a transport with a session dialer (or a

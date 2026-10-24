@@ -49,6 +49,22 @@ func (s *pollSchedule) failed(taskID string, every time.Duration, now time.Time)
 	s.next[taskID] = now.Add(wait)
 }
 
+// failedAtLeast is failed with a floor on the wait: a component that asked
+// for a Retry-After (#902) is not asked again sooner, though never later than
+// the poll's own interval.
+func (s *pollSchedule) failedAtLeast(taskID string, every time.Duration, now time.Time, atLeast time.Duration) {
+	s.failed(taskID, every, now)
+	if atLeast <= 0 || every <= 0 {
+		return
+	}
+	if atLeast > every {
+		atLeast = every
+	}
+	if next := now.Add(atLeast); next.After(s.next[taskID]) {
+		s.next[taskID] = next
+	}
+}
+
 // succeeded ends a poll's failing streak; its next run stays booked from
 // its due time.
 func (s *pollSchedule) succeeded(taskID string) {

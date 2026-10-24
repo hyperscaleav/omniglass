@@ -163,7 +163,7 @@ func TestAnSNMPAuthorizationErrorGatesTheSessionRungAndHoldsTheGet(t *testing.T)
 		Secrets:        map[string]map[string]string{"community": {"community": "lab-ro"}},
 		Spec: json.RawMessage(`{"driver":"snmp-generic","function":"scalars","request":{"get":["1.3.6.1.2.1.1.3.0"]},
 			"emits":[{"name":"uptime","lane":"metric","extract":{"oid":"1.3.6.1.2.1.1.3.0"}}]}`)}
-	if _, gated := m.blocked(poll.EndpointID, statelessRung(poll.Transport)); !gated {
+	if _, gated := m.blocked(poll.EndpointID, statelessRung(poll)); !gated {
 		t.Fatal("an snmp poll is not held beneath the auth gate")
 	}
 	// The community rotated: the fingerprint moves, the gate lifts, and the
