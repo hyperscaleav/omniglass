@@ -2093,3 +2093,18 @@ sim_endpoints:
   - component: huddle-touch
     driver: newtron-nvp-tls
     label: Panel over TLS
+  # A changed host key worth showing (#1078). The briefing place's touch panel
+  # also answers NVP over its ssh console (admin / newtron, the rotated
+  # secret), and this endpoint pins the host key the panel presented before it
+  # was reimaged. The simulated panel mints its own key when the simulator
+  # starts, so it never matches: a live node refuses the connection before
+  # logging in and reads the session rejected, class host-key, naming both
+  # keys beside Trust this key. Trusting the offered key makes it the pin and
+  # the session comes up, which is the walkthrough (trust-a-changed-host-key).
+  # A restarted simulator mints another key, so the panel reads rejected again
+  # as a reimaged one would.
+  - component: briefing-touch
+    driver: newtron-nvp-ssh
+    label: Panel SSH
+    inputs: { login: sim-panel-login-rotated }
+    host_key: SHA256:twSJOxqCcLND44UmG2UgaA2xfebMGW5hCWNq2eHE16M

@@ -95,8 +95,8 @@ type updateEndpointInput struct {
 type retryEndpointInput struct {
 	ID   string `path:"id" doc:"The endpoint's surrogate id"`
 	Body *struct {
-		HostKey     string `json:"host_key,omitempty" doc:"The SHA256 fingerprint of a changed key the operator now trusts, the key the endpoint's transport pins (the offered_key a key refusal names on the component's reachability read): an ssh endpoint's host key, which becomes its declared ssh-host-key, or a tls endpoint's certificate public key, which becomes its declared tls-certificate. The session redials onto it. Omit to retry with the pin unchanged"`
-		Certificate string `json:"certificate,omitempty" doc:"A tls endpoint only: the SHA256 fingerprint of a changed certificate public key the operator now trusts (the offered_key a certificate refusal names), the same as host_key on a tls endpoint. It becomes the endpoint's declared tls-certificate pin, and the session redials onto it. Omit to retry with the pin unchanged"`
+		HostKey     string `json:"host_key,omitempty" doc:"The SHA256 fingerprint of a changed key the operator now trusts, the key the endpoint's transport pins (the offered_key a key refusal names on the component's reachability read): an ssh endpoint's host key, which becomes its declared ssh-host-key, or a tls endpoint's certificate public key, which becomes its declared tls-certificate. The session redials onto it. While a key refusal holds, it must be that exact offered key: any other is a 409 that changes nothing (the refusal on record is the node's last word, so to trust a key the component presents since, retry without a key first). With no key refusal held it declares a pin ahead of time. Omit to retry with the pin unchanged"`
+		Certificate string `json:"certificate,omitempty" doc:"A tls endpoint only: the same as host_key, named for the certificate (the offered_key a certificate refusal names). It becomes the endpoint's declared tls-certificate pin, held to the same rule (the exact offered key while a key refusal holds), and the session redials onto it. Omit to retry with the pin unchanged"`
 	}
 }
 
@@ -216,7 +216,7 @@ func registerEndpointRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 		Method:      http.MethodPost,
 		Path:        "/endpoints/{id}:retry",
 		Summary:     "Retry an endpoint's gated connections",
-		Description: "Moves the endpoint's retry counter, which is part of its connection fingerprint: a gate a refusal retrying cannot fix holds (a wrong credential, a changed host key, a reply its driver declares terminal) lifts, the node recycles the endpoint's held session, and every connection to it is attempted again. Fixing the secret, the address, the transport, the tls mode or the driver's login needs no retry: the change moves the fingerprint itself. An unrelated edit (a label) moves nothing. host_key names a key to trust, the one the endpoint's transport pins (the offered_key a key refusal names): an ssh host key, or a tls endpoint's certificate public key, which a tls endpoint also takes as certificate. It becomes the declared pin and recycles the session onto it whatever its state, an audited acceptance of the change. Audited. Gated by endpoint:retry; read and retry scopes (through the component) drive the 404 versus 403 split.",
+		Description: "Moves the endpoint's retry counter, which is part of its connection fingerprint: a gate a refusal retrying cannot fix holds (a wrong credential, a changed host key or certificate, a reply its driver declares terminal) lifts, the node recycles the endpoint's held session, and every connection to it is attempted again. Fixing the secret, the address, the transport, the tls mode or the driver's login needs no retry: the change moves the fingerprint itself. An unrelated edit (a label) moves nothing. host_key names a key to trust, the one the endpoint's transport pins (the offered key a key refusal names): an ssh host key, or a tls endpoint's certificate public key, which a tls endpoint also takes as certificate. It becomes the declared pin and recycles the session onto it whatever its state, an audited acceptance of the change. While the endpoint's gate names an offered key, the key must be that key, so a trust confirmed against a refusal the record has since moved past is a 409 and changes nothing. Audited, a trusted key with the pin it replaced (old) and the pin it set (new). Gated by endpoint:retry; read and retry scopes (through the component) drive the 404 versus 403 split.",
 	}, "endpoint", "retry"), func(ctx context.Context, in *retryEndpointInput) (*endpointOutput, error) {
 		var pin storage.RetryPin
 		if in.Body != nil {
@@ -269,8 +269,10 @@ func mapEndpointErr(err error) error {
 		return huma.Error422UnprocessableEntity("component not found")
 	case errors.Is(err, storage.ErrEndpointNodeNotFound), errors.Is(err, storage.ErrNodeNotFound):
 		return huma.Error422UnprocessableEntity("node not found")
-	case errors.Is(err, storage.ErrRetryPin):
-		return huma.Error422UnprocessableEntity(strings.TrimPrefix(err.Error(), "storage: retry pin: "))
+	case errors.Is(err, storage.ErrRetryHostKey):
+		return huma.Error422UnprocessableEntity(strings.TrimPrefix(err.Error(), "storage: retry host key: "))
+	case errors.Is(err, storage.ErrRetryHostKeyStale):
+		return huma.Error409Conflict(strings.TrimPrefix(err.Error(), "storage: retry host key stale: "))
 	case errors.Is(err, storage.ErrEndpointPatchInvalid):
 		return huma.Error400BadRequest(strings.TrimPrefix(err.Error(), "storage: endpoint patch invalid: "))
 	case errors.Is(err, storage.ErrEndpointParamsInvalid):

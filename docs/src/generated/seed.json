@@ -296,7 +296,7 @@
    "name": "endpoint-rejection",
    "data_type": "string",
    "label": "Endpoint Rejection",
-   "description": "An endpoint's gate: the ladder rung a refusal retrying cannot fix holds (responsive for a host key, certificate or protocol refusal, authenticated for a credential), its class, and the connection fingerprint it holds for, or none. While the fingerprint is unchanged nothing at or above that rung is attempted again; a changed secret, address, port, transport, login declaration or pin, or an operator's retry, lifts it. The fingerprint is a digest only."
+   "description": "An endpoint's gate: the ladder rung a refusal retrying cannot fix holds (responsive for a host key, certificate or protocol refusal, authenticated for a credential), its class, and the connection fingerprint it holds for, or none. While the fingerprint is unchanged nothing at or above that rung is attempted again; a changed secret, address, port, transport, login declaration or pin, or an operator's retry, lifts it. The fingerprint is a digest only. A refusal of a changed key (class host-key) appends its evidence, the pinned key and the key the component offered instead, each a SHA256 fingerprint."
   },
   {
    "name": "health",

@@ -54,7 +54,9 @@ const (
 	// EndpointRejection is an endpoint's gate (#1056 ruling, ADR-0158): the
 	// ladder rung a terminal refusal holds, its class, and the connection
 	// fingerprint it holds for ("authenticated auth <fingerprint>"), or
-	// "none". The worklist carries it back, so a restarted node honours it.
+	// "none"; a refusal of a changed key appends the pinned and the offered
+	// key (#1078, ADR-0159; internal/collection/rejection reads the shape).
+	// The worklist carries it back, so a restarted node honours it.
 	EndpointRejection = "endpoint-rejection"
 )
 
@@ -69,8 +71,8 @@ const (
 // publishes, a tls endpoint's pin and certificate facts). The console reads
 // each as the node's observation, and the gate and the pins (the ssh host key,
 // the tls certificate's public key) steer what the node attempts (ADR-0158,
-// ADR-0159), so the push lane refuses every one by name: a push may not forge a verdict or a timing, plant
-// or lift a gate, or read a rejected session up.
+// ADR-0160), so the push lane refuses every one by name: a push may not forge
+// a verdict or a timing, plant or lift a gate, or read a rejected session up.
 var nodeOnly = []string{
 	TCPOpen, TCPConnectTime, ICMPReachable, ICMPRTTAvg, HTTPResponseTime, SSHHandshakeTime, TelnetResponseTime,
 	EndpointReachable, EndpointResponsive, EndpointAuthenticated, SessionState, SessionReason, SSHHostKey, EndpointRejection,

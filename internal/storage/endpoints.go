@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/hyperscaleav/omniglass/internal/collection/rejection"
 	"github.com/hyperscaleav/omniglass/internal/driver"
 	"regexp"
 	"strings"
@@ -651,7 +652,11 @@ func (p *PG) rederiveAttached(ctx context.Context, tx pgx.Tx, driverID, endpoint
 // the endpoint's declared ssh-host-key or tls-certificate, the pin the
 // worklist delivers ahead of the key trusted on first use, so the node's
 // session redials onto it. Each only on its transport, and only a SHA256
-// fingerprint.
+// fingerprint. While the endpoint's gate names an offered key (a key
+// refusal's evidence, #1078), the key must be that key: any other is
+// ErrRetryHostKeyStale and changes nothing, so a trust confirmed against a
+// view the record has since moved past cannot pin a key nobody read.
+// The audit row carries the pin replaced (old) and the pin set (new).
 func (p *PG) RetryEndpoint(ctx context.Context, actorID, id string, pin RetryPin, read, action scope.Set) (*Endpoint, error) {
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
@@ -667,7 +672,23 @@ func (p *PG) RetryEndpoint(ctx context.Context, actorID, id string, pin RetryPin
 	if err != nil {
 		return nil, err
 	}
+	// replaced is the pin a trusted key replaces, for the audit row.
+	replaced := ""
 	if key != "" {
+		published, err := latestRejection(ctx, tx, *before.ComponentID, before.Name)
+		if err != nil {
+			return nil, err
+		}
+		if gate, ok := rejection.Parse(published); ok && gate.HasKeys() && gate.OfferedKey != key {
+			// The gate is the node's last word on what the component offers: a
+			// gated node dials no more, so the component may have moved on
+			// since. The refusal says what the record names, and how to read
+			// the key again, never that the component offers it now.
+			return nil, fmt.Errorf("%w: the refusal on record names the offered key %s, not the key sent; to trust another, retry the endpoint without a key so the node reads the key the component offers now, then trust that one", ErrRetryHostKeyStale, gate.OfferedKey)
+		}
+		if _, replaced, err = keyPin(ctx, tx, *before.ComponentID, before.Name, pinKeyOf[before.Transport]); err != nil {
+			return nil, err
+		}
 		if _, err := tx.Exec(ctx, `
 			insert into property (owner_kind, component_id, property_type_id, instance, provenance, value)
 			values ('component', $1::uuid, (select id from property_type where name = $4), $2, '`+declaredProvenance+`', to_jsonb($3::text))`,
@@ -684,20 +705,19 @@ func (p *PG) RetryEndpoint(ctx context.Context, actorID, id string, pin RetryPin
 	if err != nil {
 		return nil, mapEndpointWriteErr(err)
 	}
-	audited := any(after)
+	type pinned struct {
+		*Endpoint
+		HostKey     string `json:"host_key,omitempty"`
+		Certificate string `json:"certificate,omitempty"`
+	}
+	audited, prior := any(after), any(before)
 	switch {
 	case key != "" && before.Transport == "tls":
-		audited = struct {
-			*Endpoint
-			Certificate string `json:"certificate"`
-		}{after, key}
+		audited, prior = pinned{Endpoint: after, Certificate: key}, pinned{Endpoint: before, Certificate: replaced}
 	case key != "":
-		audited = struct {
-			*Endpoint
-			HostKey string `json:"host_key"`
-		}{after, key}
+		audited, prior = pinned{Endpoint: after, HostKey: key}, pinned{Endpoint: before, HostKey: replaced}
 	}
-	if err := writeAuditRes(ctx, tx, actorID, "retry", "endpoint", after.ID, before, audited); err != nil {
+	if err := writeAuditRes(ctx, tx, actorID, "retry", "endpoint", after.ID, prior, audited); err != nil {
 		return nil, err
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -724,29 +744,70 @@ func (p RetryPin) keyFor(ep *Endpoint) (string, error) {
 		return "", nil
 	}
 	if p.Certificate != "" && ep.Transport != "tls" {
-		return "", fmt.Errorf("%w: only a tls endpoint pins a certificate key", ErrRetryPin)
+		return "", fmt.Errorf("%w: only a tls endpoint pins a certificate key", ErrRetryHostKey)
 	}
 	if p.HostKey != "" && p.Certificate != "" && p.HostKey != p.Certificate {
-		return "", fmt.Errorf("%w: host_key and certificate name different keys; send the one key to trust", ErrRetryPin)
+		return "", fmt.Errorf("%w: host_key and certificate name different keys; send the one key to trust", ErrRetryHostKey)
 	}
 	key := p.HostKey
 	if key == "" {
 		key = p.Certificate
 	}
 	if _, pinned := pinKeyOf[ep.Transport]; !pinned || ep.ComponentID == nil {
-		return "", fmt.Errorf("%w: only an ssh or tls endpoint pins a key", ErrRetryPin)
+		return "", fmt.Errorf("%w: only an ssh or tls endpoint pins a key", ErrRetryHostKey)
 	}
-	if !keyFingerprint.MatchString(key) {
-		return "", fmt.Errorf("%w: a key is a SHA256 fingerprint (SHA256: and 43 base64 characters)", ErrRetryPin)
+	if !hostKeyFingerprint.MatchString(key) {
+		return "", fmt.Errorf("%w: a key is a SHA256 fingerprint (SHA256: and 43 base64 characters)", ErrRetryHostKey)
 	}
 	return key, nil
 }
 
-// ErrRetryPin refuses a retry's key: one the endpoint's transport does not
-// pin, or not a SHA256 fingerprint.
-var ErrRetryPin = errors.New("storage: retry pin")
+// ErrRetryHostKey refuses a retry's key: one the endpoint's transport does
+// not pin, two different keys at once, or not a SHA256 fingerprint.
+var ErrRetryHostKey = errors.New("storage: retry host key")
 
-var keyFingerprint = regexp.MustCompile(`^SHA256:[A-Za-z0-9+/]{43}$`)
+// ErrRetryHostKeyStale refuses a retry's key that is not the key the
+// endpoint's gate names as offered (#1078): the operator confirmed a key the
+// refusal on record no longer names.
+var ErrRetryHostKeyStale = errors.New("storage: retry host key stale")
+
+// latestRejection is the endpoint-rejection the node last published for an
+// endpoint (its gate), or "" when none was.
+func latestRejection(ctx context.Context, q querier, componentID, instance string) (string, error) {
+	var v string
+	if err := q.QueryRow(ctx, `
+		select coalesce((select value #>> '{}' from property
+		 where owner_kind = 'component' and component_id = $1::uuid and instance = $2 and provenance = 'observed'
+		   and property_type_id = (select id from property_type where name = 'endpoint-rejection')
+		 order by ts desc, id desc limit 1), '')`, componentID, instance).Scan(&v); err != nil {
+		return "", fmt.Errorf("storage: endpoint rejection: %w", err)
+	}
+	return v, nil
+}
+
+// keyPin is an endpoint's key pin under its property (ssh-host-key, #1032;
+// tls-certificate, #1035): the operator's declared key, and the pin in force
+// (the declared key, else the key the node trusted on first use).
+func keyPin(ctx context.Context, q querier, componentID, instance, property string) (declared, pin string, err error) {
+	if err := q.QueryRow(ctx, `
+		select coalesce(
+			(select nullif(value, 'null'::jsonb) #>> '{}' from property
+			 where owner_kind = 'component' and component_id = $1::uuid and instance = $2 and provenance = 'declared'
+			   and property_type_id = (select id from property_type where name = $3)
+			 order by id desc limit 1), ''),
+			coalesce((select value #>> '{}' from property
+			 where owner_kind = 'component' and component_id = $1::uuid and instance = $2 and provenance = 'observed'
+			   and property_type_id = (select id from property_type where name = $3)
+			 order by ts desc, id desc limit 1), '')`, componentID, instance, property).Scan(&declared, &pin); err != nil {
+		return "", "", fmt.Errorf("storage: %s pin: %w", property, err)
+	}
+	if declared != "" {
+		pin = declared
+	}
+	return declared, pin, nil
+}
+
+var hostKeyFingerprint = regexp.MustCompile(`^SHA256:[A-Za-z0-9+/]{43}$`)
 
 // DeleteEndpoint removes an endpoint by id with the read/action split (through
 // the owning component) and in-transaction audit. Its derived tasks cascade-delete

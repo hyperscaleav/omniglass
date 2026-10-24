@@ -16,7 +16,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/driver"
 )
 
-// The TLS dial primitive (#1035, ADR-0159). One client handshake over a
+// The TLS dial primitive (#1035, ADR-0160). One client handshake over a
 // connection already made, under one of three modes: verify the certificate
 // against the node's roots with the server name from the host input, pin the
 // public key on first use, or (the operator's explicit choice) skip every

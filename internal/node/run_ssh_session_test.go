@@ -7,6 +7,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"net/http/httptest"
 	"strings"
@@ -17,6 +18,7 @@ import (
 
 	"github.com/hyperscaleav/omniglass/internal/api"
 	"github.com/hyperscaleav/omniglass/internal/bus"
+	"github.com/hyperscaleav/omniglass/internal/collection/rejection"
 	"github.com/hyperscaleav/omniglass/internal/node"
 	"github.com/hyperscaleav/omniglass/internal/scope"
 	"github.com/hyperscaleav/omniglass/internal/secret"
@@ -173,10 +175,21 @@ func TestNodeSSHSessionPinsTheHostKeyAndRefusesAChange(t *testing.T) {
 	if got := latest("ssh-host-key"); got != first {
 		t.Fatalf("a refused key replaced the pin: %q", got)
 	}
+	// The gate carries both keys as data (#1078), what the console names and
+	// trusts without parsing the reason.
+	waitFor("endpoint-rejection", func(v string) bool {
+		g, ok := rejection.Parse(v)
+		return ok && g.Class == "host-key" && g.PinnedKey == first && g.OfferedKey == second
+	}, "the host-key gate naming the pinned and the offered key")
 
-	// A malformed key is refused at the door; the offered one is accepted.
+	// A malformed key is refused at the door; a well-formed key the panel
+	// does not offer is stale (the operator confirmed a key that changed
+	// since); the offered one is accepted.
 	if _, err := gw.RetryEndpoint(ctx, "", ep.ID, storage.RetryPin{HostKey: "SHA256:nope"}, all, all); err == nil {
 		t.Fatal("a malformed host key was accepted")
+	}
+	if _, err := gw.RetryEndpoint(ctx, "", ep.ID, storage.RetryPin{HostKey: first}, all, all); !errors.Is(err, storage.ErrRetryHostKeyStale) {
+		t.Fatalf("trusting a key the panel does not offer = %v, want stale", err)
 	}
 	if _, err := gw.RetryEndpoint(ctx, "", ep.ID, storage.RetryPin{HostKey: second}, all, all); err != nil {
 		t.Fatalf("retry with the new key: %v", err)

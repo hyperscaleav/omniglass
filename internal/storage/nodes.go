@@ -545,22 +545,9 @@ func (p *PG) NodeWorklist(ctx context.Context, name string) (Worklist, error) {
 	// held under the first fingerprint.
 	declaredPin, declaredCert := map[int]string{}, map[int]string{}
 	for _, pr := range pins {
-		var declared, observed string
-		if err := p.pool.QueryRow(ctx, `
-			select coalesce(
-				(select nullif(value, 'null'::jsonb) #>> '{}' from property
-				 where owner_kind = 'component' and component_id = $1::uuid and instance = $2 and provenance = 'declared'
-				   and property_type_id = (select id from property_type where name = $3)
-				 order by id desc limit 1), ''),
-				coalesce((select value #>> '{}' from property
-				 where owner_kind = 'component' and component_id = $1::uuid and instance = $2 and provenance = 'observed'
-				   and property_type_id = (select id from property_type where name = $3)
-				 order by ts desc, id desc limit 1), '')`, pr.componentID, pr.instance, pr.key).Scan(&declared, &observed); err != nil {
-			return Worklist{}, fmt.Errorf("storage: node worklist %q %s: %w", name, pr.key, err)
-		}
-		pin := observed
-		if declared != "" {
-			pin = declared
+		declared, pin, err := keyPin(ctx, p.pool, pr.componentID, pr.instance, pr.key)
+		if err != nil {
+			return Worklist{}, fmt.Errorf("storage: node worklist %q: %w", name, err)
 		}
 		switch pr.key {
 		case pinKeyOf["tls"]:
@@ -578,12 +565,9 @@ func (p *PG) NodeWorklist(ctx context.Context, name string) (Worklist, error) {
 			key := cid + "\x00" + t.EndpointName
 			rej, seen := rejections[key]
 			if !seen {
-				if err := p.pool.QueryRow(ctx, `
-					select coalesce((select value #>> '{}' from property
-					 where owner_kind = 'component' and component_id = $1::uuid and instance = $2 and provenance = 'observed'
-					   and property_type_id = (select id from property_type where name = 'endpoint-rejection')
-					 order by ts desc, id desc limit 1), '')`, cid, t.EndpointName).Scan(&rej); err != nil {
-					return Worklist{}, fmt.Errorf("storage: node worklist %q rejection: %w", name, err)
+				var err error
+				if rej, err = latestRejection(ctx, p.pool, cid, t.EndpointName); err != nil {
+					return Worklist{}, fmt.Errorf("storage: node worklist %q: %w", name, err)
 				}
 				rejections[key] = rej
 			}

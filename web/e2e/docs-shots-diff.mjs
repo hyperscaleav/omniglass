@@ -14,6 +14,10 @@
 // Usage: node web/e2e/docs-shots-diff.mjs <fresh-baseline-dir> [committed-baseline-dir]
 // DOCS_SHOTS_MAX_RATIO overrides the tolerance for unpinned local browsers
 // only; CI runs the pinned container and the zero default.
+// DOCS_SHOTS_EXACT=1 compares every pixel exactly instead of through
+// pixelmatch's perceptual threshold, which scores a mask edge moving over a
+// dark surface as zero (#774). It is the proof that a mask holds: recapture with
+// the clock moved and require no pixel to differ (#1081).
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { readdir } from 'node:fs/promises';
@@ -22,6 +26,7 @@ import { compareShot, DEFAULT_MAX_RATIO } from './shotdiff.mjs';
 const fresh = process.argv[2];
 const committed = process.argv[3] ?? 'docs/screenshots/baseline';
 const MAX_RATIO = process.env.DOCS_SHOTS_MAX_RATIO ? Number(process.env.DOCS_SHOTS_MAX_RATIO) : DEFAULT_MAX_RATIO;
+const EXACT = process.env.DOCS_SHOTS_EXACT === '1';
 
 if (!fresh) {
   console.error('usage: node web/e2e/docs-shots-diff.mjs <fresh-dir> [committed-dir]');
@@ -34,7 +39,7 @@ const failures = [];
 for (const name of names) {
   let r;
   try {
-    r = compareShot(readFileSync(join(committed, name)), readFileSync(join(fresh, name)), { maxRatio: MAX_RATIO });
+    r = compareShot(readFileSync(join(committed, name)), readFileSync(join(fresh, name)), { maxRatio: MAX_RATIO, exact: EXACT });
   } catch (e) {
     failures.push(`${name}: missing in fresh capture (${e.code ?? e.message})`);
     continue;
@@ -45,9 +50,13 @@ for (const name of names) {
   }
   const pct = (r.ratio * 100).toFixed(3);
   if (r.status === 'changed') {
-    failures.push(`${name}: ${pct}% changed (${r.diffPixels}px > ${(MAX_RATIO * 100).toFixed(2)}%)`);
+    failures.push(
+      EXACT
+        ? `${name}: ${r.diffPixels}px differ (exact)`
+        : `${name}: ${pct}% changed (${r.diffPixels}px > ${(MAX_RATIO * 100).toFixed(2)}%)`,
+    );
   } else {
-    console.log(`ok    ${name} (${pct}%)`);
+    console.log(`ok    ${name} (${EXACT ? 'exact' : `${pct}%`})`);
   }
 }
 
@@ -57,4 +66,6 @@ if (failures.length > 0) {
   console.error("\nrun 'make docs-shots' and commit the updated PNGs.");
   process.exit(1);
 }
-console.log(`\ndocs-shots freshness OK (${names.length} shots within ${(MAX_RATIO * 100).toFixed(2)}%)`);
+console.log(
+  `\ndocs-shots freshness OK (${names.length} shots ${EXACT ? 'pixel-exact' : `within ${(MAX_RATIO * 100).toFixed(2)}%`})`,
+);

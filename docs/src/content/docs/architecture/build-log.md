@@ -7848,10 +7848,137 @@ and `collection-failed`, a node-emitted key declared outside `probekeys`, is #10
 ADR-0158 point 5 is amended; the push tests that used `icmp-rtt-avg` as their sample metric now
 push `room-temperature` and `uptime`.
 
+### The end-to-end servers claim their own ports, so concurrent runs never collide (#1077)
+
+Every end-to-end test started `omniglass server` on ports it found with a pick-and-release helper:
+bind `127.0.0.1:0`, read the port, close the listener, and hand the number to a binary that bound it
+seconds later, after migrating and seeding. In that gap any other process on the host could be handed
+the same port, so a run beside another (two worktrees, a session beside `make test`) failed with
+`bind: address already in use` on the API, or `nats-server not ready for connections` when the bus's
+port went. Now the server binds port 0 itself and reports what it got. `OMNIGLASS_ADDR` and
+`OMNIGLASS_NATS_ADDR` may name port 0; the API binds before it serves, so its address is known; the
+bus reads port 0 as ephemeral, where nats-server alone reads it as its default 4222; and a new
+`OMNIGLASS_READY_FILE` names a path the server writes, whole or not at all, once both listeners are
+bound: a JSON object of the bound `addr` and `nats_addr` and the `nats_url` it advertises, removed at
+a graceful shutdown. The advertised bus URL, when `OMNIGLASS_NATS_URL` is unset, is now the address the bus bound
+(loopback for a wildcard host) rather than a fixed `nats://127.0.0.1:4222`, which is the same URL for
+every configuration that worked before and the right one for a bus on port 0. The end-to-end package
+starts every server through one helper, `startServer`, which sets the listen addresses to port 0 and
+reads the ready file, and a guard test fails any test that runs the server another way or sets its
+listen addresses (against main's tests it names all seven server starts). Proven by the bus binding a
+kernel-picked port for 0 (it bound 4222 first), the ready file's write, replace and removal, and the
+healthz end-to-end test asserting both reported ports are live and neither is 0 or 4222 (it failed
+first, no ready file). Beside a squatter that holds and churns ephemeral ports, standing in for a busy
+host, main's healthz test failed four runs in four (one on the API's port, three on the bus's) and the
+fixed one passed four in four; the end-to-end package run twice side by side, three pairs, passed every
+run. The
+[CLI guide](/guides/cli/#a-server-on-ports-it-picks) teaches the ready file, and the deployment guides'
+configuration tables render the new variable from the registry.
+
+The review's fixes, each with a test that failed first: the harness observes the server's exit by
+closing a channel rather than sending its one value, since a server that died before it was ready
+had its exit taken by the wait, leaving the cleanup that stops it blocked until the suite's timeout
+(every later test aborted, the boot error never printed); the boot clears a ready file already at
+the path before anything that can fail, since a server killed outright runs no shutdown and its file
+named a dead run's ports, which the next boot left in place throughout, or for good when that boot
+failed; and the test-driven page scopes the one-helper rule to `internal/e2e`, noting that the browser
+tier and the walkthrough stack isolate through a private Docker network per run.
+
+### Docs-shot masks paint a fixed box, so baselines never move with the clock (#1081)
+
+Two masked baselines moved with the capture's wall clock though their masks exist to pin exactly
+that region: `entity-blade` masked `[data-testid=blade-since]` and `fleet-place-systems` masked
+`[data-testid=summary-since]`, each a hook on the since span itself, so each mask was painted at
+the size of the text. The text moves with the clock (`fmtTime` prints a month name, a bare day and
+AM or PM; the age reads 9s or 17s), so the same blade captured at 01:57 AM and at 06:59 PM painted a
+box one pixel apart (64 changed pixels in the blade's baseline, 160 in the card's). Every recapture
+therefore rewrote both baselines with no UI change, which is how #1059 found them, and the gate
+passed only because its perceptual threshold happens to absorb a mask edge moving over a dark
+surface (#774), not because the bytes held: the class #773 fixed for table cells, met again on a
+`data-testid` hook.
+
+A mask entry can now **declare its box**: `{ selector, width }` is painted at the value's top-left,
+as tall as the value and `width` CSS pixels wide, whatever the value reads, for a value whose
+position is fixed but whose width is not, and whose only container that holds still also holds
+what the shot exists to show. Both since masks declare one: 184px over the blade's line, 208px over
+the card's, against the widest line a capture can render in the console's face (164px and 186px,
+"since May 28, 12:59 AM · 59m"). A value wider than its box fails the capture by name instead of
+leaving its tail live. The capture's mask code moves out of `docs-shots.mjs` into
+`web/e2e/shotmasklib.mjs` (plan, paint, log), so the code that paints a baseline is the code the
+browser test drives; the docs content schema and `docs-shots-verify` accept and check the new
+entry. No console surface changed. A sweep of every other mask found none of the class: the uuid
+masks stay on fixed-width monospace text, the timestamp masks name their cells, and every other
+since-line, age and timestamp mask names a row, an incident entry, a panel or a chart its layout
+pins (the uptime figure's box by its minimum width), with no capture-relative region left unmasked.
+
+`DOCS_SHOTS_EXACT=1` makes the freshness diff compare every pixel exactly, since the gate's own
+comparison scores this defect zero. Proven both ways. At the browser tier,
+`web/e2e/shotmask.spec.ts` now reads each mask from its page's own frontmatter and drives the
+shared mask code, and its blade and card cases failed against the old selectors (the box moving
+from 164 to 179 pixels) and pass against the declared boxes, which also leave the verdict and the
+card's name live. At the shot level, a recapture with the clock moved
+(`DOCS_SHOTS_TZ=America/Los_Angeles`) changed exactly these two baselines before the fix, every
+other mask resolving to the same box, and changes no pixel after it (`DOCS_SHOTS_EXACT=1`). The
+review catalog gains `text-sized-mask`, and `unmasked-capture-relative-region` now points at a
+mask that holds.
+
+The review's fixes, the first three each with a test that failed first: the first cut masked the
+since lines' whole rows, which held still but hid the verdict badge from the last two baselines
+that still gated it (the declared box replaces it, and the browser test now fails a mask that
+covers what its shot shows); the documented way to prove a mask holds ran the gate's perceptual
+comparison, which cannot see this bug (the exact comparison, pinned by a unit test that the
+default scores a one-pixel mask move zero and the exact mode does not); a declared box is measured
+again when the baseline is shot, since the clean shot comes between planning and painting and a
+reflow in between would plant the box where the value used to be (and a value that outgrew its
+box meanwhile still fails by name); and the browser test now finds the docs from its own
+location, so it also runs from the repo root. A declared box suits only a value whose left edge
+stays put, which the docs and the catalog now say.
+
+### A changed host key can be trusted from the console (#1078)
+
+The ssh half #1059 deferred. A host-key refusal now carries both keys as data
+(`collection.TerminalError` `Pinned` and `Offered`, built by `collection.HostKeyRefusal` for the held
+session and the probe alike), and the node's gate publishes them with itself: `endpoint-rejection`
+appends `<pinned-key> <offered-key>` to `<rung> <class> <fingerprint>`, both or neither, the one
+shape declared in `internal/collection/rejection` and read there by the node, the server and the
+read. A restarted node adopts the evidence with the gate, so what it republishes is byte-identical to
+what the server holds ([ADR-0159](/architecture/decisions/#adr-0159-a-refused-keys-evidence-rides-its-gate-and-trusting-a-key-is-checked-against-the-one-offered),
+amending ADR-0158 point 5). The reachability read's `rejection` serves `pinned_key` and
+`offered_key`. `POST /endpoints/{id}:retry` with `host_key` now refuses (409, nothing written) any key
+other than the offered key the refusal on record names, and its audit row carries the pin replaced
+(`old.host_key`) beside the pin set (`new.host_key`) and the actor.
+
+In the console, a session rejected for a changed key reads **The host key changed** and names both
+keys (`PinnedKeyNotice`, two `KVStacked` facts, which now take a `hint`), side by side where the card
+is wide and stacked in the blade. **Trust this key** (gated `endpoint:retry`, greyed with its reason)
+opens `ConfirmDialog`, a new primitive (a centred Kobalte `AlertDialog`, its rail the one
+`PanelFooter`, the focus on Cancel): it repeats both keys and teaches **Why a key changes** as three
+chips (reinstalled, hardware swapped, man in the middle), each explained on hover. It holds the refusal
+as it was when opened, sends exactly that offered key, and will not send once the live read's offer
+has moved; after a trust it waits on the session as Retry does. Both components are generic over the
+class, so the tls slice's certificate refusal (#1035) renders through them unchanged. The dev fleet's
+briefing touch panel gains an ssh endpoint pinning the key it had before a reimage, so `make dev-sim`
+shows a host-key rejection, and the `trust-a-changed-host-key` walkthrough trusts it and watches the
+session come up.
+
+Proven test-first: the rejection shape's round trip and parse (`internal/collection/rejection`); the
+gate publishing and adopting the keys and a session manager's host-key refusal publishing them
+(`internal/node`); the read serving the gate's keys and never a decoy pair planted in the reason
+(`TestReachabilityCarriesTheHeldSession`); the stale trust refused with nothing written and the
+accepted trust audited with both keys and the actor (`TestTrustingAKeyChecksTheOfferedKeyAndAuditsBoth`);
+the viewer floor's 403 and the 409 over HTTP (`TestEndpointAPI`); the real-wire panel publishing both
+keys and refusing the old pin (`TestNodeSSHSessionPinsTheHostKeyAndRefusesAChange`); the seed's stale
+pin, idempotent and never put back over a trusted key (`TestSeededFleetHoldsAHostKeyRejection`); and in
+vitest the notice, the confirm, the exact key sent, the moved offer, the server's refusal and the
+greyed viewer. The adversarial review found no exploitable hole and two advisories, both fixed: the
+409 claimed the component "now offers" the key on record, which a gated node cannot know (it now says
+what the record names and to retry first, and the docs say the same), and the boot-seeded
+`endpoint-rejection` description still named three fields.
+
 ### The line protocol over tls, with a pinned public key (#1035)
 
 The first slice of the protocol wave (#1076), under the architect's approval of its decisions 1 to 4
-and 7a ([ADR-0159](/architecture/decisions/#adr-0159-tls-is-its-own-transport-over-a-shared-primitive-and-its-pin-is-the-public-key)).
+and 7a ([ADR-0160](/architecture/decisions/#adr-0160-tls-is-its-own-transport-over-a-shared-primitive-and-its-pin-is-the-public-key)).
 `tls` joins the transport registry as its own held line transport, its rung the handshake, rather
 than an option on `tcp`: an endpoint is named by its transport, so a component now holds a raw
 control port and a TLS one side by side. The handshake is one primitive, `collection.HandshakeTLS`,
@@ -7872,10 +7999,11 @@ once the handshake completes (`HostKeyPin.Admit`), published as `tls-certificate
 again while the worklist lacks it, replaced (recycling the session) when the worklist delivers a
 different one. Beneath a `certificate` gate the probe runs only the TCP connect, across a restart
 too. The gate value carries the two keys (`responsive certificate <fingerprint> <pinned>
-<offered>`, ADR-0158 point 5 amended), and the reachability read serves them as `rejection.pinned_key`
-and `rejection.offered_key` (#1078's shape for a host key), so its trust-this-key action reads them
-without parsing a reason; `:retry` takes the key through `host_key` (the key the endpoint's
-transport pins) as well as `certificate`. The
+<offered>`, the grammar ADR-0159 gives a refused key), and the reachability read serves them as `rejection.pinned_key`
+and `rejection.offered_key` (as #1078 serves a host key's), so its
+trust-this-key notice renders a certificate refusal unchanged; `:retry` takes the key through
+`host_key` (now the key the endpoint's transport pins) as well as `certificate`, under ADR-0159's
+409 for a key that is not the offered one on record. The
 worklist delivers the pin as `CertificatePin` (declared first), the declared pin joins the connection
 fingerprint (`fingerprint.Inputs.CertificatePin`, the reflection and table tests green), and
 `POST /endpoints/{id}:retry` takes `certificate` (audited, a tls endpoint only, a `SHA256:`

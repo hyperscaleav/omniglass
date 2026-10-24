@@ -28,7 +28,7 @@ Ask in order; the first yes decides.
    An endpoint is named by its transport and unique per component, so a variant a component
    can expose beside the plain one (a raw control port and a TLS one), or whose transport
    rung differs (the handshake rather than the connect), is **its own registry entry over a
-   shared primitive** ([ADR-0159](../../../docs/src/content/docs/architecture/decisions.md)).
+   shared primitive** ([ADR-0160](../../../docs/src/content/docs/architecture/decisions.md)).
    Example: `tls`, the line protocol over the TLS primitive in `internal/collection`, its
    rung the handshake. File it as a new transport that consumes the primitive.
 3. **Does the driver need something the carrier cannot do yet** (a body format, an auth

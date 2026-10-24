@@ -24,10 +24,16 @@ const screenshot = z.object({
   auth: z.boolean().default(true),
   // Optional interactions before the shot (open a blade, hover a tooltip).
   steps: z.array(screenshotStep).default([]),
-  // Playwright selectors to mask (cover with a solid box) before the shot, for
+  // Regions to mask (cover with a solid box) in the gate's baseline render, for
   // non-deterministic regions like timestamps, so the image stays byte-stable and
   // the drift gate does not fire on data that legitimately changes every capture.
-  mask: z.array(z.string()).default([]),
+  // A Playwright selector is painted at the box of what it resolves to; a
+  // `{ selector, width }` entry declares the box instead, painted at the value's
+  // top-left and `width` CSS pixels wide, for a value whose width moves with the
+  // clock (#1081). web/e2e/shotmasklib.mjs is the painter and validates entries.
+  mask: z
+    .array(z.union([z.string(), z.object({ selector: z.string(), width: z.number().int().positive() }).strict()]))
+    .default([]),
 });
 
 // A page declares the walkthroughs it embeds the same way (#926). The script is

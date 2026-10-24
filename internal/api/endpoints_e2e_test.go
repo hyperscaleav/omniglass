@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/api"
 	"github.com/hyperscaleav/omniglass/internal/auth"
@@ -135,6 +136,23 @@ func TestEndpointAPI(t *testing.T) {
 	c.do(ownerTok, http.MethodPost, "/endpoints/"+ifA.ID+":retry",
 		map[string]any{"host_key": "SHA256:" + strings.Repeat("A", 43)}, http.StatusUnprocessableEntity)
 
+	// Trusting a changed key (#1078): the console sends the offered key its
+	// read showed. Without endpoint:retry the viewer floor is refused; a key
+	// the component no longer offers is a 409 naming the one it offers now;
+	// the offered key itself is trusted.
+	sshEp := createEndpoint(c, ownerTok, map[string]any{"transport": "ssh", "component": "comp-d", "params": map[string]any{"target": "10.0.0.7:22"}})
+	shown, offeredNow := "SHA256:"+strings.Repeat("S", 43), "SHA256:"+strings.Repeat("N", 43)
+	if err := gw.InsertPropertySamples(ctx, []storage.PropertySampleWrite{{OwnerKind: "component", OwnerID: "comp-d", Key: "endpoint-rejection",
+		Instance: sshEp.Name, Value: "responsive host-key 9f86d081 SHA256:" + strings.Repeat("P", 43) + " " + offeredNow, Source: "ssh", TS: time.Now()}}); err != nil {
+		t.Fatal(err)
+	}
+	c.do(viewerAllTok, http.MethodPost, "/endpoints/"+sshEp.ID+":retry", map[string]any{"host_key": offeredNow}, http.StatusForbidden)
+	stale := c.do(ownerTok, http.MethodPost, "/endpoints/"+sshEp.ID+":retry", map[string]any{"host_key": shown}, http.StatusConflict)
+	if !strings.Contains(string(stale), offeredNow) {
+		t.Fatalf("the stale refusal does not name the key offered now: %s", stale)
+	}
+	c.do(ownerTok, http.MethodPost, "/endpoints/"+sshEp.ID+":retry", map[string]any{"host_key": offeredNow}, http.StatusOK)
+
 	// A certificate key is a tls endpoint's alone (#1035): a tcp endpoint
 	// refuses one, a malformed one is refused, and the operator in scope
 	// accepts one under endpoint:retry, which a viewer lacks and an
@@ -157,6 +175,16 @@ func TestEndpointAPI(t *testing.T) {
 		t.Fatalf("the key sent as host_key = %+v, want it declared as the tls pin", got)
 	}
 	c.do(ownerTok, http.MethodPost, "/endpoints/"+tlsA.ID+":retry", map[string]any{"host_key": again, "certificate": key}, http.StatusUnprocessableEntity)
+	// The same rule holds for a tls key (#1035 on #1078's 409): while a
+	// certificate refusal names an offered key, only that key is trusted,
+	// through certificate or host_key alike.
+	tlsOffered := "SHA256:" + strings.Repeat("O", 43)
+	if err := gw.InsertPropertySamples(ctx, []storage.PropertySampleWrite{{OwnerKind: "component", OwnerID: "comp-a", Key: "endpoint-rejection",
+		Instance: tlsA.Name, Value: "responsive certificate 9f86d081 " + again + " " + tlsOffered, Source: "tls", TS: time.Now()}}); err != nil {
+		t.Fatal(err)
+	}
+	c.do(ownerTok, http.MethodPost, "/endpoints/"+tlsA.ID+":retry", map[string]any{"certificate": key}, http.StatusConflict)
+	c.do(ownerTok, http.MethodPost, "/endpoints/"+tlsA.ID+":retry", map[string]any{"host_key": tlsOffered}, http.StatusOK)
 }
 
 // TestEndpointCreateWithAmbiguousComponentIs409 closes I1's other half: the

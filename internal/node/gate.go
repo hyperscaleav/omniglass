@@ -5,6 +5,7 @@ import (
 	"sync"
 
 	"github.com/hyperscaleav/omniglass/internal/collection"
+	"github.com/hyperscaleav/omniglass/internal/collection/rejection"
 	"github.com/hyperscaleav/omniglass/internal/driver"
 )
 
@@ -49,28 +50,27 @@ func rungOf(class string) rung {
 }
 
 // rejectionNone is the endpoint-rejection value when no gate holds.
-const rejectionNone = "none"
+const rejectionNone = rejection.None
 
-// rejectionOf renders a gate as its endpoint-rejection value: `<rung>
-// <class> <fingerprint>`, then, for a refusal of a changed key (#1035), the
-// key the endpoint pins and the key the component offered, so a surface that
-// offers to trust the new key reads both as data.
-func rejectionOf(r rung, class, fingerprint string, keys ...string) string {
-	v := string(r) + " " + class + " " + fingerprint
-	if len(keys) == 2 && keys[0] != "" && keys[1] != "" {
-		v += " " + keys[0] + " " + keys[1]
-	}
-	return v
+// rejectionOf renders a gate as its endpoint-rejection value.
+func rejectionOf(r rung, class, fingerprint string) string {
+	return rejection.Gate{Rung: string(r), Class: class, Fingerprint: fingerprint}.String()
 }
 
-// gate is one endpoint's held refusal.
+// gate is one endpoint's held refusal. pinned and offered are a key
+// refusal's evidence (#1078), published with the gate and adopted with it.
 type gate struct {
 	fingerprint string
 	rung        rung
 	class       string
 	reason      string
-	// pinned and offered are a changed key's refusal's two keys.
-	pinned, offered string
+	pinned      string
+	offered     string
+}
+
+// value renders the gate as its endpoint-rejection value.
+func (gt gate) value() string {
+	return rejection.Gate{Rung: string(gt.rung), Class: gt.class, Fingerprint: gt.fingerprint, PinnedKey: gt.pinned, OfferedKey: gt.offered}.String()
 }
 
 // gates is the node's gate per endpoint id, with the fingerprint each
@@ -86,24 +86,21 @@ func newGates() *gates { return &gates{held: map[string]gate{}, current: map[str
 // observe records the endpoint's fingerprint from the worklist and the
 // rejection published for it. A gate under another fingerprint lifts; a
 // published rejection under this one (a node restart) is adopted.
-func (g *gates) observe(endpointID, fingerprint, rejection string) {
+func (g *gates) observe(endpointID, fingerprint, published string) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	g.current[endpointID] = fingerprint
 	if gt, ok := g.held[endpointID]; ok && gt.fingerprint != fingerprint {
 		delete(g.held, endpointID)
 	}
-	if _, ok := g.held[endpointID]; ok || rejection == "" || rejection == rejectionNone {
+	if _, ok := g.held[endpointID]; ok || published == "" || published == rejectionNone {
 		return
 	}
-	parts := strings.Fields(rejection)
-	if (len(parts) == 3 || len(parts) == 5) && parts[2] == fingerprint && fingerprint != "" {
-		gt := gate{fingerprint: fingerprint, rung: rung(parts[0]), class: parts[1],
-			reason: parts[1] + ": refused under this connection fingerprint before the node restarted"}
-		if len(parts) == 5 {
-			gt.pinned, gt.offered = parts[3], parts[4]
-		}
-		g.held[endpointID] = gt
+	if gt, ok := rejection.Parse(published); ok && gt.Fingerprint == fingerprint && fingerprint != "" {
+		g.held[endpointID] = gate{fingerprint: fingerprint, rung: rung(gt.Rung), class: gt.Class,
+			reason:  gt.Class + ": refused under this connection fingerprint before the node restarted",
+			pinned:  gt.PinnedKey,
+			offered: gt.OfferedKey}
 	}
 }
 
@@ -161,7 +158,7 @@ func (g *gates) rejectionOf(endpointID string) string {
 	if !ok {
 		return rejectionNone
 	}
-	return rejectionOf(gt.rung, gt.class, gt.fingerprint, gt.pinned, gt.offered)
+	return gt.value()
 }
 
 // refusal renders a held gate as the terminal error a gated attempt fails

@@ -17,13 +17,31 @@ import pixelmatch from 'pixelmatch';
 // a whole surface swap, so a dark-on-dark change still scores 0.000%. Measured
 // and tracked in #774; when byte stability is the claim, compare the bytes
 // (web/e2e/shotmask.spec.ts does).
+//
+// `exact` is that comparison for whole captures: every pixel equal in every
+// channel, any difference a failure whatever maxRatio says. It is how a mask is
+// proven to hold (DOCS_SHOTS_EXACT=1 with the clock moved, #1081): a mask edge
+// moving one pixel over a dark surface scores zero at threshold 0.1, so the
+// default comparison cannot tell a mask that holds from one that does not.
 export const DEFAULT_MAX_RATIO = 0;
 
-export function compareShot(committedBuf, freshBuf, { maxRatio = DEFAULT_MAX_RATIO } = {}) {
+function countExact(a, b) {
+  let n = 0;
+  for (let i = 0; i < a.length; i += 4) {
+    if (a[i] !== b[i] || a[i + 1] !== b[i + 1] || a[i + 2] !== b[i + 2] || a[i + 3] !== b[i + 3]) n++;
+  }
+  return n;
+}
+
+export function compareShot(committedBuf, freshBuf, { maxRatio = DEFAULT_MAX_RATIO, exact = false } = {}) {
   const a = PNG.sync.read(committedBuf);
   const b = PNG.sync.read(freshBuf);
   if (a.width !== b.width || a.height !== b.height) {
     return { status: 'size', a: { width: a.width, height: a.height }, b: { width: b.width, height: b.height } };
+  }
+  if (exact) {
+    const n = countExact(a.data, b.data);
+    return { status: n > 0 ? 'changed' : 'ok', ratio: n / (a.width * a.height), diffPixels: n };
   }
   const diff = pixelmatch(a.data, b.data, null, a.width, a.height, { threshold: 0.1 });
   const ratio = diff / (a.width * a.height);

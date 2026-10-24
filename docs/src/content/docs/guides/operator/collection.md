@@ -5,6 +5,7 @@ walkthroughs:
   - id: set-up-monitoring
   - id: fix-an-endpoint-in-place
   - id: fix-a-rejected-session
+  - id: trust-a-changed-host-key
 ---
 
 Collection is how the fleet learns whether a device is reachable and what it reports. An **edge
@@ -192,6 +193,35 @@ rejected; pointing the login at the rotated secret brings the session up seconds
 walkthrough runs against a simulated touch panel, so the node really logs in.
 
 ::walkthrough{#fix-a-rejected-session}
+
+#### A changed key
+
+An `ssh` endpoint pins the host key its component presents: the node trusts the first key it sees,
+and every later connection must present the same one. A component that presents another (it was
+reinstalled, its hardware was swapped, or something sits in the middle answering in its place)
+reads **rejected** before anything logs in, and the notice says **The host key changed** and names
+both keys: the **pinned** one and the one the component **offered** instead. Both come from the
+node's refusal as data, so what the console shows is exactly what the node refused.
+
+**Trust this key**, with `endpoint:retry`, makes the offered key the new pin. It confirms first:
+the confirm shows both keys again, and **Why a key changes** names the three causes, each
+explained on hover, since only the first two are safe to trust. Compare the offered key with the
+one the component's own console shows before trusting a change nobody can account for. On
+confirming, the node redials onto the new pin once and the session comes up; the audit log records
+the key replaced, the key trusted, and who trusted it. The confirm sends exactly the key it shows:
+if the offer on record moves while it is open, the confirm says so and will not send, and the server
+refuses any key other than the one the refusal on record names. That record is the node's last word,
+and a refused node dials no more, so a component that changed again since (its own console shows a
+third key) needs a **Retry** first: the node reads the key it offers now, and that is the one to
+trust. Without the permission the
+button is greyed and its tooltip says so, while the two keys still read, so a viewer can tell an
+operator what changed. **Retry** stays beside it for the rarer case where the original component
+came back.
+
+In the simulated fleet, the touch panel in the place named `briefing` pins the key it had before it
+was reimaged, so it reads rejected for a changed host key; trusting the offered key brings it up.
+
+::walkthrough{#trust-a-changed-host-key}
 
 ## Events
 

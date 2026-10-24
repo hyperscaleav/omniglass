@@ -104,11 +104,11 @@ func TestTLSPinRidesTheWorklistAndRetryAcceptsAChangedKey(t *testing.T) {
 	}
 
 	// Refused at the door: a malformed key, and two different keys at once.
-	if _, err := f.gw.RetryEndpoint(f.ctx, "", ep.ID, storage.RetryPin{Certificate: "SHA256:nope"}, f.all, f.all); !errors.Is(err, storage.ErrRetryPin) {
-		t.Fatalf("a malformed certificate key = %v, want ErrRetryPin", err)
+	if _, err := f.gw.RetryEndpoint(f.ctx, "", ep.ID, storage.RetryPin{Certificate: "SHA256:nope"}, f.all, f.all); !errors.Is(err, storage.ErrRetryHostKey) {
+		t.Fatalf("a malformed certificate key = %v, want ErrRetryHostKey", err)
 	}
-	if _, err := f.gw.RetryEndpoint(f.ctx, "", ep.ID, storage.RetryPin{HostKey: key("B"), Certificate: key("C")}, f.all, f.all); !errors.Is(err, storage.ErrRetryPin) {
-		t.Fatalf("two different keys at once = %v, want ErrRetryPin", err)
+	if _, err := f.gw.RetryEndpoint(f.ctx, "", ep.ID, storage.RetryPin{HostKey: key("B"), Certificate: key("C")}, f.all, f.all); !errors.Is(err, storage.ErrRetryHostKey) {
+		t.Fatalf("two different keys at once = %v, want ErrRetryHostKey", err)
 	}
 
 	// The operator accepts the offered key: it is declared, wins over the
@@ -165,8 +165,8 @@ func TestRetryRefusesACertificateOffATLSEndpoint(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := f.gw.RetryEndpoint(f.ctx, "", ep.ID, storage.RetryPin{Certificate: key("A")}, f.all, f.all); !errors.Is(err, storage.ErrRetryPin) {
-		t.Fatalf("a certificate on an ssh endpoint = %v, want ErrRetryPin", err)
+	if _, err := f.gw.RetryEndpoint(f.ctx, "", ep.ID, storage.RetryPin{Certificate: key("A")}, f.all, f.all); !errors.Is(err, storage.ErrRetryHostKey) {
+		t.Fatalf("a certificate on an ssh endpoint = %v, want ErrRetryHostKey", err)
 	}
 	if _, err := f.gw.RetryEndpoint(f.ctx, "", ep.ID, storage.RetryPin{HostKey: key("A")}, f.all, f.all); err != nil {
 		t.Fatalf("a host key on an ssh endpoint refused: %v", err)

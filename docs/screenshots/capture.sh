@@ -23,9 +23,11 @@ set -euo pipefail
 # DOCS_SHOTS_TZ moves the capture browser's clock (an IANA zone), which is how the
 # masks are validated: they must cover boxes whose size does not depend on the text
 # they hide, so the proof is a recapture whose rendered timestamps have a different
-# character count, not two captures minutes apart (#773). For example:
+# width, not two captures minutes apart (#773). Compare it exactly: the gate's
+# perceptual threshold scores a mask edge moving one pixel over a dark surface as
+# zero (#774, #1081), and DOCS_SHOTS_EXACT=1 makes the diff count every pixel:
 #
-#	DOCS_SHOTS_TZ=Asia/Kolkata make docs-shots-check
+#	DOCS_SHOTS_EXACT=1 DOCS_SHOTS_TZ=Asia/Kolkata make docs-shots-check
 #
 # Prereqs: docker. Run via `make docs-shots`.
 set -euo pipefail

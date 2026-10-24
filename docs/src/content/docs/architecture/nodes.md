@@ -202,7 +202,7 @@ worklist delivers that differs (an operator's `:retry` with `certificate`) repla
 the session, and a key that differs from the pin is a `certificate` refusal that gates the transport
 rung, beneath which the probe runs only the TCP connect
 ([tls](/architecture/collection/#tls),
-[ADR-0159](/architecture/decisions/#adr-0159-tls-is-its-own-transport-over-a-shared-primitive-and-its-pin-is-the-public-key)).
+[ADR-0160](/architecture/decisions/#adr-0160-tls-is-its-own-transport-over-a-shared-primitive-and-its-pin-is-the-public-key)).
 Still design below: the pool knobs.
 
 ::::design[Target design: sessions and the session pool, tracked in #603; the held transports beyond the line protocol are #1034 (websocket), #1036 (mqtt), #1037 (udp), #1038 (SSE over http), #1039 (modbus/tcp), #1040 (bacnet/ip), #1041 (knxnet/ip)]
@@ -319,7 +319,7 @@ setup/resolve error, a missing credential) does not gate.
 **Off gates.** Every check toggles via `params.<name>_check = "on" | "off"`; `params.liveness =
 "off"` disables the whole gate. Defaults split by **auth dependence**: auth-independent checks ON,
 opt-out (`ping_check`, `port_check`; the TLS handshake shipped as the tls transport's own rung,
-not a toggle, [ADR-0159](/architecture/decisions/#adr-0159-tls-is-its-own-transport-over-a-shared-primitive-and-its-pin-is-the-public-key)); **`snmp_check` ON**, the one
+not a toggle, [ADR-0160](/architecture/decisions/#adr-0160-tls-is-its-own-transport-over-a-shared-primitive-and-its-pin-is-the-public-key)); **`snmp_check` ON**, the one
 auth-dependent exception (the get reuses the poll's community, so a failure means genuinely
 unpollable, and it is the only ICMP-independent SNMP signal); **`ssh_check` / `telnet_check` OFF**,
 opt-in (a differing liveness credential must not read as down).
