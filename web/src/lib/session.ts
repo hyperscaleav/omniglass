@@ -133,6 +133,17 @@ export function ladder(iface: ReachEndpoint): Rung[] {
   });
 }
 
+// pollsHeld reports a gate beneath which the node sends no stateless poll
+// (#1110): a poll is sent at the transport rung, or for snmp at the session
+// rung, since every get carries the community (#821), and a gate at or below
+// that rung holds it (the node's statelessRung). A login refused over a
+// transport whose polls carry no credential holds none.
+export function pollsHeld(iface: ReachEndpoint): boolean {
+  const rung = iface.rejection?.rung;
+  if (!rung) return false;
+  return RANK[rung] <= RANK[iface.transport === "snmp" ? "authenticated" : "responsive"];
+}
+
 // What each rung is, then what it says now: the tooltip a rung chip carries,
 // so the ladder teaches itself one hover at a time.
 const RUNG_WHAT: Record<RungRole, string> = {

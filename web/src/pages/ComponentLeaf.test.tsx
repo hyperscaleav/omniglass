@@ -295,6 +295,8 @@ describe("the leaf's dispatch facts (#786)", () => {
     const card = screen.getByTestId("leaf-collection");
     expect(within(card).queryByTestId("session-pill")).toBeNull();
     expect(within(card).getByTestId("session-reason").textContent).toBe("auth: the agent answered authorizationError for the community");
+    // Beneath the community's gate no get is sent, the poll's included.
+    expect(within(card).getByTestId("collection-snmp").textContent).toBe("polls stopped");
     expect((within(card).getByRole("button", { name: /retry/i }) as HTMLButtonElement).disabled).toBe(false);
   });
 

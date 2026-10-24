@@ -13,6 +13,7 @@ import type { Node } from "./nodes";
 import { nodeStatus } from "./nodes";
 import type { ReachEndpoint } from "./reachability";
 import { STALENESS_WINDOW_MS, endpointWord, lastSeenAt } from "./reachability";
+import { pollsHeld } from "./session";
 import { entityLabel } from "./entities";
 
 // The leaf's poll (#934): a monitoring console's component view moves as
@@ -33,7 +34,9 @@ export type CollectionState = {
   // component answered, badly, which is a component fact and not a collection one.
   // rejected and session-down (#1059): the endpoint's held session refused or
   // gave up, so its polls stopped or fail while the probes beside them keep
-  // delivering, and freshness alone would read collecting.
+  // delivering, and freshness alone would read collecting. A gate the probe
+  // set with no session held reads rejected too where it holds the polls
+  // (#1110, lib/session's pollsHeld).
   kind: "collecting" | "component-or-path" | "node-offline" | "down" | "rejected" | "session-down" | "unknown";
   node?: string;
 };
@@ -49,7 +52,7 @@ export function collectionState(iface: ReachEndpoint, node: Node | undefined, no
   const last = lastSeenAt(iface) ?? iface.verdict?.ts ?? null;
   if (!last) return { kind: nodeDown ? "node-offline" : "unknown", node: iface.node };
   if (now - new Date(last).getTime() > STALENESS_WINDOW_MS) return { kind: nodeDown ? "node-offline" : "component-or-path", node: iface.node };
-  if (iface.session?.state === "rejected") return { kind: "rejected", node: iface.node };
+  if (iface.session?.state === "rejected" || pollsHeld(iface)) return { kind: "rejected", node: iface.node };
   if (iface.session?.state === "down") return { kind: "session-down", node: iface.node };
   if (endpointWord(iface, now) === "down") return { kind: "down", node: iface.node };
   return { kind: "collecting", node: iface.node };
