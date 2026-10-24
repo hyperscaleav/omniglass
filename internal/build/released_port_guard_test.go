@@ -12,9 +12,9 @@ import (
 	"testing"
 )
 
-// TestNoTestUsesAReleasedPort fails any test that listens, reads the
-// listener's address, closes the listener and then uses the address: a port
-// picked and released. The port is free the moment the listener closes, so a
+// TestNoTestUsesAReleasedPort fails any test that listens (a Listen* call or
+// an httptest server), reads the address, closes the listener and then uses
+// the address: a port picked and released. The port is free the moment the listener closes, so a
 // concurrent run on the host can be handed it before the use, and a dial the
 // test expects refused reaches a stranger's listener (#1089), or a bind the
 // test expects to win loses (#1077). A test that needs a refused dial aims at
@@ -23,7 +23,9 @@ import (
 //
 // Test files are read whatever their build tags, and so are the non-test
 // files of a test-helper package (a directory named *test), where a helper
-// returning a released address would otherwise hide.
+// returning a released address would otherwise hide. A port released through
+// a wrapper (a simulated face's StopTCPSession, then a restart on the port)
+// is outside what this reads; #1116 tracks the one class of it on the tree.
 func TestNoTestUsesAReleasedPort(t *testing.T) {
 	// The uses that cannot be avoided, each with why. A stale entry fails,
 	// so the list never outlives the code it excuses.
@@ -92,11 +94,17 @@ type releasedPortUse struct {
 	pos      token.Position
 }
 
-// releasedPortUses finds, in each function body of f (a declaration's and
-// every function literal's), a listener (a variable assigned from a Listen*
-// call) whose address was read (Addr or LocalAddr, kept in a variable or
-// read again) and which was then closed outright, not deferred and not from
-// a closure, before the address was used.
+// releasedPortUses walks each function of f in source order and reports a
+// listener's address used once the listener has closed. A listener is a
+// variable or field assigned from a Listen* call or an httptest server; its
+// address is what Addr, LocalAddr, a server's URL or its Listener's Addr
+// reads, kept in a variable or anything derived from one. A close counts
+// where it runs in line with the code: in the body, or in a subtest's
+// function (t.Run runs it there and then). A close in any other closure (a
+// cleanup, a goroutine, a stop function) holds the listener until then, and
+// a close on a path that returns or fails the test releases it only on that
+// path. A deferred close releases it at the function's return, so a
+// function returning the address hands back a released port.
 func releasedPortUses(fset *token.FileSet, f *ast.File) []releasedPortUse {
 	var out []releasedPortUse
 	for _, decl := range f.Decls {
@@ -104,17 +112,14 @@ func releasedPortUses(fset *token.FileSet, f *ast.File) []releasedPortUse {
 		if !ok || fn.Body == nil {
 			continue
 		}
-		bodies := []*ast.BlockStmt{fn.Body}
-		ast.Inspect(fn.Body, func(n ast.Node) bool {
-			if lit, ok := n.(*ast.FuncLit); ok {
-				bodies = append(bodies, lit.Body)
-			}
-			return true
-		})
-		for _, body := range bodies {
-			for _, u := range releasedInBody(body) {
-				out = append(out, releasedPortUse{fn: fn.Name.Name, listener: u.listener, pos: fset.Position(u.pos)})
-			}
+		d := &releaseDetector{
+			gen: map[string]int{}, listeners: map[string]bool{}, httpServers: map[string]bool{},
+			closes: map[string][]closeSpan{}, deferred: map[*ast.BlockStmt]map[string]bool{},
+			addrOf: map[string]string{}, reported: map[string]bool{},
+		}
+		d.visit(fn.Body, walkCtx{frame: fn.Body, block: fn.Body})
+		for _, u := range d.out {
+			out = append(out, releasedPortUse{fn: fn.Name.Name, listener: u.listener, pos: fset.Position(u.pos)})
 		}
 	}
 	return out
@@ -125,143 +130,328 @@ type bodyUse struct {
 	pos      token.Pos
 }
 
-// releasedInBody walks one body in source order. It does not look inside a
-// nested function literal for listeners, closes or assignments (that body is
-// walked on its own), but it does follow a use of the address into one, as a
-// subtest run after the close is still a use after it.
-func releasedInBody(body *ast.BlockStmt) []bodyUse {
-	listeners := map[string]bool{}
-	closed := map[string]token.Pos{}
-	addrOf := map[string]string{} // address variable -> the listener it was read from
-	lhs := map[*ast.Ident]bool{}
-	var out []bodyUse
+// closeSpan is where a close leaves its listener released: from at to
+// until, or to the end when until is unset.
+type closeSpan struct{ at, until token.Pos }
 
-	var walk func(n ast.Node, nested bool) bool
-	walk = func(n ast.Node, nested bool) bool {
+// walkCtx is where the walk stands: the function a deferred close runs at
+// the return of (its body), the innermost block, whether a close here runs
+// in line (held is false) and whether it is deferred.
+type walkCtx struct {
+	frame     *ast.BlockStmt
+	block     *ast.BlockStmt
+	held      bool
+	deferring bool
+}
+
+// releaseDetector tracks one top-level function. A listener's key is its
+// expression (ln, s.ln) and a generation, bumped by every assignment, so an
+// address read from a listener since replaced stays tied to the one it came
+// from.
+type releaseDetector struct {
+	gen         map[string]int
+	listeners   map[string]bool // versioned key
+	httpServers map[string]bool // versioned key of an httptest server
+	closes      map[string][]closeSpan
+	deferred    map[*ast.BlockStmt]map[string]bool
+	addrOf      map[string]string // address variable -> versioned listener key
+	reported    map[string]bool
+	out         []bodyUse
+}
+
+func (d *releaseDetector) visit(n ast.Node, c walkCtx) {
+	ast.Inspect(n, func(n ast.Node) bool {
 		switch n := n.(type) {
+		case *ast.BlockStmt:
+			if n != c.block {
+				inner := c
+				inner.block = n
+				d.visit(n, inner)
+				return false
+			}
 		case *ast.FuncLit:
-			ast.Inspect(n.Body, func(m ast.Node) bool { return walk(m, true) })
+			d.visit(n.Body, walkCtx{frame: n.Body, block: n.Body, held: true})
+			return false
+		case *ast.GoStmt:
+			held := c
+			held.held = true
+			d.visit(n.Call, held)
 			return false
 		case *ast.DeferStmt:
+			deferred := c
+			deferred.deferring = true
+			d.visit(n.Call, deferred)
 			return false
 		case *ast.AssignStmt:
-			if nested {
-				break
+			for _, r := range n.Rhs {
+				d.visit(r, c)
 			}
-			for _, l := range n.Lhs {
-				if id, ok := l.(*ast.Ident); ok {
-					lhs[id] = true
-				}
-			}
-			assign(n.Lhs, n.Rhs, listeners, addrOf)
+			d.assign(n.Lhs, n.Rhs)
+			return false
 		case *ast.ValueSpec:
-			if nested {
-				break
+			for _, r := range n.Values {
+				d.visit(r, c)
 			}
-			var ls []ast.Expr
-			for _, id := range n.Names {
-				lhs[id] = true
-				ls = append(ls, id)
+			lhs := make([]ast.Expr, len(n.Names))
+			for i, id := range n.Names {
+				lhs[i] = id
 			}
-			assign(ls, n.Values, listeners, addrOf)
+			d.assign(lhs, n.Values)
+			return false
+		case *ast.ReturnStmt:
+			for _, r := range n.Results {
+				d.visit(r, c)
+				if key, ok := d.addrSource(r); ok && d.deferred[c.frame][key] {
+					d.report(key, "return:"+key, r.Pos())
+				}
+			}
+			return false
 		case *ast.CallExpr:
-			sel, ok := n.Fun.(*ast.SelectorExpr)
-			if !ok {
-				break
-			}
-			x, ok := sel.X.(*ast.Ident)
-			if !ok || !listeners[x.Name] {
-				break
-			}
-			switch sel.Sel.Name {
-			case "Close":
-				if _, done := closed[x.Name]; !done && !nested {
-					closed[x.Name] = n.Pos()
+			if sel, ok := n.Fun.(*ast.SelectorExpr); ok {
+				if sel.Sel.Name == "Close" && len(n.Args) == 0 {
+					if key, ok := d.listenerKey(sel.X); ok {
+						d.close(key, n, c)
+						return false
+					}
 				}
-			case "Addr", "LocalAddr":
-				if at, done := closed[x.Name]; done && n.Pos() > at {
-					out = append(out, bodyUse{listener: x.Name, pos: n.Pos()})
+				if sel.Sel.Name == "Run" {
+					// A subtest runs its function in line, at the call.
+					d.visit(n.Fun, c)
+					for _, a := range n.Args {
+						if lit, ok := a.(*ast.FuncLit); ok {
+							d.visit(lit.Body, walkCtx{frame: lit.Body, block: lit.Body, held: c.held})
+							continue
+						}
+						d.visit(a, c)
+					}
+					return false
 				}
+			}
+		case *ast.SelectorExpr:
+			if key, ok := d.addrRead(n); ok {
+				if d.released(key, n.Pos()) {
+					d.report(key, "read:"+key, n.Pos())
+				}
+				return false
 			}
 		case *ast.Ident:
-			l, ok := addrOf[n.Name]
-			if !ok || lhs[n] {
-				break
-			}
-			if at, done := closed[l]; done && n.Pos() > at {
-				out = append(out, bodyUse{listener: l, pos: n.Pos()})
-				delete(addrOf, n.Name) // one report per released address
+			if key, ok := d.addrOf[n.Name]; ok && d.released(key, n.Pos()) {
+				d.report(key, "var:"+n.Name+":"+key, n.Pos())
 			}
 		}
 		return true
-	}
-	ast.Inspect(body, func(n ast.Node) bool { return walk(n, false) })
-	return out
+	})
 }
 
-// assign records what an assignment makes of its targets: a Listen* call
-// makes the first a listener; a value read from a listener's address makes
-// every target an address of it; anything else ends a target's tracking.
-func assign(lhs, rhs []ast.Expr, listeners map[string]bool, addrOf map[string]string) {
-	var listened bool
-	var from string
-	for _, r := range rhs {
-		if isListenCall(r) {
-			listened = true
+// close records a listener's close: deferred to the function's return, held
+// to a later time when it sits in a closure that does not run in line, or
+// released here, until the end of a block that returns or fails the test.
+func (d *releaseDetector) close(key string, call *ast.CallExpr, c walkCtx) {
+	switch {
+	case c.deferring:
+		if d.deferred[c.frame] == nil {
+			d.deferred[c.frame] = map[string]bool{}
 		}
-		if l := addrRead(r, listeners); l != "" {
-			from = l
+		d.deferred[c.frame][key] = true
+	case c.held:
+	default:
+		span := closeSpan{at: call.Pos()}
+		if end, ok := terminates(c.block); ok {
+			span.until = end
 		}
-	}
-	for i, l := range lhs {
-		id, ok := l.(*ast.Ident)
-		if !ok || id.Name == "_" {
-			continue
-		}
-		delete(addrOf, id.Name)
-		switch {
-		case listened && i == 0:
-			listeners[id.Name] = true
-		case from != "":
-			addrOf[id.Name] = from
-		}
+		d.closes[key] = append(d.closes[key], span)
 	}
 }
 
-// isListenCall reports a call whose function is named Listen*: net.Listen,
-// net.ListenUDP, net.ListenPacket, a ListenConfig's Listen.
-func isListenCall(e ast.Expr) bool {
-	call, ok := e.(*ast.CallExpr)
-	if !ok {
-		return false
-	}
-	switch fun := call.Fun.(type) {
-	case *ast.SelectorExpr:
-		return strings.HasPrefix(fun.Sel.Name, "Listen")
-	case *ast.Ident:
-		return strings.HasPrefix(fun.Name, "Listen")
+func (d *releaseDetector) released(key string, at token.Pos) bool {
+	for _, s := range d.closes[key] {
+		if s.at < at && (s.until == token.NoPos || at < s.until) {
+			return true
+		}
 	}
 	return false
 }
 
-// addrRead returns the listener whose address e reads, if any.
-func addrRead(e ast.Expr, listeners map[string]bool) string {
-	var from string
-	ast.Inspect(e, func(n ast.Node) bool {
-		call, ok := n.(*ast.CallExpr)
-		if !ok {
-			return true
+func (d *releaseDetector) report(key, once string, at token.Pos) {
+	if d.reported[once] {
+		return
+	}
+	d.reported[once] = true
+	name, _, _ := strings.Cut(key, "#")
+	d.out = append(d.out, bodyUse{listener: name, pos: at})
+}
+
+// assign applies an assignment: a Listen* call or an httptest server makes
+// its first target a new listener; a value carrying an address makes every
+// target an address of that listener; anything else ends a target's part.
+func (d *releaseDetector) assign(lhs, rhs []ast.Expr) {
+	listened, httpServer := false, false
+	from, carries := "", false
+	for _, r := range rhs {
+		if call, ok := r.(*ast.CallExpr); ok {
+			name := calleeName(call)
+			listened = listened || strings.HasPrefix(name, "Listen")
+			httpServer = httpServer || name == "NewServer" || name == "NewTLSServer" || name == "NewUnstartedServer"
 		}
-		sel, ok := call.Fun.(*ast.SelectorExpr)
-		if !ok || (sel.Sel.Name != "Addr" && sel.Sel.Name != "LocalAddr") {
-			return true
+		if key, ok := d.addrSource(r); ok {
+			from, carries = key, true
 		}
-		if x, ok := sel.X.(*ast.Ident); ok && listeners[x.Name] {
-			from = x.Name
+	}
+	for i, l := range lhs {
+		name := exprKey(l)
+		if name == "" || name == "_" {
+			continue
 		}
-		return true
-	})
-	return from
+		delete(d.addrOf, name)
+		d.gen[name]++
+		key := fmt.Sprintf("%s#%d", name, d.gen[name])
+		switch {
+		case (listened || httpServer) && i == 0:
+			d.listeners[key] = true
+			d.httpServers[key] = httpServer
+		case carries:
+			if _, isIdent := l.(*ast.Ident); isIdent && name != "err" && name != "ok" {
+				d.addrOf[name] = from
+			}
+		}
+	}
+}
+
+// listenerKey is the versioned key of the listener x names, if it is one.
+func (d *releaseDetector) listenerKey(x ast.Expr) (string, bool) {
+	name := exprKey(x)
+	if name == "" {
+		return "", false
+	}
+	key := fmt.Sprintf("%s#%d", name, d.gen[name])
+	return key, d.listeners[key]
+}
+
+// addrRead reports a selector that reads a listener's address: its Addr or
+// LocalAddr, an httptest server's URL, or the Addr of a server's Listener.
+func (d *releaseDetector) addrRead(sel *ast.SelectorExpr) (string, bool) {
+	switch sel.Sel.Name {
+	case "Addr", "LocalAddr":
+		if key, ok := d.listenerKey(sel.X); ok {
+			return key, true
+		}
+		if inner, ok := sel.X.(*ast.SelectorExpr); ok && inner.Sel.Name == "Listener" {
+			if key, ok := d.listenerKey(inner.X); ok && d.httpServers[key] {
+				return key, true
+			}
+		}
+	case "URL":
+		if key, ok := d.listenerKey(sel.X); ok && d.httpServers[key] {
+			return key, true
+		}
+	}
+	return "", false
+}
+
+// addrSource reports the listener whose address e is: read directly, an
+// address variable, or a reshaping of one (a method or field of it, a type
+// assertion, a string built from it, a composite holding it, or one of the
+// functions that split, join, format or parse an address). A call that
+// merely takes the address (a dial, a probe) makes something else of it.
+func (d *releaseDetector) addrSource(e ast.Expr) (string, bool) {
+	switch e := e.(type) {
+	case *ast.Ident:
+		key, ok := d.addrOf[e.Name]
+		return key, ok
+	case *ast.SelectorExpr:
+		if key, ok := d.addrRead(e); ok {
+			return key, true
+		}
+		return d.addrSource(e.X)
+	case *ast.ParenExpr:
+		return d.addrSource(e.X)
+	case *ast.StarExpr:
+		return d.addrSource(e.X)
+	case *ast.UnaryExpr:
+		return d.addrSource(e.X)
+	case *ast.TypeAssertExpr:
+		return d.addrSource(e.X)
+	case *ast.BinaryExpr:
+		if key, ok := d.addrSource(e.X); ok {
+			return key, true
+		}
+		return d.addrSource(e.Y)
+	case *ast.KeyValueExpr:
+		return d.addrSource(e.Value)
+	case *ast.CompositeLit:
+		for _, el := range e.Elts {
+			if key, ok := d.addrSource(el); ok {
+				return key, true
+			}
+		}
+	case *ast.CallExpr:
+		if key, ok := d.addrSource(e.Fun); ok {
+			return key, true // the read itself (ln.Addr()), or a method of the address (a.String())
+		}
+		if addressFuncs[calleeName(e)] {
+			for _, a := range e.Args {
+				if key, ok := d.addrSource(a); ok {
+					return key, true
+				}
+			}
+		}
+	}
+	return "", false
+}
+
+// addressFuncs reshape an address without using it.
+var addressFuncs = map[string]bool{
+	"SplitHostPort": true, "JoinHostPort": true, "Sprintf": true, "Sprint": true,
+	"Itoa": true, "Atoi": true, "Parse": true, "ParseAddrPort": true,
+	"ResolveTCPAddr": true, "ResolveUDPAddr": true, "TrimPrefix": true, "TrimSuffix": true,
+}
+
+// terminates reports a block whose last statement leaves it for good, and
+// where its release ends: a return or branch at the block's end (a returned
+// address is handed back released), a call that ends the test or the
+// goroutine at that call (its arguments are a message, not a use).
+func terminates(b *ast.BlockStmt) (token.Pos, bool) {
+	if len(b.List) == 0 {
+		return token.NoPos, false
+	}
+	switch last := b.List[len(b.List)-1].(type) {
+	case *ast.ReturnStmt, *ast.BranchStmt:
+		return b.End(), true
+	case *ast.ExprStmt:
+		if call, ok := last.X.(*ast.CallExpr); ok {
+			switch calleeName(call) {
+			case "Fatal", "Fatalf", "FailNow", "Skip", "Skipf", "SkipNow", "panic", "Exit", "Goexit":
+				return last.Pos(), true
+			}
+		}
+	}
+	return token.NoPos, false
+}
+
+// calleeName is the called function's own name: Listen in net.Listen and
+// lc.Listen, panic in panic(x).
+func calleeName(call *ast.CallExpr) string {
+	switch fun := call.Fun.(type) {
+	case *ast.SelectorExpr:
+		return fun.Sel.Name
+	case *ast.Ident:
+		return fun.Name
+	}
+	return ""
+}
+
+// exprKey spells an identifier or a field selector chain (ln, s.ln), empty
+// for anything else.
+func exprKey(e ast.Expr) string {
+	switch e := e.(type) {
+	case *ast.Ident:
+		return e.Name
+	case *ast.SelectorExpr:
+		if x := exprKey(e.X); x != "" {
+			return x + "." + e.Sel.Name
+		}
+	}
+	return ""
 }
 
 // The detector finds each shape of a released port and passes each shape of
@@ -339,6 +529,122 @@ func TestReleasedPortUsesFindsPickAndRelease(t *testing.T) {
 		{"a refused address held for the test", `
 			addr := nettest.RefusedAddr(t)
 			dial(addr)`, nil},
+		// The review of #1089's shapes: each is the race, and the first cut
+		// passed every one.
+		{"a helper deferring the close and returning the address", `
+			ln, _ := net.Listen("tcp", "127.0.0.1:0")
+			defer ln.Close()
+			return ln.Addr().String()`, []string{"ln"}},
+		{"a helper deferring the close and returning a kept address", `
+			ln, _ := net.Listen("tcp", "127.0.0.1:0")
+			defer ln.Close()
+			a := ln.Addr().String()
+			return a`, []string{"ln"}},
+		{"a listener closed inside a subtest", `
+			ln, _ := net.Listen("tcp", "127.0.0.1:0")
+			addr := ln.Addr().String()
+			t.Run("closed", func(t *testing.T) {
+				ln.Close()
+				dial(addr)
+			})`, []string{"ln"}},
+		{"an httptest server's kept URL after its close", `
+			srv := httptest.NewServer(h)
+			u := srv.URL
+			srv.Close()
+			get(u)`, []string{"srv"}},
+		{"an httptest server's URL read after its close", `
+			srv := httptest.NewServer(h)
+			srv.Close()
+			get(srv.URL)`, []string{"srv"}},
+		{"an httptest server's listener address after its close", `
+			srv := httptest.NewUnstartedServer(h)
+			srv.Start()
+			a := srv.Listener.Addr().String()
+			srv.Close()
+			dial(a)`, []string{"srv"}},
+		{"a listener in a struct field", `
+			s.ln, _ = net.Listen("tcp", "127.0.0.1:0")
+			addr := s.ln.Addr().String()
+			s.ln.Close()
+			dial(addr)`, []string{"s.ln"}},
+		{"an address derived through another variable", `
+			ln, _ := net.Listen("tcp", "127.0.0.1:0")
+			a := ln.Addr()
+			_, port, _ := net.SplitHostPort(a.String())
+			ln.Close()
+			dial(port)`, []string{"ln"}},
+		{"a reassigned listener's old address", `
+			ln, _ := net.Listen("tcp", "127.0.0.1:0")
+			addr := ln.Addr().String()
+			ln.Close()
+			ln, _ = net.Listen("tcp", "127.0.0.1:0")
+			defer ln.Close()
+			dial(addr)`, []string{"ln"}},
+		{"a reassigned listener's new address", `
+			ln, _ := net.Listen("tcp", "127.0.0.1:0")
+			ln.Close()
+			ln, _ = net.Listen("tcp", "127.0.0.1:0")
+			defer ln.Close()
+			dial(ln.Addr().String())`, nil},
+		{"a close on an error path that returns", `
+			ln, err := net.Listen("tcp", "127.0.0.1:0")
+			addr := ln.Addr().String()
+			if err := setup(addr); err != nil {
+				_ = ln.Close()
+				return ""
+			}
+			dial(addr)`, nil},
+		{"a close on a path that fails the test", `
+			ln, _ := net.Listen("tcp", "127.0.0.1:0")
+			addr := ln.Addr().String()
+			if bad {
+				ln.Close()
+				t.Fatalf("bad %s", addr)
+			}
+			dial(addr)`, nil},
+		{"a use on the error path after its close", `
+			ln, _ := net.Listen("tcp", "127.0.0.1:0")
+			addr := ln.Addr().String()
+			if bad {
+				ln.Close()
+				dial(addr)
+				return ""
+			}`, []string{"ln"}},
+		{"a close in a returned cleanup", `
+			srv := httptest.NewServer(h)
+			stop := func() { srv.Close() }
+			defer stop()
+			get(srv.URL)`, nil},
+		{"a cleanup method value", `
+			srv := httptest.NewServer(h)
+			t.Cleanup(srv.Close)
+			get(srv.URL)`, nil},
+		{"a close in a goroutine", `
+			ln, _ := net.Listen("tcp", "127.0.0.1:0")
+			go func() { <-done; ln.Close() }()
+			dial(ln.Addr().String())`, nil},
+		{"a dial's result kept before the close", `
+			ln, _ := net.Listen("tcp", "127.0.0.1:0")
+			addr := ln.Addr().String()
+			res, err := dial(addr)
+			ln.Close()
+			check(res, err)`, nil},
+		{"a deferred close returning what a dial made of the address", `
+			ln, _ := net.Listen("tcp", "127.0.0.1:0")
+			defer ln.Close()
+			return dial(ln.Addr().String())`, nil},
+		{"an address rebuilt into a udp address", `
+			free, _ := net.ListenUDP("udp4", &net.UDPAddr{})
+			port := free.LocalAddr().(*net.UDPAddr).Port
+			target := &net.UDPAddr{IP: ip, Port: port}
+			free.Close()
+			send(target)`, []string{"free"}},
+		{"a subtest deferring its own close", `
+			t.Run("held", func(t *testing.T) {
+				ln, _ := net.Listen("tcp", "127.0.0.1:0")
+				defer ln.Close()
+				dial(ln.Addr().String())
+			})`, nil},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			src := "package p\nfunc F() string {" + c.body + "\nreturn \"\"\n}\n"

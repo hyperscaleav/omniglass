@@ -1,4 +1,4 @@
-//go:build unix
+//go:build linux
 
 // Package nettest holds network helpers for tests.
 package nettest
@@ -24,8 +24,12 @@ import (
 // That is what a port picked by listening on :0 and closing does not give:
 // it is free the moment it closes, and a concurrent run on the host can be
 // handed it before the dial, which then reaches a stranger's listener
-// (#1089). A guard in internal/build fails any test that uses a released
-// port.
+// (#1089). A guard in internal/build fails any test that uses a raw
+// listener's or an httptest server's address after closing it.
+//
+// The hold is Linux's bind semantics (a bound socket conflicts with any
+// later bind unless both set SO_REUSEADDR), which is where the suite runs;
+// elsewhere a refused-dial test skips (refused_other.go).
 func RefusedAddr(t testing.TB) string {
 	t.Helper()
 	addr, release, err := holdUnlistened()

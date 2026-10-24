@@ -1,4 +1,4 @@
-## fixture-binds-a-fixed-port (fixed; found by the #1061 review; the simulator fixed by #1066, the e2e servers' pick-and-release ports by #1077, the refused dials' by #1089; watch for regressions)
+## fixture-binds-a-fixed-port (fixed; found by the #1061 review; the simulator fixed by #1066, the e2e servers' pick-and-release ports by #1077, the refused dials' by #1089; open: a simulated face restarted on its port at a shared address, #1116; watch for regressions)
 
 - **Cue:** a test or fixture that serves on a literal address and port (a simulated component's face
   at `127.x.y.z:20023`, a `StartTCPSession(51325)`, a port lifted by a fixed offset); a "fresh"
@@ -24,7 +24,10 @@
   A test that needs a refused dial aims at `nettest.RefusedAddr`: a socket bound to a loopback port
   and never listening holds it, so the connect is reset and nothing else on the host can listen
   where it lands (a UDP refusal aims at a privileged port, which `bind(:0)` never hands out). The
-  guard `TestNoTestUsesAReleasedPort` (`internal/build`) fails any test that uses a listener's
-  address after closing it, with a short list of excused uses (a listen port the code under test
-  must be told, picked again on a collision). The testcontainer form of the class is
+  guard `TestNoTestUsesAReleasedPort` (`internal/build`) fails any test that uses a raw listener's
+  or an httptest server's address after closing it (a close in line or in a subtest, or a deferred
+  close in a function that returns the address), with a short list of excused uses (a listen port
+  the code under test must be told, picked again on a collision). It reads `Listen*` calls and
+  httptest servers only: a port released through a wrapper, such as a simulated face's
+  `StopTCPSession` and a restart on the same port, is a review cue, not a guard hit. The testcontainer form of the class is
   `fixed-testcontainer-port`.

@@ -52,7 +52,8 @@ unproven proves nothing about the capability.
   process can take the port; never at a port found by listening on `:0` and closing, which a
   concurrent run can be handed before the dial. A UDP refusal aims at a privileged port, which
   `bind(:0)` never hands out. A guard test (`TestNoTestUsesAReleasedPort`) fails any test that
-  uses a listener's address after closing it.
+  uses a raw listener's or an httptest server's address after closing it; a port released through a
+  wrapper (a simulated face stopped and restarted) is outside what it reads.
 - **End-to-end:** emulate the user at each entry point against the running stack: API
   (drive the contracts as a client), CLI (run the real commands), UI (browser-drive the
   SPA). Assert the user-observable outcome, not internals. The real binary follows the same
