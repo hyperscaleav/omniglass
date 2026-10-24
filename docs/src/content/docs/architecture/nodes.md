@@ -20,10 +20,10 @@ credential is permitted only its own `<node>` subjects. Also built: running task
 `internal/bus/consumer.go`), and the raw self-log lane (ADR-0066: `internal/node/logs.go`,
 `GET /nodes/{name}/logs`, the console Self-logs panel), the command wire (a per-node pull, actuated
 over the driver's binding, [ADR-0136](/architecture/decisions/#adr-0136-actuation-is-a-per-node-pull-rendered-at-dispatch)),
-driver polls on their declared schedule (#822), and, for the line protocol over `tcp`, `telnet` (#1033) and `ssh` (#1032), held sessions
+driver polls on their declared schedule (#822), and, for the line protocol over `tcp`, `tls` (#1035), `telnet` (#1033) and `ssh` (#1032), held sessions
 (#816, [below](#sessions)) with their listeners and the inbound demux (#817). Still `Design`: the
 durable JetStream command queue, the session pool knobs and the held transports beyond the line
-protocol (#1034 (websocket), #1035 (tls), #1036 (mqtt), #1037 (udp), #1038 (SSE over http), #1039 (modbus/tcp), #1040 (bacnet/ip), #1041 (knxnet/ip), [ADR-0153](/architecture/decisions/#adr-0153-the-held-session-proof-is-the-line-protocol-over-tcp-other-held-transports-are-their-own-issues)), the layered `_check` reachability gate,
+protocol (#1034 (websocket), #1036 (mqtt), #1037 (udp), #1038 (SSE over http), #1039 (modbus/tcp), #1040 (bacnet/ip), #1041 (knxnet/ip), [ADR-0153](/architecture/decisions/#adr-0153-the-held-session-proof-is-the-line-protocol-over-tcp-other-held-transports-are-their-own-issues)), the layered `_check` reachability gate,
 config-generation-driven cache invalidation, node self-telemetry, the node-down sweep, the JetStream
 publish-ack delivery contract (telemetry publish is fire-and-forget today, #430), tick
 scheduling and concurrency knobs, and config apply (the `:apply` flow). The credential is a shared
@@ -165,8 +165,8 @@ The built endpoint types, their per-task params, and the fixed samples each emit
 ## Sessions
 
 Built (#816): the node holds one session per endpoint whose worklist carries a standing listen task
-over a transport with a session dialer (the line protocol over `tcp` today), or a driver poll whose
-driver declares a `session` block, reconciled against every worklist pull and torn down on task
+over a transport with a session dialer (the line protocol over `tcp`, `tls`, `telnet` and `ssh`), or
+a driver poll whose driver declares a `session` block or rides a transport with no stateless line, reconciled against every worklist pull and torn down on task
 removal, re-address, or node shutdown. It establishes,
 lends its connection to the endpoint's line polls, recovers with a jittered, bounded backoff, and
 reports each transition as the `session-state` property (`establishing`, `up`, `recovering`,
@@ -193,9 +193,19 @@ declaration, or an operator's `:retry` moves the fingerprint and lifts it
 ([auth and rejection](/architecture/collection/#auth-and-rejection),
 [the gate](/architecture/collection/#the-connection-fingerprint-and-the-layered-gate),
 [ADR-0155](/architecture/decisions/#adr-0155-auth-is-a-layer-that-gates-a-held-session-and-a-terminal-refusal-reads-rejected)).
+Built with #1035: a **tls** endpoint's connections run the TLS handshake before anything else,
+under the verification mode its params carry (derived from the driver's `tls-mode` input). In pin
+mode the node keeps **one public key pin per endpoint**, shared by the held session and the
+reachability probe and carried across a session's recycle: a key trusted on first use is published
+as `tls-certificate` (and published again while the worklist does not yet deliver it back), a pin the
+worklist delivers that differs (an operator's `:retry` with `certificate`) replaces it and recycles
+the session, and a key that differs from the pin is a `certificate` refusal that gates the transport
+rung, beneath which the probe runs only the TCP connect
+([tls](/architecture/collection/#tls),
+[ADR-0159](/architecture/decisions/#adr-0159-tls-is-its-own-transport-over-a-shared-primitive-and-its-pin-is-the-public-key)).
 Still design below: the pool knobs.
 
-::::design[Target design: sessions and the session pool, tracked in #603; the held transports beyond the line protocol are #1034 (websocket), #1035 (tls), #1036 (mqtt), #1037 (udp), #1038 (SSE over http), #1039 (modbus/tcp), #1040 (bacnet/ip), #1041 (knxnet/ip)]
+::::design[Target design: sessions and the session pool, tracked in #603; the held transports beyond the line protocol are #1034 (websocket), #1036 (mqtt), #1037 (udp), #1038 (SSE over http), #1039 (modbus/tcp), #1040 (bacnet/ip), #1041 (knxnet/ip)]
 A stateful endpoint (`ssh`, `mqtt`, anything held open) becomes a **session** at runtime: one
 connection keyed by `(node, endpoint)`, shared by every task and command under it, handshake and
 auth paid once. A pool holds it open across ticks (reconnect, backoff, keepalive); a listener
@@ -308,7 +318,8 @@ setup/resolve error, a missing credential) does not gate.
 
 **Off gates.** Every check toggles via `params.<name>_check = "on" | "off"`; `params.liveness =
 "off"` disables the whole gate. Defaults split by **auth dependence**: auth-independent checks ON,
-opt-out (`ping_check`, `port_check`, `tls_check` when TLS lands); **`snmp_check` ON**, the one
+opt-out (`ping_check`, `port_check`; the TLS handshake shipped as the tls transport's own rung,
+not a toggle, [ADR-0159](/architecture/decisions/#adr-0159-tls-is-its-own-transport-over-a-shared-primitive-and-its-pin-is-the-public-key)); **`snmp_check` ON**, the one
 auth-dependent exception (the get reuses the poll's community, so a failure means genuinely
 unpollable, and it is the only ICMP-independent SNMP signal); **`ssh_check` / `telnet_check` OFF**,
 opt-in (a differing liveness credential must not read as down).
@@ -323,8 +334,8 @@ cannot retry a bad credential every tick, [ADR-0157](/architecture/decisions/#ad
 
 **Poller** tasks run only if the verdict is up; **listener** (`mode=listen`) tasks run ungated,
 never pinged; **inline probes** (`icmp`/`tcp` with the host on the task) *are* the check, ungated. A
-down endpoint's gate samples ship in **one** batched call. L5 (socket), L6 (TLS), and further L7
-handshakes extend the stack: one `append` in `ifaceChecks`, gated by its own `_check` param.
+down endpoint's gate samples ship in **one** batched call. L5 (socket) and further L7 handshakes
+extend the stack: one `append` in `ifaceChecks`, gated by its own `_check` param.
 :::
 
 ## Shipping samples

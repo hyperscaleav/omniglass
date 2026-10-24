@@ -281,7 +281,9 @@ secrets under the editor's scope, audited, its tasks re-derived in the same tran
 `POST /endpoints/{id}:retry`
 (gated `endpoint:retry`, audited, #1049) moves the endpoint's retry counter, part of its connection
 fingerprint, so a gate a terminal refusal holds lifts and the endpoint is attempted again (ADR-0158); for an ssh endpoint whose host key changed, its optional `host_key`
-body declares the new pin (#1032). The routes live in the
+body declares the new pin (#1032), and for a tls endpoint whose certificate's public key changed, its
+optional `certificate` does the same (#1035, ADR-0159); each is refused (422) on any other transport
+and when it is not a `SHA256:` fingerprint. The routes live in the
 [generated API reference](/reference/api/), rendered from the OpenAPI document on every build, each
 operation's description naming its permission gate verbatim (a guard test enforces that, alongside the
 spec-contract test that every gated operation carries its `x-omniglass-permission` stamp and
@@ -458,8 +460,10 @@ out-of-scope component is a non-disclosing 404 (a deliberate early exception to
   `session` while it is configured to hold one (a standing listen task, or a driver declaring a
   session: the latest `session-state`, when it changed, and the `session-reason` beside it, cut to
   500 characters), and the `rejection` a terminal refusal holds (the rung and class of
-  `endpoint-rejection`; the connection fingerprint it carries is never served), which the console's
-  session pill and ladder render (#1059). Teardown publishes no state, which is why a session is
+  `endpoint-rejection`; the connection fingerprint it carries is never served, while a refusal of a
+  changed key adds the `pinned` and `offered` keys as fields, #1035), which the console's session
+  pill and ladder render (#1059). A tls endpoint's row also carries `tls`: its verification mode, the
+  key it pins, the latest handshake time, and the certificate's expiry and days left (#1035). Teardown publishes no state, which is why a session is
   served only while one is held; and like the gate, a session's state and reason are the node's
   own facts, which `POST /telemetry:push` refuses.
 - `GET /components/{name}/events` is the log-kind mirror: the component's recent **log occurrences**

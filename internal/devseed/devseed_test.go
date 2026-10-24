@@ -1895,7 +1895,7 @@ func TestSeededFleetHoldsATLSEndpoint(t *testing.T) {
 	type ep struct{ host, port, mode, target, node string }
 	tlsEndpoints := func() ([]ep, error) {
 		rows, err := conn.Query(ctx, `
-			select e.inputs->>'host', e.inputs->>'port', coalesce(e.inputs->>'tls_mode', ''), e.params->>'target',
+			select e.inputs->>'host', e.inputs->>'port', coalesce(e.inputs->>'tls-mode', ''), e.params->>'target',
 				(select n.name from node n where n.principal_id = e.node_name)
 			from endpoint e join driver d on d.id = e.driver_id join component c on c.id = e.component join location l on l.id = c.location_id
 			where d.name = 'newtron-nvp-tls' and l.name = 'huddle' and e.name = 'tls'`)

@@ -8084,7 +8084,7 @@ export interface components {
             handshake_ms?: number;
             /** @description The public key the endpoint pins (tls-certificate), a SHA256 fingerprint; absent before first use and in verify or skip mode */
             key?: string;
-            /** @description How the endpoint's connections judge the certificate (its driver's tls_mode input, verify when none is set): verify (against the node's system roots, the server name the host), pin (the public key trusted on first use, any other refused) or skip (nothing checked, the operator's explicit choice) */
+            /** @description How the endpoint's connections judge the certificate (its driver's tls-mode input, verify when none is set): verify (against the node's system roots, the server name the host), pin (the public key trusted on first use, any other refused) or skip (nothing checked, the operator's explicit choice) */
             mode: string;
         };
         ReachVerdictBody: {

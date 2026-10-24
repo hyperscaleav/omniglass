@@ -155,7 +155,7 @@ drivers:
         # (#1035). An operator may edit the mode in place: verify for gear
         # with a certificate a root vouches for, skip (never a default) for
         # gear whose key changes on every boot.
-        - { name: tls_mode, kind: string, default: pin }
+        - { name: tls-mode, kind: string, default: pin }
       # The same NVP conversation over the panel's TLS port. The handshake is
       # the transport rung: a changed key is a terminal certificate refusal,
       # so nothing (a poll, a command, an arm) reaches a key nobody trusted.

@@ -93,7 +93,7 @@ type reachRejectionBody struct {
 // verifies, the key it pins, the latest handshake time, and the certificate's
 // expiry and days left.
 type reachTLSBody struct {
-	Mode        string     `json:"mode" doc:"How the endpoint's connections judge the certificate (its driver's tls_mode input, verify when none is set): verify (against the node's system roots, the server name the host), pin (the public key trusted on first use, any other refused) or skip (nothing checked, the operator's explicit choice)"`
+	Mode        string     `json:"mode" doc:"How the endpoint's connections judge the certificate (its driver's tls-mode input, verify when none is set): verify (against the node's system roots, the server name the host), pin (the public key trusted on first use, any other refused) or skip (nothing checked, the operator's explicit choice)"`
 	Key         string     `json:"key,omitempty" doc:"The public key the endpoint pins (tls-certificate), a SHA256 fingerprint; absent before first use and in verify or skip mode"`
 	HandshakeMS *float64   `json:"handshake_ms,omitempty" doc:"The latest probe's handshake time in milliseconds (tls-handshake-time); absent until the component answers one"`
 	Expires     *time.Time `json:"expires,omitempty" doc:"The not-after of the certificate the latest probe accepted (tls-certificate-expiry); absent until one is accepted"`
@@ -284,7 +284,7 @@ const (
 // days left.
 func composeTLS(ctx context.Context, gw storage.Gateway, comp string, it storage.ComponentEndpoint) (*reachTLSBody, error) {
 	var p struct {
-		Mode string `json:"tls_mode"`
+		Mode string `json:"tls-mode"`
 	}
 	_ = json.Unmarshal(it.Params, &p)
 	out := &reachTLSBody{Mode: p.Mode}

@@ -55,6 +55,27 @@ on first use and kept as the endpoint's `ssh-host-key`; when it changes the sess
 naming both keys, and `omniglass endpoint retry <id> --host-key <the offered key>` trusts the new
 one.
 
+A driver on `tls` speaks the line protocol over a TLS connection, its handshake the transport rung
+([tls](/architecture/collection/#tls)). How the handshake judges the certificate is the driver's
+`tls-mode` input, a string input the engine reads by name, like `host` and `port`: `verify` (the
+certificate chains to one of the node's system roots and names the host), `pin` (the first public
+key offered is trusted, any other refused) or `skip` (nothing is checked). The driver declares its
+default, as the official `newtron-nvp-tls` declares `pin` for gear that signs its own certificate; a
+driver that declares no `tls-mode` input verifies; and a spec that defaults it to `skip` refuses at
+write, since skipping verification is only ever an operator's choice. An operator edits the mode in
+place on the endpoint like any input, which moves its connection fingerprint, so a session a
+certificate refused tries again under the new mode with no retry. A refused certificate reads
+`rejected` with class `certificate` and its reason; for a pinned key that changed, the reason names
+both keys and `omniglass endpoint retry <id> --certificate <the offered key>` trusts the new one.
+
+```yaml
+transport: tls
+inputs:
+  - { name: host, kind: string, required: true }
+  - { name: port, kind: number, default: "51326" }
+  - { name: tls-mode, kind: string, default: pin }
+```
+
 A spec may also declare its **reachability ladder** (`ladder`), bottom up: `ladder.ping.enabled`
 (whether to ping at all; a ping is informational only and never gates), `ladder.transport.rung` (the
 gate: `connect` on the transport's port, the protocol's `handshake`, or a named `request` answered,
@@ -122,7 +143,8 @@ driver this way. It is a leaf catalog beside the vendor registry. See
 - An **official** row is always read-only: the blade keeps the Edit and Delete pair in place,
   greyed, with the reason on hover: "Official: ships with Omniglass and updates with it."
   Omniglass ships a starter set of official drivers (Generic SNMP, Newtron NVP, and Newtron NVP
-  over Telnet, its login a session block, with real specs, Kestrel Device API and HTTP JSON as stubs), upserted idempotently at boot so the
+  over Telnet, its login a session block, over SSH, and over TLS, pinning the panel's key, with real
+  specs, Kestrel Device API and HTTP JSON as stubs), upserted idempotently at boot so the
   shared set cannot drift install to install; add a custom driver for anything else.
 - **Delete** refuses while an **endpoint is attached** through the driver (422): an attach
   derives real collection work from the spec, so the driver cannot vanish out from under it.

@@ -417,7 +417,7 @@ func TestReachabilityCarriesTheTLSFacts(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	for comp, params := range map[string]string{"panel-1": `{"target":"127.60.0.9:51326","tls_mode":"pin"}`, "panel-2": `{"target":"127.60.0.10:51326"}`} {
+	for comp, params := range map[string]string{"panel-1": `{"target":"127.60.0.9:51326","tls-mode":"pin"}`, "panel-2": `{"target":"127.60.0.10:51326"}`} {
 		c := comp
 		if _, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{Transport: "tls", Component: &c, Params: []byte(params)}, all); err != nil {
 			t.Fatalf("tls endpoint on %s: %v", comp, err)

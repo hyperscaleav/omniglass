@@ -27,8 +27,8 @@ type endpointParams struct {
 	Username string `json:"username,omitempty"`
 	Password string `json:"password,omitempty"`
 	// TLSMode is a tls endpoint's verification mode (#1035), derived from
-	// its driver's tls_mode input; empty verifies.
-	TLSMode string `json:"tls_mode,omitempty"`
+	// its driver's tls-mode input; empty verifies.
+	TLSMode string `json:"tls-mode,omitempty"`
 }
 
 // runTasks executes every probe task in the worklist and publishes one telemetry

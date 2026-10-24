@@ -291,7 +291,7 @@ func (p *PG) resolveInputs(ctx context.Context, q querier, d *Driver, sp *driver
 
 // attachParams derives the transport params from the effective inputs by the
 // engine's naming contract: an input named `host` is the address, an input
-// named `port` joins it, and an input named `tls_mode` is the tls dialer's
+// named `port` joins it, and an input named `tls-mode` is the tls dialer's
 // verification mode (#1035). Everything else stays in inputs, read by the
 // interpreter, not the dialer.
 func attachParams(effective map[string]string) map[string]string {

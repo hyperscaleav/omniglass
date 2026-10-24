@@ -77,7 +77,7 @@ func key(c string) string { return "SHA256:" + strings.Repeat(c, 43) }
 func TestTLSPinRidesTheWorklistAndRetryAcceptsAChangedKey(t *testing.T) {
 	f := newTLSFixture(t)
 	ep, err := f.gw.CreateEndpoint(f.ctx, "", storage.EndpointSpec{Transport: "tls", Component: &f.component, Node: &f.node,
-		Params: []byte(`{"target":"10.0.0.9:51326","tls_mode":"pin"}`)}, f.all)
+		Params: []byte(`{"target":"10.0.0.9:51326","tls-mode":"pin"}`)}, f.all)
 	if err != nil {
 		t.Fatalf("a tls endpoint: %v", err)
 	}
@@ -178,12 +178,12 @@ func TestTLSModeIsADriverInputThatEditsInPlace(t *testing.T) {
 	}
 	var params map[string]string
 	_ = json.Unmarshal(ep.Params, &params)
-	if params["tls_mode"] != "pin" || params["target"] != "10.0.0.9:51326" {
+	if params["tls-mode"] != "pin" || params["target"] != "10.0.0.9:51326" {
 		t.Fatalf("attached params %s, want the driver's default mode, pin, and its port", ep.Params)
 	}
 	if _, err := f.gw.CreateEndpoint(f.ctx, "", storage.EndpointSpec{Driver: &drv, Component: &f.component, Node: &f.node,
-		Inputs: map[string]string{"host": "10.0.0.9", "tls_mode": "trust-me"}, SecretRead: f.all}, f.all); err == nil || !strings.Contains(err.Error(), "tls_mode") {
-		t.Fatalf("an attach with an unknown mode = %v, want refused naming tls_mode", err)
+		Inputs: map[string]string{"host": "10.0.0.9", "tls-mode": "trust-me"}, SecretRead: f.all}, f.all); err == nil || !strings.Contains(err.Error(), "tls-mode") {
+		t.Fatalf("an attach with an unknown mode = %v, want refused naming tls-mode", err)
 	}
 
 	before := f.task(t, ep.ID).Fingerprint
@@ -194,27 +194,27 @@ func TestTLSModeIsADriverInputThatEditsInPlace(t *testing.T) {
 	if f.task(t, ep.ID).Fingerprint != before {
 		t.Fatal("a label edit moved the fingerprint")
 	}
-	if _, err := f.gw.UpdateEndpoint(f.ctx, "", ep.ID, storage.EndpointPatch{Inputs: map[string]string{"tls_mode": "maybe"}, SecretRead: f.all}, f.all, f.all); !errors.Is(err, storage.ErrEndpointPatchInvalid) || !strings.Contains(err.Error(), "tls_mode") {
-		t.Fatalf("an unknown mode edit = %v, want ErrEndpointPatchInvalid naming tls_mode", err)
+	if _, err := f.gw.UpdateEndpoint(f.ctx, "", ep.ID, storage.EndpointPatch{Inputs: map[string]string{"tls-mode": "maybe"}, SecretRead: f.all}, f.all, f.all); !errors.Is(err, storage.ErrEndpointPatchInvalid) || !strings.Contains(err.Error(), "tls-mode") {
+		t.Fatalf("an unknown mode edit = %v, want ErrEndpointPatchInvalid naming tls-mode", err)
 	}
-	edited, err := f.gw.UpdateEndpoint(f.ctx, "", ep.ID, storage.EndpointPatch{Inputs: map[string]string{"tls_mode": "skip"}, SecretRead: f.all}, f.all, f.all)
+	edited, err := f.gw.UpdateEndpoint(f.ctx, "", ep.ID, storage.EndpointPatch{Inputs: map[string]string{"tls-mode": "skip"}, SecretRead: f.all}, f.all, f.all)
 	if err != nil {
 		t.Fatalf("edit the mode to skip: %v", err)
 	}
 	_ = json.Unmarshal(edited.Params, &params)
-	if params["tls_mode"] != "skip" || params["target"] != "10.0.0.9:51326" {
+	if params["tls-mode"] != "skip" || params["target"] != "10.0.0.9:51326" {
 		t.Fatalf("edited params %s, want skip beside the unchanged target", edited.Params)
 	}
 	if f.task(t, ep.ID).Fingerprint == before {
 		t.Fatal("editing the mode left the fingerprint")
 	}
 	// Clearing the input falls back to the driver's default.
-	cleared, err := f.gw.UpdateEndpoint(f.ctx, "", ep.ID, storage.EndpointPatch{Inputs: map[string]string{"tls_mode": ""}, SecretRead: f.all}, f.all, f.all)
+	cleared, err := f.gw.UpdateEndpoint(f.ctx, "", ep.ID, storage.EndpointPatch{Inputs: map[string]string{"tls-mode": ""}, SecretRead: f.all}, f.all, f.all)
 	if err != nil {
 		t.Fatal(err)
 	}
 	_ = json.Unmarshal(cleared.Params, &params)
-	if params["tls_mode"] != "pin" {
+	if params["tls-mode"] != "pin" {
 		t.Fatalf("cleared params %s, want the default back", cleared.Params)
 	}
 }

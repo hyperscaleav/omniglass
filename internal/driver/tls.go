@@ -12,7 +12,7 @@ import (
 // The driver declares its default (the seeded newtron-nvp-tls pins on first
 // use, since the gear it speaks to self-signs); a driver that declares none
 // verifies; skip is never a default, only an operator's explicit choice.
-const TLSModeInput = "tls_mode"
+const TLSModeInput = "tls-mode"
 
 // The tls verification modes.
 const (
@@ -43,7 +43,7 @@ func ParseTLSMode(v string) (string, error) {
 	return v, nil
 }
 
-// validateTLSInputs refuses a tls_mode input the engine could not read: one
+// validateTLSInputs refuses a tls-mode input the engine could not read: one
 // on a transport with no tls, one that is not a string, or a default that is
 // not a mode or is skip.
 func (s *Spec) validateTLSInputs() error {

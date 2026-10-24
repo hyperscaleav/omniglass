@@ -200,7 +200,7 @@ func TestNodeTLSModesVerifyAndSkip(t *testing.T) {
 	}
 	s := newGateStack(t, "127.89.16.9", "edge-tlsm")
 	s.component("panel-1")
-	ep := s.attachTLS("panel-1", "edge-tlsm", s.port("tls"), map[string]string{"tls_mode": "verify"})
+	ep := s.attachTLS("panel-1", "edge-tlsm", s.port("tls"), map[string]string{"tls-mode": "verify"})
 	s.runNode("edge-tlsm")
 
 	s.waitFor("panel-1", ep.Name, "session-state", is("rejected"), "rejected under verify")
@@ -214,7 +214,7 @@ func TestNodeTLSModesVerifyAndSkip(t *testing.T) {
 
 	edit := func(mode string) {
 		t.Helper()
-		if _, err := s.gw.UpdateEndpoint(s.ctx, "", ep.ID, storage.EndpointPatch{Inputs: map[string]string{"tls_mode": mode}, SecretRead: s.all}, s.all, s.all); err != nil {
+		if _, err := s.gw.UpdateEndpoint(s.ctx, "", ep.ID, storage.EndpointPatch{Inputs: map[string]string{"tls-mode": mode}, SecretRead: s.all}, s.all, s.all); err != nil {
 			t.Fatalf("edit the mode to %s: %v", mode, err)
 		}
 	}
@@ -228,7 +228,7 @@ func TestNodeTLSModesVerifyAndSkip(t *testing.T) {
 	}
 	var params map[string]string
 	_ = json.Unmarshal(got.Params, &params)
-	if params["tls_mode"] != "skip" {
-		t.Fatalf("the endpoint reads mode %q, want skip visible on it", params["tls_mode"])
+	if params["tls-mode"] != "skip" {
+		t.Fatalf("the endpoint reads mode %q, want skip visible on it", params["tls-mode"])
 	}
 }

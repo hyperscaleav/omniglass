@@ -141,7 +141,7 @@ func TestEndpointAPI(t *testing.T) {
 	// operator scoped elsewhere cannot see.
 	key := "SHA256:" + strings.Repeat("C", 43)
 	c.do(ownerTok, http.MethodPost, "/endpoints/"+ifA.ID+":retry", map[string]any{"certificate": key}, http.StatusUnprocessableEntity)
-	tlsA := createEndpoint(c, ownerTok, map[string]any{"transport": "tls", "component": "comp-a", "params": map[string]any{"target": "10.0.0.1:51326", "tls_mode": "pin"}})
+	tlsA := createEndpoint(c, ownerTok, map[string]any{"transport": "tls", "component": "comp-a", "params": map[string]any{"target": "10.0.0.1:51326", "tls-mode": "pin"}})
 	c.do(ownerTok, http.MethodPost, "/endpoints/"+tlsA.ID+":retry", map[string]any{"certificate": "SHA256:short"}, http.StatusUnprocessableEntity)
 	c.do(viewerAllTok, http.MethodPost, "/endpoints/"+tlsA.ID+":retry", map[string]any{"certificate": key}, http.StatusForbidden)
 	c.do(opBTok, http.MethodPost, "/endpoints/"+tlsA.ID+":retry", map[string]any{"certificate": key}, http.StatusNotFound)

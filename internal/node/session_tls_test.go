@@ -36,7 +36,7 @@ func tlsPollTask(id, endpointID, params, pin string) collection.TaskSpec {
 	}
 }
 
-const pinParams = `{"target":"10.0.0.5:51326","tls_mode":"pin"}`
+const pinParams = `{"target":"10.0.0.5:51326","tls-mode":"pin"}`
 
 func TestTLSSessionWantCarriesTheModeAndTheServerName(t *testing.T) {
 	dialers := map[string]collection.SessionDialer{"tls": &tlsFakeDialer{}}
@@ -52,7 +52,7 @@ func TestTLSSessionWantCarriesTheModeAndTheServerName(t *testing.T) {
 	if w := want["ep-1"]; w.tls == nil || w.tls.Mode != driver.TLSModeVerify || w.tls.ServerName != "panel.example" {
 		t.Fatalf("tls want = %+v, want verify against panel.example", w.tls)
 	}
-	_, refused = desiredSessions([]collection.TaskSpec{tlsPollTask("p1", "ep-1", `{"target":"10.0.0.5:51326","tls_mode":"trust-me"}`, "")}, dialers)
+	_, refused = desiredSessions([]collection.TaskSpec{tlsPollTask("p1", "ep-1", `{"target":"10.0.0.5:51326","tls-mode":"trust-me"}`, "")}, dialers)
 	if r := refused["ep-1"]; !strings.Contains(r, "trust-me") {
 		t.Fatalf("an unknown mode refused = %q, want it named", r)
 	}
