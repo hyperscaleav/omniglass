@@ -6,7 +6,9 @@ import StateStrip from "./StateStrip";
 import SessionPill from "./SessionPill";
 import ReachLadder from "./ReachLadder";
 import SessionNotice from "./SessionNotice";
-import { rel } from "../lib/format";
+import InfoTip from "./InfoTip";
+import { fmtTime, rel } from "../lib/format";
+import { certTone, daysLeftWord, shortKey, tlsMode, type ReachTLS, type Tone } from "../lib/tls";
 import { CLOCK_TICK_MS, createClock } from "../lib/clock";
 import { entityLabel } from "../lib/entities";
 import { ENDPOINTS_KEY, listEndpoints } from "../lib/endpoints";
@@ -71,6 +73,57 @@ function AvailabilityStrip(p: { iface: ReachEndpoint }) {
   );
 }
 
+// TONE_DOT is the dot a tls row's tone wears, the layer rows' own dots.
+const TONE_DOT: Record<Tone, string> = {
+  ok: "bg-success",
+  warn: "bg-warning",
+  bad: "bg-error",
+  unknown: "border border-base-content/35",
+};
+
+// TlsRows are a tls endpoint's lines in the breakdown (#1035), in the layer
+// rows' idiom: the handshake the transport rung ran and its time, how long the
+// certificate has, and how the endpoint verifies it, each teaching itself on
+// hover. The pinned key rides its row in full on the title.
+function TlsRows(p: { tls: ReachTLS; responsive: boolean }) {
+  const mode = createMemo(() => tlsMode(p.tls.mode));
+  const days = () => p.tls.days_left ?? undefined;
+  return (
+    <>
+      <div class="flex items-center gap-2">
+        <span class={`inline-block size-2 shrink-0 rounded-full ${p.tls.handshake_ms === undefined ? TONE_DOT.unknown : p.responsive ? "bg-success" : "bg-error"}`} />
+        <span class="w-10 shrink-0 uppercase tracking-wide text-base-content/45 text-[10px]">tls</span>
+        <span class="font-data text-base-content/70">handshake</span>
+        <span class="text-base-content/50">{p.tls.handshake_ms === undefined ? "not answered yet" : "answered"}</span>
+        <Show when={p.tls.handshake_ms !== undefined}>
+          <span class="text-base-content/40">· {p.tls.handshake_ms!.toFixed(1)} ms</span>
+        </Show>
+        <InfoTip label="the tls handshake" text="The transport rung for tls: the node opens the port, then runs the TLS handshake and judges the certificate the component offers. A certificate it refuses holds this rung, and nothing above it is tried." />
+      </div>
+      <div class="flex items-center gap-2" data-testid="tls-cert" data-tone={certTone(days())}>
+        <span class={`inline-block size-2 shrink-0 rounded-full ${TONE_DOT[certTone(days())]}`} />
+        <span class="w-10 shrink-0 uppercase tracking-wide text-base-content/45 text-[10px]">cert</span>
+        <Show when={days() !== undefined} fallback={<span class="text-base-content/50">no certificate accepted yet</span>}>
+          <span class="text-base-content/70">{daysLeftWord(days()!)}</span>
+        </Show>
+        <Show when={p.tls.expires}>
+          <span class="text-base-content/40">· expires {fmtTime(p.tls.expires!)}</span>
+        </Show>
+        <InfoTip label="the certificate's days left" text="Days from the latest probe to the certificate's not-after (tls-certificate-days-left), the number a threshold rule reads; the not-after itself is tls-certificate-expiry. Amber inside a month, red once expired." />
+      </div>
+      <div class="flex items-center gap-2">
+        <span class={`inline-block size-2 shrink-0 rounded-full ${TONE_DOT[mode().tone]}`} />
+        <span class="w-10 shrink-0 uppercase tracking-wide text-base-content/45 text-[10px]">trust</span>
+        <span class={mode().tone === "warn" ? "text-warning" : "text-base-content/70"}>{mode().word}</span>
+        <Show when={p.tls.key}>
+          <span class="font-data text-base-content/40" title={p.tls.key}>· {shortKey(p.tls.key!)}</span>
+        </Show>
+        <InfoTip label="how the endpoint verifies" text={mode().hint} />
+      </div>
+    </>
+  );
+}
+
 // GateBreakdown lists one line per probe layer (dot + word + timing detail) and
 // the "why" reason line for a down endpoint. It is the pedagogical payoff: the
 // verdict is the AND of the layers, shown as the layers.
@@ -96,6 +149,9 @@ function GateBreakdown(p: { iface: ReachEndpoint }) {
           );
         }}
       </For>
+      <Show when={p.iface.tls}>
+        {(tls) => <TlsRows tls={tls()} responsive={p.iface.responsive?.value === "up"} />}
+      </Show>
       <div class="flex items-center gap-2">
         <span class={`inline-block size-2 shrink-0 rounded-full ${verdictOk() ? "bg-success" : "bg-error"}`} />
         <span class="w-10 shrink-0 uppercase tracking-wide text-base-content/45 text-[10px]">verdict</span>
@@ -129,9 +185,16 @@ function EndpointRow(p: { iface: ReachEndpoint; component: string; manageId?: st
                 panel is where two endpoints of one transport sit beside each
                 other, so it is where the label earns its place (#613). */}
             <span class="truncate text-sm">{entityLabel({ name: p.iface.endpoint, label: p.iface.label })}</span>
-            <span class="truncate font-data text-[11px] text-base-content/50">
-              {p.iface.transport}
-              <Show when={p.iface.address}> · {p.iface.address}</Show>
+            <span class="flex min-w-0 items-center gap-1.5 font-data text-[11px] text-base-content/50">
+              <span class="truncate">
+                {p.iface.transport}
+                <Show when={p.iface.address}> · {p.iface.address}</Show>
+              </span>
+              {/* A skipped verification is the operator's explicit choice,
+                  and it stays visible on the row (#1035). */}
+              <Show when={p.iface.tls?.mode === "skip"}>
+                <span class="badge badge-soft badge-warning badge-xs shrink-0 font-sans" title="TLS verification is skipped: anything answering at this address is trusted">unverified</span>
+              </Show>
             </span>
           </div>
           <div class="min-w-0 flex-1">
