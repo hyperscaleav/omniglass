@@ -351,6 +351,10 @@ describe("a tls endpoint", () => {
     expect(getByText("the offered certificate is refused")).toBeTruthy();
     expect(queryByText("no certificate accepted yet")).toBeNull();
     expect(getByTestId("tls-cert").dataset.tone).toBe("bad");
+    // Beneath the gate only the TCP connect runs: the handshake row says so,
+    // rather than an earlier probe's answer or its absence.
+    expect(getByText("not tried beneath the gate")).toBeTruthy();
+    expect(queryByText(/12\.5 ms/)).toBeNull();
   });
 
   it("says nothing of tls on a row that is not tls", () => {

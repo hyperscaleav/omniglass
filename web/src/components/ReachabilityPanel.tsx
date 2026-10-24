@@ -96,13 +96,15 @@ function TlsRows(p: { tls: ReachTLS; responsive?: boolean; refused: boolean }) {
     <>
       {/* The row follows the latest probe (endpoint-responsive): a handshake
           time is shown only beside an answer, since the stored one may be
-          an earlier probe's. */}
+          an earlier probe's; beneath a certificate gate no handshake runs. */}
       <div class="flex items-center gap-2">
-        <span class={`inline-block size-2 shrink-0 rounded-full ${p.responsive === undefined ? TONE_DOT.unknown : p.responsive ? "bg-success" : "bg-error"}`} />
+        <span class={`inline-block size-2 shrink-0 rounded-full ${p.refused || p.responsive === undefined ? TONE_DOT.unknown : p.responsive ? "bg-success" : "bg-error"}`} />
         <span class="w-10 shrink-0 uppercase tracking-wide text-base-content/45 text-[10px]">tls</span>
         <span class="font-data text-base-content/70">handshake</span>
-        <span class="text-base-content/50">{p.responsive === undefined ? "not answered yet" : p.responsive ? "answered" : "not answered"}</span>
-        <Show when={p.responsive && p.tls.handshake_ms !== undefined}>
+        <span class="text-base-content/50">
+          {p.refused ? "not tried beneath the gate" : p.responsive === undefined ? "not answered yet" : p.responsive ? "answered" : "not answered"}
+        </span>
+        <Show when={!p.refused && p.responsive && p.tls.handshake_ms !== undefined}>
           <span class="text-base-content/40">· {p.tls.handshake_ms!.toFixed(1)} ms</span>
         </Show>
         <InfoTip label="the tls handshake" text="The transport rung for tls: the node opens the port, then runs the TLS handshake and judges the certificate the component offers. A certificate it refuses holds this rung, and nothing above it is tried." />
