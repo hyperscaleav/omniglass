@@ -164,3 +164,72 @@ export async function retryEndpoint(id: string): Promise<void> {
   const { error } = await api.POST("/endpoints/{id}:retry", { params: { path: { id } }, body: {} });
   if (error) throw error;
 }
+
+// ---- a changed key (#1078) ---------------------------------------------------
+
+// A refusal of a changed key: an ssh host key (class host-key), and next a tls
+// certificate's public key (class certificate, #1035). The gate carries both
+// keys as data (endpoint-rejection, ADR-0158 as amended by #1078), so the
+// console names them, and trusts the exact offered one, without reading a
+// fingerprint out of the reason.
+export type KeyRefusal = { class: string; pinned: string; offered: string };
+
+// keyRefusal is the endpoint's key refusal, or null: no gate, a gate that is
+// not about a key, or half a pair (no evidence).
+export function keyRefusal(iface: ReachEndpoint): KeyRefusal | null {
+  const r = iface.rejection;
+  if (!r?.pinned_key || !r.offered_key) return null;
+  return { class: r.class, pinned: r.pinned_key, offered: r.offered_key };
+}
+
+const KEY_NOUN: Record<string, string> = { "host-key": "host key", certificate: "certificate key" };
+
+// keyNoun names the key a class refuses, for labels and the confirm's title.
+export function keyNoun(cls: string): string {
+  return KEY_NOUN[cls] ?? "key";
+}
+
+// keyChangedHint teaches the refusal itself, on the notice's eyebrow.
+export function keyChangedHint(cls: string): string {
+  return `The component presented a ${keyNoun(cls)} that is not the one pinned, so the node refused the connection before logging in or sending anything. It dials no more until someone trusts the offered key or retries the endpoint.`;
+}
+
+// What the two keys are, taught on their labels.
+export const PINNED_KEY_HINT =
+  "The key the node holds the component to: trusted on the first connection, or set by someone who trusted a change. Every connection must present it.";
+export const OFFERED_KEY_HINT =
+  "The key the component presented instead, on the connection the node refused. Nothing logs in or sends a command past a key that does not match the pin.";
+
+// Why a key changes, taught one hover at a time in the confirm: two causes are
+// routine, and the third is the reason the node refuses at all.
+export const KEY_CHANGE_CAUSES: { label: string; hint: string }[] = [
+  {
+    label: "Reinstalled",
+    hint: "A firmware reflash, a factory reset or an operating system reinstall mints a new key. Safe to trust when you know the work was done.",
+  },
+  {
+    label: "Hardware swapped",
+    hint: "A replacement unit at the same address answers with its own key. Safe to trust when you know the unit was replaced.",
+  },
+  {
+    label: "Man in the middle",
+    hint: "Something between the node and the component answering in its place, to read what the node sends (credentials, commands). Never trust a change nobody can account for: compare the offered key with the one the component's own console shows first.",
+  },
+];
+
+// trustRefusal is why the caller may not trust a key, or null when it may.
+// The same permission as Retry, since trusting a key is a retry that declares
+// a new pin; a hint for the button only, the server is the authority.
+export function trustRefusal(me: Me | null | undefined): string | null {
+  return can(me, "endpoint", "retry") ? null : "Trusting a key needs the endpoint:retry permission.";
+}
+
+// trustOfferedKey declares key as the endpoint's new pin and retries it (POST
+// /endpoints/{id}:retry with host_key): the node redials onto it once. key is
+// exactly the one the operator was shown; the server refuses (409) a key the
+// component no longer offers, so a confirm answered against a key that changed
+// since cannot pin it. Audited server-side with both keys and the actor.
+export async function trustOfferedKey(id: string, key: string): Promise<void> {
+  const { error } = await api.POST("/endpoints/{id}:retry", { params: { path: { id } }, body: { host_key: key } });
+  if (error) throw error;
+}
