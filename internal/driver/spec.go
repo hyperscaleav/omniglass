@@ -521,11 +521,13 @@ func validateEmits(family, fn string, emits []Emit, cat Catalog) error {
 		if em.Name == "" {
 			return fmt.Errorf("driver: %s %q emits a sample with no name", family, fn)
 		}
-		if probekeys.IsNodeControl(em.Name) {
-			// A key the node publishes to steer its own attempts (a pin, the
-			// gate, a held session's account of itself) is the node's alone:
-			// emitted by a driver it would land as the observed value, and the
-			// worklist would deliver it back as the pin (#1035 review).
+		if probekeys.IsNodeOnly(em.Name) {
+			// A key only a node's own probe writes (a pin, the gate, a held
+			// session's account of itself, a verdict or a probe timing) is the
+			// node's alone: emitted by a driver it would land as the observed
+			// value, and for a pin the worklist would deliver it back as the
+			// pin (#1035 review), so it is refused here as the push lane
+			// refuses it (#1080).
 			return fmt.Errorf("driver: %s %q emits %q, a key only the node's own collection writes", family, fn, em.Name)
 		}
 		if cat != nil {

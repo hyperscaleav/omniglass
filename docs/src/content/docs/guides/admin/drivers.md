@@ -67,9 +67,10 @@ place on the endpoint like any input, which moves its connection fingerprint, so
 certificate refused tries again under the new mode with no retry. A refused certificate reads
 `rejected` with class `certificate` and its reason; for a pinned key that changed, the reason names
 both keys and `omniglass endpoint retry <id> --certificate <the offered key>` trusts the new one.
-A key only the node writes (`tls-certificate`, `ssh-host-key`, `endpoint-rejection`, a held
-session's `session-state` and `session-reason`) cannot be a driver's emit: a spec naming one
-refuses at write, since the node would otherwise take a driver's value as the pin or the gate.
+A key only the node writes (every native probe key: the reachability verdicts and probe timings,
+`tls-certificate`, `ssh-host-key`, `endpoint-rejection`, a held session's `session-state` and
+`session-reason`) cannot be a driver's emit: a spec naming one refuses at write, since the node
+would otherwise take a driver's value as its own observation, the pin or the gate.
 
 ```yaml
 transport: tls

@@ -252,15 +252,20 @@ region and a mask line in the frontmatter, per the entity blade's duration masks
   observed value through the poll path), a calc rule's output.
 - **Failure:** a push grant plants a gate (commands fail, probes drop rungs) or lifts one with a
   future-dated `none`, an unaudited bypass of the audited `:retry`.
-- **Fix:** refuse node-control keys by name on every lane: the push lane
-  (`probekeys.IsNodeControl`, internal/api/telemetry.go), driver emits at spec write
-  (`validateEmits`, internal/driver/spec.go), calc outputs (`probekeys.IsNative`,
-  internal/storage/calc_rules.go). A driver emitting `tls-certificate` would have had the
-  worklist deliver its constant as the pin, bypassing the audited `:retry`.
+- **Fix:** refuse every node-only key by name on every lane that lands a named sample: the push
+  lane (`nodeOnlyRejection` over `probekeys.IsNodeOnly`, internal/api/telemetry.go), driver emits
+  at spec write (`validateEmits`, internal/driver/spec.go, #1035: a driver emitting
+  `tls-certificate` would have had the worklist deliver its constant as the pin, bypassing the
+  audited `:retry`), calc outputs (`probekeys.IsNative`, internal/storage/calc_rules.go).
 - **Also (#1059):** a node's account of itself that a surface reads as the node's (a held
   session's `session-state` and `session-reason`) is the same class: a push read a rejected
-  session up, hiding its Retry, or planted a reason the node never scrubbed. Any new
-  node-authored key a console renders as "the node says" joins the list.
+  session up, hiding its Retry, or planted a reason the node never scrubbed.
+- **Also (#1080):** so is every native probe key (the verdict and its rungs, the probe metrics
+  and timings), so the ruling is per key in `internal/collection/probekeys`: `nodeOnly`, or
+  `pushable` with a one-line reason. `TestEveryKeyRuled` fails on a declared key ruled neither,
+  and `TestReachabilityReadsOnlyNodeOnlyKeys` on a key the reachability read serves that is not
+  node-only. A new node-authored key is declared there, not as a literal elsewhere: a key
+  declared outside `probekeys` is invisible to the ruling (`collection-failed` is, #1086).
 
 
 ## unvalidated-param-value (fixed; found by the #1061 in-place edit review)

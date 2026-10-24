@@ -7824,6 +7824,30 @@ it together and cannot stack a second redial; the ladder no longer grows a login
 session with no login; and the rows-survive-a-poll tests now let the poll land and assert DOM
 identity, proven to fail against the unkeyed iteration (two review catalog entries record it).
 
+### The push lane refuses every key only a node can write (#1080)
+
+`POST /telemetry:push` refused a node's control facts (the gate, the trusted host key, a held
+session's state and reason) but took the rest of the native probe keys like any property, so a
+principal holding `telemetry:push` could write a reachability verdict, its rungs, or a probe metric
+or timing under an endpoint's name, and the console read it as the node's observation. Now every
+native key is refused by name, on every lane (a native name pushed as an event is refused as the
+node's, not as unregistered), under any instance and any casing, beside rows in the same batch that
+land; the rejection's reason names the key. The set is `internal/collection/probekeys` itself: each
+key is ruled there node-only or pushable with the one-line reason it may be pushed (none is
+pushable today), and a test reads the package's declared constants from source and fails on a key
+ruled neither, so a key declared there cannot ship pushable by omission; the reachability read's
+keys are now those declarations too, and a test fails on one the ruling does not hold node-only. The
+node's own lane never consults the ruling. Proven against Postgres and a real bus (`TestTelemetryPushRefusesNativeKeys`:
+every node-only key on every lane and instance refused by name, a batch landing only its two
+pushable rows, casing and spacing variants refused, nothing native landing;
+`TestNodeLaneLandsEveryNativeKey`: a node publishing every native key on its own subject lands
+each one), and in unit tests (`TestEveryKeyRuled`, `TestIsNodeOnly`, `TestNodeOnlyRejection`,
+`TestReachabilityReadsOnlyNodeOnlyKeys`). The review found other write surfaces that can reach a
+native key's series, and node-lane confinement wider than the endpoint; they are #1084 and #1085,
+and `collection-failed`, a node-emitted key declared outside `probekeys`, is #1086.
+ADR-0158 point 5 is amended; the push tests that used `icmp-rtt-avg` as their sample metric now
+push `room-temperature` and `uptime`.
+
 ### The line protocol over tls, with a pinned public key (#1035)
 
 The first slice of the protocol wave (#1076), under the architect's approval of its decisions 1 to 4
@@ -7853,8 +7877,8 @@ and `rejection.offered`, so #1078's trust-this-key action reads them without par
 worklist delivers the pin as `CertificatePin` (declared first), the declared pin joins the connection
 fingerprint (`fingerprint.Inputs.CertificatePin`, the reflection and table tests green), and
 `POST /endpoints/{id}:retry` takes `certificate` (audited, a tls endpoint only, a `SHA256:`
-fingerprint only; `omniglass endpoint retry --certificate`). `tls-certificate` joins the node control
-keys the push lane refuses. The probe lands the tcp pair, `endpoint-responsive`, one
+fingerprint only; `omniglass endpoint retry --certificate`). The four tls keys are ruled node-only
+(#1080's ruling, merged beside this slice), so the push lane refuses them. The probe lands the tcp pair, `endpoint-responsive`, one
 `tls-handshake-time` per answered probe, and for an accepted certificate `tls-certificate-expiry`
 and `tls-certificate-days-left`; the reachability read serves a tls row's mode, key, handshake,
 expiry and days left, and the console's breakdown teaches them (amber inside a month) with
@@ -7872,9 +7896,9 @@ across a node restart, the operator's accepted key, verify refusing the self-sig
 `certificate` and skip connecting, each mode edit lifting the gate). The collection page's probe
 table gains its tls row by hand; rendering it from the registry is #1087.
 
-The review's fixes, each with a test that failed first: a driver may not emit a node-control key
-(`tls-certificate`, `ssh-host-key`, `endpoint-rejection`, `session-state`, `session-reason`), refused
-at spec write, since a poll emitting the pin key would have had the worklist deliver a driver's
+The review's fixes, each with a test that failed first: a driver may not emit a node-only key
+(`tls-certificate`, `ssh-host-key`, `endpoint-rejection`, `session-state`, `session-reason`, and with
+#1080's ruling every native probe key), refused at spec write, since a poll emitting the pin key would have had the worklist deliver a driver's
 constant as the pin, bypassing the audited `:retry` (a lane open for `ssh-host-key` since #1032; the
 catalog entry now covers every lane); a probe-only endpoint's certificate refusal self-logs its
 reason once, since it has no `session-reason`; the reachability read serves the pinned key in pin
