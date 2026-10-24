@@ -276,7 +276,12 @@ only on a transition, so the pill is aged by the endpoint's `last_seen`, as ADR-
 session whose endpoint has delivered nothing for the staleness window reads grey, saying what it
 last read. A rejected session offers **Retry** (`:retry`, gated `endpoint:retry`, greyed with its
 reason for a caller without it) and the way into the endpoint's edit, where pointing the credential
-at the right secret moves the fingerprint. The [collection guide](/guides/operator/collection/#held-sessions)
+at the right secret moves the fingerprint. The same refusal shows whatever met it (#1110): an
+endpoint holding no session whose reachability probe was refused (a tls certificate, a udp terminal
+reply, an snmp `authorizationError`, the ssh probe's params credential) carries the gate with its
+reason, `endpoint-rejection-reason`, which the node publishes beside it, so the notice, its reason
+and **Retry** read the same with no session pill beside them, the retry waiting on the gate rather
+than on a session ([ADR-1110](/architecture/decisions/#adr-1110-a-gate-says-why-it-holds-and-the-console-shows-it-whatever-met-the-refusal)). The [collection guide](/guides/operator/collection/#held-sessions)
 teaches it, and the `fix-a-rejected-session` walkthrough drives it against the simulated panel.
 A refusal of a changed key (#1078) names both keys, the pinned and the offered, which the gate
 carries as data, and offers **Trust this key**: a confirm that teaches why a key changes, then
@@ -314,7 +319,11 @@ down, rejected ([snmp](#snmp)). The gate is published as `endpoint-rejection` (`
 <class> <fingerprint>`, or `none`; a refusal of a changed key appends `<pinned-key> <offered-key>`,
 its evidence, [ADR-0159](/architecture/decisions/#adr-0159-a-refused-keys-evidence-rides-its-gate-and-trusting-a-key-is-checked-against-the-one-offered))
 and carried back on the worklist, so a restarted node makes no attempt against an unchanged
-fingerprint and keeps the evidence it adopts. The ssh probe's params credential rides the same gate
+fingerprint and keeps the evidence it adopts. Beside it, in the same batch, the node publishes why:
+`endpoint-rejection-reason`, the refusal's class and the component's own text, scrubbed of anything
+the node sent, so a gate on an endpoint holding no session, which has no `session-reason`, still
+says why it holds. A gate adopted after a restart publishes no reason, since the node never saw that
+refusal, and the read serves the reason only while a gate holds ([ADR-1110](/architecture/decisions/#adr-1110-a-gate-says-why-it-holds-and-the-console-shows-it-whatever-met-the-refusal)). The ssh probe's params credential rides the same gate
 (#1060): tried once, then the key exchange runs without it until the fingerprint moves, and never
 past a pinned key that changed. So does the tls probe: under a `certificate` gate it runs only the
 TCP connect, so no handshake reaches a key nobody trusted. A gate for a changed key carries the

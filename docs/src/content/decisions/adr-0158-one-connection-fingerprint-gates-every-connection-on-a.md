@@ -65,7 +65,10 @@ summary: "One **connection fingerprint** gates every connection, held or statele
      ([ADR-0160](#adr-0160-tls-is-its-own-transport-over-a-shared-primitive-and-its-pin-is-the-public-key)):**
      a tls certificate refusal for a changed key carries the same evidence; the tls keys
      (`tls-certificate`, the handshake time and the certificate facts) are node-only, and a driver
-     may not emit a node-only key either.
+     may not emit a node-only key either. **Amended (#1110):** the gate publishes its reason beside
+     it as `endpoint-rejection-reason`, node-only, in the same batch, held session or not; an adopted
+     gate publishes none
+     ([ADR-1110](#adr-1110-a-gate-says-why-it-holds-and-the-console-shows-it-whatever-met-the-refusal)).
   6. **Connection inputs edit in place** (the architect's ruling on #1061). A driver-attached
      endpoint's host, port and attached secret references are patched through `PATCH
      /endpoints/{id}` `inputs`, validated against the driver's declared inputs (a refused value is a
