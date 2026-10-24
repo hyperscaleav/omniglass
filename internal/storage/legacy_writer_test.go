@@ -31,8 +31,8 @@ func (f writerFixture) componentID(t *testing.T, name string) string {
 
 // TestNodeWriterBindsItsComponentAndEndpoint: a node's writer speaks for the
 // component its task collects for and the endpoint it ran against, both. A
-// batch landing on another component under the same endpoint name, or naming
-// an endpoint the component does not have, is refused whole.
+// batch landing on another component under the same endpoint name, or from a
+// writer bound to no component or no endpoint, is refused whole.
 func TestNodeWriterBindsItsComponentAndEndpoint(t *testing.T) {
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
@@ -75,8 +75,8 @@ func TestNodeWriterBindsItsComponentAndEndpoint(t *testing.T) {
 		"a batch that strays onto another component midway": func() error {
 			return f.gw.InsertPropertySamples(f.ctx, node, append(prop(d1, "video-input", "", "hdmi3"), prop(d2, "video-input", "", "hdmi3")...))
 		},
-		"an endpoint the component does not have": func() error {
-			return f.gw.InsertMetricSamples(f.ctx, storage.NodeWriter(d1, "panel"), []storage.MetricSampleWrite{{OwnerKind: "component", OwnerID: d1, Key: "tcp-open", Instance: "panel", Value: 1}})
+		"a node bound to no endpoint": func() error {
+			return f.gw.InsertPropertySamples(f.ctx, storage.NodeWriter(d1, ""), prop(d1, "video-input", "", "hdmi4"))
 		},
 		"a node bound to no component": func() error {
 			return f.gw.InsertMetricSamples(f.ctx, storage.NodeWriter("", "ssh"), []storage.MetricSampleWrite{{OwnerKind: "component", OwnerID: d1, Key: "tcp-open", Instance: "ssh", Value: 1}})
@@ -91,11 +91,8 @@ func TestNodeWriterBindsItsComponentAndEndpoint(t *testing.T) {
 		+ (select count(*) from event where component_id = $1::uuid)`, d2); n != 0 {
 		t.Errorf("%d rows landed on the component the node does not collect for", n)
 	}
-	if n := f.count(t, `select count(*) from property where component_id = $1::uuid and value #>> '{}' = 'hdmi3'`, d1); n != 0 {
+	if n := f.count(t, `select count(*) from property where component_id = $1::uuid and value #>> '{}' in ('hdmi3', 'hdmi4')`, d1); n != 0 {
 		t.Errorf("a refused batch landed %d of its rows", n)
-	}
-	if n := f.count(t, `select count(*) from metric where instance = 'panel'`); n != 0 {
-		t.Errorf("%d rows landed under an endpoint the component does not have", n)
 	}
 }
 

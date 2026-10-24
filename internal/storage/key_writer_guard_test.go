@@ -196,16 +196,16 @@ func TestMigrationsWriteNoSamples(t *testing.T) {
 
 // TestAdmitWrite pins the pure check every path runs, beyond the class table
 // writerclass holds: a node writes only on the component its task collects
-// for, through an endpoint of it, and a node-probe key only under that
-// endpoint (never with none); and a calc rule writes only a key it outputs.
+// for, and a node-probe key only under the endpoint its task ran (never with
+// none); and a calc rule writes only a key it outputs.
 func TestAdmitWrite(t *testing.T) {
 	probe := keyWriterOf{class: writerclass.NodeProbe}
 	calc := keyWriterOf{class: writerclass.Calc, rules: map[string]string{"r-1": "temp-avg"}}
 	collected := keyWriterOf{class: writerclass.Collected}
 	asRule := func(id string) KeyWriter { return calcWriter(&sampleLineage{ruleID: id, ruleName: "x", version: 1}) }
 	const compA, compB = "aaaaaaaa-0000-0000-0000-000000000001", "bbbbbbbb-0000-0000-0000-000000000002"
-	// node is a node writer as admitWrites leaves it: bound to compA when its
-	// endpoint is one of compA's, unbound otherwise.
+	// node is a node writer as admitWrites leaves it: bound to compA, or
+	// unbound when it names no component or endpoint.
 	node := func(ep string, held bool) KeyWriter {
 		w := NodeWriter(compA, ep)
 		if held {
@@ -228,7 +228,6 @@ func TestAdmitWrite(t *testing.T) {
 		{"node with no instance", probe, node("ssh", true), on(compA, "tcp-open", ""), false},
 		{"node bound to no endpoint", probe, node("", false), on(compA, "tcp-open", ""), false},
 		{"node on another component's same-named endpoint", probe, node("ssh", true), on(compB, "tcp-open", "ssh"), false},
-		{"node naming an endpoint its component lacks", probe, node("panel", false), on(compA, "tcp-open", "panel"), false},
 		{"node writing for a system", collected, node("ssh", true), keyedWrite{key: "uptime", ownerKind: "system", owner: compA}, false},
 		{"push on a probe key", probe, PushWriter(), on(compA, "tcp-open", "ssh"), false},
 		{"the pin on the host key", keyWriterOf{class: writerclass.NodeProbe}, gatewayWriter(writerclass.KeyPin), on(compA, "ssh-host-key", "ssh"), true},

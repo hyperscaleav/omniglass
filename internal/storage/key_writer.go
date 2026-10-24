@@ -68,12 +68,11 @@ type KeyWriter struct {
 	// name ADR-0062 resolves), the only owner a node's row lands on. Node
 	// writers only.
 	Component string
-	// Endpoint is the endpoint a node's task ran against, which must be one
-	// of Component's, and the only instance a node-probe key lands under.
-	// Node writers only.
+	// Endpoint is the endpoint of Component's a node's task ran against, the
+	// only instance a node-probe key lands under. Node writers only.
 	Endpoint string
-	// bound is Component's id once admitWrites has resolved it and found
-	// Endpoint among its endpoints; "" refuses every row a node writer carries.
+	// bound is Component's id once admitWrites has resolved it; "" refuses
+	// every row a node writer carries.
 	bound string
 	// calc is a calc rule's lineage; set only by the calc tick.
 	calc *sampleLineage
@@ -230,41 +229,33 @@ func admitWrites(ctx context.Context, q querier, lane writeLane, w KeyWriter, ro
 }
 
 // nodeBinding resolves a node writer to the id of the component its task
-// collects for, when the endpoint it names is one of that component's; ""
-// otherwise (no component, no endpoint, or an endpoint the component does not
-// have), which refuses every row the writer carries.
+// collects for; "" when it names none, or none that resolves, which refuses
+// every row the writer carries. The node lane builds the writer from the task
+// (ResolveTaskOwner reads the component and the endpoint off one endpoint
+// row), so the pair it names is always one endpoint's.
 func nodeBinding(ctx context.Context, q querier, w KeyWriter) (string, error) {
 	if w.Component == "" || w.Endpoint == "" {
 		return "", nil
 	}
-	comp := w.Component
-	if !isUUID(comp) {
-		c, err := scopedByName(ctx, q, componentConfig, comp)
-		var amb *ErrAmbiguousName
-		switch {
-		case errors.Is(err, ErrComponentNotFound), errors.As(err, &amb):
-			return "", nil
-		case err != nil:
-			return "", fmt.Errorf("storage: resolve the node's component %q: %w", comp, err)
-		}
-		comp = c.ID
+	if isUUID(w.Component) {
+		return w.Component, nil
 	}
-	var held bool
-	if err := q.QueryRow(ctx, `select exists (select 1 from endpoint where component = $1::uuid and name = $2)`,
-		comp, w.Endpoint).Scan(&held); err != nil {
-		return "", fmt.Errorf("storage: resolve the node's endpoint %q: %w", w.Endpoint, err)
-	}
-	if !held {
+	c, err := scopedByName(ctx, q, componentConfig, w.Component)
+	var amb *ErrAmbiguousName
+	switch {
+	case errors.Is(err, ErrComponentNotFound), errors.As(err, &amb):
 		return "", nil
+	case err != nil:
+		return "", fmt.Errorf("storage: resolve the node's component %q: %w", w.Component, err)
 	}
-	return comp, nil
+	return c.ID, nil
 }
 
 // admitWrite holds one row to its key's resolved writer. Pure. Beyond the
 // class's ruling: a node writes only on the component its task collects for,
-// through an endpoint of that component, and a node-probe key only under that
-// endpoint (a node cannot speak for a component or an endpoint it does not
-// hold); and a calc rule writes only a key it outputs.
+// and a node-probe key only under the endpoint its task ran against (a node
+// cannot speak for a component or an endpoint it does not hold); and a calc
+// rule writes only a key it outputs.
 func admitWrite(kw keyWriterOf, w KeyWriter, r keyedWrite) error {
 	refuse := &KeyWriterError{Key: r.key, Class: kw.class, Writer: w.Kind, Instance: r.instance, Endpoint: w.Endpoint}
 	for _, name := range kw.rules {

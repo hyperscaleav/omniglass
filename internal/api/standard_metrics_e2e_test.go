@@ -57,14 +57,14 @@ func TestStandardMetricsAPI(t *testing.T) {
 	}, http.StatusCreated)
 
 	// PUT declares the line. The metric must already exist in the catalog
-	// (tcp-open is seeded); the contract only names it.
+	// (occupancy-count is seeded); the contract only names it.
 	var set standardMetricWire
-	if err := json.Unmarshal(c.do(ownerTok, http.MethodPut, "/standards/acme-room/metrics/tcp-open",
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodPut, "/standards/acme-room/metrics/occupancy-count",
 		map[string]any{"default_value": 1, "required": true}, http.StatusOK), &set); err != nil {
 		t.Fatalf("decode set: %v", err)
 	}
-	if set.MetricTypeName != "tcp-open" || !set.Required || string(set.DefaultValue) != `1` {
-		t.Fatalf("set = %+v, want tcp-open required with default 1", set)
+	if set.MetricTypeName != "occupancy-count" || !set.Required || string(set.DefaultValue) != `1` {
+		t.Fatalf("set = %+v, want occupancy-count required with default 1", set)
 	}
 
 	// GET lists the contract.
@@ -72,12 +72,12 @@ func TestStandardMetricsAPI(t *testing.T) {
 	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/standards/acme-room/metrics", nil, http.StatusOK), &listed); err != nil {
 		t.Fatalf("decode list: %v", err)
 	}
-	if len(listed.Metrics) != 1 || listed.Metrics[0].MetricTypeName != "tcp-open" {
-		t.Fatalf("contract = %+v, want one tcp-open line", listed.Metrics)
+	if len(listed.Metrics) != 1 || listed.Metrics[0].MetricTypeName != "occupancy-count" {
+		t.Fatalf("contract = %+v, want one occupancy-count line", listed.Metrics)
 	}
 
 	// A second PUT revises the same line rather than adding another.
-	if err := json.Unmarshal(c.do(ownerTok, http.MethodPut, "/standards/acme-room/metrics/tcp-open",
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodPut, "/standards/acme-room/metrics/occupancy-count",
 		map[string]any{"default_value": 0}, http.StatusOK), &set); err != nil {
 		t.Fatalf("decode revise: %v", err)
 	}
@@ -86,19 +86,19 @@ func TestStandardMetricsAPI(t *testing.T) {
 	}
 
 	// DELETE withdraws the line; withdrawing it twice is an explicit miss.
-	c.do(ownerTok, http.MethodDelete, "/standards/acme-room/metrics/tcp-open", nil, http.StatusNoContent)
+	c.do(ownerTok, http.MethodDelete, "/standards/acme-room/metrics/occupancy-count", nil, http.StatusNoContent)
 	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/standards/acme-room/metrics", nil, http.StatusOK), &listed); err != nil {
 		t.Fatalf("decode list after delete: %v", err)
 	}
 	if len(listed.Metrics) != 0 {
 		t.Fatalf("contract after delete = %+v, want empty", listed.Metrics)
 	}
-	c.do(ownerTok, http.MethodDelete, "/standards/acme-room/metrics/tcp-open", nil, http.StatusNotFound)
+	c.do(ownerTok, http.MethodDelete, "/standards/acme-room/metrics/occupancy-count", nil, http.StatusNotFound)
 
 	// A metric the catalog does not know, and a standard that does not exist,
 	// are request faults rather than 500s.
 	c.do(ownerTok, http.MethodPut, "/standards/acme-room/metrics/not-a-metric",
 		map[string]any{"required": true}, http.StatusUnprocessableEntity)
-	c.do(ownerTok, http.MethodPut, "/standards/no-such-standard/metrics/tcp-open",
+	c.do(ownerTok, http.MethodPut, "/standards/no-such-standard/metrics/occupancy-count",
 		map[string]any{"required": true}, http.StatusNotFound)
 }
