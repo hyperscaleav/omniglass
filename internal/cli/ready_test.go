@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"sort"
+	"strings"
 	"testing"
 )
 
@@ -99,4 +101,46 @@ func TestABootClearsAStaleReadyFileFirst(t *testing.T) {
 		b, _ := os.ReadFile(path)
 		t.Fatalf("a failed boot left the stale ready file %s (stat: %v)", b, err)
 	}
+}
+
+// The CLI guide's example ready file carries exactly the keys the server
+// writes, so the teaching copy cannot drift from the report.
+func TestTheCLIGuideShowsTheReadyFileAsWritten(t *testing.T) {
+	guide, err := os.ReadFile(filepath.Join("..", "..", "docs", "src", "content", "docs", "guides", "cli.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, section, ok := strings.Cut(string(guide), "### A server on ports it picks")
+	if !ok {
+		t.Fatal("the CLI guide has no section teaching the ready file")
+	}
+	_, block, ok := strings.Cut(section, "```json\n")
+	block, _, closed := strings.Cut(block, "```")
+	if !ok || !closed {
+		t.Fatal("the ready file section shows no example")
+	}
+	var shown map[string]string
+	if err := json.Unmarshal([]byte(block), &shown); err != nil {
+		t.Fatalf("the guide's example %q is not a JSON object: %v", block, err)
+	}
+	b, _ := json.Marshal(readyReport{})
+	var written map[string]string
+	_ = json.Unmarshal(b, &written)
+	if len(shown) != len(written) {
+		t.Fatalf("the guide shows keys %v, the server writes %v", keys(shown), keys(written))
+	}
+	for k := range written {
+		if _, ok := shown[k]; !ok {
+			t.Fatalf("the guide shows keys %v, the server writes %v", keys(shown), keys(written))
+		}
+	}
+}
+
+func keys(m map[string]string) []string {
+	out := make([]string, 0, len(m))
+	for k := range m {
+		out = append(out, k)
+	}
+	sort.Strings(out)
+	return out
 }
