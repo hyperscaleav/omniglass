@@ -505,11 +505,11 @@ official types are read-only, a 409). The **metric_type catalog is the numeric k
 `:delete`, each type carrying the numeric facts (`unit`, `precision`); the two sample catalogs and
 `event_type` share one resolution namespace, so a create is refused when a sibling holds the name
 ([ADR-0079](/architecture/decisions/#adr-0079-five-telemetry-lanes-and-property-stops-being-the-genus)).
-Every type on the three ingest registries carries its `writer_class` (`node-probe`, `platform`, `calc`,
-`collected`: who may write the key,
+Every type on the three ingest registries carries its `writer_class` (`node-probe`, `platform`,
+`command-lifecycle`, `calc`, `collected`: who may write the key,
 [ADR-0161](/architecture/decisions/#adr-0161-every-key-has-one-writer-class-held-at-the-storage-gateway)),
 read beside it and never set; a create naming a reserved key (a native probe key, `collection-failed`,
-`health`) is a 422 on every lane, whether or not its type is seeded. Any write the Storage Gateway
+`health`, `command-issued`) is a 422 on every lane, whether or not its type is seeded. Any write the Storage Gateway
 refuses for its writer (a declared value, a command's target, a calc rule's output, an event rule's
 event type, a driver spec's emits on a key its route may not write) is a 422 naming the key and who
 does write it.
@@ -710,7 +710,10 @@ The list returns the contract ordered by property name, each line
 to serve, so a surface that wants them reads `/property-types` alongside. `PUT` takes
 `{default_value?, required?}`; `DELETE` withdraws the line (204), and instances **keep** any value they
 set for it, now off contract. An **official** classifier refuses the write (422), an unknown
-classifier is a 404, and a property the catalog does not know is a 422.
+classifier is a 404, and a property the catalog does not know is a 422, as is a reserved key (a
+native probe key, `health`, `command-issued`) on this route or the metric contract's, naming the key
+and who writes it, since a contract default would stand in for its writer's value
+([ADR-0163](/architecture/decisions/#adr-0163-legacy-rows-and-stored-declarations-honor-the-one-writer-ruling)).
 
 An instance's **values** are the other side of the contract, and unlike the classifier routes they are
 **ABAC-scoped through the instance**, so an out-of-read-scope instance is a non-disclosing **404** and

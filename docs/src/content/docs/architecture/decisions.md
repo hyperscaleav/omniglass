@@ -200,6 +200,7 @@ below from the project's history. From here it grows one slice at a time.
 | [ADR-0159](#adr-0159-a-refused-keys-evidence-rides-its-gate-and-trusting-a-key-is-checked-against-the-one-offered) | 2026-10-24 | Accepted | A refusal of a changed key carries both keys as data on its gate (#1078, amending ADR-0158 point 5): `endpoint-rejection` appends `<pinned-key> <offered-key>`, both or neither, declared once in `internal/collection/rejection`, adopted with the gate on a restart, and served as the reachability read's `pinned_key` and `offered_key`, so no surface parses a fingerprint out of `session-reason`. `:retry` with `host_key` must name the gate's offered key while one is held (409 otherwise, nothing written) and audits the pin replaced and the pin set. The console's Trust this key confirms first and sends exactly the key it showed |
 | [ADR-0160](#adr-0160-tls-is-its-own-transport-over-a-shared-primitive-and-its-pin-is-the-public-key) | 2026-10-24 | Accepted | `tls` is its own held line transport (rung `handshake`) over one TLS dial primitive the http, websocket and mqtt carriers consume later, so a component holds a raw port and a TLS one side by side (#1035). The verification mode is the driver input `tls-mode` (verify, pin, skip), the driver's default, verify when none, skip never a default. The pin is the public key (SPKI, the ssh `SHA256:` form), trusted on first use as `tls-certificate`, delivered back by the worklist, one per endpoint shared by its session and probe; a changed key or a failed verification is a terminal `certificate` refusal at the transport rung, the gate carrying the pinned and offered keys as data; `:retry` with `certificate` accepts a new key. The probe lands one `tls-handshake-time` per answered probe and, for an accepted certificate, `tls-certificate-expiry` and `tls-certificate-days-left` |
 | [ADR-0161](#adr-0161-every-key-has-one-writer-class-held-at-the-storage-gateway) | 2026-10-24 | Accepted | Every metric, property and event type has exactly one **writer class** (`node-probe`, `platform`, `calc`, `collected`), resolved from code and the catalogs, never stored, and the Storage Gateway refuses any sample or event write whose writer the class does not admit: an invariant beside scope injection, not a per-route check. The reserved system family (`node-probe`, `platform`) is declared in code and closed to operator-created types by name; a node-probe key reads only as the node's observed series, its time capped at the database's clock, and health only as the rollup's; fusion reconciles sources within the `collected` class; no reserved prefix (#1094 decides one for its platform keys) |
+| [ADR-0163](#adr-0163-legacy-rows-and-stored-declarations-honor-the-one-writer-ruling) | 2026-10-24 | Accepted | What was written or declared before the one-writer ruling is held to it (#1100, amending ADR-0161): a declared pin is trusted only from the endpoint's audited `:retry` (marked `source` `key-pin`, legacy ones stamped from their audit row) and a node forgets a pin the worklist stops delivering; rows the ruling refuses are retired whole into `retired_sample` with a reason, never deleted and never flagged; stored driver specs and derived tasks never hand a node a refused emit, and the boot audit names them; a node's writer binds its task's component as well as its endpoint; contracts refuse reserved keys; and `command-lifecycle` (`command-issued`) is a reserved class |
 
 ## Entries
 
@@ -7334,7 +7335,10 @@ interface create form, since that name is the platform's to mint.
      `node-probe` and `platform` are the **reserved system family**: fixed, internal, declared in
      code. The self-monitoring follow-on (#1094, the server, nodes, the bus, the database and the
      workers as components with built-in metrics only the binary writes) is the planned consumer of
-     `platform`, which takes its keys without restructuring.
+     `platform`, which takes its keys without restructuring. **Amended (#1100):** a third reserved
+     class, `command-lifecycle` (`command-issued`, a command's alone), joins the family, and what
+     was stored before this ruling is held to it
+     ([ADR-0163](#adr-0163-legacy-rows-and-stored-declarations-honor-the-one-writer-ruling)).
   2. **Each class admits a fixed set of writers**, the entry point a write comes through, each
      fixing the provenance it writes. `node-probe` admits the node lane alone, bound to the
      endpoint whose task the node ran; `platform` the process alone; `calc` the rule that outputs
@@ -7383,3 +7387,54 @@ interface create form, since that name is the platform's to mint.
   instances. The split follows the code: a driver's emits and a push are one class because the
   shipped drivers emit `video-input` while a push may write it too, a command targets it, and the
   properties page's fusion exists to reconcile exactly that.
+
+### ADR-0163: Legacy rows and stored declarations honor the one-writer ruling
+
+- **Date:** 2026-10-24 | **Status:** Accepted | **Pages:** [storage](/architecture/storage/), [metrics and properties](/architecture/properties/), [collection](/architecture/collection/), [api](/architecture/api/), [glossary](/architecture/glossary/), [drivers](/guides/admin/drivers/)
+- **Decision:** (#1100, approved in session on 2026-10-24, amending
+  [ADR-0161](#adr-0161-every-key-has-one-writer-class-held-at-the-storage-gateway).) The ruling held
+  every new write; this holds what was written or declared before it, wherever it would still act.
+  1. **A pin's provenance is its path.** A declared pin row (an ssh host key, a tls certificate's
+     public key) carries `source` `key-pin`, which only the endpoint's audited `:retry` writes, and
+     the worklist, the fingerprint, the reachability read and the pin a trust replaces read a
+     declared pin by that mark alone. A pin `:retry` wrote before the mark existed is recognized by
+     the audit row its transaction wrote (the same endpoint, the same key, the same instant) and
+     stamped by a one-time backfill; any other declared pin row is retired, with the observed rows
+     of the same key a node published under it and never before it. The endpoint then pins the key
+     its node learned before, or trusts on first use again, under the gate as ever. A node forgets a
+     pin the worklist delivered and then stops delivering (it was withdrawn): it carries and
+     republishes only a key it learned on first use itself, and a session held under a withdrawn
+     pin redials.
+  2. **Retire, never delete, never flag.** A sample or event row of a reserved key whose class
+     would refuse it today is moved whole into `retired_sample` (its lane, its id, the row as it
+     was, and the reason) by the backfill. A flag column would need every read to honor it, and a
+     read that forgot would serve the row again, the drift the gateway invariant exists to prevent;
+     moving the row leaves no read to forget. ADR-0080's floor (a prune never deletes a declared row
+     or a series' latest) governs retention, the loss of true data with age; retirement removes from
+     service a row the ruling says was never its writer's, and keeps the record, so the floor's
+     reason (nothing true is lost) holds. The backfill's down restores every row it retired.
+  3. **What retires.** A node-probe row on an owner that is not a component, written by a writer
+     other than the node, under an instance that names no endpoint of its component, or dated more
+     than five minutes past the database clock (the cap new rows obey); a `health` row the rollup
+     did not write; a `command-issued` event no command points at; and the pins of point 1. An event
+     row another row references (a command's caused event, a derived event's source) stays.
+  4. **Stored specs and tasks never reach a node with a refused emit.** The worklist strips from
+     every driver task an emit whose key the node lane may not carry (a reserved key, a calc rule's
+     output) and keeps the rest, logging each once; a re-derivation from a stored spec never bakes
+     one; and the server's boot audit names every stored driver spec, derived task and contract line
+     the ruling refuses, so an operator can mend it. Each is inert where it would act before it is
+     named.
+  5. **A node's writer binds both.** The node lane's writer names the component its task collects
+     for as well as the endpoint it ran against, and the gateway refuses every row of a batch that
+     lands on another component, under any key.
+  6. **Contracts refuse reserved keys.** A product, standard or location-type contract line on a
+     reserved key is refused on the operator's path and the seed's (a 422 naming the key), and a
+     line stored before the refusal lends the key no default in the effective reads.
+  7. **A command's lifecycle is a reserved class.** `command-lifecycle` holds `command-issued` and
+     admits a command alone, so no push, node, driver or event rule puts a command on a timeline.
+- **Context:** A write-side invariant shipped over existing data rules only what is written next.
+  Rows and declarations from before it kept acting where nothing re-read them against it: a
+  declared row the pin reads still took, a forward-dated row still read as the latest, a stored
+  spec still compiled into a node's tasks, and a contract default still resolved as a value. The
+  rows themselves could not always say who wrote them, so the pin's path became a mark on the row,
+  recovered for history from the audit trail that already recorded it.

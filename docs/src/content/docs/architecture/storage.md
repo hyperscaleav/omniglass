@@ -12,7 +12,8 @@ This page describes **how storage works**: the patterns every other leaf's entit
 :::note[Partial]
 Built today: the Storage Gateway as the only door to the database, dbmate migrations (run-once,
 embedded, idempotent), the per-action scope predicate and the in-transaction `audit_log` write, the
-writer-class check on every sample and event write ([below](#every-key-has-one-writer)), and the
+writer-class check on every sample and event write, with legacy rows held to it
+([below](#every-key-has-one-writer)), and the
 shared scoped-tree and scoped-CRUD primitives. Scope arrives at the gateway as an explicit
 per-call `scope.Set` argument; seed and system callers pass an all-scope set. Today `metric` /
 `property` carry no `series` column and no uniqueness key, so redelivery can duplicate
@@ -269,6 +270,9 @@ a prune deletes series rows older than a cutoff from both sample tables, **excep
 **except** the latest row of every series (a prune must not erase a current value). No caller
 wires it yet; any future retention feature calls this primitive rather than writing its own
 `DELETE`, so the first purge cannot silently destroy a declared value or a current reading.
+Retiring a row the writer ruling refuses ([above](#every-key-has-one-writer)) is not a prune: it moves
+the row out of service into `retired_sample` and keeps it, so nothing true is lost, which is the floor's
+reason.
 
 ::::design[Target design: partitioning is tracked in #420, retention in #417, and the `raw_sample` buffer in #430]
 
@@ -315,7 +319,20 @@ operator) and holds every row to its key's class (`admitWrites`) before anything
 write (`ErrKeyWriterRefused`, a 422 naming the key and who writes it) when the class does not admit it.
 Like scope, it is structural rather than remembered per route: a source guard fails on a function that
 writes a sample or event row without being a registered write path that runs the check, and a table
-drives every registered path with a writer its key does not admit.
+drives every registered path with a writer its key does not admit. The node lane's writer binds both
+halves of what a node holds: the component its task collects for and the endpoint it ran against, so
+every row of a batch lands on that component, and a node-probe row under that endpoint.
+
+What was written or declared before the ruling is held to it as well
+([ADR-0163](/architecture/decisions/#adr-0163-legacy-rows-and-stored-declarations-honor-the-one-writer-ruling)).
+A one-time backfill **retires** every row of a reserved key whose class would refuse it today: the row
+moves whole into `retired_sample`, with its lane, its id and the reason, so no read serves it and its
+record survives (a flag would need every read to remember it; a move leaves none to forget). A declared
+key pin is trusted only from the endpoint's audited `:retry`, whose row carries `source` `key-pin`; a
+legacy `:retry` pin was recognized by its audit row and stamped. A stored driver spec or derived task
+never hands a node an emit the ruling refuses (the worklist strips it), a contract cannot declare a
+reserved key, and the server's boot audit names every stored declaration the ruling refuses so an
+operator can mend it.
 
 The gateway also accepts a **query tracer** (`storage.WithQueryTracer`), installed on the pool's
 connection config so it observes every statement the gateway issues, whichever method issued it.

@@ -73,7 +73,8 @@ held in the metric siblings of the property contract tables (`product_metric`,
 components, a [standard](/guides/admin/standards/) for its systems, and a
 [location type](/guides/admin/location-types/) for the locations of that type. Each line names a catalog
 metric, optionally gives it a **default**, and optionally marks it **required**: a product ships a
-default sample rate, a standard requires a seat count.
+default sample rate, a standard requires a seat count. A node's own probe metric (`tcp-open`,
+`icmp-rtt-avg` and the rest) is a reserved key no contract declares, as on the property side.
 
 Type, unit, and precision are **not** repeated in the contract; they stay on the catalog entry, so
 a metric means one thing everywhere. The contract lines that predate the two-lane split moved into

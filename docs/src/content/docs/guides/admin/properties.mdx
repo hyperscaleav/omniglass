@@ -89,7 +89,11 @@ Declaring `serial-number`, `firmware-version`, and `model-number` on a Samsung Q
 every QM55 in the fleet carry those three, with the same names and the same types, without touching
 a component. Declaring `room-capacity` on Huddle Room does the same for every huddle room. Type and
 validation are **not** repeated in the contract, they stay on the catalog entry, so a property means
-one thing everywhere.
+one thing everywhere. A contract cannot declare a **reserved** key (a node's own probe and session
+keys such as `endpoint-reachable` or `ssh-host-key`, the platform's `health`): its value is only its
+writer's to give, so a default would stand in for it, and the save is refused naming the key
+([who writes a key](/architecture/properties/#who-writes-a-key-the-writer-class)). A line saved
+before that refusal lends the key no default, and the server names it in a warning at boot.
 
 Inheritance is **live, not a copy**: revise a contract default and every instance that has not
 overridden that property picks up the new value. Withdrawing a line leaves any value an instance set,

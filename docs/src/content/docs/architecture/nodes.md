@@ -199,8 +199,10 @@ mode the node keeps **one public key pin per endpoint**, shared by the held sess
 reachability probe and carried across a session's recycle: a key trusted on first use is published
 as `tls-certificate` (and published again while the worklist does not yet deliver it back), a pin the
 worklist delivers that differs (an operator's `:retry` with `certificate`) replaces it and recycles
-the session, and a key that differs from the pin is a `certificate` refusal that gates the transport
-rung, beneath which the probe runs only the TCP connect
+the session, a pin the worklist delivered and then stops delivering (withdrawn) is forgotten, so the
+next connection trusts on first use (the ssh host key likewise), and a key that differs from the pin
+is a `certificate` refusal that gates the transport rung, beneath which the probe runs only the TCP
+connect
 ([tls](/architecture/collection/#tls),
 [ADR-0160](/architecture/decisions/#adr-0160-tls-is-its-own-transport-over-a-shared-primitive-and-its-pin-is-the-public-key)).
 Still design below: the pool knobs.
