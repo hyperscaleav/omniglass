@@ -4,14 +4,16 @@
 // The Storage Gateway checks every sample and event write against it, the way it
 // injects scope on every query, so no route can forget to.
 //
-// Two classes form the reserved system family, fixed and internal: node-probe
+// Three classes form the reserved system family, fixed and internal: node-probe
 // (the keys a node's own probes and session machine write, declared in
-// probekeys) and platform (keys only the Omniglass process itself writes: the
-// health rollup's verdict today, its self-monitoring later). Their names are
-// declared in code and reserved against operator-created types. The other two
-// are resolved from the catalogs: calc (a calc rule names the key as its output)
-// and collected (every other key: a driver's emits on the node lane, a push, the
-// observers fusion reconciles by source).
+// probekeys), platform (keys only the Omniglass process itself writes: the
+// health rollup's verdict today, its self-monitoring later) and
+// command-lifecycle (the events a command's own lifecycle writes:
+// command-issued). Their names are declared in code and reserved against
+// operator-created types. The other two are resolved from the catalogs: calc (a
+// calc rule names the key as its output) and collected (every other key: a
+// driver's emits on the node lane, a push, the observers fusion reconciles by
+// source).
 //
 // A leaf: storage, the push route, the node lane and the driver spec all read
 // this one ruling.
@@ -29,20 +31,22 @@ import (
 // Class is a key's writer class.
 type Class string
 
-// The writer classes. NodeProbe and Platform are the reserved system family.
+// The writer classes. NodeProbe, Platform and CommandLifecycle are the
+// reserved system family.
 const (
-	NodeProbe Class = "node-probe"
-	Platform  Class = "platform"
-	Calc      Class = "calc"
-	Collected Class = "collected"
+	NodeProbe        Class = "node-probe"
+	Platform         Class = "platform"
+	CommandLifecycle Class = "command-lifecycle"
+	Calc             Class = "calc"
+	Collected        Class = "collected"
 )
 
 // Classes is every writer class, the reserved family first.
-func Classes() []Class { return []Class{NodeProbe, Platform, Calc, Collected} }
+func Classes() []Class { return []Class{NodeProbe, Platform, CommandLifecycle, Calc, Collected} }
 
 // Reserved reports a class of the reserved system family: fixed, internal, its
 // keys declared in code and their names closed to operator-created types.
-func (c Class) Reserved() bool { return c == NodeProbe || c == Platform }
+func (c Class) Reserved() bool { return c == NodeProbe || c == Platform || c == CommandLifecycle }
 
 // Writer is the entry point a write comes through, which the gateway matches
 // against the key's class. Each writer fixes the provenance it writes.
@@ -91,6 +95,17 @@ var platform = map[string]string{
 	Health: "the health rollup",
 }
 
+// CommandIssued is the event a command's issue lands on its owner's timeline,
+// the event its intended value is caused by.
+const CommandIssued = "command-issued"
+
+// commandLifecycle maps each event of a command's lifecycle to what it says.
+// Only a command writes one: a push, a node, a driver or an event rule landing
+// one would put a command on the timeline that nobody issued.
+var commandLifecycle = map[string]string{
+	CommandIssued: "a command's issue, on the timeline of the owner it was issued to",
+}
+
 // pinnable are the node-probe keys an operator may also declare, each with its
 // path: a declared row is never the node's observation (the reads serve only
 // observed rows), and this one is a control input the worklist hands back.
@@ -104,6 +119,7 @@ var pinnable = map[string]string{
 //     push, a calc rule, a command, an operator or an event rule never writes
 //     what the console reads as the node's own observation.
 //   - platform: the process alone.
+//   - command-lifecycle: a command alone, its issue landing command-issued.
 //   - calc: the rule that outputs it, and an operator's declared value, which
 //     resolves ahead of the calculated one by design (properties page).
 //   - collected: every observer (the node lane carrying a driver's emits, a
@@ -111,10 +127,11 @@ var pinnable = map[string]string{
 //     declared value, an event rule's event. A calc rule never: its output is a
 //     key it owns, so a collected key is never one.
 var admits = map[Class][]Writer{
-	NodeProbe: {Node},
-	Platform:  {Process},
-	Calc:      {CalcRule, Operator},
-	Collected: {Node, Push, Command, CommandReply, Operator, EventRule},
+	NodeProbe:        {Node},
+	Platform:         {Process},
+	CommandLifecycle: {Command},
+	Calc:             {CalcRule, Operator},
+	Collected:        {Node, Push, Command, CommandReply, Operator, EventRule},
 }
 
 // Admits reports whether w may write key, whose class is c.
@@ -136,6 +153,21 @@ func Reserved(name string) (Class, bool) {
 	if _, ok := platformKey(name); ok {
 		return Platform, true
 	}
+	if _, ok := lifecycleKey(name); ok {
+		return CommandLifecycle, true
+	}
+	return "", false
+}
+
+// lifecycleKey resolves name to its command lifecycle event,
+// case-insensitively.
+func lifecycleKey(name string) (string, bool) {
+	name = strings.TrimSpace(name)
+	for k := range commandLifecycle {
+		if strings.EqualFold(k, name) {
+			return k, true
+		}
+	}
 	return "", false
 }
 
@@ -150,10 +182,14 @@ func platformKey(name string) (string, bool) {
 	return "", false
 }
 
-// ReservedNames is every reserved key, both classes, sorted, a fresh slice.
+// ReservedNames is every reserved key, every reserved class, sorted, a fresh
+// slice.
 func ReservedNames() []string {
 	out := probekeys.NodeOnly()
 	for k := range platform {
+		out = append(out, k)
+	}
+	for k := range commandLifecycle {
 		out = append(out, k)
 	}
 	slices.Sort(out)
@@ -188,6 +224,8 @@ func Refusal(c Class, key string, w Writer, rule string) string {
 			by = platform[k]
 		}
 		return key + " is a platform key: only " + by + " writes it"
+	case CommandLifecycle:
+		return key + " is a command's lifecycle event: only a command's issue writes it"
 	case Calc:
 		if rule == "" {
 			return key + " is written by a calc rule: only that rule writes it"
@@ -200,10 +238,11 @@ func Refusal(c Class, key string, w Writer, rule string) string {
 
 // classDoc is each class in one line, for the docs render.
 var classDoc = map[Class]string{
-	NodeProbe: "what a node's own probes and session machine write: the node's account of an endpoint",
-	Platform:  "what only the Omniglass process writes about itself or its rollups",
-	Calc:      "a key a calc rule names as its output",
-	Collected: "every other key: what a driver's emits, a push, a command or an operator say",
+	NodeProbe:        "what a node's own probes and session machine write: the node's account of an endpoint",
+	Platform:         "what only the Omniglass process writes about itself or its rollups",
+	CommandLifecycle: "the events a command's own lifecycle writes on its owner's timeline",
+	Calc:             "a key a calc rule names as its output",
+	Collected:        "every other key: what a driver's emits, a push, a command or an operator say",
 }
 
 // writerDoc is each writer in one line, for the docs render.
@@ -258,6 +297,11 @@ func Facts() []ClassFact {
 			}
 		case Platform:
 			for k := range platform {
+				f.Keys = append(f.Keys, k)
+			}
+			slices.Sort(f.Keys)
+		case CommandLifecycle:
+			for k := range commandLifecycle {
 				f.Keys = append(f.Keys, k)
 			}
 			slices.Sort(f.Keys)

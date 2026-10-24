@@ -288,14 +288,14 @@ func TestWriterMismatchRefused(t *testing.T) {
 		"writeMetricSamples": {
 			{"a push of a probe metric", func() error { return f.gw.InsertMetricSamples(f.ctx, storage.PushWriter(), metric("tcp-open", "ssh")) }},
 			{"a node on another endpoint", func() error {
-				return f.gw.InsertMetricSamples(f.ctx, storage.NodeWriter("ssh"), metric("tcp-open", "panel"))
+				return f.gw.InsertMetricSamples(f.ctx, storage.NodeWriter(comp.ID, "ssh"), metric("tcp-open", "panel"))
 			}},
 			{"a node bound to no endpoint", func() error {
-				return f.gw.InsertMetricSamples(f.ctx, storage.NodeWriter(""), metric("icmp-rtt-avg", ""))
+				return f.gw.InsertMetricSamples(f.ctx, storage.NodeWriter(comp.ID, ""), metric("icmp-rtt-avg", ""))
 			}},
 			{"a push of a calc output", func() error { return f.gw.InsertMetricSamples(f.ctx, storage.PushWriter(), metric("avg-uptime", "")) }},
 			{"a node lane carrying a calc output", func() error {
-				return f.gw.InsertMetricSamples(f.ctx, storage.NodeWriter("ssh"), metric("avg-uptime", "ssh"))
+				return f.gw.InsertMetricSamples(f.ctx, storage.NodeWriter(comp.ID, "ssh"), metric("avg-uptime", "ssh"))
 			}},
 			{"another rule's output", func() error { return f.gw.WriteMetricAsRule(f.ctx, uuidZero, metric("avg-uptime", "")) }},
 			{"a rule writing a collected key", func() error { return f.gw.WriteMetricAsRule(f.ctx, rule.ID, metric("uptime", "")) }},
@@ -308,10 +308,10 @@ func TestWriterMismatchRefused(t *testing.T) {
 				return f.gw.InsertPropertySamples(f.ctx, storage.PushWriter(), property("health", "", "healthy"))
 			}},
 			{"a node on another endpoint", func() error {
-				return f.gw.InsertPropertySamples(f.ctx, storage.NodeWriter("ssh"), property("session-state", "panel", "up"))
+				return f.gw.InsertPropertySamples(f.ctx, storage.NodeWriter(comp.ID, "ssh"), property("session-state", "panel", "up"))
 			}},
 			{"a node writing health", func() error {
-				return f.gw.InsertPropertySamples(f.ctx, storage.NodeWriter("ssh"), property("health", "ssh", "healthy"))
+				return f.gw.InsertPropertySamples(f.ctx, storage.NodeWriter(comp.ID, "ssh"), property("health", "ssh", "healthy"))
 			}},
 			{"a rule writing the verdict", func() error {
 				return f.gw.WritePropertyAsRule(f.ctx, rule.ID, property("endpoint-reachable", "ssh", "up"))
@@ -320,7 +320,7 @@ func TestWriterMismatchRefused(t *testing.T) {
 		"InsertEvents": {
 			{"a push of collection-failed", func() error { return f.gw.InsertEvents(f.ctx, storage.PushWriter(), event("collection-failed", "ssh")) }},
 			{"a node on another endpoint", func() error {
-				return f.gw.InsertEvents(f.ctx, storage.NodeWriter("ssh"), event("collection-failed", "panel"))
+				return f.gw.InsertEvents(f.ctx, storage.NodeWriter(comp.ID, "ssh"), event("collection-failed", "panel"))
 			}},
 		},
 		"recordHealth": {
@@ -383,12 +383,12 @@ func TestWriterMismatchRefused(t *testing.T) {
 	// The admitted writers, through the same paths.
 	for name, write := range map[string]func() error{
 		"a node on its endpoint": func() error {
-			return f.gw.InsertMetricSamples(f.ctx, storage.NodeWriter("ssh"), metric("tcp-open", "ssh"))
+			return f.gw.InsertMetricSamples(f.ctx, storage.NodeWriter(comp.ID, "ssh"), metric("tcp-open", "ssh"))
 		},
 		"a push of a collected": func() error { return f.gw.InsertMetricSamples(f.ctx, storage.PushWriter(), metric("uptime", "")) },
 		"the rule's own output": func() error { return f.gw.WriteMetricAsRule(f.ctx, rule.ID, metric("avg-uptime", "")) },
 		"a node's own failure": func() error {
-			return f.gw.InsertEvents(f.ctx, storage.NodeWriter("ssh"), event("collection-failed", "ssh"))
+			return f.gw.InsertEvents(f.ctx, storage.NodeWriter(comp.ID, "ssh"), event("collection-failed", "ssh"))
 		},
 		"a declared collected": func() error {
 			_, err := f.gw.SetProperty(f.ctx, f.actor, "component", comp.ID, "serial-number", "", json.RawMessage(`"SN-1"`), all, all)
@@ -597,7 +597,7 @@ func TestNodeProbeSampleCannotOutliveItsTime(t *testing.T) {
 		t.Fatal(err)
 	}
 	far := time.Now().UTC().AddDate(70, 0, 0)
-	node := storage.NodeWriter("ssh")
+	node := storage.NodeWriter(comp.ID, "ssh")
 	if err := f.gw.InsertPropertySamples(f.ctx, node, []storage.PropertySampleWrite{
 		{OwnerKind: "component", OwnerID: comp.ID, Key: "endpoint-reachable", Instance: "ssh", Value: "up", TS: far},
 		{OwnerKind: "component", OwnerID: comp.ID, Key: "endpoint-rejection", Instance: "ssh", Value: "authenticated auth 9f86d081", TS: far},
@@ -715,7 +715,7 @@ func TestLegacyRuleFiringAReservedEventLetsTheSampleLand(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := f.gw.InsertPropertySamples(f.ctx, storage.NodeWriter("ssh"), []storage.PropertySampleWrite{
+	if err := f.gw.InsertPropertySamples(f.ctx, storage.NodeWriter(comp.ID, "ssh"), []storage.PropertySampleWrite{
 		{OwnerKind: "component", OwnerID: comp.ID, Key: "endpoint-reachable", Instance: "ssh", Value: "down"}}); err != nil {
 		t.Fatalf("the node's sample was refused for a legacy rule's sake: %v", err)
 	}

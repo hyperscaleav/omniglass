@@ -87,6 +87,9 @@ func upsertProductMetricRow(ctx context.Context, q querier, productID string, sp
 	if _, err := resolveProductRef(ctx, q, productID); err != nil {
 		return nil, ErrTypeNotFound
 	}
+	if err := contractKey(spec.MetricTypeName); err != nil {
+		return nil, err
+	}
 	if err := requireMetricType(ctx, q, spec.MetricTypeName); err != nil {
 		return nil, err
 	}

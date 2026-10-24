@@ -82,6 +82,9 @@ func upsertLocationTypePropertyRow(ctx context.Context, q querier, locationTypeI
 	if err := requireRegistryRow(ctx, q, "location_type", locationTypeID); err != nil {
 		return nil, err
 	}
+	if err := contractKey(spec.PropertyTypeName); err != nil {
+		return nil, err
+	}
 	if err := requireProperty(ctx, q, spec.PropertyTypeName); err != nil {
 		return nil, err
 	}

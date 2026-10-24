@@ -82,6 +82,9 @@ func upsertStandardPropertyRow(ctx context.Context, q querier, standardID string
 	if err := q.QueryRow(ctx, `select true from standard where `+registryRefCol(standardID)+` = $1`, standardID).Scan(&known); err != nil {
 		return nil, ErrTypeNotFound
 	}
+	if err := contractKey(spec.PropertyTypeName); err != nil {
+		return nil, err
+	}
 	if err := requireProperty(ctx, q, spec.PropertyTypeName); err != nil {
 		return nil, err
 	}

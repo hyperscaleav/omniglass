@@ -80,6 +80,9 @@ func upsertLocationTypeMetricRow(ctx context.Context, q querier, locationTypeID 
 	if err := requireRegistryRow(ctx, q, "location_type", locationTypeID); err != nil {
 		return nil, err
 	}
+	if err := contractKey(spec.MetricTypeName); err != nil {
+		return nil, err
+	}
 	if err := requireMetricType(ctx, q, spec.MetricTypeName); err != nil {
 		return nil, err
 	}

@@ -1116,7 +1116,7 @@ func seedReachSamples(ctx context.Context, gw storage.Gateway, iface string, fla
 	states = append(states, storage.PropertySampleWrite{OwnerKind: "component", OwnerID: reachComponent, Key: "endpoint-reachable", Instance: iface, Value: "up", Source: "reachability", TS: recovered})
 	// Native probe keys: written as the node that holds the endpoint would,
 	// under that endpoint alone (ADR-0161).
-	node := storage.NodeWriter(iface)
+	node := storage.NodeWriter(reachComponent, iface)
 	if err := gw.InsertPropertySamples(ctx, node, states); err != nil {
 		return fmt.Errorf("devseed: insert %s property samples: %w", iface, err)
 	}
@@ -1268,19 +1268,23 @@ func seedTelemetryBreadth(ctx context.Context, gw storage.Gateway, actorID strin
 
 	// RTT series on a few components, so leaves beyond the DSP chart. A native
 	// probe key, so written as a node would, under one endpoint name.
-	var rtts []storage.MetricSampleWrite
+	var rtts [][]storage.MetricSampleWrite
 	for i, key := range []string{"huddle-bar", "wl3-c1a", "briefing-bar"} {
 		id, ok := compIDs[key]
 		if !ok {
 			continue
 		}
+		var series []storage.MetricSampleWrite
 		for j := 0; j < 8; j++ {
 			ts := now.Add(-time.Duration(7-j) * 3 * time.Hour)
-			rtts = append(rtts, storage.MetricSampleWrite{OwnerKind: "component", OwnerID: id, Key: "icmp-rtt-avg", Instance: breadthEndpoint, Value: 4.5 + float64(i) + 0.3*float64(j%3), Source: "devseed-breadth", TS: ts})
+			series = append(series, storage.MetricSampleWrite{OwnerKind: "component", OwnerID: id, Key: "icmp-rtt-avg", Instance: breadthEndpoint, Value: 4.5 + float64(i) + 0.3*float64(j%3), Source: "devseed-breadth", TS: ts})
 		}
+		rtts = append(rtts, series)
 	}
-	if err := gw.InsertMetricSamples(ctx, storage.NodeWriter(breadthEndpoint), rtts); err != nil {
-		return fmt.Errorf("devseed: breadth rtt samples: %w", err)
+	for _, batch := range rtts {
+		if err := gw.InsertMetricSamples(ctx, storage.NodeWriter(batch[0].OwnerID, breadthEndpoint), batch); err != nil {
+			return fmt.Errorf("devseed: breadth rtt samples: %w", err)
+		}
 	}
 	var samples []storage.MetricSampleWrite
 	// Room series on every system whose standard declares the pair, varied by

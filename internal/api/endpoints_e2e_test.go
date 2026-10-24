@@ -142,7 +142,7 @@ func TestEndpointAPI(t *testing.T) {
 	// the offered key itself is trusted.
 	sshEp := createEndpoint(c, ownerTok, map[string]any{"transport": "ssh", "component": "comp-d", "params": map[string]any{"target": "10.0.0.7:22"}})
 	shown, offeredNow := "SHA256:"+strings.Repeat("S", 43), "SHA256:"+strings.Repeat("N", 43)
-	if err := gw.InsertPropertySamples(ctx, storage.NodeWriter(sshEp.Name), []storage.PropertySampleWrite{{OwnerKind: "component", OwnerID: "comp-d", Key: "endpoint-rejection",
+	if err := gw.InsertPropertySamples(ctx, storage.NodeWriter("comp-d", sshEp.Name), []storage.PropertySampleWrite{{OwnerKind: "component", OwnerID: "comp-d", Key: "endpoint-rejection",
 		Instance: sshEp.Name, Value: "responsive host-key 9f86d081 SHA256:" + strings.Repeat("P", 43) + " " + offeredNow, Source: "ssh", TS: time.Now()}}); err != nil {
 		t.Fatal(err)
 	}

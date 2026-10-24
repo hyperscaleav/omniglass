@@ -156,6 +156,10 @@ func mapTypeErr(err error, kind string) error {
 		return huma.Error409Conflict(kind + " id already exists")
 	case errors.Is(err, storage.ErrTypeOfficial):
 		return huma.Error422UnprocessableEntity("official " + kind + " is read-only")
+	case errors.Is(err, storage.ErrContractKeyReserved):
+		// The key is a reserved one (ADR-0161); the message names it and
+		// who writes it.
+		return huma.Error422UnprocessableEntity(strings.TrimPrefix(err.Error(), "storage: a contract may not declare a reserved key: "))
 	case errors.Is(err, storage.ErrTypeInUse):
 		return huma.Error409Conflict(kind + " is referenced by existing rows")
 	case errors.Is(err, storage.ErrTypeNotForked):

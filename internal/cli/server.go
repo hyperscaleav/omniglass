@@ -85,6 +85,7 @@ func runServer(ctx context.Context, _ string) error {
 		return err
 	}
 	log.Info("boot seed applied")
+	auditWriterRuling(ctx, log, gw)
 
 	// The embedded NATS server carries the node-server protocol (worklist,
 	// heartbeat, and the checkpoint-3 telemetry stream). It is hosted in-process
@@ -159,4 +160,21 @@ func startBus(c config.Config, gw storage.Gateway) (*bus.Server, error) {
 		return nil, err
 	}
 	return bus.New(bus.Config{Host: host, Port: port, StoreDir: c.NatsStoreDir}, gw)
+}
+
+// auditWriterRuling flags, once at boot, every stored declaration the
+// one-writer ruling now refuses (ADR-0161): a driver spec or a derived task
+// emitting a key the node lane may not carry, a contract line on a reserved
+// key. Each is already inert where it would act; the warning names it so an
+// operator can mend it. A failed audit is logged, never fatal.
+func auditWriterRuling(ctx context.Context, log *slog.Logger, gw *storage.PG) {
+	vs, err := gw.WriterRulingViolations(ctx)
+	if err != nil {
+		log.Warn("writer ruling audit failed", "error", err.Error())
+		return
+	}
+	for _, v := range vs {
+		log.Warn("a stored declaration names a key its writer class refuses; it is held inert",
+			"where", v.Where, "key", v.Key, "writer_class", string(v.Class))
+	}
 }

@@ -12,14 +12,15 @@ import (
 
 // TestEveryReservedKeyHasExactlyOneClass: the reserved family partitions its
 // names. Every node-only key from probekeys is node-probe, every platform key
-// is platform, no name is both, and the family is exactly those two sets.
+// is platform, every command lifecycle event is command-lifecycle, no name is
+// in two, and the family is exactly those three sets.
 func TestEveryReservedKeyHasExactlyOneClass(t *testing.T) {
 	names := ReservedNames()
 	if len(names) == 0 {
 		t.Fatal("no reserved key")
 	}
 	if len(slices.Compact(slices.Clone(names))) != len(names) {
-		t.Fatalf("a reserved name is listed twice (both classes?): %v", names)
+		t.Fatalf("a reserved name is listed twice (two classes?): %v", names)
 	}
 	for _, key := range names {
 		c, ok := Reserved(key)
@@ -27,15 +28,33 @@ func TestEveryReservedKeyHasExactlyOneClass(t *testing.T) {
 			t.Errorf("%s is listed reserved but resolves to %q (%v)", key, c, ok)
 		}
 		_, platformKey := platform[key]
-		if probekeys.IsNodeOnly(key) == platformKey {
-			t.Errorf("%s is node-only %v and platform %v; want exactly one", key, probekeys.IsNodeOnly(key), platformKey)
+		_, lifecycleKey := commandLifecycle[key]
+		in := 0
+		for _, member := range []bool{probekeys.IsNodeOnly(key), platformKey, lifecycleKey} {
+			if member {
+				in++
+			}
+		}
+		if in != 1 {
+			t.Errorf("%s is node-only %v, platform %v and command-lifecycle %v; want exactly one", key, probekeys.IsNodeOnly(key), platformKey, lifecycleKey)
 		}
 		want := NodeProbe
-		if platformKey {
+		switch {
+		case platformKey:
 			want = Platform
+		case lifecycleKey:
+			want = CommandLifecycle
 		}
 		if c != want {
 			t.Errorf("%s resolves to %s, want %s", key, c, want)
+		}
+	}
+	if c, ok := Reserved(CommandIssued); !ok || c != CommandLifecycle {
+		t.Errorf("command-issued resolves to %q (%v), want command-lifecycle: only a command's issue writes it", c, ok)
+	}
+	for key, by := range commandLifecycle {
+		if strings.TrimSpace(by) == "" {
+			t.Errorf("command lifecycle event %s names no doc", key)
 		}
 	}
 	for _, key := range probekeys.NodeOnly() {
@@ -78,10 +97,11 @@ func TestReservedFailsClosed(t *testing.T) {
 // TestAdmits pins the whole ruling, class by writer: the table is the spec.
 func TestAdmits(t *testing.T) {
 	want := map[Class][]Writer{
-		NodeProbe: {Node},
-		Platform:  {Process},
-		Calc:      {CalcRule, Operator},
-		Collected: {Node, Push, Command, CommandReply, Operator, EventRule},
+		NodeProbe:        {Node},
+		Platform:         {Process},
+		CommandLifecycle: {Command},
+		Calc:             {CalcRule, Operator},
+		Collected:        {Node, Push, Command, CommandReply, Operator, EventRule},
 	}
 	for _, c := range Classes() {
 		for _, w := range Writers() {
@@ -134,6 +154,7 @@ func TestOf(t *testing.T) {
 		{probekeys.EndpointReachable, true, NodeProbe},
 		{probekeys.CollectionFailed, false, NodeProbe},
 		{Health, true, Platform},
+		{CommandIssued, false, CommandLifecycle},
 		{"avg-temp", true, Calc},
 		{"video-input", false, Collected},
 	}
@@ -157,6 +178,8 @@ func TestRefusalNamesKeyAndWriter(t *testing.T) {
 		{NodeProbe, "tcp-open", Push, "", "only the node"},
 		{NodeProbe, "tcp-open", Node, "", "endpoint whose task it ran"},
 		{Platform, Health, Push, "", "the health rollup"},
+		{CommandLifecycle, CommandIssued, Push, "", "a command's issue"},
+		{CommandLifecycle, CommandIssued, Node, "", "a command's issue"},
 		{Calc, "avg-temp", Push, "temp-avg", "the calc rule temp-avg"},
 		{Collected, "video-input", CalcRule, "", "calc-rule"},
 	} {

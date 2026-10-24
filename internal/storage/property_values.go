@@ -289,6 +289,14 @@ var ownerContracts = map[string]ownerContract{
 	"node": {"node", "", "", "", "node_id", "principal_id", ErrNodeNotFound, ""},
 }
 
+// contractDefaultSQL is a contract line's default as the effective reads take
+// it: none on a reserved key (ADR-0161), whose value is its writer's alone, so
+// a line stored before contracts refused one lends it nothing. typeAlias is the
+// joined type row; $2 binds writerclass.ReservedNames().
+func contractDefaultSQL(typeAlias string) string {
+	return `case when ` + typeAlias + `.name = any($2::text[]) then null else c.default_value end`
+}
+
 // EffectiveProperties resolves an instance's declared properties: every property
 // its classifier's contract declares (value = coalesce(the instance's set value,
 // a calc rule's calculated value, the contract default)), plus any ad-hoc
@@ -417,9 +425,9 @@ func (p *PG) EffectiveProperties(ctx context.Context, ownerKind, ownerID string,
 		-- against the instance's own current declared value, then a calc
 		-- rule's value, then the contract default.
 		select pr.name as property_type_name, pr.id as property_type_id, pr.label, pr.data_type, c.required,
-		       c.default_value,
+		       `+contractDefaultSQL("pr")+`,
 		       d.value as set_value,
-		       coalesce(d.value, k.value, c.default_value) as effective_value,
+		       coalesce(d.value, k.value, `+contractDefaultSQL("pr")+`) as effective_value,
 		       (d.value is not null) as is_set,
 		       true as from_contract,
 		       case when d.value is not null then d.id::text end as value_id,
@@ -448,7 +456,11 @@ func (p *PG) EffectiveProperties(ctx context.Context, ownerKind, ownerID string,
 			oc.instanceTable, oc.classifierCol, oc.contractTable, oc.contractKeyCol, declared, oc.arcMatch, calculated, calcArm(oc.contractTable))
 	}
 
-	rows, err := p.pool.Query(ctx, q, arc)
+	args := []any{arc}
+	if oc.contractTable != "" {
+		args = append(args, writerclass.ReservedNames())
+	}
+	rows, err := p.pool.Query(ctx, q, args...)
 	if err != nil {
 		return nil, fmt.Errorf("storage: effective properties %s/%s: %w", ownerKind, ownerID, err)
 	}

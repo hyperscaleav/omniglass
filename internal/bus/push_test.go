@@ -111,7 +111,7 @@ func TestDeriveMetricsInstanceAndSourcePrecedence(t *testing.T) {
 	t.Run("node lane falls back to the interface", func(t *testing.T) {
 		metrics := deriveMetrics(&ogv1.TelemetryBatch{
 			Metrics: []*ogv1.MetricSample{{Name: "icmp-rtt-avg", Value: 12.4}},
-		}, nodeOwner(), reg, storage.NodeWriter(nodeOwner().EndpointName))
+		}, nodeOwner(), reg, storage.NodeWriter(nodeOwner().ComponentID, nodeOwner().EndpointName))
 		if len(metrics) != 1 {
 			t.Fatalf("got %d metrics, want 1", len(metrics))
 		}

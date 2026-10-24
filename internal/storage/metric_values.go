@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/hyperscaleav/omniglass/internal/scope"
+	"github.com/hyperscaleav/omniglass/internal/writerclass"
 )
 
 // EffectiveMetric is one metric resolved for an instance, the metric twin of
@@ -111,9 +112,9 @@ func (p *PG) EffectiveMetrics(ctx context.Context, ownerKind, ownerID string, re
 		-- The contract arm: what the instance's classifier declares, resolved
 		-- against the series' latest sample.
 		select mt.name as metric_type_name, mt.id as metric_type_id, mt.label, mt.data_type, c.required,
-		       c.default_value,
+		       `+contractDefaultSQL("mt")+`,
 		       s.value as sample_value,
-		       coalesce(s.value, c.default_value) as effective_value,
+		       coalesce(s.value, `+contractDefaultSQL("mt")+`) as effective_value,
 		       (s.value is not null) as is_sampled,
 		       true as from_contract,
 		       coalesce(s.source_rule, ''), coalesce(s.source_rule_id, '')
@@ -138,7 +139,11 @@ func (p *PG) EffectiveMetrics(ctx context.Context, ownerKind, ownerID string, re
 			oc.instanceTable, oc.classifierCol, oc.metricContractTable, oc.contractKeyCol, sampled, oc.arcMatch)
 	}
 
-	rows, err := p.pool.Query(ctx, q, arc)
+	args := []any{arc}
+	if oc.metricContractTable != "" {
+		args = append(args, writerclass.ReservedNames())
+	}
+	rows, err := p.pool.Query(ctx, q, args...)
 	if err != nil {
 		return nil, fmt.Errorf("storage: effective metrics %s/%s: %w", ownerKind, ownerID, err)
 	}

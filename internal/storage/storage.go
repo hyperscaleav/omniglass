@@ -14,6 +14,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -903,6 +904,9 @@ type PG struct {
 	// calcHook is a test seam on the calc drain (calc_export_test.go);
 	// nil in production.
 	calcHook func(stage string) error
+	// strippedEmits remembers each (task, key) emit the worklist dropped for
+	// the writer ruling, so the drop is logged once, not on every pull.
+	strippedEmits sync.Map
 }
 
 // Option configures a PG at construction. The secret provider is optional so

@@ -9,10 +9,11 @@ import (
 
 // The fixture writers: a test batch speaks for the writer its keys admit
 // (ADR-0161). A batch carrying a native probe key is the node's, and a node
-// writes one only under the endpoint its task ran, so the batch lands as one
-// node batch per endpoint its samples name, in order; every other batch is a
-// push's. A native sample naming no endpoint is a fixture the node lane could
-// never produce, and the gateway refuses it as it would the node's.
+// writes only for the component and the endpoint its task ran, so the batch
+// lands as one node batch per component and endpoint its samples name, in
+// order; every other batch is a push's. A native sample naming no endpoint of
+// its component is a fixture the node lane could never produce, and the
+// gateway refuses it as it would the node's.
 
 type sampleSink interface {
 	InsertMetricSamples(context.Context, storage.KeyWriter, []storage.MetricSampleWrite) error
@@ -22,7 +23,7 @@ type sampleSink interface {
 
 // fixtureBatches splits a batch of n samples into the writes its keys admit:
 // each a writer and the sample indexes it carries.
-func fixtureBatches(n int, key, instance func(int) string) []fixtureBatch {
+func fixtureBatches(n int, key, owner, instance func(int) string) []fixtureBatch {
 	native := false
 	for i := 0; i < n; i++ {
 		if c, ok := writerclass.Reserved(key(i)); ok && c == writerclass.NodeProbe {
@@ -39,12 +40,12 @@ func fixtureBatches(n int, key, instance func(int) string) []fixtureBatch {
 	var out []fixtureBatch
 	at := map[string]int{}
 	for i := 0; i < n; i++ {
-		ep := instance(i)
-		j, ok := at[ep]
+		comp, ep := owner(i), instance(i)
+		j, ok := at[comp+"\x00"+ep]
 		if !ok {
 			j = len(out)
-			at[ep] = j
-			out = append(out, fixtureBatch{w: storage.NodeWriter(ep)})
+			at[comp+"\x00"+ep] = j
+			out = append(out, fixtureBatch{w: storage.NodeWriter(comp, ep)})
 		}
 		out[j].idx = append(out[j].idx, i)
 	}
@@ -57,7 +58,7 @@ type fixtureBatch struct {
 }
 
 func insertMetrics(ctx context.Context, gw sampleSink, evs []storage.MetricSampleWrite) error {
-	for _, b := range fixtureBatches(len(evs), func(i int) string { return evs[i].Key }, func(i int) string { return evs[i].Instance }) {
+	for _, b := range fixtureBatches(len(evs), func(i int) string { return evs[i].Key }, func(i int) string { return evs[i].OwnerID }, func(i int) string { return evs[i].Instance }) {
 		part := make([]storage.MetricSampleWrite, len(b.idx))
 		for k, i := range b.idx {
 			part[k] = evs[i]
@@ -70,7 +71,7 @@ func insertMetrics(ctx context.Context, gw sampleSink, evs []storage.MetricSampl
 }
 
 func insertProperties(ctx context.Context, gw sampleSink, evs []storage.PropertySampleWrite) error {
-	for _, b := range fixtureBatches(len(evs), func(i int) string { return evs[i].Key }, func(i int) string { return evs[i].Instance }) {
+	for _, b := range fixtureBatches(len(evs), func(i int) string { return evs[i].Key }, func(i int) string { return evs[i].OwnerID }, func(i int) string { return evs[i].Instance }) {
 		part := make([]storage.PropertySampleWrite, len(b.idx))
 		for k, i := range b.idx {
 			part[k] = evs[i]
@@ -83,7 +84,7 @@ func insertProperties(ctx context.Context, gw sampleSink, evs []storage.Property
 }
 
 func insertEvents(ctx context.Context, gw sampleSink, evs []storage.EventWrite) error {
-	for _, b := range fixtureBatches(len(evs), func(i int) string { return evs[i].Key }, func(i int) string { return evs[i].Instance }) {
+	for _, b := range fixtureBatches(len(evs), func(i int) string { return evs[i].Key }, func(i int) string { return evs[i].OwnerID }, func(i int) string { return evs[i].Instance }) {
 		part := make([]storage.EventWrite, len(b.idx))
 		for k, i := range b.idx {
 			part[k] = evs[i]

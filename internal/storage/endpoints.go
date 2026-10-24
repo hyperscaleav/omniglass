@@ -659,15 +659,16 @@ func (p *PG) RetryEndpoint(ctx context.Context, actorID, id, hostKey string, rea
 			return nil, err
 		}
 		// The pin is the one declared row a node-probe key admits, and only
-		// through this path (ADR-0161).
+		// through this path (ADR-0161). Its source names the path, the one
+		// mark the worklist trusts a declared pin by.
 		if err := admitWrites(ctx, tx, writeProperty, gatewayWriter(writerclass.HostKeyPin),
-			[]keyedWrite{{key: probekeys.SSHHostKey, instance: before.Name}}); err != nil {
+			[]keyedWrite{{key: probekeys.SSHHostKey, instance: before.Name, ownerKind: "component", owner: *before.ComponentID}}); err != nil {
 			return nil, err
 		}
 		if _, err := tx.Exec(ctx, `
-			insert into property (owner_kind, component_id, property_type_id, instance, provenance, value)
-			values ('component', $1::uuid, (select id from property_type where name = $4), $2, '`+declaredProvenance+`', to_jsonb($3::text))`,
-			*before.ComponentID, before.Name, hostKey, probekeys.SSHHostKey); err != nil {
+			insert into property (owner_kind, component_id, property_type_id, instance, provenance, source, value)
+			values ('component', $1::uuid, (select id from property_type where name = $4), $2, '`+declaredProvenance+`', $5, to_jsonb($3::text))`,
+			*before.ComponentID, before.Name, hostKey, probekeys.SSHHostKey, pinSource); err != nil {
 			return nil, fmt.Errorf("storage: pin host key for endpoint %q: %w", before.ID, err)
 		}
 	}
@@ -720,14 +721,23 @@ func latestRejection(ctx context.Context, q querier, componentID, instance strin
 	return v, nil
 }
 
+// pinSource is the source a declared pin row carries: the writer that wrote
+// it, the endpoint's audited :retry (ADR-0161). A declared pin row without it
+// came another way (the plain property route, before the writer check refused
+// it), and no read trusts it as the pin.
+const pinSource = string(writerclass.HostKeyPin)
+
 // hostKeyPin is an ssh endpoint's host key pin (#1032): the operator's
 // declared ssh-host-key, and the pin in force (the declared key, else the key
-// the node trusted on first use).
+// the node trusted on first use). The declared key is the latest set through
+// :retry alone (pinSource): a declared row any other path left, a value or a
+// tombstone, is neither delivered nor read as the pin it replaces.
 func hostKeyPin(ctx context.Context, q querier, componentID, instance string) (declared, pin string, err error) {
 	if err := q.QueryRow(ctx, `
 		select coalesce(
 			(select nullif(value, 'null'::jsonb) #>> '{}' from property
 			 where owner_kind = 'component' and component_id = $1::uuid and instance = $2 and provenance = 'declared'
+			   and source = '`+pinSource+`'
 			   and property_type_id = (select id from property_type where name = 'ssh-host-key')
 			 order by id desc limit 1), ''),
 			coalesce((select value #>> '{}' from property

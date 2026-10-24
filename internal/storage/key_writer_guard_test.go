@@ -195,13 +195,27 @@ func TestMigrationsWriteNoSamples(t *testing.T) {
 }
 
 // TestAdmitWrite pins the pure check every path runs, beyond the class table
-// writerclass holds: a node writes a node-probe key only under its task's
-// endpoint (never with none), and a calc rule writes only a key it outputs.
+// writerclass holds: a node writes only on the component its task collects
+// for, through an endpoint of it, and a node-probe key only under that
+// endpoint (never with none); and a calc rule writes only a key it outputs.
 func TestAdmitWrite(t *testing.T) {
 	probe := keyWriterOf{class: writerclass.NodeProbe}
 	calc := keyWriterOf{class: writerclass.Calc, rules: map[string]string{"r-1": "temp-avg"}}
 	collected := keyWriterOf{class: writerclass.Collected}
 	asRule := func(id string) KeyWriter { return calcWriter(&sampleLineage{ruleID: id, ruleName: "x", version: 1}) }
+	const compA, compB = "aaaaaaaa-0000-0000-0000-000000000001", "bbbbbbbb-0000-0000-0000-000000000002"
+	// node is a node writer as admitWrites leaves it: bound to compA when its
+	// endpoint is one of compA's, unbound otherwise.
+	node := func(ep string, held bool) KeyWriter {
+		w := NodeWriter(compA, ep)
+		if held {
+			w.bound = compA
+		}
+		return w
+	}
+	on := func(comp, key, instance string) keyedWrite {
+		return keyedWrite{key: key, instance: instance, ownerKind: "component", owner: comp}
+	}
 	cases := []struct {
 		name  string
 		kw    keyWriterOf
@@ -209,19 +223,25 @@ func TestAdmitWrite(t *testing.T) {
 		row   keyedWrite
 		admit bool
 	}{
-		{"node on its endpoint", probe, NodeWriter("ssh"), keyedWrite{"tcp-open", "ssh"}, true},
-		{"node on another endpoint", probe, NodeWriter("ssh"), keyedWrite{"tcp-open", "panel"}, false},
-		{"node with no instance", probe, NodeWriter("ssh"), keyedWrite{"tcp-open", ""}, false},
-		{"node bound to no endpoint", probe, NodeWriter(""), keyedWrite{"tcp-open", ""}, false},
-		{"push on a probe key", probe, PushWriter(), keyedWrite{"tcp-open", "ssh"}, false},
-		{"the pin on the host key", keyWriterOf{class: writerclass.NodeProbe}, gatewayWriter(writerclass.HostKeyPin), keyedWrite{"ssh-host-key", "ssh"}, true},
-		{"the pin on the gate", probe, gatewayWriter(writerclass.HostKeyPin), keyedWrite{"endpoint-rejection", "ssh"}, false},
-		{"its own rule", calc, asRule("r-1"), keyedWrite{"avg-temp", ""}, true},
-		{"another rule", calc, asRule("r-2"), keyedWrite{"avg-temp", ""}, false},
-		{"a push on a calc key", calc, PushWriter(), keyedWrite{"avg-temp", ""}, false},
-		{"an operator on a calc key", calc, gatewayWriter(writerclass.Operator), keyedWrite{"avg-temp", ""}, true},
-		{"a rule on a collected key", collected, asRule("r-1"), keyedWrite{"video-input", ""}, false},
-		{"a driver's instanced series", collected, NodeWriter("ssh"), keyedWrite{"uptime", "if-3"}, true},
+		{"node on its endpoint", probe, node("ssh", true), on(compA, "tcp-open", "ssh"), true},
+		{"node on another endpoint", probe, node("ssh", true), on(compA, "tcp-open", "panel"), false},
+		{"node with no instance", probe, node("ssh", true), on(compA, "tcp-open", ""), false},
+		{"node bound to no endpoint", probe, node("", false), on(compA, "tcp-open", ""), false},
+		{"node on another component's same-named endpoint", probe, node("ssh", true), on(compB, "tcp-open", "ssh"), false},
+		{"node naming an endpoint its component lacks", probe, node("panel", false), on(compA, "tcp-open", "panel"), false},
+		{"node writing for a system", collected, node("ssh", true), keyedWrite{key: "uptime", ownerKind: "system", owner: compA}, false},
+		{"push on a probe key", probe, PushWriter(), on(compA, "tcp-open", "ssh"), false},
+		{"the pin on the host key", keyWriterOf{class: writerclass.NodeProbe}, gatewayWriter(writerclass.HostKeyPin), on(compA, "ssh-host-key", "ssh"), true},
+		{"the pin on the gate", probe, gatewayWriter(writerclass.HostKeyPin), on(compA, "endpoint-rejection", "ssh"), false},
+		{"its own rule", calc, asRule("r-1"), keyedWrite{key: "avg-temp"}, true},
+		{"another rule", calc, asRule("r-2"), keyedWrite{key: "avg-temp"}, false},
+		{"a push on a calc key", calc, PushWriter(), keyedWrite{key: "avg-temp"}, false},
+		{"an operator on a calc key", calc, gatewayWriter(writerclass.Operator), keyedWrite{key: "avg-temp"}, true},
+		{"a rule on a collected key", collected, asRule("r-1"), keyedWrite{key: "video-input"}, false},
+		{"a driver's instanced series", collected, node("ssh", true), on(compA, "uptime", "if-3"), true},
+		{"a driver's series on another component", collected, node("ssh", true), on(compB, "uptime", "if-3"), false},
+		{"a command's lifecycle event by a push", keyWriterOf{class: writerclass.CommandLifecycle}, PushWriter(), on(compA, "command-issued", ""), false},
+		{"a command's lifecycle event by its command", keyWriterOf{class: writerclass.CommandLifecycle}, gatewayWriter(writerclass.Command), on(compA, "command-issued", ""), true},
 	}
 	for _, c := range cases {
 		err := admitWrite(c.kw, c.w, c.row)

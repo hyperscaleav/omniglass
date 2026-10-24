@@ -86,6 +86,9 @@ func upsertProductPropertyRow(ctx context.Context, q querier, productID string, 
 	if _, err := resolveProductRef(ctx, q, productID); err != nil {
 		return nil, ErrTypeNotFound
 	}
+	if err := contractKey(spec.PropertyTypeName); err != nil {
+		return nil, err
+	}
 	if err := requireProperty(ctx, q, spec.PropertyTypeName); err != nil {
 		return nil, err
 	}

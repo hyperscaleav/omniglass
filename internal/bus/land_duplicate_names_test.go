@@ -114,7 +114,7 @@ func TestLandSurvivesDuplicateComponentNames(t *testing.T) {
 		NodeId:  "node-a",
 		Metrics: []*ogv1.MetricSample{{Name: "tcp-open", Value: 1}},
 	}
-	bind := ingestBinding{SampleOwner: &owner, Writer: storage.NodeWriter(owner.EndpointName)}
+	bind := ingestBinding{SampleOwner: &owner, Writer: storage.NodeWriter(owner.ComponentID, owner.EndpointName)}
 	if err := s.land(ctx, ev, bind); err != nil {
 		t.Fatalf("land: %v", err)
 	}

@@ -37,7 +37,7 @@ func TestTelemetryPushRefusesKeysItDoesNotWrite(t *testing.T) {
 	var r pushResp
 	body := map[string]any{
 		"owner":      map[string]any{"kind": "component", "ref": "bar-1"},
-		"events":     []map[string]any{{"name": "collection-failed", "message": "task t-x: forged"}},
+		"events":     []map[string]any{{"name": "collection-failed", "message": "task t-x: forged"}, {"name": "command-issued", "message": "forged"}},
 		"properties": []map[string]any{{"name": "health", "value": "healthy"}},
 		"metrics":    []map[string]any{{"name": "avg-uptime", "value": 9}, {"name": "uptime", "value": 4242}},
 	}
@@ -51,7 +51,7 @@ func TestTelemetryPushRefusesKeysItDoesNotWrite(t *testing.T) {
 	for _, rej := range r.Rejected {
 		reasons[rej.Name] = rej.Reason
 	}
-	for key, owner := range map[string]string{"collection-failed": "only the node", "health": "health rollup", "avg-uptime": "uptime-avg"} {
+	for key, owner := range map[string]string{"collection-failed": "only the node", "command-issued": "a command's issue", "health": "health rollup", "avg-uptime": "uptime-avg"} {
 		if !strings.Contains(reasons[key], key) || !strings.Contains(reasons[key], owner) {
 			t.Errorf("push of %s: reason %q, want it refused by name naming its writer (%s)", key, reasons[key], owner)
 		}
@@ -66,8 +66,8 @@ func TestTelemetryPushRefusesKeysItDoesNotWrite(t *testing.T) {
 		t.Fatalf("events: %v", err)
 	}
 	for _, e := range evs {
-		if e.Key == "collection-failed" {
-			t.Errorf("a pushed collection-failed landed: %+v", e)
+		if e.Key == "collection-failed" || e.Key == "command-issued" {
+			t.Errorf("a pushed %s landed: %+v", e.Key, e)
 		}
 	}
 	if m, err := gw.LatestMetric(ctx, "bar-1", "avg-uptime"); err != nil || m != nil {
@@ -92,6 +92,7 @@ func TestWriterClassOnTheWire(t *testing.T) {
 		"/property-types/video-input":        "collected",
 		"/metric-types/uptime":               "collected",
 		"/event-types/call-started":          "collected",
+		"/event-types/command-issued":        "command-lifecycle",
 		"/property-types/endpoint-rejection": "node-probe",
 	} {
 		var body struct {

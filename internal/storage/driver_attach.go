@@ -332,10 +332,15 @@ func loadDriverRef(ctx context.Context, q querier, ref string) (*Driver, error) 
 
 // bakeEmits resolves each emit's lane (the compile step of the authoring
 // model, ADR-0135) into the shared runtime unit the node parses back
-// (driver.BakedEmit), so the two sides can never drift on the shape.
+// (driver.BakedEmit), so the two sides can never drift on the shape. An emit
+// the writer ruling refuses (ADR-0161), which only a spec stored before the
+// refusal can carry, is never baked: the boot audit names it instead.
 func bakeEmits(emits []driver.Emit, cat catalogMaps) ([]driver.BakedEmit, error) {
 	out := make([]driver.BakedEmit, 0, len(emits))
 	for _, em := range emits {
+		if !emitAdmitted(em.Name, cat.calcOwned) {
+			continue
+		}
 		lane, ok := cat.LaneOf(em.Name)
 		if !ok {
 			// Validated at spec write; a catalog row deleted since is the one

@@ -49,6 +49,20 @@
     ]
   },
   {
+    "class": "command-lifecycle",
+    "reserved": true,
+    "doc": "the events a command's own lifecycle writes on its owner's timeline",
+    "keys": [
+      "command-issued"
+    ],
+    "admits": [
+      {
+        "writer": "command",
+        "doc": "a command's intended value and caused event"
+      }
+    ]
+  },
+  {
     "class": "calc",
     "reserved": false,
     "doc": "a key a calc rule names as its output",
