@@ -52,7 +52,7 @@ var Registry = []Var{
 	{Key: "OMNIGLASS_SETTINGS_FILE", Scope: "server",
 		Doc: "optional operator settings file (JSON or YAML), the layer between code defaults and the DB override"},
 	{Key: "OMNIGLASS_READY_FILE", Scope: "server",
-		Doc: "path the server writes once it serves: a JSON object of the addresses it bound (addr, nats_addr) and the bus URL it advertises (nats_url), for a supervisor or test that asked for port 0; removed at shutdown"},
+		Doc: "path the server writes once it serves: a JSON object of the addresses it bound (addr, nats_addr) and the bus URL it advertises (nats_url), for a supervisor or test that asked for port 0; cleared at boot, removed at a graceful shutdown"},
 	{Key: "OMNIGLASS_SECRET_KEY", Scope: "server",
 		Doc: "base64 32-byte key-encryption key for secrets at rest; wins over the key file"},
 	{Key: "OMNIGLASS_SECRET_KEY_FILE", Scope: "server",

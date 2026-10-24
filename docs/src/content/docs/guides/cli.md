@@ -38,8 +38,10 @@ embedded bus nodes connect to on `OMNIGLASS_NATS_ADDR` (`127.0.0.1:4222`). Eithe
 may name port 0, which binds whatever free port the kernel hands out, so a second server on
 the same host (a test run, another worktree's stack) never collides with the first. To learn
 the ports it got, set `OMNIGLASS_READY_FILE` to a path: once both listeners are bound, the
-server writes the addresses there as one JSON object, written whole or not at all, and
-removes the file when it shuts down.
+server writes the addresses there as one JSON object, written whole or not at all. A file
+already at that path (one a killed server left) is cleared first thing at boot, before
+anything that can fail, and the server removes its own at a graceful shutdown (SIGINT or
+SIGTERM), so a file you find there names a live server's ports.
 
 ```json
 {"addr":"127.0.0.1:41234","nats_addr":"127.0.0.1:41236","nats_url":"nats://127.0.0.1:41236"}

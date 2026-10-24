@@ -7,6 +7,7 @@ package e2e
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
@@ -124,28 +125,52 @@ func startServer(t *testing.T, bin string, env ...string) runningServer {
 		cancel()
 		t.Fatalf("start server: %v", err)
 	}
-	exited := make(chan error, 1)
-	go func() { exited <- cmd.Wait() }()
-	t.Cleanup(func() { cancel(); <-exited })
+	p := watch(cmd)
+	t.Cleanup(func() { cancel(); <-p.done })
+	srv, err := awaitReadyFile(ready, p, 60*time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return srv
+}
 
-	deadline := time.After(60 * time.Second)
+// process is a started child whose exit any number of readers can observe:
+// done is closed when it exits, and err holds its Wait result from then on.
+// A value sent once would be taken by whichever reader saw it first, leaving
+// the cleanup that stops the server blocked forever.
+type process struct {
+	done chan struct{}
+	err  error
+}
+
+// watch observes cmd's exit.
+func watch(cmd *exec.Cmd) *process {
+	p := &process{done: make(chan struct{})}
+	go func() { p.err = cmd.Wait(); close(p.done) }()
+	return p
+}
+
+// awaitReadyFile waits for the server to write its ready file at path, and
+// fails if the process exits first or the file is not there within within.
+func awaitReadyFile(path string, p *process, within time.Duration) (runningServer, error) {
+	deadline := time.After(within)
 	for {
-		if b, err := os.ReadFile(ready); err == nil {
+		if b, err := os.ReadFile(path); err == nil {
 			var r struct {
 				Addr     string `json:"addr"`
 				NatsAddr string `json:"nats_addr"`
 				NatsURL  string `json:"nats_url"`
 			}
 			if err := json.Unmarshal(b, &r); err != nil || r.Addr == "" || r.NatsAddr == "" || r.NatsURL == "" {
-				t.Fatalf("ready file %q (%v), want addr, nats_addr and nats_url", b, err)
+				return runningServer{}, fmt.Errorf("ready file %q (%v), want addr, nats_addr and nats_url", b, err)
 			}
-			return runningServer{URL: "http://" + r.Addr, Addr: r.Addr, NatsAddr: r.NatsAddr, NatsURL: r.NatsURL}
+			return runningServer{URL: "http://" + r.Addr, Addr: r.Addr, NatsAddr: r.NatsAddr, NatsURL: r.NatsURL}, nil
 		}
 		select {
-		case err := <-exited:
-			t.Fatalf("server exited before it was ready: %v", err)
+		case <-p.done:
+			return runningServer{}, fmt.Errorf("server exited before it was ready: %v", p.err)
 		case <-deadline:
-			t.Fatalf("server wrote no ready file within 60s (%s)", ready)
+			return runningServer{}, fmt.Errorf("server wrote no ready file within %s (%s)", within, path)
 		case <-time.After(50 * time.Millisecond):
 		}
 	}

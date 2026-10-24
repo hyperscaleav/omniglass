@@ -7836,7 +7836,7 @@ port went. Now the server binds port 0 itself and reports what it got. `OMNIGLAS
 bus reads port 0 as ephemeral, where nats-server alone reads it as its default 4222; and a new
 `OMNIGLASS_READY_FILE` names a path the server writes, whole or not at all, once both listeners are
 bound: a JSON object of the bound `addr` and `nats_addr` and the `nats_url` it advertises, removed at
-shutdown. The advertised bus URL, when `OMNIGLASS_NATS_URL` is unset, is now the address the bus bound
+a graceful shutdown. The advertised bus URL, when `OMNIGLASS_NATS_URL` is unset, is now the address the bus bound
 (loopback for a wildcard host) rather than a fixed `nats://127.0.0.1:4222`, which is the same URL for
 every configuration that worked before and the right one for a bus on port 0. The end-to-end package
 starts every server through one helper, `startServer`, which sets the listen addresses to port 0 and
@@ -7850,3 +7850,12 @@ fixed one passed four in four; the end-to-end package run twice side by side, th
 run. The
 [CLI guide](/guides/cli/#a-server-on-ports-it-picks) teaches the ready file, and the deployment guides'
 configuration tables render the new variable from the registry.
+
+The review's fixes, each with a test that failed first: the harness observes the server's exit by
+closing a channel rather than sending its one value, since a server that died before it was ready
+had its exit taken by the wait, leaving the cleanup that stops it blocked until the suite's timeout
+(every later test aborted, the boot error never printed); the boot clears a ready file already at
+the path before anything that can fail, since a server killed outright runs no shutdown and its file
+named a dead run's ports, which the next boot left in place throughout, or for good when that boot
+failed; and the test-driven page scopes the one-helper rule to `internal/e2e`, noting that the browser
+tier and the walkthrough stack isolate through a private Docker network per run.

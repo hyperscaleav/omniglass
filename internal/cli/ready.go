@@ -2,7 +2,9 @@ package cli
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 )
@@ -17,11 +19,26 @@ type readyReport struct {
 	NatsURL  string `json:"nats_url"`
 }
 
+// clearReadyFile removes a ready file an earlier run left at path, which a
+// server stopped without its shutdown (SIGKILL, the OOM killer) never
+// removes. The boot clears it before anything that can fail or take time,
+// so a reader polling the path never takes a dead run's ports for this
+// run's. An empty path, or no file, is nothing to clear.
+func clearReadyFile(path string) error {
+	if path == "" {
+		return nil
+	}
+	if err := os.Remove(path); err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return fmt.Errorf("ready file: clear a stale one: %w", err)
+	}
+	return nil
+}
+
 // writeReadyFile writes r to path (OMNIGLASS_READY_FILE) whole or not at
 // all: to a temporary name beside it, then renamed into place, so a reader
 // polling for the file never reads half of one. The returned remove deletes
-// it again, for the server's shutdown, so the file names a live server. An
-// empty path writes nothing.
+// it again, for a graceful shutdown; a server killed outright leaves it for
+// the next boot's clearReadyFile. An empty path writes nothing.
 func writeReadyFile(path string, r readyReport) (remove func(), err error) {
 	if path == "" {
 		return func() {}, nil

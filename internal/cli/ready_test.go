@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -46,7 +47,7 @@ func TestTheReadyFileHoldsTheBoundAddresses(t *testing.T) {
 	}
 }
 
-// A ready file left by an earlier run is replaced, never read as this run's.
+// A file already at the path is replaced by this run's report.
 func TestTheReadyFileReplacesAStaleOne(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "ready.json")
 	if err := os.WriteFile(path, []byte(`{"addr":"127.0.0.1:1"}`), 0o600); err != nil {
@@ -77,5 +78,25 @@ func TestAnUnwritableReadyFileIsAnError(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "missing", "ready.json")
 	if _, err := writeReadyFile(path, readyReport{Addr: "127.0.0.1:2"}); err == nil {
 		t.Fatal("a ready file in a missing directory was accepted")
+	}
+}
+
+// A ready file a killed server left behind (SIGKILL runs no shutdown) is
+// cleared before the boot does anything that can fail or take time, so a
+// reader polling that path never takes a dead run's ports for this run's,
+// during the boot or after a boot that fails.
+func TestABootClearsAStaleReadyFileFirst(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "ready.json")
+	if err := os.WriteFile(path, []byte(`{"addr":"127.0.0.1:41234","nats_addr":"127.0.0.1:41236","nats_url":"nats://127.0.0.1:41236"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("OMNIGLASS_READY_FILE", path)
+	t.Setenv("OMNIGLASS_DSN", "postgres://og:og@127.0.0.1:1/og?sslmode=disable")
+	if err := runServer(context.Background(), ""); err == nil {
+		t.Fatal("a server with an unreachable database booted")
+	}
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		b, _ := os.ReadFile(path)
+		t.Fatalf("a failed boot left the stale ready file %s (stat: %v)", b, err)
 	}
 }

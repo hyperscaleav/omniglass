@@ -56,7 +56,7 @@
   {
    "key": "OMNIGLASS_READY_FILE",
    "scope": "server",
-   "doc": "path the server writes once it serves: a JSON object of the addresses it bound (addr, nats_addr) and the bus URL it advertises (nats_url), for a supervisor or test that asked for port 0; removed at shutdown"
+   "doc": "path the server writes once it serves: a JSON object of the addresses it bound (addr, nats_addr) and the bus URL it advertises (nats_url), for a supervisor or test that asked for port 0; cleared at boot, removed at a graceful shutdown"
   },
   {
    "key": "OMNIGLASS_SECRET_KEY",
