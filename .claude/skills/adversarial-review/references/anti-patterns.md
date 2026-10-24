@@ -250,12 +250,17 @@ region and a mask line in the frontmatter, per the entity blade's duration masks
   that is also a seeded property type, so the operator push lane accepts it.
 - **Failure:** a push grant plants a gate (commands fail, probes drop rungs) or lifts one with a
   future-dated `none`, an unaudited bypass of the audited `:retry`.
-- **Fix:** refuse node-control keys on the push lane by name (`probekeys.IsNodeControl`,
-  internal/api/telemetry.go).
+- **Fix:** refuse every node-only key on the push lane by name, on every lane
+  (`nodeOnlyRejection` over `probekeys.IsNodeOnly`, internal/api/telemetry.go).
 - **Also (#1059):** a node's account of itself that a surface reads as the node's (a held
   session's `session-state` and `session-reason`) is the same class: a push read a rejected
-  session up, hiding its Retry, or planted a reason the node never scrubbed. Any new
-  node-authored key a console renders as "the node says" joins the list.
+  session up, hiding its Retry, or planted a reason the node never scrubbed.
+- **Also (#1080):** so is every native probe key (the verdict and its rungs, the probe metrics
+  and timings), so the ruling is per key in `internal/collection/probekeys`: `nodeOnly`, or
+  `pushable` with a one-line reason. `TestEveryKeyRuled` fails on a declared key ruled neither,
+  and `TestReachabilityReadsOnlyNodeOnlyKeys` on a key the reachability read serves that is not
+  node-only. A new node-authored key is declared there, not as a literal elsewhere: a key
+  declared outside `probekeys` is invisible to the ruling (`collection-failed` is, #1086).
 
 
 ## unvalidated-param-value (fixed; found by the #1061 in-place edit review)

@@ -21,7 +21,7 @@ Built today: the Huma-over-chi API with the OpenAPI 3.1 document generated from 
 ([ADR-0068](/architecture/decisions/#adr-0068-the-api-error-model-is-the-stock-rfc-9457-shape)), proven
 on `/auth`, `/roles`, `/locations`, `/systems`, `/components`, `/nodes`, `/endpoints`, `/tasks`, the
 first-party ingest write `POST /telemetry:push` (gated `telemetry:push`, owner declared in the body and
-fenced by the caller's scope), the per-component reachability read, the type registries, the
+fenced by the caller's scope, every native probe key refused by name), the per-component reachability read, the type registries, the
 `/products` and `/standards` catalogs, the classifier-contract and instance-value property routes, the
 role declaration, resolution, and staffing routes, and the component alarm plus system and location
 [health](#health-the-verdict-and-why) reads. The node `:enroll` and `:claim` custom methods are the
@@ -460,8 +460,11 @@ out-of-scope component is a non-disclosing 404 (a deliberate early exception to
   500 characters), and the `rejection` a terminal refusal holds (the rung and class of
   `endpoint-rejection`; the connection fingerprint it carries is never served), which the console's
   session pill and ladder render (#1059). Teardown publishes no state, which is why a session is
-  served only while one is held; and like the gate, a session's state and reason are the node's
-  own facts, which `POST /telemetry:push` refuses.
+  served only while one is held. Every key this read composes is a native probe key, the node's own
+  observation: the verdict and its rungs, the probe metrics and timings, a session's state and
+  reason, the gate. `POST /telemetry:push` refuses each by name on every lane, whatever instance it
+  names (#1080, [ADR-0158](/architecture/decisions/#adr-0158-one-connection-fingerprint-gates-every-connection-on-a-ladder-the-driver-declares)
+  point 5), so no push can stand in for the node in any of it.
 - `GET /components/{name}/events` is the log-kind mirror: the component's recent **log occurrences**
   (the [`event` log sink](/architecture/core-entities/#the-event-sink-the-first-arc-owned-occurrence)),
   newest first, bounded to the last 24 hours and capped at 200 rows; each row carries `ts`, the

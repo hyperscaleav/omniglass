@@ -109,12 +109,12 @@ func TestTelemetryPushSurvivesDuplicateComponentNames(t *testing.T) {
 	body := map[string]any{
 		"owner":   map[string]any{"kind": "component", "ref": compA.ID},
 		"source":  "test",
-		"metrics": []map[string]any{{"name": "icmp-rtt-avg", "value": 7.5}},
+		"metrics": []map[string]any{{"name": "uptime", "value": 7.5}},
 	}
 	c.do(ownerTok, http.MethodPost, "/telemetry:push", body, http.StatusAccepted)
 
 	waitFor(t, "the metric row on compA", func() bool {
-		m, err := gw.LatestMetric(ctx, compA.ID, "icmp-rtt-avg")
+		m, err := gw.LatestMetric(ctx, compA.ID, "uptime")
 		return err == nil && m != nil && m.Value == 7.5
 	})
 	// compB must never see it: if the route had published the name instead
@@ -123,11 +123,11 @@ func TestTelemetryPushSurvivesDuplicateComponentNames(t *testing.T) {
 	// Checking compB is empty here is the cross-contamination half of the
 	// assertion, matching the pattern the storage-layer duplicate-name tests
 	// already use.
-	mB, err := gw.LatestMetric(ctx, compB.ID, "icmp-rtt-avg")
+	mB, err := gw.LatestMetric(ctx, compB.ID, "uptime")
 	if err != nil {
 		t.Fatalf("latest metric compB: %v", err)
 	}
 	if mB != nil {
-		t.Fatalf("compB icmp-rtt-avg = %+v, want nil (cross-contaminated by the shared name)", mB)
+		t.Fatalf("compB uptime = %+v, want nil (cross-contaminated by the shared name)", mB)
 	}
 }

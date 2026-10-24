@@ -4,6 +4,8 @@ import (
 	"strings"
 	"testing"
 	"unicode/utf8"
+
+	"github.com/hyperscaleav/omniglass/internal/collection/probekeys"
 )
 
 // TestParseRejection holds the endpoint-rejection read (#1059): a gate reads
@@ -52,5 +54,22 @@ func TestCapReason(t *testing.T) {
 	}
 	if n := utf8.RuneCountInString(got); n != maxReasonRunes+1 || !strings.HasSuffix(got, "…") {
 		t.Fatalf("capReason kept %d runes (want %d and an ellipsis): %q", n, maxReasonRunes+1, got[len(got)-8:])
+	}
+}
+
+// TestReachabilityReadsOnlyNodeOnlyKeys ties the reachability read to #1080's
+// ruling: every key it serves as the node's account (the verdict, its rungs,
+// the probe layers and their timings, a held session's state and reason, the
+// gate) is one the push lane refuses, so no push can stand in for the node
+// here. A new key read here that is not ruled node-only fails this test.
+func TestReachabilityReadsOnlyNodeOnlyKeys(t *testing.T) {
+	keys := []string{verdictKey, responsiveKey, authKey, sessionStateKey, sessionReasonKey, rejectionKey}
+	for _, l := range reachLayers {
+		keys = append(keys, l.SignalKey, l.TimingKey)
+	}
+	for _, key := range keys {
+		if !probekeys.IsNodeOnly(key) {
+			t.Errorf("the reachability read serves %s as the node's, but probekeys does not rule it node-only", key)
+		}
 	}
 }
