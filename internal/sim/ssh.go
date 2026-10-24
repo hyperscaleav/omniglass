@@ -35,10 +35,21 @@ import (
 // profile-declared Commands. Unknown commands return a one-line error
 // and a non-zero exit status.
 func (d *Device) StartSSH(port int, defaultUser, defaultPassword string, permissive bool) error {
-	hostKey, err := generateHostKey()
-	if err != nil {
-		return fmt.Errorf("host key: %w", err)
+	_, err := d.startSSH(port, defaultUser, defaultPassword, permissive)
+	return err
+}
+
+// startSSH binds and serves the SSH listener and returns the address it
+// bound.
+func (d *Device) startSSH(port int, defaultUser, defaultPassword string, permissive bool) (net.Addr, error) {
+	if d.sshHostKey == nil {
+		k, err := generateHostKey()
+		if err != nil {
+			return nil, fmt.Errorf("host key: %w", err)
+		}
+		d.sshHostKey = k
 	}
+	hostKey := d.sshHostKey
 
 	effectivePermissive := permissive
 	if !effectivePermissive && defaultPassword == "" {
@@ -50,6 +61,7 @@ func (d *Device) StartSSH(port int, defaultUser, defaultPassword string, permiss
 
 	cfg := &ssh.ServerConfig{
 		PasswordCallback: func(conn ssh.ConnMetadata, pass []byte) (*ssh.Permissions, error) {
+			d.sshPasswordTries.Add(1)
 			if effectivePermissive {
 				return nil, nil
 			}
@@ -64,7 +76,11 @@ func (d *Device) StartSSH(port int, defaultUser, defaultPassword string, permiss
 	addr := fmt.Sprintf("%s:%d", d.LoopbackIP.String(), port)
 	lis, err := net.Listen("tcp", addr)
 	if err != nil {
-		return fmt.Errorf("listening on %s: %w", addr, err)
+		return nil, fmt.Errorf("listening on %s: %w", addr, err)
+	}
+	addr = lis.Addr().String()
+	if reg := d.sshSession; reg != nil {
+		reg.setPort(boundPort(lis.Addr()))
 	}
 	tracked := trackConns(lis, d.logConnect)
 	d.sshListener = tracked
@@ -82,7 +98,7 @@ func (d *Device) StartSSH(port int, defaultUser, defaultPassword string, permiss
 			go d.serveSSHConn(conn, cfg)
 		}
 	}()
-	return nil
+	return lis.Addr(), nil
 }
 
 // StopSSH closes the SSH listener and every connection it accepted.
@@ -250,6 +266,31 @@ func (d *Device) runSSHShell(ch ssh.Channel, remote string) {
 	// to murder them mid-session.
 	rd := bufio.NewReader(ch)
 	runShellSession(d, sess, rd, ch, d.sshPort(), "ssh")
+}
+
+// SSHPasswordTries counts the passwords the ssh face was sent, right or
+// wrong: a test reads how often a credential was tried (#1060).
+func (d *Device) SSHPasswordTries() int64 { return d.sshPasswordTries.Load() }
+
+// RotateSSHHostKey replaces the device's SSH host key; the next StartSSH
+// serves the new one. A real device's key changes when it is replaced or
+// reimaged, or when something sits in the middle: the collector's pin must
+// notice (#1032).
+func (d *Device) RotateSSHHostKey() error {
+	k, err := generateHostKey()
+	if err != nil {
+		return err
+	}
+	d.sshHostKey = k
+	return nil
+}
+
+// SSHHostKey is the device's current SSH host key, nil before StartSSH.
+func (d *Device) SSHHostKey() ssh.PublicKey {
+	if d.sshHostKey == nil {
+		return nil
+	}
+	return d.sshHostKey.PublicKey()
 }
 
 // sshPort derives the port number the SSH listener bound to. This is a

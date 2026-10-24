@@ -14,8 +14,6 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/sim/profiles"
 )
 
-const benchPortShift = 25000
-
 // thousandDevices spreads n devices across every catalog profile, each on
 // its own loopback address.
 func thousandDevices(b *testing.B, store *profile.Store, n int) []DeviceSnapshot {
@@ -54,7 +52,7 @@ func BenchmarkServeThousandDevices(b *testing.B) {
 		baseG := runtime.NumGoroutine()
 
 		e := NewEngine(store, profiles.Templates())
-		e.SetPortMap(PrivilegedPortShift(benchPortShift))
+		e.SetPortMap(EphemeralPorts)
 		start := time.Now()
 		if err := e.Sync(snaps); err != nil {
 			b.Fatalf("sync: %v", err)
@@ -62,10 +60,14 @@ func BenchmarkServeThousandDevices(b *testing.B) {
 		startup := time.Since(start)
 
 		// A device on the far end of the fleet answers.
-		last := snaps[len(snaps)-1]
-		c, err := net.DialTimeout("tcp", net.JoinHostPort(last.LoopbackIP, fmt.Sprint(80+benchPortShift)), time.Second)
-		if err == nil {
-			c.Close()
+		devs := e.Devices()
+		for _, f := range devs[len(devs)-1].Faces() {
+			if f.Protocol == "http" {
+				if c, err := net.DialTimeout("tcp", f.Addr.String(), time.Second); err == nil {
+					c.Close()
+				}
+				break
+			}
 		}
 
 		runtime.GC()

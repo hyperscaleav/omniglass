@@ -1,6 +1,7 @@
 import { For, Show } from "solid-js";
 import { useNavigate } from "@solidjs/router";
 import type { MapMarker, StandardMapDecl } from "../lib/system_map";
+import { verdictDot, type Verdict } from "../lib/health";
 import Eyebrow from "./Eyebrow";
 
 // The room, top-down (#791, ADR-0128): the standard's declared positions
@@ -8,13 +9,21 @@ import Eyebrow from "./Eyebrow";
 // this position sits" and "who holds it". Percent positioning against an
 // aspect-ratio box, so the same declaration renders at any width and jsdom
 // can assert it without layout.
-export default function SystemMap(props: { decl: StandardMapDecl; markers: MapMarker[]; onOpen?: (componentId: string) => void }) {
+// Each occupied dot wears its component's own verdict (#1071), read through
+// the same lookup the component rows use, so the map and the rows never
+// disagree about one component.
+export default function SystemMap(props: {
+  decl: StandardMapDecl;
+  markers: MapMarker[];
+  verdict?: (componentId: string) => Verdict | null;
+  onOpen?: (componentId: string) => void;
+}) {
   const navigate = useNavigate();
   return (
     <div class="flex flex-col gap-2 p-4">
       <Eyebrow
         label="Map"
-        hint="The standard declares where each role position sits in the room; every system built to it renders the same map. A solid marker is the component holding that position; a hollow one is a position nobody staffed. Click a component to open it."
+        hint="The standard declares where each role position sits in the room; every system built to it renders the same map. A solid marker is the component holding that position, in its own health colour; a hollow one is a position nobody staffed. Click a component to open it."
       />
       <div
         data-testid="system-map"
@@ -51,7 +60,7 @@ export default function SystemMap(props: { decl: StandardMapDecl; markers: MapMa
                     style={{ left: `${m.x * 100}%`, top: `${m.y * 100}%` }}
                     onClick={() => (props.onOpen ? props.onOpen(occ().componentId) : navigate(`/components/${occ().componentId}`))}
                   >
-                    <span class="h-2.5 w-2.5 flex-none rounded-full" classList={{ "bg-error": occ().down, "bg-base-content/35": !occ().down }} />
+                    <span class={`h-2.5 w-2.5 flex-none rounded-full ${verdictDot(props.verdict?.(occ().componentId) ?? null, occ().down)}`} />
                     <span class="whitespace-nowrap text-[11px]" classList={{ "text-error": occ().down }}>{label()}</span>
                   </button>
                 )}

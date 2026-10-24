@@ -48,7 +48,7 @@ plus a `template`-scoped binding the sample arc lacks (and unlike samples, confi
 
 ## config: declared device state, keyed to a signal
 
-::::design[The `config` member, tracked in #153]
+::::design[The `config` member, tracked in #603]
 A **config** item is the **declared side of a canonical signal**: `video-input` is one key with two
 sides, the **observed** value the device reports (a `property` sample, provenance=observed) and the
 **declared** value you set, sharing the **key**: under the lane model the declared value is itself
@@ -177,7 +177,7 @@ platform credential stays admin/owner-only beside an operational device secret. 
   **delete** stays admin-and-owner. `admin` holds `secret:>` (reaching the `:admin` tier a two-token
   `secret:*` cannot); `owner`'s `>` covers everything.
 
-:::design[The secret lifecycle and validity health, tracked in #153; rotation flows are ADR-0050, the timer #419]
+:::design[The secret lifecycle and validity health: rotation flows are ADR-0050, the timer #419]
 **Lifecycle is a later slice**, each behavior a template-declared use of functions, time, and flows:
 
 - **refresh** (an `oauth2` access token) is **lazy**: refreshed on use within a skew window of
@@ -265,17 +265,16 @@ property is a named slot a whole class carries, set per instance ("every Boreal 
 
 The **provenance** column is why this is one primitive: the same name and store hold a value a device
 **observed**, a rule **calculated**, config **intended**, and an operator **declared**.
+All four have writers: ingest lands `observed`, the command pillar `intended`, the operator's write
+`declared`, and since #1017 a [calc rule](/architecture/calculations/) writes `calculated` through the
+same sample-write path.
 
-:::design[Target design: the cross-owner cascade (#291), the `calculated` producer (#430), interpolation and sources (#296), file typing (#242), and the driver column (#489)]
+:::design[Target design: the cross-owner cascade (#291), interpolation and sources (#296), file typing (#242), and the driver column (#603)]
 What the design intends, and this slice does **not** yet do:
 
 - **The cross-owner cascade** (`product -> location -> system -> component`, deepest-wins): today a
   value resolves on **one instance alone** (its own declared value, else its classifier's contract
   default), no walk **across** owners yet.
-- **The `calculated` producer**: ingest upserts `observed` and the command pillar `intended` into
-  the `property` cache; only `calculated` (a rule's output) has a seat and no writer. The config
-  section's "declared intent lives in config, not as a row" reads against this newer shape;
-  reconciling the two is the config member's own slice.
 - **Macro interpolation of a value** (the consumer of `$var:` / `$sec:` / `$sample:`): a value
   holds a literal today.
 - **The `sources` model**: per-property allowed origins
@@ -320,7 +319,7 @@ synonyms) so `Prod`, `prod `, and `PROD` resolve to one value.
 - **Interpolation** renders variables (`$var:`) and secret fields (`$sec:`) into requests (a later
   consumer slice for both); config is read by key like a sample.
 
-:::design[The `config` member's observed-side worker, tracked in #153]
+:::design[The `config` member's observed-side worker, tracked in #603]
 The observed side of config is maintained by one **event-driven worker** (the one-worker-plus-stages
 model): when a `property` sample lands whose `(owner, key)` a config item is keyed to, it refreshes that item's
 cached observed value, reverse-indexed so "is this sample a config's observed side?" is a sargable
@@ -347,7 +346,7 @@ command -> device
 
 ## How this changes provenance
 
-:::design[The `config` member, tracked in #153]
+:::design[The `config` member, tracked in #603]
 Modeling declared state as **config** keeps **declared** out of the sample provenances: samples carry
 three ([observed, calculated, intended](/architecture/properties/#provenance-how-we-know-a-value)),
 and declared intent lives in config, keyed to the same signal but stored down the cascade. The

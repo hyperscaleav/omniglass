@@ -1303,9 +1303,29 @@ export interface paths {
         head?: never;
         /**
          * Update an endpoint
-         * @description Patches an endpoint's node placement, params or label; an empty label clears it and the surface falls back to the derived name. Gated by endpoint:update; read and update scopes (through the component) drive the 404 versus 403 split.
+         * @description Patches an endpoint's node placement, params, label, or (driver-attached) its connection inputs in place: the host, port and attached secret references, validated against the driver's declared inputs, the endpoint's tasks re-derived in the same transaction. A value the driver refuses is a 400 naming the field. An empty label clears it and the surface falls back to the derived name. Gated by endpoint:update; read and update scopes (through the component) drive the 404 versus 403 split.
          */
         patch: operations["update-endpoint"];
+        trace?: never;
+    };
+    "/endpoints/{id}:retry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Retry an endpoint's gated connections
+         * @description Moves the endpoint's retry counter, which is part of its connection fingerprint: a gate a refusal retrying cannot fix holds (a wrong credential, a changed host key, a reply its driver declares terminal) lifts, the node recycles the endpoint's held session, and every connection to it is attempted again. Fixing the secret, the address, the transport or the driver's login needs no retry: the change moves the fingerprint itself. An unrelated edit (a label) moves nothing. For an ssh endpoint, host_key names a host key to trust (the offered key a host-key rejection names): it becomes the declared pin and recycles the session onto it whatever its state, an audited acceptance of the change. While the endpoint's gate names an offered key, host_key must be that key, so a trust confirmed against a refusal the record has since moved past is a 409 and changes nothing. Audited, a trusted key with the pin it replaced (old) and the pin it set (new). Gated by endpoint:retry; read and retry scopes (through the component) drive the 404 versus 403 split.
+         */
+        post: operations["retry-endpoint"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/event-rules": {
@@ -4379,7 +4399,7 @@ export interface paths {
         put?: never;
         /**
          * Push telemetry for an owner
-         * @description Accepts per-lane observations (metrics, properties, events) and raw log lines for one owner and publishes them onto the ingest lane. Each lane validates against its own catalog: an unregistered name is rejected and reported in the response rather than silently dropped, and a property or event payload violating its type's schema refuses the batch with a 422. Gated by telemetry:push, and the caller's scope must cover the declared owner; an out-of-scope owner is a non-disclosing 404.
+         * @description Accepts per-lane observations (metrics, properties, events) and raw log lines for one owner and publishes them onto the ingest lane. Each lane validates against its own catalog: an unregistered name is rejected and reported in the response rather than silently dropped, and a property or event payload violating its type's schema refuses the batch with a 422. A key a native probe writes (a reachability verdict or rung, a probe metric or timing, a held session's state) is a node's own observation and is rejected by name on every lane; only the node writes it. Gated by telemetry:push, and the caller's scope must cover the declared owner; an out-of-scope owner is a non-disclosing 404.
          */
         post: operations["push-telemetry"];
         delete?: never;
@@ -4738,6 +4758,8 @@ export interface components {
             image_base64: string;
         };
         CalcErrorBody: {
+            /** @description The registered diagnostic that gave it, when one did (documented on the expressions page) */
+            code?: string;
             /**
              * Format: int64
              * @description The 1-based column of the fault, when it has a line
@@ -4750,7 +4772,7 @@ export interface components {
              * @description The 1-based line of the fault, when the reduce's expression is what failed
              */
             line?: number;
-            /** @description Why it does not compile */
+            /** @description Why it does not compile, or what it warns of */
             message: string;
         };
         CalcInputBody: {
@@ -4931,8 +4953,10 @@ export interface components {
              * @example /api/v1/schemas/CalcRuleBody.json
              */
             readonly $schema?: string;
-            /** @description Why the stored reduce does not compile against the registries as they are now (an input key deleted or retyped); absent when it compiles. While present the rule cannot be enabled */
+            /** @description Why the stored reduce does not compile against the registries as they are now (an input key deleted or retyped, or an expression a newer diagnostic refuses); absent when it compiles. While present the rule cannot be enabled */
             calc_error?: components["schemas"]["CalcErrorBody"];
+            /** @description The warnings the stored reduce compiles with (a likely mistake, such as an input it never names), each with its code; notes only, never a fault: the rule computes all the same */
+            calc_warnings?: components["schemas"]["CalcErrorBody"][] | null;
             /**
              * Format: date-time
              * @description When the rule was created
@@ -5933,6 +5957,8 @@ export interface components {
             expr: string;
         };
         CriteriaErrorBody: {
+            /** @description The registered diagnostic that gave it, when one did (documented on the expressions page) */
+            code?: string;
             /**
              * Format: int64
              * @description The 1-based column of the fault, when it has one
@@ -6295,8 +6321,10 @@ export interface components {
              * @description How many conditions the rule holds in force right now, one per component and instance, whether or not it raises an alarm (GET /event-rules/{name}/state lists them)
              */
             conditions_in_force: number;
-            /** @description Why the rule's stored criteria do not compile (its key's data type changed under them, or a row the backfill left in short form); absent when they compile. While present the rule holds: it judges nothing */
+            /** @description Why the rule's stored criteria do not compile (its key's data type changed under them, a row the backfill left in short form, or an expression a newer diagnostic refuses); absent when they compile. While present the rule holds: it judges nothing */
             criteria_error?: components["schemas"]["CriteriaErrorBody"];
+            /** @description The warnings the stored criteria compile with (a likely mistake, such as == against a decimal), each with its code; notes only, never a fault: the rule judges all the same */
+            criteria_warnings?: components["schemas"]["CriteriaErrorBody"][] | null;
             description?: string;
             enabled: boolean;
             /** @description When the sample meets this for fire_sustain, the rule's condition starts (and it opens an alarm when it names a severity) */
@@ -6415,24 +6443,59 @@ export interface components {
             memory: number;
         };
         ExpressionDiagnostic: {
+            /** @description The registered diagnostic that gave it (sum-of-bools, float-equality, ...), stable across releases and documented on the expressions page; absent for the engine's own refusals */
+            code?: string;
             /**
              * Format: int64
-             * @description The 1-based column of the fault; 0 when it has none
+             * @description The 1-based column of the diagnostic; 0 when it has none
              */
             column: number;
+            /** @description A quick fix the diagnostic offers: one text edit */
+            fix?: components["schemas"]["ExpressionFixBody"];
             /**
              * Format: int64
-             * @description The 1-based line of the fault; 0 when it has none (a length cap)
+             * @description The 1-based line of the diagnostic; 0 when it has none (a length cap, an input the expression never names)
              */
             line: number;
             message: string;
             /**
-             * @description Where it failed: parse (syntax), type (an unknown name, a mismatched type, a result that is not the site's), or limit (a cap)
+             * @description Where it arose: parse (syntax), type (an unknown name, a mismatched type, a result that is not the site's), limit (a cap), or lint (a warning or hint on an expression that compiles)
              * @enum {string}
              */
-            phase: "parse" | "type" | "limit";
+            phase: "parse" | "type" | "limit" | "lint";
+            /**
+             * @description error refuses the expression; warning (probably wrong) and hint (could be simpler) ride along with one that compiles and never refuse it
+             * @enum {string}
+             */
+            severity: "error" | "warning" | "hint";
             /** @description The name the expression uses that nothing binds, when that is the fault (an editor offers to bind it) */
             unbound?: string;
+        };
+        ExpressionFixBody: {
+            /**
+             * Format: int64
+             * @description The 1-based column it starts at, in characters
+             */
+            column: number;
+            /**
+             * Format: int64
+             * @description The 1-based column it ends before
+             */
+            end_column: number;
+            /**
+             * Format: int64
+             * @description The 1-based line it ends on
+             */
+            end_line: number;
+            /**
+             * Format: int64
+             * @description The 1-based line the replaced range starts on
+             */
+            line: number;
+            /** @description The text that replaces the range */
+            replacement: string;
+            /** @description What the fix does, as an action's label */
+            title: string;
         };
         FileBody: {
             /**
@@ -7921,12 +7984,14 @@ export interface components {
         ReachEndpointBody: {
             /** @description The probed address (target[:port]) from the endpoint params */
             address?: string;
-            /** @description The auth rung (the probe's credential was accepted), present only when a credential was tried */
+            /** @description The auth rung (the probe's credential was accepted, or a held session's login passed), present only when a credential was tried */
             authenticated?: components["schemas"]["ReachVerdictBody"];
             /** @description The endpoint's derived name (its transport) */
             endpoint: string;
             /** @description The recent verdict transitions, oldest first, for the availability strip */
             history: components["schemas"]["ReachHistoryBody"][] | null;
+            /** @description The endpoint's uuid, the address its custom methods take (POST /endpoints/{id}:retry) */
+            id: string;
             /** @description The friendly string an operator reads; absent when unset, and the row then reads the derived name verbatim */
             label?: string;
             /**
@@ -7938,8 +8003,12 @@ export interface components {
             layers: components["schemas"]["ReachLayerBody"][] | null;
             /** @description The node that probes this endpoint */
             node?: string;
+            /** @description The gate a terminal refusal holds on the endpoint, its rung and class; absent when none holds */
+            rejection?: components["schemas"]["ReachRejectionBody"];
             /** @description The layer-7 responds rung (the protocol itself answered), when a probe has climbed it */
             responsive?: components["schemas"]["ReachVerdictBody"];
+            /** @description The endpoint's held session, while it is configured to hold one (a standing listen task, or a driver declaring a session): its latest state, when it changed, and why */
+            session?: components["schemas"]["ReachSessionBody"];
             /** @description The transport (icmp, tcp, ...) */
             transport: string;
             /** @description The latest reachability verdict, or null if none yet */
@@ -7967,6 +8036,33 @@ export interface components {
              * @description The latest signal value (1 = reachable/open, 0 = not)
              */
             value: number;
+        };
+        ReachRejectionBody: {
+            /** @description The refusal's class: auth, host-key, certificate or protocol */
+            class: string;
+            /** @description A refusal of a changed key only: the SHA256 fingerprint of the key the component offered instead. Trusting it is POST /endpoints/{id}:retry with this exact value as host_key; while the refusal holds, any other value is refused (409) */
+            offered_key?: string;
+            /** @description A refusal of a changed key only (class host-key, or certificate for a pinned tls key): the SHA256 fingerprint of the key the endpoint pins, as the node refused against it. Present with offered_key or not at all */
+            pinned_key?: string;
+            /**
+             * @description The ladder rung the refusal holds: responsive for a host key, certificate or protocol refusal, authenticated for a credential. Nothing at or above it is attempted until the connection fingerprint moves
+             * @enum {string}
+             */
+            rung: "reachable" | "responsive" | "authenticated";
+        };
+        ReachSessionBody: {
+            /** @description Why the session is in its state (session-reason), the reason of its latest transition; a rejected session's is its class and the component's own text (auth: auth rejected), scrubbed by the node of anything it sent. Cut to 500 characters; the property's series keeps the whole */
+            reason?: string;
+            /**
+             * @description The held session's latest state (session-state): establishing, up, recovering, down, or rejected (a refusal retrying cannot fix; the node dials no more until the endpoint's connection fingerprint moves)
+             * @enum {string}
+             */
+            state: "establishing" | "up" | "recovering" | "down" | "rejected";
+            /**
+             * Format: date-time
+             * @description When the session last changed state: a state is stored only on a transition, so a session is judged by the endpoint's last_seen, not by this
+             */
+            ts: string;
         };
         ReachVerdictBody: {
             /**
@@ -8206,6 +8302,16 @@ export interface components {
             value_type: string;
             /** @description True for the resolved value; false for a shadowed candidate */
             winner: boolean;
+        };
+        RetryEndpointInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/RetryEndpointInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description An ssh endpoint only: the SHA256 fingerprint of a changed host key the operator now trusts (the offered_key a host-key rejection names on the component's reachability read). It becomes the endpoint's declared ssh-host-key pin, and the session redials onto it. While a key refusal holds, it must be that exact offered key: any other is a 409 that changes nothing (the refusal on record is the node's last word, so to trust a key the component presents since, retry without a host key first). With no key refusal held it declares a pin ahead of time. Omit to retry with the pin unchanged */
+            host_key?: string;
         };
         RevealSecretOutputBody: {
             /**
@@ -9240,7 +9346,9 @@ export interface components {
             built: boolean;
             description: string;
             held: boolean;
+            line: boolean;
             name: string;
+            rung?: string;
         };
         UISettings: {
             /**
@@ -9353,12 +9461,18 @@ export interface components {
              * @example /api/v1/schemas/UpdateEndpointInputBody.json
              */
             readonly $schema?: string;
+            /** @description A driver-attached endpoint's inputs, edited in place (#1061): the host, the port, an attached secret's reference name, any input the driver declares. Merged over the stored inputs and validated against the driver; a value it refuses is a 400 naming the input. Changing where a credential is sent needs the caller to be able to use that credential */
+            inputs?: {
+                [key: string]: string;
+            };
             /** @description A new label; an empty string clears it, and the surface falls back to the derived name. Omit to leave it alone */
             label?: string;
             /** @description Reassign the node placement, by name or id */
             node?: string;
-            /** @description Replace the address/target settings (jsonb) */
+            /** @description Replace the address/target settings (jsonb). On a driver-attached endpoint only the timeout is set here: its address derives from its host and port inputs */
             params?: unknown;
+            /** @description The transport: a driver-attached endpoint takes only one its driver speaks */
+            transport?: string;
         };
         UpdateEventRuleInputBody: {
             /**
@@ -9717,9 +9831,9 @@ export interface components {
             budget: components["schemas"]["ExpressionBudget"];
             /** @description The builtin functions the site admits */
             builtins: string[] | null;
-            /** @description Why it does not compile, with line and column; empty when ok */
+            /** @description Why it does not compile (one error), or the warnings and hints it compiles with, each with its line and column; empty when it compiles clean */
             diagnostics: components["schemas"]["ExpressionDiagnostic"][] | null;
-            /** @description Whether the expression compiles at the site */
+            /** @description Whether the expression compiles at the site (no diagnostic of severity error) */
             ok: boolean;
             /** @description The type the site requires the expression to yield */
             result_type: string;
@@ -12476,6 +12590,42 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["UpdateEndpointInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EndpointBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "retry-endpoint": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The endpoint's surrogate id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["RetryEndpointInputBody"];
             };
         };
         responses: {

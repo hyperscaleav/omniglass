@@ -1,4 +1,5 @@
 import { api } from "../api/client";
+import type { components } from "../api/schema.gen";
 import { share, spans } from "./timeline";
 
 // The reachability data layer: a thin typed wrapper over the generated client
@@ -20,6 +21,10 @@ export type ReachVerdict = { value: string; ts: string };
 export type ReachLayer = { layer: string; check: string; value: number; detail?: string; ts: string };
 export type ReachHistory = { ts: string; value: string };
 export type ReachEndpoint = {
+  // The endpoint's uuid, the address its custom methods take (:retry, #1059).
+  // Always on the wire; optional here so a fixture that never retries need not
+  // mint one.
+  id?: string;
   endpoint: string;
   // The friendly string an operator reads for this endpoint. The row's
   // identity field is called `endpoint`, not `name`, so a caller adapts it to
@@ -37,6 +42,11 @@ export type ReachEndpoint = {
   // only when a credential was tried, auth. Absent until a probe climbs them.
   responsive?: ReachVerdict | null;
   authenticated?: ReachVerdict | null;
+  // The held session, when the endpoint has held one (#1059): its latest
+  // state, when it changed, and why (lib/session reads it).
+  session?: components["schemas"]["ReachSessionBody"];
+  // The gate a terminal refusal holds: its rung and class (ADR-0158).
+  rejection?: components["schemas"]["ReachRejectionBody"];
   layers: ReachLayer[];
   history: ReachHistory[];
 };

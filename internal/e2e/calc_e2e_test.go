@@ -18,6 +18,7 @@ import (
 
 	"github.com/hyperscaleav/omniglass/internal/auth"
 	"github.com/hyperscaleav/omniglass/internal/scope"
+	"github.com/hyperscaleav/omniglass/internal/sim/simtest"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 )
@@ -43,25 +44,7 @@ func TestCalcRuleEndToEnd(t *testing.T) {
 		t.Fatalf("go build: %v\n%s", err, out)
 	}
 	dsn := storagetest.NewDSN(t)
-	addr := "127.0.0.1:" + freePort(t)
-	natsPort := freePort(t)
-	srvCtx, cancel := context.WithCancel(ctx)
-	defer cancel()
-	srv := exec.CommandContext(srvCtx, binPath, "server")
-	srv.Env = append(os.Environ(),
-		"OMNIGLASS_DSN="+dsn,
-		"OMNIGLASS_ADDR="+addr,
-		"OMNIGLASS_NATS_ADDR=127.0.0.1:"+natsPort,
-		"OMNIGLASS_NATS_URL=nats://127.0.0.1:"+natsPort,
-		"OMNIGLASS_NATS_STORE_DIR="+t.TempDir(),
-	)
-	srv.Stdout, srv.Stderr = os.Stderr, os.Stderr
-	if err := srv.Start(); err != nil {
-		t.Fatalf("start server: %v", err)
-	}
-	t.Cleanup(func() { cancel(); _ = srv.Wait() })
-	server := "http://" + addr
-	pollHealthz(t, server+"/api/v1/healthz")
+	server := startServer(t, binPath, "OMNIGLASS_DSN="+dsn).URL
 
 	gw, err := storage.NewPG(ctx, dsn)
 	if err != nil {
@@ -93,7 +76,9 @@ func TestCalcRuleEndToEnd(t *testing.T) {
 	}
 	defer conn.Close(ctx)
 	product, port := e2eSimulatedProduct(t, ctx, conn)
-	target := net.JoinHostPort("127.33.0.20", fmt.Sprint(port+calcE2EPortShift))
+	// The simulator serves fixed ports, so the device takes an address no
+	// other test process holds.
+	target := net.JoinHostPort(simtest.ClaimLoopback(t), fmt.Sprint(port+calcE2EPortShift))
 	for _, q := range []struct {
 		sql  string
 		args []any

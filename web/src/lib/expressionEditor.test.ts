@@ -1,8 +1,9 @@
 import { describe, it, expect } from "vitest";
 import { EditorState } from "@codemirror/state";
+import { EditorView } from "@codemirror/view";
 import { CompletionContext } from "@codemirror/autocomplete";
 import { StringStream } from "@codemirror/language";
-import { bindingAt, exprCompletions, exprTokens, toEditorDiagnostics, type Vocabulary } from "./expressionEditor";
+import { applyFix, bindingAt, diagnosticHref, exprCompletions, exprTokens, toEditorDiagnostics, type Vocabulary } from "./expressionEditor";
 
 const vocab: Vocabulary = {
   bindings: [
@@ -163,7 +164,7 @@ describe("bindingAt", () => {
 describe("toEditorDiagnostics", () => {
   it("underlines the word at a diagnostic's line and column", () => {
     const doc = "value > 40 &&\n  humidity > 2";
-    const [d] = toEditorDiagnostics(doc, [{ line: 2, column: 3, phase: "type", message: "unknown name humidity" }]);
+    const [d] = toEditorDiagnostics(doc, [{ line: 2, column: 3, phase: "type", severity: "error", message: "unknown name humidity" }]);
     expect(doc.slice(d.from, d.to)).toBe("humidity");
     expect(d.severity).toBe("error");
     expect(d.message).toBe("unknown name humidity");
@@ -172,17 +173,17 @@ describe("toEditorDiagnostics", () => {
   it("counts the column in characters, as Expr does, not in UTF-16 units", () => {
     const doc = 'value == "\u{1F525}" && humidity > 2';
     const col = Array.from(doc).indexOf("h") + 1;
-    const [d] = toEditorDiagnostics(doc, [{ line: 1, column: col, phase: "type", message: "unknown name humidity" }]);
+    const [d] = toEditorDiagnostics(doc, [{ line: 1, column: col, phase: "type", severity: "error", message: "unknown name humidity" }]);
     expect(doc.slice(d.from, d.to)).toBe("humidity");
   });
 
   it("marks one character where no word starts, the end where the column runs past it, and skips a positionless one", () => {
     const doc = "value >";
     const ds = toEditorDiagnostics(doc, [
-      { line: 1, column: 7, phase: "parse", message: "unexpected" },
-      { line: 1, column: 9, phase: "parse", message: "unexpected end" },
-      { line: 0, column: 0, phase: "limit", message: "too long" },
-      { line: 4, column: 1, phase: "parse", message: "off the end" },
+      { line: 1, column: 7, phase: "parse", severity: "error", message: "unexpected" },
+      { line: 1, column: 9, phase: "parse", severity: "error", message: "unexpected end" },
+      { line: 0, column: 0, phase: "limit", severity: "error", message: "too long" },
+      { line: 4, column: 1, phase: "parse", severity: "error", message: "off the end" },
     ]);
     expect(ds.map((d) => [d.from, d.to])).toEqual([
       [6, 7],
@@ -227,11 +228,51 @@ describe("exprCompletions over a calc rule's vocabulary", () => {
 describe("toEditorDiagnostics' bind action", () => {
   it("offers to bind a name nothing binds, and only that", () => {
     const bound: string[] = [];
-    const [d] = toEditorDiagnostics("max(fan)", [{ line: 1, column: 5, phase: "type", message: "fan is not an input", unbound: "fan" }], (n) => bound.push(n));
+    const [d] = toEditorDiagnostics("max(fan)", [{ line: 1, column: 5, phase: "type", severity: "error", message: "fan is not an input", unbound: "fan" }], (n) => bound.push(n));
     expect(d.actions?.map((a) => a.name)).toEqual(["Bind fan to a key"]);
     d.actions![0].apply(null as never, d.from, d.to);
     expect(bound).toEqual(["fan"]);
-    const [plain] = toEditorDiagnostics("max(x)", [{ line: 1, column: 1, phase: "type", message: "expected bool" }], () => {});
+    const [plain] = toEditorDiagnostics("max(x)", [{ line: 1, column: 1, phase: "type", severity: "error", message: "expected bool" }], () => {});
     expect(plain.actions).toBeUndefined();
+  });
+});
+
+// Diagnostics by severity, with their quick fixes (#1021).
+describe("toEditorDiagnostics' severities and fixes", () => {
+  it("keeps each diagnostic's severity and underlines an operator whole", () => {
+    const doc = "value == 1.5";
+    const [w] = toEditorDiagnostics(doc, [{ line: 1, column: 7, phase: "lint", severity: "warning", code: "float-equality", message: "seldom equal" }]);
+    expect(w.severity).toBe("warning");
+    expect(doc.slice(w.from, w.to)).toBe("==");
+    expect(w.source).toBe("float-equality");
+    const [h] = toEditorDiagnostics("count(c, #) == len(c)", [{ line: 1, column: 1, phase: "lint", severity: "hint", code: "count-equals-len", message: "is all" }]);
+    expect(h.severity).toBe("hint");
+  });
+
+  it("offers a diagnostic's fix as an action that rewrites the source, in characters", () => {
+    const doc = '"\u{1F525}" != "" && sum(c) > 0';
+    const col = Array.from(doc).indexOf("s") + 1;
+    const fix = { title: "Use count", line: 1, column: col, end_line: 1, end_column: col + 3, replacement: "count" };
+    const [d] = toEditorDiagnostics(doc, [{ line: 1, column: col, phase: "type", severity: "error", code: "sum-of-bools", message: "sum adds numbers", fix }]);
+    expect(d.actions?.map((a) => a.name)).toEqual(["Use count"]);
+    const view = new EditorView({ state: EditorState.create({ doc }) });
+    d.actions![0].apply(view, d.from, d.to);
+    expect(view.state.doc.toString()).toBe('"\u{1F525}" != "" && count(c) > 0');
+    // Typed past the answer's source, a fix never lands on stale columns.
+    view.dispatch({ changes: { from: 0, insert: "x" } });
+    const typed = view.state.doc.toString();
+    d.actions![0].apply(view, d.from, d.to);
+    expect(view.state.doc.toString()).toBe(typed);
+    view.destroy();
+    expect(applyFix(doc, fix)).toBe('"\u{1F525}" != "" && count(c) > 0');
+  });
+
+  it("refuses a fix whose range is not in the source", () => {
+    expect(applyFix("sum(c)", { title: "x", line: 2, column: 1, end_line: 2, end_column: 2, replacement: "y" })).toBeNull();
+    expect(applyFix("sum(c)", { title: "x", line: 1, column: 5, end_line: 1, end_column: 2, replacement: "y" })).toBeNull();
+  });
+
+  it("links a code to its entry in the generated docs table", () => {
+    expect(diagnosticHref("sum-of-bools")).toBe("https://docs.omniglass.hyperscaleav.com/architecture/expressions/#diagnostic-sum-of-bools");
   });
 });

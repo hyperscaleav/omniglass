@@ -5,14 +5,13 @@
 // by `make docs-walkthroughs`: the page never restates a caption, so a
 // re-recorded walkthrough reaches the docs by a copy, not an edit.
 //
-// The video is not committed (size), so the embed renders it, and links it, only
-// when public/walkthroughs/<id>/<id>.mp4 is present when the page renders; a
-// build without it shows the animated preview (committed with the stills, #937),
-// or the poster step for a recording without one, and the captioned stills.
+// The video is committed with the stills (#939), and the embed plays it with
+// controls; a declared walkthrough whose copy has no mp4 fails the page, as one
+// with no manifest does.
 //
 // What this plugin reads is invisible to Astro's content cache, which keys a
-// rendered page on the page's own content alone: after a re-copy, or a video
-// added or removed, an unforced build serves the old render. Astro offers a
+// rendered page on the page's own content alone: after a re-copy, an unforced
+// build serves the old render. Astro offers a
 // remark plugin no way to declare the dependency, so the docs build digests
 // what this plugin reads (scripts/lib/render-stamp.mjs) and forces Astro when
 // the digest changes (scripts/astro-build.mjs, #937);
@@ -38,6 +37,12 @@ export function remarkWalkthroughs({ publicDir }) {
     if (manifest.id !== spec.id) {
       file.fail(`${manifestPath} is walkthrough "${manifest.id}", not "${spec.id}"; re-run make docs-walkthroughs`, node);
     }
-    return renderWalkthrough(manifest, { video: existsSync(join(dir, videoName(spec.id))) });
+    if (!existsSync(join(dir, videoName(spec.id)))) {
+      file.fail(
+        `::walkthrough{#${spec.id}} has no ${join(dir, videoName(spec.id))}; re-run make docs-walkthroughs (it copies the video with the stills)`,
+        node,
+      );
+    }
+    return renderWalkthrough(manifest);
   });
 }

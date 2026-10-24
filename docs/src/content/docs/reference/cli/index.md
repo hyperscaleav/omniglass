@@ -1617,6 +1617,26 @@ Example:
 omniglass endpoint list
 ```
 
+### `omniglass endpoint retry`
+
+Retry an endpoint's gated connections
+
+```
+omniglass endpoint retry <id> [flags]
+```
+
+Moves the endpoint's retry counter, which is part of its connection fingerprint: a gate a refusal retrying cannot fix holds (a wrong credential, a changed host key, a reply its driver declares terminal) lifts, the node recycles the endpoint's held session, and every connection to it is attempted again. Fixing the secret, the address, the transport or the driver's login needs no retry: the change moves the fingerprint itself. An unrelated edit (a label) moves nothing. For an ssh endpoint, host_key names a host key to trust (the offered key a host-key rejection names): it becomes the declared pin and recycles the session onto it whatever its state, an audited acceptance of the change. While the endpoint's gate names an offered key, host_key must be that key, so a trust confirmed against a refusal the record has since moved past is a 409 and changes nothing. Audited, a trusted key with the pin it replaced (old) and the pin it set (new). Gated by endpoint:retry; read and retry scopes (through the component) drive the 404 versus 403 split.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--host-key` | string | (none) | An ssh endpoint only: the SHA256 fingerprint of a changed host key the operator now trusts (the offered_key a host-key rejection names on the component's reachability read). It becomes the endpoint's declared ssh-host-key pin, and the session redials onto it. While a key refusal holds, it must be that exact offered key: any other is a 409 that changes nothing (the refusal on record is the node's last word, so to trust a key the component presents since, retry without a host key first). With no key refusal held it declares a pin ahead of time. Omit to retry with the pin unchanged |
+
+Example:
+
+```sh
+omniglass endpoint retry <id>
+```
+
 ### `omniglass endpoint update`
 
 Update an endpoint
@@ -1625,13 +1645,15 @@ Update an endpoint
 omniglass endpoint update <id> [flags]
 ```
 
-Patches an endpoint's node placement, params or label; an empty label clears it and the surface falls back to the derived name. Gated by endpoint:update; read and update scopes (through the component) drive the 404 versus 403 split.
+Patches an endpoint's node placement, params, label, or (driver-attached) its connection inputs in place: the host, port and attached secret references, validated against the driver's declared inputs, the endpoint's tasks re-derived in the same transaction. A value the driver refuses is a 400 naming the field. An empty label clears it and the surface falls back to the derived name. Gated by endpoint:update; read and update scopes (through the component) drive the 404 versus 403 split.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
+| `--inputs` | string | (none) | A driver-attached endpoint's inputs, edited in place (#1061): the host, the port, an attached secret's reference name, any input the driver declares. Merged over the stored inputs and validated against the driver; a value it refuses is a 400 naming the input. Changing where a credential is sent needs the caller to be able to use that credential |
 | `--label` | string | (none) | A new label; an empty string clears it, and the surface falls back to the derived name. Omit to leave it alone |
 | `--node` | string | (none) | Reassign the node placement, by name or id |
-| `--params` | string | (none) | Replace the address/target settings (jsonb) |
+| `--params` | string | (none) | Replace the address/target settings (jsonb). On a driver-attached endpoint only the timeout is set here: its address derives from its host and port inputs |
+| `--transport` | string | (none) | The transport: a driver-attached endpoint takes only one its driver speaks |
 
 Example:
 
@@ -4099,6 +4121,8 @@ Run the control-plane server (HTTP API)
 omniglass server
 ```
 
+Runs the control plane: applies pending migrations and the boot seed, then serves the HTTP API on OMNIGLASS_ADDR and hosts the embedded NATS bus nodes connect to on OMNIGLASS_NATS_ADDR. Either address may name port 0, which binds whatever free port the kernel hands out; set OMNIGLASS_READY_FILE to a path and, once both listeners are bound, the server writes the addresses it got there as JSON (addr, nats_addr, and the nats_url it advertises to nodes). A file already at that path is cleared first thing at boot, and the server removes its own at a graceful shutdown (SIGINT or SIGTERM). A supervisor or a test reads the ports from that file rather than picking one and hoping it stays free. Configured by environment; see the deployment guides.
+
 ## `omniglass session`
 
 Commands for the session resource
@@ -5705,7 +5729,7 @@ Push telemetry for an owner
 omniglass telemetry push [flags]
 ```
 
-Accepts per-lane observations (metrics, properties, events) and raw log lines for one owner and publishes them onto the ingest lane. Each lane validates against its own catalog: an unregistered name is rejected and reported in the response rather than silently dropped, and a property or event payload violating its type's schema refuses the batch with a 422. Gated by telemetry:push, and the caller's scope must cover the declared owner; an out-of-scope owner is a non-disclosing 404.
+Accepts per-lane observations (metrics, properties, events) and raw log lines for one owner and publishes them onto the ingest lane. Each lane validates against its own catalog: an unregistered name is rejected and reported in the response rather than silently dropped, and a property or event payload violating its type's schema refuses the batch with a 422. A key a native probe writes (a reachability verdict or rung, a probe metric or timing, a held session's state) is a node's own observation and is rejected by name on every lane; only the node writes it. Gated by telemetry:push, and the caller's scope must cover the declared owner; an out-of-scope owner is a non-disclosing 404.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|

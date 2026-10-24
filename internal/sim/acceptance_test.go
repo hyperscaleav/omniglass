@@ -25,12 +25,9 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/sim/profiles"
 )
 
-// acceptancePortShift lifts the privileged profile ports above 1024 so the whole
-// fleet serves unprivileged. Each device owns a distinct 127.x address, so
-// a fixed shift cannot collide between devices.
-const acceptancePortShift = 20000
-
-// startFleet compiles an embedded fleet and serves every device in it.
+// startFleet compiles an embedded fleet and serves every device in it, each
+// face on an ephemeral port (unprivileged, and never colliding with another
+// run serving the same fleet), read back from the device.
 func startFleet(t *testing.T, name string) (*Engine, *profile.Store) {
 	t.Helper()
 	store, err := profile.LoadStoreFS(profiles.FS)
@@ -46,7 +43,7 @@ func startFleet(t *testing.T, name string) (*Engine, *profile.Store) {
 		t.Fatalf("compiling fleet: %v", err)
 	}
 	e := NewEngine(store, profiles.Templates())
-	e.SetPortMap(PrivilegedPortShift(acceptancePortShift))
+	e.SetPortMap(EphemeralPorts)
 	if err := e.LoadDevices(Snapshots(fl)); err != nil {
 		t.Fatalf("loading devices: %v", err)
 	}
@@ -80,9 +77,6 @@ func TestFleetServesSharedStateAcrossProtocols(t *testing.T) {
 	}
 	dsp := deviceByProfile(t, e, "polaris-dsp-16")
 	ip := dsp.LoopbackIP.String()
-	at := func(port int) string {
-		return net.JoinHostPort(ip, fmt.Sprint(PrivilegedPortShift(acceptancePortShift)(port)))
-	}
 
 	var hitsMu sync.Mutex
 	hits := map[string]bool{}
@@ -105,7 +99,7 @@ func TestFleetServesSharedStateAcrossProtocols(t *testing.T) {
 	})
 
 	// Line protocol: subscribe to channel 0 gain before the write.
-	conn, err := net.DialTimeout("tcp", at(1710), 2*time.Second)
+	conn, err := net.DialTimeout("tcp", faceAddr(t, dsp, "qrc"), 2*time.Second)
 	if err != nil {
 		t.Fatalf("dialing line protocol: %v", err)
 	}
@@ -131,7 +125,7 @@ func TestFleetServesSharedStateAcrossProtocols(t *testing.T) {
 	}
 
 	// HTTP: the write.
-	req, _ := http.NewRequest(http.MethodPost, "http://"+at(80)+"/api/channels/gain",
+	req, _ := http.NewRequest(http.MethodPost, "http://"+faceAddr(t, dsp, "http-api")+"/api/channels/gain",
 		bytes.NewBufferString(`{"index": 0, "gain": -17}`))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Polaris-Token", "polaris-lab-token")
@@ -156,7 +150,7 @@ func TestFleetServesSharedStateAcrossProtocols(t *testing.T) {
 	}
 
 	// SSH: the CLI renders the same state.
-	out, code, err := sshExec(at(22), "admin", "polaris", "show channels")
+	out, code, err := sshExec(faceAddr(t, dsp, "ssh-console"), "admin", "polaris", "show channels")
 	if err != nil || code != 0 {
 		t.Fatalf("SSH exec: code=%d err=%v out=%q", code, err, out)
 	}
@@ -165,7 +159,7 @@ func TestFleetServesSharedStateAcrossProtocols(t *testing.T) {
 	}
 
 	// SNMP and HTTP read one serial from the same state.
-	resp, err = authedGet("http://"+at(80)+"/api/status", "polaris-lab-token")
+	resp, err = authedGet("http://"+faceAddr(t, dsp, "http-api")+"/api/status", "polaris-lab-token")
 	if err != nil {
 		t.Fatalf("HTTP status: %v", err)
 	}
@@ -180,7 +174,7 @@ func TestFleetServesSharedStateAcrossProtocols(t *testing.T) {
 		t.Fatalf("decoding status serial: %v (%q)", err, status.Device.Serial)
 	}
 	g := &gosnmp.GoSNMP{
-		Target: ip, Port: uint16(161 + acceptancePortShift), Community: "public",
+		Target: ip, Port: uint16(facePort(t, dsp, "snmp")), Community: "public",
 		Version: gosnmp.Version2c, Timeout: 2 * time.Second, Retries: 1,
 	}
 	if err := g.Connect(); err != nil {
@@ -200,7 +194,7 @@ func TestFleetServesSharedStateAcrossProtocols(t *testing.T) {
 	display := deviceByProfile(t, e, "boreal-edge-86")
 	dip := display.LoopbackIP.String()
 	preq, _ := http.NewRequest(http.MethodPost,
-		"http://"+net.JoinHostPort(dip, fmt.Sprint(80+acceptancePortShift))+"/api/display/power",
+		"http://"+faceAddr(t, display, "web-admin")+"/api/display/power",
 		bytes.NewBufferString(`{"power": "off"}`))
 	preq.Header.Set("Content-Type", "application/json")
 	preq.SetBasicAuth("admin", "boreal")
@@ -213,7 +207,7 @@ func TestFleetServesSharedStateAcrossProtocols(t *testing.T) {
 		t.Fatalf("display power write status = %d", presp.StatusCode)
 	}
 	dg := &gosnmp.GoSNMP{
-		Target: dip, Port: uint16(161 + acceptancePortShift), Community: "public",
+		Target: dip, Port: uint16(facePort(t, display, "snmp")), Community: "public",
 		Version: gosnmp.Version2c, Timeout: 2 * time.Second, Retries: 1,
 	}
 	if err := dg.Connect(); err != nil {
@@ -236,8 +230,8 @@ func TestFleetServesSharedStateAcrossProtocols(t *testing.T) {
 		t.Error("no session event for the line-protocol session")
 	}
 	for _, p := range sessionPorts {
-		if p != 1710 {
-			t.Errorf("session event port = %d, want the bound 1710", p)
+		if want := facePort(t, dsp, "qrc"); p != want {
+			t.Errorf("session event port = %d, want the bound %d", p, want)
 		}
 	}
 	for _, p := range []string{"http", "ssh", "snmp"} {

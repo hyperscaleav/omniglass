@@ -64,25 +64,30 @@ func (c *calcCompiles) program(r CalcRule, typed []rules.TypedInput, output stri
 	return prog, err
 }
 
-func (c *calcCompiles) compile(r CalcRule, typed []rules.TypedInput, output string) error {
-	_, err := c.program(r, typed, output)
-	return err
-}
-
-// calcFault is why a stored rule's reduce does not compile against the
-// registries as they are now (the key types its read resolved, by the ids it
-// holds), or nil when it compiles.
-func (p *PG) calcFault(r CalcRule) *CalcFault {
-	typed := typedInputs(r)
+// withCalcNotes sets r's CalcError and CalcWarnings against the registries
+// as they are now (the key types its read resolved, by the ids it holds):
+// why its stored reduce does not compile, or the warnings it compiles with.
+func (p *PG) withCalcNotes(r *CalcRule) {
+	r.CalcError, r.CalcWarnings = nil, nil
+	typed := typedInputs(*r)
 	for i, t := range typed {
 		if t.ValueType == "" {
-			return &CalcFault{Field: fmt.Sprintf("inputs[%d].key", i), Message: fmt.Sprintf("%q is not a registered property or metric", t.Key)}
+			r.CalcError = &CalcFault{Field: fmt.Sprintf("inputs[%d].key", i), Message: fmt.Sprintf("%q is not a registered property or metric", t.Key)}
+			return
 		}
 	}
-	err := p.calcs.compile(r, typed, r.outputType)
-	if err == nil {
-		return nil
+	prog, err := p.calcs.program(*r, typed, r.outputType)
+	if err != nil {
+		r.CalcError = calcFault(err)
+		return
 	}
+	for _, w := range prog.Warnings() {
+		r.CalcWarnings = append(r.CalcWarnings, CalcFault{Field: w.Field, Line: w.Line, Column: w.Column, Message: w.Message, Code: w.Code})
+	}
+}
+
+// calcFault is a reduce compile error as a reader sees it.
+func calcFault(err error) *CalcFault {
 	f := &CalcFault{Message: err.Error()}
 	var ce *rules.CalcError
 	if errors.As(err, &ce) {
@@ -90,7 +95,7 @@ func (p *PG) calcFault(r CalcRule) *CalcFault {
 	}
 	var ee *expression.Error
 	if errors.As(err, &ee) {
-		f.Line, f.Column, f.Message = ee.Line, ee.Column, ee.Message
+		f.Line, f.Column, f.Message, f.Code = ee.Line, ee.Column, ee.Message, ee.Code
 	}
 	return f
 }

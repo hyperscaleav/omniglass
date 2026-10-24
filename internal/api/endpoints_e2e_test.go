@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/api"
 	"github.com/hyperscaleav/omniglass/internal/auth"
@@ -97,6 +98,60 @@ func TestEndpointAPI(t *testing.T) {
 			t.Fatalf("operator@B leaked comp-a endpoint %q", it.Name)
 		}
 	}
+
+	// :retry (#1049) wakes a rejected session for one attempt. It is gated by
+	// endpoint:retry, which the viewer floor lacks (a capability 403), scoped
+	// through the component (A's endpoint is a non-disclosing 404 to the
+	// operator scoped to B), and held by the operator in scope.
+	c.do(viewerAllTok, http.MethodPost, "/endpoints/"+ifA.ID+":retry", nil, http.StatusForbidden)
+	c.do(opBTok, http.MethodPost, "/endpoints/"+ifA.ID+":retry", nil, http.StatusNotFound)
+	c.do(opBTok, http.MethodPost, "/endpoints/"+ifB.ID+":retry", nil, http.StatusOK)
+	c.do(ownerTok, http.MethodPost, "/endpoints/"+ifA.ID+":retry", nil, http.StatusOK)
+	// A driver-attached endpoint's connection inputs edit in place (#1061
+	// ruling): its port moves its derived target; a value the driver refuses
+	// is a 400 naming the field; the viewer floor is refused.
+	nvp := "newtron-nvp"
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "comp-d"}, all, all, all, all); err != nil {
+		t.Fatal(err)
+	}
+	att := createEndpoint(c, ownerTok, map[string]any{"driver": nvp, "component": "comp-d", "inputs": map[string]any{"host": "10.0.0.7"}})
+	var edited struct {
+		Params json.RawMessage `json:"params"`
+	}
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodPatch, "/endpoints/"+att.ID, map[string]any{"inputs": map[string]any{"port": "4000"}}, http.StatusOK), &edited); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(edited.Params), "10.0.0.7:4000") {
+		t.Fatalf("the edited endpoint's params = %s, want the new port in its target", edited.Params)
+	}
+	bad := c.do(ownerTok, http.MethodPatch, "/endpoints/"+att.ID, map[string]any{"inputs": map[string]any{"port": "forty"}}, http.StatusBadRequest)
+	if !strings.Contains(string(bad), "port") {
+		t.Fatalf("a refused input value does not name the field: %s", bad)
+	}
+	c.do(ownerTok, http.MethodPatch, "/endpoints/"+att.ID, map[string]any{"transport": "ssh"}, http.StatusBadRequest)
+	c.do(ownerTok, http.MethodPatch, "/endpoints/"+att.ID, map[string]any{"params": map[string]any{"target": "9.9.9.9:1"}}, http.StatusBadRequest)
+	c.do(viewerAllTok, http.MethodPatch, "/endpoints/"+att.ID, map[string]any{"inputs": map[string]any{"port": "4001"}}, http.StatusForbidden)
+
+	// A host key is an ssh endpoint's alone (#1032): a tcp endpoint refuses one.
+	c.do(ownerTok, http.MethodPost, "/endpoints/"+ifA.ID+":retry",
+		map[string]any{"host_key": "SHA256:" + strings.Repeat("A", 43)}, http.StatusUnprocessableEntity)
+
+	// Trusting a changed key (#1078): the console sends the offered key its
+	// read showed. Without endpoint:retry the viewer floor is refused; a key
+	// the component no longer offers is a 409 naming the one it offers now;
+	// the offered key itself is trusted.
+	sshEp := createEndpoint(c, ownerTok, map[string]any{"transport": "ssh", "component": "comp-d", "params": map[string]any{"target": "10.0.0.7:22"}})
+	shown, offeredNow := "SHA256:"+strings.Repeat("S", 43), "SHA256:"+strings.Repeat("N", 43)
+	if err := gw.InsertPropertySamples(ctx, []storage.PropertySampleWrite{{OwnerKind: "component", OwnerID: "comp-d", Key: "endpoint-rejection",
+		Instance: sshEp.Name, Value: "responsive host-key 9f86d081 SHA256:" + strings.Repeat("P", 43) + " " + offeredNow, Source: "ssh", TS: time.Now()}}); err != nil {
+		t.Fatal(err)
+	}
+	c.do(viewerAllTok, http.MethodPost, "/endpoints/"+sshEp.ID+":retry", map[string]any{"host_key": offeredNow}, http.StatusForbidden)
+	stale := c.do(ownerTok, http.MethodPost, "/endpoints/"+sshEp.ID+":retry", map[string]any{"host_key": shown}, http.StatusConflict)
+	if !strings.Contains(string(stale), offeredNow) {
+		t.Fatalf("the stale refusal does not name the key offered now: %s", stale)
+	}
+	c.do(ownerTok, http.MethodPost, "/endpoints/"+sshEp.ID+":retry", map[string]any{"host_key": offeredNow}, http.StatusOK)
 }
 
 // TestEndpointCreateWithAmbiguousComponentIs409 closes I1's other half: the

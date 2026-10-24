@@ -2,6 +2,7 @@ package collection
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"strings"
@@ -28,6 +29,9 @@ type SSHProber interface {
 type SSHCredential struct {
 	Username string
 	Password string
+	// HostKeyPin is the endpoint's pinned host key (#1060): a key that
+	// differs is reported, and the credential is never sent past it.
+	HostKeyPin string
 }
 
 // SSHResult is one SSH probe observation. Dialed is the L4 rung; Responded
@@ -43,6 +47,10 @@ type SSHResult struct {
 	DialMS        float64
 	HandshakeMS   float64
 	Reason        Reachability
+	// HostKeyChanged: the key offered is not the pinned one (OfferedKey), so
+	// no credential was tried.
+	HostKeyChanged bool
+	OfferedKey     string
 }
 
 // NewSSHProber returns the real SSH probe. Host keys are deliberately not
@@ -67,10 +75,20 @@ func (sshProber) Probe(ctx context.Context, target string, cred SSHCredential, t
 		res.AuthAttempted = true
 	}
 	config := &ssh.ClientConfig{
-		User:            user,
-		Auth:            auth,
-		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
-		Timeout:         timeout,
+		User: user,
+		Auth: auth,
+		// With a pin, a key that differs ends the exchange before userauth,
+		// so the credential never reaches whatever answered (#1060). With
+		// none, the probe measures responsiveness only and trusts nothing.
+		HostKeyCallback: func(_ string, _ net.Addr, key ssh.PublicKey) error {
+			fp := ssh.FingerprintSHA256(key)
+			if cred.HostKeyPin != "" && fp != cred.HostKeyPin {
+				res.OfferedKey = fp
+				return errProbeHostKeyChanged
+			}
+			return nil
+		},
+		Timeout: timeout,
 	}
 
 	dialer := net.Dialer{Timeout: timeout}
@@ -95,6 +113,16 @@ func (sshProber) Probe(ctx context.Context, target string, cred SSHCredential, t
 	elapsed := float64(time.Since(start)) / float64(time.Millisecond)
 	if err != nil {
 		_ = conn.Close()
+		if errors.Is(err, errProbeHostKeyChanged) {
+			// The protocol answered (the key exchange completed); it is the
+			// key that is refused, and nothing was authenticated.
+			res.Responded = true
+			res.HandshakeMS = elapsed
+			res.Reason = Responded
+			res.HostKeyChanged = true
+			res.AuthAttempted = false
+			return res, nil
+		}
 		// The exchange reached authentication and the server said no: the
 		// protocol answered, so the responds rung is up and the auth rung is
 		// down. Anything else on a dialed socket is the daemon not speaking
@@ -124,6 +152,10 @@ func (sshProber) Probe(ctx context.Context, target string, cred SSHCredential, t
 	}
 	return res, nil
 }
+
+// errProbeHostKeyChanged is the probe's host key callback refusing a key
+// that differs from the pin.
+var errProbeHostKeyChanged = errors.New("host key differs from the pin")
 
 // String implements fmt.Stringer for test failure legibility.
 func (r SSHResult) String() string {

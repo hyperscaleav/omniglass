@@ -24,6 +24,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/seed"
 	"github.com/hyperscaleav/omniglass/internal/sim/profile"
 	"github.com/hyperscaleav/omniglass/internal/sim/profiles"
+	"github.com/hyperscaleav/omniglass/internal/sim/simtest"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 )
@@ -83,23 +84,7 @@ func TestOperatorMonitorsAndConfiguresSimulatedDevices(t *testing.T) {
 	}
 
 	dsn := storagetest.NewDSN(t)
-	addr := "127.0.0.1:" + freePort(t)
-	natsPort := freePort(t)
-	srvCtx, cancel := context.WithCancel(ctx)
-	defer cancel()
-	srv := exec.CommandContext(srvCtx, binPath, "server")
-	srv.Env = append(os.Environ(),
-		"OMNIGLASS_DSN="+dsn, "OMNIGLASS_ADDR="+addr,
-		"OMNIGLASS_NATS_ADDR=127.0.0.1:"+natsPort, "OMNIGLASS_NATS_URL=nats://127.0.0.1:"+natsPort,
-		"OMNIGLASS_NATS_STORE_DIR="+t.TempDir(),
-	)
-	srv.Stdout, srv.Stderr = os.Stderr, os.Stderr
-	if err := srv.Start(); err != nil {
-		t.Fatalf("start server: %v", err)
-	}
-	t.Cleanup(func() { cancel(); _ = srv.Wait() })
-	server := "http://" + addr
-	pollHealthz(t, server+"/api/v1/healthz")
+	server := startServer(t, binPath, "OMNIGLASS_DSN="+dsn).URL
 
 	gw, err := storage.NewPG(ctx, dsn)
 	if err != nil {
@@ -150,7 +135,10 @@ func TestOperatorMonitorsAndConfiguresSimulatedDevices(t *testing.T) {
 	}
 	as("secret", "create", "--name", "sim-community", "--secret-type", "snmp-community",
 		"--owner-kind", "platform", "--fields", `{"community":"public"}`)
-	displayIP, panelIP := "127.34.0.10", "127.34.0.11"
+	// The run mode binds the profiles' ports (lifted) on the endpoints'
+	// addresses, so the endpoints target them and each device takes an
+	// address no other test process holds.
+	displayIP, panelIP := simtest.ClaimLoopback(t), simtest.ClaimLoopback(t)
 	as("endpoint", "create", "--component", "sim-display", "--node", "edge-p", "--driver", "snmp-generic",
 		"--inputs", fmt.Sprintf(`{"host":%q,"port":"%d","community":"sim-community"}`, displayIP, 161+protocolsPortShift))
 	as("endpoint", "create", "--component", "sim-panel", "--node", "edge-p", "--driver", "newtron-nvp",

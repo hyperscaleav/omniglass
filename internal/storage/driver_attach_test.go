@@ -48,7 +48,7 @@ const lineProtoSpec = `{
 		]
 	}],
 	"commands": [
-		{"command_type": "set-input", "request": {"line": "SET INPUT ${value}"}}
+		{"command_type": "set-input", "request": {"line": "SET INPUT ${value}", "reply": {"prefix": "INPUT "}}}
 	]
 }`
 
@@ -621,6 +621,16 @@ func TestCommandWireDelivery(t *testing.T) {
 	if d.Target != "10.20.4.50:4998" {
 		t.Fatalf("target = %q, want the endpoint's derived target", d.Target)
 	}
+	// #817: the delivery names its endpoint (a node holding a session there
+	// actuates over it) and carries the binding's reply shape.
+	if d.EndpointID == "" || d.Reply == nil || d.Reply.Prefix != "INPUT " {
+		t.Fatalf("delivery endpoint %q reply %+v, want the endpoint and the declared reply shape", d.EndpointID, d.Reply)
+	}
+	// #1049: a tcp driver with no session block may still fall back to a
+	// throwaway connection when no session is held.
+	if d.SessionOnly {
+		t.Fatalf("delivery = %+v, want not session-only for a tcp driver with no session block", d)
+	}
 
 	// Dispatched: an immediate re-pull redelivers nothing (at-least-once
 	// means silence redelivers, not every pull).
@@ -753,9 +763,9 @@ func TestAttachScopesSecretReference(t *testing.T) {
 
 // TestUpdateEndpointRefusesDriverParams pins the second half of the credential
 // confinement (rollup review): a driver-attached endpoint's params are derived
-// from its inputs, so endpoint:update cannot repoint them (which would send the
-// credential to a target the inputs never named). The re-attach is the write
-// path for its address.
+// from its inputs, so a raw params target cannot repoint them (which would send
+// the credential to a target the inputs never named). The host and port inputs
+// are the write path for its address, in place (the #1061 ruling).
 func TestUpdateEndpointRefusesDriverParams(t *testing.T) {
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
@@ -792,8 +802,8 @@ func TestUpdateEndpointRefusesDriverParams(t *testing.T) {
 		t.Fatalf("attach: %v", err)
 	}
 	// A params patch on the attached endpoint refuses.
-	if _, err := gw.UpdateEndpoint(ctx, "", ep.ID, storage.EndpointPatch{Params: []byte(`{"target":"attacker:161"}`)}, all, all); !errors.Is(err, storage.ErrEndpointDriverParams) {
-		t.Fatalf("params patch on attached endpoint: err = %v, want ErrEndpointDriverParams", err)
+	if _, err := gw.UpdateEndpoint(ctx, "", ep.ID, storage.EndpointPatch{Params: []byte(`{"target":"attacker:161"}`)}, all, all); !errors.Is(err, storage.ErrEndpointPatchInvalid) {
+		t.Fatalf("params patch on attached endpoint: err = %v, want ErrEndpointPatchInvalid", err)
 	}
 	// A label-only patch still works (it moves nothing about the address).
 	label := "Room amp"

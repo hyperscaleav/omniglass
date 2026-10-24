@@ -62,6 +62,9 @@ exist without appearing here:
 
 <ConfigVars scope="server" />
 
+A listen address may name port 0, and the server then reports the port it got through its
+ready file ([a server on ports it picks](/guides/cli/#a-server-on-ports-it-picks)).
+
 The node process reads its own small set (the CLI-scope variables surface through the
 [CLI reference](/reference/cli/) instead):
 

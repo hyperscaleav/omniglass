@@ -69,8 +69,12 @@ const reach: Reachability = {
 
 const nodes: Node[] = [{ name: "edge-1", enrolled: true, last_heartbeat_at: iso(5), tags: {} } as Node];
 
+// The cache the last mount rendered from, so a test can land a poll on it.
+let leafClient: QueryClient | undefined;
+
 function mount(path = `/web/components/${uuidFor("cf-c-bar")}`, memberships?: unknown[], component: Component = bar, meOverride: Me = me, alarms?: unknown[], seed?: { reach?: Reachability; nodes?: Node[] }) {
   const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
+  leafClient = qc;
   seedSeverityLevels(qc);
   qc.setQueryData([...FLEET_VIEW_KEY], view);
   qc.setQueryData([...COMPONENTS_KEY], [component]);
@@ -246,11 +250,54 @@ describe("the leaf's dispatch facts (#786)", () => {
     expect(within(card).getByText("6.1")).toBeTruthy();
   });
 
-  it("the collection card shows each endpoint's layer rungs", () => {
+  it("the collection card shows each endpoint's ladder, bottom up", () => {
     mount();
     const card = screen.getByTestId("leaf-collection");
-    expect(within(card).getByText("ping up")).toBeTruthy();
-    expect(within(card).getByText("port open")).toBeTruthy();
+    const rungs = within(card).getAllByTestId("ladder-rung").map((r) => `${r.dataset.rung}:${r.dataset.status}`);
+    expect(rungs).toEqual(["reachable:pass", "responsive:pass"]);
+  });
+
+  // A held session on the component's view (#1059): the pill, and a rejected
+  // session's reason with Retry, where a viewer reads Retry greyed with why.
+  const rejectedReach = {
+    component: "videobar-1",
+    endpoints: [{
+      id: uuidFor("cf-ep-telnet"), endpoint: "telnet", transport: "telnet", node: "edge-1", last_seen: iso(2),
+      verdict: { value: "up", ts: iso(60) }, responsive: { value: "up", ts: iso(60) }, authenticated: { value: "no", ts: iso(30) },
+      session: { state: "rejected", ts: iso(30), reason: "auth: auth rejected" }, rejection: { rung: "authenticated", class: "auth" },
+      layers: [{ layer: "ping", check: "icmp-reachable", value: 1, ts: iso(2) }], history: [],
+    }],
+  } as unknown as Reachability;
+
+  it("the collection card reads a rejected session, its reason, and Retry", () => {
+    mount(undefined, undefined, bar, me, undefined, { reach: rejectedReach });
+    const card = screen.getByTestId("leaf-collection");
+    expect(within(card).getByTestId("session-pill").dataset.state).toBe("rejected");
+    expect(within(card).getByTestId("session-reason").textContent).toBe("auth: auth rejected");
+    expect(within(card).getByTestId("collection-telnet").textContent).toBe("polls stopped");
+    expect((within(card).getByRole("button", { name: /retry/i }) as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  // The view polls the read and every poll hands back fresh objects (last
+  // seen moves): rows are kept by endpoint id, so a rung's open tooltip is
+  // not torn out from under the pointer by the next poll.
+  it("keeps a collection row's elements across a poll that hands back fresh objects", async () => {
+    const { container } = mount(undefined, undefined, bar, me, undefined, { reach: rejectedReach });
+    const card = screen.getByTestId("leaf-collection");
+    const rung = within(card).getAllByTestId("ladder-rung")[0];
+    const qcReach = { ...rejectedReach, endpoints: rejectedReach.endpoints.map((e) => ({ ...e, last_seen: new Date(Date.now() + 5_000).toISOString() })) };
+    // Re-seed through the same cache the view reads, as its poll would.
+    leafClient!.setQueryData([...REACHABILITY_KEY(uuidFor("cf-c-bar"))], qcReach);
+    await new Promise((r) => setTimeout(r, 20));
+    expect(container.contains(rung)).toBe(true);
+  });
+
+  it("a viewer reads the rejected session with Retry greyed and its reason", () => {
+    const viewerMe = { principal: { id: "vw", kind: "human" }, permissions: ["*:read"], grants: [] } as unknown as Me;
+    mount(undefined, undefined, bar, viewerMe, undefined, { reach: rejectedReach });
+    const card = screen.getByTestId("leaf-collection");
+    expect((within(card).getByRole("button", { name: /retry/i }) as HTMLButtonElement).disabled).toBe(true);
+    expect(within(card).getByLabelText(/needs the endpoint:retry permission/i)).toBeTruthy();
   });
 });
 

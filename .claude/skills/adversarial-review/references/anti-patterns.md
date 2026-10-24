@@ -92,6 +92,13 @@ new class appends one. Entries are never silently deleted; a fixed class is mark
   into sinks with no uniqueness key (the audit's P0-1).
 - **Fix:** until #430's staged contract lands, new code must not widen the gap: publish
   with ack where the API allows, and never assume dedup exists downstream.
+- **Single-shot trust publish** (found by the #1032 review, fixed): a security-relevant fact the
+  node learns once (an ssh host key trusted on first use) published once, deduped in memory, and
+  lost on the next recycle. Republish it until the server reflects it back, and carry it in
+  memory across recycles (`pins` in internal/node/session.go). The same holds for the gate a node
+  publishes (`endpoint-rejection`, found by the fingerprint review): republish until the worklist
+  reflects it, under a task chosen from the current worklist (a re-derived driver deletes old task
+  ids), never a cached "already published".
 
 ## hand-written-fact (live)
 
@@ -146,7 +153,11 @@ gated-fetch test, where the api client's async onRequest middleware deferred eve
 the synchronous assertion. Detection cue: a sync spy assertion immediately after `render()`
 or `mount()` claiming an effect did NOT happen. Fix: assert the structural fact synchronously
 (the query cache holds no entry for the gated key), or flush a tick before the spy assertion
-and prove the test can fail by breaking the guard.
+and prove the test can fail by breaking the guard. The same shape after `setQueryData` (#1059):
+solid-query notifies observers a few microtasks later, so one `await Promise.resolve()` asserts
+before the "poll" lands and a rows-survive-a-poll test passed with the rows rebuilt; wait a
+macrotask (`setTimeout(r, 20)`), assert DOM identity (`container.contains(node)`), and prove it
+fails against the unkeyed iteration.
 
 ## css-only-tooltip-on-disabled-control (live)
 
@@ -184,8 +195,43 @@ console then differ, and the zero-tolerance shot gate (#623) reads the flap as U
 Detection cue: a diff adds `Date.now()`, `durationText`, `rel(`, or a spans/weight
 computation to a component any `screenshots:` frontmatter path renders, with no matching
 `mask:` selector in that page's entry. Fix: a stable hook (`data-testid`) on the moving
-region and a mask line in the frontmatter, per the entity blade's duration masks
+region and a mask line in the frontmatter that paints a box the text cannot resize (see
+`text-sized-mask` below), per the entity blade's declared-box since-line mask
 (docs/src/content/docs/guides/operator/entities.md).
+
+## text-sized-mask (fixed by #1081; first met as #773, watch for regressions)
+
+- **Cue:** a `mask:` entry in a page's `screenshots:` frontmatter that is a bare selector
+  resolving to the element holding a value whose width varies: a `text=/…/` selector, or a
+  `data-testid` hook on the value's own span (a since-line, an age, a timestamp), with neither a
+  `>> xpath=ancestor::…` hop to a container the layout pins nor a declared `width`. In the
+  capture output, a selector mask whose box is as wide as its text is the tell
+  (`mask 1x span 157x16 <- [data-testid=blade-since]`, the span exactly its line's width).
+  The opposite overcorrection is a cue too: a container hop that swallows what the shot exists
+  to show (a since-line's whole row, verdict included) where a declared box would do.
+- **Failure:** a mask is painted at the bounding box of what the selector resolves to, so the box
+  is the size of the text, and the text's width moves with the clock (`fmtTime` prints a month
+  name, a bare day and AM or PM; `toLocaleString` leaves the hour bare; `durationText` reads 9s
+  or 17s). The baseline then moves by a column of pixels with no UI change: every recapture
+  rewrites it, churning unrelated PRs, and the zero-tolerance gate holds only while its
+  perceptual threshold happens to absorb the moved edge (#774), and would fail outright once the
+  edge crossed pixels it can see. The audit trail's When column moved 7px, 8,400 changed pixels
+  the gate scored 0.000% (#773); the entity blade's and a system summary card's since-lines moved
+  1px between 01:57 AM and 06:59 PM, 64 and 160 changed pixels the gate scored as zero too
+  (#1081). The overcorrection fails silently the other way: the row mask that first fixed #1081
+  hid the verdict badge from the last two baselines that still gated it.
+- **Fix:** paint a box the text cannot resize. Name a container the layout pins (the cell,
+  `>> xpath=ancestor::td[1]`, pinned by its column descriptor; a whole row only where what follows
+  the value on its line moves with it), checking the container's height as well as its width; or
+  declare the box (`{ selector, width }`, painted at the value's top-left, so only for a value
+  whose left edge stays put: not right-aligned or centered), sized from the widest value a
+  capture can render in the console's face, which the capture refuses by name if the value
+  outgrows it. The text stays the target only where its width is fixed by construction (a
+  36-character uuid in a monospace face). Prove it exactly with the clock moved
+  (`DOCS_SHOTS_EXACT=1 DOCS_SHOTS_TZ=… make docs-shots-check`; the gate's default comparison
+  scores the defect zero, and two captures minutes apart share an hour and prove nothing), and
+  add the value to `web/e2e/shotmask.spec.ts`, which reads the page's own entry, drives the
+  capture's mask code, and fails a mask whose box tracks its value or covers what it keeps.
 
 ## scoped-owner-unscoped-member (fixed; found by the #525 rollup review)
 
@@ -200,3 +246,105 @@ region and a mask line in the frontmatter, per the entity blade's duration masks
   the part's read scope and withhold the owner when any is out of it (`hiddenCalcMembers`,
   internal/storage/calc_state.go). A named fold over every part (an average) is the
   aggregate the owner's state already shows, and may stay.
+
+## fix-range-from-node-spans (fixed; found by the #1054 review)
+
+- **Cue:** a quick fix or source rewrite whose replaced range is built from AST node
+  locations alone (`Location()`, a node's min and max offsets), not from the source's tokens.
+- **Failure:** a node's location never covers the brackets around it (Expr keeps no node for
+  a parenthesized group), so the edit leaves one bracket behind: `(count(xs, p)) == len(xs)`
+  "fixed" to `(all(xs, p)`, which no longer parses; one click turns a saving expression into a
+  refused one.
+- **Fix:** widen the range over the enclosing brackets by tokens before replacing it
+  (`subject.bracketed`, internal/expression/diagnostics.go), and pin each bracketed shape as a
+  fixture with its `fixed:` source, which the fixture runner recompiles.
+
+## terminal-reply-lost (fixed; found by the #1049 review)
+
+- **Cue:** a session-wide signal channel that an exchange goroutine feeds after the connection's
+  `Done` can already have fired, and that the next connect drains as stale.
+- **Failure:** a component answers with a reply the driver declares terminal and hangs up; the
+  machine sees the drop first, books an ordinary failure, discards the late signal on the next
+  connect, and redials into the lockout.
+- **Fix:** the signal belongs to the connection (allocated with it, `lend` in
+  internal/collection/session.go), and after `Done` the machine waits for the connection's
+  in-flight exchanges before deciding between fail and reject.
+
+## stale-write-deadline (fixed; found by the #1033 review)
+
+- **Cue:** a wrapper that writes on the read path (a negotiation reply, an ack, a keepalive answer)
+  beneath a caller that sets `SetWriteDeadline` per write and never clears it.
+- **Failure:** the wrapper's write inherits a long-expired deadline and fails at once, and its
+  timeout surfaces from `Read`, where a reader using read deadlines as interrupts takes it for its own.
+- **Fix:** clear the deadline after each bounded write, give the inner write its own deadline, and
+  never return an inner write's error as the read's (internal/collection/telnet.go `Read`).
+
+## node-control-key-pushable (fixed; found by the fingerprint review)
+
+- **Cue:** a property a node publishes to steer its own future attempts (a gate, a trusted key)
+  that is also a seeded property type, so the operator push lane accepts it.
+- **Failure:** a push grant plants a gate (commands fail, probes drop rungs) or lifts one with a
+  future-dated `none`, an unaudited bypass of the audited `:retry`.
+- **Fix:** refuse every node-only key on the push lane by name, on every lane
+  (`nodeOnlyRejection` over `probekeys.IsNodeOnly`, internal/api/telemetry.go).
+- **Also (#1059):** a node's account of itself that a surface reads as the node's (a held
+  session's `session-state` and `session-reason`) is the same class: a push read a rejected
+  session up, hiding its Retry, or planted a reason the node never scrubbed.
+- **Also (#1080):** so is every native probe key (the verdict and its rungs, the probe metrics
+  and timings), so the ruling is per key in `internal/collection/probekeys`: `nodeOnly`, or
+  `pushable` with a one-line reason. `TestEveryKeyRuled` fails on a declared key ruled neither,
+  and `TestReachabilityReadsOnlyNodeOnlyKeys` on a key the reachability read serves that is not
+  node-only. A new node-authored key is declared there, not as a literal elsewhere: a key
+  declared outside `probekeys` is invisible to the ruling (`collection-failed` is, #1086).
+
+
+## unvalidated-param-value (fixed; found by the #1061 in-place edit review)
+
+- **Cue:** a patch path that allow-lists a key but never parses its value.
+- **Failure:** the API answers 200 and the node refuses the value at run time (a `timeout` of
+  "five seconds"), so the endpoint stops collecting while the operator saw success.
+- **Fix:** parse the value where it is accepted and refuse it naming the field
+  (`patchedConnection`, internal/storage/endpoints.go).
+
+## fixture-hangs-up-before-the-check (fixed; found by CI on #1061)
+
+- **Cue:** a scripted peer in a real-wire test that reports over a channel and then returns, its
+  deferred `Close` racing a non-blocking check on the client's `Done()` or state.
+- **Failure:** under scheduler pressure the client sees the peer's EOF before the test looks, and
+  a correct EOF fails the test intermittently on CI while passing locally (`telnet_test.go`, CI run
+  40016892001). A 50ms pause before the check reproduces it deterministically.
+- **Fix:** hold the fixture open until the test ends (a `release` channel closed on return), and
+  prove liveness with an action over the connection (a second exchange answered), never a peek.
+
+## fixture-binds-a-fixed-port (fixed; found by the #1061 review; the simulator fixed by #1066, the e2e servers' pick-and-release ports by #1077; watch for regressions)
+
+- **Cue:** a test or fixture that serves on a literal address and port (a simulated component's face
+  at `127.x.y.z:20023`, a `StartTCPSession(51325)`, a port lifted by a fixed offset); a "fresh"
+  address from a package-level counter (it isolates a `-count` rerun, never a second process); a
+  pick-and-release free port handed to a server that binds it later.
+- **Failure:** two test processes on one host (two worktrees, a session beside `make test`) bind the
+  same address and one fails `bind: address already in use`, or worse, a client in one run reaches
+  the other run's server and asserts against the wrong state. The suite is flaky only under the
+  parallel use it most needs to survive.
+- **Fix:** bind port 0 and read the address back: an in-process simulator serves on
+  `sim.EphemeralPorts` and tests aim at `Device.Faces`; a face restarted mid-test rebinds the port
+  it reported. Where a port is fixed by design (the `sim run` mode binds the profile's ports on the
+  endpoint's address, so the endpoints must target those) or pinned on purpose (a port bound on one
+  address and rebound on another), claim an address no other test holds (`simtest.ClaimLoopback`).
+  An out-of-process server binds port 0 too and reports what it got: `omniglass server` takes
+  port 0 on `OMNIGLASS_ADDR` and `OMNIGLASS_NATS_ADDR` and writes the bound addresses to
+  `OMNIGLASS_READY_FILE`, and the e2e tests start it only through `startServer`, which a guard
+  test (`TestOnlyStartServerStartsAServer`) holds them to. Mind a library that reads port 0 as
+  its own default: nats-server binds 4222 for 0, so the bus maps 0 to its ephemeral `-1`.
+  The testcontainer form of the class is `fixed-testcontainer-port`.
+
+## exit-value-consumed-twice (fixed; found by the #1077 review)
+
+- **Cue:** a single-send result channel (`ch <- cmd.Wait()`, a buffered `chan error` written once)
+  read both by a failure branch (a wait that gives up when the process dies) and by a cleanup or
+  teardown that waits for the same exit.
+- **Failure:** whichever reader sees the exit first takes the only value; when the failure branch
+  wins, the cleanup blocks forever, so one fast boot failure becomes a suite-wide timeout panic that
+  aborts every later test and never prints the error that started it.
+- **Fix:** broadcast the exit by closing a channel and keep the result in a field read after it
+  closes (`process` and `watch`, internal/e2e/server_e2e_test.go; `TestADeadServerFailsTheWaitAndFreesItsCleanup`).

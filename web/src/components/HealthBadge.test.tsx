@@ -44,11 +44,10 @@ describe("HealthBadge", () => {
     expect(seen.size).toBe(3); // never one accent for "not fine"
   });
 
-  // Healthy stays grey (#872, the outline's rule carried to every fleet
-  // surface): a hue means "look here", so a healthy fleet reads calm and the
-  // one troubled system is the only colour on the page. The word and the
-  // glyph still carry the state.
-  it("draws healthy in the neutral chip, with no hue", () => {
+  // Healthy reads green (#1067, reversing #872's grey): a grey healthy chip
+  // read as the grey unknown one. Healthy wears its own class so the hue lives
+  // in one place (app.css), and never the ghost chip unknown wears.
+  it("draws healthy in its own green chip, never the unknown one", () => {
     const { getByText } = mount(() => <HealthBadge verdict="healthy" />);
     const cls = getByText("healthy").className;
     expect(cls).toContain("badge-healthy");

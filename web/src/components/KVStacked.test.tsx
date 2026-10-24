@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { render } from "@solidjs/testing-library";
+import { render, fireEvent, screen } from "@solidjs/testing-library";
 import KVStacked from "./KVStacked";
 
 describe("KVStacked", () => {
@@ -56,6 +56,25 @@ describe("KVStacked", () => {
 
   it("marks nothing when the fact is the row's own", () => {
     const { queryByRole } = render(() => <KVStacked label="Stem" value="carray" provenance="" />);
+    expect(queryByRole("button")).toBeNull();
+  });
+
+  // A fact teaches what it is the way a field does: an (i) beside the label,
+  // opening on keyboard focus, so a detail surface carries no explanatory
+  // prose (a pinned key's fingerprint, #1078).
+  it("teaches the fact through an (i) beside its label when given a hint", async () => {
+    const { getByText, getByRole } = render(() => (
+      <KVStacked label="Pinned key" value="SHA256:abc" hint="The key every connection must present." />
+    ));
+    const tip = getByRole("button", { name: "More about Pinned key" });
+    expect(getByText("Pinned key").contains(tip)).toBe(true);
+    fireEvent.keyDown(document.body, { key: "Tab" });
+    tip.focus();
+    expect(await screen.findByText("The key every connection must present.")).toBeTruthy();
+  });
+
+  it("draws no (i) without a hint", () => {
+    const { queryByRole } = render(() => <KVStacked label="Pinned key" value="SHA256:abc" />);
     expect(queryByRole("button")).toBeNull();
   });
 });

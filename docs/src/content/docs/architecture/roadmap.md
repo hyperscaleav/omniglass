@@ -22,7 +22,7 @@ Three surfaces carry the time axis, and this page ties them together:
 
 The platform half is well past its midpoint. The single binary runs in `server` / `node` / `migrate`
 modes over a BYO Postgres, and the tiers below are shipped, tested, and live in the console; the
-per-slice detail (136 entries at this update) is on [implementation status](/architecture/status/).
+per-slice detail is on [implementation status](/architecture/status/).
 
 - **Identity and access, end to end.** Password, session-cookie, and API-token auth with expiry,
   lockout, and password policy; the full principal lifecycle (disable, archive, purge); impersonation
@@ -37,14 +37,30 @@ per-slice detail (136 entries at this update) is on [implementation status](/arc
   the [settings](/architecture/settings/) engine (platform rung), and the unified resolution panel
   that explains which value won and why.
 - **The collection vertical.** The [node](/architecture/nodes/) runtime with enrollment and claim,
-  embedded NATS/JetStream with per-node subject isolation, the icmp and tcp probes, the
-  transition-only reachability verdict and its panel, endpoint and task authoring, and the raw-log
-  lane with node self-logs ([ADR-0066](/architecture/decisions/#adr-0066-logs-are-a-raw-ingest-lane-not-events)).
+  embedded NATS/JetStream with per-node subject isolation, the transition-only reachability verdict
+  and its panel, endpoint and task authoring, and the raw-log lane with node self-logs
+  ([ADR-0066](/architecture/decisions/#adr-0066-logs-are-a-raw-ingest-lane-not-events)). The
+  stateless arc of [#603](https://github.com/hyperscaleav/omniglass/issues/603) (#824) made transports
+  code and completed the layer-7 ladder: an `http` probe draws a real response and an `ssh` probe runs a
+  real key exchange and tries the endpoint credential, so an endpoint reports reached, responsive, and
+  authenticated, not just an open port. The same arc shipped the declarative driver spec, poll
+  interpretation, and the command wire that actuates a device and settles against what it reports. The
+  stateful arc followed: the line protocol holds a session whose listeners land the device's pushes
+  (#816, #817), polls run on their declared schedule (#822), and an attached endpoint's tasks
+  re-derive when its driver's spec changes (#823).
 - **The telemetry ontology.** The `metric_type` / `property_type` / `event_type` / `command_type`
   registries, the sample lanes (`metric`, `property`, `event`, `log_line`), current values derived
   from the series, and the
   [command](/architecture/commands/) pillar with computed settlement
   ([ADR-0063](/architecture/decisions/#adr-0063-the-telemetry-model-is-typed-registries-over-bare-noun-data-tables)).
+- **Expressions and rules.** The [expression engine](/architecture/expressions/) (#975,
+  [ADR-0146](/architecture/decisions/#adr-0146-expressions-run-on-pinned-expr-with-an-allowlist-and-per-site-budgets-and-rule-criteria-are-expressions))
+  is the one language the rules share. [Event rules](/architecture/alarms-actions/#the-event_rule) judge
+  it on the ingest path and raise alarms at a severity level (#936,
+  [ADR-0144](/architecture/decisions/#adr-0144-alarms-are-raised-by-event-rules-at-a-severity-level-from-a-ranked-registry)),
+  recording each edge as a derived event, with or without an alarm (#955). [Calc rules](/architecture/calculations/)
+  derive samples from samples (#1017,
+  [ADR-0148](/architecture/decisions/#adr-0148-calc-rules-run-on-a-durable-pending-set-and-a-server-tick-not-a-jetstream-consumer)).
 - **Delivery and the pipeline.** `make gen` emits the OpenAPI document, the cobra CLI, the typed SPA
   client, the CLI reference, and the generated ERD; goreleaser builds the release matrix and the
   multi-arch image; the Helm chart deploys production and powers per-PR preview environments.
@@ -56,7 +72,7 @@ authoritative.
 
 | Epic | Outcome | Lands in |
 |---|---|---|
-| [Release 0.1.0 (#825)](https://github.com/hyperscaleav/omniglass/issues/825) | Ahead: the first public tag. Three lanes ship first: [drivers, listeners, and the command wire (#603)](https://github.com/hyperscaleav/omniglass/issues/603), [the expression engine (#524)](https://github.com/hyperscaleav/omniglass/issues/524), and [the event rule tier (#819)](https://github.com/hyperscaleav/omniglass/issues/819), with the delivery half of [telemetry integrity (#430)](https://github.com/hyperscaleav/omniglass/issues/430) and the [role staffing bugs (#504)](https://github.com/hyperscaleav/omniglass/issues/504); the epic lists the pre-tag hygiene and the four open calls. | [collection](/architecture/collection/), [expressions](/architecture/expressions/), [alarms and actions](/architecture/alarms-actions/) |
+| [Release 0.1.0 (#825)](https://github.com/hyperscaleav/omniglass/issues/825) | Ahead: the first public tag. The expression engine (#524) and the event rule tier (#819) are done, as is the stateless arc of [drivers, listeners, and the command wire (#603)](https://github.com/hyperscaleav/omniglass/issues/603). **#603's stateful arc closes the epic**: [sessions (#816)](https://github.com/hyperscaleav/omniglass/issues/816) that hold a connection and recover it, [listeners (#817)](https://github.com/hyperscaleav/omniglass/issues/817) that take device-pushed payloads over a held session, scheduled polls (#822), re-derived driver tasks (#823), and [the collection decision set (#818)](https://github.com/hyperscaleav/omniglass/issues/818). Beside it ride the delivery half of [telemetry integrity (#430)](https://github.com/hyperscaleav/omniglass/issues/430) and the [role staffing bugs (#504)](https://github.com/hyperscaleav/omniglass/issues/504); the epic lists the pre-tag hygiene. | [collection](/architecture/collection/), [nodes](/architecture/nodes/) |
 | [Groups as scope and the cross-tier cascade (#10)](https://github.com/hyperscaleav/omniglass/issues/10) | Ahead: entity-groups as scope anchors and dynamic-membership scope, plus the cross-tier cascade (a location scope reaching its systems and components). Principal groups as grant subjects shipped; group-as-scope has not. | [identity and access](/architecture/identity-access/), [groups](/architecture/groups/), [cascade](/architecture/cascade/) |
 | [Public releases (#57)](https://github.com/hyperscaleav/omniglass/issues/57) | Ahead: signed and notarized binaries for every major OS/arch and one-line installs (Homebrew / Scoop / winget), so a first-time user runs with no security warning. | [scaling and deployment](/architecture/scaling/) |
 | [Embedded Postgres run mode (#19)](https://github.com/hyperscaleav/omniglass/issues/19) | Ahead: an opt-in single-binary mode with a managed embedded Postgres, for edge, demo, and learning installs with zero external database. | [scaling and deployment](/architecture/scaling/) |
@@ -74,25 +90,34 @@ automation and read tier. The broad order the remaining work follows, each band 
 that describes the target:
 
 1. **Collection at the edge.** Substantially landed: the [node](/architecture/nodes/) runtime, the
-   embedded bus, the icmp/tcp probes, edge parsing, and [endpoint](/architecture/collection/) and task
-   authoring all shipped. Still ahead: [templates](/architecture/templates/) (the reusable device
-   shape) and the richer transports (real snmp / http / ssh drivers, webhook listeners; today `ssh`
-   and `http` probe as tcp-connect only).
+   embedded bus, the probes up the layer-7 ladder (`http` and `ssh` prove a real answer, not only an
+   open port), the declarative driver spec with poll interpretation, the command wire, and
+   [endpoint](/architecture/collection/) and task authoring all shipped, and so did the stateful half:
+   held line sessions and the listeners that ride them (#603), now over `tcp`, `telnet` and `ssh`,
+   each authenticating before it acts and stopping on a refusal it cannot fix (#1049, #1033, #1032).
+   Still ahead: [templates](/architecture/templates/) (the reusable device shape, #827), the snmp
+   driver, the held transports beyond those (#1034 to #1041), protocols that move whole files (#1043 to
+   #1047), and server-hosted listeners (webhook, trap, syslog ingress, #1024).
 2. **The data model.** Landed except one piece: [properties](/architecture/properties/) (the
    canonical-signal registry and the exclusive-arc owner columns), the sample sinks,
    [config and variables](/architecture/variables/) resolved down the
-   [cascade](/architecture/cascade/) all shipped. Still ahead: the
-   [expression engine](/architecture/expressions/) the rules and filters share.
+   [cascade](/architecture/cascade/) all shipped, and so has the
+   [expression engine](/architecture/expressions/) the rules share. Still ahead on this band: the
+   rest of the expression design (the Omniglass functions, unit conversion, and the sites beyond rule
+   criteria and calc).
 3. **Detection and verdict.** [Events](/architecture/events/) shipped (their registry, sink, and
    lineage columns), as did [commands](/architecture/commands/) with settlement, and the **verdict half
    has landed**: an alarm impairs a component's own verdict, an impaired role sinks its system by its
-   impact, and the transitions record when it changed. What remains is what **produces** an alarm (the
-   `event_rule` tier), [calculations](/architecture/calculations/), and what **acts** on one
-   ([alarms and actions](/architecture/alarms-actions/), the automation tier).
+   impact, and the transitions record when it changed. What **produces** an alarm has landed too: the
+   `event_rule` tier raises and clears alarms at a severity level, and component
+   [calc rules](/architecture/calculations/) derive the samples rules judge. What remains is what
+   **acts** on an alarm ([alarms and actions](/architecture/alarms-actions/), the automation tier).
 4. **The machinery underneath.** The [messaging](/architecture/messaging/) subject contract, per-node
    subject isolation, and the durable JetStream telemetry consumer
-   ([workers](/architecture/workers/)) shipped. Still ahead: the raw/trusted two-lane data plane,
-   [time](/architecture/time/) as a primitive, and the CDC bridge on
+   ([workers](/architecture/workers/)) shipped, beside three server loops that are not consumers (the
+   command settlement sweep, the event rule sweep, and the calc tick). Still ahead: the raw/trusted
+   two-lane data plane, [time](/architecture/time/) as a primitive (#419, where those loops converge),
+   and the CDC bridge on
    [storage](/architecture/storage/).
 5. **The read side, in full.** [Views](/architecture/views/) and the `ViewResult` renderer, composable
    dashboards, and the exploration surfaces on the [UI](/architecture/ui/), plus the

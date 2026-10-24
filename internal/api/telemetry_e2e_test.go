@@ -83,7 +83,7 @@ func TestTelemetryPushAPI(t *testing.T) {
 		"owner":  map[string]any{"kind": "component", "ref": "bar-1"},
 		"source": "webex-cloud",
 		"metrics": []map[string]any{
-			{"name": "icmp-rtt-avg", "value": 12.4, "ts": suppliedTS.Format(time.RFC3339)},
+			{"name": "room-temperature", "value": 21.5, "ts": suppliedTS.Format(time.RFC3339)},
 			{"name": "audio-level", "value": -42.5},
 		},
 		"properties": []map[string]any{
@@ -113,8 +113,8 @@ func TestTelemetryPushAPI(t *testing.T) {
 	// The lane the caller chose is the table the row landed in, and the supplied
 	// per-sample ts survived ingest verbatim (the #594 ts rule).
 	waitFor(t, "the metric row", func() bool {
-		m, err := gw.LatestMetric(ctx, "bar-1", "icmp-rtt-avg")
-		return err == nil && m != nil && m.Value == 12.4 && m.Source == "webex-cloud" && m.TS.Equal(suppliedTS)
+		m, err := gw.LatestMetric(ctx, "bar-1", "room-temperature")
+		return err == nil && m != nil && m.Value == 21.5 && m.Source == "webex-cloud" && m.TS.Equal(suppliedTS)
 	})
 	waitFor(t, "the property row", func() bool {
 		s, err := gw.LatestProperty(ctx, "bar-1", "video-input", "")
@@ -152,6 +152,9 @@ func TestTelemetryPushAPI(t *testing.T) {
 		t.Fatalf("reject-not-project failed: audio-level landed as %+v", m)
 	}
 
+	// A native probe key (a node's own observation, its gate, its session) is
+	// refused by name on every lane: TestTelemetryPushRefusesNativeKeys.
+
 	// SCHEMA VIOLATION IS A 422 (#594 acceptance): the name resolves, so the
 	// mistake is in the data, and the request is refused whole rather than
 	// half-landing a batch around it. video-input's seeded validation is an
@@ -188,11 +191,11 @@ func TestTelemetryPushAPI(t *testing.T) {
 	out = c.do(ownerTok, http.MethodPost, "/telemetry:push", map[string]any{
 		"owner": map[string]any{"kind": "component", "ref": "bar-1"},
 		"metrics": []map[string]any{
-			{"name": "video-input", "value": 3},    // a property name on the metric lane
-			{"name": "icmp-rtt-avg", "value": 9.5}, // correct, must still land
+			{"name": "video-input", "value": 3},        // a property name on the metric lane
+			{"name": "room-temperature", "value": 9.5}, // correct, must still land
 		},
 		"events": []map[string]any{
-			{"name": "icmp-rtt-avg", "message": "x"}, // a metric name on the event lane
+			{"name": "room-temperature", "message": "x"}, // a metric name on the event lane
 		},
 	}, http.StatusAccepted)
 	var mismatch pushResp
@@ -211,9 +214,9 @@ func TestTelemetryPushAPI(t *testing.T) {
 			if !strings.Contains(r.Reason, "metric") {
 				t.Errorf("video-input rejection %q does not name the metric lane", r.Reason)
 			}
-		case "icmp-rtt-avg":
+		case "room-temperature":
 			if !strings.Contains(r.Reason, "event") {
-				t.Errorf("icmp-rtt-avg rejection %q does not name the event lane", r.Reason)
+				t.Errorf("room-temperature rejection %q does not name the event lane", r.Reason)
 			}
 		default:
 			t.Errorf("unexpected rejection %+v", r)

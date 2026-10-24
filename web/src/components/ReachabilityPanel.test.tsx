@@ -193,10 +193,11 @@ describe("ReachabilityPanel identity", () => {
   });
 });
 
-// The layer-7 rungs (#812): the responds and auth chips render only once a
-// probe has climbed them, so a plain tcp endpoint's row is untouched.
+// The layer-7 rungs (#812) read as the ladder (#1059, ADR-0158): the ping,
+// the transport rung, and the login only once a credential was tried, so a
+// plain tcp endpoint's row carries no login rung.
 describe("the layer-7 rungs", () => {
-  it("renders responds and auth chips from the read, and omits them when absent", () => {
+  it("reads the ladder from the read, the login rung only where a credential was tried", () => {
     mount({
       component: compId,
       endpoints: [
@@ -210,10 +211,10 @@ describe("the layer-7 rungs", () => {
         { endpoint: "disp-1-tcp", transport: "tcp", verdict: null, layers: [], history: [] },
       ],
     });
-    expect(screen.getByText("responds")).toBeTruthy();
-    expect(screen.getByText("auth failed")).toBeTruthy();
-    expect(screen.queryByText("no response")).toBeNull();
-    expect(screen.queryByText("auth ok")).toBeNull();
+    const groups = screen.getAllByRole("group", { name: /reachability ladder/i });
+    const rungsOf = (g: HTMLElement) => [...g.querySelectorAll<HTMLElement>("[data-testid=ladder-rung]")].map((r) => `${r.dataset.rung}:${r.dataset.status}`);
+    expect(rungsOf(groups[0])).toEqual(["reachable:unknown", "responsive:pass", "authenticated:fail"]);
+    expect(rungsOf(groups[1])).toEqual(["reachable:unknown", "responsive:unknown"]);
   });
 
   // The pill ages with a clock of its own, not with the data (#934): a poll
@@ -233,5 +234,54 @@ describe("the layer-7 rungs", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+// A held session on the Endpoints panel (#1059): the pill on the row, and for
+// a rejected or down session the reason beneath it without expanding, since a
+// session the node will not leave on its own is the row's whole story.
+describe("a held session on the row", () => {
+  const telnetRow = (state: "up" | "rejected", lastSeen = new Date().toISOString()) => ({
+    id: uuidFor("if-telnet"), endpoint: "telnet", transport: "telnet", node: "node-a", last_seen: lastSeen,
+    verdict: { value: "up", ts: lastSeen }, responsive: { value: "up", ts: lastSeen },
+    ...(state === "rejected"
+      ? { authenticated: { value: "no", ts: lastSeen }, session: { state, ts: lastSeen, reason: "auth: auth rejected" }, rejection: { rung: "authenticated" as const, class: "auth" } }
+      : { session: { state, ts: lastSeen } }),
+    layers: [], history: [],
+  });
+
+  it("wears the session pill and shows a rejected session's reason and Retry, unexpanded", () => {
+    mount({ component: compId, endpoints: [telnetRow("rejected")] });
+    expect(screen.getByTestId("session-pill").dataset.state).toBe("rejected");
+    expect(screen.getByTestId("session-reason").textContent).toBe("auth: auth rejected");
+    expect(screen.getByRole("button", { name: /retry/i })).toBeTruthy();
+  });
+
+  it("shows no notice for an up session", () => {
+    mount({ component: compId, endpoints: [telnetRow("up")] });
+    expect(screen.getByTestId("session-pill").dataset.state).toBe("up");
+    expect(screen.queryByTestId("session-notice")).toBeNull();
+  });
+
+  // The component's view polls this read every five seconds and every poll
+  // hands back fresh objects (last_seen moves), so rows are kept by endpoint,
+  // not by object: an expanded row, and a retry waiting on its session, must
+  // survive the next poll.
+  it("keeps an expanded row open across a poll that hands back fresh objects", async () => {
+    const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
+    qc.setQueryData([...REACHABILITY_KEY(compId)], { component: compId, endpoints: [telnetRow("up")] });
+    render(() => (
+      <QueryClientProvider client={qc}>
+        <ReachabilityPanel name={compId} />
+      </QueryClientProvider>
+    ));
+    const toggle = screen.getByRole("button", { expanded: false });
+    fireEvent.click(toggle);
+    expect(screen.getByText(/probed by/)).toBeTruthy();
+    qc.setQueryData([...REACHABILITY_KEY(compId)], { component: compId, endpoints: [telnetRow("up", new Date(Date.now() + 5_000).toISOString())] });
+    // The query notifies its observers asynchronously: let the poll land.
+    await new Promise((r) => setTimeout(r, 20));
+    expect(document.body.contains(toggle)).toBe(true);
+    expect(screen.getByText(/probed by/)).toBeTruthy();
   });
 });

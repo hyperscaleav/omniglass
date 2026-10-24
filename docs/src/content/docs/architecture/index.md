@@ -183,9 +183,15 @@ The journey rides on a few foundations:
   write goes through it, which is where **scope** ([identity and access](/architecture/identity-access/))
   is enforced: a permission on every route, a visibility filter on every query. A grant can target a
   **[group](/architecture/groups/)** of principals as well as a single one.
-- the **[workers](/architecture/workers/)** are one machinery: durable JetStream consumers over the
-  **[messaging](/architecture/messaging/)** subject contract. The built one is the telemetry
-  consumer; the rule engine, the clock, and reconcile follow the same shape; no bespoke loops.
+- the **[workers](/architecture/workers/)** are durable JetStream consumers over the
+  **[messaging](/architecture/messaging/)** subject contract; the built one is the telemetry
+  consumer. Not all background work rides one yet: the event rule sweep closes sustains and
+  reconciles streaks on a server tick
+  ([ADR-0144](/architecture/decisions/#adr-0144-alarms-are-raised-by-event-rules-at-a-severity-level-from-a-ranked-registry)
+  point 6), and calc rules drain a durable pending set on a tick of their own
+  ([ADR-0148](/architecture/decisions/#adr-0148-calc-rules-run-on-a-durable-pending-set-and-a-server-tick-not-a-jetstream-consumer)).
+  Those loops are replica-safe and lose nothing on restart; [time](/architecture/time/) as a
+  primitive (#419) is where they converge.
 - the **[audit](/architecture/audit/)** trail and the operational logs are immutable, append-only
   ground truth: the record of who changed what and what the platform did.
 - **[time](/architecture/time/)** is the one primitive that turns the passage of time into events, so

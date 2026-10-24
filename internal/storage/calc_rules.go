@@ -45,6 +45,9 @@ type CalcRule struct {
 	// written outside the gateway); nil when it compiles. Read beside the
 	// rule, never stored or audited.
 	CalcError *CalcFault `json:"-"`
+	// CalcWarnings are the warnings the stored reduce compiles with
+	// (#1021): notes, never a fault; the rule computes all the same.
+	CalcWarnings []CalcFault `json:"-"`
 	// outputType is the output's value type, from the registry row the rule
 	// holds by id on its recorded lane, never re-resolved by name; outputID
 	// is that row's id.
@@ -58,14 +61,16 @@ type CalcRule struct {
 	candidate bool
 }
 
-// CalcFault is a stored rule's compile error as a reader sees it: the field
-// at fault, the 1-based line and column when the reduce's expression is what
-// failed (0 otherwise), and the message.
+// CalcFault is a stored rule's compile error, or a warning, as a reader
+// sees it: the field at fault, the 1-based line and column when the reduce's
+// expression is what failed (0 otherwise), the message, and the diagnostic's
+// code when a registered rule (#1021) gave it.
 type CalcFault struct {
 	Field   string
 	Line    int
 	Column  int
 	Message string
+	Code    string
 }
 
 // CalcRuleSelector picks a rule's owners. A component rule's is the event
@@ -227,7 +232,7 @@ func (p *PG) ListCalcRules(ctx context.Context) ([]CalcRule, error) {
 		return nil, err
 	}
 	for i := range out {
-		out[i].CalcError = p.calcFault(out[i])
+		p.withCalcNotes(&out[i])
 	}
 	return out, nil
 }
@@ -235,7 +240,7 @@ func (p *PG) ListCalcRules(ctx context.Context) ([]CalcRule, error) {
 // withCalcFault sets r's CalcError from the registries as they are now (the
 // key types its read resolved).
 func (p *PG) withCalcFault(_ context.Context, r *CalcRule) (*CalcRule, error) {
-	r.CalcError = p.calcFault(*r)
+	p.withCalcNotes(r)
 	return r, nil
 }
 

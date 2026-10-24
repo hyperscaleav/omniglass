@@ -13,6 +13,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"golang.org/x/crypto/ssh"
 	"io"
 	"log/slog"
 	"net"
@@ -21,6 +22,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"text/template"
 	"time"
 
@@ -273,18 +275,34 @@ type Device struct {
 	// deterministic, individually phased random walks across runs.
 	rand *deviceRand
 
+	// faces records the address each face the engine started bound, in
+	// profile order (Faces).
+	faceMu sync.Mutex
+	faces  []Face
+
 	// One listener per protocol. Future stages populate snmp/ssh/telnet/udp.
-	httpMu         sync.Mutex
-	httpServers    []*http.Server // one per declared http interface
-	httpListeners  []net.Listener // the sockets under httpServers, closed by StopHTTP itself
-	httpAddrs      []net.Addr
-	httpServing    sync.WaitGroup // one per running serve goroutine
-	snmpServer     snmpShutdowner // the SNMP read loop, kept as an interface so device.go doesn't import the server package
-	sshListener    net.Listener
-	telnetListener net.Listener
-	tcpMu          sync.Mutex
-	tcpListeners   []net.Listener // raw TCP, persistent-session-only (no one-shot equivalent), one per interface
-	udpConn        net.PacketConn
+	httpMu        sync.Mutex
+	httpServers   []*http.Server // one per declared http interface
+	httpListeners []net.Listener // the sockets under httpServers, closed by StopHTTP itself
+	httpAddrs     []net.Addr
+	httpServing   sync.WaitGroup // one per running serve goroutine
+	snmpServer    snmpShutdowner // the SNMP read loop, kept as an interface so device.go doesn't import the server package
+	sshListener   net.Listener
+	// sshHostKey is the device's SSH host key, minted on the first StartSSH
+	// and kept across listener restarts, as a real device keeps its key; a
+	// test rotates it to model a replaced or reimaged device (#1032).
+	sshHostKey ssh.Signer
+	// telnetSilentReject makes the telnet login hang up on a wrong password
+	// with no text (#1056).
+	telnetSilentReject atomic.Bool
+	// telnetLogins counts the logins the telnet face was sent.
+	telnetLogins atomic.Int64
+	// sshPasswordTries counts the passwords the ssh face was sent.
+	sshPasswordTries atomic.Int64
+	telnetListener   net.Listener
+	tcpMu            sync.Mutex
+	tcpListeners     []net.Listener // raw TCP, persistent-session-only (no one-shot equivalent), one per interface
+	udpConn          net.PacketConn
 
 	// Persistent-session machinery. Populated by the engine when an
 	// interface is declared with persistent: true. The SSH registry
@@ -1279,14 +1297,22 @@ func contentTypeFor(tmplName string) string {
 
 // StartHTTP starts the device's HTTP listener on its loopback IP. When
 // tlsCert is non-nil the listener serves HTTPS; otherwise it serves
-// plain HTTP.
+// plain HTTP. Port 0 takes a free port from the kernel (HTTPAddrs reads it).
 func (d *Device) StartHTTP(port int, tlsCert *tls.Certificate) error {
+	_, err := d.startHTTP(port, tlsCert)
+	return err
+}
+
+// startHTTP binds and serves one HTTP listener and returns the address it
+// bound.
+func (d *Device) startHTTP(port int, tlsCert *tls.Certificate) (net.Addr, error) {
 	addr := fmt.Sprintf("%s:%d", d.LoopbackIP.String(), port)
 	lis, err := net.Listen("tcp", addr)
 	if err != nil {
-		return fmt.Errorf("listening on %s: %w", addr, err)
+		return nil, fmt.Errorf("listening on %s: %w", addr, err)
 	}
-	d.Port = port
+	d.Port = boundPort(lis.Addr())
+	addr = lis.Addr().String()
 
 	srv := &http.Server{Handler: d,
 		// The server's own complaints (a TLS port check that never shakes
@@ -1323,7 +1349,7 @@ func (d *Device) StartHTTP(port int, tlsCert *tls.Certificate) error {
 			slog.Error("device HTTP error", "device", d.Hostname, "error", err)
 		}
 	}()
-	return nil
+	return lis.Addr(), nil
 }
 
 // HTTPAddrs returns the bound address of each HTTP listener the device is

@@ -121,8 +121,10 @@ input key was since retyped stays editable), and an unchanged output is not re-c
 inputs given again by name compare equal to the same keys held by id. Enabling a rule recompiles it. A
 stored reduce that no longer compiles (an input key retyped, a row written outside the gateway) is not
 silent: every read carries `calc_error` (the field, the line and column when the expression is what
-failed, and the message), compiled once per rule version and key typing, and such a rule cannot be
-enabled until it compiles. Deleting a property or metric type a rule writes, or one a rule reads, is a
+failed, the message, and the diagnostic's code when a registered one refused it), compiled once per rule
+version and key typing, and such a rule cannot be enabled until it compiles. A reduce that compiles with a
+warning, such as an input it never names, carries it in `calc_warnings`: a note on the blade that never
+refuses a save. Deleting a property or metric type a rule writes, or one a rule reads, is a
 409 naming the rule.
 
 ## How a calc rule runs

@@ -1,0 +1,35 @@
+# Fix an expression with a quick fix (#1021): author a calc rule that counts a
+# component's slow endpoints, write the count as a sum (the common mistake),
+# read the field explain it on the sum with its code, apply the one-click fix,
+# and save the rule. The simulated fleet answers TCP on every component, so
+# tcp-connect-time has current values on the walkthrough stack.
+title: Fix an expression with a quick fix
+description: Write a calc rule's expression with a common mistake, read the plain-words diagnostic the field gives on the spot, apply its one-click fix, and save the rule.
+steps:
+  - goto: /calc-rules
+    caption: Calc rules derive a value from others. This one counts a component's slow endpoints.
+  - click: { role: button, name: New rule }
+    caption: New rule opens the drawer.
+  - type: { target: { role: textbox, name: Name, exact: true }, text: slow-endpoints }
+    caption: Name the rule.
+  - select: { target: { role: combobox, name: Input 1 key, exact: true }, value: tcp-connect-time }
+    caption: It reads TCP connect time, one value per endpoint, as the list tcp_connect_time.
+  - click: { role: button, name: New metric, exact: true }
+    caption: It writes a metric of its own. Register it here.
+  - type: { target: { role: textbox, name: New metric name, exact: true }, text: slow-endpoints }
+    caption: Name the metric.
+  - click: { role: button, name: Create metric, exact: true }
+    caption: Create it. The rule now writes it.
+  - type: { target: { role: textbox, name: Reduce, exact: true }, text: 'sum(tcp_connect_time, # > 50)' }
+    caption: Count the endpoints slower than 50 ms. A sum is the natural first guess.
+  - wait: { selector: '[data-testid="expression-diagnostic"][data-severity="error"]', timeout: 10000 }
+    caption: The field explains the mistake on the sum itself, links its code to the docs, and offers a fix.
+    poster: true
+  - click: { role: button, name: Use count, exact: true }
+    caption: Use count rewrites it in one click. Ctrl-Z would take it back.
+  - wait: { selector: '[data-testid="expression-ok"]', timeout: 10000 }
+    caption: Now it compiles and yields a number, as the metric needs.
+  - click: { role: button, name: Create rule }
+    caption: Save it. The rule computes whenever an endpoint's time changes.
+  - wait: { selector: '[data-testid="calc-expr"]', timeout: 10000 }
+    caption: Its blade shows the expression it computes by.

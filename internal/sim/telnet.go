@@ -27,10 +27,22 @@ import (
 // After login, reads lines and dispatches through Device.RunCommand.
 // `exit` / `quit` / EOF close the session.
 func (d *Device) StartTelnet(port int, defaultUser, defaultPassword string, permissive bool) error {
+	_, err := d.startTelnet(port, defaultUser, defaultPassword, permissive)
+	return err
+}
+
+// startTelnet binds and serves the telnet listener and returns the address
+// it bound.
+func (d *Device) startTelnet(port int, defaultUser, defaultPassword string, permissive bool) (net.Addr, error) {
 	addr := fmt.Sprintf("%s:%d", d.LoopbackIP.String(), port)
 	lis, err := net.Listen("tcp", addr)
 	if err != nil {
-		return fmt.Errorf("listening on %s: %w", addr, err)
+		return nil, fmt.Errorf("listening on %s: %w", addr, err)
+	}
+	addr = lis.Addr().String()
+	port = boundPort(lis.Addr()) // what its hits and sessions report
+	if reg := d.telnetSession; reg != nil {
+		reg.setPort(port)
 	}
 	tracked := trackConns(lis, d.logConnect)
 	d.telnetListener = tracked
@@ -56,8 +68,16 @@ func (d *Device) StartTelnet(port int, defaultUser, defaultPassword string, perm
 			go d.serveTelnetConn(conn, defaultUser, defaultPassword, effectivePermissive, port)
 		}
 	}()
-	return nil
+	return lis.Addr(), nil
 }
+
+// TelnetLogins counts the logins the telnet face was sent (a username and a
+// password), right or wrong: a test reads how often a credential was tried.
+func (d *Device) TelnetLogins() int64 { return d.telnetLogins.Load() }
+
+// SetTelnetSilentReject makes the telnet login hang up on a wrong password
+// without writing "auth rejected", as some devices do (#1056).
+func (d *Device) SetTelnetSilentReject(silent bool) { d.telnetSilentReject.Store(silent) }
 
 // StopTelnet closes the telnet listener and every connection it accepted.
 func (d *Device) StopTelnet() {
@@ -109,9 +129,14 @@ func (d *Device) serveTelnetConn(conn net.Conn, defaultUser, defaultPassword str
 		return
 	}
 	_, _ = io.WriteString(w, "\r\n")
+	d.telnetLogins.Add(1)
 
 	if !telnetAuthOK(user, pass, defaultUser, defaultPassword, permissive) {
-		_, _ = io.WriteString(w, "auth rejected\r\n")
+		// A silent device hangs up on a wrong password without a word, the
+		// case a driver's terminal rule cannot match (#1056).
+		if !d.telnetSilentReject.Load() {
+			_, _ = io.WriteString(w, "auth rejected\r\n")
+		}
 		return
 	}
 

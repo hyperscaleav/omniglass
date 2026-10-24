@@ -131,14 +131,12 @@ Each is a gate; a red one blocks the ship.
    - **Record it on the PR.** Resolve any merge conflicts (GitHub runs no `pull_request`
      workflow on a conflicted PR), push, then apply the `run:walkthrough` label. CI records the
      branch tip: every walkthrough, or, when the PR changes nothing under `web/` but scripts,
-     just the scripts it adds or changes. It replaces the PR's stills under
-     `.github/screenshots/<pr>/walkthroughs/` on the branch and upserts one PR comment
-     embedding them by commit SHA, with the mp4s as a workflow artifact. A failed walkthrough
+     just the scripts it adds or changes. It commits each walkthrough's mp4, preview, poster and
+     stills to the PR's evidence ref (`refs/walkthroughs/pr-<n>`, never the PR branch, so there
+     is nothing to pull and the head's checks are untouched) and upserts one PR comment that links
+     a scrubbable video per walkthrough and embeds the rest by commit SHA. A failed walkthrough
      fails the job and is named in the comment (a stack that never came up says so instead);
-     fix it and re-run. **Pull after the run** (the stills commit is now on your branch). GitHub
-     starts no workflow for the workflow token's push, so if the stills commit is the head, run
-     the PR's other checks on it with an empty commit:
-     `git commit --allow-empty -m "chore: rerun checks"`, then push.
+     fix it and re-run.
    - **Link it.** The PR body's Visual confirmation carries the walkthrough comment's link on
      its **Walkthrough** line, and the ship-review's Walkthrough line names it.
 

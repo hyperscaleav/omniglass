@@ -9,8 +9,8 @@ import type { Verdict } from "../lib/health";
 // columns. A place wears its system (standard and health on its own row) and
 // lists the components beneath it directly; only a place holding several
 // systems shows a header per system. Health is four fixed slots, and only
-// trouble wears a hue, so a healthy fleet reads calm and the one degraded
-// branch is the only colour on the page.
+// healthy wears a muted green beside the full trouble hues, so a healthy fleet
+// reads calm and the one degraded branch is the loudest colour on the page.
 //
 // The geometry is one grid shared by every row, measured against the
 // wireframe: text starts at one x per depth whatever the row's kind, and each
@@ -44,9 +44,9 @@ type Row =
 
 const VERDICTS: Verdict[] = ["healthy", "incomplete", "degraded", "outage"];
 const WORDS: Record<Verdict, string> = { healthy: "healthy", incomplete: "incomplete", degraded: "degraded", outage: "outage" };
-// Healthy stays grey: a hue means "look here".
+// Healthy wears the muted green (#1067), so the one troubled branch still pops.
 const HUE: Record<Verdict, string> = {
-  healthy: "text-base-content/35",
+  healthy: "text-healthy",
   incomplete: "text-incomplete",
   degraded: "text-warning",
   outage: "text-error",
@@ -54,7 +54,7 @@ const HUE: Record<Verdict, string> = {
 const GLYPH: Record<Verdict, typeof CircleCheck> = { healthy: CircleCheck, incomplete: CircleDashed, degraded: TriangleAlert, outage: OctagonX };
 
 // One verdict as its glyph alone, in the slot vocabulary's hue (healthy
-// grey), named for a screen reader: where a row is one thing, not a count.
+// muted green), named for a screen reader: where a row is one thing, not a count.
 export function HealthGlyph(props: { verdict: Verdict | null }) {
   return (
     <Show when={props.verdict}>

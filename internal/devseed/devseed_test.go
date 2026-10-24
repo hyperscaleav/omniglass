@@ -449,14 +449,14 @@ func TestRunIdempotent(t *testing.T) {
 	if err := conn.QueryRow(ctx, `select count(*) from principal where kind = 'human'`).Scan(&humans); err != nil {
 		t.Fatalf("count humans: %v", err)
 	}
-	if humans != 3 {
-		t.Errorf("human principals = %d, want 3", humans)
+	if humans != 4 {
+		t.Errorf("human principals = %d, want 4", humans)
 	}
 	if err := conn.QueryRow(ctx, `select count(*) from principal_grant`).Scan(&grants); err != nil {
 		t.Fatalf("count grants: %v", err)
 	}
-	if grants != 3 {
-		t.Errorf("grants = %d, want 3", grants)
+	if grants != 4 {
+		t.Errorf("grants = %d, want 4", grants)
 	}
 
 	// The property primitive seeds one extra contract line on the QM55, one component
@@ -508,17 +508,20 @@ func TestRunIdempotent(t *testing.T) {
 		select count(*) from credential
 		where kind = 'password'
 		  and principal_id in (select principal_id from human
-		    where username in ('operator', 'viewer-hq', 'tech-east'))`).Scan(&pwCreds); err != nil {
+		    where username in ('operator', 'viewer', 'viewer-hq', 'tech-east'))`).Scan(&pwCreds); err != nil {
 		t.Fatalf("count password creds: %v", err)
 	}
-	if pwCreds != 3 {
-		t.Errorf("password credentials for seeded users = %d, want 3", pwCreds)
+	if pwCreds != 4 {
+		t.Errorf("password credentials for seeded users = %d, want 4", pwCreds)
 	}
 
-	// Grant shapes: operator is all-scoped; viewer-hq reads the hq subtree; tech-east
-	// deploys under the East campus excluding its root. The region-scoped users name
-	// their region; the all-scoped one does not.
+	// Grant shapes: operator is all-scoped; viewer reads the whole fleet and
+	// changes nothing (the one seeded user who sees a component and may not
+	// act on it, #1059); viewer-hq reads the hq subtree; tech-east deploys under
+	// the East campus excluding its root. The region-scoped users name their
+	// region; the all-scoped ones do not.
 	assertGrant(t, conn, ctx, "operator", "operator", "all", "", "subtree")
+	assertGrant(t, conn, ctx, "viewer", "viewer", "all", "", "subtree")
 	assertGrant(t, conn, ctx, "viewer-hq", "viewer", "location", "hq", "subtree")
 	assertGrant(t, conn, ctx, "tech-east", "deploy", "location", "east", "subtree_excl_root")
 
@@ -1802,5 +1805,157 @@ func TestSimulatedFleetAtRealPorts(t *testing.T) {
 	}
 	if lifted != 0 || low == 0 {
 		t.Errorf("simulated probe targets: %d lifted, %d below 1024; want none lifted and some below 1024", lifted, low)
+	}
+}
+
+// TestSeededFleetHoldsARejectedSession proves the dev fleet carries a held
+// session worth showing (#1059): the huddle's touch panel also answers NVP over
+// telnet behind a login, and the endpoint seeded on it logs in with the secret
+// holding the password from before a rotation, so a live node reads its
+// session rejected beside Retry. The rotated secret holds the right one, and
+// pointing the endpoint's login at it is the fix the walkthrough teaches. A
+// second run adds nothing.
+func TestSeededFleetHoldsARejectedSession(t *testing.T) {
+	ctx, conn, gw := seededFleet(t)
+	type ep struct{ host, port, login, node string }
+	telnet := func() (ep, int) {
+		t.Helper()
+		var e ep
+		var n int
+		rows, err := conn.Query(ctx, `
+			select e.inputs->>'host', e.inputs->>'port', e.inputs->>'login', (select n.name from node n where n.principal_id = e.node_name)
+			from endpoint e join driver d on d.id = e.driver_id join component c on c.id = e.component join location l on l.id = c.location_id
+			where d.name = 'newtron-nvp-telnet' and l.name = 'huddle'`)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer rows.Close()
+		for rows.Next() {
+			n++
+			if err := rows.Scan(&e.host, &e.port, &e.login, &e.node); err != nil {
+				t.Fatal(err)
+			}
+		}
+		return e, n
+	}
+	got, n := telnet()
+	if n != 1 {
+		t.Fatalf("huddle telnet endpoints: want 1, got %d", n)
+	}
+	var nvpHost string
+	if err := conn.QueryRow(ctx, `
+		select e.inputs->>'host'
+		from endpoint e join driver d on d.id = e.driver_id join component c on c.id = e.component join location l on l.id = c.location_id
+		where d.name = 'newtron-nvp' and l.name = 'huddle'`).Scan(&nvpHost); err != nil {
+		t.Fatalf("the huddle panel's nvp endpoint: %v", err)
+	}
+	// The panel's own simulated address, its telnet port lifted as make dev
+	// lifts every port below 1024, on the dev node, with the stale login.
+	if got.host != nvpHost || got.port != "10023" || got.node != "edge-hq" || got.login != "sim-panel-login" {
+		t.Fatalf("huddle telnet endpoint = %+v, want host %s, port 10023, node edge-hq, login sim-panel-login", got, nvpHost)
+	}
+
+	all := scope.Set{All: true}
+	reveal := func(name string) map[string]string {
+		t.Helper()
+		var id string
+		if err := conn.QueryRow(ctx, `select s.id::text from secret s join secret_type t on t.id = s.secret_type where s.name = $1 and t.name = 'basic-auth'`, name).Scan(&id); err != nil {
+			t.Fatalf("secret %s: %v", name, err)
+		}
+		fields, err := gw.RevealSecret(ctx, "", id, all, all, true)
+		if err != nil {
+			t.Fatalf("reveal %s: %v", name, err)
+		}
+		return fields
+	}
+	// The simulated panel's login is admin / newtron (its nvp-telnet face):
+	// the rotated secret holds it, the one the endpoint uses does not.
+	if right := reveal("sim-panel-login-rotated"); right["username"] != "admin" || right["password"] != "newtron" {
+		t.Errorf("sim-panel-login-rotated = %v, want the panel's admin / newtron", right)
+	}
+	if stale := reveal("sim-panel-login"); stale["username"] != "admin" || stale["password"] == "newtron" || stale["password"] == "" {
+		t.Errorf("sim-panel-login = %v, want admin with a password the panel refuses", stale)
+	}
+
+	if err := devseed.Run(ctx, gw, ""); err != nil {
+		t.Fatalf("second run: %v", err)
+	}
+	if _, n := telnet(); n != 1 {
+		t.Fatalf("a second run changed the huddle's telnet endpoints: %d", n)
+	}
+}
+
+// TestSeededFleetHoldsAHostKeyRejection pins the changed host key make dev
+// shows (#1078): the touch panel in the briefing place answers NVP over its ssh
+// console, and its endpoint pins a host key from before the panel was
+// reimaged, so the simulated panel's own key (minted when the simulator
+// starts) never matches it and a live node reads the session rejected with
+// class host-key, both keys named, beside Trust this key. The login is the
+// panel's right one, so trusting the offered key brings the session up. A
+// second run neither adds an endpoint nor moves the pin an operator may have
+// trusted since.
+func TestSeededFleetHoldsAHostKeyRejection(t *testing.T) {
+	ctx, conn, gw := seededFleet(t)
+	type ep struct{ id, name, host, port, login, node string }
+	sshEndpoints := func() []ep {
+		t.Helper()
+		rows, err := conn.Query(ctx, `
+			select e.id::text, e.name, e.inputs->>'host', e.inputs->>'port', e.inputs->>'login', (select n.name from node n where n.principal_id = e.node_name)
+			from endpoint e join driver d on d.id = e.driver_id join component c on c.id = e.component join location l on l.id = c.location_id
+			where d.name = 'newtron-nvp-ssh' and l.name = 'briefing'`)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer rows.Close()
+		var out []ep
+		for rows.Next() {
+			var e ep
+			if err := rows.Scan(&e.id, &e.name, &e.host, &e.port, &e.login, &e.node); err != nil {
+				t.Fatal(err)
+			}
+			out = append(out, e)
+		}
+		return out
+	}
+	got := sshEndpoints()
+	if len(got) != 1 {
+		t.Fatalf("briefing ssh endpoints: want 1, got %d", len(got))
+	}
+	e := got[0]
+	if !strings.HasPrefix(e.host, "127.60.") || e.port != "10022" || e.node != "edge-hq" || e.login != "sim-panel-login-rotated" {
+		t.Fatalf("briefing ssh endpoint = %+v, want the panel's simulated address, port 10022, node edge-hq, the panel's right login", e)
+	}
+	const stalePin = "SHA256:twSJOxqCcLND44UmG2UgaA2xfebMGW5hCWNq2eHE16M"
+	pin := func() string {
+		t.Helper()
+		wl, err := gw.NodeWorklist(ctx, "edge-hq")
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, task := range wl.Tasks {
+			if task.EndpointID == e.id && task.HostKey != "" {
+				return task.HostKey
+			}
+		}
+		return ""
+	}
+	if got := pin(); got != stalePin {
+		t.Fatalf("briefing ssh pin = %q, want the key from before the reimage %q", got, stalePin)
+	}
+
+	// An operator trusts the panel's key; a second run leaves it.
+	trusted := "SHA256:" + strings.Repeat("T", 43)
+	all := scope.Set{All: true}
+	if _, err := gw.RetryEndpoint(ctx, "", e.id, trusted, all, all); err != nil {
+		t.Fatalf("trust: %v", err)
+	}
+	if err := devseed.Run(ctx, gw, ""); err != nil {
+		t.Fatalf("second run: %v", err)
+	}
+	if n := len(sshEndpoints()); n != 1 {
+		t.Fatalf("a second run changed the briefing's ssh endpoints: %d", n)
+	}
+	if got := pin(); got != trusted {
+		t.Fatalf("a second run moved the pin to %q, want the trusted %q", got, trusted)
 	}
 }

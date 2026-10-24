@@ -187,6 +187,17 @@ below from the project's history. From here it grows one slice at a time.
 | [ADR-0146](#adr-0146-expressions-run-on-pinned-expr-with-an-allowlist-and-per-site-budgets-and-rule-criteria-are-expressions) | 2026-10-20 | Accepted | Expressions run on pinned Expr behind a per-site allowlist of vetted builtins and a per-site budget (after three adversarial passes); event rule criteria are stored as `{expr}`, the short form lowered on input and by a one-time backfill, with one approved bool divergence; compile errors show on the rule; validate and preview answer from the same declarations |
 | [ADR-0147](#adr-0147-a-calc-rule-is-a-typed-sibling-registry-checked-acyclic-at-authoring) | 2026-10-21 | Accepted, amended (#1018) | `calc_rule` is a sibling of `event_rule` with typed columns (inputs `{as, key}`, a named reducer or an expression, the output key by id); every write compiles the reduce against a calc expression site of its own and refuses a cycle in the key graph, a second enabled writer of a key, `health` as an input or output, and an output a collection declares (a native probe key or a driver's emits); a reduce that stops compiling reads back as `calc_error`; **Amended (#1018):** the reduce is always an expression, its named reducers now list functions, and inputs are held by uuid in `calc_rule_input`, each bound by an alias as the list of its values |
 | [ADR-0148](#adr-0148-calc-rules-run-on-a-durable-pending-set-and-a-server-tick-not-a-jetstream-consumer) | 2026-10-21 | Accepted, amended (#1018) | Component calc rules run on a durable `calc_pending` set marked in the sample-write transaction and drained by a 1s server tick (`SKIP LOCKED`, one transaction per mark), writing calculated samples through the same path so event rules judge them; marks are held by their writer until commit, the ingest retries a deadlock, a failing mark is deferred, a rule write recomputes its owners; a write never marks its own rule; a missing input writes nothing and is recorded in `calc_rule_state`; an unchanged result writes no row. Diverges from the JetStream calc consumer (#430). **Amended (#1018):** every input binds as the list of its per-instance values, an expression's included, and the marking probe reads `calc_rule_input` by key id |
+| [ADR-0149](#adr-0149-walkthrough-evidence-lives-on-per-pr-refs-its-pr-video-plays-through-jsdelivr-and-the-docs-commit-the-mp4) | 2026-10-23 | Accepted | A PR's walkthrough evidence (mp4, preview, poster, stills) is committed to `refs/walkthroughs/pr-<n>`, never the PR branch, and reached by that commit's SHA; the PR comment links each video through jsDelivr (a public-repo dependency) so it scrubs; the docs commit each declared walkthrough's mp4 and play it with controls, carrying no preview; a scheduled job deletes an evidence ref 30 days after its PR closes. Supersedes the #884 ruling that put evidence on the PR branch |
+| [ADR-0150](#adr-0150-a-held-sessions-state-is-a-property-series-and-node-logs-not-a-session-table) | 2026-10-23 | Accepted | A held session (#816) surfaces as the `session-state` property per endpoint (establishing, up, recovering, down; transitions only, under the endpoint's standing listen task) plus the node's self-logs carrying the reasons; no `session_log` table and no `session` view. The session is held for an endpoint whose worklist carries a standing listen task over a transport with a session dialer (the line protocol over `tcp` today), polls on that endpoint borrow it, and recovery is a jittered exponential backoff with an attempt budget before down |
+| [ADR-0151](#adr-0151-a-held-line-session-routes-every-inbound-line-listeners-first-answers-by-reply-shape) | 2026-10-23 | Accepted | Listeners run over the held session (#817): `arm` commands on every connection before up (plumbing, self-logged), `match` claims a pushed line, its emits land as push samples under the listen task. Every inbound line is routed listeners first, then the exchange in flight by its declared `request.reply` shape (or the first unclaimed line), then unclaimed (counted; `unmatched: collection-failed` lands one fault per tick). Commands ride the held session. Reverses the designed matcher order (outstanding poll first) |
+| [ADR-0152](#adr-0152-a-driver-poll-runs-on-its-declared-schedule-at-heartbeat-granularity) | 2026-10-23 | Accepted | A driver poll runs on its declared `schedule.every` at heartbeat granularity (#822): a per-task next-due time kept for the run, the first tick at or after it runs the poll, a new task runs at once, a late tick never bursts; probes stay per tick and pushes are never gated. Settles the nodes page's open question for driver polls |
+| [ADR-0153](#adr-0153-the-held-session-proof-is-the-line-protocol-over-tcp-other-held-transports-are-their-own-issues) | 2026-10-23 | Accepted | The stateful arc proves the held session on the line protocol over `tcp` (sessions, listeners, the shared reader); SSH, which #816 named as the session-lifecycle carrier, and the other held transports are deferred, each to its own issue (#1032 ssh, #1033 telnet, #1034 websocket, #1035 tls, #1036 mqtt, #1037 udp, #1038 SSE over http, #1039 modbus/tcp, #1040 bacnet/ip, #1041 knxnet/ip, #1042 ONVIF as a driver on http, #1043 the file sample with #1044 to #1047 for file-moving protocols), with server-hosted ingress at #1024; there is no serial transport, serial being reached through an IP-to-serial gateway over tcp (or tls or telnet) |
+| [ADR-0154](#adr-0154-healthy-reads-green-tiered-so-a-calm-fleet-stays-calm) | 2026-10-23 | Accepted | Healthy reads green, reversing the grey healthy of [ADR-0137](#adr-0137-explore-is-the-fleets-door-and-it-is-an-outline-of-places) and [ADR-0139](#adr-0139-a-detail-view-is-one-per-system-its-place-a-card-of-context) (#1067): one `--og-healthy` token from the success hue, full weight on the health pill and the history strip, muted (`text-healthy`) on the outline's slots and the uptime figure; unknown keeps the grey chip |
+| [ADR-0155](#adr-0155-auth-is-a-layer-that-gates-a-held-session-and-a-terminal-refusal-reads-rejected) | 2026-10-23 | Accepted | Auth is a layer that gates a held session (#1049, the architect's ruling): each attempt runs dial, then the auth step (a driver's login dialog or a transport's own auth), then the arm, then `up`, and nothing borrows the connection before the step passes; its verdict is the existing `endpoint-authenticated` rung. A terminal refusal moves the session to `rejected` (amending ADR-0150's state set), which dials no more and fails polls and commands fast with no throwaway fallback, until the endpoint's session identity changes, an operator's audited `:retry` (gated by `endpoint:retry`) moves the retry counter in the connection fingerprint (ADR-0158), or the driver's slow re-probe comes due; an unrelated edit does nothing. Three silent hang-ups after the final secret are an `auth` refusal (the login budget). `session-reason` carries the reason as a property. One login dialog serves raw tcp, telnet and ssh keyboard-interactive |
+| [ADR-0156](#adr-0156-a-driver-declares-its-terminal-replies-and-a-transport-classifies-its-own-refusals) | 2026-10-23 | Accepted | Non-retryable errors are defined in drivers (#1049, the architect's ruling): a spec's `session.terminal` lists the replies retrying cannot fix, each a match with a class (`auth`, `host-key`, `certificate`, `protocol`, a code-held set), applied to the login and to every answer, refusal and arm reply; a transport classifies its own protocol refusals into the same classes. The primitive is `collection.TerminalError{Class, Reason}`; anything unclassified stays retryable, and a terminal poll fault waits its interval rather than the failure backoff |
+| [ADR-0157](#adr-0157-telnet-and-ssh-are-held-line-transports-their-login-is-the-drivers-and-the-ssh-host-key-is-pinned-on-first-use) | 2026-10-23 | Accepted | `telnet` (#1033) and `ssh` (#1032) are held line transports: the same session machine and line reader, telnet behind a filter refusing every option, ssh over a shell or exec channel. Their session's login is the driver's (`session.login`, `session.credential`), not endpoint params; the telnet probe never logs in, and the ssh probe's params login is a known gap (#1060). The ssh host key is pinned on first use as the `ssh-host-key` property (observed), delivered back by the worklist, overridden by a declared value an operator sets with `:retry` and `host_key`; a changed key is a `host-key` refusal |
+| [ADR-0158](#adr-0158-one-connection-fingerprint-gates-every-connection-on-a-ladder-the-driver-declares) | 2026-10-23 | Accepted | One **connection fingerprint** gates every connection, held or stateless (#1056 ruling): a digest the server computes over every input a connection is made with (transport, declared params, driver inputs, each secret's sealed version, the session block, the ladder, the ssh pin, the `:retry` counter), held in `internal/fingerprint`. Connections are verified bottom up on the existing ladder (reachable, informational ping; responsive, the transport rung and the gate; authenticated, the login), declared in the driver spec with registry defaults. A terminal refusal gates its rung and above for the fingerprint; lower rungs keep running; the gate is published as `endpoint-rejection` and carried back so a restart honours it. **Amended (#1059, #1080):** the push lane refuses every native probe key by name, not only the gate and the host key |
+| [ADR-0159](#adr-0159-a-refused-keys-evidence-rides-its-gate-and-trusting-a-key-is-checked-against-the-one-offered) | 2026-10-24 | Accepted | A refusal of a changed key carries both keys as data on its gate (#1078, amending ADR-0158 point 5): `endpoint-rejection` appends `<pinned-key> <offered-key>`, both or neither, declared once in `internal/collection/rejection`, adopted with the gate on a restart, and served as the reachability read's `pinned_key` and `offered_key`, so no surface parses a fingerprint out of `session-reason`. `:retry` with `host_key` must name the gate's offered key while one is held (409 otherwise, nothing written) and audits the pin replaced and the pin set. The console's Trust this key confirms first and sends exactly the key it showed |
 
 ## Entries
 
@@ -6803,3 +6814,441 @@ interface create form, since that name is the platform's to mint.
   expression read the aggregate instance alone. A system member's record still carries its own
   aggregate value. The marking probe reads `calc_rule_input` by key id (the inputs' GIN index went with
   the jsonb column), so a property and a metric of one name mark only the rules reading that lane's key.
+
+### ADR-0149: Walkthrough evidence lives on per-PR refs, its PR video plays through jsDelivr, and the docs commit the mp4
+
+- **Date:** 2026-10-23 | **Status:** Accepted | **Pages:** [walkthroughs](/contributing/walkthroughs/), [labels](/contributing/labels/)
+- **Decision:** Walkthrough recordings (#884) are hosted three ways, by who reads them (#939):
+  1. **PR evidence on a per-PR ref.** The `run:walkthrough` job commits each passing walkthrough's mp4,
+     animated preview, poster and stills to `refs/walkthroughs/pr-<n>`, as a fresh tree on top of the
+     ref's last commit, and the PR comment reaches every file by that commit's SHA. Nothing is pushed
+     to the PR branch. A separate publish job holds the write token, checks nothing out and runs
+     nothing from the PR; the record job, which runs the PR's code, has a read-only token.
+  2. **Scrubbable PR video through jsDelivr.** The comment links each mp4 as
+     `https://cdn.jsdelivr.net/gh/<owner>/<repo>@<sha>/<id>/<id>.mp4`, which jsDelivr serves as
+     `video/mp4` with range requests, so a browser plays and seeks it; GitHub's raw host serves an mp4
+     as an octet stream, and GitHub plays no video a workflow can attach. The animated preview stays
+     the comment's inline glance, from the raw host.
+  3. **Docs commit the mp4.** `make docs-walkthroughs` copies every declared walkthrough's mp4 into
+     `docs/public/walkthroughs/<id>/`, and the embed is `<video controls>` with the poster step's still
+     as its poster frame and fallback. The docs carry no animated preview: a page that plays the video
+     has no use for it.
+  4. **Cleanup.** `walkthrough-prune.yml` runs daily and deletes the evidence ref of every PR closed
+     more than 30 days ago (and only those it can prove are), after which that PR comment's images
+     and links go stale.
+- **Context:** The #884 ruling committed PR evidence to the PR branch under
+  `.github/screenshots/<pr>/walkthroughs/`. A squash-merge then carried about 3 MB of review-only
+  binaries per labelled PR into main for good, and the bot's push to the PR head left that commit's
+  checks un-run (GitHub starts no workflow for the workflow token's push), so authors pushed empty
+  commits to run them. A ref outside `refs/heads/` touches neither: it is not fetched by a default clone
+  and not in the branch list, unlike an orphan branch, and a probe showed GitHub's raw host and jsDelivr
+  both serve a commit reachable only from such a ref, and that the workflow token may push one. The
+  refs still cost repository size on GitHub and in any mirror that fetches all refs (`git clone
+  --mirror`), about 2 to 3.5 MB per walkthrough per run, which the 30-day prune bounds; deleting on
+  close was rejected because a just-merged PR is still read. jsDelivr works only while the repository
+  is public; a private repository would need another host for scrubbable PR video. The docs mp4 costs
+  about 1 MB per walkthrough per re-record in main's history, accepted so the deployed docs and their PR
+  previews play the flow with controls. Supersedes the #884 ruling on where PR evidence lives.
+
+### ADR-0150: A held session's state is a property series and node logs, not a session table
+
+- **Date:** 2026-10-23 | **Status:** Accepted | **Pages:** [collection](/architecture/collection/), [nodes](/architecture/nodes/), [datapoints](/architecture/properties/), [glossary](/architecture/glossary/), [storage](/architecture/storage/)
+- **Decision:** A stateful transport holds its connection (#816, epic #603's thin cut "no session
+  table"), and its lifecycle is surfaced without a new store:
+  1. **The state is a property.** `session-state` (seeded, `establishing`, `up`, `recovering`,
+     `down`) lands per endpoint on the endpoint's component (instance: the endpoint's name, as
+     `endpoint-reachable` does), published by the node at the moment of each transition under the
+     endpoint's standing listen task, so ownership binds server-side like every other sample and the
+     series is transitions only.
+  2. **The reasons are node logs.** Each transition is also a self-log (`facility: session`,
+     ADR-0066) carrying the reason (`connection lost: EOF`, `5 consecutive attempts failed, last:
+     ...`), and teardown logs why (`its listen task left the worklist`, `its endpoint changed`, `node
+     shutdown`). The reason also rides the sample as the `reason` label, which is not persisted.
+     Teardown publishes no state: the node stopped wanting the session, which says nothing about the
+     device. So the last `session-state` outlives a teardown or a node shutdown (an `up` stays the
+     latest value of a session nobody holds), and a read must judge it by its age, as the
+     property catalog already says of stale values. No surface reads `session-state` yet (the
+     reachability panel reads the endpoint verdicts only); the console work that shows it, with
+     #817's listeners, must render it aged. **Amended (#1059):** the console reads it now, on the
+     component's reachability read beside `session-reason` and the gate's rung and class, aged by the
+     endpoint's `last_seen` (a state whose endpoint delivered nothing for the staleness window reads
+     grey), with Retry for a rejected one.
+  3. **What holds a session.** An endpoint whose worklist carries a standing listen task over a
+     transport with a session dialer (the line protocol over `tcp` today; ssh is not wired). The
+     listen task is what needs the connection held (its listeners arm over it, #817); the endpoint's
+     line polls borrow the session instead of dialing, and a poll over a session that is not up
+     faults (`collection-failed` naming the state) rather than dialing a connection of its own. The
+     worklist carries each task's endpoint id, the node-unique key a session is held under.
+  4. **Recovery is bounded.** A failed attempt waits `SessionBackoff`: 250ms doubling per attempt,
+     capped at 30s, jittered 20% either way; five consecutive failed attempts read `down`, and the
+     session keeps retrying at the capped pace so a device that returns reads `up` unattended. An
+     attempt fails when its dial fails, when its connection drops unanswered within 10s (a device
+     that accepts and drops cannot hot-loop or read `up` forever), or when an exchange over it that
+     declared no reply shape timed out (a hung device, however long the connection lived; a shaped
+     exchange's timeout fails only itself, ADR-0151). An answered exchange forgives the
+     failures before it, so a healthy device's rare missed answer never adds up to `down`; a
+     connection that outlives 10s and drops for another reason forgives them too and redials at
+     once. Once `down`, a returning connection publishes nothing until it proves itself: an answered
+     exchange (the session lends it to polls meanwhile), a line a listener claims (a push proves the
+     device talks, though it forgives no failures, so a device that pushes and drops still backs
+     off), or, unless answer timeouts were what failed, outliving the 10s window; so an accept-then-drop or hung device publishes no `up`/`down` pairs.
+     A caller abandoning an exchange (its own deadline or cancel) is not the device's timeout, and
+     the wait for a first dial has its own budget, so a slow dial never eats the exchange's. A held
+     connection carries a 15s TCP keepalive, whose failure is recorded as itself.
+  5. **An answer belongs to its ask.** One reader goroutine owns the connection: on an ask it
+     discards every byte already received (a banner, a stray line, plus a 2ms window for bytes in
+     flight), writes the line, and hands the next line it reads to that ask, keeping an answer whole
+     across segments. An ask whose answer does not come in time recycles the connection, since its
+     late reply would otherwise answer the next ask. One window remains: a line the device sends
+     after the drain and before it has read the request (a push landing in that instant) is taken
+     as the answer, since nothing on the wire tells the two apart. [ADR-0151](#adr-0151-a-held-line-session-routes-every-inbound-line-listeners-first-answers-by-reply-shape)
+     (#817) closes it for every request that declares a reply shape, and a line a listener claims is
+     never an answer at all. A listen task whose spec
+     changes (its content-addressed id re-hashes) keeps the healthy connection; only what the
+     connection depends on (transport, address, timeout, credentials) recycles it.
+- **Context:** The nodes page designed a `session_log` table of node-reported transitions with a
+  `session` view over it. A property series already gives transition-only history, latest-value
+  reads, staleness at read time, rules over it (an event rule can watch `session-state` as it watches
+  `endpoint-reachable`), and owner scope, with no new table, route, or permission noun; the free-text
+  reasons belong to the node's own narration, which `node_log` already lands. A session table stays
+  possible if per-session counters (commands, errors, last activity) earn one; nothing here forecloses it.
+
+### ADR-0151: A held line session routes every inbound line, listeners first, answers by reply shape
+
+- **Date:** 2026-10-23 | **Status:** Accepted | **Pages:** [collection](/architecture/collection/), [nodes](/architecture/nodes/), [drivers](/guides/admin/drivers/)
+- **Decision:** A driver's listeners come alive over the held session (#817), and one reader per
+  connection routes every inbound line:
+  1. **Arm on every connection.** A listener's `arm` commands are sent in order on each connection
+     before the session reads `up` (establish and every recover). They are plumbing, per the #603
+     ruling: a node self-log with the device's reply, never a command row. The ack is the first
+     line of any kind, one a listener claims included (both have it), since a device may ack a
+     subscribe with the push itself; no ack within the timeout is logged at warn ("armed,
+     unacknowledged") and does not fail the attempt, while the connection dying during the arm does.
+  2. **Listeners first.** Listeners are offered a line in function-name order; the first whose
+     `match` picks it claims it, and its emits land at once as samples under its listen task. A
+     claimed line is never an exchange's answer, unless the exchange declared a reply shape the
+     line matches, when both have it (a protocol whose answers look like its pushes still answers).
+  3. **Answers by reply shape.** A request may declare `reply` (a `prefix` or `regex`, the regex
+     Go RE2 with substring semantics, so anchored to mean a whole line); the exchange in flight
+     takes the first line it matches, or, with none declared, the first line no listener claims. A
+     reply may also declare an `error` shape: an unclaimed line matching it answers the exchange as
+     a refusal carrying the device's text, never a timeout. A shaped exchange that gets no answer in
+     time fails alone, keeping the connection and not charging the session, since shape routing
+     cannot misroute its late answer; an unshaped one still recycles (ADR-0150). A line begun
+     before the request was written is never its answer.
+  4. **The rest is unclaimed.** Counted and self-logged once per tick; a spec declaring
+     `unmatched: collection-failed` (default `discard`) also lands one `collection-failed` per tick.
+  5. **Commands ride the session.** A command delivery names its endpoint and carries its binding's
+     reply shape; a node holding a session there actuates over it, falling back to a throwaway
+     connection only when none is held. A refusal reports the device's text as both the execution
+     error and the reply, so the command fails at once with its reason (a response-settled binding
+     fails on the execution error before it reads the reply).
+  6. **Patterns compile once.** Every match, reply and extraction regex is compiled once per
+     process and reused by the reader, and refused at write when it does not compile.
+- **Context:** The nodes page designed an ordered matcher set trying an outstanding poll's response
+  matcher first. On a line protocol that order lets a push that happens to fit a loose answer (or
+  any line, when the poll declares no shape) be eaten as the answer, which loses a sample and
+  misreports a poll; a listener's rule is the more specific statement of what a line is. Declaring
+  reply shapes closes the window ADR-0150 point 5 left open for every request that declares one;
+  a request without one still takes the first unclaimed line, so a driver whose protocol mixes
+  unsolicited lines with answers declares its replies (the seeded `newtron-nvp` does).
+
+### ADR-0152: A driver poll runs on its declared schedule, at heartbeat granularity
+
+- **Date:** 2026-10-23 | **Status:** Accepted | **Pages:** [nodes](/architecture/nodes/), [collection](/architecture/collection/), [drivers](/guides/admin/drivers/)
+- **Decision:** The node honors a driver poll's `schedule.every` (#822). It keeps, per task id and for
+  the life of the run, when each poll is next due, and runs the poll on the first heartbeat tick at or
+  after that time. The next run is booked from the due time, so tick jitter does not drift the cadence;
+  a tick so late it missed whole intervals runs the poll once and books from now, never a catch-up
+  burst. A run that lands nothing because its fetch failed retries on a backoff instead of waiting
+  its interval: `min(every, max(heartbeat, backoff))`, the backoff starting at the heartbeat and
+  doubling per consecutive failure, so a 24h poll that fails during a device reboot retries within
+  seconds and a dead device is still asked no more often than every heartbeat; the first success
+  books from its due time again. A down held session is proven by a listener's push as well as by
+  an answered poll, so a gated poll never keeps a pushing device reading down. A task new to the
+  worklist runs at once; a task that leaves it is forgotten; a restart polls
+  at its first tick. The gate covers driver polls only: reachability probes still run every tick, and a
+  listener's pushes are never gated, since they ride the held session as they arrive.
+- **Context:** The schedule was validated and baked but unread, so `snmp-generic`'s `every: 60s` polled
+  every 30s heartbeat and a `24h` poll would have asked a device 2880 times a day. The nodes page left
+  per-task cadence within a tick as an open question; a per-task gate settles it for driver polls
+  without the tick scheduler's redesign (the overrun-aware loop and the bounded pool stay design), at
+  the cost of cadence precision bounded by the heartbeat.
+
+### ADR-0153: The held-session proof is the line protocol over tcp; other held transports are their own issues
+
+- **Date:** 2026-10-23 | **Status:** Accepted | **Pages:** [collection](/architecture/collection/), [nodes](/architecture/nodes/)
+- **Decision:** The stateful arc of #603 proves the held session on one transport: the line protocol
+  over `tcp` (sessions, #816; listeners and the shared reader, #817), against the simulator's NVP port
+  and end to end. #816's scope named SSH as the session-lifecycle integration carrier; the architect
+  accepted the arc on the line protocol instead and deferred SSH. Every other held transport is its
+  own issue under #603: #1032 (ssh), #1033 (telnet), #1034 (websocket), #1035 (tls), #1036 (mqtt),
+  #1037 (udp), #1038 (SSE over http), #1039 (modbus/tcp), #1040 (bacnet/ip), #1041 (knxnet/ip);
+  server-hosted ingress (syslog, SNMP trap, webhook) is #1024. **There is no serial transport**
+  (architect's ruling): a serial device (RS-232, RS-485) is reached through an IP-to-serial gateway,
+  which is the `tcp` transport (or `tls` or `telnet`, as the gateway speaks), so its driver is a line
+  protocol like any other and the node never owns a serial port.
+  **How a protocol is placed.** The first rule that fits decides. A protocol that rides a carrier
+  we already have with only payload differences (http with any body, a tcp line protocol, a
+  websocket, and udp datagrams once #1037 lands) is a **driver**: ONVIF is SOAP over http (#1042).
+  A driver that needs something its carrier cannot do yet (a body format, an auth scheme, a stream
+  mode, TLS) makes that **capability** on the existing transport, proven by the driver: SSE on http
+  (#1038), tls (#1035), sftp on ssh (#1045), and http fetching a body as a file (#1044). A
+  protocol that moves whole files rather than values lands as a **file sample** (#1043, the
+  primitive #1044 through #1047 depend on). A protocol with its own framing, addressing, or session handshake is a
+  **new transport** plus a generic driver on it, the `snmp` and `snmp-generic` pattern: ssh (#1032),
+  telnet (#1033), websocket (#1034), mqtt (#1036), udp (#1037), modbus/tcp (#1039), bacnet/ip
+  (#1040), knxnet/ip (#1041), ftp/ftps (#1046), and tftp on udp (#1047). A serial link is reached only through a gateway, as above. A
+  protocol that pushes to us rather than being reached is server-hosted **ingress** (#1024), not a
+  node transport. The `/scope-protocol` skill applies this placement rule when a new protocol comes up,
+  and files the issue in the house shape. The session machine, its
+  `session-state` surface (ADR-0150), and the routing (ADR-0151) are transport-agnostic behind the
+  `SessionDialer` and `HeldConn` seams, so each of those issues adds a dialer and its own
+  real-implementation integration test rather than a second machine.
+- **Context:** The #603 rulings set the line-protocol emulator as the stateful proving target, with
+  SSH to carry the session-lifecycle test. The line protocol exercised every part of the lifecycle
+  (establish, arm, operate, recover, teardown) over a real wire, and SSH adds authentication and
+  channel semantics that are a slice of their own; holding the arc for it would have delayed a proven
+  machine. The collection and nodes pages' transport fences now name these issues, so no deferred
+  transport is a fence without an owner.
+
+### ADR-0154: Healthy reads green, tiered so a calm fleet stays calm
+
+- **Date:** 2026-10-23 | **Status:** Accepted | **Pages:** [health](/architecture/health/), [design system](/contributing/design-system/), [fleet guide](/guides/operator/fleet/)
+- **Decision:** A healthy verdict wears green, reversing the "healthy is grey, only trouble carries
+  a hue" rule of [ADR-0137](#adr-0137-explore-is-the-fleets-door-and-it-is-an-outline-of-places) and
+  [ADR-0139](#adr-0139-a-detail-view-is-one-per-system-its-place-a-card-of-context). One token,
+  `--og-healthy` (the theme's success hue), in three tiers: `badge-healthy` (the health pill, the
+  simulator's running pill) and `bg-healthy` (the history strip's healthy stretch) at the trouble hues'
+  weight, and `text-healthy`, a muted green, on the dense views (the outline's healthy slot and glyph,
+  a good uptime figure). Unknown keeps the grey `badge-ghost` chip.
+- **Context:** In use, the grey healthy chip and the grey unknown chip read as one state, so an
+  operator could not tell a system known to be fine from one never read (#1067). The concern #872 was
+  answering, that a fleet of loud green would bury the one amber branch, holds for the dense views, so
+  they take the muted tier; the single-subject surfaces (a pill, a strip) take the full hue, where there
+  is nothing for green to drown out. The word and the glyph still carry the state for a colour-blind
+  reader. **Amended (#1071):** the system map's occupied-position dot, missed in the first pass,
+  wears its component's own verdict through one `verdictDot` primitive: healthy the muted tier
+  (`bg-healthy-muted`, the fill twin of `text-healthy`), incomplete indigo, degraded amber, outage red,
+  read through the same lookup the component rows use so the two never disagree. A known verdict always
+  wins; only an unknown one falls back to the staffing read (red when down, else grey), and an empty
+  position keeps its hollow grey ring.
+
+### ADR-0155: Auth is a layer that gates a held session, and a terminal refusal reads rejected
+
+- **Date:** 2026-10-23 | **Status:** Accepted | **Pages:** [collection](/architecture/collection/), [nodes](/architecture/nodes/), [glossary](/architecture/glossary/), [drivers](/guides/admin/drivers/)
+- **Decision:** The architect's ruling, made in session on 2026-10-23 (#1049), applies the ladder
+  the stateless probes climb (dialed, responds, authenticated) to held sessions:
+  1. **Auth gates the session.** Every attempt runs dial, then the **auth step**, then the
+     listeners' arm, then `up`. The step is declared by the driver (a login dialog in the spec's
+     `session` block) or by the transport (one that authenticates on its own); a dialer that cannot
+     run a declared step is a `protocol` refusal. Nothing (a poll, a command, an arm) borrows a
+     connection whose step has not passed: the dialer is staged (`Connect`, then `Authenticate`,
+     then `Open`), so the line reader does not exist until the step passes. The verdict lands as
+     the existing `endpoint-authenticated` property (`yes`/`no`, on change), no parallel vocabulary.
+     A login that is silent or dropped decides nothing and is an ordinary failed attempt.
+  2. **One login dialog.** Steps wait for a prompt (matched on a partial line once the component
+     pauses on it, since a prompt ends no line) and send a line that may name a secret input's field
+     (`${secret.<input>.<field>}`); `ready` says it passed; a prompt for a step already answered is
+     an `auth` refusal. The same primitive answers ssh keyboard-interactive questions. A credential
+     is written only to the wire: render faults name the reference, never the value, and text the
+     component sends is scrubbed of the sends before it reaches an error or a reason.
+  3. **`rejected` joins the state set** (amending ADR-0150's establishing, up, recovering, down).
+     A terminal refusal ([ADR-0156](#adr-0156-a-driver-declares-its-terminal-replies-and-a-transport-classifies-its-own-refusals))
+     moves the session there at once, without spending the budget; it closes the connection and
+     dials no more. Polls and commands over it fail fast with the refusal, and neither falls back
+     to a throwaway connection (a command delivery is `session_only` when its driver declares a
+     session or its transport has no stateless line).
+  4. **Leaving `rejected`** (amended in this PR by the #1056 ruling). A session leaves `rejected`
+     only when its connection fingerprint changes ([ADR-0158](#adr-0158-one-connection-fingerprint-gates-every-connection-on-a-ladder-the-driver-declares)): the attached
+     secret rotated in the store, the address, port or transport, the driver's login or terminal
+     declaration, a pin, or an operator's `POST /endpoints/{id}:retry` (gated by a new
+     `endpoint:retry` action the operator role holds, audited), which moves an explicit
+     `session_retry` counter on the endpoint (a migration) that is part of the fingerprint. The
+     endpoint's `updated_at`, first used as the retry signal, moved on every edit, a label
+     included, and pulled a rejected session out; it no longer does. A driver may declare
+     `session.reprobe` (at least 5m; default never). A component that hangs up after the final
+     secret and before ready, with no refusal text, charges a **login budget** of its own: three
+     in a row are an `auth` refusal; a drop before the secret step stays an ordinary failure, and
+     a login that passes resets it.
+  5. **Visibility.** Each transition lands `session-reason` beside `session-state`, the reason as a
+     property an event rule can read (labels do not persist); the node logs a rejection once, at
+     warn, at the transition.
+- **Context:** Every session failure was retryable (ADR-0150): after the budget a session redialed
+  at the capped 30s pace forever, about 2,880 attempts a day, harmless for the tcp line protocol and
+  an account lockout for any transport with a login. The retry signal needed a home the node could
+  see that nothing else moves; a component that drops a wrong password silently needed a bound no
+  driver rule could give it (#1056).
+
+### ADR-0156: A driver declares its terminal replies, and a transport classifies its own refusals
+
+- **Date:** 2026-10-23 | **Status:** Accepted | **Pages:** [collection](/architecture/collection/), [glossary](/architecture/glossary/), [drivers](/guides/admin/drivers/)
+- **Decision:** The architect's ruling, made in session on 2026-10-23 (#1049): non-retryable errors
+  are defined in drivers.
+  1. A spec's `session.terminal` lists the replies retrying cannot fix, each a `match` (a prefix
+     or a regex) with a `class`. The classes are a code-held set (`auth`, `host-key`,
+     `certificate`, `protocol`), refused at write when unknown, grown in code as transports need.
+  2. A rule applies to every line the component sends the session's way: the login's lines, every
+     exchange's answer and declared refusal, and every arm reply. A match fails that exchange with
+     the refusal and rejects the session ([ADR-0155](#adr-0155-auth-is-a-layer-that-gates-a-held-session-and-a-terminal-refusal-reads-rejected)).
+  3. A transport classifies its own protocol-level refusals into the same classes (an ssh auth
+     failure is `auth`, a changed host key `host-key`), so a driver need not declare what the
+     protocol already says.
+  4. The primitive is `collection.TerminalError{Class, Reason}`, the reason the component's own
+     text; anything unclassified stays retryable and follows the backoff and budget. A stateless
+     or session poll whose fault is terminal waits its interval, never the failure backoff; one
+     its session refused runs at the first tick that session is up again.
+- **Context:** Only the driver knows what its component's refusal looks like ("auth rejected",
+  "Login incorrect", an "account locked" reply), and only the transport knows its protocol's
+  refusals; a session machine guessing from text would misclassify both ways. A fixed class set
+  keeps an event rule's vocabulary stable across drivers.
+
+### ADR-0157: Telnet and ssh are held line transports, their login is the driver's, and the ssh host key is pinned on first use
+
+- **Date:** 2026-10-23 | **Status:** Accepted | **Pages:** [collection](/architecture/collection/), [nodes](/architecture/nodes/), [glossary](/architecture/glossary/), [drivers](/guides/admin/drivers/)
+- **Decision:** (#1033, #1032, under the ruling ADR-0155 and ADR-0156 record.)
+  1. **Held line transports.** `telnet` and `ssh` join `tcp` as transports the line protocol rides
+     over a held session (the registry's `line` flag): one session machine, one reader, one routing.
+     Telnet is the line connection behind a filter that strips negotiation and refuses every option
+     (DO answered WONT, WILL answered DONT, a literal 0xFF escaped). Ssh bridges a shell channel
+     (with a PTY on `session.pty`) or an exec channel (`session.exec`) onto the reader.
+  2. **The session's login is the driver's.** The designed `endpoint.params` login fields
+     (`login_expect`, `password_expect`, `private_key`) are not built for a held session: a telnet or
+     raw tcp login is the driver's `session.login` dialog, and an ssh credential is the secret input
+     `session.credential` names (a `basic-auth` username and password, or an `ssh-key` username and
+     private key; a login dialog only answers keyboard-interactive questions beside it), delivered
+     unsealed on the worklist. A keyboard-interactive question nothing declared answers (a one-time
+     code) is an `auth` refusal. The telnet probe never logs in: it reads the first negotiation or
+     banner bytes (`telnet-response-time`), and while the node holds an up telnet session it takes
+     the verdict from the session rather than dial again. The ssh probe still tries a params
+     `username`/`password` on every tick without the pin, a gap filed as #1060.
+  3. **Trust on first use.** The node trusts the first ssh host key it sees and publishes it as the
+     observed `ssh-host-key` property; the worklist delivers the pin (the declared value, else the
+     observed one), so a node restart or reassignment keeps it. A changed key is a `host-key`
+     refusal naming both fingerprints and is never published as the pin. The node republishes the key
+     on every authenticated connection and while the worklist delivers no pin, and carries it across
+     a session's recycle, so one lost publish cannot reopen first use. An operator who trusts the
+     change retries the endpoint with `host_key` (gated by `endpoint:retry`, audited), which
+     declares the new pin; the node redials onto it, whatever state the session is in.
+- **Context:** The design fenced telnet and ssh as their own polled endpoint types with login
+  config on endpoint params. Under the 2026-10-23 ruling auth is a session layer declared by the
+  driver or the transport, so a login on params would have been a second, unclassified path, and a
+  probe that logged in every tick would retry a bad credential forever. A host key pin needed a
+  home the node can read after a restart without a new table; the property lanes already carry the
+  observed-versus-declared split and the history an operator reads.
+
+### ADR-0158: One connection fingerprint gates every connection, on a ladder the driver declares
+
+- **Date:** 2026-10-23 | **Status:** Accepted | **Pages:** [collection](/architecture/collection/), [nodes](/architecture/nodes/), [glossary](/architecture/glossary/), [drivers](/guides/admin/drivers/), [api](/architecture/api/), [properties](/architecture/properties/)
+- **Decision:** The architect's rulings of 2026-10-23 (on #1056 and #1049), for every connection to
+  an endpoint, held or stateless (the reachability probe, a throwaway poll or command, the held
+  session):
+  1. **The fingerprint primitive.** `internal/fingerprint` digests (SHA-256 over canonical JSON)
+     every input a connection is made with: the transport, the declared params (the address as
+     declared, never a DNS result, the port, the timeout), the driver's inputs (secret reference
+     names, never values), a digest of each attached secret's sealed envelope and id (a rotation
+     re-seals, so it moves; nothing plaintext-derived is hashed), the driver's session block, the
+     resolved ladder, the ssh host key pin, and the endpoint's `:retry` counter. The server computes
+     it in the worklist, one per endpoint, so the node only compares. A reflection test holds that
+     every field moves it, and a table test that every field a task delivers is either one of its
+     inputs or declared not one, so a new transport cannot read an input the fingerprint misses. It
+     is never logged.
+  2. **The ladder, bottom up, on the existing rungs.** `reachable` is a ping and **never gates**:
+     an open, answering transport is what counts, so a component that blocks ping never reads down
+     for it (the ping lands `icmp-reachable` beside the probe, one observation per probe, after the
+     verdict). `responsive` is the transport rung and **the gate**: a TCP connect on the transport's
+     port, the protocol's handshake (ssh key exchange, tls), or, where an open port cannot be
+     detected (udp), the driver's named request answered (run as a line over tcp today; snmp's own
+     request is #821, a udp datagram's #1037). `authenticated` is the session rung, the
+     login, attempted only when the transport rung passes. A wrong host, address or port fails
+     the transport rung, retryably, and never reads as auth.
+  3. **Declared in the driver, defaulted by the registry.** The spec's `ladder` declares whether to
+     ping (`ping.enabled`; a cloud API says no), the transport rung (`transport.rung`, with its
+     `request`), and whether a session rung exists (`session.enabled`); the transport registry's
+     `rung` supplies the defaults, so most drivers declare nothing, and a rung a transport cannot
+     run refuses at write. Each rung is an object so per-family measurement toggles and a burst
+     count and interval (#1063) and a path rung (#1064) join without reshaping it, and a layer-2
+     presence rung (#1062) slots in below the ping, informational the same way.
+  4. **The gate.** A terminal refusal (`auth` at the authenticated rung; `host-key`,
+     `certificate`, `protocol` at the responsive rung) gates its rung and every rung above it for
+     the endpoint while the fingerprint is unchanged; the rungs below keep running, so reachability
+     stays observed while auth is rejected. The held session starts rejected, the ssh probe sends no
+     credential (#1060: tried once, never past a pinned key that changed), a stateless poll faults
+     without fetching, and a command fails fast. A changed fingerprint lifts the gate, and so does
+     the rung passing. The #1056 login budget (three silent hang-ups after the secret) feeds it.
+  5. **Restart safety.** The gate is published as the `endpoint-rejection` property (`<rung>
+     <class> <fingerprint>`, or `none`), republished every pull until the worklist reflects it, and
+     carried back, so a restarted node makes no attempt against an unchanged fingerprint. A refusal
+     reported for an attempt under an older fingerprint gates nothing. The ssh pin the node trusted
+     on first use is a learned fact and stays out of the fingerprint; only the operator's declared
+     pin goes in. `endpoint-rejection` and `ssh-host-key` are node control facts the push lane
+     refuses, so no push can plant or lift a gate. **Amended (#1059):** `session-state` and
+     `session-reason` join them, since the console reads them as the node's account of its own
+     connection: a push could otherwise read a rejected session up, hiding the refusal and its
+     Retry, or plant a reason the node never scrubbed. **Amended (#1080):** every native probe key
+     joins them. The reachability verdict and its rungs, the probe metrics and their rtt-style
+     timings are read by the console as the node's observation too, so they are no more a push's to
+     write than the gate. The refused set is `internal/collection/probekeys` itself, where each key
+     is ruled node-only or pushable with the reason it may be pushed; none is pushable today, and a
+     test fails on a key declared there and ruled neither, so it cannot ship pushable by omission. The
+     refusal holds on every lane (a native name pushed as an event is refused as the node's, not as
+     unregistered), under any instance and any casing, and its reason names the key. The node's own
+     lane never reads the ruling, so it writes every one of them as before. **Amended (#1078):** a refusal of a changed
+     key appends its evidence, `<pinned-key> <offered-key>`, to the gate's value
+     ([ADR-0159](#adr-0159-a-refused-keys-evidence-rides-its-gate-and-trusting-a-key-is-checked-against-the-one-offered)).
+  6. **Connection inputs edit in place** (the architect's ruling on #1061). A driver-attached
+     endpoint's host, port and attached secret references are patched through `PATCH
+     /endpoints/{id}` `inputs`, validated against the driver's declared inputs (a refused value is a
+     400 naming the field), its tasks re-derived in the same transaction through #823's derivation,
+     audited; a transport is accepted only where the driver speaks it. Re-attach is not the path.
+     The confinement the earlier read-only rule bought (a credential never sent to an address its
+     attach did not name) is kept another way: the edit re-resolves every attached secret under the
+     editor's own secret scope and admin tier, so an editor who could not use a credential cannot
+     redirect it. The fingerprint moves, so a rejected session un-gates and a healthy one recycles
+     onto the new address within a tick.
+- **Context:** A refusal retrying cannot fix must stop every path that would retry it, not only the
+  held session: the ssh probe retried a params credential every tick (#1060), and a restarted node
+  forgot every rejection. Gating on "what changed" needed one definition of the inputs, computed
+  where the sealed secrets live so a published digest leaks nothing about a value. ICMP is blocked
+  on much installed gear, so only a transport answer can say a component is there. Follow-ons: the
+  udp request rung's snmp proof is #821; per-rung rtt, jitter and loss as driver toggles, stored as
+  one observation per probe with statistics from windowed calc rules, are #1063 and #1065; a path
+  rung (hop count, network path) is #1064; layer-2 presence is #1062.
+
+### ADR-0159: A refused key's evidence rides its gate, and trusting a key is checked against the one offered
+
+- **Date:** 2026-10-24 | **Status:** Accepted | **Pages:** [collection](/architecture/collection/), [api](/architecture/api/), [glossary](/architecture/glossary/), [drivers](/guides/admin/drivers/)
+- **Decision:** (#1078, approved in session on 2026-10-24.) A host-key rejection is trusted from the
+  console, and the data it needs is the refusal's own:
+  1. **The evidence rides the gate** (amending ADR-0158 point 5). A refusal of a changed key (an ssh
+     host key; a tls certificate's public key, #1035) carries the key the endpoint pins and the key
+     the component offered instead as data (`collection.TerminalError` `Pinned`, `Offered`), and
+     the gate publishes them with itself: `endpoint-rejection` is `<rung> <class> <fingerprint>`,
+     plus `<pinned-key> <offered-key>` for a key refusal, both or neither. The value is declared once
+     (`internal/collection/rejection`) and read there by the node, the server and the read. A
+     restarted node adopts the evidence with the gate, so what it republishes is what the server
+     holds.
+  2. **The read serves it.** The reachability read's `rejection` carries `pinned_key` and
+     `offered_key`; the console names both and never parses a fingerprint out of `session-reason`,
+     which keeps naming them in prose for the property's series and the CLI reader.
+  3. **A trust is checked against the offer on record.** `POST /endpoints/{id}:retry` with
+     `host_key` must name the gate's offered key while the gate carries one: any other is a 409
+     naming the one on record, and nothing is written (no pin, no counter, no audit row). The record
+     is the node's last word, not a live read: a refused node dials no more, so a component that
+     changed again since is read by a plain retry first, and the server does not compare the gate's
+     connection fingerprint (computing it means unsealing the endpoint's secrets), so a gate left
+     under an older fingerprint by an offline node holds the check until the node publishes again.
+     Both fail closed. With no key refusal held, `host_key` still declares a pin ahead of time. The
+     audit row's `old` carries the pin replaced and its `new` the pin set, beside the actor.
+  4. **The console confirms.** Trust this key (gated `endpoint:retry`, greyed with its reason) opens
+     a confirm that shows both keys and teaches why a key changes (a reinstall, a hardware swap, a
+     man in the middle) through hover, holds the refusal as it was when it opened, sends exactly that
+     offered key, and will not send once the live read's offer has moved.
+- **Context:** The fingerprints existed only inside the reason's text, and a console that parsed
+  prose to send back as a pin would trust whatever the prose said. A separate property for the
+  offered key was the other shape: it is stored on change and published once, so a lost publish or
+  a later refusal could pair an old offered key with a new gate. The gate's value is republished
+  until the server reflects it and adopted on a restart, so evidence carried in it always describes
+  the refusal it gates; and it is per key, not per transport, so the tls slice reuses it unchanged.
+  A trust confirmed against a stale view (another operator retried, and the component now offers a
+  third key) would pin a key nobody read; the server's check is what makes "the key shown" binding.

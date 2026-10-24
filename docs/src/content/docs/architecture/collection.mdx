@@ -44,14 +44,24 @@ transport (a v2c scalar SNMP GET, a stateless line exchange over tcp), the node 
 emit (locate by OID, regex capture, dotted JSON path, or key; apply the declared transform; type
 by the baked lane), the worklist delivers a task's secret inputs unsealed on the per-node subject,
 and anything that does not parse lands a `collection-failed` event naming the task, never a silent
-drop and never a wrong-lane sample. Sessions and listeners are the stateful arc, next. See
+drop and never a wrong-lane sample. Also built, the stateful arc: a **session holds its
+connection** (#816) for an endpoint with a standing listen task, its line polls and commands
+borrowing it, its state the `session-state` property per endpoint ([ADR-0150](/architecture/decisions/#adr-0150-a-held-sessions-state-is-a-property-series-and-node-logs-not-a-session-table));
+and the driver's **listeners come alive** over it (#817): their instantiation commands arm every
+connection, their match rules claim the device's pushes, and the claimed line lands as a push
+sample with no poll involved ([ADR-0151](/architecture/decisions/#adr-0151-a-held-line-session-routes-every-inbound-line-listeners-first-answers-by-reply-shape)).
+The arc's closeout is #818. Built since: **auth is a layer that gates the session** (#1049): a
+driver's declared login runs as the session's auth step before anything rides the connection, its
+verdict the `endpoint-authenticated` rung, and a refusal retrying cannot fix reads `rejected` and
+stops dialing ([ADR-0155](/architecture/decisions/#adr-0155-auth-is-a-layer-that-gates-a-held-session-and-a-terminal-refusal-reads-rejected),
+[ADR-0156](/architecture/decisions/#adr-0156-a-driver-declares-its-terminal-replies-and-a-transport-classifies-its-own-refusals)). See
 [ADR-0037](/architecture/decisions/#adr-0037-telemetry-is-a-protobuf-event-over-jetstream-with-an-inline-owner-confining-consumer),
 [ADR-0038](/architecture/decisions/#adr-0038-the-reachability-verdict-is-a-built-in-state),
 [ADR-0039](/architecture/decisions/#adr-0039-an-endpoint-is-a-device-api-the-endpoint-type-is-its-transport-not-its-driver),
 and [ADR-0040](/architecture/decisions/#adr-0040-the-task-is-derived-read-only-plumbing-projected-from-its-endpoint).
 :::
 
-:::design[The template authoring model, tracked in #489]
+:::design[The template authoring model, tracked in #827]
 
 Collection is built from **functions**. A versioned `ComponentTemplate` declares how to reach a
 class of device (its endpoints) and a set of **functions**, each a discrete unit of device logic
@@ -112,7 +122,7 @@ endpoints:
 - **Codec and framing**: raw-TCP AV control planes wrap payloads (line terminators, length prefixes, NUL framing, JSON-RPC or TTP envelopes); the endpoint's codec frames outbound and parses inbound to the declared envelope, so a step sees structure, not wire bytes.
 - **Node placement is not declared here**; it is server-assigned from the component's location.
 
-:::design[Functions: a trigger plus a step DAG, tracked in #489]
+:::design[Functions: a trigger plus a step DAG, tracked in #827]
 
 ## Functions: a trigger plus a step DAG
 
@@ -136,7 +146,7 @@ for a targeted refetch.
 A **task** is a node's unit of collection work, described by two independent axes:
 
 - **Task mode** (on the task): **poll** (we ask) or **listen** (we wait), stated from *our* perspective on purpose, since "pull/push" inverts with the frame.
-- **Transport** (on the endpoint): **stateless** (a throwaway connection per shot) or **stateful** (a held-open connection, a `session` emitting `session_log` rows for connect/auth/drop/reconnect).
+- **Transport** (on the endpoint): **stateless** (a throwaway connection per shot) or **stateful** (a held-open connection, a **session** whose state is the `session-state` property per endpoint, its connect/drop/reconnect reasons in the node's own logs; [ADR-0150](/architecture/decisions/#adr-0150-a-held-sessions-state-is-a-property-series-and-node-logs-not-a-session-table)).
 
 All four cells are real:
 
@@ -147,7 +157,182 @@ All four cells are real:
 
 Waiting for a frame is one mode (**listen**) regardless of transport; statefulness lives on the endpoint.
 
+### Sessions
+
+Built (#816): a session **holds its connection** across ticks. The node holds one per endpoint
+whose worklist carries a standing listen task over a transport with a session dialer (the line
+protocol over `tcp`, `telnet` (#1033) and `ssh` (#1032)), or any driver poll over `telnet` or `ssh`, or a driver poll whose driver declares a `session` block (a login a
+throwaway connection would skip, #1049), keyed by the endpoint's id, which the worklist carries
+beside its name (endpoint names are unique only per component). The machine runs on its own:
+
+- **establish**: the first dial; the session reads `establishing` until it connects.
+- **authenticate**: when the driver declares an auth step, it runs on every connection between the
+  dial and anything else ([auth and rejection, below](#auth-and-rejection)): no poll, command, or
+  listener arm rides a connection whose auth step has not passed.
+- **operate**: the session reads `up`, and the endpoint's line polls **borrow the held connection**
+  instead of dialing per tick. One reader goroutine owns the connection: on an ask it discards
+  whatever already arrived (a banner, a stray line), writes the line, and hands the next line to
+  that ask. An ask whose answer does not come in time recycles the connection, since its late reply
+  would answer the next ask. A pushed line a listener claims is never an answer, and a request that
+  declares its reply shape takes only a line that shape matches ([routing, below](#listeners-over-a-held-session)).
+  A poll issued while the
+  first dial is in flight waits for it (on a budget of its own, then the exchange gets its whole
+  timeout); any other poll over a session with no connection faults at once with a
+  `collection-failed` naming the state, so a down device never stalls the node's tick, and it never
+  dials a connection of its own.
+- **recover**: a held connection that drops (the peer closed, a read failed, the TCP keepalive gave
+  up, an unshaped answer timed out) reads `recovering` at once, without waiting for a poll, and redials with
+  a jittered exponential backoff (250ms doubling, capped at 30s, 20% jitter). Five consecutive failed
+  attempts read `down`, where an attempt fails if its dial fails, its connection drops unanswered
+  within 10s, or an answer over it timed out; so a device that accepts and drops, or accepts and
+  never answers, reads `down` rather than `up` forever. An answered exchange forgives the failures
+  before it, so a healthy device's rare missed answer never reads `down`. The session keeps retrying
+  at the capped pace and leaves `down` only when a returning connection proves itself (an answer, a
+  listener's push, or outliving 10s unless answers were what failed), so a failing device publishes no flapping; a
+  stable connection's drop redials at once.
+- **teardown**: a listen task that leaves the worklist, a change to what the connection depends on
+  (transport, address, timeout, credentials; a listen task's spec re-hash keeps it), or node
+  shutdown closes the connection. Teardown publishes no state (the node stopped wanting the session,
+  which says nothing about the device), so the last `session-state` outlives it and is read by its
+  age.
+
+There is **no session table**: each transition lands as the `session-state` property on the
+endpoint's component (instance: the endpoint's name), published at the transition under the listen
+task, and as a node self-log (`facility: session`) carrying the reason
+([ADR-0150](/architecture/decisions/#adr-0150-a-held-sessions-state-is-a-property-series-and-node-logs-not-a-session-table)).
+Proven against the simulator's line protocol: kill the device's listener mid-session and the session
+reads `recovering`, then `up` once it returns, with the transitions landing on the server.
+
+### Auth and rejection
+
+Built (#1049). **Auth is a layer that gates the session**, the held-session form of the ladder the
+stateless probes climb (dialed, responds, authenticated). Each attempt runs in order: dial, then the
+**auth step**, then the listeners' arm, then `up`. The auth step is declared by the driver (a login
+dialog in its `session` block) or by the transport (a transport that authenticates on its own); its
+verdict lands as the `endpoint-authenticated` property (`yes` or `no`, published when it changes),
+the same rung the ssh probe writes. A login that never prompts or a connection that drops mid-login
+decides nothing: it is an ordinary failed attempt.
+
+**One login dialog.** A driver declares the prompts to wait for, what to send at each (a secret
+input's field, `${secret.<input>.<field>}`), and the match that means ready. A prompt need not end a
+line (`login: ` waits on the same line): a partial line is judged once the component pauses on it,
+never at an arbitrary read boundary, so a banner arriving in pieces is read whole. A prompt for a step
+already answered (the component asking again) is a refusal. The same primitive answers a raw tcp password prompt, a telnet login, and
+ssh keyboard-interactive questions. A credential is only ever written to the wire: a refusal names
+the reference that was missing, never its value, and any text the component sends is scrubbed of
+what was sent before it reaches an error or a reason, so an echoing component cannot leak it.
+
+**Terminal or retryable.** A refusal retrying cannot fix is a **terminal error**, a class and the
+component's own text: the driver declares which replies are terminal (`session.terminal`, each a
+match with a class: `auth`, `host-key`, `certificate`, `protocol`), and a transport classifies its own
+protocol refusals. A terminal reply during the login, to a poll, a command, or a listener's arm
+rejects the session; anything unclassified stays retryable and follows the backoff and budget above.
+
+**The login budget.** A component that hangs up after the final secret and before ready, with no
+refusal text, cannot be told from a dropped connection one time; three such logins in a row are an
+`auth` refusal (the #1056 ruling). A drop before the secret step stays an ordinary failure, and a
+login that passes resets the budget.
+
+**Rejected.** A terminal error moves the session straight to `rejected`, without spending the
+budget: it closes the connection and dials no more. Polls fail fast with the refusal (a terminal
+fault waits the poll's interval, never the failure backoff), commands fail with the reason, and
+neither falls back to a throwaway connection, which would retry the bad credential. It leaves
+`rejected` only when its **connection fingerprint** changes ([below](#the-connection-fingerprint-and-the-layered-gate)):
+
+- anything it connects with changes: the attached secret rotated in the secret store (the endpoint
+  row untouched), the address, port or attached secret (a driver-attached endpoint's inputs edit
+  in place, `PATCH /endpoints/{id}` with `inputs`), the transport, the driver's login or terminal declaration (re-derived to the endpoint, #823), or
+  its pin. The session is recycled and reconnects within a tick;
+- an operator retries it (`POST /endpoints/{id}:retry`, gated by `endpoint:retry` and audited): the
+  endpoint's retry counter, part of the fingerprint, moves;
+- the driver declares a slow re-probe (`session.reprobe`, at least 5m; the default is never).
+
+An unrelated edit (a label) moves nothing the fingerprint covers, and a rejected session stays
+rejected.
+
+Each transition also lands `session-reason`, the reason as a property (`auth: auth rejected` when
+rejected), so an event rule can alarm on it, and the node logs it once, at the transition. Proven
+over a real socket (`linesession_login_integration_test.go`: a raw tcp line protocol behind a
+password prompt; the right password logs in before the first poll, a wrong one is dialed exactly
+once, never arms, and reads `rejected` with the component's text) and over fakes for the machine
+(`session_auth_test.go`: a wrong credential dials once over an hour of the session's clock, a retry
+dials once more, a re-probe fires on its interval, a transient failure still spends the budget).
+
+**In the console** (#1059). The component's reachability read carries each endpoint's latest
+`session-state` with the `session-reason` beside it, while the endpoint is configured to hold a
+session (teardown publishes nothing, so a session nobody holds is not served), and the rung and
+class of its `endpoint-rejection` (never the fingerprint, which is the node's to compare). Like
+every native probe key, a session's state and reason are the node's own facts, which the push lane
+refuses ([the push lane refuses a native key](#the-push-lane-refuses-a-native-key)), so no push can read a
+rejected session up or plant a reason the node never scrubbed. So the component's
+Collection card, its Endpoints panel and the endpoint's detail show the session as a pill, the
+ladder with the held rung marked, and, for a down or rejected session, the reason. A state is stored
+only on a transition, so the pill is aged by the endpoint's `last_seen`, as ADR-0150 requires: a
+session whose endpoint has delivered nothing for the staleness window reads grey, saying what it
+last read. A rejected session offers **Retry** (`:retry`, gated `endpoint:retry`, greyed with its
+reason for a caller without it) and the way into the endpoint's edit, where pointing the credential
+at the right secret moves the fingerprint. The [collection guide](/guides/operator/collection/#held-sessions)
+teaches it, and the `fix-a-rejected-session` walkthrough drives it against the simulated panel.
+A refusal of a changed key (#1078) names both keys, the pinned and the offered, which the gate
+carries as data, and offers **Trust this key**: a confirm that teaches why a key changes, then
+`:retry` with exactly the offered key it showed as `host_key`, which the server refuses (409) unless
+the refusal on record still names it ([ADR-0159](/architecture/decisions/#adr-0159-a-refused-keys-evidence-rides-its-gate-and-trusting-a-key-is-checked-against-the-one-offered));
+the `trust-a-changed-host-key` walkthrough drives it against the simulated panel's ssh console.
+
+### The connection fingerprint and the layered gate
+
+Built (#1056 ruling, [ADR-0158](/architecture/decisions/#adr-0158-one-connection-fingerprint-gates-every-connection-on-a-ladder-the-driver-declares)). Every connection to an endpoint, held or
+stateless (the reachability probe, a throwaway poll or command, the held session), is verified
+bottom up on the existing ladder:
+
+- **reachable**: a ping, **informational only**. An open, answering transport is what counts, so a
+  component that blocks ping never reads down for it, and a cloud API is never pinged. The
+  driver's ladder lands `icmp-reachable` beside the endpoint's probe (one observation per probe),
+  after the verdict is judged. A layer-2 presence rung below it is #1062.
+- **responsive**, the transport rung and **the gate**: a TCP connect on the transport's port, the
+  protocol's handshake (the ssh key exchange, tls), or, where an open port cannot be detected
+  (udp), the driver's named request answered (snmp's own is #821). A wrong host, address or port
+  fails here, retryably, and never reads as auth.
+- **authenticated**, the session rung: the login, attempted only when the transport rung passes.
+
+The ladder is declared in the driver spec (`ladder.ping`, `ladder.transport`, `ladder.session`),
+its defaults from the transport registry's `rung`, so most drivers declare nothing; a rung a
+transport cannot run refuses at write. A terminal refusal gates its rung and every rung above it,
+for the endpoint, while the **connection fingerprint** is unchanged: a digest the server computes
+over every input a connection is made with (the transport, the declared params, the driver's
+inputs, a digest of each attached secret's sealed envelope, never its plaintext, the session block,
+the ladder, the ssh pin, and the `:retry` counter). The rungs below keep running, so reachability
+stays observed while auth is rejected. The gate is published as `endpoint-rejection` (`<rung>
+<class> <fingerprint>`, or `none`; a refusal of a changed key appends `<pinned-key> <offered-key>`,
+its evidence, [ADR-0159](/architecture/decisions/#adr-0159-a-refused-keys-evidence-rides-its-gate-and-trusting-a-key-is-checked-against-the-one-offered))
+and carried back on the worklist, so a restarted node makes no attempt against an unchanged
+fingerprint and keeps the evidence it adopts. The ssh probe's params credential rides the same gate
+(#1060): tried once, then the key exchange runs without it until the fingerprint moves, and never
+past a pinned key that changed. Proven end to end (`run_session_identity_test.go`): a silent panel
+spends the login budget, then a label edit and a node restart try nothing, while a retry, a
+login-declaration change, a rotated secret, and an ssh attachment each attempt again; a wrong
+port reads down on refused connects and tries no login, and the port edited in place connects and
+authenticates within a tick, a label edit through the same route recycles nothing, and the address
+edited in place moves a healthy session to the new component; the ssh probe sends a wrong password once,
+across a restart too, and authenticates after a params edit.
+
 **Native push**: data pushed by smart senders is self-describing (it carries its key), its edge parse a near-identity pass-through marked `shape=native`; a failed parse keeps the raw on a `collection.failed` event.
+
+### The push lane refuses a native key
+
+Every key a native probe writes, its samples ([below](#poll-protocols-and-their-config)) and the
+node's account of its own connection (the verdict and its rungs, the probe metrics and their
+timings, a held session's state and reason, the host key it trusted, the gate it publishes), is the
+node's own observation, and the console reads it as one. So `POST /telemetry:push` refuses each by
+name (#1080, [ADR-0158](/architecture/decisions/#adr-0158-one-connection-fingerprint-gates-every-connection-on-a-ladder-the-driver-declares)
+point 5): on every lane, not just its own, under any instance and any casing, and the rejection's
+reason names the key. The set is not a second list: it is `internal/collection/probekeys`, the
+declaration the probes emit from, where each key is ruled node-only or pushable with the reason it
+may be pushed. None is pushable today, and a key declared there without a ruling fails its test,
+as does a key the reachability read serves that is not ruled node-only. The node's own lane never
+consults the ruling and lands every one of them. A pusher with a measurement of its own, an outside
+pinger's round trip say, registers a metric type for it rather than borrowing the node's. The push
+lane is one write surface; hardening the others that can reach a native key's series is #1084.
 
 ## Endpoint types and their config
 
@@ -168,23 +353,48 @@ the endpoint's `params` JSON, unmarshalled on the node:
 | `icmp` | inline probe | `target` (host or IP), `count`, `timeout` | `icmp-reachable`, `icmp-rtt-avg` (fixed) |
 | `tcp` | inline probe | `target` (`host:port`), `timeout` | `tcp-open`, `tcp-connect-time` (fixed) |
 | `http` | inline probe | `target` (`host:port`), `timeout` | the tcp pair, `http-response-time`, `endpoint-responsive` |
+| `telnet` | inline probe | `target` (`host:port`), `timeout` | the tcp pair, `telnet-response-time` (the first negotiation or banner bytes), `endpoint-responsive`; the login is the held session's auth step, never the probe's |
 | `ssh` | inline probe | `target` (`host:port`), `timeout`, optional `username`/`password` (secret references arrive with the driver spec) | the tcp pair, `ssh-handshake-time`, `endpoint-responsive`, `endpoint-authenticated` (only when a credential was tried) |
 
-:::design[The remaining transports and their per-task spec, tracked in #489]
+The `raw-tcp` row below is built in its driver form: the line protocol over `tcp` holds a session
+(#816) that polls, commands, and listeners share (#817). So is the `telnet` row (#1033): the same line
+protocol behind a telnet filter that strips option negotiation and refuses every option (DO is
+answered WONT, WILL is answered DONT, a literal 0xFF escaped), its login the driver's login dialog run
+as the session's auth step on establish and every recover; proven against the simulated panel's
+`nvp-telnet` face (login, poll, command, push, recover with a fresh login, and a wrong password
+rejected after one attempt); while the node holds an endpoint's telnet session and it reads up, the
+reachability probe takes its verdict from the session rather than dial a second connection (gear that
+admits one telnet client would refuse it). And so is `ssh` (#1032): the line protocol over a shell
+channel (with a PTY when the driver's `session.pty` asks, or an exec channel, `session.exec`), its
+userauth the session's auth step with the credential the driver names (`session.credential`, a
+username with a password or a private key, or keyboard-interactive answered by the login dialog). A
+refused credential is `auth`, and the **host key is pinned on first use**: the node trusts the first
+key it sees and publishes it as `ssh-host-key`, the server delivers it back as the pin on every
+worklist, and a changed key reads `rejected`, class `host-key`, naming both fingerprints, which
+the gate carries as data. An operator who trusts the new key (a replaced component) retries the
+endpoint with it (`:retry` with `host_key`, audited with both keys; the console's **Trust this
+key**), which declares the new pin and redials onto it; a key the refusal on record does not name is
+refused. Proven against
+the simulated panel's ssh shell (poll, command, push, recover onto the same key, down after the
+budget, a wrong password and a rotated key each rejected) and end to end ([ADR-0157](/architecture/decisions/#adr-0157-telnet-and-ssh-are-held-line-transports-their-login-is-the-drivers-and-the-ssh-host-key-is-pinned-on-first-use)).
+The other held transports are each their own
+issue: #1034 (websocket), #1035 (tls), #1036 (mqtt), #1037 (udp), #1038 (SSE over http), #1039 (modbus/tcp), #1040 (bacnet/ip), #1041 (knxnet/ip). There is no serial transport: an RS-232 or RS-485 device is reached
+through an IP-to-serial gateway, which is the `tcp` transport (or `tls` or `telnet`), so its driver is
+a line protocol like any other ([ADR-0153](/architecture/decisions/#adr-0153-the-held-session-proof-is-the-line-protocol-over-tcp-other-held-transports-are-their-own-issues)).
+
+:::design[The remaining transports and their per-task spec, tracked in #603 and #1034 (websocket), #1035 (tls), #1036 (mqtt), #1037 (udp), #1038 (SSE over http), #1039 (modbus/tcp), #1040 (bacnet/ip), #1041 (knxnet/ip)]
 
 | endpoint type | shape | host/target | per-task params | samples |
 |---|---|---|---|---|
 | `snmp` | held connection | `endpoint.address` (`host[:port]`, port defaults 161) | `task.params.oids` (comma-separated `name=oid`); `endpoint.params.version` (default `2c`), `endpoint.params.community` | one sample per OID, `name` = the sample key |
 | `http` | held connection | `endpoint.address` (base URL) | `task.params.path` (joined onto the base URL), `method` (default `GET`), `timeout` (default `5s`), `body`, `extract` (comma-separated `name=json:<dot.path>`); `endpoint.params.header_*` (request headers, prefix stripped) | `http-reachable`, `http-status-code`, `http-response-time` (fixed) + one per `extract` entry |
 | `raw-tcp` | held connection | `endpoint.address` (`host:port`) | `task.params.command` (sent verbatim + line ending), `timeout`, `extract` (comma-separated `name=re:<pattern>`); `endpoint.params.line_ending` (default `\r\n`), `read_delim` (default `\n`), `connect_timeout`, `read_timeout` | `rawtcp-reachable`, `rawtcp-response-time` (fixed) + one per `extract` entry |
-| `telnet` | held connection | `endpoint.address` (`host:port`) | as `raw-tcp`, plus `endpoint.params.username`/`password` (drive the default `login:` / `Password:` chain; `login_expect`/`password_expect` override the prompts) | `telnet-reachable`, `telnet-response-time` (fixed) + one per `extract` entry |
-| `ssh` | held connection | `endpoint.address` (`host:port`) | as `raw-tcp` (the command runs as a one-shot `exec`), plus `endpoint.params.username` and `password` and/or `private_key` (inline PEM) | `ssh-reachable`, `ssh-response-time` (fixed) + one per `extract` entry |
 
 :::
 
-`icmp`/`tcp` are inline probes (config on `endpoint.params`); the rest, in the design model, are held connections: the connection lives on the endpoint, the task names what to read. The ship-with registry seeds the 11 real catalog rows, 4 `metric_type` plus 7 `property_type` (`internal/seed/metric_types.yaml`, `internal/seed/property_types.yaml`), including the probe built-ins above plus `endpoint-reachable`; the wider per-transport set (`udp-open`, `snmp-reachable`, the http trio, `<proto>-reachable`/`<proto>-response-time` for the text family) is Design, and unregistered names would be reject-not-project dropped at ingest.
+`icmp`/`tcp` are inline probes (config on `endpoint.params`); the rest, in the design model, are held connections: the connection lives on the endpoint, the task names what to read. The ship-with registry seeds the probe built-ins above, the endpoint verdicts, and `session-state` (`internal/seed/metric_types.yaml`, `internal/seed/property_types.yaml`; the [metrics](/guides/admin/metrics/) and [properties](/guides/admin/properties/) guides render each set from the seed); the wider per-transport set (`udp-open`, `snmp-reachable`, the http trio, `<proto>-reachable`/`<proto>-response-time` for the remaining text family; `telnet-response-time` is seeded) is Design, and unregistered names would be reject-not-project dropped at ingest.
 
-:::design[The held-connection transports in detail, tracked in #489]
+:::design[The held-connection transports in detail, tracked in #603 and #1034 (websocket), #1035 (tls), #1036 (mqtt), #1037 (udp), #1038 (SSE over http), #1039 (modbus/tcp), #1040 (bacnet/ip), #1041 (knxnet/ip)]
 
 For `snmp`, each OID keeps its **native SNMP type**: numeric OIDs land as `metric`, string OIDs
 (OctetString / IPAddress / OID) as `property`, the lane decided at ingest by catalog membership;
@@ -216,9 +426,56 @@ text family persistently (prompt-expect, echo handling, Q-SYS-style framing), ss
 
 :::
 
+### Listeners over a held session
+
+Built (#817): a listener declared in a driver's spec derives a standing listen task, and the
+node runs every listen task on an endpoint over that endpoint's one held session:
+
+- **Instantiation commands** (`arm`): the subscribe conversation, sent in order on every connection
+  before the session reads `up`, so on establish and again on each recover. They are **plumbing**,
+  not command rows (the #603 ruling): each is a node self-log (`session armed`, with the device's
+  reply). The ack is the first line of any kind, one a listener claims included (the listener has
+  it too), since a device may acknowledge a subscribe with the push itself; an arm with no ack
+  within the timeout is logged at warn (`session armed, unacknowledged`) and does not fail the
+  attempt, while the connection dying during the arm does.
+- **Match** (`prefix` or `regex`): classifies an inbound line. Listeners are offered a line in
+  function-name order and the first whose rule picks it claims it.
+- **Extraction**: the claimed line runs through the same emit shape a poll's answer does (locate,
+  transform, type by the baked lane), and lands at once as a sample under the listen task: the
+  component owns it, the endpoint is its instance, and no poll schedule is involved. A claimed line
+  whose emits do not extract is a `collection-failed`, landed once per change.
+
+Every inbound line on a held session is routed by one precedence
+([ADR-0151](/architecture/decisions/#adr-0151-a-held-line-session-routes-every-inbound-line-listeners-first-answers-by-reply-shape)):
+
+1. A line a listener claims is the listener's. It is never an exchange's answer, unless the
+   exchange declared a reply shape the line matches, in which case both have it.
+2. An exchange in flight (a poll, a command) takes the first line its declared reply shape
+   (`request.reply`, a `prefix` or `regex`) matches, or, when it declares none, the first line no
+   listener claims. When the shape also declares an `error` shape, an unclaimed line matching it
+   answers the exchange as a **refusal** carrying the device's text. A line that began before the
+   request was written is never its answer.
+3. Anything left is **unclaimed**: counted, and once per tick the node logs the count and the last
+   such line; a spec declaring `unmatched: collection-failed` also lands one `collection-failed`
+   per tick naming them (the default is `discard`).
+
+A request with a reply shape closes the window #816 left open (a stray line arriving just before
+the device reads the request); without one, a line no listener claims in that instant can still be
+taken as the answer, so a driver whose protocol mixes unsolicited lines with answers declares its
+replies. A shape's `regex` is Go RE2 with **substring** semantics, so anchor it (`^INPUT \S+$`), or it
+also matches a push containing it. Because shape routing cannot hand a late answer to the next ask,
+a shaped request that gets no answer in time fails only that exchange: the connection is kept and
+the session is not charged (an unshaped one still recycles the connection, ADR-0150). A poll whose
+answer is a refusal lands a `collection-failed` naming the device's text. Commands ride the held
+session too: a delivery names its endpoint, and a node holding a session there actuates over it
+(falling back to a throwaway connection only when none is held). A command the device answers
+settles from that answer as it did over a throwaway connection; one it refuses reports the
+device's text as both its execution error and its reply, so it fails at once with the reason on
+the row rather than timing out.
+
 ### Listeners and their config
 
-:::design[Server-hosted listeners, tracked in #489]
+:::design[Server-hosted listeners: syslog, SNMP trap, and webhook ingress, tracked in #1024]
 
 A **listener** waits for pushed data (`mode: listen`): a webhook POST, an MQTT/subscribe stream, an
 SNMP trap or syslog line, or a line on a held session; a webhook is one transport, not the
@@ -255,7 +512,7 @@ bodies).
 
 :::
 
-:::design[The step DAG and extractors, tracked in #489]
+:::design[The step DAG and extractors, tracked in #827]
 
 ## Steps: the DAG
 
@@ -314,7 +571,7 @@ Compile-time validation resolves every key to a reachable scope; an unresolved k
 reject-not-project at ingest, so a template never silently collects a measurement no scope knows.
 :::
 
-:::design[Template inputs, tracked in #489]
+:::design[Template inputs, tracked in #827]
 
 ## Inputs: the template's typed parameters
 
@@ -408,21 +665,40 @@ spec declares:
 defaults bake, and the spec's functions derive the endpoint's tasks in the same transaction: a
 poll task per poll function, a standing listen task per listener, each task's spec carrying the
 function **whole with its emit lanes resolved at attach** (the compile step: the node never
-looks up a catalog at runtime). Refusals name the fault as a 422: a missing required input, an
+looks up a catalog at runtime). The tasks **re-derive when the driver's spec changes** (#823): a
+driver update over the API, and the boot seed's upsert of an official spec, rewrite every attached
+endpoint's driver tasks in the same transaction, writing the ones the spec now derives and retiring
+the ones it no longer does. Task ids are content hashes, so an unchanged function keeps its row and
+a re-seed that changes nothing writes nothing at all (not the driver row, not a task); an endpoint
+whose tasks changed has its config generation moved, and its node runs the new spec from its next
+pull. An attach reads the driver row under a share lock, so one that races an update waits for it
+and derives the committed spec, and a re-derive skips an endpoint a concurrent delete removes.
+One gap is accepted: between the re-derive and the node's next pull (one tick), samples the node
+still publishes under a retired task's id are dropped at ingest as orphans, the same confinement
+that drops any unknown task id; the next tick publishes under the new one. Refusals name the fault as a 422: a missing required input, an
 input the spec does not declare, an ambiguous secret name. A secret input is resolved under the
 **caller's own secret read scope and admin tier**, so an attach can only bind a credential the
 operator could themselves read: an out-of-scope or admin-sensitive secret refuses
 indistinguishably from an absent one, no name or type oracle. The worklist delivery re-confines
-to a secret that cascades onto the endpoint's component, and a driver-attached endpoint's params
-are read-only afterwards (the address is derived from the inputs; re-attach to change it). A
+to a secret that cascades onto the endpoint's component. A driver-attached endpoint's address is
+derived from its inputs and edits in place through them (#1061): `PATCH /endpoints/{id}` takes
+`inputs` (the host, the port, an attached secret's reference), validated against the driver's
+declared inputs (a value it refuses is a 400 naming the field), every attached secret re-resolved
+under the editor's own secret scope (so an edit cannot send a credential its editor could not use to
+a new address), audited, and the tasks re-derived in the same transaction through #823's one
+derivation; a raw `params.target` on it, or a transport its driver does not speak, refuses. A
 driver row without a spec is a **stub** that cannot be attached. The console's endpoint
 create offers both moves (a bare probe endpoint, or attach a driver and fill its inputs), and the
 Drivers page renders each spec as the menu it is.
 
-**The interpreter runs the poll functions** (#814): the node tells a baked driver task from a
-probe task by its spec, fetches over the transport (the v2c scalar GET rides `gosnmp`, proven
+**The interpreter runs the poll functions** (#814) **on their declared schedule** (#822): a poll's
+`schedule.every` is honored at heartbeat granularity, the node running it on the first tick at or
+after it is due (a new task at once, and a run whose fetch failed retried on a backoff from the
+heartbeat, doubling, capped at the interval), while reachability probes run every tick and a listener's
+pushes ride the held session as they arrive, never gated ([ADR-0152](/architecture/decisions/#adr-0152-a-driver-poll-runs-on-its-declared-schedule-at-heartbeat-granularity)).
+The node tells a baked driver task from a probe task by its spec, fetches over the transport (the v2c scalar GET rides `gosnmp`, proven
 against a from-the-spec BER agent; a line poll runs one stateless ask over a throwaway
-connection until the stateful arc holds a session), and interprets the payload against the baked
+connection, or borrows the endpoint's [held session](#sessions) when the node holds one), and interprets the payload against the baked
 function: locate each emit by its one extractor, apply the declared transform (enum map, then
 scale, then cast), and type it by the baked lane. A metric-lane value that is not numeric is a
 fault, never a wrong-lane sample; a missing emit faults by name while the rest of the payload
@@ -430,8 +706,8 @@ still lands; a failed fetch lands nothing; every fault is a `collection-failed` 
 task. Secret inputs reach the node **unsealed in the worklist reply**: the server resolves each
 reference once per pull (the per-node NATS grant is the isolation boundary, and the attach that
 bound the reference is the audited operator action), and a reference that no longer resolves is
-delivered as absence, which the node reports as the missing credential. Sessions and listeners
-arrive with the stateful arc. The ship-with set:
+delivered as absence, which the node reports as the missing credential. Sessions and the
+listeners over them are built ([above](#sessions)). The ship-with set:
 
 <SeededSet kind="drivers" />
 

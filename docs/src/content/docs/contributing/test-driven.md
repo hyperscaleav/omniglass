@@ -43,10 +43,22 @@ unproven proves nothing about the capability.
 - **Unit:** pure logic, fast, no I/O. Expression compile/eval, decode, request shaping,
   mapping.
 - **Integration:** real Postgres, no mocking the database. `testcontainers-go` gives each
-  run an ephemeral instance on a random port; never bind a fixed host port.
+  run an ephemeral instance on a random port; never bind a fixed host port. The simulator
+  follows the same rule: a test serves it on `sim.EphemeralPorts` and aims its clients and
+  endpoints at the address each face reports
+  ([fixed and ephemeral ports](/architecture/simulation/#fixed-ports-and-ephemeral-ports)).
 - **End-to-end:** emulate the user at each entry point against the running stack: API
   (drive the contracts as a client), CLI (run the real commands), UI (browser-drive the
-  SPA). Assert the user-observable outcome, not internals. The browser tier has a floor
+  SPA). Assert the user-observable outcome, not internals. The real binary follows the same
+  port rule: every end-to-end test in `internal/e2e` starts `omniglass server` through one
+  helper, `startServer`, which asks for port 0 on both the API and the embedded bus and reads
+  the addresses the server bound back from its ready file
+  ([a server on ports it picks](/guides/cli/#a-server-on-ports-it-picks)). Nothing picks a
+  free port, releases it and hands the number to a later bind, which a concurrent run on the
+  host could take in between; a guard test in the package fails any test there that starts
+  the server another way or sets its listen addresses. The browser tier and the walkthrough
+  stack run the server in Docker instead, on a private network per run with nothing on a
+  host port (`web/e2e/lib/stack.sh`), which isolates them the same way. The browser tier has a floor
   no console route can dodge: the router renders from a route manifest
   (`web/src/lib/routemanifest.ts`) and the smoke spec (`web/e2e/routes.spec.ts`) drives
   the same manifest, visiting every route and failing on any page or console error, so

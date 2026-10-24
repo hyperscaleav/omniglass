@@ -21,7 +21,7 @@ Built today: the Huma-over-chi API with the OpenAPI 3.1 document generated from 
 ([ADR-0068](/architecture/decisions/#adr-0068-the-api-error-model-is-the-stock-rfc-9457-shape)), proven
 on `/auth`, `/roles`, `/locations`, `/systems`, `/components`, `/nodes`, `/endpoints`, `/tasks`, the
 first-party ingest write `POST /telemetry:push` (gated `telemetry:push`, owner declared in the body and
-fenced by the caller's scope), the per-component reachability read, the type registries, the
+fenced by the caller's scope, every native probe key refused by name), the per-component reachability read, the type registries, the
 `/products` and `/standards` catalogs, the classifier-contract and instance-value property routes, the
 role declaration, resolution, and staffing routes, and the component alarm plus system and location
 [health](#health-the-verdict-and-why) reads. The node `:enroll` and `:claim` custom methods are the
@@ -274,7 +274,18 @@ exercise every convention above at once: the standard family per resource (`/nod
 (the code registry the endpoint picker consumes, `endpoint:read`-gated, #811). An endpoint
 create takes either a `transport` (a bare probe endpoint) or a `driver` plus `inputs` (an
 attach, #813: the driver's spec derives the transport, params, and tasks), and the `/drivers`
-family carries each driver's declarative `spec`, validated at write. The routes live in the
+family carries each driver's declarative `spec`, validated at write. `PATCH /endpoints/{id}` edits a
+driver-attached endpoint's `inputs` in place (the host, the port, an attached secret's reference;
+#1061), validated against the driver (a refused value is a 400 naming the field), re-resolving its
+secrets under the editor's scope, audited, its tasks re-derived in the same transaction.
+`POST /endpoints/{id}:retry`
+(gated `endpoint:retry`, audited, #1049) moves the endpoint's retry counter, part of its connection
+fingerprint, so a gate a terminal refusal holds lifts and the endpoint is attempted again (ADR-0158); for an ssh endpoint whose host key changed, its optional `host_key`
+body declares the new pin (#1032). While the endpoint's gate names an offered key, `host_key` must be
+that key: any other is a 409 that writes nothing, so a trust confirmed against a view the record has
+since moved past cannot pin a key nobody read, and the audit row carries the pin replaced
+(`old.host_key`), the pin set (`new.host_key`) and the actor (#1078,
+[ADR-0159](/architecture/decisions/#adr-0159-a-refused-keys-evidence-rides-its-gate-and-trusting-a-key-is-checked-against-the-one-offered)). The routes live in the
 [generated API reference](/reference/api/), rendered from the OpenAPI document on every build, each
 operation's description naming its permission gate verbatim (a guard test enforces that, alongside the
 spec-contract test that every gated operation carries its `x-omniglass-permission` stamp and
@@ -341,14 +352,19 @@ lowered to its expression, and a rule always reads back as `{expr}`. An unknown 
 type, a missing fire event type, or a criterion that does not compile against its lane is a 422; for a
 criterion the problem's error is located at `body.fire_criteria.expr` (or `clear_criteria`), or at
 `body.fire_criteria` when the body gave the short form, and carries the `line` and `column` of the
-fault when it has one. A stored rule whose criteria no longer compile carries `criteria_error`
-(`field`, `line`, `column`, `message`) on the list, a get and its state, and holds until rewritten. `POST /expressions:validate` (gated `rule:read`; `omniglass expression validate`) compiles a
+fault when it has one, and the `code` of the [diagnostic](/architecture/expressions/#diagnostics-clear-messages-and-quick-fixes)
+that refused it when one did. A stored rule whose criteria no longer compile carries `criteria_error`
+(`field`, `line`, `column`, `message`, `code`) on the list, a get and its state, and holds until rewritten;
+criteria that compile with a warning carry it in `criteria_warnings` (the same shape), a note that never
+holds the rule or refuses its save. `POST /expressions:validate` (gated `rule:read`; `omniglass expression validate`) compiles a
 `source` against a registered expression `site` (`criteria`, for which the sample `key` is required
 and types the value, a metric a number and a property its data type, which so tells a `rule:read`
 holder a key's lane and data type, as the rule list does; or `calc`, for which `key` is the rule's
 output key, typing the result, and `inputs` with `owner_kind` give the bindings, an unknown or
 misnamed input, or `health` as one, being a 422) and answers `ok`,
-the value and result types, `diagnostics` with line, column and phase, and the site's `bindings`,
+the value and result types, `diagnostics` (the refusal, or the warnings and hints an expression that
+compiles carries, each with line, column, phase, `severity` and, from a registered diagnostic, its
+`code` and a quick `fix`: a range and its replacement), and the site's `bindings`,
 `builtins` and `budget`, generated from the site's declaration; it compiles without the engine's
 program cache, stores and runs nothing, and an unknown site or a missing or unknown key is a 422. `POST /event-rules:preview` (gated `rule:read`; `omniglass event-rule
 preview`) judges a candidate rule (sample key, selector, criteria) without writing anything, in a
@@ -391,8 +407,9 @@ alias binds); any other refusal is a 422 located at the field
 it names (`body.inputs[0].key`, `body.inputs[0].alias`, `body.output_key`, `body.selector`): an unknown
 key, an alias that is not an identifier of at most 64, is reserved or repeats, `health` as an input or
 output, an output a native probe or a driver's declared emits write, an output another enabled rule
-writes (the refusal names it; enabling a rule is checked too). A list or get carries `calc_error` (`field`, `line`, `column`, `message`) when a stored reduce no
-longer compiles against the registries, and such a rule cannot be enabled (422). Deleting a property
+writes (the refusal names it; enabling a rule is checked too). A list or get carries `calc_error` (`field`, `line`, `column`, `message`, `code`) when a stored reduce no
+longer compiles against the registries, and such a rule cannot be enabled (422); a reduce that compiles
+with a warning (an input it never names) carries it in `calc_warnings`, which never refuses a save. Deleting a property
 or metric type a calc rule writes or reads is a 409 naming the rule. A metric or property type a calc
 rule writes names it on `/metric-types` and `/property-types` (list and get) as `written_by`
 (`rule`, `rule_id`): the enabled writer, else a disabled one, read with the type and scope-free as the
@@ -441,7 +458,19 @@ out-of-scope component is a non-disclosing 404 (a deliberate early exception to
   landed a batch the endpoint's task delivered, by the server's clock and to within a few seconds,
   whatever the batch carried. A verdict is stored only on a transition, so its `ts` is when it last
   changed, and a driver endpoint has no verdict at all; `last_seen` is the one freshness every
-  endpoint has.
+  endpoint has. Each row also carries the endpoint's `id` (the address `:retry` takes), its held
+  `session` while it is configured to hold one (a standing listen task, or a driver declaring a
+  session: the latest `session-state`, when it changed, and the `session-reason` beside it, cut to
+  500 characters), and the `rejection` a terminal refusal holds (the rung and class of
+  `endpoint-rejection`; the connection fingerprint it carries is never served), which the console's
+  session pill and ladder render (#1059). A refusal of a changed key adds `pinned_key` and
+  `offered_key`, both or neither, read off the gate as data (#1078): the console names them and
+  trusts the exact `offered_key` it showed, never a fingerprint parsed out of the reason. Teardown
+  publishes no state, which is why a session is served only while one is held. Every key this read
+  composes is a native probe key, the node's own observation: the verdict and its rungs, the probe
+  metrics and timings, a session's state and reason, the gate. `POST /telemetry:push` refuses each by
+  name on every lane, whatever instance it names (#1080, [ADR-0158](/architecture/decisions/#adr-0158-one-connection-fingerprint-gates-every-connection-on-a-ladder-the-driver-declares)
+  point 5), so no push can stand in for the node in any of it.
 - `GET /components/{name}/events` is the log-kind mirror: the component's recent **log occurrences**
   (the [`event` log sink](/architecture/core-entities/#the-event-sink-the-first-arc-owned-occurrence)),
   newest first, bounded to the last 24 hours and capped at 200 rows; each row carries `ts`, the

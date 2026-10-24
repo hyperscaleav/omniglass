@@ -3,6 +3,7 @@ title: Calc rules
 description: "Writing a calc rule: the value it derives on each component or system, the inputs it reads and the aliases its expression uses for them, the expression that folds them into one value, what it writes, previewing it before saving, and reading what it last computed on each owner, from the console, the CLI, or the API."
 walkthroughs:
   - id: derive-a-value-with-a-calc-rule
+  - id: fix-an-expression-with-a-quick-fix
 ---
 
 **Catalog, under Actions: Calc rules** (with `rule:read`) is where a value is **derived from others**:
@@ -61,7 +62,10 @@ lists the first twelve; **and N more** shows the rest.
   criteria: it completes the aliases, the functions and a member's fields as you write, and is checked
   as you type against exactly what the rule binds. **Start from** inserts a function with the cursor in
   its slot, ready for an alias. A name the expression uses that no input has as its alias is underlined,
-  with **Bind it to a key**, which adds an input of that alias for you to choose the key of.
+  with **Bind it to a key**, which adds an input of that alias for you to choose the key of. A common
+  mistake is said plainly with a fix a click away: `sum(members, .has.t) > 0` is refused on the `sum`
+  ("sum adds numbers") with **Use count** beside it. An input the expression never names is a
+  **warning** in amber: the rule still saves, and its blade carries the warning as a note.
 - **Writes**: the property or metric it writes, whose type the reduce must yield. Not one a collection
   writes, and not one another enabled rule writes. To write a key that does not exist yet, **New metric**
   (a name, a label and a unit; its values are numbers) or **New property** (a name, a label and a data
@@ -90,6 +94,13 @@ TCP connect time), previews and saves it, then opens one of its components, wher
 shows among the vitals, linked to the rule.
 
 ::walkthrough{#derive-a-value-with-a-calc-rule}
+
+The next one writes a count of a component's slow endpoints as a `sum`, the most common first mistake:
+the field explains it on the `sum`, links its code to the
+[diagnostics table](/architecture/expressions/#diagnostics-clear-messages-and-quick-fixes), and **Use
+count** fixes it in one click before the rule is saved.
+
+::walkthrough{#fix-an-expression-with-a-quick-fix}
 
 ## From the CLI and the API
 

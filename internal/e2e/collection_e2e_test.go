@@ -38,28 +38,11 @@ func TestCollectionEndToEnd(t *testing.T) {
 	}
 
 	dsn := storagetest.NewDSN(t)
-	addr := "127.0.0.1:" + freePort(t)
-	natsPort := freePort(t)
 
 	// Run the real server: it migrates, seeds (the tcp interface_type + sample
-	// types), and hosts the embedded bus. NATS_URL must match NATS_ADDR so the
-	// claim reply advertises a URL the node can dial.
-	srvCtx, cancel := context.WithCancel(ctx)
-	defer cancel()
-	srv := exec.CommandContext(srvCtx, binPath, "server")
-	srv.Env = append(os.Environ(),
-		"OMNIGLASS_DSN="+dsn,
-		"OMNIGLASS_ADDR="+addr,
-		"OMNIGLASS_NATS_ADDR=127.0.0.1:"+natsPort,
-		"OMNIGLASS_NATS_URL=nats://127.0.0.1:"+natsPort,
-		"OMNIGLASS_NATS_STORE_DIR="+t.TempDir(),
-	)
-	srv.Stdout, srv.Stderr = os.Stderr, os.Stderr
-	if err := srv.Start(); err != nil {
-		t.Fatalf("start server: %v", err)
-	}
-	t.Cleanup(func() { cancel(); _ = srv.Wait() })
-	pollHealthz(t, "http://"+addr+"/api/v1/healthz")
+	// types), and hosts the embedded bus, whose claim reply advertises the URL
+	// of the port the bus bound, so the node dials the right one.
+	server := startServer(t, binPath, "OMNIGLASS_DSN="+dsn).URL
 
 	// A live listener is the probe's open target.
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
@@ -112,7 +95,7 @@ func TestCollectionEndToEnd(t *testing.T) {
 
 	// Run the real node binary once: claim, pull, probe the live listener, publish.
 	out, code := runCLI(t, root, binPath, os.Environ())(
-		"node", "run", "--server", "http://"+addr, "--name", "site-a", "--token", token, "--once")
+		"node", "run", "--server", server, "--name", "site-a", "--token", token, "--once")
 	if code != 0 {
 		t.Fatalf("omniglass node exit %d:\n%s", code, out)
 	}

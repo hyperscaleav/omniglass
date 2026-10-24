@@ -3,6 +3,9 @@ title: Nodes and reachability
 description: "Enrolling a collection node, adding a transport-named endpoint to a component, and reading the per-endpoint reachability and the log events a node reports."
 walkthroughs:
   - id: set-up-monitoring
+  - id: fix-an-endpoint-in-place
+  - id: fix-a-rejected-session
+  - id: trust-a-changed-host-key
 ---
 
 Collection is how the fleet learns whether a device is reachable and what it reports. An **edge
@@ -76,8 +79,10 @@ without one reads its transport name exactly.
 
   The owning component is the one you are on. Either face **derives the endpoint's tasks**
   for you, so a fresh endpoint is working collection with no second step.
-- With `endpoint:update`, editing an endpoint changes only its **node placement** and its
-  **target**; the transport (and so the name) is fixed at creation.
+- With `endpoint:update`, editing an endpoint changes its **node placement** and where it
+  connects: a bare probe's **target**, or an attached driver's **inputs** (its host, its port, the
+  name of the secret it authenticates with), edited in place and checked against the driver, with
+  no re-attach. The transport (and so the name) is fixed at creation.
 - With `endpoint:delete`, deleting an endpoint removes it and **cascades its derived task**.
 
 Setting up monitoring on a component nothing collects from yet is both faces in turn: the SNMP
@@ -87,6 +92,12 @@ own as they land, so there is nothing to reload. The walkthrough runs against a 
 component, so the node is really collecting.
 
 ::walkthrough{#set-up-monitoring}
+
+A driver attached with a mistake (an address typed one octet short) is fixed on the endpoint itself:
+correct the input, save, and the node reconnects at its next check-in, so samples arrive seconds
+later.
+
+::walkthrough{#fix-an-endpoint-in-place}
 
 Because an endpoint belongs to a component, it inherits that component's scope: an endpoint
 on a component outside your scope is not shown. A node **purge cascades** its endpoints and
@@ -115,19 +126,90 @@ pill ages an endpoint by when the server last received anything its task deliver
 seen**, and an endpoint answering every probe stays responding however long ago it last changed
 state), an **availability strip** drawn from the
 verdict's up/down transitions over time, and an expandable **gate breakdown** with each probe's signal and timing, then the composed
-verdict (the endpoint is up only when every applicable probe passed). An `http` or `ssh`
-endpoint also wears its upper rungs as chips once a probe has climbed them: **responds** (the
-API drew a real answer) or **no response** (the port accepted but the service never spoke),
-and for `ssh` **auth ok** / **auth failed** (shown only when a credential was actually
-tried). A down endpoint also shows a plain-language **why** line. Every value is a real reading from the node, and the panel
-is also the authoring surface: its header carries **Add endpoint** (with `endpoint:create`)
-and each row that maps to an endpoint a **Manage** affordance opening that endpoint's detail.
+verdict (the endpoint is up only when every applicable probe passed). Every row also wears its
+**reachability ladder**, the rungs a connection is checked on bottom up: **reachable** (a ping,
+informational only, so its chip is dashed and a component that blocks ping never reads down for
+it), **responsive** (the transport answering: a connect, or the protocol's handshake; this is the
+gate, and nothing above it is tried until it passes) and **authenticated** (the login, shown once a
+credential was actually tried). Hover or focus a rung for what it checks and what it says now. A
+rung a refusal holds wears the refusal glyph and the rungs above it read untried, while the rungs
+below keep their readings: an endpoint whose login was refused still shows its ping and its
+transport answering. A down endpoint also shows a plain-language **why** line. Every value is a
+real reading from the node, and the panel is also the authoring surface: its header carries **Add
+endpoint** (with `endpoint:create`) and each row that maps to an endpoint a **Manage** affordance
+opening that endpoint's detail.
 
 To author a reachability check, add an **endpoint** to the component (above), from this
 panel's own header: a bare probe endpoint is the reachability check, and **attaching a
 driver** is the authoring flow for real collection (the spec's functions become the
 endpoint's tasks, and their samples land on the component). There is no standalone
 Endpoints page.
+
+### Held sessions
+
+An endpoint whose driver holds its connection open (a line protocol over `tcp`, `telnet` or
+`ssh`) is a **session**, and its state wears a pill beside the ladder on the component's
+**Collection** card, on the **Endpoints** panel, and on the endpoint's own detail: **establishing**
+(the first connection, dialing then logging in), **up** (held and logged in; polls and commands
+borrow it), **recovering** (it dropped and the node is redialing on a backoff), **down** (five
+attempts in a row failed; the node keeps redialing slowly, so a component that returns comes back
+on its own) or **rejected** (the component refused in a way retrying cannot fix, such as a wrong
+password or a changed host key; the node dials no more). Rejected is amber with a refusal glyph,
+apart from down's red, because it is the one state the node will not leave without someone acting.
+Beside the pill is how long ago the state changed. A state is stored only when it changes, so the
+pill is judged by the endpoint's last seen: an endpoint that has delivered nothing for a while
+turns the pill grey, and its tooltip says what it last read.
+
+A **down** or **rejected** session also says **why**, in the node's words for down and, for
+rejected, the refusal's class and the component's own text (`auth: auth rejected`), scrubbed by the
+node of anything it sent, so a credential never reaches the console. A rejected session offers two
+ways out:
+
+- **Retry**, with `endpoint:retry` (operators hold it), redials once with the endpoint as it is: the
+  right move when the component itself was fixed (its account unlocked, its password reset to what
+  the secret holds). It is audited, and the button holds its spinner until the session moves.
+  Without the permission the button is greyed and its tooltip says so, and the server refuses the
+  call anyway.
+- **Fix the endpoint**: on the Collection card and the Endpoints panel the notice opens the
+  endpoint, whose own notice offers **Edit credential** (with `endpoint:update`), its edit face with
+  the secret input focused. Pointing the login at the secret holding the right credential, rotating
+  that secret's value, or correcting the address or port changes what the endpoint connects with,
+  so the refusal no longer holds and the node tries again at its next check-in, with no retry.
+
+A component whose console password was rotated while its endpoint kept the old secret reads
+rejected; pointing the login at the rotated secret brings the session up seconds later. The
+walkthrough runs against a simulated touch panel, so the node really logs in.
+
+::walkthrough{#fix-a-rejected-session}
+
+#### A changed key
+
+An `ssh` endpoint pins the host key its component presents: the node trusts the first key it sees,
+and every later connection must present the same one. A component that presents another (it was
+reinstalled, its hardware was swapped, or something sits in the middle answering in its place)
+reads **rejected** before anything logs in, and the notice says **The host key changed** and names
+both keys: the **pinned** one and the one the component **offered** instead. Both come from the
+node's refusal as data, so what the console shows is exactly what the node refused.
+
+**Trust this key**, with `endpoint:retry`, makes the offered key the new pin. It confirms first:
+the confirm shows both keys again, and **Why a key changes** names the three causes, each
+explained on hover, since only the first two are safe to trust. Compare the offered key with the
+one the component's own console shows before trusting a change nobody can account for. On
+confirming, the node redials onto the new pin once and the session comes up; the audit log records
+the key replaced, the key trusted, and who trusted it. The confirm sends exactly the key it shows:
+if the offer on record moves while it is open, the confirm says so and will not send, and the server
+refuses any key other than the one the refusal on record names. That record is the node's last word,
+and a refused node dials no more, so a component that changed again since (its own console shows a
+third key) needs a **Retry** first: the node reads the key it offers now, and that is the one to
+trust. Without the permission the
+button is greyed and its tooltip says so, while the two keys still read, so a viewer can tell an
+operator what changed. **Retry** stays beside it for the rarer case where the original component
+came back.
+
+In the simulated fleet, the touch panel in the place named `briefing` pins the key it had before it
+was reimaged, so it reads rejected for a changed host key; trusting the offered key brings it up.
+
+::walkthrough{#trust-a-changed-host-key}
 
 ## Events
 

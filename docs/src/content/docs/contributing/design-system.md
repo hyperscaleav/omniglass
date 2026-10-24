@@ -54,7 +54,7 @@ CLI is generated the same way. `make gen` regenerates all of it; a non-empty dif
   element, its focus and an open menu. Its columns answer the outline's own width through
   container queries rather than the window's, since the sidebar and the blade take their share
   first. Health is four fixed slots (healthy, incomplete, degraded, outage), glyph and count,
-  where healthy stays grey and only trouble carries a hue (ADR-0137).
+  where healthy wears a muted green beside the full trouble hues (ADR-0154).
 - **A detail view is one per system, its place as context.** Systems are the unit; places are
   folders and metadata; components are pieces of systems (#872). A system's view
   (`pages/SystemZoom.tsx`) is a `PlaceCard` (the place's type, tags and its own panel, never its
@@ -170,11 +170,13 @@ badge-warning` for stale). A **neutral** state (a node that has never checked in
 an unknown verdict) does **not** use `badge-neutral`: against this theme's dark `base-100`
 (`#080c16`) it renders near-black, and `theme-badges.test.ts` bans it. The app's neutral chip is
 `badge-ghost`, which `app.css` restyles from daisyUI's transparent default into a soft grey fill
-tinted from the text color, so it reads as a visible pill at the same weight as the soft hues. A
-**healthy** verdict wears `badge-healthy`, the same grey with its own name (#872): only trouble
-carries a hue, on every health pill, strip and marker, and a known healthy verdict stays
-distinguishable from an unknown one in markup. The same reason keeps `type` values (endpoint/task
-`type`) as plain `font-data` text, not a `badge-neutral` chip.
+tinted from the text color, so it reads as a visible pill at the same weight as the soft hues. The
+same reason keeps `type` values (endpoint/task `type`) as plain `font-data` text, not a
+`badge-neutral` chip. A **healthy** verdict wears green from one token, `--og-healthy` (ADR-0154):
+`badge-healthy` on a pill and `bg-healthy` on a strip at the trouble hues' weight, `text-healthy`
+and its fill twin `bg-healthy-muted` (muted) on dense views such as the outline and the map's dots (a dot that stands for one
+component takes its fill from `verdictDot`, every verdict in its own hue), so a known healthy verdict never reads as the grey
+unknown chip.
 
 A **severity** wears its level's color, one map for the whole console (`SEVERITY_BADGE` beside
 `SeverityBadge`): gray is the `badge-ghost` neutral chip, blue `badge-info`, green `badge-success`,
@@ -183,11 +185,32 @@ yellow `badge-warning`, red `badge-error`, and orange and darkred their own `bad
 from a high. The chip shows the level's label; whether it takes a component out is the level's
 `outage` flag, never a comparison against a level name.
 
+A held **session** wears `SessionPill` (#1059), on `HealthBadge`'s recipe of glyph, word and hue:
+establishing the incomplete look (a dashed ring: not yet, not broken), up `badge-success`,
+recovering `badge-info` (the node is working on it), down `badge-error`, and rejected
+`badge-warning` with a refusal glyph, because it is the one state that waits on an operator and must
+not read as down. Beside it sits its age, and a state whose endpoint has delivered nothing for the
+staleness window takes the grey `badge-ghost` chip, its tooltip saying what it last read. The
+**reachability ladder** (`ReachLadder`) is a row of rung chips, each an `InfoTip` trigger of its own
+(InfoTip takes children in place of its (i) for exactly this), the informational ping's chip dashed
+and a held rung amber with the refusal glyph. A list whose rows hold state (an expanded row, a retry
+waiting on its session) keys its rows by id, never by the objects a poll hands back.
+
+A refusal of a changed key (#1078) renders `PinnedKeyNotice` in place of the reason: the **pinned**
+and the **offered** key, each a `KVStacked` fact whose `hint` (an `(i)` beside the label) says what
+the key is, read off the gate as data. `TrustKeyButton` beside Retry opens a `ConfirmDialog`, the
+console's confirm for a decision that needs reading first (a centred Kobalte `AlertDialog`, its rail
+the one `PanelFooter`, the focus on Cancel when it opens): the confirm repeats both keys and teaches
+**Why a key changes** as three chips, each an `InfoTip` trigger, the man in the middle on the
+warning hue and the two routine causes on the neutral chip. Both are generic over the class, so a
+tls certificate's pinned key renders the same. A delete keeps the browser's own `confirm()`; a
+confirm whose body has to teach cannot be a native prompt.
+
 ## Primitives (the reuse target)
 
-`ListShell` (with its `FlatList` / `TreeList` bodies), `FilterBar`, `Drawer`, `PanelFooter`,
-`Badge`, `Page`, `DataTable`, `IdentityCell`, `KVStacked` / `KVRow` / `FieldRow` / `BladeField`,
-`CommandPalette`, plus the `Sidebar` / `TopBar` shell. New inventory pages consume these; new
+`ListShell` (with its `FlatList` / `TreeList` bodies), `FilterBar`, `Drawer`, `ConfirmDialog`,
+`PanelFooter`, `Badge`, `Page`, `DataTable`, `IdentityCell`, `KVStacked` / `KVRow` / `FieldRow` /
+`BladeField`, `CommandPalette`, plus the `Sidebar` / `TopBar` shell. New inventory pages consume these; new
 surface *classes* (dashboards, alarms, explore, learn) add their own primitive rather than
 bending `ListShell`.
 
@@ -204,7 +227,8 @@ accepted types) never leads an operator view. Ruled 2026-08-20 (#790); the platf
 of the remaining pages is #784.
 
 - **`KVStacked`** is a **fact**: an eyebrow label above a value. It is what a detail grid cell is,
-  and it is also the read state of a field.
+  and it is also the read state of a field. A `hint` puts an `(i)` beside its label, the fact's
+  form of `FieldRow`'s tooltip.
 - **`FieldRow`** is a **form field**: the same eyebrow label above a control, with an optional
   `(i)` tooltip beside the label and a hint below. It generates the control's id and points
   `<label for>` at it, keeping the tooltip trigger outside the `<label>` so a labelable button

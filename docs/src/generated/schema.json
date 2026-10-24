@@ -1862,6 +1862,12 @@
       "type": "jsonb",
       "nullable": false,
       "default": "'{}'::jsonb"
+     },
+     {
+      "name": "session_retry",
+      "type": "bigint",
+      "nullable": false,
+      "default": "0"
      }
     ],
     "uniques": [

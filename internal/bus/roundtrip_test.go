@@ -106,6 +106,9 @@ func TestNodeRoundTrip(t *testing.T) {
 	if len(reply.Tasks) != 1 || reply.Tasks[0].ID != "t-icmp" || reply.Tasks[0].Transport != "icmp" {
 		t.Fatalf("worklist = %+v, want one t-icmp/icmp task", reply.Tasks)
 	}
+	if reply.Tasks[0].EndpointID == "" {
+		t.Fatalf("worklist task carries no endpoint id; a held session is keyed by it (#816)")
+	}
 	if reply.ConfigGeneration == 0 {
 		t.Fatalf("config_generation = 0, want the interface updated_at epoch")
 	}

@@ -7309,6 +7309,672 @@ name field now flags the name alone, rather than every field at once, which had 
 pointer. The calc walkthrough is one flow: the rule, its output created inline, the expression, preview,
 save, then a component whose vitals show the derived value linked to the rule.
 
+### Walkthrough evidence lives off main, and its videos scrub (#939)
+
+The `run:walkthrough` job no longer pushes to the PR branch. It commits each passing walkthrough's
+mp4, animated preview, poster and stills under `<id>/` to the PR's own ref, `refs/walkthroughs/pr-<n>`,
+as a fresh tree built in a scratch index on top of the ref's last commit (so a re-run drops a removed
+script's files while an older comment's SHA stays reachable), and the comment reaches every file by that
+commit's SHA. The PR head and its checks are untouched, a squash-merge carries none of it into main, and
+a default clone never fetches it; the "push an empty commit to rerun checks" step is gone from the
+labels page, the walkthroughs page and `/ship-slice`. A ref was chosen over an orphan branch after
+probing both hosts: a commit pushed only to a `refs/walkthroughs/*` ref is served by SHA from GitHub's
+raw host and from jsDelivr, and the push needs no more than `contents: write`. Each walkthrough in the
+comment now leads with a **Watch (scrubbable)** link to its mp4 through jsDelivr, which serves it as
+`video/mp4` with range requests (the raw host serves an octet stream), so the browser's player seeks; the
+preview stays the inline glance. The job is split so no write token shares a runner with the PR's
+code: `record` runs the PR's code with a read-only token and stages the files and the comment body
+(written against a placeholder SHA) as an artifact; `publish` holds the write token, checks nothing
+out, builds the evidence commit in a fresh repository with no global, system, hook or fsmonitor
+configuration, pushes only the ref derived from the event's PR number, and pins and upserts the
+comment. `walkthrough-prune.yml` deletes an evidence ref daily once its PR has been closed 30 days.
+The ref, the files, both URL builders and the prune choice are pure functions in
+`web/e2e/walkthroughpr.mjs`, unit-tested in `make test-web`; the hosting is
+[ADR-0149](/architecture/decisions/#adr-0149-walkthrough-evidence-lives-on-per-pr-refs-its-pr-video-plays-through-jsdelivr-and-the-docs-commit-the-mp4).
+
+The docs carry the video too: `make docs-walkthroughs` copies every declared walkthrough's mp4 (no
+longer opt-in, and no longer gitignored), and the embed renders `<video controls>` with the poster step's
+still as its poster frame and fallback. The docs no longer carry the animated preview (the committed
+copies were removed; it stays PR evidence), and the lint flags a stray one. The walkthrough lint and
+the post-build embed check both fail a declared walkthrough whose copy has no mp4, and the remark
+plugin fails the page. The six docs walkthroughs were re-recorded to get their videos, about 6 MB of mp4 in the
+repository, a cost [walkthroughs](/contributing/walkthroughs/) states.
+
+### A session holds its connection (#816)
+
+The first slice of epic #603's stateful arc. A stateful transport keeps its connection across ticks:
+`internal/collection/session.go` is the machine (establish, operate, recover, teardown) over a
+`HeldConn` seam, and `internal/collection/linesession.go` is the real held line connection (one TCP
+connection, a single reader goroutine framing lines and handing the next one to the exchange waiting
+for it, a line nobody asked for dropped as unsolicited until listeners claim it in #817, an
+unterminated flood bounded, a 15s keepalive). The node (`internal/node/session.go`) holds one session
+per endpoint whose worklist carries a standing listen task over a transport with a session dialer (the
+line protocol over `tcp`), keyed by the endpoint id the worklist now carries beside its name, and
+reconciles the held set on every pull: a new listen task starts one, a removed task or a re-addressed
+endpoint tears it down, node shutdown tears down all. The endpoint's line polls borrow the held
+connection instead of dialing per tick; a poll waits only while the first dial is in flight, and over a
+session that is otherwise not up it faults at once naming the state (a down device never stalls the
+tick), never dialing on its own. Recovery is bounded by named constants: a
+jittered exponential backoff (`SessionBackoff`: 250ms doubling, 30s cap, 20% jitter), five consecutive
+failed dials to `down` (still retrying at the cap), and churn (a connection dropping within 10s) growing
+the wait so an accept-and-drop device cannot hot-loop. The honest states land as the seeded
+`session-state` property per endpoint (`establishing`, `up`, `recovering`, `down`), published at each
+transition under the listen task, and each transition is a node self-log carrying the reason; there is
+no session table ([ADR-0150](/architecture/decisions/#adr-0150-a-held-sessions-state-is-a-property-series-and-node-logs-not-a-session-table)).
+Proven at three tiers: the state machine over fakes (`internal/collection/session_test.go`), the real
+held line connection over a real socket (`linesession_integration_test.go`) and against the
+simulator's NVP listener (`internal/sim/session_hold_test.go`: three polls ride one connection, the
+listener killed mid-session reads recovering, then up once it returns), and end to end
+(`internal/node/run_session_test.go`: the shipped `newtron-nvp` driver attached, the real node and
+bus, the `session-state` series on the server reading establishing, up, recovering, up through a
+listener outage, the reason in `node_log`, and node shutdown leaving the device holding no session).
+
+### The held session's review fixes (#816)
+
+The slice's review, fixed before the rollup, each with a regression test that failed first. A
+timed-out exchange recycles its connection (`ErrExchangeTimeout`), since its late reply would answer
+the next ask forever (`TestHeldSessionTimeoutNeverAnswersTheNextAsk`: SLOW GET INPUT times out, GET
+VOLUME gets VOLUME); the held line connection was rebuilt so one reader goroutine draws every ask's
+boundary (discard what already arrived, write, hand the next line over), so a banner sent on connect
+is never an answer (`a banner on connect is never an answer`, fifty fresh connections). An attempt
+now fails on a churned connection or an answer timeout as well as a failed dial, so an
+accept-then-drop or a hung device reads down within the attempt budget instead of up forever
+(`TestSessionAcceptThenDropReadsDownWithinTheBudget`, `TestHeldSessionToAHungDeviceReadsDown`), and a
+stable connection's drop still never does. The first dial's wait window closes inside the up
+transition, and a listen task's spec re-hash keeps a healthy connection while a credential change
+recycles it (`TestSessionManagerKeepsTheConnectionAcrossATaskRehash`). ADR-0150 now says the last
+`session-state` outlives a teardown and is read by its age.
+
+### The held session forgives a healthy device's rare timeout (#816)
+
+The re-review of the review fixes, each with a regression test that failed first. The previous
+commit's title overclaimed: a line the device sends after the drain and before it reads the request
+is still taken as the answer, a window #817's reply matching closes (ADR-0150 point 5 now says so).
+An answered exchange now forgives the failures before it, so one missed answer in fifty never reads
+down (`TestSessionSporadicTimeoutsNeverReadDown`, 250 good exchanges); a down session publishes
+nothing until a returning connection proves itself by an answer, or by outliving the stable window
+unless answers were what failed, so an accept-then-drop or hung device no longer flaps up and down
+(`TestSessionHungDeviceStaysDownWithoutFlapping`, `TestSessionDownReadsUpOnceTheConnectionProvesStable`).
+On the wire: a late interrupt mid-answer keeps the partial bytes (`TestLineConnLateInterruptKeepsThePartialReply`),
+only a passed read deadline is an interrupt so a failed keepalive keeps its cause, a caller's own
+deadline is not recorded as the device's timeout, and the wait for a first dial has its own budget
+(`TestSessionFirstDialWaitHasItsOwnBudget`).
+
+### Listeners and their instantiation commands (#817)
+
+The second slice of epic #603's stateful arc: a driver's listeners come alive over the held session.
+The session arms every connection with the listeners' `arm` commands before it reads up (on establish
+and on every recover; plumbing per the #603 ruling, each a `session armed` self-log with the device's
+reply, an unanswered one a failed attempt). The held line connection's one reader routes every inbound
+line by a documented precedence
+([ADR-0151](/architecture/decisions/#adr-0151-a-held-line-session-routes-every-inbound-line-listeners-first-answers-by-reply-shape)):
+a line a listener's `match` claims lands at once as a push sample under its listen task (the endpoint
+its instance, no poll involved), and is never an exchange's answer unless it also matches the
+exchange's declared reply shape; an exchange takes the first line its new `request.reply` shape
+matches (or the first unclaimed line); a line waiting in the socket when an ask begins is routed, not
+discarded; the rest is counted unclaimed, with a new spec-level `unmatched: collection-failed` policy
+landing one fault per tick. Commands ride the held session too (the delivery now names its endpoint
+and carries the binding's reply shape), falling back to a throwaway connection only when none is held,
+and the transport registry marks `tcp` as held. The seeded `newtron-nvp` declares its reply shapes.
+Proven over the simulator's NVP port (`internal/sim/listener_hold_test.go`: SUBSCRIBE INPUT armed, a
+change made elsewhere heard within a second, thirty GET polls amid a stream of pushes each getting
+their own answer, the subscription re-armed after the listener dies and returns) and end to end
+(`TestNodeLandsPushedSamplesThroughARecover`: with the node's tick at an hour, a change on the panel
+lands as the component's `video-input` within a second, and again after a recover).
+The slice's adversarial review, fixed before the rollup, each with a real-socket test that failed with
+the fix disabled. A reply may declare an `error` shape: the panel's `-ERR` refusal now answers a command
+at once as a refusal carrying the device's text (its execution error and its reply), not a timeout that
+recycled the session and charged its budget (`TestLineConnErrorReplyIsAFailureNotATimeout`, and over the
+simulator in the listener test); the seeded `newtron-nvp` declares it. A shaped exchange's timeout fails
+only that exchange and keeps the connection (`TestLineConnShapedTimeoutKeepsTheConnection`). An arm's ack
+is the first line of any kind, a listener's push included, and no ack within the timeout is logged as
+armed, unacknowledged rather than failing the attempt, so a device that acks with a push or not at all
+no longer stays down (`TestSessionArmAckedByAPushReadsUp`, `TestSessionArmNeverAckedStillReadsUp`).
+Regexes compile once per process (`TestRegexCompiledOnce`), and the drivers guide says a regex is an
+RE2 substring search to anchor (`TestLineConnUnanchoredReplyRegexMatchesAPush` pins it).
+
+### Driver tasks re-derive when a driver's spec changes (#823)
+
+Deferred from the stateless arc's review, closed in the stateful rollup. Driver tasks were baked at
+attach and never re-derived, so fixing a regex in a driver left the fleet emitting by the old one while
+the Drivers page showed the fix, and the reply and error shapes #817 added to the official
+`newtron-nvp` never reached endpoints attached before it. Now a driver update over the API, and the
+boot seed's upsert (now one transaction per driver), re-derive every attached endpoint's driver tasks in
+the same transaction: the tasks the spec derives are written where missing and the driver tasks it no
+longer derives retire, while the reachability probe stays. Ids are content hashes, so an unchanged
+function keeps its row, a re-seed that changes nothing touches no task and no endpoint, and an endpoint
+whose tasks changed has its `updated_at` (the node's config generation) moved. The update's audit row
+covers it. Proven over Postgres (`TestReseedWithNoChangeTouchesNothing`,
+`TestSeededSpecChangeReachesAttachedEndpoints`, `TestDriverUpdateRederivesAttachedEndpoints`) and end to
+end (`TestDriverFixReachesTheNextPoll`: a regex fix turns a faulting poll against a real line server into
+a landed value on the next poll). The review that followed closed three races and a cost, each with a
+Postgres test that failed first: an attach now reads the driver row `FOR SHARE`, so one racing an update
+waits and derives the committed spec instead of keeping the old one for good
+(`TestAttachDuringADriverUpdateDerivesTheNewSpec`, two interleaved transactions); the re-derive's endpoint
+list takes `FOR KEY SHARE` in id order, so a concurrent delete is waited on and skipped rather than
+failing the update on the task foreign key (`TestRederiveSkipsAnEndpointDeletedConcurrently`); and the
+seed's upsert writes only when a field differs and re-derives only when it wrote, so an unchanged boot
+leaves the driver and task rows' `xmin` as they were. Samples published under a retired task id in the
+one-tick gap before the node's next pull are dropped as orphans, accepted and documented.
+
+### The node honors a driver poll's declared schedule (#822)
+
+Deferred from the stateless arc's review, closed in the stateful rollup. A driver poll's `schedule.every`
+was validated and baked but unread, so every driver poll ran on every heartbeat. The node now keeps a
+per-task next-due time for the run (`internal/node/schedule.go`) and runs a driver poll on the first
+tick at or after it: a task new to the worklist runs at once, the cadence books from the due time so tick
+jitter does not drift it, a late tick runs once rather than bursting, and a task that leaves the worklist
+is forgotten. Reachability probes still run every tick, and a listener's pushes are never gated
+([ADR-0152](/architecture/decisions/#adr-0152-a-driver-poll-runs-on-its-declared-schedule-at-heartbeat-granularity),
+settling the nodes page's open question for driver polls). Proven by `TestPollScheduleRunsOncePerInterval`
+(a 60s poll on a simulated 1s tick runs at 0, 60 and 120s) and `TestNodeHonorsThePollSchedule` (the real
+node on a 50ms heartbeat asks a device about 4 times in 1.3s for a 400ms poll; the same test against an
+ungated stub measured 26). The review that followed added the retry: a run whose fetch failed retries on
+a backoff from the heartbeat, doubling, capped at the interval (`TestPollScheduleRetriesAFailureOnABackoff`;
+it also let the simulator end-to-end test drop the start-order workaround the gate had forced on it),
+pinned the anti-drift booking (`TestPollScheduleDoesNotDrift`), and let a listener's push prove a down
+held session, which a gated poll could otherwise keep reading down for its whole interval
+(`TestSessionDownReadsUpOnAPush`).
+
+### The collection decision set (#818)
+
+The closeout of epic #603. The four decisions the epic names are in the log, cited rather than
+duplicated: spec-is-data
+([ADR-0135](/architecture/decisions/#adr-0135-a-drivers-spec-is-data-one-engine-interprets-it)), the
+actuation contract
+([ADR-0136](/architecture/decisions/#adr-0136-actuation-is-a-per-node-pull-rendered-at-dispatch), with
+settlement from the reply in
+[ADR-0141](/architecture/decisions/#adr-0141-a-command-settles-when-its-evidence-arrives-from-its-reply-first-and-observation-second)),
+the endpoint naming with `interface` on the docslint denylist
+([ADR-0134](/architecture/decisions/#adr-0134-the-entity-an-api-is-reached-through-is-an-endpoint)), and
+instantiation commands as plumbing
+([ADR-0151](/architecture/decisions/#adr-0151-a-held-line-session-routes-every-inbound-line-listeners-first-answers-by-reply-shape)
+point 1). One new decision records the arc's held-session proof
+([ADR-0153](/architecture/decisions/#adr-0153-the-held-session-proof-is-the-line-protocol-over-tcp-other-held-transports-are-their-own-issues)):
+the line protocol over `tcp`, with SSH and the other held transports deferred to #1032 through #1041 and
+server-hosted ingress to #1024, and no serial transport (serial is reached through an IP-to-serial
+gateway over tcp, tls, or telnet), which the collection and nodes pages' transport fences now name. The
+sweep moved what the arc built out of design prose: the nodes page's status note (the command wire,
+scheduled polls, held line sessions, listeners and the demux), its listen-mode, sessions, and task-queue
+sections, the glossary (the endpoint row's rename note, and new listener and reply-shape rows), the
+collection page's stale hand-count of seeded catalog rows, and the roadmap. Badges stay at their floors:
+collection, nodes, messaging, commands, and the glossary are each Partial, every one still carrying
+design.
+
+### Healthy reads green (#1067)
+
+The grey healthy verdict read as the grey unknown one, so it turns green
+([ADR-0154](/architecture/decisions/#adr-0154-healthy-reads-green-tiered-so-a-calm-fleet-stays-calm)).
+One `--og-healthy` token in `app.css` feeds three utilities: `badge-healthy` (the health pill and the
+simulator's running pill), `bg-healthy` (the history strip), and the muted `text-healthy` (the outline's
+healthy slot and a good uptime figure). Unknown keeps the grey chip. A guard in `theme-badges.test.ts`
+fails if any of the three is mixed from the base-content grey again. Badges are unchanged: health stays
+at its floor.
+
+### The system map's dots wear each component's verdict (#1071)
+
+The map filled every occupied, up position with the retired grey and only a down one red, so a
+degraded component and a healthy one looked alike, beside coloured glyphs on the same page. Each dot
+now wears its component's own verdict through a `verdictDot` primitive in `lib/health.ts` (healthy the
+muted `bg-healthy-muted`, incomplete indigo, degraded amber, outage red, unknown grey), read through
+the one lookup the component rows also use, recorded as an amendment to
+[ADR-0154](/architecture/decisions/#adr-0154-healthy-reads-green-tiered-so-a-calm-fleet-stays-calm).
+The theme guard covers the new fill with the other three.
+
+### Expression diagnostics: the registry (#1051)
+
+The first slice of #1021. The engine gains a registry of diagnostics
+(`internal/expression/diagnostics.go`): each rule declares a stable code, a severity (error, warning or
+hint), the sites it applies at, a trigger (refine, which explains a refusal it recognises at the place
+the mistake is, or lint, which flags a likely mistake in an expression that compiles), a pure matcher
+over the typed tree, a message, an optional fix as one text edit, and fixtures beside it in Go. To give
+a refine rule the typed tree of an expression the checker refused, `compile` still goes through
+`expr.Compile` (the engine never reimplements Expr's pipeline, by the architect's ruling in review) with
+one more `expr.Patch` visitor that changes nothing and only records the slot the root sits in, read
+after a refusal: Expr's checker annotates those same nodes in place, as far as it got
+(`TestRefusedTreeKeepsCheckedTypes`). The recorder sits before the engine's charger, so the charger's
+walk stays the last before Expr's final check, and `TestCompileGoesThroughExprCompile` fails if the
+package imports Expr's checker or compiler. `Check` now returns the warnings and hints beside
+its refusal, and a compiled program carries them (`Program.Diagnostics`). Each site names itself on its
+environment (`WithSite`: criteria and calc), so a rule runs only where it applies. Proven with
+test-local rules (`internal/expression/diagnostics_test.go`): a refine rule's refusal replaces Expr's
+with its code and positioned fix, an unrecognised refusal is Expr's unchanged, warnings and hints ride
+along on `Check` and on the cached program, an error lint refuses, a rule runs only at its sites, a
+panicking matcher is skipped, the registry refuses a rule without both kinds of fixture, and the
+fixture runner fails a rule whose examples disagree with it (`TestFixturesHoldARule`,
+`TestEveryDiagnosticPassesItsFixtures`).
+
+### The starter diagnostics (#1054)
+
+The second slice of #1021, the registry's first rules, each in
+`internal/expression/diagnostic_rules.go` with its fixtures beside it (compiled against criteria-shaped
+and calc-shaped fixture environments that name their sites). `sum-of-bools` (refine, error) recognises
+Expr's refusal of a sum over bools, whether the operator mismatch where the sum is compared or the
+engine's own refusal of the list or predicate, and refuses on the `sum` with "sum adds numbers" and
+the fix to `count`; `float-equality` (lint, warning) flags `==` or `!=` between a number-typed value and
+a decimal that is not whole; `count-equals-len` (lint, hint) offers `all(xs, p)` for
+`count(xs, p) == len(xs)`; `unused-alias` (lint, warning, calc only) names each input the reduce never
+names, read through `WithInputs`, which a calc rule's environment now declares from its aliases. The
+existing refusal of `sum(pts, .has)` moved from the operator to the `sum` with the clearer message.
+Proven by the fixtures (`TestEveryDiagnosticPassesItsFixtures`, each fix applied and recompiled) and on
+the real sites (`internal/rules/diagnostics_test.go`: the acceptance example refused at validate and
+create alike and its fix compiling, the unused alias and the float equality never refusing).
+
+### Validate answers diagnostic codes, severities and fixes (#1052)
+
+The third slice of #1021. `POST /expressions:validate` answers every diagnostic with a `severity`
+(`error`, `warning`, `hint`) and, from a registered rule, its `code` and a quick `fix` (a range and its
+replacement); an expression that compiles answers `ok` with its warnings and hints (phase `lint`). A rule
+an error diagnostic refuses is a 422 carrying the `code`, at create and update alike. Stored rules carry
+their warnings as notes (definition decision 1): `criteria_warnings` on an event rule and
+`calc_warnings` on a calc rule, read from the same cached compile that gives `criteria_error` and
+`calc_error`, which gained the `code`; a warning never refuses a save, and a row that newly trips an
+error diagnostic reads it as its fault without being rewritten. Hints stay in the editor. Proven by
+`TestStoredRuleDiagnostics` (the gateway: the warning saved and read on get and list, the error refused at
+create and update, the out-of-band row read as `sum-of-bools` and left as stored) and
+`TestExpressionDiagnosticsAPI` (the route: each severity, the fix, the 422's code, both rules' warnings
+on create and get).
+
+### The generated diagnostics table (#1055)
+
+The fourth slice of #1021. `make gen` (`cmd/exprgen`) renders the diagnostics registry to
+`docs/src/generated/expression-diagnostics.json` (`expression.DiagnosticsFactsJSON`), and the expressions
+page renders it as a table (`ExpressionDiagnostics.astro`): each rule's code, severity and when it runs,
+its sites, its message, and its examples, which are its fixtures (what it flags, with the fix's result,
+and what it leaves alone), so no row or example is hand-written. Each row carries the anchor
+`#diagnostic-<code>` the console's editor links a code to. Proven by `TestDiagnosticsFacts` (every rule,
+its examples its fixtures) and the drift gate `TestDiagnosticsFactsMatchCommitted`.
+
+### The editor shows severities and offers quick fixes (#1053)
+
+The fifth slice of #1021, the console half. The shared expression field
+(`web/src/components/ExpressionField.tsx`) draws each diagnostic at its severity: an error a wavy red
+underline, a warning a wavy amber one, a hint a dotted info line (`toEditorDiagnostics` keeps the
+severity, underlines an operator whole, and names the diagnostic by its code). Only an error marks the
+field invalid (`textarea-error`, `aria-invalid`) or withholds the verdict, so a warning never stops a
+save. Beneath the field each diagnostic names its severity, links its code to the generated docs table
+(`diagnosticHref`), and offers its fix as a button that applies it as the author's own, undoable edit, only
+while the source is still the one the answer was for (`applyFix`, `fixRange`, columns counted in
+characters); the same fix rides the underline's tooltip, and the editor gains CodeMirror's lint keys (F8,
+Mod-Shift-M). A stored rule's warnings show on the calc and event rule blades as a note
+(`ExpressionNotes`), never an alert. Proven in `make test-web`: the pure half
+(`expressionEditor.test.ts`: severities, the fix in characters and its refusal on stale text, the docs
+link), the field (`ExpressionField.test.tsx`: a warning leaves the field valid and the verdict ok, the fix
+button rewrites and undoes, the code links), and both blades' notes.
+
+### Sessions authenticate before they act, and a refusal stops the retrying (#1049)
+
+The first slice of the protocol backlog under epic #603, under the architect's ruling of 2026-10-23:
+auth is a layer that gates a held session, and non-retryable errors are defined in drivers. The
+session machine (`internal/collection/session.go`) runs each attempt as dial, then the **auth step**,
+then arm, then `up`, over a staged dialer (`Connect`, `Authenticate`, `Open`) so the line reader does
+not exist until the step passes; the real line dialer (`linesession.go`) is staged, running a declared
+**login dialog** (`login.go`, one primitive for raw tcp, telnet and ssh keyboard-interactive) over the
+raw connection, with prompts matched on a partial line. A **terminal error**
+(`collection.TerminalError`, `terminal.go`), declared by the driver's `session.terminal` rules
+(`internal/driver/session.go`) or classified by a transport, moves the session to the new
+**`rejected`** state without spending the budget: no dialing, polls and commands failing fast with
+the reason, never a throwaway connection. It leaves on an identity change (a fixed credential
+recycles it), an operator's audited `POST /endpoints/{id}:retry` (the new `endpoint:retry` action,
+moving the endpoint's revision, which the worklist now carries), or the driver's slow
+`session.reprobe`. The auth verdict lands as `endpoint-authenticated` and every transition as
+`session-reason` beside `session-state` (both seeded), and a poll fault that is terminal waits its
+interval instead of the failure backoff. Proven over fakes with a fake clock (a wrong credential dials
+once over an hour, a retry once more, a 20m re-probe three times an hour, a transient failure still
+spends the budget, nothing arms before the auth step), over a real socket (a raw tcp line protocol
+behind a password prompt: the right password logs in before the first poll, the wrong one is dialed
+exactly once and never arms), against Postgres (the worklist carries the session block and revision,
+`:retry` moves it and is audited, a login driver's command delivery is session-only), and over the API
+(a viewer is refused `:retry`, an out-of-scope operator gets a non-disclosing 404). Recorded as
+[ADR-0155](/architecture/decisions/#adr-0155-auth-is-a-layer-that-gates-a-held-session-and-a-terminal-refusal-reads-rejected)
+and [ADR-0156](/architecture/decisions/#adr-0156-a-driver-declares-its-terminal-replies-and-a-transport-classifies-its-own-refusals).
+
+### A telnet session with option negotiation and a login dialog (#1033)
+
+The second slice of the protocol backlog. `telnet` joins the transport registry as a held line
+transport (`internal/transport`), its reachability probe connecting and waiting for the first
+negotiation or banner bytes (`telnet-response-time`, seeded; a silent port reads reached but not
+responsive). The held session is the line protocol's own behind a filter (`internal/collection/telnet.go`):
+inbound IAC sequences are stripped (including one split across reads, and subnegotiations), DO is
+answered WONT and WILL is answered DONT, and a literal 0xFF is escaped. The login is the shared dialog
+from #1049, run as the session's auth step on establish and every recover. The simulated panel gains an
+`nvp-telnet` face (port 23, a login whose prompts end no line, the NVP verbs and pushes behind it), and
+the official `newtron-nvp-telnet` driver declares the login and the panel's terminal refusal. A poll
+that faulted on its session's refusal now runs at the first tick its session is up again, so a fixed
+credential lands data within a tick rather than an interval later. Proven against real sockets (the
+filter and the probe), against the simulator (`telnet_session_hold_test.go`: login, poll, command,
+push, a recover that logs in again and re-arms, and a wrong password connected exactly once and
+rejected with the panel's own text), and end to end (`run_telnet_session_test.go`: the shipped driver
+attached with a wrong password reads `rejected`, `session-reason` `auth: auth rejected` and
+`endpoint-authenticated` `no`, logs one rejection across twenty ticks, a `:retry` dials once more, and
+fixing the secret reads `up`, authenticated, and lands the polled value).
+
+### An ssh session holds a shell for the line protocol (#1032)
+
+The third slice of the protocol backlog. `ssh` becomes a held line transport
+(`internal/collection/sshsession.go`): a staged dialer whose auth step is ssh userauth with the
+credential the driver names (`session.credential`: a password, a private key, or keyboard-interactive
+answered by the shared login dialog), then a shell channel (a PTY on `session.pty`) or an exec channel
+(`session.exec`) bridged onto an in-memory pipe so the line reader keeps its read deadlines. A refused
+credential is terminal `auth`; the host key is **pinned on first use**: the node trusts the first key,
+publishes it as the seeded `ssh-host-key` property, and the worklist delivers it back as the pin (the
+declared value first), so a changed key reads `rejected`, class `host-key`, naming both fingerprints.
+`POST /endpoints/{id}:retry` takes an optional `host_key`, which declares the new pin (audited) and
+recycles the session onto it. The simulated panel keeps its ssh host key across listener restarts (a
+test rotates it to model a replaced component) and serves the NVP subject on its ssh shell; the
+official `newtron-nvp-ssh` driver ships. Proven against the simulator (poll, command, push, recover onto
+the same key, down after the budget, a wrong password and a rotated key each rejected after one
+attempt) and end to end (`run_ssh_session_test.go`: trust on first use lands `ssh-host-key` and the
+worklist pin, a rotated key reads `rejected` naming both keys, a malformed `host_key` refuses, and the
+accepted key reads `up`). Recorded as
+[ADR-0157](/architecture/decisions/#adr-0157-telnet-and-ssh-are-held-line-transports-their-login-is-the-drivers-and-the-ssh-host-key-is-pinned-on-first-use),
+which also logs the designed endpoint-params login retiring. Prompt-delimited answers are #1057.
+
+### The telnet review's fixes (#1033)
+
+Each with a test that failed first. A telnet negotiation reply carries its own write deadline, and the
+line reader and login dialog clear theirs after each write, so a component that sends `IAC DO
+TIMING-MARK` after an idle spell is answered rather than silently dropped (and the stale deadline can no
+longer surface from a read as the reader's own interrupt). The telnet probe reads a port that accepts
+and hangs up as `closed`, not `timeout`, and while the node holds an up telnet session the probe takes
+its verdict from the session instead of dialing a second connection. The design fences that still
+listed telnet and ssh as unbuilt, and their endpoint-params rows, are retired.
+
+### The ssh review's fixes (#1032)
+
+Each with a test that failed first. The trusted host key publishes on every authenticated connection
+and again on every tick the worklist delivers no pin, and the node carries it across a session's
+recycle, so a lost publish followed by a credential edit cannot reopen first use to whatever answers
+next. A keyboard-interactive question nothing declared answers (a one-time code) is an `auth`
+refusal, not a retry loop. An ssh session requires `session.credential` (the ssh user), and the
+`ssh-key` secret type ships so the private-key path works end to end, proven with the pty and exec
+channels against a real ssh server. The `:retry` route says a `host_key` recycles any session onto the
+new pin. The ssh probe's params login, which ignores the pin, is filed as #1060.
+
+### One connection fingerprint gates every connection (#1056, #1060)
+
+The architect's rulings on #1056 and #1049, folded into the rollup. A component that hangs up after
+the final secret with no refusal text charges a **login budget** (three in a row read `rejected` as
+`auth`; `ErrLoginDropped` in the login dialog, a sim telnet face that rejects silently proves it over
+the wire). The retry signal is an explicit `session_retry` counter on the endpoint (a migration), not
+`updated_at`, so a label edit no longer pulls a rejected session out. `internal/fingerprint` is the
+**connection fingerprint**: the worklist computes one per endpoint over every input a connection is
+made with, the attached secrets as digests of their sealed envelopes, and a reflection test and a
+table test hold its inputs complete. The node holds a **gate** per endpoint
+(`internal/node/gate.go`) at the ladder rung a terminal refusal holds, for that fingerprint, across
+its held session (started rejected), the ssh probe (#1060: its params credential tried once, and
+never past a changed pinned key), stateless polls and commands; the gate publishes as
+`endpoint-rejection` and is carried back, so a restarted node makes no attempt. The driver spec's
+`ladder` declares the rungs (an informational ping, the transport rung that gates, the session rung),
+defaulted by the registry's new `rung`, a request rung proven over the line client. Proven end to end
+(`run_session_identity_test.go`): a silent panel spends the login budget; a label edit and a node
+restart try nothing; a retry, a login-declaration change, a rotated secret and a re-attach over ssh
+each try again; a wrong port reads down on refused connects and tries no login; the ssh probe sends a
+wrong password once, across a restart, then authenticates after a params edit. Recorded as
+[ADR-0158](/architecture/decisions/#adr-0158-one-connection-fingerprint-gates-every-connection-on-a-ladder-the-driver-declares),
+with ADR-0155 amended.
+
+### The fingerprint review's fixes (#1056, #1060)
+
+Each with a test that failed first. The gate (`endpoint-rejection`) republishes every pull until the
+worklist reflects it, under a task chosen from the current worklist, so a lost publish or a
+re-derived driver can no longer leave a restarted node without it. A refusal reported for an attempt
+under an older fingerprint gates nothing. A host key trusted on first use stays out of the
+fingerprint (only the declared pin goes in), so first use no longer recycles a healthy session. The
+push lane refuses the node's control facts (`endpoint-rejection`, `ssh-host-key`). A request rung
+refuses at write anywhere but a line over tcp (#821, #1037). The informational ping runs beside the
+probe on a 500ms bound. Fixed-port simulator collisions are #1066.
+
+### A driver-attached endpoint's connection edits in place (#1061)
+
+The architect's ruling before merge: re-attach is not the path. `PATCH /endpoints/{id}` takes a
+driver-attached endpoint's `inputs` (the host, the port, an attached secret's reference), merged over
+the stored ones and checked against the driver's declared inputs (a non-number port, an undeclared
+input, a raw `params.target`, or a transport the driver does not speak is a 400 naming the field),
+every attached secret re-resolved under the editor's own secret scope (an editor cannot redirect a
+credential they could not use), audited, and the tasks re-derived in the same transaction through the
+one per-endpoint derivation #823's driver update now shares (`rederiveEndpoint`; ids move only where
+the derived spec does). The console's endpoint blade edits the declared inputs in place, sending only
+the ones changed, and `omniglass endpoint update <id> --inputs` regenerates. Proven against Postgres
+(the port and address and secret edits, task ids unchanged, the refusals, two audit rows), over the
+API (a 400 naming `port`, the viewer refused), in vitest (only changed inputs sent, a label-only edit
+sends no inputs), and end to end (`TestADriverEndpointEditsItsAddressInPlace`: a wrong port reads
+down with no login; the port edited in place connects and authenticates within a tick; a label edit
+recycles nothing; the address edited in place moves the healthy session to the other component).
+Recorded in ADR-0158 point 6.
+
+The in-place edit's review, each with a test that failed first: a `params.timeout` value is parsed
+and refused by name unless it is a positive duration; an input a driver update dropped no longer
+blocks an edit; an empty value clears an optional input (its default fills it again) and refuses a
+required one by name, the console sending a cleared field rather than dropping it; the row is locked
+before an edit merges over it, so two concurrent edits cannot lose one; a transport restatement is
+judged against the endpoint's own. End to end, an in-place swap of the attached secret now un-gates
+a session its stale credential had rejected, within a tick.
+
+CI on the rollup found two more. A telnet test's scripted peer hung up as soon as it reported, racing
+the test's peek at the connection; the peer now stays connected and the test proves the connection
+survived with a second exchange (a review catalog entry records the pattern). And a stateless poll
+kept the failure backoff it built up against an address since edited in place, so its first good
+fetch could wait tens of seconds: a poll whose endpoint's connection fingerprint moves now runs at
+the next tick. The `fix-an-endpoint-in-place` walkthrough ships on the operator collection guide.
+
+### Simulated faces bind ephemeral ports, so test runs never collide (#1066)
+
+Every simulator-backed test bound each face of its simulated component at a fixed loopback address
+and port (127.89.16.5:20023 and its like, after the privileged-port lift), so two `go test` runs on
+one host (two worktrees, or a session beside a `make test`) failed with `bind: address already in
+use`; #1061's tests had taken a fresh address per stack as a stopgap, which isolated a `-count` rerun
+but not a second process. Now a face binds whatever port the engine's port map asks for and records
+the address it got: `Device.Faces` lists each face with its surface's name, protocol, declared port
+and bound address. The map is the explicit choice: fixed (no map, or `PrivilegedPortShift`) for the
+operator-facing simulator, whose ports an operator, a seeded endpoint and the docs all name, and
+`sim.EphemeralPorts` for tests, where every face binds port 0 and the kernel hands it a free port. A
+face reports the port it bound everywhere it reports one (its hits, its session events, SNMP's request
+detail), where a face asked for port 0 had reported 0; SNMP binds before it builds its
+agent so it knows the port, and a simulated component's raw-TCP faces find their session registry by
+the declared port rather than the mapped one. Every in-process simulator test (the sim package, the node's session
+tests) serves on ephemeral ports and aims its clients and endpoints at the reported addresses. The
+end-to-end and run-mode tests drive `omniglass sim run`, which binds the profile's ports (lifted) on
+the address an endpoint targets and cannot tell the endpoints a port it picked, so they stay on fixed
+ports and claim a loopback address no other test holds (`simtest.ClaimLoopback`, a sentinel listener
+held for the test's life); so do the engine tests that pin a port on purpose (an address handed over
+or swapped, a squatted port released and rebound). Proven by a test that serves one address from two engines at once
+and finds every face of both bound, answering on its own engine at its reported address, with the
+bound port on its hits and session events (it failed first, the line protocol's session events
+reporting port 0), and by the sim, node and end-to-end packages run twice side by side with no
+collision, where on main the same pair failed with bind errors. The
+[simulation](/architecture/simulation/#fixed-ports-and-ephemeral-ports) page teaches the two choices.
+
+### An endpoint shows its held session, and a rejected one offers a retry (#1059)
+
+The first console surface to read `session-state` (ADR-0150 point 2). The component's reachability
+read now carries each endpoint's `id` (the address `:retry` takes), its held `session` (the latest
+state, when it changed, and the `session-reason` beside it), and the `rejection` a terminal refusal
+holds (the rung and class of `endpoint-rejection`; the fingerprint is dropped at the read). Three
+console primitives render it, each on the component's Collection card, its Endpoints panel and the
+endpoint's blade: `SessionPill` (each state its own glyph, word and soft hue on HealthBadge's recipe,
+rejected amber with a refusal glyph apart from down's red, aged by `last_seen` and grey once the
+endpoint has delivered nothing for the staleness window), `ReachLadder` (reachable, responsive and
+authenticated bottom up, the ping's chip dashed as informational, the held rung marked and the rungs
+above it untried, each chip teaching its rung through `InfoTip`, which now takes a trigger of its
+own), and `SessionNotice` (the reason for a down or rejected session; for rejected, **Retry** through
+the generated client, greyed with its reason without `endpoint:retry` and holding its spinner until
+the session moves, and the way into the endpoint's edit, where **Edit credential** focuses the secret
+input). The collection card's state reads `polls stopped` for a rejected session and `polls failing`
+for a down one, where freshness alone read collecting. Rows on both lists are now kept by endpoint id
+rather than by the objects a poll hands back, so an expanded row and a retry waiting on its session
+survive the next poll. The dev fleet's huddle touch panel gains an NVP-over-telnet endpoint logging
+in with the secret from before a password rotation (`sim_secrets`, `sim_endpoints` in the fixtures,
+wired with the simulated fleet only), so `make dev-sim` shows a rejected session to read and fix, and
+the `fix-a-rejected-session` walkthrough points its login at the rotated secret and watches it come
+up. Proven against Postgres (`TestReachabilityCarriesTheHeldSession`: the state, reason and rung
+read, the fingerprint never served, a lifted gate and a session-less endpoint absent;
+`TestSeededFleetHoldsARejectedSession`), in vitest (the ladder model, the pill, the notice's retry
+and its permission greying, the blade's credential edit, rows surviving a poll), and live against
+the simulated panel. Host-key trust from the console (#1059's ssh half) is #1078.
+
+The review's fixes, each with a test that failed first: `session-state` and `session-reason` join
+the node's own facts the push lane refuses (a push could read a rejected session up, hiding its
+Retry, or plant a reason the node never scrubbed; ADR-0158 point 5 amended); the read serves a
+session only while the endpoint holds one (a standing listen task, or a driver declaring a
+session), since teardown publishes nothing and a torn-down session's last state stood beside a
+Retry that could change nothing; the reason is cut to 500 characters at the read; a retry in hand
+lives in the query cache under the endpoint, so the Collection card's notice and the blade's hold
+it together and cannot stack a second redial; the ladder no longer grows a login rung for a
+session with no login; and the rows-survive-a-poll tests now let the poll land and assert DOM
+identity, proven to fail against the unkeyed iteration (two review catalog entries record it).
+
+### The push lane refuses every key only a node can write (#1080)
+
+`POST /telemetry:push` refused a node's control facts (the gate, the trusted host key, a held
+session's state and reason) but took the rest of the native probe keys like any property, so a
+principal holding `telemetry:push` could write a reachability verdict, its rungs, or a probe metric
+or timing under an endpoint's name, and the console read it as the node's observation. Now every
+native key is refused by name, on every lane (a native name pushed as an event is refused as the
+node's, not as unregistered), under any instance and any casing, beside rows in the same batch that
+land; the rejection's reason names the key. The set is `internal/collection/probekeys` itself: each
+key is ruled there node-only or pushable with the one-line reason it may be pushed (none is
+pushable today), and a test reads the package's declared constants from source and fails on a key
+ruled neither, so a key declared there cannot ship pushable by omission; the reachability read's
+keys are now those declarations too, and a test fails on one the ruling does not hold node-only. The
+node's own lane never consults the ruling. Proven against Postgres and a real bus (`TestTelemetryPushRefusesNativeKeys`:
+every node-only key on every lane and instance refused by name, a batch landing only its two
+pushable rows, casing and spacing variants refused, nothing native landing;
+`TestNodeLaneLandsEveryNativeKey`: a node publishing every native key on its own subject lands
+each one), and in unit tests (`TestEveryKeyRuled`, `TestIsNodeOnly`, `TestNodeOnlyRejection`,
+`TestReachabilityReadsOnlyNodeOnlyKeys`). The review found other write surfaces that can reach a
+native key's series, and node-lane confinement wider than the endpoint; they are #1084 and #1085,
+and `collection-failed`, a node-emitted key declared outside `probekeys`, is #1086.
+ADR-0158 point 5 is amended; the push tests that used `icmp-rtt-avg` as their sample metric now
+push `room-temperature` and `uptime`.
+
+### The end-to-end servers claim their own ports, so concurrent runs never collide (#1077)
+
+Every end-to-end test started `omniglass server` on ports it found with a pick-and-release helper:
+bind `127.0.0.1:0`, read the port, close the listener, and hand the number to a binary that bound it
+seconds later, after migrating and seeding. In that gap any other process on the host could be handed
+the same port, so a run beside another (two worktrees, a session beside `make test`) failed with
+`bind: address already in use` on the API, or `nats-server not ready for connections` when the bus's
+port went. Now the server binds port 0 itself and reports what it got. `OMNIGLASS_ADDR` and
+`OMNIGLASS_NATS_ADDR` may name port 0; the API binds before it serves, so its address is known; the
+bus reads port 0 as ephemeral, where nats-server alone reads it as its default 4222; and a new
+`OMNIGLASS_READY_FILE` names a path the server writes, whole or not at all, once both listeners are
+bound: a JSON object of the bound `addr` and `nats_addr` and the `nats_url` it advertises, removed at
+a graceful shutdown. The advertised bus URL, when `OMNIGLASS_NATS_URL` is unset, is now the address the bus bound
+(loopback for a wildcard host) rather than a fixed `nats://127.0.0.1:4222`, which is the same URL for
+every configuration that worked before and the right one for a bus on port 0. The end-to-end package
+starts every server through one helper, `startServer`, which sets the listen addresses to port 0 and
+reads the ready file, and a guard test fails any test that runs the server another way or sets its
+listen addresses (against main's tests it names all seven server starts). Proven by the bus binding a
+kernel-picked port for 0 (it bound 4222 first), the ready file's write, replace and removal, and the
+healthz end-to-end test asserting both reported ports are live and neither is 0 or 4222 (it failed
+first, no ready file). Beside a squatter that holds and churns ephemeral ports, standing in for a busy
+host, main's healthz test failed four runs in four (one on the API's port, three on the bus's) and the
+fixed one passed four in four; the end-to-end package run twice side by side, three pairs, passed every
+run. The
+[CLI guide](/guides/cli/#a-server-on-ports-it-picks) teaches the ready file, and the deployment guides'
+configuration tables render the new variable from the registry.
+
+The review's fixes, each with a test that failed first: the harness observes the server's exit by
+closing a channel rather than sending its one value, since a server that died before it was ready
+had its exit taken by the wait, leaving the cleanup that stops it blocked until the suite's timeout
+(every later test aborted, the boot error never printed); the boot clears a ready file already at
+the path before anything that can fail, since a server killed outright runs no shutdown and its file
+named a dead run's ports, which the next boot left in place throughout, or for good when that boot
+failed; and the test-driven page scopes the one-helper rule to `internal/e2e`, noting that the browser
+tier and the walkthrough stack isolate through a private Docker network per run.
+
+### Docs-shot masks paint a fixed box, so baselines never move with the clock (#1081)
+
+Two masked baselines moved with the capture's wall clock though their masks exist to pin exactly
+that region: `entity-blade` masked `[data-testid=blade-since]` and `fleet-place-systems` masked
+`[data-testid=summary-since]`, each a hook on the since span itself, so each mask was painted at
+the size of the text. The text moves with the clock (`fmtTime` prints a month name, a bare day and
+AM or PM; the age reads 9s or 17s), so the same blade captured at 01:57 AM and at 06:59 PM painted a
+box one pixel apart (64 changed pixels in the blade's baseline, 160 in the card's). Every recapture
+therefore rewrote both baselines with no UI change, which is how #1059 found them, and the gate
+passed only because its perceptual threshold happens to absorb a mask edge moving over a dark
+surface (#774), not because the bytes held: the class #773 fixed for table cells, met again on a
+`data-testid` hook.
+
+A mask entry can now **declare its box**: `{ selector, width }` is painted at the value's top-left,
+as tall as the value and `width` CSS pixels wide, whatever the value reads, for a value whose
+position is fixed but whose width is not, and whose only container that holds still also holds
+what the shot exists to show. Both since masks declare one: 184px over the blade's line, 208px over
+the card's, against the widest line a capture can render in the console's face (164px and 186px,
+"since May 28, 12:59 AM · 59m"). A value wider than its box fails the capture by name instead of
+leaving its tail live. The capture's mask code moves out of `docs-shots.mjs` into
+`web/e2e/shotmasklib.mjs` (plan, paint, log), so the code that paints a baseline is the code the
+browser test drives; the docs content schema and `docs-shots-verify` accept and check the new
+entry. No console surface changed. A sweep of every other mask found none of the class: the uuid
+masks stay on fixed-width monospace text, the timestamp masks name their cells, and every other
+since-line, age and timestamp mask names a row, an incident entry, a panel or a chart its layout
+pins (the uptime figure's box by its minimum width), with no capture-relative region left unmasked.
+
+`DOCS_SHOTS_EXACT=1` makes the freshness diff compare every pixel exactly, since the gate's own
+comparison scores this defect zero. Proven both ways. At the browser tier,
+`web/e2e/shotmask.spec.ts` now reads each mask from its page's own frontmatter and drives the
+shared mask code, and its blade and card cases failed against the old selectors (the box moving
+from 164 to 179 pixels) and pass against the declared boxes, which also leave the verdict and the
+card's name live. At the shot level, a recapture with the clock moved
+(`DOCS_SHOTS_TZ=America/Los_Angeles`) changed exactly these two baselines before the fix, every
+other mask resolving to the same box, and changes no pixel after it (`DOCS_SHOTS_EXACT=1`). The
+review catalog gains `text-sized-mask`, and `unmasked-capture-relative-region` now points at a
+mask that holds.
+
+The review's fixes, the first three each with a test that failed first: the first cut masked the
+since lines' whole rows, which held still but hid the verdict badge from the last two baselines
+that still gated it (the declared box replaces it, and the browser test now fails a mask that
+covers what its shot shows); the documented way to prove a mask holds ran the gate's perceptual
+comparison, which cannot see this bug (the exact comparison, pinned by a unit test that the
+default scores a one-pixel mask move zero and the exact mode does not); a declared box is measured
+again when the baseline is shot, since the clean shot comes between planning and painting and a
+reflow in between would plant the box where the value used to be (and a value that outgrew its
+box meanwhile still fails by name); and the browser test now finds the docs from its own
+location, so it also runs from the repo root. A declared box suits only a value whose left edge
+stays put, which the docs and the catalog now say.
+
+### A changed host key can be trusted from the console (#1078)
+
+The ssh half #1059 deferred. A host-key refusal now carries both keys as data
+(`collection.TerminalError` `Pinned` and `Offered`, built by `collection.HostKeyRefusal` for the held
+session and the probe alike), and the node's gate publishes them with itself: `endpoint-rejection`
+appends `<pinned-key> <offered-key>` to `<rung> <class> <fingerprint>`, both or neither, the one
+shape declared in `internal/collection/rejection` and read there by the node, the server and the
+read. A restarted node adopts the evidence with the gate, so what it republishes is byte-identical to
+what the server holds ([ADR-0159](/architecture/decisions/#adr-0159-a-refused-keys-evidence-rides-its-gate-and-trusting-a-key-is-checked-against-the-one-offered),
+amending ADR-0158 point 5). The reachability read's `rejection` serves `pinned_key` and
+`offered_key`. `POST /endpoints/{id}:retry` with `host_key` now refuses (409, nothing written) any key
+other than the offered key the refusal on record names, and its audit row carries the pin replaced
+(`old.host_key`) beside the pin set (`new.host_key`) and the actor.
+
+In the console, a session rejected for a changed key reads **The host key changed** and names both
+keys (`PinnedKeyNotice`, two `KVStacked` facts, which now take a `hint`), side by side where the card
+is wide and stacked in the blade. **Trust this key** (gated `endpoint:retry`, greyed with its reason)
+opens `ConfirmDialog`, a new primitive (a centred Kobalte `AlertDialog`, its rail the one
+`PanelFooter`, the focus on Cancel): it repeats both keys and teaches **Why a key changes** as three
+chips (reinstalled, hardware swapped, man in the middle), each explained on hover. It holds the refusal
+as it was when opened, sends exactly that offered key, and will not send once the live read's offer
+has moved; after a trust it waits on the session as Retry does. Both components are generic over the
+class, so the tls slice's certificate refusal (#1035) renders through them unchanged. The dev fleet's
+briefing touch panel gains an ssh endpoint pinning the key it had before a reimage, so `make dev-sim`
+shows a host-key rejection, and the `trust-a-changed-host-key` walkthrough trusts it and watches the
+session come up.
+
+Proven test-first: the rejection shape's round trip and parse (`internal/collection/rejection`); the
+gate publishing and adopting the keys and a session manager's host-key refusal publishing them
+(`internal/node`); the read serving the gate's keys and never a decoy pair planted in the reason
+(`TestReachabilityCarriesTheHeldSession`); the stale trust refused with nothing written and the
+accepted trust audited with both keys and the actor (`TestTrustingAKeyChecksTheOfferedKeyAndAuditsBoth`);
+the viewer floor's 403 and the 409 over HTTP (`TestEndpointAPI`); the real-wire panel publishing both
+keys and refusing the old pin (`TestNodeSSHSessionPinsTheHostKeyAndRefusesAChange`); the seed's stale
+pin, idempotent and never put back over a trusted key (`TestSeededFleetHoldsAHostKeyRejection`); and in
+vitest the notice, the confirm, the exact key sent, the moved offer, the server's refusal and the
+greyed viewer. The adversarial review found no exploitable hole and two advisories, both fixed: the
+409 claimed the component "now offers" the key on record, which a gated node cannot know (it now says
+what the record names and to retry first, and the docs say the same), and the boot-seeded
+`endpoint-rejection` description still named three fields.
+
 ### A component's product change brings its calc rules in line (#1015)
 
 A component retyped out of a component calc rule's selector kept the rule's state, and one retyped in

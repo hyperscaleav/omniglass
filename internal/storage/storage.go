@@ -422,6 +422,12 @@ type Gateway interface {
 	GetEndpoint(ctx context.Context, id string, read scope.Set) (*Endpoint, error)
 	CreateEndpoint(ctx context.Context, actorID string, spec EndpointSpec, create scope.Set) (*Endpoint, error)
 	UpdateEndpoint(ctx context.Context, actorID, id string, patch EndpointPatch, read, action scope.Set) (*Endpoint, error)
+	// RetryEndpoint is an operator's retry of the endpoint's held session
+	// (#1049): it moves the endpoint's revision, which wakes a rejected
+	// session for one attempt, and is audited.
+	// hostKey, when set, is the ssh host key fingerprint the operator now
+	// trusts (a replaced component's), declared as the endpoint's pin.
+	RetryEndpoint(ctx context.Context, actorID, id, hostKey string, read, action scope.Set) (*Endpoint, error)
 	DeleteEndpoint(ctx context.Context, actorID, id string, read, action scope.Set) error
 
 	// The task tier: read-only over DERIVED collection work. A task is not

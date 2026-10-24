@@ -22,6 +22,21 @@ type DriverPollTask struct {
 	Target    string
 	Secrets   map[string]map[string]string
 	Timeout   time.Duration
+	// Session is the endpoint's held session, when the node holds one
+	// (#816): a line poll borrows it instead of dialing a throwaway
+	// connection, and a session that is not up faults the poll rather than
+	// the poll reconnecting on its own.
+	Session HeldExchanger
+	// SessionOnly forbids the throwaway connection (#1049): the driver
+	// declares a session (a login a throwaway would skip, or retry once
+	// rejected), or the transport has no stateless line.
+	SessionOnly bool
+}
+
+// HeldExchanger is the slice of a held session a poll borrows: one request,
+// its answer. *Session satisfies it.
+type HeldExchanger interface {
+	Exchange(ctx context.Context, line string, reply *driver.Reply, timeout time.Duration) (string, error)
 }
 
 // snmpCommunity is the engine's credential contract for the snmp transport:
@@ -61,7 +76,18 @@ func (r *Runner) CollectDriverPoll(ctx context.Context, t DriverPollTask) ([]Sam
 			return nil, []error{fmt.Errorf("collection: driver poll %s/%s: %w", t.Fn.Driver, t.Fn.Function, err)}
 		}
 		payload.Values = values
-	case "tcp":
+	case "tcp", "telnet", "ssh":
+		if t.Session != nil {
+			answer, err := t.Session.Exchange(ctx, t.Fn.Request.Line, t.Fn.Request.Reply, t.Timeout)
+			if err != nil {
+				return nil, []error{fmt.Errorf("collection: driver poll %s/%s: %w", t.Fn.Driver, t.Fn.Function, err)}
+			}
+			payload.Text = answer
+			break
+		}
+		if t.SessionOnly || t.Transport != "tcp" {
+			return nil, []error{fmt.Errorf("collection: driver poll %s/%s: no session is held for this endpoint, and its %s line rides only a held session", t.Fn.Driver, t.Fn.Function, t.Transport)}
+		}
 		if r.Line == nil {
 			return nil, []error{fmt.Errorf("collection: driver poll %s/%s: no line fetcher wired", t.Fn.Driver, t.Fn.Function)}
 		}

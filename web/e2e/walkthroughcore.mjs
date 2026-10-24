@@ -29,6 +29,12 @@ export function checkId(id) {
   return id;
 }
 
+// The video's file name, as the recorder writes it beside the stills.
+/** @param {string} id @returns {string} */
+export function videoName(id) {
+  return `${checkId(id)}.mp4`;
+}
+
 /** @param {string} id @param {unknown} name */
 export function checkStill(id, name) {
   if (typeof name !== 'string' || !STILL.test(name)) {

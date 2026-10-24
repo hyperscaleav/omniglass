@@ -836,17 +836,17 @@ func TestCheckDoesNotCache(t *testing.T) {
 	saved := programs
 	programs = newCache(MaxCachedPrograms)
 	defer func() { programs = saved }()
-	if err := Check("value > 42.4242 // check only", boolEnv(t)); err != nil {
+	if err := checkErr("value > 42.4242 // check only", boolEnv(t)); err != nil {
 		t.Fatal(err)
 	}
 	if n := programs.len(); n != 0 {
 		t.Errorf("Check cached %d programs, want 0", n)
 	}
-	e := asError(t, Check("value > 1 &&\n  nope", boolEnv(t)))
+	e := asError(t, checkErr("value > 1 &&\n  nope", boolEnv(t)))
 	if e.Line != 2 || e.Column != 3 || e.Phase != PhaseType {
 		t.Errorf("Check's diagnostic %v at %d:%d, want a type error at 2:3", e, e.Line, e.Column)
 	}
-	if err := Check(strings.Repeat(" ", MaxSourceBytes+1), boolEnv(t)); !errors.Is(err, ErrSourceTooLong) {
+	if err := checkErr(strings.Repeat(" ", MaxSourceBytes+1), boolEnv(t)); !errors.Is(err, ErrSourceTooLong) {
 		t.Errorf("Check skipped the length cap: %v", err)
 	}
 }

@@ -44,10 +44,16 @@ type BoolInput struct {
 // The criteria site's environments: the criteria builtins, the criteria
 // budget, a bool result.
 var (
-	metricEnv = expression.MustEnv[MetricInput](expression.Bool, expression.WithBuiltins(expression.CriteriaBuiltins()...))
-	textEnv   = expression.MustEnv[TextInput](expression.Bool, expression.WithBuiltins(expression.CriteriaBuiltins()...))
-	boolEnv   = expression.MustEnv[BoolInput](expression.Bool, expression.WithBuiltins(expression.CriteriaBuiltins()...))
+	metricEnv = expression.MustEnv[MetricInput](expression.Bool, criteriaOptions()...)
+	textEnv   = expression.MustEnv[TextInput](expression.Bool, criteriaOptions()...)
+	boolEnv   = expression.MustEnv[BoolInput](expression.Bool, criteriaOptions()...)
 )
+
+// criteriaOptions are the criteria site's declaration: its builtins, and
+// its name, so the diagnostic rules for criteria run on its expressions.
+func criteriaOptions() []expression.Option {
+	return []expression.Option{expression.WithBuiltins(expression.CriteriaBuiltins()...), expression.WithSite("criteria")}
+}
 
 // CriteriaEnv is the environment a criterion compiles against: the lane,
 // and for a property its data type.
@@ -128,6 +134,34 @@ func compileOne(c Criteria, lane Lane, dataType string, env expression.Env, fiel
 		return Criteria{}, nil, &CriteriaError{Field: field, Short: short, Err: err}
 	}
 	return low, p, nil
+}
+
+// FieldDiagnostic is a diagnostic on one of a rule's expressions, naming
+// which (fire_criteria, clear_criteria, reduce.expr).
+type FieldDiagnostic struct {
+	Field string
+	expression.Diagnostic
+}
+
+// warningsOf are a program's warnings (its hints are the editor's alone),
+// each named for its field.
+func warningsOf(field string, p *expression.Program) []FieldDiagnostic {
+	var out []FieldDiagnostic
+	if p == nil {
+		return out
+	}
+	for _, d := range p.Diagnostics() {
+		if d.Severity == expression.SeverityWarning {
+			out = append(out, FieldDiagnostic{Field: field, Diagnostic: d})
+		}
+	}
+	return out
+}
+
+// Warnings are the warnings the rule's criteria compiled with, the fire
+// criteria's first: notes on a rule that judges all the same.
+func (j *Judge) Warnings() []FieldDiagnostic {
+	return append(warningsOf("fire_criteria", j.fireProg), warningsOf("clear_criteria", j.clearProg)...)
 }
 
 // Fire is the fire criterion, lowered.

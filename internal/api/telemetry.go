@@ -8,6 +8,7 @@ import (
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/hyperscaleav/omniglass/internal/collection"
+	"github.com/hyperscaleav/omniglass/internal/collection/probekeys"
 	"github.com/hyperscaleav/omniglass/internal/key"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 	ogv1 "github.com/hyperscaleav/omniglass/proto/og/v1"
@@ -119,7 +120,9 @@ func registerTelemetryRoutes(api huma.API, a *authenticator, gw storage.Gateway,
 		Description: "Accepts per-lane observations (metrics, properties, events) and raw log lines for one owner and " +
 			"publishes them onto the ingest lane. Each lane validates against its own catalog: an unregistered name is " +
 			"rejected and reported in the response rather than silently dropped, and a property or event payload " +
-			"violating its type's schema refuses the batch with a 422. Gated by telemetry:push, and the " +
+			"violating its type's schema refuses the batch with a 422. A key a native probe writes (a reachability " +
+			"verdict or rung, a probe metric or timing, a held session's state) is a node's own observation and is " +
+			"rejected by name on every lane; only the node writes it. Gated by telemetry:push, and the " +
 			"caller's scope must cover the declared owner; an out-of-scope owner is a non-disclosing 404.",
 	}, "telemetry", "push"), func(ctx context.Context, in *pushInput) (*pushOutput, error) {
 		if pub == nil {
@@ -197,7 +200,15 @@ func registerTelemetryRoutes(api huma.API, a *authenticator, gw storage.Gateway,
 		// instead (the #594 contract): the caller declared the right name, so the
 		// mistake is in the data, and half-landing a batch around it would leave
 		// the caller guessing which rows exist.
+		//
+		// A native probe key is refused first, on every lane (#1080): it is a node's
+		// own observation, so its reason names that, not a lane the caller could
+		// switch to.
 		for _, m := range in.Body.Metrics {
+			if rej, ok := nodeOnlyRejection(m.Name); ok {
+				out.Body.Rejected = append(out.Body.Rejected, rej)
+				continue
+			}
 			if _, ok := reg.Metric(m.Name); !ok {
 				out.Body.Rejected = append(out.Body.Rejected, pushRejection{
 					Name: m.Name, Reason: "unregistered metric type name",
@@ -210,6 +221,10 @@ func registerTelemetryRoutes(api huma.API, a *authenticator, gw storage.Gateway,
 		}
 
 		for _, p := range in.Body.Properties {
+			if rej, ok := nodeOnlyRejection(p.Name); ok {
+				out.Body.Rejected = append(out.Body.Rejected, rej)
+				continue
+			}
 			pt, ok := reg.Property(p.Name)
 			if !ok {
 				out.Body.Rejected = append(out.Body.Rejected, pushRejection{
@@ -238,6 +253,10 @@ func registerTelemetryRoutes(api huma.API, a *authenticator, gw storage.Gateway,
 		}
 
 		for _, e := range in.Body.Events {
+			if rej, ok := nodeOnlyRejection(e.Name); ok {
+				out.Body.Rejected = append(out.Body.Rejected, rej)
+				continue
+			}
 			et, ok := reg.Event(e.Name)
 			if !ok {
 				out.Body.Rejected = append(out.Body.Rejected, pushRejection{
@@ -293,6 +312,22 @@ func registerTelemetryRoutes(api huma.API, a *authenticator, gw storage.Gateway,
 		out.Body.Accepted.Logs = len(batch.Logs)
 		return out, nil
 	})
+}
+
+// nodeOnlyRejection refuses a key only a node may write (#1080, ADR-0158 point
+// 5): every native probe key, read from probekeys, the one declaration the
+// probes emit from. Its value is the node's own observation (a reachability
+// verdict or rung, a probe metric or timing, the node's account of its own
+// connection), which the console reads as the node's, so a push may not write
+// it on any lane. The reason names the key.
+func nodeOnlyRejection(name string) (pushRejection, bool) {
+	if !probekeys.IsNodeOnly(name) {
+		return pushRejection{}, false
+	}
+	return pushRejection{
+		Name:   name,
+		Reason: name + " is a native probe key, a node's own observation: only the node writes it",
+	}, true
 }
 
 // itemTS maps an optional per-item timestamp to the wire: absent stays absent

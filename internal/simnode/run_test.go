@@ -22,6 +22,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/seed"
 	"github.com/hyperscaleav/omniglass/internal/sim/profile"
 	"github.com/hyperscaleav/omniglass/internal/sim/profiles"
+	"github.com/hyperscaleav/omniglass/internal/sim/simtest"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 )
@@ -132,7 +133,10 @@ func TestRunServesTheNodesDevicesAndFollowsChanges(t *testing.T) {
 		}
 		return target
 	}
-	first := addDevice("sim-one", "127.31.0.10")
+	// The run mode binds each face at its profile's port, lifted, on the
+	// address the endpoint targets: fixed ports, so each device takes an
+	// address no other test process holds.
+	first := addDevice("sim-one", simtest.ClaimLoopback(t))
 
 	busSrv, err := bus.New(bus.Config{Host: "127.0.0.1", Port: -1}, gw)
 	if err != nil {
@@ -165,7 +169,7 @@ func TestRunServesTheNodesDevicesAndFollowsChanges(t *testing.T) {
 		return ok && st.Devices[oneID].Count > 0 && st.Serving[oneID] && st.Capabilities.PortOffset == runPortShift
 	})
 
-	second := addDevice("sim-two", "127.31.0.11")
+	second := addDevice("sim-two", simtest.ClaimLoopback(t))
 	eventually(t, "the added device to answer without a restart", func() bool { return answers(second) })
 
 	if _, err := conn.Exec(ctx, `delete from endpoint where name = 'sim-one-tcp'`); err != nil {

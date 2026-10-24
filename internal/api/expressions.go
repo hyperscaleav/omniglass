@@ -23,11 +23,32 @@ type validateExpressionInput struct {
 }
 
 type expressionDiagnostic struct {
-	Line    int    `json:"line" doc:"The 1-based line of the fault; 0 when it has none (a length cap)"`
-	Column  int    `json:"column" doc:"The 1-based column of the fault; 0 when it has none"`
-	Phase   string `json:"phase" enum:"parse,type,limit" doc:"Where it failed: parse (syntax), type (an unknown name, a mismatched type, a result that is not the site's), or limit (a cap)"`
-	Message string `json:"message"`
-	Unbound string `json:"unbound,omitempty" required:"false" doc:"The name the expression uses that nothing binds, when that is the fault (an editor offers to bind it)"`
+	Line     int                `json:"line" doc:"The 1-based line of the diagnostic; 0 when it has none (a length cap, an input the expression never names)"`
+	Column   int                `json:"column" doc:"The 1-based column of the diagnostic; 0 when it has none"`
+	Phase    string             `json:"phase" enum:"parse,type,limit,lint" doc:"Where it arose: parse (syntax), type (an unknown name, a mismatched type, a result that is not the site's), limit (a cap), or lint (a warning or hint on an expression that compiles)"`
+	Severity string             `json:"severity" enum:"error,warning,hint" doc:"error refuses the expression; warning (probably wrong) and hint (could be simpler) ride along with one that compiles and never refuse it"`
+	Code     string             `json:"code,omitempty" required:"false" doc:"The registered diagnostic that gave it (sum-of-bools, float-equality, ...), stable across releases and documented on the expressions page; absent for the engine's own refusals"`
+	Message  string             `json:"message"`
+	Unbound  string             `json:"unbound,omitempty" required:"false" doc:"The name the expression uses that nothing binds, when that is the fault (an editor offers to bind it)"`
+	Fix      *expressionFixBody `json:"fix,omitempty" required:"false" doc:"A quick fix the diagnostic offers: one text edit"`
+}
+
+// expressionFixBody is one text edit: the source from line:column up to
+// (not including) end_line:end_column becomes replacement.
+type expressionFixBody struct {
+	Title       string `json:"title" doc:"What the fix does, as an action's label"`
+	Line        int    `json:"line" doc:"The 1-based line the replaced range starts on"`
+	Column      int    `json:"column" doc:"The 1-based column it starts at, in characters"`
+	EndLine     int    `json:"end_line" doc:"The 1-based line it ends on"`
+	EndColumn   int    `json:"end_column" doc:"The 1-based column it ends before"`
+	Replacement string `json:"replacement" doc:"The text that replaces the range"`
+}
+
+func toFixBody(f *expression.Fix) *expressionFixBody {
+	if f == nil {
+		return nil
+	}
+	return &expressionFixBody{Title: f.Title, Line: f.Line, Column: f.Column, EndLine: f.EndLine, EndColumn: f.EndColumn, Replacement: f.Replacement}
 }
 
 type expressionBinding struct {
@@ -44,11 +65,11 @@ type expressionBudget struct {
 
 type validateExpressionOutput struct {
 	Body struct {
-		OK          bool                   `json:"ok" doc:"Whether the expression compiles at the site"`
+		OK          bool                   `json:"ok" doc:"Whether the expression compiles at the site (no diagnostic of severity error)"`
 		Site        string                 `json:"site"`
 		ValueType   string                 `json:"value_type" enum:"number,text,bool" doc:"The value type the expression was checked against: for criteria the key's value, for calc the output's"`
 		ResultType  string                 `json:"result_type" doc:"The type the site requires the expression to yield"`
-		Diagnostics []expressionDiagnostic `json:"diagnostics" doc:"Why it does not compile, with line and column; empty when ok"`
+		Diagnostics []expressionDiagnostic `json:"diagnostics" doc:"Why it does not compile (one error), or the warnings and hints it compiles with, each with its line and column; empty when it compiles clean"`
 		Bindings    []expressionBinding    `json:"bindings" doc:"The names the expression may use at the site, generated from the site's environment"`
 		Builtins    []string               `json:"builtins" doc:"The builtin functions the site admits"`
 		Budget      expressionBudget       `json:"budget" doc:"What one run at the site may spend"`
@@ -100,15 +121,21 @@ func registerExpressionRoutes(api huma.API, a *authenticator, gw storage.Gateway
 		if site.Bindings != "" {
 			check = rules.CheckCalc
 		}
-		if err := check(in.Body.Source, env); err != nil {
-			d := expressionDiagnostic{Phase: "type", Message: err.Error()}
+		diags, err := check(in.Body.Source, env)
+		if err != nil {
+			d := expressionDiagnostic{Phase: "type", Severity: string(expression.SeverityError), Message: err.Error()}
 			var ee *expression.Error
 			if errors.As(err, &ee) {
-				d = expressionDiagnostic{Line: ee.Line, Column: ee.Column, Phase: string(ee.Phase), Message: ee.Message, Unbound: ee.Unbound}
+				d = expressionDiagnostic{Line: ee.Line, Column: ee.Column, Phase: string(ee.Phase), Severity: string(expression.SeverityError),
+					Code: ee.Code, Message: ee.Message, Unbound: ee.Unbound, Fix: toFixBody(ee.Fix)}
 			}
 			b.Diagnostics = append(b.Diagnostics, d)
 		}
-		b.OK = len(b.Diagnostics) == 0
+		for _, d := range diags {
+			b.Diagnostics = append(b.Diagnostics, expressionDiagnostic{Line: d.Line, Column: d.Column, Phase: "lint",
+				Severity: string(d.Severity), Code: d.Code, Message: d.Message, Fix: toFixBody(d.Fix)})
+		}
+		b.OK = err == nil
 		b.Bindings = []expressionBinding{}
 		for _, x := range env.Bindings() {
 			b.Bindings = append(b.Bindings, expressionBinding{Name: x.Name, Type: x.Type, Doc: x.Doc})

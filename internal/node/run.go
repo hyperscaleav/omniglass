@@ -3,9 +3,11 @@ package node
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/collection"
@@ -43,6 +45,19 @@ type Config struct {
 	// Line is the driver-poll stateless line-protocol client (#814). Nil
 	// defaults to the real collection.NewLineExchanger(); tests inject a fake.
 	Line collection.LineExchanger
+	// LineSession is the held line-session dialer (#816) an endpoint with a
+	// standing listen task over tcp holds its connection with. Nil defaults
+	// to the real collection.NewLineSessionDialer(); tests inject a fake.
+	LineSession collection.SessionDialer
+	// SSHSession is the held ssh dialer (#1032). Nil defaults to the real
+	// collection.NewSSHSessionDialer(); tests inject a fake.
+	SSHSession collection.SessionDialer
+	// TelnetSession is the held telnet dialer (#1033). Nil defaults to the
+	// real collection.NewTelnetSessionDialer(); tests inject a fake.
+	TelnetSession collection.SessionDialer
+	// Telnet is the telnet reachability probe (#1033). Nil defaults to the
+	// real collection.NewTelnetProber().
+	Telnet collection.TelnetProbe
 }
 
 // Run claims the node's NATS credential, connects outbound-only to the bus,
@@ -106,7 +121,107 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 	if lineExchanger == nil {
 		lineExchanger = collection.NewLineExchanger()
 	}
-	runner := &collection.Runner{TCP: dialer, Ping: pinger, HTTP: httpProber, SSH: sshProber, SNMP: snmpGetter, Line: lineExchanger}
+	telnetProber := cfg.Telnet
+	if telnetProber == nil {
+		telnetProber = collection.NewTelnetProber()
+	}
+	runner := &collection.Runner{TCP: dialer, Ping: pinger, HTTP: httpProber, SSH: sshProber, SNMP: snmpGetter, Line: lineExchanger, Telnet: telnetProber}
+
+	// The held sessions (#816): one per endpoint whose worklist carries a
+	// standing listen task over a transport with a session dialer (or a
+	// poll whose driver declares a session, or over a transport with no
+	// stateless line, #1049). A
+	// transition lands at once (not on the next tick) as the session-state
+	// property under the listen task, and as a self-log carrying the reason;
+	// the deferred closeAll is the node-shutdown teardown, run before the bus
+	// connection closes.
+	lineSession := cfg.LineSession
+	if lineSession == nil {
+		lineSession = collection.NewLineSessionDialer()
+	}
+	// A listener's claimed push lands the same way, at once and under its
+	// listen task (#817); the arm conversation is plumbing, so it is a
+	// self-log and never a command row.
+	telnetSession := cfg.TelnetSession
+	if telnetSession == nil {
+		telnetSession = collection.NewTelnetSessionDialer()
+	}
+	var hostKeyMu sync.Mutex
+	hostKeyLogged := map[string]string{}
+	sshSession := cfg.SSHSession
+	if sshSession == nil {
+		sshSession = collection.NewSSHSessionDialer()
+	}
+	sessions := newSessionManager(map[string]collection.SessionDialer{"tcp": lineSession, "telnet": telnetSession, "ssh": sshSession}, sessionHooks{
+		transition: func(taskID, endpoint string, tr collection.SessionTransition) {
+			// A rejection is logged once, at the transition, never per tick
+			// (#1049): the rejected session dials no more, so nothing repeats.
+			level := slog.LevelInfo
+			if tr.State == collection.SessionRejected {
+				level = slog.LevelWarn
+			}
+			logger.Log(ctx, level, "session "+string(tr.State), "facility", "session", "task", taskID, "endpoint", endpoint, "reason", tr.Reason)
+			if err := publishBatch(nc, cfg.Name, taskID, sessionSamples(tr)); err != nil {
+				logger.Warn("session state not published", "facility", "session", "task", taskID, "error", err.Error())
+			}
+		},
+		auth: func(taskID, endpoint string, v collection.AuthVerdict) {
+			// The auth step's verdict is the endpoint-authenticated rung, the
+			// ladder's own vocabulary, published when it changes.
+			logger.Info("session authenticated", "facility", "session", "task", taskID, "endpoint", endpoint, "authenticated", v.Authenticated, "reason", v.Reason)
+			if err := publishBatch(nc, cfg.Name, taskID, []collection.Sample{authSample(v)}); err != nil {
+				logger.Warn("auth verdict not published", "facility", "session", "task", taskID, "error", err.Error())
+			}
+		},
+		rejection: func(taskID, endpoint, value string) {
+			// The endpoint's gate, published when it changes so the server
+			// carries it back to a restarted node (ADR-0158). The value holds
+			// the connection fingerprint, a digest only.
+			if err := publishBatch(nc, cfg.Name, taskID, []collection.Sample{{
+				Name: collection.SignalEndpointRejection, Text: value, IsText: true, TS: time.Now().UTC(),
+			}}); err != nil {
+				logger.Warn("endpoint rejection not published", "facility", "session", "task", taskID, "error", err.Error())
+			}
+		},
+		hostKey: func(taskID, endpoint, fp string) {
+			// The ssh host key the session trusted: on first use this is the
+			// pin the server keeps and delivers back (#1032). It publishes on
+			// every authenticated connection; the log says it once per key.
+			hostKeyMu.Lock()
+			fresh := hostKeyLogged[taskID] != fp
+			hostKeyLogged[taskID] = fp
+			hostKeyMu.Unlock()
+			if fresh {
+				logger.Info("session host key trusted", "facility", "session", "task", taskID, "endpoint", endpoint, "fingerprint", fp)
+			}
+			if err := publishBatch(nc, cfg.Name, taskID, []collection.Sample{{
+				Name: collection.SignalSSHHostKey, Text: fp, IsText: true, TS: time.Now().UTC(),
+			}}); err != nil {
+				logger.Warn("host key not published", "facility", "session", "task", taskID, "error", err.Error())
+			}
+		},
+		samples: func(taskID string, dps []collection.Sample) {
+			if err := publishBatch(nc, cfg.Name, taskID, dps); err != nil {
+				logger.Warn("pushed samples not published", "facility", "session", "task", taskID, "error", err.Error())
+			}
+		},
+		fault: func(taskID string, cause error) {
+			logger.Warn("listener fault", "facility", "collection", "task", taskID, "error", cause.Error())
+			_ = publishCollectionFailed(nc, cfg.Name, taskID, cause)
+		},
+		arm: func(taskID, endpoint, line, reply string, err error) {
+			if errors.Is(err, collection.ErrUnacknowledged) {
+				logger.Warn("session armed, unacknowledged", "facility", "session", "task", taskID, "endpoint", endpoint, "line", line)
+				return
+			}
+			if err != nil {
+				logger.Warn("session arm failed", "facility", "session", "task", taskID, "endpoint", endpoint, "line", line, "error", err.Error())
+				return
+			}
+			logger.Info("session armed", "facility", "session", "task", taskID, "endpoint", endpoint, "line", line, "reply", reply)
+		},
+	})
+	defer sessions.closeAll()
 
 	// verdicts remembers the last reachability verdict per task (keyed by the
 	// node-unique task id, since interface names collide across components) across
@@ -116,21 +231,29 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 	// faultseen remembers each driver task's last fault set so a static
 	// misconfiguration lands one collection-failed, not one per tick (#814).
 	faultseen := map[string]string{}
+	// sched remembers when each driver poll is next due, so a poll runs on
+	// its declared schedule rather than every heartbeat (#822).
+	heartbeat := cfg.HeartbeatEvery
+	if heartbeat <= 0 {
+		heartbeat = 30 * time.Second
+	}
+	sched := newPollSchedule(heartbeat)
 
 	wl, err := pullWorklist(nc, cfg.Name)
 	if err != nil {
 		return collection.WorklistReply{}, err
 	}
 	logger.Info("worklist pulled", "facility", "collection", "tasks", len(wl.Tasks))
+	sessions.reconcile(wl.Tasks)
 	// executedCommands remembers each pulled command's outcome across ticks:
 	// at-least-once delivery means redelivery, and idempotence per command id
 	// lives here (the report repeats, the device is not touched twice). It is
 	// pruned past the redelivery window so it does not grow for the life of the run.
 	executedCommands := map[int64]commandOutcome{}
-	if err := runTasks(ctx, nc, cfg.Name, wl, runner, verdicts, faultseen); err != nil {
+	if err := runTasks(ctx, nc, cfg.Name, wl, runner, sessions, sched, verdicts, faultseen); err != nil {
 		return wl, err
 	}
-	runCommands(ctx, nc, cfg.Name, runner, executedCommands)
+	runCommands(ctx, nc, cfg.Name, runner, sessions, executedCommands)
 	if err := publishHeartbeat(nc, cfg.Name); err != nil {
 		return wl, err
 	}
@@ -159,11 +282,15 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 			if next, err := pullWorklist(nc, cfg.Name); err == nil {
 				wl = next
 			}
+			// Hold, recycle, or tear down sessions to match the worklist.
+			sessions.reconcile(wl.Tasks)
 			// Run the worklist's tcp tasks and publish their telemetry. A publish
 			// failure is non-fatal (retry next tick).
-			_ = runTasks(ctx, nc, cfg.Name, wl, runner, verdicts, faultseen)
+			_ = runTasks(ctx, nc, cfg.Name, wl, runner, sessions, sched, verdicts, faultseen)
 			// Pull and actuate the pending command queue (#815).
-			runCommands(ctx, nc, cfg.Name, runner, executedCommands)
+			runCommands(ctx, nc, cfg.Name, runner, sessions, executedCommands)
+			// Report the inbound lines no listener claimed this tick.
+			sessions.flushUnclaimed()
 			// Ship whatever the node logged this tick as self-logs.
 			publishSelfLogs(nc, cfg.Name, sink)
 		}
