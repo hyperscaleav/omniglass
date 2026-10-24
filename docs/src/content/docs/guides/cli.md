@@ -31,6 +31,29 @@ name are the ones no rule could produce: every LOCATION, since no shipped locati
 carries a name rule (a campus, a building, a floor and a room each have a name you hold
 and the platform does not).
 
+### A server on ports it picks
+
+`omniglass server` serves the API on `OMNIGLASS_ADDR` (`:8080` by default) and hosts the
+embedded bus nodes connect to on `OMNIGLASS_NATS_ADDR` (`127.0.0.1:4222`). Either address
+may name port 0, which binds whatever free port the kernel hands out, so a second server on
+the same host (a test run, another worktree's stack) never collides with the first. To learn
+the ports it got, set `OMNIGLASS_READY_FILE` to a path: once both listeners are bound, the
+server writes the addresses there as one JSON object, written whole or not at all. A file
+already at that path (one a killed server left) is cleared first thing at boot, before
+anything that can fail, and the server removes its own at a graceful shutdown (SIGINT or
+SIGTERM), so a file you find there names a live server's ports.
+
+```json
+{"addr":"127.0.0.1:41234","nats_addr":"127.0.0.1:41236","nats_url":"nats://127.0.0.1:41236"}
+```
+
+`nats_url` is the bus URL the node-claim exchange hands each node: `OMNIGLASS_NATS_URL` when
+that is set, otherwise the address the bus bound (read as loopback when it bound a wildcard
+host such as `0.0.0.0`), so a bus on port 0 tells nodes the port it got. Read the ports from
+the file rather than finding a free port and passing it in: a port that is free when you look
+can be taken by another process before the server binds it. The end-to-end tests start every
+server this way ([test-driven](/contributing/test-driven/#tiers)).
+
 ## Connecting
 
 Every generated command is a client of a running server and takes two shared flags, each

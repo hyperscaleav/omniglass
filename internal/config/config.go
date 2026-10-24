@@ -20,15 +20,14 @@ const (
 	// OMNIGLASS_DSN (or the standard DATABASE_URL) in every real deployment;
 	// production is BYO Postgres.
 	DefaultDSN = "postgres://omniglass:omniglass@localhost:5432/omniglass?sslmode=disable"
-	// DefaultAddr is the HTTP API listen address. Override with OMNIGLASS_ADDR.
+	// DefaultAddr is the HTTP API listen address. Override with OMNIGLASS_ADDR;
+	// port 0 asks the kernel for a free port, which the ready file reports.
 	DefaultAddr = ":8080"
 	// DefaultNatsAddr is the embedded NATS listen address (host:port). Override
-	// with OMNIGLASS_NATS_ADDR. Bound to loopback by default: a node reaches it
-	// through the same host the API is on.
+	// with OMNIGLASS_NATS_ADDR; port 0 asks for a free port, as for the API.
+	// Bound to loopback by default: a node reaches it through the same host
+	// the API is on.
 	DefaultNatsAddr = "127.0.0.1:4222"
-	// DefaultNatsURL is the URL the node-claim exchange advertises. Override with
-	// OMNIGLASS_NATS_URL when the node reaches the bus at a different address.
-	DefaultNatsURL = "nats://127.0.0.1:4222"
 	// DefaultDataDir holds local server state that is not in Postgres, notably
 	// the fallback secret key when no KEK is provided. Override with
 	// OMNIGLASS_DATA_DIR; a real deployment sets OMNIGLASS_SECRET_KEY_FILE and
@@ -54,7 +53,10 @@ type Config struct {
 	NatsAddr string
 	// NatsStoreDir is the JetStream store directory.
 	NatsStoreDir string
-	// NatsURL is the address the node-claim reply advertises to nodes.
+	// NatsURL is the address the node-claim reply advertises to nodes. Empty
+	// means the URL of the address the bus bound (loopback when it bound a
+	// wildcard host), so a bus asked for port 0 advertises the port it got.
+	// Set OMNIGLASS_NATS_URL when the node reaches the bus at another address.
 	NatsURL string
 	// DataDir is the directory for local, non-Postgres server state (the fallback
 	// secret key). Override with OMNIGLASS_DATA_DIR.
@@ -63,6 +65,10 @@ type Config struct {
 	// layer of the settings engine (between embedded code defaults and the DB
 	// override). Empty means no file layer. Set OMNIGLASS_SETTINGS_FILE.
 	SettingsFile string
+	// ReadyFile is where the server writes the addresses it bound once it
+	// serves, for a supervisor or a test that asked for port 0. Empty means no
+	// file. Set OMNIGLASS_READY_FILE.
+	ReadyFile string
 }
 
 // Load resolves the configuration from the environment, applying defaults for
@@ -80,9 +86,10 @@ func Load() Config {
 		SecureCookies: Get("OMNIGLASS_SECURE_COOKIES") == "true",
 		NatsAddr:      firstNonEmpty(Get("OMNIGLASS_NATS_ADDR"), DefaultNatsAddr),
 		NatsStoreDir:  firstNonEmpty(Get("OMNIGLASS_NATS_STORE_DIR"), filepath.Join(os.TempDir(), "omniglass-nats")),
-		NatsURL:       firstNonEmpty(Get("OMNIGLASS_NATS_URL"), DefaultNatsURL),
+		NatsURL:       Get("OMNIGLASS_NATS_URL"),
 		DataDir:       firstNonEmpty(Get("OMNIGLASS_DATA_DIR"), DefaultDataDir),
 		SettingsFile:  firstNonEmpty(Get("OMNIGLASS_SETTINGS_FILE"), DefaultSettingsFile),
+		ReadyFile:     Get("OMNIGLASS_READY_FILE"),
 	}
 }
 

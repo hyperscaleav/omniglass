@@ -16,7 +16,7 @@
    "key": "OMNIGLASS_ADDR",
    "default": ":8080",
    "scope": "server",
-   "doc": "HTTP listen address"
+   "doc": "HTTP listen address; port 0 binds a free port, reported in the ready file"
   },
   {
    "key": "OMNIGLASS_SECURE_COOKIES",
@@ -28,7 +28,7 @@
    "key": "OMNIGLASS_NATS_ADDR",
    "default": "127.0.0.1:4222",
    "scope": "server",
-   "doc": "listen address (host:port) of the embedded NATS server"
+   "doc": "listen address (host:port) of the embedded NATS server; port 0 binds a free port, reported in the ready file"
   },
   {
    "key": "OMNIGLASS_NATS_STORE_DIR",
@@ -38,9 +38,9 @@
   },
   {
    "key": "OMNIGLASS_NATS_URL",
-   "default": "nats://127.0.0.1:4222",
+   "default": "the bus's bound address",
    "scope": "server",
-   "doc": "bus URL the node-claim exchange advertises to nodes"
+   "doc": "bus URL the node-claim exchange advertises to nodes; unset, the URL of the address the bus bound (loopback for a wildcard host such as 0.0.0.0)"
   },
   {
    "key": "OMNIGLASS_DATA_DIR",
@@ -52,6 +52,11 @@
    "key": "OMNIGLASS_SETTINGS_FILE",
    "scope": "server",
    "doc": "optional operator settings file (JSON or YAML), the layer between code defaults and the DB override"
+  },
+  {
+   "key": "OMNIGLASS_READY_FILE",
+   "scope": "server",
+   "doc": "path the server writes once it serves: a JSON object of the addresses it bound (addr, nats_addr) and the bus URL it advertises (nats_url), for a supervisor or test that asked for port 0; cleared at boot, removed at a graceful shutdown"
   },
   {
    "key": "OMNIGLASS_SECRET_KEY",
