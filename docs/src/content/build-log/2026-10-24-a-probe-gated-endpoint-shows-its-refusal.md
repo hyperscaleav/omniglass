@@ -49,5 +49,4 @@ refusal under the same fingerprint, whose words now record and go out beside the
 before a rejected session's; `pollsHeld` leaves the polls to a held session, as the node does; the
 tls verify bullet, a probe comment and the read's type comment stopped saying a probe's reason is
 only logged. The review's new class joins the catalog (`replayed-state-rerecorded`). The guard
-over the legacy backfill's key lists, red on main since snmp's timing merged between the writer
-ruling and the backfill, rules it and the new reason key born under the ruling.
+over the legacy backfill's key lists rules the new reason key born under the ruling.
