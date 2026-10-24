@@ -9,7 +9,7 @@ title: Fix a rejected session
 description: A touch panel refused its console login, so the node stopped dialing it. Read why, point the endpoint at the rotated credential, and watch the session come up.
 steps:
   - goto: /systems/huddle
-    caption: The huddle room. Its touch panel fills no role, but a node collects it.
+    caption: This place's system. Its touch panel fills no role, but a node collects it.
   - click: 'button:has([data-label]:text-is("Touch Panel 1"))'
     caption: Open the touch panel.
   - click: 'aside[data-blade] button[aria-label=Expand]'

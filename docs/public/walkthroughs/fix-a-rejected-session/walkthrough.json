@@ -6,7 +6,7 @@
     {
       "n": 1,
       "kind": "goto",
-      "caption": "The huddle room. Its touch panel fills no role, but a node collects it.",
+      "caption": "This place's system. Its touch panel fills no role, but a node collects it.",
       "still": "step-01.png"
     },
     {
@@ -61,8 +61,8 @@
   "poster": "step-09.png",
   "preview": "preview.webp",
   "budget": {
-    "seconds": 34.1,
-    "bytes": 801949,
-    "previewBytes": 618798
+    "seconds": 34,
+    "bytes": 810011,
+    "previewBytes": 611664
   }
 }
