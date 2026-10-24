@@ -122,8 +122,9 @@ export function reason(iface: ReachEndpoint, now: number = Date.now()): string {
   if (ping && ping.value >= 1 && port && port.value < 1) {
     return "Host answers ping but the control port is refused: service down, box up.";
   }
-  if (ping && ping.value >= 1 && !port && iface.responsive?.value === "down") {
+  if (ping && ping.value >= 1 && !port && iface.responsive?.value === "down" && !iface.rejection) {
     // A udp endpoint (#1037): no port to open, so the rung is the request.
+    // A gated one did answer (a terminal reply); its gate row says why.
     return "Host answers ping, but the endpoint's request goes unanswered: an open udp port cannot be detected, so a request answered is the transport rung. The service is down, the port is closed, or the datagrams are lost.";
   }
   if (ping && ping.value < 1) {

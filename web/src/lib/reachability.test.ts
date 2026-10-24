@@ -124,6 +124,19 @@ describe("reason", () => {
     expect(reason(iface, now)).toMatch(/request goes unanswered/i);
     expect(reason(iface, now)).toMatch(/cannot be detected/i);
   });
+  // A gated udp endpoint did answer: with a reply its driver declares
+  // terminal. The gate row explains it, so the why-line claims no silence.
+  it("does not call a gated udp endpoint's request unanswered", () => {
+    const iface: ReachEndpoint = {
+      ...base,
+      endpoint: "udp",
+      transport: "udp",
+      responsive: { value: "down", ts: ago(5_000) },
+      rejection: { rung: "responsive", class: "protocol" },
+      layers: [{ layer: "ping", check: "icmp-reachable", value: 1, ts: ago(5_000) }],
+    };
+    expect(reason(iface, now)).not.toMatch(/unanswered/i);
+  });
 });
 
 describe("layerWord", () => {
