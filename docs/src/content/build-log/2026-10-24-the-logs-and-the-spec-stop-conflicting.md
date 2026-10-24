@@ -5,7 +5,7 @@ refs: [1095]
 ---
 
 The build log, the decision log, and the adversarial-review anti-pattern catalog are fragment
-directories now ([ADR-0160](/architecture/decisions/#adr-0160-the-append-only-logs-are-directories-of-one-file-per-entry-spliced-into-their-pages)):
+directories now ([ADR-0162](/architecture/decisions/#adr-0162-the-append-only-logs-are-directories-of-one-file-per-entry-spliced-into-their-pages)):
 398 build-log entries, 159 decisions, and 27 anti-patterns became one file each, split by a one-time
 script that proved the files rebuild the old text byte for byte. The pages carry a directive
 (`::build-log`, `::decision-index`, `::decision-log`) that `docs/src/plugins/remark-fragments.mjs`
