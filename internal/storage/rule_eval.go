@@ -653,7 +653,15 @@ func (p *PG) endCondition(ctx context.Context, tx pgx.Tx, actorID string, r Even
 	if tag.RowsAffected() == 0 || r.ClearEventType == "" {
 		return nil
 	}
-	return writeRuleEvent(ctx, tx, r, r.ClearEventType, comp, instance, alarmID, s)
+	err = writeRuleEvent(ctx, tx, r, r.ClearEventType, comp, instance, alarmID, s)
+	if errors.Is(err, ErrKeyWriterRefused) {
+		// A rule stored with a clear event type the writer ruling now
+		// refuses (ADR-0163) still lets its condition go: the condition
+		// ends and its alarm clears, writing no event, so the rule can be
+		// released or deleted; the boot audit names it.
+		return nil
+	}
+	return err
 }
 
 // writeRuleEvent records one of a rule's edges as an event (#949): derived,

@@ -108,8 +108,9 @@ func (p *PG) stripRefusedEmits(ctx context.Context, node string, tasks []Worklis
 // driver spec's or a derived task's emit, or a contract line, with the key it
 // names and the key's class.
 type RulingViolation struct {
-	// Where names the declaration: "driver <name>", "task <id>", or
-	// "<product|standard|location type> <name> contract".
+	// Where names the declaration: "driver <name>", "task <id>",
+	// "<product|standard|location type> <name> contract", "event rule
+	// <name>" or "command type <name>".
 	Where string
 	Key   string
 	Class writerclass.Class
@@ -117,7 +118,9 @@ type RulingViolation struct {
 
 // WriterRulingViolations audits the stored declarations against the ruling,
 // for the boot audit: every driver spec and derived task emitting a key the
-// node lane may not carry, and every contract line on a reserved key. Each is
+// node lane may not carry, every contract line on a reserved key, every event
+// rule firing or clearing with an event type a rule may not write, and every
+// command type targeting a key a command may not. Each is
 // already inert where it would act (the worklist strips the emit, the
 // effective reads lend the contract no default); this names them so an
 // operator can mend them. Ordered by where, then key.
@@ -177,6 +180,31 @@ func (p *PG) WriterRulingViolations(ctx context.Context) ([]RulingViolation, err
 	for _, n := range lines {
 		if c, reserved := writerclass.Reserved(n.key); reserved {
 			out = append(out, RulingViolation{Where: n.where, Key: n.key, Class: c})
+		}
+	}
+	// A rule's fire or clear event, and a command type's target, a writer
+	// other than the rule's or the command's own now holds.
+	decls, err := p.pool.Query(ctx, `
+		select 'event rule ' || r.name, t.name, 'event-rule' from event_rule r join event_type t on t.id in (r.fire_event_type_id, r.clear_event_type_id)
+		union all select 'command type ' || c.name, t.name, 'command' from command_type c join property_type t on t.id = c.target_property_type_id
+		union all select 'command type ' || c.name, t.name, 'command' from command_type c join metric_type t on t.id = c.target_metric_type_id`)
+	if err != nil {
+		return nil, fmt.Errorf("storage: audit the stored rules and command types: %w", err)
+	}
+	type declared struct {
+		where, key string
+		writer     writerclass.Writer
+	}
+	targets, err := pgx.CollectRows(decls, func(r pgx.CollectableRow) (declared, error) {
+		var d declared
+		return d, r.Scan(&d.where, &d.key, &d.writer)
+	})
+	if err != nil {
+		return nil, fmt.Errorf("storage: audit the stored rules and command types: %w", err)
+	}
+	for _, d := range targets {
+		if c := writerclass.Of(d.key, calcOwned[d.key]); !writerclass.Admits(c, d.writer, d.key) {
+			out = append(out, RulingViolation{Where: d.where, Key: d.key, Class: c})
 		}
 	}
 	slices.SortFunc(out, func(a, b RulingViolation) int {

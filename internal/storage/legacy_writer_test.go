@@ -558,3 +558,56 @@ func TestStoredSpecsAndTasksCarryNoReservedEmit(t *testing.T) {
 		t.Errorf("after the re-derivation the worklist carries %v", got)
 	}
 }
+
+// TestARuleWhoseEventBecameReservedCanStillLetGo: a rule stored with a clear
+// event type the ruling now reserves (command-issued) still ends the
+// condition it holds, writing no event, so it can be deleted; and the boot
+// audit names it, with a command type stored targeting a reserved key.
+func TestARuleWhoseEventBecameReservedCanStillLetGo(t *testing.T) {
+	if testing.Short() {
+		t.Skip("integration test needs Postgres")
+	}
+	f := newWriterFixture(t)
+	all := scope.Set{All: true}
+	d1 := f.componentID(t, "disp-1")
+	if _, err := f.gw.CreateEventRule(f.ctx, "", storage.EventRuleSpec{Name: "legacy-clear", SampleKey: "video-input",
+		Fire: rules.Criteria{Expr: `value == "hdmi1"`}, FireEventType: "condition-started", ClearEventType: "condition-ended"}, all); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.gw.InsertPropertySamples(f.ctx, storage.PushWriter(), []storage.PropertySampleWrite{
+		{OwnerKind: "component", OwnerID: d1, Key: "video-input", Value: "hdmi1"}}); err != nil {
+		t.Fatal(err)
+	}
+	conditions := func() int {
+		return f.count(t, `select count(*) from event_rule_condition c join event_rule r on r.id = c.rule_id where r.name = 'legacy-clear'`)
+	}
+	if n := conditions(); n != 1 {
+		t.Fatalf("the rule holds %d conditions, want 1 in force", n)
+	}
+	if _, err := f.conn.Exec(f.ctx, `update event_rule set clear_event_type_id = (select id from event_type where name = 'command-issued')
+		where name = 'legacy-clear'`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.conn.Exec(f.ctx, `insert into command_type (name, description, settle_window_seconds, target_property_type_id, official)
+		values ('legacy-forge', '', 30, (select id from property_type where name = 'endpoint-reachable'), false)`); err != nil {
+		t.Fatal(err)
+	}
+	vs, err := f.gw.WriterRulingViolations(f.ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for where, key := range map[string]string{"event rule legacy-clear": "command-issued", "command type legacy-forge": "endpoint-reachable"} {
+		if !slices.ContainsFunc(vs, func(v storage.RulingViolation) bool { return v.Key == key && strings.Contains(v.Where, where) }) {
+			t.Errorf("the boot audit does not flag %s on %s: %+v", key, where, vs)
+		}
+	}
+	if err := f.gw.DeleteEventRule(f.ctx, f.actor, "legacy-clear", all); err != nil {
+		t.Fatalf("delete the legacy rule: %v", err)
+	}
+	if n := conditions(); n != 0 {
+		t.Errorf("%d conditions outlive the rule's delete", n)
+	}
+	if n := f.count(t, `select count(*) from event where event_type_id = (select id from event_type where name = 'command-issued')`); n != 0 {
+		t.Errorf("the rule's clear wrote %d command-issued events", n)
+	}
+}
