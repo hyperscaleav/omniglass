@@ -8,6 +8,7 @@
 import matter from 'gray-matter';
 import { readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { normalizeMask } from './shotmasklib.mjs';
 
 const CONTENT = 'docs/src/content/docs';
 const SHOTS = 'docs/public/screenshots';
@@ -33,6 +34,14 @@ for (const file of await walk(CONTENT)) {
       errors.push(`duplicate screenshot id "${s.id}" (in ${file} and ${declared.get(s.id)})`);
     }
     declared.set(s.id, file);
+    // A malformed mask entry would only surface mid-capture; name it here.
+    for (const m of s.mask ?? []) {
+      try {
+        normalizeMask(m);
+      } catch (e) {
+        errors.push(`screenshot "${s.id}" (${file}): ${e.message}`);
+      }
+    }
   }
 }
 

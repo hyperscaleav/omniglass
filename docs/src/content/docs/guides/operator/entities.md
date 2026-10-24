@@ -13,16 +13,18 @@ screenshots:
     # The blade renders one region no clock can pin: the since line's age
     # counts from the capture's own seed-to-shoot latency.
     #
-    # The mask names the since line's ROW (`xpath=ancestor::div[1]`), not the
-    # since span. Playwright paints a mask over the element the selector
-    # resolves to, so a mask on the span is the size of its text, and the text
-    # moves with the clock (`fmtTime` prints AM or PM and leaves the day bare;
-    # the age reads 9s or 17s): the box repainted a pixel narrower or wider on
-    # an unchanged blade (#1081). The row stretches to the blade's fixed width,
-    # so its box does not move. It also covers the verdict beside the age,
-    # which the baseline gives up and the clean render still shows.
+    # The mask DECLARES its box (`width`): painted at the since span's
+    # top-left, as tall as the span and 184px wide, whatever the line reads.
+    # A mask on the span alone is the size of its text, and the text moves
+    # with the clock (`fmtTime` prints the month, a bare day and AM or PM; the
+    # age reads 9s or 17s), so the box repainted a pixel narrower or wider on
+    # an unchanged blade (#1081). The row around it holds still but also holds
+    # the verdict, the one region on the page a baseline must keep gating. The
+    # widest line a capture renders ("since May 28, 12:59 AM · 59m") is 164px
+    # in the console's face; a line wider than 184px fails the capture by name.
     mask:
-      - "[data-testid=blade-since] >> xpath=ancestor::div[1]"
+      - selector: "[data-testid=blade-since]"
+        width: 184
   - id: entity-edit-face
     path: /web/locations/east?edit=1
     alt: "An ?edit=1 deep link lands a place's view on its Configure tab, already editing."

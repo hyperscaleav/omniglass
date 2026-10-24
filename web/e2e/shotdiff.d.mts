@@ -4,7 +4,7 @@ export const DEFAULT_MAX_RATIO: number;
 export function compareShot(
   committedBuf: Buffer | Uint8Array,
   freshBuf: Buffer | Uint8Array,
-  opts?: { maxRatio?: number },
+  opts?: { maxRatio?: number; exact?: boolean },
 ):
   | { status: "ok" | "changed"; ratio: number; diffPixels: number }
   | { status: "size"; a: { width: number; height: number }; b: { width: number; height: number } };
