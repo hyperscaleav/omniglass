@@ -7189,7 +7189,7 @@ interface create form, since that name is the platform's to mint.
      timings are read by the console as the node's observation too, so they are no more a push's to
      write than the gate. The refused set is `internal/collection/probekeys` itself, where each key
      is ruled node-only or pushable with the reason it may be pushed; none is pushable today, and a
-     test fails on a key ruled neither, so a new probe key cannot ship pushable by omission. The
+     test fails on a key declared there and ruled neither, so it cannot ship pushable by omission. The
      refusal holds on every lane (a native name pushed as an event is refused as the node's, not as
      unregistered), under any instance and any casing, and its reason names the key. The node's own
      lane never reads the ruling, so it writes every one of them as before.

@@ -263,7 +263,7 @@ dials once more, a re-probe fires on its interval, a transient failure still spe
 session (teardown publishes nothing, so a session nobody holds is not served), and the rung and
 class of its `endpoint-rejection` (never the fingerprint, which is the node's to compare). Like
 every native probe key, a session's state and reason are the node's own facts, which the push lane
-refuses ([only the node writes them](#only-the-node-writes-a-native-key)), so no push can read a
+refuses ([the push lane refuses a native key](#the-push-lane-refuses-a-native-key)), so no push can read a
 rejected session up or plant a reason the node never scrubbed. So the component's
 Collection card, its Endpoints panel and the endpoint's detail show the session as a pill, the
 ladder with the held rung marked, and, for a down or rejected session, the reason. A state is stored
@@ -311,7 +311,7 @@ across a restart too, and authenticates after a params edit.
 
 **Native push**: data pushed by smart senders is self-describing (it carries its key), its edge parse a near-identity pass-through marked `shape=native`; a failed parse keeps the raw on a `collection.failed` event.
 
-### Only the node writes a native key
+### The push lane refuses a native key
 
 Every key a native probe writes, its samples ([below](#poll-protocols-and-their-config)) and the
 node's account of its own connection (the verdict and its rungs, the probe metrics and their
@@ -321,10 +321,11 @@ name (#1080, [ADR-0158](/architecture/decisions/#adr-0158-one-connection-fingerp
 point 5): on every lane, not just its own, under any instance and any casing, and the rejection's
 reason names the key. The set is not a second list: it is `internal/collection/probekeys`, the
 declaration the probes emit from, where each key is ruled node-only or pushable with the reason it
-may be pushed. None is pushable today, and a key added there without a ruling fails its test, so a
-new probe cannot ship a key a push may forge. The node's own lane never consults the ruling and
-lands every one of them. A pusher with a measurement of its own, an outside pinger's round trip
-say, registers a metric type for it rather than borrowing the node's.
+may be pushed. None is pushable today, and a key declared there without a ruling fails its test,
+as does a key the reachability read serves that is not ruled node-only. The node's own lane never
+consults the ruling and lands every one of them. A pusher with a measurement of its own, an outside
+pinger's round trip say, registers a metric type for it rather than borrowing the node's. The push
+lane is one write surface; hardening the others that can reach a native key's series is #1084.
 
 ## Endpoint types and their config
 

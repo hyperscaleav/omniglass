@@ -23,7 +23,7 @@ probe results); the consumer lands it in `property` under the same owner-confine
 server binds the owner from the task's endpoint) and the **API push lane** (`POST /telemetry:push`:
 a scoped caller declares the owner, the scope check is the fence, and a native probe key is refused
 by name, since only the node observes one:
-[only the node writes a native key](/architecture/collection/#only-the-node-writes-a-native-key)). A push publishes onto the data
+[the push lane refuses a native key](/architecture/collection/#the-push-lane-refuses-a-native-key)). A push publishes onto the data
 lane, not Postgres, so pushed samples reach the stream consumers; both lanes call one `land()` and
 share its semantics (reject-not-project per lane, the transition-only property guard). The wire is
 the protobuf `TelemetryBatch` with **per-lane arrays** (`metrics`, `properties`, `events`, `logs`).
