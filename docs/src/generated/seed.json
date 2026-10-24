@@ -591,9 +591,9 @@
   },
   {
    "name": "snmp",
-   "description": "SNMP transport; the v2c scalar driver arrives with its slice.",
-   "held": true,
-   "built": false
+   "description": "SNMP v2c, stateless: the probe gets a standard OID (sysUpTime.0 unless the driver names another) with the endpoint's community, and an answer is the rung; a wrong community is dropped silently and reads as no answer, while an authorizationError reads as an auth refusal.",
+   "held": false,
+   "built": true
   }
  ],
  "location_types": [

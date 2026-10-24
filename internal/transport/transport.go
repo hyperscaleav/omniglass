@@ -45,7 +45,7 @@ var registry = []Transport{
 	{Name: "telnet", Description: "Telnet: the line protocol over TCP with option negotiation (every option refused), its login the session's auth step; the probe connects and waits for the first negotiation or banner bytes (responds).", Held: true, Built: true, Line: true, Rung: "connect"},
 	{Name: "ssh", Description: "SSH: the probe runs a real key exchange (responds) and tries the endpoint credential when one is set (auth); the line protocol holds a shell or exec channel over it, its userauth the session's auth step and its host key pinned on first use.", Held: true, Built: true, Line: true, Rung: "handshake"},
 	{Name: "http", Description: "HTTP transport; the probe draws a real response off the API (responds), any status counting as an answer.", Held: true, Built: true, Rung: "connect"},
-	{Name: "snmp", Description: "SNMP transport; the v2c scalar driver arrives with its slice.", Held: true, Built: false, Rung: "request"},
+	{Name: "snmp", Description: "SNMP v2c, stateless: the probe gets a standard OID (sysUpTime.0 unless the driver names another) with the endpoint's community, and an answer is the rung; a wrong community is dropped silently and reads as no answer, while an authorizationError reads as an auth refusal.", Held: false, Built: true, Rung: "request"},
 }
 
 // byName indexes the registry; built once at init since the registry is
