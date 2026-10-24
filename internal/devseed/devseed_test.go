@@ -1885,6 +1885,102 @@ func TestSeededFleetHoldsARejectedSession(t *testing.T) {
 	}
 }
 
+// TestSeededFleetHoldsAProbeGate pins the refusal make dev shows on an
+// endpoint holding no session (#1110): the auditorium's touch panel answers
+// SNMP, and its snmp-generic endpoint reads its community from a secret
+// holding the one the panel's agent knows and refuses, so a live node's
+// reachability probe meets authorizationError, gates the endpoint at the
+// session rung, and the console shows the refusal's reason beside Retry with
+// no session pill. Pointing the community at the fleet's own secret lifts it.
+// A second run adds nothing.
+func TestSeededFleetHoldsAProbeGate(t *testing.T) {
+	ctx, conn, gw := seededFleet(t)
+	type ep struct{ id, host, port, community, node string }
+	snmpEndpoints := func() []ep {
+		t.Helper()
+		rows, err := conn.Query(ctx, `
+			select e.id::text, e.inputs->>'host', e.inputs->>'port', e.inputs->>'community', (select n.name from node n where n.principal_id = e.node_name)
+			from endpoint e join driver d on d.id = e.driver_id join component c on c.id = e.component
+			where d.name = 'snmp-generic' and c.id = (select c2.id from component c2 join location l on l.id = c2.location_id
+				join product p on p.id = c2.product_id where l.name = 'auditorium' and p.name = 'newtron-panel-7')`)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer rows.Close()
+		var out []ep
+		for rows.Next() {
+			var e ep
+			if err := rows.Scan(&e.id, &e.host, &e.port, &e.community, &e.node); err != nil {
+				t.Fatal(err)
+			}
+			out = append(out, e)
+		}
+		return out
+	}
+	got := snmpEndpoints()
+	if len(got) != 1 {
+		t.Fatalf("auditorium touch panel snmp endpoints: want 1, got %d", len(got))
+	}
+	e := got[0]
+	if !strings.HasPrefix(e.host, "127.60.") || e.port != "10161" || e.node != "edge-hq" || e.community != "sim-snmp-revoked" {
+		t.Fatalf("auditorium snmp endpoint = %+v, want the panel's simulated address, port 10161, node edge-hq, community sim-snmp-revoked", e)
+	}
+
+	// The secret holds the community the panel's agent refuses, by the
+	// simulator's own profile, so the refusal is the agent's and not a guess.
+	store, err := profile.LoadStoreFS(profiles.FS)
+	if err != nil {
+		t.Fatal(err)
+	}
+	name, _, ok := store.ForProduct("newtron-panel-7")
+	if !ok {
+		t.Fatal("the simulator serves no newtron-panel-7")
+	}
+	refused := ""
+	for _, iface := range store.Devices[name].Interfaces {
+		if iface.Protocol == "snmp" {
+			refused = iface.Auth.RefusedCommunity
+		}
+	}
+	if refused == "" {
+		t.Fatal("the panel's snmp face refuses no community")
+	}
+	var secretID string
+	if err := conn.QueryRow(ctx, `select s.id::text from secret s join secret_type t on t.id = s.secret_type where s.name = 'sim-snmp-revoked' and t.name = 'snmp-community'`).Scan(&secretID); err != nil {
+		t.Fatalf("secret sim-snmp-revoked: %v", err)
+	}
+	all := scope.Set{All: true}
+	fields, err := gw.RevealSecret(ctx, "", secretID, all, all, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fields["community"] != refused {
+		t.Fatalf("sim-snmp-revoked holds %q, want the community the panel refuses %q", fields["community"], refused)
+	}
+
+	// Nothing holds a session on it: the gate is the probe's alone.
+	var compID string
+	if err := conn.QueryRow(ctx, `select component::text from endpoint where id = $1`, e.id).Scan(&compID); err != nil {
+		t.Fatal(err)
+	}
+	eps, err := gw.ListComponentEndpoints(ctx, compID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, it := range eps {
+		if it.ID == e.id && it.HoldsSession {
+			t.Fatal("the auditorium snmp endpoint holds a session; the example is a probe's gate")
+		}
+	}
+
+	if err := devseed.Run(ctx, gw, ""); err != nil {
+		t.Fatalf("second run: %v", err)
+	}
+	if n := len(snmpEndpoints()); n != 1 {
+		t.Fatalf("a second run changed the auditorium's snmp endpoints: %d", n)
+	}
+}
+
 // TestSeededFleetHoldsAHostKeyRejection pins the changed host key make dev
 // shows (#1078): the touch panel in the briefing place answers NVP over its ssh
 // console, and its endpoint pins a host key from before the panel was

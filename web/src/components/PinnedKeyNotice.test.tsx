@@ -34,7 +34,7 @@ const hostKeyRejected = (over: Partial<ReachEndpoint> = {}): ReachEndpoint => ({
   responsive: { value: "up", ts: ago(60_000) },
   // The reason names other keys: a notice that parsed the prose would show them.
   session: { state: "rejected", ts: ago(30_000), reason: `host-key: the host key changed: pinned SHA256:${"x".repeat(43)}, offered SHA256:${"y".repeat(43)}` },
-  rejection: { rung: "responsive", class: "host-key", pinned_key: pinned, offered_key: offered },
+  rejection: { rung: "responsive", class: "host-key", ts: "2026-10-23T11:58:00.000Z", pinned_key: pinned, offered_key: offered },
   layers: [{ layer: "ping", check: "icmp-reachable", value: 1, ts: ago(2_000) }],
   history: [],
   ...over,
@@ -127,7 +127,7 @@ describe("PinnedKeyNotice", () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(ok());
     const { setIface } = mount(hostKeyRejected());
     fireEvent.click(trustButton());
-    setIface(hostKeyRejected({ rejection: { rung: "responsive", class: "host-key", pinned_key: pinned, offered_key: offeredAgain } }));
+    setIface(hostKeyRejected({ rejection: { rung: "responsive", class: "host-key", ts: "2026-10-23T11:58:00.000Z", pinned_key: pinned, offered_key: offeredAgain } }));
     const d = dialog();
     await waitFor(() => expect(screen.getByRole("alert").textContent).toMatch(/offers a different key/i));
     expect(d.textContent).toContain(offered);
@@ -166,9 +166,47 @@ describe("PinnedKeyNotice", () => {
   });
 
   it("offers no trust for a refusal that is not about a key", () => {
-    mount(hostKeyRejected({ session: { state: "rejected", ts: ago(30_000), reason: "auth: auth rejected" }, rejection: { rung: "authenticated", class: "auth" } }));
+    mount(hostKeyRejected({ session: { state: "rejected", ts: ago(30_000), reason: "auth: auth rejected" }, rejection: { rung: "authenticated", class: "auth", ts: "2026-10-23T11:58:00.000Z" } }));
     expect(screen.queryByTestId("pinned-key-notice")).toBeNull();
     expect(screen.queryByRole("button", { name: "Trust this key" })).toBeNull();
     expect(screen.getByTestId("session-reason").textContent).toBe("auth: auth rejected");
+  });
+});
+
+// #1110: a changed key the reachability probe met, on an endpoint holding no
+// session (an ssh probe's host key, a pinned tls certificate's key), reads the
+// same: both keys from the gate, Trust this key behind endpoint:retry, and the
+// trust waits on the gate rather than a session there is none of.
+describe("PinnedKeyNotice for a probe's gate, no session held", () => {
+  beforeEach(() => vi.restoreAllMocks());
+
+  it.each([
+    ["ssh", "host-key", "The host key changed"],
+    ["tls", "certificate", "The certificate key changed"],
+  ] as const)("names both keys of a %s probe's refusal and trusts the offered one", async (transport, cls, heading) => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(ok());
+    const probe = hostKeyRejected({
+      endpoint: transport,
+      transport,
+      session: undefined,
+      rejection: { rung: "responsive", class: cls, ts: ago(40_000), pinned_key: pinned, offered_key: offered, reason: `${cls}: the key changed` },
+    });
+    const { invalidate } = mount(probe);
+    expect(screen.getByText(heading)).toBeTruthy();
+    expect(screen.getByTestId("pinned-key").textContent).toBe(pinned);
+    expect(screen.getByTestId("offered-key").textContent).toBe(offered);
+    expect(screen.getByRole("button", { name: /retry/i })).toBeTruthy();
+    fireEvent.click(trustButton());
+    fireEvent.click(screen.getByRole("button", { name: "Trust this key" }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledOnce());
+    expect(await (fetchMock.mock.calls[0][0] as Request).json()).toEqual({ host_key: offered });
+    await waitFor(() => expect(invalidate).toHaveBeenCalledWith({ queryKey: [...REACHABILITY_KEY(compId)] }));
+    await waitFor(() => expect(trustButton().disabled).toBe(true));
+  });
+
+  it("greys Trust for a caller without endpoint:retry, the keys still read", () => {
+    mount(hostKeyRejected({ session: undefined, rejection: { rung: "responsive", class: "host-key", ts: ago(40_000), pinned_key: pinned, offered_key: offered } }), viewer);
+    expect(trustButton().disabled).toBe(true);
+    expect(screen.getByTestId("offered-key").textContent).toBe(offered);
   });
 });

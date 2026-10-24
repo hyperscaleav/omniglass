@@ -26,8 +26,10 @@ const (
 	SignalSessionState  = probekeys.SessionState
 	SignalSessionReason = probekeys.SessionReason
 	SignalSSHHostKey    = probekeys.SSHHostKey
-	// SignalEndpointRejection is the endpoint's gate (ADR-0158).
-	SignalEndpointRejection = probekeys.EndpointRejection
+	// SignalEndpointRejection is the endpoint's gate (ADR-0158), and
+	// SignalEndpointRejectionReason why it holds (#1110).
+	SignalEndpointRejection       = probekeys.EndpointRejection
+	SignalEndpointRejectionReason = probekeys.EndpointRejectionReason
 )
 
 // SessionState is the session's honest state, the session-state property's

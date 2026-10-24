@@ -36,8 +36,9 @@ type sessionHooks struct {
 	samples    func(taskID string, dps []collection.Sample)
 	fault      func(taskID string, err error)
 	arm        func(taskID, endpoint, line, reply string, err error)
-	// rejection hears an endpoint's endpoint-rejection change (#1056).
-	rejection func(taskID, endpoint, value string)
+	// rejection hears an endpoint's endpoint-rejection change (#1056), with
+	// the reason the gate holds for (#1110), empty when it knows none.
+	rejection func(taskID, endpoint, value, reason string)
 	// hostKey hears an ssh host key the session trusted (#1032).
 	hostKey func(taskID, endpoint, fingerprint string)
 	// certificate hears a tls public key the endpoint trusted on first use
@@ -518,12 +519,13 @@ func (m *sessionManager) certPinOf(task collection.TaskSpec) *collection.HostKey
 }
 
 // syncRejection publishes the endpoint's endpoint-rejection when it differs
-// from what it last published (none once its gate lifts).
+// from what it last published (none once its gate lifts), with the reason the
+// gate holds for (#1110).
 func (m *sessionManager) syncRejection(endpointID string) {
 	if m == nil {
 		return
 	}
-	want := m.gates.rejectionOf(endpointID)
+	want, reason := m.gates.rejectionOf(endpointID)
 	m.pubMu.Lock()
 	last, seen := m.published[endpointID]
 	if (seen && last == want) || (!seen && want == rejectionNone) {
@@ -534,7 +536,7 @@ func (m *sessionManager) syncRejection(endpointID string) {
 	task := m.pubTask[endpointID]
 	m.pubMu.Unlock()
 	if m.hooks.rejection != nil && task[0] != "" {
-		m.hooks.rejection(task[0], task[1], want)
+		m.hooks.rejection(task[0], task[1], want, reason)
 	}
 }
 
@@ -862,6 +864,19 @@ func sessionSamples(tr collection.SessionTransition) []collection.Sample {
 		IsText: true,
 		TS:     tr.At,
 	}}
+}
+
+// rejectionSamples renders a gate as what it publishes: endpoint-rejection,
+// and endpoint-rejection-reason beside it in the same batch and at the same
+// time when the gate knows why it holds (#1110), so an endpoint with no held
+// session still says why it was refused. A gate that knows no reason (none,
+// or one adopted after a restart) lands alone, leaving the reason on record.
+func rejectionSamples(value, reason string, at time.Time) []collection.Sample {
+	out := []collection.Sample{{Name: collection.SignalEndpointRejection, Text: value, IsText: true, TS: at}}
+	if reason != "" {
+		out = append(out, collection.Sample{Name: collection.SignalEndpointRejectionReason, Text: reason, IsText: true, TS: at})
+	}
+	return out
 }
 
 // authSample renders the session's auth verdict as the endpoint-authenticated

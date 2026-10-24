@@ -2079,6 +2079,12 @@ sim_secrets:
     label: Simulated panel login (rotated)
     secret_type: basic-auth
     fields: { username: admin, password: newtron }
+  # The community a simulated panel's agent knows and refuses (its snmp face's
+  # refused_community), for the probe's gate below (#1110).
+  - name: sim-snmp-revoked
+    label: Simulated SNMP community (revoked)
+    secret_type: snmp-community
+    fields: { community: revoked }
 
 sim_endpoints:
   - component: huddle-touch
@@ -2116,3 +2122,14 @@ sim_endpoints:
     label: Panel SSH
     inputs: { login: sim-panel-login-rotated }
     host_key: SHA256:twSJOxqCcLND44UmG2UgaA2xfebMGW5hCWNq2eHE16M
+  # A refusal on an endpoint holding no session worth showing (#1110). The
+  # auditorium's touch panel answers SNMP, and this endpoint reads its
+  # community from the secret holding the one the panel's agent refuses: a
+  # live node's reachability probe meets authorizationError, gates the
+  # endpoint at the session rung and sends no further get, and the console
+  # shows the refusal's reason beside Retry with no session pill. Pointing
+  # the community at the fleet's own secret (sim-community) lifts the gate.
+  - component: auditorium-touch
+    driver: snmp-generic
+    label: Panel SNMP
+    inputs: { community: sim-snmp-revoked }

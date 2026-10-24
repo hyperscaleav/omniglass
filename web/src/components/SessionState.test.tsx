@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, fireEvent, screen, waitFor } from "@solidjs/testing-library";
+import { createSignal } from "solid-js";
 import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
 import SessionPill, { SESSION_LOOK } from "./SessionPill";
 import ReachLadder from "./ReachLadder";
@@ -30,7 +31,7 @@ const rejected = (over: Partial<ReachEndpoint> = {}): ReachEndpoint => ({
   responsive: { value: "up", ts: ago(60_000) },
   authenticated: { value: "no", ts: ago(30_000) },
   session: { state: "rejected", ts: ago(30_000), reason: "auth: auth rejected" },
-  rejection: { rung: "authenticated", class: "auth" },
+  rejection: { rung: "authenticated", class: "auth", ts: "2026-10-23T11:58:00.000Z" },
   layers: [{ layer: "ping", check: "icmp-reachable", value: 1, ts: ago(2_000) }],
   history: [],
   ...over,
@@ -206,6 +207,101 @@ describe("SessionNotice", () => {
 
   it("renders nothing for an up session", () => {
     const { queryByTestId } = mountNotice(rejected({ session: { state: "up", ts: ago(1_000) }, rejection: undefined }));
+    expect(queryByTestId("session-notice")).toBeNull();
+  });
+});
+
+// #1110: an endpoint gated by its reachability probe alone holds no session,
+// and its refusal reads the same as a rejected session's: the same notice, the
+// gate's reason, Retry behind endpoint:retry, and the fix path.
+describe("SessionNotice for a probe's gate, no session held", () => {
+  beforeEach(() => vi.restoreAllMocks());
+
+  const probeGated = (transport: string, rung: "responsive" | "authenticated", cls: string, reason?: string, over: Partial<ReachEndpoint> = {}): ReachEndpoint => ({
+    id: epId,
+    endpoint: transport,
+    label: `Panel ${transport}`,
+    transport,
+    node: "edge-hq",
+    last_seen: ago(2_000),
+    verdict: { value: "down", ts: ago(60_000) },
+    responsive: { value: rung === "responsive" ? "down" : "up", ts: ago(60_000) },
+    rejection: { rung, class: cls, ts: ago(40_000), ...(reason ? { reason } : {}) },
+    layers: [{ layer: "ping", check: "icmp-reachable", value: 1, ts: ago(2_000) }],
+    history: [],
+    ...over,
+  });
+
+  it.each([
+    ["tls", "responsive", "certificate", "certificate: the certificate failed verification: x509: certificate signed by unknown authority"],
+    ["udp", "responsive", "auth", "auth: ERR 401 not authorized"],
+    ["snmp", "authenticated", "auth", "auth: the agent answered authorizationError for the community"],
+    ["ssh", "authenticated", "auth", "auth: the component refused the probe's credential"],
+  ] as const)("says why a %s probe was refused and retries it through :retry", async (transport, rung, cls, reason) => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ id: epId, name: transport, transport }), { status: 200, headers: { "Content-Type": "application/json" } }),
+    );
+    const onFix = vi.fn();
+    const { getByTestId, getByRole, invalidate } = mountNotice(probeGated(transport, rung, cls, reason), operator, onFix);
+    expect(getByTestId("session-notice").dataset.state).toBe("rejected");
+    expect(getByTestId("session-reason").textContent).toBe(reason);
+    fireEvent.click(getByRole("button", { name: "Edit credential" }));
+    expect(onFix).toHaveBeenCalledOnce();
+    const retry = getByRole("button", { name: /retry/i }) as HTMLButtonElement;
+    expect(retry.disabled).toBe(false);
+    fireEvent.click(retry);
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledOnce());
+    const req = fetchMock.mock.calls[0][0] as Request;
+    expect(req.method).toBe("POST");
+    expect(req.url).toContain(`/endpoints/${epId}:retry`);
+    await waitFor(() => expect(invalidate).toHaveBeenCalledWith({ queryKey: [...REACHABILITY_KEY(compId)] }));
+    // Until the gate moves, the button says the retry is in hand.
+    await waitFor(() => expect((getByRole("button", { name: /retry/i }) as HTMLButtonElement).disabled).toBe(true));
+  });
+
+  it("names the class when the gate carries no reason", () => {
+    const { getByTestId } = mountNotice(probeGated("snmp", "authenticated", "auth"));
+    expect(getByTestId("session-reason").textContent).toMatch(/^auth: /);
+  });
+
+  it("greys Retry with its reason for a caller without endpoint:retry, and never calls it", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch");
+    const { getByRole, getByLabelText, getByTestId } = mountNotice(probeGated("snmp", "authenticated", "auth", "auth: the agent answered authorizationError for the community"), viewer);
+    // The refusal still reads, so a viewer can tell an operator what is wrong.
+    expect(getByTestId("session-reason").textContent).toMatch(/authorizationError/);
+    const retry = getByRole("button", { name: /retry/i }) as HTMLButtonElement;
+    expect(retry.disabled).toBe(true);
+    expect(getByLabelText(/needs the endpoint:retry permission/i)).toBeTruthy();
+    fireEvent.click(retry);
+    await new Promise((r) => setTimeout(r, 20));
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  // A retry lifts the gate; a refusal met again sets it anew, at a new time,
+  // and Retry is offered again at once rather than after the wait runs out.
+  it("offers Retry again as soon as the refusal is met again", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ id: epId, name: "snmp", transport: "snmp" }), { status: 200, headers: { "Content-Type": "application/json" } }),
+    );
+    const qc = client(operator);
+    const invalidate = vi.spyOn(qc, "invalidateQueries");
+    const [iface, setIface] = createSignal(probeGated("snmp", "authenticated", "auth", "auth: the agent answered authorizationError for the community"));
+    render(() => (
+      <QueryClientProvider client={qc}>
+        <SessionNotice iface={iface()} component={compId} now={now} />
+      </QueryClientProvider>
+    ));
+    fireEvent.click(screen.getByRole("button", { name: /retry/i }));
+    // The retry landed, and while the gate has not moved it is in hand.
+    await waitFor(() => expect(invalidate).toHaveBeenCalledWith({ queryKey: [...REACHABILITY_KEY(compId)] }));
+    await new Promise((r) => setTimeout(r, 10));
+    expect((screen.getByRole("button", { name: /retry/i }) as HTMLButtonElement).disabled).toBe(true);
+    setIface(probeGated("snmp", "authenticated", "auth", "auth: the agent answered authorizationError for the community", { rejection: { rung: "authenticated", class: "auth", ts: ago(1_000), reason: "auth: the agent answered authorizationError for the community" } }));
+    await waitFor(() => expect((screen.getByRole("button", { name: /retry/i }) as HTMLButtonElement).disabled).toBe(false));
+  });
+
+  it("renders nothing for a probe endpoint with no gate", () => {
+    const { queryByTestId } = mountNotice(probeGated("snmp", "authenticated", "auth", undefined, { rejection: undefined }));
     expect(queryByTestId("session-notice")).toBeNull();
   });
 });
