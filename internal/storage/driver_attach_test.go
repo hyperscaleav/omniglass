@@ -460,8 +460,14 @@ func TestNodeWorklistDeliversSecretInputs(t *testing.T) {
 	if got := driverTask.Secrets["community"]["community"]; got != "very-secret" {
 		t.Fatalf("driver task secrets = %v, want the community field unsealed", driverTask.Secrets)
 	}
-	if len(reachTask.Secrets) != 0 {
-		t.Fatalf("the reachability task carries secrets it has no use for: %v", reachTask.Secrets)
+	// snmp's reachability probe is a get carrying the community (#821): the
+	// probe gets the one credential its rung sends, and the rung's request,
+	// sysUpTime.0 by default.
+	if got := reachTask.Secrets["community"]["community"]; got != "very-secret" || len(reachTask.Secrets) != 1 {
+		t.Fatalf("the snmp reachability task's secrets = %v, want the community alone", reachTask.Secrets)
+	}
+	if reachTask.Ladder == nil || reachTask.Ladder.Request == nil || len(reachTask.Ladder.Request.Get) != 1 || reachTask.Ladder.Request.Get[0] != "1.3.6.1.2.1.1.3.0" {
+		t.Fatalf("the snmp reachability task's ladder = %+v, want the sysUpTime get", reachTask.Ladder)
 	}
 }
 
