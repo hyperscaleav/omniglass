@@ -16,6 +16,13 @@ import (
 type TerminalError struct {
 	Class  string
 	Reason string
+	// Pinned and Offered are set on a refusal of a changed key (a tls
+	// certificate's public key that differs from the pin, #1035): the key
+	// the endpoint pins and the key the component now offers, each a
+	// SHA256 fingerprint, carried as data so no surface parses them out of
+	// Reason. Empty on every other refusal.
+	Pinned  string
+	Offered string
 }
 
 func (e *TerminalError) Error() string { return e.Class + ": " + e.Reason }

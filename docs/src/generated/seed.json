@@ -281,6 +281,18 @@
    "description": "The SHA256 fingerprint of the host key an ssh session trusts, per endpoint. The node records the first key it sees (trust on first use) and every connection that matches it; a changed key is refused, and the session reads rejected with class host-key naming both fingerprints until an operator retries the endpoint with the new key, which lands here as the declared value."
   },
   {
+   "name": "tls-certificate",
+   "data_type": "string",
+   "label": "TLS Certificate Key",
+   "description": "The SHA256 fingerprint of the public key a tls endpoint pins, per endpoint, in the form ssh fingerprints a host key in. In pin mode the node records the first key it is offered (trust on first use) and every connection that matches it; a renewal that keeps the key is no change, and a changed key is refused, the session reading rejected with class certificate naming both fingerprints, until an operator retries the endpoint with the new key, which lands here as the declared value."
+  },
+  {
+   "name": "tls-certificate-expiry",
+   "data_type": "string",
+   "label": "TLS Certificate Expiry",
+   "description": "The not-after of the certificate a tls probe accepted (RFC 3339, UTC), per endpoint, stored on change. The days left beside it, tls-certificate-days-left, is the number a rule reads."
+  },
+  {
    "name": "endpoint-rejection",
    "data_type": "string",
    "label": "Endpoint Rejection",
@@ -390,6 +402,20 @@
    "unit": "ms",
    "label": "Telnet Response Time",
    "description": "Time for a telnet port to send its first bytes (an option negotiation or a banner) after the connection opened; absent when the port accepted and stayed silent."
+  },
+  {
+   "name": "tls-handshake-time",
+   "data_type": "float",
+   "unit": "ms",
+   "label": "TLS Handshake Time",
+   "description": "Time for the TLS handshake to reach the certificate after the connection opened, one observation per probe the component answered; absent when it never answered the handshake."
+  },
+  {
+   "name": "tls-certificate-days-left",
+   "data_type": "float",
+   "unit": "d",
+   "label": "TLS Certificate Days Left",
+   "description": "Days from the probe to the not-after of the certificate a tls probe accepted, to the hundredth, negative once it has expired; one observation per probe, the number a threshold rule reads (an expression cannot read the clock)."
   }
  ],
  "event_types": [
