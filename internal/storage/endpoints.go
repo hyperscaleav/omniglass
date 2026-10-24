@@ -8,7 +8,6 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/collection/rejection"
 	"github.com/hyperscaleav/omniglass/internal/driver"
 	"regexp"
-	"strconv"
 	"strings"
 	"time"
 
@@ -65,22 +64,17 @@ func checkBareParams(transportName string, params []byte) error {
 }
 
 // checkListenPort refuses a bare udp endpoint's listen port the node could
-// not bind (#1037): a port, as a number or a numeral.
+// not bind (#1037), through the reading the node itself uses.
 func checkListenPort(p map[string]any) error {
 	raw, ok := p[driver.ListenPortInput]
 	if !ok {
 		return nil
 	}
-	var v string
-	switch x := raw.(type) {
-	case string:
-		v = x
-	case float64:
-		v = strconv.FormatFloat(x, 'f', -1, 64)
-	default:
-		v = fmt.Sprint(x)
+	b, err := json.Marshal(raw)
+	if err != nil {
+		return fmt.Errorf("params.%s: %w", driver.ListenPortInput, err)
 	}
-	if n, err := strconv.Atoi(v); err != nil || n < 1 || n > 65535 {
+	if _, err := driver.ParseListenPort(b); err != nil {
 		return fmt.Errorf("params.%s must be a port, 1 to 65535, and %v is not", driver.ListenPortInput, raw)
 	}
 	return nil

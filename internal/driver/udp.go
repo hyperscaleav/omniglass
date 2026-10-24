@@ -1,7 +1,9 @@
 package driver
 
 import (
+	"encoding/json"
 	"fmt"
+	"math"
 	"strconv"
 )
 
@@ -43,6 +45,36 @@ func (s *Spec) validateUDPInputs() error {
 		}
 	}
 	return nil
+}
+
+// ParseListenPort reads a listen port off its params value: a JSON number or
+// a numeral, 1 to 65535. Absent, null and "" are unset and read 0. It is the
+// one reading the write path and the node share, so a value the write
+// accepts is one the node binds.
+func ParseListenPort(raw json.RawMessage) (int, error) {
+	if len(raw) == 0 || string(raw) == "null" {
+		return 0, nil
+	}
+	var n float64
+	var s string
+	switch {
+	case json.Unmarshal(raw, &s) == nil:
+		if s == "" {
+			return 0, nil
+		}
+		i, err := strconv.Atoi(s)
+		if err != nil {
+			return 0, fmt.Errorf("%s %s is not a port (1 to 65535)", ListenPortInput, raw)
+		}
+		n = float64(i)
+	case json.Unmarshal(raw, &n) == nil:
+	default:
+		return 0, fmt.Errorf("%s %s is not a port (1 to 65535)", ListenPortInput, raw)
+	}
+	if n != math.Trunc(n) || n < 1 || n > 65535 {
+		return 0, fmt.Errorf("%s %s is not a port (1 to 65535)", ListenPortInput, raw)
+	}
+	return int(n), nil
 }
 
 func checkPort(v string) error {

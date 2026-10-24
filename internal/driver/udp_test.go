@@ -1,6 +1,7 @@
 package driver_test
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 
@@ -124,5 +125,40 @@ func TestRenderRequestKeepsRetries(t *testing.T) {
 	}
 	if got.Line != "SET INPUT hdmi2" || got.RetriesOr(driver.DefaultCommandRetries) != 2 {
 		t.Fatalf("rendered %+v, want the line and the declared retries", got)
+	}
+}
+
+// One parse of a listen port for every reader (#1037): the write path and
+// the node accept the same set, so a value the write accepts is a port the
+// node binds, and unset reads the same on both.
+func TestParseListenPortIsTheOneReading(t *testing.T) {
+	for _, tc := range []struct {
+		raw  string
+		want int
+		bad  bool
+	}{
+		{raw: ``, want: 0},
+		{raw: `null`, want: 0},
+		{raw: `""`, want: 0},
+		{raw: `51400`, want: 51400},
+		{raw: `51400.0`, want: 51400},
+		{raw: `"51400"`, want: 51400},
+		{raw: `0`, bad: true},
+		{raw: `65536`, bad: true},
+		{raw: `514.5`, bad: true},
+		{raw: `"x"`, bad: true},
+		{raw: `true`, bad: true},
+		{raw: `[1]`, bad: true},
+	} {
+		got, err := driver.ParseListenPort(json.RawMessage(tc.raw))
+		if tc.bad {
+			if err == nil {
+				t.Errorf("ParseListenPort(%s) = %d, want a refusal", tc.raw, got)
+			}
+			continue
+		}
+		if err != nil || got != tc.want {
+			t.Errorf("ParseListenPort(%s) = %d, %v, want %d", tc.raw, got, err, tc.want)
+		}
 	}
 }
