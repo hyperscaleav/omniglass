@@ -57,11 +57,11 @@ List open PRs and split them by the marker line:
   resolved (merge the base in, never rebase a pushed branch), red CI root-caused and
   fixed, human review comments implemented or answered, reviewer re-requested after
   pushing. The logs cannot conflict (each build-log entry, ADR, and anti-pattern is its own
-  file, #1095), so check by hand that main has not taken your ADR number: a decisions-lint
-  failure naming two files after the merge means it has, and
-  `make adr-renumber FROM=NNNN TO=MMMM FILE=adr-NNNN-<yours>.md` moves yours
-  (`/record-decision`). A conflict in a generated file is resolved by `make gen`, never by
-  hand. A PR that is green, mergeable, and waiting only on the architect is left
+  file, #1095), and an ADR is numbered by its issue (#1108), so it cannot collide either,
+  except when two PRs add the same issue's next suffix: a decisions-lint failure naming two
+  files means that, and `make adr-renumber FROM=NNNN.2 TO=NNNN.3 FILE=adr-NNNN.2-<yours>.md`
+  moves yours (`/record-decision`). A conflict in a generated file is resolved by `make gen`,
+  never by hand. A PR that is green, mergeable, and waiting only on the architect is left
   alone; note it for the report.
 - **Every other PR belongs to the architect.** Never push to one. If it blocks the day's
   candidate slice (same files, same seam), pick a different slice rather than building a
