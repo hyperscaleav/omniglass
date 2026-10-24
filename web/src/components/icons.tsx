@@ -111,6 +111,11 @@ export const Eye: Component<P> = (p) => (
 export const Key: Component<P> = (p) => (
   <Svg size={p.size}><circle cx="7.5" cy="15.5" r="4.5" /><path d="M10.7 12.3 20 3" /><path d="m17 6 2 2" /><path d="m14 9 2 2" /></Svg>
 );
+// ShieldCheck is trusting a key (#1078): a decision about who the node may
+// talk to, not a retry.
+export const ShieldCheck: Component<P> = (p) => (
+  <Svg size={p.size}><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z" /><path d="m9 12 2 2 4-4" /></Svg>
+);
 export const EyeOff: Component<P> = (p) => (
   <Svg size={p.size}><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c6.5 0 10 8 10 8a13.2 13.2 0 0 1-1.67 2.68" /><path d="M6.61 6.61A13.5 13.5 0 0 0 2 12s3.5 8 10 8a9.1 9.1 0 0 0 5.39-1.61" /><line x1="2" y1="2" x2="22" y2="22" /></Svg>
 );

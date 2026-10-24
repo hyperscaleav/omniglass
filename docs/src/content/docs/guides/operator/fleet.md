@@ -377,7 +377,8 @@ on its label's tooltip.
 **Collection** shows each endpoint with its reachability ladder (the ping answers the path, the
 transport answers the service, the login answers the credential; each rung teaches itself on
 hover), a held session's state where the endpoint holds one, with why and **Retry** when it was
-rejected ([held sessions](/guides/operator/collection/#held-sessions)), the node, its state, and when
+rejected, and both keys with **Trust this key** when what changed was the component's host key
+([held sessions](/guides/operator/collection/#held-sessions)), the node, its state, and when
 it was last seen: when the server last
 received anything the endpoint's task delivered, not its last up/down change (hours old on an
 endpoint that never stopped answering) and not a time the node wrote on a sample. A driver

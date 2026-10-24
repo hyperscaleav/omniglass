@@ -1319,7 +1319,7 @@ export interface paths {
         put?: never;
         /**
          * Retry an endpoint's gated connections
-         * @description Moves the endpoint's retry counter, which is part of its connection fingerprint: a gate a refusal retrying cannot fix holds (a wrong credential, a changed host key, a reply its driver declares terminal) lifts, the node recycles the endpoint's held session, and every connection to it is attempted again. Fixing the secret, the address, the transport or the driver's login needs no retry: the change moves the fingerprint itself. An unrelated edit (a label) moves nothing. For an ssh endpoint, host_key names a host key to trust (the offered key a host-key rejection names): it becomes the declared pin and recycles the session onto it whatever its state, an audited acceptance of the change. Audited. Gated by endpoint:retry; read and retry scopes (through the component) drive the 404 versus 403 split.
+         * @description Moves the endpoint's retry counter, which is part of its connection fingerprint: a gate a refusal retrying cannot fix holds (a wrong credential, a changed host key, a reply its driver declares terminal) lifts, the node recycles the endpoint's held session, and every connection to it is attempted again. Fixing the secret, the address, the transport or the driver's login needs no retry: the change moves the fingerprint itself. An unrelated edit (a label) moves nothing. For an ssh endpoint, host_key names a host key to trust (the offered key a host-key rejection names): it becomes the declared pin and recycles the session onto it whatever its state, an audited acceptance of the change. While the endpoint's gate names an offered key, host_key must be that key, so a trust confirmed against a refusal the record has since moved past is a 409 and changes nothing. Audited, a trusted key with the pin it replaced (old) and the pin it set (new). Gated by endpoint:retry; read and retry scopes (through the component) drive the 404 versus 403 split.
          */
         post: operations["retry-endpoint"];
         delete?: never;
@@ -8040,6 +8040,10 @@ export interface components {
         ReachRejectionBody: {
             /** @description The refusal's class: auth, host-key, certificate or protocol */
             class: string;
+            /** @description A refusal of a changed key only: the SHA256 fingerprint of the key the component offered instead. Trusting it is POST /endpoints/{id}:retry with this exact value as host_key; while the refusal holds, any other value is refused (409) */
+            offered_key?: string;
+            /** @description A refusal of a changed key only (class host-key, or certificate for a pinned tls key): the SHA256 fingerprint of the key the endpoint pins, as the node refused against it. Present with offered_key or not at all */
+            pinned_key?: string;
             /**
              * @description The ladder rung the refusal holds: responsive for a host key, certificate or protocol refusal, authenticated for a credential. Nothing at or above it is attempted until the connection fingerprint moves
              * @enum {string}
@@ -8306,7 +8310,7 @@ export interface components {
              * @example /api/v1/schemas/RetryEndpointInputBody.json
              */
             readonly $schema?: string;
-            /** @description An ssh endpoint only: the SHA256 fingerprint of a changed host key the operator now trusts (the offered key a host-key rejection names). It becomes the endpoint's declared ssh-host-key pin, and the session redials onto it. Omit to retry with the pin unchanged */
+            /** @description An ssh endpoint only: the SHA256 fingerprint of a changed host key the operator now trusts (the offered_key a host-key rejection names on the component's reachability read). It becomes the endpoint's declared ssh-host-key pin, and the session redials onto it. While a key refusal holds, it must be that exact offered key: any other is a 409 that changes nothing (the refusal on record is the node's last word, so to trust a key the component presents since, retry without a host key first). With no key refusal held it declares a pin ahead of time. Omit to retry with the pin unchanged */
             host_key?: string;
         };
         RevealSecretOutputBody: {

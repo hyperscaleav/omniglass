@@ -2,12 +2,24 @@ import { Show, createSignal, type Component } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import Button from "./Button";
 import Eyebrow from "./Eyebrow";
+import PinnedKeyNotice, { TrustKeyButton } from "./PinnedKeyNotice";
 import { RotateCcw, Sliders } from "./icons";
 import { useMe } from "../lib/auth";
+import { entityLabel } from "../lib/entities";
 import { describeError } from "../lib/format";
 import { ENDPOINTS_KEY } from "../lib/endpoints";
 import { REACHABILITY_KEY, type ReachEndpoint } from "../lib/reachability";
-import { RETRY_PENDING_KEY, retryEndpoint, retryRefusal, retryWaiting, sessionShowsReason, type RetryPending } from "../lib/session";
+import {
+  RETRY_PENDING_KEY,
+  keyChangedHint,
+  keyNoun,
+  keyRefusal,
+  retryEndpoint,
+  retryRefusal,
+  retryWaiting,
+  sessionShowsReason,
+  type RetryPending,
+} from "../lib/session";
 
 // SessionNotice says why an endpoint's held session is down or rejected
 // (#1059): the session-reason the node published at the transition (a
@@ -27,6 +39,12 @@ import { RETRY_PENDING_KEY, retryEndpoint, retryRefusal, retryWaiting, sessionSh
 // redials while the node has not picked up the first. The retry in hand lives
 // in the query cache under the endpoint (lib/session), so every notice for the
 // endpoint holds it, not only the one clicked.
+//
+// A refusal of a changed key (#1078) names both keys in place of the reason,
+// read off the gate as data (PinnedKeyNotice), and leads its ways out with
+// Trust this key, which declares the offered key as the new pin after a
+// confirm. The node's reason names the same two keys in prose, so it is not
+// repeated beside them.
 
 export default function SessionNotice(props: {
   iface: ReachEndpoint;
@@ -52,6 +70,7 @@ export default function SessionNotice(props: {
     staleTime: Infinity,
   }));
   const rejected = () => props.iface.session?.state === "rejected";
+  const keys = () => (rejected() ? keyRefusal(props.iface) : null);
   const refusal = () => retryRefusal(me.data);
   const waiting = () => retryWaiting(pending.data, props.iface.session?.ts, props.now);
 
@@ -82,17 +101,43 @@ export default function SessionNotice(props: {
         class="flex flex-col gap-1.5 rounded-box border px-3 py-2 text-xs"
         classList={{ "border-warning/40 bg-warning/5": rejected(), "border-error/40 bg-error/5": !rejected() }}
       >
-        <Eyebrow
-          label={rejected() ? "Why it was refused" : "Why it is down"}
-          hint={
-            rejected()
-              ? "The component's own words, after the class the driver or the transport gave them. The node dials no more until something it connects with changes (the credential, the address, the port) or someone retries it."
-              : "The node's account of the last attempt. It keeps redialing at a slow pace, so a component that returns comes back up on its own."
+        <Show
+          when={keys()}
+          fallback={
+            <>
+              <Eyebrow
+                label={rejected() ? "Why it was refused" : "Why it is down"}
+                hint={
+                  rejected()
+                    ? "The component's own words, after the class the driver or the transport gave them. The node dials no more until something it connects with changes (the credential, the address, the port) or someone retries it."
+                    : "The node's account of the last attempt. It keeps redialing at a slow pace, so a component that returns comes back up on its own."
+                }
+              />
+              <p data-testid="session-reason" class="break-words font-data text-[11.5px] text-base-content/80">{props.iface.session?.reason}</p>
+            </>
           }
-        />
-        <p data-testid="session-reason" class="break-words font-data text-[11.5px] text-base-content/80">{props.iface.session?.reason}</p>
+        >
+          {(k) => (
+            <>
+              <Eyebrow label={`The ${keyNoun(k().class)} changed`} hint={keyChangedHint(k().class)} />
+              <PinnedKeyNotice refusal={k()} />
+            </>
+          )}
+        </Show>
         <Show when={rejected() && props.iface.id}>
           <div class="flex flex-wrap items-center gap-2">
+            <Show when={keys()}>
+              {(k) => (
+                <TrustKeyButton
+                  endpointID={props.iface.id!}
+                  component={props.component}
+                  endpointLabel={entityLabel({ name: props.iface.endpoint, label: props.iface.label })}
+                  refusal={k()}
+                  sessionTS={props.iface.session?.ts}
+                  now={props.now}
+                />
+              )}
+            </Show>
             <Show
               when={refusal()}
               fallback={

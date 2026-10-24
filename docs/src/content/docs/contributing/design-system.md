@@ -196,11 +196,21 @@ staleness window takes the grey `badge-ghost` chip, its tooltip saying what it l
 and a held rung amber with the refusal glyph. A list whose rows hold state (an expanded row, a retry
 waiting on its session) keys its rows by id, never by the objects a poll hands back.
 
+A refusal of a changed key (#1078) renders `PinnedKeyNotice` in place of the reason: the **pinned**
+and the **offered** key, each a `KVStacked` fact whose `hint` (an `(i)` beside the label) says what
+the key is, read off the gate as data. `TrustKeyButton` beside Retry opens a `ConfirmDialog`, the
+console's confirm for a decision that needs reading first (a centred Kobalte `AlertDialog`, its rail
+the one `PanelFooter`, the focus on Cancel when it opens): the confirm repeats both keys and teaches
+**Why a key changes** as three chips, each an `InfoTip` trigger, the man in the middle on the
+warning hue and the two routine causes on the neutral chip. Both are generic over the class, so a
+tls certificate's pinned key renders the same. A delete keeps the browser's own `confirm()`; a
+confirm whose body has to teach cannot be a native prompt.
+
 ## Primitives (the reuse target)
 
-`ListShell` (with its `FlatList` / `TreeList` bodies), `FilterBar`, `Drawer`, `PanelFooter`,
-`Badge`, `Page`, `DataTable`, `IdentityCell`, `KVStacked` / `KVRow` / `FieldRow` / `BladeField`,
-`CommandPalette`, plus the `Sidebar` / `TopBar` shell. New inventory pages consume these; new
+`ListShell` (with its `FlatList` / `TreeList` bodies), `FilterBar`, `Drawer`, `ConfirmDialog`,
+`PanelFooter`, `Badge`, `Page`, `DataTable`, `IdentityCell`, `KVStacked` / `KVRow` / `FieldRow` /
+`BladeField`, `CommandPalette`, plus the `Sidebar` / `TopBar` shell. New inventory pages consume these; new
 surface *classes* (dashboards, alarms, explore, learn) add their own primitive rather than
 bending `ListShell`.
 
@@ -217,7 +227,8 @@ accepted types) never leads an operator view. Ruled 2026-08-20 (#790); the platf
 of the remaining pages is #784.
 
 - **`KVStacked`** is a **fact**: an eyebrow label above a value. It is what a detail grid cell is,
-  and it is also the read state of a field.
+  and it is also the read state of a field. A `hint` puts an `(i)` beside its label, the fact's
+  form of `FieldRow`'s tooltip.
 - **`FieldRow`** is a **form field**: the same eyebrow label above a control, with an optional
   `(i)` tooltip beside the label and a hint below. It generates the control's id and points
   `<label for>` at it, keeping the tooltip trigger outside the `<label>` so a labelable button

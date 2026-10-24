@@ -273,6 +273,11 @@ last read. A rejected session offers **Retry** (`:retry`, gated `endpoint:retry`
 reason for a caller without it) and the way into the endpoint's edit, where pointing the credential
 at the right secret moves the fingerprint. The [collection guide](/guides/operator/collection/#held-sessions)
 teaches it, and the `fix-a-rejected-session` walkthrough drives it against the simulated panel.
+A refusal of a changed key (#1078) names both keys, the pinned and the offered, which the gate
+carries as data, and offers **Trust this key**: a confirm that teaches why a key changes, then
+`:retry` with exactly the offered key it showed as `host_key`, which the server refuses (409) unless
+the refusal on record still names it ([ADR-0159](/architecture/decisions/#adr-0159-a-refused-keys-evidence-rides-its-gate-and-trusting-a-key-is-checked-against-the-one-offered));
+the `trust-a-changed-host-key` walkthrough drives it against the simulated panel's ssh console.
 
 ### The connection fingerprint and the layered gate
 
@@ -298,8 +303,10 @@ over every input a connection is made with (the transport, the declared params, 
 inputs, a digest of each attached secret's sealed envelope, never its plaintext, the session block,
 the ladder, the ssh pin, and the `:retry` counter). The rungs below keep running, so reachability
 stays observed while auth is rejected. The gate is published as `endpoint-rejection` (`<rung>
-<class> <fingerprint>`, or `none`) and carried back on the worklist, so a restarted node makes no
-attempt against an unchanged fingerprint. The ssh probe's params credential rides the same gate
+<class> <fingerprint>`, or `none`; a refusal of a changed key appends `<pinned-key> <offered-key>`,
+its evidence, [ADR-0159](/architecture/decisions/#adr-0159-a-refused-keys-evidence-rides-its-gate-and-trusting-a-key-is-checked-against-the-one-offered))
+and carried back on the worklist, so a restarted node makes no attempt against an unchanged
+fingerprint and keeps the evidence it adopts. The ssh probe's params credential rides the same gate
 (#1060): tried once, then the key exchange runs without it until the fingerprint moves, and never
 past a pinned key that changed. Proven end to end (`run_session_identity_test.go`): a silent panel
 spends the login budget, then a label edit and a node restart try nothing, while a retry, a
@@ -363,9 +370,11 @@ userauth the session's auth step with the credential the driver names (`session.
 username with a password or a private key, or keyboard-interactive answered by the login dialog). A
 refused credential is `auth`, and the **host key is pinned on first use**: the node trusts the first
 key it sees and publishes it as `ssh-host-key`, the server delivers it back as the pin on every
-worklist, and a changed key reads `rejected`, class `host-key`, naming both fingerprints. An
-operator who trusts the new key (a replaced component) retries the endpoint with it
-(`:retry` with `host_key`, audited), which declares the new pin and redials onto it. Proven against
+worklist, and a changed key reads `rejected`, class `host-key`, naming both fingerprints, which
+the gate carries as data. An operator who trusts the new key (a replaced component) retries the
+endpoint with it (`:retry` with `host_key`, audited with both keys; the console's **Trust this
+key**), which declares the new pin and redials onto it; a key the refusal on record does not name is
+refused. Proven against
 the simulated panel's ssh shell (poll, command, push, recover onto the same key, down after the
 budget, a wrong password and a rotated key each rejected) and end to end ([ADR-0157](/architecture/decisions/#adr-0157-telnet-and-ssh-are-held-line-transports-their-login-is-the-drivers-and-the-ssh-host-key-is-pinned-on-first-use)).
 The other held transports are each their own

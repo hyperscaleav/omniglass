@@ -1,6 +1,20 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { STALENESS_WINDOW_MS, type ReachEndpoint } from "./reachability";
-import { ladder, rungHint, sessionWord, sessionShowsReason, retryRefusal, retryEndpoint, retryWaiting, RETRY_WAIT_MS } from "./session";
+import {
+  ladder,
+  rungHint,
+  sessionWord,
+  sessionShowsReason,
+  retryRefusal,
+  retryEndpoint,
+  retryWaiting,
+  RETRY_WAIT_MS,
+  keyRefusal,
+  keyNoun,
+  trustOfferedKey,
+  trustRefusal,
+  KEY_CHANGE_CAUSES,
+} from "./session";
 import { uuidFor } from "./testids";
 
 const now = Date.parse("2026-10-23T12:00:00Z");
@@ -161,5 +175,62 @@ describe("retry", () => {
   it("names the permission a caller lacks, and refuses nothing for one who holds it", () => {
     expect(retryRefusal({ permissions: ["*:read"] } as never)).toMatch(/endpoint:retry/);
     expect(retryRefusal({ permissions: ["endpoint:retry"] } as never)).toBeNull();
+  });
+});
+
+// A refusal of a changed key (#1078): the gate carries both keys as data, so
+// the console names them and trusts the exact offered one without reading the
+// reason. Half a pair, or a refusal that is not about a key, is no evidence.
+describe("keyRefusal", () => {
+  const pinned = "SHA256:" + "A".repeat(43);
+  const offered = "SHA256:" + "B".repeat(43);
+  it("reads both keys and the class off the gate, never the reason", () => {
+    const e = ep({
+      session: { state: "rejected", ts: ago(1_000), reason: "host-key: the host key changed: pinned SHA256:xxx, offered SHA256:yyy" },
+      rejection: { rung: "responsive", class: "host-key", pinned_key: pinned, offered_key: offered },
+    });
+    expect(keyRefusal(e)).toEqual({ class: "host-key", pinned, offered });
+  });
+  it("is null without both keys, or without a gate", () => {
+    expect(keyRefusal(ep({ rejection: { rung: "responsive", class: "host-key", offered_key: offered } }))).toBeNull();
+    expect(keyRefusal(ep({ rejection: { rung: "authenticated", class: "auth" } }))).toBeNull();
+    expect(keyRefusal(ep({}))).toBeNull();
+  });
+  it("names the key by its class, so a certificate's pinned key reads as one", () => {
+    expect(keyNoun("host-key")).toBe("host key");
+    expect(keyNoun("certificate")).toBe("certificate key");
+    expect(keyNoun("something-new")).toBe("key");
+  });
+  it("teaches the three ways a key changes, each with its own hint", () => {
+    expect(KEY_CHANGE_CAUSES.map((c) => c.label)).toEqual(["Reinstalled", "Hardware swapped", "Man in the middle"]);
+    for (const c of KEY_CHANGE_CAUSES) expect(c.hint.length).toBeGreaterThan(20);
+  });
+});
+
+describe("trustOfferedKey", () => {
+  beforeEach(() => vi.restoreAllMocks());
+
+  it("posts :retry with the exact key it is given as host_key", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ id: uuidFor("ep-1"), name: "ssh", transport: "ssh" }), { status: 200, headers: { "Content-Type": "application/json" } }),
+    );
+    const key = "SHA256:" + "B".repeat(43);
+    await trustOfferedKey(uuidFor("ep-1"), key);
+    const req = fetchMock.mock.calls[0][0] as Request;
+    expect(req.method).toBe("POST");
+    expect(req.url).toContain(`/api/v1/endpoints/${uuidFor("ep-1")}:retry`);
+    expect(await req.json()).toEqual({ host_key: key });
+  });
+
+  it("throws the server's refusal, so the confirm can say why", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ title: "Conflict", status: 409, detail: "the component now offers SHA256:zzz" }), { status: 409, headers: { "Content-Type": "application/problem+json" } }),
+    );
+    await expect(trustOfferedKey(uuidFor("ep-1"), "SHA256:" + "B".repeat(43))).rejects.toMatchObject({ detail: expect.stringMatching(/now offers/) });
+  });
+
+  it("names the permission a caller lacks", () => {
+    expect(trustRefusal({ permissions: ["*:read"] } as never)).toMatch(/endpoint:retry/);
+    expect(trustRefusal({ permissions: ["endpoint:retry"] } as never)).toBeNull();
   });
 });

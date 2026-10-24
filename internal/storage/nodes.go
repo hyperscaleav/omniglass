@@ -534,23 +534,12 @@ func (p *PG) NodeWorklist(ctx context.Context, name string) (Worklist, error) {
 	// held under the first fingerprint.
 	declaredPin := map[int]string{}
 	for _, pr := range pins {
-		var declared string
-		if err := p.pool.QueryRow(ctx, `
-			select coalesce(
-				(select nullif(value, 'null'::jsonb) #>> '{}' from property
-				 where owner_kind = 'component' and component_id = $1::uuid and instance = $2 and provenance = 'declared'
-				   and property_type_id = (select id from property_type where name = 'ssh-host-key')
-				 order by id desc limit 1), ''),
-				coalesce((select value #>> '{}' from property
-				 where owner_kind = 'component' and component_id = $1::uuid and instance = $2 and provenance = 'observed'
-				   and property_type_id = (select id from property_type where name = 'ssh-host-key')
-				 order by ts desc, id desc limit 1), '')`, pr.componentID, pr.instance).Scan(&declared, &wl.Tasks[pr.idx].HostKey); err != nil {
-			return Worklist{}, fmt.Errorf("storage: node worklist %q host key: %w", name, err)
+		declared, pin, err := hostKeyPin(ctx, p.pool, pr.componentID, pr.instance)
+		if err != nil {
+			return Worklist{}, fmt.Errorf("storage: node worklist %q: %w", name, err)
 		}
 		declaredPin[pr.idx] = declared
-		if declared != "" {
-			wl.Tasks[pr.idx].HostKey = declared
-		}
+		wl.Tasks[pr.idx].HostKey = pin
 	}
 	// The rejection a node published for the endpoint (its gate), and the
 	// connection fingerprint each task is judged against (#1056 ruling).
@@ -561,12 +550,9 @@ func (p *PG) NodeWorklist(ctx context.Context, name string) (Worklist, error) {
 			key := cid + "\x00" + t.EndpointName
 			rej, seen := rejections[key]
 			if !seen {
-				if err := p.pool.QueryRow(ctx, `
-					select coalesce((select value #>> '{}' from property
-					 where owner_kind = 'component' and component_id = $1::uuid and instance = $2 and provenance = 'observed'
-					   and property_type_id = (select id from property_type where name = 'endpoint-rejection')
-					 order by ts desc, id desc limit 1), '')`, cid, t.EndpointName).Scan(&rej); err != nil {
-					return Worklist{}, fmt.Errorf("storage: node worklist %q rejection: %w", name, err)
+				var err error
+				if rej, err = latestRejection(ctx, p.pool, cid, t.EndpointName); err != nil {
+					return Worklist{}, fmt.Errorf("storage: node worklist %q: %w", name, err)
 				}
 				rejections[key] = rej
 			}

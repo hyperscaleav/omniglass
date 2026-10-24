@@ -312,8 +312,7 @@ func collectSSHProbe(ctx context.Context, runner *collection.Runner, task collec
 	}
 	switch {
 	case res.HostKeyChanged:
-		sessions.refuse(task.EndpointID, task.Fingerprint, &collection.TerminalError{Class: driver.ClassHostKey, Reason: fmt.Sprintf(
-			"the host key changed: pinned %s, offered %s; retry the endpoint with the offered key to trust it", t.HostKeyPin, res.OfferedKey)})
+		sessions.refuse(task.EndpointID, task.Fingerprint, collection.HostKeyRefusal(t.HostKeyPin, res.OfferedKey))
 	case res.AuthAttempted && !res.Authenticated:
 		sessions.refuse(task.EndpointID, task.Fingerprint, &collection.TerminalError{Class: driver.ClassAuth, Reason: "the component refused the probe's credential"})
 	case res.Authenticated:

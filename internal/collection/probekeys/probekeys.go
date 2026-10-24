@@ -40,7 +40,9 @@ const (
 	// EndpointRejection is an endpoint's gate (#1056 ruling, ADR-0158): the
 	// ladder rung a terminal refusal holds, its class, and the connection
 	// fingerprint it holds for ("authenticated auth <fingerprint>"), or
-	// "none". The worklist carries it back, so a restarted node honours it.
+	// "none"; a refusal of a changed key appends the pinned and the offered
+	// key (#1078, ADR-0159; internal/collection/rejection reads the shape).
+	// The worklist carries it back, so a restarted node honours it.
 	EndpointRejection = "endpoint-rejection"
 )
 

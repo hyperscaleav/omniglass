@@ -250,3 +250,127 @@ func TestATrustedOnFirstUseKeyLeavesTheFingerprint(t *testing.T) {
 		t.Fatal("a key trusted on first use moved the fingerprint")
 	}
 }
+
+// Trusting a changed key from a refusal (#1078): the key a :retry pins while
+// the endpoint's gate names an offered key must be that key, so a confirm the
+// operator answered against a key the component has since stopped offering
+// (it changed again, or something else now answers) is refused and changes
+// nothing; the accepted trust is audited with the pin it replaced, the pin it
+// set, and the actor. With no key refusal held, a host key is a pin declared
+// ahead of time, as before.
+func TestTrustingAKeyChecksTheOfferedKeyAndAuditsBoth(t *testing.T) {
+	if testing.Short() {
+		t.Skip("integration test needs Postgres")
+	}
+	ctx := context.Background()
+	dsn := storagetest.NewDSN(t)
+	gw, err := storage.NewPG(ctx, dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer gw.Close()
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatal(err)
+	}
+	_, hash, prefix, err := auth.NewBearerToken()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := gw.BootstrapOwner(ctx, storage.OwnerSpec{Username: "root", SecretHash: hash, Prefix: prefix}); err != nil {
+		t.Fatal(err)
+	}
+	conn, err := pgx.Connect(ctx, dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close(ctx)
+	var actor string
+	if err := conn.QueryRow(ctx, `select principal_id from human where username = 'root'`).Scan(&actor); err != nil {
+		t.Fatal(err)
+	}
+	all := scope.Set{All: true}
+	comp, node := "codec-2", "edge-t"
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: comp}, all, all, all, all); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: node}, all, all); err != nil {
+		t.Fatal(err)
+	}
+	ep, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{Transport: "ssh", Component: &comp, Node: &node,
+		Params: []byte(`{"target":"10.0.0.10:22"}`)}, all)
+	if err != nil {
+		t.Fatal(err)
+	}
+	first, shown, now := "SHA256:"+strings.Repeat("F", 43), "SHA256:"+strings.Repeat("S", 43), "SHA256:"+strings.Repeat("N", 43)
+	observe := func(key, value string) {
+		t.Helper()
+		if err := gw.InsertPropertySamples(ctx, []storage.PropertySampleWrite{{OwnerKind: "component", OwnerID: comp, Key: key,
+			Instance: ep.Name, Value: value, Source: "ssh", TS: time.Now()}}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	task := func() storage.WorklistTask {
+		t.Helper()
+		wl, err := gw.NodeWorklist(ctx, node)
+		if err != nil || len(wl.Tasks) == 0 {
+			t.Fatalf("worklist: %v %+v", err, wl)
+		}
+		return wl.Tasks[0]
+	}
+	audits := func() int {
+		t.Helper()
+		var n int
+		if err := conn.QueryRow(ctx, `select count(*) from audit_log where resource = 'endpoint' and verb = 'retry' and resource_id = $1`, ep.ID).Scan(&n); err != nil {
+			t.Fatal(err)
+		}
+		return n
+	}
+
+	// The node trusted the first key, then the component offered another: the
+	// console showed `shown`. Before the operator confirmed, the component
+	// changed again and the node published the gate naming `now`.
+	observe("ssh-host-key", first)
+	observe("endpoint-rejection", "responsive host-key "+task().Fingerprint+" "+first+" "+now)
+	before := task()
+	if _, err := gw.RetryEndpoint(ctx, actor, ep.ID, shown, all, all); !errors.Is(err, storage.ErrRetryHostKeyStale) {
+		t.Fatalf("trusting a key the component no longer offers = %v, want stale", err)
+	} else if !strings.Contains(err.Error(), now) || !strings.Contains(err.Error(), "on record") || !strings.Contains(err.Error(), "retry the endpoint without a host key") {
+		// The gate is the node's last word: a gated node dials no more, so
+		// the component may have moved on since (review of #1078). The
+		// refusal says what the record names and how to read the key again,
+		// never that the component offers it now.
+		t.Fatalf("the stale refusal does not name the key on record and the way to read it again: %v", err)
+	}
+	if after := task(); after.HostKey != first || after.SessionRetry != before.SessionRetry || after.Fingerprint != before.Fingerprint {
+		t.Fatalf("a refused trust changed the endpoint: pin %q, retry %d", after.HostKey, after.SessionRetry)
+	}
+	if n := audits(); n != 0 {
+		t.Fatalf("a refused trust wrote %d audit rows", n)
+	}
+
+	// The key the gate names is trusted: it becomes the pin, the retry
+	// counter moves, and the audit row carries both keys and the actor.
+	if _, err := gw.RetryEndpoint(ctx, actor, ep.ID, now, all, all); err != nil {
+		t.Fatalf("trusting the offered key: %v", err)
+	}
+	if after := task(); after.HostKey != now || after.SessionRetry != before.SessionRetry+1 {
+		t.Fatalf("after trusting: pin %q, retry %d", after.HostKey, after.SessionRetry)
+	}
+	var oldKey, newKey, actorID string
+	if err := conn.QueryRow(ctx, `select coalesce(old->>'host_key', ''), coalesce(new->>'host_key', ''), coalesce(actor_principal_id::text, '')
+		from audit_log where resource = 'endpoint' and verb = 'retry' and resource_id = $1`, ep.ID).Scan(&oldKey, &newKey, &actorID); err != nil {
+		t.Fatal(err)
+	}
+	if oldKey != first || newKey != now || actorID != actor {
+		t.Fatalf("audit: old %q new %q actor %q, want %q -> %q by %q", oldKey, newKey, actorID, first, now, actor)
+	}
+
+	// With no key refusal held, a key is a pin declared ahead of time.
+	observe("endpoint-rejection", "none")
+	if _, err := gw.RetryEndpoint(ctx, actor, ep.ID, shown, all, all); err != nil {
+		t.Fatalf("declaring a pin with no key refusal held: %v", err)
+	}
+	if got := task().HostKey; got != shown {
+		t.Fatalf("pin = %q, want the declared %q", got, shown)
+	}
+}
