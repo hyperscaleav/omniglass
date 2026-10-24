@@ -174,7 +174,6 @@ type Reply struct {
 // acknowledgement, which a device may send as a push.
 func AnyLine() *Reply { return &Reply{any: true} }
 
-
 // Accepts reads the declared answer shape against a line; no shape declared
 // accepts any line.
 func (r *Reply) Accepts(line string) bool {
