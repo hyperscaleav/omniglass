@@ -306,3 +306,63 @@ func TestLegacyBackfillDownRestoresTheRows(t *testing.T) {
 		t.Errorf("%d rows stay retired after the down", n)
 	}
 }
+
+// TestRetiredPlantedPinIsNeverRelearned: a pin retired as planted stays out
+// of force however it comes back as an observation: a node still on an
+// older binary republishes it from memory, or an echo stamped by a lagging
+// node clock (dated before the plant, though published after it) survives
+// in the series. Neither is delivered as the pin until an operator's :retry
+// confirms the key.
+func TestRetiredPlantedPinIsNeverRelearned(t *testing.T) {
+	if testing.Short() {
+		t.Skip("integration test needs Postgres")
+	}
+	f := pinFixture(t)
+	all := scope.Set{All: true}
+	d1 := f.componentID(t, "disp-1")
+	up, _ := legacyBackfillSQL(t)
+	for _, pc := range pinCases {
+		planted := "SHA256:" + strings.Repeat("x", 43)
+		f.plantPin(t, pc.property, pc.transport, planted)
+		// The node's echo, its clock ten minutes slow: dated before the plant.
+		if _, err := f.conn.Exec(f.ctx, `insert into property (ts, owner_kind, component_id, property_type_id, instance, provenance, source, value)
+			values (now() - interval '10 minutes', 'component', $1::uuid, (select id from property_type where name = $2), $3, 'observed', $3, to_jsonb($4::text))`,
+			d1, pc.property, pc.transport, planted); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := f.conn.Exec(f.ctx, up); err != nil {
+			t.Fatalf("run the backfill: %v", err)
+		}
+		if got := pc.delivered(f.endpointTask(t, pc.transport)); got != "" {
+			t.Errorf("%s: after the backfill the pin is %q, want none: the lagging echo should not survive as the pin", pc.transport, got)
+		}
+		if n := f.count(t, `select count(*) from property where value #>> '{}' = $1
+			and property_type_id = (select id from property_type where name = $2)`, planted, pc.property); n != 0 {
+			t.Errorf("%s: %d rows of the planted key survive the backfill", pc.transport, n)
+		}
+
+		// A node still holding the planted key republishes it as observed.
+		if err := f.gw.InsertPropertySamples(f.ctx, storage.NodeWriter(d1, pc.transport), []storage.PropertySampleWrite{
+			{OwnerKind: "component", OwnerID: d1, Key: pc.property, Instance: pc.transport, Value: planted}}); err != nil {
+			t.Fatalf("%s: the republish: %v", pc.transport, err)
+		}
+		if got := pc.delivered(f.endpointTask(t, pc.transport)); got != "" {
+			t.Errorf("%s: a republished retired pin is delivered as %q, want none", pc.transport, got)
+		}
+		if pin, err := f.gw.EndpointKeyPin(f.ctx, "disp-1", pc.transport, pc.transport); err != nil || pin != "" {
+			t.Errorf("%s: the reachability read serves %q (%v), want none", pc.transport, pin, err)
+		}
+
+		// An operator's :retry confirms the key: it is the pin again.
+		var epID string
+		if err := f.conn.QueryRow(f.ctx, `select id::text from endpoint where name = $1`, pc.transport).Scan(&epID); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := f.gw.RetryEndpoint(f.ctx, f.actor, epID, pc.retry(planted), all, all); err != nil {
+			t.Fatalf("%s: retry: %v", pc.transport, err)
+		}
+		if got := pc.delivered(f.endpointTask(t, pc.transport)); got != planted {
+			t.Errorf("%s: after the operator's :retry the pin is %q, want the confirmed key", pc.transport, got)
+		}
+	}
+}

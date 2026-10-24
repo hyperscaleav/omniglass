@@ -819,12 +819,24 @@ func (p *PG) EndpointKeyPin(ctx context.Context, componentRef, endpoint, transpo
 // it), and no read trusts it as the pin.
 const pinSource = string(writerclass.KeyPin)
 
+// retiredPinSQL matches an observed pin row (aliased o, its endpoint's
+// component and instance at $1 and $2) whose key is one a backfill retired as
+// a declared pin no :retry set (ADR-0163): such a key is never taken as the
+// pin from the observed series, however it comes back (a node still holding
+// it in memory republishes it), until a :retry declares it.
+const retiredPinSQL = `select 1 from retired_sample r
+	where r.lane = 'property' and r.sample->>'provenance' = 'declared'
+	  and coalesce(r.sample->>'source', '') <> '` + pinSource + `'
+	  and r.sample->>'component_id' = $1::text and r.sample->>'instance' = $2
+	  and r.sample->>'property_type_id' = o.property_type_id::text and r.sample->'value' = o.value`
+
 // keyPin is an endpoint's key pin under its property (ssh-host-key, #1032;
 // tls-certificate, #1035): the operator's declared key, and the pin in force
 // (the declared key, else the key the node trusted on first use). The
 // declared key is the latest set through :retry alone (pinSource): a declared
 // row any other path left, a value or a tombstone, is neither delivered nor
-// read as the pin a trust replaces.
+// read as the pin a trust replaces; nor is an observed key retired as such a
+// pin (retiredPinSQL).
 func keyPin(ctx context.Context, q querier, componentID, instance, property string) (declared, pin string, err error) {
 	if err := q.QueryRow(ctx, `
 		select coalesce(
@@ -833,10 +845,11 @@ func keyPin(ctx context.Context, q querier, componentID, instance, property stri
 			   and source = '`+pinSource+`'
 			   and property_type_id = (select id from property_type where name = $3)
 			 order by id desc limit 1), ''),
-			coalesce((select value #>> '{}' from property
-			 where owner_kind = 'component' and component_id = $1::uuid and instance = $2 and provenance = 'observed'
-			   and property_type_id = (select id from property_type where name = $3)
-			 order by ts desc, id desc limit 1), '')`, componentID, instance, property).Scan(&declared, &pin); err != nil {
+			coalesce((select o.value #>> '{}' from property o
+			 where o.owner_kind = 'component' and o.component_id = $1::uuid and o.instance = $2 and o.provenance = 'observed'
+			   and o.property_type_id = (select id from property_type where name = $3)
+			   and not exists (`+retiredPinSQL+`)
+			 order by o.ts desc, o.id desc limit 1), '')`, componentID, instance, property).Scan(&declared, &pin); err != nil {
 		return "", "", fmt.Errorf("storage: %s pin: %w", property, err)
 	}
 	if declared != "" {

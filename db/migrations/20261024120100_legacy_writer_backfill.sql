@@ -13,7 +13,9 @@
 --    wrote (same endpoint, same key, same instant) and stamped; any other
 --    declared pin row is retired, with the observed rows of the same key
 --    that a node published under it and never before it. Its endpoint then
---    pins the key the node learned before, or trusts on first use again.
+--    pins the key the node learned before, or trusts on first use again; a
+--    retired pin's key is never taken as the pin from the observed series
+--    again until a :retry confirms it.
 -- 2. A node-probe row is retired when its owner is not a component, when a
 --    writer other than the node wrote it, when its instance names no
 --    endpoint of its component, or when it is dated more than five minutes
@@ -49,17 +51,20 @@ BEGIN
         FROM public.property p JOIN public.property_type t ON t.id = p.property_type_id
         WHERE t.name = ANY (pinnable) AND p.provenance = 'declared' AND p.source <> 'key-pin'
     ), echo AS (
+        -- Ordered by arrival (the identity id the server assigns), never by
+        -- ts: an observation's ts is the node's clock, a declared row's the
+        -- database's, and a lagging node would date an echo before the plant.
         SELECT o.id FROM public.property o
         WHERE o.provenance = 'observed'
           AND EXISTS (
             SELECT 1 FROM planted d
             WHERE d.component_id = o.component_id AND d.instance = o.instance
-              AND d.property_type_id = o.property_type_id AND d.value = o.value AND o.ts >= d.ts)
+              AND d.property_type_id = o.property_type_id AND d.value = o.value AND o.id > d.id)
           AND NOT EXISTS (
             SELECT 1 FROM public.property h
             WHERE h.provenance = 'observed' AND h.component_id = o.component_id AND h.instance = o.instance
               AND h.property_type_id = o.property_type_id AND h.value = o.value
-              AND h.ts < (SELECT min(d.ts) FROM planted d
+              AND h.id < (SELECT min(d.id) FROM planted d
                           WHERE d.component_id = o.component_id AND d.instance = o.instance
                             AND d.property_type_id = o.property_type_id AND d.value = o.value))
           AND NOT EXISTS (
