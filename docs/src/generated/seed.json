@@ -1841,6 +1841,15 @@
    "commands": 1
   },
   {
+   "id": "newtron-nvp-tls",
+   "label": "Newtron NVP over TLS",
+   "version": "1.0.0",
+   "transport": "tls",
+   "polls": 1,
+   "listeners": 1,
+   "commands": 1
+  },
+  {
    "id": "http-json",
    "label": "HTTP JSON",
    "version": "1.0.0"

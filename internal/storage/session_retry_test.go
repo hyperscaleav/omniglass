@@ -132,14 +132,14 @@ func TestWorklistCarriesTheSessionBlockAndRetryMovesTheRevision(t *testing.T) {
 	// A viewer-shaped caller (no action scope) cannot retry; out of read
 	// scope it is not even told the endpoint exists.
 	none := scope.Set{}
-	if _, err := gw.RetryEndpoint(ctx, "", ep.ID, "", all, none); !errors.Is(err, storage.ErrEndpointForbidden) {
+	if _, err := gw.RetryEndpoint(ctx, "", ep.ID, storage.RetryPin{}, all, none); !errors.Is(err, storage.ErrEndpointForbidden) {
 		t.Fatalf("retry without action scope = %v, want forbidden", err)
 	}
-	if _, err := gw.RetryEndpoint(ctx, "", ep.ID, "", none, none); !errors.Is(err, storage.ErrEndpointNotFound) {
+	if _, err := gw.RetryEndpoint(ctx, "", ep.ID, storage.RetryPin{}, none, none); !errors.Is(err, storage.ErrEndpointNotFound) {
 		t.Fatalf("retry out of read scope = %v, want not found", err)
 	}
 
-	if _, err := gw.RetryEndpoint(ctx, "", ep.ID, "", all, all); err != nil {
+	if _, err := gw.RetryEndpoint(ctx, "", ep.ID, storage.RetryPin{}, all, all); err != nil {
 		t.Fatalf("retry: %v", err)
 	}
 	if got := driverTask().SessionRetry; got != 1 {

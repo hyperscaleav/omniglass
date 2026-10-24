@@ -612,11 +612,13 @@ func (p *PG) rederiveAttached(ctx context.Context, tx pgx.Tx, driverID, endpoint
 // runs through the owning component like every endpoint write, and the
 // retry is audited in the same transaction.
 //
-// hostKey, when set, accepts a changed ssh host key (#1032): it lands as the
-// endpoint's declared ssh-host-key, the pin the worklist delivers ahead of
-// the key trusted on first use, so the node's session redials onto it. Only
-// an ssh endpoint takes one, and only a SHA256 fingerprint.
-func (p *PG) RetryEndpoint(ctx context.Context, actorID, id, hostKey string, read, action scope.Set) (*Endpoint, error) {
+// pin, when set, accepts a changed key: a host key on an ssh endpoint
+// (#1032), a certificate's public key on a tls endpoint (#1035). It lands as
+// the endpoint's declared ssh-host-key or tls-certificate, the pin the
+// worklist delivers ahead of the key trusted on first use, so the node's
+// session redials onto it. Each only on its transport, and only a SHA256
+// fingerprint.
+func (p *PG) RetryEndpoint(ctx context.Context, actorID, id string, pin RetryPin, read, action scope.Set) (*Endpoint, error) {
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("storage: begin retry endpoint: %w", err)
@@ -627,18 +629,24 @@ func (p *PG) RetryEndpoint(ctx context.Context, actorID, id, hostKey string, rea
 	if err != nil {
 		return nil, err
 	}
-	if hostKey != "" {
-		if before.Transport != "ssh" || before.ComponentID == nil {
-			return nil, fmt.Errorf("%w: only an ssh endpoint pins a host key", ErrRetryHostKey)
+	for _, accept := range []struct{ value, transport, what, only string }{
+		{pin.HostKey, "ssh", "host key", "only an ssh endpoint pins a host key"},
+		{pin.Certificate, "tls", "certificate key", "only a tls endpoint pins a certificate key"},
+	} {
+		if accept.value == "" {
+			continue
 		}
-		if !hostKeyFingerprint.MatchString(hostKey) {
-			return nil, fmt.Errorf("%w: a host key is a SHA256 fingerprint (SHA256: and 43 base64 characters)", ErrRetryHostKey)
+		if before.Transport != accept.transport || before.ComponentID == nil {
+			return nil, fmt.Errorf("%w: %s", ErrRetryPin, accept.only)
+		}
+		if !keyFingerprint.MatchString(accept.value) {
+			return nil, fmt.Errorf("%w: a %s is a SHA256 fingerprint (SHA256: and 43 base64 characters)", ErrRetryPin, accept.what)
 		}
 		if _, err := tx.Exec(ctx, `
 			insert into property (owner_kind, component_id, property_type_id, instance, provenance, value)
-			values ('component', $1::uuid, (select id from property_type where name = 'ssh-host-key'), $2, '`+declaredProvenance+`', to_jsonb($3::text))`,
-			*before.ComponentID, before.Name, hostKey); err != nil {
-			return nil, fmt.Errorf("storage: pin host key for endpoint %q: %w", before.ID, err)
+			values ('component', $1::uuid, (select id from property_type where name = $4), $2, '`+declaredProvenance+`', to_jsonb($3::text))`,
+			*before.ComponentID, before.Name, accept.value, pinKeyOf[accept.transport]); err != nil {
+			return nil, fmt.Errorf("storage: pin %s for endpoint %q: %w", accept.what, before.ID, err)
 		}
 	}
 	// The counter, not updated_at: an unrelated edit (a label) moves
@@ -651,11 +659,12 @@ func (p *PG) RetryEndpoint(ctx context.Context, actorID, id, hostKey string, rea
 		return nil, mapEndpointWriteErr(err)
 	}
 	audited := any(after)
-	if hostKey != "" {
+	if pin.HostKey != "" || pin.Certificate != "" {
 		audited = struct {
 			*Endpoint
-			HostKey string `json:"host_key"`
-		}{after, hostKey}
+			HostKey     string `json:"host_key,omitempty"`
+			Certificate string `json:"certificate,omitempty"`
+		}{after, pin.HostKey, pin.Certificate}
 	}
 	if err := writeAuditRes(ctx, tx, actorID, "retry", "endpoint", after.ID, before, audited); err != nil {
 		return nil, err
@@ -666,11 +675,19 @@ func (p *PG) RetryEndpoint(ctx context.Context, actorID, id, hostKey string, rea
 	return after, nil
 }
 
-// ErrRetryHostKey refuses a retry's host key: not an ssh endpoint, or not a
-// SHA256 fingerprint.
-var ErrRetryHostKey = errors.New("storage: retry host key")
+// RetryPin is a key an operator's retry accepts as the endpoint's new pin:
+// a host key for an ssh endpoint, a certificate's public key for a tls one.
+// Both empty retries with the pin unchanged.
+type RetryPin struct {
+	HostKey     string
+	Certificate string
+}
 
-var hostKeyFingerprint = regexp.MustCompile(`^SHA256:[A-Za-z0-9+/]{43}$`)
+// ErrRetryPin refuses a retry's key: one the endpoint's transport does not
+// pin, or not a SHA256 fingerprint.
+var ErrRetryPin = errors.New("storage: retry pin")
+
+var keyFingerprint = regexp.MustCompile(`^SHA256:[A-Za-z0-9+/]{43}$`)
 
 // DeleteEndpoint removes an endpoint by id with the read/action split (through
 // the owning component) and in-transaction audit. Its derived tasks cascade-delete

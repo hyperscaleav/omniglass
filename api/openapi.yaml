@@ -6186,6 +6186,9 @@ components:
         session:
           $ref: "#/components/schemas/ReachSessionBody"
           description: "The endpoint's held session, while it is configured to hold one (a standing listen task, or a driver declaring a session): its latest state, when it changed, and why"
+        tls:
+          $ref: "#/components/schemas/ReachTLSBody"
+          description: "A tls endpoint's handshake and certificate: its verification mode, pinned key, handshake time, expiry and days left; absent on every other transport"
         transport:
           description: The transport (icmp, tcp, ...)
           type: string
@@ -6244,6 +6247,12 @@ components:
         class:
           description: "The refusal's class: auth, host-key, certificate or protocol"
           type: string
+        offered:
+          description: "For a refusal of a changed key: the public key the component now offers, a SHA256 fingerprint. Trusting it is POST /endpoints/{id}:retry with certificate set to this value"
+          type: string
+        pinned:
+          description: "For a refusal of a changed key (class certificate on a tls endpoint in pin mode): the public key the endpoint pins, a SHA256 fingerprint. Absent on every other refusal"
+          type: string
         rung:
           description: "The ladder rung the refusal holds: responsive for a host key, certificate or protocol refusal, authenticated for a credential. Nothing at or above it is attempted until the connection fingerprint moves"
           enum:
@@ -6277,6 +6286,30 @@ components:
       required:
         - state
         - ts
+      type: object
+    ReachTLSBody:
+      additionalProperties: false
+      properties:
+        days_left:
+          description: "Days from the latest probe to that not-after (tls-certificate-days-left), negative once expired: the number a threshold rule reads"
+          format: double
+          type: number
+        expires:
+          description: The not-after of the certificate the latest probe accepted (tls-certificate-expiry); absent until one is accepted
+          format: date-time
+          type: string
+        handshake_ms:
+          description: The latest probe's handshake time in milliseconds (tls-handshake-time); absent until the component answers one
+          format: double
+          type: number
+        key:
+          description: The public key the endpoint pins (tls-certificate), a SHA256 fingerprint; absent before first use and in verify or skip mode
+          type: string
+        mode:
+          description: "How the endpoint's connections judge the certificate (its driver's tls_mode input, verify when none is set): verify (against the node's system roots, the server name the host), pin (the public key trusted on first use, any other refused) or skip (nothing checked, the operator's explicit choice)"
+          type: string
+      required:
+        - mode
       type: object
     ReachVerdictBody:
       additionalProperties: false
@@ -6714,6 +6747,9 @@ components:
             - /api/v1/schemas/RetryEndpointInputBody.json
           format: uri
           readOnly: true
+          type: string
+        certificate:
+          description: "A tls endpoint only: the SHA256 fingerprint of a changed certificate public key the operator now trusts (the offered key a certificate rejection carries). It becomes the endpoint's declared tls-certificate pin, and the session redials onto it. Omit to retry with the pin unchanged"
           type: string
         host_key:
           description: "An ssh endpoint only: the SHA256 fingerprint of a changed host key the operator now trusts (the offered key a host-key rejection names). It becomes the endpoint's declared ssh-host-key pin, and the session redials onto it. Omit to retry with the pin unchanged"
@@ -11729,7 +11765,7 @@ paths:
       x-omniglass-permission: endpoint:update
   /endpoints/{id}:retry:
     post:
-      description: "Moves the endpoint's retry counter, which is part of its connection fingerprint: a gate a refusal retrying cannot fix holds (a wrong credential, a changed host key, a reply its driver declares terminal) lifts, the node recycles the endpoint's held session, and every connection to it is attempted again. Fixing the secret, the address, the transport or the driver's login needs no retry: the change moves the fingerprint itself. An unrelated edit (a label) moves nothing. For an ssh endpoint, host_key names a host key to trust (the offered key a host-key rejection names): it becomes the declared pin and recycles the session onto it whatever its state, an audited acceptance of the change. Audited. Gated by endpoint:retry; read and retry scopes (through the component) drive the 404 versus 403 split."
+      description: "Moves the endpoint's retry counter, which is part of its connection fingerprint: a gate a refusal retrying cannot fix holds (a wrong credential, a changed host key, a reply its driver declares terminal) lifts, the node recycles the endpoint's held session, and every connection to it is attempted again. Fixing the secret, the address, the transport, the tls mode or the driver's login needs no retry: the change moves the fingerprint itself. An unrelated edit (a label) moves nothing. For an ssh endpoint, host_key names a host key to trust (the offered key a host-key rejection names); for a tls endpoint, certificate names a certificate public key to trust (the offered key a certificate rejection carries): either becomes the declared pin and recycles the session onto it whatever its state, an audited acceptance of the change. Audited. Gated by endpoint:retry; read and retry scopes (through the component) drive the 404 versus 403 split."
       operationId: retry-endpoint
       parameters:
         - description: The endpoint's surrogate id

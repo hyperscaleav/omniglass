@@ -2236,22 +2236,27 @@ func generatedCommands() []*cobra.Command {
 		}())
 		parent.AddCommand(func() *cobra.Command {
 			cmd := func() *cobra.Command {
+				var fCertificate string
 				var fHostKey string
 				cmd := &cobra.Command{
 					Use:     "retry <id>",
 					Short:   "Retry an endpoint's gated connections",
-					Long:    "Moves the endpoint's retry counter, which is part of its connection fingerprint: a gate a refusal retrying cannot fix holds (a wrong credential, a changed host key, a reply its driver declares terminal) lifts, the node recycles the endpoint's held session, and every connection to it is attempted again. Fixing the secret, the address, the transport or the driver's login needs no retry: the change moves the fingerprint itself. An unrelated edit (a label) moves nothing. For an ssh endpoint, host_key names a host key to trust (the offered key a host-key rejection names): it becomes the declared pin and recycles the session onto it whatever its state, an audited acceptance of the change. Audited. Gated by endpoint:retry; read and retry scopes (through the component) drive the 404 versus 403 split.",
+					Long:    "Moves the endpoint's retry counter, which is part of its connection fingerprint: a gate a refusal retrying cannot fix holds (a wrong credential, a changed host key, a reply its driver declares terminal) lifts, the node recycles the endpoint's held session, and every connection to it is attempted again. Fixing the secret, the address, the transport, the tls mode or the driver's login needs no retry: the change moves the fingerprint itself. An unrelated edit (a label) moves nothing. For an ssh endpoint, host_key names a host key to trust (the offered key a host-key rejection names); for a tls endpoint, certificate names a certificate public key to trust (the offered key a certificate rejection carries): either becomes the declared pin and recycles the session onto it whatever its state, an audited acceptance of the change. Audited. Gated by endpoint:retry; read and retry scopes (through the component) drive the 404 versus 403 split.",
 					Example: "  omniglass endpoint retry <id>",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
 						path := fmt.Sprintf("/api/v1/endpoints/%s:retry", url.PathEscape(args[0]))
 						body := map[string]any{}
+						if cmd.Flags().Changed("certificate") {
+							body["certificate"] = fCertificate
+						}
 						if cmd.Flags().Changed("host-key") {
 							body["host_key"] = fHostKey
 						}
 						return runAPICommand(cmd, "POST", path, body)
 					},
 				}
+				cmd.Flags().StringVar(&fCertificate, "certificate", "", "A tls endpoint only: the SHA256 fingerprint of a changed certificate public key the operator now trusts (the offered key a certificate rejection carries). It becomes the endpoint's declared tls-certificate pin, and the session redials onto it. Omit to retry with the pin unchanged")
 				cmd.Flags().StringVar(&fHostKey, "host-key", "", "An ssh endpoint only: the SHA256 fingerprint of a changed host key the operator now trusts (the offered key a host-key rejection names). It becomes the endpoint's declared ssh-host-key pin, and the session redials onto it. Omit to retry with the pin unchanged")
 				return cmd
 			}()

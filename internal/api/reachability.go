@@ -83,6 +83,21 @@ type reachSessionBody struct {
 type reachRejectionBody struct {
 	Rung  string `json:"rung" enum:"reachable,responsive,authenticated" doc:"The ladder rung the refusal holds: responsive for a host key, certificate or protocol refusal, authenticated for a credential. Nothing at or above it is attempted until the connection fingerprint moves"`
 	Class string `json:"class" doc:"The refusal's class: auth, host-key, certificate or protocol"`
+	// Pinned and Offered are a changed key's two keys (#1035), carried on
+	// the gate as data so no surface parses them out of the reason.
+	Pinned  string `json:"pinned,omitempty" doc:"For a refusal of a changed key (class certificate on a tls endpoint in pin mode): the public key the endpoint pins, a SHA256 fingerprint. Absent on every other refusal"`
+	Offered string `json:"offered,omitempty" doc:"For a refusal of a changed key: the public key the component now offers, a SHA256 fingerprint. Trusting it is POST /endpoints/{id}:retry with certificate set to this value"`
+}
+
+// reachTLSBody is a tls endpoint's handshake and certificate (#1035): how it
+// verifies, the key it pins, the latest handshake time, and the certificate's
+// expiry and days left.
+type reachTLSBody struct {
+	Mode        string     `json:"mode" doc:"How the endpoint's connections judge the certificate (its driver's tls_mode input, verify when none is set): verify (against the node's system roots, the server name the host), pin (the public key trusted on first use, any other refused) or skip (nothing checked, the operator's explicit choice)"`
+	Key         string     `json:"key,omitempty" doc:"The public key the endpoint pins (tls-certificate), a SHA256 fingerprint; absent before first use and in verify or skip mode"`
+	HandshakeMS *float64   `json:"handshake_ms,omitempty" doc:"The latest probe's handshake time in milliseconds (tls-handshake-time); absent until the component answers one"`
+	Expires     *time.Time `json:"expires,omitempty" doc:"The not-after of the certificate the latest probe accepted (tls-certificate-expiry); absent until one is accepted"`
+	DaysLeft    *float64   `json:"days_left,omitempty" doc:"Days from the latest probe to that not-after (tls-certificate-days-left), negative once expired: the number a threshold rule reads"`
 }
 
 type reachEndpointBody struct {
@@ -98,6 +113,7 @@ type reachEndpointBody struct {
 	Authenticated *reachVerdictBody   `json:"authenticated,omitempty" doc:"The auth rung (the probe's credential was accepted, or a held session's login passed), present only when a credential was tried"`
 	Session       *reachSessionBody   `json:"session,omitempty" doc:"The endpoint's held session, while it is configured to hold one (a standing listen task, or a driver declaring a session): its latest state, when it changed, and why"`
 	Rejection     *reachRejectionBody `json:"rejection,omitempty" doc:"The gate a terminal refusal holds on the endpoint, its rung and class; absent when none holds"`
+	TLS           *reachTLSBody       `json:"tls,omitempty" doc:"A tls endpoint's handshake and certificate: its verification mode, pinned key, handshake time, expiry and days left; absent on every other transport"`
 	Layers        []reachLayerBody    `json:"layers" doc:"The per-layer probe signals that compose the verdict"`
 	History       []reachHistoryBody  `json:"history" doc:"The recent verdict transitions, oldest first, for the availability strip"`
 }
@@ -220,6 +236,11 @@ func composeEndpoint(ctx context.Context, gw storage.Gateway, comp string, it st
 	if gate != nil {
 		row.Rejection = parseRejection(gate.Value)
 	}
+	if it.Transport == "tls" {
+		if row.TLS, err = composeTLS(ctx, gw, comp, it); err != nil {
+			return row, err
+		}
+	}
 
 	for _, l := range reachLayers {
 		signal, err := gw.LatestMetricInstance(ctx, comp, l.SignalKey, it.Name)
@@ -250,6 +271,55 @@ func composeEndpoint(ctx context.Context, gw storage.Gateway, comp string, it st
 	return row, nil
 }
 
+// The tls facts a probe and a session land (#1035).
+const (
+	tlsKeyKey       = "tls-certificate"
+	tlsExpiryKey    = "tls-certificate-expiry"
+	tlsDaysLeftKey  = "tls-certificate-days-left"
+	tlsHandshakeKey = "tls-handshake-time"
+)
+
+// composeTLS reads a tls endpoint's facts: the mode off its params (verify
+// when none is set), the pinned key, and the latest handshake, expiry and
+// days left.
+func composeTLS(ctx context.Context, gw storage.Gateway, comp string, it storage.ComponentEndpoint) (*reachTLSBody, error) {
+	var p struct {
+		Mode string `json:"tls_mode"`
+	}
+	_ = json.Unmarshal(it.Params, &p)
+	out := &reachTLSBody{Mode: p.Mode}
+	if out.Mode == "" {
+		out.Mode = "verify"
+	}
+	key, err := gw.LatestProperty(ctx, comp, tlsKeyKey, it.Name)
+	if err != nil {
+		return nil, err
+	}
+	if key != nil {
+		out.Key = key.Value
+	}
+	expiry, err := gw.LatestProperty(ctx, comp, tlsExpiryKey, it.Name)
+	if err != nil {
+		return nil, err
+	}
+	if expiry != nil {
+		if at, err := time.Parse(time.RFC3339, expiry.Value); err == nil {
+			out.Expires = &at
+		}
+	}
+	for key, into := range map[string]**float64{tlsHandshakeKey: &out.HandshakeMS, tlsDaysLeftKey: &out.DaysLeft} {
+		m, err := gw.LatestMetricInstance(ctx, comp, key, it.Name)
+		if err != nil {
+			return nil, err
+		}
+		if m != nil {
+			v := m.Value
+			*into = &v
+		}
+	}
+	return out, nil
+}
+
 // maxReasonRunes bounds the session reason the read serves (#1059): a
 // refusal carries the component's own text, and a line answer may run to
 // 64 KiB, which the console would render on every row showing it. The full
@@ -265,18 +335,23 @@ func capReason(s string) string {
 }
 
 // parseRejection reads an endpoint-rejection value (`<rung> <class>
-// <fingerprint>`, or none) into the rung and class it holds at. The
+// <fingerprint>`, then for a changed key the pinned and offered keys, or
+// none) into the rung and class it holds at, and the two keys. The
 // fingerprint is dropped: a digest of the connection's inputs, it is the
 // node's to compare and says nothing an operator acts on. Anything else (none,
 // a malformed value, a rung the ladder does not have) is no gate.
 func parseRejection(v string) *reachRejectionBody {
 	parts := strings.Fields(v)
-	if len(parts) != 3 {
+	if len(parts) != 3 && len(parts) != 5 {
 		return nil
 	}
 	switch parts[0] {
 	case "reachable", "responsive", "authenticated":
-		return &reachRejectionBody{Rung: parts[0], Class: parts[1]}
+		out := &reachRejectionBody{Rung: parts[0], Class: parts[1]}
+		if len(parts) == 5 {
+			out.Pinned, out.Offered = parts[3], parts[4]
+		}
+		return out
 	}
 	return nil
 }

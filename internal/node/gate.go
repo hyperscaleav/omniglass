@@ -51,9 +51,16 @@ func rungOf(class string) rung {
 // rejectionNone is the endpoint-rejection value when no gate holds.
 const rejectionNone = "none"
 
-// rejectionOf renders a gate as its endpoint-rejection value.
-func rejectionOf(r rung, class, fingerprint string) string {
-	return string(r) + " " + class + " " + fingerprint
+// rejectionOf renders a gate as its endpoint-rejection value: `<rung>
+// <class> <fingerprint>`, then, for a refusal of a changed key (#1035), the
+// key the endpoint pins and the key the component offered, so a surface that
+// offers to trust the new key reads both as data.
+func rejectionOf(r rung, class, fingerprint string, keys ...string) string {
+	v := string(r) + " " + class + " " + fingerprint
+	if len(keys) == 2 && keys[0] != "" && keys[1] != "" {
+		v += " " + keys[0] + " " + keys[1]
+	}
+	return v
 }
 
 // gate is one endpoint's held refusal.
@@ -62,6 +69,8 @@ type gate struct {
 	rung        rung
 	class       string
 	reason      string
+	// pinned and offered are a changed key's refusal's two keys.
+	pinned, offered string
 }
 
 // gates is the node's gate per endpoint id, with the fingerprint each
@@ -88,9 +97,13 @@ func (g *gates) observe(endpointID, fingerprint, rejection string) {
 		return
 	}
 	parts := strings.Fields(rejection)
-	if len(parts) == 3 && parts[2] == fingerprint && fingerprint != "" {
-		g.held[endpointID] = gate{fingerprint: fingerprint, rung: rung(parts[0]), class: parts[1],
+	if (len(parts) == 3 || len(parts) == 5) && parts[2] == fingerprint && fingerprint != "" {
+		gt := gate{fingerprint: fingerprint, rung: rung(parts[0]), class: parts[1],
 			reason: parts[1] + ": refused under this connection fingerprint before the node restarted"}
+		if len(parts) == 5 {
+			gt.pinned, gt.offered = parts[3], parts[4]
+		}
+		g.held[endpointID] = gt
 	}
 }
 
@@ -105,7 +118,8 @@ func (g *gates) record(endpointID, fingerprint string, terr *collection.Terminal
 	if fingerprint != g.current[endpointID] {
 		return false
 	}
-	g.held[endpointID] = gate{fingerprint: fingerprint, rung: rungOf(terr.Class), class: terr.Class, reason: terr.Error()}
+	g.held[endpointID] = gate{fingerprint: fingerprint, rung: rungOf(terr.Class), class: terr.Class, reason: terr.Error(),
+		pinned: terr.Pinned, offered: terr.Offered}
 	return true
 }
 
@@ -147,12 +161,12 @@ func (g *gates) rejectionOf(endpointID string) string {
 	if !ok {
 		return rejectionNone
 	}
-	return rejectionOf(gt.rung, gt.class, gt.fingerprint)
+	return rejectionOf(gt.rung, gt.class, gt.fingerprint, gt.pinned, gt.offered)
 }
 
 // refusal renders a held gate as the terminal error a gated attempt fails
 // with.
 func (gt gate) refusal() *collection.TerminalError {
 	reason := strings.TrimPrefix(gt.reason, gt.class+": ")
-	return &collection.TerminalError{Class: gt.class, Reason: reason}
+	return &collection.TerminalError{Class: gt.class, Reason: reason, Pinned: gt.pinned, Offered: gt.offered}
 }

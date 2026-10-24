@@ -95,7 +95,8 @@ type updateEndpointInput struct {
 type retryEndpointInput struct {
 	ID   string `path:"id" doc:"The endpoint's surrogate id"`
 	Body *struct {
-		HostKey string `json:"host_key,omitempty" doc:"An ssh endpoint only: the SHA256 fingerprint of a changed host key the operator now trusts (the offered key a host-key rejection names). It becomes the endpoint's declared ssh-host-key pin, and the session redials onto it. Omit to retry with the pin unchanged"`
+		HostKey     string `json:"host_key,omitempty" doc:"An ssh endpoint only: the SHA256 fingerprint of a changed host key the operator now trusts (the offered key a host-key rejection names). It becomes the endpoint's declared ssh-host-key pin, and the session redials onto it. Omit to retry with the pin unchanged"`
+		Certificate string `json:"certificate,omitempty" doc:"A tls endpoint only: the SHA256 fingerprint of a changed certificate public key the operator now trusts (the offered key a certificate rejection carries). It becomes the endpoint's declared tls-certificate pin, and the session redials onto it. Omit to retry with the pin unchanged"`
 	}
 }
 
@@ -215,13 +216,13 @@ func registerEndpointRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 		Method:      http.MethodPost,
 		Path:        "/endpoints/{id}:retry",
 		Summary:     "Retry an endpoint's gated connections",
-		Description: "Moves the endpoint's retry counter, which is part of its connection fingerprint: a gate a refusal retrying cannot fix holds (a wrong credential, a changed host key, a reply its driver declares terminal) lifts, the node recycles the endpoint's held session, and every connection to it is attempted again. Fixing the secret, the address, the transport or the driver's login needs no retry: the change moves the fingerprint itself. An unrelated edit (a label) moves nothing. For an ssh endpoint, host_key names a host key to trust (the offered key a host-key rejection names): it becomes the declared pin and recycles the session onto it whatever its state, an audited acceptance of the change. Audited. Gated by endpoint:retry; read and retry scopes (through the component) drive the 404 versus 403 split.",
+		Description: "Moves the endpoint's retry counter, which is part of its connection fingerprint: a gate a refusal retrying cannot fix holds (a wrong credential, a changed host key, a reply its driver declares terminal) lifts, the node recycles the endpoint's held session, and every connection to it is attempted again. Fixing the secret, the address, the transport, the tls mode or the driver's login needs no retry: the change moves the fingerprint itself. An unrelated edit (a label) moves nothing. For an ssh endpoint, host_key names a host key to trust (the offered key a host-key rejection names); for a tls endpoint, certificate names a certificate public key to trust (the offered key a certificate rejection carries): either becomes the declared pin and recycles the session onto it whatever its state, an audited acceptance of the change. Audited. Gated by endpoint:retry; read and retry scopes (through the component) drive the 404 versus 403 split.",
 	}, "endpoint", "retry"), func(ctx context.Context, in *retryEndpointInput) (*endpointOutput, error) {
-		hostKey := ""
+		var pin storage.RetryPin
 		if in.Body != nil {
-			hostKey = in.Body.HostKey
+			pin = storage.RetryPin{HostKey: in.Body.HostKey, Certificate: in.Body.Certificate}
 		}
-		it, err := gw.RetryEndpoint(ctx, actorID(ctx), in.ID, hostKey,
+		it, err := gw.RetryEndpoint(ctx, actorID(ctx), in.ID, pin,
 			a.scopeFor(ctx, "endpoint", "read"), a.scopeFor(ctx, "endpoint", "retry"))
 		if err != nil {
 			return nil, mapEndpointErr(err)
@@ -268,8 +269,8 @@ func mapEndpointErr(err error) error {
 		return huma.Error422UnprocessableEntity("component not found")
 	case errors.Is(err, storage.ErrEndpointNodeNotFound), errors.Is(err, storage.ErrNodeNotFound):
 		return huma.Error422UnprocessableEntity("node not found")
-	case errors.Is(err, storage.ErrRetryHostKey):
-		return huma.Error422UnprocessableEntity(strings.TrimPrefix(err.Error(), "storage: retry host key: "))
+	case errors.Is(err, storage.ErrRetryPin):
+		return huma.Error422UnprocessableEntity(strings.TrimPrefix(err.Error(), "storage: retry pin: "))
 	case errors.Is(err, storage.ErrEndpointPatchInvalid):
 		return huma.Error400BadRequest(strings.TrimPrefix(err.Error(), "storage: endpoint patch invalid: "))
 	default:

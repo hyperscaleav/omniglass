@@ -227,17 +227,20 @@ func (p *HostKeyPin) Trust(fp string) {
 
 // Admit trusts fp on first use and reports whether fp is the pin (#1035):
 // an empty pin takes fp atomically, so two connections racing on first use
-// cannot each trust a different key, and OnTrust hears only the pin, on
-// each connection it admits. pinned is the pin after the call.
+// cannot each trust a different key. OnTrust hears the first use only; a
+// pin lost on its way to the server is republished by whoever holds it
+// (the node's session manager, while the worklist delivers no pin). pinned
+// is the pin after the call.
 func (p *HostKeyPin) Admit(fp string) (pinned string, ok bool) {
 	p.mu.Lock()
-	if p.fp == "" {
+	first := p.fp == ""
+	if first {
 		p.fp = fp
 	}
 	pinned, ok = p.fp, p.fp == fp
 	on := p.OnTrust
 	p.mu.Unlock()
-	if ok && on != nil {
+	if first && on != nil {
 		on(fp)
 	}
 	return pinned, ok

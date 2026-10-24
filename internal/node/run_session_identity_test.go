@@ -230,7 +230,7 @@ func TestTheGateLiftsOnlyWhenTheFingerprintChanges(t *testing.T) {
 	s.settles("logins after a node restart", logins, 3)
 
 	// An operator's retry moves the fingerprint: a fresh login budget.
-	if _, err := s.gw.RetryEndpoint(s.ctx, "", ep.ID, "", s.all, s.all); err != nil {
+	if _, err := s.gw.RetryEndpoint(s.ctx, "", ep.ID, storage.RetryPin{}, s.all, s.all); err != nil {
 		t.Fatal(err)
 	}
 	s.settles("logins after a retry", logins, 6)

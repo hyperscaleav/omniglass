@@ -384,3 +384,116 @@ func TestReachabilityCarriesTheHeldSession(t *testing.T) {
 		t.Fatalf("icmp id: want %s, got %q", ids["icmp"], icmp.ID)
 	}
 }
+
+// TestReachabilityCarriesTheTLSFacts drives the read the console's tls rows
+// render (#1035): a tls endpoint reads its verification mode (from its
+// params, verify when none is set), the key it pins, the latest handshake
+// time, and the certificate's expiry and days left; a gate for a changed key
+// carries the pinned and offered keys as data. Skipped under -short.
+func TestReachabilityCarriesTheTLSFacts(t *testing.T) {
+	if testing.Short() {
+		t.Skip("integration test needs Postgres")
+	}
+	ctx := context.Background()
+	dsn := storagetest.NewDSN(t)
+	gw, err := storage.NewPG(ctx, dsn)
+	if err != nil {
+		t.Fatalf("open gateway: %v", err)
+	}
+	defer gw.Close()
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	ownerTok, hash, prefix, err := auth.NewBearerToken()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := gw.BootstrapOwner(ctx, storage.OwnerSpec{Username: "root", SecretHash: hash, Prefix: prefix}); err != nil {
+		t.Fatal(err)
+	}
+	all := scope.Set{All: true}
+	for _, name := range []string{"panel-1", "panel-2"} {
+		if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: name}, all, all, all, all); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for comp, params := range map[string]string{"panel-1": `{"target":"127.60.0.9:51326","tls_mode":"pin"}`, "panel-2": `{"target":"127.60.0.10:51326"}`} {
+		c := comp
+		if _, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{Transport: "tls", Component: &c, Params: []byte(params)}, all); err != nil {
+			t.Fatalf("tls endpoint on %s: %v", comp, err)
+		}
+	}
+	pinned, offered := "SHA256:"+strings.Repeat("A", 43), "SHA256:"+strings.Repeat("B", 43)
+	expiry := time.Date(2026, 11, 3, 12, 0, 0, 0, time.UTC)
+	at := time.Now().UTC().Add(-time.Minute).Truncate(time.Microsecond)
+	const fingerprint = "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08"
+	prop := func(key, value string) storage.PropertySampleWrite {
+		return storage.PropertySampleWrite{OwnerKind: "component", OwnerID: "panel-1", Key: key, Instance: "tls", Value: value, Source: "tls", TS: at}
+	}
+	if err := gw.InsertPropertySamples(ctx, []storage.PropertySampleWrite{
+		prop("tls-certificate", pinned),
+		prop("tls-certificate-expiry", expiry.Format(time.RFC3339)),
+		prop("endpoint-rejection", "responsive certificate "+fingerprint+" "+pinned+" "+offered),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	metric := func(key string, v float64) storage.MetricSampleWrite {
+		return storage.MetricSampleWrite{OwnerKind: "component", OwnerID: "panel-1", Key: key, Instance: "tls", Value: v, Source: "tls", TS: at}
+	}
+	if err := gw.InsertMetricSamples(ctx, []storage.MetricSampleWrite{metric("tls-handshake-time", 12.5), metric("tls-certificate-days-left", 10.02)}); err != nil {
+		t.Fatal(err)
+	}
+
+	srv := httptest.NewServer(api.NewHandler(gw))
+	defer srv.Close()
+	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
+	type tlsResp struct {
+		Endpoints []struct {
+			Endpoint string `json:"endpoint"`
+			TLS      *struct {
+				Mode        string     `json:"mode"`
+				Key         string     `json:"key"`
+				HandshakeMS *float64   `json:"handshake_ms"`
+				Expires     *time.Time `json:"expires"`
+				DaysLeft    *float64   `json:"days_left"`
+			} `json:"tls"`
+			Rejection *struct {
+				Rung    string `json:"rung"`
+				Class   string `json:"class"`
+				Pinned  string `json:"pinned"`
+				Offered string `json:"offered"`
+			} `json:"rejection"`
+		} `json:"endpoints"`
+	}
+	read := func(comp string) tlsResp {
+		var r tlsResp
+		out := c.do(ownerTok, http.MethodGet, "/components/"+comp+"/reachability", nil, http.StatusOK)
+		if strings.Contains(string(out), fingerprint) {
+			t.Fatalf("the read served the connection fingerprint: %s", out)
+		}
+		if err := json.Unmarshal(out, &r); err != nil {
+			t.Fatal(err)
+		}
+		if len(r.Endpoints) != 1 {
+			t.Fatalf("%s endpoints = %+v", comp, r.Endpoints)
+		}
+		return r
+	}
+	ep := read("panel-1").Endpoints[0]
+	if ep.TLS == nil || ep.TLS.Mode != "pin" || ep.TLS.Key != pinned {
+		t.Fatalf("tls = %+v, want pin mode and the pinned key", ep.TLS)
+	}
+	if ep.TLS.HandshakeMS == nil || *ep.TLS.HandshakeMS != 12.5 || ep.TLS.DaysLeft == nil || *ep.TLS.DaysLeft != 10.02 {
+		t.Fatalf("tls = %+v, want the handshake time and the days left", ep.TLS)
+	}
+	if ep.TLS.Expires == nil || !ep.TLS.Expires.Equal(expiry) {
+		t.Fatalf("tls expires = %v, want %v", ep.TLS.Expires, expiry)
+	}
+	if ep.Rejection == nil || ep.Rejection.Class != "certificate" || ep.Rejection.Pinned != pinned || ep.Rejection.Offered != offered {
+		t.Fatalf("rejection = %+v, want class certificate with both keys", ep.Rejection)
+	}
+	// An endpoint with no mode set verifies, and has measured nothing yet.
+	if ep := read("panel-2").Endpoints[0]; ep.TLS == nil || ep.TLS.Mode != "verify" || ep.TLS.Key != "" || ep.TLS.DaysLeft != nil {
+		t.Fatalf("panel-2 tls = %+v, want verify and nothing measured", ep.TLS)
+	}
+}

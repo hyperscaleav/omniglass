@@ -263,8 +263,8 @@ func TestHostKeyPinAdmitIsAtomic(t *testing.T) {
 	if got, ok := pin.Admit("SHA256:a"); !ok || got != "SHA256:a" {
 		t.Fatalf("the pin again = %q, %v", got, ok)
 	}
-	if len(heard) != 2 || heard[0] != "SHA256:a" || heard[1] != "SHA256:a" {
-		t.Fatalf("OnTrust heard %v, want only the pin, on each admitted connection", heard)
+	if len(heard) != 1 || heard[0] != "SHA256:a" {
+		t.Fatalf("OnTrust heard %v, want the first use only", heard)
 	}
 }
 

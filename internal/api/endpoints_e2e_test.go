@@ -134,6 +134,21 @@ func TestEndpointAPI(t *testing.T) {
 	// A host key is an ssh endpoint's alone (#1032): a tcp endpoint refuses one.
 	c.do(ownerTok, http.MethodPost, "/endpoints/"+ifA.ID+":retry",
 		map[string]any{"host_key": "SHA256:" + strings.Repeat("A", 43)}, http.StatusUnprocessableEntity)
+
+	// A certificate key is a tls endpoint's alone (#1035): a tcp endpoint
+	// refuses one, a malformed one is refused, and the operator in scope
+	// accepts one under endpoint:retry, which a viewer lacks and an
+	// operator scoped elsewhere cannot see.
+	key := "SHA256:" + strings.Repeat("C", 43)
+	c.do(ownerTok, http.MethodPost, "/endpoints/"+ifA.ID+":retry", map[string]any{"certificate": key}, http.StatusUnprocessableEntity)
+	tlsA := createEndpoint(c, ownerTok, map[string]any{"transport": "tls", "component": "comp-a", "params": map[string]any{"target": "10.0.0.1:51326", "tls_mode": "pin"}})
+	c.do(ownerTok, http.MethodPost, "/endpoints/"+tlsA.ID+":retry", map[string]any{"certificate": "SHA256:short"}, http.StatusUnprocessableEntity)
+	c.do(viewerAllTok, http.MethodPost, "/endpoints/"+tlsA.ID+":retry", map[string]any{"certificate": key}, http.StatusForbidden)
+	c.do(opBTok, http.MethodPost, "/endpoints/"+tlsA.ID+":retry", map[string]any{"certificate": key}, http.StatusNotFound)
+	c.do(ownerTok, http.MethodPost, "/endpoints/"+tlsA.ID+":retry", map[string]any{"certificate": key}, http.StatusOK)
+	if got, err := gw.LatestProperty(ctx, "comp-a", "tls-certificate", "tls"); err != nil || got == nil || got.Value != key || got.Provenance != "declared" {
+		t.Fatalf("the accepted key = %+v, %v; want it declared as the endpoint's pin", got, err)
+	}
 }
 
 // TestEndpointCreateWithAmbiguousComponentIs409 closes I1's other half: the

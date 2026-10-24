@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"net"
 	"sort"
 	"strings"
 	"sync"
@@ -39,6 +40,9 @@ type sessionHooks struct {
 	rejection func(taskID, endpoint, value string)
 	// hostKey hears an ssh host key the session trusted (#1032).
 	hostKey func(taskID, endpoint, fingerprint string)
+	// certificate hears a tls public key the endpoint trusted on first use
+	// (#1035), and republishes it while the server lacks it.
+	certificate func(taskID, endpoint, fingerprint string)
 }
 
 // sessionConn is what a held connection depends on: the transport, the
@@ -113,6 +117,10 @@ type sessionWant struct {
 	// channel (#1032).
 	hostKey string
 	channel collection.ChannelOptions
+	// tls is the handshake a tls endpoint's connections run (#1035): its
+	// mode and server name; the pin is the endpoint's own, shared with its
+	// probe, and joins at start.
+	tls *collection.TLSTrust
 }
 
 // holdsSession reports whether a task asks its endpoint's session to be held:
@@ -168,6 +176,21 @@ func sessionAuthOf(task collection.TaskSpec) (*collection.SessionAuth, error) {
 		return nil, nil
 	}
 	return auth, nil
+}
+
+// tlsTrustOf reads a tls endpoint's handshake off its params (#1035): the
+// mode (empty verifies) and the server name, the target's host. The pin is
+// the endpoint's own, joined by the session manager.
+func tlsTrustOf(p endpointParams) (collection.TLSTrust, error) {
+	mode, err := driver.ParseTLSMode(p.TLSMode)
+	if err != nil {
+		return collection.TLSTrust{}, fmt.Errorf("tls: %v", err)
+	}
+	host, _, err := net.SplitHostPort(p.Target)
+	if err != nil {
+		host = p.Target
+	}
+	return collection.TLSTrust{Mode: mode, ServerName: host}, nil
 }
 
 // desiredSessions derives the held set from a worklist. Pure. A listen task
@@ -230,6 +253,15 @@ func desiredSessions(tasks []collection.TaskSpec, dialers map[string]collection.
 			refused[task.EndpointID] = fmt.Sprintf("session auth: %v", err)
 			continue
 		}
+		var trust *collection.TLSTrust
+		if task.Transport == "tls" {
+			t, err := tlsTrustOf(p)
+			if err != nil {
+				refused[task.EndpointID] = err.Error()
+				continue
+			}
+			trust = &t
+		}
 		want[task.EndpointID] = sessionWant{
 			conn:        sessionConn{transport: task.Transport, target: p.Target, timeout: timeout},
 			secrets:     task.Secrets,
@@ -244,6 +276,7 @@ func desiredSessions(tasks []collection.TaskSpec, dialers map[string]collection.
 			fingerprint: task.Fingerprint,
 			hostKey:     task.HostKey,
 			channel:     channelOf(task.Session),
+			tls:         trust,
 		}
 	}
 	for id, w := range want {
@@ -362,6 +395,9 @@ type heldSession struct {
 	sess   *collection.Session
 	router *listenerRouter
 	pin    *collection.HostKeyPin
+	// certPin is the tls pin the session was started with (#1035): the
+	// endpoint's own, which the probe shares.
+	certPin *collection.HostKeyPin
 
 	mu       sync.Mutex
 	taskID   string
@@ -391,11 +427,81 @@ type sessionManager struct {
 	pubMu     sync.Mutex
 	published map[string]string
 	pubTask   map[string][2]string
+	// certPins is each tls endpoint's public key pin (#1035), one per
+	// endpoint and shared by its held session and its probe, so neither
+	// trusts a key the other refused. It outlives a session's recycle (a key
+	// trusted on first use stays the pin while the server does not yet hold
+	// it) and is replaced only when the worklist delivers another pin (an
+	// operator's :retry with certificate). Touched on the run loop only; the
+	// pin itself is safe across goroutines.
+	certPins map[string]*collection.HostKeyPin
 }
 
 func newSessionManager(dialers map[string]collection.SessionDialer, hooks sessionHooks) *sessionManager {
 	return &sessionManager{dialers: dialers, hooks: hooks, held: map[string]*heldSession{}, refused: map[string]string{}, pins: map[string]string{},
-		gates: newGates(), published: map[string]string{}, pubTask: map[string][2]string{}}
+		gates: newGates(), published: map[string]string{}, pubTask: map[string][2]string{}, certPins: map[string]*collection.HostKeyPin{}}
+}
+
+// syncCertPins brings each tls endpoint's pin to what the worklist
+// delivers: a new endpoint takes the delivered pin (empty before first use),
+// a different delivered pin replaces it, and a pin the node holds that the
+// worklist does not deliver (a lost publish) is published again. An endpoint
+// that left the worklist forgets its pin.
+func (m *sessionManager) syncCertPins(tasks []collection.TaskSpec) {
+	delivered := map[string]string{}
+	for _, t := range tasks {
+		if t.Transport != "tls" || t.EndpointID == "" {
+			continue
+		}
+		if _, seen := delivered[t.EndpointID]; !seen || t.CertificatePin != "" {
+			delivered[t.EndpointID] = t.CertificatePin
+		}
+	}
+	for id := range m.certPins {
+		if _, ok := delivered[id]; !ok {
+			delete(m.certPins, id)
+		}
+	}
+	for id, pin := range delivered {
+		held := m.certPins[id]
+		switch {
+		case held == nil, pin != "" && pin != held.Get():
+			m.certPins[id] = m.newCertPin(id, pin)
+		case pin == "" && held.Get() != "":
+			m.publishCertificate(id, held.Get())
+		}
+	}
+}
+
+// newCertPin makes an endpoint's pin; a key it trusts on first use is
+// published as tls-certificate under the endpoint's publishing task.
+func (m *sessionManager) newCertPin(endpointID, fp string) *collection.HostKeyPin {
+	pin := collection.NewHostKeyPin(fp)
+	pin.OnTrust = func(fp string) { m.publishCertificate(endpointID, fp) }
+	return pin
+}
+
+func (m *sessionManager) publishCertificate(endpointID, fp string) {
+	if m.hooks.certificate == nil {
+		return
+	}
+	m.pubMu.Lock()
+	task := m.pubTask[endpointID]
+	m.pubMu.Unlock()
+	if task[0] != "" {
+		m.hooks.certificate(task[0], task[1], fp)
+	}
+}
+
+// certPinOf is the tls endpoint's pin the probe shares, or a pin of the
+// delivered key alone when the node holds none (no session manager).
+func (m *sessionManager) certPinOf(task collection.TaskSpec) *collection.HostKeyPin {
+	if m != nil {
+		if pin, ok := m.certPins[task.EndpointID]; ok {
+			return pin
+		}
+	}
+	return collection.NewHostKeyPin(task.CertificatePin)
 }
 
 // syncRejection publishes the endpoint's endpoint-rejection when it differs
@@ -496,6 +602,7 @@ func (m *sessionManager) observe(tasks []collection.TaskSpec) {
 // reconcile brings the held set to what the worklist asks for.
 func (m *sessionManager) reconcile(tasks []collection.TaskSpec) {
 	m.observe(tasks)
+	m.syncCertPins(tasks)
 	want, refused := desiredSessions(tasks, m.dialers)
 	for id := range m.pins {
 		if _, ok := want[id]; !ok {
@@ -518,6 +625,10 @@ func (m *sessionManager) reconcile(tasks []collection.TaskSpec) {
 			// The operator pinned a different key (a replaced component's,
 			// accepted with :retry): the session redials onto it.
 			m.teardown(id, h, "its host key pin changed")
+		case h.certPin != nil && h.certPin != m.certPins[id]:
+			// The endpoint's tls pin was replaced (an operator's :retry with
+			// certificate): the session redials onto the new one.
+			m.teardown(id, h, "its certificate pin changed")
 		default:
 			h.mu.Lock()
 			h.taskID, h.endpoint = w.taskID, w.endpoint
@@ -570,6 +681,19 @@ func (m *sessionManager) start(id string, w sessionWant) {
 		}
 		w.auth.SSH.Pin = h.pin
 	}
+	var trust *collection.TLSTrust
+	if w.tls != nil {
+		t := *w.tls
+		if t.Mode == driver.TLSModePin {
+			t.Pin = m.certPins[id]
+			if t.Pin == nil {
+				t.Pin = m.newCertPin(id, "")
+				m.certPins[id] = t.Pin
+			}
+			h.certPin = t.Pin
+		}
+		trust = &t
+	}
 	var rejected *collection.TerminalError
 	if gt, ok := m.gates.blocked(id, rungAuthenticated); ok {
 		// A gate this node holds for this fingerprint, or carried back from
@@ -587,6 +711,7 @@ func (m *sessionManager) start(id string, w sessionWant) {
 		Terminal: w.terminal,
 		Reprobe:  w.reprobe,
 		Channel:  w.channel,
+		TLS:      trust,
 		OnAuth: func(v collection.AuthVerdict) {
 			if hooks.auth != nil {
 				taskID, endpoint := h.publishTo()

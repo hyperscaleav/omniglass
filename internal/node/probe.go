@@ -26,6 +26,9 @@ type endpointParams struct {
 	Timeout  string `json:"timeout,omitempty"`
 	Username string `json:"username,omitempty"`
 	Password string `json:"password,omitempty"`
+	// TLSMode is a tls endpoint's verification mode (#1035), derived from
+	// its driver's tls_mode input; empty verifies.
+	TLSMode string `json:"tls_mode,omitempty"`
 }
 
 // runTasks executes every probe task in the worklist and publishes one telemetry
@@ -273,7 +276,7 @@ func collectProbe(ctx context.Context, runner *collection.Runner, task collectio
 		switch {
 		case l.Transport == driver.RungRequest && l.Request != nil:
 			return collectRequestRung(ctx, runner, task, l.Request)
-		case l.Transport == driver.RungConnect && task.Transport == "ssh":
+		case l.Transport == driver.RungConnect && (task.Transport == "ssh" || task.Transport == "tls"):
 			t, err := parseTCPTask(task)
 			if err != nil {
 				return nil, err
@@ -281,8 +284,11 @@ func collectProbe(ctx context.Context, runner *collection.Runner, task collectio
 			return runner.CollectTCP(ctx, t)
 		}
 	}
-	if task.Transport == "ssh" {
+	switch task.Transport {
+	case "ssh":
 		return collectSSHProbe(ctx, runner, task, sessions)
+	case "tls":
+		return collectTLSProbe(ctx, runner, task, sessions)
 	}
 	return collectTask(ctx, runner, task)
 }
@@ -318,6 +324,39 @@ func collectSSHProbe(ctx context.Context, runner *collection.Runner, task collec
 		sessions.refuse(task.EndpointID, task.Fingerprint, &collection.TerminalError{Class: driver.ClassAuth, Reason: "the component refused the probe's credential"})
 	case res.Authenticated:
 		sessions.pass(task.EndpointID)
+	}
+	return dps, nil
+}
+
+// collectTLSProbe runs the tls probe on the gate (#1035). With the transport
+// rung gated (a changed key, a certificate that failed verification) only
+// the rung below runs, a TCP connect, so no handshake reaches a key nobody
+// trusted. Otherwise the handshake runs under the endpoint's mode and its
+// pin (the one its held session shares), and a certificate refusal it meets
+// gates the endpoint, carrying both keys when a pin refused one.
+func collectTLSProbe(ctx context.Context, runner *collection.Runner, task collection.TaskSpec, sessions *sessionManager) ([]collection.Sample, error) {
+	t, err := parseTCPTask(task)
+	if err != nil {
+		return nil, err
+	}
+	if gt, ok := sessions.blocked(task.EndpointID, rungResponsive); ok && gt.rung == rungResponsive {
+		return runner.CollectTCP(ctx, t)
+	}
+	var p endpointParams
+	_ = json.Unmarshal(task.EndpointParams, &p) // parseTCPTask has read it already
+	trust, err := tlsTrustOf(p)
+	if err != nil {
+		return nil, fmt.Errorf("node: task %s: %w", task.ID, err)
+	}
+	if trust.Mode == driver.TLSModePin {
+		trust.Pin = sessions.certPinOf(task)
+	}
+	dps, res, err := runner.CollectTLSResult(ctx, collection.TLSTask{Target: t.Target, Timeout: t.Timeout, Trust: trust})
+	if err != nil {
+		return nil, err
+	}
+	if res.Refusal != nil {
+		sessions.refuse(task.EndpointID, task.Fingerprint, res.Refusal)
 	}
 	return dps, nil
 }

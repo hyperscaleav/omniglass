@@ -26,9 +26,10 @@ func base() fingerprint.Inputs {
 			Login:    &driver.Login{Steps: []driver.LoginStep{{Expect: driver.Match{Prefix: "login:"}, Send: "${secret.login.username}"}}, Ready: driver.Match{Prefix: "READY"}},
 			Terminal: []driver.TerminalRule{{Class: driver.ClassAuth, Match: driver.Match{Prefix: "auth rejected"}}},
 		},
-		Ladder:     &driver.EffectiveLadder{Ping: true, Transport: driver.RungConnect, Session: true},
-		HostKeyPin: "SHA256:pinned",
-		Retry:      1,
+		Ladder:         &driver.EffectiveLadder{Ping: true, Transport: driver.RungConnect, Session: true},
+		HostKeyPin:     "SHA256:pinned",
+		CertificatePin: "SHA256:tls-pinned",
+		Retry:          1,
 	}
 }
 
@@ -37,7 +38,7 @@ func TestFingerprintIsStableAndOpaque(t *testing.T) {
 	if a != b || len(a) != 64 {
 		t.Fatalf("fingerprints %q, %q: want one stable sha256 hex", a, b)
 	}
-	for _, clear := range []string{"10.0.0.5", "panel-login", "sealed-digest-1", "SHA256:pinned", "auth rejected"} {
+	for _, clear := range []string{"10.0.0.5", "panel-login", "sealed-digest-1", "SHA256:pinned", "SHA256:tls-pinned", "auth rejected"} {
 		if strings.Contains(a, clear) {
 			t.Fatalf("the fingerprint carries %q in the clear", clear)
 		}
