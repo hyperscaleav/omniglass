@@ -197,6 +197,7 @@ below from the project's history. From here it grows one slice at a time.
 | [ADR-0156](#adr-0156-a-driver-declares-its-terminal-replies-and-a-transport-classifies-its-own-refusals) | 2026-10-23 | Accepted | Non-retryable errors are defined in drivers (#1049, the architect's ruling): a spec's `session.terminal` lists the replies retrying cannot fix, each a match with a class (`auth`, `host-key`, `certificate`, `protocol`, a code-held set), applied to the login and to every answer, refusal and arm reply; a transport classifies its own protocol refusals into the same classes. The primitive is `collection.TerminalError{Class, Reason}`; anything unclassified stays retryable, and a terminal poll fault waits its interval rather than the failure backoff |
 | [ADR-0157](#adr-0157-telnet-and-ssh-are-held-line-transports-their-login-is-the-drivers-and-the-ssh-host-key-is-pinned-on-first-use) | 2026-10-23 | Accepted | `telnet` (#1033) and `ssh` (#1032) are held line transports: the same session machine and line reader, telnet behind a filter refusing every option, ssh over a shell or exec channel. Their session's login is the driver's (`session.login`, `session.credential`), not endpoint params; the telnet probe never logs in, and the ssh probe's params login is a known gap (#1060). The ssh host key is pinned on first use as the `ssh-host-key` property (observed), delivered back by the worklist, overridden by a declared value an operator sets with `:retry` and `host_key`; a changed key is a `host-key` refusal |
 | [ADR-0158](#adr-0158-one-connection-fingerprint-gates-every-connection-on-a-ladder-the-driver-declares) | 2026-10-23 | Accepted | One **connection fingerprint** gates every connection, held or stateless (#1056 ruling): a digest the server computes over every input a connection is made with (transport, declared params, driver inputs, each secret's sealed version, the session block, the ladder, the ssh pin, the `:retry` counter), held in `internal/fingerprint`. Connections are verified bottom up on the existing ladder (reachable, informational ping; responsive, the transport rung and the gate; authenticated, the login), declared in the driver spec with registry defaults. A terminal refusal gates its rung and above for the fingerprint; lower rungs keep running; the gate is published as `endpoint-rejection` and carried back so a restart honours it |
+| [ADR-0159](#adr-0159-a-refused-keys-evidence-rides-its-gate-and-trusting-a-key-is-checked-against-the-one-offered) | 2026-10-24 | Accepted | A refusal of a changed key carries both keys as data on its gate (#1078, amending ADR-0158 point 5): `endpoint-rejection` appends `<pinned-key> <offered-key>`, both or neither, declared once in `internal/collection/rejection`, adopted with the gate on a restart, and served as the reachability read's `pinned_key` and `offered_key`, so no surface parses a fingerprint out of `session-reason`. `:retry` with `host_key` must name the gate's offered key while one is held (409 otherwise, nothing written) and audits the pin replaced and the pin set. The console's Trust this key confirms first and sends exactly the key it showed |
 
 ## Entries
 
@@ -7184,7 +7185,9 @@ interface create form, since that name is the platform's to mint.
      refuses, so no push can plant or lift a gate. **Amended (#1059):** `session-state` and
      `session-reason` join them, since the console reads them as the node's account of its own
      connection: a push could otherwise read a rejected session up, hiding the refusal and its
-     Retry, or plant a reason the node never scrubbed.
+     Retry, or plant a reason the node never scrubbed. **Amended (#1078):** a refusal of a changed
+     key appends its evidence, `<pinned-key> <offered-key>`, to the value
+     ([ADR-0159](#adr-0159-a-refused-keys-evidence-rides-its-gate-and-trusting-a-key-is-checked-against-the-one-offered)).
   6. **Connection inputs edit in place** (the architect's ruling on #1061). A driver-attached
      endpoint's host, port and attached secret references are patched through `PATCH
      /endpoints/{id}` `inputs`, validated against the driver's declared inputs (a refused value is a
@@ -7203,3 +7206,37 @@ interface create form, since that name is the platform's to mint.
   udp request rung's snmp proof is #821; per-rung rtt, jitter and loss as driver toggles, stored as
   one observation per probe with statistics from windowed calc rules, are #1063 and #1065; a path
   rung (hop count, network path) is #1064; layer-2 presence is #1062.
+
+### ADR-0159: A refused key's evidence rides its gate, and trusting a key is checked against the one offered
+
+- **Date:** 2026-10-24 | **Status:** Accepted | **Pages:** [collection](/architecture/collection/), [api](/architecture/api/), [glossary](/architecture/glossary/), [drivers](/guides/admin/drivers/)
+- **Decision:** (#1078, approved in session on 2026-10-24.) A host-key rejection is trusted from the
+  console, and the data it needs is the refusal's own:
+  1. **The evidence rides the gate** (amending ADR-0158 point 5). A refusal of a changed key (an ssh
+     host key; a tls certificate's public key, #1035) carries the key the endpoint pins and the key
+     the component offered instead as data (`collection.TerminalError` `Pinned`, `Offered`), and
+     the gate publishes them with itself: `endpoint-rejection` is `<rung> <class> <fingerprint>`,
+     plus `<pinned-key> <offered-key>` for a key refusal, both or neither. The value is declared once
+     (`internal/collection/rejection`) and read there by the node, the server and the read. A
+     restarted node adopts the evidence with the gate, so what it republishes is what the server
+     holds.
+  2. **The read serves it.** The reachability read's `rejection` carries `pinned_key` and
+     `offered_key`; the console names both and never parses a fingerprint out of `session-reason`,
+     which keeps naming them in prose for the property's series and the CLI reader.
+  3. **A trust is checked against the offer.** `POST /endpoints/{id}:retry` with `host_key` must name
+     the gate's offered key while the gate carries one: a key the component no longer offers is a
+     409 naming the one it offers now, and nothing is written (no pin, no counter, no audit row).
+     With no key refusal held, `host_key` still declares a pin ahead of time. The audit row's `old`
+     carries the pin replaced and its `new` the pin set, beside the actor.
+  4. **The console confirms.** Trust this key (gated `endpoint:retry`, greyed with its reason) opens
+     a confirm that shows both keys and teaches why a key changes (a reinstall, a hardware swap, a
+     man in the middle) through hover, holds the refusal as it was when it opened, sends exactly that
+     offered key, and will not send once the live read's offer has moved.
+- **Context:** The fingerprints existed only inside the reason's text, and a console that parsed
+  prose to send back as a pin would trust whatever the prose said. A separate property for the
+  offered key was the other shape: it is stored on change and published once, so a lost publish or
+  a later refusal could pair an old offered key with a new gate. The gate's value is republished
+  until the server reflects it and adopted on a restart, so evidence carried in it always describes
+  the refusal it gates; and it is per key, not per transport, so the tls slice reuses it unchanged.
+  A trust confirmed against a stale view (another operator retried, and the component now offers a
+  third key) would pin a key nobody read; the server's check is what makes "the key shown" binding.

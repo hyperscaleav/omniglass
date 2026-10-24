@@ -281,7 +281,11 @@ secrets under the editor's scope, audited, its tasks re-derived in the same tran
 `POST /endpoints/{id}:retry`
 (gated `endpoint:retry`, audited, #1049) moves the endpoint's retry counter, part of its connection
 fingerprint, so a gate a terminal refusal holds lifts and the endpoint is attempted again (ADR-0158); for an ssh endpoint whose host key changed, its optional `host_key`
-body declares the new pin (#1032). The routes live in the
+body declares the new pin (#1032). While the endpoint's gate names an offered key, `host_key` must be
+that key: one the component no longer offers is a 409 that writes nothing, so a trust confirmed
+against a stale view cannot pin a key nobody read, and the audit row carries the pin replaced
+(`old.host_key`), the pin set (`new.host_key`) and the actor (#1078,
+[ADR-0159](/architecture/decisions/#adr-0159-a-refused-keys-evidence-rides-its-gate-and-trusting-a-key-is-checked-against-the-one-offered)). The routes live in the
 [generated API reference](/reference/api/), rendered from the OpenAPI document on every build, each
 operation's description naming its permission gate verbatim (a guard test enforces that, alongside the
 spec-contract test that every gated operation carries its `x-omniglass-permission` stamp and
@@ -459,7 +463,9 @@ out-of-scope component is a non-disclosing 404 (a deliberate early exception to
   session: the latest `session-state`, when it changed, and the `session-reason` beside it, cut to
   500 characters), and the `rejection` a terminal refusal holds (the rung and class of
   `endpoint-rejection`; the connection fingerprint it carries is never served), which the console's
-  session pill and ladder render (#1059). Teardown publishes no state, which is why a session is
+  session pill and ladder render (#1059). A refusal of a changed key adds `pinned_key` and
+  `offered_key`, both or neither, read off the gate as data (#1078): the console names them and
+  trusts the exact `offered_key` it showed, never a fingerprint parsed out of the reason. Teardown publishes no state, which is why a session is
   served only while one is held; and like the gate, a session's state and reason are the node's
   own facts, which `POST /telemetry:push` refuses.
 - `GET /components/{name}/events` is the log-kind mirror: the component's recent **log occurrences**

@@ -34,12 +34,17 @@ import {
 // the class: a certificate refusal carrying both keys renders the same.
 
 // PinnedKeyNotice is a key refusal's facts: the key pinned, the key offered.
+// Side by side where its own width holds two fingerprints (a container query,
+// so the Collection card and the narrower blade each get the layout that fits
+// them), stacked otherwise.
 export default function PinnedKeyNotice(props: { refusal: KeyRefusal }) {
   const noun = () => keyNoun(props.refusal.class);
   return (
-    <div data-testid="pinned-key-notice" class="grid gap-2">
-      <KeyFact label={`Pinned ${noun()}`} hint={PINNED_KEY_HINT} value={props.refusal.pinned} testid="pinned-key" />
-      <KeyFact label={`Offered ${noun()}`} hint={OFFERED_KEY_HINT} value={props.refusal.offered} testid="offered-key" />
+    <div class="@container">
+      <div data-testid="pinned-key-notice" class="grid gap-x-6 gap-y-2.5 pt-1 pb-0.5 @3xl:grid-cols-2">
+        <KeyFact label={`Pinned ${noun()}`} hint={PINNED_KEY_HINT} value={props.refusal.pinned} testid="pinned-key" />
+        <KeyFact label={`Offered ${noun()}`} hint={OFFERED_KEY_HINT} value={props.refusal.offered} testid="offered-key" />
+      </div>
     </div>
   );
 }

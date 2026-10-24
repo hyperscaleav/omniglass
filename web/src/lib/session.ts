@@ -213,7 +213,7 @@ export const KEY_CHANGE_CAUSES: { label: string; hint: string }[] = [
   },
   {
     label: "Man in the middle",
-    hint: "Something between the node and the component answering in its place, to read what the node sends (credentials, commands). Never trust a change nobody can account for: compare the offered key with the one the component's own console shows first.",
+    hint: "Something between the node and the component, answering in its place to read what the node sends (credentials, commands). Never trust a change nobody can account for: compare the offered key with the component's own console first.",
   },
 ];
 

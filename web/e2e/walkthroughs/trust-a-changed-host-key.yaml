@@ -1,0 +1,34 @@
+# Trust a changed host key (#1078): the briefing room's touch panel answers NVP
+# over its ssh console, and its endpoint pins the host key the panel presented
+# before it was reimaged (internal/devseed/fixtures.yaml, sim_endpoints). The
+# simulated panel mints its own key when the simulator starts, so the node
+# refuses the connection before logging in and the session reads rejected,
+# class host-key, naming both keys. Trust this key confirms, teaching why a key
+# changes, then makes the offered key the pin; the node redials onto it at its
+# next check-in (2s on the walkthrough stack) and the session reads up.
+title: Trust a changed host key
+description: A touch panel was reimaged, so it presents a new ssh host key and the node refused it. Read both keys, learn why a key changes, trust the new one, and watch the session come up.
+steps:
+  - goto: /locations/briefing
+    caption: The briefing room's system. A node collects its touch panel over the panel's ssh console.
+  - click: 'button:has([data-label]:text-is("Touch Panel 1"))'
+    caption: Open the touch panel.
+  - click: 'aside[data-blade] button[aria-label=Expand]'
+    caption: Expand it to the component's view, where collection is read.
+  - wait: { selector: '[data-testid=pinned-key-notice]' }
+    caption: The host key changed. The node refused the connection before logging in, and names the key pinned and the key offered.
+    hold: 1500
+  - click: { role: button, name: Trust this key }
+    caption: Trusting a key decides who the node will talk to, so it confirms first.
+  - wait: { role: alertdialog }
+    caption: The confirm shows both keys again, and why a key changes.
+  - press: Shift+Tab
+    caption: Each cause teaches itself. A reinstall or a hardware swap is safe to trust.
+  - wait: { text: answering in its place }
+    caption: A change nobody can account for may be something answering in the panel's place. This panel was reimaged.
+    hold: 1500
+  - click: '[role=alertdialog] button:has-text("Trust this key")'
+    caption: Trust it. The offered key becomes the pin, and the audit log records both keys and who trusted.
+  - wait: { selector: 'li:has([data-testid=collection-ssh]) [data-testid=session-pill][data-state=up]', timeout: 20000 }
+    caption: The node redials onto the new pin at its next check-in, and the session reads up.
+    poster: true

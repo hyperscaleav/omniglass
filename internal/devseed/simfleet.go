@@ -179,7 +179,8 @@ func simulateReachabilityDemo(ctx context.Context, gw storage.Gateway, actorID s
 // secrets they reference, then each endpoint as a driver attach at its
 // component's simulated address (the host an endpoint the plan gave it already
 // targets), the driver's declared port lifted as the simulator lifts it, on
-// the dev node. Idempotent: a secret that exists is kept, and a component that
+// the dev node, with its ssh host key pinned where the fixture names one
+// (#1078). Idempotent: a secret that exists is kept, and a component that
 // already holds an endpoint of the driver's transport is left alone, so a
 // re-run changes nothing. Runs after seedSimFleet, which gives every simulated
 // component its address.
@@ -260,10 +261,18 @@ func seedSimEndpoints(ctx context.Context, gw storage.Gateway, actorID string, d
 			inputs[k] = v
 		}
 		comp, drv := compID, se.Driver
-		if _, err := gw.CreateEndpoint(ctx, actorID, storage.EndpointSpec{
+		created, err := gw.CreateEndpoint(ctx, actorID, storage.EndpointSpec{
 			Driver: &drv, Inputs: inputs, Label: se.Label, Component: &comp, Node: &node, SecretRead: all, CanAdmin: true,
-		}, all); err != nil {
+		}, all)
+		if err != nil {
 			return fmt.Errorf("devseed: create simulated %s endpoint on %s: %w", se.Driver, se.Component, err)
+		}
+		// Pinned once, at creation: a re-run skips the endpoint above, so a
+		// key an operator trusted since is never put back.
+		if se.HostKey != "" {
+			if _, err := gw.RetryEndpoint(ctx, actorID, created.ID, se.HostKey, all, all); err != nil {
+				return fmt.Errorf("devseed: pin the host key of the simulated %s endpoint on %s: %w", se.Driver, se.Component, err)
+			}
 		}
 	}
 	return nil

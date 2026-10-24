@@ -239,7 +239,7 @@ omniglass endpoint delete <id>                                  # refused (409) 
 # An endpoint a refusal gated (session-state reads rejected, endpoint-rejection names the rung)
 # is not attempted again until what it connects with changes, or an operator retries it:
 omniglass endpoint retry <id>                                   # needs endpoint:retry; audited
-omniglass endpoint retry <id> --host-key SHA256:...             # ssh: trust a replaced component's new key
+omniglass endpoint retry <id> --host-key SHA256:...             # ssh: trust the offered key (409 if it is no longer offered)
 
 # The poll task is derived from the endpoint, so the task surface is read-only.
 omniglass task list
