@@ -93,6 +93,27 @@ func executeDelivery(ctx context.Context, runner *collection.Runner, d collectio
 		return "", "node: the endpoint is gated: " + gt.refusal().Error()
 	}
 	switch {
+	case d.Transport == "udp":
+		// A datagram from the endpoint's own socket (#1037), re-sent only
+		// as often as the binding declares: a command sent twice may act
+		// twice, so by default a lost reply fails it.
+		sock := sessions.datagramOf(d.EndpointID)
+		if sock == nil {
+			return "", "node: no udp socket is bound for endpoint " + d.EndpointID + ": " + sessions.datagramRefusal(d.EndpointID)
+		}
+		ans, err := sock.Exchange(ctx, d.Line, d.Reply, sessions.datagramTimeout(d.EndpointID), d.Retries)
+		if terr, ok := collection.AsTerminal(err); ok {
+			sessions.refuseOver(d.Transport, d.EndpointID, sessions.currentFingerprint(d.EndpointID), terr)
+			return "", err.Error()
+		}
+		var refused *collection.RefusedError
+		if errors.As(err, &refused) {
+			return refused.Line, err.Error()
+		}
+		if err != nil {
+			return "", err.Error()
+		}
+		return ans.Line, ""
 	case collection.IsLineTransport(d.Transport):
 		if held := sessions.lookup(d.EndpointID); held != nil {
 			reply, err := held.Exchange(ctx, d.Line, d.Reply, 0)

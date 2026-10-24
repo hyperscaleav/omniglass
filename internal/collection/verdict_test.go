@@ -32,3 +32,27 @@ func TestInterfaceVerdict(t *testing.T) {
 		})
 	}
 }
+
+// Where no port can be opened (udp, #1037), the transport rung is a request
+// answered, so with no reachability metric the responsive rung is the
+// verdict; beside a port's tcp-open it decides nothing (the AND is the
+// port's, as before).
+func TestTheResponsiveRungIsTheVerdictWhereNoPortCanBeOpened(t *testing.T) {
+	up := Sample{Name: SignalEndpointResponsive, Text: "up", IsText: true}
+	down := Sample{Name: SignalEndpointResponsive, Text: "down", IsText: true}
+	for _, tc := range []struct {
+		name   string
+		dps    []Sample
+		wantUp bool
+		wantOk bool
+	}{
+		{"answered", []Sample{up, {Name: SignalUDPResponseTime, Value: 2}}, true, true},
+		{"unanswered", []Sample{down}, false, true},
+		{"beside an open port it decides nothing", []Sample{{Name: SignalTCPOpen, Value: 1}, down}, true, true},
+	} {
+		gotUp, gotOk := EndpointVerdict(tc.dps)
+		if gotUp != tc.wantUp || gotOk != tc.wantOk {
+			t.Errorf("%s: verdict = %v, %v; want %v, %v", tc.name, gotUp, gotOk, tc.wantUp, tc.wantOk)
+		}
+	}
+}

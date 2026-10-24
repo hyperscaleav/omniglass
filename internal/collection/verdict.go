@@ -41,7 +41,19 @@ func EndpointVerdict(dps []Sample) (up bool, ok bool) {
 		}
 	}
 	if !ok {
-		return false, false
+		return responsiveVerdict(dps)
 	}
 	return up, true
+}
+
+// responsiveVerdict is the verdict of an endpoint whose transport rung is a
+// request answered, where no port can be opened (udp, #1037): the
+// responsive rung itself. ok is false when no such rung landed.
+func responsiveVerdict(dps []Sample) (up bool, ok bool) {
+	for _, d := range dps {
+		if d.Name == SignalEndpointResponsive && d.IsText {
+			return d.Text == VerdictUp, true
+		}
+	}
+	return false, false
 }

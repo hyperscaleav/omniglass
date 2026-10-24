@@ -10,6 +10,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/hyperscaleav/omniglass/internal/collection/probekeys"
 	"github.com/hyperscaleav/omniglass/internal/driver"
 )
 
@@ -28,6 +29,10 @@ import (
 // reaches the exchange (refused, not a timeout) through the socket's error
 // queue, which the platform file turns on (IP_RECVERR on Linux; elsewhere a
 // closed port reads as a timeout).
+
+// SignalUDPResponseTime is the udp request rung's timing, one observation
+// per answered probe (decision 7a of #1076; folded into rtt by #1063).
+const SignalUDPResponseTime = probekeys.UDPResponseTime
 
 // DatagramConfig is what an endpoint's socket is made from.
 type DatagramConfig struct {
