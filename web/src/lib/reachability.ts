@@ -127,6 +127,11 @@ export function reason(iface: ReachEndpoint, now: number = Date.now()): string {
     // retrying cannot fix, and the node sends nothing more under it.
     return `The component refused the endpoint's request in a way retrying cannot fix (${iface.rejection.class}): nothing is sent to it until the endpoint changes or someone retries it.`;
   }
+  if (ping && ping.value >= 1 && !port && iface.responsive?.value === "down" && iface.transport === "snmp") {
+    // An snmp endpoint (#821): its rung is a get, and v2c drops a wrong
+    // community silently, so the cause cannot be narrowed.
+    return "Host answers ping, but the agent does not answer its get: the agent is stopped, the community is wrong (a v2c agent drops a wrong community silently, so the two cannot be told apart), or the datagrams are lost.";
+  }
   if (ping && ping.value >= 1 && !port && iface.responsive?.value === "down") {
     // A udp endpoint (#1037): no port to open, so the rung is the request.
     return "Host answers ping, but the endpoint's request goes unanswered: an open udp port cannot be detected, so a request answered is the transport rung. The service is down, the port is closed, or the datagrams are lost.";

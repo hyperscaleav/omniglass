@@ -60,7 +60,7 @@ type reachVerdictBody struct {
 }
 
 type reachLayerBody struct {
-	Layer  string    `json:"layer" doc:"The probe layer word (ping, port, or request: a udp endpoint's request answered)"`
+	Layer  string    `json:"layer" doc:"The probe layer word (ping, port, or request: a udp endpoint's request or an snmp endpoint's get answered)"`
 	Check  string    `json:"check" doc:"The property_type key of the primary signal"`
 	Value  float64   `json:"value" doc:"The latest signal value (1 = reachable/open, 0 = not)"`
 	Detail string    `json:"detail,omitempty" doc:"A human timing detail (rtt / connect time), when present"`
@@ -262,8 +262,8 @@ func composeEndpoint(ctx context.Context, gw storage.Gateway, comp string, it st
 		row.Layers = append(row.Layers, lb)
 	}
 
-	if it.Transport == "udp" && row.Responsive != nil {
-		lb, err := composeRequestLayer(ctx, gw, comp, it.Name, row.Responsive)
+	if timingKey, ok := requestTimingKey[it.Transport]; ok && row.Responsive != nil {
+		lb, err := composeRequestLayer(ctx, gw, comp, it.Name, row.Responsive, timingKey)
 		if err != nil {
 			return row, err
 		}
@@ -280,22 +280,30 @@ func composeEndpoint(ctx context.Context, gw storage.Gateway, comp string, it st
 	return row, nil
 }
 
-// udpResponseKey times a udp endpoint's answered request (#1037), ruled
-// node-only like every probe timing.
-const udpResponseKey = probekeys.UDPResponseTime
+// udpResponseKey and snmpResponseKey time an answered request rung (#1037,
+// #821), ruled node-only like every probe timing.
+const (
+	udpResponseKey  = probekeys.UDPResponseTime
+	snmpResponseKey = probekeys.SNMPResponseTime
+)
 
-// composeRequestLayer serves a udp endpoint's transport rung (#1037): an open
-// udp port cannot be detected, so the gate is the driver's request answered,
-// read off endpoint-responsive. It is timed by the latest udp-response-time
-// only while answered: an unanswered probe lands no time, so the last one
-// belongs to an earlier answer and is not served as this probe's.
-func composeRequestLayer(ctx context.Context, gw storage.Gateway, comp, instance string, responsive *reachVerdictBody) (reachLayerBody, error) {
+// requestTimingKey is each transport whose rung is a request answered, where
+// an open port cannot be detected, and the timing its answers land.
+var requestTimingKey = map[string]string{"udp": udpResponseKey, "snmp": snmpResponseKey}
+
+// composeRequestLayer serves a request-rung endpoint's transport rung (udp
+// #1037, snmp #821): an open port cannot be detected, so the gate is the
+// driver's request answered (snmp's a get), read off endpoint-responsive. It
+// is timed by the latest timing only while answered: an unanswered probe
+// lands no time, so the last one belongs to an earlier answer and is not
+// served as this probe's.
+func composeRequestLayer(ctx context.Context, gw storage.Gateway, comp, instance string, responsive *reachVerdictBody, timingKey string) (reachLayerBody, error) {
 	lb := reachLayerBody{Layer: "request", Check: responsiveKey, TS: responsive.TS}
 	if responsive.Value != "up" {
 		return lb, nil
 	}
 	lb.Value = 1
-	timing, err := gw.LatestMetricInstance(ctx, comp, udpResponseKey, instance)
+	timing, err := gw.LatestMetricInstance(ctx, comp, timingKey, instance)
 	if err != nil {
 		return lb, err
 	}

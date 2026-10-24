@@ -633,3 +633,82 @@ func TestReachabilityServesTheUDPRequestLayer(t *testing.T) {
 		t.Fatalf("layers = %+v, want the request layer unanswered and untimed", got)
 	}
 }
+
+// snmp's rung (#821) is a get answered: the read serves it as the same
+// request layer, timed by snmp-response-time while answered.
+func TestReachabilityServesTheSNMPRequestLayer(t *testing.T) {
+	if testing.Short() {
+		t.Skip("integration test needs Postgres")
+	}
+	ctx := context.Background()
+	gw, err := storage.NewPG(ctx, storagetest.NewDSN(t))
+	if err != nil {
+		t.Fatalf("open gateway: %v", err)
+	}
+	defer gw.Close()
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	ownerTok, hash, prefix, err := auth.NewBearerToken()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := gw.BootstrapOwner(ctx, storage.OwnerSpec{Username: "root", SecretHash: hash, Prefix: prefix}); err != nil {
+		t.Fatal(err)
+	}
+	all := scope.Set{All: true}
+	comp := "panel-1"
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: comp}, all, all, all, all); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{Transport: "snmp", Component: &comp, Params: []byte(`{"target":"127.60.0.9:161"}`)}, all); err != nil {
+		t.Fatalf("snmp endpoint: %v", err)
+	}
+	at := time.Now().UTC().Add(-time.Minute).Truncate(time.Microsecond)
+	responsive := func(v string, ts time.Time) {
+		t.Helper()
+		if err := insertProperties(ctx, gw, []storage.PropertySampleWrite{
+			{OwnerKind: "component", OwnerID: comp, Key: "endpoint-responsive", Instance: "snmp", Value: v, Source: "snmp", TS: ts},
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	responsive("up", at)
+	if err := insertMetrics(ctx, gw, []storage.MetricSampleWrite{
+		{OwnerKind: "component", OwnerID: comp, Key: "snmp-response-time", Instance: "snmp", Value: 0.74, Source: "snmp", TS: at},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	srv := httptest.NewServer(api.NewHandler(gw))
+	defer srv.Close()
+	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
+	type layer struct {
+		Layer  string  `json:"layer"`
+		Check  string  `json:"check"`
+		Value  float64 `json:"value"`
+		Detail string  `json:"detail"`
+	}
+	read := func() []layer {
+		var r struct {
+			Endpoints []struct {
+				Layers []layer `json:"layers"`
+			} `json:"endpoints"`
+		}
+		if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/components/"+comp+"/reachability", nil, http.StatusOK), &r); err != nil {
+			t.Fatal(err)
+		}
+		if len(r.Endpoints) != 1 {
+			t.Fatalf("endpoints = %+v", r.Endpoints)
+		}
+		return r.Endpoints[0].Layers
+	}
+	got := read()
+	if len(got) != 1 || got[0] != (layer{Layer: "request", Check: "endpoint-responsive", Value: 1, Detail: "0.7 ms"}) {
+		t.Fatalf("layers = %+v, want the request layer answered in 0.7 ms", got)
+	}
+	responsive("down", at.Add(time.Second))
+	if got := read(); len(got) != 1 || got[0] != (layer{Layer: "request", Check: "endpoint-responsive", Value: 0}) {
+		t.Fatalf("layers = %+v, want the request layer unanswered and untimed", got)
+	}
+}

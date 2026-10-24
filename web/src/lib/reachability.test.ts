@@ -125,6 +125,24 @@ describe("reason", () => {
     expect(reason(iface, now)).toMatch(/request goes unanswered/i);
     expect(reason(iface, now)).toMatch(/cannot be detected/i);
   });
+  // An snmp endpoint's rung is a get (#821): the why names the get and the
+  // v2c limit, never a control port.
+  it("explains a ping-up snmp endpoint whose get goes unanswered", () => {
+    const iface: ReachEndpoint = {
+      ...base,
+      endpoint: "snmp",
+      transport: "snmp",
+      responsive: { value: "down", ts: ago(5_000) },
+      layers: [
+        { layer: "ping", check: "icmp-reachable", value: 1, ts: ago(5_000) },
+        { layer: "request", check: "endpoint-responsive", value: 0, ts: ago(5_000) },
+      ],
+    };
+    const why = reason(iface, now);
+    expect(why).toMatch(/get/i);
+    expect(why).toMatch(/community/i);
+    expect(why).not.toMatch(/port/i);
+  });
   // A gated udp endpoint's request was answered with a refusal retrying
   // cannot fix, and the node sends nothing more (review of #1037, finding 5):
   // the why says that, never "unanswered".

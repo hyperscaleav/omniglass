@@ -176,14 +176,14 @@ function GateBreakdown(p: { iface: ReachEndpoint }) {
         <div class="flex items-center gap-2" data-testid="request-rung">
           <span class={`inline-block size-2 shrink-0 rounded-full ${requestGated() ? TONE_DOT.unknown : requestRung(p.iface) ? "bg-success" : "bg-error"}`} />
           <span class="w-16 shrink-0 uppercase tracking-wide text-base-content/45 text-[10px]">rung</span>
-          <span class="font-data text-base-content/70">request</span>
+          <span class="font-data text-base-content/70">{p.iface.transport === "snmp" ? "get" : "request"}</span>
           <span class="text-base-content/50">{requestGated() ? "refused, not sent beneath the gate" : requestRung(p.iface) ? "answered" : "not answered"}</span>
           <Show when={!requestGated() && requestRung(p.iface) && requestLayer(p.iface)?.detail}>
             <span class="text-base-content/40">· {requestLayer(p.iface)!.detail}</span>
           </Show>
           <InfoTip
             label="the request rung"
-            text="The transport rung where an open port cannot be detected (udp): the node sends the driver's named request and an answer proves the protocol. Silence reads not answered (timed out), and a port the host reports closed reads refused. With no port to open, this rung is the endpoint's verdict."
+            text="The transport rung where an open port cannot be detected (udp, snmp): the node sends the driver's named request (for snmp, a get of a standard OID with the endpoint's community) and an answer proves the protocol. Silence reads not answered (timed out), and a port the host reports closed reads refused; a v2c agent drops a wrong community silently, so it reads not answered too. With no port to open, this rung is the endpoint's verdict."
           />
         </div>
       </Show>
