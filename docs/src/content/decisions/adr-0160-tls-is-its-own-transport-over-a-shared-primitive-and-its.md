@@ -15,7 +15,11 @@ summary: "`tls` is its own held line transport (rung `handshake`) over one TLS d
      variant of a carrier that needs its own endpoint name and its own rung is its own registry
      entry over a shared primitive; one that needs neither is a capability on the carrier. This
      amends [ADR-0153](#adr-0153-the-held-session-proof-is-the-line-protocol-over-tcp-other-held-transports-are-their-own-issues),
-     which placed tls as a capability on tcp.
+     which placed tls as a capability on tcp. **Amended (#902):** https meets both tests (its rung
+     is the handshake, and a component may serve a plain web port beside a TLS one), so it is its
+     own registry entry over this primitive, not a capability on http
+     ([ADR-0902](#adr-0902-http-polls-and-commands-send-real-requests-read-through-one-extraction-authenticated-by-a-declared-scheme));
+     wss beside websocket follows the same answer (decision 4 of #1113).
   2. **The mode is a driver input.** `tls-mode` (`verify`, `pin`, `skip`) is derived into the
      endpoint's params as `host` and `port` are, so it edits in place (`PATCH /endpoints/{id}`
      `inputs`) and moves the connection fingerprint. The driver declares its default (the

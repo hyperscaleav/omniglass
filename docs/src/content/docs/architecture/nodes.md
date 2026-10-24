@@ -23,7 +23,9 @@ over the driver's binding, [ADR-0136](/architecture/decisions/#adr-0136-actuatio
 driver polls on their declared schedule (#822), and, for the line protocol over `tcp`, `tls` (#1035), `telnet` (#1033) and `ssh` (#1032), held sessions
 (#816, [below](#sessions)) with their listeners and the inbound demux (#817), and the same line
 protocol as datagrams over `udp` (#1037), stateless, each endpoint on its own bound socket
-([udp](/architecture/collection/#udp)). Still `Design`: the
+([udp](/architecture/collection/#udp)), and http polls and commands over `http` and `https`
+(#902), stateless, each its own request with the endpoint's declared credential, the https pin shared
+with the endpoint's probe ([http and https](/architecture/collection/#http-and-https)). Still `Design`: the
 durable JetStream command queue, the session pool knobs and the held transports beyond the line
 protocol (#1034 (websocket), #1036 (mqtt), #1038 (SSE over http), #1039 (modbus/tcp), #1040 (bacnet/ip), #1041 (knxnet/ip), [ADR-0153](/architecture/decisions/#adr-0153-the-held-session-proof-is-the-line-protocol-over-tcp-other-held-transports-are-their-own-issues)),
 config-generation-driven cache invalidation, node self-telemetry, the node-down sweep, the JetStream
@@ -310,7 +312,7 @@ their AND.
 |---|---|---|---|
 | L3 network | ICMP ping, **batched once per host** per tick | `icmp-reachable` / `icmp-rtt-avg` | **informational** (see verdict below); shared by every endpoint on the host |
 | L4 transport | TCP connect (tcp-family) | `tcp-open`/`tcp-connect-time` | udp has no presence check: an open udp port cannot be detected, so its transport rung is the driver's request answered (built, [ADR-0163](/architecture/decisions/#adr-0163-a-udp-endpoint-binds-its-own-socket-and-its-rung-is-a-request-answered)), and the host's port-unreachable report reads `refused` |
-| L7 app | protocol handshake: SNMP `sysUpTime` get (built as snmp's transport rung, [ADR-0821](/architecture/decisions/#adr-0821-snmps-rung-is-a-standard-get-answered-and-only-an-authorizationerror-reads-as-auth)) · SSH handshake+auth · telnet login chain | (verdict) | the SNMP get is the SNMP liveness (ICMP-independent); SSH/telnet log in only where the driver's ladder declares a session rung, because their liveness credential can differ from the device's |
+| L7 app | protocol handshake: SNMP `sysUpTime` get (built as snmp's transport rung, [ADR-0821](/architecture/decisions/#adr-0821-snmps-rung-is-a-standard-get-answered-and-only-an-authorizationerror-reads-as-auth)) · SSH handshake+auth · telnet login chain · an HTTP response drawn, after the TLS handshake for https (built, [ADR-0902](/architecture/decisions/#adr-0902-http-polls-and-commands-send-real-requests-read-through-one-extraction-authenticated-by-a-declared-scheme)) | (verdict) | the SNMP get is the SNMP liveness (ICMP-independent); SSH/telnet log in only where the driver's ladder declares a session rung, because their liveness credential can differ from the device's; the http probe never carries a credential, so an http endpoint's session rung is proven by its credentialed polls and commands |
 
 **The verdict respects each layer's definitiveness.** A TCP connect, any L7 handshake and a
 request answered are **definitive**, so the **ping is informational**, everywhere (an

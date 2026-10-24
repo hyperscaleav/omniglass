@@ -134,7 +134,19 @@ profile can serve a certificate ten days from expiry. A test replaces the key (`
 replaced component) or the whole certificate (`SetTLSCertificate`, one a test root vouches for),
 restarts the face on its port (`StartTLSSession`), and counts the handshakes it was offered
 (`TLSHandshakes`, so a bare TCP connect is told from a handshake); these are test-harness hooks, not
-operator-facing simulator operations. A test that drives the run mode out of
+operator-facing simulator operations.
+
+An http face declaring `tls: true` (the Kestrel bar's API on 443) serves the device's own **https
+identity** (#902): an ECDSA key derived from its id, the same on every run, so an `https` endpoint
+that pinned it stays up across a simulator restart (an ECDSA key, not the line face's Ed25519 one,
+because a browser refuses an Ed25519 certificate and an operator opens the bar's page in one). A test
+replaces it with `RotateHTTPSKey` and reads it with `HTTPSCertificate`. An http face's `auth` may be
+`basic`, `header` (an api key in a named header), `bearer` (an `Authorization: Bearer` token) or
+`query` (an api key in the query parameter `query` names, `apikey` by default), each answering a
+wrong or missing credential with 401; `HTTPRequests` and `HTTPRefusals` count what the faces were
+sent and what the gate refused, so a test tells a gated collector from a retrying one. The DSP serves
+its status as namespaced XML (`GET /api/status.xml`) beside its JSON and its HTML dashboard, the
+three formats an http driver reads. A test that drives the run mode out of
 process (the end-to-end tests run `omniglass sim run` beside a node) cannot take an ephemeral
 port: the run mode binds each face at its profile's port, lifted by `--port-offset`, on the
 address the endpoint targets, and has no way to tell the endpoints a port it picked, so the
@@ -201,7 +213,9 @@ The dev seed simulates its own fleet. Every component whose product a profile se
 address in `127.60.0.0/16` (a component keeps the address it was given, and a new one takes the
 lowest address no endpoint already targets) and endpoints on the dev node, `edge-hq`. A product whose driver
 has a spec gets that driver attached: SNMP products through `snmp-generic` (with a seeded platform
-community secret), the Newtron panels through `newtron-nvp`'s line protocol. The huddle's panel
+community secret), the Newtron panels through `newtron-nvp`'s line protocol, the Kestrel bars
+through `kestrel-api` over https (a seeded basic-auth login, the bar's key pinned on first use), and
+the Tessellate sensors through `http-json` (a seeded api key in its header). The huddle's panel
 also carries its line protocol over telnet behind a login (`newtron-nvp-telnet`, the
 rejected-session demonstration) and over TLS (`newtron-nvp-tls` on 51326, pinning the panel's key
 on first use). A product whose driver
