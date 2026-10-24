@@ -21,7 +21,9 @@ probe results); the consumer lands it in `property` under the same owner-confine
 ([ADR-0066](/architecture/decisions/#adr-0066-logs-are-a-raw-ingest-lane-not-events)).
 **Two ingest lanes**, one write path: the node lane (a node publishes on its own subject; the
 server binds the owner from the task's endpoint) and the **API push lane** (`POST /telemetry:push`:
-a scoped caller declares the owner, the scope check is the fence). A push publishes onto the data
+a scoped caller declares the owner, the scope check is the fence, and a native probe key is refused
+by name, since only the node observes one:
+[the push lane refuses a native key](/architecture/collection/#the-push-lane-refuses-a-native-key)). A push publishes onto the data
 lane, not Postgres, so pushed samples reach the stream consumers; both lanes call one `land()` and
 share its semantics (reject-not-project per lane, the transition-only property guard). The wire is
 the protobuf `TelemetryBatch` with **per-lane arrays** (`metrics`, `properties`, `events`, `logs`).
