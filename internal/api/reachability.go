@@ -9,6 +9,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/danielgtaylor/huma/v2"
+	"github.com/hyperscaleav/omniglass/internal/collection/probekeys"
 	"github.com/hyperscaleav/omniglass/internal/collection/rejection"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 )
@@ -28,14 +29,15 @@ const reachHistoryWindow = 24 * time.Hour
 // verdict; responsiveKey and authKey are the layer-7 rungs beside it (#812).
 // sessionStateKey and sessionReasonKey are a held session's state and why
 // (ADR-0150, ADR-0155), and rejectionKey the gate a terminal refusal holds
-// (ADR-0158); the console's session pill and ladder read them (#1059).
+// (ADR-0158); the console's session pill and ladder read them (#1059). Each is
+// the probekeys declaration the node emits from, ruled node-only there (#1080).
 const (
-	verdictKey       = "endpoint-reachable"
-	responsiveKey    = "endpoint-responsive"
-	authKey          = "endpoint-authenticated"
-	sessionStateKey  = "session-state"
-	sessionReasonKey = "session-reason"
-	rejectionKey     = "endpoint-rejection"
+	verdictKey       = probekeys.EndpointReachable
+	responsiveKey    = probekeys.EndpointResponsive
+	authKey          = probekeys.EndpointAuthenticated
+	sessionStateKey  = probekeys.SessionState
+	sessionReasonKey = probekeys.SessionReason
+	rejectionKey     = probekeys.EndpointRejection
 )
 
 // reachLayer describes one probe layer the panel gates on: its primary signal
@@ -48,8 +50,8 @@ type reachLayer struct {
 
 // reachLayers is the fixed probe-layer order, L3 then L4.
 var reachLayers = []reachLayer{
-	{Layer: "ping", SignalKey: "icmp-reachable", TimingKey: "icmp-rtt-avg"},
-	{Layer: "port", SignalKey: "tcp-open", TimingKey: "tcp-connect-time"},
+	{Layer: "ping", SignalKey: probekeys.ICMPReachable, TimingKey: probekeys.ICMPRTTAvg},
+	{Layer: "port", SignalKey: probekeys.TCPOpen, TimingKey: probekeys.TCPConnectTime},
 }
 
 type reachVerdictBody struct {
