@@ -80,7 +80,11 @@ export function ladder(iface: ReachEndpoint): Rung[] {
     // nothing on the read says a driver declares a login it never ran, so a
     // session with no login (a bare line protocol) never grows one.
     if (iface.authenticated || iface.rejection?.rung === "authenticated") {
-      rungs.push({ key: "authenticated", role: "login", status: observed(iface.authenticated ? iface.authenticated.value === "yes" : undefined) });
+      // The login is attempted only once the transport answers (ADR-0158):
+      // above a failed transport rung it was not tried this time, so an
+      // earlier verdict is not shown as current.
+      const status: RungStatus = transport === false ? "untried" : observed(iface.authenticated ? iface.authenticated.value === "yes" : undefined);
+      rungs.push({ key: "authenticated", role: "login", status });
     }
   }
   const gate = iface.rejection;
@@ -120,7 +124,7 @@ const RUNG_NOW: Record<RungKey, Record<RungStatus, string>> = {
     pass: "The login was accepted.",
     fail: "The login was refused.",
     held: "The login was refused. Nothing logs in again until the credential changes or someone retries the endpoint.",
-    untried: "Not tried while the transport rung is held.",
+    untried: "Not tried while the transport rung is held or does not answer.",
     unknown: "No login has been tried yet.",
   },
 };
