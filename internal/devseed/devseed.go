@@ -705,7 +705,12 @@ func runDoc(ctx context.Context, gw storage.Gateway, actorID string, doc Doc, op
 	if err := seedSimFleet(ctx, gw, actorID, opts.SimPortOffset, only); err != nil {
 		return err
 	}
-	return seedSimEndpoints(ctx, gw, actorID, base, compIDs, opts.SimPortOffset)
+	if err := seedSimEndpoints(ctx, gw, actorID, base, compIDs, opts.SimPortOffset); err != nil {
+		return err
+	}
+	// The breadth RTT series, after the endpoints they are the node's account
+	// of.
+	return seedBreadthRTT(ctx, gw, compIDs)
 }
 
 // standardMaps are the example rooms' layouts, drawn the way an integrator
@@ -1196,14 +1201,54 @@ func seedEvents(ctx context.Context, gw storage.Gateway, componentID string) err
 // beside the boardroom's worked example: enough rooms that the Events tab
 // reads populated wherever an operator lands. Fixture keys.
 
-// breadthEndpoint is the endpoint name the breadth RTT series land under: a
-// native probe key is the node's account of one endpoint (ADR-0161).
-const breadthEndpoint = "icmp"
+// seedBreadthRTT writes RTT series on a few components, so leaves beyond the
+// DSP chart. A native probe key is the node's account of one of the
+// component's endpoints (ADR-0161), so it runs after the simulated fleet gave
+// each its endpoint, lands under that endpoint as the node would, and skips a
+// component with none. Sentinel: a component whose endpoint already carries
+// the series is left alone.
+func seedBreadthRTT(ctx context.Context, gw storage.Gateway, compIDs map[string]string) error {
+	now := time.Now().UTC()
+	for i, key := range []string{"huddle-bar", "wl3-c1a", "briefing-bar"} {
+		id, ok := compIDs[key]
+		if !ok {
+			continue
+		}
+		eps, err := gw.ListComponentEndpoints(ctx, id)
+		if err != nil {
+			return fmt.Errorf("devseed: breadth rtt endpoints: %w", err)
+		}
+		if len(eps) == 0 {
+			continue
+		}
+		names := make([]string, len(eps))
+		for k, ep := range eps {
+			names[k] = ep.Name
+		}
+		sortStrings(names)
+		ep := names[0]
+		if had, err := gw.LatestMetricInstance(ctx, id, "icmp-rtt-avg", ep); err != nil {
+			return fmt.Errorf("devseed: check breadth rtt: %w", err)
+		} else if had != nil {
+			continue
+		}
+		var series []storage.MetricSampleWrite
+		for j := 0; j < 8; j++ {
+			ts := now.Add(-time.Duration(7-j) * 3 * time.Hour)
+			series = append(series, storage.MetricSampleWrite{OwnerKind: "component", OwnerID: id, Key: "icmp-rtt-avg", Instance: ep, Value: 4.5 + float64(i) + 0.3*float64(j%3), Source: "devseed-breadth", TS: ts})
+		}
+		if err := gw.InsertMetricSamples(ctx, storage.NodeWriter(id, ep), series); err != nil {
+			return fmt.Errorf("devseed: breadth rtt samples: %w", err)
+		}
+	}
+	return nil
+}
 
 // seedTelemetryBreadth writes the fleet-wide example telemetry (#796):
-// call events on several bars, log lines on several devices, RTT series on a
-// few components, room series on every system whose standard declares them,
-// and a raised-then-cleared alarm pair so the history surfaces show a healed
+// call events on several bars, log lines on several devices, room series on
+// every system whose standard declares them (the RTT series wait for their
+// endpoints, seedBreadthRTT), and a raised-then-cleared alarm pair so the
+// history surfaces show a healed
 // incident beside the standing ones. Sentinel: the breadth marker event on
 // the first breadth bar; present means the whole block ran.
 func seedTelemetryBreadth(ctx context.Context, gw storage.Gateway, actorID string, compIDs, sysIDs map[string]string) error {
@@ -1266,26 +1311,6 @@ func seedTelemetryBreadth(ctx context.Context, gw storage.Gateway, actorID strin
 		return fmt.Errorf("devseed: breadth logs: %w", err)
 	}
 
-	// RTT series on a few components, so leaves beyond the DSP chart. A native
-	// probe key, so written as a node would, under one endpoint name.
-	var rtts [][]storage.MetricSampleWrite
-	for i, key := range []string{"huddle-bar", "wl3-c1a", "briefing-bar"} {
-		id, ok := compIDs[key]
-		if !ok {
-			continue
-		}
-		var series []storage.MetricSampleWrite
-		for j := 0; j < 8; j++ {
-			ts := now.Add(-time.Duration(7-j) * 3 * time.Hour)
-			series = append(series, storage.MetricSampleWrite{OwnerKind: "component", OwnerID: id, Key: "icmp-rtt-avg", Instance: breadthEndpoint, Value: 4.5 + float64(i) + 0.3*float64(j%3), Source: "devseed-breadth", TS: ts})
-		}
-		rtts = append(rtts, series)
-	}
-	for _, batch := range rtts {
-		if err := gw.InsertMetricSamples(ctx, storage.NodeWriter(batch[0].OwnerID, breadthEndpoint), batch); err != nil {
-			return fmt.Errorf("devseed: breadth rtt samples: %w", err)
-		}
-	}
 	var samples []storage.MetricSampleWrite
 	// Room series on every system whose standard declares the pair, varied by
 	// index; the huddle keeps its own worked pattern from seedStandardMetrics.
