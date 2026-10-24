@@ -73,7 +73,12 @@ reach, so only admin and owner see the security trail. Rows return newest first,
 `resource` and `verb`, paged backward with `before` plus `limit` (default 100, capped at 500), each
 carrying the `old` and `new` images the write recorded: a create only `new`, a delete only `old`, an
 update both, auth events neither. Redaction is the write side's (sealed secret material and
-credential hashes never enter an image); the read passes images through verbatim.
+credential hashes never enter an image); the read passes images through verbatim. An image carries a
+jsonb column as the JSON it is: the write marshals a row whose jsonb columns scan raw (an endpoint's
+params and inputs, a driver's spec), and writes each such field that holds JSON inline rather than as
+the base64 a byte slice marshals to (#1088). Base64 was never a redaction, so nothing reads that the row
+did not already carry; an endpoint's secret inputs are references by name, never values. Rows written
+before #1088 carry base64 and are served as written.
 
 Auth events ride a **second write lane**: login and logout run on read / no-transaction paths, so
 they emit through a standalone non-transactional seam (`WriteAuthEvent`) under `resource = 'auth'`,
