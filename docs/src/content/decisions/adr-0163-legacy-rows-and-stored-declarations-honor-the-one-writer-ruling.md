@@ -15,11 +15,15 @@ summary: "What was written or declared before the one-writer ruling is held to i
      declared pin by that mark alone. A pin `:retry` wrote before the mark existed is recognized by
      the audit row its transaction wrote (the same endpoint, the same key, the same instant) and
      stamped by a one-time backfill; any other declared pin row is retired, with the observed rows
-     of the same key a node published under it and never before it. The endpoint then pins the key
-     its node learned before, or trusts on first use again, under the gate as ever. A node forgets a
-     pin the worklist delivered and then stops delivering (it was withdrawn): it carries and
-     republishes only a key it learned on first use itself, and a session held under a withdrawn
-     pin redials.
+     of the same key a node published under it and never before it (ordered by arrival, never by a
+     node's clock). The endpoint then pins the key its node learned before, or trusts on first use
+     again, under the gate as ever, and a retired pin's key is never taken as the pin from the
+     observed series again (a node still holding it may republish it) until a `:retry` declares
+     it. A node forgets a pin the worklist delivered and then stops delivering (it was withdrawn):
+     it carries and republishes only a key it learned on first use itself, and a session held under
+     a withdrawn pin redials. A declared row the plain property route left, a clear among them, is
+     not honored: the pin in force is the last one `:retry` set, which fails closed (a component
+     whose key moved since reads `rejected` naming both keys, and one `:retry` trusts it).
   2. **Retire, never delete, never flag.** A sample or event row of a reserved key whose class
      would refuse it today is moved whole into `retired_sample` (its lane, its id, the row as it
      was, and the reason) by the backfill. A flag column would need every read to honor it, and a
@@ -29,16 +33,20 @@ summary: "What was written or declared before the one-writer ruling is held to i
      service a row the ruling says was never its writer's, and keeps the record, so the floor's
      reason (nothing true is lost) holds. The backfill's down restores every row it retired.
   3. **What retires.** A node-probe row on an owner that is not a component, written by a writer
-     other than the node, under an instance that names no endpoint of its component, or dated more
-     than five minutes past the database clock (the cap new rows obey); a `health` row the rollup
-     did not write; a `command-issued` event no command points at; and the pins of point 1. An event
-     row another row references (a command's caused event, a derived event's source) stays.
+     other than the node (a declared, intended or calculated row, a derived event, or a command's
+     reply, which carries its command's settlement instant), under an instance that names no
+     endpoint of its component, or dated more than five minutes past the database clock (the cap new
+     rows obey); a `health` row the rollup did not write; a `command-issued` event no command points
+     at; and the pins of point 1. An event row another row references (a command's caused event, a
+     derived event's source) stays. At boot, every event rule series a retirement took rows from is
+     judged again, so a condition, and the alarm with it, that a retired row raised lets go.
   4. **Stored specs and tasks never reach a node with a refused emit.** The worklist strips from
      every driver task an emit whose key the node lane may not carry (a reserved key, a calc rule's
      output) and keeps the rest, logging each once; a re-derivation from a stored spec never bakes
-     one; and the server's boot audit names every stored driver spec, derived task and contract line
-     the ruling refuses, so an operator can mend it. Each is inert where it would act before it is
-     named.
+     one; and the server's boot audit names every stored driver spec, derived task, contract line,
+     event rule and command type the ruling refuses, so an operator can mend it. Each is inert where
+     it would act before it is named, and a rule whose clear event the ruling now reserves still lets
+     its condition go, writing no event.
   5. **A node's writer binds both.** The node lane's writer names the component its task collects
      for as well as the endpoint it ran against, and the gateway refuses every row of a batch that
      lands on another component, under any key.

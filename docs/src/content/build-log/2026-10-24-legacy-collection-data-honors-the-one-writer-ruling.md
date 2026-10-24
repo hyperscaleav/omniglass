@@ -14,13 +14,16 @@ pin the worklist stops delivering, so its session redials trusting on first use.
 `retired_sample` table (DDL), and a one-time backfill that stamps the `:retry` pins written before the
 mark (matched to the audit row their transaction wrote) and moves every row of a reserved key its class
 would refuse today into `retired_sample`, whole, with its reason: a declared pin `:retry` did not
-write and what a node published under it, a node-probe row on an owner that is not a component, by a
-writer other than the node, under an instance naming no endpoint of its component, or dated past the
-database clock, a `health` row the rollup did not write, and a `command-issued` event no command points
+write and what a node published under it (ordered by arrival), a node-probe row on an owner that is
+not a component, by a writer other than the node (a command's reply among them), under an instance
+naming no endpoint of its component, or dated past the database clock, a `health` row the rollup did not write, and a `command-issued` event no command points
 at. Retirement is a move, never a delete or a flag: no read serves a retired row, and its down restores
-every one. The worklist strips from every driver task an emit the node lane may not carry, a
-re-derivation never bakes one, and the server's boot audit names each stored driver spec, derived task
-and contract line the ruling refuses. The node lane's writer binds the component its task collects for
+every one; a retired pin's key is never re-learned as the pin until a `:retry` declares it, and at boot
+every event rule series a retirement touched is judged again, so a condition a retired row raised lets
+go. The worklist strips from every driver task an emit the node lane may not carry, a
+re-derivation never bakes one, and the server's boot audit names each stored driver spec, derived task,
+contract line, event rule and command type the ruling refuses (a rule whose clear event the ruling now
+reserves still lets its condition go). The node lane's writer binds the component its task collects for
 as well as its endpoint (`NodeWriter(component, endpoint)`); contracts on all three classifiers refuse a
 reserved key (a 422 naming it) and a legacy line lends no default; and `command-lifecycle` joins the
 reserved family, holding `command-issued`, which only a command writes. Proven test-first, each test
@@ -34,6 +37,10 @@ node forgets a withdrawn pin (`TestSSHWithdrawnPinIsForgottenAndTrustsOnFirstUse
 to a node (`TestStoredSpecsAndTasksCarryNoReservedEmit`), and the backfill retires exactly what the
 ruling refuses, leaves the honest rows, changes nothing on a second run and is reversed by its down
 (`TestLegacyBackfillRetiresWhatTheRulingRefuses`, `TestLegacyBackfillDownRestoresTheRows`), with its key
-lists held to the code's (`TestLegacyBackfillNamesTheRuling`). The contract tests that used a node's
+lists held to the code's (`TestLegacyBackfillNamesTheRuling`). The adversarial review's in-scope
+findings were fixed the same way: a retired pin is never re-learned from the series
+(`TestRetiredPlantedPinIsNeverRelearned`), a condition a retired row raised is released
+(`TestRetiredRowsReleaseTheConditionsTheyRaised`), and a legacy rule still lets go
+(`TestARuleWhoseEventBecameReservedCanStillLetGo`). The contract tests that used a node's
 probe metric as a stand-in now use collected metrics, and the dev seed's breadth round-trip series lands
 under each component's own endpoint once the simulated fleet gives it one.

@@ -331,8 +331,9 @@ record survives (a flag would need every read to remember it; a move leaves none
 key pin is trusted only from the endpoint's audited `:retry`, whose row carries `source` `key-pin`; a
 legacy `:retry` pin was recognized by its audit row and stamped. A stored driver spec or derived task
 never hands a node an emit the ruling refuses (the worklist strips it), a contract cannot declare a
-reserved key, and the server's boot audit names every stored declaration the ruling refuses so an
-operator can mend it.
+reserved key, and at boot the server judges again every event rule series a retirement took rows
+from (so a condition a retired row raised lets go) and names every stored declaration the ruling
+refuses so an operator can mend it.
 
 The gateway also accepts a **query tracer** (`storage.WithQueryTracer`), installed on the pool's
 connection config so it observes every statement the gateway issues, whichever method issued it.
