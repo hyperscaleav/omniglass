@@ -75,8 +75,10 @@ func TestABareUDPEndpointsListenPortIsCheckedAtWrite(t *testing.T) {
 		Params: []byte(`{"target":"10.0.0.9:51327","listen-port":"any"}`)}, f.all); !errors.Is(err, storage.ErrEndpointParamsInvalid) || !strings.Contains(err.Error(), driver.ListenPortInput) {
 		t.Fatalf("a bare udp endpoint with listen port any = %v, want ErrEndpointParamsInvalid naming %s", err, driver.ListenPortInput)
 	}
-	for i, good := range []string{`"51400"`, `51400`} {
-		comp := []string{"panel-u1", "panel-u2"}[i]
+	// The write accepts exactly what the node binds (driver.ParseListenPort):
+	// a numeral, a whole number however written, or unset.
+	for i, good := range []string{`"51400"`, `51400`, `51400.0`, `null`, `""`} {
+		comp := []string{"panel-u1", "panel-u2", "panel-u3", "panel-u4", "panel-u5"}[i]
 		if _, err := f.gw.CreateComponent(f.ctx, "", storage.ComponentSpec{Name: comp}, f.all, f.all, f.all, f.all); err != nil {
 			t.Fatal(err)
 		}

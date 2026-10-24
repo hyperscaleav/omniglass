@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"log/slog"
 	"sort"
-	"strconv"
 	"sync"
 	"time"
 
@@ -48,8 +47,9 @@ type datagramWant struct {
 	session   *driver.SessionSpec
 }
 
-// listenPortOf reads the listen port off an endpoint's params, a number or
-// a numeral; zero when none is set.
+// listenPortOf reads the listen port off an endpoint's params through the
+// one reading the write path shares (driver.ParseListenPort); zero when none
+// is set.
 func listenPortOf(raw json.RawMessage) (int, error) {
 	var p struct {
 		ListenPort json.RawMessage `json:"listen-port"`
@@ -59,22 +59,7 @@ func listenPortOf(raw json.RawMessage) (int, error) {
 			return 0, err
 		}
 	}
-	if len(p.ListenPort) == 0 || string(p.ListenPort) == "null" {
-		return 0, nil
-	}
-	v := string(p.ListenPort)
-	var s string
-	if json.Unmarshal(p.ListenPort, &s) == nil {
-		v = s
-	}
-	if v == "" {
-		return 0, nil
-	}
-	n, err := strconv.Atoi(v)
-	if err != nil || n < 1 || n > 65535 {
-		return 0, fmt.Errorf("%s %s is not a port (1 to 65535)", driver.ListenPortInput, string(p.ListenPort))
-	}
-	return n, nil
+	return driver.ParseListenPort(p.ListenPort)
 }
 
 // desiredDatagrams derives the socket set from a worklist. Pure. Every task
