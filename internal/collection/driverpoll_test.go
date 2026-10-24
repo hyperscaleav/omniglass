@@ -234,3 +234,96 @@ func TestCollectDriverPollLineOverTLSRidesOnlyTheSession(t *testing.T) {
 		t.Fatal("a tls poll dialed a throwaway connection")
 	}
 }
+
+type fakeHTTPFetcher struct {
+	ans  collection.HTTPAnswer
+	err  error
+	sent collection.HTTPExchange
+}
+
+func (f *fakeHTTPFetcher) Exchange(_ context.Context, x collection.HTTPExchange) (collection.HTTPAnswer, error) {
+	f.sent = x
+	a := f.ans
+	a.Credentialed = x.Credential != nil
+	return a, f.err
+}
+
+func httpPollTask() collection.DriverPollTask {
+	return collection.DriverPollTask{
+		Transport: "http",
+		Target:    "10.20.4.41:80",
+		Secrets:   map[string]map[string]string{"login": {"username": "admin", "password": "kestrel"}},
+		Auth:      &driver.SessionSpec{Credential: "login", Scheme: driver.SchemeBasic},
+		Fn: &driver.BakedFunction{
+			Driver: "kestrel-api", Function: "status",
+			Request: &driver.Request{Path: "/api/status"},
+			Emits: []driver.BakedEmit{
+				{Name: "power-state", Lane: "property", Extract: driver.Extract{JSONPath: "device.power"}},
+				{Name: "volume", Lane: "metric", Extract: driver.Extract{JSONPath: "audio.volume"}},
+			},
+		},
+	}
+}
+
+// An http poll (#902): the request leaves with the endpoint's credential,
+// the JSON answer interprets into its lanes, and the credentialed answer
+// proves the session rung (decision 7 of #1113).
+func TestCollectDriverPollHTTP(t *testing.T) {
+	f := &fakeHTTPFetcher{ans: collection.HTTPAnswer{Status: 200, Body: []byte(`{"device":{"power":"on"},"audio":{"volume":35}}`)}}
+	r := &collection.Runner{HTTPFetch: f}
+	dps, faults := r.CollectDriverPoll(context.Background(), httpPollTask())
+	if len(faults) != 0 {
+		t.Fatalf("faults %v", faults)
+	}
+	got := map[string]collection.Sample{}
+	for _, d := range dps {
+		got[d.Name] = d
+	}
+	if got["power-state"].Text != "on" || got["volume"].Value != 35 || got["endpoint-authenticated"].Text != "yes" {
+		t.Fatalf("samples %v", dps)
+	}
+	if f.sent.Credential == nil || f.sent.Credential.Username != "admin" || f.sent.TLS != nil || f.sent.Request.Path != "/api/status" {
+		t.Fatalf("sent %+v", f.sent)
+	}
+}
+
+func TestCollectDriverPollHTTPRefusedAndFaulted(t *testing.T) {
+	// A refused credential: a terminal auth the node gates on, authenticated no.
+	r := &collection.Runner{HTTPFetch: &fakeHTTPFetcher{ans: collection.HTTPAnswer{Status: 401}}}
+	dps, faults := r.CollectDriverPoll(context.Background(), httpPollTask())
+	if len(faults) != 1 {
+		t.Fatalf("faults %v", faults)
+	}
+	if terr, ok := collection.AsTerminal(faults[0]); !ok || terr.Class != driver.ClassAuth {
+		t.Fatalf("a 401 faulted %v, want a terminal auth", faults[0])
+	}
+	if len(dps) != 1 || dps[0].Name != "endpoint-authenticated" || dps[0].Text != "no" {
+		t.Fatalf("samples %v, want authenticated no alone", dps)
+	}
+	// A 404: the request's own fault, no gate.
+	r = &collection.Runner{HTTPFetch: &fakeHTTPFetcher{ans: collection.HTTPAnswer{Status: 404, Body: []byte("no such route")}}}
+	_, faults = r.CollectDriverPoll(context.Background(), httpPollTask())
+	if _, ok := collection.AsRequestFault(faults[0]); !ok || !strings.Contains(faults[0].Error(), "no such route") {
+		t.Fatalf("a 404 faulted %v, want a request fault carrying the component's text", faults[0])
+	}
+	// A missing credential field names the reference, never a value.
+	task := httpPollTask()
+	task.Secrets = map[string]map[string]string{"login": {"username": "admin"}}
+	_, faults = r.CollectDriverPoll(context.Background(), task)
+	if len(faults) != 1 || !strings.Contains(faults[0].Error(), "login.password") {
+		t.Fatalf("faults %v, want the missing login.password named", faults)
+	}
+	// https needs its trust; with it the exchange carries it.
+	task = httpPollTask()
+	task.Transport = "https"
+	_, faults = r.CollectDriverPoll(context.Background(), task)
+	if len(faults) != 1 || !strings.Contains(faults[0].Error(), "tls") {
+		t.Fatalf("an https poll with no trust = %v", faults)
+	}
+	f := &fakeHTTPFetcher{err: errors.New("dial refused")}
+	task.TLS = &collection.TLSTrust{Mode: driver.TLSModePin}
+	_, faults = (&collection.Runner{HTTPFetch: f}).CollectDriverPoll(context.Background(), task)
+	if len(faults) != 1 || f.sent.TLS == nil {
+		t.Fatalf("faults %v sent %+v", faults, f.sent)
+	}
+}

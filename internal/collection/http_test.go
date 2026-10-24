@@ -3,7 +3,6 @@ package collection_test
 import (
 	"context"
 	"testing"
-	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/collection"
 )
@@ -15,7 +14,7 @@ import (
 
 type fakeHTTPProber struct{ res collection.HTTPResult }
 
-func (f fakeHTTPProber) Probe(context.Context, string, time.Duration) (collection.HTTPResult, error) {
+func (f fakeHTTPProber) Probe(context.Context, collection.HTTPTask) (collection.HTTPResult, error) {
 	return f.res, nil
 }
 
