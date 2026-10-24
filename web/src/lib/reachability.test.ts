@@ -151,7 +151,7 @@ describe("reason", () => {
       endpoint: "snmp",
       transport: "snmp",
       responsive: { value: "down", ts: ago(5_000) },
-      rejection: { rung: "authenticated", class: "auth" },
+      rejection: { rung: "authenticated", class: "auth", ts: "2026-10-23T11:58:00.000Z" },
       layers: [
         { layer: "ping", check: "icmp-reachable", value: 1, ts: ago(5_000) },
         { layer: "request", check: "endpoint-responsive", value: 0, ts: ago(5_000) },
@@ -169,7 +169,7 @@ describe("reason", () => {
       endpoint: "udp",
       transport: "udp",
       responsive: { value: "down", ts: ago(5_000) },
-      rejection: { rung: "responsive", class: "auth" },
+      rejection: { rung: "responsive", class: "auth", ts: "2026-10-23T11:58:00.000Z" },
       layers: [{ layer: "ping", check: "icmp-reachable", value: 1, ts: ago(5_000) }],
     };
     expect(reason(iface, now)).not.toMatch(/unanswered/i);

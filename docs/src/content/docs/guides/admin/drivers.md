@@ -29,8 +29,9 @@ a spec is Go RE2 with **substring** semantics: `INPUT \S+` also matches `EVT INP
 a pattern meant to match a whole line (`^INPUT \S+$`). `unmatched: collection-failed` makes a line
 nobody claims a collection fault rather than a counted discard ([routing](/architecture/collection/#listeners-over-a-held-session)).
 An emit names a **collected** key. A key only the node writes (every native probe key: the
-reachability verdicts and probe timings, `tls-certificate`, `ssh-host-key`, `endpoint-rejection`, a
-held session's `session-state` and `session-reason`, and `collection-failed`), `health`,
+reachability verdicts and probe timings, `tls-certificate`, `ssh-host-key`, `endpoint-rejection` and
+its `endpoint-rejection-reason`, a held session's `session-state` and `session-reason`, and
+`collection-failed`), `health`,
 `command-issued`, or a key a calc rule outputs is refused at the spec's write, naming the key, since
 each has its own writer ([who writes a key](/architecture/properties/#who-writes-a-key-the-writer-class)):
 the node would otherwise take a driver's value as its own observation, the pin or the gate. A spec

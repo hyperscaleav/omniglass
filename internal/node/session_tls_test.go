@@ -345,7 +345,7 @@ func TestGateRendersAndParsesTheRefusedKeys(t *testing.T) {
 	g := newGates()
 	g.observe("ep-1", "fp-a", "")
 	g.record("ep-1", "fp-a", &collection.TerminalError{Class: driver.ClassCertificate, Pinned: keyFirst, Offered: keySecond, Reason: "changed"})
-	published := g.rejectionOf("ep-1")
+	published, _ := g.rejectionOf("ep-1")
 	if published != "responsive certificate fp-a "+keyFirst+" "+keySecond {
 		t.Fatalf("published %q", published)
 	}
@@ -357,8 +357,8 @@ func TestGateRendersAndParsesTheRefusedKeys(t *testing.T) {
 	}
 	// A refusal that names no key renders the three fields it always has.
 	g.record("ep-1", "fp-a", &collection.TerminalError{Class: driver.ClassCertificate, Reason: "the certificate failed verification"})
-	if got := g.rejectionOf("ep-1"); got != "responsive certificate fp-a" {
-		t.Fatalf("a verification refusal published %q", got)
+	if got, reason := g.rejectionOf("ep-1"); got != "responsive certificate fp-a" || reason != "certificate: the certificate failed verification" {
+		t.Fatalf("a verification refusal published %q with reason %q", got, reason)
 	}
 }
 

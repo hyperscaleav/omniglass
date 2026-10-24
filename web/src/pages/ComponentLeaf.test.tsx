@@ -264,7 +264,7 @@ describe("the leaf's dispatch facts (#786)", () => {
     endpoints: [{
       id: uuidFor("cf-ep-telnet"), endpoint: "telnet", transport: "telnet", node: "edge-1", last_seen: iso(2),
       verdict: { value: "up", ts: iso(60) }, responsive: { value: "up", ts: iso(60) }, authenticated: { value: "no", ts: iso(30) },
-      session: { state: "rejected", ts: iso(30), reason: "auth: auth rejected" }, rejection: { rung: "authenticated", class: "auth" },
+      session: { state: "rejected", ts: iso(30), reason: "auth: auth rejected" }, rejection: { rung: "authenticated", class: "auth", ts: "2026-10-23T11:58:00.000Z" },
       layers: [{ layer: "ping", check: "icmp-reachable", value: 1, ts: iso(2) }], history: [],
     }],
   } as unknown as Reachability;
@@ -275,6 +275,28 @@ describe("the leaf's dispatch facts (#786)", () => {
     expect(within(card).getByTestId("session-pill").dataset.state).toBe("rejected");
     expect(within(card).getByTestId("session-reason").textContent).toBe("auth: auth rejected");
     expect(within(card).getByTestId("collection-telnet").textContent).toBe("polls stopped");
+    expect((within(card).getByRole("button", { name: /retry/i }) as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  // #1110: an endpoint gated by its reachability probe alone holds no
+  // session, and its refusal reads on the card all the same.
+  const probeGatedReach = {
+    component: "videobar-1",
+    endpoints: [{
+      id: uuidFor("cf-ep-snmp"), endpoint: "snmp", transport: "snmp", node: "edge-1", last_seen: iso(2),
+      verdict: { value: "down", ts: iso(60) }, responsive: { value: "down", ts: iso(60) }, authenticated: { value: "no", ts: iso(60) },
+      rejection: { rung: "authenticated", class: "auth", ts: iso(60), reason: "auth: the agent answered authorizationError for the community" },
+      layers: [{ layer: "ping", check: "icmp-reachable", value: 1, ts: iso(2) }], history: [],
+    }],
+  } as unknown as Reachability;
+
+  it("the collection card reads a probe's refusal with no held session, its reason, and Retry", () => {
+    mount(undefined, undefined, bar, me, undefined, { reach: probeGatedReach });
+    const card = screen.getByTestId("leaf-collection");
+    expect(within(card).queryByTestId("session-pill")).toBeNull();
+    expect(within(card).getByTestId("session-reason").textContent).toBe("auth: the agent answered authorizationError for the community");
+    // Beneath the community's gate no get is sent, the poll's included.
+    expect(within(card).getByTestId("collection-snmp").textContent).toBe("polls stopped");
     expect((within(card).getByRole("button", { name: /retry/i }) as HTMLButtonElement).disabled).toBe(false);
   });
 

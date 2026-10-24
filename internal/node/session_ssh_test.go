@@ -193,7 +193,7 @@ func TestSSHHostKeyRefusalPublishesBothKeysWithItsGate(t *testing.T) {
 	var published []string
 	m := newSessionManager(map[string]collection.SessionDialer{"ssh": dialer}, sessionHooks{
 		transition: log.record,
-		rejection: func(_, _ string, v string) {
+		rejection: func(_, _ string, v, _ string) {
 			mu.Lock()
 			published = append(published, v)
 			mu.Unlock()

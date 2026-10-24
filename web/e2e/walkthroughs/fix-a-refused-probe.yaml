@@ -1,0 +1,36 @@
+# Fix a refused probe (#1110): the auditorium's touch panel answers SNMP, and
+# its snmp-generic endpoint reads its community from a secret holding the one
+# the panel's agent refuses (internal/devseed/fixtures.yaml, sim_endpoints).
+# Nothing holds a session on it: the reachability probe meets
+# authorizationError, gates the endpoint at the session rung and sends no more
+# gets, and the console shows the refusal on the endpoint all the same.
+# Pointing the community at the fleet's own secret moves the connection
+# fingerprint, and the node's next get (2s on the walkthrough stack) is
+# answered.
+title: Fix a refused probe
+description: A touch panel's SNMP agent refused the endpoint's community, so the node stopped asking. Read why, point the endpoint at the right community, and watch the refusal lift.
+steps:
+  - goto: /systems/auditorium
+    caption: This place's system. Its touch panel fills the touch-control role, and a node collects it.
+  - click: 'button:has([data-label]:text-is("Touch Panel 1"))'
+    caption: Open the touch panel.
+  - click: 'aside[data-blade] button[aria-label=Expand]'
+    caption: Expand it to the component's view, where collection is read.
+  - wait: { selector: '[data-testid=session-notice][data-state=rejected]' }
+    caption: Its SNMP endpoint holds no session, yet it reads refused, in the agent's words. The node sends no more gets, so nothing hammers it.
+    hold: 1500
+  - click: { role: button, name: Open endpoint }
+    caption: Open the endpoint. The ladder shows the ping answering and the community held.
+  - click: { role: button, name: Edit credential }
+    caption: The community is one of the endpoint's inputs, edited in place.
+  - press: Control+a
+    caption: Select the secret it names now.
+  - press: Backspace
+    caption: Clear it.
+  - type: { target: '#edit-iface-input-community', text: sim-community }
+    caption: Name the secret holding the community the agent answers.
+  - click: 'aside[data-blade] button:has-text("Save")'
+    caption: Save. What the endpoint connects with changed, so the refusal no longer holds.
+  - wait: { selector: 'aside[data-blade] [data-testid=endpoint-session]:not(:has([data-testid=session-notice])):has([data-testid=ladder-rung][data-rung=authenticated][data-status=pass])', timeout: 20000 }
+    caption: The node asks again at its next check-in, the agent answers the community, and the refusal is gone.
+    poster: true

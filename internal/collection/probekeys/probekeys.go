@@ -67,6 +67,12 @@ const (
 	// key (#1078, ADR-0159; internal/collection/rejection reads the shape).
 	// The worklist carries it back, so a restarted node honours it.
 	EndpointRejection = "endpoint-rejection"
+	// EndpointRejectionReason is why a gate holds (#1110): the refusal's
+	// class and the component's own text (`auth: <device text>`), published
+	// beside endpoint-rejection whenever the node records a gate, so an
+	// endpoint with no held session (a probe's gate) still says why it was
+	// refused. A gate adopted from the worklist publishes none.
+	EndpointRejectionReason = "endpoint-rejection-reason"
 	// CollectionFailed is the event a node lands when a task cannot collect
 	// (#1086): an unusable config, a payload that did not parse, a driver
 	// emit that did not extract. Its message is the node's account of its
@@ -82,14 +88,14 @@ const (
 // (#1080): the reachability verdicts and their rungs, the probe metrics and
 // their timings, and the node's account of its own connection (a held
 // session's state and reason, the host key it trusted, the gate it
-// publishes, a tls endpoint's pin and certificate facts). The console reads
+// publishes and why, a tls endpoint's pin and certificate facts). The console reads
 // each as the node's observation, and the gate and the pins (the ssh host key,
 // the tls certificate's public key) steer what the node attempts (ADR-0158,
 // ADR-0160), so the push lane refuses every one by name: a push may not forge
 // a verdict or a timing, plant or lift a gate, or read a rejected session up.
 var nodeOnly = []string{
 	TCPOpen, TCPConnectTime, ICMPReachable, ICMPRTTAvg, HTTPResponseTime, SSHHandshakeTime, TelnetResponseTime,
-	EndpointReachable, EndpointResponsive, EndpointAuthenticated, SessionState, SessionReason, SSHHostKey, EndpointRejection,
+	EndpointReachable, EndpointResponsive, EndpointAuthenticated, SessionState, SessionReason, SSHHostKey, EndpointRejection, EndpointRejectionReason,
 	TLSHandshakeTime, TLSCertificate, TLSCertificateExpiry, TLSCertificateDaysLeft, UDPResponseTime, SNMPResponseTime,
 	CollectionFailed,
 }

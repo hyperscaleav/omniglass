@@ -28,16 +28,18 @@ const reachHistoryWindow = 24 * time.Hour
 // verdictKey is the property sample that carries the per-endpoint reach
 // verdict; responsiveKey and authKey are the layer-7 rungs beside it (#812).
 // sessionStateKey and sessionReasonKey are a held session's state and why
-// (ADR-0150, ADR-0155), and rejectionKey the gate a terminal refusal holds
-// (ADR-0158); the console's session pill and ladder read them (#1059). Each is
-// the probekeys declaration the node emits from, ruled node-only there (#1080).
+// (ADR-0150, ADR-0155), rejectionKey the gate a terminal refusal holds
+// (ADR-0158) and rejectionReasonKey why it holds (#1110); the console's
+// session pill, ladder and refusal notice read them (#1059). Each is the
+// probekeys declaration the node emits from, ruled node-only there (#1080).
 const (
-	verdictKey       = probekeys.EndpointReachable
-	responsiveKey    = probekeys.EndpointResponsive
-	authKey          = probekeys.EndpointAuthenticated
-	sessionStateKey  = probekeys.SessionState
-	sessionReasonKey = probekeys.SessionReason
-	rejectionKey     = probekeys.EndpointRejection
+	verdictKey         = probekeys.EndpointReachable
+	responsiveKey      = probekeys.EndpointResponsive
+	authKey            = probekeys.EndpointAuthenticated
+	sessionStateKey    = probekeys.SessionState
+	sessionReasonKey   = probekeys.SessionReason
+	rejectionKey       = probekeys.EndpointRejection
+	rejectionReasonKey = probekeys.EndpointRejectionReason
 )
 
 // reachLayer describes one probe layer the panel gates on: its primary signal
@@ -81,13 +83,16 @@ type reachSessionBody struct {
 }
 
 // reachRejectionBody is the gate a terminal refusal holds (ADR-0158): the
-// rung and the class of endpoint-rejection, never its fingerprint, and a key
-// refusal's two keys (#1078).
+// rung and the class of endpoint-rejection, never its fingerprint, a key
+// refusal's two keys (#1078), and why it holds and since when (#1110), served
+// whether or not the endpoint holds a session.
 type reachRejectionBody struct {
-	Rung       string `json:"rung" enum:"reachable,responsive,authenticated" doc:"The ladder rung the refusal holds: responsive for a host key, certificate or protocol refusal, authenticated for a credential. Nothing at or above it is attempted until the connection fingerprint moves"`
-	Class      string `json:"class" doc:"The refusal's class: auth, host-key, certificate or protocol"`
-	PinnedKey  string `json:"pinned_key,omitempty" doc:"A refusal of a changed key only (class host-key, or certificate for a pinned tls key): the SHA256 fingerprint of the key the endpoint pins, as the node refused against it. Present with offered_key or not at all"`
-	OfferedKey string `json:"offered_key,omitempty" doc:"A refusal of a changed key only: the SHA256 fingerprint of the key the component offered instead. Trusting it is POST /endpoints/{id}:retry with this exact value as host_key (a tls endpoint also takes it as certificate); while the refusal holds, any other value is refused (409)"`
+	Rung       string    `json:"rung" enum:"reachable,responsive,authenticated" doc:"The ladder rung the refusal holds: responsive for a host key, certificate or protocol refusal, authenticated for a credential. Nothing at or above it is attempted until the connection fingerprint moves"`
+	Class      string    `json:"class" doc:"The refusal's class: auth, host-key, certificate or protocol"`
+	Reason     string    `json:"reason,omitempty" doc:"Why the gate holds (endpoint-rejection-reason): the class and the component's own text (auth: the agent answered authorizationError for the community), scrubbed by the node of anything it sent. Published beside the gate by whatever the node was connecting with, its reachability probe, a poll or a held session, so an endpoint holding no session still says why it was refused. Absent when the node recorded none (a gate published before it did). Cut to 500 characters; the property's series keeps the whole"`
+	TS         time.Time `json:"ts" doc:"When the node last published the gate: a retry that lifts it and a refusal that sets it again each move it"`
+	PinnedKey  string    `json:"pinned_key,omitempty" doc:"A refusal of a changed key only (class host-key, or certificate for a pinned tls key): the SHA256 fingerprint of the key the endpoint pins, as the node refused against it. Present with offered_key or not at all"`
+	OfferedKey string    `json:"offered_key,omitempty" doc:"A refusal of a changed key only: the SHA256 fingerprint of the key the component offered instead. Trusting it is POST /endpoints/{id}:retry with this exact value as host_key (a tls endpoint also takes it as certificate); while the refusal holds, any other value is refused (409)"`
 }
 
 // reachTLSBody is a tls endpoint's handshake and certificate (#1035): how it
@@ -113,7 +118,7 @@ type reachEndpointBody struct {
 	Responsive    *reachVerdictBody   `json:"responsive,omitempty" doc:"The layer-7 responds rung (the protocol itself answered), when a probe has climbed it"`
 	Authenticated *reachVerdictBody   `json:"authenticated,omitempty" doc:"The auth rung (the probe's credential was accepted, or a held session's login passed), present only when a credential was tried"`
 	Session       *reachSessionBody   `json:"session,omitempty" doc:"The endpoint's held session, while it is configured to hold one (a standing listen task, or a driver declaring a session): its latest state, when it changed, and why"`
-	Rejection     *reachRejectionBody `json:"rejection,omitempty" doc:"The gate a terminal refusal holds on the endpoint, its rung and class; absent when none holds"`
+	Rejection     *reachRejectionBody `json:"rejection,omitempty" doc:"The gate a terminal refusal holds on the endpoint, its rung, class and reason, whether or not the endpoint holds a session (a reachability probe's refusal gates it too); absent when none holds"`
 	TLS           *reachTLSBody       `json:"tls,omitempty" doc:"A tls endpoint's handshake and certificate: its verification mode, pinned key, handshake time, expiry and days left; absent on every other transport"`
 	Layers        []reachLayerBody    `json:"layers" doc:"The per-layer probe signals that compose the verdict"`
 	History       []reachHistoryBody  `json:"history" doc:"The recent verdict transitions, oldest first, for the availability strip"`
@@ -236,6 +241,20 @@ func composeEndpoint(ctx context.Context, gw storage.Gateway, comp string, it st
 	}
 	if gate != nil {
 		row.Rejection = parseRejection(gate.Value)
+	}
+	// The gate and its reason, served whatever holds a session (#1110): a
+	// probe's refusal has no session-reason to say why, and its notice and
+	// Retry key on the gate. The reason is read only while a gate holds, so
+	// a lifted gate's last one is never served beside nothing.
+	if row.Rejection != nil {
+		row.Rejection.TS = gate.TS
+		why, err := gw.LatestProperty(ctx, comp, rejectionReasonKey, it.Name)
+		if err != nil {
+			return row, err
+		}
+		if why != nil {
+			row.Rejection.Reason = capReason(why.Value)
+		}
 	}
 	if it.Transport == "tls" {
 		if row.TLS, err = composeTLS(ctx, gw, comp, it, row.Rejection); err != nil {

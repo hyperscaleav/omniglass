@@ -6,6 +6,7 @@ walkthroughs:
   - id: fix-an-endpoint-in-place
   - id: fix-a-rejected-session
   - id: trust-a-changed-host-key
+  - id: fix-a-refused-probe
 ---
 
 Collection is how the fleet learns whether a device is reachable and what it reports. An **edge
@@ -235,6 +236,29 @@ In the simulated fleet, the touch panel in the place named `briefing` pins the k
 was reimaged, so it reads rejected for a changed host key; trusting the offered key brings it up.
 
 ::walkthrough{#trust-a-changed-host-key}
+
+#### A refusal with no session
+
+An endpoint that holds no session is still checked by its reachability probe, and a probe can be
+refused in a way retrying cannot fix too: an snmp agent answering `authorizationError` for the
+endpoint's community, a udp reply its driver declares terminal, a tls certificate that fails
+verification, or the ssh probe's credential. The node gates the endpoint exactly as it gates a
+session, and the row says so the same way, with no session pill beside the ladder: the held rung
+wears the refusal glyph, and beneath the row **Why it was refused** gives the class and the
+component's own words (`auth: the agent answered authorizationError for the community`), with
+**Retry** and the way into the endpoint, whose own notice offers **Edit credential** with the secret
+input focused (an snmp endpoint's `community`). A changed key the probe met names both keys and
+offers **Trust this key**, as above. Retry holds its spinner until the refusal moves: the node lifts
+the gate at its next check-in and tries once, and a refusal met again sets it anew. Without
+`endpoint:retry` the button is greyed and its tooltip says so, while the reason still reads. Where
+the gate holds the endpoint's polls too (any refusal at the transport rung, and an snmp community,
+which every get carries), the Collection card reads **polls stopped** beside it.
+
+In the simulated fleet, the touch panel in the place named `auditorium` answers SNMP, and its
+endpoint reads its community from a secret holding the one the panel's agent refuses, so it reads
+refused, class `auth`; pointing its `community` input at `sim-community` lifts the gate.
+
+::walkthrough{#fix-a-refused-probe}
 
 ## Events
 

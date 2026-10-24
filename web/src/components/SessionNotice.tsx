@@ -11,33 +11,40 @@ import { ENDPOINTS_KEY } from "../lib/endpoints";
 import { REACHABILITY_KEY, type ReachEndpoint } from "../lib/reachability";
 import {
   RETRY_PENDING_KEY,
+  endpointNotice,
   keyChangedHint,
   keyNoun,
   keyRefusal,
   retryEndpoint,
+  retryMark,
   retryRefusal,
   retryWaiting,
-  sessionShowsReason,
   type RetryPending,
 } from "../lib/session";
 
-// SessionNotice says why an endpoint's held session is down or rejected
-// (#1059): the session-reason the node published at the transition (a
-// rejected one's class and the component's own text, scrubbed of anything the
-// node sent), and, for a rejected session, the two ways out. Retry moves the
-// endpoint's retry counter (POST /endpoints/{id}:retry, audited), so the node
-// redials once; it greys with its reason for a caller without endpoint:retry
-// (a hint only, the server is the authority and says why it refused). The fix
-// path is the host's: the endpoint blade begins its own edit, where the
-// credential is one of the inputs, and a list opens that blade. A down session
-// offers no retry: the node is already redialing on its own.
+// SessionNotice says why an endpoint is refused or its held session down
+// (#1059): for a refusal, the reason (the gate's: its class and the
+// component's own text, scrubbed of anything the node sent; else a rejected
+// session's own words) and the two ways out. A refusal shows whatever met it: the gate
+// holds whether or not a session is held, so an endpoint refused by its
+// reachability probe alone (a tls certificate, a udp terminal reply, an snmp
+// authorizationError, an ssh probe's credential) reads the same as a rejected
+// session (#1110). Retry moves the endpoint's retry counter (POST
+// /endpoints/{id}:retry, audited), so the node tries once more; it greys with
+// its reason for a caller without endpoint:retry (a hint only, the server is
+// the authority and says why it refused). The fix path is the host's: the
+// endpoint blade begins its own edit, where the credential is one of the
+// inputs, and a list opens that blade. A down session offers no retry: the
+// node is already redialing on its own.
 //
-// After a retry the notice waits on the session itself: the read it renders is
-// invalidated (and polled by the component's view), and the button holds its
-// spinner until the session's transition time moves (a fresh establishing, up,
-// or rejected again) or RETRY_WAIT_MS passes, so a second click cannot stack
-// redials while the node has not picked up the first. The retry in hand lives
-// in the query cache under the endpoint (lib/session), so every notice for the
+// After a retry the notice waits on what the retry moves (lib/session's
+// retryMark): the read it renders is invalidated (and polled by the
+// component's view), and the button holds its spinner until the session's
+// transition time moves (a fresh establishing, up, or rejected again) or, for
+// an endpoint holding no session, the gate's publish time does (a refusal met
+// again), or RETRY_WAIT_MS passes, so a second click cannot stack attempts
+// while the node has not picked up the first. The retry in hand lives in the
+// query cache under the endpoint (lib/session), so every notice for the
 // endpoint holds it, not only the one clicked.
 //
 // A refusal of a changed key (#1078) names both keys in place of the reason,
@@ -69,19 +76,23 @@ export default function SessionNotice(props: {
     enabled: false,
     staleTime: Infinity,
   }));
-  const rejected = () => props.iface.session?.state === "rejected";
+  const notice = () => endpointNotice(props.iface, props.now);
+  const rejected = () => notice()?.kind === "rejected";
   const keys = () => (rejected() ? keyRefusal(props.iface) : null);
   const refusal = () => retryRefusal(me.data);
-  const waiting = () => retryWaiting(pending.data, props.iface.session?.ts, props.now);
+  const waiting = () => retryWaiting(pending.data, retryMark(props.iface), props.now);
 
   async function retry() {
     const id = props.iface.id;
     if (!id || refusal()) return;
+    // What the retry waits on, as it stood when asked for: a read that lands
+    // while the call is in flight must not become the mark it waits past.
+    const mark = retryMark(props.iface);
     setBusy(true);
     setErr(null);
     try {
       await retryEndpoint(id);
-      qc.setQueryData<RetryPending>([...RETRY_PENDING_KEY(id)], { ts: props.iface.session?.ts ?? "", at: Date.now() });
+      qc.setQueryData<RetryPending>([...RETRY_PENDING_KEY(id)], { ts: mark, at: Date.now() });
       await Promise.all([
         qc.invalidateQueries({ queryKey: [...REACHABILITY_KEY(props.component)] }),
         qc.invalidateQueries({ queryKey: [...ENDPOINTS_KEY] }),
@@ -94,10 +105,10 @@ export default function SessionNotice(props: {
   }
 
   return (
-    <Show when={sessionShowsReason(props.iface, props.now)}>
+    <Show when={notice()}>
       <div
         data-testid="session-notice"
-        data-state={props.iface.session?.state}
+        data-state={notice()?.kind}
         class="flex flex-col gap-1.5 rounded-box border px-3 py-2 text-xs"
         classList={{ "border-warning/40 bg-warning/5": rejected(), "border-error/40 bg-error/5": !rejected() }}
       >
@@ -109,11 +120,11 @@ export default function SessionNotice(props: {
                 label={rejected() ? "Why it was refused" : "Why it is down"}
                 hint={
                   rejected()
-                    ? "The component's own words, after the class the driver or the transport gave them. The node dials no more until something it connects with changes (the credential, the address, the port) or someone retries it."
+                    ? "The component's own words, after the class the driver or the transport gave them. Whatever met the refusal (the reachability probe, a poll, a held session), nothing at or above the refused rung is tried again until something the endpoint connects with changes (the credential, the address, the port) or someone retries it."
                     : "The node's account of the last attempt. It keeps redialing at a slow pace, so a component that returns comes back up on its own."
                 }
               />
-              <p data-testid="session-reason" class="break-words font-data text-[11.5px] text-base-content/80">{props.iface.session?.reason}</p>
+              <p data-testid="session-reason" class="break-words font-data text-[11.5px] text-base-content/80">{notice()?.reason}</p>
             </>
           }
         >
@@ -133,7 +144,7 @@ export default function SessionNotice(props: {
                   component={props.component}
                   endpointLabel={entityLabel({ name: props.iface.endpoint, label: props.iface.label })}
                   refusal={k()}
-                  sessionTS={props.iface.session?.ts}
+                  waitTS={retryMark(props.iface)}
                   now={props.now}
                 />
               )}
@@ -141,7 +152,7 @@ export default function SessionNotice(props: {
             <Show
               when={refusal()}
               fallback={
-                <Button size="xs" icon={RotateCcw} loading={busy() || waiting()} onClick={() => void retry()} title="Redial once, with the endpoint as it is now">
+                <Button size="xs" icon={RotateCcw} loading={busy() || waiting()} onClick={() => void retry()} title="Try once more, with the endpoint as it is now">
                   Retry
                 </Button>
               }
