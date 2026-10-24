@@ -105,6 +105,45 @@ type Request struct {
 	// or a stray line is never taken as the answer. Absent, the first line
 	// no listener claims answers it.
 	Reply *Reply `json:"reply,omitempty"`
+	// Retries is how many times a datagram request is sent again when no
+	// answer comes (#1037), udp alone: absent, a poll's and the request
+	// rung's default (DefaultPollRetries) or a command's
+	// (DefaultCommandRetries). The endpoint's timeout bounds the whole
+	// exchange, each attempt an equal share of it.
+	Retries *int `json:"retries,omitempty"`
+}
+
+// The retry defaults and bound (#1037). A poll or the request rung re-asks
+// a lost datagram twice, since asking again is harmless; a command is sent
+// once unless its binding declares otherwise, since a command may be
+// relative (a volume step) and a lost reply must not send it twice.
+const (
+	DefaultPollRetries    = 2
+	DefaultCommandRetries = 0
+	MaxRetries            = 5
+)
+
+// RetriesOr is the request's declared retries, else def.
+func (r Request) RetriesOr(def int) int {
+	if r.Retries == nil {
+		return def
+	}
+	return *r.Retries
+}
+
+// validateRetries refuses retries on a transport that does not resend (only
+// a datagram is lost silently) or outside 0 to MaxRetries.
+func validateRetries(transportName, what string, r Request) error {
+	if r.Retries == nil {
+		return nil
+	}
+	if transportName != "udp" {
+		return fmt.Errorf("driver: %s declares retries, which only a udp datagram has (%q resends nothing)", what, transportName)
+	}
+	if *r.Retries < 0 || *r.Retries > MaxRetries {
+		return fmt.Errorf("driver: %s declares %d retries; want 0 to %d", what, *r.Retries, MaxRetries)
+	}
+	return nil
 }
 
 // Reply is a line request's declared answer: the shape of a good answer
@@ -432,6 +471,9 @@ func (s *Spec) Validate(cat Catalog) error {
 		if err := validateReply(fmt.Sprintf("poll %q", p.Name), p.Request); err != nil {
 			return err
 		}
+		if err := validateRetries(s.Transport, fmt.Sprintf("poll %q", p.Name), p.Request); err != nil {
+			return err
+		}
 		if err := checkPollShape(s.Transport, p); err != nil {
 			return err
 		}
@@ -452,6 +494,9 @@ func (s *Spec) Validate(cat Catalog) error {
 		}
 	}
 	if err := s.validateTLSInputs(); err != nil {
+		return err
+	}
+	if err := s.validateUDPInputs(); err != nil {
 		return err
 	}
 	if err := s.validateSession(); err != nil {
@@ -483,11 +528,15 @@ func (s *Spec) Validate(cat Catalog) error {
 		if c.Request.Empty() {
 			return fmt.Errorf("driver: command binding %q has an empty request", c.CommandType)
 		}
-		// Only the line-protocol actuation wire exists today, so a binding on a
+		// Only the line-protocol actuation wire exists today (over a line
+		// transport, or as a datagram over udp, #1037), so a binding on a
 		// transport it cannot reach refuses at write rather than dispatching a
 		// request no node can send.
-		if !isLineTransport(s.Transport) {
-			return fmt.Errorf("driver: command binding %q rides transport %q, which has no actuation wire (only the line transports actuate today)", c.CommandType, s.Transport)
+		if !isLineTransport(s.Transport) && s.Transport != "udp" {
+			return fmt.Errorf("driver: command binding %q rides transport %q, which has no actuation wire (only the line transports and udp actuate today)", c.CommandType, s.Transport)
+		}
+		if err := validateRetries(s.Transport, fmt.Sprintf("command binding %q", c.CommandType), c.Request); err != nil {
+			return err
 		}
 		if c.Request.Line == "" {
 			return fmt.Errorf("driver: command binding %q on %s needs a line request", c.CommandType, s.Transport)
@@ -592,6 +641,17 @@ func checkPollShape(tr string, p Poll) error {
 				return fmt.Errorf("driver: snmp poll %q emit %q must locate by oid", p.Name, em.Name)
 			}
 		}
+	case "udp":
+		// A datagram carries one line (#1037): the request is a line, and an
+		// answer is text a regex reads.
+		if p.Request.Line == "" {
+			return fmt.Errorf("driver: udp poll %q needs a line request (the datagram it sends)", p.Name)
+		}
+		for _, em := range p.Emits {
+			if em.Extract.OID != "" || em.Extract.Key != "" || em.Extract.JSONPath != "" {
+				return fmt.Errorf("driver: udp poll %q emit %q must locate by regex (a datagram's line carries no keyed or json body)", p.Name, em.Name)
+			}
+		}
 	case "tcp", "tls", "telnet", "ssh":
 		if !isLineTransport(tr) {
 			return fmt.Errorf("driver: poll %q rides transport %q, which has no poll fetcher yet", p.Name, tr)
@@ -610,7 +670,7 @@ func checkPollShape(tr string, p Poll) error {
 			}
 		}
 	default:
-		return fmt.Errorf("driver: poll %q rides transport %q, which has no poll fetcher (only snmp and the line transports poll today)", p.Name, tr)
+		return fmt.Errorf("driver: poll %q rides transport %q, which has no poll fetcher (only snmp, udp and the line transports poll today)", p.Name, tr)
 	}
 	return nil
 }

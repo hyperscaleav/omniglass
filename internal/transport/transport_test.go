@@ -14,10 +14,10 @@ import (
 func TestRegistryCarriesTheEightTransports(t *testing.T) {
 	want := map[string]struct{ held, built bool }{
 		"icmp":   {held: false, built: true},
-		"tcp":    {held: true, built: true}, // the line protocol holds a session over it (#817)
-		"tls":    {held: true, built: true}, // the line protocol over a tls handshake (#1035)
-		"udp":    {held: false, built: false},
-		"telnet": {held: true, built: true}, // the line protocol behind a login (#1033)
+		"tcp":    {held: true, built: true},  // the line protocol holds a session over it (#817)
+		"tls":    {held: true, built: true},  // the line protocol over a tls handshake (#1035)
+		"udp":    {held: false, built: true}, // datagrams, stateless: its rung is a request answered (#1037)
+		"telnet": {held: true, built: true},  // the line protocol behind a login (#1033)
 		"ssh":    {held: true, built: true},
 		"http":   {held: true, built: true},
 		"snmp":   {held: true, built: false},
@@ -105,5 +105,15 @@ func TestTLSIsAHeldLineTransportWhoseRungIsTheHandshake(t *testing.T) {
 	}
 	if !tr.Held || !tr.Built || !tr.Line || tr.Rung != "handshake" {
 		t.Fatalf("tls = %+v, want held, built, line, rung handshake", tr)
+	}
+}
+
+// udp is built and stateless (#1037): no session is held, its transport rung
+// is a request answered (an open udp port cannot be detected), and the line
+// protocol rides it as datagrams, not over a held line session.
+func TestUDPIsBuiltStatelessAndItsRungIsARequest(t *testing.T) {
+	tr, ok := transport.ByName("udp")
+	if !ok || !tr.Built || tr.Held || tr.Line || tr.Rung != "request" {
+		t.Fatalf("udp = %+v, want built, not held, not a held line, rung request", tr)
 	}
 }

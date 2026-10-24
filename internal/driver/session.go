@@ -169,7 +169,13 @@ func (s *Spec) validateSession() error {
 		}
 		return nil
 	}
-	if !isLineTransport(s.Transport) {
+	if s.Transport == "udp" {
+		// Nothing logs in or is held over udp (#1037): a udp driver's session
+		// block declares the replies retrying cannot fix, and nothing else.
+		if ss.Login != nil || ss.Credential != "" || ss.Reprobe != "" || ss.PTY || ss.Exec != "" {
+			return fmt.Errorf("driver: over udp a session block declares only terminal replies; nothing logs in, is held, or re-probes")
+		}
+	} else if !isLineTransport(s.Transport) {
 		return fmt.Errorf("driver: a session block rides a held line transport; %q has none", s.Transport)
 	}
 	if l := ss.Login; l != nil {

@@ -71,12 +71,17 @@ func (s *Spec) validateTLSInputs() error {
 }
 
 // CheckInputValue refuses a value an attach or an in-place edit supplies for
-// an input the engine reads with meaning: the tls mode must be a mode. Any
-// other input's value is the driver's to read.
+// an input the engine reads with meaning: the tls mode must be a mode, a udp
+// listen port a port. Any other input's value is the driver's to read.
 func (s *Spec) CheckInputValue(name, value string) error {
 	if name == TLSModeInput && s.Transport == "tls" {
 		if _, err := ParseTLSMode(value); err != nil {
 			return fmt.Errorf("input %s: %v", TLSModeInput, err)
+		}
+	}
+	if name == ListenPortInput && s.Transport == "udp" {
+		if err := checkPort(value); err != nil {
+			return fmt.Errorf("input %s: %v", ListenPortInput, err)
 		}
 	}
 	return nil
