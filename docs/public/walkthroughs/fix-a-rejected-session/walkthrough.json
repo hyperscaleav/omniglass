@@ -1,0 +1,68 @@
+{
+  "id": "fix-a-rejected-session",
+  "title": "Fix a rejected session",
+  "description": "A touch panel refused its console login, so the node stopped dialing it. Read why, point the endpoint at the rotated credential, and watch the session come up.",
+  "steps": [
+    {
+      "n": 1,
+      "kind": "goto",
+      "caption": "The huddle room. Its touch panel fills no role, but a node collects it.",
+      "still": "step-01.png"
+    },
+    {
+      "n": 2,
+      "kind": "click",
+      "caption": "Open the touch panel.",
+      "still": "step-02.png"
+    },
+    {
+      "n": 3,
+      "kind": "click",
+      "caption": "Expand it to the component's view, where collection is read.",
+      "still": "step-03.png"
+    },
+    {
+      "n": 4,
+      "kind": "wait",
+      "caption": "It reads rejected, in the panel's own words; the node stopped dialing, so nothing locks out.",
+      "still": "step-04.png"
+    },
+    {
+      "n": 5,
+      "kind": "click",
+      "caption": "Open the endpoint. The ladder shows the ping and the transport answering, and the login held.",
+      "still": "step-05.png"
+    },
+    {
+      "n": 6,
+      "kind": "click",
+      "caption": "The credential is one of the endpoint's inputs, edited in place.",
+      "still": "step-06.png"
+    },
+    {
+      "n": 7,
+      "kind": "type",
+      "caption": "Point the login at the secret holding the rotated password.",
+      "still": "step-07.png"
+    },
+    {
+      "n": 8,
+      "kind": "click",
+      "caption": "Save. What the endpoint connects with changed, so the refusal no longer holds.",
+      "still": "step-08.png"
+    },
+    {
+      "n": 9,
+      "kind": "wait",
+      "caption": "The node logs in at its next check-in, and the session reads up.",
+      "still": "step-09.png"
+    }
+  ],
+  "poster": "step-09.png",
+  "preview": "preview.webp",
+  "budget": {
+    "seconds": 34.1,
+    "bytes": 801949,
+    "previewBytes": 618798
+  }
+}
