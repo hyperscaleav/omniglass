@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/collection"
+	"github.com/hyperscaleav/omniglass/internal/nettest"
 )
 
 // The real HTTP probe against real listeners (the capability carve-out): the
@@ -66,13 +67,7 @@ func TestHTTPProberReal(t *testing.T) {
 	})
 
 	t.Run("port closed classifies on the dial rung", func(t *testing.T) {
-		ln, err := net.Listen("tcp", "127.0.0.1:0")
-		if err != nil {
-			t.Fatalf("listen: %v", err)
-		}
-		addr := ln.Addr().String()
-		_ = ln.Close()
-		res, err := p.Probe(ctx, addr, 2*time.Second)
+		res, err := p.Probe(ctx, nettest.RefusedAddr(t), 2*time.Second)
 		if err != nil {
 			t.Fatalf("probe: %v", err)
 		}
