@@ -684,7 +684,7 @@ func (p *PG) RetryEndpoint(ctx context.Context, actorID, id string, pin RetryPin
 			// gated node dials no more, so the component may have moved on
 			// since. The refusal says what the record names, and how to read
 			// the key again, never that the component offers it now.
-			return nil, fmt.Errorf("%w: the refusal on record names the offered key %s, not the key sent; to trust another, retry the endpoint without a key so the node reads the key the component offers now, then trust that one", ErrRetryHostKeyStale, gate.OfferedKey)
+			return nil, fmt.Errorf("%w: the refusal on record names the offered key %s, not the key sent; to trust another, retry the endpoint without a host key so the node reads the key the component offers now, then trust that one", ErrRetryHostKeyStale, gate.OfferedKey)
 		}
 		if _, replaced, err = keyPin(ctx, tx, *before.ComponentID, before.Name, pinKeyOf[before.Transport]); err != nil {
 			return nil, err
