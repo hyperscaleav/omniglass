@@ -259,8 +259,11 @@ once, never arms, and reads `rejected` with the component's text) and over fakes
 dials once more, a re-probe fires on its interval, a transient failure still spends the budget).
 
 **In the console** (#1059). The component's reachability read carries each endpoint's latest
-`session-state` with the `session-reason` beside it, and the rung and class of its
-`endpoint-rejection` (never the fingerprint, which is the node's to compare), so the component's
+`session-state` with the `session-reason` beside it, while the endpoint is configured to hold a
+session (teardown publishes nothing, so a session nobody holds is not served), and the rung and
+class of its `endpoint-rejection` (never the fingerprint, which is the node's to compare). Like the
+gate, a session's state and reason are the node's own facts, which the push lane refuses, so no
+push can read a rejected session up or plant a reason the node never scrubbed. So the component's
 Collection card, its Endpoints panel and the endpoint's detail show the session as a pill, the
 ladder with the held rung marked, and, for a down or rejected session, the reason. A state is stored
 only on a transition, so the pill is aged by the endpoint's `last_seen`, as ADR-0150 requires: a

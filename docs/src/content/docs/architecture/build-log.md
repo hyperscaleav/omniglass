@@ -7785,3 +7785,14 @@ read, the fingerprint never served, a lifted gate and a session-less endpoint ab
 `TestSeededFleetHoldsARejectedSession`), in vitest (the ladder model, the pill, the notice's retry
 and its permission greying, the blade's credential edit, rows surviving a poll), and live against
 the simulated panel. Host-key trust from the console (#1059's ssh half) is #1078.
+
+The review's fixes, each with a test that failed first: `session-state` and `session-reason` join
+the node's own facts the push lane refuses (a push could read a rejected session up, hiding its
+Retry, or plant a reason the node never scrubbed; ADR-0158 point 5 amended); the read serves a
+session only while the endpoint holds one (a standing listen task, or a driver declaring a
+session), since teardown publishes nothing and a torn-down session's last state stood beside a
+Retry that could change nothing; the reason is cut to 500 characters at the read; a retry in hand
+lives in the query cache under the endpoint, so the Collection card's notice and the blade's hold
+it together and cannot stack a second redial; the ladder no longer grows a login rung for a
+session with no login; and the rows-survive-a-poll tests now let the poll land and assert DOM
+identity, proven to fail against the unkeyed iteration (two review catalog entries record it).

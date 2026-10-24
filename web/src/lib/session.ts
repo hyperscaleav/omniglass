@@ -76,8 +76,10 @@ export function ladder(iface: ReachEndpoint): Rung[] {
   if (iface.transport !== "icmp") {
     const transport = iface.responsive ? iface.responsive.value === "up" : port ? port.value >= 1 : undefined;
     rungs.push({ key: "responsive", role: "gate", status: observed(transport) });
-    const gate = iface.rejection;
-    if (iface.authenticated || gate?.rung === "authenticated" || (gate && iface.session)) {
+    // The login rung exists where a login was tried or a gate holds it:
+    // nothing on the read says a driver declares a login it never ran, so a
+    // session with no login (a bare line protocol) never grows one.
+    if (iface.authenticated || iface.rejection?.rung === "authenticated") {
       rungs.push({ key: "authenticated", role: "login", status: observed(iface.authenticated ? iface.authenticated.value === "yes" : undefined) });
     }
   }
@@ -135,6 +137,24 @@ export function rungHint(r: Rung): string {
 // authority, and a retry it refuses says why in the response.
 export function retryRefusal(me: Me | null | undefined): string | null {
   return can(me, "endpoint", "retry") ? null : "Retrying needs the endpoint:retry permission.";
+}
+
+// A retry in hand, per endpoint: the session's transition time when it was
+// asked for, and when. Kept in the query cache rather than in one notice, so
+// every notice for the endpoint (the component's Collection card and the
+// endpoint's blade show one each) holds the retry, and neither can stack a
+// second redial while the node has not picked up the first.
+export type RetryPending = { ts: string; at: number };
+export const RETRY_PENDING_KEY = (endpointID: string) => ["session-retry", endpointID] as const;
+
+// RETRY_WAIT_MS bounds how long a retry is held in hand: past it, a node that
+// never answered (offline, the endpoint moved) no longer keeps Retry spinning.
+export const RETRY_WAIT_MS = 60_000;
+
+// retryWaiting: a retry is in hand while the session has not moved since it was
+// asked for (its transition time unchanged) and the wait has not run out.
+export function retryWaiting(pending: RetryPending | null | undefined, sessionTS: string | undefined, now: number): boolean {
+  return !!pending && pending.ts === (sessionTS ?? "") && now - pending.at < RETRY_WAIT_MS;
 }
 
 // retryEndpoint moves the endpoint's retry counter (POST /endpoints/{id}:retry):

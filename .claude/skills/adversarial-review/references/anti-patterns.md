@@ -153,7 +153,11 @@ gated-fetch test, where the api client's async onRequest middleware deferred eve
 the synchronous assertion. Detection cue: a sync spy assertion immediately after `render()`
 or `mount()` claiming an effect did NOT happen. Fix: assert the structural fact synchronously
 (the query cache holds no entry for the gated key), or flush a tick before the spy assertion
-and prove the test can fail by breaking the guard.
+and prove the test can fail by breaking the guard. The same shape after `setQueryData` (#1059):
+solid-query notifies observers a few microtasks later, so one `await Promise.resolve()` asserts
+before the "poll" lands and a rows-survive-a-poll test passed with the rows rebuilt; wait a
+macrotask (`setTimeout(r, 20)`), assert DOM identity (`container.contains(node)`), and prove it
+fails against the unkeyed iteration.
 
 ## css-only-tooltip-on-disabled-control (live)
 
@@ -248,6 +252,10 @@ region and a mask line in the frontmatter, per the entity blade's duration masks
   future-dated `none`, an unaudited bypass of the audited `:retry`.
 - **Fix:** refuse node-control keys on the push lane by name (`probekeys.IsNodeControl`,
   internal/api/telemetry.go).
+- **Also (#1059):** a node's account of itself that a surface reads as the node's (a held
+  session's `session-state` and `session-reason`) is the same class: a push read a rejected
+  session up, hiding its Retry, or planted a reason the node never scrubbed. Any new
+  node-authored key a console renders as "the node says" joins the list.
 
 
 ## unvalidated-param-value (fixed; found by the #1061 in-place edit review)

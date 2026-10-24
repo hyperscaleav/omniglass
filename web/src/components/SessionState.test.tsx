@@ -150,14 +150,35 @@ describe("SessionNotice", () => {
     await waitFor(() => expect((getByRole("button", { name: /retry/i }) as HTMLButtonElement).disabled).toBe(true));
   });
 
-  it("greys Retry with its reason for a caller without endpoint:retry, and never calls it", () => {
+  it("greys Retry with its reason for a caller without endpoint:retry, and never calls it", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch");
     const { getByRole, getByLabelText } = mountNotice(rejected(), viewer);
     const retry = getByRole("button", { name: /retry/i }) as HTMLButtonElement;
     expect(retry.disabled).toBe(true);
     expect(getByLabelText(/needs the endpoint:retry permission/i)).toBeTruthy();
     fireEvent.click(retry);
+    // The client sends from an async hook, so give a call time to land.
+    await new Promise((r) => setTimeout(r, 20));
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  // The component's view shows the session on its Collection card and, once
+  // opened, on the endpoint's blade: two notices for one endpoint. A retry
+  // from one is in hand for both, so the other cannot stack a second redial.
+  it("holds a retry for every notice of the same endpoint", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ id: epId, name: "telnet", transport: "telnet" }), { status: 200, headers: { "Content-Type": "application/json" } }),
+    );
+    const qc = client(operator);
+    render(() => (
+      <QueryClientProvider client={qc}>
+        <SessionNotice iface={rejected()} component={compId} now={now} />
+        <SessionNotice iface={rejected()} component={compId} now={now} />
+      </QueryClientProvider>
+    ));
+    const [first, second] = screen.getAllByRole("button", { name: /retry/i }) as HTMLButtonElement[];
+    fireEvent.click(first);
+    await waitFor(() => expect(second.disabled).toBe(true));
   });
 
   it("says why a retry was refused", async () => {

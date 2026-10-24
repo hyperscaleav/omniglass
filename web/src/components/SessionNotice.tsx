@@ -1,5 +1,5 @@
 import { Show, createSignal, type Component } from "solid-js";
-import { useQueryClient } from "@tanstack/solid-query";
+import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import Button from "./Button";
 import Eyebrow from "./Eyebrow";
 import { RotateCcw, Sliders } from "./icons";
@@ -7,7 +7,7 @@ import { useMe } from "../lib/auth";
 import { describeError } from "../lib/format";
 import { ENDPOINTS_KEY } from "../lib/endpoints";
 import { REACHABILITY_KEY, type ReachEndpoint } from "../lib/reachability";
-import { retryEndpoint, retryRefusal, sessionShowsReason } from "../lib/session";
+import { RETRY_PENDING_KEY, retryEndpoint, retryRefusal, retryWaiting, sessionShowsReason, type RetryPending } from "../lib/session";
 
 // SessionNotice says why an endpoint's held session is down or rejected
 // (#1059): the session-reason the node published at the transition (a
@@ -24,9 +24,9 @@ import { retryEndpoint, retryRefusal, sessionShowsReason } from "../lib/session"
 // invalidated (and polled by the component's view), and the button holds its
 // spinner until the session's transition time moves (a fresh establishing, up,
 // or rejected again) or RETRY_WAIT_MS passes, so a second click cannot stack
-// redials while the node has not picked up the first.
-
-const RETRY_WAIT_MS = 60_000;
+// redials while the node has not picked up the first. The retry in hand lives
+// in the query cache under the endpoint (lib/session), so every notice for the
+// endpoint holds it, not only the one clicked.
 
 export default function SessionNotice(props: {
   iface: ReachEndpoint;
@@ -43,13 +43,17 @@ export default function SessionNotice(props: {
   const qc = useQueryClient();
   const [busy, setBusy] = createSignal(false);
   const [err, setErr] = createSignal<string | null>(null);
-  const [sent, setSent] = createSignal<{ ts: string; at: number } | null>(null);
+  // Read only, never fetched: a retry sets it (below), every notice for the
+  // endpoint observes it.
+  const pending = useQuery(() => ({
+    queryKey: RETRY_PENDING_KEY(props.iface.id ?? ""),
+    queryFn: (): RetryPending | null => null,
+    enabled: false,
+    staleTime: Infinity,
+  }));
   const rejected = () => props.iface.session?.state === "rejected";
   const refusal = () => retryRefusal(me.data);
-  const waiting = () => {
-    const s = sent();
-    return !!s && s.ts === props.iface.session?.ts && props.now - s.at < RETRY_WAIT_MS;
-  };
+  const waiting = () => retryWaiting(pending.data, props.iface.session?.ts, props.now);
 
   async function retry() {
     const id = props.iface.id;
@@ -58,7 +62,7 @@ export default function SessionNotice(props: {
     setErr(null);
     try {
       await retryEndpoint(id);
-      setSent({ ts: props.iface.session?.ts ?? "", at: Date.now() });
+      qc.setQueryData<RetryPending>([...RETRY_PENDING_KEY(id)], { ts: props.iface.session?.ts ?? "", at: Date.now() });
       await Promise.all([
         qc.invalidateQueries({ queryKey: [...REACHABILITY_KEY(props.component)] }),
         qc.invalidateQueries({ queryKey: [...ENDPOINTS_KEY] }),

@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/hyperscaleav/omniglass/internal/storage"
@@ -74,7 +75,7 @@ type reachHistoryBody struct {
 type reachSessionBody struct {
 	State  string    `json:"state" enum:"establishing,up,recovering,down,rejected" doc:"The held session's latest state (session-state): establishing, up, recovering, down, or rejected (a refusal retrying cannot fix; the node dials no more until the endpoint's connection fingerprint moves)"`
 	TS     time.Time `json:"ts" doc:"When the session last changed state: a state is stored only on a transition, so a session is judged by the endpoint's last_seen, not by this"`
-	Reason string    `json:"reason,omitempty" doc:"Why the session is in its state (session-reason), the reason of its latest transition; a rejected session's is its class and the component's own text (auth: auth rejected), scrubbed by the node of anything it sent"`
+	Reason string    `json:"reason,omitempty" doc:"Why the session is in its state (session-reason), the reason of its latest transition; a rejected session's is its class and the component's own text (auth: auth rejected), scrubbed by the node of anything it sent. Cut to 500 characters; the property's series keeps the whole"`
 }
 
 // reachRejectionBody is the gate a terminal refusal holds (ADR-0158): the
@@ -95,7 +96,7 @@ type reachEndpointBody struct {
 	Verdict       *reachVerdictBody   `json:"verdict" doc:"The latest reachability verdict, or null if none yet"`
 	Responsive    *reachVerdictBody   `json:"responsive,omitempty" doc:"The layer-7 responds rung (the protocol itself answered), when a probe has climbed it"`
 	Authenticated *reachVerdictBody   `json:"authenticated,omitempty" doc:"The auth rung (the probe's credential was accepted, or a held session's login passed), present only when a credential was tried"`
-	Session       *reachSessionBody   `json:"session,omitempty" doc:"The endpoint's held session, when it has held one: its latest state, when it changed, and why"`
+	Session       *reachSessionBody   `json:"session,omitempty" doc:"The endpoint's held session, while it is configured to hold one (a standing listen task, or a driver declaring a session): its latest state, when it changed, and why"`
 	Rejection     *reachRejectionBody `json:"rejection,omitempty" doc:"The gate a terminal refusal holds on the endpoint, its rung and class; absent when none holds"`
 	Layers        []reachLayerBody    `json:"layers" doc:"The per-layer probe signals that compose the verdict"`
 	History       []reachHistoryBody  `json:"history" doc:"The recent verdict transitions, oldest first, for the availability strip"`
@@ -191,9 +192,16 @@ func composeEndpoint(ctx context.Context, gw storage.Gateway, comp string, it st
 	if authed != nil {
 		row.Authenticated = &reachVerdictBody{Value: authed.Value, TS: authed.TS}
 	}
-	state, err := gw.LatestProperty(ctx, comp, sessionStateKey, it.Name)
-	if err != nil {
-		return row, err
+	// A session is served only while the endpoint is configured to hold one:
+	// teardown publishes no state (ADR-0150), so a session nobody holds keeps
+	// its last one, and a rejected that outlived its listener would stand
+	// beside a Retry that can change nothing.
+	var state *storage.PropertySample
+	if it.HoldsSession {
+		state, err = gw.LatestProperty(ctx, comp, sessionStateKey, it.Name)
+		if err != nil {
+			return row, err
+		}
 	}
 	if state != nil {
 		row.Session = &reachSessionBody{State: state.Value, TS: state.TS}
@@ -202,7 +210,7 @@ func composeEndpoint(ctx context.Context, gw storage.Gateway, comp string, it st
 			return row, err
 		}
 		if why != nil {
-			row.Session.Reason = why.Value
+			row.Session.Reason = capReason(why.Value)
 		}
 	}
 	gate, err := gw.LatestProperty(ctx, comp, rejectionKey, it.Name)
@@ -240,6 +248,20 @@ func composeEndpoint(ctx context.Context, gw storage.Gateway, comp string, it st
 		row.History = append(row.History, reachHistoryBody{TS: tr.TS, Value: tr.Value})
 	}
 	return row, nil
+}
+
+// maxReasonRunes bounds the session reason the read serves (#1059): a
+// refusal carries the component's own text, and a line answer may run to
+// 64 KiB, which the console would render on every row showing it. The full
+// text stays on the property's own series.
+const maxReasonRunes = 500
+
+// capReason cuts a reason past maxReasonRunes on a rune boundary and says so.
+func capReason(s string) string {
+	if utf8.RuneCountInString(s) <= maxReasonRunes {
+		return s
+	}
+	return string([]rune(s)[:maxReasonRunes]) + "…"
 }
 
 // parseRejection reads an endpoint-rejection value (`<rung> <class>

@@ -275,10 +275,13 @@ describe("a held session on the row", () => {
         <ReachabilityPanel name={compId} />
       </QueryClientProvider>
     ));
-    fireEvent.click(screen.getByRole("button", { expanded: false }));
+    const toggle = screen.getByRole("button", { expanded: false });
+    fireEvent.click(toggle);
     expect(screen.getByText(/probed by/)).toBeTruthy();
     qc.setQueryData([...REACHABILITY_KEY(compId)], { component: compId, endpoints: [telnetRow("up", new Date(Date.now() + 5_000).toISOString())] });
-    await Promise.resolve();
+    // The query notifies its observers asynchronously: let the poll land.
+    await new Promise((r) => setTimeout(r, 20));
+    expect(document.body.contains(toggle)).toBe(true);
     expect(screen.getByText(/probed by/)).toBeTruthy();
   });
 });

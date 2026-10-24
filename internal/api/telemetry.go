@@ -213,7 +213,7 @@ func registerTelemetryRoutes(api huma.API, a *authenticator, gw storage.Gateway,
 		for _, p := range in.Body.Properties {
 			if probekeys.IsNodeControl(p.Name) {
 				out.Body.Rejected = append(out.Body.Rejected, pushRejection{
-					Name: p.Name, Reason: "a node's control fact (its gate or trusted host key); only the node writes it",
+					Name: p.Name, Reason: "a node's own fact (its gate, its trusted host key, a held session's state or reason); only the node writes it",
 				})
 				continue
 			}

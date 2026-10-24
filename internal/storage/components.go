@@ -1003,6 +1003,12 @@ type ComponentEndpoint struct {
 	// landed, by the server's clock, to within liveStampEvery; nil when
 	// none has (#933).
 	LastSeenAt *time.Time
+	// HoldsSession is whether the endpoint is configured to hold a session:
+	// a standing listen task, or a driver that declares a session block
+	// (ADR-0150 point 3, ADR-0155). Teardown publishes no state, so a session
+	// nobody holds keeps its last session-state; the reachability read serves
+	// a session only while this holds (#1059).
+	HoldsSession bool
 }
 
 // ListComponentEndpoints returns a component's endpoints ordered by the label
@@ -1024,7 +1030,9 @@ func (p *PG) ListComponentEndpoints(ctx context.Context, componentRef string) ([
 		return nil, err
 	}
 	rows, err := p.pool.Query(ctx, `
-		select i.id::text, i.name, coalesce(i.label, ''), i.transport, coalesce((select n.name from node n where n.principal_id = i.node_name), ''), i.params, l.last_seen_at
+		select i.id::text, i.name, coalesce(i.label, ''), i.transport, coalesce((select n.name from node n where n.principal_id = i.node_name), ''), i.params, l.last_seen_at,
+			exists (select 1 from task t where t.endpoint_id = i.id and t.mode = 'listen' and t.enabled)
+				or exists (select 1 from driver d where d.id = i.driver_id and d.spec ? 'session')
 		from endpoint i
 		left join endpoint_live l on l.endpoint_id = i.id
 		where i.component = $1::uuid
@@ -1036,7 +1044,7 @@ func (p *PG) ListComponentEndpoints(ctx context.Context, componentRef string) ([
 	var out []ComponentEndpoint
 	for rows.Next() {
 		var it ComponentEndpoint
-		if err := rows.Scan(&it.ID, &it.Name, &it.Label, &it.Transport, &it.NodeName, &it.Params, &it.LastSeenAt); err != nil {
+		if err := rows.Scan(&it.ID, &it.Name, &it.Label, &it.Transport, &it.NodeName, &it.Params, &it.LastSeenAt, &it.HoldsSession); err != nil {
 			return nil, fmt.Errorf("storage: scan endpoint for %s: %w", componentRef, err)
 		}
 		out = append(out, it)

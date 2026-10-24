@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { STALENESS_WINDOW_MS, type ReachEndpoint } from "./reachability";
-import { ladder, rungHint, sessionWord, sessionShowsReason, retryRefusal, retryEndpoint } from "./session";
+import { ladder, rungHint, sessionWord, sessionShowsReason, retryRefusal, retryEndpoint, retryWaiting, RETRY_WAIT_MS } from "./session";
 import { uuidFor } from "./testids";
 
 const now = Date.parse("2026-10-23T12:00:00Z");
@@ -117,6 +117,13 @@ describe("ladder", () => {
     const rungs = ladder(ep({ responsive: { value: "up", ts: ago(1) }, rejection: { rung: "authenticated", class: "auth" } }));
     expect(rungs.at(-1)).toMatchObject({ key: "authenticated", status: "held" });
   });
+  it("invents no login rung for a session that has no login, whatever its gate", () => {
+    const rungs = ladder(ep({ transport: "tcp", layers: [ping(1), port(1)], session: { state: "rejected", ts: ago(1_000) }, rejection: { rung: "responsive", class: "protocol" } }));
+    expect(rungs.map((r) => [r.key, r.status])).toEqual([
+      ["reachable", "pass"],
+      ["responsive", "held"],
+    ]);
+  });
   it("reads an icmp endpoint's ping as its gate, not as information", () => {
     expect(ladder(ep({ transport: "icmp", layers: [ping(1)] })).map((r) => [r.key, r.status, r.role])).toEqual([["reachable", "pass", "gate"]]);
   });
@@ -139,6 +146,16 @@ describe("retry", () => {
     const req = fetchMock.mock.calls[0][0] as Request;
     expect(req.method).toBe("POST");
     expect(req.url).toContain(`/api/v1/endpoints/${uuidFor("ep-1")}:retry`);
+  });
+
+  // A retry is in hand until the session moves or the wait runs out, so a
+  // node that never answers does not keep Retry spinning forever.
+  it("holds a retry until the session moves or the wait runs out", () => {
+    const pending = { ts: ago(30_000), at: now - 1_000 };
+    expect(retryWaiting(pending, ago(30_000), now)).toBe(true);
+    expect(retryWaiting(pending, ago(500), now)).toBe(false);
+    expect(retryWaiting({ ...pending, at: now - RETRY_WAIT_MS - 1 }, ago(30_000), now)).toBe(false);
+    expect(retryWaiting(null, ago(30_000), now)).toBe(false);
   });
 
   it("names the permission a caller lacks, and refuses nothing for one who holds it", () => {

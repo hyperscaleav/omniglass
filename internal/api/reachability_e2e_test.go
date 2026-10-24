@@ -246,8 +246,8 @@ type sessionReachResp struct {
 // pill renders (#1059): a rejected session reads its state, its reason and the
 // rung its gate holds; the connection fingerprint the gate carries is never
 // served (a digest the read has no use for); a gate that lifted reads none
-// and serves nothing; an endpoint that never held a session carries no
-// session at all. Skipped under -short.
+// and serves nothing; an endpoint that never held a session, or no longer
+// holds one, carries no session at all. Skipped under -short.
 func TestReachabilityCarriesTheHeldSession(t *testing.T) {
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
@@ -281,8 +281,16 @@ func TestReachabilityCarriesTheHeldSession(t *testing.T) {
 	if _, err := conn.Exec(ctx, `insert into endpoint (name, transport, component, params) values
 		('telnet', 'telnet', (select id from component where name = 'panel-1'), '{"target":"127.60.0.9:23"}'::jsonb),
 		('tcp', 'tcp', (select id from component where name = 'panel-1'), '{"target":"127.60.0.9:51325"}'::jsonb),
-		('icmp', 'icmp', (select id from component where name = 'panel-1'), '{"target":"127.60.0.9"}'::jsonb)`); err != nil {
+		('icmp', 'icmp', (select id from component where name = 'panel-1'), '{"target":"127.60.0.9"}'::jsonb),
+		('http', 'http', (select id from component where name = 'panel-1'), '{"target":"127.60.0.9:80"}'::jsonb)`); err != nil {
 		t.Fatalf("insert endpoints: %v", err)
+	}
+	// A standing listen task is what holds an endpoint's session (ADR-0150
+	// point 3): telnet and tcp hold one; http's listen task was removed (its
+	// driver lost the listener), so the node tore its session down.
+	if _, err := conn.Exec(ctx, `insert into task (id, mode, endpoint_id, spec) select 'listen-' || name, 'listen', id, '{}'::jsonb
+		from endpoint where name in ('telnet', 'tcp') and component = (select id from component where name = 'panel-1')`); err != nil {
+		t.Fatalf("insert listen tasks: %v", err)
 	}
 	ids := map[string]string{}
 	rows, err := conn.Query(ctx, `select name, id::text from endpoint where component = (select id from component where name = 'panel-1')`)
@@ -314,6 +322,8 @@ func TestReachabilityCarriesTheHeldSession(t *testing.T) {
 		prop("session-reason", "tcp", "", at),
 		prop("endpoint-rejection", "tcp", "responsive host-key "+fingerprint, at.Add(-time.Hour)),
 		prop("endpoint-rejection", "tcp", "none", at),
+		prop("session-state", "http", "rejected", at),
+		prop("session-reason", "http", "auth: auth rejected", at),
 	}); err != nil {
 		t.Fatalf("insert session samples: %v", err)
 	}
@@ -356,6 +366,14 @@ func TestReachabilityCarriesTheHeldSession(t *testing.T) {
 	}
 	if tcp.Rejection != nil {
 		t.Fatalf("tcp rejection: a gate that lifted (none) is absent, got %+v", tcp.Rejection)
+	}
+
+	// Teardown publishes no state (ADR-0150), so the last one outlives a
+	// session nobody holds; the read serves a session only while the
+	// endpoint is configured to hold one, so a torn-down session's rejected
+	// never stands beside a Retry that can change nothing.
+	if http := r.Endpoints[byName["http"]]; http.Session != nil {
+		t.Fatalf("http: an endpoint no longer holding a session carries its last state: %+v", http.Session)
 	}
 
 	icmp := r.Endpoints[byName["icmp"]]

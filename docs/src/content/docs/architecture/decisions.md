@@ -7181,7 +7181,10 @@ interface create form, since that name is the platform's to mint.
      reported for an attempt under an older fingerprint gates nothing. The ssh pin the node trusted
      on first use is a learned fact and stays out of the fingerprint; only the operator's declared
      pin goes in. `endpoint-rejection` and `ssh-host-key` are node control facts the push lane
-     refuses, so no push can plant or lift a gate.
+     refuses, so no push can plant or lift a gate. **Amended (#1059):** `session-state` and
+     `session-reason` join them, since the console reads them as the node's account of its own
+     connection: a push could otherwise read a rejected session up, hiding the refusal and its
+     Retry, or plant a reason the node never scrubbed.
   6. **Connection inputs edit in place** (the architect's ruling on #1061). A driver-attached
      endpoint's host, port and attached secret references are patched through `PATCH
      /endpoints/{id}` `inputs`, validated against the driver's declared inputs (a refused value is a

@@ -8007,7 +8007,7 @@ export interface components {
             rejection?: components["schemas"]["ReachRejectionBody"];
             /** @description The layer-7 responds rung (the protocol itself answered), when a probe has climbed it */
             responsive?: components["schemas"]["ReachVerdictBody"];
-            /** @description The endpoint's held session, when it has held one: its latest state, when it changed, and why */
+            /** @description The endpoint's held session, while it is configured to hold one (a standing listen task, or a driver declaring a session): its latest state, when it changed, and why */
             session?: components["schemas"]["ReachSessionBody"];
             /** @description The transport (icmp, tcp, ...) */
             transport: string;
@@ -8047,7 +8047,7 @@ export interface components {
             rung: "reachable" | "responsive" | "authenticated";
         };
         ReachSessionBody: {
-            /** @description Why the session is in its state (session-reason), the reason of its latest transition; a rejected session's is its class and the component's own text (auth: auth rejected), scrubbed by the node of anything it sent */
+            /** @description Why the session is in its state (session-reason), the reason of its latest transition; a rejected session's is its class and the component's own text (auth: auth rejected), scrubbed by the node of anything it sent. Cut to 500 characters; the property's series keeps the whole */
             reason?: string;
             /**
              * @description The held session's latest state (session-state): establishing, up, recovering, down, or rejected (a refusal retrying cannot fix; the node dials no more until the endpoint's connection fingerprint moves)

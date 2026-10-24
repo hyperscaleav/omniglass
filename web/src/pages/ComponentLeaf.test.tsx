@@ -69,8 +69,12 @@ const reach: Reachability = {
 
 const nodes: Node[] = [{ name: "edge-1", enrolled: true, last_heartbeat_at: iso(5), tags: {} } as Node];
 
+// The cache the last mount rendered from, so a test can land a poll on it.
+let leafClient: QueryClient | undefined;
+
 function mount(path = `/web/components/${uuidFor("cf-c-bar")}`, memberships?: unknown[], component: Component = bar, meOverride: Me = me, alarms?: unknown[], seed?: { reach?: Reachability; nodes?: Node[] }) {
   const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
+  leafClient = qc;
   seedSeverityLevels(qc);
   qc.setQueryData([...FLEET_VIEW_KEY], view);
   qc.setQueryData([...COMPONENTS_KEY], [component]);
@@ -272,6 +276,20 @@ describe("the leaf's dispatch facts (#786)", () => {
     expect(within(card).getByTestId("session-reason").textContent).toBe("auth: auth rejected");
     expect(within(card).getByTestId("collection-telnet").textContent).toBe("polls stopped");
     expect((within(card).getByRole("button", { name: /retry/i }) as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  // The view polls the read and every poll hands back fresh objects (last
+  // seen moves): rows are kept by endpoint id, so a rung's open tooltip is
+  // not torn out from under the pointer by the next poll.
+  it("keeps a collection row's elements across a poll that hands back fresh objects", async () => {
+    const { container } = mount(undefined, undefined, bar, me, undefined, { reach: rejectedReach });
+    const card = screen.getByTestId("leaf-collection");
+    const rung = within(card).getAllByTestId("ladder-rung")[0];
+    const qcReach = { ...rejectedReach, endpoints: rejectedReach.endpoints.map((e) => ({ ...e, last_seen: new Date(Date.now() + 5_000).toISOString() })) };
+    // Re-seed through the same cache the view reads, as its poll would.
+    leafClient!.setQueryData([...REACHABILITY_KEY(uuidFor("cf-c-bar"))], qcReach);
+    await new Promise((r) => setTimeout(r, 20));
+    expect(container.contains(rung)).toBe(true);
   });
 
   it("a viewer reads the rejected session with Retry greyed and its reason", () => {
