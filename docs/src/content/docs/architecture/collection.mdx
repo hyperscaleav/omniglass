@@ -473,7 +473,9 @@ report; it names a cause and never gates. With no port to open, the responsive r
 endpoint's verdict too, and no `tcp-open` lands; the ping stays informational, so a component that
 blocks ping but answers reads up, and one that answers ping but not the request reads down. Each
 answered probe lands one `udp-response-time` (a rung-specific name until #1063 folds probe timings
-into `rtt`); loss shows through `endpoint-responsive` and its reason.
+into `rtt`); loss shows through `endpoint-responsive` and its reason. The Endpoints panel's
+breakdown lists the request rung beside the ping, and a ping-up endpoint whose request goes
+unanswered says so in its why-line.
 
 An exchange takes its reply by the request's declared shape (`request.reply`), with the held line
 connection's precedence, so a datagram that does not match is never the answer and a push arriving

@@ -8103,7 +8103,8 @@ polls, commands and the arm conversation leave from it; the rung lands `endpoint
 `udp-response-time` per answered probe (writer class `node-probe`, [ADR-0161](/architecture/decisions/#adr-0161-every-key-has-one-writer-class-held-at-the-storage-gateway)), never `tcp-open` or `session-state`, and decides
 the verdict where no port can be opened; a terminal reply gates the transport rung; a recovered rung
 re-arms the listeners; another source's datagrams are self-logged once per tick. A command delivery
-carries its binding's retries. The console's ladder and why-line teach the request rung. The
+carries its binding's retries. The console's breakdown lists a udp endpoint's request rung (the
+layer its verdict follows), and its ladder hint and why-line teach it. The
 simulated panel serves NVP as datagrams (`nvp-udp`, 51327, per source address over the shell loop),
 dropping a share of datagrams each way, seeded per datagram so a lossy run repeats; the dev fleet
 attaches the new official `newtron-nvp-udp` to the huddle panel.
