@@ -12,6 +12,7 @@ import (
 
 	"github.com/hyperscaleav/omniglass/internal/rules"
 	"github.com/hyperscaleav/omniglass/internal/scope"
+	"github.com/hyperscaleav/omniglass/internal/writerclass"
 )
 
 // EventRuleSelector picks the components a rule watches: those whose
@@ -267,7 +268,8 @@ func prepareEventRule(ctx context.Context, q querier, r *EventRule, check ruleCh
 }
 
 // resolveRuleEventTypes resolves a rule's event types by name: the fire type
-// is required, the clear type optional, and each must be registered. A type
+// is required, the clear type optional, and each must be registered and a key
+// an event rule may write (not a reserved one). A type
 // a rule names cannot be deleted (the reference restricts it), so a stored
 // name always resolves and an unchanged one never blocks an edit.
 func resolveRuleEventTypes(ctx context.Context, q querier, r *EventRule) error {
@@ -275,6 +277,11 @@ func resolveRuleEventTypes(ctx context.Context, q querier, r *EventRule) error {
 		return invalidRule("a rule names the event type it writes when its condition starts (fire_event_type)")
 	}
 	resolve := func(field, name string) (string, error) {
+		// A rule's event is the rule's: never a key another writer owns
+		// (ADR-0161), such as the node's collection-failed.
+		if c, ok := writerclass.Reserved(name); ok {
+			return "", invalidRule("%s %q: %s", field, name, writerclass.Refusal(c, name, writerclass.EventRule, ""))
+		}
 		var id string
 		err := q.QueryRow(ctx, `select id::text from event_type where name = $1`, name).Scan(&id)
 		if errors.Is(err, pgx.ErrNoRows) {

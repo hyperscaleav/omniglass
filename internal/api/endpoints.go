@@ -250,6 +250,9 @@ func mapEndpointErr(err error) error {
 	if refErr, ok := mapRefErr(err); ok {
 		return refErr
 	}
+	if refused, ok := mapKeyWriterErr(err); ok {
+		return refused
+	}
 	switch {
 	case errors.Is(err, storage.ErrAttachInvalid), errors.Is(err, storage.ErrSpecInvalid):
 		// The attach gate names the fault (a missing input, a secret reference

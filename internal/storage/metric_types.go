@@ -8,6 +8,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/hyperscaleav/omniglass/internal/rules"
+	"github.com/hyperscaleav/omniglass/internal/writerclass"
 )
 
 // MetricType is a canonical registered signal on the metric lane of the catalog
@@ -30,6 +31,10 @@ type MetricType struct {
 	// WrittenBy is the calc rule that writes this metric, nil when none
 	// does (#1019). Read beside the type, never stored or audited.
 	WrittenBy *CalcWriter `json:"-"`
+	// WriterClass is who may write this metric (ADR-0161): resolved from its
+	// name and WrittenBy, never stored, so it cannot drift from what a write
+	// is held to.
+	WriterClass writerclass.Class `json:"-"`
 }
 
 // Sentinels for metric_type CRUD. Official (seed-owned) metric types are read-only.
@@ -70,6 +75,7 @@ func scanMetricType(row pgx.Row) (*MetricType, error) {
 		return nil, err
 	}
 	mt.WrittenBy = parseCalcWriter(writer)
+	mt.WriterClass = classOf(mt.Name, mt.WrittenBy)
 	return &mt, nil
 }
 
@@ -152,6 +158,9 @@ func guardMetricTypeMutable(ctx context.Context, q querier, name string) error {
 // The name must be a valid canonical key. A duplicate name is ErrMetricTypeExists.
 func (p *PG) CreateMetricType(ctx context.Context, actorID string, spec MetricTypeSpec) (*MetricType, error) {
 	if err := ValidateName("metric_type", spec.Name); err != nil {
+		return nil, fmt.Errorf("%w: %w", ErrMetricTypeInvalid, err)
+	}
+	if err := reservedName(spec.Name); err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrMetricTypeInvalid, err)
 	}
 	tx, err := p.pool.Begin(ctx)

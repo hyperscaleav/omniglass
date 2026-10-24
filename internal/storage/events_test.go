@@ -35,7 +35,7 @@ func TestInsertEvents(t *testing.T) {
 	}
 
 	now := time.Now().UTC()
-	err = gw.InsertEvents(ctx, []storage.EventWrite{
+	err = gw.InsertEvents(ctx, storage.PushWriter(), []storage.EventWrite{
 		{OwnerKind: "component", OwnerID: "disp-1", Key: "call-started", Message: "call started", Source: "xapi", TS: now.Add(-2 * time.Minute)},
 		{OwnerKind: "component", OwnerID: "disp-1", Key: "call-started", Message: "call joined by 4 participants", Attributes: []byte(`{"peer":"room-204","protocol":"sip"}`), Source: "xapi", TS: now},
 	})
@@ -69,7 +69,7 @@ func TestInsertEvents(t *testing.T) {
 	}
 
 	// An owner component that does not exist violates the component FK.
-	err = gw.InsertEvents(ctx, []storage.EventWrite{
+	err = gw.InsertEvents(ctx, storage.PushWriter(), []storage.EventWrite{
 		{OwnerKind: "component", OwnerID: "ghost", Key: "call-started", Message: "x", TS: now},
 	})
 	if err == nil {
@@ -110,7 +110,7 @@ func TestListSystemEvents(t *testing.T) {
 	}
 
 	now := time.Now().UTC()
-	if err := gw.InsertEvents(ctx, []storage.EventWrite{
+	if err := gw.InsertEvents(ctx, storage.PushWriter(), []storage.EventWrite{
 		{OwnerKind: "component", OwnerID: "bar-1", Key: "call-started", Message: "member event", Source: "xapi", TS: now.Add(-2 * time.Minute)},
 		{OwnerKind: "system", OwnerID: sys.ID, Key: "call-started", Message: "system event", Source: "seed", TS: now.Add(-1 * time.Minute)},
 		{OwnerKind: "component", OwnerID: "stray-1", Key: "call-started", Message: "someone else's", Source: "xapi", TS: now},

@@ -131,6 +131,9 @@ func registerLocationPropertyRoutes(api huma.API, a *authenticator, gw storage.G
 // property or owner that does not exist is a request fault (422), and the location
 // sentinels keep the location routes' non-disclosing mapping.
 func mapLocationPropertyErr(err error) error {
+	if refused, ok := mapKeyWriterErr(err); ok {
+		return refused
+	}
 	switch {
 	case errors.Is(err, storage.ErrPropertyNotFound):
 		return huma.Error404NotFound("property not set on this location")

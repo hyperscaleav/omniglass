@@ -134,7 +134,7 @@ func TestInformationalRuleRaisesNoAlarm(t *testing.T) {
 	if _, err := f.conn.Exec(ctx, `update event_rule set enabled = $1 where name = 'reachability-lost'`, off); err != nil {
 		t.Fatal(err)
 	}
-	if err := f.gw.InsertPropertySamples(ctx, []storage.PropertySampleWrite{{OwnerKind: "component", OwnerID: "bar-1",
+	if err := insertProperties(ctx, f.gw, []storage.PropertySampleWrite{{OwnerKind: "component", OwnerID: "bar-1",
 		Key: "endpoint-reachable", Instance: "tcp", Value: "down", TS: time.Now()}}); err != nil {
 		t.Fatal(err)
 	}

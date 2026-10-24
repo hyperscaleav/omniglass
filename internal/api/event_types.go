@@ -20,11 +20,13 @@ type eventTypeBody struct {
 	Description   string          `json:"description,omitempty"`
 	PayloadSchema json.RawMessage `json:"payload_schema,omitempty" doc:"A JSON Schema fragment for the occurrence payload"`
 	Official      bool            `json:"official"`
+	WriterClass   string          `json:"writer_class" enum:"node-probe,platform,calc,collected" doc:"Who may write this key (ADR-0161): node-probe (a node's own probe or session machine, under the endpoint it probed), platform (the Omniglass process itself: the health rollup), calc (the calc rule that outputs it), or collected (a driver's emits or a push, and a command's or an operator's value). The Storage Gateway refuses any write whose writer the class does not admit"`
 }
 
 func toEventTypeBody(et *storage.EventType) eventTypeBody {
 	b := eventTypeBody{
 		ID: et.ID, Name: et.Name, Label: et.Label, Description: et.Description, Official: et.Official,
+		WriterClass: string(et.WriterClass),
 	}
 	if len(et.PayloadSchema) > 0 {
 		b.PayloadSchema = json.RawMessage(et.PayloadSchema)

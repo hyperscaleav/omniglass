@@ -40,6 +40,7 @@ gen: gen-proto
 	go run ./cmd/docsgen
 	go run ./cmd/erdgen
 	go run ./cmd/seedgen
+	go run ./cmd/writerclassgen
 	go run ./cmd/labelgen
 	go run ./cmd/exprgen
 	go run ./cmd/configgen

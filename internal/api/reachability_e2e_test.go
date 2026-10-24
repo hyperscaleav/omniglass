@@ -101,30 +101,30 @@ func TestReachabilityAPI(t *testing.T) {
 	t1 := t0.Add(time.Minute)
 	t2 := t1.Add(time.Minute)
 	// disp-1-tcp: up verdict + tcp-open=1 + connect_time.
-	if err := gw.InsertPropertySamples(ctx, []storage.PropertySampleWrite{
+	if err := insertProperties(ctx, gw, []storage.PropertySampleWrite{
 		{OwnerKind: "component", OwnerID: "disp-1", Key: "endpoint-reachable", Instance: "disp-1-tcp", Value: "up", Source: "tcp", TS: t2},
 		{OwnerKind: "component", OwnerID: "disp-1", Key: "endpoint-responsive", Instance: "disp-1-tcp", Value: "up", Source: "http", TS: t2},
 	}); err != nil {
 		t.Fatalf("insert tcp state: %v", err)
 	}
-	if err := gw.InsertMetricSamples(ctx, []storage.MetricSampleWrite{
+	if err := insertMetrics(ctx, gw, []storage.MetricSampleWrite{
 		{OwnerKind: "component", OwnerID: "disp-1", Key: "tcp-open", Instance: "disp-1-tcp", Value: 1, Source: "tcp", TS: t2},
 		{OwnerKind: "component", OwnerID: "disp-1", Key: "tcp-connect-time", Instance: "disp-1-tcp", Value: 3.1, Source: "tcp", TS: t2},
 	}); err != nil {
 		t.Fatalf("insert tcp metrics: %v", err)
 	}
 	// disp-1-icmp: down verdict with two transitions (up then down) + icmp-reachable=0.
-	if err := gw.InsertPropertySamples(ctx, []storage.PropertySampleWrite{
+	if err := insertProperties(ctx, gw, []storage.PropertySampleWrite{
 		{OwnerKind: "component", OwnerID: "disp-1", Key: "endpoint-reachable", Instance: "disp-1-icmp", Value: "up", Source: "icmp", TS: t0},
 	}); err != nil {
 		t.Fatalf("insert icmp up: %v", err)
 	}
-	if err := gw.InsertPropertySamples(ctx, []storage.PropertySampleWrite{
+	if err := insertProperties(ctx, gw, []storage.PropertySampleWrite{
 		{OwnerKind: "component", OwnerID: "disp-1", Key: "endpoint-reachable", Instance: "disp-1-icmp", Value: "down", Source: "icmp", TS: t1},
 	}); err != nil {
 		t.Fatalf("insert icmp down: %v", err)
 	}
-	if err := gw.InsertMetricSamples(ctx, []storage.MetricSampleWrite{
+	if err := insertMetrics(ctx, gw, []storage.MetricSampleWrite{
 		{OwnerKind: "component", OwnerID: "disp-1", Key: "icmp-reachable", Instance: "disp-1-icmp", Value: 0, Source: "icmp", TS: t1},
 	}); err != nil {
 		t.Fatalf("insert icmp metric: %v", err)
@@ -134,7 +134,7 @@ func TestReachabilityAPI(t *testing.T) {
 	// metrics (uptime here), stamped with the endpoint as their instance; it
 	// never gets a reachability verdict or a layer signal (#933).
 	t3 := t2.Add(30 * time.Second)
-	if err := gw.InsertMetricSamples(ctx, []storage.MetricSampleWrite{
+	if err := insertMetrics(ctx, gw, []storage.MetricSampleWrite{
 		{OwnerKind: "component", OwnerID: "disp-1", Key: "uptime", Instance: "disp-1-snmp", Value: 42, Source: "snmp", TS: t3},
 	}); err != nil {
 		t.Fatalf("insert snmp metric: %v", err)
@@ -316,7 +316,7 @@ func TestReachabilityCarriesTheHeldSession(t *testing.T) {
 	prop := func(key, instance, value string, ts time.Time) storage.PropertySampleWrite {
 		return storage.PropertySampleWrite{OwnerKind: "component", OwnerID: "panel-1", Key: key, Instance: instance, Value: value, Source: "session", TS: ts}
 	}
-	if err := gw.InsertPropertySamples(ctx, []storage.PropertySampleWrite{
+	if err := insertProperties(ctx, gw, []storage.PropertySampleWrite{
 		prop("session-state", "telnet", "establishing", at.Add(-time.Minute)),
 		prop("session-reason", "telnet", "", at.Add(-time.Minute)),
 		prop("session-state", "telnet", "rejected", at),
@@ -454,7 +454,7 @@ func TestReachabilityCarriesTheTLSFacts(t *testing.T) {
 	prop := func(key, value string) storage.PropertySampleWrite {
 		return storage.PropertySampleWrite{OwnerKind: "component", OwnerID: "panel-1", Key: key, Instance: "tls", Value: value, Source: "tls", TS: at}
 	}
-	if err := gw.InsertPropertySamples(ctx, []storage.PropertySampleWrite{
+	if err := insertProperties(ctx, gw, []storage.PropertySampleWrite{
 		prop("tls-certificate", pinned),
 		prop("tls-certificate-expiry", expiry.Format(time.RFC3339)),
 		// panel-2 verifies, yet holds a key from an earlier pin: not served.
@@ -465,7 +465,7 @@ func TestReachabilityCarriesTheTLSFacts(t *testing.T) {
 	metric := func(key string, v float64) storage.MetricSampleWrite {
 		return storage.MetricSampleWrite{OwnerKind: "component", OwnerID: "panel-1", Key: key, Instance: "tls", Value: v, Source: "tls", TS: at}
 	}
-	if err := gw.InsertMetricSamples(ctx, []storage.MetricSampleWrite{metric("tls-handshake-time", 12.5), metric("tls-certificate-days-left", 10.02)}); err != nil {
+	if err := insertMetrics(ctx, gw, []storage.MetricSampleWrite{metric("tls-handshake-time", 12.5), metric("tls-certificate-days-left", 10.02)}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -475,6 +475,7 @@ func TestReachabilityCarriesTheTLSFacts(t *testing.T) {
 	type tlsResp struct {
 		Endpoints []struct {
 			Endpoint string `json:"endpoint"`
+			ID       string `json:"id"`
 			TLS      *struct {
 				Mode        string     `json:"mode"`
 				Key         string     `json:"key"`
@@ -521,7 +522,7 @@ func TestReachabilityCarriesTheTLSFacts(t *testing.T) {
 	// The component is replaced: a certificate gate holds, carrying both
 	// keys, and the last accepted certificate's facts are no longer served
 	// as current (under the gate the probe connects only, so they freeze).
-	if err := gw.InsertPropertySamples(ctx, []storage.PropertySampleWrite{
+	if err := insertProperties(ctx, gw, []storage.PropertySampleWrite{
 		{OwnerKind: "component", OwnerID: "panel-1", Key: "endpoint-rejection", Instance: "tls", Value: "responsive certificate " + fingerprint + " " + pinned + " " + offered, Source: "tls", TS: at.Add(time.Second)},
 	}); err != nil {
 		t.Fatal(err)
@@ -532,6 +533,16 @@ func TestReachabilityCarriesTheTLSFacts(t *testing.T) {
 	}
 	if ep.TLS == nil || ep.TLS.Key != pinned || ep.TLS.Expires != nil || ep.TLS.DaysLeft != nil {
 		t.Fatalf("tls under a certificate gate = %+v, want the pin kept and the stale certificate facts withheld", ep.TLS)
+	}
+
+	// The operator accepts the offered key: the pin served is the pin in
+	// force, the declared key, though the node publishes no observation of
+	// a pin it is handed back (ADR-0161).
+	if _, err := gw.RetryEndpoint(ctx, "", ep.ID, storage.RetryPin{Certificate: offered}, all, all); err != nil {
+		t.Fatalf("accept the offered key: %v", err)
+	}
+	if ep := read("panel-1").Endpoints[0]; ep.TLS == nil || ep.TLS.Key != offered {
+		t.Fatalf("tls after the key is accepted = %+v, want the accepted key as the pin", ep.TLS)
 	}
 
 	// An endpoint with no mode set verifies; a key left from an earlier pin

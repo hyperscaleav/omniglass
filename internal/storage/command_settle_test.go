@@ -174,7 +174,7 @@ func TestCommandSettlesOnTheNextObservation(t *testing.T) {
 	if got := r.status(t, id); got != "issued" {
 		t.Fatalf("status after the reply = %q, want issued (observe decides)", got)
 	}
-	if err := r.gw.InsertPropertySamples(r.ctx, []storage.PropertySampleWrite{{
+	if err := r.gw.InsertPropertySamples(r.ctx, storage.PushWriter(), []storage.PropertySampleWrite{{
 		OwnerKind: "component", OwnerID: "switcher", Key: "video-input", Instance: "tcp", Value: "hdmi3", Source: "tcp",
 	}}); err != nil {
 		t.Fatal(err)
@@ -281,7 +281,7 @@ func TestNonEvidenceLeavesACommandPending(t *testing.T) {
 		{OwnerKind: "component", OwnerID: "switcher", Key: "video-input", Instance: "tcp", Value: "hdmi1", Source: "tcp"},
 		{OwnerKind: "component", OwnerID: "switcher", Key: "video-input", Instance: "tcp", Value: "hdmi3", Source: "tcp", TS: issuedAt.Add(-time.Minute)},
 	} {
-		if err := r.gw.InsertPropertySamples(r.ctx, []storage.PropertySampleWrite{s}); err != nil {
+		if err := r.gw.InsertPropertySamples(r.ctx, storage.PushWriter(), []storage.PropertySampleWrite{s}); err != nil {
 			t.Fatal(err)
 		}
 		if got := r.status(t, id); got != "issued" {

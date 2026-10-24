@@ -188,14 +188,15 @@ func (r *Runner) CollectICMP(ctx context.Context, t ICMPTask) ([]Sample, error) 
 // The layer-7 ladder signals (#812): the response metrics born five-lane in
 // the seed catalogs, and the responds/auth verdict properties beside
 // endpoint-reachable. EventCollectionFailed is the occurrence a task lands
-// when its payload or config cannot be used, never a silent drop.
+// when its payload or config cannot be used, never a silent drop; declared in
+// probekeys, so it is ruled node-only with the rest (#1086).
 const (
 	SignalHTTPResponseTime      = probekeys.HTTPResponseTime
 	SignalSSHHandshakeTime      = probekeys.SSHHandshakeTime
 	SignalTelnetResponseTime    = probekeys.TelnetResponseTime
 	SignalEndpointResponsive    = probekeys.EndpointResponsive
 	SignalEndpointAuthenticated = probekeys.EndpointAuthenticated
-	EventCollectionFailed       = "collection-failed"
+	EventCollectionFailed       = probekeys.CollectionFailed
 )
 
 // HTTPTask is the parsed http reachability-plus-responsiveness unit a node

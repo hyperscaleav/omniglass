@@ -28,6 +28,9 @@ answer the request as a failure carrying the device's text instead of timing out
 a spec is Go RE2 with **substring** semantics: `INPUT \S+` also matches `EVT INPUT hdmi2`, so anchor
 a pattern meant to match a whole line (`^INPUT \S+$`). `unmatched: collection-failed` makes a line
 nobody claims a collection fault rather than a counted discard ([routing](/architecture/collection/#listeners-over-a-held-session)).
+An emit names a **collected** key: a native probe key or `collection-failed` (the node's own account),
+`health`, or a key a calc rule outputs is refused at the spec's write, naming the key, since each has
+its own writer ([who writes a key](/architecture/properties/#who-writes-a-key-the-writer-class)).
 A spec may declare a **session** block, the auth step the held session runs before anything rides
 it ([auth and rejection](/architecture/collection/#auth-and-rejection)). `session.login` is a login
 dialog: its `steps` each wait for a prompt (`expect`, a `prefix` or `regex` that may match a prompt

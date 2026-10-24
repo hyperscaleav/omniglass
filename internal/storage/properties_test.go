@@ -143,7 +143,7 @@ func TestRegistryNamesAreUniqueAcrossBothRegistries(t *testing.T) {
 	// property lane, and a seeded property name is refused on the metric lane, so
 	// no name can route to two sinks.
 	if _, err := gw.CreatePropertyType(ctx, "", storage.PropertyTypeSpec{
-		Name: "icmp-rtt-avg", Label: "RTT", DataType: "string",
+		Name: "uptime", Label: "Uptime", DataType: "string",
 	}); !errors.Is(err, storage.ErrPropertyTypeExists) {
 		t.Fatalf("CreatePropertyType on an existing metric type name = %v, want ErrPropertyTypeExists", err)
 	}

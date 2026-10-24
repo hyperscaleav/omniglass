@@ -20,8 +20,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/hyperscaleav/omniglass/internal/collection/probekeys"
 	"github.com/hyperscaleav/omniglass/internal/transport"
+	"github.com/hyperscaleav/omniglass/internal/writerclass"
 )
 
 // Catalog resolves the names a spec references against the platform catalogs.
@@ -35,6 +35,10 @@ type Catalog interface {
 	CommandTypeExists(name string) bool
 	// SecretTypeExists reports whether the secret-type catalog holds name.
 	SecretTypeExists(name string) bool
+	// WriterClass resolves an emitted name's writer class (ADR-0161): a
+	// driver emits only a collected key, so a calc rule's output is refused
+	// here as a reserved key is refused by name.
+	WriterClass(name string) writerclass.Class
 }
 
 // Spec is a driver's declarative body. Version gates interpretation: this
@@ -521,18 +525,21 @@ func validateEmits(family, fn string, emits []Emit, cat Catalog) error {
 		if em.Name == "" {
 			return fmt.Errorf("driver: %s %q emits a sample with no name", family, fn)
 		}
-		if probekeys.IsNodeOnly(em.Name) {
-			// A key only a node's own probe writes (a pin, the gate, a held
-			// session's account of itself, a verdict or a probe timing) is the
-			// node's alone: emitted by a driver it would land as the observed
-			// value, and for a pin the worklist would deliver it back as the
-			// pin (#1035 review), so it is refused here as the push lane
-			// refuses it (#1080).
-			return fmt.Errorf("driver: %s %q emits %q, a key only the node's own collection writes", family, fn, em.Name)
+		// A reserved key (a pin, the gate, a held session's account of
+		// itself, a verdict or a probe timing, collection-failed, health) has
+		// one writer, never a driver's emits: emitted by a driver it would land
+		// as the observed value, and for a pin the worklist would deliver it
+		// back as the pin (#1035 review). The writer-class ruling decides it
+		// (ADR-0161), the one the push lane and the gateway read.
+		if err := emittable(em.Name); err != nil {
+			return fmt.Errorf("driver: %s %q may not emit %w", family, fn, err)
 		}
 		if cat != nil {
 			if _, ok := cat.LaneOf(em.Name); !ok {
 				return fmt.Errorf("driver: %s %q emits %q, which no catalog holds", family, fn, em.Name)
+			}
+			if c := cat.WriterClass(em.Name); c != writerclass.Collected {
+				return fmt.Errorf("driver: %s %q may not emit %q: %s", family, fn, em.Name, writerclass.Refusal(c, em.Name, writerclass.Node, ""))
 			}
 		}
 		if err := validateExtract(fn, em); err != nil {
@@ -543,6 +550,18 @@ func validateEmits(family, fn string, emits []Emit, cat Catalog) error {
 				return err
 			}
 		}
+	}
+	return nil
+}
+
+// emittable refuses a name a driver may never emit, whatever the catalog
+// holds (ADR-0161): a reserved key (a native probe key, collection-failed, a
+// platform key) has one writer, and it is never a driver's function. The spec
+// write and the node's interpreter both ask, so a stored spec or a task
+// derived before the refusal existed still cannot land one.
+func emittable(name string) error {
+	if c, ok := writerclass.Reserved(name); ok {
+		return fmt.Errorf("%q: %s", name, writerclass.Refusal(c, strings.TrimSpace(name), writerclass.Push, ""))
 	}
 	return nil
 }

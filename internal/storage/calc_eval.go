@@ -690,18 +690,18 @@ func (p *PG) writeCalcOutput(ctx context.Context, tx pgx.Tx, r CalcRule, owner c
 	if current != nil && current == v {
 		return nil
 	}
-	lineage := &sampleLineage{ruleID: r.ID, ruleName: r.Name, version: r.Version}
+	w := calcWriter(&sampleLineage{ruleID: r.ID, ruleName: r.Name, version: r.Version})
 	ts := time.Now().UTC()
 	if r.OutputLane == rules.LaneMetric {
 		f, ok := v.(float64)
 		if !ok {
 			return fmt.Errorf("storage: calc rule %s produced %T for metric output %s", r.Name, v, r.OutputKey)
 		}
-		return p.writeMetricSamples(ctx, tx, []MetricSampleWrite{{OwnerKind: owner.kind, OwnerID: owner.id, Key: r.OutputKey,
-			Value: f, Source: calcSource, TS: ts}}, lineage)
+		return p.writeMetricSamples(ctx, tx, w, []MetricSampleWrite{{OwnerKind: owner.kind, OwnerID: owner.id, Key: r.OutputKey,
+			Value: f, Source: calcSource, TS: ts}})
 	}
-	return p.writePropertySamples(ctx, tx, []PropertySampleWrite{{OwnerKind: owner.kind, OwnerID: owner.id, Key: r.OutputKey,
-		Value: rules.FormatCalcValue(v), Source: calcSource, TS: ts}}, lineage)
+	return p.writePropertySamples(ctx, tx, w, []PropertySampleWrite{{OwnerKind: owner.kind, OwnerID: owner.id, Key: r.OutputKey,
+		Value: rules.FormatCalcValue(v), Source: calcSource, TS: ts}})
 }
 
 // calcSource is the source a calculated sample records; its producer is in

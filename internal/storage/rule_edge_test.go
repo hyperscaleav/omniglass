@@ -57,7 +57,7 @@ func (r *edgeRig) rule(spec storage.EventRuleSpec) {
 
 func (r *edgeRig) observe(instance, v string) {
 	r.t.Helper()
-	if err := r.f.gw.InsertPropertySamples(r.ctx, []storage.PropertySampleWrite{{OwnerKind: "component", OwnerID: "bar-1",
+	if err := insertProperties(r.ctx, r.f.gw, []storage.PropertySampleWrite{{OwnerKind: "component", OwnerID: "bar-1",
 		Key: "endpoint-reachable", Instance: instance, Value: v, TS: time.Now()}}); err != nil {
 		r.t.Fatal(err)
 	}

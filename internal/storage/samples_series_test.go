@@ -31,11 +31,11 @@ func TestListMetricSeries(t *testing.T) {
 		t.Fatalf("create component: %v", err)
 	}
 	now := time.Now().UTC()
-	if err := gw.InsertMetricSamples(ctx, []storage.MetricSampleWrite{
-		{OwnerKind: "component", OwnerID: "probe-1", Key: "icmp-rtt-avg", Value: 5.0, Source: "t", TS: now.Add(-3 * time.Hour)},
-		{OwnerKind: "component", OwnerID: "probe-1", Key: "icmp-rtt-avg", Value: 6.1, Source: "t", TS: now.Add(-1 * time.Minute)},
-		{OwnerKind: "component", OwnerID: "probe-1", Key: "icmp-rtt-avg", Value: 5.5, Source: "t", TS: now.Add(-30 * time.Hour)},
-		{OwnerKind: "component", OwnerID: "probe-1", Key: "tcp-connect-time", Value: 9.9, Source: "t", TS: now},
+	if err := insertMetrics(ctx, gw, []storage.MetricSampleWrite{
+		{OwnerKind: "component", OwnerID: "probe-1", Key: "icmp-rtt-avg", Instance: "icmp", Value: 5.0, Source: "t", TS: now.Add(-3 * time.Hour)},
+		{OwnerKind: "component", OwnerID: "probe-1", Key: "icmp-rtt-avg", Instance: "icmp", Value: 6.1, Source: "t", TS: now.Add(-1 * time.Minute)},
+		{OwnerKind: "component", OwnerID: "probe-1", Key: "icmp-rtt-avg", Instance: "icmp", Value: 5.5, Source: "t", TS: now.Add(-30 * time.Hour)},
+		{OwnerKind: "component", OwnerID: "probe-1", Key: "tcp-connect-time", Instance: "icmp", Value: 9.9, Source: "t", TS: now},
 	}); err != nil {
 		t.Fatalf("insert samples: %v", err)
 	}
@@ -77,7 +77,7 @@ func TestListPropertySeries(t *testing.T) {
 		t.Fatalf("create component: %v", err)
 	}
 	now := time.Now().UTC()
-	if err := gw.InsertPropertySamples(ctx, []storage.PropertySampleWrite{
+	if err := insertProperties(ctx, gw, []storage.PropertySampleWrite{
 		{OwnerKind: "component", OwnerID: "probe-2", Key: "firmware-version", Value: "2.1.0", Source: "collection", TS: now.Add(-2 * time.Hour)},
 		{OwnerKind: "component", OwnerID: "probe-2", Key: "firmware-version", Value: "2.1.4", Source: "collection", TS: now.Add(-1 * time.Hour)},
 	}); err != nil {

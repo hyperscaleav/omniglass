@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/key"
+	"github.com/hyperscaleav/omniglass/internal/writerclass"
 )
 
 // ErrCommandValueNotNumeric refuses an intended value that cannot open a metric
@@ -70,6 +71,9 @@ type Command struct {
 // as ErrAmbiguousName instead of picking a row, and an unambiguous one is a
 // caller that never applied a scope at all, which the conformance matrix's
 // readable-but-not-actionable branch fails on.
+// commandIssuedEvent is the event type of a command's caused occurrence.
+const commandIssuedEvent = "command-issued"
+
 func (p *PG) IssueCommand(ctx context.Context, actorID, ownerKind, ownerID, commandType, instance string, value, params json.RawMessage) (*Command, error) {
 	col, err := ownerColumn(ownerKind)
 	if err != nil {
@@ -118,6 +122,24 @@ func (p *PG) IssueCommand(ctx context.Context, actorID, ownerKind, ownerID, comm
 		return nil, err
 	}
 
+	// A command writes its caused event and, when settleable, an intended
+	// value on its target: both held to their keys' writer classes before
+	// anything is recorded (ADR-0161), so a command type stored before its
+	// target was refused at write still opens nothing on a key a command may
+	// not write.
+	if err := admitWrites(ctx, tx, writeEvent, gatewayWriter(writerclass.Command), []keyedWrite{{key: commandIssuedEvent, instance: instance}}); err != nil {
+		return nil, err
+	}
+	if opensIntended {
+		lane, target := writeProperty, ct.TargetPropertyType
+		if ct.TargetMetricType != "" {
+			lane, target = writeMetric, ct.TargetMetricType
+		}
+		if err := admitWrites(ctx, tx, lane, gatewayWriter(writerclass.Command), []keyedWrite{{key: target, instance: instance}}); err != nil {
+			return nil, err
+		}
+	}
+
 	// The caused event: a command-issued occurrence, origin=caused, carrying the
 	// params. It stays stamped on the intended value as context, though the
 	// value's lineage is the command itself now.
@@ -127,10 +149,10 @@ func (p *PG) IssueCommand(ctx context.Context, actorID, ownerKind, ownerID, comm
 	}
 	var causedID int64
 	eventSQL := fmt.Sprintf(`insert into event (owner_kind, %s, event_type_id, instance, origin, message, attributes, provenance, source)
-		values ($1, $2, (select id from event_type where name = 'command-issued'), $3, 'caused', $4, $5, 'observed', 'command')
+		values ($1, $2, (select id from event_type where name = $6), $3, 'caused', $4, $5, 'observed', 'command')
 		returning id`, col)
 	msg := fmt.Sprintf("command %s issued", commandType)
-	if err := tx.QueryRow(ctx, eventSQL, ownerKind, arc, instance, msg, attrs).Scan(&causedID); err != nil {
+	if err := tx.QueryRow(ctx, eventSQL, ownerKind, arc, instance, msg, attrs, commandIssuedEvent).Scan(&causedID); err != nil {
 		return nil, fmt.Errorf("storage: record caused event for %q: %w", commandType, err)
 	}
 

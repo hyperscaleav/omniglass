@@ -32,7 +32,7 @@ func newStreakRig(t *testing.T, name string, sustain time.Duration) *streakRig {
 
 func (r *streakRig) observe(t *testing.T, instance, v string, at time.Time) {
 	t.Helper()
-	if err := r.f.gw.InsertPropertySamples(context.Background(), []storage.PropertySampleWrite{{OwnerKind: "component",
+	if err := insertProperties(context.Background(), r.f.gw, []storage.PropertySampleWrite{{OwnerKind: "component",
 		OwnerID: "bar-1", Key: "endpoint-reachable", Instance: instance, Value: v, TS: at}}); err != nil {
 		t.Fatal(err)
 	}
@@ -104,7 +104,7 @@ func TestRuleSweepSerializesWithIngest(t *testing.T) {
 	time.Sleep(700 * time.Millisecond)
 	go func() {
 		defer wg.Done()
-		if err := r.f.gw.InsertPropertySamples(ctx, []storage.PropertySampleWrite{{OwnerKind: "component", OwnerID: "bar-1",
+		if err := insertProperties(ctx, r.f.gw, []storage.PropertySampleWrite{{OwnerKind: "component", OwnerID: "bar-1",
 			Key: "endpoint-reachable", Instance: "tcp", Value: "up", TS: now.Add(12 * time.Second)}}); err != nil {
 			t.Error(err)
 		}
@@ -174,7 +174,7 @@ func TestRuleCreatedWhileConditionHolds(t *testing.T) {
 	f := newHealthFixture(t)
 	ctx, all := context.Background(), scope.Set{All: true}
 	now := time.Now().UTC()
-	if err := f.gw.InsertPropertySamples(ctx, []storage.PropertySampleWrite{{OwnerKind: "component", OwnerID: "bar-1",
+	if err := insertProperties(ctx, f.gw, []storage.PropertySampleWrite{{OwnerKind: "component", OwnerID: "bar-1",
 		Key: "endpoint-reachable", Instance: "tcp", Value: "down", TS: now.Add(-time.Hour)}}); err != nil {
 		t.Fatal(err)
 	}
@@ -242,7 +242,7 @@ func TestRuleSweepRejudgesNewestSample(t *testing.T) {
 func TestOfficialRuleSeedPrimes(t *testing.T) {
 	f := newHealthFixture(t)
 	ctx := context.Background()
-	if err := f.gw.InsertPropertySamples(ctx, []storage.PropertySampleWrite{{OwnerKind: "component", OwnerID: "bar-1",
+	if err := insertProperties(ctx, f.gw, []storage.PropertySampleWrite{{OwnerKind: "component", OwnerID: "bar-1",
 		Key: "endpoint-reachable", Instance: "tcp", Value: "down", TS: time.Now().UTC()}}); err != nil {
 		t.Fatal(err)
 	}
@@ -301,7 +301,7 @@ func TestRuleDisableSerializesWithIngest(t *testing.T) {
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
-		if err := r.f.gw.InsertPropertySamples(ctx, []storage.PropertySampleWrite{{OwnerKind: "component", OwnerID: "bar-1",
+		if err := insertProperties(ctx, r.f.gw, []storage.PropertySampleWrite{{OwnerKind: "component", OwnerID: "bar-1",
 			Key: "endpoint-reachable", Instance: "tcp", Value: "down", TS: time.Now().UTC()}}); err != nil {
 			t.Error(err)
 		}

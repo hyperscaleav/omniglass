@@ -289,7 +289,7 @@ Authors a rule that derives its output key on each owner (each component its sel
 | `--inputs` | string | (none) | The keys the rule reads, each by a unique alias its reduce uses; health may not be one |
 | `--label` | string | (none) | A human label |
 | `--name` | string | (none) | The rule's name (lowercase letters, digits, hyphens) |
-| `--output-key` | string | (none) | The property or metric the rule writes: its type pins the reduce's result. Not health, not a key a collection writes, and not one another enabled rule writes |
+| `--output-key` | string | (none) | The property or metric the rule writes: its type pins the reduce's result. Not a reserved key (a native probe key, health), not a key a driver's emits or a command type write, and not one another enabled rule writes |
 | `--owner-kind` | string | (none) | What the rule derives a value on: each component its selector picks, or each system its selector picks (read from the system's role-bound members). Fixed at create |
 | `--reduce` | string | (none) | An expression over the inputs by alias |
 | `--selector` | string | (none) | The owners the rule derives for: a component rule's component_types and components, or a system rule's system_types and systems; absent is every owner of its kind |
@@ -5730,7 +5730,7 @@ Push telemetry for an owner
 omniglass telemetry push [flags]
 ```
 
-Accepts per-lane observations (metrics, properties, events) and raw log lines for one owner and publishes them onto the ingest lane. Each lane validates against its own catalog: an unregistered name is rejected and reported in the response rather than silently dropped, and a property or event payload violating its type's schema refuses the batch with a 422. A key a native probe writes (a reachability verdict or rung, a probe metric or timing, a held session's state) is a node's own observation and is rejected by name on every lane; only the node writes it. Gated by telemetry:push, and the caller's scope must cover the declared owner; an out-of-scope owner is a non-disclosing 404.
+Accepts per-lane observations (metrics, properties, events) and raw log lines for one owner and publishes them onto the ingest lane. Each lane validates against its own catalog: an unregistered name is rejected and reported in the response rather than silently dropped, and a property or event payload violating its type's schema refuses the batch with a 422. Every key has one writer class, and a push writes only a collected key: a key a native probe writes (a reachability verdict or rung, a probe metric or timing, a held session's state, collection-failed) is a node's own observation and a platform key (health) is the platform's, each rejected by name on every lane; a key a calc rule outputs is rejected naming the rule. Gated by telemetry:push, and the caller's scope must cover the declared owner; an out-of-scope owner is a non-disclosing 404.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|

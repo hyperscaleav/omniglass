@@ -10,6 +10,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/collection"
 	"github.com/hyperscaleav/omniglass/internal/key"
 	"github.com/hyperscaleav/omniglass/internal/storage"
+	"github.com/hyperscaleav/omniglass/internal/writerclass"
 	ogv1 "github.com/hyperscaleav/omniglass/proto/og/v1"
 	"github.com/nats-io/nats.go/jetstream"
 	"google.golang.org/protobuf/proto"
@@ -138,7 +139,10 @@ func (s *Server) handleTelemetry(msg jetstream.Msg) {
 			return
 		}
 		if ok {
+			// The node's writer is bound to the task's endpoint: the only
+			// instance a node-probe key lands under (ADR-0161).
 			bind.SampleOwner = &owner
+			bind.Writer = storage.NodeWriter(owner.EndpointName)
 		}
 	}
 
@@ -181,6 +185,7 @@ func apiBinding(ev *ogv1.TelemetryBatch) (ingestBinding, bool) {
 	return ingestBinding{
 		LogComponent: o.GetRef(),
 		SampleOwner:  &owner,
+		Writer:       storage.PushWriter(),
 	}, true
 }
 
@@ -191,11 +196,14 @@ func apiBinding(ev *ogv1.TelemetryBatch) (ingestBinding, bool) {
 // task's component. On the push lane, both land under the component the API
 // authorized. Exactly one of LogNode / LogComponent is set per lane; a nil
 // SampleOwner means the batch's samples must not be written (no samples, or an
-// orphan task).
+// orphan task). Writer is who the samples speak for, which the Storage Gateway
+// holds every key to (ADR-0161): the node bound to its task's endpoint, or the
+// push lane.
 type ingestBinding struct {
 	LogComponent string
 	LogNode      string
 	SampleOwner  *storage.TaskOwner
+	Writer       storage.KeyWriter
 }
 
 // sampleCount is how many registry-resolved observations a batch carries across
@@ -269,16 +277,16 @@ func (s *Server) land(ctx context.Context, ev *ogv1.TelemetryBatch, bind ingestB
 	// the split is only the sink, not a second trust decision. The
 	// multi-transaction-then-ack redelivery characteristic is NOTE(#311) on land
 	// above.
-	metrics := deriveMetrics(ev, *bind.SampleOwner, reg)
-	states := deriveProperties(ev, *bind.SampleOwner, reg)
-	events := deriveEvents(ev, *bind.SampleOwner, reg)
+	metrics := deriveMetrics(ev, *bind.SampleOwner, reg, bind.Writer)
+	states := deriveProperties(ev, *bind.SampleOwner, reg, bind.Writer)
+	events := deriveEvents(ev, *bind.SampleOwner, reg, bind.Writer)
 	if len(metrics) > 0 {
-		if err := s.store.InsertMetricSamples(ctx, metrics); err != nil {
+		if err := s.store.InsertMetricSamples(ctx, bind.Writer, metrics); err != nil {
 			return err
 		}
 	}
 	if len(events) > 0 {
-		if err := s.store.InsertEvents(ctx, events); err != nil {
+		if err := s.store.InsertEvents(ctx, bind.Writer, events); err != nil {
 			return err
 		}
 	}
@@ -292,7 +300,7 @@ func (s *Server) land(ctx context.Context, ev *ogv1.TelemetryBatch, bind ingestB
 		return err
 	}
 	if len(fresh) > 0 {
-		if err := s.store.InsertPropertySamples(ctx, fresh); err != nil {
+		if err := s.store.InsertPropertySamples(ctx, bind.Writer, fresh); err != nil {
 			return err
 		}
 	}
@@ -446,24 +454,32 @@ func lineSource(ev *ogv1.TelemetryBatch, l *ogv1.LogLine) string {
 // lane's OWN catalog is dropped, even when another catalog knows the name. The
 // owner is stamped identically on every lane from the task's interface:
 // owner_kind=component, source=interface type, instance=interface name;
-// provenance is observed (the insert path fixes that). A validation failure is
-// permanent, so it is dropped in place (with a warning: the node lane has no
-// reply channel), never returned as an error the caller would redeliver.
+// provenance is observed (the insert path fixes that). A sample whose type's
+// writer class does not admit the batch's writer is dropped too (ADR-0161; the
+// gateway refuses it again, so this keeps one stray row from failing a whole
+// batch). A validation failure is permanent, so it is dropped in place (with a
+// warning: the node lane has no reply channel), never returned as an error the
+// caller would redeliver.
 
 // deriveMetrics maps the metric lane to metric rows: the name must be a
 // registered metric_type. The value is a double by wire type, so there is no
 // shape to validate beyond the name.
-func deriveMetrics(ev *ogv1.TelemetryBatch, owner storage.TaskOwner, reg collection.Registry) []storage.MetricSampleWrite {
+func deriveMetrics(ev *ogv1.TelemetryBatch, owner storage.TaskOwner, reg collection.Registry, w storage.KeyWriter) []storage.MetricSampleWrite {
 	var out []storage.MetricSampleWrite
 	for _, dp := range ev.GetMetrics() {
-		if _, ok := reg.Metric(dp.GetName()); !ok {
+		mt, ok := reg.Metric(dp.GetName())
+		if !ok {
 			continue // reject-not-project: not a metric_type name
+		}
+		instance, ok := laneInstance(mt.WriterClass, dp.GetName(), dp.GetInstance(), owner, w)
+		if !ok {
+			continue
 		}
 		out = append(out, storage.MetricSampleWrite{
 			OwnerKind: "component",
 			OwnerID:   owner.ComponentID,
 			Key:       dp.GetName(),
-			Instance:  laneInstance(dp.GetInstance(), owner),
+			Instance:  instance,
 			Value:     dp.GetValue(),
 			Source:    laneSource(ev, owner),
 			TS:        sampleTime(ev, dp.GetTs()),
@@ -476,12 +492,16 @@ func deriveMetrics(ev *ogv1.TelemetryBatch, owner storage.TaskOwner, reg collect
 // registered property_type, the value must be canonical JSON of the type's
 // data_type, and when the type declares a validation schema the value must
 // satisfy it (key.ValidateValue, the same validator every registered key obeys).
-func deriveProperties(ev *ogv1.TelemetryBatch, owner storage.TaskOwner, reg collection.Registry) []storage.PropertySampleWrite {
+func deriveProperties(ev *ogv1.TelemetryBatch, owner storage.TaskOwner, reg collection.Registry, w storage.KeyWriter) []storage.PropertySampleWrite {
 	var out []storage.PropertySampleWrite
 	for _, dp := range ev.GetProperties() {
 		pt, ok := reg.Property(dp.GetName())
 		if !ok {
 			continue // reject-not-project: not a property_type name
+		}
+		instance, ok := laneInstance(pt.WriterClass, dp.GetName(), dp.GetInstance(), owner, w)
+		if !ok {
+			continue
 		}
 		raw := json.RawMessage(dp.GetValueJson())
 		if err := key.ValidateValue(pt.DataType, raw, pt.Validation); err != nil {
@@ -493,7 +513,7 @@ func deriveProperties(ev *ogv1.TelemetryBatch, owner storage.TaskOwner, reg coll
 			OwnerKind: "component",
 			OwnerID:   owner.ComponentID,
 			Key:       dp.GetName(),
-			Instance:  laneInstance(dp.GetInstance(), owner),
+			Instance:  instance,
 			Value:     propertyText(raw),
 			Source:    laneSource(ev, owner),
 			TS:        sampleTime(ev, dp.GetTs()),
@@ -509,12 +529,16 @@ func deriveProperties(ev *ogv1.TelemetryBatch, owner storage.TaskOwner, reg coll
 // sample). A component published the occurrence natively (an xAPI event, an
 // SNMP trap): origin caught, the platform did not derive it. Raw log lines are
 // a separate ingest lane, not this path (ADR-0066).
-func deriveEvents(ev *ogv1.TelemetryBatch, owner storage.TaskOwner, reg collection.Registry) []storage.EventWrite {
+func deriveEvents(ev *ogv1.TelemetryBatch, owner storage.TaskOwner, reg collection.Registry, w storage.KeyWriter) []storage.EventWrite {
 	var out []storage.EventWrite
 	for _, dp := range ev.GetEvents() {
 		et, ok := reg.Event(dp.GetName())
 		if !ok {
 			continue // reject-not-project: not an event_type name
+		}
+		instance, ok := laneInstance(et.WriterClass, dp.GetName(), dp.GetInstance(), owner, w)
+		if !ok {
+			continue
 		}
 		payload := dp.GetPayload()
 		if dp.GetMessage() == "" && len(payload) == 0 {
@@ -533,7 +557,7 @@ func deriveEvents(ev *ogv1.TelemetryBatch, owner storage.TaskOwner, reg collecti
 			OwnerKind:  "component",
 			OwnerID:    owner.ComponentID,
 			Key:        dp.GetName(),
-			Instance:   laneInstance(dp.GetInstance(), owner),
+			Instance:   instance,
 			Origin:     "caught",
 			Message:    dp.GetMessage(),
 			Attributes: payload,
@@ -544,15 +568,38 @@ func deriveEvents(ev *ogv1.TelemetryBatch, owner storage.TaskOwner, reg collecti
 	return out
 }
 
-// laneInstance resolves a sample's instance discriminator: the wire value wins
-// where supplied, else the task interface's name. The node lane sets none (its
-// interface name IS the discriminator); a push has no interface, so it must be
-// able to say it.
-func laneInstance(instance string, owner storage.TaskOwner) string {
-	if instance != "" {
-		return instance
+// laneInstance resolves a sample's instance discriminator, or refuses the
+// sample (ok false). The wire value wins where supplied, else the task
+// endpoint's name: the node lane sets none (its endpoint name IS the
+// discriminator), a driver may name its own (one series per port), and a push
+// has no endpoint, so it must be able to say it.
+//
+// Two refusals come first (ADR-0161). A sample whose type's writer class does
+// not admit the batch's writer is dropped: a push of a calc rule's output, a
+// node lane carrying a key a stored driver may no longer emit. And a node-probe
+// key is the node's account of the endpoint whose task it ran, so on the node
+// lane its instance is that endpoint's name: empty is filled with it, and any
+// other (another node's endpoint on the same component, a name no endpoint
+// holds) is refused, never written into a series the console reads as that
+// endpoint's.
+func laneInstance(class writerclass.Class, name, instance string, owner storage.TaskOwner, w storage.KeyWriter) (string, bool) {
+	if !writerclass.Admits(class, w.Kind, name) {
+		slog.Warn("sample refused: its writer class does not admit the lane",
+			"name", name, "class", class, "writer", w.Kind)
+		return "", false
 	}
-	return owner.EndpointName
+	if class == writerclass.NodeProbe && w.Kind == writerclass.Node {
+		if owner.EndpointName == "" || (instance != "" && instance != owner.EndpointName) {
+			slog.Warn("node-probe sample refused: a node writes one only under its task's endpoint",
+				"name", name, "instance", instance, "endpoint", owner.EndpointName)
+			return "", false
+		}
+		return owner.EndpointName, true
+	}
+	if instance != "" {
+		return instance, true
+	}
+	return owner.EndpointName, true
 }
 
 // laneSource resolves a batch's provenance source: the batch's own wins, else

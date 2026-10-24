@@ -91,7 +91,7 @@ func TestTLSPinRidesTheWorklistAndRetryAcceptsAChangedKey(t *testing.T) {
 
 	// The node trusts a key on first use: it rides back as the pin, and
 	// (a learned fact) moves nothing.
-	if err := f.gw.InsertPropertySamples(f.ctx, []storage.PropertySampleWrite{{OwnerKind: "component", OwnerID: f.component,
+	if err := insertProperties(f.ctx, f.gw, []storage.PropertySampleWrite{{OwnerKind: "component", OwnerID: f.component,
 		Key: "tls-certificate", Instance: ep.Name, Value: key("A"), Source: "tls", TS: time.Now()}}); err != nil {
 		t.Fatal(err)
 	}
@@ -124,7 +124,7 @@ func TestTLSPinRidesTheWorklistAndRetryAcceptsAChangedKey(t *testing.T) {
 		t.Fatal("the declared pin left the fingerprint")
 	}
 	// A later observation of the old key does not displace the declared one.
-	if err := f.gw.InsertPropertySamples(f.ctx, []storage.PropertySampleWrite{{OwnerKind: "component", OwnerID: f.component,
+	if err := insertProperties(f.ctx, f.gw, []storage.PropertySampleWrite{{OwnerKind: "component", OwnerID: f.component,
 		Key: "tls-certificate", Instance: ep.Name, Value: key("A"), Source: "tls", TS: time.Now().Add(time.Second)}}); err != nil {
 		t.Fatal(err)
 	}

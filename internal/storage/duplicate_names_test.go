@@ -156,7 +156,7 @@ func TestDuplicateNamesDoNotBreakIngestPath(t *testing.T) {
 
 	// The ingest write path, by uuid: InsertPropertySamples must not 21000 and
 	// must land on the right row (property_samples.go).
-	if err := gw.InsertPropertySamples(ctx, []storage.PropertySampleWrite{{
+	if err := gw.InsertPropertySamples(ctx, storage.PushWriter(), []storage.PropertySampleWrite{{
 		OwnerKind: "component", OwnerID: compA.ID, Key: "video-input-x", Value: "hdmi2", Source: "test", TS: time.Now().UTC(),
 	}}); err != nil {
 		t.Fatalf("insert property sample on compA by id: %v", err)
@@ -209,7 +209,7 @@ func TestDuplicateNamesDoNotBreakIngestPath(t *testing.T) {
 
 	// A metric sample, by uuid, then read back through EffectiveMetrics
 	// (metric_values.go, the CTE twin of EffectiveProperties): same shape.
-	if err := gw.InsertMetricSamples(ctx, []storage.MetricSampleWrite{{
+	if err := gw.InsertMetricSamples(ctx, storage.PushWriter(), []storage.MetricSampleWrite{{
 		OwnerKind: "component", OwnerID: compA.ID, Key: "volume-x", Value: 42, Source: "test", TS: time.Now().UTC(),
 	}}); err != nil {
 		t.Fatalf("insert metric sample on compA by id: %v", err)
