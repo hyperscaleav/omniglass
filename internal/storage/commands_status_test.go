@@ -69,7 +69,7 @@ func TestCommandStatusRecording(t *testing.T) {
 	}
 	// disp-1 and disp-3 already report hdmi2; disp-2 reports nothing.
 	for _, comp := range []string{"disp-1", "disp-3"} {
-		if err := gw.InsertPropertySamples(ctx, []storage.PropertySampleWrite{{
+		if err := gw.InsertPropertySamples(ctx, storage.PushWriter(), []storage.PropertySampleWrite{{
 			OwnerKind: "component", OwnerID: comp, Key: "video-input-x", Value: "hdmi2", TS: time.Now().UTC(),
 		}}); err != nil {
 			t.Fatalf("seed observed on %s: %v", comp, err)
@@ -245,7 +245,7 @@ func TestCommandStatusRecording(t *testing.T) {
 		// No metric-targeted command ships yet, so the command_type is a fixture.
 		mustExec(t, conn, `insert into command_type (name, target_metric_type_id, settle_window_seconds)
 			values ('set-volume-x', (select id from metric_type where name = 'volume-x'), 0)`)
-		if err := gw.InsertMetricSamples(ctx, []storage.MetricSampleWrite{{
+		if err := gw.InsertMetricSamples(ctx, storage.PushWriter(), []storage.MetricSampleWrite{{
 			OwnerKind: "component", OwnerID: "disp-1", Key: "volume-x", Value: 50, TS: time.Now().UTC(),
 		}}); err != nil {
 			t.Fatalf("seed observed metric: %v", err)

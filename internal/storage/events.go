@@ -63,11 +63,14 @@ type Event struct {
 // both event reads scan into Event.DerivedByRule and Event.AlarmID.
 const eventLineageCols = `case when event.origin = 'derived' then event.source_rule end, event.derived_by_rule_id::text, event.alarm_id::text`
 
-// InsertEvents writes observed occurrence rows in one transaction. Each row sets
+// InsertEvents writes observed occurrence rows in one transaction, for w: a
+// node's lane (NodeWriter) or the push lane (PushWriter). Each row sets
 // exactly its owner arc column (the CHECK enforces the rest) and provenance
-// observed. Callers apply reject-not-project (collection.Registry) before calling;
-// this is the durable write. Mirrors InsertMetricSamples.
-func (p *PG) InsertEvents(ctx context.Context, evs []EventWrite) error {
+// observed. Callers apply reject-not-project (collection.Registry) before
+// calling; this is the durable write, refusing the whole batch when an event
+// type's writer class does not admit w (ADR-0161: collection-failed is the
+// node's alone). Mirrors InsertMetricSamples.
+func (p *PG) InsertEvents(ctx context.Context, w KeyWriter, evs []EventWrite) error {
 	if len(evs) == 0 {
 		return nil
 	}
@@ -76,6 +79,14 @@ func (p *PG) InsertEvents(ctx context.Context, evs []EventWrite) error {
 		return fmt.Errorf("storage: begin insert events: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
+
+	rows := make([]keyedWrite, len(evs))
+	for i, ev := range evs {
+		rows[i] = keyedWrite{key: ev.Key, instance: ev.Instance}
+	}
+	if err := admitWrites(ctx, tx, writeEvent, w, rows); err != nil {
+		return err
+	}
 
 	for _, ev := range evs {
 		col, err := ownerColumn(ev.OwnerKind)

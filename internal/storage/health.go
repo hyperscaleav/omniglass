@@ -9,6 +9,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/health"
 	"github.com/hyperscaleav/omniglass/internal/rules"
 	"github.com/hyperscaleav/omniglass/internal/scope"
+	"github.com/hyperscaleav/omniglass/internal/writerclass"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 )
@@ -444,6 +445,10 @@ func recordHealth(ctx context.Context, q txQuerier, ownerKind, ownerID string, v
 	col, err := ownerColumn(ownerKind)
 	if err != nil {
 		return fmt.Errorf("storage: record health %s/%s: %w", ownerKind, ownerID, err)
+	}
+	// The rollup is health's one writer (ADR-0161): the process itself.
+	if err := admitWrites(ctx, q, writeProperty, gatewayWriter(writerclass.Process), []keyedWrite{{key: healthKey}}); err != nil {
+		return err
 	}
 	if err := lockHealthOwner(ctx, q, ownerKind, ownerID); err != nil {
 		return err

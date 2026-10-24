@@ -8,6 +8,7 @@ sidebar:
 ---
 
 import SchemaTable from '../../../components/SchemaTable.astro';
+import WriterClasses from '../../../components/WriterClasses.astro';
 
 :::note[Partial]
 Built: both sample lanes end to end. The **metric** path (reachability): the tcp probe produces
@@ -23,7 +24,9 @@ probe results); the consumer lands it in `property` under the same owner-confine
 server binds the owner from the task's endpoint) and the **API push lane** (`POST /telemetry:push`:
 a scoped caller declares the owner, the scope check is the fence, and a native probe key is refused
 by name, since only the node observes one:
-[the push lane refuses a native key](/architecture/collection/#the-push-lane-refuses-a-native-key)). A push publishes onto the data
+[the push lane refuses a native key](/architecture/collection/#the-push-lane-refuses-a-native-key)).
+Every write, on either lane and every other path, is held to the key's **writer class** at the
+Storage Gateway ([below](#who-writes-a-key-the-writer-class)). A push publishes onto the data
 lane, not Postgres, so pushed samples reach the stream consumers; both lanes call one `land()` and
 share its semantics (reject-not-project per lane, the transition-only property guard). The wire is
 the protobuf `TelemetryBatch` with **per-lane arrays** (`metrics`, `properties`, `events`, `logs`).
@@ -222,6 +225,39 @@ Which side wins is a per-item `reconcile` policy ([config](/architecture/variabl
 
 Sample provenances never contest: intended is a pending bet that observed confirms or refutes ([intended](#intended-the-declared-effect-of-a-command)), superseded on arrival. Device-swap is handled by [maintenance mode](/architecture/core-entities/#operational-mode-active-maintenance-disabled), which suppresses drift.
 
+## Who writes a key: the writer class
+
+Provenance says how a row knows its value; the **writer class** says who may write the key at all
+([ADR-0161](/architecture/decisions/#adr-0161-every-key-has-one-writer-class-held-at-the-storage-gateway)).
+Every metric, property and event type has exactly one, resolved from its name and the catalogs, never
+stored, and the [Storage Gateway](/architecture/storage/#every-key-has-one-writer) refuses any sample
+or event write whose writer the class does not admit, the way it injects scope on every query. The type
+reads carry it as `writer_class`. The ruling, rendered from the code the gateway enforces:
+
+<WriterClasses />
+
+Two classes form the **reserved system family**, fixed and internal: `node-probe` (the node's own
+account of an endpoint, declared in `internal/collection/probekeys`) and `platform` (what only the
+Omniglass process writes; the self-monitoring follow-on, #1094, is its planned consumer). Their names
+are declared in code and closed to an operator-created type on every lane. A **writer** is the entry
+point a write comes through, and it fixes the provenance: the node lane and the push lane write
+`observed`, a calc rule `calculated`, a command `intended`, an operator `declared`. So operator and
+command are writers, not classes: a declared or intended row is never an observation and contests no
+observer, which is why a collected key keeps all four provenances side by side.
+
+- **A node-probe key reads only as the node's observation.** The reachability panel, the session pill
+  and the ingest's transition guard read the observed series alone, so no other provenance stands in
+  for the node's; the one declared row the family admits, the ssh host key pin, is set only through an
+  endpoint's audited `:retry` and read only as the pin.
+- **Fusion is within a class.** The same-key, multi-source reconcile [below](#fusion) is between the
+  perspectives of a `collected` key (a driver's emits on the node lane, a push), told apart by
+  `source`: the class is the trust boundary, the source the sensor path within it. A reserved key has
+  one observer and never fuses.
+- **A calc rule owns its output.** A calc output is never a reserved key nor a key a stored driver
+  emits ([calculations](/architecture/calculations/)), and once a rule outputs a key, a push, a node
+  lane or a driver spec writing it is refused; an operator's declared value still resolves ahead of
+  the calculated one.
+
 ## Current value is the latest series row
 
 "What is this property now?" is answered by **reading the series**: the latest row per `(type, owner, instance, provenance)`, ordered by `ts` (id breaks same-instant ties). That tiebreak is **insertion order**, not an arbitrary identifier: the row id is a bigint identity column, so two values written in the same tick resolve to the one written second, every time. `ts` leads rather than the id because the observed lane accepts a caller-supplied timestamp (a node backfilling, a device reporting a reading it took a minute ago), and a late-arriving older sample must not become current merely by being written last; the price of that, stated so it is not rediscovered, is that a database clock stepping backwards between two writes to one series resolves to the earlier-written row. There is no maintained latest-value store: the one-catalog design kept one (a `property` cache upserted from the sink) and it retired with the fold ([ADR-0079](/architecture/decisions/#adr-0079-five-telemetry-lanes-and-property-stops-being-the-genus)), because a derived copy of a fact the series already holds is a second thing to keep honest. The property lane is transition-only and sparse, so the read is an index probe, not a firehose scan; the metric lane's current-value read rides the same shape.
@@ -263,7 +299,7 @@ Drift is a condition operator, **`disagree(A, B)`**, usable inside event rule co
 
 Multiple sources reporting one signal land as **perspectives**: source-tagged observed rows, **all preserved**. A reduce-on-read **policy** produces the effective value:
 
-- **same-name, many sources** reduces on read. **`fusion_policy`** is a **default/hint, not a mandate** (the right reduce is often unknowable a priori): a policy may default from the type, be source-weighted, per-instance, or **left open** for read time, an operator, or AI. When it reduces (`mode`: priority / weighted / majority / worst / average / latest, plus tie-break and per-source weights), the reduced value is what current-value reads and event_rule evaluation see; perspectives stay queryable. event_rule evaluation reduces over the **latest-per-source perspective set** held from the live `samples` stream (bounded, in-memory), never a firehose scan. A `source` registry carries default trust weights. A fused series materializes only if a profile earns it.
+- **same-name, many sources** reduces on read, among the perspectives of one writer class (a `collected` key's; [the writer class](#who-writes-a-key-the-writer-class)). **`fusion_policy`** is a **default/hint, not a mandate** (the right reduce is often unknowable a priori): a policy may default from the type, be source-weighted, per-instance, or **left open** for read time, an operator, or AI. When it reduces (`mode`: priority / weighted / majority / worst / average / latest, plus tie-break and per-source weights), the reduced value is what current-value reads and event_rule evaluation see; perspectives stay queryable. event_rule evaluation reduces over the **latest-per-source perspective set** held from the live `samples` stream (bounded, in-memory), never a firehose scan. A `source` registry carries default trust weights. A fused series materializes only if a profile earns it.
 - **cross-name / system-level** is a **`calc_rule`** (the only fusion that authors a rule): `room-in-use` from display power + codec call-state + occupancy, a higher-order fact with a new name, not a same-name consensus. See [calculations](/architecture/calculations/).
 
 Conflict detection (`disagree(observed, observed)` across sources) is complementary: a perspective disagreeing beyond tolerance is itself a signal.

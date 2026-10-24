@@ -65,11 +65,15 @@ func TestReachabilityReads(t *testing.T) {
 	// disp-1-tcp value even though it is older.
 	older := time.Now().UTC().Add(-2 * time.Minute)
 	newer := older.Add(time.Minute)
-	if err := gw.InsertMetricSamples(ctx, []storage.MetricSampleWrite{
+	// One batch per endpoint: a node writes a probe key only under the
+	// endpoint its task ran against (ADR-0161).
+	for _, w := range []storage.MetricSampleWrite{
 		{OwnerKind: "component", OwnerID: "disp-1", Key: "tcp-open", Instance: "disp-1-tcp", Value: 1, Source: "tcp", TS: older},
 		{OwnerKind: "component", OwnerID: "disp-1", Key: "tcp-open", Instance: "disp-1-icmp", Value: 0, Source: "tcp", TS: newer},
-	}); err != nil {
-		t.Fatalf("insert metrics: %v", err)
+	} {
+		if err := insertMetrics(ctx, gw, []storage.MetricSampleWrite{w}); err != nil {
+			t.Fatalf("insert metrics: %v", err)
+		}
 	}
 
 	dp, err := gw.LatestMetricInstance(ctx, "disp-1", "tcp-open", "disp-1-tcp")

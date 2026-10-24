@@ -102,15 +102,19 @@ Every write is refused, with a 422 naming the field at fault, when:
   until it is enabled, and enabling it is checked. This is a topology check beside
   [ADR-0069](/architecture/decisions/#adr-0069-cycle-safety-is-provenance-based-not-topology-based)'s
   provenance rule, not in place of it: a loop through an event rule and an alarm is not in this graph.
-- **it reads or writes `health`.** An alarm moves health, so a rule reading it could feed back through an
-  event rule, and health has its own producer, the rollup.
+- **it reads `health`, or writes a reserved key.** An alarm moves health, so a rule reading it could
+  feed back through an event rule. A rule's output is a key it owns, so it is never a key of the
+  reserved family: a native probe key is the node's observation, and `health` is the rollup's
+  ([the writer class](/architecture/properties/#who-writes-a-key-the-writer-class)).
 - **its output is a key another enabled rule writes.** One enabled rule writes a key: two would mix
   their values on an owner by newest timestamp. The refusal names the other rule, and enabling a
   disabled rule is checked the same way.
 - **its output is a key a collection writes**, for the same reason. The check reads declarations, never
-  sample history: the native probes' keys (`internal/collection/probekeys`, the one declaration the
-  probes emit from) and any stored driver whose spec declares the key among its emits. What it cannot
-  catch is a driver created or edited to emit the key after the rule exists.
+  sample history: any stored driver whose spec declares the key among its emits. The reverse order is
+  held too, by the writer class
+  ([ADR-0161](/architecture/decisions/#adr-0161-every-key-has-one-writer-class-held-at-the-storage-gateway)):
+  once a rule outputs a key it is of the `calc` class, so a driver created or edited to emit it is
+  refused at its spec's write, and a push or a node lane carrying it is refused at the Storage Gateway.
 
 The graph and the one-writer check are key-level: they ignore owner kinds, so a component rule and a
 system rule writing or reading the same key are judged as one graph. That can refuse a rule that would

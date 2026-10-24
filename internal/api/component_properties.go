@@ -164,6 +164,9 @@ func registerComponentPropertyRoutes(api huma.API, a *authenticator, gw storage.
 // write naming a property or owner that does not exist is a request fault (422),
 // and the component sentinels keep the component routes' non-disclosing mapping.
 func mapComponentPropertyErr(err error) error {
+	if refused, ok := mapKeyWriterErr(err); ok {
+		return refused
+	}
 	switch {
 	case errors.Is(err, storage.ErrPropertyNotFound):
 		return huma.Error404NotFound("property not set on this component")

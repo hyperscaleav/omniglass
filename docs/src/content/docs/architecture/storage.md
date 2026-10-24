@@ -11,8 +11,9 @@ This page describes **how storage works**: the patterns every other leaf's entit
 
 :::note[Partial]
 Built today: the Storage Gateway as the only door to the database, dbmate migrations (run-once,
-embedded, idempotent), the per-action scope predicate and the in-transaction `audit_log` write, and
-the shared scoped-tree and scoped-CRUD primitives. Scope arrives at the gateway as an explicit
+embedded, idempotent), the per-action scope predicate and the in-transaction `audit_log` write, the
+writer-class check on every sample and event write ([below](#every-key-has-one-writer)), and the
+shared scoped-tree and scoped-CRUD primitives. Scope arrives at the gateway as an explicit
 per-call `scope.Set` argument; seed and system callers pass an all-scope set. Today `metric` /
 `property` carry no `series` column and no uniqueness key, so redelivery can duplicate
 ([#430](https://github.com/hyperscaleav/omniglass/issues/430) stage 3). Current values are derived
@@ -295,6 +296,26 @@ The **Storage Gateway is the only door to the database** (no direct access, no P
 
 - **default**: Postgres for everything (samples, ground-truth records, views, registries). Postgres is **BYO today**.
 - **blobs**: opaque bytes (a firmware image, a config dump, a capture, later a large `log_line` body or a `collection.failed` raw payload) live in the content-addressed [blob store](/architecture/files/), a `blob.Store` seam behind the same gateway. The default **pgblobs** backend holds bytes inline in Postgres; a row references a blob by its `sha256`, never inline bytes.
+
+### Every key has one writer
+
+The gateway holds a second invariant beside scope, on the write side
+([ADR-0161](/architecture/decisions/#adr-0161-every-key-has-one-writer-class-held-at-the-storage-gateway)).
+Scope says which owners a write may reach; the **writer class** says who may write a key at all. Every
+metric, property and event type has exactly one, resolved from code and the catalogs and never stored,
+so it cannot drift from what a write is held to (`internal/writerclass`; the type reads report it as
+`writer_class`, and [metrics and properties](/architecture/properties/#who-writes-a-key-the-writer-class)
+renders the ruling from the code). The two **reserved** classes, a node's own probe keys and the keys
+only the Omniglass process writes, are declared in code and closed to an operator-created type on every
+lane.
+
+Every gateway function that writes a sample or an event row names its writer (the node lane bound to
+the endpoint its task ran, the push lane, a calc rule's tick, the health rollup, a command, an
+operator) and holds every row to its key's class (`admitWrites`) before anything lands, refusing the
+write (`ErrKeyWriterRefused`, a 422 naming the key and who writes it) when the class does not admit it.
+Like scope, it is structural rather than remembered per route: a source guard fails on a function that
+writes a sample or event row without being a registered write path that runs the check, and a table
+drives every registered path with a writer its key does not admit.
 
 The gateway also accepts a **query tracer** (`storage.WithQueryTracer`), installed on the pool's
 connection config so it observes every statement the gateway issues, whichever method issued it.

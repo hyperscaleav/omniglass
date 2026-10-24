@@ -12,9 +12,9 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 
-	"github.com/hyperscaleav/omniglass/internal/collection/probekeys"
 	"github.com/hyperscaleav/omniglass/internal/rules"
 	"github.com/hyperscaleav/omniglass/internal/scope"
+	"github.com/hyperscaleav/omniglass/internal/writerclass"
 )
 
 // CalcRule is the authored config that derives one output key on an owner
@@ -384,8 +384,11 @@ func prepareCalcRule(ctx context.Context, q txQuerier, r *CalcRule, check calcCh
 	if err := resolveCalcInputs(ctx, q, r); err != nil {
 		return err
 	}
-	if r.OutputKey == healthKey {
-		return invalidCalc("output_key", "%s is written by the health rollup, not by a calc rule", healthKey)
+	// A calc rule's output is a key it owns, never one of the reserved
+	// family's (ADR-0161): a native probe key is the node's observation, and
+	// health is the rollup's (#525 decision 3).
+	if c, ok := writerclass.Reserved(r.OutputKey); ok {
+		return invalidCalc("output_key", "%s", writerclass.Refusal(c, strings.TrimSpace(r.OutputKey), writerclass.CalcRule, ""))
 	}
 	out, ok, err := resolveSampleKey(ctx, q, r.OutputKey)
 	if err != nil {
@@ -576,20 +579,16 @@ func writeCalcInputs(ctx context.Context, tx pgx.Tx, r CalcRule) error {
 
 // collectedBy refuses an output key a collection writes (#525 decision 6):
 // a current value would mix a collected producer with a calculated one by
-// newest ts. It reads declarations only, never sample history (one
-// hand-posted or simulated sample would otherwise block a key forever):
+// newest ts. The reserved family (a native probe key, a platform key) is
+// refused before it, by name (prepareCalcRule); this reads the one remaining
+// declaration, never sample history (one hand-posted or simulated sample would
+// otherwise block a key forever): a stored driver whose spec declares the key
+// among a poll's or a listener's emits.
 //
-//   - the native probes' keys (probekeys, the one declaration the probes
-//     emit from);
-//   - a stored driver whose spec declares the key among a poll's or a
-//     listener's emits.
-//
-// What it cannot catch: a driver created or edited to emit the key after the
-// rule exists (the ingest-side guard is its own issue).
+// The reverse order is held too (ADR-0161): a driver created or edited to emit
+// a key a rule already outputs is refused at its spec write (the key is of the
+// calc class), and a node lane carrying one is refused at the gateway.
 func collectedBy(ctx context.Context, q querier, key string) error {
-	if probekeys.IsNative(key) {
-		return invalidCalc("output_key", "%q is collected: a native probe writes it, and a calc rule may not write a key a collection writes", key)
-	}
 	var driver string
 	err := q.QueryRow(ctx, `select d.name from driver d
 		cross join lateral jsonb_array_elements(coalesce(d.spec->'polls', '[]'::jsonb) || coalesce(d.spec->'listeners', '[]'::jsonb)) f

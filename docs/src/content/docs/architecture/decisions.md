@@ -197,6 +197,7 @@ below from the project's history. From here it grows one slice at a time.
 | [ADR-0156](#adr-0156-a-driver-declares-its-terminal-replies-and-a-transport-classifies-its-own-refusals) | 2026-10-23 | Accepted | Non-retryable errors are defined in drivers (#1049, the architect's ruling): a spec's `session.terminal` lists the replies retrying cannot fix, each a match with a class (`auth`, `host-key`, `certificate`, `protocol`, a code-held set), applied to the login and to every answer, refusal and arm reply; a transport classifies its own protocol refusals into the same classes. The primitive is `collection.TerminalError{Class, Reason}`; anything unclassified stays retryable, and a terminal poll fault waits its interval rather than the failure backoff |
 | [ADR-0157](#adr-0157-telnet-and-ssh-are-held-line-transports-their-login-is-the-drivers-and-the-ssh-host-key-is-pinned-on-first-use) | 2026-10-23 | Accepted | `telnet` (#1033) and `ssh` (#1032) are held line transports: the same session machine and line reader, telnet behind a filter refusing every option, ssh over a shell or exec channel. Their session's login is the driver's (`session.login`, `session.credential`), not endpoint params; the telnet probe never logs in, and the ssh probe's params login is a known gap (#1060). The ssh host key is pinned on first use as the `ssh-host-key` property (observed), delivered back by the worklist, overridden by a declared value an operator sets with `:retry` and `host_key`; a changed key is a `host-key` refusal |
 | [ADR-0158](#adr-0158-one-connection-fingerprint-gates-every-connection-on-a-ladder-the-driver-declares) | 2026-10-23 | Accepted | One **connection fingerprint** gates every connection, held or stateless (#1056 ruling): a digest the server computes over every input a connection is made with (transport, declared params, driver inputs, each secret's sealed version, the session block, the ladder, the ssh pin, the `:retry` counter), held in `internal/fingerprint`. Connections are verified bottom up on the existing ladder (reachable, informational ping; responsive, the transport rung and the gate; authenticated, the login), declared in the driver spec with registry defaults. A terminal refusal gates its rung and above for the fingerprint; lower rungs keep running; the gate is published as `endpoint-rejection` and carried back so a restart honours it. **Amended (#1059, #1080):** the push lane refuses every native probe key by name, not only the gate and the host key |
+| [ADR-0161](#adr-0161-every-key-has-one-writer-class-held-at-the-storage-gateway) | 2026-10-24 | Accepted | Every metric, property and event type has exactly one **writer class** (`node-probe`, `platform`, `calc`, `collected`), resolved from code and the catalogs, never stored, and the Storage Gateway refuses any sample or event write whose writer the class does not admit: an invariant beside scope injection, not a per-route check. The reserved system family (`node-probe`, `platform`) is declared in code and closed to operator-created types by name; a node-probe key reads only as the node's observed series; fusion reconciles sources within the `collected` class; no reserved prefix (#1094 decides one for its platform keys) |
 
 ## Entries
 
@@ -7211,3 +7212,61 @@ interface create form, since that name is the platform's to mint.
   udp request rung's snmp proof is #821; per-rung rtt, jitter and loss as driver toggles, stored as
   one observation per probe with statistics from windowed calc rules, are #1063 and #1065; a path
   rung (hop count, network path) is #1064; layer-2 presence is #1062.
+
+### ADR-0161: Every key has one writer class, held at the Storage Gateway
+
+- **Date:** 2026-10-24 | **Status:** Accepted | **Pages:** [storage](/architecture/storage/), [identity and access](/architecture/identity-access/), [metrics and properties](/architecture/properties/), [collection](/architecture/collection/), [calculations](/architecture/calculations/), [api](/architecture/api/), [glossary](/architecture/glossary/)
+- **Decision:** The architect's ruling of 2026-10-24 (#1084, #1085, #1086): there is no path by which
+  anything but the node writes what the console reads as the node's observation, and the rule is
+  structural rather than a check each route remembers.
+  1. **One writer class per key.** Every metric, property and event type has exactly one writer
+     class, resolved from its name and the catalogs and never stored (`internal/writerclass`; read
+     beside the type as `writer_class`): `node-probe`, the keys a node's own probes and session
+     machine write, declared in `internal/collection/probekeys` (`collection-failed` among them
+     now); `platform`, the keys only the Omniglass process itself writes (`health`, the rollup's
+     verdict); `calc`, a key a calc rule names as its output; and `collected`, every other key.
+     `node-probe` and `platform` are the **reserved system family**: fixed, internal, declared in
+     code. The self-monitoring follow-on (#1094, the server, nodes, the bus, the database and the
+     workers as components with built-in metrics only the binary writes) is the planned consumer of
+     `platform`, which takes its keys without restructuring.
+  2. **Each class admits a fixed set of writers**, the entry point a write comes through, each
+     fixing the provenance it writes. `node-probe` admits the node lane alone, bound to the
+     endpoint whose task the node ran; `platform` the process alone; `calc` the rule that outputs
+     it, and an operator's declared value (which resolves ahead of the calculated one, by design);
+     `collected` every observer (a driver's emits on the node lane, a push, a command's reply), a
+     command's intended value, an operator's declared value and an event rule's event. The one
+     declared row the reserved family admits is the ssh host key pin, set only through an
+     endpoint's audited `:retry` (ADR-0157). Operator and command are writers, not classes: a
+     declared or intended row is never an observation, so it contests no observer.
+  3. **Held at the Storage Gateway, as scope is.** Every gateway function that writes a sample or
+     an event row names its writer and holds every row to its key's class before anything lands;
+     a refusal is `ErrKeyWriterRefused`, a 422 naming the key and who writes it. A source guard
+     fails on any function that writes a sample or event row without being a registered write path
+     that runs the check, a table drives every registered path with a writer its key does not
+     admit, and a migration that writes sample rows must be ruled as well. The declaration points
+     refuse first with the same ruling: a command type's target, a driver spec's emits (and the
+     node's interpreter, for a task derived before the refusal existed), a calc rule's output, an
+     event rule's fire and clear types, and an operator-created type's name on every lane.
+  4. **A node-probe key reads only as the node's observation.** The reads the reachability panel,
+     the session pill and the ingest's transition guard compose over serve the observed series
+     only, so no other provenance beside it stands in for the node's.
+  5. **Fusion fits inside one class.** Same-key, multi-source reconcile is between the
+     perspectives of the `collected` class (a driver's emits and a push, told apart by `source`):
+     a writer class is the trust boundary, a source the sensor path within it. A reserved key has
+     one observer and never fuses.
+  6. **No reserved namespace.** Existing keys keep their names. The reserved family's exact names
+     are closed to operator-created types on every lane, which the class resolution needs and a
+     prefix would only repeat. A prefix buys one thing the invariant does not: names an operator
+     cannot already hold when a later release ships a new reserved key. #1094's platform metrics are
+     the likely case, so it decides the prefix; a collision meanwhile fails closed (the operator's
+     writes to that key are refused, naming its writer), never open.
+- **Context:** The push lane's refusal of native keys (#1080) was one route's check on one surface.
+  The other surfaces that land a sample (a declared value, a command, a driver's emits, a calc
+  rule's output, the node lane itself) each answered who may write a key for themselves, or not at
+  all, and `collection-failed`, declared outside probekeys, stayed outside the ruling (#1086). The
+  calc rule's ownership of its output was the one structural precedent (a calc rule may not write a
+  key a collection writes), with its ingest-side half left open. Generalizing that one primitive to
+  every key, and holding it where every write already passes, closes the class rather than its
+  instances. The split follows the code: a driver's emits and a push are one class because the
+  shipped drivers emit `video-input` while a push may write it too, a command targets it, and the
+  properties page's fusion exists to reconcile exactly that.

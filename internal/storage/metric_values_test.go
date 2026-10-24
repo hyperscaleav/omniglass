@@ -83,8 +83,8 @@ func TestEffectiveMetrics(t *testing.T) {
 	// A sample lands: the series wins over the default, and the default stays
 	// visible beside it.
 	base := time.Now().UTC().Add(-time.Hour)
-	if err := gw.InsertMetricSamples(ctx, []storage.MetricSampleWrite{
-		{OwnerKind: "component", OwnerID: "dsp-1", Key: "icmp-rtt-avg", Value: 3.25, Source: "test", TS: base},
+	if err := insertMetrics(ctx, gw, []storage.MetricSampleWrite{
+		{OwnerKind: "component", OwnerID: "dsp-1", Key: "icmp-rtt-avg", Instance: "if-0", Value: 3.25, Source: "test", TS: base},
 	}); err != nil {
 		t.Fatalf("insert sample: %v", err)
 	}
@@ -95,8 +95,8 @@ func TestEffectiveMetrics(t *testing.T) {
 	}
 
 	// The latest sample per metric wins across instances (the LatestMetric rule):
-	// a newer per-interface reading replaces the older un-instanced one.
-	if err := gw.InsertMetricSamples(ctx, []storage.MetricSampleWrite{
+	// a newer reading on another endpoint replaces the older one.
+	if err := insertMetrics(ctx, gw, []storage.MetricSampleWrite{
 		{OwnerKind: "component", OwnerID: "dsp-1", Key: "icmp-rtt-avg", Instance: "if-1", Value: 7.5, Source: "test", TS: base.Add(time.Minute)},
 	}); err != nil {
 		t.Fatalf("insert instanced sample: %v", err)
@@ -120,8 +120,8 @@ func TestEffectiveMetrics(t *testing.T) {
 	}
 
 	// A metric the contract does not declare still resolves, flagged off-contract.
-	if err := gw.InsertMetricSamples(ctx, []storage.MetricSampleWrite{
-		{OwnerKind: "component", OwnerID: "dsp-1", Key: "tcp-connect-time", Value: 42, Source: "test", TS: base},
+	if err := insertMetrics(ctx, gw, []storage.MetricSampleWrite{
+		{OwnerKind: "component", OwnerID: "dsp-1", Key: "tcp-connect-time", Instance: "if-0", Value: 42, Source: "test", TS: base},
 	}); err != nil {
 		t.Fatalf("insert ad-hoc sample: %v", err)
 	}

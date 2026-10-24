@@ -21,7 +21,8 @@ Built today: the Huma-over-chi API with the OpenAPI 3.1 document generated from 
 ([ADR-0068](/architecture/decisions/#adr-0068-the-api-error-model-is-the-stock-rfc-9457-shape)), proven
 on `/auth`, `/roles`, `/locations`, `/systems`, `/components`, `/nodes`, `/endpoints`, `/tasks`, the
 first-party ingest write `POST /telemetry:push` (gated `telemetry:push`, owner declared in the body and
-fenced by the caller's scope, every native probe key refused by name), the per-component reachability read, the type registries, the
+fenced by the caller's scope, every native probe key refused by name, every key held to its writer
+class), the per-component reachability read, the type registries, the
 `/products` and `/standards` catalogs, the classifier-contract and instance-value property routes, the
 role declaration, resolution, and staffing routes, and the component alarm plus system and location
 [health](#health-the-verdict-and-why) reads. The node `:enroll` and `:claim` custom methods are the
@@ -464,7 +465,9 @@ out-of-scope component is a non-disclosing 404 (a deliberate early exception to
   observation: the verdict and its rungs, the probe metrics and timings, a session's state and
   reason, the gate. `POST /telemetry:push` refuses each by name on every lane, whatever instance it
   names (#1080, [ADR-0158](/architecture/decisions/#adr-0158-one-connection-fingerprint-gates-every-connection-on-a-ladder-the-driver-declares)
-  point 5), so no push can stand in for the node in any of it.
+  point 5), and the read serves each key's observed series only, so no other writer or provenance can
+  stand in for the node in any of it
+  ([ADR-0161](/architecture/decisions/#adr-0161-every-key-has-one-writer-class-held-at-the-storage-gateway)).
 - `GET /components/{name}/events` is the log-kind mirror: the component's recent **log occurrences**
   (the [`event` log sink](/architecture/core-entities/#the-event-sink-the-first-arc-owned-occurrence)),
   newest first, bounded to the last 24 hours and capped at 200 rows; each row carries `ts`, the
@@ -488,6 +491,14 @@ official types are read-only, a 409). The **metric_type catalog is the numeric k
 `:delete`, each type carrying the numeric facts (`unit`, `precision`); the two sample catalogs and
 `event_type` share one resolution namespace, so a create is refused when a sibling holds the name
 ([ADR-0079](/architecture/decisions/#adr-0079-five-telemetry-lanes-and-property-stops-being-the-genus)).
+Every type on the three ingest registries carries its `writer_class` (`node-probe`, `platform`, `calc`,
+`collected`: who may write the key,
+[ADR-0161](/architecture/decisions/#adr-0161-every-key-has-one-writer-class-held-at-the-storage-gateway)),
+read beside it and never set; a create naming a reserved key (a native probe key, `collection-failed`,
+`health`) is a 422 on every lane, whether or not its type is seeded. Any write the Storage Gateway
+refuses for its writer (a declared value, a command's target, a calc rule's output, an event rule's
+event type, a driver spec's emits on a key its route may not write) is a 422 naming the key and who
+does write it.
 The **event_type registry is the occurrence keyspace**:
 `GET/POST/PATCH/DELETE /event-types[/{name}]`, gated `event_type:read` / `:create` / `:update` /
 `:delete`; an ingested occurrence is typed by a registered `event_type` name (the log-to-event

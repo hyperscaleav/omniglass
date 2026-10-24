@@ -114,7 +114,7 @@ func TestEventRuleAPI(t *testing.T) {
 	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "rule-target"}, all, all, all, all); err != nil {
 		t.Fatal(err)
 	}
-	if err := gw.InsertPropertySamples(ctx, []storage.PropertySampleWrite{{OwnerKind: "component", OwnerID: "rule-target",
+	if err := insertProperties(ctx, gw, []storage.PropertySampleWrite{{OwnerKind: "component", OwnerID: "rule-target",
 		Key: "endpoint-reachable", Instance: "tcp", Value: "down", TS: time.Now()}}); err != nil {
 		t.Fatal(err)
 	}
@@ -166,7 +166,7 @@ func TestEventRuleAPI(t *testing.T) {
 	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "rule-other"}, all, all, all, all); err != nil {
 		t.Fatal(err)
 	}
-	if err := gw.InsertPropertySamples(ctx, []storage.PropertySampleWrite{{OwnerKind: "component", OwnerID: "rule-other",
+	if err := insertProperties(ctx, gw, []storage.PropertySampleWrite{{OwnerKind: "component", OwnerID: "rule-other",
 		Key: "endpoint-reachable", Instance: "tcp", Value: "down", TS: time.Now()}}); err != nil {
 		t.Fatal(err)
 	}
@@ -392,7 +392,7 @@ func TestRuleEventsOnTheEventsRead(t *testing.T) {
 	c.do(ownerTok, http.MethodPost, "/event-rules", map[string]any{"name": "ev-watch", "sample_key": "endpoint-reachable",
 		"fire_criteria": map[string]any{"op": "eq", "value": "down"}, "severity": "high", "fire_event_type": "condition-started",
 		"selector": map[string]any{"components": []string{"ev-target"}}}, http.StatusCreated)
-	if err := gw.InsertPropertySamples(ctx, []storage.PropertySampleWrite{{OwnerKind: "component", OwnerID: "ev-target",
+	if err := insertProperties(ctx, gw, []storage.PropertySampleWrite{{OwnerKind: "component", OwnerID: "ev-target",
 		Key: "endpoint-reachable", Instance: "tcp", Value: "down", TS: time.Now()}}); err != nil {
 		t.Fatal(err)
 	}
@@ -527,7 +527,7 @@ func TestAlarmTimelineAPI(t *testing.T) {
 		"severity": "high", "fire_event_type": "condition-started", "clear_event_type": "condition-ended",
 		"selector": map[string]any{"components": []string{"tl-target"}}}, http.StatusCreated)
 	sample := func(v string) {
-		if err := gw.InsertPropertySamples(ctx, []storage.PropertySampleWrite{{OwnerKind: "component", OwnerID: "tl-target",
+		if err := insertProperties(ctx, gw, []storage.PropertySampleWrite{{OwnerKind: "component", OwnerID: "tl-target",
 			Key: "endpoint-reachable", Instance: "tcp", Value: v, TS: time.Now()}}); err != nil {
 			t.Fatal(err)
 		}
@@ -775,7 +775,7 @@ func TestEventRuleRenameAPI(t *testing.T) {
 	}
 	sample := func(v string) {
 		t.Helper()
-		if err := gw.InsertPropertySamples(ctx, []storage.PropertySampleWrite{{OwnerKind: "component", OwnerID: "rn-target",
+		if err := insertProperties(ctx, gw, []storage.PropertySampleWrite{{OwnerKind: "component", OwnerID: "rn-target",
 			Key: "endpoint-reachable", Instance: "tcp", Value: v, TS: time.Now()}}); err != nil {
 			t.Fatal(err)
 		}

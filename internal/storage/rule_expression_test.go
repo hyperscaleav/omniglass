@@ -59,7 +59,7 @@ func TestRuleCriteriaAreExpressions(t *testing.T) {
 	}
 	prop := func(instance, value string) {
 		t.Helper()
-		if err := gw.InsertPropertySamples(ctx, []storage.PropertySampleWrite{{OwnerKind: "component", OwnerID: "bar-1",
+		if err := insertProperties(ctx, gw, []storage.PropertySampleWrite{{OwnerKind: "component", OwnerID: "bar-1",
 			Key: "endpoint-reachable", Instance: instance, Value: value, TS: time.Now()}}); err != nil {
 			t.Fatal(err)
 		}
@@ -78,7 +78,7 @@ func TestRuleCriteriaAreExpressions(t *testing.T) {
 		Fire: exprCriteria("value >= 40"), Severity: "high", FireEventType: "condition-started"}, all); err != nil {
 		t.Fatal(err)
 	}
-	if err := gw.InsertMetricSamples(ctx, []storage.MetricSampleWrite{{OwnerKind: "component", OwnerID: "bar-1",
+	if err := insertMetrics(ctx, gw, []storage.MetricSampleWrite{{OwnerKind: "component", OwnerID: "bar-1",
 		Key: "room-temperature", Value: 41, TS: time.Now()}}); err != nil {
 		t.Fatal(err)
 	}
@@ -129,7 +129,7 @@ func TestRuleCompilesOncePerVersion(t *testing.T) {
 			ws = append(ws, storage.MetricSampleWrite{OwnerKind: "component", OwnerID: "bar-1", Key: "room-temperature",
 				Instance: "probe", Value: base + float64(i%3), TS: now.Add(time.Duration(i) * time.Millisecond)})
 		}
-		if err := f.gw.InsertMetricSamples(ctx, ws); err != nil {
+		if err := insertMetrics(ctx, f.gw, ws); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -159,7 +159,7 @@ func TestRuleRunErrorHoldsAndLogsOnce(t *testing.T) {
 	}
 	long := strings.Repeat("a", 6000)
 	for i := 0; i < 3; i++ {
-		if err := f.gw.InsertPropertySamples(ctx, []storage.PropertySampleWrite{{OwnerKind: "component", OwnerID: "bar-1",
+		if err := insertProperties(ctx, f.gw, []storage.PropertySampleWrite{{OwnerKind: "component", OwnerID: "bar-1",
 			Key: "endpoint-reachable", Instance: "tcp", Value: long, TS: time.Now()}}); err != nil {
 			t.Fatalf("the sample was refused for the rule's sake: %v", err)
 		}
@@ -344,14 +344,14 @@ func TestCriteriaBackfill(t *testing.T) {
 	}
 	prop := func(v string) {
 		t.Helper()
-		if err := gw.InsertPropertySamples(ctx, []storage.PropertySampleWrite{{OwnerKind: "component", OwnerID: "up-1",
+		if err := insertProperties(ctx, gw, []storage.PropertySampleWrite{{OwnerKind: "component", OwnerID: "up-1",
 			Key: "endpoint-reachable", Instance: "tcp", Value: v, TS: time.Now()}}); err != nil {
 			t.Fatal(err)
 		}
 	}
 	metric := func(v float64) {
 		t.Helper()
-		if err := gw.InsertMetricSamples(ctx, []storage.MetricSampleWrite{{OwnerKind: "component", OwnerID: "up-1",
+		if err := insertMetrics(ctx, gw, []storage.MetricSampleWrite{{OwnerKind: "component", OwnerID: "up-1",
 			Key: "room-temperature", Value: v, TS: time.Now()}}); err != nil {
 			t.Fatal(err)
 		}
@@ -410,7 +410,7 @@ func TestCriteriaThatCannotCompileAreVisible(t *testing.T) {
 			ws = append(ws, storage.PropertySampleWrite{OwnerKind: "component", OwnerID: "bar-1", Key: "endpoint-reachable",
 				Instance: "tcp", Value: "true", TS: time.Now().Add(time.Duration(j) * time.Millisecond)})
 		}
-		if err := f.gw.InsertPropertySamples(ctx, ws); err != nil {
+		if err := insertProperties(ctx, f.gw, ws); err != nil {
 			t.Fatal(err)
 		}
 	}

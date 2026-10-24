@@ -10,7 +10,7 @@ import (
 
 func (r *systemRig) occupancy(comp string, v float64) {
 	r.t.Helper()
-	if err := r.gw.InsertMetricSamples(r.ctx, []storage.MetricSampleWrite{{OwnerKind: "component", OwnerID: r.ids[comp],
+	if err := r.gw.InsertMetricSamples(r.ctx, storage.PushWriter(), []storage.MetricSampleWrite{{OwnerKind: "component", OwnerID: r.ids[comp],
 		Key: "occupancy-count", Value: v, TS: time.Now()}}); err != nil {
 		r.t.Fatal(err)
 	}
@@ -26,7 +26,7 @@ func TestCalcPreviewOrdersValuedFirst(t *testing.T) {
 		r.occupancy(c, 2)
 	}
 	// m4, last by name and by creation, already holds the output.
-	if err := r.gw.InsertMetricSamples(r.ctx, []storage.MetricSampleWrite{{OwnerKind: "component", OwnerID: r.ids["m4"],
+	if err := r.gw.InsertMetricSamples(r.ctx, storage.PushWriter(), []storage.MetricSampleWrite{{OwnerKind: "component", OwnerID: r.ids["m4"],
 		Key: "temp-sum", Value: 9, TS: time.Now()}}); err != nil {
 		t.Fatal(err)
 	}

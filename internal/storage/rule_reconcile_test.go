@@ -85,7 +85,7 @@ func TestReconcileHealsEnableDuringBatch(t *testing.T) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		if err := f.gw.InsertPropertySamples(ctx, []storage.PropertySampleWrite{{OwnerKind: "component", OwnerID: "bar-1",
+		if err := insertProperties(ctx, f.gw, []storage.PropertySampleWrite{{OwnerKind: "component", OwnerID: "bar-1",
 			Key: "endpoint-reachable", Instance: "tcp", Value: "down", TS: time.Now().UTC()}}); err != nil {
 			t.Error(err)
 		}
@@ -117,8 +117,11 @@ func TestReconcileHealsEnableDuringBatch(t *testing.T) {
 func TestReconcileHealsDeadlockAbort(t *testing.T) {
 	f := newHealthFixture(t)
 	ctx, all := context.Background(), scope.Set{All: true}
-	if _, err := f.gw.CreateEventRule(ctx, "", storage.EventRuleSpec{FireEventType: "condition-started", Name: "dl", SampleKey: "endpoint-reachable",
-		Fire: criteria("eq", "down"), Clear: ptrCriteria(criteria("eq", "up")), Severity: "high"}, all); err != nil {
+	// A collected key: one batch carrying two of its series is a push's (or
+	// a driver's instanced series), where a node-probe key's batch is one
+	// endpoint's alone (ADR-0161).
+	if _, err := f.gw.CreateEventRule(ctx, "", storage.EventRuleSpec{FireEventType: "condition-started", Name: "dl", SampleKey: "video-input",
+		Fire: criteria("eq", "hdmi1"), Clear: ptrCriteria(criteria("eq", "hdmi2")), Severity: "high"}, all); err != nil {
 		t.Fatal(err)
 	}
 	var compID string
@@ -136,9 +139,9 @@ func TestReconcileHealsDeadlockAbort(t *testing.T) {
 	now := time.Now().UTC()
 	go func() {
 		defer wg.Done()
-		if err := f.gw.InsertPropertySamples(ctx, []storage.PropertySampleWrite{
-			{OwnerKind: "component", OwnerID: "bar-1", Key: "endpoint-reachable", Instance: "tcp", Value: "down", TS: now},
-			{OwnerKind: "component", OwnerID: "bar-1", Key: "endpoint-reachable", Instance: "icmp", Value: "down", TS: now},
+		if err := insertProperties(ctx, f.gw, []storage.PropertySampleWrite{
+			{OwnerKind: "component", OwnerID: "bar-1", Key: "video-input", Instance: "tcp", Value: "hdmi1", TS: now},
+			{OwnerKind: "component", OwnerID: "bar-1", Key: "video-input", Instance: "icmp", Value: "hdmi1", TS: now},
 		}); err != nil {
 			t.Error(err)
 		}
@@ -154,18 +157,18 @@ func TestReconcileHealsDeadlockAbort(t *testing.T) {
 	wg.Wait()
 	var landed int
 	if err := f.conn.QueryRow(ctx, `select count(*) from property p join property_type t on t.id = p.property_type_id
-		where t.name = 'endpoint-reachable' and p.instance = 'icmp'`).Scan(&landed); err != nil {
+		where t.name = 'video-input' and p.instance = 'icmp'`).Scan(&landed); err != nil {
 		t.Fatal(err)
 	}
 	if landed != 1 {
-		t.Fatalf("setup: icmp's down did not land (%d rows)", landed)
+		t.Fatalf("setup: icmp's hdmi1 did not land (%d rows)", landed)
 	}
 	if n := openRuleAlarms(t, f, "dl"); n != 1 {
 		t.Fatalf("setup: after the deadlock the rule holds %d alarms, want tcp's alone; the window was not reproduced", n)
 	}
 	reconcile(t, f, nil)
 	if n := openRuleAlarms(t, f, "dl"); n != 2 {
-		t.Fatalf("both endpoints read down; after a reconcile pass the rule holds %d alarms, want 2", n)
+		t.Fatalf("both series read hdmi1; after a reconcile pass the rule holds %d alarms, want 2", n)
 	}
 }
 
@@ -335,7 +338,7 @@ func TestReconcileMetricLaneAndSelector(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, c := range []string{"bar-1", "other-c"} {
-		if err := f.gw.InsertMetricSamples(ctx, []storage.MetricSampleWrite{{OwnerKind: "component", OwnerID: c,
+		if err := insertMetrics(ctx, f.gw, []storage.MetricSampleWrite{{OwnerKind: "component", OwnerID: c,
 			Key: "http-response-time", Value: 35, TS: time.Now()}}); err != nil {
 			t.Fatal(err)
 		}

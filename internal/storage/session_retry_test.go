@@ -238,7 +238,7 @@ func TestATrustedOnFirstUseKeyLeavesTheFingerprint(t *testing.T) {
 	}
 	before, _ := fp()
 	key := "SHA256:" + strings.Repeat("B", 43)
-	if err := gw.InsertPropertySamples(ctx, []storage.PropertySampleWrite{{OwnerKind: "component", OwnerID: comp, Key: "ssh-host-key",
+	if err := insertProperties(ctx, gw, []storage.PropertySampleWrite{{OwnerKind: "component", OwnerID: comp, Key: "ssh-host-key",
 		Instance: ep.Name, Value: key, Source: "ssh", TS: time.Now()}}); err != nil {
 		t.Fatal(err)
 	}

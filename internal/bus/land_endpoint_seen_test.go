@@ -63,7 +63,7 @@ func TestLandStampsEndpointSeen(t *testing.T) {
 	land := func(ev *ogv1.TelemetryBatch) {
 		t.Helper()
 		ev.TaskId, ev.NodeId = "t-snmp", "node-a"
-		if err := s.land(ctx, ev, ingestBinding{SampleOwner: &owner}); err != nil {
+		if err := s.land(ctx, ev, ingestBinding{SampleOwner: &owner, Writer: storage.NodeWriter(owner.EndpointName)}); err != nil {
 			t.Fatalf("land: %v", err)
 		}
 	}

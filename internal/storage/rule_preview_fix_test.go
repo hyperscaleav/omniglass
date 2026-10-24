@@ -15,7 +15,7 @@ import (
 
 func metricAt(t *testing.T, f *healthFixture, comp string, v float64, ts time.Time) {
 	t.Helper()
-	if err := f.gw.InsertMetricSamples(context.Background(), []storage.MetricSampleWrite{{OwnerKind: "component", OwnerID: comp,
+	if err := insertMetrics(context.Background(), f.gw, []storage.MetricSampleWrite{{OwnerKind: "component", OwnerID: comp,
 		Key: "room-temperature", Value: v, TS: ts}}); err != nil {
 		t.Fatal(err)
 	}
@@ -23,7 +23,7 @@ func metricAt(t *testing.T, f *healthFixture, comp string, v float64, ts time.Ti
 
 func propAt(t *testing.T, f *healthFixture, comp, v string, ts time.Time) {
 	t.Helper()
-	if err := f.gw.InsertPropertySamples(context.Background(), []storage.PropertySampleWrite{{OwnerKind: "component", OwnerID: comp,
+	if err := insertProperties(context.Background(), f.gw, []storage.PropertySampleWrite{{OwnerKind: "component", OwnerID: comp,
 		Key: "endpoint-reachable", Instance: "tcp", Value: v, TS: ts}}); err != nil {
 		t.Fatal(err)
 	}

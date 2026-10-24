@@ -66,7 +66,7 @@ func TestEventsAPI(t *testing.T) {
 
 	t0 := time.Now().UTC().Add(-2 * time.Minute)
 	t1 := t0.Add(time.Minute)
-	if err := gw.InsertEvents(ctx, []storage.EventWrite{
+	if err := gw.InsertEvents(ctx, storage.PushWriter(), []storage.EventWrite{
 		{OwnerKind: "component", OwnerID: "disp-1", Key: "call-started", Message: "call started", Source: "xapi", TS: t0},
 		{OwnerKind: "component", OwnerID: "disp-1", Key: "call-started", Message: "call joined by 4 participants", Attributes: []byte(`{"peer":"room-204","protocol":"sip"}`), Source: "xapi", TS: t1},
 	}); err != nil {
@@ -150,7 +150,7 @@ func TestSystemEventsAndLogsOnTheWire(t *testing.T) {
 		t.Fatalf("add member: %v", err)
 	}
 	now := time.Now().UTC()
-	if err := gw.InsertEvents(ctx, []storage.EventWrite{
+	if err := gw.InsertEvents(ctx, storage.PushWriter(), []storage.EventWrite{
 		{OwnerKind: "component", OwnerID: "wired-bar", Key: "call-started", Message: "member event", Source: "xapi", TS: now},
 	}); err != nil {
 		t.Fatalf("insert event: %v", err)

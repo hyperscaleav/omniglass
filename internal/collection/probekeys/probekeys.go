@@ -1,10 +1,11 @@
-// Package probekeys declares the sample keys the native collection probes
-// write (tcp, icmp, http, ssh, the endpoint verdicts they roll up into, and
-// a held session's state), and who may write each.
-// A leaf, so the probes (internal/collection), the storage gateway's calc rule
-// check (a calc rule may not write a key a collection writes) and the push
-// lane (which refuses a key only a node may write) read this one declaration.
-// A driver's keys are declared in its spec instead.
+// Package probekeys declares the keys a node's own collection writes: the
+// samples the native probes write (tcp, icmp, http, ssh, the endpoint verdicts
+// they roll up into, and a held session's state), the event a task lands when
+// it cannot collect, and who may write each.
+// A leaf, so the probes (internal/collection), the writer-class ruling
+// (internal/writerclass, the node-probe class the Storage Gateway enforces on
+// every write, ADR-0161) and the push lane read this one declaration. A
+// driver's keys are declared in its spec instead.
 package probekeys
 
 import (
@@ -42,6 +43,11 @@ const (
 	// fingerprint it holds for ("authenticated auth <fingerprint>"), or
 	// "none". The worklist carries it back, so a restarted node honours it.
 	EndpointRejection = "endpoint-rejection"
+	// CollectionFailed is the event a node lands when a task cannot collect
+	// (#1086): an unusable config, a payload that did not parse, a driver
+	// emit that did not extract. Its message is the node's account of its
+	// own task, so it is node-only like every key above.
+	CollectionFailed = "collection-failed"
 )
 
 // Every constant above is ruled exactly once, in nodeOnly or in pushable
@@ -59,6 +65,7 @@ const (
 var nodeOnly = []string{
 	TCPOpen, TCPConnectTime, ICMPReachable, ICMPRTTAvg, HTTPResponseTime, SSHHandshakeTime, TelnetResponseTime,
 	EndpointReachable, EndpointResponsive, EndpointAuthenticated, SessionState, SessionReason, SSHHostKey, EndpointRejection,
+	CollectionFailed,
 }
 
 // pushable are the native keys a push may write too, each mapped to the
@@ -77,6 +84,14 @@ var native = slices.Concat(nodeOnly, slices.Collect(maps.Keys(pushable)))
 func IsNodeOnly(key string) bool {
 	key = strings.TrimSpace(key)
 	return slices.ContainsFunc(nodeOnly, func(k string) bool { return strings.EqualFold(k, key) })
+}
+
+// NodeOnly is every node-only key, sorted, a fresh slice each call: the
+// node-probe writer class (internal/writerclass).
+func NodeOnly() []string {
+	out := slices.Clone(nodeOnly)
+	slices.Sort(out)
+	return out
 }
 
 // Native is every key a native probe writes, sorted, a fresh slice each call.

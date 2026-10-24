@@ -226,7 +226,7 @@ func TestCommandWireActuates(t *testing.T) {
 
 	// The device now reports the input it was told: the observed value lands
 	// (the poll path's write, hand-driven here) and the command settles.
-	if err := gw.InsertPropertySamples(ctx, []storage.PropertySampleWrite{{
+	if err := gw.InsertPropertySamples(ctx, storage.PushWriter(), []storage.PropertySampleWrite{{
 		OwnerKind: "component", OwnerID: "switcher-1", Key: "video-input",
 		Value: "hdmi-2", Source: "tcp", TS: time.Now().UTC(),
 	}}); err != nil {

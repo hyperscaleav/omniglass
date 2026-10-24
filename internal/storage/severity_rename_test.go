@@ -34,7 +34,7 @@ func TestSeverityRenameDuringARaisingBatch(t *testing.T) {
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
-		ingestErr = f.gw.InsertPropertySamples(ctx, []storage.PropertySampleWrite{{OwnerKind: "component", OwnerID: "bar-1",
+		ingestErr = insertProperties(ctx, f.gw, []storage.PropertySampleWrite{{OwnerKind: "component", OwnerID: "bar-1",
 			Key: "endpoint-reachable", Instance: "tcp", Value: "down", TS: time.Now().UTC()}})
 	}()
 	time.Sleep(700 * time.Millisecond)

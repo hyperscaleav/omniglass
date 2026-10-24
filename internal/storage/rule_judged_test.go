@@ -54,7 +54,7 @@ func TestRuleLastJudged(t *testing.T) {
 	}
 	observe := func(component, v string, at time.Time) {
 		t.Helper()
-		if err := f.gw.InsertPropertySamples(ctx, []storage.PropertySampleWrite{{OwnerKind: "component", OwnerID: component,
+		if err := insertProperties(ctx, f.gw, []storage.PropertySampleWrite{{OwnerKind: "component", OwnerID: component,
 			Key: "endpoint-reachable", Instance: "tcp", Value: v, TS: at}}); err != nil {
 			t.Fatal(err)
 		}
@@ -130,7 +130,7 @@ func TestRuleStampNeverWaits(t *testing.T) {
 	}
 	quick, cancel := context.WithTimeout(ctx, 3*time.Second)
 	defer cancel()
-	if err := r.f.gw.InsertPropertySamples(quick, []storage.PropertySampleWrite{{OwnerKind: "component", OwnerID: "bar-1",
+	if err := insertProperties(quick, r.f.gw, []storage.PropertySampleWrite{{OwnerKind: "component", OwnerID: "bar-1",
 		Key: "endpoint-reachable", Instance: "tcp", Value: "up", TS: time.Now().UTC()}}); err != nil {
 		t.Fatalf("a batch waited on a stamp row another transaction holds: %v", err)
 	}

@@ -4,7 +4,10 @@
 // lane it arrived on.
 package collection
 
-import "github.com/hyperscaleav/omniglass/internal/storage"
+import (
+	"github.com/hyperscaleav/omniglass/internal/storage"
+	"github.com/hyperscaleav/omniglass/internal/writerclass"
+)
 
 // Registry is an immutable snapshot of the observable-signal vocabulary, built
 // from the three catalog reads (metric_type, property_type, event_type). It is
@@ -39,7 +42,13 @@ func NewRegistry(metricTypes []storage.MetricType, propertyTypes []storage.Prope
 	properties := make(map[string]storage.PropertyType, len(propertyTypes))
 	events := make(map[string]storage.EventType, len(eventTypes))
 	var collisions []string
+	// Each row carries its writer class (ADR-0161). A catalog read resolves
+	// it; a row built by hand is resolved here the same way, so the snapshot
+	// never holds a classless key.
 	for _, mt := range metricTypes {
+		if mt.WriterClass == "" {
+			mt.WriterClass = writerclass.Of(mt.Name, mt.WrittenBy != nil)
+		}
 		metrics[mt.Name] = mt
 	}
 	for _, pt := range propertyTypes {
@@ -47,9 +56,15 @@ func NewRegistry(metricTypes []storage.MetricType, propertyTypes []storage.Prope
 			collisions = append(collisions, pt.Name)
 			continue
 		}
+		if pt.WriterClass == "" {
+			pt.WriterClass = writerclass.Of(pt.Name, pt.WrittenBy != nil)
+		}
 		properties[pt.Name] = pt
 	}
 	for _, et := range eventTypes {
+		if et.WriterClass == "" {
+			et.WriterClass = writerclass.Of(et.Name, false)
+		}
 		_, inMetrics := metrics[et.Name]
 		_, inProperties := properties[et.Name]
 		if inMetrics || inProperties {

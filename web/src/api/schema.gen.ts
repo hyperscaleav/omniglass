@@ -4399,7 +4399,7 @@ export interface paths {
         put?: never;
         /**
          * Push telemetry for an owner
-         * @description Accepts per-lane observations (metrics, properties, events) and raw log lines for one owner and publishes them onto the ingest lane. Each lane validates against its own catalog: an unregistered name is rejected and reported in the response rather than silently dropped, and a property or event payload violating its type's schema refuses the batch with a 422. A key a native probe writes (a reachability verdict or rung, a probe metric or timing, a held session's state) is a node's own observation and is rejected by name on every lane; only the node writes it. Gated by telemetry:push, and the caller's scope must cover the declared owner; an out-of-scope owner is a non-disclosing 404.
+         * @description Accepts per-lane observations (metrics, properties, events) and raw log lines for one owner and publishes them onto the ingest lane. Each lane validates against its own catalog: an unregistered name is rejected and reported in the response rather than silently dropped, and a property or event payload violating its type's schema refuses the batch with a 422. Every key has one writer class, and a push writes only a collected key: a key a native probe writes (a reachability verdict or rung, a probe metric or timing, a held session's state, collection-failed) is a node's own observation and a platform key (health) is the platform's, each rejected by name on every lane; a key a calc rule outputs is rejected naming the rule. Gated by telemetry:push, and the caller's scope must cover the declared owner; an out-of-scope owner is a non-disclosing 404.
          */
         post: operations["push-telemetry"];
         delete?: never;
@@ -6409,6 +6409,11 @@ export interface components {
             official: boolean;
             /** @description A JSON Schema fragment for the occurrence payload */
             payload_schema?: unknown;
+            /**
+             * @description Who may write this key (ADR-0161): node-probe (a node's own probe or session machine, under the endpoint it probed), platform (the omniglass process itself: the health rollup), calc (the calc rule that outputs it), or collected (a driver's emits or a push, and a command's or an operator's value). The Storage Gateway refuses any write whose writer the class does not admit
+             * @enum {string}
+             */
+            writer_class: "node-probe" | "platform" | "calc" | "collected";
         };
         EventsOutputBody: {
             /**
@@ -7530,6 +7535,11 @@ export interface components {
             precision?: number;
             /** @description The display unit of the series (ms, dB, percent) */
             unit?: string;
+            /**
+             * @description Who may write this key (ADR-0161): node-probe (a node's own probe or session machine, under the endpoint it probed), platform (the omniglass process itself: the health rollup), calc (the calc rule that outputs it), or collected (a driver's emits or a push, and a command's or an operator's value). The Storage Gateway refuses any write whose writer the class does not admit
+             * @enum {string}
+             */
+            writer_class: "node-probe" | "platform" | "calc" | "collected";
             /** @description The calc rule that writes this metric, absent when none does (one enabled rule writes a key; a disabled writer is named when no rule is enabled) */
             written_by?: components["schemas"]["CalcWriterBody"];
         };
@@ -7836,6 +7846,11 @@ export interface components {
             official: boolean;
             /** @description A JSON Schema fragment constraining the value */
             validation?: unknown;
+            /**
+             * @description Who may write this key (ADR-0161): node-probe (a node's own probe or session machine, under the endpoint it probed), platform (the omniglass process itself: the health rollup), calc (the calc rule that outputs it), or collected (a driver's emits or a push, and a command's or an operator's value). The Storage Gateway refuses any write whose writer the class does not admit
+             * @enum {string}
+             */
+            writer_class: "node-probe" | "platform" | "calc" | "collected";
             /** @description The calc rule that writes this property, absent when none does (one enabled rule writes a key; a disabled writer is named when no rule is enabled) */
             written_by?: components["schemas"]["CalcWriterBody"];
         };

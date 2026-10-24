@@ -315,17 +315,28 @@ across a restart too, and authenticates after a params edit.
 
 Every key a native probe writes, its samples ([below](#poll-protocols-and-their-config)) and the
 node's account of its own connection (the verdict and its rungs, the probe metrics and their
-timings, a held session's state and reason, the host key it trusted, the gate it publishes), is the
-node's own observation, and the console reads it as one. So `POST /telemetry:push` refuses each by
-name (#1080, [ADR-0158](/architecture/decisions/#adr-0158-one-connection-fingerprint-gates-every-connection-on-a-ladder-the-driver-declares)
-point 5): on every lane, not just its own, under any instance and any casing, and the rejection's
-reason names the key. The set is not a second list: it is `internal/collection/probekeys`, the
-declaration the probes emit from, where each key is ruled node-only or pushable with the reason it
-may be pushed. None is pushable today, and a key declared there without a ruling fails its test,
-as does a key the reachability read serves that is not ruled node-only. The node's own lane never
-consults the ruling and lands every one of them. A pusher with a measurement of its own, an outside
-pinger's round trip say, registers a metric type for it rather than borrowing the node's. The push
-lane is one write surface; hardening the others that can reach a native key's series is #1084.
+timings, a held session's state and reason, the host key it trusted, the gate it publishes), and the
+`collection-failed` a task lands when it cannot collect (#1086), is the node's own observation, and the
+console reads it as one. So `POST /telemetry:push` refuses each by name (#1080): on every lane, not
+just its own, under any instance and any casing, and the rejection's reason names the key. The set is
+not a second list: it is `internal/collection/probekeys`, the declaration the probes emit from, where
+each key is ruled node-only or pushable with the reason it may be pushed. None is pushable today, and a
+key declared there without a ruling fails its test, as does a key the reachability read serves that is
+not ruled node-only. A pusher with a measurement of its own, an outside pinger's round trip say,
+registers a metric type for it rather than borrowing the node's.
+
+The push lane is one write surface, and the refusal is no longer its alone: every key has one **writer
+class**, and the Storage Gateway holds every write to it
+([ADR-0161](/architecture/decisions/#adr-0161-every-key-has-one-writer-class-held-at-the-storage-gateway),
+[the ruling](/architecture/properties/#who-writes-a-key-the-writer-class)). The probekeys set is the
+`node-probe` class, so a declared value, a command, a calc rule or an event rule is refused on it the
+same way, and a push is refused a `platform` key (`health`) and a calc rule's output, naming the rule.
+On the node's own lane a node-probe key lands only under the endpoint whose task the node ran: an
+empty instance is that endpoint's name, and any other (another node's endpoint on the same component, a
+name no endpoint holds) is refused, while a driver's own keys keep the instance they name. A driver
+spec may emit only a collected key: a reserved one is refused at the spec's write, and again where the
+node interprets a task derived before that refusal existed, so a driver cannot speak for the node
+either.
 
 ## Endpoint types and their config
 

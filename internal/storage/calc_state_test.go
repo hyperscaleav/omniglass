@@ -29,14 +29,14 @@ func TestCalcRuleState(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, c := range []string{"m3", "m4"} {
-		if err := r.gw.InsertMetricSamples(r.ctx, []storage.MetricSampleWrite{{OwnerKind: "component", OwnerID: r.ids[c], Key: "occupancy-count", Value: 2}}); err != nil {
+		if err := r.gw.InsertMetricSamples(r.ctx, storage.PushWriter(), []storage.MetricSampleWrite{{OwnerKind: "component", OwnerID: r.ids[c], Key: "occupancy-count", Value: 2}}); err != nil {
 			t.Fatal(err)
 		}
 	}
 	if _, err := r.gw.DrainCalcPending(r.ctx, 100); err != nil {
 		t.Fatal(err)
 	}
-	if err := r.gw.InsertMetricSamples(r.ctx, []storage.MetricSampleWrite{{OwnerKind: "component", OwnerID: r.ids["m4"], Key: "occupancy-count", Value: 3}}); err != nil {
+	if err := r.gw.InsertMetricSamples(r.ctx, storage.PushWriter(), []storage.MetricSampleWrite{{OwnerKind: "component", OwnerID: r.ids["m4"], Key: "occupancy-count", Value: 3}}); err != nil {
 		t.Fatal(err)
 	}
 

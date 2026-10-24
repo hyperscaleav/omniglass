@@ -10,8 +10,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/hyperscaleav/omniglass/internal/collection/probekeys"
 	"github.com/hyperscaleav/omniglass/internal/scope"
 	"github.com/hyperscaleav/omniglass/internal/transport"
+	"github.com/hyperscaleav/omniglass/internal/writerclass"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 )
@@ -634,10 +636,16 @@ func (p *PG) RetryEndpoint(ctx context.Context, actorID, id, hostKey string, rea
 		if !hostKeyFingerprint.MatchString(hostKey) {
 			return nil, fmt.Errorf("%w: a host key is a SHA256 fingerprint (SHA256: and 43 base64 characters)", ErrRetryHostKey)
 		}
+		// The pin is the one declared row a node-probe key admits, and only
+		// through this path (ADR-0161).
+		if err := admitWrites(ctx, tx, writeProperty, gatewayWriter(writerclass.HostKeyPin),
+			[]keyedWrite{{key: probekeys.SSHHostKey, instance: before.Name}}); err != nil {
+			return nil, err
+		}
 		if _, err := tx.Exec(ctx, `
 			insert into property (owner_kind, component_id, property_type_id, instance, provenance, value)
-			values ('component', $1::uuid, (select id from property_type where name = 'ssh-host-key'), $2, '`+declaredProvenance+`', to_jsonb($3::text))`,
-			*before.ComponentID, before.Name, hostKey); err != nil {
+			values ('component', $1::uuid, (select id from property_type where name = $4), $2, '`+declaredProvenance+`', to_jsonb($3::text))`,
+			*before.ComponentID, before.Name, hostKey, probekeys.SSHHostKey); err != nil {
 			return nil, fmt.Errorf("storage: pin host key for endpoint %q: %w", before.ID, err)
 		}
 	}

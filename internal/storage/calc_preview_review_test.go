@@ -123,7 +123,7 @@ func TestCalcPreviewOwnersAndWork(t *testing.T) {
 			t.Fatal(err)
 		}
 		holders = append(holders, c.ID)
-		if err := r.gw.InsertMetricSamples(r.ctx, []storage.MetricSampleWrite{{OwnerKind: "component", OwnerID: c.ID, Key: "room-temperature", Value: 1, TS: time.Now()}}); err != nil {
+		if err := r.gw.InsertMetricSamples(r.ctx, storage.PushWriter(), []storage.MetricSampleWrite{{OwnerKind: "component", OwnerID: c.ID, Key: "room-temperature", Value: 1, TS: time.Now()}}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -154,7 +154,7 @@ func TestCalcStatePendingDepthScoped(t *testing.T) {
 		t.Fatal(err)
 	}
 	r.metric("room-temperature", "", 20)
-	if err := r.gw.InsertMetricSamples(r.ctx, []storage.MetricSampleWrite{{OwnerKind: "component", OwnerID: other.ID, Key: "room-temperature", Value: 2, TS: time.Now()}}); err != nil {
+	if err := r.gw.InsertMetricSamples(r.ctx, storage.PushWriter(), []storage.MetricSampleWrite{{OwnerKind: "component", OwnerID: other.ID, Key: "room-temperature", Value: 2, TS: time.Now()}}); err != nil {
 		t.Fatal(err)
 	}
 	all, err := r.gw.CalcRuleState(r.ctx, "temp-mean", r.all, r.all, 0)

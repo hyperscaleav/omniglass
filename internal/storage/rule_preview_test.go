@@ -28,7 +28,7 @@ func TestPreviewEventRule(t *testing.T) {
 	at := func(h float64) time.Time { return now.Add(-time.Duration(h * float64(time.Hour))) }
 	put := func(comp, inst, v string, ts time.Time) {
 		t.Helper()
-		if err := f.gw.InsertPropertySamples(ctx, []storage.PropertySampleWrite{{OwnerKind: "component", OwnerID: comp,
+		if err := insertProperties(ctx, f.gw, []storage.PropertySampleWrite{{OwnerKind: "component", OwnerID: comp,
 			Key: "endpoint-reachable", Instance: inst, Value: v, TS: ts}}); err != nil {
 			t.Fatal(err)
 		}

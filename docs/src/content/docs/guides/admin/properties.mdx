@@ -130,6 +130,11 @@ rest of the detail, and **Cancel** discards them.
 - **An instance with no classifier is all off contract.** A **productless** component and a **one-off
   system** (one conforming to no standard) have no contract at all, so everything they carry is off
   contract. Nothing breaks; the panel simply shows one group.
+- **A node's own facts are not yours to set.** A property of the `node-probe` writer class (a
+  reachability verdict, a held session's state, the gate, the trusted host key) is the node's
+  observation, and `health` is the rollup's, so setting one is refused (422) naming the key; a host
+  key you trust is pinned through the endpoint's **Retry** instead
+  ([who writes a key](/architecture/properties/#who-writes-a-key-the-writer-class)).
 - An instance in a scope you cannot reach is **not found**, not forbidden: the panel resolves
   properties only within your read scope for that entity kind, mirroring secrets and variables. The
   same scope check runs on the **write**, so setting a property on a system or location outside your

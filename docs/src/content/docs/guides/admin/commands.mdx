@@ -82,6 +82,10 @@ visible to every reader; the write gates decide who may change it.
   <SeededSet kind="command_types" />
 - A **duplicate** name is refused (409), and an attempt to change an official command type is
   refused too: the catalog has exactly one entry per name.
+- A **target** must be a key a command may write. A command opens an intended value on it and its
+  reply lands as an observation of it, so a native probe key (the node's own observation), `health`
+  (the rollup's) or a calc rule's output is refused (422) naming the key
+  ([who writes a key](/architecture/properties/#who-writes-a-key-the-writer-class)).
 
 ## Issue a command
 

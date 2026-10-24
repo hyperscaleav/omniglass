@@ -25,14 +25,15 @@ func TestUpsertCommandTypeTargetArms(t *testing.T) {
 		t.Fatalf("open gateway: %v", err)
 	}
 	defer gw.Close()
-	// The seeded catalogs supply the registered targets (video-input, icmp-rtt-avg).
+	// The seeded catalogs supply the registered targets (video-input, and uptime
+	// on the metric arm: a collected key a command may write, ADR-0161).
 	if err := seed.Run(ctx, gw); err != nil {
 		t.Fatalf("seed: %v", err)
 	}
 
 	t.Run("a metric target survives the upsert", func(t *testing.T) {
 		if err := gw.UpsertCommandType(ctx, storage.CommandType{
-			Name: "set-volume-official", TargetMetricType: "icmp-rtt-avg", SettleWindowSeconds: 5, Official: true,
+			Name: "set-volume-official", TargetMetricType: "uptime", SettleWindowSeconds: 5, Official: true,
 		}); err != nil {
 			t.Fatalf("upsert: %v", err)
 		}
@@ -40,8 +41,8 @@ func TestUpsertCommandTypeTargetArms(t *testing.T) {
 		if err != nil {
 			t.Fatalf("get: %v", err)
 		}
-		if ct.TargetMetricType != "icmp-rtt-avg" {
-			t.Errorf("TargetMetricType = %q, want icmp-rtt-avg (the seed upsert dropped the metric arm)", ct.TargetMetricType)
+		if ct.TargetMetricType != "uptime" {
+			t.Errorf("TargetMetricType = %q, want uptime (the seed upsert dropped the metric arm)", ct.TargetMetricType)
 		}
 	})
 
@@ -71,7 +72,7 @@ func TestUpsertCommandTypeTargetArms(t *testing.T) {
 
 	t.Run("both arms refuse with the arc named", func(t *testing.T) {
 		err := gw.UpsertCommandType(ctx, storage.CommandType{
-			Name: "both-arms", TargetPropertyType: "video-input", TargetMetricType: "icmp-rtt-avg", Official: true,
+			Name: "both-arms", TargetPropertyType: "video-input", TargetMetricType: "uptime", Official: true,
 		})
 		if err == nil {
 			t.Fatal("upsert with both target arms succeeded, want the arc refusal")
@@ -101,19 +102,19 @@ func TestCommandTypeTargetSpecPatch(t *testing.T) {
 
 	t.Run("create round-trips a metric target", func(t *testing.T) {
 		ct, err := gw.CreateCommandType(ctx, "", storage.CommandTypeSpec{
-			Name: "set-gain", TargetMetricType: "icmp-rtt-avg", SettleWindowSeconds: 5,
+			Name: "set-gain", TargetMetricType: "uptime", SettleWindowSeconds: 5,
 		})
 		if err != nil {
 			t.Fatalf("create: %v", err)
 		}
-		if ct.TargetMetricType != "icmp-rtt-avg" || ct.TargetPropertyType != "" {
+		if ct.TargetMetricType != "uptime" || ct.TargetPropertyType != "" {
 			t.Errorf("created = %+v, want the metric arm carried and the property arm empty", ct)
 		}
 	})
 
 	t.Run("create refuses both arms with the sentinel", func(t *testing.T) {
 		_, err := gw.CreateCommandType(ctx, "", storage.CommandTypeSpec{
-			Name: "both-arms-crud", TargetPropertyType: "video-input", TargetMetricType: "icmp-rtt-avg",
+			Name: "both-arms-crud", TargetPropertyType: "video-input", TargetMetricType: "uptime",
 		})
 		if !errors.Is(err, storage.ErrCommandTypeTargetArc) {
 			t.Fatalf("create with both arms = %v, want ErrCommandTypeTargetArc", err)
@@ -141,17 +142,17 @@ func TestCommandTypeTargetSpecPatch(t *testing.T) {
 		if ct.TargetPropertyType != "video-input" || ct.TargetMetricType != "" {
 			t.Errorf("after arm switch = %+v, want the property arm set and the metric arm cleared", ct)
 		}
-		metric := "icmp-rtt-avg"
+		metric := "uptime"
 		if ct, err = gw.UpdateCommandType(ctx, "", "set-gain", storage.CommandTypePatch{TargetMetricType: &metric}); err != nil {
 			t.Fatalf("patch back: %v", err)
 		}
-		if ct.TargetMetricType != "icmp-rtt-avg" || ct.TargetPropertyType != "" {
+		if ct.TargetMetricType != "uptime" || ct.TargetPropertyType != "" {
 			t.Errorf("after switch back = %+v, want the metric arm set and the property arm cleared", ct)
 		}
 	})
 
 	t.Run("patch refuses both arms with the sentinel", func(t *testing.T) {
-		prop, metric := "video-input", "icmp-rtt-avg"
+		prop, metric := "video-input", "uptime"
 		_, err := gw.UpdateCommandType(ctx, "", "set-gain", storage.CommandTypePatch{
 			TargetPropertyType: &prop, TargetMetricType: &metric,
 		})

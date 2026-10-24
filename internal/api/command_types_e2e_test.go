@@ -113,13 +113,13 @@ func TestCommandTypeAPI(t *testing.T) {
 		TargetMetricType   string `json:"target_metric_type"`
 	}
 	json.Unmarshal(c.do(ownerTok, http.MethodPost, "/command-types", map[string]any{
-		"name": "set-gain", "settle_window_seconds": 5, "target_metric_type": "icmp-rtt-avg",
+		"name": "set-gain", "settle_window_seconds": 5, "target_metric_type": "uptime",
 	}, http.StatusCreated), &armed)
-	if armed.TargetMetricType != "icmp-rtt-avg" || armed.TargetPropertyType != "" {
+	if armed.TargetMetricType != "uptime" || armed.TargetPropertyType != "" {
 		t.Fatalf("metric-targeted create = %+v, want the metric arm carried", armed)
 	}
 	json.Unmarshal(c.do(ownerTok, http.MethodGet, "/command-types/set-gain", nil, http.StatusOK), &armed)
-	if armed.TargetMetricType != "icmp-rtt-avg" {
+	if armed.TargetMetricType != "uptime" {
 		t.Fatalf("read dropped the metric arm: %+v", armed)
 	}
 
@@ -142,7 +142,7 @@ func TestCommandTypeAPI(t *testing.T) {
 	// Both targets in one request is the arc refusal, named: a 422 whose message
 	// says never both (the DB CHECK is the backstop, not the message).
 	arc := c.do(ownerTok, http.MethodPost, "/command-types", map[string]any{
-		"name": "both-arms", "target_property_type": "video-input", "target_metric_type": "icmp-rtt-avg",
+		"name": "both-arms", "target_property_type": "video-input", "target_metric_type": "uptime",
 	}, http.StatusUnprocessableEntity)
 	if !strings.Contains(string(arc), "never both") {
 		t.Fatalf("both-targets 422 body %s does not name the arc", arc)

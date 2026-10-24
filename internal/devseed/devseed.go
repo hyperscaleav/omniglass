@@ -828,7 +828,8 @@ func seedStandardMetrics(ctx context.Context, gw storage.Gateway, sysIDs map[str
 			storage.MetricSampleWrite{OwnerKind: "system", OwnerID: sysID, Key: "occupancy-count", Value: occ[i], Source: "devseed", TS: ts},
 		)
 	}
-	if err := gw.InsertMetricSamples(ctx, writes); err != nil {
+	// The room's sensors are an outside producer: the push lane's writer.
+	if err := gw.InsertMetricSamples(ctx, storage.PushWriter(), writes); err != nil {
 		return fmt.Errorf("devseed: write KPI samples: %w", err)
 	}
 	return nil
@@ -1109,10 +1110,13 @@ func seedReachSamples(ctx context.Context, gw storage.Gateway, iface string, fla
 		)
 	}
 	states = append(states, storage.PropertySampleWrite{OwnerKind: "component", OwnerID: reachComponent, Key: "endpoint-reachable", Instance: iface, Value: "up", Source: "reachability", TS: recovered})
-	if err := gw.InsertPropertySamples(ctx, states); err != nil {
+	// Native probe keys: written as the node that holds the endpoint would,
+	// under that endpoint alone (ADR-0161).
+	node := storage.NodeWriter(iface)
+	if err := gw.InsertPropertySamples(ctx, node, states); err != nil {
 		return fmt.Errorf("devseed: insert %s property samples: %w", iface, err)
 	}
-	if err := gw.InsertMetricSamples(ctx, []storage.MetricSampleWrite{
+	if err := gw.InsertMetricSamples(ctx, node, []storage.MetricSampleWrite{
 		{OwnerKind: "component", OwnerID: reachComponent, Key: "icmp-reachable", Instance: iface, Value: 1, Source: "icmp", TS: recovered},
 		{OwnerKind: "component", OwnerID: reachComponent, Key: "icmp-rtt-avg", Instance: iface, Value: rttMs, Source: "icmp", TS: recovered},
 		{OwnerKind: "component", OwnerID: reachComponent, Key: "tcp-open", Instance: iface, Value: 1, Source: "tcp", TS: recovered},
@@ -1178,7 +1182,7 @@ func seedEvents(ctx context.Context, gw storage.Gateway, componentID string) err
 			TS:         now.Add(-time.Duration(e.minsAgo) * time.Minute),
 		})
 	}
-	if err := gw.InsertEvents(ctx, evs); err != nil {
+	if err := gw.InsertEvents(ctx, storage.PushWriter(), evs); err != nil {
 		return fmt.Errorf("devseed: insert events: %w", err)
 	}
 	return nil
@@ -1187,6 +1191,10 @@ func seedEvents(ctx context.Context, gw storage.Gateway, componentID string) err
 // breadthEventComponents are the bars that carry a day of call activity
 // beside the boardroom's worked example: enough rooms that the Events tab
 // reads populated wherever an operator lands. Fixture keys.
+
+// breadthEndpoint is the endpoint name the breadth RTT series land under: a
+// native probe key is the node's account of one endpoint (ADR-0161).
+const breadthEndpoint = "icmp"
 
 // seedTelemetryBreadth writes the fleet-wide example telemetry (#796):
 // call events on several bars, log lines on several devices, RTT series on a
@@ -1232,7 +1240,7 @@ func seedTelemetryBreadth(ctx context.Context, gw storage.Gateway, actorID strin
 		}
 		events = append(events, storage.EventWrite{OwnerKind: "component", OwnerID: id, Key: "input-changed", Message: "HDMI 2 to HDMI 1", Source: "devseed-breadth", TS: now.Add(-time.Duration(5+i) * time.Hour)})
 	}
-	if err := gw.InsertEvents(ctx, events); err != nil {
+	if err := gw.InsertEvents(ctx, storage.PushWriter(), events); err != nil {
 		return fmt.Errorf("devseed: breadth events: %w", err)
 	}
 
@@ -1254,8 +1262,9 @@ func seedTelemetryBreadth(ctx context.Context, gw storage.Gateway, actorID strin
 		return fmt.Errorf("devseed: breadth logs: %w", err)
 	}
 
-	// RTT series on a few components, so leaves beyond the DSP chart.
-	var samples []storage.MetricSampleWrite
+	// RTT series on a few components, so leaves beyond the DSP chart. A native
+	// probe key, so written as a node would, under one endpoint name.
+	var rtts []storage.MetricSampleWrite
 	for i, key := range []string{"huddle-bar", "wl3-c1a", "briefing-bar"} {
 		id, ok := compIDs[key]
 		if !ok {
@@ -1263,9 +1272,13 @@ func seedTelemetryBreadth(ctx context.Context, gw storage.Gateway, actorID strin
 		}
 		for j := 0; j < 8; j++ {
 			ts := now.Add(-time.Duration(7-j) * 3 * time.Hour)
-			samples = append(samples, storage.MetricSampleWrite{OwnerKind: "component", OwnerID: id, Key: "icmp-rtt-avg", Value: 4.5 + float64(i) + 0.3*float64(j%3), Source: "devseed-breadth", TS: ts})
+			rtts = append(rtts, storage.MetricSampleWrite{OwnerKind: "component", OwnerID: id, Key: "icmp-rtt-avg", Instance: breadthEndpoint, Value: 4.5 + float64(i) + 0.3*float64(j%3), Source: "devseed-breadth", TS: ts})
 		}
 	}
+	if err := gw.InsertMetricSamples(ctx, storage.NodeWriter(breadthEndpoint), rtts); err != nil {
+		return fmt.Errorf("devseed: breadth rtt samples: %w", err)
+	}
+	var samples []storage.MetricSampleWrite
 	// Room series on every system whose standard declares the pair, varied by
 	// index; the huddle keeps its own worked pattern from seedStandardMetrics.
 	roomStds := map[string]bool{"mr55": true, "mr65": true, "mr75": true, "mr86": true, "mr98": true, "divisible-conference": true, "huddle-room": true, "classroom": true, "training-room": true, "auditorium": true}
@@ -1295,7 +1308,7 @@ func seedTelemetryBreadth(ctx context.Context, gw storage.Gateway, actorID strin
 			)
 		}
 	}
-	if err := gw.InsertMetricSamples(ctx, samples); err != nil {
+	if err := gw.InsertMetricSamples(ctx, storage.PushWriter(), samples); err != nil {
 		return fmt.Errorf("devseed: breadth samples: %w", err)
 	}
 

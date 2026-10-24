@@ -27,7 +27,7 @@ func newEvalRig(t *testing.T) *evalRig {
 
 func (r *evalRig) metric(key, instance string, v float64) {
 	r.t.Helper()
-	if err := r.gw.InsertMetricSamples(r.ctx, []storage.MetricSampleWrite{{OwnerKind: "component", OwnerID: r.comp, Key: key,
+	if err := r.gw.InsertMetricSamples(r.ctx, storage.PushWriter(), []storage.MetricSampleWrite{{OwnerKind: "component", OwnerID: r.comp, Key: key,
 		Instance: instance, Value: v, Source: "test", TS: time.Now()}}); err != nil {
 		r.t.Fatal(err)
 	}
@@ -35,7 +35,7 @@ func (r *evalRig) metric(key, instance string, v float64) {
 
 func (r *evalRig) property(key, v string) {
 	r.t.Helper()
-	if err := r.gw.InsertPropertySamples(r.ctx, []storage.PropertySampleWrite{{OwnerKind: "component", OwnerID: r.comp, Key: key,
+	if err := r.gw.InsertPropertySamples(r.ctx, storage.PushWriter(), []storage.PropertySampleWrite{{OwnerKind: "component", OwnerID: r.comp, Key: key,
 		Value: v, Source: "test", TS: time.Now()}}); err != nil {
 		r.t.Fatal(err)
 	}
@@ -244,16 +244,26 @@ func TestCalcChainAndNoSelfMark(t *testing.T) {
 
 	// A rule reading its own output can only exist outside the gateway (the
 	// cycle check refuses it); written straight into the table, it still
-	// never marks itself: one drain computes it once and leaves nothing.
+	// never marks itself: one drain computes it once and leaves nothing. Its
+	// output is its own (the calc writer class, ADR-0161), so no other writer
+	// lands a temp-sum sample to mark it: the sample and the mark it would
+	// leave are planted the same way.
 	if _, err := r.conn.Exec(r.ctx, `with c as (insert into calc_rule (name, owner_kind, reduce, output_lane, output_metric_type_id)
 			values ('self', 'component', '{"expr": "max(s) + 1"}', 'metric', (select id from metric_type where name = 'temp-sum')) returning id)
 		insert into calc_rule_input (rule_id, position, alias, lane, metric_type_id)
 		select c.id, 0, 's', 'metric', (select id from metric_type where name = 'temp-sum') from c`); err != nil {
 		t.Fatal(err)
 	}
-	r.metric("temp-sum", "", 1)
+	if _, err := r.conn.Exec(r.ctx, `insert into metric (ts, owner_kind, component_id, metric_type_id, instance, value, provenance, source)
+		values (now(), 'component', $1::uuid, (select id from metric_type where name = 'temp-sum'), '', 1, 'observed', 'test')`, r.comp); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := r.conn.Exec(r.ctx, `insert into calc_pending (rule_id, owner_kind, component_id)
+		values ((select id from calc_rule where name = 'self'), 'component', $1::uuid)`, r.comp); err != nil {
+		t.Fatal(err)
+	}
 	if n := r.pending(); n != 1 {
-		t.Fatalf("%d marks after a temp-sum sample, want self's one", n)
+		t.Fatalf("%d marks after self's planted mark, want its one", n)
 	}
 	if n := r.drain(); n != 1 || r.pending() != 0 {
 		t.Fatalf("drained %d, %d left: self's own write re-marked it", n, r.pending())
@@ -279,7 +289,7 @@ func TestCalcDrainReplicasAndRestart(t *testing.T) {
 			t.Fatal(err)
 		}
 		ids = append(ids, c.ID)
-		if err := r.gw.InsertMetricSamples(r.ctx, []storage.MetricSampleWrite{{OwnerKind: "component", OwnerID: c.ID,
+		if err := r.gw.InsertMetricSamples(r.ctx, storage.PushWriter(), []storage.MetricSampleWrite{{OwnerKind: "component", OwnerID: c.ID,
 			Key: "room-temperature", Value: float64(i), TS: time.Now()}}); err != nil {
 			t.Fatal(err)
 		}
@@ -361,7 +371,7 @@ func TestCalcIgnoresDeclaredInputs(t *testing.T) {
 	// aggregate instance, whose newest row is then the declaration.
 	mark := func() {
 		t.Helper()
-		if err := r.gw.InsertPropertySamples(r.ctx, []storage.PropertySampleWrite{{OwnerKind: "component", OwnerID: r.comp, Key: "in-call",
+		if err := r.gw.InsertPropertySamples(r.ctx, storage.PushWriter(), []storage.PropertySampleWrite{{OwnerKind: "component", OwnerID: r.comp, Key: "in-call",
 			Instance: "aux", Value: "false", Source: "test", TS: time.Now()}}); err != nil {
 			t.Fatal(err)
 		}
