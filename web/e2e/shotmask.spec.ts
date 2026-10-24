@@ -243,6 +243,34 @@ test.describe("docs screenshot masks", () => {
     );
   });
 
+  // The clean shot is taken between planning and the baseline, and a page can
+  // reflow in between (a late query, a poll). A selector mask re-resolves at the
+  // baseline; a declared box must too, or it lands where the value was and leaves
+  // the value's tail live.
+  test("a declared box is measured when the baseline is shot, not when it was planned", async ({ page }) => {
+    const entry = { selector: "[data-testid=blade-since]", width: 184 };
+    const moveValue = () => page.evaluate(() => ((document.querySelector(".badge") as HTMLElement).style.width = "120px"));
+
+    await page.setContent(bladeRow("since Oct 24, 01:57 AM · 17s"));
+    const stale = await planMasks(page, [entry]);
+    await moveValue();
+    const late = await shootBaseline(page, stale);
+
+    await page.setContent(bladeRow("since Oct 24, 01:57 AM · 17s"));
+    await moveValue();
+    const fresh = await shootBaseline(page, await planMasks(page, [entry]));
+    expect(late.equals(fresh)).toBe(true);
+  });
+
+  test("a value that outgrows its declared box after planning still fails by name", async ({ page }) => {
+    await page.setContent(bladeRow("since Oct 24, 01:57 AM · 17s"));
+    const value = await valueBox(page, "[data-testid=blade-since]");
+    const entry = { selector: "[data-testid=blade-since]", width: Math.ceil(value.width) + 2 };
+    const plan = await planMasks(page, [entry]);
+    await page.evaluate(() => (document.querySelector("[data-testid=blade-since]")!.textContent = "since Oct 24, 01:57 AM · 23h 59m"));
+    await expect(shootBaseline(page, plan)).rejects.toThrow(`wider than its declared ${entry.width}px box`);
+  });
+
   test("a mask that matches nothing fails the capture by name", async ({ page }) => {
     await page.setContent(bladeRow("since Oct 24, 01:57 AM · 17s"));
     await expect(planMasks(page, ["[data-testid=nowhere]"])).rejects.toThrow(

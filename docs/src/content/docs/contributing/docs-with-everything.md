@@ -169,10 +169,11 @@ text whose width can change paints a **box the text cannot move**, one of two wa
   ```
 
   The box is painted at the value's top-left, as tall as the value and `width` CSS pixels
-  wide, whatever the value reads; it suits a value whose position is fixed and which ends its
-  line. Size it from the widest value a capture can render, measured in the console's own face,
-  with some headroom, and say the measurement in the frontmatter comment. A value wider than
-  its box fails the capture by name rather than leaving its tail live.
+  wide, whatever the value reads; it suits a value whose left edge stays put (not right-aligned
+  or centered, which moves the left edge with the text) and which ends its line. Size it from
+  the widest value a capture can render, measured in the console's own face, with some
+  headroom, and say the measurement in the frontmatter comment. A value wider than its box
+  fails the capture by name rather than leaving its tail live.
 
 A mask over text of fixed width (a uuid in a monospace face) stays on the text, which is also
 the only correct answer when the enclosing cell holds something the shot exists to show.

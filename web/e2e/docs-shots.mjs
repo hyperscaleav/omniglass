@@ -150,7 +150,12 @@ for (const spec of specs) {
     animations: 'disabled',
     caret: 'hide',
   });
-  await shootBaseline(page, plan, { path: join(BASELINE, `${spec.id}.png`) });
+  try {
+    await shootBaseline(page, plan, { path: join(BASELINE, `${spec.id}.png`) });
+  } catch (e) {
+    console.error(`docs-shots: ${e.message} (on ${spec.id})`);
+    process.exit(1);
+  }
   await ctx.close();
   console.log('wrote', join(OUT, `${spec.id}.png`), `+ baseline (${spec.path})`);
 }

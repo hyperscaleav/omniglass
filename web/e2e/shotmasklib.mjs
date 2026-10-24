@@ -16,9 +16,12 @@
 // rewrites the baseline. A selector mask over such a value names a container the
 // layout pins (a table cell, `>> xpath=ancestor::td[1]`). Where the only pinned
 // container also holds what the shot is there to show (a since-line beside the
-// verdict it qualifies), the box is declared instead: the value's position is
-// deterministic, its width is not, so the frontmatter fixes the width. A value
-// wider than its declared box would leave its tail live, so planning refuses it by
+// verdict it qualifies), the box is declared instead: the value's left edge is
+// deterministic, its width is not, so the frontmatter fixes the width. That holds
+// only for a value whose LEFT edge stays put as its width changes (it starts its
+// own run of the line and ends it): a right-aligned or centered value moves its
+// left edge with its text, and a declared box over it moves too. A value wider
+// than its declared box would leave its tail live, so the capture refuses it by
 // name rather than writing a baseline that moves.
 
 // A DELIBERATE redaction panel over the baseline, the console's own neutral
@@ -43,32 +46,36 @@ export function normalizeMask(entry) {
   );
 }
 
+// The viewport rect of every element a mask's selector matches, measured now.
+// Throws, naming the selector, when it matches nothing (the mask would hide
+// nothing, and the region it was written for would render live and fail the gate
+// somewhere else) or when a value renders wider than its declared box.
+async function measure(mask, locator) {
+  const rects = await locator.evaluateAll((els) =>
+    els.map((el) => {
+      const r = el.getBoundingClientRect();
+      return { tag: el.tagName.toLowerCase(), x: r.left, y: r.top, width: r.width, height: r.height };
+    }),
+  );
+  if (rects.length === 0) throw new Error(`mask matched no element: ${mask.selector}`);
+  if (mask.width !== undefined) {
+    const widest = Math.max(...rects.map((r) => r.width));
+    if (widest > mask.width) {
+      throw new Error(`${mask.selector} renders ${Math.ceil(widest)}px wide, wider than its declared ${mask.width}px box`);
+    }
+  }
+  return rects;
+}
+
 // Resolve every entry against the settled page: the locator a selector mask
-// paints through, and the rect of each element it matches. Throws, naming the
-// selector, when an entry matches nothing (it would hide nothing, and the region
-// it was written for would render live and fail the gate somewhere else) or when
-// a value renders wider than its declared box.
+// paints through, and the rects of the elements it matches (for the log, and for
+// a test to inspect; the baseline measures again when it is shot).
 export async function planMasks(page, entries) {
   const plan = [];
   for (const entry of entries) {
     const mask = normalizeMask(entry);
     const locator = page.locator(mask.selector);
-    const rects = await locator.evaluateAll((els) =>
-      els.map((el) => {
-        const r = el.getBoundingClientRect();
-        return { tag: el.tagName.toLowerCase(), x: r.left, y: r.top, width: r.width, height: r.height };
-      }),
-    );
-    if (rects.length === 0) throw new Error(`mask matched no element: ${mask.selector}`);
-    if (mask.width !== undefined) {
-      const widest = Math.max(...rects.map((r) => r.width));
-      if (widest > mask.width) {
-        throw new Error(
-          `${mask.selector} renders ${Math.ceil(widest)}px wide, wider than its declared ${mask.width}px box`,
-        );
-      }
-    }
-    plan.push({ ...mask, locator, rects });
+    plan.push({ ...mask, locator, rects: await measure(mask, locator) });
   }
   return plan;
 }
@@ -102,12 +109,19 @@ export function describeMask(m) {
   );
 }
 
-// The masked BASELINE render of the settled page: each declared box is laid over
-// its value as a fixed element (no layout moves), every mask is painted through
-// Playwright's own mask in MASK_COLOR, and the declared boxes are removed again so
-// a later render of the same page (or a test reusing it) sees the page untouched.
+// The masked BASELINE render of the settled page: each declared box is measured
+// again and laid over its value as a fixed element (no layout moves), every mask
+// is painted through Playwright's own mask in MASK_COLOR, and the declared boxes
+// are removed again so a later render of the same page (or a test reusing it)
+// sees the page untouched. Measuring again matters because the clean shot is
+// taken between planning and this render, and a page can reflow in between: a
+// selector mask re-resolves through its locator at the screenshot, and a declared
+// box planted where the value used to be would leave the value's tail live.
 export async function shootBaseline(page, plan, { path } = {}) {
-  const boxes = plan.filter((m) => m.width !== undefined);
+  const boxes = [];
+  for (const m of plan.filter((m) => m.width !== undefined)) {
+    boxes.push({ ...m, rects: await measure(m, m.locator) });
+  }
   await page.evaluate(
     ({ attr, color, boxes }) => {
       for (const b of boxes) {

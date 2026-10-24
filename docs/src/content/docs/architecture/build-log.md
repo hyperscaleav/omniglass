@@ -7862,10 +7862,14 @@ other mask resolving to the same box, and changes no pixel after it (`DOCS_SHOTS
 review catalog gains `text-sized-mask`, and `unmasked-capture-relative-region` now points at a
 mask that holds.
 
-The review's fixes, the first two each with a test that failed first: the first cut masked the
+The review's fixes, the first three each with a test that failed first: the first cut masked the
 since lines' whole rows, which held still but hid the verdict badge from the last two baselines
 that still gated it (the declared box replaces it, and the browser test now fails a mask that
 covers what its shot shows); the documented way to prove a mask holds ran the gate's perceptual
 comparison, which cannot see this bug (the exact comparison, pinned by a unit test that the
-default scores a one-pixel mask move zero and the exact mode does not); and the browser test now
-finds the docs from its own location, so it also runs from the repo root.
+default scores a one-pixel mask move zero and the exact mode does not); a declared box is measured
+again when the baseline is shot, since the clean shot comes between planning and painting and a
+reflow in between would plant the box where the value used to be (and a value that outgrew its
+box meanwhile still fails by name); and the browser test now finds the docs from its own
+location, so it also runs from the repo root. A declared box suits only a value whose left edge
+stays put, which the docs and the catalog now say.
