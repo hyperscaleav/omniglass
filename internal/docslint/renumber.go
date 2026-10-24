@@ -1,11 +1,13 @@
 package docslint
 
-// RenumberADR is the one-command fix for two PRs that took the same next ADR
-// number (#1095). The decisions lint names both files, and the branch that
-// lands second moves its decision with `make adr-renumber FROM=NNNN TO=MMMM`,
-// which renames the decision file and rewrites every reference to the number
-// across the repository: the ADR-NNNN mentions in docs, code comments, and
-// skills, and the #adr-NNNN-<slug> anchors and adr-NNNN-<slug>.md file names.
+// RenumberADR moves a decision to another number (#1095, #1108). A decision
+// takes its issue's number, so two PRs clash only when both add one issue's next
+// suffix (both take ADR-NNNN.2); the decisions lint names both files, and the
+// branch that lands second moves its decision with
+// `make adr-renumber FROM=NNNN.2 TO=NNNN.3`, which renames the decision file and
+// rewrites every reference to the number across the repository: the ADR-NNNN.2
+// mentions in docs, code comments, and skills, the adr-NNNN.2-<slug>.md file
+// names, and the #adr-NNNN2-<slug> anchors.
 //
 // Before main is merged in, the number means only the branch's decision and
 // every reference is rewritten. Once both decisions are in the tree (after the
@@ -58,15 +60,42 @@ func isText(b []byte) bool {
 	return bytes.IndexByte(head, 0) == -1 && utf8.Valid(b)
 }
 
-// RenumberADR moves decision `from` to number `to` under the repository root,
-// returning the repo-relative paths it changed, sorted.
-func RenumberADR(root string, from, to int, opt RenumberOptions) ([]string, error) {
-	if from < 1 || from > 9999 || to < 1 || to > 9999 || from == to {
-		return nil, fmt.Errorf("FROM and TO are two different numbers from 1 to 9999")
+var adrNumberArg = regexp.MustCompile(`^(\d{1,9})(?:\.([2-9]|[1-9]\d+))?$`)
+
+// parseADRNumber reads a FROM or TO argument (160, 0160, 1108, 1108.2) into the
+// form a heading writes it in: zero-padded to four digits, a suffix from .2.
+func parseADRNumber(arg string) (string, error) {
+	m := adrNumberArg.FindStringSubmatch(arg)
+	if m == nil || atoi(m[1]) == 0 {
+		return "", fmt.Errorf("%q is not an ADR number: write it like 0160, 1108, or 1108.2 (a suffix from .2)", arg)
+	}
+	suffix := 1
+	if m[2] != "" {
+		suffix = atoi(m[2])
+	}
+	return adrKey(atoi(m[1]), suffix), nil
+}
+
+// RenumberADR moves decision `fromArg` to number `toArg` under the repository
+// root, returning the repo-relative paths it changed, sorted. A number is
+// written as a heading writes it (0160, 1108, 1108.2); a suffixed number's
+// anchor drops the dot (#adr-NNNN2-<slug>), so mentions and file names take the
+// dot form and anchors the dotless one.
+func RenumberADR(root, fromArg, toArg string, opt RenumberOptions) ([]string, error) {
+	from, err := parseADRNumber(fromArg)
+	if err != nil {
+		return nil, err
+	}
+	to, err := parseADRNumber(toArg)
+	if err != nil {
+		return nil, err
+	}
+	if from == to {
+		return nil, fmt.Errorf("FROM and TO are the same number")
 	}
 	dir := filepath.Join(root, "docs", "src", "content", "decisions")
-	holders := func(n int) ([]string, error) {
-		matches, err := filepath.Glob(filepath.Join(dir, fmt.Sprintf("adr-%04d-*.md", n)))
+	holders := func(n string) ([]string, error) {
+		matches, err := filepath.Glob(filepath.Join(dir, "adr-"+n+"-*.md"))
 		if err != nil {
 			return nil, err
 		}
@@ -81,7 +110,7 @@ func RenumberADR(root string, from, to int, opt RenumberOptions) ([]string, erro
 		return nil, err
 	}
 	if len(src) == 0 {
-		return nil, fmt.Errorf("no decision file holds ADR-%04d under %s", from, dir)
+		return nil, fmt.Errorf("no decision file holds ADR-%s under %s", from, dir)
 	}
 	oldName := ""
 	switch {
@@ -92,18 +121,18 @@ func RenumberADR(root string, from, to int, opt RenumberOptions) ([]string, erro
 			}
 		}
 		if oldName == "" {
-			return nil, fmt.Errorf("%s does not hold ADR-%04d (held by %s)", opt.File, from, strings.Join(src, ", "))
+			return nil, fmt.Errorf("%s does not hold ADR-%s (held by %s)", opt.File, from, strings.Join(src, ", "))
 		}
 	case len(src) == 1:
 		oldName = src[0]
 	default:
-		return nil, fmt.Errorf("ADR-%04d is held by %s: name the one to move with FILE=<its file name>, "+
+		return nil, fmt.Errorf("ADR-%s is held by %s: name the one to move with FILE=<its file name>, "+
 			"and only the lines your commits wrote are rewritten", from, strings.Join(src, " and "))
 	}
 	if taken, err := holders(to); err != nil {
 		return nil, err
 	} else if len(taken) > 0 {
-		return nil, fmt.Errorf("ADR-%04d is taken by %s", to, strings.Join(taken, ", "))
+		return nil, fmt.Errorf("ADR-%s is taken by %s", to, strings.Join(taken, ", "))
 	}
 
 	// Scoped mode: the commits whose lines are this decision's references.
@@ -127,16 +156,12 @@ func RenumberADR(root string, from, to int, opt RenumberOptions) ([]string, erro
 		}
 	}
 
-	newName := fmt.Sprintf("adr-%04d-%s", to, strings.TrimPrefix(oldName, fmt.Sprintf("adr-%04d-", from)))
+	newName := "adr-" + to + "-" + strings.TrimPrefix(oldName, "adr-"+from+"-")
 	if err := os.Rename(filepath.Join(dir, oldName), filepath.Join(dir, newName)); err != nil {
 		return nil, err
 	}
 
-	// ADR-NNNN and adr-NNNN-<slug> (an anchor or a file name): the prefix keeps
-	// its case, and the word boundaries keep a five-digit run or a shorter
-	// number out.
-	ref := regexp.MustCompile(fmt.Sprintf(`(?i)\b(adr-)%04d\b`, from))
-	repl := []byte(fmt.Sprintf("${1}%04d", to))
+	rewrite := adrRewriter(from, to)
 	movedPath := filepath.Join(dir, newName)
 	var changed []string
 	err = filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
@@ -153,16 +178,16 @@ func RenumberADR(root string, from, to int, opt RenumberOptions) ([]string, erro
 		if err != nil {
 			return err
 		}
-		if !isText(b) || (!ref.Match(b) && path != movedPath) {
+		out := rewrite(b)
+		if !isText(b) || (bytes.Equal(out, b) && path != movedPath) {
 			return nil
 		}
 		rel, err := filepath.Rel(root, path)
 		if err != nil {
 			return err
 		}
-		out := ref.ReplaceAll(b, repl)
 		if mine != nil && path != movedPath {
-			if out, err = rewriteBlamed(root, rel, b, ref, repl, mine); err != nil {
+			if out, err = rewriteBlamed(root, rel, b, rewrite, mine); err != nil {
 				return err
 			}
 		}
@@ -188,11 +213,11 @@ func RenumberADR(root string, from, to int, opt RenumberOptions) ([]string, erro
 // rewriteBlamed rewrites the references on the lines of rel that git blame
 // attributes to one of the `mine` commits. A file git does not track yet is
 // wholly the branch's, so every reference in it is rewritten.
-func rewriteBlamed(root, rel string, b []byte, ref *regexp.Regexp, repl []byte, mine map[string]bool) ([]byte, error) {
+func rewriteBlamed(root, rel string, b []byte, rewrite func([]byte) []byte, mine map[string]bool) ([]byte, error) {
 	out, err := exec.Command("git", "-C", root, "blame", "--line-porcelain", "--", rel).Output()
 	if err != nil {
 		if exec.Command("git", "-C", root, "ls-files", "--error-unmatch", "--", rel).Run() != nil {
-			return ref.ReplaceAll(b, repl), nil
+			return rewrite(b), nil
 		}
 		return nil, fmt.Errorf("git blame %s: %v", rel, err)
 	}
@@ -208,8 +233,41 @@ func rewriteBlamed(root, rel string, b []byte, ref *regexp.Regexp, repl []byte, 
 	lines := bytes.SplitAfter(b, []byte("\n"))
 	for i, line := range lines {
 		if mine[owner[i+1]] {
-			lines[i] = ref.ReplaceAll(line, repl)
+			lines[i] = rewrite(line)
 		}
 	}
 	return bytes.Join(lines, nil), nil
+}
+
+// adrRewriter rewrites one decision's references from number `from` to `to`
+// (both as headings write them). Two forms:
+//
+//   - an anchor, #adr-<number without its dot>-, which is what a heading's slug
+//     makes of ADR-NNNN.2 (#adr-NNNN2-<slug>);
+//   - a mention or a file name, ADR-<number> or adr-<number>-<slug>.md, its
+//     prefix keeping its case. The word boundaries keep a longer number out,
+//     and a plain number followed by a suffix (ADR-NNNN in ADR-NNNN.2) is
+//     another decision, left alone.
+func adrRewriter(from, to string) func([]byte) []byte {
+	anchor := regexp.MustCompile(`#adr-` + strings.ReplaceAll(from, ".", "") + `-`)
+	anchorTo := []byte("#adr-" + strings.ReplaceAll(to, ".", "") + "-")
+	mention := regexp.MustCompile(`(?i)\b(adr-)` + regexp.QuoteMeta(from) + `\b`)
+	suffixAfter := regexp.MustCompile(`^\.\d`)
+	return func(b []byte) []byte {
+		b = anchor.ReplaceAll(b, anchorTo)
+		var out []byte
+		last := 0
+		for _, m := range mention.FindAllSubmatchIndex(b, -1) {
+			if suffixAfter.Match(b[m[1]:]) || (m[0] > 0 && b[m[0]-1] == '#') {
+				continue
+			}
+			out = append(out, b[last:m[3]]...)
+			out = append(out, to...)
+			last = m[1]
+		}
+		if out == nil {
+			return b
+		}
+		return append(out, b[last:]...)
+	}
 }
