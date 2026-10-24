@@ -198,3 +198,26 @@ func isNumericOID(oid string) bool {
 	}
 	return true
 }
+
+// SNMPCommunityInput is the secret input an snmp driver's community rides:
+// every v2c request carries it, and the engine reads it by this name, the
+// poll and the reachability rung alike (#821).
+const SNMPCommunityInput = "community"
+
+// validateSNMPCommunity refuses an snmp driver that declares no secret input
+// named community of the snmp-community type: its rung could never be formed.
+func (s *Spec) validateSNMPCommunity() error {
+	if s.Transport != "snmp" {
+		return nil
+	}
+	for _, in := range s.Inputs {
+		if in.Name != SNMPCommunityInput {
+			continue
+		}
+		if in.Kind != "secret" || in.SecretType != "snmp-community" {
+			return fmt.Errorf("driver: an snmp driver's %s input is a secret of type snmp-community", SNMPCommunityInput)
+		}
+		return nil
+	}
+	return fmt.Errorf("driver: an snmp driver declares its community, a secret input named %s of type snmp-community: every v2c request, the reachability get included, carries it", SNMPCommunityInput)
+}

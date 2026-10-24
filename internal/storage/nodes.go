@@ -704,8 +704,8 @@ func nodeLocationID(ctx context.Context, q querier, ref *string, locationRead sc
 // community (the engine's credential contract the poll reads too, #821).
 func rungSecretRefs(refs map[string]string) map[string]string {
 	out := map[string]string{}
-	if ref, ok := refs["community"]; ok {
-		out["community"] = ref
+	if ref, ok := refs[driver.SNMPCommunityInput]; ok {
+		out[driver.SNMPCommunityInput] = ref
 	}
 	return out
 }

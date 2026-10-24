@@ -569,6 +569,9 @@ func (s *Spec) Validate(cat Catalog) error {
 			}
 		}
 	}
+	if err := s.validateSNMPCommunity(); err != nil {
+		return err
+	}
 	return nil
 }
 
