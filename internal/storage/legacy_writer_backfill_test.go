@@ -37,10 +37,17 @@ func legacyBackfillSQL(t *testing.T) (up, down string) {
 	return strings.TrimPrefix(up, "-- migrate:up"), down
 }
 
+// bornUnderTheRuling are the reserved keys declared after the legacy
+// backfill shipped. A key born under the ruling has no row from before it,
+// so the frozen migration need not name it: a slice that declares a new
+// reserved key adds it here.
+var bornUnderTheRuling = map[string]bool{}
+
 // TestLegacyBackfillNamesTheRuling: the key lists the backfill holds rows to
 // are the code's ruling as of the migration, so a typo cannot leave a class
 // of legacy rows untouched: every node-probe key and every pinnable key the
-// code declares today is listed, and nothing else.
+// code declares is listed (or born after the migration, bornUnderTheRuling),
+// and nothing the code does not declare.
 func TestLegacyBackfillNamesTheRuling(t *testing.T) {
 	up, _ := legacyBackfillSQL(t)
 	list := func(name string) []string {
@@ -56,18 +63,27 @@ func TestLegacyBackfillNamesTheRuling(t *testing.T) {
 		slices.Sort(out)
 		return out
 	}
-	if got, want := list("node_probe"), probekeys.NodeOnly(); !slices.Equal(got, want) {
-		t.Errorf("the backfill's node-probe keys %v, the ruling's %v", got, want)
+	held := func(name string, got, want []string) {
+		t.Helper()
+		for _, k := range got {
+			if !slices.Contains(want, k) {
+				t.Errorf("the backfill's %s list names %s, which the ruling does not declare", name, k)
+			}
+		}
+		for _, k := range want {
+			if !slices.Contains(got, k) && !bornUnderTheRuling[k] {
+				t.Errorf("the ruling declares %s, which the backfill's %s list misses: a key declared after it goes in bornUnderTheRuling", k, name)
+			}
+		}
 	}
+	held("node_probe", list("node_probe"), probekeys.NodeOnly())
 	var pins []string
 	for _, k := range writerclass.ReservedNames() {
 		if writerclass.Pinnable(k) {
 			pins = append(pins, k)
 		}
 	}
-	if got := list("pinnable"); !slices.Equal(got, pins) {
-		t.Errorf("the backfill's pinnable keys %v, the ruling's %v", got, pins)
-	}
+	held("pinnable", list("pinnable"), pins)
 	for _, k := range []string{writerclass.Health, writerclass.CommandIssued} {
 		if !strings.Contains(up, "'"+k+"'") {
 			t.Errorf("the backfill does not hold %s rows to their writer", k)

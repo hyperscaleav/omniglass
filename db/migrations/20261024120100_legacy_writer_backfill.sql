@@ -35,7 +35,7 @@ DECLARE
         'endpoint-responsive', 'http-response-time', 'icmp-reachable', 'icmp-rtt-avg', 'session-reason',
         'session-state', 'ssh-handshake-time', 'ssh-host-key', 'tcp-connect-time', 'tcp-open',
         'telnet-response-time', 'tls-certificate', 'tls-certificate-days-left', 'tls-certificate-expiry',
-        'tls-handshake-time'];
+        'tls-handshake-time', 'udp-response-time'];
 BEGIN
     -- 1. Pins: stamp the :retry ones, then retire the rest and their echoes.
     UPDATE public.property p SET source = 'key-pin'
