@@ -23,7 +23,9 @@ export type FlatColumn<T> = {
   headClass?: string;
 };
 
-export type FlatDetail = { title: JSX.Element; body: JSX.Element };
+// wide asks for the Drawer's wide panel, for a body that reads more than a
+// form (the audit trail's before/after change, #1088).
+export type FlatDetail = { title: JSX.Element; body: JSX.Element; wide?: boolean };
 
 export type FlatConfig<T> = {
   // entity.name is the singular display noun (the create Drawer title reads
@@ -233,7 +235,7 @@ export default function FlatList<T>(props: { config: FlatConfig<T> }) {
         {(_) => {
           const d = cfg.detail!(selected()!);
           return (
-            <Drawer open={true} onClose={() => setSelected(null)} title={d.title}>
+            <Drawer open={true} onClose={() => setSelected(null)} title={d.title} wide={d.wide}>
               {d.body}
             </Drawer>
           );
