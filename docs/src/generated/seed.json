@@ -527,6 +527,12 @@
    "built": true
   },
   {
+   "name": "tls",
+   "description": "TLS: the line protocol over a TLS connection, held exactly as it is over tcp; the probe runs the handshake (responds) and reports the certificate's expiry, verified against the node's roots, pinned to the public key on first use, or (by the operator's explicit choice) not verified.",
+   "held": true,
+   "built": true
+  },
+  {
    "name": "udp",
    "description": "UDP datagram transport; probing arrives with its driver.",
    "held": false,

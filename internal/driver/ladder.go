@@ -56,6 +56,7 @@ const (
 // rungsOf is what each transport's rung can be.
 var rungsOf = map[string][]string{
 	"tcp":    {RungConnect, RungRequest},
+	"tls":    {RungHandshake, RungConnect},
 	"telnet": {RungConnect},
 	"ssh":    {RungHandshake, RungConnect},
 	"http":   {RungConnect, RungRequest},

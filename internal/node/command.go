@@ -92,8 +92,8 @@ func executeDelivery(ctx context.Context, runner *collection.Runner, d collectio
 		// refusal on every path, never a dial under the refused fingerprint.
 		return "", "node: the endpoint is gated: " + gt.refusal().Error()
 	}
-	switch d.Transport {
-	case "tcp", "telnet", "ssh":
+	switch {
+	case collection.IsLineTransport(d.Transport):
 		if held := sessions.lookup(d.EndpointID); held != nil {
 			reply, err := held.Exchange(ctx, d.Line, d.Reply, 0)
 			var refused *collection.RefusedError

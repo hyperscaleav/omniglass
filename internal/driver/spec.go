@@ -450,6 +450,9 @@ func (s *Spec) Validate(cat Catalog) error {
 			return err
 		}
 	}
+	if err := s.validateTLSInputs(); err != nil {
+		return err
+	}
 	if err := s.validateSession(); err != nil {
 		return err
 	}
@@ -579,7 +582,7 @@ func checkPollShape(tr string, p Poll) error {
 				return fmt.Errorf("driver: snmp poll %q emit %q must locate by oid", p.Name, em.Name)
 			}
 		}
-	case "tcp", "telnet", "ssh":
+	case "tcp", "tls", "telnet", "ssh":
 		if !isLineTransport(tr) {
 			return fmt.Errorf("driver: poll %q rides transport %q, which has no poll fetcher yet", p.Name, tr)
 		}

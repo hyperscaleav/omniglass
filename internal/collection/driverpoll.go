@@ -62,8 +62,8 @@ func (r *Runner) CollectDriverPoll(ctx context.Context, t DriverPollTask) ([]Sam
 	}
 
 	var payload driver.Payload
-	switch t.Transport {
-	case "snmp":
+	switch {
+	case t.Transport == "snmp":
 		community, ok := t.snmpCommunity()
 		if !ok {
 			return nil, []error{fmt.Errorf("collection: driver poll %s/%s: no community credential was delivered for the snmp fetch", t.Fn.Driver, t.Fn.Function)}
@@ -76,7 +76,7 @@ func (r *Runner) CollectDriverPoll(ctx context.Context, t DriverPollTask) ([]Sam
 			return nil, []error{fmt.Errorf("collection: driver poll %s/%s: %w", t.Fn.Driver, t.Fn.Function, err)}
 		}
 		payload.Values = values
-	case "tcp", "telnet", "ssh":
+	case IsLineTransport(t.Transport):
 		if t.Session != nil {
 			answer, err := t.Session.Exchange(ctx, t.Fn.Request.Line, t.Fn.Request.Reply, t.Timeout)
 			if err != nil {
