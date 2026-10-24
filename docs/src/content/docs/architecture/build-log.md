@@ -8002,7 +8002,9 @@ declaration points refuse first with the same ruling: a command type's target, a
 (and the node's interpreter, for a task derived before), a calc rule's output, an event rule's event
 types, and an operator-created type under a reserved name on any lane. On the node lane a node-probe
 key lands only under the endpoint whose task the node ran; a driver's own keys keep their instance.
-The reachability, session and transition-guard reads serve a key's observed series only. The type
+The reachability, session and transition-guard reads serve a key's observed series only, the health
+reads the rollup's rows only, and a node-probe sample dated more than five minutes past the database's
+clock is stored at the database's now. The type
 reads carry `writer_class`, and the properties page renders the ruling from the code
 (`cmd/writerclassgen`, `docs/src/generated/writerclass.json`). Proven test-first: a source guard reads
 every sample and event insert in the gateway and fails on a function that is not a registered write

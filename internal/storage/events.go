@@ -88,6 +88,7 @@ func (p *PG) InsertEvents(ctx context.Context, w KeyWriter, evs []EventWrite) er
 		return err
 	}
 
+	clock := sampleClock{q: tx}
 	for _, ev := range evs {
 		col, err := ownerColumn(ev.OwnerKind)
 		if err != nil {
@@ -96,6 +97,9 @@ func (p *PG) InsertEvents(ctx context.Context, w KeyWriter, evs []EventWrite) er
 		ts := ev.TS
 		if ts.IsZero() {
 			ts = time.Now().UTC()
+		}
+		if ts, err = clock.cap(ctx, ev.Key, ts); err != nil {
+			return err
 		}
 		// attributes is jsonb: pass the raw JSON as text (nil stays SQL NULL) so
 		// pgx does not encode a []byte as bytea.

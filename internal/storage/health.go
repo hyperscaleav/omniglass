@@ -463,6 +463,7 @@ func recordHealth(ctx context.Context, q txQuerier, ownerKind, ownerID string, v
 		where $4::text is distinct from (
 			select value #>> '{}' from property
 			where %[1]s = %[3]s and property_type_id = (select id from property_type where name = $3::text) and instance = ''
+			  and provenance = 'calculated'
 			order by id desc
 			limit 1)`, col, col, owner)
 	if _, err := q.Exec(ctx, sql, ownerKind, ownerID, healthKey, v.String(), healthRule); err != nil {
@@ -651,6 +652,7 @@ func (p *PG) locationVerdict(ctx context.Context, q txQuerier, locationID string
 		select distinct on (sd.system_id) sd.value #>> '{}'
 		from property sd
 		where sd.property_type_id = (select id from property_type where name = $2)
+		  and sd.provenance = 'calculated'
 		  and sd.system_id in (select id from system where location_id in (select id from subtree))
 		order by sd.system_id, sd.id desc`, locationID, healthKey)
 	if err != nil {
@@ -724,6 +726,7 @@ func (p *PG) SystemVerdicts(ctx context.Context, read scope.Set) ([]SystemVerdic
 			select distinct on (v.system_id) v.system_id, v.value #>> '{}' as verdict
 			from property v
 			where v.property_type_id = (select id from property_type where name = `+key+`)
+			  and v.provenance = 'calculated'
 			  and v.system_id in (select id from sys)
 			order by v.system_id, v.id desc
 		)
@@ -1105,6 +1108,7 @@ func (p *PG) subtreeSystemHealth(ctx context.Context, q txQuerier, locationID st
 		select s.name, coalesce((
 			select sd.value #>> '{}' from property sd
 			where sd.system_id = s.id and sd.property_type_id = (select id from property_type where name = $2) and sd.instance = ''
+			  and sd.provenance = 'calculated'
 			order by sd.id desc
 			limit 1
 		), 'healthy')
@@ -1139,7 +1143,8 @@ func healthTransitions(ctx context.Context, q txQuerier, ownerKind, ownerID stri
 	}
 	bound, args := tsSince("ts", window, ownerID, healthKey)
 	sql := fmt.Sprintf(`select ts, value #>> '{}' from property
-		where %s = %s and property_type_id = (select id from property_type where name = $2) and instance = '' and %s
+		where %s = %s and property_type_id = (select id from property_type where name = $2) and instance = ''
+		  and provenance = 'calculated' and %s
 		order by ts asc, id asc`, col, ownerArcExprN(ownerKind, 1), bound)
 	rows, err := q.Query(ctx, sql, args...)
 	if err != nil {

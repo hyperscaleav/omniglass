@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 
@@ -227,12 +228,45 @@ func admitWrite(kw keyWriterOf, w KeyWriter, r keyedWrite) error {
 
 // reservedName refuses an operator-created type taking a reserved key's name,
 // on any lane (ADR-0161): the reserved family's names are declared in code and
-// belong to it whether or not its type is seeded yet, so a name a release later
-// ships as a reserved key is never an operator's first. The seed's
-// authoritative upsert is the only writer of a reserved type.
+// belong to it whether or not its type is seeded yet. The seed's authoritative
+// upsert is the only writer of a reserved type (and takes over an operator's
+// type a later release ships a reserved key under, ADR-0161 point 6).
 func reservedName(name string) error {
 	if c, ok := writerclass.Reserved(name); ok {
 		return fmt.Errorf("%q is a reserved name (writer class %s), closed to an operator-created type on every lane", name, c)
 	}
 	return nil
+}
+
+// nodeClockSkew is how far ahead of the database's clock a node-probe sample
+// may be dated and keep its own time. A node's clock drifts, so a little is the
+// node's to keep; but a node-probe key's latest row is the node's current
+// account of an endpoint (and the gate and pin control reads take it), so a
+// sample dated further ahead would hold that account current after the node
+// stopped holding the endpoint (ADR-0161).
+const nodeClockSkew = 5 * time.Minute
+
+// sampleClock caps a node-probe sample's time at the database's now when it is
+// dated further ahead than nodeClockSkew, reading the clock once, on first
+// need. Any other key keeps the time its producer sent.
+type sampleClock struct {
+	q   querier
+	now time.Time
+}
+
+func (c *sampleClock) cap(ctx context.Context, key string, ts time.Time) (time.Time, error) {
+	if class, ok := writerclass.Reserved(key); !ok || class != writerclass.NodeProbe {
+		return ts, nil
+	}
+	if c.now.IsZero() {
+		now, err := dbNow(ctx, c.q)
+		if err != nil {
+			return ts, err
+		}
+		c.now = now
+	}
+	if ts.After(c.now.Add(nodeClockSkew)) {
+		return c.now, nil
+	}
+	return ts, nil
 }

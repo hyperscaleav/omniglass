@@ -15,10 +15,42 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/writerclass"
 )
 
-// sampleWriteSQL matches SQL that writes a row of a sample table (metric,
-// property) or of event: an insert into one, or an update of one. It reads the
-// table name whole, so metric_type, property_type and event_rule never match.
-var sampleWriteSQL = regexp.MustCompile(`(?is)\b(insert\s+into|update)\s+(metric|property|event)\b\s*(\(|set\b|select\b)`)
+// sampleTable is a sample table (metric, property) or event, as SQL may name
+// it: optionally schema-qualified, optionally quoted, read whole so
+// metric_type, property_type and event_rule never match.
+const sampleTable = `(?:"?public"?\s*\.\s*)?"?(?:metric|property|event)"?`
+
+// sampleWriteSQL matches SQL that writes a sample or event row, whatever
+// follows the table: an insert (a column list, values, a select, an alias), an
+// update (with or without an alias, then set), a merge, or a copy.
+var sampleWriteSQL = []*regexp.Regexp{
+	regexp.MustCompile(`(?is)\binsert\s+into\s+` + sampleTable + `(?:[^\w"]|$)`),
+	regexp.MustCompile(`(?is)\bupdate\s+(?:only\s+)?` + sampleTable + `(?:\s+(?:as\s+)?\w+)?\s+set\b`),
+	regexp.MustCompile(`(?is)\bmerge\s+into\s+` + sampleTable + `(?:[^\w"]|$)`),
+	regexp.MustCompile(`(?is)\bcopy\s+` + sampleTable + `(?:[^\w"]|$)`),
+}
+
+// dynamicTableSQL matches a write whose table is spliced in rather than
+// written (a literal ending at the verb, or a Sprintf verb as the table), which
+// no pattern can read; such a function is ruled in dynamicTableWriters.
+var dynamicTableSQL = regexp.MustCompile(`(?is)\b(insert\s+into|update|merge\s+into|copy)\s+(%(\[\d+\])?s\b|$)`)
+
+func writesSample(sql string) bool {
+	for _, re := range sampleWriteSQL {
+		if re.MatchString(sql) {
+			return true
+		}
+	}
+	return false
+}
+
+// dynamicTableWriters are the functions whose SQL splices its table in, each
+// with the tables it reaches: none is a sample table, and a new one must say
+// which it reaches (or be a registered write path) before this guard passes.
+var dynamicTableWriters = map[string]string{
+	"writeLabelChanges": "the label column of location, system and component (a scopeTable)",
+	"stamp":             "a liveness stamp table (endpoint_live), never a sample table",
+}
 
 // sampleWriters reads this package's non-test source and returns every
 // function whose body carries SQL writing a sample or event row, with whether
@@ -40,6 +72,19 @@ func sampleWriters(t *testing.T) map[string]bool {
 			t.Fatalf("parse %s: %v", name, err)
 		}
 		for _, decl := range f.Decls {
+			if gen, ok := decl.(*ast.GenDecl); ok {
+				// SQL held at package level is read by no write path's body,
+				// so the registry cannot see who runs it: keep it in one.
+				ast.Inspect(gen, func(n ast.Node) bool {
+					if lit, ok := n.(*ast.BasicLit); ok && lit.Kind == token.STRING {
+						if sql, err := strconv.Unquote(lit.Value); err == nil && writesSample(sql) {
+							t.Errorf("%s declares sample-writing SQL at package level: write it in a registered write path's body", name)
+						}
+					}
+					return true
+				})
+				continue
+			}
 			fn, ok := decl.(*ast.FuncDecl)
 			if !ok || fn.Body == nil {
 				continue
@@ -49,8 +94,15 @@ func sampleWriters(t *testing.T) map[string]bool {
 				switch x := n.(type) {
 				case *ast.BasicLit:
 					if x.Kind == token.STRING {
-						if sql, err := strconv.Unquote(x.Value); err == nil && sampleWriteSQL.MatchString(sql) {
-							writes = true
+						if sql, err := strconv.Unquote(x.Value); err == nil {
+							if writesSample(sql) {
+								writes = true
+							}
+							if dynamicTableSQL.MatchString(sql) {
+								if _, ruled := dynamicTableWriters[fn.Name.Name]; !ruled {
+									t.Errorf("%s splices the table of a write into its SQL: rule it in dynamicTableWriters with the tables it reaches", fn.Name.Name)
+								}
+							}
 						}
 					}
 				case *ast.CallExpr:
@@ -115,7 +167,8 @@ func TestEverySampleWritePathAdmitsItsWriter(t *testing.T) {
 // why its write leaves every key's writer intact (a one-time backfill that
 // moved values between keys would not).
 var sampleMigrations = map[string]string{
-	"20260805170000_state_becomes_property.sql": "reshapes the value column of every existing property row in place (#591); no key, provenance or writer changes",
+	"20260805170000_state_becomes_property.sql":              "reshapes the value column of every existing property row in place (#591); no key, provenance or writer changes",
+	"20260805210000_command_status_and_intended_lineage.sql": "repoints the lineage of existing intended rows onto the command that opened them (command_id); no key, value or writer changes",
 }
 
 // TestMigrationsWriteNoSamples: a migration is a write path that runs outside
@@ -131,7 +184,7 @@ func TestMigrationsWriteNoSamples(t *testing.T) {
 			t.Fatalf("read %s: %v", path, err)
 		}
 		name := filepath.Base(path)
-		if sampleWriteSQL.Match(raw) {
+		if writesSample(string(raw)) {
 			if why, ok := sampleMigrations[name]; !ok || strings.TrimSpace(why) == "" {
 				t.Errorf("migration %s writes sample or event rows: state in sampleMigrations why it leaves every key's writer intact", name)
 			}
@@ -177,6 +230,58 @@ func TestAdmitWrite(t *testing.T) {
 		}
 		if err != nil && !strings.Contains(err.Error(), c.row.key) {
 			t.Errorf("%s: refusal %q does not name %s", c.name, err, c.row.key)
+		}
+	}
+}
+
+// TestSampleWriteSQLReadsEveryForm pins the guard's reading of SQL: every form
+// that writes a sample or event row matches, and the neighbouring tables and
+// the error strings that name a table do not.
+func TestSampleWriteSQLReadsEveryForm(t *testing.T) {
+	for _, sql := range []string{
+		`insert into property (ts, owner_kind) values ($1, $2)`,
+		`insert into metric values ($1)`,
+		`INSERT INTO event SELECT * FROM x`,
+		`insert into property as p (ts) values ($1)`,
+		`insert into public.property (ts) values ($1)`,
+		`insert into "property" (ts) values ($1)`,
+		`insert into public."metric"(ts) values ($1)`,
+		"insert into\n\t\tproperty\n(ts)",
+		`update property p set command_id = 1`,
+		`update metric set value = 1`,
+		`update only public.event e set message = ''`,
+		`merge into property using x on true when matched then do nothing`,
+		`copy metric from stdin`,
+	} {
+		if !writesSample(sql) {
+			t.Errorf("writesSample(%q) = false, want the write read", sql)
+		}
+	}
+	for _, sql := range []string{
+		`insert into property_type (name) values ($1)`,
+		`insert into metric_type (name) values ($1)`,
+		`insert into event_type (name) values ($1)`,
+		`insert into event_rule_condition (rule_id) values ($1)`,
+		`update metric_type set unit = $1`,
+		`update property_type p set label = $1`,
+		`storage: update property %q: %w`,
+		`storage: begin update metric type: %w`,
+		`storage: insert property sample %s/%s: %w`,
+		`select * from property where provenance = 'observed'`,
+		`delete from metric where ts < $1`,
+	} {
+		if writesSample(sql) {
+			t.Errorf("writesSample(%q) = true, want no write read", sql)
+		}
+	}
+	for _, sql := range []string{"\n\t\tupdate ", "insert into %[1]s (a)", "update %s set", "insert into "} {
+		if !dynamicTableSQL.MatchString(sql) {
+			t.Errorf("dynamicTableSQL misses %q", sql)
+		}
+	}
+	for _, sql := range []string{"update", "select id from t where id = $1 for update", "for no key update"} {
+		if dynamicTableSQL.MatchString(sql) {
+			t.Errorf("dynamicTableSQL reads %q as a spliced table", sql)
 		}
 	}
 }

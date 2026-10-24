@@ -183,11 +183,15 @@ func (p *PG) writeMetricSamples(ctx context.Context, tx pgx.Tx, w KeyWriter, evs
 		return err
 	}
 	provenance, sourceRule, sourceVersion, sourceRuleID := w.provenanceArgs()
+	clock := sampleClock{q: tx}
 	for i, ev := range evs {
 		col, _ := ownerColumn(ev.OwnerKind)
 		ts := ev.TS
 		if ts.IsZero() {
 			ts = time.Now().UTC()
+		}
+		if ts, err = clock.cap(ctx, ev.Key, ts); err != nil {
+			return err
 		}
 		sql := fmt.Sprintf(`insert into metric (ts, owner_kind, %s, metric_type_id, instance, value, provenance, source, source_rule, source_rule_version, source_rule_id)
 			values ($1, $2, $3, (select id from metric_type where name = $4), $5, $6, $7, $8, $9, $10, $11::uuid)`, col)

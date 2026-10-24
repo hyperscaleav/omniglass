@@ -340,7 +340,9 @@ class**, and the Storage Gateway holds every write to it
 same way, and a push is refused a `platform` key (`health`) and a calc rule's output, naming the rule.
 On the node's own lane a node-probe key lands only under the endpoint whose task the node ran: an
 empty instance is that endpoint's name, and any other (another node's endpoint on the same component, a
-name no endpoint holds) is refused, while a driver's own keys keep the instance they name. A driver
+name no endpoint holds) is refused, while a driver's own keys keep the instance they name, and a
+node-probe sample dated more than five minutes past the database's clock is stored at the database's
+now, so a node's account of an endpoint cannot stay current past its tenure. A driver
 spec may emit only a collected key: a reserved one is refused at the spec's write, and again where the
 node interprets a task derived before that refusal existed, so a driver cannot speak for the node
 either.

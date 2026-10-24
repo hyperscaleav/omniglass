@@ -582,3 +582,147 @@ func TestCalcOutputAndCommandTargetExclude(t *testing.T) {
 		t.Errorf("a command type over a calc output = %v, want it refused naming the rule", err)
 	}
 }
+
+// TestNodeProbeSampleCannotOutliveItsTime: a node-probe sample dated ahead of
+// the database's clock by more than the skew is stored at the database's now,
+// so a node cannot keep its account of an endpoint current past its tenure
+// (ADR-0161). A collected key keeps the time its producer sent.
+func TestNodeProbeSampleCannotOutliveItsTime(t *testing.T) {
+	if testing.Short() {
+		t.Skip("integration test needs Postgres")
+	}
+	f := newWriterFixture(t)
+	comp, err := f.gw.GetComponent(f.ctx, "disp-1", scope.Set{All: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	far := time.Now().UTC().AddDate(70, 0, 0)
+	node := storage.NodeWriter("ssh")
+	if err := f.gw.InsertPropertySamples(f.ctx, node, []storage.PropertySampleWrite{
+		{OwnerKind: "component", OwnerID: comp.ID, Key: "endpoint-reachable", Instance: "ssh", Value: "up", TS: far},
+		{OwnerKind: "component", OwnerID: comp.ID, Key: "endpoint-rejection", Instance: "ssh", Value: "authenticated auth 9f86d081", TS: far},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.gw.InsertMetricSamples(f.ctx, node, []storage.MetricSampleWrite{
+		{OwnerKind: "component", OwnerID: comp.ID, Key: "tcp-open", Instance: "ssh", Value: 1, TS: far}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.gw.InsertEvents(f.ctx, node, []storage.EventWrite{
+		{OwnerKind: "component", OwnerID: comp.ID, Key: "collection-failed", Instance: "ssh", Message: "x", TS: far}}); err != nil {
+		t.Fatal(err)
+	}
+	if n := f.count(t, `select (select count(*) from property where ts > now() + interval '1 hour')
+		+ (select count(*) from metric where ts > now() + interval '1 hour')
+		+ (select count(*) from event where ts > now() + interval '1 hour')`); n != 0 {
+		t.Fatalf("%d node-probe rows kept a time seventy years ahead", n)
+	}
+	// The next reading, a second from now, is the current one.
+	if err := f.gw.InsertPropertySamples(f.ctx, node, []storage.PropertySampleWrite{
+		{OwnerKind: "component", OwnerID: comp.ID, Key: "endpoint-reachable", Instance: "ssh", Value: "down", TS: time.Now().UTC().Add(time.Second)}}); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := f.gw.LatestProperty(f.ctx, "disp-1", "endpoint-reachable", "ssh"); err != nil || got == nil || got.Value != "down" {
+		t.Fatalf("LatestProperty = %+v (%v), want the later down", got, err)
+	}
+	// A small skew is the node's clock, kept.
+	near := time.Now().UTC().Add(30 * time.Second).Truncate(time.Millisecond)
+	if err := f.gw.InsertMetricSamples(f.ctx, node, []storage.MetricSampleWrite{
+		{OwnerKind: "component", OwnerID: comp.ID, Key: "tcp-connect-time", Instance: "ssh", Value: 2, TS: near}}); err != nil {
+		t.Fatal(err)
+	}
+	if m, err := f.gw.LatestMetricInstance(f.ctx, "disp-1", "tcp-connect-time", "ssh"); err != nil || m == nil || !m.TS.Equal(near) {
+		t.Fatalf("a sample 30s ahead = %+v (%v), want its own time kept", m, err)
+	}
+	// A collected key keeps its producer's time, however far.
+	if err := f.gw.InsertMetricSamples(f.ctx, storage.PushWriter(), []storage.MetricSampleWrite{
+		{OwnerKind: "component", OwnerID: comp.ID, Key: "uptime", Value: 3, TS: far}}); err != nil {
+		t.Fatal(err)
+	}
+	if n := f.count(t, `select count(*) from metric where ts > now() + interval '1 hour'
+		and metric_type_id = (select id from metric_type where name = 'uptime')`); n != 1 {
+		t.Fatalf("a pushed uptime's own time: %d far rows, want 1", n)
+	}
+}
+
+// TestHealthReadsServeOnlyTheRollup: a health row the rollup did not write (a
+// declared one, written before the writer check refused it) never reads as a
+// system's verdict; the reads serve the rollup's calculated rows alone.
+func TestHealthReadsServeOnlyTheRollup(t *testing.T) {
+	if testing.Short() {
+		t.Skip("integration test needs Postgres")
+	}
+	f := newWriterFixture(t)
+	all := scope.Set{All: true}
+	sys, err := f.gw.CreateSystem(f.ctx, "", storage.SystemSpec{Name: "room-1"}, all, all)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.conn.Exec(f.ctx, `insert into property (ts, owner_kind, system_id, property_type_id, instance, value, provenance, source_rule)
+		values (clock_timestamp(), 'system', $1::uuid, (select id from property_type where name = 'health'), '', to_jsonb('outage'::text), 'calculated', 'health-rollup')`, sys.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.conn.Exec(f.ctx, `insert into property (ts, owner_kind, system_id, property_type_id, instance, value, provenance)
+		values (clock_timestamp() + interval '1 second', 'system', $1::uuid, (select id from property_type where name = 'health'), '', to_jsonb('healthy'::text), 'declared')`, sys.ID); err != nil {
+		t.Fatal(err)
+	}
+	vs, err := f.gw.SystemVerdicts(f.ctx, all)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, v := range vs {
+		if v.SystemID == sys.ID && v.Verdict != "outage" {
+			t.Errorf("SystemVerdicts serves %q, want the rollup's outage", v.Verdict)
+		}
+	}
+	fv, err := f.gw.FleetProjection(f.ctx, all, all, all)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, s := range fv.Systems {
+		if s.ID == sys.ID && s.Verdict != "outage" {
+			t.Errorf("the fleet projection serves %q, want the rollup's outage", s.Verdict)
+		}
+	}
+	rep, err := f.gw.SystemHealth(f.ctx, sys.ID, 0, all)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := len(rep.Transitions); n == 0 || rep.Transitions[n-1].Value != "outage" {
+		t.Errorf("the transitions end %+v, want the rollup's outage last", rep.Transitions)
+	}
+}
+
+// TestLegacyRuleFiringAReservedEventLetsTheSampleLand: an event rule stored
+// before its fire type was refused (one firing the node's collection-failed)
+// writes no event, and the sample it judged still lands: an ingest is never
+// refused for a rule's sake.
+func TestLegacyRuleFiringAReservedEventLetsTheSampleLand(t *testing.T) {
+	if testing.Short() {
+		t.Skip("integration test needs Postgres")
+	}
+	f := newWriterFixture(t)
+	all := scope.Set{All: true}
+	if _, err := f.gw.CreateEventRule(f.ctx, "", storage.EventRuleSpec{Name: "legacy-forge", SampleKey: "endpoint-reachable",
+		Fire: rules.Criteria{Expr: `value == "down"`}, FireEventType: "condition-started"}, all); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.conn.Exec(f.ctx, `update event_rule set fire_event_type_id = (select id from event_type where name = 'collection-failed')
+		where name = 'legacy-forge'`); err != nil {
+		t.Fatal(err)
+	}
+	comp, err := f.gw.GetComponent(f.ctx, "disp-1", all)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := f.gw.InsertPropertySamples(f.ctx, storage.NodeWriter("ssh"), []storage.PropertySampleWrite{
+		{OwnerKind: "component", OwnerID: comp.ID, Key: "endpoint-reachable", Instance: "ssh", Value: "down"}}); err != nil {
+		t.Fatalf("the node's sample was refused for a legacy rule's sake: %v", err)
+	}
+	if got, err := f.gw.LatestProperty(f.ctx, "disp-1", "endpoint-reachable", "ssh"); err != nil || got == nil || got.Value != "down" {
+		t.Fatalf("LatestProperty = %+v (%v), want the node's down", got, err)
+	}
+	if n := f.count(t, `select count(*) from event where event_type_id = (select id from event_type where name = 'collection-failed')`); n != 0 {
+		t.Fatalf("the legacy rule wrote %d collection-failed events", n)
+	}
+}

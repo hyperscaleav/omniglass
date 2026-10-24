@@ -108,11 +108,15 @@ func (p *PG) writePropertySamples(ctx context.Context, tx pgx.Tx, w KeyWriter, e
 		return err
 	}
 	provenance, sourceRule, sourceVersion, sourceRuleID := w.provenanceArgs()
+	clock := sampleClock{q: tx, now: now}
 	for i, ev := range evs {
 		col, _ := ownerColumn(ev.OwnerKind)
 		ts := ev.TS
 		if ts.IsZero() {
 			ts = time.Now().UTC()
+		}
+		if ts, err = clock.cap(ctx, ev.Key, ts); err != nil {
+			return err
 		}
 		sql := fmt.Sprintf(`insert into property (ts, owner_kind, %s, property_type_id, instance, value, provenance, source, source_rule, source_rule_version, source_rule_id)
 			values ($1, $2, $3, (select id from property_type where name = $4), $5, to_jsonb($6::text), $7, $8, $9, $10, $11::uuid)`, col)
