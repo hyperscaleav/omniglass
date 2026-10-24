@@ -1,5 +1,5 @@
 import { Tooltip } from "@kobalte/core/tooltip";
-import { Show } from "solid-js";
+import { Show, children, type JSX } from "solid-js";
 import { Info } from "./icons";
 
 // InfoTip: the small (i) affordance that sits next to a field label and reveals
@@ -11,16 +11,32 @@ import { Info } from "./icons";
 //
 // An optional href renders a "learn more" link at the end of the content and
 // widens the close delay so the pointer can travel into the tooltip to click it.
-export default function InfoTip(props: { text: string; label?: string; href?: string; hrefText?: string }) {
+//
+// Children replace the (i) with a trigger of their own (a ladder rung's chip,
+// #1059), styled by `class`; the label is then the trigger's whole accessible
+// name rather than "More about" it, since the chip is the thing being named.
+export default function InfoTip(props: { text: string; label?: string; href?: string; hrefText?: string; class?: string; children?: JSX.Element }) {
+  // Resolved once: reading props.children twice (the branch, then the slot)
+  // would build the trigger's content twice.
+  const trigger = children(() => props.children);
   return (
     <Tooltip openDelay={150} closeDelay={props.href ? 350 : 100} placement="top" gutter={4}>
-      <Tooltip.Trigger
-        type="button"
-        aria-label={props.label ? `More about ${props.label}` : "More information"}
-        class="inline-flex text-base-content/40 transition-colors hover:text-base-content/70 focus-visible:text-primary focus:outline-none"
+      <Show
+        when={trigger()}
+        fallback={
+          <Tooltip.Trigger
+            type="button"
+            aria-label={props.label ? `More about ${props.label}` : "More information"}
+            class="inline-flex text-base-content/40 transition-colors hover:text-base-content/70 focus-visible:text-primary focus:outline-none"
+          >
+            <Info size={13} />
+          </Tooltip.Trigger>
+        }
       >
-        <Info size={13} />
-      </Tooltip.Trigger>
+        <Tooltip.Trigger type="button" aria-label={props.label} class={props.class}>
+          {trigger()}
+        </Tooltip.Trigger>
+      </Show>
       <Tooltip.Portal>
         <Tooltip.Content class="z-100 max-w-56 rounded-box border border-base-300 bg-base-100 px-2.5 py-1.5 text-xs font-normal normal-case leading-snug tracking-normal text-base-content shadow-lg">
           {props.text}

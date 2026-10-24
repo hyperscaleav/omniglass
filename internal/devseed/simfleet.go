@@ -7,7 +7,9 @@ import (
 	"fmt"
 	"net"
 	"strconv"
+	"strings"
 
+	"github.com/hyperscaleav/omniglass/internal/driver"
 	"github.com/hyperscaleav/omniglass/internal/scope"
 	"github.com/hyperscaleav/omniglass/internal/sim"
 	"github.com/hyperscaleav/omniglass/internal/sim/profile"
@@ -168,6 +170,100 @@ func simulateReachabilityDemo(ctx context.Context, gw storage.Gateway, actorID s
 		params := []byte(fmt.Sprintf(`{"target":"%s:%d"}`, addr, shift(port)))
 		if _, err := gw.UpdateEndpoint(ctx, actorID, e.ID, storage.EndpointPatch{Params: params}, all, all); err != nil {
 			return fmt.Errorf("devseed: re-aim reachability demo endpoint %s: %w", e.Name, err)
+		}
+	}
+	return nil
+}
+
+// seedSimEndpoints lands the fixture's extra simulated endpoints (#1059): the
+// secrets they reference, then each endpoint as a driver attach at its
+// component's simulated address (the host an endpoint the plan gave it already
+// targets), the driver's declared port lifted as the simulator lifts it, on
+// the dev node. Idempotent: a secret that exists is kept, and a component that
+// already holds an endpoint of the driver's transport is left alone, so a
+// re-run changes nothing. Runs after seedSimFleet, which gives every simulated
+// component its address.
+func seedSimEndpoints(ctx context.Context, gw storage.Gateway, actorID string, doc Doc, compIDs map[string]string, portOffset int) error {
+	all := scope.Set{All: true}
+	for _, s := range doc.SimSecrets {
+		if _, err := gw.CreateSecret(ctx, actorID, storage.SecretSpec{
+			Name: s.Name, Label: s.Label, SecretType: s.SecretType, OwnerKind: "platform", Fields: s.Fields,
+		}, all, true); err != nil && !errors.Is(err, storage.ErrSecretExists) {
+			return fmt.Errorf("devseed: create simulated secret %s: %w", s.Name, err)
+		}
+	}
+	if len(doc.SimEndpoints) == 0 {
+		return nil
+	}
+	drivers, err := gw.ListDrivers(ctx)
+	if err != nil {
+		return fmt.Errorf("devseed: list drivers: %w", err)
+	}
+	specs := map[string]*driver.Spec{}
+	for _, d := range drivers {
+		if len(d.Spec) == 0 {
+			continue
+		}
+		spec, err := driver.Parse(d.Spec)
+		if err != nil {
+			return fmt.Errorf("devseed: parse driver %s: %w", d.Name, err)
+		}
+		specs[d.Name] = spec
+	}
+	endpoints, err := gw.ListEndpoints(ctx, all)
+	if err != nil {
+		return fmt.Errorf("devseed: list endpoints: %w", err)
+	}
+	shift := sim.PrivilegedPortShift(portOffset)
+	if shift == nil {
+		shift = func(p int) int { return p } // the simulator binds the profiles' own ports
+	}
+	node := reachNode
+	for _, se := range doc.SimEndpoints {
+		compID, ok := compIDs[se.Component]
+		if !ok {
+			return fmt.Errorf("devseed: simulated endpoint references unknown component key %q", se.Component)
+		}
+		spec, ok := specs[se.Driver]
+		if !ok {
+			return fmt.Errorf("devseed: simulated endpoint on %s names driver %q, which has no spec", se.Component, se.Driver)
+		}
+		host, held := "", false
+		for _, e := range endpoints {
+			if e.ComponentID == nil || *e.ComponentID != compID {
+				continue
+			}
+			if e.Transport == spec.Transport {
+				held = true
+			}
+			if h := storage.TargetHost(endpointTarget(e.Params)); strings.HasPrefix(h, "127.60.") {
+				host = h
+			}
+		}
+		if held {
+			continue
+		}
+		if host == "" {
+			return fmt.Errorf("devseed: simulated endpoint on %s: the component has no simulated address", se.Component)
+		}
+		inputs := map[string]string{"host": host}
+		for _, in := range spec.Inputs {
+			if in.Name == "port" && in.Default != "" {
+				port, err := strconv.Atoi(in.Default)
+				if err != nil {
+					return fmt.Errorf("devseed: driver %s port default %q: %w", se.Driver, in.Default, err)
+				}
+				inputs["port"] = strconv.Itoa(shift(port))
+			}
+		}
+		for k, v := range se.Inputs {
+			inputs[k] = v
+		}
+		comp, drv := compID, se.Driver
+		if _, err := gw.CreateEndpoint(ctx, actorID, storage.EndpointSpec{
+			Driver: &drv, Inputs: inputs, Label: se.Label, Component: &comp, Node: &node, SecretRead: all, CanAdmin: true,
+		}, all); err != nil {
+			return fmt.Errorf("devseed: create simulated %s endpoint on %s: %w", se.Driver, se.Component, err)
 		}
 	}
 	return nil

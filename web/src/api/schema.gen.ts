@@ -7984,12 +7984,14 @@ export interface components {
         ReachEndpointBody: {
             /** @description The probed address (target[:port]) from the endpoint params */
             address?: string;
-            /** @description The auth rung (the probe's credential was accepted), present only when a credential was tried */
+            /** @description The auth rung (the probe's credential was accepted, or a held session's login passed), present only when a credential was tried */
             authenticated?: components["schemas"]["ReachVerdictBody"];
             /** @description The endpoint's derived name (its transport) */
             endpoint: string;
             /** @description The recent verdict transitions, oldest first, for the availability strip */
             history: components["schemas"]["ReachHistoryBody"][] | null;
+            /** @description The endpoint's uuid, the address its custom methods take (POST /endpoints/{id}:retry) */
+            id: string;
             /** @description The friendly string an operator reads; absent when unset, and the row then reads the derived name verbatim */
             label?: string;
             /**
@@ -8001,8 +8003,12 @@ export interface components {
             layers: components["schemas"]["ReachLayerBody"][] | null;
             /** @description The node that probes this endpoint */
             node?: string;
+            /** @description The gate a terminal refusal holds on the endpoint, its rung and class; absent when none holds */
+            rejection?: components["schemas"]["ReachRejectionBody"];
             /** @description The layer-7 responds rung (the protocol itself answered), when a probe has climbed it */
             responsive?: components["schemas"]["ReachVerdictBody"];
+            /** @description The endpoint's held session, while it is configured to hold one (a standing listen task, or a driver declaring a session): its latest state, when it changed, and why */
+            session?: components["schemas"]["ReachSessionBody"];
             /** @description The transport (icmp, tcp, ...) */
             transport: string;
             /** @description The latest reachability verdict, or null if none yet */
@@ -8030,6 +8036,29 @@ export interface components {
              * @description The latest signal value (1 = reachable/open, 0 = not)
              */
             value: number;
+        };
+        ReachRejectionBody: {
+            /** @description The refusal's class: auth, host-key, certificate or protocol */
+            class: string;
+            /**
+             * @description The ladder rung the refusal holds: responsive for a host key, certificate or protocol refusal, authenticated for a credential. Nothing at or above it is attempted until the connection fingerprint moves
+             * @enum {string}
+             */
+            rung: "reachable" | "responsive" | "authenticated";
+        };
+        ReachSessionBody: {
+            /** @description Why the session is in its state (session-reason), the reason of its latest transition; a rejected session's is its class and the component's own text (auth: auth rejected), scrubbed by the node of anything it sent. Cut to 500 characters; the property's series keeps the whole */
+            reason?: string;
+            /**
+             * @description The held session's latest state (session-state): establishing, up, recovering, down, or rejected (a refusal retrying cannot fix; the node dials no more until the endpoint's connection fingerprint moves)
+             * @enum {string}
+             */
+            state: "establishing" | "up" | "recovering" | "down" | "rejected";
+            /**
+             * Format: date-time
+             * @description When the session last changed state: a state is stored only on a transition, so a session is judged by the endpoint's last_seen, not by this
+             */
+            ts: string;
         };
         ReachVerdictBody: {
             /**

@@ -372,6 +372,16 @@ users:
     grants:
       - role: operator
         scope_kind: all
+  # A read-only viewer across the whole fleet, all-scoped like operator: the one
+  # seeded user who can open a component and may change nothing on it, so a
+  # gated affordance (Retry on a rejected session, #1059) is seen greyed with its
+  # reason. viewer-hq cannot stand in: a location grant reaches no component.
+  - username: viewer
+    password: dev
+    label: Fleet Viewer
+    grants:
+      - role: viewer
+        scope_kind: all
   # A read-only viewer confined to the Headquarters campus.
   - username: viewer-hq
     password: dev
@@ -2048,3 +2058,30 @@ alarms:
     severity: warning
     message: Lamp hours approaching end of life
     dedup_key: lamp-hours
+
+# A held session worth showing (#1059), wired only with the simulated fleet (so
+# the docs screenshots, seeded without it, carry none of this). The huddle's
+# touch panel also answers its NVP line protocol over telnet behind a login
+# (the simulated panel's nvp-telnet face, admin / newtron). Its password was
+# rotated, and this endpoint still logs in with the secret holding the old
+# one: the panel answers "auth rejected", the driver declares that terminal,
+# and a live node reads the session rejected after one attempt, with the
+# panel's own words beside Retry. Pointing the endpoint's login at the rotated
+# secret moves the connection fingerprint and the session comes up, which is
+# the walkthrough (fix-a-rejected-session). The host is the panel's simulated
+# address and the port the driver's default, lifted as make dev lifts it.
+sim_secrets:
+  - name: sim-panel-login
+    label: Simulated panel login (before the rotation)
+    secret_type: basic-auth
+    fields: { username: admin, password: newtron-2025 }
+  - name: sim-panel-login-rotated
+    label: Simulated panel login (rotated)
+    secret_type: basic-auth
+    fields: { username: admin, password: newtron }
+
+sim_endpoints:
+  - component: huddle-touch
+    driver: newtron-nvp-telnet
+    label: Panel console
+    inputs: { login: sim-panel-login }

@@ -6,6 +6,8 @@ import { BladeEditContext, BladesContext, createEditSlot, type BladeController }
 import { DRIVERS_KEY, type Driver } from "../lib/drivers";
 import { ENDPOINTS_KEY, TRANSPORTS_KEY, type Transport } from "../lib/endpoints";
 import { COMPONENTS_KEY } from "../lib/components";
+import { ME_KEY, type Me } from "../lib/auth";
+import { REACHABILITY_KEY, type Reachability } from "../lib/reachability";
 import { uuidFor } from "../lib/testids";
 
 // The endpoint create form's two faces (#813): Probe posts a transport, Attach
@@ -205,5 +207,82 @@ describe("endpoint edit blade, driver-attached", () => {
     await slot.save();
     await waitFor(() => expect(bodies.length).toBe(1));
     expect(bodies[0]).toEqual({ label: "Lobby panel" });
+  });
+});
+
+// The blade reads the endpoint's held session (#1059): the pill, the ladder,
+// the reason, Retry gated on endpoint:retry, and the path to fix a refused
+// credential in place, which is this blade's own edit.
+describe("endpoint blade, held session", () => {
+  const telnet: Driver = {
+    id: uuidFor("newtron-nvp-telnet"), name: "newtron-nvp-telnet", label: "Newtron NVP over Telnet", official: true,
+    spec: { version: 1, transport: "telnet", inputs: [
+      { name: "host", kind: "string", required: true },
+      { name: "port", kind: "number", default: "23" },
+      { name: "login", kind: "secret", secret_type: "basic-auth", required: true },
+    ], polls: [] },
+  };
+  const compId = uuidFor("panel-2");
+  const row = {
+    id: uuidFor("ep-rejected"), name: "telnet", transport: "telnet", component: "panel-2", component_id: compId,
+    params: { target: "127.60.0.9:23" }, driver: "newtron-nvp-telnet", driver_id: uuidFor("newtron-nvp-telnet"),
+    inputs: { host: "127.60.0.9", port: "23", login: "panel-login-old" },
+  };
+  const now = new Date().toISOString();
+  const reach: Reachability = {
+    component: "panel-2",
+    endpoints: [{
+      id: row.id, endpoint: "telnet", transport: "telnet", node: "edge-hq", last_seen: now,
+      verdict: { value: "up", ts: now }, responsive: { value: "up", ts: now }, authenticated: { value: "no", ts: now },
+      session: { state: "rejected", ts: now, reason: "auth: auth rejected" },
+      rejection: { rung: "authenticated", class: "auth" },
+      layers: [{ layer: "ping", check: "icmp-reachable", value: 1, ts: now }], history: [],
+    }],
+  };
+  const operator: Me = { principal: { id: "op", kind: "human" }, permissions: ["*:read", "endpoint:update", "endpoint:retry"], grants: [] };
+  const viewer: Me = { principal: { id: "vw", kind: "human" }, permissions: ["*:read"], grants: [] };
+
+  function mountHeld(me: Me) {
+    const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
+    qc.setQueryData([...ENDPOINTS_KEY], [row]);
+    qc.setQueryData([...DRIVERS_KEY], [telnet]);
+    qc.setQueryData([...ME_KEY], me);
+    qc.setQueryData([...REACHABILITY_KEY(compId)], reach);
+    const slot = createEditSlot();
+    const blades = { pop: () => {} } as unknown as BladeController;
+    render(() => (
+      <QueryClientProvider client={qc}>
+        <BladesContext.Provider value={blades}>
+          <BladeEditContext.Provider value={slot}>
+            <endpointBlade.Body id={row.id} />
+          </BladeEditContext.Provider>
+        </BladesContext.Provider>
+      </QueryClientProvider>
+    ));
+    return slot;
+  }
+
+  it("reads the session rejected, with its reason and its ladder", () => {
+    mountHeld(operator);
+    expect(screen.getByTestId("session-pill").dataset.state).toBe("rejected");
+    expect(screen.getByTestId("session-reason").textContent).toBe("auth: auth rejected");
+    expect(screen.getAllByTestId("ladder-rung").map((r) => r.dataset.status)).toEqual(["pass", "pass", "held"]);
+    expect((screen.getByRole("button", { name: /retry/i }) as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it("fixes the refused credential in place: the blade's own edit, the secret input focused", async () => {
+    const slot = mountHeld(operator);
+    fireEvent.click(screen.getByRole("button", { name: "Edit credential" }));
+    expect(slot.editing()).toBe(true);
+    const login = (await screen.findByLabelText("login")) as HTMLInputElement;
+    expect(login.value).toBe("panel-login-old");
+    await waitFor(() => expect(document.activeElement).toBe(login));
+  });
+
+  it("greys Retry for a viewer and offers no edit", () => {
+    mountHeld(viewer);
+    expect((screen.getByRole("button", { name: /retry/i }) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByLabelText(/needs the endpoint:retry permission/i)).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Edit credential" })).toBeNull();
   });
 });

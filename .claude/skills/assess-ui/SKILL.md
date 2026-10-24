@@ -50,8 +50,9 @@ and `kobalte` cover the reactivity and primitive mechanics.
 iterating, run `./bin/omniglass server` with `cd web && npm run dev` on :5173 (Vite
 proxies `/api`; no rebuild per change), but **PR captures come from the embedded build**,
 per the PR template. Permission-variant states use the seeded users `operator`,
-`viewer-hq`, `tech-east` (password `dev`), or a per-user token
-(`./bin/omniglass token viewer-hq`).
+`viewer` (fleet-wide read-only, the one who sees a component and may act on nothing),
+`viewer-hq`, `tech-east` (password `dev`; a location grant reaches no component, so the
+last two never open one), or a per-user token (`./bin/omniglass token viewer`).
 
 **Capture the matrix.** One capture per state on the plan list, at the house viewport
 (1320x860 at 2x, what `shot.mjs` ships):

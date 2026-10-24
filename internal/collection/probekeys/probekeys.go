@@ -44,10 +44,13 @@ var native = []string{
 	EndpointReachable, EndpointResponsive, EndpointAuthenticated, SessionState, SessionReason, SSHHostKey, EndpointRejection,
 }
 
-// nodeControl are the keys whose values steer what a node attempts: the
-// gate it publishes and the host key it trusted (ADR-0158). Only a node's
-// own collection writes them; the push lane refuses them.
-var nodeControl = []string{EndpointRejection, SSHHostKey}
+// nodeControl are the keys only a node's own collection writes; the push
+// lane refuses them. The gate it publishes and the host key it trusted steer
+// what the node attempts (ADR-0158); a held session's state and reason are
+// the node's account of its own connection, which the console reads as such
+// (#1059), so a push may neither read a rejected session up, hiding the
+// refusal and its Retry, nor plant a reason the node never scrubbed.
+var nodeControl = []string{EndpointRejection, SSHHostKey, SessionState, SessionReason}
 
 // IsNodeControl reports a key only a node's own collection may write.
 func IsNodeControl(key string) bool { return slices.Contains(nodeControl, key) }

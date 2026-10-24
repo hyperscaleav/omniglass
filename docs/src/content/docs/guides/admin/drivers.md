@@ -37,8 +37,9 @@ login passed. `session.terminal` lists the replies retrying cannot fix, each a `
 `class` (`auth`, `host-key`, `certificate`, `protocol`): a line matching one, during the login or
 answering any request, moves the session to `rejected`, where the node attempts nothing more until
 the endpoint's connection fingerprint changes (its secret is rotated, its address, port or transport
-changes, the driver's login declaration changes) or an operator retries it
-(`omniglass endpoint retry <id>`, with `endpoint:retry`); a label edit changes nothing. `session.reprobe`
+changes, the driver's login declaration changes) or an operator retries it (**Retry** on the
+rejected session's notice in the console, or `omniglass endpoint retry <id>`, with
+`endpoint:retry`); a label edit changes nothing. `session.reprobe`
 (at least `5m`, default never) lets a rejected session try once more on its own. A wrong password the
 component answers with a declared refusal then costs one attempt rather than a retry every 30 seconds;
 a component that hangs up on a wrong password without saying so costs three (the login budget), and

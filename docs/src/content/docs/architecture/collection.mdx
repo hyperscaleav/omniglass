@@ -258,6 +258,21 @@ once, never arms, and reads `rejected` with the component's text) and over fakes
 (`session_auth_test.go`: a wrong credential dials once over an hour of the session's clock, a retry
 dials once more, a re-probe fires on its interval, a transient failure still spends the budget).
 
+**In the console** (#1059). The component's reachability read carries each endpoint's latest
+`session-state` with the `session-reason` beside it, while the endpoint is configured to hold a
+session (teardown publishes nothing, so a session nobody holds is not served), and the rung and
+class of its `endpoint-rejection` (never the fingerprint, which is the node's to compare). Like the
+gate, a session's state and reason are the node's own facts, which the push lane refuses, so no
+push can read a rejected session up or plant a reason the node never scrubbed. So the component's
+Collection card, its Endpoints panel and the endpoint's detail show the session as a pill, the
+ladder with the held rung marked, and, for a down or rejected session, the reason. A state is stored
+only on a transition, so the pill is aged by the endpoint's `last_seen`, as ADR-0150 requires: a
+session whose endpoint has delivered nothing for the staleness window reads grey, saying what it
+last read. A rejected session offers **Retry** (`:retry`, gated `endpoint:retry`, greyed with its
+reason for a caller without it) and the way into the endpoint's edit, where pointing the credential
+at the right secret moves the fingerprint. The [collection guide](/guides/operator/collection/#held-sessions)
+teaches it, and the `fix-a-rejected-session` walkthrough drives it against the simulated panel.
+
 ### The connection fingerprint and the layered gate
 
 Built (#1056 ruling, [ADR-0158](/architecture/decisions/#adr-0158-one-connection-fingerprint-gates-every-connection-on-a-ladder-the-driver-declares)). Every connection to an endpoint, held or

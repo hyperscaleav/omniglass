@@ -454,7 +454,14 @@ out-of-scope component is a non-disclosing 404 (a deliberate early exception to
   landed a batch the endpoint's task delivered, by the server's clock and to within a few seconds,
   whatever the batch carried. A verdict is stored only on a transition, so its `ts` is when it last
   changed, and a driver endpoint has no verdict at all; `last_seen` is the one freshness every
-  endpoint has.
+  endpoint has. Each row also carries the endpoint's `id` (the address `:retry` takes), its held
+  `session` while it is configured to hold one (a standing listen task, or a driver declaring a
+  session: the latest `session-state`, when it changed, and the `session-reason` beside it, cut to
+  500 characters), and the `rejection` a terminal refusal holds (the rung and class of
+  `endpoint-rejection`; the connection fingerprint it carries is never served), which the console's
+  session pill and ladder render (#1059). Teardown publishes no state, which is why a session is
+  served only while one is held; and like the gate, a session's state and reason are the node's
+  own facts, which `POST /telemetry:push` refuses.
 - `GET /components/{name}/events` is the log-kind mirror: the component's recent **log occurrences**
   (the [`event` log sink](/architecture/core-entities/#the-event-sink-the-first-arc-owned-occurrence)),
   newest first, bounded to the last 24 hours and capped at 200 rows; each row carries `ts`, the

@@ -1,9 +1,13 @@
 import { For, Show, createMemo, createSignal, type JSX } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
-import { Sliders } from "./icons";
+import { Pencil, Sliders } from "./icons";
 import KVStacked from "./KVStacked";
 import InfoTip from "./InfoTip";
 import BladeTitle from "./BladeTitle";
+import Eyebrow from "./Eyebrow";
+import SessionPill from "./SessionPill";
+import ReachLadder from "./ReachLadder";
+import SessionNotice from "./SessionNotice";
 import {
   type Endpoint,
   type UpdateEndpoint,
@@ -16,7 +20,9 @@ import {
   deleteEndpoint,
   endpointTarget,
 } from "../lib/endpoints";
-import { REACHABILITY_KEY } from "../lib/reachability";
+import { REACHABILITY_KEY, getReachability } from "../lib/reachability";
+import { LEAF_POLL_MS } from "../lib/component_leaf";
+import { CLOCK_TICK_MS, createClock } from "../lib/clock";
 import { DRIVERS_KEY, listDrivers, type Driver } from "../lib/drivers";
 import { COMPONENTS_KEY, listComponents } from "../lib/components";
 import { NODES_KEY, listNodes } from "../lib/nodes";
@@ -99,6 +105,29 @@ function EndpointBladeBody(props: { id: string }): JSX.Element {
   const drivers = useQuery(() => ({ queryKey: DRIVERS_KEY, queryFn: listDrivers }));
   const declaredInputs = createMemo(() => drivers.data?.find((d) => d.name === i()?.driver)?.spec?.inputs ?? []);
   const [err, setErr] = createSignal<string | null>(null);
+
+  // The endpoint's held session and its ladder (#1059), off the component's
+  // reachability read: the same cache entry the component's view polls, so
+  // the pill moves here as it moves there, and polled here too for a blade
+  // opened where nothing else polls it.
+  const now = createClock(CLOCK_TICK_MS);
+  const reach = useQuery(() => ({
+    queryKey: REACHABILITY_KEY(i()?.component_id ?? ""),
+    queryFn: () => getReachability(i()!.component_id!),
+    enabled: !!i()?.component_id,
+    refetchInterval: LEAF_POLL_MS,
+  }));
+  const held = createMemo(() => (reach.data?.endpoints ?? []).find((e) => e.endpoint === i()?.name));
+  // The secret input a refused credential is fixed through: the first one the
+  // driver declares. Pointing it at a secret holding the right credential
+  // moves the connection fingerprint, so the gate lifts with no retry.
+  const secretInput = createMemo(() => declaredInputs().find((d) => d.kind === "secret")?.name);
+  const authRefused = () => held()?.rejection?.class === "auth" && !!secretInput();
+  function fixEndpoint() {
+    edit.begin();
+    const name = secretInput();
+    if (name && authRefused()) setTimeout(() => document.getElementById(`edit-iface-input-${name}`)?.focus(), 0);
+  }
 
   // Invalidate the endpoints list and, when the endpoint is on a component, that
   // component's reachability read, so the component's Endpoints panel refreshes.
@@ -195,6 +224,29 @@ function EndpointBladeBody(props: { id: string }): JSX.Element {
             <div role="alert" class="alert alert-error alert-soft text-sm"><span>{err()}</span></div>
           </Show>
 
+          <Show when={held()}>
+            {(h) => (
+              <section data-testid="endpoint-session" class="flex flex-col gap-2">
+                <Eyebrow
+                  label="Connection"
+                  hint="The node checks an endpoint bottom up: a ping (informational only), the transport answering (the gate), then the login. A held session's state sits beside the ladder. Hover a rung for what it checks and what it says now."
+                />
+                <div class="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+                  <SessionPill iface={h()} now={now()} />
+                  <ReachLadder iface={h()} />
+                </div>
+                <SessionNotice
+                  iface={h()}
+                  component={iface().component_id!}
+                  now={now()}
+                  onFix={!edit.editing() && edit.editable() ? fixEndpoint : undefined}
+                  fixLabel={authRefused() ? "Edit credential" : "Edit endpoint"}
+                  fixIcon={Pencil}
+                />
+              </section>
+            )}
+          </Show>
+
           <Show
             when={edit.editing()}
             fallback={
@@ -236,7 +288,7 @@ function EndpointBladeBody(props: { id: string }): JSX.Element {
                           <div class="mb-1.5 flex items-center gap-1.5">
                             <label class="eyebrow block" for={`edit-iface-input-${decl.name}`}>{decl.name}</label>
                             <Show when={decl.kind === "secret"}>
-                              <InfoTip label={decl.name} text="The name of a secret this endpoint authenticates with, never its value. Changing where a credential is sent needs you to be able to use it." />
+                              <InfoTip label={decl.name} text="The name of a secret this endpoint authenticates with, never its value. Pointing it at a secret that holds the right credential lifts a refusal the login was held under. Changing where a credential is sent needs you to be able to use it." />
                             </Show>
                             <Show when={decl.name === "host" || decl.name === "port"}>
                               <InfoTip label={decl.name} text="The endpoint's target derives from its host and port. Saving reconnects the endpoint on the new address, and lifts a refusal it was held under." />

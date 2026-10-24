@@ -155,21 +155,28 @@ func TestTelemetryPushAPI(t *testing.T) {
 	// A NODE'S CONTROL FACTS ARE NOT PUSHABLE (ADR-0158): the gate a node
 	// publishes (endpoint-rejection) and the host key it trusted
 	// (ssh-host-key) steer what the node attempts, so the push lane rejects
-	// them by name rather than let a push plant or lift a gate.
+	// them by name rather than let a push plant or lift a gate. Nor is a held
+	// session's state or reason (#1059): the console reads them as the node's
+	// account of its own connection, so a push could otherwise read a rejected
+	// session up, hiding its Retry, or plant a reason the node never scrubbed.
 	ctl := c.do(ownerTok, http.MethodPost, "/telemetry:push", map[string]any{
 		"owner": map[string]any{"kind": "component", "ref": "bar-1"},
 		"properties": []map[string]any{
 			{"name": "endpoint-rejection", "instance": "ssh", "value": "none"},
 			{"name": "ssh-host-key", "instance": "ssh", "value": "SHA256:" + strings.Repeat("C", 43)},
+			{"name": "session-state", "instance": "ssh", "value": "up"},
+			{"name": "session-reason", "instance": "ssh", "value": "connected"},
 		},
 	}, http.StatusAccepted)
-	for _, name := range []string{"endpoint-rejection", "ssh-host-key"} {
+	for _, name := range []string{"endpoint-rejection", "ssh-host-key", "session-state", "session-reason"} {
 		if !strings.Contains(string(ctl), name) {
-			t.Fatalf("the push lane accepted the control fact %s: %s", name, ctl)
+			t.Fatalf("the push lane accepted the node's own fact %s: %s", name, ctl)
 		}
 	}
-	if s, _ := gw.LatestProperty(ctx, "bar-1", "endpoint-rejection", "ssh"); s != nil {
-		t.Fatalf("a pushed endpoint-rejection landed: %+v", s)
+	for _, key := range []string{"endpoint-rejection", "session-state", "session-reason"} {
+		if s, _ := gw.LatestProperty(ctx, "bar-1", key, "ssh"); s != nil {
+			t.Fatalf("a pushed %s landed: %+v", key, s)
+		}
 	}
 
 	// SCHEMA VIOLATION IS A 422 (#594 acceptance): the name resolves, so the

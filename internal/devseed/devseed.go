@@ -43,6 +43,31 @@ type Doc struct {
 	RoleAssignments   []RoleAssignment  `yaml:"role_assignments"`
 	Alarms            []Alarm           `yaml:"alarms"`
 	PropertyValues    []Property        `yaml:"property_values"`
+	SimSecrets        []SimSecret       `yaml:"sim_secrets"`
+	SimEndpoints      []SimEndpoint     `yaml:"sim_endpoints"`
+}
+
+// SimSecret is a platform secret the simulated fleet's endpoints reference
+// (#1059): seeded with the simulated fleet only, beside the SNMP community,
+// so a fleet without the simulator (the docs screenshots) carries none.
+type SimSecret struct {
+	Name       string            `yaml:"name"`
+	Label      string            `yaml:"label"`
+	SecretType string            `yaml:"secret_type"`
+	Fields     map[string]string `yaml:"fields"`
+}
+
+// SimEndpoint is one more endpoint on a simulated component, beside the one
+// the simulated fleet's plan gives it (#1059): a driver attach at the
+// component's simulated address, its port the driver's declared default
+// (lifted as the simulator lifts it), plus the inputs given here. Component
+// is a fixture key. Seeded once: a component already holding an endpoint of
+// the driver's transport is left alone.
+type SimEndpoint struct {
+	Component string            `yaml:"component"`
+	Driver    string            `yaml:"driver"`
+	Label     string            `yaml:"label"`
+	Inputs    map[string]string `yaml:"inputs"`
 }
 
 // System is one example system: a thing in a room that either works or does not.
@@ -673,7 +698,10 @@ func runDoc(ctx context.Context, gw storage.Gateway, actorID string, doc Doc, op
 			only[id] = true
 		}
 	}
-	return seedSimFleet(ctx, gw, actorID, opts.SimPortOffset, only)
+	if err := seedSimFleet(ctx, gw, actorID, opts.SimPortOffset, only); err != nil {
+		return err
+	}
+	return seedSimEndpoints(ctx, gw, actorID, base, compIDs, opts.SimPortOffset)
 }
 
 // standardMaps are the example rooms' layouts, drawn the way an integrator

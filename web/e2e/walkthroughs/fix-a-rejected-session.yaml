@@ -1,0 +1,30 @@
+# Fix a rejected session (#1059): the huddle's touch panel had its console
+# password rotated, and its telnet endpoint still logs in with the secret that
+# holds the old one (internal/devseed/fixtures.yaml, sim_endpoints). The panel
+# answers "auth rejected", the driver declares that terminal, so the session
+# reads rejected after one attempt and the node dials no more. Pointing the
+# endpoint's login at the rotated secret moves the connection fingerprint, and
+# the node logs in at its next check-in (2s on the walkthrough stack).
+title: Fix a rejected session
+description: A touch panel refused its console login, so the node stopped dialing it. Read why, point the endpoint at the rotated credential, and watch the session come up.
+steps:
+  - goto: /systems/huddle
+    caption: This place's system. Its touch panel fills no role, but a node collects it.
+  - click: 'button:has([data-label]:text-is("Touch Panel 1"))'
+    caption: Open the touch panel.
+  - click: 'aside[data-blade] button[aria-label=Expand]'
+    caption: Expand it to the component's view, where collection is read.
+  - wait: { selector: '[data-testid=session-notice][data-state=rejected]' }
+    caption: It reads rejected, in the panel's own words; the node stopped dialing, so nothing locks out.
+    hold: 1500
+  - click: { role: button, name: Open endpoint }
+    caption: Open the endpoint. The ladder shows the ping and the transport answering, and the login held.
+  - click: { role: button, name: Edit credential }
+    caption: The credential is one of the endpoint's inputs, edited in place.
+  - type: { target: '#edit-iface-input-login', text: '-rotated' }
+    caption: Point the login at the secret holding the rotated password.
+  - click: 'aside[data-blade] button:has-text("Save")'
+    caption: Save. What the endpoint connects with changed, so the refusal no longer holds.
+  - wait: { selector: 'aside[data-blade] [data-testid=endpoint-session]:has([data-testid=session-pill][data-state=up])', timeout: 20000 }
+    caption: The node logs in at its next check-in, and the session reads up.
+    poster: true

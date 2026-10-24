@@ -6146,7 +6146,7 @@ components:
           type: string
         authenticated:
           $ref: "#/components/schemas/ReachVerdictBody"
-          description: The auth rung (the probe's credential was accepted), present only when a credential was tried
+          description: The auth rung (the probe's credential was accepted, or a held session's login passed), present only when a credential was tried
         endpoint:
           description: The endpoint's derived name (its transport)
           type: string
@@ -6157,6 +6157,9 @@ components:
           type:
             - array
             - "null"
+        id:
+          description: The endpoint's uuid, the address its custom methods take (POST /endpoints/{id}:retry)
+          type: string
         label:
           description: The friendly string an operator reads; absent when unset, and the row then reads the derived name verbatim
           type: string
@@ -6174,9 +6177,15 @@ components:
         node:
           description: The node that probes this endpoint
           type: string
+        rejection:
+          $ref: "#/components/schemas/ReachRejectionBody"
+          description: The gate a terminal refusal holds on the endpoint, its rung and class; absent when none holds
         responsive:
           $ref: "#/components/schemas/ReachVerdictBody"
           description: The layer-7 responds rung (the protocol itself answered), when a probe has climbed it
+        session:
+          $ref: "#/components/schemas/ReachSessionBody"
+          description: "The endpoint's held session, while it is configured to hold one (a standing listen task, or a driver declaring a session): its latest state, when it changed, and why"
         transport:
           description: The transport (icmp, tcp, ...)
           type: string
@@ -6184,6 +6193,7 @@ components:
           $ref: "#/components/schemas/ReachVerdictBody"
           description: The latest reachability verdict, or null if none yet
       required:
+        - id
         - endpoint
         - transport
         - verdict
@@ -6226,6 +6236,46 @@ components:
         - layer
         - check
         - value
+        - ts
+      type: object
+    ReachRejectionBody:
+      additionalProperties: false
+      properties:
+        class:
+          description: "The refusal's class: auth, host-key, certificate or protocol"
+          type: string
+        rung:
+          description: "The ladder rung the refusal holds: responsive for a host key, certificate or protocol refusal, authenticated for a credential. Nothing at or above it is attempted until the connection fingerprint moves"
+          enum:
+            - reachable
+            - responsive
+            - authenticated
+          type: string
+      required:
+        - rung
+        - class
+      type: object
+    ReachSessionBody:
+      additionalProperties: false
+      properties:
+        reason:
+          description: "Why the session is in its state (session-reason), the reason of its latest transition; a rejected session's is its class and the component's own text (auth: auth rejected), scrubbed by the node of anything it sent. Cut to 500 characters; the property's series keeps the whole"
+          type: string
+        state:
+          description: "The held session's latest state (session-state): establishing, up, recovering, down, or rejected (a refusal retrying cannot fix; the node dials no more until the endpoint's connection fingerprint moves)"
+          enum:
+            - establishing
+            - up
+            - recovering
+            - down
+            - rejected
+          type: string
+        ts:
+          description: "When the session last changed state: a state is stored only on a transition, so a session is judged by the endpoint's last_seen, not by this"
+          format: date-time
+          type: string
+      required:
+        - state
         - ts
       type: object
     ReachVerdictBody:
