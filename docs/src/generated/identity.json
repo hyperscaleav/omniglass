@@ -249,6 +249,12 @@
       "labelled": false
     },
     {
+      "table": "retired_sample",
+      "shape": "id only",
+      "reason": "a retired sample or event row kept for audit (ADR-1100), keyed by its lane and the row's own id; nothing addresses it by name",
+      "labelled": false
+    },
+    {
       "table": "role",
       "shape": "key-bearing",
       "proved_elsewhere": "seeded only, no create path on the gateway",

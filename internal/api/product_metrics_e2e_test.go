@@ -59,14 +59,14 @@ func TestProductMetricsAPI(t *testing.T) {
 	}, http.StatusCreated)
 
 	// PUT declares the line. The metric must already exist in the catalog
-	// (icmp-rtt-avg is seeded); the contract only names it.
+	// (room-temperature is seeded); the contract only names it.
 	var set productMetricWire
-	if err := json.Unmarshal(c.do(ownerTok, http.MethodPut, "/products/acme-panel/metrics/icmp-rtt-avg",
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodPut, "/products/acme-panel/metrics/room-temperature",
 		map[string]any{"default_value": 10.5, "required": true}, http.StatusOK), &set); err != nil {
 		t.Fatalf("decode set: %v", err)
 	}
-	if set.MetricTypeName != "icmp-rtt-avg" || !set.Required || string(set.DefaultValue) != `10.5` {
-		t.Fatalf("set = %+v, want icmp-rtt-avg required with default 10.5", set)
+	if set.MetricTypeName != "room-temperature" || !set.Required || string(set.DefaultValue) != `10.5` {
+		t.Fatalf("set = %+v, want room-temperature required with default 10.5", set)
 	}
 
 	// GET lists the contract.
@@ -74,12 +74,12 @@ func TestProductMetricsAPI(t *testing.T) {
 	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/products/acme-panel/metrics", nil, http.StatusOK), &listed); err != nil {
 		t.Fatalf("decode list: %v", err)
 	}
-	if len(listed.Metrics) != 1 || listed.Metrics[0].MetricTypeName != "icmp-rtt-avg" {
-		t.Fatalf("contract = %+v, want one icmp-rtt-avg line", listed.Metrics)
+	if len(listed.Metrics) != 1 || listed.Metrics[0].MetricTypeName != "room-temperature" {
+		t.Fatalf("contract = %+v, want one room-temperature line", listed.Metrics)
 	}
 
 	// A second PUT revises the same line rather than adding another.
-	if err := json.Unmarshal(c.do(ownerTok, http.MethodPut, "/products/acme-panel/metrics/icmp-rtt-avg",
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodPut, "/products/acme-panel/metrics/room-temperature",
 		map[string]any{"default_value": 20}, http.StatusOK), &set); err != nil {
 		t.Fatalf("decode revise: %v", err)
 	}
@@ -94,25 +94,25 @@ func TestProductMetricsAPI(t *testing.T) {
 	}
 
 	// DELETE withdraws the line; withdrawing it twice is an explicit miss.
-	c.do(ownerTok, http.MethodDelete, "/products/acme-panel/metrics/icmp-rtt-avg", nil, http.StatusNoContent)
+	c.do(ownerTok, http.MethodDelete, "/products/acme-panel/metrics/room-temperature", nil, http.StatusNoContent)
 	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/products/acme-panel/metrics", nil, http.StatusOK), &listed); err != nil {
 		t.Fatalf("decode list after delete: %v", err)
 	}
 	if len(listed.Metrics) != 0 {
 		t.Fatalf("contract after delete = %+v, want empty", listed.Metrics)
 	}
-	c.do(ownerTok, http.MethodDelete, "/products/acme-panel/metrics/icmp-rtt-avg", nil, http.StatusNotFound)
+	c.do(ownerTok, http.MethodDelete, "/products/acme-panel/metrics/room-temperature", nil, http.StatusNotFound)
 
 	// The seeded official product ships its contract with the release, so both
 	// writes are refused (the official read-only rule, not a permission fault).
-	c.do(ownerTok, http.MethodPut, "/products/generic-device/metrics/icmp-rtt-avg",
+	c.do(ownerTok, http.MethodPut, "/products/generic-device/metrics/room-temperature",
 		map[string]any{"required": true}, http.StatusUnprocessableEntity)
-	c.do(ownerTok, http.MethodDelete, "/products/generic-device/metrics/icmp-rtt-avg", nil, http.StatusUnprocessableEntity)
+	c.do(ownerTok, http.MethodDelete, "/products/generic-device/metrics/room-temperature", nil, http.StatusUnprocessableEntity)
 
 	// A metric the catalog does not know is a request fault, not a 500, and an
 	// unknown product is a 404.
 	c.do(ownerTok, http.MethodPut, "/products/acme-panel/metrics/not-a-metric",
 		map[string]any{"required": true}, http.StatusUnprocessableEntity)
-	c.do(ownerTok, http.MethodPut, "/products/no-such-product/metrics/icmp-rtt-avg",
+	c.do(ownerTok, http.MethodPut, "/products/no-such-product/metrics/room-temperature",
 		map[string]any{"required": true}, http.StatusNotFound)
 }

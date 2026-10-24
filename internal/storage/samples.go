@@ -149,9 +149,24 @@ func (l *sampleLineage) rule() string {
 // are marked pending on each owner (#996), never the rule that produced the
 // batch.
 func (p *PG) writeMetricSamples(ctx context.Context, tx pgx.Tx, w KeyWriter, evs []MetricSampleWrite) error {
+	arcs := make([]string, len(evs))
 	rows := make([]keyedWrite, len(evs))
+	marks := newCalcMarks()
 	for i, ev := range evs {
-		rows[i] = keyedWrite{key: ev.Key, instance: ev.Instance}
+		if _, err := ownerColumn(ev.OwnerKind); err != nil {
+			return fmt.Errorf("storage: sample %s/%s: %w", ev.OwnerID, ev.Key, err)
+		}
+		// The arc stores the owner's primary key. Resolving here rather than in the
+		// insert means an unknown owner is a named error instead of a NULL that
+		// trips the arc CHECK opaquely, and the writer check holds the row to
+		// the owner it will land on.
+		arc, err := p.ownerArcValue(ctx, tx, ev.OwnerKind, ev.OwnerID)
+		if err != nil {
+			return fmt.Errorf("storage: sample %s/%s: %w", ev.OwnerID, ev.Key, err)
+		}
+		arcs[i] = arc
+		rows[i] = keyedWrite{key: ev.Key, instance: ev.Instance, ownerKind: ev.OwnerKind, owner: arc}
+		marks.add(ev.OwnerKind, arc, rules.LaneMetric, ev.Key)
 	}
 	if err := admitWrites(ctx, tx, writeMetric, w, rows); err != nil {
 		return err
@@ -160,22 +175,6 @@ func (p *PG) writeMetricSamples(ctx context.Context, tx pgx.Tx, w KeyWriter, evs
 	eval, err := p.newRuleEvaluator(ctx, tx, keys)
 	if err != nil {
 		return err
-	}
-	arcs := make([]string, len(evs))
-	marks := newCalcMarks()
-	for i, ev := range evs {
-		if _, err := ownerColumn(ev.OwnerKind); err != nil {
-			return fmt.Errorf("storage: sample %s/%s: %w", ev.OwnerID, ev.Key, err)
-		}
-		// The arc stores the owner's primary key. Resolving here rather than in the
-		// insert means an unknown owner is a named error instead of a NULL that
-		// trips the arc CHECK opaquely.
-		arc, err := p.ownerArcValue(ctx, tx, ev.OwnerKind, ev.OwnerID)
-		if err != nil {
-			return fmt.Errorf("storage: sample %s/%s: %w", ev.OwnerID, ev.Key, err)
-		}
-		arcs[i] = arc
-		marks.add(ev.OwnerKind, arc, rules.LaneMetric, ev.Key)
 	}
 	// Marked before any sample lands, so the batch takes the pending rows'
 	// locks before any series or health lock (the calc tick's order).

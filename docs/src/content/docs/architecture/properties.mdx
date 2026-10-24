@@ -236,10 +236,12 @@ reads carry it as `writer_class`. The ruling, rendered from the code the gateway
 
 <WriterClasses />
 
-Two classes form the **reserved system family**, fixed and internal: `node-probe` (the node's own
-account of an endpoint, declared in `internal/collection/probekeys`) and `platform` (what only the
-Omniglass process writes; the self-monitoring follow-on, #1094, is its planned consumer). Their names
-are declared in code and closed to an operator-created type on every lane. A **writer** is the entry
+Three classes form the **reserved system family**, fixed and internal: `node-probe` (the node's own
+account of an endpoint, declared in `internal/collection/probekeys`), `platform` (what only the
+Omniglass process writes; the self-monitoring follow-on, #1094, is its planned consumer) and
+`command-lifecycle` (`command-issued`, the event a command's issue puts on its owner's timeline). Their
+names are declared in code and closed to an operator-created type on every lane, and no product,
+standard or location-type contract declares one or gives it a default. A **writer** is the entry
 point a write comes through, and it fixes the provenance: the node lane and the push lane write
 `observed`, a calc rule `calculated`, a command `intended`, an operator `declared`. So operator and
 command are writers, not classes: a declared or intended row is never an observation and contests no
@@ -248,9 +250,12 @@ observer, which is why a collected key keeps all four provenances side by side.
 - **A node-probe key reads only as the node's observation.** The reachability panel, the session pill
   and the ingest's transition guard read the observed series alone, so no other provenance stands in
   for the node's; the one declared row the family admits, a key pin (the ssh host key, the tls
-  certificate), is set only through an endpoint's audited `:retry` and read only as the pin. A node-probe sample dated more than five
+  certificate), is set only through an endpoint's audited `:retry` (its row's `source` is `key-pin`,
+  the one mark a read trusts it by) and read only as the pin. A node-probe sample dated more than five
   minutes past the database's clock is stored at the database's now, so the node's account cannot
-  outlive its tenure. Likewise the health reads serve the rollup's calculated rows alone.
+  outlive its tenure. Likewise the health reads serve the rollup's calculated rows alone. Rows written
+  before the ruling that it refuses were retired into `retired_sample`
+  ([ADR-1100](/architecture/decisions/#adr-1100-legacy-rows-and-stored-declarations-honor-the-one-writer-ruling)).
 - **Fusion is within a class.** The same-key, multi-source reconcile [below](#fusion) is between the
   perspectives of a `collected` key (a driver's emits on the node lane, a push), told apart by
   `source`: the class is the trust boundary, the source the sensor path within it. A reserved key has

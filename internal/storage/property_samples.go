@@ -59,30 +59,8 @@ func (p *PG) InsertPropertySamples(ctx context.Context, w KeyWriter, evs []Prope
 // metrics, held to each key's writer class first. An observation may also
 // settle a pending command.
 func (p *PG) writePropertySamples(ctx context.Context, tx pgx.Tx, w KeyWriter, evs []PropertySampleWrite) error {
-	rows := make([]keyedWrite, len(evs))
-	for i, ev := range evs {
-		rows[i] = keyedWrite{key: ev.Key, instance: ev.Instance}
-	}
-	if err := admitWrites(ctx, tx, writeProperty, w, rows); err != nil {
-		return err
-	}
-	// Settlement only cares about properties a command type targets; learn
-	// which once per batch, and read the transaction's clock once.
-	now, err := dbNow(ctx, tx)
-	if err != nil {
-		return err
-	}
-	targeted, err := commandTargetedProperties(ctx, tx)
-	if err != nil {
-		return err
-	}
-	// The event rules reading this batch's keys judge each sample as it lands
-	// (#919), in this transaction.
-	eval, err := p.newRuleEvaluator(ctx, tx, sampleKeys(evs, func(e PropertySampleWrite) string { return e.Key }))
-	if err != nil {
-		return err
-	}
 	arcs := make([]string, len(evs))
+	rows := make([]keyedWrite, len(evs))
 	marks := newCalcMarks()
 	for i, ev := range evs {
 		if _, err := ownerColumn(ev.OwnerKind); err != nil {
@@ -101,7 +79,29 @@ func (p *PG) writePropertySamples(ctx context.Context, tx pgx.Tx, w KeyWriter, e
 			return fmt.Errorf("storage: property sample %s/%s: %w", ev.OwnerID, ev.Key, err)
 		}
 		arcs[i] = arc
+		rows[i] = keyedWrite{key: ev.Key, instance: ev.Instance, ownerKind: ev.OwnerKind, owner: arc}
 		marks.add(ev.OwnerKind, arc, rules.LaneProperty, ev.Key)
+	}
+	// Every row is held to its key's writer class, and to the owner it will
+	// land on, before anything lands.
+	if err := admitWrites(ctx, tx, writeProperty, w, rows); err != nil {
+		return err
+	}
+	// Settlement only cares about properties a command type targets; learn
+	// which once per batch, and read the transaction's clock once.
+	now, err := dbNow(ctx, tx)
+	if err != nil {
+		return err
+	}
+	targeted, err := commandTargetedProperties(ctx, tx)
+	if err != nil {
+		return err
+	}
+	// The event rules reading this batch's keys judge each sample as it lands
+	// (#919), in this transaction.
+	eval, err := p.newRuleEvaluator(ctx, tx, sampleKeys(evs, func(e PropertySampleWrite) string { return e.Key }))
+	if err != nil {
+		return err
 	}
 	// Marked before any sample lands (writeMetricSamples says why).
 	if err := p.markCalcPending(ctx, tx, marks, w.rule()); err != nil {

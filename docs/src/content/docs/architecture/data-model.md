@@ -463,6 +463,10 @@ audit: {
     actor_principal_id: uuid {constraint: foreign_key}
     real_actor_principal_id: uuid {constraint: foreign_key}
   }
+  retired_sample: {
+    shape: sql_table
+    id: bigint {constraint: primary_key}
+  }
 }
 
 audit.audit_log.actor_principal_id -> identity.principal.id

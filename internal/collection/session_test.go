@@ -778,3 +778,30 @@ func TestSessionDownReadsUpOnAPush(t *testing.T) {
 	d.last().push("EVT INPUT hdmi2")
 	r.waitStates(t, establishing, down, up)
 }
+
+// TestHostKeyPinKnowsWhatItLearned: a key trusted on first use (by Trust or
+// Admit) is the node's own, a key the worklist delivered never becomes one by
+// matching, and a carried key stays learned. Only a learned key is the node's
+// to republish or carry once the worklist delivers none (ADR-0161).
+func TestHostKeyPinKnowsWhatItLearned(t *testing.T) {
+	first := collection.NewHostKeyPin("")
+	first.Trust("SHA256:a")
+	if !first.Learned() || first.Get() != "SHA256:a" {
+		t.Fatalf("a first-use trust: learned %v, pin %q", first.Learned(), first.Get())
+	}
+	admitted := collection.NewHostKeyPin("")
+	if _, ok := admitted.Admit("SHA256:b"); !ok || !admitted.Learned() {
+		t.Fatalf("a first-use admit: ok %v, learned %v", ok, admitted.Learned())
+	}
+	delivered := collection.NewHostKeyPin("SHA256:c")
+	delivered.Trust("SHA256:c")
+	if _, ok := delivered.Admit("SHA256:c"); !ok || delivered.Learned() {
+		t.Fatalf("a delivered pin that matched: ok %v, learned %v; want it still the server's", ok, delivered.Learned())
+	}
+	if carried := collection.NewLearnedHostKeyPin("SHA256:d"); !carried.Learned() {
+		t.Fatal("a carried key is not learned")
+	}
+	if empty := collection.NewLearnedHostKeyPin(""); empty.Learned() {
+		t.Fatal("an empty carried pin reads learned")
+	}
+}

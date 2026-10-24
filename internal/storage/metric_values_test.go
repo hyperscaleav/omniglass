@@ -51,12 +51,12 @@ func TestEffectiveMetrics(t *testing.T) {
 		t.Fatalf("create product: %v", err)
 	}
 	if _, err := gw.SetProductMetric(ctx, "", "acme-dsp", storage.ProductMetricSpec{
-		MetricTypeName: "icmp-rtt-avg", DefaultValue: json.RawMessage(`10.5`), Required: true,
+		MetricTypeName: "room-temperature", DefaultValue: json.RawMessage(`10.5`), Required: true,
 	}); err != nil {
-		t.Fatalf("declare icmp-rtt-avg: %v", err)
+		t.Fatalf("declare room-temperature: %v", err)
 	}
-	if _, err := gw.SetProductMetric(ctx, "", "acme-dsp", storage.ProductMetricSpec{MetricTypeName: "tcp-open"}); err != nil {
-		t.Fatalf("declare tcp-open: %v", err)
+	if _, err := gw.SetProductMetric(ctx, "", "acme-dsp", storage.ProductMetricSpec{MetricTypeName: "uptime"}); err != nil {
+		t.Fatalf("declare uptime: %v", err)
 	}
 	product := "acme-dsp"
 	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "dsp-1", ProductName: &product}, all, all, all, all); err != nil {
@@ -72,38 +72,38 @@ func TestEffectiveMetrics(t *testing.T) {
 		t.Fatalf("want the 2 contract metrics, got %d: %+v", len(got), got)
 	}
 	idx := metricsByName(got)
-	rtt := idx["icmp-rtt-avg"]
-	if string(rtt.Value) != `10.5` || rtt.IsSampled || !rtt.FromContract || !rtt.Required {
-		t.Fatalf("icmp-rtt-avg unsampled: want default 10.5 from-contract required, got %+v", rtt)
+	temp := idx["room-temperature"]
+	if string(temp.Value) != `10.5` || temp.IsSampled || !temp.FromContract || !temp.Required {
+		t.Fatalf("room-temperature unsampled: want default 10.5 from-contract required, got %+v", temp)
 	}
-	if open := idx["tcp-open"]; open.Value != nil || open.IsSampled {
-		t.Fatalf("tcp-open unsampled with no default: want no value, got %+v", open)
+	if up := idx["uptime"]; up.Value != nil || up.IsSampled {
+		t.Fatalf("uptime unsampled with no default: want no value, got %+v", up)
 	}
 
 	// A sample lands: the series wins over the default, and the default stays
 	// visible beside it.
 	base := time.Now().UTC().Add(-time.Hour)
 	if err := insertMetrics(ctx, gw, []storage.MetricSampleWrite{
-		{OwnerKind: "component", OwnerID: "dsp-1", Key: "icmp-rtt-avg", Instance: "if-0", Value: 3.25, Source: "test", TS: base},
+		{OwnerKind: "component", OwnerID: "dsp-1", Key: "room-temperature", Instance: "if-0", Value: 3.25, Source: "test", TS: base},
 	}); err != nil {
 		t.Fatalf("insert sample: %v", err)
 	}
 	idx = metricsByName(mustEffectiveMetrics(t, gw, "component", "dsp-1", all))
-	rtt = idx["icmp-rtt-avg"]
-	if string(rtt.Value) != `3.25` || !rtt.IsSampled || string(rtt.SampleValue) != `3.25` || string(rtt.DefaultValue) != `10.5` {
-		t.Fatalf("icmp-rtt-avg sampled: want 3.25 over default 10.5, got %+v", rtt)
+	temp = idx["room-temperature"]
+	if string(temp.Value) != `3.25` || !temp.IsSampled || string(temp.SampleValue) != `3.25` || string(temp.DefaultValue) != `10.5` {
+		t.Fatalf("room-temperature sampled: want 3.25 over default 10.5, got %+v", temp)
 	}
 
 	// The latest sample per metric wins across instances (the LatestMetric rule):
-	// a newer reading on another endpoint replaces the older one.
+	// a newer reading on another instance replaces the older one.
 	if err := insertMetrics(ctx, gw, []storage.MetricSampleWrite{
-		{OwnerKind: "component", OwnerID: "dsp-1", Key: "icmp-rtt-avg", Instance: "if-1", Value: 7.5, Source: "test", TS: base.Add(time.Minute)},
+		{OwnerKind: "component", OwnerID: "dsp-1", Key: "room-temperature", Instance: "if-1", Value: 7.5, Source: "test", TS: base.Add(time.Minute)},
 	}); err != nil {
 		t.Fatalf("insert instanced sample: %v", err)
 	}
 	idx = metricsByName(mustEffectiveMetrics(t, gw, "component", "dsp-1", all))
-	if rtt = idx["icmp-rtt-avg"]; string(rtt.Value) != `7.5` {
-		t.Fatalf("icmp-rtt-avg latest across instances: want 7.5, got %+v", rtt)
+	if temp = idx["room-temperature"]; string(temp.Value) != `7.5` {
+		t.Fatalf("room-temperature latest across instances: want 7.5, got %+v", temp)
 	}
 
 	// A calculated row is part of reality too: newer than every observation, it
@@ -112,44 +112,44 @@ func TestEffectiveMetrics(t *testing.T) {
 	conn := connectDSN(t, dsn)
 	mustExec(t, conn, `insert into metric (ts, owner_kind, component_id, metric_type_id, instance, value, provenance, source, source_rule, source_rule_version)
 		values ($1, 'component', (select id from component where name = 'dsp-1'),
-		        (select id from metric_type where name = 'icmp-rtt-avg'), '', 9.75, 'calculated', 'rule', 'rule-x', 1)`,
+		        (select id from metric_type where name = 'room-temperature'), '', 9.75, 'calculated', 'rule', 'rule-x', 1)`,
 		base.Add(2*time.Minute))
 	idx = metricsByName(mustEffectiveMetrics(t, gw, "component", "dsp-1", all))
-	if rtt = idx["icmp-rtt-avg"]; string(rtt.Value) != `9.75` || !rtt.IsSampled {
-		t.Fatalf("icmp-rtt-avg calculated latest: want 9.75, got %+v", rtt)
+	if temp = idx["room-temperature"]; string(temp.Value) != `9.75` || !temp.IsSampled {
+		t.Fatalf("room-temperature calculated latest: want 9.75, got %+v", temp)
 	}
 
 	// A metric the contract does not declare still resolves, flagged off-contract.
 	if err := insertMetrics(ctx, gw, []storage.MetricSampleWrite{
-		{OwnerKind: "component", OwnerID: "dsp-1", Key: "tcp-connect-time", Instance: "if-0", Value: 42, Source: "test", TS: base},
+		{OwnerKind: "component", OwnerID: "dsp-1", Key: "occupancy-count", Instance: "if-0", Value: 42, Source: "test", TS: base},
 	}); err != nil {
 		t.Fatalf("insert ad-hoc sample: %v", err)
 	}
 	idx = metricsByName(mustEffectiveMetrics(t, gw, "component", "dsp-1", all))
-	if ct := idx["tcp-connect-time"]; !ct.IsSampled || ct.FromContract || ct.Required || string(ct.Value) != `42` {
-		t.Fatalf("ad-hoc tcp-connect-time: want sampled off-contract 42, got %+v", ct)
+	if ct := idx["occupancy-count"]; !ct.IsSampled || ct.FromContract || ct.Required || string(ct.Value) != `42` {
+		t.Fatalf("ad-hoc occupancy-count: want sampled off-contract 42, got %+v", ct)
 	}
 
 	// Withdrawing a line stops the contract resolving it: with samples the metric
 	// survives as ad-hoc, without samples it leaves the read entirely.
-	if err := gw.DeleteProductMetric(ctx, "", "acme-dsp", "icmp-rtt-avg"); err != nil {
-		t.Fatalf("withdraw icmp-rtt-avg: %v", err)
+	if err := gw.DeleteProductMetric(ctx, "", "acme-dsp", "room-temperature"); err != nil {
+		t.Fatalf("withdraw room-temperature: %v", err)
 	}
-	if err := gw.DeleteProductMetric(ctx, "", "acme-dsp", "tcp-open"); err != nil {
-		t.Fatalf("withdraw tcp-open: %v", err)
+	if err := gw.DeleteProductMetric(ctx, "", "acme-dsp", "uptime"); err != nil {
+		t.Fatalf("withdraw uptime: %v", err)
 	}
 	idx = metricsByName(mustEffectiveMetrics(t, gw, "component", "dsp-1", all))
-	if rtt = idx["icmp-rtt-avg"]; !rtt.IsSampled || rtt.FromContract || rtt.DefaultValue != nil {
-		t.Fatalf("withdrawn icmp-rtt-avg: want ad-hoc with no default, got %+v", rtt)
+	if temp = idx["room-temperature"]; !temp.IsSampled || temp.FromContract || temp.DefaultValue != nil {
+		t.Fatalf("withdrawn room-temperature: want ad-hoc with no default, got %+v", temp)
 	}
-	if _, still := idx["tcp-open"]; still {
-		t.Fatalf("withdrawn tcp-open with no samples still resolves: %+v", idx)
+	if _, still := idx["uptime"]; still {
+		t.Fatalf("withdrawn uptime with no samples still resolves: %+v", idx)
 	}
 
 	// --- system: resolves against its standard's contract ---------------------
 
 	if _, err := gw.SetStandardMetric(ctx, "", "huddle-room", storage.StandardMetricSpec{
-		MetricTypeName: "tcp-open", DefaultValue: json.RawMessage(`1`),
+		MetricTypeName: "uptime", DefaultValue: json.RawMessage(`1`),
 	}); err != nil {
 		t.Fatalf("declare on standard: %v", err)
 	}
@@ -158,14 +158,14 @@ func TestEffectiveMetrics(t *testing.T) {
 		t.Fatalf("create system: %v", err)
 	}
 	sys := metricsByName(mustEffectiveMetrics(t, gw, "system", "hq-huddle", all))
-	if got := sys["tcp-open"]; string(got.Value) != `1` || got.IsSampled || !got.FromContract {
+	if got := sys["uptime"]; string(got.Value) != `1` || got.IsSampled || !got.FromContract {
 		t.Fatalf("system inherits the standard default: want 1 unsampled from-contract, got %+v", got)
 	}
 
 	// --- location: resolves against its location type's contract --------------
 
 	if _, err := gw.SetLocationTypeMetric(ctx, "", "room", storage.LocationTypeMetricSpec{
-		MetricTypeName: "icmp-rtt-avg", DefaultValue: json.RawMessage(`5`), Required: true,
+		MetricTypeName: "room-temperature", DefaultValue: json.RawMessage(`5`), Required: true,
 	}); err != nil {
 		t.Fatalf("declare on location type: %v", err)
 	}
@@ -178,7 +178,7 @@ func TestEffectiveMetrics(t *testing.T) {
 		t.Fatalf("create location: %v", err)
 	}
 	loc := metricsByName(mustEffectiveMetrics(t, gw, "location", "hq-room-1", all))
-	if got := loc["icmp-rtt-avg"]; string(got.Value) != `5` || !got.FromContract || !got.Required {
+	if got := loc["room-temperature"]; string(got.Value) != `5` || !got.FromContract || !got.Required {
 		t.Fatalf("location inherits the type default: want 5 from-contract required, got %+v", got)
 	}
 

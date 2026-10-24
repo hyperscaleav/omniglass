@@ -80,20 +80,29 @@ func (p *PG) InsertEvents(ctx context.Context, w KeyWriter, evs []EventWrite) er
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
+	// The arc points at the primary key, so each owner reference resolves to a
+	// uuid before it is stored, and before the writer check holds the row to
+	// it. A node still stores its name until the collection tier converts.
+	arcs := make([]string, len(evs))
 	rows := make([]keyedWrite, len(evs))
 	for i, ev := range evs {
-		rows[i] = keyedWrite{key: ev.Key, instance: ev.Instance}
+		if _, err := ownerColumn(ev.OwnerKind); err != nil {
+			return fmt.Errorf("storage: event %s/%s: %w", ev.OwnerID, ev.Key, err)
+		}
+		arc, err := p.ownerArcValue(ctx, tx, ev.OwnerKind, ev.OwnerID)
+		if err != nil {
+			return err
+		}
+		arcs[i] = arc
+		rows[i] = keyedWrite{key: ev.Key, instance: ev.Instance, ownerKind: ev.OwnerKind, owner: arc}
 	}
 	if err := admitWrites(ctx, tx, writeEvent, w, rows); err != nil {
 		return err
 	}
 
 	clock := sampleClock{q: tx}
-	for _, ev := range evs {
-		col, err := ownerColumn(ev.OwnerKind)
-		if err != nil {
-			return fmt.Errorf("storage: event %s/%s: %w", ev.OwnerID, ev.Key, err)
-		}
+	for i, ev := range evs {
+		col, _ := ownerColumn(ev.OwnerKind)
 		ts := ev.TS
 		if ts.IsZero() {
 			ts = time.Now().UTC()
@@ -113,14 +122,7 @@ func (p *PG) InsertEvents(ctx context.Context, w KeyWriter, evs []EventWrite) er
 		}
 		sql := fmt.Sprintf(`insert into event (ts, owner_kind, %s, event_type_id, instance, origin, message, attributes, provenance, source)
 			values ($1, $2, $3, (select id from event_type where name = $4), $5, $6, $7, $8, 'observed', $9)`, col)
-		// The arc points at the primary key, so the owner reference resolves to a
-		// uuid before it is stored. A node still stores its name until the
-		// collection tier converts.
-		arc, err := p.ownerArcValue(ctx, tx, ev.OwnerKind, ev.OwnerID)
-		if err != nil {
-			return err
-		}
-		if _, err := tx.Exec(ctx, sql, ts, ev.OwnerKind, arc, ev.Key, ev.Instance, origin, ev.Message, attrs, ev.Source); err != nil {
+		if _, err := tx.Exec(ctx, sql, ts, ev.OwnerKind, arcs[i], ev.Key, ev.Instance, origin, ev.Message, attrs, ev.Source); err != nil {
 			return fmt.Errorf("storage: insert event %s/%s: %w", ev.OwnerID, ev.Key, err)
 		}
 	}

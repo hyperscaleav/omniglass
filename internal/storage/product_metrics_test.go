@@ -48,13 +48,13 @@ func TestProductMetricCRUD(t *testing.T) {
 
 	// Declare a required metric with a default.
 	pm, err := gw.SetProductMetric(ctx, "", "acme-widget", storage.ProductMetricSpec{
-		MetricTypeName: "icmp-rtt-avg", DefaultValue: json.RawMessage(`10.5`), Required: true,
+		MetricTypeName: "room-temperature", DefaultValue: json.RawMessage(`10.5`), Required: true,
 	})
 	if err != nil {
 		t.Fatalf("set: %v", err)
 	}
-	if pm.ProductName != "acme-widget" || pm.MetricTypeName != "icmp-rtt-avg" || !pm.Required {
-		t.Fatalf("set = %+v, want acme-widget/icmp-rtt-avg required", pm)
+	if pm.ProductName != "acme-widget" || pm.MetricTypeName != "room-temperature" || !pm.Required {
+		t.Fatalf("set = %+v, want acme-widget/room-temperature required", pm)
 	}
 	if string(pm.DefaultValue) != `10.5` {
 		t.Fatalf("set default = %s, want 10.5", pm.DefaultValue)
@@ -63,7 +63,7 @@ func TestProductMetricCRUD(t *testing.T) {
 	// Setting the same metric again updates the contract in place rather than
 	// adding a second row (the (product, metric) pair is the key).
 	if _, err := gw.SetProductMetric(ctx, "", "acme-widget", storage.ProductMetricSpec{
-		MetricTypeName: "icmp-rtt-avg", DefaultValue: json.RawMessage(`20`), Required: false,
+		MetricTypeName: "room-temperature", DefaultValue: json.RawMessage(`20`), Required: false,
 	}); err != nil {
 		t.Fatalf("re-set: %v", err)
 	}
@@ -77,7 +77,7 @@ func TestProductMetricCRUD(t *testing.T) {
 
 	// A contract may declare a metric with no default at all; nil round-trips as
 	// nil (a SQL NULL), not as the JSON literal null.
-	noDefault, err := gw.SetProductMetric(ctx, "", "acme-widget", storage.ProductMetricSpec{MetricTypeName: "tcp-open"})
+	noDefault, err := gw.SetProductMetric(ctx, "", "acme-widget", storage.ProductMetricSpec{MetricTypeName: "uptime"})
 	if err != nil {
 		t.Fatalf("set without default: %v", err)
 	}
@@ -88,9 +88,9 @@ func TestProductMetricCRUD(t *testing.T) {
 	if err != nil {
 		t.Fatalf("list two: %v", err)
 	}
-	// Ordered by metric name: icmp-rtt-avg before tcp-open.
-	if len(lines) != 2 || lines[0].MetricTypeName != "icmp-rtt-avg" || lines[1].MetricTypeName != "tcp-open" {
-		t.Fatalf("list two = %+v, want icmp-rtt-avg then tcp-open", lines)
+	// Ordered by metric name: room-temperature before uptime.
+	if len(lines) != 2 || lines[0].MetricTypeName != "room-temperature" || lines[1].MetricTypeName != "uptime" {
+		t.Fatalf("list two = %+v, want room-temperature then uptime", lines)
 	}
 
 	// An unknown metric name is a missing catalog reference, not a silent insert.
@@ -99,10 +99,10 @@ func TestProductMetricCRUD(t *testing.T) {
 	}
 
 	// Delete clears one declaration; a re-delete is ErrTypeNotFound.
-	if err := gw.DeleteProductMetric(ctx, "", "acme-widget", "tcp-open"); err != nil {
+	if err := gw.DeleteProductMetric(ctx, "", "acme-widget", "uptime"); err != nil {
 		t.Fatalf("delete: %v", err)
 	}
-	if err := gw.DeleteProductMetric(ctx, "", "acme-widget", "icmp-rtt-avg"); err != nil {
+	if err := gw.DeleteProductMetric(ctx, "", "acme-widget", "room-temperature"); err != nil {
 		t.Fatalf("delete second: %v", err)
 	}
 	lines, err = gw.ListProductMetrics(ctx, "acme-widget")
@@ -112,27 +112,27 @@ func TestProductMetricCRUD(t *testing.T) {
 	if len(lines) != 0 {
 		t.Fatalf("list after delete = %d rows, want 0", len(lines))
 	}
-	if err := gw.DeleteProductMetric(ctx, "", "acme-widget", "icmp-rtt-avg"); !errors.Is(err, storage.ErrTypeNotFound) {
+	if err := gw.DeleteProductMetric(ctx, "", "acme-widget", "room-temperature"); !errors.Is(err, storage.ErrTypeNotFound) {
 		t.Fatalf("re-delete err = %v, want ErrTypeNotFound", err)
 	}
 
 	// A seeded (official) product's contract is seed-owned and read-only.
-	if _, err := gw.SetProductMetric(ctx, "", "generic-device", storage.ProductMetricSpec{MetricTypeName: "tcp-open"}); !errors.Is(err, storage.ErrTypeOfficial) {
+	if _, err := gw.SetProductMetric(ctx, "", "generic-device", storage.ProductMetricSpec{MetricTypeName: "uptime"}); !errors.Is(err, storage.ErrTypeOfficial) {
 		t.Fatalf("set official err = %v, want ErrTypeOfficial", err)
 	}
-	if err := gw.DeleteProductMetric(ctx, "", "generic-device", "tcp-open"); !errors.Is(err, storage.ErrTypeOfficial) {
+	if err := gw.DeleteProductMetric(ctx, "", "generic-device", "uptime"); !errors.Is(err, storage.ErrTypeOfficial) {
 		t.Fatalf("delete official err = %v, want ErrTypeOfficial", err)
 	}
 
 	// The boot-seed path writes an official product's contract without the guard
 	// and without an audit, and is idempotent.
 	if err := gw.UpsertProductMetric(ctx, "generic-device", storage.ProductMetricSpec{
-		MetricTypeName: "tcp-open", DefaultValue: json.RawMessage(`1`), Required: true,
+		MetricTypeName: "uptime", DefaultValue: json.RawMessage(`1`), Required: true,
 	}); err != nil {
 		t.Fatalf("upsert: %v", err)
 	}
 	if err := gw.UpsertProductMetric(ctx, "generic-device", storage.ProductMetricSpec{
-		MetricTypeName: "tcp-open", DefaultValue: json.RawMessage(`0`), Required: false,
+		MetricTypeName: "uptime", DefaultValue: json.RawMessage(`0`), Required: false,
 	}); err != nil {
 		t.Fatalf("re-upsert: %v", err)
 	}
@@ -141,21 +141,21 @@ func TestProductMetricCRUD(t *testing.T) {
 		t.Fatalf("list official: %v", err)
 	}
 	if len(lines) != 1 || string(lines[0].DefaultValue) != `0` || lines[0].Required {
-		t.Fatalf("upsert = %+v, want one tcp-open line defaulting to 0 required=false", lines)
+		t.Fatalf("upsert = %+v, want one uptime line defaulting to 0 required=false", lines)
 	}
 
 	// An unknown classifier is ErrTypeNotFound on both write paths of every
 	// family, never a raw not-null violation from the resolved-to-NULL insert.
-	if _, err := gw.SetProductMetric(ctx, "", "no-such-product", storage.ProductMetricSpec{MetricTypeName: "tcp-open"}); !errors.Is(err, storage.ErrTypeNotFound) {
+	if _, err := gw.SetProductMetric(ctx, "", "no-such-product", storage.ProductMetricSpec{MetricTypeName: "uptime"}); !errors.Is(err, storage.ErrTypeNotFound) {
 		t.Fatalf("set unknown product err = %v, want ErrTypeNotFound", err)
 	}
-	if err := gw.UpsertProductMetric(ctx, "no-such-product", storage.ProductMetricSpec{MetricTypeName: "tcp-open"}); !errors.Is(err, storage.ErrTypeNotFound) {
+	if err := gw.UpsertProductMetric(ctx, "no-such-product", storage.ProductMetricSpec{MetricTypeName: "uptime"}); !errors.Is(err, storage.ErrTypeNotFound) {
 		t.Fatalf("upsert unknown product err = %v, want ErrTypeNotFound", err)
 	}
-	if err := gw.UpsertStandardMetric(ctx, "no-such-standard", storage.StandardMetricSpec{MetricTypeName: "tcp-open"}); !errors.Is(err, storage.ErrTypeNotFound) {
+	if err := gw.UpsertStandardMetric(ctx, "no-such-standard", storage.StandardMetricSpec{MetricTypeName: "uptime"}); !errors.Is(err, storage.ErrTypeNotFound) {
 		t.Fatalf("upsert unknown standard err = %v, want ErrTypeNotFound", err)
 	}
-	if err := gw.UpsertLocationTypeMetric(ctx, "no-such-type", storage.LocationTypeMetricSpec{MetricTypeName: "tcp-open"}); !errors.Is(err, storage.ErrTypeNotFound) {
+	if err := gw.UpsertLocationTypeMetric(ctx, "no-such-type", storage.LocationTypeMetricSpec{MetricTypeName: "uptime"}); !errors.Is(err, storage.ErrTypeNotFound) {
 		t.Fatalf("upsert unknown location type err = %v, want ErrTypeNotFound", err)
 	}
 	// The location-type PROPERTY seed path had the same gap (product resolves the

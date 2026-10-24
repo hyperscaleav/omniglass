@@ -6410,10 +6410,10 @@ export interface components {
             /** @description A JSON Schema fragment for the occurrence payload */
             payload_schema?: unknown;
             /**
-             * @description Who may write this key (ADR-0161): node-probe (a node's own probe or session machine, under the endpoint it probed), platform (the Omniglass process itself: the health rollup), calc (the calc rule that outputs it), or collected (a driver's emits or a push, and a command's or an operator's value). The Storage Gateway refuses any write whose writer the class does not admit
+             * @description Who may write this key (ADR-0161): node-probe (a node's own probe or session machine, under the endpoint it probed), platform (the Omniglass process itself: the health rollup), command-lifecycle (a command's own issue: command-issued), calc (the calc rule that outputs it), or collected (a driver's emits or a push, and a command's or an operator's value). The Storage Gateway refuses any write whose writer the class does not admit
              * @enum {string}
              */
-            writer_class: "node-probe" | "platform" | "calc" | "collected";
+            writer_class: "node-probe" | "platform" | "command-lifecycle" | "calc" | "collected";
         };
         EventsOutputBody: {
             /**

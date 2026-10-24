@@ -72,7 +72,7 @@ type Command struct {
 // caller that never applied a scope at all, which the conformance matrix's
 // readable-but-not-actionable branch fails on.
 // commandIssuedEvent is the event type of a command's caused occurrence.
-const commandIssuedEvent = "command-issued"
+const commandIssuedEvent = writerclass.CommandIssued
 
 func (p *PG) IssueCommand(ctx context.Context, actorID, ownerKind, ownerID, commandType, instance string, value, params json.RawMessage) (*Command, error) {
 	col, err := ownerColumn(ownerKind)

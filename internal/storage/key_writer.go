@@ -25,8 +25,9 @@ import (
 var ErrKeyWriterRefused = errors.New("storage: the key's writer class does not admit this writer")
 
 // KeyWriterError is a refused write: the key, its class, the writer that tried,
-// and, where it decides the refusal, the calc rule that owns the key or the
-// instance a node named against the endpoint its task ran.
+// and, where it decides the refusal, the calc rule that owns the key, the
+// instance a node named against the endpoint its task ran, or the component a
+// node's row landed on against the one its task collects for.
 type KeyWriterError struct {
 	Key      string
 	Class    writerclass.Class
@@ -34,9 +35,19 @@ type KeyWriterError struct {
 	Rule     string
 	Instance string
 	Endpoint string
+	// Owner and Component are set on a node's write refused for its binding:
+	// the component the row would land on, and the one the task collects for
+	// (empty when the writer's endpoint is no endpoint of it).
+	Owner     string
+	Component string
+	binding   bool
 }
 
 func (e *KeyWriterError) Error() string {
+	if e.binding {
+		return fmt.Sprintf("%s: a node writes only for the component and the endpoint its task ran against "+
+			"(the row's component %q; the task's component %q, endpoint %q)", e.Key, e.Owner, e.Component, e.Endpoint)
+	}
 	msg := writerclass.Refusal(e.Class, e.Key, e.Writer, e.Rule)
 	if e.Class == writerclass.NodeProbe && e.Writer == writerclass.Node {
 		msg += fmt.Sprintf(" (instance %q, the task's endpoint %q)", e.Instance, e.Endpoint)
@@ -53,17 +64,25 @@ func (e *KeyWriterError) Unwrap() error { return ErrKeyWriterRefused }
 // where that path writes.
 type KeyWriter struct {
 	Kind writerclass.Writer
-	// Endpoint is the endpoint a node's task ran against, the only instance a
-	// node-probe key lands under. Node writers only.
+	// Component is the component a node's task collects for (its id, or a
+	// name ADR-0062 resolves), the only owner a node's row lands on. Node
+	// writers only.
+	Component string
+	// Endpoint is the endpoint of Component's a node's task ran against, the
+	// only instance a node-probe key lands under. Node writers only.
 	Endpoint string
+	// bound is Component's id once admitWrites has resolved it; "" refuses
+	// every row a node writer carries.
+	bound string
 	// calc is a calc rule's lineage; set only by the calc tick.
 	calc *sampleLineage
 }
 
-// NodeWriter is the node lane's writer: a node's own collection, under the
-// task bound to endpoint (the task's endpoint name, resolved server-side).
-func NodeWriter(endpoint string) KeyWriter {
-	return KeyWriter{Kind: writerclass.Node, Endpoint: endpoint}
+// NodeWriter is the node lane's writer: a node's own collection, for the
+// component its task collects for and under the endpoint its task ran against
+// (both resolved server-side from the task, never the node's to assert).
+func NodeWriter(component, endpoint string) KeyWriter {
+	return KeyWriter{Kind: writerclass.Node, Component: component, Endpoint: endpoint}
 }
 
 // PushWriter is the telemetry push lane's writer.
@@ -171,17 +190,27 @@ func keyWriters(ctx context.Context, q querier, lane writeLane, keys []string) (
 	return out, nil
 }
 
-// keyedWrite is one row a write path is about to land: its key and instance.
+// keyedWrite is one row a write path is about to land: its key and instance,
+// and its resolved owner arc (kind and id), which a node's writer is held to.
 type keyedWrite struct {
-	key, instance string
+	key, instance    string
+	ownerKind, owner string
 }
 
 // admitWrites is the gateway's write check, run by every path that lands a
-// sample or an event before it lands anything: each row's key must admit w.
-// The first refusal returns, so a batch lands whole or not at all.
+// sample or an event before it lands anything: each row's key must admit w,
+// and a node's every row must land on its task's component. The first refusal
+// returns, so a batch lands whole or not at all.
 func admitWrites(ctx context.Context, q querier, lane writeLane, w KeyWriter, rows []keyedWrite) error {
 	if len(rows) == 0 {
 		return nil
+	}
+	if w.Kind == writerclass.Node {
+		bound, err := nodeBinding(ctx, q, w)
+		if err != nil {
+			return err
+		}
+		w.bound = bound
 	}
 	keys := make([]string, len(rows))
 	for i, r := range rows {
@@ -199,10 +228,34 @@ func admitWrites(ctx context.Context, q querier, lane writeLane, w KeyWriter, ro
 	return nil
 }
 
+// nodeBinding resolves a node writer to the id of the component its task
+// collects for; "" when it names none, or none that resolves, which refuses
+// every row the writer carries. The node lane builds the writer from the task
+// (ResolveTaskOwner reads the component and the endpoint off one endpoint
+// row), so the pair it names is always one endpoint's.
+func nodeBinding(ctx context.Context, q querier, w KeyWriter) (string, error) {
+	if w.Component == "" || w.Endpoint == "" {
+		return "", nil
+	}
+	if isUUID(w.Component) {
+		return w.Component, nil
+	}
+	c, err := scopedByName(ctx, q, componentConfig, w.Component)
+	var amb *ErrAmbiguousName
+	switch {
+	case errors.Is(err, ErrComponentNotFound), errors.As(err, &amb):
+		return "", nil
+	case err != nil:
+		return "", fmt.Errorf("storage: resolve the node's component %q: %w", w.Component, err)
+	}
+	return c.ID, nil
+}
+
 // admitWrite holds one row to its key's resolved writer. Pure. Beyond the
-// class's ruling: a node writes a node-probe key only under the endpoint its
-// task ran against (a node cannot speak for an endpoint it does not hold), and
-// a calc rule writes only a key it outputs.
+// class's ruling: a node writes only on the component its task collects for,
+// and a node-probe key only under the endpoint its task ran against (a node
+// cannot speak for a component or an endpoint it does not hold); and a calc
+// rule writes only a key it outputs.
 func admitWrite(kw keyWriterOf, w KeyWriter, r keyedWrite) error {
 	refuse := &KeyWriterError{Key: r.key, Class: kw.class, Writer: w.Kind, Instance: r.instance, Endpoint: w.Endpoint}
 	for _, name := range kw.rules {
@@ -211,6 +264,10 @@ func admitWrite(kw keyWriterOf, w KeyWriter, r keyedWrite) error {
 		}
 	}
 	if !writerclass.Admits(kw.class, w.Kind, r.key) {
+		return refuse
+	}
+	if w.Kind == writerclass.Node && (w.bound == "" || r.ownerKind != "component" || r.owner != w.bound) {
+		refuse.Owner, refuse.Component, refuse.binding = r.owner, w.bound, true
 		return refuse
 	}
 	switch {
@@ -269,4 +326,21 @@ func (c *sampleClock) cap(ctx context.Context, key string, ts time.Time) (time.T
 		return c.now, nil
 	}
 	return ts, nil
+}
+
+// ErrContractKeyReserved refuses a product, standard or location-type contract
+// line naming a reserved key (ADR-0161): a contract's default resolves as the
+// key's value where nothing else says one, so on a node-probe key it would
+// stand in for the node's observation, on a platform key for the platform's
+// verdict, and on a command's lifecycle event for a command nobody issued.
+var ErrContractKeyReserved = errors.New("storage: a contract may not declare a reserved key")
+
+// contractKey refuses a contract line on a reserved key, on the operator's
+// path and the seed's alike, naming the key and who writes it.
+func contractKey(name string) error {
+	if c, ok := writerclass.Reserved(name); ok {
+		return fmt.Errorf("%w: %s, so no contract declares it or gives it a default",
+			ErrContractKeyReserved, writerclass.Refusal(c, name, writerclass.Operator, ""))
+	}
+	return nil
 }

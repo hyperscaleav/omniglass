@@ -58,14 +58,14 @@ func TestLocationTypeMetricsAPI(t *testing.T) {
 	}, http.StatusCreated)
 
 	// PUT declares the line. The metric must already exist in the catalog
-	// (icmp-rtt-avg is seeded); the contract only names it.
+	// (room-temperature is seeded); the contract only names it.
 	var set locationTypeMetricWire
-	if err := json.Unmarshal(c.do(ownerTok, http.MethodPut, "/location-types/annex/metrics/icmp-rtt-avg",
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodPut, "/location-types/annex/metrics/room-temperature",
 		map[string]any{"default_value": 5, "required": true}, http.StatusOK), &set); err != nil {
 		t.Fatalf("decode set: %v", err)
 	}
-	if set.MetricTypeName != "icmp-rtt-avg" || !set.Required || string(set.DefaultValue) != `5` {
-		t.Fatalf("set = %+v, want icmp-rtt-avg required with default 5", set)
+	if set.MetricTypeName != "room-temperature" || !set.Required || string(set.DefaultValue) != `5` {
+		t.Fatalf("set = %+v, want room-temperature required with default 5", set)
 	}
 
 	// GET lists the contract.
@@ -73,12 +73,12 @@ func TestLocationTypeMetricsAPI(t *testing.T) {
 	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/location-types/annex/metrics", nil, http.StatusOK), &listed); err != nil {
 		t.Fatalf("decode list: %v", err)
 	}
-	if len(listed.Metrics) != 1 || listed.Metrics[0].MetricTypeName != "icmp-rtt-avg" {
-		t.Fatalf("contract = %+v, want one icmp-rtt-avg line", listed.Metrics)
+	if len(listed.Metrics) != 1 || listed.Metrics[0].MetricTypeName != "room-temperature" {
+		t.Fatalf("contract = %+v, want one room-temperature line", listed.Metrics)
 	}
 
 	// A second PUT revises the same line rather than adding another.
-	if err := json.Unmarshal(c.do(ownerTok, http.MethodPut, "/location-types/annex/metrics/icmp-rtt-avg",
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodPut, "/location-types/annex/metrics/room-temperature",
 		map[string]any{"default_value": 7.5}, http.StatusOK), &set); err != nil {
 		t.Fatalf("decode revise: %v", err)
 	}
@@ -87,20 +87,20 @@ func TestLocationTypeMetricsAPI(t *testing.T) {
 	}
 
 	// DELETE withdraws the line; withdrawing it twice is an explicit miss.
-	c.do(ownerTok, http.MethodDelete, "/location-types/annex/metrics/icmp-rtt-avg", nil, http.StatusNoContent)
+	c.do(ownerTok, http.MethodDelete, "/location-types/annex/metrics/room-temperature", nil, http.StatusNoContent)
 	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/location-types/annex/metrics", nil, http.StatusOK), &listed); err != nil {
 		t.Fatalf("decode list after delete: %v", err)
 	}
 	if len(listed.Metrics) != 0 {
 		t.Fatalf("contract after delete = %+v, want empty", listed.Metrics)
 	}
-	c.do(ownerTok, http.MethodDelete, "/location-types/annex/metrics/icmp-rtt-avg", nil, http.StatusNotFound)
+	c.do(ownerTok, http.MethodDelete, "/location-types/annex/metrics/room-temperature", nil, http.StatusNotFound)
 
 	// A metric the catalog does not know, and a type that does not exist, are
 	// request faults rather than 500s.
 	c.do(ownerTok, http.MethodPut, "/location-types/annex/metrics/not-a-metric",
 		map[string]any{"required": true}, http.StatusUnprocessableEntity)
-	c.do(ownerTok, http.MethodPut, "/location-types/no-such-type/metrics/icmp-rtt-avg",
+	c.do(ownerTok, http.MethodPut, "/location-types/no-such-type/metrics/room-temperature",
 		map[string]any{"required": true}, http.StatusNotFound)
 
 	// A SHIPPED type's contract is writable over the wire too, which is what the
@@ -108,7 +108,7 @@ func TestLocationTypeMetricsAPI(t *testing.T) {
 	// ADR-0106). Held here and not only at the gateway, because the description
 	// that used to promise a 422 here is what the CLI, the typed client and the
 	// reference all repeat: a status is the claim, so a status is the assertion.
-	c.do(ownerTok, http.MethodPut, "/location-types/room/metrics/icmp-rtt-avg",
+	c.do(ownerTok, http.MethodPut, "/location-types/room/metrics/room-temperature",
 		map[string]any{"required": true}, http.StatusOK)
-	c.do(ownerTok, http.MethodDelete, "/location-types/room/metrics/icmp-rtt-avg", nil, http.StatusNoContent)
+	c.do(ownerTok, http.MethodDelete, "/location-types/room/metrics/room-temperature", nil, http.StatusNoContent)
 }

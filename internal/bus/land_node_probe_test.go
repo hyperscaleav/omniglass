@@ -66,7 +66,7 @@ func TestNodeLaneConfinesNodeProbeKeysToItsEndpoint(t *testing.T) {
 	land := func(ev *ogv1.TelemetryBatch) {
 		t.Helper()
 		ev.TaskId, ev.NodeId = "t-ssh", "node-a"
-		if err := s.land(ctx, ev, ingestBinding{LogNode: "node-a", SampleOwner: &owner, Writer: storage.NodeWriter(owner.EndpointName)}); err != nil {
+		if err := s.land(ctx, ev, ingestBinding{LogNode: "node-a", SampleOwner: &owner, Writer: storage.NodeWriter(owner.ComponentID, owner.EndpointName)}); err != nil {
 			t.Fatalf("land: %v", err)
 		}
 	}

@@ -142,7 +142,7 @@ func (s *Server) handleTelemetry(msg jetstream.Msg) {
 			// The node's writer is bound to the task's endpoint: the only
 			// instance a node-probe key lands under (ADR-0161).
 			bind.SampleOwner = &owner
-			bind.Writer = storage.NodeWriter(owner.EndpointName)
+			bind.Writer = storage.NodeWriter(owner.ComponentID, owner.EndpointName)
 		}
 	}
 

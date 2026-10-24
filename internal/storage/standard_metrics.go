@@ -82,6 +82,9 @@ func upsertStandardMetricRow(ctx context.Context, q querier, standardID string, 
 	if err := requireRegistryRow(ctx, q, "standard", standardID); err != nil {
 		return nil, err
 	}
+	if err := contractKey(spec.MetricTypeName); err != nil {
+		return nil, err
+	}
 	if err := requireMetricType(ctx, q, spec.MetricTypeName); err != nil {
 		return nil, err
 	}

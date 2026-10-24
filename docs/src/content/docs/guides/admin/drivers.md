@@ -28,9 +28,15 @@ answer the request as a failure carrying the device's text instead of timing out
 a spec is Go RE2 with **substring** semantics: `INPUT \S+` also matches `EVT INPUT hdmi2`, so anchor
 a pattern meant to match a whole line (`^INPUT \S+$`). `unmatched: collection-failed` makes a line
 nobody claims a collection fault rather than a counted discard ([routing](/architecture/collection/#listeners-over-a-held-session)).
-An emit names a **collected** key: a native probe key or `collection-failed` (the node's own account),
-`health`, or a key a calc rule outputs is refused at the spec's write, naming the key, since each has
-its own writer ([who writes a key](/architecture/properties/#who-writes-a-key-the-writer-class)).
+An emit names a **collected** key. A key only the node writes (every native probe key: the
+reachability verdicts and probe timings, `tls-certificate`, `ssh-host-key`, `endpoint-rejection`, a
+held session's `session-state` and `session-reason`, and `collection-failed`), `health`,
+`command-issued`, or a key a calc rule outputs is refused at the spec's write, naming the key, since
+each has its own writer ([who writes a key](/architecture/properties/#who-writes-a-key-the-writer-class)):
+the node would otherwise take a driver's value as its own observation, the pin or the gate. A spec
+stored before that refusal is held to it where it acts: the worklist strips such an emit from the
+tasks a node receives (the rest still run), a re-derivation never bakes one, and the server names the
+spec and its tasks in a warning at boot so you can mend it.
 A spec may declare a **session** block, the auth step the held session runs before anything rides
 it ([auth and rejection](/architecture/collection/#auth-and-rejection)). `session.login` is a login
 dialog: its `steps` each wait for a prompt (`expect`, a `prefix` or `regex` that may match a prompt
@@ -75,10 +81,6 @@ place on the endpoint like any input, which moves its connection fingerprint, so
 certificate refused tries again under the new mode with no retry. A refused certificate reads
 `rejected` with class `certificate` and its reason; for a pinned key that changed, the reason names
 both keys and `omniglass endpoint retry <id> --certificate <the offered key>` trusts the new one.
-A key only the node writes (every native probe key: the reachability verdicts and probe timings,
-`tls-certificate`, `ssh-host-key`, `endpoint-rejection`, a held session's `session-state` and
-`session-reason`) cannot be a driver's emit: a spec naming one refuses at write, since the node
-would otherwise take a driver's value as its own observation, the pin or the gate.
 
 ```yaml
 transport: tls

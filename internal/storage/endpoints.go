@@ -712,15 +712,16 @@ func (p *PG) RetryEndpoint(ctx context.Context, actorID, id string, pin RetryPin
 		}
 		// A pin (the ssh host key, a tls certificate's public key) is the one
 		// declared row a node-probe key admits, and only through this path
-		// (ADR-0161).
+		// (ADR-0161). Its source names the path: the one mark a read trusts a
+		// declared pin by.
 		if err := admitWrites(ctx, tx, writeProperty, gatewayWriter(writerclass.KeyPin),
-			[]keyedWrite{{key: pinKeyOf[before.Transport], instance: before.Name}}); err != nil {
+			[]keyedWrite{{key: pinKeyOf[before.Transport], instance: before.Name, ownerKind: "component", owner: *before.ComponentID}}); err != nil {
 			return nil, err
 		}
 		if _, err := tx.Exec(ctx, `
-			insert into property (owner_kind, component_id, property_type_id, instance, provenance, value)
-			values ('component', $1::uuid, (select id from property_type where name = $4), $2, '`+declaredProvenance+`', to_jsonb($3::text))`,
-			*before.ComponentID, before.Name, key, pinKeyOf[before.Transport]); err != nil {
+			insert into property (owner_kind, component_id, property_type_id, instance, provenance, source, value)
+			values ('component', $1::uuid, (select id from property_type where name = $4), $2, '`+declaredProvenance+`', $5, to_jsonb($3::text))`,
+			*before.ComponentID, before.Name, key, pinKeyOf[before.Transport], pinSource); err != nil {
 			return nil, fmt.Errorf("storage: pin a key for endpoint %q: %w", before.ID, err)
 		}
 	}
@@ -832,20 +833,52 @@ func (p *PG) EndpointKeyPin(ctx context.Context, componentRef, endpoint, transpo
 	return pin, err
 }
 
+// pinSource is the source a declared pin row carries: the writer that wrote
+// it, the endpoint's audited :retry (ADR-0161). A declared pin row without it
+// came another way (the plain property route, before the writer check refused
+// it), and no read trusts it as the pin.
+const pinSource = string(writerclass.KeyPin)
+
+// retiredPinSQL matches an observed pin row (aliased o; comp and inst are
+// the SQL its endpoint's component id, as text, and instance read from) whose
+// key a backfill retired as a declared pin no :retry set, published after
+// that declared row and never before it (ADR-1100): such a key is never taken
+// as the pin from the observed series, however it comes back (a node still
+// holding it in memory republishes it), until a :retry declares it. A key the
+// node learned before the plant stays its own, as the backfill's echo rule
+// keeps it.
+func retiredPinSQL(comp, inst string) string {
+	return `select 1 from retired_sample r
+	where r.lane = 'property' and r.sample->>'provenance' = 'declared'
+	  and coalesce(r.sample->>'source', '') <> '` + pinSource + `'
+	  and r.sample->>'component_id' = ` + comp + ` and r.sample->>'instance' = ` + inst + `
+	  and r.sample->>'property_type_id' = o.property_type_id::text and r.sample->'value' = o.value
+	  and o.id > (r.sample->>'id')::bigint
+	  and not exists (select 1 from property h
+		where h.provenance = 'observed' and h.component_id = o.component_id and h.instance = o.instance
+		  and h.property_type_id = o.property_type_id and h.value = o.value and h.id < (r.sample->>'id')::bigint)`
+}
+
 // keyPin is an endpoint's key pin under its property (ssh-host-key, #1032;
 // tls-certificate, #1035): the operator's declared key, and the pin in force
-// (the declared key, else the key the node trusted on first use).
+// (the declared key, else the key the node trusted on first use). The
+// declared key is the latest set through :retry alone (pinSource): a declared
+// row any other path left, a value or a tombstone, is neither delivered nor
+// read as the pin a trust replaces; nor is an observed key retired as such a
+// pin (retiredPinSQL).
 func keyPin(ctx context.Context, q querier, componentID, instance, property string) (declared, pin string, err error) {
 	if err := q.QueryRow(ctx, `
 		select coalesce(
 			(select nullif(value, 'null'::jsonb) #>> '{}' from property
 			 where owner_kind = 'component' and component_id = $1::uuid and instance = $2 and provenance = 'declared'
+			   and source = '`+pinSource+`'
 			   and property_type_id = (select id from property_type where name = $3)
 			 order by id desc limit 1), ''),
-			coalesce((select value #>> '{}' from property
-			 where owner_kind = 'component' and component_id = $1::uuid and instance = $2 and provenance = 'observed'
-			   and property_type_id = (select id from property_type where name = $3)
-			 order by ts desc, id desc limit 1), '')`, componentID, instance, property).Scan(&declared, &pin); err != nil {
+			coalesce((select o.value #>> '{}' from property o
+			 where o.owner_kind = 'component' and o.component_id = $1::uuid and o.instance = $2 and o.provenance = 'observed'
+			   and o.property_type_id = (select id from property_type where name = $3)
+			   and not exists (`+retiredPinSQL("$1::text", "$2")+`)
+			 order by o.ts desc, o.id desc limit 1), '')`, componentID, instance, property).Scan(&declared, &pin); err != nil {
 		return "", "", fmt.Errorf("storage: %s pin: %w", property, err)
 	}
 	if declared != "" {

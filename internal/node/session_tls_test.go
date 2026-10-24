@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"log/slog"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -398,5 +399,32 @@ func TestTLSProbeLogsTheRefusalsReasonOnce(t *testing.T) {
 	}
 	if !strings.Contains(out, "level=WARN") || !strings.Contains(out, "endpoint=tls") {
 		t.Fatalf("the refusal log = %s, want a warning naming the endpoint", out)
+	}
+}
+
+// A tls pin the worklist delivered and then stops delivering was withdrawn by
+// the server: the node forgets it, never republishes it, and the session
+// redials trusting on first use.
+func TestTLSWithdrawnPinIsForgottenAndTrustsOnFirstUseAgain(t *testing.T) {
+	dialer := &tlsFakeDialer{offered: "SHA256:planted"}
+	log, keys := &transitionLog{}, &keyLog{}
+	m := newSessionManager(map[string]collection.SessionDialer{"tls": dialer}, sessionHooks{transition: log.record, certificate: keys.record})
+	defer m.closeAll()
+	m.reconcile([]collection.TaskSpec{tlsPollTask("p1", "ep-1", pinParams, "SHA256:planted")})
+	log.waitFor(t, "p1", collection.SessionUp)
+
+	dialer.setOffered(keySecond)
+	m.reconcile([]collection.TaskSpec{tlsPollTask("p1", "ep-1", pinParams, "")})
+	waitFor(t, func() bool { return dialer.count() == 2 }, "the withdrawn pin recycled the session")
+	waitFor(t, func() bool { return slices.Contains(keys.all(), keySecond) }, "the key trusted on first use was published")
+	m.reconcile([]collection.TaskSpec{tlsPollTask("p1", "ep-1", pinParams, "")})
+	if got := keys.all(); slices.Contains(got, "SHA256:planted") {
+		t.Fatalf("the node republished the withdrawn pin as its own key: %v", got)
+	}
+	dialer.mu.Lock()
+	last := dialer.trusts[len(dialer.trusts)-1]
+	dialer.mu.Unlock()
+	if last.Pin == nil || last.Pin.Get() != keySecond {
+		t.Fatalf("the recycled session pinned %v, want the key it trusted on first use", last.Pin)
 	}
 }

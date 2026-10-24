@@ -62,7 +62,7 @@ func TestComponentMetricsAPI(t *testing.T) {
 	c.do(ownerTok, http.MethodPost, "/products", map[string]any{
 		"name": "acme-dsp", "label": "Acme DSP", "kind": "device", "component_type": "generic-device",
 	}, http.StatusCreated)
-	c.do(ownerTok, http.MethodPut, "/products/acme-dsp/metrics/icmp-rtt-avg",
+	c.do(ownerTok, http.MethodPut, "/products/acme-dsp/metrics/room-temperature",
 		map[string]any{"default_value": 10.5, "required": true}, http.StatusOK)
 	c.do(ownerTok, http.MethodPost, "/components", map[string]any{
 		"name": "dsp-1", "product": "acme-dsp",
@@ -77,15 +77,15 @@ func TestComponentMetricsAPI(t *testing.T) {
 		t.Fatalf("effective read = %+v, want dsp-1 with one metric", got)
 	}
 	m := got.Metrics[0]
-	if m.MetricTypeName != "icmp-rtt-avg" || !m.FromContract || m.IsSampled || string(m.Value) != `10.5` || !m.Required {
+	if m.MetricTypeName != "room-temperature" || !m.FromContract || m.IsSampled || string(m.Value) != `10.5` || !m.Required {
 		t.Fatalf("unsampled line = %+v, want the contract default 10.5", m)
 	}
 
 	// A sample lands (through the gateway sink, the ingest path's write): the
 	// series wins over the default, and an off-contract series shows beside it.
 	if err := insertMetrics(ctx, gw, []storage.MetricSampleWrite{
-		{OwnerKind: "component", OwnerID: "dsp-1", Key: "icmp-rtt-avg", Instance: "icmp", Value: 3.25, Source: "test"},
-		{OwnerKind: "component", OwnerID: "dsp-1", Key: "tcp-connect-time", Instance: "icmp", Value: 42, Source: "test"},
+		{OwnerKind: "component", OwnerID: "dsp-1", Key: "room-temperature", Instance: "", Value: 3.25, Source: "test"},
+		{OwnerKind: "component", OwnerID: "dsp-1", Key: "occupancy-count", Instance: "", Value: 42, Source: "test"},
 	}); err != nil {
 		t.Fatalf("insert samples: %v", err)
 	}
@@ -97,11 +97,11 @@ func TestComponentMetricsAPI(t *testing.T) {
 	}
 	for _, m := range got.Metrics {
 		switch m.MetricTypeName {
-		case "icmp-rtt-avg":
+		case "room-temperature":
 			if !m.IsSampled || string(m.Value) != `3.25` || string(m.DefaultValue) != `10.5` {
 				t.Errorf("sampled line = %+v, want 3.25 over default 10.5", m)
 			}
-		case "tcp-connect-time":
+		case "occupancy-count":
 			if !m.IsSampled || m.FromContract || string(m.Value) != `42` {
 				t.Errorf("ad-hoc line = %+v, want off-contract 42", m)
 			}

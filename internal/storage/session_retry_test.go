@@ -304,7 +304,7 @@ func TestTrustingAKeyChecksTheOfferedKeyAndAuditsBoth(t *testing.T) {
 	first, shown, now := "SHA256:"+strings.Repeat("F", 43), "SHA256:"+strings.Repeat("S", 43), "SHA256:"+strings.Repeat("N", 43)
 	observe := func(key, value string) {
 		t.Helper()
-		if err := gw.InsertPropertySamples(ctx, storage.NodeWriter(ep.Name), []storage.PropertySampleWrite{{OwnerKind: "component", OwnerID: comp, Key: key,
+		if err := gw.InsertPropertySamples(ctx, storage.NodeWriter(comp, ep.Name), []storage.PropertySampleWrite{{OwnerKind: "component", OwnerID: comp, Key: key,
 			Instance: ep.Name, Value: value, Source: "ssh", TS: time.Now()}}); err != nil {
 			t.Fatal(err)
 		}

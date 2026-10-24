@@ -404,7 +404,11 @@ worklist, and a changed key reads `rejected`, class `host-key`, naming both fing
 the gate carries as data. An operator who trusts the new key (a replaced component) retries the
 endpoint with it (`:retry` with `host_key`, audited with both keys; the console's **Trust this
 key**), which declares the new pin and redials onto it; a key the refusal on record does not name is
-refused. Proven against
+refused. A declared pin is trusted only as that path wrote it (its row's `source` is `key-pin`): a
+declared row any other path left is never delivered, and a pin the worklist stops delivering is one
+the node forgets, trusting on first use again
+([ADR-1100](/architecture/decisions/#adr-1100-legacy-rows-and-stored-declarations-honor-the-one-writer-ruling)).
+Proven against
 the simulated panel's ssh shell (poll, command, push, recover onto the same key, down after the
 budget, a wrong password and a rotated key each rejected) and end to end ([ADR-0157](/architecture/decisions/#adr-0157-telnet-and-ssh-are-held-line-transports-their-login-is-the-drivers-and-the-ssh-host-key-is-pinned-on-first-use)).
 

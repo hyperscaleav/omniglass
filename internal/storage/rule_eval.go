@@ -653,7 +653,15 @@ func (p *PG) endCondition(ctx context.Context, tx pgx.Tx, actorID string, r Even
 	if tag.RowsAffected() == 0 || r.ClearEventType == "" {
 		return nil
 	}
-	return writeRuleEvent(ctx, tx, r, r.ClearEventType, comp, instance, alarmID, s)
+	err = writeRuleEvent(ctx, tx, r, r.ClearEventType, comp, instance, alarmID, s)
+	if errors.Is(err, ErrKeyWriterRefused) {
+		// A rule stored with a clear event type the writer ruling now
+		// refuses (ADR-1100) still lets its condition go: the condition
+		// ends and its alarm clears, writing no event, so the rule can be
+		// released or deleted; the boot audit names it.
+		return nil
+	}
+	return err
 }
 
 // writeRuleEvent records one of a rule's edges as an event (#949): derived,
@@ -1400,6 +1408,14 @@ func (p *PG) watched(ctx context.Context, cands []ruleCandidate) ([]ruleCandidat
 // sample as though it had just arrived; on a series that already agrees,
 // that changes nothing.
 func (p *PG) reconcileSeries(ctx context.Context, c ruleCandidate) error {
+	return p.rejudgeSeries(ctx, c, false)
+}
+
+// rejudgeSeries is reconcileSeries, and with releaseEmpty a series left with
+// no sample at all lets go of what the rule holds on it (its condition, the
+// alarm with it, its streak): the boot heal's case, where a retirement took
+// the only samples a condition stood on (ADR-1100).
+func (p *PG) rejudgeSeries(ctx context.Context, c ruleCandidate, releaseEmpty bool) error {
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("storage: begin rule reconcile: %w", err)
@@ -1434,8 +1450,21 @@ func (p *PG) reconcileSeries(ctx context.Context, c ruleCandidate) error {
 		return err
 	}
 	newest, err := newestSamples(ctx, tx, r.SampleLane, r.SampleKey, c.component, c.instance)
-	if err != nil || len(newest) == 0 {
+	if err != nil {
 		return err
+	}
+	if len(newest) == 0 {
+		if !releaseEmpty {
+			return nil
+		}
+		if err := p.endCondition(ctx, tx, "", r, &o.comp, c.instance, edgeSample{}); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, `delete from event_rule_state where rule_id = $1::uuid and component_id = $2::uuid and instance = $3`,
+			r.ID, c.component, c.instance); err != nil {
+			return fmt.Errorf("storage: rule %s release streak on %s: %w", r.Name, c.component, err)
+		}
+		return tx.Commit(ctx)
 	}
 	action, _ := p.decide(r, o, c.instance, newest[0].value)
 	now, err := dbNow(ctx, tx)

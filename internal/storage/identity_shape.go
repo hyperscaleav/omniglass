@@ -172,6 +172,7 @@ var IdentityShapes = map[string]TableIdentity{
 	"principal_group_member": {Shape: ShapeIDOnly},
 	"product_metric":         {Shape: ShapeIDOnly}, "product_property": {Shape: ShapeIDOnly},
 	"property":         {Shape: ShapeIDOnly},
+	"retired_sample":   {Shape: ShapeIDOnly, Reason: "a retired sample or event row kept for audit (ADR-1100), keyed by its lane and the row's own id; nothing addresses it by name"},
 	"setting_override": {Shape: ShapeIDOnly}, "standard_metric": {Shape: ShapeIDOnly},
 	"standard_property": {Shape: ShapeIDOnly}, "system_member": {Shape: ShapeIDOnly},
 	"system_role_assignment": {Shape: ShapeIDOnly},

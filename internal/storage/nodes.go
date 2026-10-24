@@ -496,6 +496,12 @@ func (p *PG) NodeWorklist(ctx context.Context, name string) (Worklist, error) {
 	if err := rows.Err(); err != nil {
 		return Worklist{}, fmt.Errorf("storage: node worklist %q: %w", name, err)
 	}
+	// A driver spec stored, or a task derived, before the emit refusal may
+	// still name a key the node lane may not carry: the node never sees it
+	// (ADR-0161), whatever binary it runs.
+	if err := p.stripRefusedEmits(ctx, name, wl.Tasks); err != nil {
+		return Worklist{}, fmt.Errorf("storage: node worklist %q: %w", name, err)
+	}
 	// Unseal after the row scan (one connection at a time), caching by the
 	// (reference, component) pair so two tasks on one component sharing a
 	// credential unseal it once. Delivery is confined to a secret that CASCADES
@@ -544,8 +550,8 @@ func (p *PG) NodeWorklist(ctx context.Context, name string) (Worklist, error) {
 	}
 	// An ssh task's host key pin (#1032), and a tls task's public key pin
 	// (#1035): the operator's declared key wins (a :retry accepting a
-	// replaced component's key, or a cleared one falling back), else the key
-	// the node trusted on first use.
+	// replaced component's key; a declared row any other path left is never
+	// the pin, ADR-1100), else the key the node trusted on first use.
 	// The declared pin alone is a fingerprint input: it is the operator's
 	// act. A key the node trusted on first use is a learned fact, and moving
 	// the fingerprint on it would recycle a healthy session and lift a gate
