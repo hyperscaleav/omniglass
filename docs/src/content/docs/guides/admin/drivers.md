@@ -21,7 +21,7 @@ families (poll functions, listeners, command bindings). The detail blade renders
 the **menu it is**: what each poll asks and what lands, what each listener waits for, what each
 command binding actuates. On a line protocol a listener's **arm** commands (the subscribe
 conversation) are sent on every connection the node holds, its **match** rule claims the
-device's pushes, and each claimed line lands as a sample with no poll involved (a listener rides a
+component's pushes, and each claimed line lands as a sample with no poll involved (a listener rides a
 held line session or a udp socket, and is refused at write on any other transport, where nothing
 would run it); a request may
 declare its **reply** shape (`request.reply`, a `prefix` or `regex`) so its answer is picked out of

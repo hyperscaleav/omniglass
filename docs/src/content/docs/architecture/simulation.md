@@ -136,7 +136,7 @@ restarts the face on its port (`StartTLSSession`), and counts the handshakes it 
 (`TLSHandshakes`, so a bare TCP connect is told from a handshake); these are test-harness hooks, not
 operator-facing simulator operations.
 
-An http face declaring `tls: true` (the Kestrel bar's API on 443) serves the device's own **https
+An http face declaring `tls: true` (the Kestrel bar's API on 443) serves the simulated component's own **https
 identity** (#902): an ECDSA key derived from its id, the same on every run, so an `https` endpoint
 that pinned it stays up across a simulator restart (an ECDSA key, not the line face's Ed25519 one,
 because a browser refuses an Ed25519 certificate and an operator opens the bar's page in one). A test
