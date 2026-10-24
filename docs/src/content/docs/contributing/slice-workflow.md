@@ -49,6 +49,8 @@ Not a vibe at each gate, a check:
 - **Status moves with the code.** A slice that advances a page flips its **status badge** to the new
   floor (`Design` to `Partial` to `Built`), adds the [build log](/architecture/build-log/) entry, and records any
   divergence from the design both inline on the page and in the [decision log](/architecture/decisions/).
+  Each log entry is a new file of its own, never an edit to the log page
+  ([the logs are fragment directories](/contributing/docs-with-everything/#the-logs-are-one-file-per-entry)).
   A built capability behind a `Design` badge is a drift bug.
 - **The API cannot drift.** `make gen` regenerates the OpenAPI and the clients (the cobra CLI and the
   typed SPA client) from the Go; a non-empty diff fails the slice until committed.

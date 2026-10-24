@@ -307,7 +307,7 @@ their AND.
 | Layer | Check | Sample | Notes |
 |---|---|---|---|
 | L3 network | ICMP ping, **batched once per host** per tick | `icmp-reachable` / `icmp-rtt-avg` | **informational** (see verdict below); shared by every endpoint on the host |
-| L4 transport | TCP connect (tcp-family) | `tcp-open`/`tcp-connect-time` | udp has no presence check: an open udp port cannot be detected, so its transport rung is the driver's request answered (built, [ADR-0162](/architecture/decisions/#adr-0162-a-udp-endpoint-binds-its-own-socket-and-its-rung-is-a-request-answered)), and the host's port-unreachable report reads `refused` |
+| L4 transport | TCP connect (tcp-family) | `tcp-open`/`tcp-connect-time` | udp has no presence check: an open udp port cannot be detected, so its transport rung is the driver's request answered (built, [ADR-0163](/architecture/decisions/#adr-0163-a-udp-endpoint-binds-its-own-socket-and-its-rung-is-a-request-answered)), and the host's port-unreachable report reads `refused` |
 | L7 app | protocol handshake: SNMP `sysUpTime` get (**`snmp.reachable`**, default-on) · SSH handshake+auth · telnet login chain | (verdict) | the SNMP get is the **primary, default** SNMP liveness (ICMP-independent); SSH/telnet log in only where the driver's ladder declares a session rung, because their liveness credential can differ from the device's |
 
 **The verdict respects each layer's definitiveness.** A TCP connect, any L7 handshake and a
@@ -324,7 +324,7 @@ setup/resolve error, a missing credential) does not gate.
 `ladder.ping.enabled` turns the informational ping off, `ladder.transport` names the gate (a
 connect, the protocol's handshake, or a request answered: the tls handshake shipped as the tls
 transport's rung, [ADR-0160](/architecture/decisions/#adr-0160-tls-is-its-own-transport-over-a-shared-primitive-and-its-pin-is-the-public-key),
-and the udp request as udp's, [ADR-0162](/architecture/decisions/#adr-0162-a-udp-endpoint-binds-its-own-socket-and-its-rung-is-a-request-answered)), and `ladder.session.enabled` whether a login
+and the udp request as udp's, [ADR-0163](/architecture/decisions/#adr-0163-a-udp-endpoint-binds-its-own-socket-and-its-rung-is-a-request-answered)), and `ladder.session.enabled` whether a login
 rung exists. Nothing is toggled per check on an endpoint; the snmp get as snmp's rung is #821.
 
 The honest limit: a v2c wrong community is a **silent drop**, so a get failure alone cannot separate

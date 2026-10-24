@@ -451,7 +451,7 @@ onto the same key, a changed key held beneath the gate across a node restart and
 
 #### udp
 
-Built (#1037, [ADR-0162](/architecture/decisions/#adr-0162-a-udp-endpoint-binds-its-own-socket-and-its-rung-is-a-request-answered)):
+Built (#1037, [ADR-0163](/architecture/decisions/#adr-0163-a-udp-endpoint-binds-its-own-socket-and-its-rung-is-a-request-answered)):
 `udp` is the line protocol as datagrams, one line each, and stateless: there is no connection to
 hold and no `session-state`. Each udp endpoint binds **its own socket** on the node, on its
 driver's `listen-port` input (unset, a port the kernel picks), and every request it makes leaves
