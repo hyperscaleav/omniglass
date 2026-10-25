@@ -273,9 +273,11 @@ the gate at its next check-in and tries once, and a refusal met again sets it an
 `endpoint:retry` the button is greyed and its tooltip says so, while the reason still reads. Where
 the gate holds the endpoint's polls too (any refusal at the transport rung, and a credential every
 poll carries: an snmp community, or an http or https driver's credential), the Collection card reads
-**polls stopped** beside it. An **http** or **https** endpoint holds no session either: a 401 to a
-request carrying its credential gates it, class `auth`, with the reason
-`auth: the component refused the credential (401)`, and an https certificate the endpoint refuses
+**polls stopped** beside it. An **http** or **https** endpoint holds no session either (a login's
+session lives in its node's memory, never as a held connection): a 401 to a request carrying its
+credential gates it, class `auth`, with the reason `auth: the component refused the credential
+(401)`, a login the component refuses gates it the same way with its own reason (`auth: the login
+was sent back to the login page (302 to /login)`), and an https certificate the endpoint refuses
 gates it at the handshake, a changed key offering **Trust this key**.
 
 In the simulated fleet, the touch panel in the place named `auditorium` answers SNMP, and its

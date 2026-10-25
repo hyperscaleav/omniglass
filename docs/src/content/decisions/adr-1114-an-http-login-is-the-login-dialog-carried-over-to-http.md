@@ -16,8 +16,11 @@ summary: "An http session may declare `session.login` (#1114, slice 2 of epic #1
   2. **What a login opens.** `capture` names values the last answer carries, each located by the one
      extraction primitive bound to that answer's format; `headers` send them on every later request
      (`${session.<capture>}` only, never a secret, never `Cookie` or the headers the client owns, a
-     poll's own headers never shadowing one); `expiry` reads the session's lifetime in seconds. The
-     component's cookies ride a jar. A captured value with a control character, or past 8 KiB, refuses.
+     poll's or a command's own headers never shadowing one); `expiry` reads the session's lifetime in
+     seconds, held to 10 seconds to 30 days, and one missing, zero or unreadable declares none. The
+     component's cookies ride a jar, kept for a login session alone, at most 64 cookies of 4 KiB. A
+     captured value with a control character, or past 8 KiB, refuses. A step's path opens with a
+     literal `/`, so no secret renders into the URL's authority.
   3. **Memory alone** (decision 3). The node holds one auth state per http endpoint, shared by its
      polls and its commands: the jar, the captured values and their headers, the digest challenge.
      Never logged, published or persisted; dropped whole when the endpoint's connection fingerprint
@@ -32,17 +35,26 @@ summary: "An http session may declare `session.login` (#1114, slice 2 of epic #1
      redirect back to the login page, any other 4xx, or a 2xx at the last step without the `ready`
      text or a value it captures, is the component refusing the login: a terminal `auth` at the session
      rung, through the gate and its reason (#1110). The state holds the refusal, so concurrent
-     requests cannot try twice; the gate holds every request beneath it across a restart. A 5xx, a 408
-     or a 429 is retryable and charges nothing; a redirect elsewhere passes.
+     requests cannot try twice; the gate holds every request beneath it across a restart. A login
+     drawing no verdict after its secrets were sent (a 5xx, a 408, a 429, a connection dropped after
+     the request was written) is retryable, but three in a row spend the login budget and read
+     `rejected`, as a line session's silent hang-up does; a connection never made charges nothing. A
+     redirect elsewhere passes.
   6. **Digest is a scheme on basic-auth.** `scheme: digest` answers RFC 7616: MD5 and SHA-256 and
      their `-sess` forms, `qop=auth` or the legacy form, the strongest challenge offered. The
-     challenge is held and answered preemptively with a rising count; a challenge marked `stale` is
-     answered afresh (a count once sent under a nonce is never sent again), and a 401 to an answer
-     that was not stale is the credential's refusal. The password never crosses the wire.
+     challenge is held and answered preemptively with a rising count; a challenge marked `stale`, or
+     under a nonce rotated without saying so, is answered afresh (a count once sent under a nonce is
+     never sent again, and a `-sess` key keeps one client nonce per challenge), and a 401 to an
+     answer of the nonce still offered is the credential's refusal. A 401 with no challenge the node
+     answers is the request's own fault: the credential was never sent. The password never crosses
+     the wire.
   7. **Never logged.** Everything the state holds (the secret fields a login sent, the captured
      values, the cookies) is scrubbed from every reason and error in every form a component could echo,
-     and from every URL the node names. The node logs a login's reason (`opening`, `renewing before
-     expiry`, `the session lapsed`), never a value.
+     and from every URL the node names; what a login would capture is scrubbed even from the reason
+     refusing it. An exchange prints as its method and path alone. The node logs a login's reason
+     (`opening`, `renewing before expiry`, `the session lapsed`), never a value. A command whose
+     delivery names an address the worklist does not is never sent, so a session never rides to
+     another component.
   8. **Shaped for OAuth2.** A client-credentials grant (#1119) is a request step posting the client's
      secret fields, a captured `access_token`, its `expires_in` and a bearer header: no reshaping, only
      a secret type. A client authenticating with a Basic header over its id and secret needs a

@@ -3,6 +3,7 @@ package driver
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"regexp"
 	"slices"
 	"strconv"
@@ -34,7 +35,8 @@ var captureName = regexp.MustCompile(`^[a-z][a-z0-9_-]*$`)
 
 // loginHeaderReserved are the headers a login may not set: the cookie (the
 // jar sends the component's own) and the ones the client owns.
-var loginHeaderReserved = []string{"cookie", "host", "content-length", "transfer-encoding", "connection", "proxy-authorization"}
+var loginHeaderReserved = []string{"cookie", "host", "content-length", "content-type", "transfer-encoding", "connection",
+	"proxy-authorization", "user-agent", "expect", "te", "upgrade"}
 
 // validateHTTPLogin refuses an http login no node could run.
 func (s *Spec) validateHTTPLogin() error {
@@ -119,6 +121,13 @@ func (s *Spec) validateHTTPLogin() error {
 				}
 			}
 		}
+		for _, c := range s.Commands {
+			for h := range c.Request.Headers {
+				if strings.EqualFold(h, name) {
+					return fmt.Errorf("driver: command %q header %s is the one the login sends", c.CommandType, h)
+				}
+			}
+		}
 	}
 	return nil
 }
@@ -129,6 +138,11 @@ func stripRefs(v string) string { return argPattern.ReplaceAllString(v, "") }
 // validateLoginRequest is validateHTTPRequest for a login step: the same
 // shape, its only references secret fields of declared secret inputs.
 func (s *Spec) validateLoginRequest(what string, r Request) error {
+	// A path that opens with a reference would render a secret into the
+	// URL's authority.
+	if !strings.HasPrefix(r.Path, "/") {
+		return fmt.Errorf("driver: %s path %q must start with a literal /", what, r.Path)
+	}
 	// The request shape is checked with its secret references set aside,
 	// then each reference on its own.
 	refs, err := httpTemplateRefs(r)
@@ -220,13 +234,30 @@ func (l *Login) SessionHeaders(values map[string]string) (map[string]string, err
 	return out, nil
 }
 
-// ParseExpiry reads a login's expiry: a positive number of seconds.
-func ParseExpiry(v string) (time.Duration, error) {
+// The bounds a declared session lifetime is held to: shorter would log in
+// on nearly every request, longer is a session that never renews (gear says
+// "never" with a huge number), which a lapse renews when it comes.
+const (
+	MinSessionLifetime = 10 * time.Second
+	MaxSessionLifetime = 30 * 24 * time.Hour
+)
+
+// ParseExpiry reads a login's expiry, a number of seconds, held to
+// [MinSessionLifetime, MaxSessionLifetime]. ok is false for anything that
+// is not a finite positive number (zero, a negative, a word), which gear
+// uses to mean no expiry: the session lasts until a request finds it lapsed.
+func ParseExpiry(v string) (d time.Duration, ok bool) {
 	f, err := strconv.ParseFloat(strings.TrimSpace(v), 64)
-	if err != nil || f <= 0 {
-		return 0, fmt.Errorf("driver: a login expiry is a positive number of seconds, and %q is not", v)
+	if err != nil || math.IsNaN(f) || math.IsInf(f, 0) || f <= 0 {
+		return 0, false
 	}
-	return time.Duration(f * float64(time.Second)), nil
+	switch {
+	case f < MinSessionLifetime.Seconds():
+		return MinSessionLifetime, true
+	case f > MaxSessionLifetime.Seconds():
+		return MaxSessionLifetime, true
+	}
+	return time.Duration(f * float64(time.Second)), true
 }
 
 // ExtractValue locates one value in a payload by its selector, the one

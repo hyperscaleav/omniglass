@@ -185,9 +185,16 @@ func executeHTTP(ctx context.Context, runner *collection.Runner, d collection.Co
 	if err != nil {
 		return "", err.Error()
 	}
-	target := d.Target
+	// The credential, the session and the trust are the worklist's, so the
+	// address is too: a delivery naming another (the endpoint moved since
+	// this node last read its worklist) is not sent, so a session opened
+	// with one component never rides a request to another.
+	target := ep.params.Target
+	if d.Target != "" && target != "" && d.Target != target {
+		return "", "node: the endpoint's address moved since this node last read its worklist, so the command was not sent to it"
+	}
 	if target == "" {
-		target = ep.params.Target
+		target = d.Target
 	}
 	x := collection.HTTPExchange{Target: target, Request: *d.Request, Credential: cred, Session: ep.session, Timeout: ep.timeout, BodyCap: commandBodyCap,
 		State: sessions.httpAuthOf(d.EndpointID, ep.task.Fingerprint)}

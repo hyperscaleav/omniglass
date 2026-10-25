@@ -44,6 +44,10 @@ type HTTPAuthState struct {
 	gen      uint64
 	refused  error
 	logins   int
+	// failed counts the logins in a row that drew no verdict after the
+	// secrets were sent (a 5xx, a dropped connection): past loginBudget,
+	// the refusal the component never said.
+	failed int
 
 	// loginMu serializes logins, so callers that find the session lapsed
 	// together open one session between them.
@@ -53,6 +57,22 @@ type HTTPAuthState struct {
 	// "renewing before expiry", "the session lapsed"), never a value: the
 	// node's log line. Set before the state is shared.
 	OnLogin func(why string)
+
+	// now is the clock a session's lifetime is read against; time.Now
+	// unless a test sets one (SetClock).
+	now func() time.Time
+}
+
+// SetClock sets the clock a session's declared lifetime is read against,
+// for a test that renews a session without waiting out its lifetime. Set
+// before the state is shared.
+func (s *HTTPAuthState) SetClock(now func() time.Time) { s.now = now }
+
+func (s *HTTPAuthState) clock() time.Time {
+	if s.now == nil {
+		return time.Now()
+	}
+	return s.now()
 }
 
 // NewHTTPAuthState is an empty state: no cookies, no challenge, no session.
@@ -101,6 +121,14 @@ func (s *HTTPAuthState) current(now time.Time) (gen uint64, headers map[string]s
 	return s.gen, s.headers, true
 }
 
+// held is the session the state holds, due for renewal or not: what the
+// request a login just opened rides, however short the lifetime it declared.
+func (s *HTTPAuthState) held() (gen uint64, headers map[string]string, ok bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.gen, s.headers, s.loggedIn
+}
+
 // lapse drops the session opened at gen; a session another caller opened
 // since is kept.
 func (s *HTTPAuthState) lapse(gen uint64) {
@@ -120,10 +148,14 @@ type recordingJar struct {
 	seen map[string]string
 }
 
-// maxRecordedCookies bounds what a component can make the jar remember for
-// the scrub: past it, the oldest names are not tracked (the jar itself still
-// holds them).
-const maxRecordedCookies = 64
+// The bounds on what a component can make an endpoint's jar hold: a cookie
+// past maxCookieValue (RFC 6265's floor for what a client stores is 4096
+// bytes for the whole cookie) or past maxCookies distinct cookies is
+// dropped, never stored, sent back or remembered.
+const (
+	maxCookies     = 64
+	maxCookieValue = 4096
+)
 
 func newRecordingJar() *recordingJar {
 	// A jar with no public suffix list: it only ever holds one endpoint's
@@ -134,19 +166,26 @@ func newRecordingJar() *recordingJar {
 
 func (j *recordingJar) SetCookies(u *url.URL, cookies []*http.Cookie) {
 	j.mu.Lock()
+	kept := cookies[:0:0]
 	for _, c := range cookies {
-		if _, ok := j.seen[c.Name]; ok || len(j.seen) < maxRecordedCookies {
-			j.seen[c.Name] = c.Value
+		key := c.Name + "\x00" + c.Domain + "\x00" + c.Path
+		if _, ok := j.seen[key]; (!ok && len(j.seen) >= maxCookies) || len(c.Name)+len(c.Value) > maxCookieValue {
+			continue
 		}
+		j.seen[key] = c.Value
+		kept = append(kept, c)
 	}
 	j.mu.Unlock()
-	j.CookieJar.SetCookies(u, cookies)
+	if len(kept) > 0 {
+		j.CookieJar.SetCookies(u, kept)
+	}
 }
 
 // minCookieSecret is the shortest cookie value treated as a secret: a
-// session id is long, and masking a short value (a language's "en", a
-// flag's "1") would mangle every reason and hide nothing.
-const minCookieSecret = 8
+// session id, even embedded gear's numeric one, is longer, and masking a
+// shorter value (a language's "en", a flag's "1") would mangle every reason
+// and hide nothing.
+const minCookieSecret = 4
 
 func (j *recordingJar) values() []string {
 	j.mu.Lock()
@@ -164,6 +203,13 @@ func (j *recordingJar) values() []string {
 // maxCaptureLen bounds a captured value: it rides a header on every later
 // request, and a token or session id is far shorter.
 const maxCaptureLen = 8 << 10
+
+// loginBudget is how many logins in a row may draw no verdict after the
+// secrets were sent (a 5xx, a dropped connection) before the endpoint reads
+// rejected, as a line session's login budget counts a component hanging up
+// on a wrong password without saying so: a component that fails a wrong
+// password that way is not tried on every poll.
+const loginBudget = 3
 
 // renewFraction is how much of a declared session lifetime is used before
 // the session is renewed: a tenth is left as margin for the clock and the
@@ -191,19 +237,17 @@ func (r *Runner) DoHTTP(ctx context.Context, x HTTPExchange, secrets map[string]
 	}
 	s := x.State
 	opened := false
-	gen, headers, ok := s.current(time.Now())
+	gen, headers, ok := s.current(s.clock())
 	if !ok {
 		why := "opening"
 		if gen > 0 {
 			why = "renewing before expiry"
 		}
-		if err := r.ensureLogin(ctx, x, secrets, gen, why); err != nil {
+		var err error
+		if gen, headers, err = r.ensureLogin(ctx, x, secrets, gen, why); err != nil {
 			return HTTPAnswer{}, x, err
 		}
 		opened = true
-		if gen, headers, ok = s.current(time.Now()); !ok {
-			return HTTPAnswer{}, x, errors.New("collection: the http login opened no session")
-		}
 	}
 	for {
 		sx := x
@@ -220,20 +264,19 @@ func (r *Runner) DoHTTP(ctx context.Context, x HTTPExchange, secrets map[string]
 			return ans, sx, nil
 		}
 		s.lapse(gen)
-		if err := r.ensureLogin(ctx, x, secrets, gen, "the session lapsed"); err != nil {
+		if gen, headers, err = r.ensureLogin(ctx, x, secrets, gen, "the session lapsed"); err != nil {
 			return HTTPAnswer{}, sx, err
 		}
 		opened = true
-		if gen, headers, ok = s.current(time.Now()); !ok {
-			return HTTPAnswer{}, sx, errors.New("collection: the http login opened no session")
-		}
 	}
 }
 
-// ensureLogin opens a session unless another caller opened one since gen;
-// a refusal a login met under this state is returned again, never a second
-// attempt (the login budget: one try per fingerprint).
-func (r *Runner) ensureLogin(ctx context.Context, x HTTPExchange, secrets map[string]map[string]string, gen uint64, why string) error {
+// ensureLogin opens a session unless another caller opened one since gen,
+// and returns the session held; a refusal a login met under this state is
+// returned again, never a second attempt (one try per fingerprint), and
+// logins that draw no verdict after the secrets were sent are counted
+// against loginBudget.
+func (r *Runner) ensureLogin(ctx context.Context, x HTTPExchange, secrets map[string]map[string]string, gen uint64, why string) (uint64, map[string]string, error) {
 	s := x.State
 	s.loginMu.Lock()
 	defer s.loginMu.Unlock()
@@ -241,18 +284,54 @@ func (r *Runner) ensureLogin(ctx context.Context, x HTTPExchange, secrets map[st
 	refused := s.refused
 	s.mu.Unlock()
 	if refused != nil {
-		return refused
+		return 0, nil, refused
 	}
-	if g, _, ok := s.current(time.Now()); ok && g != gen {
-		return nil
+	if g, h, ok := s.current(s.clock()); ok && g != gen {
+		return g, h, nil
 	}
 	err := r.httpLogin(ctx, x, secrets, why)
-	if _, terminal := AsTerminal(err); terminal {
-		s.mu.Lock()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	switch _, terminal := AsTerminal(err); {
+	case err == nil:
+		s.failed = 0
+		return s.gen, s.headers, nil
+	case terminal:
 		s.refused = err
-		s.mu.Unlock()
+	case unjudgedLogin(err):
+		s.failed++
+		if s.failed >= loginBudget {
+			s.refused = &TerminalError{Class: driver.ClassAuth, Reason: fmt.Sprintf("the login failed %d times in a row after the secrets were sent, and the component never said why: %s", s.failed, loginCause(err))}
+			return 0, nil, s.refused
+		}
 	}
-	return err
+	return 0, nil, err
+}
+
+// unjudgedLogin reports a failed login whose secrets reached the component
+// with no verdict back: an answer that backs off (a 5xx, a 408, a 429), or
+// a connection that ended after it was made. A connection never made, or a
+// credential never delivered, sent nothing and charges nothing.
+func unjudgedLogin(err error) bool {
+	var retry *RetryableAnswer
+	if errors.As(err, &retry) {
+		return true
+	}
+	var transport *httpTransportError
+	return errors.As(err, &transport) && transport.sent && !errors.Is(err, context.Canceled)
+}
+
+// loginCause is a failed login's cause without its wrapping.
+func loginCause(err error) string {
+	var retry *RetryableAnswer
+	if errors.As(err, &retry) {
+		return retry.Error()
+	}
+	var transport *httpTransportError
+	if errors.As(err, &transport) && transport.cause != nil {
+		return transport.cause.Error()
+	}
+	return err.Error()
 }
 
 // httpLogin runs the login's steps on a fresh jar, judges each answer,
@@ -284,7 +363,13 @@ func (r *Runner) httpLogin(ctx context.Context, x HTTPExchange, secrets map[stri
 		}
 		ans.Credentialed = true
 		lx.Redact = append(lx.Redact, s.redactions()...)
-		if err := judgeLoginAnswer(ans, lx, i == len(l.Steps)-1); err != nil {
+		last := i == len(l.Steps)-1
+		if last {
+			// What the login would capture is a secret before it is judged:
+			// a refusal's reason quotes the answer that carries it.
+			lx.Redact = append(lx.Redact, captured(l, ans, lx.Request)...)
+		}
+		if err := judgeLoginAnswer(ans, lx, last); err != nil {
 			return fmt.Errorf("collection: login step %d: %w", i+1, err)
 		}
 	}
@@ -306,17 +391,16 @@ func (r *Runner) httpLogin(ctx context.Context, x HTTPExchange, secrets map[stri
 	if err != nil {
 		return &TerminalError{Class: driver.ClassAuth, Reason: "the login's captured value cannot ride a header: " + Scrub(err.Error(), nil, redact...)}
 	}
+	// An expiry the answer does not carry, or carries as no lifetime (zero,
+	// a word), declares none: the session lasts until a request finds it
+	// lapsed. Its value is never quoted.
 	var renewAt time.Time
 	if l.Expiry != nil {
-		v, err := driver.ExtractValue(*l.Expiry, p)
-		if err != nil {
-			return &TerminalError{Class: driver.ClassAuth, Reason: "the login answered without the session's expiry it declares"}
+		if v, err := driver.ExtractValue(*l.Expiry, p); err == nil {
+			if d, ok := driver.ParseExpiry(v); ok {
+				renewAt = s.clock().Add(time.Duration(float64(d) * renewFraction))
+			}
 		}
-		d, err := driver.ParseExpiry(v)
-		if err != nil {
-			return &TerminalError{Class: driver.ClassAuth, Reason: Scrub(err.Error(), nil, redact...)}
-		}
-		renewAt = time.Now().Add(time.Duration(float64(d) * renewFraction))
 	}
 	s.mu.Lock()
 	s.loggedIn, s.headers, s.renewAt = true, headers, renewAt
@@ -360,6 +444,22 @@ func judgeLoginAnswer(a HTTPAnswer, x HTTPExchange, last bool) error {
 		return &TerminalError{Class: driver.ClassAuth, Reason: reason}
 	}
 	return nil
+}
+
+// captured is every value a login's captures locate in an answer, read
+// best-effort, for the scrub.
+func captured(l *driver.Login, a HTTPAnswer, req driver.Request) []string {
+	if len(l.Capture) == 0 {
+		return nil
+	}
+	p := driver.HTTPPayload(a.Body, &req)
+	var out []string
+	for _, c := range l.Capture {
+		if v, err := driver.ExtractValue(c.Extract, p); err == nil && v != "" {
+			out = append(out, v)
+		}
+	}
+	return out
 }
 
 func refusedLogin(status int, text string) string {

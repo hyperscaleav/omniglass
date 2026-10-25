@@ -92,10 +92,16 @@ func TestHTTPLoginRefusals(t *testing.T) {
 			s.Session.Login.Headers["Authorization"] = "Basic ${secret.login.password}"
 		}, "secret"},
 		{"a cookie header", func(s *driver.Spec) { s.Session.Login.Headers["Cookie"] = "${session.token}" }, "Cookie"},
+		{"a user-agent header", func(s *driver.Spec) { s.Session.Login.Headers["User-Agent"] = "${session.token}" }, "User-Agent"},
+		{"a step path opening with a secret", func(s *driver.Spec) { s.Session.Login.Steps[0].Request.Path = "${secret.login.password}/x" }, "literal /"},
 		{"a relative login path", func(s *driver.Spec) { s.Session.Login.Path = "login" }, "/"},
 		{"an uncompilable expired match", func(s *driver.Spec) { s.Session.Login.Expired = &driver.Match{Regex: "("} }, "expired"},
 		{"an expiry by xpath on a json answer", func(s *driver.Spec) { s.Session.Login.Expiry = &driver.Extract{XPath: "//e"} }, "format"},
 		{"a poll header shadowing a login header", func(s *driver.Spec) { s.Polls[0].Request.Headers["authorization"] = "x" }, "authorization"},
+		{"a command header shadowing a login header", func(s *driver.Spec) {
+			s.Session.Login.Headers["X-Session"] = "${session.token}"
+			s.Commands[0].Request.Headers = map[string]string{"x-session": "x"}
+		}, "is the one the login sends"},
 		{"a re-probe beside the login", func(s *driver.Spec) { s.Session.Reprobe = "10m" }, "reprobe"},
 		// The credential reaches a node only with a task.
 		{"a login with commands and no poll", func(s *driver.Spec) { s.Polls = nil }, "poll"},
@@ -154,10 +160,25 @@ func TestLoginSessionHeadersAndExpiry(t *testing.T) {
 	if _, err := l.SessionHeaders(map[string]string{"token": "a\r\nb"}); err == nil {
 		t.Fatal("a captured value with CR LF rode a header")
 	}
-	if d, err := driver.ParseExpiry("300"); err != nil || d != 300*time.Second {
-		t.Fatalf("expiry = %v, %v", d, err)
+	for v, want := range map[string]time.Duration{
+		"300":         300 * time.Second,
+		"0.001":       driver.MinSessionLifetime, // held to the floor: never a login per request
+		"9999999999":  driver.MaxSessionLifetime, // gear's "never", held to the ceiling
+		"1e300":       driver.MaxSessionLifetime,
+		" 3600 ":      time.Hour,
+		"86400.5":     86400*time.Second + 500*time.Millisecond,
+		"2592000":     driver.MaxSessionLifetime,
+		"2591999.999": 2591999999 * time.Millisecond,
+	} {
+		if d, ok := driver.ParseExpiry(v); !ok || d != want {
+			t.Errorf("expiry %q = %v, %v; want %v", v, d, ok, want)
+		}
 	}
-	if _, err := driver.ParseExpiry("soon"); err == nil {
-		t.Fatal("an expiry that is not seconds parsed")
+	// Anything not a finite positive number of seconds is no declared
+	// expiry: the session lasts until a request finds it lapsed.
+	for _, v := range []string{"soon", "", "0", "-1", "NaN", "Inf", "-Inf", "+Inf"} {
+		if d, ok := driver.ParseExpiry(v); ok {
+			t.Errorf("expiry %q = %v, want none", v, d)
+		}
 	}
 }

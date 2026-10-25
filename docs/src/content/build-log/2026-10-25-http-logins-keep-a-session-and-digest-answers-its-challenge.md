@@ -16,10 +16,15 @@ The collection engine (`internal/collection/httpsession.go`) runs the login on a
 keeps what it opened in an `HTTPAuthState`, renews before a declared expiry, and on a lapse (a 401,
 a redirect to the login page, the expired text) logs in once more and replays once; a lapse right
 after a fresh login, or a refused login, is a terminal `auth` held for the life of the state, so it
-is tried once. Digest (`internal/collection/digest.go`) answers MD5, SHA-256 and their `-sess`
-forms, holds the challenge and answers a stale nonce afresh. The node keeps one state per http
+is tried once, and three logins in a row that draw no verdict after their secrets were sent spend
+the login budget. Digest (`internal/collection/digest.go`) answers MD5, SHA-256 and their `-sess`
+forms, holds the challenge and answers a stale or quietly rotated nonce afresh; a 401 it cannot
+answer never sends the credential. The node keeps one state per http
 endpoint, in memory alone, shared by its polls and commands and dropped when the fingerprint moves
-or a terminal refusal lands. Everything the state holds is scrubbed from reasons, errors and URLs.
+or a terminal refusal lands; a command never rides to an address its worklist does not name.
+Everything the state holds is scrubbed from reasons, errors and URLs, a jar keeps cookies for a
+login session alone (bounded), and an adversarial security review's findings shaped the bounds on
+an expiry, a cookie, a challenge and a response's headers.
 
 The simulator's http gate gains form, token and digest faces, with sessions the console can expire
 through a face's `expire_path`; the Newtron panel's https API now signs in with a form and the Boreal

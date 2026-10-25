@@ -245,9 +245,11 @@ A login the component refuses (a 401, a redirect back to the login page, another
 answer without its `ready` text or a value it captures) is tried once: the endpoint reads
 `rejected`, class `auth`, with the component's reason, and logs in again only when the fingerprint
 moves (fix the secret in place with `omniglass secret update`, or edit the endpoint's inputs). A
-session refused right after a fresh login reads `rejected` too, never a second login. A login
-declares no scheme beside it, and a header it sends names only a capture, never a secret or
-`Cookie`.
+login answered with a 5xx or a dropped connection is retried, but the third in a row reads
+`rejected` too. A session refused right after a fresh login reads `rejected`, never a second login.
+`expiry` is seconds, held between 10 seconds and 30 days; zero or a missing value means none. A
+login declares no scheme beside it, its step paths open with a literal `/`, and a header it sends
+names only a capture, never a secret, `Cookie` or a header a poll or command sets.
 
 A telnet driver:
 

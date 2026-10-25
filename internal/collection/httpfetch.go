@@ -9,12 +9,16 @@ import (
 	"fmt"
 	"html"
 	"io"
+	"log/slog"
 	"net"
 	"net/http"
+	"net/http/httptrace"
 	"net/url"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/driver"
@@ -90,7 +94,8 @@ func (httpFetcher) Exchange(ctx context.Context, x HTTPExchange) (HTTPAnswer, er
 		x.BodyCap = DefaultBodyCap
 	}
 	dialer := &net.Dialer{Timeout: x.Timeout}
-	tr := &http.Transport{DialContext: dialer.DialContext, DisableKeepAlives: true, ResponseHeaderTimeout: x.Timeout}
+	tr := &http.Transport{DialContext: dialer.DialContext, DisableKeepAlives: true, ResponseHeaderTimeout: x.Timeout,
+		MaxResponseHeaderBytes: maxResponseHeaderBytes}
 	if x.TLS != nil {
 		trust := *x.TLS
 		tr.DialTLSContext = func(ctx context.Context, network, addr string) (net.Conn, error) {
@@ -108,7 +113,9 @@ func (httpFetcher) Exchange(ctx context.Context, x HTTPExchange) (HTTPAnswer, er
 	client := &http.Client{Transport: tr, Timeout: x.Timeout, CheckRedirect: func(*http.Request, []*http.Request) error {
 		return http.ErrUseLastResponse
 	}}
-	if x.State != nil {
+	// Only a login session keeps the component's cookies (#1114): every
+	// other request is its own, as it was before a login could open one.
+	if x.State != nil && x.Session != nil && x.Session.Login != nil {
 		client.Jar = x.State.cookieJar()
 	}
 	digest := x.Credential != nil && x.Credential.Scheme == driver.SchemeDigest
@@ -120,42 +127,95 @@ func (httpFetcher) Exchange(ctx context.Context, x HTTPExchange) (HTTPAnswer, er
 		ds = &x.State.digest
 	}
 	// A digest request answers the held challenge preemptively; a 401
-	// carrying a fresh challenge (none held yet, or the held nonce stale) is
-	// answered once more, and a 401 to an answer that was not stale is the
-	// credential's refusal, which the status table reads.
+	// carrying a challenge the answer did not meet (none held yet, the held
+	// nonce called stale, or a nonce the component rotated without saying
+	// so) is answered once more, and a 401 to an answer of the nonce it
+	// still offers is the credential's refusal, which the status table
+	// reads.
 	for attempt := 0; ; attempt++ {
 		req, err := BuildHTTPRequest(ctx, x)
 		if err != nil {
 			return HTTPAnswer{}, err
 		}
-		answered := false
+		answered, nonce := false, ""
 		if digest {
-			if answered, err = ds.authorize(req, x.Credential.Username, x.Credential.Password); err != nil {
+			if answered, nonce, err = ds.authorize(req, x.Credential.Username, x.Credential.Password); err != nil {
 				return HTTPAnswer{}, err
 			}
 		}
+		var wrote atomic.Bool
+		req = req.WithContext(httptrace.WithClientTrace(req.Context(), &httptrace.ClientTrace{
+			WroteRequest: func(httptrace.WroteRequestInfo) { wrote.Store(true) },
+		}))
 		resp, err := client.Do(req)
 		if err != nil {
-			return HTTPAnswer{}, redactedRequestError(req, x, err)
+			return HTTPAnswer{}, redactedRequestError(req, x, err, wrote.Load())
 		}
 		body, err := io.ReadAll(io.LimitReader(resp.Body, x.BodyCap+1))
 		_ = resp.Body.Close()
 		if err != nil {
-			return HTTPAnswer{}, fmt.Errorf("collection: %s %s: reading the body: %w", req.Method, x.redactedURL(req.URL), err)
+			return HTTPAnswer{}, &httpTransportError{msg: fmt.Sprintf("collection: %s %s: reading the body: %s", req.Method, x.redactedURL(req.URL),
+				Scrub(err.Error(), x.Credential, x.Redact...)), cause: err, sent: true}
 		}
-		if digest && resp.StatusCode == http.StatusUnauthorized && attempt < 2 {
-			if ch, ok := parseDigestChallenges(resp.Header); ok && (!answered || ch.stale) {
+		if digest && resp.StatusCode == http.StatusUnauthorized {
+			ch, ok := parseDigestChallenges(resp.Header)
+			if ok && attempt < 2 && (!answered || ch.stale || ch.nonce != nonce) {
 				ds.learn(ch)
 				continue
+			}
+			if !answered {
+				// The credential was never sent: the component offers no
+				// challenge this node answers, which is no verdict on it.
+				return HTTPAnswer{}, &RequestFault{Status: resp.StatusCode, Reason: "the component's 401 offers no digest challenge this node answers (" + offeredSchemes(resp.Header) + ")"}
 			}
 		}
 		if int64(len(body)) > x.BodyCap {
 			return HTTPAnswer{}, &RequestFault{Status: resp.StatusCode, Reason: fmt.Sprintf("the response body exceeds the cap of %d bytes", x.BodyCap)}
 		}
+		credentialed := x.Credential != nil
+		if digest {
+			credentialed = answered
+		}
 		return HTTPAnswer{Status: resp.StatusCode, Body: body, RetryAfter: resp.Header.Get("Retry-After"),
-			Credentialed: x.Credential != nil, Location: resp.Header.Get("Location")}, nil
+			Credentialed: credentialed, Location: resp.Header.Get("Location")}, nil
 	}
 }
+
+// maxResponseHeaderBytes bounds the headers a component's answer may carry:
+// a status document's headers are small, and a hostile component cannot make
+// a node hold megabytes of cookies or challenges.
+const maxResponseHeaderBytes = 64 << 10
+
+// offeredSchemes names the auth schemes a 401's challenges offer, never
+// their parameters.
+func offeredSchemes(h http.Header) string {
+	var out []string
+	for _, v := range h.Values("WWW-Authenticate") {
+		for _, ch := range splitChallenges(v) {
+			scheme := strings.Fields(ch)
+			if len(scheme) > 0 && len(scheme[0]) <= 32 && !slices.Contains(out, scheme[0]) {
+				out = append(out, scheme[0])
+			}
+		}
+	}
+	if len(out) == 0 {
+		return "none offered"
+	}
+	return "it offers " + strings.Join(out, ", ")
+}
+
+// String names an exchange by its method and path, never a value it
+// carries: the credential, the session headers and the redactions are
+// secrets.
+func (x HTTPExchange) String() string {
+	return fmt.Sprintf("http exchange %s %s to %s", x.Request.MethodOf(), x.Request.Path, x.Target)
+}
+
+// GoString is String: a %#v names no secret either.
+func (x HTTPExchange) GoString() string { return x.String() }
+
+// LogValue is String, for a log line.
+func (x HTTPExchange) LogValue() slog.Value { return slog.StringValue(x.String()) }
 
 // BuildHTTPRequest builds the request an exchange sends: the URL from the
 // target, the path and the query (the api key added where it rides), the
@@ -243,7 +303,7 @@ func RedactedURL(u *url.URL, c *driver.HTTPCredential) string {
 // URL the client's error would carry (a query key rides it): the method,
 // the redacted URL, and the cause. A TerminalError (a certificate the trust
 // refused) is kept whole, so the gate reads its class and evidence.
-func redactedRequestError(req *http.Request, x HTTPExchange, err error) error {
+func redactedRequestError(req *http.Request, x HTTPExchange, err error, sent bool) error {
 	if terr, ok := AsTerminal(err); ok {
 		return terr
 	}
@@ -252,7 +312,7 @@ func redactedRequestError(req *http.Request, x HTTPExchange, err error) error {
 	if errors.As(err, &uerr) {
 		cause = uerr.Err
 	}
-	return &httpTransportError{msg: fmt.Sprintf("collection: %s %s: %s", req.Method, x.redactedURL(req.URL), Scrub(strings.ToValidUTF8(cause.Error(), "\uFFFD"), x.Credential, x.Redact...)), cause: cause}
+	return &httpTransportError{msg: fmt.Sprintf("collection: %s %s: %s", req.Method, x.redactedURL(req.URL), Scrub(strings.ToValidUTF8(cause.Error(), "\uFFFD"), x.Credential, x.Redact...)), cause: cause, sent: sent}
 }
 
 // redactedURL is RedactedURL scrubbed of every further secret the exchange
@@ -266,6 +326,9 @@ func (x HTTPExchange) redactedURL(u *url.URL) string {
 type httpTransportError struct {
 	msg   string
 	cause error
+	// sent is whether the request was written before the connection
+	// failed: a login's secrets reached the component.
+	sent bool
 }
 
 func (e *httpTransportError) Error() string { return e.msg }

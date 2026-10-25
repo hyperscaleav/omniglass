@@ -43,13 +43,25 @@ func TestDigestChallengesPickTheStrongest(t *testing.T) {
 	if _, ok := parseDigestChallenges(http.Header{"Www-Authenticate": {`Basic realm="x"`}}); ok {
 		t.Fatal("a basic challenge read as digest")
 	}
+	// An unanswerable challenge sends nothing: no verdict on the credential,
+	// so the request's own fault, never a gate.
 	_, err := digestAuthorization(digestChallenge{nonce: "n", algorithm: "SHA-512-256"}, "GET", "/", "u", "p", 1, "c")
-	if terr, ok := AsTerminal(err); !ok || terr.Class != "protocol" {
-		t.Fatalf("an algorithm this node does not answer = %v, want a protocol refusal", err)
+	if _, ok := AsRequestFault(err); !ok {
+		t.Fatalf("an algorithm this node does not answer = %v, want a request fault", err)
 	}
 	_, err = digestAuthorization(digestChallenge{nonce: "n", algorithm: "MD5", qop: "auth-int"}, "GET", "/", "u", "p", 1, "c")
-	if _, ok := AsTerminal(err); !ok {
-		t.Fatalf("auth-int alone = %v, want a protocol refusal", err)
+	if _, ok := AsRequestFault(err); !ok {
+		t.Fatalf("auth-int alone = %v, want a request fault", err)
+	}
+	// RFC 7235 lets a parameter's "=" carry spaces, and a scheme be followed
+	// by a tab: neither starts a new challenge.
+	spaced := http.Header{"Www-Authenticate": {"Digest\trealm = \"r\", nonce = \"n1\", qop = \"auth\""}}
+	if ch, ok := parseDigestChallenges(spaced); !ok || ch.nonce != "n1" || ch.realm != "r" || ch.qop != "auth" {
+		t.Fatalf("a spaced challenge = %+v, %v", ch, ok)
+	}
+	huge := http.Header{"Www-Authenticate": {`Digest realm="` + strings.Repeat("r", 2000) + `", nonce="n"`}}
+	if _, ok := parseDigestChallenges(huge); ok {
+		t.Fatal("a challenge with a 2000-byte realm was answered")
 	}
 	legacy, err := digestAuthorization(digestChallenge{nonce: "n", algorithm: "MD5", realm: "r"}, "GET", "/", "u", "p", 1, "c")
 	if err != nil || strings.Contains(legacy, "qop=") {
@@ -66,7 +78,7 @@ func TestDigestCountNeverRepeatsUnderANonce(t *testing.T) {
 	var d DigestState
 	nc := func() string {
 		r, _ := http.NewRequest("GET", "http://x/s", nil)
-		if ok, err := d.authorize(r, "u", "p"); !ok || err != nil {
+		if ok, _, err := d.authorize(r, "u", "p"); !ok || err != nil {
 			t.Fatalf("authorize = %v, %v", ok, err)
 		}
 		_, rest, _ := strings.Cut(r.Header.Get("Authorization"), "nc=")
@@ -83,5 +95,30 @@ func TestDigestCountNeverRepeatsUnderANonce(t *testing.T) {
 	d.learn(digestChallenge{realm: "r", nonce: "n2", algorithm: "MD5", qop: "auth", stale: true})
 	if got := nc(); got != "00000001" {
 		t.Fatalf("a new nonce = %s, want the count from one", got)
+	}
+}
+
+// A -sess session key is computed once per challenge, so every answer to it
+// carries the one client nonce; a plain algorithm's answers each carry their
+// own.
+func TestDigestSessKeepsOneClientNoncePerChallenge(t *testing.T) {
+	cnonce := func(d *DigestState) string {
+		r, _ := http.NewRequest("GET", "http://x/s", nil)
+		if ok, _, err := d.authorize(r, "u", "p"); !ok || err != nil {
+			t.Fatalf("authorize = %v, %v", ok, err)
+		}
+		_, rest, _ := strings.Cut(r.Header.Get("Authorization"), `cnonce="`)
+		v, _, _ := strings.Cut(rest, `"`)
+		return v
+	}
+	var sess DigestState
+	sess.learn(digestChallenge{realm: "r", nonce: "n1", algorithm: "MD5-sess", qop: "auth"})
+	if a, b := cnonce(&sess), cnonce(&sess); a == "" || a != b {
+		t.Fatalf("-sess client nonces %q, %q, want one per challenge", a, b)
+	}
+	var plain DigestState
+	plain.learn(digestChallenge{realm: "r", nonce: "n1", algorithm: "MD5", qop: "auth"})
+	if a, b := cnonce(&plain), cnonce(&plain); a == b {
+		t.Fatalf("plain client nonces repeat: %q", a)
 	}
 }

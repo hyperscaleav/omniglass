@@ -33,8 +33,10 @@ type loginComponent struct {
 	password string
 	sessions map[string]bool
 	n        int
-	// broken refuses every session, even a fresh one.
+	// broken refuses every session, even a fresh one; failWith answers
+	// every login with that status, judging nothing.
 	broken      bool
+	failWith    int
 	lifetime    string
 	loginHits   atomic.Int32
 	statusHits  atomic.Int32
@@ -84,6 +86,13 @@ func (c *loginComponent) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/", http.StatusFound)
 	case "/api/login":
 		c.loginHits.Add(1)
+		c.mu.Lock()
+		fail := c.failWith
+		c.mu.Unlock()
+		if fail != 0 {
+			w.WriteHeader(fail)
+			return
+		}
 		var in struct{ Username, Password string }
 		_ = json.NewDecoder(r.Body).Decode(&in)
 		if in.Username != "admin" || in.Password != c.pass() {
@@ -242,9 +251,11 @@ func TestHTTPTokenLoginRidesItsHeaderAndRenewsBeforeExpiry(t *testing.T) {
 		t.Skip("real-socket integration test")
 	}
 	comp, target := newLoginComponent(t)
-	comp.lifetime = "0.3"
+	comp.lifetime = "60"
 	r := &collection.Runner{HTTPFetch: collection.NewHTTPFetcher()}
 	state := collection.NewHTTPAuthState()
+	clock := time.Now()
+	state.SetClock(func() time.Time { return clock })
 	x := collection.HTTPExchange{Target: target, Request: driver.Request{Path: "/api/status"}, Session: tokenLoginSession(), Timeout: 2 * time.Second, State: state}
 	if ans, err := doHTTP(t, r, x, "s3cret-pass"); err != nil || ans.Status != 200 {
 		t.Fatalf("first poll = %+v, %v", ans, err)
@@ -255,13 +266,35 @@ func TestHTTPTokenLoginRidesItsHeaderAndRenewsBeforeExpiry(t *testing.T) {
 	if !strings.HasPrefix(bearer, "sess-1-") {
 		t.Fatalf("the request carried bearer %q, want the captured token", bearer)
 	}
-	time.Sleep(350 * time.Millisecond)
-	if ans, err := doHTTP(t, r, x, "s3cret-pass"); err != nil || ans.Status != 200 {
-		t.Fatalf("poll past the lifetime = %+v, %v", ans, err)
+	// Inside the lifetime: the same token.
+	clock = clock.Add(50 * time.Second)
+	if ans, err := doHTTP(t, r, x, "s3cret-pass"); err != nil || ans.Status != 200 || comp.loginHits.Load() != 1 {
+		t.Fatalf("poll inside the lifetime = %+v, %v after %d logins", ans, err, comp.loginHits.Load())
 	}
-	if comp.loginHits.Load() != 2 || comp.statusHits.Load() != 2 {
+	// Within a tenth of the lifetime of its end: renewed before the request.
+	clock = clock.Add(5 * time.Second)
+	if ans, err := doHTTP(t, r, x, "s3cret-pass"); err != nil || ans.Status != 200 {
+		t.Fatalf("poll near the end of the lifetime = %+v, %v", ans, err)
+	}
+	if comp.loginHits.Load() != 2 || comp.statusHits.Load() != 3 {
 		t.Fatalf("logins %d, status reads %d, want a renewal before the request, not a refused one", comp.loginHits.Load(), comp.statusHits.Load())
 	}
+
+	// A lifetime too short to be one (a hundredth of a second) is held to
+	// the floor: the request that logged in rides its session, and the next
+	// does too, never a login per request.
+	comp.lifetime = "0.01"
+	comp.expire()
+	logins := comp.loginHits.Load()
+	for range 3 {
+		if ans, err := doHTTP(t, r, x, "s3cret-pass"); err != nil || ans.Status != 200 {
+			t.Fatalf("poll on a tiny lifetime = %+v, %v", ans, err)
+		}
+	}
+	if got := comp.loginHits.Load() - logins; got != 1 {
+		t.Fatalf("a tiny lifetime cost %d logins over three polls, want one", got)
+	}
+	comp.lifetime = "60"
 
 	// The declared expired text lapses the session too.
 	comp.lifetime = "300"
@@ -331,6 +364,8 @@ func TestHTTPSessionScrubsWhatItHolds(t *testing.T) {
 // holds the client to.
 type digestComponent struct {
 	mu        sync.Mutex
+	quiet     bool // rotates its nonce without calling the old one stale
+	basicOnly bool // offers Basic and nothing else
 	algorithm string
 	password  string
 	nonce     string
@@ -351,11 +386,13 @@ func (d *digestComponent) challenge(w http.ResponseWriter, stale bool) {
 	d.mu.Lock()
 	v := fmt.Sprintf(`Digest realm="panel", qop="auth", algorithm=%s, nonce=%q, opaque="op-1"`, d.algorithm, d.nonce)
 	d.mu.Unlock()
-	if stale {
+	if stale && !d.quiet {
 		v += ", stale=true"
 	}
 	w.Header().Add("WWW-Authenticate", `Basic realm="panel"`)
-	w.Header().Add("WWW-Authenticate", v)
+	if !d.basicOnly {
+		w.Header().Add("WWW-Authenticate", v)
+	}
 	w.WriteHeader(http.StatusUnauthorized)
 }
 
@@ -471,6 +508,178 @@ func TestHTTPLoginNeverNamesItsSecretsInAnError(t *testing.T) {
 	for _, leak := range []string{"p&w", "p%26w", "operator-7"} {
 		if strings.Contains(err.Error(), leak) {
 			t.Fatalf("the error names %q: %v", leak, err)
+		}
+	}
+}
+
+// A component that rotates its nonce without calling the old one stale (an
+// idle expiry, a one-time nonce) is answered once more under the new one,
+// never read as a refused password; one offering no digest at all is never
+// sent the credential, and its 401 is no verdict on it.
+func TestHTTPDigestMeetsAQuietRotationAndAnUnanswerableChallenge(t *testing.T) {
+	if testing.Short() {
+		t.Skip("real-socket integration test")
+	}
+	comp := &digestComponent{algorithm: "MD5", password: "pw-1234", quiet: true}
+	comp.rotate()
+	srv := httptest.NewServer(comp)
+	defer srv.Close()
+	r := &collection.Runner{HTTPFetch: collection.NewHTTPFetcher()}
+	session := &driver.SessionSpec{Credential: "login", Scheme: driver.SchemeDigest}
+	cred := &driver.HTTPCredential{Scheme: driver.SchemeDigest, Username: "admin", Password: "pw-1234"}
+	x := collection.HTTPExchange{Target: srv.Listener.Addr().String(), Request: driver.Request{Path: "/s"}, Credential: cred, Session: session,
+		Timeout: 2 * time.Second, State: collection.NewHTTPAuthState()}
+	if ans, err := doHTTP(t, r, x, ""); err != nil || ans.Status != 200 {
+		t.Fatalf("first request = %+v, %v", ans, err)
+	}
+	comp.rotate()
+	if ans, err := doHTTP(t, r, x, ""); err != nil || ans.Status != 200 {
+		t.Fatalf("after a quiet rotation = %+v, %v, want the new nonce answered", ans, err)
+	}
+
+	basic := &digestComponent{algorithm: "MD5", password: "pw-1234", basicOnly: true}
+	basic.rotate()
+	bsrv := httptest.NewServer(basic)
+	defer bsrv.Close()
+	x.Target, x.State = bsrv.Listener.Addr().String(), collection.NewHTTPAuthState()
+	_, err := doHTTP(t, r, x, "")
+	if _, terminal := collection.AsTerminal(err); terminal {
+		t.Fatalf("a Basic-only 401 = %v, want no refusal: the credential was never sent", err)
+	}
+	if fault, ok := collection.AsRequestFault(err); !ok || !strings.Contains(fault.Reason, "Basic") {
+		t.Fatalf("a Basic-only 401 = %v, want a request fault naming what it offers", err)
+	}
+	if basic.answered.Load() != 0 {
+		t.Fatalf("the credential was sent %d times to a component offering no digest", basic.answered.Load())
+	}
+}
+
+// A component that answers every login with a 500 is tried three times
+// (the login budget), then reads rejected; a connection never made charges
+// nothing.
+func TestHTTPLoginsThatDrawNoVerdictSpendTheBudget(t *testing.T) {
+	if testing.Short() {
+		t.Skip("real-socket integration test")
+	}
+	comp, target := newLoginComponent(t)
+	comp.failWith = http.StatusInternalServerError
+	r := &collection.Runner{HTTPFetch: collection.NewHTTPFetcher()}
+	x := collection.HTTPExchange{Target: target, Request: driver.Request{Path: "/api/status"}, Session: tokenLoginSession(), Timeout: 2 * time.Second, State: collection.NewHTTPAuthState()}
+	for i := 1; i <= 5; i++ {
+		_, err := doHTTP(t, r, x, "s3cret-pass")
+		terr, terminal := collection.AsTerminal(err)
+		switch {
+		case i < 3 && terminal:
+			t.Fatalf("login %d = %v, want a retryable fault inside the budget", i, err)
+		case i >= 3 && (!terminal || terr.Class != driver.ClassAuth || !strings.Contains(terr.Reason, "3 times")):
+			t.Fatalf("login %d = %v, want the budget spent: a terminal auth refusal", i, err)
+		}
+	}
+	if comp.loginHits.Load() != 3 {
+		t.Fatalf("logins %d, want the budget of three and no more", comp.loginHits.Load())
+	}
+
+	srv := httptest.NewServer(http.NotFoundHandler())
+	closed := srv.Listener.Addr().String()
+	srv.Close()
+	x.Target, x.State = closed, collection.NewHTTPAuthState()
+	for i := 1; i <= 5; i++ {
+		if _, err := doHTTP(t, r, x, "s3cret-pass"); err == nil {
+			t.Fatal("a login to a closed port succeeded")
+		} else if _, terminal := collection.AsTerminal(err); terminal {
+			t.Fatalf("connect %d = %v: a connection never made charged the budget", i, err)
+		}
+	}
+}
+
+// A refused login's reason may quote the answer: whatever the login would
+// capture from it is scrubbed first. An expiry the answer gives as no
+// lifetime (zero) declares none, never a refusal.
+func TestHTTPLoginReasonsNeverCarryACapturedValue(t *testing.T) {
+	if testing.Short() {
+		t.Skip("real-socket integration test")
+	}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/login":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"ok":false,"locked":true,"token":"tok-0123456789abcdef","expires_in":0}`))
+		default:
+			if r.Header.Get("Authorization") != "Bearer tok-0123456789abcdef" {
+				w.WriteHeader(http.StatusUnauthorized)
+				return
+			}
+			_, _ = w.Write([]byte(`{"power":"on"}`))
+		}
+	}))
+	defer srv.Close()
+	r := &collection.Runner{HTTPFetch: collection.NewHTTPFetcher()}
+	session := tokenLoginSession()
+	session.Login.Ready = driver.Match{Regex: `"ok":\s*true`}
+	x := collection.HTTPExchange{Target: srv.Listener.Addr().String(), Request: driver.Request{Path: "/s"}, Session: session, Timeout: 2 * time.Second, State: collection.NewHTTPAuthState()}
+	_, err := doHTTP(t, r, x, "pw")
+	terr, ok := collection.AsTerminal(err)
+	if !ok || !strings.Contains(terr.Reason, "ready text") {
+		t.Fatalf("a login without its ready text = %v, want a refusal", err)
+	}
+	if strings.Contains(err.Error(), "tok-0123456789abcdef") {
+		t.Fatalf("the refusal quotes the token: %v", err)
+	}
+
+	session.Login.Ready = driver.Match{}
+	state := collection.NewHTTPAuthState()
+	x.State = state
+	for range 3 {
+		if ans, err := doHTTP(t, r, x, "pw"); err != nil || ans.Status != 200 {
+			t.Fatalf("a zero expiry = %+v, %v, want no declared expiry", ans, err)
+		}
+	}
+	if state.Logins() != 1 {
+		t.Fatalf("a zero expiry cost %d logins, want one session kept", state.Logins())
+	}
+}
+
+// Only a login session keeps the component's cookies: a basic-auth request
+// is its own, as before logins existed.
+func TestHTTPOnlyALoginSessionKeepsCookies(t *testing.T) {
+	if testing.Short() {
+		t.Skip("real-socket integration test")
+	}
+	var sent atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Cookie") != "" {
+			sent.Add(1)
+		}
+		http.SetCookie(w, &http.Cookie{Name: "track", Value: "abcdef123456"})
+		_, _ = w.Write([]byte(`{}`))
+	}))
+	defer srv.Close()
+	r := &collection.Runner{HTTPFetch: collection.NewHTTPFetcher()}
+	x := collection.HTTPExchange{Target: srv.Listener.Addr().String(), Request: driver.Request{Path: "/s"},
+		Credential: &driver.HTTPCredential{Scheme: driver.SchemeBasic, Username: "u", Password: "p"},
+		Session:    &driver.SessionSpec{Credential: "login", Scheme: driver.SchemeBasic}, Timeout: 2 * time.Second, State: collection.NewHTTPAuthState()}
+	for range 3 {
+		if _, err := doHTTP(t, r, x, ""); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if sent.Load() != 0 {
+		t.Fatalf("a basic-auth endpoint sent a cookie back %d times", sent.Load())
+	}
+}
+
+// An exchange printed by any verb names no secret it carries.
+func TestHTTPExchangeNeverPrintsASecret(t *testing.T) {
+	x := collection.HTTPExchange{Target: "10.0.0.5:443", Request: driver.Request{Path: "/status"},
+		Credential:     &driver.HTTPCredential{Scheme: driver.SchemeBasic, Username: "admin", Password: "hunter2-pass"},
+		SessionHeaders: map[string]string{"Authorization": "Bearer tok-secret-value"},
+		Redact:         []string{"cookie-secret-value"}}
+	for _, verb := range []string{"%v", "%+v", "%#v", "%s"} {
+		out := fmt.Sprintf(verb, x)
+		for _, secret := range []string{"hunter2-pass", "tok-secret-value", "cookie-secret-value"} {
+			if strings.Contains(out, secret) {
+				t.Fatalf("%s printed %q: %s", verb, secret, out)
+			}
 		}
 	}
 }

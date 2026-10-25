@@ -611,7 +611,10 @@ published or persisted, and it is dropped whole when the endpoint's connection f
 (every login input is a fingerprint input: the steps, the captures, the headers, the paths, each
 secret's sealed version), on a terminal refusal, and with the node process. A login runs on a fresh
 jar before the first request, and again before a declared expiry lapses (with a tenth of the
-lifetime to spare), never once per poll.
+lifetime to spare), never once per poll. A declared lifetime is held between 10 seconds and 30 days
+(gear says "never" with a huge number); one the answer omits, or gives as zero or a word, declares
+none, and the session lasts until a request finds it lapsed. Only a login session keeps cookies:
+a request under a scheme is its own, as before, and a jar holds at most 64 cookies of at most 4 KiB.
 
 **A lapse logs in once.** A request over a login session whose answer is a 401, a redirect to the
 declared login `path`, or the declared `expired` text has lapsed: the node logs in once more and
@@ -625,21 +628,29 @@ step without the declared `ready` text (or without a value it captures) is the c
 the login, a terminal `auth` at the session rung (`auth: the login was sent back to the login page
 (302 to /login)`). It is held as refused for the life of the auth state, the gate holds every
 request beneath it across a restart, and the next login is the one the moved fingerprint brings.
-No retry loop can lock an account out. A 5xx, a 408 or a 429 is retryable and charges nothing; a
+No retry loop can lock an account out. A login that draws no verdict after its secrets were sent (a
+5xx, a 408, a 429, a connection dropped once the request was written) is retried on the poll's
+backoff, but three in a row spend the login budget, as a line session's does, and read `rejected`
+with the component's last answer; a connection never made sends nothing and charges nothing. A
 redirect anywhere else passes (a form login's way of saying yes).
 
 **Digest** (RFC 7616) is `scheme: digest` on a `basic-auth` secret. The first request draws the
 component's challenge, which the node answers (MD5, SHA-256, or their `-sess` forms; `qop=auth`, or
 the legacy form with none), then holds, answering every later request at once with a rising count.
-A challenge the component marks `stale` (its nonce rotated) is answered afresh, never read as a
-refusal; a 401 to an answer that was not stale is the credential's refusal. The password never
-crosses the wire.
+A challenge the component marks `stale`, or one under a nonce it rotated without saying so, is
+answered afresh, never read as a refusal; a 401 to an answer of the nonce it still offers is the
+credential's refusal. A 401 offering no digest challenge the node answers (Basic alone, an
+algorithm other than MD5 or SHA-256) is the request's own fault, its schemes named: the credential
+was never sent, so it says nothing about it. The password never crosses the wire.
 
 **Never logged.** The values the auth state holds (the secret fields a login sent, the values it
 captured, the component's cookies) are scrubbed from every reason and error as the credential is,
 in every form a component could echo them, and from every URL the node names (a login step may
-render a secret into its query). A captured value with a control character, or longer than 8 KiB,
-refuses rather than riding a header. The node logs that it logged in and why (`opening`, `renewing
+render a secret into its query, though never into its host: a step's path opens with a literal
+`/`). What a login would capture is scrubbed even from the reason that refuses it. A captured
+value with a control character, or longer than 8 KiB, refuses rather than riding a header, and a
+command whose delivery names an address the node's worklist does not is never sent, so a session
+opened with one component never rides a request to another. The node logs that it logged in and why (`opening`, `renewing
 before expiry`, `the session lapsed`), never a value.
 
 **Shaped for OAuth2.** A client-credentials grant (#1119) is this shape with no new primitive: a
