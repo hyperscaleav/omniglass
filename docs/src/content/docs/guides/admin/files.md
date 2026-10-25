@@ -61,3 +61,9 @@ without it.
 Reading and downloading ordinary files rides the viewer floor (`file:read`). Uploading is `file:create`
 and deleting is `file:delete`, the writes an operator holds. The sensitive tier (`file:read:admin` and
 friends), which admin and owner carry, is what gates the confidential ones.
+
+From the CLI the same surface is `omniglass file list` / `create` / `get` / `download` / `delete`,
+each taking the file by its filename where exactly one file you can see carries it
+(`omniglass file download codec-firmware-2.1.4.txt`), and by the uuid a listing prints where two
+share it. A filename may be almost anything but a path, a uuid, `.` or `..`: each of those would read
+back as some other reference, so an upload naming one is refused.

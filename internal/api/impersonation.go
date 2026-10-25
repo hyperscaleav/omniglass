@@ -13,7 +13,7 @@ import (
 const defaultImpersonationMinutes = 30
 
 type impersonateInput struct {
-	ID   string `path:"id" doc:"The principal to impersonate, addressed by its uuid or a human username"`
+	ID   string `path:"id" doc:"The principal to impersonate, addressed by its uuid, a human's username, or a service account's name"`
 	Body struct {
 		Mode            string `json:"mode" enum:"view_as,act_as" doc:"view_as is read-only; act_as is full, with mutations attributed to both the real actor and the impersonated principal"`
 		DurationMinutes int    `json:"duration_minutes,omitempty" minimum:"1" maximum:"1440" doc:"Session lifetime in minutes (default 30, max 1440)"`

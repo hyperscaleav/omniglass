@@ -328,14 +328,14 @@ func (p *PG) ListSecrets(ctx context.Context, read scope.Set, canAdmin bool) ([]
 // action scope (all for a platform secret); an unknown id or one out of read scope
 // is the non-disclosing ErrSecretNotFound. canPlatform is the caller's
 // platform:delete permission, required to remove a secret at the platform tier.
-func (p *PG) DeleteSecret(ctx context.Context, actorID, id string, read, action scope.Set, canAdmin, canPlatform bool) error {
+func (p *PG) DeleteSecret(ctx context.Context, actorID, ref string, read, action scope.Set, canAdmin, canPlatform bool) error {
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("storage: begin delete secret: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	before, err := p.secretForAction(ctx, tx, id, read, action, canAdmin, canPlatform)
+	before, err := p.secretForAction(ctx, tx, ref, read, action, canAdmin, canPlatform)
 	if err != nil {
 		return err
 	}
@@ -363,7 +363,7 @@ func (p *PG) DeleteSecret(ctx context.Context, actorID, id string, read, action 
 // it empty. Requires the owner within the action scope; an unknown or
 // out-of-scope id is ErrSecretNotFound. canPlatform is the caller's
 // platform:update permission, required to edit a secret at the platform tier.
-func (p *PG) UpdateSecret(ctx context.Context, actorID, id string, patch SecretPatch, read, action scope.Set, canAdmin, canPlatform bool) (*Secret, error) {
+func (p *PG) UpdateSecret(ctx context.Context, actorID, ref string, patch SecretPatch, read, action scope.Set, canAdmin, canPlatform bool) (*Secret, error) {
 	if p.secret == nil {
 		return nil, ErrNoSecretProvider
 	}
@@ -373,7 +373,7 @@ func (p *PG) UpdateSecret(ctx context.Context, actorID, id string, patch SecretP
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	row, shape, err := p.secretRowForAction(ctx, tx, id, read, action, canAdmin, canPlatform)
+	row, shape, err := p.secretRowForAction(ctx, tx, ref, read, action, canAdmin, canPlatform)
 	if err != nil {
 		return nil, err
 	}
@@ -402,9 +402,12 @@ func (p *PG) UpdateSecret(ctx context.Context, actorID, id string, patch SecretP
 			label = case when $4::boolean then $3 else label end,
 			updated_at = now()
 		where id = $1
-		returning `+secretCols, id, valueJSON, labelVal, setLabel), shape)
+		returning `+secretCols, row.id, valueJSON, labelVal, setLabel), shape)
 	if err != nil {
 		return nil, mapSecretWriteErr(err)
+	}
+	if s.OwnerName, err = arcOwnerName(ctx, tx, s.OwnerKind, s.OwnerID); err != nil {
+		return nil, err
 	}
 	if err := writeAuditRes(ctx, tx, actorID, "update", "secret", s.ID, nil, auditSecret(s)); err != nil {
 		return nil, err
@@ -417,16 +420,16 @@ func (p *PG) UpdateSecret(ctx context.Context, actorID, id string, patch SecretP
 
 // RevealSecret decrypts a secret's fields for on-screen display, audited as a
 // `reveal`. See decryptSecret for the mechanics.
-func (p *PG) RevealSecret(ctx context.Context, actorID, id string, read, action scope.Set, canAdmin bool) (map[string]string, error) {
-	return p.decryptSecret(ctx, actorID, id, "reveal", read, action, canAdmin)
+func (p *PG) RevealSecret(ctx context.Context, actorID, ref string, read, action scope.Set, canAdmin bool) (map[string]string, error) {
+	return p.decryptSecret(ctx, actorID, ref, "reveal", read, action, canAdmin)
 }
 
 // CopySecret decrypts a secret's fields for clipboard copy, audited as a `copy`.
 // It is the same exposure as a reveal (the plaintext leaves the server), gated
 // by the same secret:reveal capability, but recorded under a distinct verb so the
 // audit trail tells a copy from an on-screen view.
-func (p *PG) CopySecret(ctx context.Context, actorID, id string, read, action scope.Set, canAdmin bool) (map[string]string, error) {
-	return p.decryptSecret(ctx, actorID, id, "copy", read, action, canAdmin)
+func (p *PG) CopySecret(ctx context.Context, actorID, ref string, read, action scope.Set, canAdmin bool) (map[string]string, error) {
+	return p.decryptSecret(ctx, actorID, ref, "copy", read, action, canAdmin)
 }
 
 // decryptSecret unseals a secret's fields and returns their plaintext, auditing
@@ -435,7 +438,7 @@ func (p *PG) CopySecret(ctx context.Context, actorID, id string, read, action sc
 // non-secret fields are returned as-is. Requires the owner within the action
 // scope; an unknown or out-of-scope id is ErrSecretNotFound. Every decrypt is
 // audited (no token cache in slice 1).
-func (p *PG) decryptSecret(ctx context.Context, actorID, id, verb string, read, action scope.Set, canAdmin bool) (map[string]string, error) {
+func (p *PG) decryptSecret(ctx context.Context, actorID, ref, verb string, read, action scope.Set, canAdmin bool) (map[string]string, error) {
 	if p.secret == nil {
 		return nil, ErrNoSecretProvider
 	}
@@ -448,7 +451,7 @@ func (p *PG) decryptSecret(ctx context.Context, actorID, id, verb string, read, 
 	// Revealing reads a secret, it never writes at the platform tier, so the tier
 	// permission does not apply here: the read/action scopes and the admin tier are
 	// the whole gate. Passing true keeps the shared fetch from re-gating a read.
-	row, shape, err := p.secretRowForAction(ctx, tx, id, read, action, canAdmin, true)
+	row, shape, err := p.secretRowForAction(ctx, tx, ref, read, action, canAdmin, true)
 	if err != nil {
 		return nil, err
 	}
@@ -762,8 +765,8 @@ type secretRow struct {
 
 // secretForAction fetches a secret by id and enforces the read-then-action scope
 // split on its owner, returning the masked Secret for the audit before-image.
-func (p *PG) secretForAction(ctx context.Context, q querier, id string, read, action scope.Set, canAdmin, canPlatform bool) (*Secret, error) {
-	row, shape, err := p.secretRowForAction(ctx, q, id, read, action, canAdmin, canPlatform)
+func (p *PG) secretForAction(ctx context.Context, q querier, ref string, read, action scope.Set, canAdmin, canPlatform bool) (*Secret, error) {
+	row, shape, err := p.secretRowForAction(ctx, q, ref, read, action, canAdmin, canPlatform)
 	if err != nil {
 		return nil, err
 	}
@@ -782,14 +785,24 @@ func (p *PG) secretForAction(ctx context.Context, q querier, id string, read, ac
 // (canPlatform): the tier is install-wide, so scope alone does not carry it. Only
 // the stored row knows its tier, which is why the permission is resolved by the
 // API and passed in here rather than checked on the request body.
-func (p *PG) secretRowForAction(ctx context.Context, q querier, id string, read, action scope.Set, canAdmin, canPlatform bool) (secretRow, secret.Shape, error) {
+//
+// ref is the secret's uuid or its name (#1133): `<name>`, or `<owner>/<name>`.
+// A name resolves to the uuid first, among the secrets this caller may read
+// (owner in read scope, and admin-sensitive only with the tier), so the split
+// below then runs on the resolved row exactly as it does for a uuid, and a
+// secret the caller cannot see is indistinguishable from one that is absent.
+func (p *PG) secretRowForAction(ctx context.Context, q querier, ref string, read, action scope.Set, canAdmin, canPlatform bool) (secretRow, secret.Shape, error) {
 	var (
 		row            secretRow
 		secType        string
 		comp, sys, loc *string
 		value          []byte
 	)
-	err := q.QueryRow(ctx, `
+	id, err := ownedIDByRef(ctx, q, secretOwned, ref, read, canAdmin)
+	if err != nil {
+		return secretRow{}, secret.Shape{}, err
+	}
+	err = q.QueryRow(ctx, `
 		select id, name, coalesce(label, ''), (select st.name from secret_type st where st.id = secret.secret_type) as secret_type, owner_kind, component_id, system_id, location_id, admin_sensitive, value
 		from secret where id = $1`, id).
 		Scan(&row.id, &row.name, &row.label, &secType, &row.ownerKind, &comp, &sys, &loc, &row.adminSensitive, &value)

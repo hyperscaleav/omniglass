@@ -41,7 +41,19 @@ import (
 // caller's Msg verbatim. storage.ErrAddressNotAccepted is a dotted or
 // accessor-bearing ref sent to a registry whose names stay a single global
 // token (node, tag, the four lane types): also a 422, naming the kind.
+//
+// storage.ErrUnresolvedRef is a name reference to one of the resources #1133
+// made addressable by name (an endpoint, a secret, a variable, a file, a
+// principal group, a principal) that resolves to no single row the caller may
+// see: a 404 naming what was looked up, and, when more than one visible row
+// answers to it, every one of them in the spelling that does resolve. Those
+// candidates are built after the scope filter, so an absent row and an
+// out-of-scope one read identically.
 func mapRefErr(err error) (error, bool) {
+	var unresolvedRef *storage.ErrUnresolvedRef
+	if errors.As(err, &unresolvedRef) {
+		return huma.Error404NotFound(unresolvedRefMessage(unresolvedRef)), true
+	}
 	var ambig *storage.ErrAmbiguousName
 	if errors.As(err, &ambig) {
 		if len(ambig.Candidates) == 0 {
@@ -186,4 +198,35 @@ func mapTypeErr(err error, kind string) error {
 	default:
 		return huma.Error500InternalServerError("type operation failed")
 	}
+}
+
+// maxListedCandidates caps the spellings an unresolved name's 404 lists.
+const maxListedCandidates = 10
+
+// unresolvedRefMessage is the operator-facing 404 for a name that resolves to no
+// single resource: what was looked up, and either nothing more (no row the
+// caller can see answers to it) or each row that does, spelled so it resolves.
+// It lists at most maxListedCandidates of them: a bare name a whole fleet
+// shares (every room's display-1/snmp) would otherwise answer with a page of
+// addresses, and the first few already show the operator the spelling to type.
+func unresolvedRefMessage(e *storage.ErrUnresolvedRef) string {
+	msg := fmt.Sprintf("%s %q not found", e.Kind, e.Ref)
+	listed, more := e.Candidates, 0
+	if len(listed) > maxListedCandidates {
+		listed, more = listed[:maxListedCandidates], len(listed)-maxListedCandidates
+	}
+	switch n := len(listed); {
+	case more > 0:
+		msg += fmt.Sprintf(": %d you can see answer to it; address one as %s (and %d more)",
+			len(e.Candidates), strings.Join(listed, ", "), more)
+	case n == 2:
+		msg += fmt.Sprintf(": 2 you can see answer to it; address one as %s or %s", listed[0], listed[1])
+	case n > 2:
+		msg += fmt.Sprintf(": %d you can see answer to it; address one as %s or %s",
+			n, strings.Join(listed[:n-1], ", "), listed[n-1])
+	}
+	if e.Hint != "" {
+		msg += "; " + e.Hint
+	}
+	return msg
 }

@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/hyperscaleav/omniglass/internal/auth"
 	"github.com/hyperscaleav/omniglass/internal/scope"
 	"github.com/jackc/pgx/v5"
@@ -282,22 +281,26 @@ func mustDummyHash() string {
 }
 
 // ResolvePrincipalRef maps a principal reference to the principal id. A value that
-// parses as a uuid is returned as-is (any principal kind, and an unknown uuid still
-// resolves here so the caller's own not-found handling applies unchanged). Otherwise
-// it is treated as a human's username and looked up; an unknown username is
-// ErrPrincipalNotFound. Service principals have no username, so they stay addressable
-// only by uuid. This backs addressing a principal by username on the API and CLI.
+// is a uuid is returned as-is (any principal kind, and an unknown uuid still
+// resolves here so the caller's own not-found handling applies unchanged).
+// Otherwise it is a human's username or a service account's name (#1133); an
+// unknown one is ErrPrincipalNotFound, and one that is both a username and a
+// service name is refused as naming no one principal (principalIDByRef). This
+// backs addressing a principal by name on the API and CLI.
 func (p *PG) ResolvePrincipalRef(ctx context.Context, ref string) (string, error) {
-	if _, err := uuid.Parse(ref); err == nil {
-		return ref, nil
-	}
+	return principalIDByRef(ctx, p.pool, ref)
+}
+
+// ResolveUsername maps a human's username to its principal id, matching the
+// human table alone; an unknown username is ErrPrincipalNotFound.
+func (p *PG) ResolveUsername(ctx context.Context, username string) (string, error) {
 	var id string
-	err := p.pool.QueryRow(ctx, `select principal_id from human where username = $1`, ref).Scan(&id)
+	err := p.pool.QueryRow(ctx, `select principal_id from human where username = $1`, username).Scan(&id)
 	switch {
 	case errors.Is(err, pgx.ErrNoRows):
 		return "", ErrPrincipalNotFound
 	case err != nil:
-		return "", fmt.Errorf("storage: resolve principal ref %q: %w", ref, err)
+		return "", fmt.Errorf("storage: resolve username %q: %w", username, err)
 	}
 	return id, nil
 }
@@ -1096,24 +1099,14 @@ func (p *PG) CreateGrant(ctx context.Context, actorID, principalID string, spec 
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	// A scoped grant must target a real entity of that kind by id, so the scope
-	// filter (which matches entity ids) resolves. This rejects a grant scoped to a
-	// name or a non-existent id up front, rather than 500-ing the scoped list later.
+	// A scoped grant must target a real entity of that kind, stored by its id so
+	// the scope filter (which matches entity ids) resolves. The root may be named
+	// by uuid, name or dotted address (#1133); whatever names it, the uuid is what
+	// the grant stores, and a root that names nothing is refused up front rather
+	// than 500-ing the scoped list later.
 	if spec.ScopeKind != "all" {
-		tbl, ok := scopeKindTable(spec.ScopeKind)
-		if !ok {
-			return nil, ErrBadScope // "group" and any other non-tree kind are unsupported
-		}
-		if _, perr := uuid.Parse(spec.ScopeID); perr != nil {
-			return nil, ErrBadScope
-		}
-		var exists bool
-		if err := tx.QueryRow(ctx,
-			`select exists(select 1 from `+string(tbl)+` where id = $1)`, spec.ScopeID).Scan(&exists); err != nil {
-			return nil, fmt.Errorf("storage: scope target check: %w", err)
-		}
-		if !exists {
-			return nil, ErrBadScope
+		if spec.ScopeID, err = resolveScopeRoot(ctx, tx, spec.ScopeKind, spec.ScopeID); err != nil {
+			return nil, err
 		}
 	}
 

@@ -23,8 +23,11 @@ store, behind the same Storage Gateway as everything else.
   yet, deferred to [#191](https://github.com/hyperscaleav/omniglass/issues/191)), the searchable
   handle an operator references; it owns no bytes, pointing at a blob by hash. The filename is a
   human label with an extension (`codec-firmware-2.1.4.txt`), deliberately **not** a triad name: it
-  takes no name rule, carries no uniqueness, and the handle is addressed by its uuid, which is why
-  `file` is declared "human identifier, not a name" in the identity shapes.
+  takes no name rule and carries no uniqueness, which is why `file` is declared "human identifier,
+  not a name" in the identity shapes. A route still takes it: the handle is addressed by its uuid
+  or by its filename, the filename resolving where exactly one file the caller can see carries it
+  and refusing with each candidate's uuid where more do
+  ([ADR-1133](/architecture/decisions/#adr-1133-every-operator-resource-answers-to-its-name-and-an-endpoint-is-its-component-and-its-name)).
 - **the blob store** holds the **bytes**, **content-addressed by `sha256`**: the hash is the key,
   so identical bytes are one blob.
 

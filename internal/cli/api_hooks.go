@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"net/url"
+	"strings"
 
 	"github.com/hyperscaleav/omniglass/internal/cli/apiclient"
 	"github.com/hyperscaleav/omniglass/internal/config"
@@ -75,4 +77,38 @@ func addClientFlags(root *cobra.Command) {
 	}
 	root.PersistentFlags().String("server", server, "Omniglass server base URL (env OMNIGLASS_SERVER)")
 	root.PersistentFlags().String("token", config.Get("OMNIGLASS_TOKEN"), "bearer token (env OMNIGLASS_TOKEN)")
+}
+
+// pathSegment renders a positional argument as exactly one URL path segment, the
+// way every generated command builds its request path. url.PathEscape already
+// encodes a slash, so a qualified name (`<component>/<endpoint>`,
+// `<owner>/<name>`, #1133) stays one segment; a colon it leaves alone, and the
+// router reads the first colon in a segment as the start of a `:verb` custom
+// method, so a filename carrying one would never reach its route. Encoding it too
+// keeps the segment whole, and the server decodes both back. No name or dotted
+// address carries either character, so for them this is url.PathEscape.
+func pathSegment(s string) string {
+	return strings.ReplaceAll(url.PathEscape(s), ":", "%3A")
+}
+
+// pathArgs is every generated command's positional check: exactly n arguments,
+// none of them a dot segment. A positional rides the request path as one
+// segment, and `.` or `..` there is a segment a normalizing hop (a proxy, an
+// ingress) rewrites into the route above it, so `member delete night-shift ..`
+// could reach `DELETE /principal-groups/night-shift`. No name, dotted address or
+// filename is either (the name rule opens on a letter or digit, and a file may
+// not be named one, #1133), so refusing them loses nothing.
+func pathArgs(n int) cobra.PositionalArgs {
+	exact := cobra.ExactArgs(n)
+	return func(cmd *cobra.Command, args []string) error {
+		if err := exact(cmd, args); err != nil {
+			return err
+		}
+		for _, a := range args {
+			if a == "." || a == ".." {
+				return fmt.Errorf("argument %q is a dot segment, which addresses no resource", a)
+			}
+		}
+		return nil
+	}
 }

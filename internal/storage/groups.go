@@ -147,11 +147,16 @@ func (p *PG) ListGroups(ctx context.Context, read scope.Set) ([]Group, error) {
 	return out, rows.Err()
 }
 
-// GetGroup resolves one group by id. Requires an all-scope grant; an unknown id
-// is ErrGroupNotFound.
-func (p *PG) GetGroup(ctx context.Context, id string, read scope.Set) (*Group, error) {
+// GetGroup resolves one group by reference, its uuid or its name (#1133).
+// Requires an all-scope grant, checked before the reference is resolved; an
+// unknown one is ErrGroupNotFound.
+func (p *PG) GetGroup(ctx context.Context, ref string, read scope.Set) (*Group, error) {
 	if !read.All {
 		return nil, ErrPrincipalForbidden
+	}
+	id, err := groupIDByRef(ctx, p.pool, ref)
+	if err != nil {
+		return nil, err
 	}
 	g, err := scanGroupFull(p.pool.QueryRow(ctx, `select `+groupColsWithCounts+` from principal_group g where g.id = $1`, id))
 	if err != nil {
@@ -162,7 +167,7 @@ func (p *PG) GetGroup(ctx context.Context, id string, read scope.Set) (*Group, e
 
 // UpdateGroup patches a group's presentational fields, audited. An unknown id is
 // ErrGroupNotFound.
-func (p *PG) UpdateGroup(ctx context.Context, actorID, groupID string, patch GroupPatch, action scope.Set) (*Group, error) {
+func (p *PG) UpdateGroup(ctx context.Context, actorID, groupRef string, patch GroupPatch, action scope.Set) (*Group, error) {
 	if !action.All {
 		return nil, ErrPrincipalForbidden
 	}
@@ -171,6 +176,10 @@ func (p *PG) UpdateGroup(ctx context.Context, actorID, groupID string, patch Gro
 		return nil, fmt.Errorf("storage: begin update group: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
+	groupID, err := groupIDByRef(ctx, tx, groupRef)
+	if err != nil {
+		return nil, err
+	}
 
 	before, err := scanGroup(tx.QueryRow(ctx, `select `+groupCols+` from principal_group where id = $1 for update`, groupID))
 	if err != nil {
@@ -205,7 +214,7 @@ func (p *PG) UpdateGroup(ctx context.Context, actorID, groupID string, patch Gro
 // references an operator stored outside this system. Nothing inside breaks, since
 // membership and grants both key on the group's uuid, which is also why the audit
 // row keys on that uuid rather than on the name it just moved.
-func (p *PG) RenameGroup(ctx context.Context, actorID, groupID, newName string, action scope.Set) (*Group, error) {
+func (p *PG) RenameGroup(ctx context.Context, actorID, groupRef, newName string, action scope.Set) (*Group, error) {
 	if !action.All {
 		return nil, ErrPrincipalForbidden
 	}
@@ -217,6 +226,10 @@ func (p *PG) RenameGroup(ctx context.Context, actorID, groupID, newName string, 
 		return nil, fmt.Errorf("storage: begin rename group: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
+	groupID, err := groupIDByRef(ctx, tx, groupRef)
+	if err != nil {
+		return nil, err
+	}
 
 	before, err := scanGroup(tx.QueryRow(ctx, `select `+groupCols+` from principal_group where id = $1 for update`, groupID))
 	if err != nil {
@@ -240,7 +253,7 @@ func (p *PG) RenameGroup(ctx context.Context, actorID, groupID, newName string, 
 // DeleteGroup removes a group (and, by cascade, its memberships and group
 // grants), audited. Requires an all-scope grant; an unknown id is
 // ErrGroupNotFound.
-func (p *PG) DeleteGroup(ctx context.Context, actorID, groupID string, action scope.Set) error {
+func (p *PG) DeleteGroup(ctx context.Context, actorID, groupRef string, action scope.Set) error {
 	if !action.All {
 		return ErrPrincipalForbidden
 	}
@@ -249,6 +262,10 @@ func (p *PG) DeleteGroup(ctx context.Context, actorID, groupID string, action sc
 		return fmt.Errorf("storage: begin delete group: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
+	groupID, err := groupIDByRef(ctx, tx, groupRef)
+	if err != nil {
+		return err
+	}
 
 	before, err := scanGroup(tx.QueryRow(ctx, `select `+groupCols+` from principal_group where id = $1`, groupID))
 	if err != nil {
@@ -264,8 +281,10 @@ func (p *PG) DeleteGroup(ctx context.Context, actorID, groupID string, action sc
 }
 
 // AddGroupMember adds a principal to a group, audited and idempotent (re-adding
-// an existing member is a no-op). Requires an all-scope grant.
-func (p *PG) AddGroupMember(ctx context.Context, actorID, groupID, principalID string, action scope.Set) error {
+// an existing member is a no-op). Requires an all-scope grant, checked before
+// either reference resolves: the group by uuid or name, the principal by uuid,
+// username, or a service account's name (#1133).
+func (p *PG) AddGroupMember(ctx context.Context, actorID, groupRef, principalRef string, action scope.Set) error {
 	if !action.All {
 		return ErrPrincipalForbidden
 	}
@@ -274,6 +293,10 @@ func (p *PG) AddGroupMember(ctx context.Context, actorID, groupID, principalID s
 		return fmt.Errorf("storage: begin add member: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
+	groupID, principalID, err := p.memberRefs(ctx, tx, groupRef, principalRef)
+	if err != nil {
+		return err
+	}
 
 	tag, err := tx.Exec(ctx,
 		`insert into principal_group_member (group_id, principal_id) values ($1, $2) on conflict do nothing`, groupID, principalID)
@@ -290,8 +313,9 @@ func (p *PG) AddGroupMember(ctx context.Context, actorID, groupID, principalID s
 }
 
 // RemoveGroupMember removes a principal from a group, audited. Requires an
-// all-scope grant. Removing a non-member is a no-op.
-func (p *PG) RemoveGroupMember(ctx context.Context, actorID, groupID, principalID string, action scope.Set) error {
+// all-scope grant, checked before either reference resolves (as AddGroupMember).
+// Removing a non-member is a no-op.
+func (p *PG) RemoveGroupMember(ctx context.Context, actorID, groupRef, principalRef string, action scope.Set) error {
 	if !action.All {
 		return ErrPrincipalForbidden
 	}
@@ -300,6 +324,10 @@ func (p *PG) RemoveGroupMember(ctx context.Context, actorID, groupID, principalI
 		return fmt.Errorf("storage: begin remove member: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
+	groupID, principalID, err := p.memberRefs(ctx, tx, groupRef, principalRef)
+	if err != nil {
+		return err
+	}
 
 	tag, err := tx.Exec(ctx, `delete from principal_group_member where group_id = $1 and principal_id = $2`, groupID, principalID)
 	if err != nil {
@@ -315,9 +343,13 @@ func (p *PG) RemoveGroupMember(ctx context.Context, actorID, groupID, principalI
 }
 
 // ListGroupMembers returns the principals in a group. Requires an all-scope grant.
-func (p *PG) ListGroupMembers(ctx context.Context, groupID string, read scope.Set) ([]GroupMember, error) {
+func (p *PG) ListGroupMembers(ctx context.Context, groupRef string, read scope.Set) ([]GroupMember, error) {
 	if !read.All {
 		return nil, ErrPrincipalForbidden
+	}
+	groupID, err := groupIDByRef(ctx, p.pool, groupRef)
+	if err != nil {
+		return nil, err
 	}
 	// A group can hold humans and service accounts, and a roster shows two
 	// different facts about each: its NAME, the identifier that says which
@@ -387,7 +419,7 @@ func (p *PG) ListGroupsForPrincipal(ctx context.Context, principalID string, rea
 // inherit it. Requires an all-scope grant; the escalation cover-check (a granter
 // may not grant above its own tier) is applied by the API handler, as for a
 // direct grant. Validation mirrors CreateGrant.
-func (p *PG) CreateGroupGrant(ctx context.Context, actorID, groupID string, spec GrantSpec, action scope.Set) (*Grant, error) {
+func (p *PG) CreateGroupGrant(ctx context.Context, actorID, groupRef string, spec GrantSpec, action scope.Set) (*Grant, error) {
 	if !action.All {
 		return nil, ErrPrincipalForbidden
 	}
@@ -408,18 +440,14 @@ func (p *PG) CreateGroupGrant(ctx context.Context, actorID, groupID string, spec
 		return nil, fmt.Errorf("storage: begin create group grant: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
+	groupID, err := groupIDByRef(ctx, tx, groupRef)
+	if err != nil {
+		return nil, err
+	}
 
 	if spec.ScopeKind != "all" {
-		tbl, ok := scopeKindTable(spec.ScopeKind)
-		if !ok {
-			return nil, ErrBadScope
-		}
-		var exists bool
-		if err := tx.QueryRow(ctx, `select exists(select 1 from `+string(tbl)+` where id = $1)`, spec.ScopeID).Scan(&exists); err != nil {
-			return nil, fmt.Errorf("storage: scope target check: %w", err)
-		}
-		if !exists {
-			return nil, ErrBadScope
+		if spec.ScopeID, err = resolveScopeRoot(ctx, tx, spec.ScopeKind, spec.ScopeID); err != nil {
+			return nil, err
 		}
 	}
 
@@ -445,7 +473,7 @@ func (p *PG) CreateGroupGrant(ctx context.Context, actorID, groupID string, spec
 
 // RevokeGroupGrant deletes one grant from a group, audited. Requires an all-scope
 // grant. An unknown grant (for that group) is ErrGrantNotFound.
-func (p *PG) RevokeGroupGrant(ctx context.Context, actorID, groupID, grantID string, action scope.Set) error {
+func (p *PG) RevokeGroupGrant(ctx context.Context, actorID, groupRef, grantID string, action scope.Set) error {
 	if !action.All {
 		return ErrPrincipalForbidden
 	}
@@ -454,6 +482,10 @@ func (p *PG) RevokeGroupGrant(ctx context.Context, actorID, groupID, grantID str
 		return fmt.Errorf("storage: begin revoke group grant: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
+	groupID, err := groupIDByRef(ctx, tx, groupRef)
+	if err != nil {
+		return err
+	}
 
 	var g Grant
 	err = tx.QueryRow(ctx,
@@ -472,9 +504,13 @@ func (p *PG) RevokeGroupGrant(ctx context.Context, actorID, groupID, grantID str
 }
 
 // ListGroupGrants returns a group's grants. Requires an all-scope grant.
-func (p *PG) ListGroupGrants(ctx context.Context, groupID string, read scope.Set) ([]Grant, error) {
+func (p *PG) ListGroupGrants(ctx context.Context, groupRef string, read scope.Set) ([]Grant, error) {
 	if !read.All {
 		return nil, ErrPrincipalForbidden
+	}
+	groupID, err := groupIDByRef(ctx, p.pool, groupRef)
+	if err != nil {
+		return nil, err
 	}
 	rows, err := p.pool.Query(ctx,
 		`select id, (select name from role where id = principal_grant.role_id), scope_kind, scope_id, scope_op from principal_grant where group_id = $1 order by created_at`, groupID)
@@ -532,4 +568,17 @@ func mapMemberWriteErr(err error) error {
 		return ErrGroupNotFound
 	}
 	return fmt.Errorf("storage: add member: %w", err)
+}
+
+// memberRefs resolves a membership write's two references: the group by uuid or
+// name, the principal by uuid, username or service account name. Its callers run
+// it after the all-scope check.
+func (p *PG) memberRefs(ctx context.Context, q querier, groupRef, principalRef string) (groupID, principalID string, err error) {
+	if groupID, err = groupIDByRef(ctx, q, groupRef); err != nil {
+		return "", "", err
+	}
+	if principalID, err = principalIDByRef(ctx, q, principalRef); err != nil {
+		return "", "", err
+	}
+	return groupID, principalID, nil
 }

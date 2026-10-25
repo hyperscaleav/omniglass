@@ -9,6 +9,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/seed"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
+	"github.com/jackc/pgx/v5"
 )
 
 // TestSetPasswordBreakGlassLockout proves the break-glass set-password revokes the
@@ -97,5 +98,29 @@ func TestSetPasswordBreakGlassLockout(t *testing.T) {
 	// An unknown user is a clean error, not a panic.
 	if err := runSetPassword(ctx, "ghost", "whatever-strong-12", false); err == nil {
 		t.Fatalf("set-password on an unknown user should error")
+	}
+
+	// A service account sharing the username (#1133's review): the break-glass
+	// still revokes the HUMAN's sessions, the one whose password it rotated. A
+	// principal reference would now find both and refuse, after the password had
+	// already moved, leaving a stolen session alive.
+	conn, err := pgx.Connect(ctx, dsn)
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	defer conn.Close(ctx)
+	var svc string
+	if err := conn.QueryRow(ctx, `insert into principal (kind) values ('service') returning id`).Scan(&svc); err != nil {
+		t.Fatalf("insert service principal: %v", err)
+	}
+	if _, err := conn.Exec(ctx, `insert into service (principal_id, name) values ($1, 'root')`, svc); err != nil {
+		t.Fatalf("insert service: %v", err)
+	}
+	addSession()
+	if err := runSetPassword(ctx, "root", "blue-harbor-31x", false); err != nil {
+		t.Fatalf("set-password beside a same-named service account: %v", err)
+	}
+	if s, _ := counts(); s != 0 {
+		t.Fatalf("after break-glass beside a same-named service account: %d session(s) survived", s)
 	}
 }

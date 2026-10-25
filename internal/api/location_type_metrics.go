@@ -47,12 +47,12 @@ type locationTypeMetricOutput struct {
 // locationTypeMetricPathInput addresses one contract line by the location type
 // and the metric name (the pair the contract is unique on).
 type locationTypeMetricPathInput struct {
-	ID     string `path:"id" doc:"The location type id"`
+	ID     string `path:"id" doc:"The location type, by name or uuid" example:"room"`
 	Metric string `path:"metric" doc:"The metric name"`
 }
 
 type setLocationTypeMetricInput struct {
-	ID     string `path:"id" doc:"The location type id"`
+	ID     string `path:"id" doc:"The location type, by name or uuid" example:"room"`
 	Metric string `path:"metric" doc:"The metric name"`
 	Body   struct {
 		DefaultValue any  `json:"default_value,omitempty" doc:"The contract default, validated against the metric's data_type; omit for no default"`

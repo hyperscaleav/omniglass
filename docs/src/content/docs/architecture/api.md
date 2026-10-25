@@ -34,7 +34,8 @@ first `:verb` routes in the wild. See [implementation status](/architecture/stat
 Everything lives under `/api/v1`. The path shape is derivable, not special-cased:
 
 - **Plural resource collections**, standard methods addressed by the entity's `name` where it has one
-  and by its uuid where it does not (AIP-style): `POST` creates (409 when the `name` is already taken
+  (the name-only forms are listed under [every resource answers to its
+  name](#every-operator-resource-answers-to-its-name)) and by its uuid always (AIP-style): `POST` creates (409 when the `name` is already taken
   in its placement bucket; the uuid primary key is the server's to mint and cannot collide), `GET`
   reads, `PATCH` partial-updates (AIP-134), `DELETE` removes. No upsert shortcuts. On `location`,
   `system`, and `component`, the `{ref}` path parameter takes a third form beside uuid and bare name: a
@@ -48,7 +49,7 @@ Everything lives under `/api/v1`. The path shape is derivable, not special-cased
   A path or a reference resolves whichever form it is given, since a kebab name can never look like a
   uuid.
 - **A rename is a custom method, never a `PATCH` field.** `POST /components/{name}:rename` (also
-  `/systems`, `/locations`, `/principal-groups/{id}`) moves the `name`, gated by `<entity>:rename`
+  `/systems`, `/locations`, `/principal-groups/{group}`) moves the `name`, gated by `<entity>:rename`
   rather than `<entity>:update`, and the `PATCH` body of those four carries no `name` at all. Renaming
   breaks every reference an operator stored outside the system (a bookmark, a runbook step, an
   integration's config), so it is an act a grant can withhold on its own instead of a side effect of
@@ -87,10 +88,51 @@ Everything lives under `/api/v1`. The path shape is derivable, not special-cased
   placement bucket, not a single global fact. It stays **blind to the caller's own grant scope**:
   a deploy principal scoped to one subtree still gets a correct answer for a placement it cannot
   read via `GET`, because the check queries the target bucket directly rather than reading the row.
-- **A principal is addressable by uuid or username.** Every `/principals/{id}` route resolves either
-  server-side (a value that parses as a uuid is used directly, else a username lookup, an unknown one
-  a 404). The uuid stays the stable identity (a username is mutable, nothing keys on it); service
-  principals have no username and stay uuid-addressed.
+- **A principal is addressable by uuid, username, or service account name.** Every
+  `/principals/{id}` route resolves any of them server-side (a value that parses as a uuid is used
+  directly, else a username or a service account's name, an unknown one a 404, and a word that is
+  both a username and a service name a 404 listing both uuids). A name resolves only for a caller who
+  may list the whole directory (`principal:read:admin` on an all-scope grant); anyone else gets the
+  all-scope 403 for every name, so a name cannot be probed. The uuid stays the stable identity (a
+  username is mutable, nothing keys on it).
+
+### Every operator resource answers to its name
+
+Every resource an operator types the name of accepts that name wherever its uuid is accepted, and
+every response still returns the uuid
+([ADR-1133](/architecture/decisions/#adr-1133-every-operator-resource-answers-to-its-name-and-an-endpoint-is-its-component-and-its-name)).
+The forms, by what the name is unique within:
+
+| Resource | Path parameter | Accepts beside the uuid | Example |
+|---|---|---|---|
+| location, system, component | `{name}` | a bare name, a dotted address | `boi.17c.415a.$comp.display-1` |
+| endpoint | `{endpoint}` | `<component>/<endpoint name>`, the component in any form above | `boi.17c.415a.$comp.display-1/https` |
+| secret, variable | `{secret}`, `{variable}` | a bare name, or `<owner>/<name>`, the owner a location, system or component in any form above, or `$platform` | `demo-panel-login`, `$platform/demo-panel-login` |
+| file | `{file}` | its filename | `codec-firmware-2.1.4.txt` |
+| principal group | `{group}` | its name | `night-shift` |
+| principal, group member | `{id}`, `{principal}` | a username, a service account's name | `alice` |
+| a grant's scope root | `scope_id` (body) | a bare name, a dotted address | `boi.17c` |
+
+The slash in an endpoint, secret or variable reference is one path segment, so a URL percent-encodes
+it (`/endpoints/boi.17c.415a.$comp.display-1%2Fhttps:retry`); the generated CLI does that for you
+(`omniglass endpoint retry 'boi.17c.415a.$comp.display-1/https'`).
+
+**Scope decides before ambiguity does**, for every form. A name's candidates are narrowed to the rows
+the caller may read first (for a secret, also to its admin tier), so a name an out-of-scope row shares
+never makes an in-scope one ambiguous, and an absent row and an out-of-scope one give the same refusal.
+A name that no visible row answers to, or that more than one does, is a **404 naming what was looked
+up**; when more than one answers, the 404 lists each in the spelling that does resolve
+(`$platform/demo-panel-login`, `boi.17c/demo-panel-login`). Resolution runs inside the request's own
+transaction and yields the uuid; the permission check, the read-then-action scope split, and the audit
+row then run on that resolved row exactly as they do for a uuid. The tree entities keep their own
+ambiguity refusal, a 409 listing candidates (#697; aligning the two is #1134). A write answers with
+the row it reached (a secret's or variable's `owner_kind`, `owner_id` and `owner_name`), because a
+name is a lookup: automation that must never drift addresses `<owner>/<name>` or stores the uuid.
+
+**What stays uuid-only, and why**: an alarm, an audit row, a grant, a session or API token, and a task
+have no name (a task's id is its content hash); a component-less (server-hosted) endpoint's name is not
+unique, since only a component makes it so; a node principal on `/principals` is reached by its name on
+`/nodes` instead.
 
 ## Lists: filter, order, page
 
@@ -275,11 +317,11 @@ exercise every convention above at once: the standard family per resource (`/nod
 (the code registry the endpoint picker consumes, `endpoint:read`-gated, #811). An endpoint
 create takes either a `transport` (a bare probe endpoint) or a `driver` plus `inputs` (an
 attach, #813: the driver's spec derives the transport, params, and tasks), and the `/drivers`
-family carries each driver's declarative `spec`, validated at write. `PATCH /endpoints/{id}` edits a
+family carries each driver's declarative `spec`, validated at write. `PATCH /endpoints/{endpoint}` edits a
 driver-attached endpoint's `inputs` in place (the host, the port, an attached secret's reference;
 #1061), validated against the driver (a refused value is a 400 naming the field), re-resolving its
 secrets under the editor's scope, audited, its tasks re-derived in the same transaction.
-`POST /endpoints/{id}:retry`
+`POST /endpoints/{endpoint}:retry`
 (gated `endpoint:retry`, audited, #1049) moves the endpoint's retry counter, part of its connection
 fingerprint, so a gate a terminal refusal holds lifts and the endpoint is attempted again (ADR-0158); for an ssh endpoint whose host key changed, its optional `host_key`
 body declares the new pin (#1032), and for a tls endpoint whose certificate's public key changed,
@@ -549,7 +591,8 @@ it (a **409**). The four built endpoint types are `icmp`, `tcp`, `ssh`, and `htt
 
 A **secret** is a typed, encrypted-at-rest operator value ([config, credentials, and
 variables](/architecture/variables/)); its routes (`GET /secret-types`, `GET` / `POST /secrets`,
-`PATCH` / `DELETE /secrets/{id}`, `POST /secrets/{id}:reveal`; shapes in the
+`PATCH` / `DELETE /secrets/{secret}`, `POST /secrets/{secret}:reveal`, the secret by name, by
+`<owner>/<name>`, or by uuid; shapes in the
 [reference](/reference/api/)) are a worked instance of the conventions above. Secret is a **sensitive
 resource**
 ([ADR-0025](/architecture/decisions/#adr-0025-secret-is-a-sensitive-resource-a-per-secret-admin_sensitive-flag-flips-a-secret-to-the-admin-tier)),
@@ -572,7 +615,7 @@ platform|location|system|component`), shown in the clear (no registry, no mask, 
 polymorphic JSON typed by `value_type` (`string|int|float|bool|json`) and validated against it on
 write. `GET /variables` is the **all-scope admin directory** (like the secret directory, a non-all
 scope is a 403) on `variable:read`; `POST /variables` creates (201, `variable:create`),
-`PATCH /variables/{id}` replaces the `value` (`variable:update`), and `DELETE /variables/{id}` removes
+`PATCH /variables/{variable}` replaces the `value` (`variable:update`), and `DELETE /variables/{variable}` removes
 (204, `variable:delete`, admin and owner), with the same `platform` tier rule as a secret.
 
 A **tag** ([tags](/architecture/tags/)) is a `key: value` label, and its routes split along the
@@ -931,11 +974,12 @@ The bytes ride **base64 in JSON** on both create and download (the
 so the whole surface stays under the authz middleware and generates a uniform client.
 
 `GET /files` is the directory (`{files: [file]}`), sensitive files omitted below the admin tier;
-`GET /files/{id}` returns one handle's metadata; `GET /files/{id}:download` returns
+`GET /files/{file}` returns one handle's metadata (the file by uuid, or by filename where exactly one
+visible file carries it); `GET /files/{file}:download` returns
 `{name, content_type, content (base64)}`, the blob read back and its hash verified (all `file:read`).
 `POST /files` creates one from `{name, content_type, content (base64), sensitive?}` (201,
 `file:create`): the server hashes the bytes, **deduplicates** the blob, and writes the handle
-(`sensitive: true` additionally needs the admin tier). `DELETE /files/{id}` removes the handle (204,
+(`sensitive: true` additionally needs the admin tier). `DELETE /files/{file}` removes the handle (204,
 `file:delete`); the blob is freed in the same transaction when no other handle references it. A `file`
 body is `{id, name, content_type, size, sha256, sensitive, created_at}`; the `sha256` is the content
 address.

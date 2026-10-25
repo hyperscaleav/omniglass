@@ -197,12 +197,12 @@ func resolveRoleWrite(body roleSpecBody, spec storage.SystemRoleSpec) (storage.S
 }
 
 type standardRolePathInput struct {
-	ID   string `path:"id" doc:"The standard id"`
+	ID   string `path:"id" doc:"The standard, by name or uuid" example:"meeting-room"`
 	Role string `path:"role" doc:"The role name"`
 }
 
 type setStandardRoleInput struct {
-	ID   string `path:"id" doc:"The standard id"`
+	ID   string `path:"id" doc:"The standard, by name or uuid" example:"meeting-room"`
 	Role string `path:"role" doc:"The role name"`
 	Body roleSpecBody
 }

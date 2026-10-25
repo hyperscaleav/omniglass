@@ -42,7 +42,7 @@
             "type": "string"
           },
           "principal_id": {
-            "description": "The principal to add to the group",
+            "description": "The principal to add: a human's username, a service account's name, or its uuid",
             "minLength": 1,
             "type": "string"
           }
@@ -2339,7 +2339,7 @@
             "type": "string"
           },
           "scope_id": {
-            "description": "The scope root id; omit for the all scope",
+            "description": "The scope root, the location, system or component the scope kind names, by name, dotted address or uuid (stored as its uuid); omit for the all scope",
             "type": "string"
           },
           "scope_kind": {
@@ -2386,7 +2386,7 @@
             "type": "string"
           },
           "scope_id": {
-            "description": "The scope root id; omit for the all scope",
+            "description": "The scope root, the location, system or component the scope kind names, by name, dotted address or uuid (stored as its uuid); omit for the all scope",
             "type": "string"
           },
           "scope_kind": {
@@ -3782,7 +3782,7 @@
             "type": "string"
           },
           "id": {
-            "description": "The endpoint's surrogate id (the address)",
+            "description": "The endpoint's uuid, the stable handle; <component>/<name> is the address an operator types",
             "type": "string"
           },
           "inputs": {
@@ -8348,7 +8348,7 @@
             ]
           },
           "id": {
-            "description": "The endpoint's uuid, the address its custom methods take (POST /endpoints/{id}:retry)",
+            "description": "The endpoint's uuid, the address its custom methods take (POST /endpoints/{endpoint}:retry)",
             "type": "string"
           },
           "label": {
@@ -8468,7 +8468,7 @@
             "type": "string"
           },
           "offered_key": {
-            "description": "A refusal of a changed key only: the SHA256 fingerprint of the key the component offered instead. Trusting it is POST /endpoints/{id}:retry with this exact value as host_key (a tls or https endpoint also takes it as certificate); while the refusal holds, any other value is refused (409)",
+            "description": "A refusal of a changed key only: the SHA256 fingerprint of the key the component offered instead. Trusting it is POST /endpoints/{endpoint}:retry with this exact value as host_key (a tls or https endpoint also takes it as certificate); while the refusal holds, any other value is refused (409)",
             "type": "string"
           },
           "pinned_key": {
@@ -14111,12 +14111,15 @@
         "operationId": "delete-component-type",
         "parameters": [
           {
-            "description": "The component_type id",
+            "description": "The component type, by name or uuid",
             "in": "path",
             "name": "id",
             "required": true,
             "schema": {
-              "description": "The component_type id",
+              "description": "The component type, by name or uuid",
+              "examples": [
+                "display"
+              ],
               "type": "string"
             }
           }
@@ -14144,10 +14147,15 @@
         "operationId": "update-component-type",
         "parameters": [
           {
+            "description": "The component type, by name or uuid",
             "in": "path",
             "name": "id",
             "required": true,
             "schema": {
+              "description": "The component type, by name or uuid",
+              "examples": [
+                "display"
+              ],
               "type": "string"
             }
           }
@@ -14194,12 +14202,15 @@
         "operationId": "restore-component-type",
         "parameters": [
           {
-            "description": "The component_type id",
+            "description": "The component type, by name or uuid",
             "in": "path",
             "name": "id",
             "required": true,
             "schema": {
-              "description": "The component_type id",
+              "description": "The component type, by name or uuid",
+              "examples": [
+                "display"
+              ],
               "type": "string"
             }
           }
@@ -16114,12 +16125,15 @@
         "operationId": "delete-driver",
         "parameters": [
           {
-            "description": "The driver id",
+            "description": "The driver, by name or uuid",
             "in": "path",
             "name": "id",
             "required": true,
             "schema": {
-              "description": "The driver id",
+              "description": "The driver, by name or uuid",
+              "examples": [
+                "snmp-generic"
+              ],
               "type": "string"
             }
           }
@@ -16147,12 +16161,15 @@
         "operationId": "get-driver",
         "parameters": [
           {
-            "description": "The driver id",
+            "description": "The driver, by name or uuid",
             "in": "path",
             "name": "id",
             "required": true,
             "schema": {
-              "description": "The driver id",
+              "description": "The driver, by name or uuid",
+              "examples": [
+                "snmp-generic"
+              ],
               "type": "string"
             }
           }
@@ -16187,10 +16204,15 @@
         "operationId": "update-driver",
         "parameters": [
           {
+            "description": "The driver, by name or uuid",
             "in": "path",
             "name": "id",
             "required": true,
             "schema": {
+              "description": "The driver, by name or uuid",
+              "examples": [
+                "snmp-generic"
+              ],
               "type": "string"
             }
           }
@@ -16299,18 +16321,21 @@
         "x-omniglass-permission": "endpoint:create"
       }
     },
-    "/endpoints/{id}": {
+    "/endpoints/{endpoint}": {
       "delete": {
         "description": "Deletes an endpoint, refused while a task still references it. Gated by endpoint:delete; read and delete scopes (through the component) drive the 404 versus 403 split.",
         "operationId": "delete-endpoint",
         "parameters": [
           {
-            "description": "The endpoint's surrogate id",
+            "description": "The endpoint, as <component>/<endpoint name> (the component by name, dotted address or uuid) or by its uuid. The slash is percent-encoded in a URL, as the CLI does",
             "in": "path",
-            "name": "id",
+            "name": "endpoint",
             "required": true,
             "schema": {
-              "description": "The endpoint's surrogate id",
+              "description": "The endpoint, as <component>/<endpoint name> (the component by name, dotted address or uuid) or by its uuid. The slash is percent-encoded in a URL, as the CLI does",
+              "examples": [
+                "boi.17c.415a.$comp.display-1/https"
+              ],
               "type": "string"
             }
           }
@@ -16334,16 +16359,19 @@
         "x-omniglass-permission": "endpoint:delete"
       },
       "get": {
-        "description": "Fetches an endpoint by id. An endpoint whose component is out of the caller's read scope is a non-disclosing 404. Gated by endpoint:read.",
+        "description": "Fetches an endpoint by its address (<component>/<endpoint name>) or uuid. An endpoint whose component is out of the caller's read scope is a non-disclosing 404, and a name no endpoint the caller can see answers to is a 404 naming what was looked up (listing each match when more than one does). Gated by endpoint:read.",
         "operationId": "get-endpoint",
         "parameters": [
           {
-            "description": "The endpoint's surrogate id",
+            "description": "The endpoint, as <component>/<endpoint name> (the component by name, dotted address or uuid) or by its uuid. The slash is percent-encoded in a URL, as the CLI does",
             "in": "path",
-            "name": "id",
+            "name": "endpoint",
             "required": true,
             "schema": {
-              "description": "The endpoint's surrogate id",
+              "description": "The endpoint, as <component>/<endpoint name> (the component by name, dotted address or uuid) or by its uuid. The slash is percent-encoded in a URL, as the CLI does",
+              "examples": [
+                "boi.17c.415a.$comp.display-1/https"
+              ],
               "type": "string"
             }
           }
@@ -16378,10 +16406,15 @@
         "operationId": "update-endpoint",
         "parameters": [
           {
+            "description": "The endpoint, as <component>/<endpoint name> (the component by name, dotted address or uuid) or by its uuid. The slash is percent-encoded in a URL, as the CLI does",
             "in": "path",
-            "name": "id",
+            "name": "endpoint",
             "required": true,
             "schema": {
+              "description": "The endpoint, as <component>/<endpoint name> (the component by name, dotted address or uuid) or by its uuid. The slash is percent-encoded in a URL, as the CLI does",
+              "examples": [
+                "boi.17c.415a.$comp.display-1/https"
+              ],
               "type": "string"
             }
           }
@@ -16422,18 +16455,21 @@
         "x-omniglass-permission": "endpoint:update"
       }
     },
-    "/endpoints/{id}:retry": {
+    "/endpoints/{endpoint}:retry": {
       "post": {
         "description": "Moves the endpoint's retry counter, which is part of its connection fingerprint: a gate a refusal retrying cannot fix holds (a wrong credential, a changed host key or certificate, a reply its driver declares terminal) lifts, the node recycles the endpoint's held session, and every connection to it is attempted again. Fixing the secret, the address, the transport, the tls mode or the driver's login needs no retry: the change moves the fingerprint itself. An unrelated edit (a label) moves nothing. host_key names a key to trust, the one the endpoint's transport pins (the offered key a key refusal names): an ssh host key, or a tls or https endpoint's certificate public key, which such an endpoint also takes as certificate. It becomes the declared pin and recycles the session onto it whatever its state, an audited acceptance of the change. While the endpoint's gate names an offered key, the key must be that key, so a trust confirmed against a refusal the record has since moved past is a 409 and changes nothing. Audited, a trusted key with the pin it replaced (old) and the pin it set (new). Gated by endpoint:retry; read and retry scopes (through the component) drive the 404 versus 403 split.",
         "operationId": "retry-endpoint",
         "parameters": [
           {
-            "description": "The endpoint's surrogate id",
+            "description": "The endpoint, as <component>/<endpoint name> (the component by name, dotted address or uuid) or by its uuid. The slash is percent-encoded in a URL, as the CLI does",
             "in": "path",
-            "name": "id",
+            "name": "endpoint",
             "required": true,
             "schema": {
-              "description": "The endpoint's surrogate id",
+              "description": "The endpoint, as <component>/<endpoint name> (the component by name, dotted address or uuid) or by its uuid. The slash is percent-encoded in a URL, as the CLI does",
+              "examples": [
+                "boi.17c.415a.$comp.display-1/https"
+              ],
               "type": "string"
             }
           }
@@ -17101,18 +17137,21 @@
         "x-omniglass-permission": "file:create"
       }
     },
-    "/files/{id}": {
+    "/files/{file}": {
       "delete": {
         "description": "Removes a file handle. The underlying blob is left in place (garbage collection is a later slice). A sensitive file is a non-disclosing 404 without the admin tier. Gated by file:delete.",
         "operationId": "delete-file",
         "parameters": [
           {
-            "description": "The file's id",
+            "description": "The file: its filename, where exactly one file you can see carries it, or its uuid",
             "in": "path",
-            "name": "id",
+            "name": "file",
             "required": true,
             "schema": {
-              "description": "The file's id",
+              "description": "The file: its filename, where exactly one file you can see carries it, or its uuid",
+              "examples": [
+                "codec-firmware-2.1.4.txt"
+              ],
               "type": "string"
             }
           }
@@ -17140,12 +17179,15 @@
         "operationId": "get-file",
         "parameters": [
           {
-            "description": "The file's id",
+            "description": "The file: its filename, where exactly one file you can see carries it, or its uuid",
             "in": "path",
-            "name": "id",
+            "name": "file",
             "required": true,
             "schema": {
-              "description": "The file's id",
+              "description": "The file: its filename, where exactly one file you can see carries it, or its uuid",
+              "examples": [
+                "codec-firmware-2.1.4.txt"
+              ],
               "type": "string"
             }
           }
@@ -17176,18 +17218,21 @@
         "x-omniglass-permission": "file:read"
       }
     },
-    "/files/{id}:download": {
+    "/files/{file}:download": {
       "get": {
         "description": "Returns a file's bytes (base64-encoded) read from the blob it points at, the hash verified on read. A sensitive file is a non-disclosing 404 without the admin tier. Gated by file:read.",
         "operationId": "download-file",
         "parameters": [
           {
-            "description": "The file's id",
+            "description": "The file: its filename, where exactly one file you can see carries it, or its uuid",
             "in": "path",
-            "name": "id",
+            "name": "file",
             "required": true,
             "schema": {
-              "description": "The file's id",
+              "description": "The file: its filename, where exactly one file you can see carries it, or its uuid",
+              "examples": [
+                "codec-firmware-2.1.4.txt"
+              ],
               "type": "string"
             }
           }
@@ -17321,12 +17366,15 @@
         "operationId": "delete-location-type",
         "parameters": [
           {
-            "description": "The location_type id",
+            "description": "The location type, by name or uuid",
             "in": "path",
             "name": "id",
             "required": true,
             "schema": {
-              "description": "The location_type id",
+              "description": "The location type, by name or uuid",
+              "examples": [
+                "room"
+              ],
               "type": "string"
             }
           }
@@ -17354,10 +17402,15 @@
         "operationId": "update-location-type",
         "parameters": [
           {
+            "description": "The location type, by name or uuid",
             "in": "path",
             "name": "id",
             "required": true,
             "schema": {
+              "description": "The location type, by name or uuid",
+              "examples": [
+                "room"
+              ],
               "type": "string"
             }
           }
@@ -17404,12 +17457,15 @@
         "operationId": "list-location-type-metrics",
         "parameters": [
           {
-            "description": "The location_type id",
+            "description": "The location type, by name or uuid",
             "in": "path",
             "name": "id",
             "required": true,
             "schema": {
-              "description": "The location_type id",
+              "description": "The location type, by name or uuid",
+              "examples": [
+                "room"
+              ],
               "type": "string"
             }
           }
@@ -17446,12 +17502,15 @@
         "operationId": "delete-location-type-metric",
         "parameters": [
           {
-            "description": "The location type id",
+            "description": "The location type, by name or uuid",
             "in": "path",
             "name": "id",
             "required": true,
             "schema": {
-              "description": "The location type id",
+              "description": "The location type, by name or uuid",
+              "examples": [
+                "room"
+              ],
               "type": "string"
             }
           },
@@ -17489,12 +17548,15 @@
         "operationId": "set-location-type-metric",
         "parameters": [
           {
-            "description": "The location type id",
+            "description": "The location type, by name or uuid",
             "in": "path",
             "name": "id",
             "required": true,
             "schema": {
-              "description": "The location type id",
+              "description": "The location type, by name or uuid",
+              "examples": [
+                "room"
+              ],
               "type": "string"
             }
           },
@@ -17551,12 +17613,15 @@
         "operationId": "list-location-type-properties",
         "parameters": [
           {
-            "description": "The location_type id",
+            "description": "The location type, by name or uuid",
             "in": "path",
             "name": "id",
             "required": true,
             "schema": {
-              "description": "The location_type id",
+              "description": "The location type, by name or uuid",
+              "examples": [
+                "room"
+              ],
               "type": "string"
             }
           }
@@ -17593,12 +17658,15 @@
         "operationId": "delete-location-type-property",
         "parameters": [
           {
-            "description": "The location type id",
+            "description": "The location type, by name or uuid",
             "in": "path",
             "name": "id",
             "required": true,
             "schema": {
-              "description": "The location type id",
+              "description": "The location type, by name or uuid",
+              "examples": [
+                "room"
+              ],
               "type": "string"
             }
           },
@@ -17636,12 +17704,15 @@
         "operationId": "set-location-type-property",
         "parameters": [
           {
-            "description": "The location type id",
+            "description": "The location type, by name or uuid",
             "in": "path",
             "name": "id",
             "required": true,
             "schema": {
-              "description": "The location type id",
+              "description": "The location type, by name or uuid",
+              "examples": [
+                "room"
+              ],
               "type": "string"
             }
           },
@@ -17698,12 +17769,15 @@
         "operationId": "restore-location-type",
         "parameters": [
           {
-            "description": "The location_type id",
+            "description": "The location type, by name or uuid",
             "in": "path",
             "name": "id",
             "required": true,
             "schema": {
-              "description": "The location_type id",
+              "description": "The location type, by name or uuid",
+              "examples": [
+                "room"
+              ],
               "type": "string"
             }
           }
@@ -19463,18 +19537,21 @@
         "x-omniglass-permission": "principal_group:create"
       }
     },
-    "/principal-groups/{id}": {
+    "/principal-groups/{group}": {
       "delete": {
         "description": "Removes a group and, by cascade, its memberships and grants. Gated by principal_group:delete (all-scope).",
         "operationId": "delete-group",
         "parameters": [
           {
-            "description": "The group's id (uuid)",
+            "description": "The group, by name or uuid",
             "in": "path",
-            "name": "id",
+            "name": "group",
             "required": true,
             "schema": {
-              "description": "The group's id (uuid)",
+              "description": "The group, by name or uuid",
+              "examples": [
+                "night-shift"
+              ],
               "type": "string"
             }
           }
@@ -19498,16 +19575,19 @@
         "x-omniglass-permission": "principal_group:delete"
       },
       "get": {
-        "description": "One principal group by id. Gated by principal_group:read:admin.",
+        "description": "One principal group, by name or uuid. Gated by principal_group:read:admin.",
         "operationId": "get-group",
         "parameters": [
           {
-            "description": "The group's id (uuid)",
+            "description": "The group, by name or uuid",
             "in": "path",
-            "name": "id",
+            "name": "group",
             "required": true,
             "schema": {
-              "description": "The group's id (uuid)",
+              "description": "The group, by name or uuid",
+              "examples": [
+                "night-shift"
+              ],
               "type": "string"
             }
           }
@@ -19542,12 +19622,15 @@
         "operationId": "update-group",
         "parameters": [
           {
-            "description": "The group's id (uuid)",
+            "description": "The group, by name or uuid",
             "in": "path",
-            "name": "id",
+            "name": "group",
             "required": true,
             "schema": {
-              "description": "The group's id (uuid)",
+              "description": "The group, by name or uuid",
+              "examples": [
+                "night-shift"
+              ],
               "type": "string"
             }
           }
@@ -19588,18 +19671,21 @@
         "x-omniglass-permission": "principal_group:update"
       }
     },
-    "/principal-groups/{id}/grants": {
+    "/principal-groups/{group}/grants": {
       "get": {
         "description": "The role x scope grants a group confers on its members. Gated by principal_group:read:admin.",
         "operationId": "list-group-grants",
         "parameters": [
           {
-            "description": "The group's id (uuid)",
+            "description": "The group, by name or uuid",
             "in": "path",
-            "name": "id",
+            "name": "group",
             "required": true,
             "schema": {
-              "description": "The group's id (uuid)",
+              "description": "The group, by name or uuid",
+              "examples": [
+                "night-shift"
+              ],
               "type": "string"
             }
           }
@@ -19634,12 +19720,15 @@
         "operationId": "create-group-grant",
         "parameters": [
           {
-            "description": "The group's id (uuid)",
+            "description": "The group, by name or uuid",
             "in": "path",
-            "name": "id",
+            "name": "group",
             "required": true,
             "schema": {
-              "description": "The group's id (uuid)",
+              "description": "The group, by name or uuid",
+              "examples": [
+                "night-shift"
+              ],
               "type": "string"
             }
           }
@@ -19680,18 +19769,21 @@
         "x-omniglass-permission": "principal_grant:create"
       }
     },
-    "/principal-groups/{id}/grants/{grantId}": {
+    "/principal-groups/{group}/grants/{grantId}": {
       "delete": {
         "description": "Removes one grant from a group. Gated by principal_grant:delete (all-scope).",
         "operationId": "revoke-group-grant",
         "parameters": [
           {
-            "description": "The group's id (uuid)",
+            "description": "The group, by name or uuid",
             "in": "path",
-            "name": "id",
+            "name": "group",
             "required": true,
             "schema": {
-              "description": "The group's id (uuid)",
+              "description": "The group, by name or uuid",
+              "examples": [
+                "night-shift"
+              ],
               "type": "string"
             }
           },
@@ -19725,18 +19817,21 @@
         "x-omniglass-permission": "principal_grant:delete"
       }
     },
-    "/principal-groups/{id}/members": {
+    "/principal-groups/{group}/members": {
       "get": {
         "description": "The principals in a group. Gated by principal_group:read:admin.",
         "operationId": "list-group-members",
         "parameters": [
           {
-            "description": "The group's id (uuid)",
+            "description": "The group, by name or uuid",
             "in": "path",
-            "name": "id",
+            "name": "group",
             "required": true,
             "schema": {
-              "description": "The group's id (uuid)",
+              "description": "The group, by name or uuid",
+              "examples": [
+                "night-shift"
+              ],
               "type": "string"
             }
           }
@@ -19771,12 +19866,15 @@
         "operationId": "add-group-member",
         "parameters": [
           {
-            "description": "The group's id (uuid)",
+            "description": "The group, by name or uuid",
             "in": "path",
-            "name": "id",
+            "name": "group",
             "required": true,
             "schema": {
-              "description": "The group's id (uuid)",
+              "description": "The group, by name or uuid",
+              "examples": [
+                "night-shift"
+              ],
               "type": "string"
             }
           }
@@ -19810,28 +19908,34 @@
         "x-omniglass-permission": "principal_group:update"
       }
     },
-    "/principal-groups/{id}/members/{principalId}": {
+    "/principal-groups/{group}/members/{principal}": {
       "delete": {
         "description": "Removes a principal from a group; it stops inheriting the group's grants. Gated by principal_group:update (all-scope).",
         "operationId": "remove-group-member",
         "parameters": [
           {
-            "description": "The group's id (uuid)",
+            "description": "The group, by name or uuid",
             "in": "path",
-            "name": "id",
+            "name": "group",
             "required": true,
             "schema": {
-              "description": "The group's id (uuid)",
+              "description": "The group, by name or uuid",
+              "examples": [
+                "night-shift"
+              ],
               "type": "string"
             }
           },
           {
-            "description": "The member principal's id (uuid)",
+            "description": "The member: a human's username, a service account's name, or the principal's uuid",
             "in": "path",
-            "name": "principalId",
+            "name": "principal",
             "required": true,
             "schema": {
-              "description": "The member principal's id (uuid)",
+              "description": "The member: a human's username, a service account's name, or the principal's uuid",
+              "examples": [
+                "alice"
+              ],
               "type": "string"
             }
           }
@@ -19855,18 +19959,21 @@
         "x-omniglass-permission": "principal_group:update"
       }
     },
-    "/principal-groups/{id}:rename": {
+    "/principal-groups/{group}:rename": {
       "post": {
         "description": "Moves the group's name. A separate act from an update, and a separately grantable one, because it breaks the references stored outside this system; inside it nothing breaks, since membership and grants both key on the group's uuid. A taken name is a 409, an illegal or uuid-shaped one a 422. Gated by principal_group:rename (all-scope).",
         "operationId": "rename-group",
         "parameters": [
           {
-            "description": "The group's id (uuid)",
+            "description": "The group, by name or uuid",
             "in": "path",
-            "name": "id",
+            "name": "group",
             "required": true,
             "schema": {
-              "description": "The group's id (uuid)",
+              "description": "The group, by name or uuid",
+              "examples": [
+                "night-shift"
+              ],
               "type": "string"
             }
           }
@@ -20007,12 +20114,12 @@
         "operationId": "get-principal",
         "parameters": [
           {
-            "description": "The principal, addressed by its uuid or a human username",
+            "description": "The principal, addressed by its uuid, a human's username, or a service account's name",
             "in": "path",
             "name": "id",
             "required": true,
             "schema": {
-              "description": "The principal, addressed by its uuid or a human username",
+              "description": "The principal, addressed by its uuid, a human's username, or a service account's name",
               "type": "string"
             }
           }
@@ -20047,12 +20154,12 @@
         "operationId": "update-principal",
         "parameters": [
           {
-            "description": "The principal, addressed by its uuid or a human username",
+            "description": "The principal, addressed by its uuid, a human's username, or a service account's name",
             "in": "path",
             "name": "id",
             "required": true,
             "schema": {
-              "description": "The principal, addressed by its uuid or a human username",
+              "description": "The principal, addressed by its uuid, a human's username, or a service account's name",
               "type": "string"
             }
           }
@@ -20099,12 +20206,12 @@
         "operationId": "get-principal-avatar",
         "parameters": [
           {
-            "description": "The principal, addressed by its uuid or a human username",
+            "description": "The principal, addressed by its uuid, a human's username, or a service account's name",
             "in": "path",
             "name": "id",
             "required": true,
             "schema": {
-              "description": "The principal, addressed by its uuid or a human username",
+              "description": "The principal, addressed by its uuid, a human's username, or a service account's name",
               "type": "string"
             }
           }
@@ -20141,12 +20248,12 @@
         "operationId": "create-grant",
         "parameters": [
           {
-            "description": "The principal, addressed by its uuid or a human username",
+            "description": "The principal, addressed by its uuid, a human's username, or a service account's name",
             "in": "path",
             "name": "id",
             "required": true,
             "schema": {
-              "description": "The principal, addressed by its uuid or a human username",
+              "description": "The principal, addressed by its uuid, a human's username, or a service account's name",
               "type": "string"
             }
           }
@@ -20193,12 +20300,12 @@
         "operationId": "revoke-grant",
         "parameters": [
           {
-            "description": "The principal, addressed by its uuid or a human username",
+            "description": "The principal, addressed by its uuid, a human's username, or a service account's name",
             "in": "path",
             "name": "id",
             "required": true,
             "schema": {
-              "description": "The principal, addressed by its uuid or a human username",
+              "description": "The principal, addressed by its uuid, a human's username, or a service account's name",
               "type": "string"
             }
           },
@@ -20238,12 +20345,12 @@
         "operationId": "list-principal-sessions",
         "parameters": [
           {
-            "description": "The principal, addressed by its uuid or a human username",
+            "description": "The principal, addressed by its uuid, a human's username, or a service account's name",
             "in": "path",
             "name": "id",
             "required": true,
             "schema": {
-              "description": "The principal, addressed by its uuid or a human username",
+              "description": "The principal, addressed by its uuid, a human's username, or a service account's name",
               "type": "string"
             }
           }
@@ -20310,12 +20417,12 @@
         "operationId": "revoke-principal-session",
         "parameters": [
           {
-            "description": "The principal, addressed by its uuid or a human username",
+            "description": "The principal, addressed by its uuid, a human's username, or a service account's name",
             "in": "path",
             "name": "id",
             "required": true,
             "schema": {
-              "description": "The principal, addressed by its uuid or a human username",
+              "description": "The principal, addressed by its uuid, a human's username, or a service account's name",
               "type": "string"
             }
           },
@@ -20385,12 +20492,12 @@
         "operationId": "revoke-all-principal-sessions",
         "parameters": [
           {
-            "description": "The principal, addressed by its uuid or a human username",
+            "description": "The principal, addressed by its uuid, a human's username, or a service account's name",
             "in": "path",
             "name": "id",
             "required": true,
             "schema": {
-              "description": "The principal, addressed by its uuid or a human username",
+              "description": "The principal, addressed by its uuid, a human's username, or a service account's name",
               "type": "string"
             }
           }
@@ -20467,12 +20574,12 @@
         "operationId": "archive-principal",
         "parameters": [
           {
-            "description": "The principal, addressed by its uuid or a human username",
+            "description": "The principal, addressed by its uuid, a human's username, or a service account's name",
             "in": "path",
             "name": "id",
             "required": true,
             "schema": {
-              "description": "The principal, addressed by its uuid or a human username",
+              "description": "The principal, addressed by its uuid, a human's username, or a service account's name",
               "type": "string"
             }
           }
@@ -20502,12 +20609,12 @@
         "operationId": "disable-principal",
         "parameters": [
           {
-            "description": "The principal, addressed by its uuid or a human username",
+            "description": "The principal, addressed by its uuid, a human's username, or a service account's name",
             "in": "path",
             "name": "id",
             "required": true,
             "schema": {
-              "description": "The principal, addressed by its uuid or a human username",
+              "description": "The principal, addressed by its uuid, a human's username, or a service account's name",
               "type": "string"
             }
           }
@@ -20537,12 +20644,12 @@
         "operationId": "enable-principal",
         "parameters": [
           {
-            "description": "The principal, addressed by its uuid or a human username",
+            "description": "The principal, addressed by its uuid, a human's username, or a service account's name",
             "in": "path",
             "name": "id",
             "required": true,
             "schema": {
-              "description": "The principal, addressed by its uuid or a human username",
+              "description": "The principal, addressed by its uuid, a human's username, or a service account's name",
               "type": "string"
             }
           }
@@ -20572,12 +20679,12 @@
         "operationId": "impersonate-principal",
         "parameters": [
           {
-            "description": "The principal to impersonate, addressed by its uuid or a human username",
+            "description": "The principal to impersonate, addressed by its uuid, a human's username, or a service account's name",
             "in": "path",
             "name": "id",
             "required": true,
             "schema": {
-              "description": "The principal to impersonate, addressed by its uuid or a human username",
+              "description": "The principal to impersonate, addressed by its uuid, a human's username, or a service account's name",
               "type": "string"
             }
           }
@@ -20654,12 +20761,12 @@
         "operationId": "purge-principal",
         "parameters": [
           {
-            "description": "The principal, addressed by its uuid or a human username",
+            "description": "The principal, addressed by its uuid, a human's username, or a service account's name",
             "in": "path",
             "name": "id",
             "required": true,
             "schema": {
-              "description": "The principal, addressed by its uuid or a human username",
+              "description": "The principal, addressed by its uuid, a human's username, or a service account's name",
               "type": "string"
             }
           }
@@ -20689,12 +20796,12 @@
         "operationId": "remove-principal-avatar",
         "parameters": [
           {
-            "description": "The principal, addressed by its uuid or a human username",
+            "description": "The principal, addressed by its uuid, a human's username, or a service account's name",
             "in": "path",
             "name": "id",
             "required": true,
             "schema": {
-              "description": "The principal, addressed by its uuid or a human username",
+              "description": "The principal, addressed by its uuid, a human's username, or a service account's name",
               "type": "string"
             }
           }
@@ -20724,12 +20831,12 @@
         "operationId": "reset-principal-password",
         "parameters": [
           {
-            "description": "The principal, addressed by its uuid or a human username",
+            "description": "The principal, addressed by its uuid, a human's username, or a service account's name",
             "in": "path",
             "name": "id",
             "required": true,
             "schema": {
-              "description": "The principal, addressed by its uuid or a human username",
+              "description": "The principal, addressed by its uuid, a human's username, or a service account's name",
               "type": "string"
             }
           }
@@ -20769,12 +20876,12 @@
         "operationId": "restore-principal",
         "parameters": [
           {
-            "description": "The principal, addressed by its uuid or a human username",
+            "description": "The principal, addressed by its uuid, a human's username, or a service account's name",
             "in": "path",
             "name": "id",
             "required": true,
             "schema": {
-              "description": "The principal, addressed by its uuid or a human username",
+              "description": "The principal, addressed by its uuid, a human's username, or a service account's name",
               "type": "string"
             }
           }
@@ -20804,12 +20911,12 @@
         "operationId": "set-principal-avatar",
         "parameters": [
           {
-            "description": "The principal, addressed by its uuid or a human username",
+            "description": "The principal, addressed by its uuid, a human's username, or a service account's name",
             "in": "path",
             "name": "id",
             "required": true,
             "schema": {
-              "description": "The principal, addressed by its uuid or a human username",
+              "description": "The principal, addressed by its uuid, a human's username, or a service account's name",
               "type": "string"
             }
           }
@@ -20917,12 +21024,15 @@
         "operationId": "delete-product",
         "parameters": [
           {
-            "description": "The product id",
+            "description": "The product, by name or uuid",
             "in": "path",
             "name": "id",
             "required": true,
             "schema": {
-              "description": "The product id",
+              "description": "The product, by name or uuid",
+              "examples": [
+                "boreal-edge-55"
+              ],
               "type": "string"
             }
           }
@@ -20950,12 +21060,15 @@
         "operationId": "get-product",
         "parameters": [
           {
-            "description": "The product id",
+            "description": "The product, by name or uuid",
             "in": "path",
             "name": "id",
             "required": true,
             "schema": {
-              "description": "The product id",
+              "description": "The product, by name or uuid",
+              "examples": [
+                "boreal-edge-55"
+              ],
               "type": "string"
             }
           }
@@ -20990,10 +21103,15 @@
         "operationId": "update-product",
         "parameters": [
           {
+            "description": "The product, by name or uuid",
             "in": "path",
             "name": "id",
             "required": true,
             "schema": {
+              "description": "The product, by name or uuid",
+              "examples": [
+                "boreal-edge-55"
+              ],
               "type": "string"
             }
           }
@@ -21040,12 +21158,15 @@
         "operationId": "list-product-metrics",
         "parameters": [
           {
-            "description": "The product id",
+            "description": "The product, by name or uuid",
             "in": "path",
             "name": "id",
             "required": true,
             "schema": {
-              "description": "The product id",
+              "description": "The product, by name or uuid",
+              "examples": [
+                "boreal-edge-55"
+              ],
               "type": "string"
             }
           }
@@ -21082,12 +21203,15 @@
         "operationId": "delete-product-metric",
         "parameters": [
           {
-            "description": "The product id",
+            "description": "The product, by name or uuid",
             "in": "path",
             "name": "id",
             "required": true,
             "schema": {
-              "description": "The product id",
+              "description": "The product, by name or uuid",
+              "examples": [
+                "boreal-edge-55"
+              ],
               "type": "string"
             }
           },
@@ -21125,12 +21249,15 @@
         "operationId": "set-product-metric",
         "parameters": [
           {
-            "description": "The product id",
+            "description": "The product, by name or uuid",
             "in": "path",
             "name": "id",
             "required": true,
             "schema": {
-              "description": "The product id",
+              "description": "The product, by name or uuid",
+              "examples": [
+                "boreal-edge-55"
+              ],
               "type": "string"
             }
           },
@@ -21187,12 +21314,15 @@
         "operationId": "list-product-properties",
         "parameters": [
           {
-            "description": "The product id",
+            "description": "The product, by name or uuid",
             "in": "path",
             "name": "id",
             "required": true,
             "schema": {
-              "description": "The product id",
+              "description": "The product, by name or uuid",
+              "examples": [
+                "boreal-edge-55"
+              ],
               "type": "string"
             }
           }
@@ -21229,12 +21359,15 @@
         "operationId": "delete-product-property",
         "parameters": [
           {
-            "description": "The product id",
+            "description": "The product, by name or uuid",
             "in": "path",
             "name": "id",
             "required": true,
             "schema": {
-              "description": "The product id",
+              "description": "The product, by name or uuid",
+              "examples": [
+                "boreal-edge-55"
+              ],
               "type": "string"
             }
           },
@@ -21272,12 +21405,15 @@
         "operationId": "set-product-property",
         "parameters": [
           {
-            "description": "The product id",
+            "description": "The product, by name or uuid",
             "in": "path",
             "name": "id",
             "required": true,
             "schema": {
-              "description": "The product id",
+              "description": "The product, by name or uuid",
+              "examples": [
+                "boreal-edge-55"
+              ],
               "type": "string"
             }
           },
@@ -21650,18 +21786,21 @@
         "x-omniglass-platform-permission": "platform:create"
       }
     },
-    "/secrets/{id}": {
+    "/secrets/{secret}": {
       "delete": {
-        "description": "Removes a secret by id. Gated by secret:delete, plus platform:delete when the secret sits at the platform tier; read and delete scopes on the owner drive the 404 versus 403 split.",
+        "description": "Removes a secret, by name or uuid. Gated by secret:delete, plus platform:delete when the secret sits at the platform tier; read and delete scopes on the owner drive the 404 versus 403 split.",
         "operationId": "delete-secret",
         "parameters": [
           {
-            "description": "The secret's id",
+            "description": "The secret: its name, or <owner>/<name> where more than one you can see shares it (the owner by name, dotted address or uuid, or $platform), or its uuid. The slash is percent-encoded in a URL, as the CLI does",
             "in": "path",
-            "name": "id",
+            "name": "secret",
             "required": true,
             "schema": {
-              "description": "The secret's id",
+              "description": "The secret: its name, or <owner>/<name> where more than one you can see shares it (the owner by name, dotted address or uuid, or $platform), or its uuid. The slash is percent-encoded in a URL, as the CLI does",
+              "examples": [
+                "demo-panel-login"
+              ],
               "type": "string"
             }
           }
@@ -21690,12 +21829,15 @@
         "operationId": "update-secret",
         "parameters": [
           {
-            "description": "The secret's id",
+            "description": "The secret: its name, or <owner>/<name> where more than one you can see shares it (the owner by name, dotted address or uuid, or $platform), or its uuid. The slash is percent-encoded in a URL, as the CLI does",
             "in": "path",
-            "name": "id",
+            "name": "secret",
             "required": true,
             "schema": {
-              "description": "The secret's id",
+              "description": "The secret: its name, or <owner>/<name> where more than one you can see shares it (the owner by name, dotted address or uuid, or $platform), or its uuid. The slash is percent-encoded in a URL, as the CLI does",
+              "examples": [
+                "demo-panel-login"
+              ],
               "type": "string"
             }
           }
@@ -21737,18 +21879,21 @@
         "x-omniglass-platform-permission": "platform:update"
       }
     },
-    "/secrets/{id}:copy": {
+    "/secrets/{secret}:copy": {
       "post": {
         "description": "Decrypts and returns a secret's field values for a clipboard copy, audited under the copy verb (distinct from an on-screen reveal). Same exposure and the same secret:reveal gate as reveal.",
         "operationId": "copy-secret",
         "parameters": [
           {
-            "description": "The secret's id",
+            "description": "The secret: its name, or <owner>/<name> where more than one you can see shares it (the owner by name, dotted address or uuid, or $platform), or its uuid. The slash is percent-encoded in a URL, as the CLI does",
             "in": "path",
-            "name": "id",
+            "name": "secret",
             "required": true,
             "schema": {
-              "description": "The secret's id",
+              "description": "The secret: its name, or <owner>/<name> where more than one you can see shares it (the owner by name, dotted address or uuid, or $platform), or its uuid. The slash is percent-encoded in a URL, as the CLI does",
+              "examples": [
+                "demo-panel-login"
+              ],
               "type": "string"
             }
           }
@@ -21779,18 +21924,21 @@
         "x-omniglass-permission": "secret:reveal"
       }
     },
-    "/secrets/{id}:reveal": {
+    "/secrets/{secret}:reveal": {
       "post": {
         "description": "Decrypts and returns a secret's field values, auditing the decrypt. Gated by secret:reveal at the caller's scope; an admin-sensitive secret additionally needs the admin tier (secret:reveal:admin), so a scoped operator reveals device secrets but never a platform credential.",
         "operationId": "reveal-secret",
         "parameters": [
           {
-            "description": "The secret's id",
+            "description": "The secret: its name, or <owner>/<name> where more than one you can see shares it (the owner by name, dotted address or uuid, or $platform), or its uuid. The slash is percent-encoded in a URL, as the CLI does",
             "in": "path",
-            "name": "id",
+            "name": "secret",
             "required": true,
             "schema": {
-              "description": "The secret's id",
+              "description": "The secret: its name, or <owner>/<name> where more than one you can see shares it (the owner by name, dotted address or uuid, or $platform), or its uuid. The slash is percent-encoded in a URL, as the CLI does",
+              "examples": [
+                "demo-panel-login"
+              ],
               "type": "string"
             }
           }
@@ -22362,12 +22510,15 @@
         "operationId": "delete-standard",
         "parameters": [
           {
-            "description": "The standard id",
+            "description": "The standard, by name or uuid",
             "in": "path",
             "name": "id",
             "required": true,
             "schema": {
-              "description": "The standard id",
+              "description": "The standard, by name or uuid",
+              "examples": [
+                "meeting-room"
+              ],
               "type": "string"
             }
           }
@@ -22395,12 +22546,15 @@
         "operationId": "get-standard",
         "parameters": [
           {
-            "description": "The standard id",
+            "description": "The standard, by name or uuid",
             "in": "path",
             "name": "id",
             "required": true,
             "schema": {
-              "description": "The standard id",
+              "description": "The standard, by name or uuid",
+              "examples": [
+                "meeting-room"
+              ],
               "type": "string"
             }
           }
@@ -22435,10 +22589,15 @@
         "operationId": "update-standard",
         "parameters": [
           {
+            "description": "The standard, by name or uuid",
             "in": "path",
             "name": "id",
             "required": true,
             "schema": {
+              "description": "The standard, by name or uuid",
+              "examples": [
+                "meeting-room"
+              ],
               "type": "string"
             }
           }
@@ -22485,12 +22644,15 @@
         "operationId": "list-standard-metrics",
         "parameters": [
           {
-            "description": "The standard id",
+            "description": "The standard, by name or uuid",
             "in": "path",
             "name": "id",
             "required": true,
             "schema": {
-              "description": "The standard id",
+              "description": "The standard, by name or uuid",
+              "examples": [
+                "meeting-room"
+              ],
               "type": "string"
             }
           }
@@ -22527,12 +22689,15 @@
         "operationId": "delete-standard-metric",
         "parameters": [
           {
-            "description": "The standard id",
+            "description": "The standard, by name or uuid",
             "in": "path",
             "name": "id",
             "required": true,
             "schema": {
-              "description": "The standard id",
+              "description": "The standard, by name or uuid",
+              "examples": [
+                "meeting-room"
+              ],
               "type": "string"
             }
           },
@@ -22570,12 +22735,15 @@
         "operationId": "set-standard-metric",
         "parameters": [
           {
-            "description": "The standard id",
+            "description": "The standard, by name or uuid",
             "in": "path",
             "name": "id",
             "required": true,
             "schema": {
-              "description": "The standard id",
+              "description": "The standard, by name or uuid",
+              "examples": [
+                "meeting-room"
+              ],
               "type": "string"
             }
           },
@@ -22632,12 +22800,15 @@
         "operationId": "list-standard-properties",
         "parameters": [
           {
-            "description": "The standard id",
+            "description": "The standard, by name or uuid",
             "in": "path",
             "name": "id",
             "required": true,
             "schema": {
-              "description": "The standard id",
+              "description": "The standard, by name or uuid",
+              "examples": [
+                "meeting-room"
+              ],
               "type": "string"
             }
           }
@@ -22674,12 +22845,15 @@
         "operationId": "delete-standard-property",
         "parameters": [
           {
-            "description": "The standard id",
+            "description": "The standard, by name or uuid",
             "in": "path",
             "name": "id",
             "required": true,
             "schema": {
-              "description": "The standard id",
+              "description": "The standard, by name or uuid",
+              "examples": [
+                "meeting-room"
+              ],
               "type": "string"
             }
           },
@@ -22717,12 +22891,15 @@
         "operationId": "set-standard-property",
         "parameters": [
           {
-            "description": "The standard id",
+            "description": "The standard, by name or uuid",
             "in": "path",
             "name": "id",
             "required": true,
             "schema": {
-              "description": "The standard id",
+              "description": "The standard, by name or uuid",
+              "examples": [
+                "meeting-room"
+              ],
               "type": "string"
             }
           },
@@ -22779,12 +22956,15 @@
         "operationId": "list-standard-roles",
         "parameters": [
           {
-            "description": "The standard id",
+            "description": "The standard, by name or uuid",
             "in": "path",
             "name": "id",
             "required": true,
             "schema": {
-              "description": "The standard id",
+              "description": "The standard, by name or uuid",
+              "examples": [
+                "meeting-room"
+              ],
               "type": "string"
             }
           }
@@ -22821,12 +23001,15 @@
         "operationId": "delete-standard-role",
         "parameters": [
           {
-            "description": "The standard id",
+            "description": "The standard, by name or uuid",
             "in": "path",
             "name": "id",
             "required": true,
             "schema": {
-              "description": "The standard id",
+              "description": "The standard, by name or uuid",
+              "examples": [
+                "meeting-room"
+              ],
               "type": "string"
             }
           },
@@ -22864,12 +23047,15 @@
         "operationId": "set-standard-role",
         "parameters": [
           {
-            "description": "The standard id",
+            "description": "The standard, by name or uuid",
             "in": "path",
             "name": "id",
             "required": true,
             "schema": {
-              "description": "The standard id",
+              "description": "The standard, by name or uuid",
+              "examples": [
+                "meeting-room"
+              ],
               "type": "string"
             }
           },
@@ -22994,12 +23180,15 @@
         "operationId": "delete-system-type",
         "parameters": [
           {
-            "description": "The system_type id",
+            "description": "The system type, by name or uuid",
             "in": "path",
             "name": "id",
             "required": true,
             "schema": {
-              "description": "The system_type id",
+              "description": "The system type, by name or uuid",
+              "examples": [
+                "av"
+              ],
               "type": "string"
             }
           }
@@ -23027,10 +23216,15 @@
         "operationId": "update-system-type",
         "parameters": [
           {
+            "description": "The system type, by name or uuid",
             "in": "path",
             "name": "id",
             "required": true,
             "schema": {
+              "description": "The system type, by name or uuid",
+              "examples": [
+                "av"
+              ],
               "type": "string"
             }
           }
@@ -25212,18 +25406,21 @@
         "x-omniglass-platform-permission": "platform:create"
       }
     },
-    "/variables/{id}": {
+    "/variables/{variable}": {
       "delete": {
-        "description": "Removes a variable by id. Gated by variable:delete, plus platform:delete when the variable sits at the platform tier; read and delete scopes on the owner drive the 404 versus 403 split.",
+        "description": "Removes a variable, by name or uuid. Gated by variable:delete, plus platform:delete when the variable sits at the platform tier; read and delete scopes on the owner drive the 404 versus 403 split.",
         "operationId": "delete-variable",
         "parameters": [
           {
-            "description": "The variable's id",
+            "description": "The variable: its name, or <owner>/<name> where more than one you can see shares it (the owner by name, dotted address or uuid, or $platform), or its uuid. The slash is percent-encoded in a URL, as the CLI does",
             "in": "path",
-            "name": "id",
+            "name": "variable",
             "required": true,
             "schema": {
-              "description": "The variable's id",
+              "description": "The variable: its name, or <owner>/<name> where more than one you can see shares it (the owner by name, dotted address or uuid, or $platform), or its uuid. The slash is percent-encoded in a URL, as the CLI does",
+              "examples": [
+                "poll-interval"
+              ],
               "type": "string"
             }
           }
@@ -25252,12 +25449,15 @@
         "operationId": "update-variable",
         "parameters": [
           {
-            "description": "The variable's id",
+            "description": "The variable: its name, or <owner>/<name> where more than one you can see shares it (the owner by name, dotted address or uuid, or $platform), or its uuid. The slash is percent-encoded in a URL, as the CLI does",
             "in": "path",
-            "name": "id",
+            "name": "variable",
             "required": true,
             "schema": {
-              "description": "The variable's id",
+              "description": "The variable: its name, or <owner>/<name> where more than one you can see shares it (the owner by name, dotted address or uuid, or $platform), or its uuid. The slash is percent-encoded in a URL, as the CLI does",
+              "examples": [
+                "poll-interval"
+              ],
               "type": "string"
             }
           }
@@ -25373,12 +25573,15 @@
         "operationId": "delete-vendor",
         "parameters": [
           {
-            "description": "The vendor id",
+            "description": "The vendor, by name or uuid",
             "in": "path",
             "name": "id",
             "required": true,
             "schema": {
-              "description": "The vendor id",
+              "description": "The vendor, by name or uuid",
+              "examples": [
+                "boreal"
+              ],
               "type": "string"
             }
           }
@@ -25406,12 +25609,15 @@
         "operationId": "get-vendor",
         "parameters": [
           {
-            "description": "The vendor id",
+            "description": "The vendor, by name or uuid",
             "in": "path",
             "name": "id",
             "required": true,
             "schema": {
-              "description": "The vendor id",
+              "description": "The vendor, by name or uuid",
+              "examples": [
+                "boreal"
+              ],
               "type": "string"
             }
           }
@@ -25446,10 +25652,15 @@
         "operationId": "update-vendor",
         "parameters": [
           {
+            "description": "The vendor, by name or uuid",
             "in": "path",
             "name": "id",
             "required": true,
             "schema": {
+              "description": "The vendor, by name or uuid",
+              "examples": [
+                "boreal"
+              ],
               "type": "string"
             }
           }

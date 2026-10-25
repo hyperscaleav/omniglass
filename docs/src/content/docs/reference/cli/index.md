@@ -1382,7 +1382,7 @@ Deletes a custom component_type, refused if official (422, forked or not: a fork
 Example:
 
 ```sh
-omniglass component-type delete <id>
+omniglass component-type delete display
 ```
 
 ### `omniglass component-type list`
@@ -1414,7 +1414,7 @@ Discards your fork of a shipped component_type, so reads return the values this 
 Example:
 
 ```sh
-omniglass component-type restore <id>
+omniglass component-type restore display
 ```
 
 ### `omniglass component-type update`
@@ -1439,7 +1439,7 @@ Patches a component_type's label, stem, icon, abbrev, label_rule, or default_tag
 Example:
 
 ```sh
-omniglass component-type update <id>
+omniglass component-type update display
 ```
 
 ## `omniglass driver`
@@ -1482,7 +1482,7 @@ Deletes a custom driver, refused if official (422). Gated by driver:delete.
 Example:
 
 ```sh
-omniglass driver delete <id>
+omniglass driver delete snmp-generic
 ```
 
 ### `omniglass driver get`
@@ -1498,7 +1498,7 @@ Fetches a driver by id. Gated by driver:read.
 Example:
 
 ```sh
-omniglass driver get <id>
+omniglass driver get snmp-generic
 ```
 
 ### `omniglass driver list`
@@ -1536,7 +1536,7 @@ Patches a custom driver's label or version. Official drivers are read-only (422)
 Example:
 
 ```sh
-omniglass driver update <id>
+omniglass driver update snmp-generic
 ```
 
 ## `omniglass endpoint`
@@ -1574,7 +1574,7 @@ omniglass endpoint create
 Delete an endpoint
 
 ```
-omniglass endpoint delete <id>
+omniglass endpoint delete <endpoint>
 ```
 
 Deletes an endpoint, refused while a task still references it. Gated by endpoint:delete; read and delete scopes (through the component) drive the 404 versus 403 split.
@@ -1582,7 +1582,7 @@ Deletes an endpoint, refused while a task still references it. Gated by endpoint
 Example:
 
 ```sh
-omniglass endpoint delete <id>
+omniglass endpoint delete 'boi.17c.415a.$comp.display-1/https'
 ```
 
 ### `omniglass endpoint get`
@@ -1590,15 +1590,15 @@ omniglass endpoint delete <id>
 Get an endpoint
 
 ```
-omniglass endpoint get <id>
+omniglass endpoint get <endpoint>
 ```
 
-Fetches an endpoint by id. An endpoint whose component is out of the caller's read scope is a non-disclosing 404. Gated by endpoint:read.
+Fetches an endpoint by its address (<component>/<endpoint name>) or uuid. An endpoint whose component is out of the caller's read scope is a non-disclosing 404, and a name no endpoint the caller can see answers to is a 404 naming what was looked up (listing each match when more than one does). Gated by endpoint:read.
 
 Example:
 
 ```sh
-omniglass endpoint get <id>
+omniglass endpoint get 'boi.17c.415a.$comp.display-1/https'
 ```
 
 ### `omniglass endpoint list`
@@ -1622,7 +1622,7 @@ omniglass endpoint list
 Retry an endpoint's gated connections
 
 ```
-omniglass endpoint retry <id> [flags]
+omniglass endpoint retry <endpoint> [flags]
 ```
 
 Moves the endpoint's retry counter, which is part of its connection fingerprint: a gate a refusal retrying cannot fix holds (a wrong credential, a changed host key or certificate, a reply its driver declares terminal) lifts, the node recycles the endpoint's held session, and every connection to it is attempted again. Fixing the secret, the address, the transport, the tls mode or the driver's login needs no retry: the change moves the fingerprint itself. An unrelated edit (a label) moves nothing. host_key names a key to trust, the one the endpoint's transport pins (the offered key a key refusal names): an ssh host key, or a tls or https endpoint's certificate public key, which such an endpoint also takes as certificate. It becomes the declared pin and recycles the session onto it whatever its state, an audited acceptance of the change. While the endpoint's gate names an offered key, the key must be that key, so a trust confirmed against a refusal the record has since moved past is a 409 and changes nothing. Audited, a trusted key with the pin it replaced (old) and the pin it set (new). Gated by endpoint:retry; read and retry scopes (through the component) drive the 404 versus 403 split.
@@ -1635,7 +1635,7 @@ Moves the endpoint's retry counter, which is part of its connection fingerprint:
 Example:
 
 ```sh
-omniglass endpoint retry <id>
+omniglass endpoint retry 'boi.17c.415a.$comp.display-1/https'
 ```
 
 ### `omniglass endpoint update`
@@ -1643,7 +1643,7 @@ omniglass endpoint retry <id>
 Update an endpoint
 
 ```
-omniglass endpoint update <id> [flags]
+omniglass endpoint update <endpoint> [flags]
 ```
 
 Patches an endpoint's node placement, params, label, or (driver-attached) its connection inputs in place: the host, port and attached secret references, validated against the driver's declared inputs, the endpoint's tasks re-derived in the same transaction. A value the driver refuses is a 400 naming the field. An empty label clears it and the surface falls back to the derived name. Gated by endpoint:update; read and update scopes (through the component) drive the 404 versus 403 split.
@@ -1659,7 +1659,7 @@ Patches an endpoint's node placement, params, label, or (driver-attached) its co
 Example:
 
 ```sh
-omniglass endpoint update <id>
+omniglass endpoint update 'boi.17c.415a.$comp.display-1/https'
 ```
 
 ## `omniglass event-rule`
@@ -2002,7 +2002,7 @@ omniglass file create --content content --content-type content_type --name name
 Delete a file
 
 ```
-omniglass file delete <id>
+omniglass file delete <file>
 ```
 
 Removes a file handle. The underlying blob is left in place (garbage collection is a later slice). A sensitive file is a non-disclosing 404 without the admin tier. Gated by file:delete.
@@ -2010,7 +2010,7 @@ Removes a file handle. The underlying blob is left in place (garbage collection 
 Example:
 
 ```sh
-omniglass file delete <id>
+omniglass file delete codec-firmware-2.1.4.txt
 ```
 
 ### `omniglass file download`
@@ -2018,7 +2018,7 @@ omniglass file delete <id>
 Download a file's bytes
 
 ```
-omniglass file download <id>
+omniglass file download <file>
 ```
 
 Returns a file's bytes (base64-encoded) read from the blob it points at, the hash verified on read. A sensitive file is a non-disclosing 404 without the admin tier. Gated by file:read.
@@ -2026,7 +2026,7 @@ Returns a file's bytes (base64-encoded) read from the blob it points at, the has
 Example:
 
 ```sh
-omniglass file download <id>
+omniglass file download codec-firmware-2.1.4.txt
 ```
 
 ### `omniglass file get`
@@ -2034,7 +2034,7 @@ omniglass file download <id>
 Get a file's metadata
 
 ```
-omniglass file get <id>
+omniglass file get <file>
 ```
 
 Returns one file handle's searchable metadata (no bytes). A sensitive file is a non-disclosing 404 without the admin tier. Gated by file:read.
@@ -2042,7 +2042,7 @@ Returns one file handle's searchable metadata (no bytes). A sensitive file is a 
 Example:
 
 ```sh
-omniglass file get <id>
+omniglass file get codec-firmware-2.1.4.txt
 ```
 
 ### `omniglass file list`
@@ -2501,7 +2501,7 @@ Deletes a custom location_type, refused if official (422) or still referenced by
 Example:
 
 ```sh
-omniglass location-type delete <id>
+omniglass location-type delete room
 ```
 
 ### `omniglass location-type list`
@@ -2537,7 +2537,7 @@ Removes one line from a location type's contract, a shipped (official) type's in
 Example:
 
 ```sh
-omniglass location-type metric delete <id> <metric>
+omniglass location-type metric delete room <metric>
 ```
 
 #### `omniglass location-type metric list`
@@ -2553,7 +2553,7 @@ Lists the location type's declared-metric contract (which metrics every location
 Example:
 
 ```sh
-omniglass location-type metric list <id>
+omniglass location-type metric list room
 ```
 
 #### `omniglass location-type metric update`
@@ -2574,7 +2574,7 @@ Declares a catalog metric on a location type, or revises the declaration in plac
 Example:
 
 ```sh
-omniglass location-type metric update <id> <metric>
+omniglass location-type metric update room <metric>
 ```
 
 ### `omniglass location-type property`
@@ -2594,7 +2594,7 @@ Removes one line from a location type's contract, a shipped (official) type's in
 Example:
 
 ```sh
-omniglass location-type property delete <id> <property>
+omniglass location-type property delete room <property>
 ```
 
 #### `omniglass location-type property list`
@@ -2610,7 +2610,7 @@ Lists the location type's declared-property contract (what every location of the
 Example:
 
 ```sh
-omniglass location-type property list <id>
+omniglass location-type property list room
 ```
 
 #### `omniglass location-type property update`
@@ -2631,7 +2631,7 @@ Declares a catalog property on a location type, or revises the declaration in pl
 Example:
 
 ```sh
-omniglass location-type property update <id> <property>
+omniglass location-type property update room <property>
 ```
 
 ### `omniglass location-type restore`
@@ -2647,7 +2647,7 @@ Discards your fork of a shipped location_type, so reads return the values this r
 Example:
 
 ```sh
-omniglass location-type restore <id>
+omniglass location-type restore room
 ```
 
 ### `omniglass location-type update`
@@ -2672,7 +2672,7 @@ Patches a location_type's label, icon, allowed parents, label_rule or name_rule.
 Example:
 
 ```sh
-omniglass location-type update <id>
+omniglass location-type update room
 ```
 
 ## `omniglass metric-type`
@@ -3154,7 +3154,7 @@ Assigns a role at a scope to a principal. Gated by principal_grant:create (all-s
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--role` | string | (none) | A role id (viewer, operator, admin, owner, or a custom role) |
-| `--scope-id` | string | (none) | The scope root id; omit for the all scope |
+| `--scope-id` | string | (none) | The scope root, the location, system or component the scope kind names, by name, dotted address or uuid (stored as its uuid); omit for the all scope |
 | `--scope-kind` | string | (none) | The scope kind; 'all' confers the whole fleet (group-as-scope is unbuilt and not offered) |
 | `--scope-op` | string | (none) | How the scope root matches the tree: subtree (root + descendants, the default), subtree_excl_root (descendants only for update/delete, root kept for read/create), or self (the root row only). Moot for the all scope. |
 
@@ -3419,7 +3419,7 @@ omniglass principal-group create --name name
 Delete a principal group
 
 ```
-omniglass principal-group delete <id>
+omniglass principal-group delete <group>
 ```
 
 Removes a group and, by cascade, its memberships and grants. Gated by principal_group:delete (all-scope).
@@ -3427,7 +3427,7 @@ Removes a group and, by cascade, its memberships and grants. Gated by principal_
 Example:
 
 ```sh
-omniglass principal-group delete <id>
+omniglass principal-group delete night-shift
 ```
 
 ### `omniglass principal-group get`
@@ -3435,15 +3435,15 @@ omniglass principal-group delete <id>
 Get a principal group
 
 ```
-omniglass principal-group get <id>
+omniglass principal-group get <group>
 ```
 
-One principal group by id. Gated by principal_group:read:admin.
+One principal group, by name or uuid. Gated by principal_group:read:admin.
 
 Example:
 
 ```sh
-omniglass principal-group get <id>
+omniglass principal-group get night-shift
 ```
 
 ### `omniglass principal-group grant`
@@ -3455,7 +3455,7 @@ Commands for the grant resource
 Grant a role to a group
 
 ```
-omniglass principal-group grant create <id> [flags]
+omniglass principal-group grant create <group> [flags]
 ```
 
 Assigns a role at a scope to a group; its members inherit it. Gated by principal_grant:create (all-scope). Refused (403) when the granted role's capabilities exceed the granter's own, exactly as for a direct grant. A duplicate is 409.
@@ -3463,14 +3463,14 @@ Assigns a role at a scope to a group; its members inherit it. Gated by principal
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--role` | string | (none) | A role id (viewer, operator, admin, owner, or a custom role) |
-| `--scope-id` | string | (none) | The scope root id; omit for the all scope |
+| `--scope-id` | string | (none) | The scope root, the location, system or component the scope kind names, by name, dotted address or uuid (stored as its uuid); omit for the all scope |
 | `--scope-kind` | string | (none) | The scope kind; 'all' confers the whole fleet (group-as-scope is unbuilt and not offered) |
 | `--scope-op` | string | (none) | How the scope root matches the tree; moot for the all scope |
 
 Example:
 
 ```sh
-omniglass principal-group grant create <id> --role role --scope-kind scope_kind
+omniglass principal-group grant create night-shift --role role --scope-kind scope_kind
 ```
 
 #### `omniglass principal-group grant delete`
@@ -3478,7 +3478,7 @@ omniglass principal-group grant create <id> --role role --scope-kind scope_kind
 Revoke a group grant
 
 ```
-omniglass principal-group grant delete <id> <grantId>
+omniglass principal-group grant delete <group> <grantId>
 ```
 
 Removes one grant from a group. Gated by principal_grant:delete (all-scope).
@@ -3486,7 +3486,7 @@ Removes one grant from a group. Gated by principal_grant:delete (all-scope).
 Example:
 
 ```sh
-omniglass principal-group grant delete <id> <grantId>
+omniglass principal-group grant delete night-shift <grantId>
 ```
 
 #### `omniglass principal-group grant list`
@@ -3494,7 +3494,7 @@ omniglass principal-group grant delete <id> <grantId>
 List a group's grants
 
 ```
-omniglass principal-group grant list <id>
+omniglass principal-group grant list <group>
 ```
 
 The role x scope grants a group confers on its members. Gated by principal_group:read:admin.
@@ -3502,7 +3502,7 @@ The role x scope grants a group confers on its members. Gated by principal_group
 Example:
 
 ```sh
-omniglass principal-group grant list <id>
+omniglass principal-group grant list night-shift
 ```
 
 ### `omniglass principal-group list`
@@ -3530,19 +3530,19 @@ Commands for the member resource
 Add a member to a group
 
 ```
-omniglass principal-group member create <id> [flags]
+omniglass principal-group member create <group> [flags]
 ```
 
 Adds a principal to a group; its members inherit the group's grants. Gated by principal_group:update (all-scope). Idempotent.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--principal-id` | string | (none) | The principal to add to the group |
+| `--principal-id` | string | (none) | The principal to add: a human's username, a service account's name, or its uuid |
 
 Example:
 
 ```sh
-omniglass principal-group member create <id> --principal-id principal_id
+omniglass principal-group member create night-shift --principal-id principal_id
 ```
 
 #### `omniglass principal-group member delete`
@@ -3550,7 +3550,7 @@ omniglass principal-group member create <id> --principal-id principal_id
 Remove a member from a group
 
 ```
-omniglass principal-group member delete <id> <principalId>
+omniglass principal-group member delete <group> <principal>
 ```
 
 Removes a principal from a group; it stops inheriting the group's grants. Gated by principal_group:update (all-scope).
@@ -3558,7 +3558,7 @@ Removes a principal from a group; it stops inheriting the group's grants. Gated 
 Example:
 
 ```sh
-omniglass principal-group member delete <id> <principalId>
+omniglass principal-group member delete night-shift alice
 ```
 
 #### `omniglass principal-group member list`
@@ -3566,7 +3566,7 @@ omniglass principal-group member delete <id> <principalId>
 List a group's members
 
 ```
-omniglass principal-group member list <id>
+omniglass principal-group member list <group>
 ```
 
 The principals in a group. Gated by principal_group:read:admin.
@@ -3574,7 +3574,7 @@ The principals in a group. Gated by principal_group:read:admin.
 Example:
 
 ```sh
-omniglass principal-group member list <id>
+omniglass principal-group member list night-shift
 ```
 
 ### `omniglass principal-group rename`
@@ -3582,7 +3582,7 @@ omniglass principal-group member list <id>
 Rename a principal group
 
 ```
-omniglass principal-group rename <id> [flags]
+omniglass principal-group rename <group> [flags]
 ```
 
 Moves the group's name. A separate act from an update, and a separately grantable one, because it breaks the references stored outside this system; inside it nothing breaks, since membership and grants both key on the group's uuid. A taken name is a 409, an illegal or uuid-shaped one a 422. Gated by principal_group:rename (all-scope).
@@ -3594,7 +3594,7 @@ Moves the group's name. A separate act from an update, and a separately grantabl
 Example:
 
 ```sh
-omniglass principal-group rename <id> --name name
+omniglass principal-group rename night-shift --name name
 ```
 
 ### `omniglass principal-group update`
@@ -3602,7 +3602,7 @@ omniglass principal-group rename <id> --name name
 Update a principal group
 
 ```
-omniglass principal-group update <id> [flags]
+omniglass principal-group update <group> [flags]
 ```
 
 Updates a group's presentational fields. The name is not patchable: renaming is the :rename custom method. Gated by principal_group:update (all-scope).
@@ -3615,7 +3615,7 @@ Updates a group's presentational fields. The name is not patchable: renaming is 
 Example:
 
 ```sh
-omniglass principal-group update <id>
+omniglass principal-group update night-shift
 ```
 
 ## `omniglass product`
@@ -3663,7 +3663,7 @@ Deletes a custom product, refused if official (422) or still referenced by a com
 Example:
 
 ```sh
-omniglass product delete <id>
+omniglass product delete boreal-edge-55
 ```
 
 ### `omniglass product get`
@@ -3679,7 +3679,7 @@ Fetches a product by its name or its uuid. Either form resolves, so `omniglass p
 Example:
 
 ```sh
-omniglass product get <id>
+omniglass product get boreal-edge-55
 ```
 
 ### `omniglass product list`
@@ -3715,7 +3715,7 @@ Removes one line from a custom product's contract; instances keep any samples th
 Example:
 
 ```sh
-omniglass product metric delete <id> <metric>
+omniglass product metric delete boreal-edge-55 <metric>
 ```
 
 #### `omniglass product metric list`
@@ -3731,7 +3731,7 @@ Lists the product's declared-metric contract (which metrics every instance of th
 Example:
 
 ```sh
-omniglass product metric list <id>
+omniglass product metric list boreal-edge-55
 ```
 
 #### `omniglass product metric update`
@@ -3752,7 +3752,7 @@ Declares a catalog metric on a custom product, or revises the declaration in pla
 Example:
 
 ```sh
-omniglass product metric update <id> <metric>
+omniglass product metric update boreal-edge-55 <metric>
 ```
 
 ### `omniglass product property`
@@ -3772,7 +3772,7 @@ Removes one line from a custom product's contract; instances keep any value they
 Example:
 
 ```sh
-omniglass product property delete <id> <property>
+omniglass product property delete boreal-edge-55 <property>
 ```
 
 #### `omniglass product property list`
@@ -3788,7 +3788,7 @@ Lists the product's declared-property contract (what every instance of the produ
 Example:
 
 ```sh
-omniglass product property list <id>
+omniglass product property list boreal-edge-55
 ```
 
 #### `omniglass product property update`
@@ -3809,7 +3809,7 @@ Declares a catalog property on a custom product, or revises the declaration in p
 Example:
 
 ```sh
-omniglass product property update <id> <property>
+omniglass product property update boreal-edge-55 <property>
 ```
 
 ### `omniglass product update`
@@ -3836,7 +3836,7 @@ Patches a custom product's label, vendor, driver, kind, component_type, icon, or
 Example:
 
 ```sh
-omniglass product update <id>
+omniglass product update boreal-edge-55
 ```
 
 ## `omniglass property-type`
@@ -3966,7 +3966,7 @@ Commands for the secret resource
 Decrypt a secret for clipboard copy
 
 ```
-omniglass secret copy <id>
+omniglass secret copy <secret>
 ```
 
 Decrypts and returns a secret's field values for a clipboard copy, audited under the copy verb (distinct from an on-screen reveal). Same exposure and the same secret:reveal gate as reveal.
@@ -3974,7 +3974,7 @@ Decrypts and returns a secret's field values for a clipboard copy, audited under
 Example:
 
 ```sh
-omniglass secret copy <id>
+omniglass secret copy demo-panel-login
 ```
 
 ### `omniglass secret create`
@@ -4008,15 +4008,15 @@ omniglass secret create --fields <json> --name name --owner-kind owner_kind --se
 Delete a secret
 
 ```
-omniglass secret delete <id>
+omniglass secret delete <secret>
 ```
 
-Removes a secret by id. Gated by secret:delete, plus platform:delete when the secret sits at the platform tier; read and delete scopes on the owner drive the 404 versus 403 split.
+Removes a secret, by name or uuid. Gated by secret:delete, plus platform:delete when the secret sits at the platform tier; read and delete scopes on the owner drive the 404 versus 403 split.
 
 Example:
 
 ```sh
-omniglass secret delete <id>
+omniglass secret delete demo-panel-login
 ```
 
 ### `omniglass secret list`
@@ -4040,7 +4040,7 @@ omniglass secret list
 Reveal a secret's plaintext
 
 ```
-omniglass secret reveal <id>
+omniglass secret reveal <secret>
 ```
 
 Decrypts and returns a secret's field values, auditing the decrypt. Gated by secret:reveal at the caller's scope; an admin-sensitive secret additionally needs the admin tier (secret:reveal:admin), so a scoped operator reveals device secrets but never a platform credential.
@@ -4048,7 +4048,7 @@ Decrypts and returns a secret's field values, auditing the decrypt. Gated by sec
 Example:
 
 ```sh
-omniglass secret reveal <id>
+omniglass secret reveal demo-panel-login
 ```
 
 ### `omniglass secret update`
@@ -4056,7 +4056,7 @@ omniglass secret reveal <id>
 Update a secret
 
 ```
-omniglass secret update <id> [flags]
+omniglass secret update <secret> [flags]
 ```
 
 Replaces the given field values on a secret, re-sealing secret fields, and patches its label. Only those change; name, type, and owner are fixed at creation. An omitted field keeps its value, an omitted label leaves it alone, and an empty label clears it. Gated by secret:update, plus platform:update when the secret sits at the platform tier.
@@ -4069,7 +4069,7 @@ Replaces the given field values on a secret, re-sealing secret fields, and patch
 Example:
 
 ```sh
-omniglass secret update <id>
+omniglass secret update demo-panel-login
 ```
 
 ## `omniglass secret-type`
@@ -4539,7 +4539,7 @@ Deletes a custom standard, refused if official (422) or still referenced by a sy
 Example:
 
 ```sh
-omniglass standard delete <id>
+omniglass standard delete meeting-room
 ```
 
 ### `omniglass standard get`
@@ -4555,7 +4555,7 @@ Fetches a standard by id. Gated by standard:read.
 Example:
 
 ```sh
-omniglass standard get <id>
+omniglass standard get meeting-room
 ```
 
 ### `omniglass standard list`
@@ -4591,7 +4591,7 @@ Removes one line from a custom standard's contract; conforming systems keep any 
 Example:
 
 ```sh
-omniglass standard metric delete <id> <metric>
+omniglass standard metric delete meeting-room <metric>
 ```
 
 #### `omniglass standard metric list`
@@ -4607,7 +4607,7 @@ Lists the standard's declared-metric contract (which metrics every system confor
 Example:
 
 ```sh
-omniglass standard metric list <id>
+omniglass standard metric list meeting-room
 ```
 
 #### `omniglass standard metric update`
@@ -4628,7 +4628,7 @@ Declares a catalog metric on a custom standard, or revises the declaration in pl
 Example:
 
 ```sh
-omniglass standard metric update <id> <metric>
+omniglass standard metric update meeting-room <metric>
 ```
 
 ### `omniglass standard property`
@@ -4648,7 +4648,7 @@ Removes one line from a custom standard's contract; conforming systems keep any 
 Example:
 
 ```sh
-omniglass standard property delete <id> <property>
+omniglass standard property delete meeting-room <property>
 ```
 
 #### `omniglass standard property list`
@@ -4664,7 +4664,7 @@ Lists the standard's declared-property contract (what every system conforming to
 Example:
 
 ```sh
-omniglass standard property list <id>
+omniglass standard property list meeting-room
 ```
 
 #### `omniglass standard property update`
@@ -4685,7 +4685,7 @@ Declares a catalog property on a custom standard, or revises the declaration in 
 Example:
 
 ```sh
-omniglass standard property update <id> <property>
+omniglass standard property update meeting-room <property>
 ```
 
 ### `omniglass standard role`
@@ -4705,7 +4705,7 @@ Removes the role from the standard, and with it every assignment conforming syst
 Example:
 
 ```sh
-omniglass standard role delete <id> <role>
+omniglass standard role delete meeting-room <role>
 ```
 
 #### `omniglass standard role list`
@@ -4721,7 +4721,7 @@ Lists the roles this standard declares (every conforming system inherits them li
 Example:
 
 ```sh
-omniglass standard role list <id>
+omniglass standard role list meeting-room
 ```
 
 #### `omniglass standard role update`
@@ -4749,7 +4749,7 @@ Declares a role every conforming system needs filled, or revises it in place (th
 Example:
 
 ```sh
-omniglass standard role update <id> <role>
+omniglass standard role update meeting-room <role>
 ```
 
 ### `omniglass standard update`
@@ -4771,7 +4771,7 @@ Patches a custom standard's label or parent. Official standards are read-only (4
 Example:
 
 ```sh
-omniglass standard update <id>
+omniglass standard update meeting-room
 ```
 
 ## `omniglass system`
@@ -5504,7 +5504,7 @@ Deletes a custom system_type, refused if official (422), still a parent of anoth
 Example:
 
 ```sh
-omniglass system-type delete <id>
+omniglass system-type delete av
 ```
 
 ### `omniglass system-type list`
@@ -5544,7 +5544,7 @@ Patches a custom system_type's label, stem, icon, abbrev, or label_rule. An unpa
 Example:
 
 ```sh
-omniglass system-type update <id>
+omniglass system-type update av
 ```
 
 ## `omniglass tag`
@@ -5817,15 +5817,15 @@ omniglass variable create --name name --owner-kind owner_kind --value <json> --v
 Delete a variable
 
 ```
-omniglass variable delete <id>
+omniglass variable delete <variable>
 ```
 
-Removes a variable by id. Gated by variable:delete, plus platform:delete when the variable sits at the platform tier; read and delete scopes on the owner drive the 404 versus 403 split.
+Removes a variable, by name or uuid. Gated by variable:delete, plus platform:delete when the variable sits at the platform tier; read and delete scopes on the owner drive the 404 versus 403 split.
 
 Example:
 
 ```sh
-omniglass variable delete <id>
+omniglass variable delete poll-interval
 ```
 
 ### `omniglass variable list`
@@ -5849,7 +5849,7 @@ omniglass variable list
 Update a variable
 
 ```
-omniglass variable update <id> [flags]
+omniglass variable update <variable> [flags]
 ```
 
 Replaces a variable's value (validated against its fixed value_type) and patches its label; either may be omitted, and an empty label clears it. Name, type, and owner are fixed at creation. Gated by variable:update, plus platform:update when the variable sits at the platform tier.
@@ -5862,7 +5862,7 @@ Replaces a variable's value (validated against its fixed value_type) and patches
 Example:
 
 ```sh
-omniglass variable update <id>
+omniglass variable update poll-interval
 ```
 
 ## `omniglass vendor`
@@ -5907,7 +5907,7 @@ Deletes a custom vendor, refused if official (422). Gated by vendor:delete.
 Example:
 
 ```sh
-omniglass vendor delete <id>
+omniglass vendor delete boreal
 ```
 
 ### `omniglass vendor get`
@@ -5923,7 +5923,7 @@ Fetches a vendor by id. Gated by vendor:read.
 Example:
 
 ```sh
-omniglass vendor get <id>
+omniglass vendor get boreal
 ```
 
 ### `omniglass vendor list`
@@ -5963,7 +5963,7 @@ Patches a custom vendor's label, kind, icon, support_phone, or website. Official
 Example:
 
 ```sh
-omniglass vendor update <id>
+omniglass vendor update boreal
 ```
 
 ## `omniglass view`

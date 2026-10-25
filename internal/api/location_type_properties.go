@@ -47,12 +47,12 @@ type locationTypePropertyOutput struct {
 // locationTypePropertyPathInput addresses one contract line by the location type
 // and the property name (the pair the contract is unique on).
 type locationTypePropertyPathInput struct {
-	ID       string `path:"id" doc:"The location type id"`
+	ID       string `path:"id" doc:"The location type, by name or uuid" example:"room"`
 	Property string `path:"property" doc:"The property name"`
 }
 
 type setLocationTypePropertyInput struct {
-	ID       string `path:"id" doc:"The location type id"`
+	ID       string `path:"id" doc:"The location type, by name or uuid" example:"room"`
 	Property string `path:"property" doc:"The property name"`
 	Body     struct {
 		DefaultValue any  `json:"default_value,omitempty" doc:"The contract default, validated against the property's data_type; omit for no default"`

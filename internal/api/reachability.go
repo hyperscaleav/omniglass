@@ -93,7 +93,7 @@ type reachRejectionBody struct {
 	Reason     string    `json:"reason,omitempty" doc:"Why the gate holds (endpoint-rejection-reason): the class and the component's own text (auth: the agent answered authorizationError for the community), scrubbed by the node of anything it sent. Published beside the gate by whatever the node was connecting with, its reachability probe, a poll or a held session, so an endpoint holding no session still says why it was refused. Absent when the node recorded none (a gate published before it did). Cut to 500 characters; the property's series keeps the whole"`
 	TS         time.Time `json:"ts" doc:"When the node last published the gate: a retry that lifts it and a refusal that sets it again each move it"`
 	PinnedKey  string    `json:"pinned_key,omitempty" doc:"A refusal of a changed key only (class host-key, or certificate for a pinned tls key): the SHA256 fingerprint of the key the endpoint pins, as the node refused against it. Present with offered_key or not at all"`
-	OfferedKey string    `json:"offered_key,omitempty" doc:"A refusal of a changed key only: the SHA256 fingerprint of the key the component offered instead. Trusting it is POST /endpoints/{id}:retry with this exact value as host_key (a tls or https endpoint also takes it as certificate); while the refusal holds, any other value is refused (409)"`
+	OfferedKey string    `json:"offered_key,omitempty" doc:"A refusal of a changed key only: the SHA256 fingerprint of the key the component offered instead. Trusting it is POST /endpoints/{endpoint}:retry with this exact value as host_key (a tls or https endpoint also takes it as certificate); while the refusal holds, any other value is refused (409)"`
 }
 
 // reachTLSBody is the handshake and certificate of an endpoint over the tls
@@ -108,7 +108,7 @@ type reachTLSBody struct {
 }
 
 type reachEndpointBody struct {
-	ID            string              `json:"id" doc:"The endpoint's uuid, the address its custom methods take (POST /endpoints/{id}:retry)"`
+	ID            string              `json:"id" doc:"The endpoint's uuid, the address its custom methods take (POST /endpoints/{endpoint}:retry)"`
 	Endpoint      string              `json:"endpoint" doc:"The endpoint's derived name (its transport)"`
 	Label         string              `json:"label,omitempty" doc:"The friendly string an operator reads; absent when unset, and the row then reads the derived name verbatim"`
 	Transport     string              `json:"transport" doc:"The transport (icmp, tcp, ...)"`

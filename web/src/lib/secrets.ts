@@ -63,20 +63,20 @@ export type UpdateSecret = {
 };
 
 export async function updateSecret(id: string, body: UpdateSecret): Promise<Secret> {
-  const { data, error } = await api.PATCH("/secrets/{id}", { params: { path: { id } }, body });
+  const { data, error } = await api.PATCH("/secrets/{secret}", { params: { path: { secret: id } }, body });
   if (error) throw error;
   return data as Secret;
 }
 
 export async function deleteSecret(id: string): Promise<void> {
-  const { error } = await api.DELETE("/secrets/{id}", { params: { path: { id } } });
+  const { error } = await api.DELETE("/secrets/{secret}", { params: { path: { secret: id } } });
   if (error) throw error;
 }
 
 // revealSecret decrypts a secret's fields for on-screen display (the audited,
 // admin-gated reveal). The returned map is field name -> plaintext.
 export async function revealSecret(id: string): Promise<Record<string, string>> {
-  const { data, error } = await api.POST("/secrets/{id}:reveal", { params: { path: { id } } });
+  const { data, error } = await api.POST("/secrets/{secret}:reveal", { params: { path: { secret: id } } });
   if (error) throw error;
   return (data?.fields ?? {}) as Record<string, string>;
 }
@@ -84,7 +84,7 @@ export async function revealSecret(id: string): Promise<Record<string, string>> 
 // copySecret decrypts a secret's fields for a clipboard copy: the same exposure
 // and gate as reveal, audited under the distinct `copy` verb.
 export async function copySecret(id: string): Promise<Record<string, string>> {
-  const { data, error } = await api.POST("/secrets/{id}:copy", { params: { path: { id } } });
+  const { data, error } = await api.POST("/secrets/{secret}:copy", { params: { path: { secret: id } } });
   if (error) throw error;
   return (data?.fields ?? {}) as Record<string, string>;
 }

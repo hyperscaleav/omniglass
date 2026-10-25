@@ -132,7 +132,7 @@ type listLocationTypesOutput struct {
 }
 
 type locationTypePathInput struct {
-	ID string `path:"id" doc:"The location_type id"`
+	ID string `path:"id" doc:"The location type, by name or uuid" example:"room"`
 }
 
 type createLocationTypeInput struct {
@@ -150,7 +150,7 @@ type createLocationTypeInput struct {
 }
 
 type updateLocationTypeInput struct {
-	ID   string `path:"id"`
+	ID   string `path:"id" doc:"The location type, by name or uuid" example:"room"`
 	Body struct {
 		// The mask is what makes a nullable OBJECT field clearable, and it is
 		// the house answer for every one that follows (#692, ADR-0091): an

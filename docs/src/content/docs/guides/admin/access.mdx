@@ -56,7 +56,7 @@ stack that user's blade over the group) and its **grants**, built with the same 
 immediately, and is bounded by the same rule as a direct grant (you cannot grant a role above your own tier).
 **New group** creates one (name, label, description); the **name** is an ordinary entity name
 (lowercase letters, digits, and hyphens, no dots and no underscores), while the label is free
-text. The name is not patchable once the group exists: moving it is `POST /principal-groups/{id}:rename`,
+text. The name is not patchable once the group exists: moving it is `POST /principal-groups/{group}:rename`,
 gated by `principal_group:rename` rather than `:update` ([ADR-0077](/architecture/decisions/)), and the
 console's group blade shows the name read-only. The new group then opens
 **directly in edit mode**, so you add its members and grants right away and one **Save** commits them (they
@@ -98,4 +98,4 @@ locked out of administration.
 Hovering a role in the picker shows its description and the permissions it grants, so you can see what
 you are assigning before you stage it.
 
-From the CLI a direct grant is `omniglass principal grant create <id>` / `omniglass principal grant delete <id> <grantId>`.
+From the CLI a direct grant is `omniglass principal grant create alice --role viewer --scope-kind location --scope-id boi.17c` (the principal by username or service account name, the scope root by name or dotted address) / `omniglass principal grant delete alice <grantId>`; a grant has no name, so it alone is addressed by its uuid.

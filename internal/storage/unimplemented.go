@@ -56,6 +56,11 @@ func (UnimplementedGateway) AuthenticateBearer(context.Context, []byte) (*Princi
 func (UnimplementedGateway) ResolvePrincipalRef(context.Context, string) (string, error) {
 	return "", nil
 }
+
+func (UnimplementedGateway) ResolveUsername(context.Context, string) (string, error) {
+	return "", nil
+}
+
 func (UnimplementedGateway) BeginImpersonation(context.Context, string, string, string, time.Duration) (string, *ImpersonationSession, error) {
 	return "", nil, nil
 }

@@ -219,11 +219,11 @@ export function retryWaiting(pending: RetryPending | null | undefined, mark: str
   return !!pending && pending.ts === (mark ?? "") && now - pending.at < RETRY_WAIT_MS;
 }
 
-// retryEndpoint moves the endpoint's retry counter (POST /endpoints/{id}:retry):
+// retryEndpoint moves the endpoint's retry counter (POST /endpoints/{endpoint}:retry):
 // its connection fingerprint moves, so a gate a refusal holds lifts and the node
 // redials once at its next check-in. Audited server-side.
 export async function retryEndpoint(id: string): Promise<void> {
-  const { error } = await api.POST("/endpoints/{id}:retry", { params: { path: { id } }, body: {} });
+  const { error } = await api.POST("/endpoints/{endpoint}:retry", { params: { path: { endpoint: id } }, body: {} });
   if (error) throw error;
 }
 
@@ -287,11 +287,11 @@ export function trustRefusal(me: Me | null | undefined): string | null {
 }
 
 // trustOfferedKey declares key as the endpoint's new pin and retries it (POST
-// /endpoints/{id}:retry with host_key): the node redials onto it once. key is
+// /endpoints/{endpoint}:retry with host_key): the node redials onto it once. key is
 // exactly the one the operator was shown; the server refuses (409) any key the
 // refusal on record does not name, so a confirm answered against a record that
 // moved since cannot pin it. Audited server-side with both keys and the actor.
 export async function trustOfferedKey(id: string, key: string): Promise<void> {
-  const { error } = await api.POST("/endpoints/{id}:retry", { params: { path: { id } }, body: { host_key: key } });
+  const { error } = await api.POST("/endpoints/{endpoint}:retry", { params: { path: { endpoint: id } }, body: { host_key: key } });
   if (error) throw error;
 }

@@ -82,10 +82,15 @@ func (p *PG) ListFiles(ctx context.Context, canAdmin bool) ([]File, error) {
 	return out, rows.Err()
 }
 
-// GetFile returns one file handle by id. A sensitive file is a non-disclosing
-// ErrFileNotFound to a caller without the admin tier, and a malformed id is
-// ErrFileNotFound (it cannot name an existing row).
-func (p *PG) GetFile(ctx context.Context, id string, canAdmin bool) (*File, error) {
+// GetFile returns one file handle by reference: its uuid, or its filename
+// (#1133) when exactly one file the caller may see carries it. A sensitive file
+// is a non-disclosing ErrFileNotFound to a caller without the admin tier, and a
+// malformed id is ErrFileNotFound (it cannot name an existing row).
+func (p *PG) GetFile(ctx context.Context, ref string, canAdmin bool) (*File, error) {
+	id, err := fileIDByRef(ctx, p.pool, ref, canAdmin)
+	if err != nil {
+		return nil, err
+	}
 	f, err := scanFileRow(p.pool.QueryRow(ctx, `select `+fileCols+` from file where id = $1`, id))
 	if errors.Is(err, pgx.ErrNoRows) || isInvalidUUID(err) {
 		return nil, ErrFileNotFound
@@ -140,8 +145,8 @@ func (p *PG) CreateFile(ctx context.Context, actorID string, spec FileSpec, canA
 // DownloadFile returns a file's metadata and its bytes, reading the blob the
 // handle points at (the hash is verified on read). The same sensitive-tier gate
 // as GetFile applies.
-func (p *PG) DownloadFile(ctx context.Context, id string, canAdmin bool) (*File, []byte, error) {
-	f, err := p.GetFile(ctx, id, canAdmin)
+func (p *PG) DownloadFile(ctx context.Context, ref string, canAdmin bool) (*File, []byte, error) {
+	f, err := p.GetFile(ctx, ref, canAdmin)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -157,8 +162,8 @@ func (p *PG) DownloadFile(ctx context.Context, id string, canAdmin bool) (*File,
 // deleting files reclaims storage rather than leaking it). Async mark-sweep GC
 // of aged or event-referenced blobs is a separate later slice. The sensitive-tier
 // gate applies: a caller without the admin tier gets the non-disclosing not-found.
-func (p *PG) DeleteFile(ctx context.Context, actorID, id string, canAdmin bool) error {
-	f, err := p.GetFile(ctx, id, canAdmin)
+func (p *PG) DeleteFile(ctx context.Context, actorID, ref string, canAdmin bool) error {
+	f, err := p.GetFile(ctx, ref, canAdmin)
 	if err != nil {
 		return err
 	}

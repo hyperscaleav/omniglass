@@ -84,7 +84,7 @@ type listProductsOutput struct {
 }
 
 type productPathInput struct {
-	ID string `path:"id" doc:"The product id"`
+	ID string `path:"id" doc:"The product, by name or uuid" example:"boreal-edge-55"`
 }
 
 type createProductInput struct {
@@ -102,7 +102,7 @@ type createProductInput struct {
 }
 
 type updateProductInput struct {
-	ID   string `path:"id"`
+	ID   string `path:"id" doc:"The product, by name or uuid" example:"boreal-edge-55"`
 	Body struct {
 		Label           *string `json:"label,omitempty" doc:"A new operator-facing label"`
 		VendorID        *string `json:"vendor_id,omitempty" doc:"A new vendor, by handle or uuid"`

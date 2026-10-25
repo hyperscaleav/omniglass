@@ -60,7 +60,7 @@ func runSetPassword(ctx context.Context, username, password string, revokeTokens
 	// sessions so any stolen login stops at once. Tokens are their own bearer secret,
 	// not tied to the password, so they are kept unless --revoke-tokens asks for a full
 	// lockout of a compromised account.
-	pid, err := gw.ResolvePrincipalRef(ctx, username)
+	pid, err := gw.ResolveUsername(ctx, username)
 	if err != nil {
 		return fmt.Errorf("resolve %q after set-password: %w", username, err)
 	}

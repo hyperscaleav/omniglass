@@ -64,7 +64,7 @@ export async function listEndpoints(): Promise<Endpoint[]> {
 }
 
 export async function getEndpoint(id: string): Promise<Endpoint> {
-  const { data, error } = await api.GET("/endpoints/{id}", { params: { path: { id } } });
+  const { data, error } = await api.GET("/endpoints/{endpoint}", { params: { path: { endpoint: id } } });
   if (error) throw error;
   return data as Endpoint;
 }
@@ -99,13 +99,13 @@ export async function createEndpoint(body: CreateEndpoint): Promise<Endpoint> {
 export type UpdateEndpoint = { node?: string; params?: EndpointParams; label?: string; inputs?: Record<string, string> };
 
 export async function updateEndpoint(id: string, body: UpdateEndpoint): Promise<Endpoint> {
-  const { data, error } = await api.PATCH("/endpoints/{id}", { params: { path: { id } }, body });
+  const { data, error } = await api.PATCH("/endpoints/{endpoint}", { params: { path: { endpoint: id } }, body });
   if (error) throw error;
   return data as Endpoint;
 }
 
 export async function deleteEndpoint(id: string): Promise<void> {
-  const { error } = await api.DELETE("/endpoints/{id}", { params: { path: { id } } });
+  const { error } = await api.DELETE("/endpoints/{endpoint}", { params: { path: { endpoint: id } } });
   if (error) throw error;
 }
 

@@ -36,7 +36,7 @@ type listDriversOutput struct {
 }
 
 type driverPathInput struct {
-	ID string `path:"id" doc:"The driver id"`
+	ID string `path:"id" doc:"The driver, by name or uuid" example:"snmp-generic"`
 }
 
 type createDriverInput struct {
@@ -49,7 +49,7 @@ type createDriverInput struct {
 }
 
 type updateDriverInput struct {
-	ID   string `path:"id"`
+	ID   string `path:"id" doc:"The driver, by name or uuid" example:"snmp-generic"`
 	Body struct {
 		Label   *string         `json:"label,omitempty" doc:"A new operator-facing label"`
 		Version *string         `json:"version,omitempty" doc:"A new version string, e.g. 1.0.1"`

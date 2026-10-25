@@ -37,10 +37,7 @@ Wait
 Sleep 1s
 
 Hide
-Type `demo_hush 'panel_ep=$(omniglass endpoint list | jq -r ".endpoints[] | select(.label == \"Panel web API\") | .id")'`
-Enter
-Wait
-Type `demo_hush 'panel_secret=$(omniglass secret list | jq -r ".secrets[] | select(.name == \"demo-panel-login\") | .id")'`
+Type `demo_hush 'panel_ep=$(omniglass endpoint get "$panel/https" | jq -r .id)'`
 Enter
 Wait
 Type `demo_until 120 'omniglass component reachability list "$panel" | jq -e ".endpoints[] | select(.endpoint == \"https\") | .authenticated.value == \"yes\"" && omniglass component reachability list "$display" | jq -e ".endpoints[] | select(.endpoint == \"http\") | .authenticated.value == \"yes\""'`
@@ -100,7 +97,7 @@ Show
 Type "# A wrong password: refused, with its reason, after one attempt"
 Enter
 Wait
-Type `omniglass secret update "$panel_secret" --fields '{"password":"wrong-password"}' | jq -c '{name, fields: [.fields[] | {name, value}]}'`
+Type `omniglass secret update demo-panel-login --fields '{"password":"wrong-password"}' | jq -c '{name, fields: [.fields[] | {name, value}]}'`
 Enter
 Wait
 Hide
@@ -132,7 +129,7 @@ Show
 Type "# The secret fixed in place: the gate lifts, and the panel recovers"
 Enter
 Wait
-Type `omniglass secret update "$panel_secret" --fields '{"password":"newtron"}' | jq -c '{name, fields: [.fields[] | {name, value}]}'`
+Type `omniglass secret update demo-panel-login --fields '{"password":"newtron"}' | jq -c '{name, fields: [.fields[] | {name, value}]}'`
 Enter
 Wait
 Hide

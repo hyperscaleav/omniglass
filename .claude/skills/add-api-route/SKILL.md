@@ -64,6 +64,16 @@ The uuid is identity; the `name` is the operator-facing address. Routes take `{n
 (`GetComponent(ctx, name, read)`), responses carry both, and no operator surface renders
 or filters by uuid. A `_name`-suffixed field holding a uuid is a defect.
 
+**A route that takes a uuid takes the name too** (ADR-1133). A name unique only inside
+something is addressed by that something and its name (`<component>/<endpoint>`,
+`<owner>/<name>`); reuse the resolvers in `internal/storage/name_ref.go` (or
+`resolveRef` for a tree entity) rather than writing another, resolve inside the write's
+transaction, narrow candidates to the caller's read scope before judging ambiguity, and
+run the route's existing scope split on the resolved uuid. An unresolved name is
+`ErrUnresolvedRef`, which `mapRefErr` turns into a 404 naming it. Give the path param an
+`example:` tag holding a real name: the generated CLI shows it in its help. A docs page or
+demo that types a uuid fails `TestDocsCarryNoHardCodedUUIDs`.
+
 ## Shapes and the doc-tag pipeline
 
 Request/response structs carry `doc:` tags on every field. They flow to OpenAPI, then to

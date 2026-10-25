@@ -64,8 +64,9 @@ func TestGrantsAndOwnerInvariant(t *testing.T) {
 	if _, err := gw.CreateGrant(ctx, owner.ID, "00000000-0000-0000-0000-000000000000", storage.GrantSpec{Role: "viewer", ScopeKind: "all"}, all); !errors.Is(err, storage.ErrPrincipalNotFound) {
 		t.Fatalf("unknown principal: want ErrPrincipalNotFound, got %v", err)
 	}
-	// A scoped grant targets a real entity by id: a name or unknown id is refused,
-	// a valid location id is fine.
+	// A scoped grant targets a real entity, stored by id: its name resolves to
+	// that id (#1133), one naming nothing is refused, and the same root by id is
+	// the same grant.
 	if err := gw.UpsertLocationType(ctx, storage.LocationType{Name: "campus", Label: "Campus", Official: true}); err != nil {
 		t.Fatalf("seed location type: %v", err)
 	}
@@ -73,11 +74,15 @@ func TestGrantsAndOwnerInvariant(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create hq: %v", err)
 	}
-	if _, err := gw.CreateGrant(ctx, owner.ID, alice.ID, storage.GrantSpec{Role: "viewer", ScopeKind: "location", ScopeID: "hq"}, all); !errors.Is(err, storage.ErrBadScope) {
-		t.Fatalf("scoped grant to a name: want ErrBadScope, got %v", err)
+	if _, err := gw.CreateGrant(ctx, owner.ID, alice.ID, storage.GrantSpec{Role: "viewer", ScopeKind: "location", ScopeID: "no-such-place"}, all); !errors.Is(err, storage.ErrBadScope) {
+		t.Fatalf("scoped grant to an unknown name: want ErrBadScope, got %v", err)
 	}
-	if _, err := gw.CreateGrant(ctx, owner.ID, alice.ID, storage.GrantSpec{Role: "viewer", ScopeKind: "location", ScopeID: hq.ID}, all); err != nil {
-		t.Fatalf("scoped grant by id: %v", err)
+	byName, err := gw.CreateGrant(ctx, owner.ID, alice.ID, storage.GrantSpec{Role: "viewer", ScopeKind: "location", ScopeID: "hq"}, all)
+	if err != nil || byName.ScopeID == nil || *byName.ScopeID != hq.ID {
+		t.Fatalf("scoped grant to a name = %+v (err %v), want it stored by hq's id", byName, err)
+	}
+	if _, err := gw.CreateGrant(ctx, owner.ID, alice.ID, storage.GrantSpec{Role: "viewer", ScopeKind: "location", ScopeID: hq.ID}, all); !errors.Is(err, storage.ErrGrantExists) {
+		t.Fatalf("the same root by id: want ErrGrantExists, got %v", err)
 	}
 
 	// An unknown scope operator is refused.

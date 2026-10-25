@@ -257,9 +257,9 @@ neither falls back to a throwaway connection, which would retry the bad credenti
 
 - anything it connects with changes: the attached secret rotated in the secret store (the endpoint
   row untouched), the address, port or attached secret (a driver-attached endpoint's inputs edit
-  in place, `PATCH /endpoints/{id}` with `inputs`), the transport, the driver's login or terminal declaration (re-derived to the endpoint, #823), or
+  in place, `PATCH /endpoints/{endpoint}` with `inputs`), the transport, the driver's login or terminal declaration (re-derived to the endpoint, #823), or
   its pin. The session is recycled and reconnects within a tick;
-- an operator retries it (`POST /endpoints/{id}:retry`, gated by `endpoint:retry` and audited): the
+- an operator retries it (`POST /endpoints/{endpoint}:retry`, gated by `endpoint:retry` and audited): the
   endpoint's retry counter, part of the fingerprint, moves;
 - the driver declares a slow re-probe (`session.reprobe`, at least 5m; the default is never).
 
@@ -1057,7 +1057,7 @@ input the spec does not declare, an ambiguous secret name. A secret input is res
 operator could themselves read: an out-of-scope or admin-sensitive secret refuses
 indistinguishably from an absent one, no name or type oracle. The worklist delivery re-confines
 to a secret that cascades onto the endpoint's component. A driver-attached endpoint's address is
-derived from its inputs and edits in place through them (#1061): `PATCH /endpoints/{id}` takes
+derived from its inputs and edits in place through them (#1061): `PATCH /endpoints/{endpoint}` takes
 `inputs` (the host, the port, an attached secret's reference), validated against the driver's
 declared inputs (a value it refuses is a 400 naming the field), every attached secret re-resolved
 under the editor's own secret scope (so an edit cannot send a credential its editor could not use to

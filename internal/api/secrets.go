@@ -94,13 +94,18 @@ type createSecretInput struct {
 	}
 }
 
+// secretIDInput is the secret reference every per-secret route takes (#1133,
+// ADR-1133). A secret's name is unique within its owner, and the cascade makes
+// one name at several owners the ordinary case (a room overriding the platform),
+// so a bare name resolves only where exactly one secret the caller can see
+// carries it, and the owner-qualified form is the one that always does.
 type secretIDInput struct {
-	ID string `path:"id" doc:"The secret's id"`
+	Secret string `path:"secret" doc:"The secret: its name, or <owner>/<name> where more than one you can see shares it (the owner by name, dotted address or uuid, or $platform), or its uuid. The slash is percent-encoded in a URL, as the CLI does" example:"demo-panel-login"`
 }
 
 type updateSecretInput struct {
-	ID   string `path:"id" doc:"The secret's id"`
-	Body struct {
+	Secret string `path:"secret" doc:"The secret: its name, or <owner>/<name> where more than one you can see shares it (the owner by name, dotted address or uuid, or $platform), or its uuid. The slash is percent-encoded in a URL, as the CLI does" example:"demo-panel-login"`
+	Body   struct {
 		Fields map[string]string `json:"fields,omitempty" doc:"The field values to replace; an omitted field keeps its value"`
 		Label  *string           `json:"label,omitempty" maxLength:"200" doc:"A new label; an empty string clears it, and the surface falls back to the name. Omit to leave it alone"`
 	}
@@ -261,13 +266,13 @@ func registerSecretRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 	huma.Register(api, a.platformGated(a.gated(huma.Operation{
 		OperationID: "update-secret",
 		Method:      http.MethodPatch,
-		Path:        "/secrets/{id}",
+		Path:        "/secrets/{secret}",
 		Summary:     "Update a secret",
 		Description: "Replaces the given field values on a secret, re-sealing secret fields, and patches its label. Only those change; name, type, and owner are fixed at creation. An omitted field keeps its value, an omitted label leaves it alone, and an empty label clears it. Gated by secret:update, plus platform:update when the secret sits at the platform tier.",
 	}, "secret", "update"), "update"), func(ctx context.Context, in *updateSecretInput) (*secretOutput, error) {
 		// Only the stored row knows its tier, so the resolved permission rides with
 		// the call and the Gateway applies it beside the scope split.
-		s, err := gw.UpdateSecret(ctx, actorID(ctx), in.ID, storage.SecretPatch{Fields: in.Body.Fields, Label: in.Body.Label},
+		s, err := gw.UpdateSecret(ctx, actorID(ctx), in.Secret, storage.SecretPatch{Fields: in.Body.Fields, Label: in.Body.Label},
 			a.scopeFor(ctx, "secret", "read"), a.scopeFor(ctx, "secret", "update"),
 			a.canSecretAdmin(ctx, "update"), a.canPlatform(ctx, "update"))
 		if err != nil {
@@ -279,12 +284,12 @@ func registerSecretRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 	huma.Register(api, a.platformGated(a.gated(huma.Operation{
 		OperationID:   "delete-secret",
 		Method:        http.MethodDelete,
-		Path:          "/secrets/{id}",
+		Path:          "/secrets/{secret}",
 		DefaultStatus: http.StatusNoContent,
 		Summary:       "Delete a secret",
-		Description:   "Removes a secret by id. Gated by secret:delete, plus platform:delete when the secret sits at the platform tier; read and delete scopes on the owner drive the 404 versus 403 split.",
+		Description:   "Removes a secret, by name or uuid. Gated by secret:delete, plus platform:delete when the secret sits at the platform tier; read and delete scopes on the owner drive the 404 versus 403 split.",
 	}, "secret", "delete"), "delete"), func(ctx context.Context, in *secretIDInput) (*struct{}, error) {
-		if err := gw.DeleteSecret(ctx, actorID(ctx), in.ID,
+		if err := gw.DeleteSecret(ctx, actorID(ctx), in.Secret,
 			a.scopeFor(ctx, "secret", "read"), a.scopeFor(ctx, "secret", "delete"),
 			a.canSecretAdmin(ctx, "delete"), a.canPlatform(ctx, "delete")); err != nil {
 			return nil, mapSecretErr(err)
@@ -295,11 +300,11 @@ func registerSecretRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "reveal-secret",
 		Method:      http.MethodPost,
-		Path:        "/secrets/{id}:reveal",
+		Path:        "/secrets/{secret}:reveal",
 		Summary:     "Reveal a secret's plaintext",
 		Description: "Decrypts and returns a secret's field values, auditing the decrypt. Gated by secret:reveal at the caller's scope; an admin-sensitive secret additionally needs the admin tier (secret:reveal:admin), so a scoped operator reveals device secrets but never a platform credential.",
 	}, "secret", "reveal"), func(ctx context.Context, in *secretIDInput) (*revealSecretOutput, error) {
-		fields, err := gw.RevealSecret(ctx, actorID(ctx), in.ID,
+		fields, err := gw.RevealSecret(ctx, actorID(ctx), in.Secret,
 			a.scopeFor(ctx, "secret", "read"), a.scopeFor(ctx, "secret", "reveal"), a.canSecretAdmin(ctx, "reveal"))
 		if err != nil {
 			return nil, mapSecretErr(err)
@@ -312,11 +317,11 @@ func registerSecretRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "copy-secret",
 		Method:      http.MethodPost,
-		Path:        "/secrets/{id}:copy",
+		Path:        "/secrets/{secret}:copy",
 		Summary:     "Decrypt a secret for clipboard copy",
 		Description: "Decrypts and returns a secret's field values for a clipboard copy, audited under the copy verb (distinct from an on-screen reveal). Same exposure and the same secret:reveal gate as reveal.",
 	}, "secret", "reveal"), func(ctx context.Context, in *secretIDInput) (*revealSecretOutput, error) {
-		fields, err := gw.CopySecret(ctx, actorID(ctx), in.ID,
+		fields, err := gw.CopySecret(ctx, actorID(ctx), in.Secret,
 			a.scopeFor(ctx, "secret", "read"), a.scopeFor(ctx, "secret", "reveal"), a.canSecretAdmin(ctx, "reveal"))
 		if err != nil {
 			return nil, mapSecretErr(err)

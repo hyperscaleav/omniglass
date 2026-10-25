@@ -40,8 +40,11 @@ type fileOutput struct {
 	Body fileBody
 }
 
+// fileIDInput is the file reference every per-file route takes (#1133,
+// ADR-1133): its uuid, or its filename, which is unique nowhere and so resolves
+// only where exactly one file the caller can see carries it.
 type fileIDInput struct {
-	ID string `path:"id" doc:"The file's id"`
+	File string `path:"file" doc:"The file: its filename, where exactly one file you can see carries it, or its uuid" example:"codec-firmware-2.1.4.txt"`
 }
 
 type createFileInput struct {
@@ -127,11 +130,11 @@ func registerFileRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "get-file",
 		Method:      http.MethodGet,
-		Path:        "/files/{id}",
+		Path:        "/files/{file}",
 		Summary:     "Get a file's metadata",
 		Description: "Returns one file handle's searchable metadata (no bytes). A sensitive file is a non-disclosing 404 without the admin tier. Gated by file:read.",
 	}, "file", "read"), func(ctx context.Context, in *fileIDInput) (*fileOutput, error) {
-		f, err := gw.GetFile(ctx, in.ID, a.canFileAdmin(ctx, "read"))
+		f, err := gw.GetFile(ctx, in.File, a.canFileAdmin(ctx, "read"))
 		if err != nil {
 			return nil, mapFileErr(err)
 		}
@@ -141,11 +144,11 @@ func registerFileRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "download-file",
 		Method:      http.MethodGet,
-		Path:        "/files/{id}:download",
+		Path:        "/files/{file}:download",
 		Summary:     "Download a file's bytes",
 		Description: "Returns a file's bytes (base64-encoded) read from the blob it points at, the hash verified on read. A sensitive file is a non-disclosing 404 without the admin tier. Gated by file:read.",
 	}, "file", "read"), func(ctx context.Context, in *fileIDInput) (*downloadFileOutput, error) {
-		f, data, err := gw.DownloadFile(ctx, in.ID, a.canFileAdmin(ctx, "read"))
+		f, data, err := gw.DownloadFile(ctx, in.File, a.canFileAdmin(ctx, "read"))
 		if err != nil {
 			return nil, mapFileErr(err)
 		}
@@ -159,12 +162,12 @@ func registerFileRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID:   "delete-file",
 		Method:        http.MethodDelete,
-		Path:          "/files/{id}",
+		Path:          "/files/{file}",
 		DefaultStatus: http.StatusNoContent,
 		Summary:       "Delete a file",
 		Description:   "Removes a file handle. The underlying blob is left in place (garbage collection is a later slice). A sensitive file is a non-disclosing 404 without the admin tier. Gated by file:delete.",
 	}, "file", "delete"), func(ctx context.Context, in *fileIDInput) (*struct{}, error) {
-		if err := gw.DeleteFile(ctx, actorID(ctx), in.ID, a.canFileAdmin(ctx, "delete")); err != nil {
+		if err := gw.DeleteFile(ctx, actorID(ctx), in.File, a.canFileAdmin(ctx, "delete")); err != nil {
 			return nil, mapFileErr(err)
 		}
 		return nil, nil
@@ -173,6 +176,9 @@ func registerFileRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 
 // mapFileErr translates the gateway's file sentinels into HTTP status.
 func mapFileErr(err error) error {
+	if refErr, ok := mapRefErr(err); ok {
+		return refErr
+	}
 	switch {
 	case errors.Is(err, storage.ErrFileNotFound):
 		return huma.Error404NotFound("file not found")

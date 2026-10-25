@@ -46,12 +46,12 @@ type productPropertyOutput struct {
 // productPropertyPathInput addresses one contract line by the product and the
 // property name (the pair the contract is unique on).
 type productPropertyPathInput struct {
-	ID       string `path:"id" doc:"The product id"`
+	ID       string `path:"id" doc:"The product, by name or uuid" example:"boreal-edge-55"`
 	Property string `path:"property" doc:"The property name"`
 }
 
 type setProductPropertyInput struct {
-	ID       string `path:"id" doc:"The product id"`
+	ID       string `path:"id" doc:"The product, by name or uuid" example:"boreal-edge-55"`
 	Property string `path:"property" doc:"The property name"`
 	Body     struct {
 		DefaultValue any  `json:"default_value,omitempty" doc:"The contract default, validated against the property's data_type; omit for no default"`
