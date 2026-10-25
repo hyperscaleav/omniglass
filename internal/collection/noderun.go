@@ -1,6 +1,7 @@
 package collection
 
 import (
+	"errors"
 	"sort"
 	"strings"
 	"time"
@@ -22,6 +23,18 @@ import (
 // the server requesting). The node subscribes with its own grant and answers
 // each request once.
 func RunSubject(node string) string { return subjectPrefix + "run." + node }
+
+// The answers a run gets when the node does not run it.
+var (
+	// ErrNodeAbsent: the node is not connected (no one listens on its run
+	// subject).
+	ErrNodeAbsent = errors.New("the node is not connected")
+	// ErrNodeTimeout: the node did not answer within the run's budget.
+	ErrNodeTimeout = errors.New("the node did not answer in time")
+	// ErrTaskNotOnWorklist: the task is not on the node's worklist (disabled,
+	// or its endpoint moved since it was resolved).
+	ErrTaskNotOnWorklist = errors.New("the task is not on the node's worklist")
+)
 
 // The two outcomes of a run.
 const (

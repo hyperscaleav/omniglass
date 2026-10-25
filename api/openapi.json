@@ -4731,6 +4731,35 @@
         ],
         "type": "object"
       },
+      "Finding": {
+        "additionalProperties": false,
+        "properties": {
+          "function": {
+            "description": "The function the fault is pinned on: a poll's or a listener's name, a command binding's command type",
+            "type": "string"
+          },
+          "kind": {
+            "description": "What the fault is in: parse (the spec is not a spec), spec (the spec itself), or the family of the function it is pinned on",
+            "enum": [
+              "parse",
+              "spec",
+              "poll",
+              "listener",
+              "command"
+            ],
+            "type": "string"
+          },
+          "message": {
+            "description": "The fault, as the validator names it",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "message"
+        ],
+        "type": "object"
+      },
       "FireSimInputBody": {
         "additionalProperties": false,
         "properties": {
@@ -7716,6 +7745,157 @@
         ],
         "type": "object"
       },
+      "PollRunBody": {
+        "additionalProperties": false,
+        "properties": {
+          "excerpt": {
+            "description": "What the fetch answered, before any emit read it, bounded and masked of every secret the preview used",
+            "type": "string"
+          },
+          "excerpt_truncated": {
+            "description": "The answer was longer than the excerpt",
+            "type": "boolean"
+          },
+          "faults": {
+            "description": "Each emit that did not locate or type, or the fetch that failed",
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "poll": {
+            "description": "The poll that ran",
+            "type": "string"
+          },
+          "samples": {
+            "description": "What its emits extracted",
+            "items": {
+              "$ref": "#/components/schemas/RunSample"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "took_ms": {
+            "description": "How long the poll took on the node",
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "poll",
+          "samples",
+          "took_ms"
+        ],
+        "type": "object"
+      },
+      "PreviewDriverInputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "$schema": {
+            "description": "A URL to the JSON Schema for this object.",
+            "examples": [
+              "/api/v1/schemas/PreviewDriverInputBody.json"
+            ],
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "driver": {
+            "description": "A stored driver to preview, by name; or give spec",
+            "type": "string"
+          },
+          "inputs": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "The inputs an attach would take (host, port, a secret by name); a secret must be one you may reveal, since a preview hands it to the target",
+            "type": "object"
+          },
+          "node": {
+            "description": "The node that runs the preview, by name: the one that reaches the target",
+            "examples": [
+              "edge-hq"
+            ],
+            "type": "string"
+          },
+          "polls": {
+            "description": "The polls to run, by name; absent runs every poll",
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "spec": {
+            "description": "A driver spec to preview inline, unsaved; or give driver"
+          },
+          "timeout_seconds": {
+            "description": "How long the node may take for the whole preview (default 15, at most 30)",
+            "format": "int64",
+            "maximum": 30,
+            "minimum": 1,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "node"
+        ],
+        "type": "object"
+      },
+      "PreviewDriverOutputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "$schema": {
+            "description": "A URL to the JSON Schema for this object.",
+            "examples": [
+              "/api/v1/schemas/PreviewDriverOutputBody.json"
+            ],
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "driver": {
+            "description": "The stored driver previewed; absent for an inline spec",
+            "type": "string"
+          },
+          "node": {
+            "description": "The node that ran it",
+            "type": "string"
+          },
+          "results": {
+            "description": "One per poll",
+            "items": {
+              "$ref": "#/components/schemas/PollRunBody"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "stored": {
+            "description": "Always false: a preview stores no sample",
+            "type": "boolean"
+          },
+          "target": {
+            "description": "Where the polls were sent",
+            "type": "string"
+          }
+        },
+        "required": [
+          "node",
+          "target",
+          "stored",
+          "results"
+        ],
+        "type": "object"
+      },
       "PreviewEdgeBody": {
         "additionalProperties": false,
         "properties": {
@@ -9805,6 +9985,113 @@
           "component_id",
           "pending",
           "since"
+        ],
+        "type": "object"
+      },
+      "RunEndpointPollOutputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "$schema": {
+            "description": "A URL to the JSON Schema for this object.",
+            "examples": [
+              "/api/v1/schemas/RunEndpointPollOutputBody.json"
+            ],
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "component": {
+            "description": "Its component, by name",
+            "type": "string"
+          },
+          "endpoint": {
+            "description": "The endpoint, by name",
+            "type": "string"
+          },
+          "faults": {
+            "description": "Each emit that did not locate or type, or the fetch that failed, each landed as collection-failed",
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "node": {
+            "description": "The node that ran the poll",
+            "type": "string"
+          },
+          "poll": {
+            "description": "The poll that ran",
+            "type": "string"
+          },
+          "samples": {
+            "description": "What its emits extracted, landed as a scheduled run's are",
+            "items": {
+              "$ref": "#/components/schemas/RunSample"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "stored": {
+            "description": "Always true: a run now lands its samples as a scheduled run does",
+            "type": "boolean"
+          },
+          "took_ms": {
+            "description": "How long the poll took on the node",
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "endpoint",
+          "node",
+          "stored",
+          "poll",
+          "samples",
+          "took_ms"
+        ],
+        "type": "object"
+      },
+      "RunSample": {
+        "additionalProperties": false,
+        "properties": {
+          "labels": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "The sample's labels, its instance among them",
+            "type": "object"
+          },
+          "lane": {
+            "description": "event or log for an event or a log line; absent for a metric or a property",
+            "type": "string"
+          },
+          "name": {
+            "description": "The key the emit landed",
+            "type": "string"
+          },
+          "text": {
+            "description": "A property's value, or an event's or log line's message",
+            "type": "string"
+          },
+          "ts": {
+            "description": "When the sample was taken",
+            "format": "date-time",
+            "type": "string"
+          },
+          "value": {
+            "description": "A metric's number",
+            "format": "double",
+            "type": "number"
+          }
+        },
+        "required": [
+          "name",
+          "ts"
         ],
         "type": "object"
       },
@@ -12932,6 +13219,60 @@
             "type": "string"
           }
         },
+        "type": "object"
+      },
+      "ValidateDriverInputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "$schema": {
+            "description": "A URL to the JSON Schema for this object.",
+            "examples": [
+              "/api/v1/schemas/ValidateDriverInputBody.json"
+            ],
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "spec": {
+            "description": "The driver spec to check, as create-driver takes it"
+          }
+        },
+        "required": [
+          "spec"
+        ],
+        "type": "object"
+      },
+      "ValidateDriverOutputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "$schema": {
+            "description": "A URL to the JSON Schema for this object.",
+            "examples": [
+              "/api/v1/schemas/ValidateDriverOutputBody.json"
+            ],
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "findings": {
+            "description": "Every fault the validator can pin down, the first the one a save names; empty when valid",
+            "items": {
+              "$ref": "#/components/schemas/Finding"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "valid": {
+            "description": "Whether a save would accept the spec",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "valid",
+          "findings"
+        ],
         "type": "object"
       },
       "ValidateExpressionInputBody": {
@@ -16741,6 +17082,91 @@
         "x-omniglass-permission": "driver:update"
       }
     },
+    "/drivers:preview": {
+      "post": {
+        "description": "Runs a driver spec's polls once through the node named, against the target its inputs name, and answers with what each poll read: the samples its emits extracted, each emit that did not locate, and an excerpt of the raw answer, masked of every secret the preview used. Nothing is stored. The spec is a stored driver (driver) or an unsaved one (spec); an invalid spec is a 422 listing its findings, as validate-driver-spec gives them. A preview runs a poll that is its own request (http, https, an snmp get, a tcp line); a poll that rides a held session or a bound socket needs an attached endpoint (run-endpoint-poll). A secret input must be one the caller may reveal (secret:reveal), since the preview hands it to the target named. A node that is not connected is a 503, one that does not answer in time a 504; too many runs in flight is a 429. Audited on the node and on each secret used. Gated by driver:preview.",
+        "operationId": "preview-driver",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PreviewDriverInputBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PreviewDriverOutputBody"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Preview a driver spec's polls through a node",
+        "x-omniglass-mcp": {
+          "destructive": true,
+          "open_world": true
+        },
+        "x-omniglass-permission": "driver:preview"
+      }
+    },
+    "/drivers:validate": {
+      "post": {
+        "description": "Checks a driver spec by the rules a save applies (the strict parse, then validation against the live catalogs) and writes nothing. The answer lists every fault the validator can pin down, each pinned on the function it is in, the first always the fault a save would name; an empty list is a spec create-driver accepts. Gated by driver:read.",
+        "operationId": "validate-driver-spec",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ValidateDriverInputBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidateDriverOutputBody"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Check a driver spec without saving it",
+        "x-omniglass-mcp": {},
+        "x-omniglass-permission": "driver:read"
+      }
+    },
     "/endpoints": {
       "get": {
         "description": "Lists the endpoints whose owning component the caller may read (the component cascade). Gated by endpoint:read.",
@@ -16950,6 +17376,80 @@
           "open_world": true
         },
         "x-omniglass-permission": "endpoint:update"
+      }
+    },
+    "/endpoints/{endpoint}/polls/{poll}:run": {
+      "post": {
+        "description": "Runs one of an attached endpoint's polls now, on the node that holds the endpoint, outside its schedule (which is unchanged), and answers with what it read. The samples land as a scheduled run's do. The run borrows the endpoint's held session where it has one and honors its gate: a gated endpoint refuses the run with the gate's reason (409) and nothing is sent. A poll the endpoint does not have is a 404 naming the polls it has; an endpoint on no node is a 409. A node that is not connected is a 503, one that does not answer in time a 504; too many runs in flight is a 429. Audited on the endpoint. Gated by endpoint:run; read and run scopes (through the component) drive the 404 versus 403 split.",
+        "operationId": "run-endpoint-poll",
+        "parameters": [
+          {
+            "description": "The endpoint, as <component>/<endpoint name> or its id",
+            "in": "path",
+            "name": "endpoint",
+            "required": true,
+            "schema": {
+              "description": "The endpoint, as <component>/<endpoint name> or its id",
+              "examples": [
+                "hq.west.level-2.huddle.$comp.panel-1/telnet"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "description": "The poll to run, by its function name",
+            "in": "path",
+            "name": "poll",
+            "required": true,
+            "schema": {
+              "description": "The poll to run, by its function name",
+              "examples": [
+                "status"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "description": "How long the node may take (default 15, at most 30)",
+            "explode": false,
+            "in": "query",
+            "name": "timeout_seconds",
+            "schema": {
+              "description": "How long the node may take (default 15, at most 30)",
+              "format": "int64",
+              "maximum": 30,
+              "minimum": 1,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunEndpointPollOutputBody"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Run an endpoint's poll now",
+        "x-omniglass-mcp": {
+          "open_world": true
+        },
+        "x-omniglass-permission": "endpoint:run"
       }
     },
     "/endpoints/{endpoint}:retry": {

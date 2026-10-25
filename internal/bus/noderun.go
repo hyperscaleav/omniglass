@@ -22,15 +22,12 @@ import (
 // reply to a request stays permitted.
 const runTimeout = 30 * time.Second
 
+// The answers a run gets when the node does not run it (the collection
+// package's, so the API names them without importing the bus).
 var (
-	// ErrNodeAbsent is a run's answer when the node is not connected (no one
-	// is listening on its run subject).
-	ErrNodeAbsent = errors.New("the node is not connected")
-	// ErrNodeTimeout is a run's answer when the node did not answer in time.
-	ErrNodeTimeout = errors.New("the node did not answer in time")
-	// ErrTaskNotOnWorklist is a run now's answer when the task is not on the
-	// node's worklist (disabled, or its endpoint moved since it was resolved).
-	ErrTaskNotOnWorklist = errors.New("the task is not on the node's worklist")
+	ErrNodeAbsent        = collection.ErrNodeAbsent
+	ErrNodeTimeout       = collection.ErrNodeTimeout
+	ErrTaskNotOnWorklist = collection.ErrTaskNotOnWorklist
 )
 
 // RunPreview asks node to run tasks once and answer with what they read,

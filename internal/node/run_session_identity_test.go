@@ -97,7 +97,7 @@ func newGateStackWith(t *testing.T, ip, nodeName string, shape func(*profile.Sto
 		t.Fatal(err)
 	}
 	t.Cleanup(srv.Shutdown)
-	apiSrv := httptest.NewServer(api.NewHandler(gw, api.WithNatsURL(srv.ClientURL())))
+	apiSrv := httptest.NewServer(api.NewHandler(gw, api.WithNatsURL(srv.ClientURL()), api.WithNodeRunner(srv)))
 	t.Cleanup(apiSrv.Close)
 	s := &gateStack{t: t, ctx: ctx, gw: gw, all: all, ip: ip, apiURL: apiSrv.URL, token: token, panels: map[string]*sim.Device{}}
 	for _, d := range engine.Devices() {
