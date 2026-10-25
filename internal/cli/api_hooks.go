@@ -61,22 +61,41 @@ func runAPICommand(cmd *cobra.Command, method, path string, body any) error {
 }
 
 // clientFromCmd builds an apiclient from the --server and --token persistent
-// flags (which default from OMNIGLASS_SERVER and OMNIGLASS_TOKEN).
+// flags, each falling back to its environment variable when it is not given.
 func clientFromCmd(cmd *cobra.Command) *apiclient.Client {
-	server, _ := cmd.Flags().GetString("server")
-	token, _ := cmd.Flags().GetString("token")
-	return apiclient.New(server, token)
+	return apiclient.New(flagOrEnv(cmd, "server", "OMNIGLASS_SERVER"), flagOrEnv(cmd, "token", "OMNIGLASS_TOKEN"))
 }
 
+// defaultServer is where the CLI connects when neither --server nor
+// OMNIGLASS_SERVER says otherwise.
+const defaultServer = "http://localhost:8080"
+
 // addClientFlags installs the shared connection flags on the root, so every
-// generated command inherits them. Defaults come from the environment.
+// generated command inherits them. Their defaults are fixed literals, never the
+// environment: cobra prints a flag's default in every --help, in completion and
+// in the generated CLI reference, so a default read from OMNIGLASS_TOKEN
+// printed a live credential to anyone who asked for help (#979). The
+// environment is read when the command runs (flagOrEnv), and help names the
+// variable instead of its value.
 func addClientFlags(root *cobra.Command) {
-	server := config.Get("OMNIGLASS_SERVER")
-	if server == "" {
-		server = "http://localhost:8080"
+	root.PersistentFlags().String("server", defaultServer,
+		"Omniglass server base URL; when omitted, $OMNIGLASS_SERVER, else the default")
+	root.PersistentFlags().String("token", "",
+		"bearer token; when omitted, $OMNIGLASS_TOKEN (read at run time, never printed)")
+}
+
+// flagOrEnv resolves a connection flag at run time: the flag when the operator
+// gave it (an explicit empty value included), else the environment variable
+// when it is set, else the flag's literal default.
+func flagOrEnv(cmd *cobra.Command, flag, env string) string {
+	v, _ := cmd.Flags().GetString(flag)
+	if cmd.Flags().Changed(flag) {
+		return v
 	}
-	root.PersistentFlags().String("server", server, "Omniglass server base URL (env OMNIGLASS_SERVER)")
-	root.PersistentFlags().String("token", config.Get("OMNIGLASS_TOKEN"), "bearer token (env OMNIGLASS_TOKEN)")
+	if e := config.Get(env); e != "" {
+		return e
+	}
+	return v
 }
 
 // pathSegment renders a positional argument as exactly one URL path segment, the

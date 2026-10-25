@@ -12,12 +12,12 @@ hand-written split, see [the CLI guide](/guides/cli/).
 
 ## Global flags
 
-Every command accepts these, each with an environment-variable default:
+Every command accepts these. An omitted flag falls back to its environment variable, read when the command runs, so this page and every `--help` name the variable and never print its value:
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--server` | string | `http://localhost:8080` | Omniglass server base URL (env OMNIGLASS_SERVER) |
-| `--token` | string | (none) | bearer token (env OMNIGLASS_TOKEN) |
+| `--server` | string | `http://localhost:8080` | Omniglass server base URL; when omitted, $OMNIGLASS_SERVER, else the default |
+| `--token` | string | (none) | bearer token; when omitted, $OMNIGLASS_TOKEN (read at run time, never printed) |
 
 ## `omniglass audit-log`
 
