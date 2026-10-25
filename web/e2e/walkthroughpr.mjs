@@ -12,9 +12,10 @@
 // web/e2e/walkthroughs/<id>.yaml, for a console flow). A demo id names one demo
 // of either kind and its evidence directory.
 //
-// - which demos a PR records: the tapes and scripts it adds or changes, every
-//   tape when it changes the terminal recorder, every walkthrough when it
-//   changes anything else under web/, and every demo when it names none;
+// - which demos a PR records (#1180): exactly the demos its body tags
+//   (`demo: <id> ...` in its Demo section), plus any tape or walkthrough
+//   script it adds or changes; nothing fans out from what else it touches,
+//   and the freshness run on main records every demo instead;
 // - where their evidence is committed (#939): the PR's own ref,
 //   refs/walkthroughs/pr-<n> (named when walkthroughs were the only demos),
 //   never the PR branch, so the PR head's checks are untouched and a
@@ -31,9 +32,11 @@
 //   browser's own player plays and seeks it (GitHub plays no inline video a
 //   workflow can attach);
 // - the one comment the workflow upserts, listing every demo, found again by
-//   its marker (or the walkthrough comment's earlier one).
+//   its marker (or the walkthrough comment's earlier one), and the clip it
+//   writes into the PR body's Demo section between its own markers (#1180);
+// - the freshness report the nightly run on main files when a demo fails.
 
-import { PREVIEW, checkId, checkPreview, checkStill, plural, videoName } from './walkthroughcore.mjs';
+import { ID, PREVIEW, checkId, checkPreview, checkStill, plural, videoName } from './walkthroughcore.mjs';
 import { checkTapeId } from './tapelib.mjs';
 
 /** @typedef {import('./walkthroughcore.mjs').ManifestStep} ManifestStep */
@@ -41,9 +44,18 @@ import { checkTapeId } from './tapelib.mjs';
 /** @typedef {import('./tapelib.mjs').TapeManifest} TapeManifest */
 /**
  * One recorder's results: the manifests of the demos that passed, the ids of
- * those that did not, and whether its stack came up at all.
+ * those that ran and failed, and the ids of those that never ran (their stack
+ * never came up, or their job ended before recording).
  * @template M
- * @typedef {{ recorded: M[], failed: string[], stackUp?: boolean }} Results
+ * @typedef {{ recorded: M[], failed: string[], unstarted: string[] }} Results
+ */
+/**
+ * What a PR body's demo tag says: the demos it names, or none, with why.
+ * @typedef {{ ids: string[] } | { none: string }} DemoTag
+ */
+/**
+ * One demo to record, the recorder that plays it, and why it was chosen.
+ * @typedef {{ id: string, kind: 'tape' | 'walkthrough', why: string }} Selected
  */
 
 export const DEMO_MARKER = '<!-- omniglass-demo -->';
@@ -52,6 +64,13 @@ export const DEMO_MARKER = '<!-- omniglass-demo -->';
 // one comment, updated in place.
 export const WALKTHROUGH_MARKER = '<!-- omniglass-walkthrough -->';
 export const DEMO_MARKERS = [DEMO_MARKER, WALKTHROUGH_MARKER];
+// The edges of the clip the publish job writes into the PR body's Demo
+// section (#1180): it replaces only what lies between them, so the author's
+// text around the block is never touched. demo.yml spells them out too.
+export const CLIP_START = '<!-- omniglass-demo-clip -->';
+export const CLIP_END = '<!-- /omniglass-demo-clip -->';
+// The marker the freshness run's issue opens with, which it is found again by.
+export const FRESHNESS_MARKER = '<!-- omniglass-demo-freshness -->';
 
 // The SHA the record job writes the comment against, before the evidence
 // commit exists; the publish job (which runs nothing from the PR) replaces
@@ -63,20 +82,11 @@ const SCRIPT_DIR = 'web/e2e/walkthroughs/';
 const TAPE_DIR = 'scripts/demo/';
 const SHA = /^[0-9a-f]{40}$/;
 const REPO = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
-// The terminal recorder's own files under web/: a change to one re-records
-// every tape, and is no reason to re-record a walkthrough.
-const TAPE_RECORDER = new Set(['web/e2e/tapes.sh', 'web/e2e/tapelib.mjs', 'web/e2e/tape.mjs']);
-const TAPE_RECORDER_DIR = 'web/e2e/tape/';
-// What both recorders share (the stack they play on, the dispatcher, and the
-// evidence pipeline that stages and lists them): a change to it re-records
-// every demo, so the run exercises both kinds' paths.
-const SHARED = new Set([
-  'web/e2e/lib/stack.sh',
-  'web/e2e/demo.sh',
-  'web/e2e/walkthroughcore.mjs',
-  'web/e2e/walkthroughpr.mjs',
-  'web/e2e/walkthrough-pr.mjs',
-]);
+// A tag line: `demo:` opening a line of its own (a list bullet allowed), and
+// what follows it.
+const TAG_LINE = /^[ \t]*(?:[-*+][ \t]+)?demo:(.*)$/;
+const FENCE = /^[ \t]*(?:```|~~~)/;
+const NONE = /^none[ \t]*\((.*)\)$/;
 
 // The id of the top-level script under `dir` with extension `ext` that path
 // `p` names, or null.
@@ -87,40 +97,117 @@ function scriptId(p, dir, ext) {
   return rest.includes('/') ? null : rest;
 }
 
-// The ids to record, tapes first, each in the tree's order. `changed` is the
-// PR's changed paths (repo-relative); `tapes` and `walkthroughs` every tape's
-// and every walkthrough script's id in the tree. A PR records the tapes and
-// scripts it adds or changes; every tape when it changes the terminal recorder
-// (anything under scripts/demo/ but a tape, or the recorder's own files);
-// every walkthrough when it changes anything else under web/ (the console,
-// the walkthrough recorder, a fixture), since that can move a flow a
-// walkthrough walks; every demo when it changes the stack both play on, or
-// names no demo and moves no recorder (as the walkthrough label always
-// recorded every walkthrough).
-/** @param {string[]} changed @param {string[]} tapes @param {string[]} walkthroughs @returns {string[]} */
-export function selectDemos(changed, tapes, walkthroughs) {
+// The lines of `body` a reader sees as text: an HTML comment blanked out (its
+// characters, not its newlines, so line numbers hold) and a fenced code
+// block's lines dropped, so a tag quoted by the PR template or shown as an
+// example is never read as the PR's own. Each entry is [line number, text].
+/** @param {string} body @returns {[number, string][]} */
+export function visibleLines(body) {
+  const masked = String(body ?? '').replace(/<!--[\s\S]*?-->/g, (c) => c.replace(/[^\n]/g, ' '));
+  /** @type {[number, string][]} */
+  const out = [];
+  let fenced = false;
+  masked.split('\n').forEach((raw, i) => {
+    const line = raw.replace(/\r$/, '');
+    if (FENCE.test(line)) fenced = !fenced;
+    else if (!fenced) out.push([i, line]);
+  });
+  return out;
+}
+
+// The demo tag `body` (a PR body) carries, or null when no line is one. A tag
+// is a line of its own in the Demo section: `demo: <id> [<id>...]` (spaces or
+// commas between), or `demo: none (<reason>)`. Every tag line counts, ids
+// once each in order; a word that is not a demo id, `none` with no reason in
+// parentheses, and `none` beside a demo are refused, naming the problem.
+// Whether each id names a demo in the tree is selectDemos's to check.
+/** @param {string} body @returns {DemoTag | null} */
+export function demoTag(body) {
+  /** @type {string[]} */
+  const ids = [];
+  /** @type {string[]} */
+  const nones = [];
+  for (const [, line] of visibleLines(body)) {
+    const m = TAG_LINE.exec(line);
+    if (!m) continue;
+    const value = m[1].trim();
+    if (value === 'none' || value.startsWith('none ') || value.startsWith('none(')) {
+      const n = NONE.exec(value);
+      const reason = n ? n[1].trim() : '';
+      if (!reason) throw new Error('demo tag: say why a PR has no demo, as demo: none (<reason>)');
+      nones.push(reason);
+      continue;
+    }
+    const words = value.split(/[\s,]+/).filter(Boolean);
+    if (!words.length) throw new Error('demo tag: demo: names no demo (write demo: <id>, or demo: none (<reason>))');
+    for (const w of words) {
+      if (!ID.test(w)) throw new Error(`demo tag: "${w}" is not a demo id (lowercase letters, digits and hyphens)`);
+      if (!ids.includes(w)) ids.push(w);
+    }
+  }
+  if (nones.length && ids.length) throw new Error('demo tag: a PR either names demos or says none, not both');
+  if (nones.length > 1) throw new Error('demo tag: a PR says none once');
+  if (nones.length) return { none: nones[0] };
+  return ids.length ? { ids } : null;
+}
+
+/** @param {string[]} tapes @param {string[]} walkthroughs */
+function checkTree(tapes, walkthroughs) {
   tapes.forEach(checkTapeId);
   walkthroughs.forEach(checkId);
   const both = tapes.find((id) => walkthroughs.includes(id));
   if (both !== undefined) throw new Error(`demos: demo id "${both}" names both a tape and a walkthrough; a demo id names one demo`);
   if (tapes.length + walkthroughs.length === 0) throw new Error(`demos: no demos under ${TAPE_DIR} or ${SCRIPT_DIR}`);
-  const touchedTapes = new Set();
-  const touchedWalks = new Set();
-  let allTapes = false;
-  let allWalks = false;
-  for (const p of changed) {
-    const tape = scriptId(p, TAPE_DIR, '.tape');
-    const walk = scriptId(p, SCRIPT_DIR, '.yaml');
-    if (tape !== null) touchedTapes.add(tape);
-    else if (walk !== null) touchedWalks.add(walk);
-    else if (SHARED.has(p)) allTapes = allWalks = true;
-    else if (p.startsWith(TAPE_DIR) || TAPE_RECORDER.has(p) || p.startsWith(TAPE_RECORDER_DIR)) allTapes = true;
-    else if (p.startsWith('web/')) allWalks = true;
+}
+
+// The demos a PR records (#1180), tapes first, each in the tree's order, with
+// the recorder that plays each and why. `changed` is the PR's changed paths
+// (repo-relative), `tag` its body's demo tag (demoTag), and `tapes` and
+// `walkthroughs` every tape's and walkthrough script's id in the tree. A PR
+// records exactly the demos it tags, plus any tape or walkthrough script it
+// adds or changes (a demo is a test, so a changed one is played). Nothing
+// else: a change to the console, a recorder, the stack or this pipeline
+// records no demo it did not name, since a demo it could break is the
+// freshness run's to catch (everyDemo). A tag naming a demo the tree does not
+// have is refused, naming it.
+/**
+ * @param {string[]} changed
+ * @param {DemoTag | null} tag
+ * @param {string[]} tapes
+ * @param {string[]} walkthroughs
+ * @returns {Selected[]}
+ */
+export function selectDemos(changed, tag, tapes, walkthroughs) {
+  checkTree(tapes, walkthroughs);
+  const tagged = new Set(tag && 'ids' in tag ? tag.ids : []);
+  for (const id of tagged) {
+    if (!tapes.includes(id) && !walkthroughs.includes(id)) {
+      throw new Error(`demo tag names no demo "${id}" (neither ${TAPE_DIR}${id}.tape nor ${SCRIPT_DIR}${id}.yaml)`);
+    }
   }
-  const pickedTapes = allTapes ? [...tapes] : tapes.filter((id) => touchedTapes.has(id));
-  const pickedWalks = allWalks ? [...walkthroughs] : walkthroughs.filter((id) => touchedWalks.has(id));
-  if (pickedTapes.length + pickedWalks.length === 0) return [...tapes, ...walkthroughs];
-  return [...pickedTapes, ...pickedWalks];
+  const touched = new Set();
+  for (const p of changed) {
+    const id = scriptId(p, TAPE_DIR, '.tape') ?? scriptId(p, SCRIPT_DIR, '.yaml');
+    if (id !== null) touched.add(id);
+  }
+  /** @type {(id: string) => string} */
+  const why = (id) => [...(tagged.has(id) ? ['tagged'] : []), ...(touched.has(id) ? ['changed by the PR'] : [])].join(', and ');
+  return [
+    ...tapes.filter((id) => tagged.has(id) || touched.has(id)).map((id) => ({ id, kind: /** @type {const} */ ('tape'), why: why(id) })),
+    ...walkthroughs.filter((id) => tagged.has(id) || touched.has(id)).map((id) => ({ id, kind: /** @type {const} */ ('walkthrough'), why: why(id) })),
+  ];
+}
+
+// Every demo in the tree, tapes first, as the freshness run on main records
+// them: the run that catches a demo a change broke without naming it.
+/** @param {string[]} tapes @param {string[]} walkthroughs @returns {Selected[]} */
+export function everyDemo(tapes, walkthroughs) {
+  checkTree(tapes, walkthroughs);
+  const why = 'the freshness run records every demo';
+  return [
+    ...tapes.map((id) => ({ id, kind: /** @type {const} */ ('tape'), why })),
+    ...walkthroughs.map((id) => ({ id, kind: /** @type {const} */ ('walkthrough'), why })),
+  ];
 }
 
 // The ref PR `pr`'s evidence is committed to. Each run commits a fresh tree on
@@ -264,67 +351,148 @@ function section(repo, sha, m) {
   return lines;
 }
 
+// The ids of a run's demos that failed and that never ran, each with its
+// kind, as Markdown list items; every id checked first.
+/**
+ * @param {Results<TapeManifest>} tapes
+ * @param {Results<Manifest>} walkthroughs
+ * @returns {{ failed: string[], unstarted: string[] }}
+ */
+function misses(tapes, walkthroughs) {
+  const item = (/** @type {string} */ id, /** @type {string} */ kind) => `- \`${id}\` (${kind})`;
+  return {
+    failed: [...tapes.failed.map((id) => item(checkTapeId(id), 'terminal demo')), ...walkthroughs.failed.map((id) => item(checkId(id), 'walkthrough'))],
+    unstarted: [...tapes.unstarted.map((id) => item(checkTapeId(id), 'terminal demo')), ...walkthroughs.unstarted.map((id) => item(checkId(id), 'walkthrough'))],
+  };
+}
+
+// The tally of a run: what it recorded by kind, then how many failed and how
+// many never ran.
+/** @param {Results<TapeManifest>} tapes @param {Results<Manifest>} walkthroughs @param {number} failed @param {number} unstarted */
+function tally(tapes, walkthroughs, failed, unstarted) {
+  const kinds = [
+    ...(tapes.recorded.length ? [plural(tapes.recorded.length, 'terminal demo')] : []),
+    ...(walkthroughs.recorded.length ? [plural(walkthroughs.recorded.length, 'walkthrough')] : []),
+  ];
+  return `${kinds.length ? kinds.join(' and ') : '0 demos'} recorded${failed ? `, ${failed} failed` : ''}${unstarted ? `, ${unstarted} did not run` : ''}`;
+}
+
+const FAILED_NOTE =
+  '**Failed** (a demo is a test: a terminal demo fails when a command it typed exited non-zero or a wait ran out, a walkthrough when a ' +
+  "step's result never appeared, and either when its recording is over budget; the run log names the cause, and the artifact keeps the partial output):";
+const UNSTARTED_NOTE =
+  '**Did not run** (its stack never came up, or its record job ended before recording: this is the stack or the runner, not the demo, ' +
+  "and that demo's record job log says why):";
+
 // The comment body: one comment listing every demo the run recorded, terminal
 // demos first, then walkthroughs. `sha` is the evidence commit (what every
 // file is reached by), `headSha` the PR head they were recorded from;
 // `tapes` and `walkthroughs` each recorder's results: the manifests
-// (demo.json, walkthrough.json) of the demos that passed and the ids of those
-// that did not. A recorder whose `stackUp` is false never came up, so none of
-// its demos ran: the comment says so instead of blaming each one.
+// (demo.json, walkthrough.json) of the demos that passed, the ids of those
+// that failed, and the ids of those that never ran (each demo records on a
+// stack of its own, #1180, so a stack that never came up costs that demo
+// alone, and is named as the stack's fault rather than the demo's).
 /**
  * @param {{ repo: string, pr: number, sha: string, headSha: string, runUrl: string,
  *   artifactUrl: string, tapes: Results<TapeManifest>, walkthroughs: Results<Manifest> }} args
  * @returns {string}
  */
 export function commentBody({ repo, pr, sha, headSha, runUrl, artifactUrl, tapes, walkthroughs }) {
-  // A recorder with nothing selected never ran, so it brought up no stack:
-  // only one that had demos to record can be said to have failed to.
-  const tapesUp = tapes.stackUp !== false || tapes.recorded.length + tapes.failed.length === 0;
-  const walksUp = walkthroughs.stackUp !== false || walkthroughs.recorded.length + walkthroughs.failed.length === 0;
-  const failed = [
-    ...(tapesUp ? tapes.failed.map((id) => `- \`${checkTapeId(id)}\` (terminal demo)`) : []),
-    ...(walksUp ? walkthroughs.failed.map((id) => `- \`${checkId(id)}\` (walkthrough)`) : []),
-  ];
-  const kinds = [
-    ...(tapes.recorded.length ? [plural(tapes.recorded.length, 'terminal demo')] : []),
-    ...(walkthroughs.recorded.length ? [plural(walkthroughs.recorded.length, 'walkthrough')] : []),
-  ];
-  const tally = `${kinds.length ? kinds.join(' and ') : '0 demos'} recorded${failed.length ? `, ${failed.length} failed` : ''}`;
+  const { failed, unstarted } = misses(tapes, walkthroughs);
   const lines = [
     DEMO_MARKER,
     '### Demos',
     '',
-    `${tally} from \`${String(headSha).slice(0, 7)}\` in [this run](${runUrl}). ` +
+    `${tally(tapes, walkthroughs, failed.length, unstarted.length)} from \`${String(headSha).slice(0, 7)}\` in [this run](${runUrl}). ` +
       `Each demo's files are committed to \`${evidenceRef(pr)}\` (off the PR branch, so none of it reaches main) ` +
-      `and reached by that commit's SHA; the [workflow artifact](${artifactUrl}) also keeps a failed demo's partial output.`,
+      `and reached by that commit's SHA; the [workflow artifacts](${artifactUrl}) also keep a failed demo's partial output.`,
     '',
   ];
-  if (!tapesUp) {
-    lines.push(
-      `**The terminal demos' stack never came up**, so no terminal demo ran (${tapes.failed.length} selected). ` +
-        'This is the stack, not a tape: the Record step of the run log says why.',
-      '',
-    );
-  }
-  if (!walksUp) {
-    lines.push(
-      `**The walkthrough stack never came up**, so no walkthrough ran (${walkthroughs.failed.length} selected). ` +
-        'This is the stack, not a walkthrough: the Record step of the run log says why.',
-      '',
-    );
-  }
-  if (failed.length) {
-    lines.push(
-      '**Failed** (a demo is a test: a terminal demo fails when a command it typed exited non-zero or a wait ran out, a walkthrough when a ' +
-        "step's result never appeared, and either when its recording is over budget; the run log names the cause, and the artifact keeps the partial output):",
-      '',
-      ...failed,
-      '',
-    );
-  }
+  if (failed.length) lines.push(FAILED_NOTE, '', ...failed, '');
+  if (unstarted.length) lines.push(UNSTARTED_NOTE, '', ...unstarted, '');
   for (const m of tapes.recorded) lines.push(...tapeSection(repo, sha, m));
   for (const m of walkthroughs.recorded) lines.push(...section(repo, sha, m));
-  if (!kinds.length && !failed.length && tapesUp && walksUp) lines.push('Nothing was recorded.', '');
-  lines.push('Re-run the workflow, or remove and re-add the `run:demo` label, to record the current head again; this comment is updated in place.');
+  if (!tapes.recorded.length && !walkthroughs.recorded.length && !failed.length && !unstarted.length) lines.push('Nothing was recorded.', '');
+  lines.push(
+    "The PR body's Demo section carries each recording's clip. Re-run the workflow, or remove and re-add the `run:demo` label, " +
+      'to record the current head again; this comment and the clip are updated in place.',
+  );
   return lines.join('\n') + '\n';
+}
+
+// The clip the publish job writes into the PR body's Demo section, between
+// CLIP_START and CLIP_END (#1180): per demo, terminal demos first, a line
+// with its title, id, kind and length linking its scrubbable video, then what
+// plays inline (a terminal demo's GIF; a walkthrough's animated preview, else
+// its poster), all pinned to the evidence commit's SHA; then the demos that
+// failed or never ran. The full record (every step's still, the run, the
+// artifacts) stays in the demo comment, which the publish job links below the
+// clip. Every title is escaped, so the clip carries no HTML and can never
+// close its own block.
+/**
+ * @param {{ repo: string, sha: string, headSha: string, tapes: Results<TapeManifest>, walkthroughs: Results<Manifest> }} args
+ * @returns {string}
+ */
+export function clipBody({ repo, sha, headSha, tapes, walkthroughs }) {
+  const lines = [`Recorded from \`${String(headSha).slice(0, 7)}\` by \`run:demo\`:`, ''];
+  for (const m of tapes.recorded) {
+    const [gif, mp4] = tapeEvidenceFiles(m);
+    const took = m.budget ? `, ${length(m.budget.seconds)}` : '';
+    lines.push(`**${esc(m.title)}** (\`${m.id}\`, terminal demo${took}): [Watch (scrubbable)](${cdnUrl(repo, sha, mp4)})`, '');
+    lines.push(`![${esc(m.title)}: terminal recording](${rawUrl(repo, sha, gif)})`, '');
+  }
+  for (const m of walkthroughs.recorded) {
+    evidenceFiles(m);
+    lines.push(
+      `**${esc(m.title)}** (\`${m.id}\`, walkthrough, ${plural(m.steps.length, 'step')}): [Watch (scrubbable)](${cdnUrl(repo, sha, `${m.id}/${videoName(m.id)}`)})`,
+      '',
+    );
+    lines.push(
+      m.preview !== undefined
+        ? `![${esc(m.title)}: animated preview](${rawUrl(repo, sha, `${m.id}/${PREVIEW}`)})`
+        : `![${esc(m.title)}: poster](${rawUrl(repo, sha, `${m.id}/poster.png`)})`,
+      '',
+    );
+  }
+  const { failed, unstarted } = misses(tapes, walkthroughs);
+  const inline = (/** @type {string[]} */ items) => items.map((i) => i.slice(2)).join(', ');
+  if (failed.length) lines.push(`**Failed:** ${inline(failed)}.`, '');
+  if (unstarted.length) lines.push(`**Did not run:** ${inline(unstarted)}.`, '');
+  return lines.join('\n').trimEnd() + '\n';
+}
+
+// The freshness run's verdict on main (#1180): ok when every demo recorded
+// green; a one-line summary (the closing note on a green run); and the body
+// of the issue it opens or updates when one did not, naming each demo that
+// failed or never ran with its kind, and how to reproduce it.
+/**
+ * @param {{ runUrl: string, headSha: string, tapes: Results<TapeManifest>, walkthroughs: Results<Manifest> }} args
+ * @returns {{ ok: boolean, summary: string, body: string }}
+ */
+export function freshnessReport({ runUrl, headSha, tapes, walkthroughs }) {
+  const { failed, unstarted } = misses(tapes, walkthroughs);
+  const total = tapes.recorded.length + walkthroughs.recorded.length + failed.length + unstarted.length;
+  const head = `\`${String(headSha).slice(0, 7)}\``;
+  const ok = failed.length + unstarted.length === 0;
+  const summary = ok
+    ? `All ${plural(total, 'demo')} recorded green on \`main\` at ${head} in [this run](${runUrl}).`
+    : `${failed.length + unstarted.length} of ${plural(total, 'demo')} did not record green on \`main\` at ${head} in [this run](${runUrl}).`;
+  const first = [...tapes.failed, ...walkthroughs.failed, ...tapes.unstarted, ...walkthroughs.unstarted][0];
+  const lines = [
+    FRESHNESS_MARKER,
+    'The freshness run re-records every demo on `main` each night, since a PR records only the demos it tags (#1180), so a change ' +
+      'can break a demo it never named.',
+    '',
+    summary,
+    '',
+  ];
+  if (failed.length) lines.push(FAILED_NOTE, '', ...failed, '');
+  if (unstarted.length) lines.push(UNSTARTED_NOTE, '', ...unstarted, '');
+  if (!ok) {
+    lines.push(
+      `Each demo's partial output and its stack's logs are in the run's \`demo-leg-<id>\` artifact. Reproduce one with \`make demo ID=${first}\`, ` +
+        'fix the feature or the demo, and the next green run closes this issue.',
+    );
+  }
+  return { ok, summary, body: lines.join('\n').trimEnd() + '\n' };
 }

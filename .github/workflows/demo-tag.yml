@@ -1,0 +1,38 @@
+name: demo-tag
+
+# The demo tag lint (#1180). A PR names the demos it is about with a tag in its
+# body's Demo section, a line of its own: `demo: <id> [<id>...]`, each a tape
+# (scripts/demo/<id>.tape) or a walkthrough (web/e2e/walkthroughs/<id>.yaml),
+# or `demo: none (<reason>)` for a PR with nothing to demo. The run:demo label
+# (demo.yml) records exactly the tagged demos, plus any the PR adds or
+# changes, so a missing tag, a malformed one, or one naming a demo the PR's
+# tree does not have fails here, as the body is written, rather than when the
+# label is applied. The parse and the check are walkthroughpr.mjs demoTag and
+# selectDemos, unit-tested. The body reaches the script only through env.
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Check the PR body's demo tag
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: node web/e2e/walkthrough-pr.mjs tag

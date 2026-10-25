@@ -20,7 +20,8 @@
 # Per tape: tape.mjs, in the Playwright container (node, no install), holds the
 # tape to the house rules and wraps it in the house settings (tapelib.mjs);
 # VHS, in its pinned image with jq, the prelude and this tree's omniglass
-# binary added (web/e2e/tape/Dockerfile), plays it on the stack network as
+# binary added (web/e2e/tape/Dockerfile, its base images pulled while the
+# stack builds), plays it on the stack network as
 # this user, with the stack's server and an owner token in the CLI's env and
 # the stack's container logs readable under /stack/logs/; ffprobe reads the
 # MP4's length; and tape.mjs judges the recording. A demo is a test: a command
@@ -91,11 +92,41 @@ tape_node() {
     "$STACK_PWIMG" node e2e/tape.mjs "$@"
 }
 
+# The recorder's base images, pulled by digest while the stack builds (#1180).
+# The VHS image is about 0.9 GB to pull (3 GB on disk), and a fresh CI runner
+# has none of it; pulled here, it lands while the omniglass image builds
+# rather than after, and the recorder's build below finds its layers in the
+# daemon's image store (a host that has pulled it once pulls nothing). The
+# pins are read from the Dockerfile's FROM lines, so each lives in one place.
+# Best effort: a pull that fails leaves the build to pull it as before.
+PREFETCH_PID=""
+PREFETCH_SECONDS=$(mktemp)
+prefetch_images() {
+  local refs
+  mapfile -t refs < <(sed -n 's/^FROM \([a-z0-9./-]*:[^@ ]*@sha256:[0-9a-f]\{64\}\)\( AS [a-z]*\)\{0,1\}$/\1/p' web/e2e/tape/Dockerfile)
+  [ "${#refs[@]}" -gt 0 ] || return 0
+  (
+    s=$SECONDS
+    for r in "${refs[@]}"; do docker pull -q "$r" >/dev/null 2>&1 || exit 0; done
+    echo "$((SECONDS - s))" >"$PREFETCH_SECONDS"
+  ) &
+  PREFETCH_PID=$!
+}
+stop_prefetch() {
+  [ -z "$PREFETCH_PID" ] || kill "$PREFETCH_PID" 2>/dev/null || true
+  [ ! -e "$PREFETCH_SECONDS" ] || rm -- "$PREFETCH_SECONDS"
+}
+
 # The recorder image for this run, as $DEMO_IMG: tagged with the run id and
 # labeled like the stack, so teardown (or the orphan reaper) untags it.
 DEMO_IMG=""
 demo_image() {
-  local labels
+  local labels started=$SECONDS
+  if [ -n "$PREFETCH_PID" ]; then
+    wait "$PREFETCH_PID" || true
+    PREFETCH_PID=""
+    [ ! -s "$PREFETCH_SECONDS" ] || echo "stack $STACK_ID: the recorder's base images pulled in $(<"$PREFETCH_SECONDS")s, alongside the stack" >&2
+  fi
   mapfile -t labels < <(stack__labels)
   DEMO_IMG="omniglass-demo:$STACK_ID"
   echo "stack $STACK_ID: building the terminal recorder" >&2
@@ -103,6 +134,7 @@ demo_image() {
   STACK_FG_PID=$!
   wait "$STACK_FG_PID"
   STACK_FG_PID=""
+  echo "stack $STACK_ID: the terminal recorder was ready in $((SECONDS - started))s" >&2
 }
 
 # The stack's container logs, followed into out/stack-logs/ for a tape to read
@@ -168,9 +200,10 @@ if [ "$mode" = record ]; then
 fi
 
 stack_init ogdemo
-# The log followers stop before the stack's own teardown, which keeps the
-# exit status it is handed.
-trap 'rc=$?; stop_logs; (exit "$rc"); stack__exit' EXIT
+# The log followers and the prefetch stop before the stack's own teardown,
+# which keeps the exit status it is handed.
+trap 'rc=$?; stop_logs; stop_prefetch; (exit "$rc"); stack__exit' EXIT
+prefetch_images
 stack_walkthrough_up
 demo_image
 follow_logs
