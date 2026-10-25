@@ -150,8 +150,9 @@ func TestDriverAttachAPI(t *testing.T) {
 		t.Fatalf("neither transport nor driver: status %d body %s, want 422", status, body)
 	}
 	// A stub driver (no spec yet) cannot be attached.
+	c.do(ownerTok, http.MethodPost, "/drivers", map[string]any{"name": "a-stub", "label": "A stub"}, http.StatusCreated)
 	status, body = c.send(ownerTok, http.MethodPost, "/endpoints", map[string]any{
-		"driver": "kestrel-api", "component": "amp-9",
+		"driver": "a-stub", "component": "amp-9",
 	})
 	if status != http.StatusUnprocessableEntity || !strings.Contains(string(body), "stub") {
 		t.Fatalf("stub driver: status %d body %s, want 422 naming the stub", status, body)

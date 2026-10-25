@@ -35,6 +35,12 @@ type DriverPollTask struct {
 	// request rides, re-sent up to Retries times within the timeout.
 	Datagram DatagramExchanger
 	Retries  int
+	// Auth is the endpoint's driver's session block, whose scheme an http
+	// request's credential rides and whose terminal rules classify its
+	// answer (#902); TLS is an https endpoint's trust (its mode and the pin
+	// its probe shares), nil over plain http.
+	Auth *driver.SessionSpec
+	TLS  *TLSTrust
 }
 
 // HeldExchanger is the slice of a held session a poll borrows: one request,
@@ -66,7 +72,14 @@ func (r *Runner) CollectDriverPoll(ctx context.Context, t DriverPollTask) ([]Sam
 	}
 
 	var payload driver.Payload
+	var proven []Sample
 	switch {
+	case driver.IsHTTP(t.Transport):
+		p, auth, faults := r.fetchHTTPPoll(ctx, t)
+		if faults != nil {
+			return auth, faults
+		}
+		payload, proven = p, auth
 	case t.Transport == "snmp":
 		community, ok := t.snmpCommunity()
 		if !ok {
@@ -114,7 +127,8 @@ func (r *Runner) CollectDriverPoll(ctx context.Context, t DriverPollTask) ([]Sam
 	}
 
 	emitted, faults := t.Fn.Interpret(payload, time.Now().UTC())
-	out := make([]Sample, 0, len(emitted))
+	out := make([]Sample, 0, len(emitted)+len(proven))
+	out = append(out, proven...)
 	for _, e := range emitted {
 		out = append(out, Sample{
 			Name:   e.Name,
@@ -125,4 +139,46 @@ func (r *Runner) CollectDriverPoll(ctx context.Context, t DriverPollTask) ([]Sam
 		})
 	}
 	return out, faults
+}
+
+// fetchHTTPPoll sends an http poll's request with the endpoint's credential
+// and judges the answer (#902): the payload a 2xx carries in its request's
+// format, the endpoint-authenticated rung a credentialed answer proves
+// (decision 7 of #1113), and the fault an answer or a failed request is,
+// classified so a refused credential gates (a TerminalError), a request's own
+// fault waits its interval (a RequestFault) and a 5xx backs off.
+func (r *Runner) fetchHTTPPoll(ctx context.Context, t DriverPollTask) (driver.Payload, []Sample, []error) {
+	name := t.Fn.Driver + "/" + t.Fn.Function
+	if r.HTTPFetch == nil {
+		return driver.Payload{}, nil, []error{fmt.Errorf("collection: driver poll %s: no http fetcher wired", name)}
+	}
+	cred, err := driver.ResolveHTTPCredential(t.Auth, t.Secrets)
+	if err != nil {
+		return driver.Payload{}, nil, []error{fmt.Errorf("collection: driver poll %s: %w", name, err)}
+	}
+	x := HTTPExchange{Target: t.Target, Request: *t.Fn.Request, Credential: cred, Session: t.Auth, Timeout: t.Timeout}
+	if t.Transport == "https" {
+		if t.TLS == nil {
+			return driver.Payload{}, nil, []error{fmt.Errorf("collection: driver poll %s: no tls trust for the https endpoint", name)}
+		}
+		x.TLS = t.TLS
+	}
+	ans, err := r.HTTPFetch.Exchange(ctx, x)
+	if err != nil {
+		return driver.Payload{}, nil, []error{fmt.Errorf("collection: driver poll %s: %w", name, err)}
+	}
+	judged := JudgeHTTPAnswer(ans, x)
+	var proven []Sample
+	if verdict, ok := Authenticated(ans, judged); ok {
+		reason := "the component accepted the credential"
+		if verdict == "no" {
+			reason = judged.Error()
+		}
+		proven = append(proven, Sample{Name: SignalEndpointAuthenticated, Text: verdict, IsText: true, TS: time.Now().UTC(),
+			Labels: map[string]string{ReasonLabel: reason}})
+	}
+	if judged != nil {
+		return driver.Payload{}, proven, []error{fmt.Errorf("collection: driver poll %s: %w", name, judged)}
+	}
+	return driver.HTTPPayload(ans.Body, t.Fn.Request), proven, nil
 }

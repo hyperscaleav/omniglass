@@ -406,9 +406,9 @@ func (p *PG) RecordHeartbeat(ctx context.Context, name string) error {
 }
 
 // pinKeyOf names the property a transport's key pin rides (declared and
-// observed): the ssh host key (#1032) and the tls certificate's public key
-// (#1035).
-var pinKeyOf = map[string]string{"ssh": probekeys.SSHHostKey, "tls": probekeys.TLSCertificate}
+// observed): the ssh host key (#1032), and the certificate's public key of a
+// transport over the tls handshake (tls #1035, https #902).
+var pinKeyOf = map[string]string{"ssh": probekeys.SSHHostKey, "tls": probekeys.TLSCertificate, "https": probekeys.TLSCertificate}
 
 // NodeWorklist resolves a node's enabled tasks (joined to their endpoint) plus
 // the config generation. Keyed by the node name the server extracts from the

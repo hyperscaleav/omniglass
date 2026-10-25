@@ -24,8 +24,9 @@ summary: "The stateful arc proves the held session on the line protocol over `tc
   (#1038), tls (#1035), sftp on ssh (#1045), and http fetching a body as a file (#1044).
   **Amended ([ADR-0159](#adr-0160-tls-is-its-own-transport-over-a-shared-primitive-and-its-pin-is-the-public-key)):**
   tls is its own transport over a shared primitive, since a secure variant that needs its own
-  endpoint name and rung is its own registry entry; it stays a capability on http, websocket and
-  mqtt. A
+  endpoint name and rung is its own registry entry; it stays a capability on websocket and mqtt.
+  **Amended (#902):** https is its own entry too, by the same rule
+  ([ADR-0902](#adr-0902-http-polls-and-commands-send-real-requests-read-through-one-extraction-authenticated-by-a-declared-scheme)). A
   protocol that moves whole files rather than values lands as a **file sample** (#1043, the
   primitive #1044 through #1047 depend on). A protocol with its own framing, addressing, or session handshake is a
   **new transport** plus a generic driver on it, the `snmp` and `snmp-generic` pattern: ssh (#1032),

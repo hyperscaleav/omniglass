@@ -123,6 +123,31 @@ property_types:
       The selected video input on a display or switcher. A settable state: the
       set-input command tells the device which input to select (opening an intended
       value), and the device reports the observed input, so the two reconcile.
+  # Settable and observed states the http drivers read (#902).
+  - name: power-state
+    data_type: string
+    validation: { enum: ["on", "off", standby] }
+    label: Power State
+    description: >-
+      Whether a component is on, off, or in standby. A settable state: the set-power
+      command tells the component which to enter, and its report settles it.
+  - name: mute
+    data_type: string
+    validation: { enum: ["true", "false"] }
+    label: Mute
+    description: >-
+      Whether a component's audio is muted, as the component reports it ("true" or
+      "false"). A settable state: the set-mute command tells the component which.
+  - name: call-state
+    data_type: string
+    validation: { enum: [active, idle] }
+    label: Call State
+    description: Whether a conferencing component is in a call (active) or not (idle).
+  - name: occupancy-state
+    data_type: string
+    validation: { enum: [occupied, vacant] }
+    label: Occupancy State
+    description: Whether a space reads occupied or vacant by its occupancy source.
   # Declared attribute properties: the starter set a field draws from.
   - name: serial-number
     data_type: string

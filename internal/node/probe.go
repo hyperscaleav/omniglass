@@ -6,10 +6,12 @@ import (
 	"fmt"
 	"log/slog"
 	"net"
+	"strings"
 	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/collection"
 	"github.com/hyperscaleav/omniglass/internal/driver"
+	"github.com/hyperscaleav/omniglass/internal/transport"
 	ogv1 "github.com/hyperscaleav/omniglass/proto/og/v1"
 	"github.com/nats-io/nats.go"
 	"google.golang.org/protobuf/proto"
@@ -73,7 +75,7 @@ func runTasks(ctx context.Context, nc *nats.Conn, node string, wl collection.Wor
 			}
 			var dps []collection.Sample
 			var faults []error
-			if gt, gated := sessions.blocked(task.EndpointID, statelessRung(task.Transport)); gated && sessions.lookup(task.EndpointID) == nil {
+			if gt, gated := sessions.blocked(task.EndpointID, statelessRung(task)); gated && sessions.lookup(task.EndpointID) == nil {
 				// A stateless poll on a gated endpoint is not retried under
 				// the fingerprint it was refused under (#1056 ruling).
 				faults = []error{fmt.Errorf("node: task %s: the endpoint is gated: %w", task.ID, gt.refusal())}
@@ -93,13 +95,15 @@ func runTasks(ctx context.Context, nc *nats.Conn, node string, wl collection.Wor
 				current += f.Error() + "\n"
 			}
 			if current != faultseen[task.ID] {
-				faultseen[task.ID] = current
 				for _, f := range faults {
 					slog.Warn("driver poll fault", "facility", "collection", "task", task.ID, "error", f.Error())
 					if pubErr := publishCollectionFailed(nc, node, task.ID, f); pubErr != nil {
 						return pubErr
 					}
 				}
+				// Remembered only once published, so a fault set whose publish
+				// failed is told again next tick rather than lost.
+				faultseen[task.ID] = current
 			}
 			if len(dps) == 0 {
 				continue
@@ -151,20 +155,42 @@ func runTasks(ctx context.Context, nc *nats.Conn, node string, wl collection.Wor
 
 // bookPollRun books a poll's next run from what its run landed. A run that
 // landed nothing and faulted (the fetch failed) retries on a backoff rather
-// than waiting its whole interval, unless the fault is terminal (#1049): a
-// refusal retrying cannot fix waits the interval, never the backoff.
+// than waiting its whole interval, unless the fault is terminal (#1049) or
+// the request's own (an http 404, #902): a fault retrying cannot fix waits
+// the interval, never the backoff. A run whose only landing is the session
+// rung it proved (an http answer's endpoint-authenticated) landed no data,
+// and a retryable answer's backoff waits at least its Retry-After.
 func bookPollRun(sched *pollSchedule, taskID string, interval time.Duration, now time.Time, dps []collection.Sample, faults []error) {
-	if len(dps) == 0 && len(faults) > 0 {
+	if !landedData(dps) && len(faults) > 0 {
 		for _, f := range faults {
-			if _, terminal := collection.AsTerminal(f); terminal {
+			_, terminal := collection.AsTerminal(f)
+			_, own := collection.AsRequestFault(f)
+			if terminal || own {
 				sched.refusedRun(taskID)
 				return
 			}
 		}
-		sched.failed(taskID, interval, now)
+		atLeast := time.Duration(0)
+		for _, f := range faults {
+			if wait, ok := collection.RetryAfterOf(f); ok && wait > atLeast {
+				atLeast = wait
+			}
+		}
+		sched.failedAtLeast(taskID, interval, now, atLeast)
 		return
 	}
 	sched.succeeded(taskID)
+}
+
+// landedData reports a run that landed a sample beyond the session rung its
+// answer proved.
+func landedData(dps []collection.Sample) bool {
+	for _, d := range dps {
+		if d.Name != collection.SignalEndpointAuthenticated {
+			return true
+		}
+	}
+	return false
 }
 
 // pollInterval reads a driver poll's declared cadence off its baked spec;
@@ -225,6 +251,23 @@ func collectDriverTask(ctx context.Context, runner *collection.Runner, task coll
 		Timeout:     timeout,
 		Session:     sessions.lookup(task.EndpointID),
 		SessionOnly: task.Session != nil,
+		Auth:        task.Session,
+	}
+	if driver.IsHTTP(task.Transport) {
+		// An http poll holds no session (#902): it is its own request, its
+		// credential from the session block, its trust (https) the one the
+		// endpoint's probe shares, the pin included.
+		pt.Session, pt.SessionOnly = nil, false
+		if task.Transport == "https" {
+			trust, err := tlsTrustOf(p)
+			if err != nil {
+				return nil, []error{fmt.Errorf("node: task %s: %w", task.ID, err)}
+			}
+			if trust.Mode == driver.TLSModePin {
+				trust.Pin = sessions.certPinOf(task)
+			}
+			pt.TLS = &trust
+		}
 	}
 	if task.Transport == "udp" {
 		pt.Datagram = sessions.datagramOf(task.EndpointID)
@@ -288,7 +331,7 @@ func collectProbe(ctx context.Context, runner *collection.Runner, task collectio
 			return collectSNMPRung(ctx, runner, task, l.Request, sessions)
 		case l.Transport == driver.RungRequest && l.Request != nil:
 			return collectRequestRung(ctx, runner, task, l.Request)
-		case l.Transport == driver.RungConnect && (task.Transport == "ssh" || task.Transport == "tls"):
+		case l.Transport == driver.RungConnect && (task.Transport == "ssh" || transport.UsesTLS(task.Transport)):
 			t, err := parseTCPTask(task)
 			if err != nil {
 				return nil, err
@@ -301,8 +344,44 @@ func collectProbe(ctx context.Context, runner *collection.Runner, task collectio
 		return collectSSHProbe(ctx, runner, task, sessions)
 	case "tls":
 		return collectTLSProbe(ctx, runner, task, sessions)
+	case "https":
+		return collectHTTPSProbe(ctx, runner, task, sessions)
 	}
 	return collectTask(ctx, runner, task)
+}
+
+// collectHTTPSProbe runs the https probe on the gate (#902), as the tls
+// probe does: with the transport rung gated (a changed key, a certificate
+// that failed verification) only the TCP connect runs, so no handshake
+// reaches a key nobody trusted; otherwise the handshake runs under the
+// endpoint's mode and the pin its polls share, then one credential-free
+// GET /, and a certificate refusal it meets gates the endpoint.
+func collectHTTPSProbe(ctx context.Context, runner *collection.Runner, task collection.TaskSpec, sessions *sessionManager) ([]collection.Sample, error) {
+	t, err := parseTCPTask(task)
+	if err != nil {
+		return nil, err
+	}
+	if gt, ok := sessions.blocked(task.EndpointID, rungResponsive); ok && gt.rung == rungResponsive {
+		return runner.CollectTCP(ctx, t)
+	}
+	var p endpointParams
+	_ = json.Unmarshal(task.EndpointParams, &p) // parseTCPTask has read it already
+	trust, err := tlsTrustOf(p)
+	if err != nil {
+		return nil, fmt.Errorf("node: task %s: %w", task.ID, err)
+	}
+	if trust.Mode == driver.TLSModePin {
+		trust.Pin = sessions.certPinOf(task)
+	}
+	dps, res, err := runner.CollectHTTPResult(ctx, collection.HTTPTask{Target: t.Target, Timeout: t.Timeout, TLS: &trust})
+	if err != nil {
+		return nil, err
+	}
+	if res.Refusal != nil {
+		slog.Warn("https certificate refused", "facility", "collection", "task", task.ID, "endpoint", task.EndpointName, "reason", res.Refusal.Error())
+		sessions.refuse(task.EndpointID, task.Fingerprint, res.Refusal)
+	}
+	return dps, nil
 }
 
 // collectSSHProbe runs the ssh probe on the gate (#1060). With the transport
@@ -568,7 +647,7 @@ func buildBatch(taskID, node string, dps []collection.Sample) *ogv1.TelemetryBat
 				Name:      d.Name,
 				ValueJson: string(vj),
 				Ts:        ts,
-				Labels:    d.Labels,
+				Labels:    validLabels(d.Labels),
 			})
 			continue
 		}
@@ -576,10 +655,24 @@ func buildBatch(taskID, node string, dps []collection.Sample) *ogv1.TelemetryBat
 			Name:   d.Name,
 			Value:  d.Value,
 			Ts:     ts,
-			Labels: d.Labels,
+			Labels: validLabels(d.Labels),
 		})
 	}
 	return ev
+}
+
+// validLabels is a sample's labels as valid UTF-8: a reason may carry a
+// component's own text (an http error page), and a protobuf string refuses
+// invalid UTF-8, which would fail the whole batch.
+func validLabels(labels map[string]string) map[string]string {
+	if len(labels) == 0 {
+		return labels
+	}
+	out := make(map[string]string, len(labels))
+	for k, v := range labels {
+		out[strings.ToValidUTF8(k, "\uFFFD")] = strings.ToValidUTF8(v, "\uFFFD")
+	}
+	return out
 }
 
 // publishCollectionFailed lands the collection-failed occurrence for a task
@@ -593,8 +686,10 @@ func publishCollectionFailed(nc *nats.Conn, node, taskID string, cause error) er
 		NodeId: node,
 		Ts:     timestamppb.New(time.Now().UTC()),
 		Events: []*ogv1.EventSample{{
-			Name:    collection.EventCollectionFailed,
-			Message: cause.Error(),
+			Name: collection.EventCollectionFailed,
+			// A cause may carry a component's own text; a protobuf string
+			// refuses invalid UTF-8.
+			Message: strings.ToValidUTF8(cause.Error(), "\uFFFD"),
 			Payload: payload,
 		}},
 	}

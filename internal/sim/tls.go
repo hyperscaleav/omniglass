@@ -1,7 +1,10 @@
 package sim
 
 import (
+	"crypto"
+	"crypto/ecdsa"
 	"crypto/ed25519"
+	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha256"
@@ -16,17 +19,11 @@ import (
 	"time"
 )
 
-// generateSelfSignedCert returns a fresh in-memory RSA certificate so
-// devices declaring `tls: true` can complete a real TLS handshake.
-// The cert exists to make the wire protocol right, not to protect
-// anything, the whole lab runs inside one host's container network
-// namespace with no external traffic. Every client in the lab (agent
-// sidecar, e2e probes, serve_test) uses InsecureSkipVerify; there is
-// no CA, no persistence, no rotation.
-//
-// If a scenario ever needs a strict-verifying client, the right move
-// is probably a dedicated test-only CA pool, not padding this SAN
-// list.
+// generateSelfSignedCert returns a fresh in-memory RSA certificate, for a
+// caller of StartHTTP that brings its own TLS (a test). A profile's https
+// face serves the device's own derived identity instead (#902), so its key
+// is the same on every run; this one is minted per call, with no
+// persistence and no rotation.
 func generateSelfSignedCert() (*tls.Certificate, error) {
 	priv, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
@@ -67,22 +64,6 @@ func generateSelfSignedCert() (*tls.Certificate, error) {
 	}, nil
 }
 
-// certCache produces the shared self-signed cert exactly once per
-// Engine. A per-device cert is overkill for a lab and multiplies
-// handshake cost for nothing.
-type certCache struct {
-	once sync.Once
-	cert *tls.Certificate
-	err  error
-}
-
-func (c *certCache) get() (*tls.Certificate, error) {
-	c.once.Do(func() {
-		c.cert, c.err = generateSelfSignedCert()
-	})
-	return c.cert, c.err
-}
-
 // The tls line face's identity (#1035): the key and certificate a tcp face
 // declared with tls: true serves, one per device. The key is derived from
 // the device's id, so it is the same on every run of the simulator and an
@@ -97,7 +78,7 @@ func (c *certCache) get() (*tls.Certificate, error) {
 // from the next handshake, with no listener restart.
 type tlsIdentity struct {
 	mu       sync.Mutex
-	key      ed25519.PrivateKey
+	key      crypto.Signer
 	cert     *tls.Certificate
 	validity time.Duration
 	// face is the tls line face's session registry, so the harness can
@@ -118,9 +99,25 @@ func deviceTLSKey(deviceID string) ed25519.PrivateKey {
 	return ed25519.NewKeyFromSeed(seed[:])
 }
 
+// deviceHTTPSKey derives a device's https key from its id (#902): an ECDSA
+// P-256 key, which every browser accepts (an Ed25519 certificate is refused by
+// the browsers an operator opens a simulated component's web page in), the
+// same on every run so a pinned https endpoint survives a simulator restart.
+func deviceHTTPSKey(deviceID string) crypto.Signer {
+	seed := sha256.Sum256([]byte("omniglass-sim-https\x00" + deviceID))
+	for {
+		if k, err := ecdsa.ParseRawPrivateKey(elliptic.P256(), seed[:]); err == nil {
+			return k
+		}
+		// A seed at or past the curve's order (one in 2^32) is no scalar:
+		// derive again from it, still deterministic.
+		seed = sha256.Sum256(seed[:])
+	}
+}
+
 // mintTLSCertificate self-signs key for the device, valid for validity from
 // now.
-func mintTLSCertificate(d *Device, key ed25519.PrivateKey, validity time.Duration) (*tls.Certificate, error) {
+func mintTLSCertificate(d *Device, key crypto.Signer, validity time.Duration) (*tls.Certificate, error) {
 	serial, err := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 128))
 	if err != nil {
 		return nil, fmt.Errorf("generating serial: %w", err)
@@ -152,14 +149,25 @@ func mintTLSCertificate(d *Device, key ed25519.PrivateKey, validity time.Duratio
 // identity, minted on first use with validity (zero is a year), read at
 // every handshake so a replacement takes effect at once.
 func (d *Device) tlsServerConfig(validity time.Duration) (*tls.Config, error) {
+	return d.tlsID.serverConfig(d, validity, func() crypto.Signer { return deviceTLSKey(d.DeviceID) })
+}
+
+// httpsServerConfig is the config an https face serves (#902): the device's
+// https identity, an ECDSA key derived from its id, the same on every run.
+func (d *Device) httpsServerConfig(validity time.Duration) (*tls.Config, error) {
+	return d.httpsID.serverConfig(d, validity, func() crypto.Signer { return deviceHTTPSKey(d.DeviceID) })
+}
+
+// serverConfig mints the identity's certificate on first use (its key from
+// derive) and serves it, read at every handshake.
+func (id *tlsIdentity) serverConfig(d *Device, validity time.Duration, derive func() crypto.Signer) (*tls.Config, error) {
 	if validity <= 0 {
 		validity = defaultTLSValidity
 	}
-	id := &d.tlsID
 	id.mu.Lock()
 	defer id.mu.Unlock()
 	if id.key == nil {
-		id.key = deviceTLSKey(d.DeviceID)
+		id.key = derive()
 	}
 	if id.cert == nil {
 		c, err := mintTLSCertificate(d, id.key, validity)
@@ -230,7 +238,34 @@ func (d *Device) RotateTLSKey() error {
 	if err != nil {
 		return err
 	}
-	id := &d.tlsID
+	return d.tlsID.rotate(d, key)
+}
+
+// RotateHTTPSKey replaces the device's https key with a fresh one, as
+// RotateTLSKey does the line face's (#902): a replaced component. A test
+// harness hook.
+func (d *Device) RotateHTTPSKey() error {
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		return err
+	}
+	return d.httpsID.rotate(d, key)
+}
+
+// HTTPSCertificate is the certificate the device's https faces serve now,
+// nil before one first starts.
+func (d *Device) HTTPSCertificate() *x509.Certificate {
+	d.httpsID.mu.Lock()
+	defer d.httpsID.mu.Unlock()
+	if d.httpsID.cert == nil {
+		return nil
+	}
+	return d.httpsID.cert.Leaf
+}
+
+// rotate replaces the identity's key and re-mints its certificate over the
+// same window.
+func (id *tlsIdentity) rotate(d *Device, key crypto.Signer) error {
 	id.mu.Lock()
 	defer id.mu.Unlock()
 	validity := id.validity

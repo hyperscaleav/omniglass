@@ -56,7 +56,8 @@ detail, each
 showing the endpoint's **label** over its transport name, its reachability, its node placement, and
 its probed target. An endpoint is **named by its transport**: you pick the wire it speaks over and
 the endpoint takes that transport as its name, unique within its component, so one component can
-have one `tcp` and one `http`, and a second endpoint of a transport it already has is refused.
+have one `tcp` and one `http` (and an `https` beside them), and a second endpoint of a transport it
+already has is refused.
 Because you never type that name, the **label** is the one string on an endpoint that is yours:
 give it one ("Control processor") to say what the connection is FOR, since `ssh` only says how it is
 reached and reads the same on every component in the fleet. It is optional, and an endpoint
@@ -66,9 +67,9 @@ without one reads its transport name exactly.
   two faces:
   - **Probe**: give it a **label** (optional, and the only name-like string you type here),
     choose a **transport** (the picker reads the code registry the binary ships,
-    `GET /transports`: `icmp` and `tcp` probe layers 3 and 4, `ssh` and `http` climb to
+    `GET /transports`: `icmp` and `tcp` probe layers 3 and 4, `ssh`, `http` and `https` climb to
     layer 7 (the probe draws a real response, so reached-but-not-responsive and
-    responded-but-not-authenticated are visible states), `udp` proves its rung with its
+    responded-but-not-authenticated are visible states; an http probe never sends a credential), `udp` proves its rung with its
     driver's request, so attach a driver rather than probe it bare, and `snmp` proves its rung
     with a standard get carrying its driver's community, so it too needs a driver, never a standalone
     probe; there is no free-text name), a node placement, and a target (`host:port` for the
@@ -143,7 +144,7 @@ real reading from the node, and the panel is also the authoring surface: its hea
 endpoint** (with `endpoint:create`) and each row that maps to an endpoint a **Manage** affordance
 opening that endpoint's detail.
 
-A **tls** endpoint's breakdown adds three rows, each teaching itself on hover: the **handshake** (the
+A **tls** or **https** endpoint's breakdown adds three rows, each teaching itself on hover: the **handshake** (the
 transport rung, the TLS handshake answered, and how long it took), the **certificate** (its days
 left, amber inside a month and red once expired, and its expiry date; while a certificate is
 refused it says so rather than show the last accepted one's) and **trust**, how the endpoint
@@ -154,6 +155,15 @@ mode is one of the endpoint's driver inputs (`tls-mode`), edited on the endpoint
 host or port. A pinned key that changes reads **rejected** with class `certificate`, naming both
 keys; once you know the component was replaced, `omniglass endpoint retry <id> --certificate <the
 offered key>` trusts the new one ([tls](/architecture/collection/#tls)).
+
+An **http** or **https** endpoint's driver sends real requests, each carrying the endpoint's
+credential (a basic login, a bearer token, or an API key, by the driver's declared scheme). Its
+**authenticated** rung is proven by those requests, never the probe, which sends no credential: the
+first answer that accepts the credential reads yes. A component that refuses it (a 401) gates the
+endpoint, class `auth`, its row saying why and offering **Retry** ([a refusal with no
+session](#a-refusal-with-no-session)), and nothing that carries the credential is sent again until
+the endpoint changes (point it at the right secret, or rotate the secret) or you retry it, while its
+ping and its transport keep reporting ([http and https](/architecture/collection/#http-and-https)).
 
 A **udp** endpoint has no port to open, so its breakdown lists its **request** rung beside the ping:
 the driver's named request, answered (with its round trip) or not, which is the layer its verdict
@@ -251,8 +261,12 @@ input focused (an snmp endpoint's `community`). A changed key the probe met name
 offers **Trust this key**, as above. Retry holds its spinner until the refusal moves: the node lifts
 the gate at its next check-in and tries once, and a refusal met again sets it anew. Without
 `endpoint:retry` the button is greyed and its tooltip says so, while the reason still reads. Where
-the gate holds the endpoint's polls too (any refusal at the transport rung, and an snmp community,
-which every get carries), the Collection card reads **polls stopped** beside it.
+the gate holds the endpoint's polls too (any refusal at the transport rung, and a credential every
+poll carries: an snmp community, or an http or https driver's credential), the Collection card reads
+**polls stopped** beside it. An **http** or **https** endpoint holds no session either: a 401 to a
+request carrying its credential gates it, class `auth`, with the reason
+`auth: the component refused the credential (401)`, and an https certificate the endpoint refuses
+gates it at the handshake, a changed key offering **Trust this key**.
 
 In the simulated fleet, the touch panel in the place named `auditorium` answers SNMP, and its
 endpoint reads its community from a secret holding the one the panel's agent refuses, so it reads

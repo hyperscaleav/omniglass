@@ -21,7 +21,9 @@ families (poll functions, listeners, command bindings). The detail blade renders
 the **menu it is**: what each poll asks and what lands, what each listener waits for, what each
 command binding actuates. On a line protocol a listener's **arm** commands (the subscribe
 conversation) are sent on every connection the node holds, its **match** rule claims the
-device's pushes, and each claimed line lands as a sample with no poll involved; a request may
+component's pushes, and each claimed line lands as a sample with no poll involved (a listener rides a
+held line session or a udp socket, and is refused at write on any other transport, where nothing
+would run it); a request may
 declare its **reply** shape (`request.reply`, a `prefix` or `regex`) so its answer is picked out of
 those pushes, plus an optional `error` shape (`reply.error`) for the device's refusals, which then
 answer the request as a failure carrying the device's text instead of timing out. Every `regex` in
@@ -152,6 +154,58 @@ ladder:
     request: { get: ["1.3.6.1.2.1.1.2.0"] }
 ```
 
+An http or https driver sends real requests ([http and https](/architecture/collection/#http-and-https)).
+A request declares its `method` (GET unless it says otherwise), `path`, `query`, `headers`, a `body`
+(a JSON value, encoded by its `body_format`: `json`, `form`, `xml` or `text`) and the answer's
+`format` (`json`, `xml`, `html` or `text`, declared rather than read off the `Content-Type`, which gear
+mislabels). An emit locates its value with one selector the format admits: a `jsonpath` on a json
+answer, an `xpath` on an xml answer (its prefixes declared on the request's `namespaces`) or on an html
+page, a `regex` on any. A selector must find exactly one value: none, or more than one node, is a
+fault naming the emit, and the rest still land. A command's request renders `${value}` and
+`${arg.<key>}` where you place them, escaped for where they land (a path segment, a query value, a
+JSON or xml body), and a JSON body leaf that is exactly `${value}` keeps the value's type, so an
+intended volume is sent as a number. A request never names a secret and never sets `Authorization`
+or `Cookie`: the credential is the session block's.
+
+```yaml
+transport: https
+inputs:
+  - { name: host, kind: string, required: true }
+  - { name: port, kind: number, default: "443" }
+  - { name: tls-mode, kind: string, default: pin }
+  - { name: login, kind: secret, secret_type: basic-auth, required: true }
+session:
+  credential: login
+  scheme: basic
+polls:
+  - name: audio
+    schedule: { every: 30s }
+    request: { path: /api/audio }
+    emits:
+      - { name: volume, extract: { jsonpath: volume } }
+  - name: firmware
+    schedule: { every: 1h }
+    request: { path: /api/status.xml, format: xml, namespaces: { d: "urn:polaris:dsp:1", sys: "urn:polaris:system:1" } }
+    emits:
+      - { name: firmware-version, extract: { xpath: "/d:status/sys:device/sys:firmware" } }
+commands:
+  - command_type: set-volume
+    request: { method: POST, path: /api/audio/volume, body: { volume: "${value}" } }
+    settle: { from: response, success: { regex: '"ok":\s*true' } }
+```
+
+`session.scheme` says how the credential `session.credential` names rides every request: `basic` (a
+`basic-auth` secret), `bearer` (a `bearer-token`), or `api-key` (an `api-key`, placed by
+`session.api_key: { in: header, name: X-Census-Key }` or `{ in: query, name: apikey }`). A 401 to a
+credentialed request reads `rejected`, class `auth`, and nothing credentialed is sent again until the
+endpoint's connection fingerprint changes; a `session.terminal` rule may name a `status` (a gear's
+403 for a wrong credential) or a body match. Any other 4xx faults that request alone and waits its
+interval; a 408, 429 or 5xx retries on the backoff, no sooner than a `Retry-After`; a redirect is
+not followed. The reachability probe never sends the credential, so an http endpoint's
+`endpoint-authenticated` is proven by its polls; a driver whose commands carry a credential needs a
+poll to carry it to the node. Over `https` the `tls-mode` input and the pinned key work as over `tls`
+(above), and `omniglass endpoint retry <id> --certificate <the offered key>` trusts a changed key.
+
 A telnet driver:
 
 ```yaml
@@ -201,8 +255,9 @@ driver this way. It is a leaf catalog beside the vendor registry. See
 - An **official** row is always read-only: the blade keeps the Edit and Delete pair in place,
   greyed, with the reason on hover: "Official: ships with Omniglass and updates with it."
   Omniglass ships a starter set of official drivers (Generic SNMP, Newtron NVP, and Newtron NVP
-  over Telnet, its login a session block, over SSH, and over TLS, pinning the panel's key, with real
-  specs, Kestrel Device API and HTTP JSON as stubs), upserted idempotently at boot so the
+  over Telnet, its login a session block, over SSH, and over TLS, pinning the panel's key, the Kestrel
+  Device API over https with basic auth, and HTTP JSON over http with a header key, all with real
+  specs), upserted idempotently at boot so the
   shared set cannot drift install to install; add a custom driver for anything else.
 - **Delete** refuses while an **endpoint is attached** through the driver (422): an attach
   derives real collection work from the spec, so the driver cannot vanish out from under it.

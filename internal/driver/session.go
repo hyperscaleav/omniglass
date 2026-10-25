@@ -36,6 +36,11 @@ type SessionSpec struct {
 	// the channel instead of a shell (#1032). Both are ssh's alone.
 	PTY  bool   `json:"pty,omitempty"`
 	Exec string `json:"exec,omitempty"`
+	// Scheme is how an http session's credential rides every request
+	// (#902): basic, bearer or api-key, sending the secret input Credential
+	// names; APIKey places an api key in a header or a query parameter.
+	Scheme string           `json:"scheme,omitempty"`
+	APIKey *APIKeyPlacement `json:"api_key,omitempty"`
 }
 
 // Login is a declared login dialog: each step waits for its prompt and then
@@ -54,10 +59,13 @@ type LoginStep struct {
 	Send   string `json:"send"`
 }
 
-// TerminalRule classifies a reply retrying cannot fix.
+// TerminalRule classifies a reply retrying cannot fix. Over http a rule may
+// match a response's Status (a gear's 403 for a wrong credential), its body
+// by Match, or both (#902).
 type TerminalRule struct {
-	Class string `json:"class"`
-	Match Match  `json:"match"`
+	Class  string `json:"class"`
+	Match  Match  `json:"match"`
+	Status int    `json:"status,omitempty"`
 }
 
 // The terminal classes. A transport classifies its own protocol refusals
@@ -102,6 +110,29 @@ func (s *SessionSpec) TerminalFor(line string) (class string, ok bool) {
 		if r.Match.Matches(line) {
 			return r.Class, true
 		}
+	}
+	return "", false
+}
+
+// TerminalForResponse classifies an http response against the declared
+// terminal rules: the first whose status (when it names one) and body match
+// (when it declares one) both fit decides the class.
+func (s *SessionSpec) TerminalForResponse(status int, body string) (class string, ok bool) {
+	if s == nil {
+		return "", false
+	}
+	for _, r := range s.Terminal {
+		hasMatch := r.Match.Prefix != "" || r.Match.Regex != ""
+		if r.Status == 0 && !hasMatch {
+			continue
+		}
+		if r.Status != 0 && r.Status != status {
+			continue
+		}
+		if hasMatch && !r.Match.Matches(body) {
+			continue
+		}
+		return r.Class, true
 	}
 	return "", false
 }
@@ -169,13 +200,22 @@ func (s *Spec) validateSession() error {
 		}
 		return nil
 	}
-	if s.Transport == "udp" {
+	httpSession := IsHTTP(s.Transport)
+	if (ss.Scheme != "" || ss.APIKey != nil) && !httpSession {
+		return fmt.Errorf("driver: a session scheme rides every http request; %q is not http", s.Transport)
+	}
+	switch {
+	case s.Transport == "udp":
 		// Nothing logs in or is held over udp (#1037): a udp driver's session
 		// block declares the replies retrying cannot fix, and nothing else.
 		if ss.Login != nil || ss.Credential != "" || ss.Reprobe != "" || ss.PTY || ss.Exec != "" {
 			return fmt.Errorf("driver: over udp a session block declares only terminal replies; nothing logs in, is held, or re-probes")
 		}
-	} else if !isLineTransport(s.Transport) {
+	case httpSession:
+		if err := s.validateHTTPSession(); err != nil {
+			return err
+		}
+	case !isLineTransport(s.Transport):
 		return fmt.Errorf("driver: a session block rides a held line transport; %q has none", s.Transport)
 	}
 	if l := ss.Login; l != nil {
@@ -214,6 +254,15 @@ func (s *Spec) validateSession() error {
 		if !known {
 			return fmt.Errorf("driver: terminal rule %d has unknown class %q; want one of %s", i+1, r.Class, strings.Join(TerminalClasses(), ", "))
 		}
+		if r.Status != 0 && !httpSession {
+			return fmt.Errorf("driver: terminal rule %d matches a status, which only an http response has", i+1)
+		}
+		if r.Status != 0 && (r.Status < 100 || r.Status > 599) {
+			return fmt.Errorf("driver: terminal rule %d status %d is not an http status (100 to 599)", i+1, r.Status)
+		}
+		if httpSession && r.Status != 0 && r.Match.Prefix == "" && r.Match.Regex == "" {
+			continue // a status alone is a whole rule over http
+		}
 		if err := validateMatch(fmt.Sprintf("terminal rule %d", i+1), r.Match); err != nil {
 			return err
 		}
@@ -235,9 +284,9 @@ func (s *Spec) validateSession() error {
 	if ss.PTY && ss.Exec != "" {
 		return fmt.Errorf("driver: a session runs a shell (with a pty) or an exec, not both")
 	}
-	if ss.Credential != "" {
+	if ss.Credential != "" && !httpSession {
 		if s.Transport != "ssh" {
-			return fmt.Errorf("driver: a session credential is the transport's own auth, which only ssh has; %q authenticates through its login dialog", s.Transport)
+			return fmt.Errorf("driver: a session credential is the transport's own auth, which only ssh and http have; %q authenticates through its login dialog", s.Transport)
 		}
 		if err := s.requireSecretInput(ss.Credential); err != nil {
 			return fmt.Errorf("driver: session credential: %v", err)

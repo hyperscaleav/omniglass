@@ -35,6 +35,20 @@ func httpAuthFromProfile(a profile.Auth) HTTPAuth {
 			HeaderName:  a.Header,
 			PublicPaths: append([]string(nil), a.PublicPaths...),
 		}
+	case "bearer":
+		return HTTPAuth{
+			Mode:        HTTPAuthBearer,
+			APIKey:      a.APIKey,
+			Realm:       a.Realm,
+			PublicPaths: append([]string(nil), a.PublicPaths...),
+		}
+	case "query":
+		return HTTPAuth{
+			Mode:        HTTPAuthQuery,
+			APIKey:      a.APIKey,
+			QueryName:   a.Query,
+			PublicPaths: append([]string(nil), a.PublicPaths...),
+		}
 	default:
 		return HTTPAuth{}
 	}
@@ -44,6 +58,10 @@ func httpAuthFromProfile(a profile.Auth) HTTPAuth {
 // device leaves HeaderName empty. Matches the convention used by
 // most AV gear that ships an API key (Crestron, QSC, Biamp, etc).
 const defaultAPIKeyHeader = "X-API-Key"
+
+// defaultAPIKeyQuery is the query parameter consulted when an
+// HTTPAuthQuery device leaves QueryName empty.
+const defaultAPIKeyQuery = "apikey"
 
 // checkHTTPAuth enforces the device's HTTPAuth setting against r.
 // Returns true when the request is allowed to proceed; returns false
@@ -103,6 +121,35 @@ func (d *Device) checkHTTPAuth(w http.ResponseWriter, r *http.Request) bool {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusUnauthorized)
 		_, _ = fmt.Fprintf(w, `{"error":"unauthorized","auth":"header","header":"%s"}`+"\n", header)
+		return false
+
+	case HTTPAuthBearer:
+		got, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
+		if ok && got != "" && constantTimeEqual(got, d.HTTPAuth.APIKey) {
+			return true
+		}
+		realm := strings.ReplaceAll(d.HTTPAuth.Realm, `"`, "")
+		if realm == "" {
+			realm = d.Hostname
+		}
+		w.Header().Set("WWW-Authenticate", fmt.Sprintf(`Bearer realm="%s"`, realm))
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusUnauthorized)
+		_, _ = w.Write([]byte(`{"error":"unauthorized","auth":"bearer"}` + "\n"))
+		return false
+
+	case HTTPAuthQuery:
+		name := d.HTTPAuth.QueryName
+		if name == "" {
+			name = defaultAPIKeyQuery
+		}
+		got := r.URL.Query().Get(name)
+		if got != "" && constantTimeEqual(got, d.HTTPAuth.APIKey) {
+			return true
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusUnauthorized)
+		_, _ = fmt.Fprintf(w, `{"error":"unauthorized","auth":"query","param":"%s"}`+"\n", name)
 		return false
 
 	default:

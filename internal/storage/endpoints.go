@@ -40,10 +40,11 @@ var (
 )
 
 // checkBareParams reads what a bare endpoint's params hand its transport's
-// dialer with meaning, refusing a value it cannot use: a tls endpoint's mode
-// (#1035), which a driver-attached one has checked as an input instead.
+// dialer with meaning, refusing a value it cannot use: the mode of an
+// endpoint over the tls handshake (tls #1035, https #902), which a
+// driver-attached one has checked as an input instead.
 func checkBareParams(transportName string, params []byte) error {
-	if (transportName != "tls" && transportName != "udp") || len(params) == 0 {
+	if (!transport.UsesTLS(transportName) && transportName != "udp") || len(params) == 0 {
 		return nil
 	}
 	var p map[string]any
@@ -741,7 +742,7 @@ func (p *PG) RetryEndpoint(ctx context.Context, actorID, id string, pin RetryPin
 	}
 	audited, prior := any(after), any(before)
 	switch {
-	case key != "" && before.Transport == "tls":
+	case key != "" && transport.UsesTLS(before.Transport):
 		audited, prior = pinned{Endpoint: after, Certificate: key}, pinned{Endpoint: before, Certificate: replaced}
 	case key != "":
 		audited, prior = pinned{Endpoint: after, HostKey: key}, pinned{Endpoint: before, HostKey: replaced}
@@ -772,8 +773,8 @@ func (p RetryPin) keyFor(ep *Endpoint) (string, error) {
 	if p.HostKey == "" && p.Certificate == "" {
 		return "", nil
 	}
-	if p.Certificate != "" && ep.Transport != "tls" {
-		return "", fmt.Errorf("%w: only a tls endpoint pins a certificate key", ErrRetryHostKey)
+	if p.Certificate != "" && !transport.UsesTLS(ep.Transport) {
+		return "", fmt.Errorf("%w: only a tls or https endpoint pins a certificate key", ErrRetryHostKey)
 	}
 	if p.HostKey != "" && p.Certificate != "" && p.HostKey != p.Certificate {
 		return "", fmt.Errorf("%w: host_key and certificate name different keys; send the one key to trust", ErrRetryHostKey)
@@ -783,7 +784,7 @@ func (p RetryPin) keyFor(ep *Endpoint) (string, error) {
 		key = p.Certificate
 	}
 	if _, pinned := pinKeyOf[ep.Transport]; !pinned || ep.ComponentID == nil {
-		return "", fmt.Errorf("%w: only an ssh or tls endpoint pins a key", ErrRetryHostKey)
+		return "", fmt.Errorf("%w: only an ssh, tls or https endpoint pins a key", ErrRetryHostKey)
 	}
 	if !hostKeyFingerprint.MatchString(key) {
 		return "", fmt.Errorf("%w: a key is a SHA256 fingerprint (SHA256: and 43 base64 characters)", ErrRetryHostKey)

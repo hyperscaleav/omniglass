@@ -54,6 +54,23 @@ describe("sessionWord", () => {
 describe("endpointNotice", () => {
   const gate = (over: Partial<NonNullable<ReachEndpoint["rejection"]>> = {}) => ({ rung: "authenticated" as const, class: "auth", ts: ago(20_000), ...over });
 
+  // http and https hold no session (#902): a credentialed request's 401 and a
+  // changed certificate key gate the endpoint, and the notice reads the gate's
+  // own reason, its Retry waiting on the gate's publish time; the certificate
+  // gate's keys are what Trust this key renders.
+  it("says why an http credential or an https certificate was refused, with no session", () => {
+    const authGate = ep({ endpoint: "http", transport: "http", rejection: gate({ reason: "auth: the component refused the credential (401)" }) });
+    expect(endpointNotice(authGate, now)).toEqual({ kind: "rejected", reason: "auth: the component refused the credential (401)", waitTS: ago(20_000) });
+    const certGate = ep({
+      endpoint: "https",
+      transport: "https",
+      rejection: gate({ rung: "responsive", class: "certificate", reason: "certificate: the certificate's public key changed", pinned_key: "SHA256:aaa", offered_key: "SHA256:bbb" }),
+    });
+    expect(endpointNotice(certGate, now)?.reason).toBe("certificate: the certificate's public key changed");
+    expect(keyRefusal(certGate)).toEqual({ class: "certificate", pinned: "SHA256:aaa", offered: "SHA256:bbb" });
+    expect(keyRefusal(authGate)).toBeNull();
+  });
+
   it("says why a rejected session was refused, in its own words where its gate carries none", () => {
     const e = ep({ session: { state: "rejected", ts: ago(1_000), reason: "auth: auth rejected" }, rejection: gate() });
     expect(endpointNotice(e, now)).toEqual({ kind: "rejected", reason: "auth: auth rejected", waitTS: ago(1_000) });

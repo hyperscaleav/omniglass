@@ -39,6 +39,20 @@ metric_types:
     unit: s
     label: Uptime
     description: How long the device reports it has been running, in seconds (an SNMP sysUpTime scaled from timeticks, or the driver's equivalent).
+  # A conferencing component's call and audio, the kestrel-api driver's menu
+  # (#902): volume a settable quantity (the set-volume command targets it).
+  - name: volume
+    data_type: float
+    unit: "%"
+    label: Volume
+    description: >-
+      The output volume a component reports, as a percentage of its range. A settable
+      quantity: the set-volume command opens an intended volume and settles when the
+      component reports it.
+  - name: participant-count
+    data_type: int
+    label: Participant Count
+    description: The participants a component reports in its current call; 0 when no call is active.
   - name: http-response-time
     data_type: float
     unit: ms

@@ -77,6 +77,9 @@ type Runner struct {
 	Telnet TelnetProbe
 	// TLS is the tls reachability probe (#1035).
 	TLS TLSProber
+	// HTTPFetch sends a driver's http and https requests, its polls' and
+	// its commands' (#902).
+	HTTPFetch HTTPFetcher
 }
 
 // CollectTCP runs one tcp task and returns its samples. A tcp probe always
@@ -200,10 +203,12 @@ const (
 )
 
 // HTTPTask is the parsed http reachability-plus-responsiveness unit a node
-// runs: the request target (host:port) and the per-attempt timeout.
+// runs: the request target (host:port), the per-attempt timeout, and for
+// https the trust its handshake runs under (#902); nil TLS is plain http.
 type HTTPTask struct {
 	Target  string
 	Timeout time.Duration
+	TLS     *TLSTrust
 }
 
 // TelnetTask is the parsed telnet reachability unit (#1033): the dial
@@ -284,12 +289,23 @@ func ladderVerdict(name, value string, reason Reachability, ts time.Time) Sample
 // reached-but-not-responsive, distinct from port-closed. err is returned only
 // when the target could not be attempted at all (inconclusive).
 func (r *Runner) CollectHTTP(ctx context.Context, t HTTPTask) ([]Sample, error) {
+	out, _, err := r.CollectHTTPResult(ctx, t)
+	return out, err
+}
+
+// CollectHTTPResult is CollectHTTP with the probe's observation, which an
+// https probe's gate reads (a certificate the trust refused). Over https the
+// transport rung is the handshake (#902): the component answering it reads
+// responsive, its timing lands as tls-handshake-time, a certificate the mode
+// accepted lands its expiry and days left, and a response drawn after it
+// lands http-response-time; a refused certificate lands no certificate fact.
+func (r *Runner) CollectHTTPResult(ctx context.Context, t HTTPTask) ([]Sample, HTTPResult, error) {
 	if t.Target == "" {
-		return nil, fmt.Errorf("collection: http task: empty target")
+		return nil, HTTPResult{}, fmt.Errorf("collection: http task: empty target")
 	}
-	res, err := r.HTTP.Probe(ctx, t.Target, t.Timeout)
+	res, err := r.HTTP.Probe(ctx, t)
 	if err != nil {
-		return nil, fmt.Errorf("collection: http probe %s: %w", t.Target, err)
+		return nil, HTTPResult{}, fmt.Errorf("collection: http probe %s: %w", t.Target, err)
 	}
 	now := time.Now().UTC()
 	openVal := 0.0
@@ -306,12 +322,23 @@ func (r *Runner) CollectHTTP(ctx context.Context, t HTTPTask) ([]Sample, error) 
 		out = append(out, Sample{Name: SignalTCPConnectTime, Value: res.DialMS, TS: now})
 	}
 	responsive := "down"
-	if res.Responded {
+	if res.Handshaken {
+		out = append(out, Sample{Name: SignalTLSHandshakeTime, Value: res.HandshakeMS, TS: now})
+	}
+	if res.Responded || (t.TLS != nil && res.Handshaken) {
 		responsive = "up"
+	}
+	if res.Responded {
 		out = append(out, Sample{Name: SignalHTTPResponseTime, Value: res.ResponseMS, TS: now})
 	}
 	out = append(out, ladderVerdict(SignalEndpointResponsive, responsive, res.Reason, now))
-	return out, nil
+	if t.TLS != nil && res.Accepted && !res.Facts.NotAfter.IsZero() {
+		out = append(out,
+			Sample{Name: SignalTLSCertificateExpiry, Text: res.Facts.NotAfter.UTC().Format(time.RFC3339), IsText: true, TS: now},
+			Sample{Name: SignalTLSCertificateDaysLeft, Value: DaysLeft(res.Facts.NotAfter, now), TS: now},
+		)
+	}
+	return out, res, nil
 }
 
 // CollectSSH runs one ssh task: the L4 dial facts, the L7 rung (the key

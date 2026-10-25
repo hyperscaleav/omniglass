@@ -52,6 +52,13 @@ interfaces:
         template: api/polaris-dsp/status.json.gotempl
         doc: { summary: "DSP status snapshot", tags: [api, status] }
 
+      # The same status as XML (#902): a namespaced document (the DSP's own
+      # namespace by default, its system facts under a second prefix), the
+      # shape an XPath extraction declares its prefixes for.
+      - match: "GET /api/status.xml"
+        template: api/polaris-dsp/status.xml.gotempl
+        doc: { summary: "DSP status snapshot as namespaced XML", tags: [api, status, xml] }
+
       - match: "GET /api/channels"
         template: api/polaris-dsp/channels.json.gotempl
         doc: { summary: "Per-channel state (gain, mute, peak)", tags: [api, audio] }

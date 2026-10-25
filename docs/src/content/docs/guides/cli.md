@@ -264,8 +264,8 @@ omniglass endpoint delete <id>                                  # refused (409) 
 # retries it:
 omniglass endpoint retry <id>                                   # needs endpoint:retry; audited
 omniglass endpoint retry <id> --host-key SHA256:...             # ssh: trust the offered key the refusal names (409 for any other)
-omniglass endpoint retry <id> --certificate SHA256:...          # tls: the same for a certificate's public key (--host-key works too)
-# A tls endpoint's verification mode is one of its driver's inputs, edited in place:
+omniglass endpoint retry <id> --certificate SHA256:...          # tls or https: the same for a certificate's public key (--host-key works too)
+# A tls or https endpoint's verification mode is one of its driver's inputs, edited in place:
 omniglass endpoint update <id> --inputs '{"tls-mode":"verify"}'  # verify, pin or skip
 
 # The poll task is derived from the endpoint, so the task surface is read-only.
@@ -275,9 +275,9 @@ omniglass task get <id>
 
 The transports are a code registry the binary ships (`omniglass transport list` reads it):
 `icmp` and `tcp` probe layers 3 and 4, `telnet` reads its first bytes, `tls` runs the handshake and reports the
-certificate's expiry, `ssh` and `http` climb to layer 7 (the probe draws a
-real response, so reached-but-not-responsive and responded-but-not-authenticated are visible
-states), `udp` proves its rung with its driver's request (a bare udp endpoint has nothing to send),
+certificate's expiry, `ssh`, `http` and `https` (the handshake, then a response) climb to layer 7
+(the probe draws a real response, so reached-but-not-responsive and responded-but-not-authenticated
+are visible states; an http probe sends no credential, so its driver's polls prove the login), `udp` proves its rung with its driver's request (a bare udp endpoint has nothing to send),
 and `snmp` proves its rung with a standard get (sysUpTime.0) carrying its driver's community.
 An endpoint is **named by its transport** (the `--transport`, or the attached driver's spec),
 unique within its component. An endpoint `update` changes only its node placement and

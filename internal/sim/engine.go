@@ -1,7 +1,6 @@
 package sim
 
 import (
-	"crypto/tls"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -28,7 +27,6 @@ type Engine struct {
 	reqPub     RequestPublisher
 	diffPub    DiffPublisher
 	hit        func(Hit)
-	certs      certCache // lazy self-signed cert shared by TLS interfaces
 	sessionPub SessionEventPublisher
 }
 
@@ -416,20 +414,17 @@ func (e *Engine) bindInterface(dev *Device, iface profile.Interface) (net.Addr, 
 	port := e.port(iface.Port)
 	switch iface.Protocol {
 	case "http":
-		var cert *tls.Certificate
-		if iface.TLS {
-			c, err := e.certs.get()
-			if err != nil {
-				return nil, fmt.Errorf("obtaining TLS cert: %w", err)
-			}
-			cert = c
-		}
 		// Auth is only enforced when the profile sets enforce: true.
 		// A profile may declare credentials for documentation
 		// without gating traffic, which keeps existing devices
 		// open-by-default until they opt in.
 		dev.HTTPAuth = httpAuthFromProfile(iface.Auth)
-		return dev.startHTTP(port, cert)
+		if iface.TLS {
+			// The device's own https identity (#902), the same on every
+			// run, so a pinned https endpoint survives a restart.
+			return dev.startHTTPS(port)
+		}
+		return dev.startHTTP(port, nil)
 	case "snmp":
 		community := iface.Auth.Community
 		if community == "" {

@@ -61,6 +61,7 @@ var rungsOf = map[string][]string{
 	"telnet": {RungConnect},
 	"ssh":    {RungHandshake, RungConnect},
 	"http":   {RungConnect, RungRequest},
+	"https":  {RungHandshake, RungConnect},
 	"udp":    {RungRequest},
 	"snmp":   {RungRequest},
 }

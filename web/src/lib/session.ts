@@ -136,17 +136,21 @@ export function ladder(iface: ReachEndpoint): Rung[] {
   });
 }
 
+// CREDENTIALED_POLLS are the transports whose every stateless poll carries
+// the credential: an snmp get its community (#821), an http or https request
+// its driver's scheme (#902). An auth gate on one of these holds the polls.
+const CREDENTIALED_POLLS = new Set(["snmp", "http", "https"]);
+
 // pollsHeld reports a gate beneath which the node sends no stateless poll
-// (#1110): a poll is sent at the transport rung, or for snmp at the session
-// rung, since every get carries the community (#821), and a gate at or below
-// that rung holds it (the node's statelessRung). A login refused over a
-// transport whose polls carry no credential holds none, and neither does a
-// gate beside a held session: its polls ride the session, which says for
-// itself whether they run.
+// (#1110): a poll is sent at the transport rung, or at the session rung where
+// it carries the credential, and a gate at or below that rung holds it (the
+// node's statelessRung). A login refused over a transport whose polls carry no
+// credential holds none, and neither does a gate beside a held session: its
+// polls ride the session, which says for itself whether they run.
 export function pollsHeld(iface: ReachEndpoint): boolean {
   const rung = iface.rejection?.rung;
   if (!rung || iface.session) return false;
-  return RANK[rung] <= RANK[iface.transport === "snmp" ? "authenticated" : "responsive"];
+  return RANK[rung] <= RANK[CREDENTIALED_POLLS.has(iface.transport) ? "authenticated" : "responsive"];
 }
 
 // What each rung is, then what it says now: the tooltip a rung chip carries,

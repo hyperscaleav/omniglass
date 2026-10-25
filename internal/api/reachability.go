@@ -12,6 +12,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/collection/probekeys"
 	"github.com/hyperscaleav/omniglass/internal/collection/rejection"
 	"github.com/hyperscaleav/omniglass/internal/storage"
+	"github.com/hyperscaleav/omniglass/internal/transport"
 )
 
 // The reachability read BFF: a per-component, per-endpoint composition of the
@@ -92,12 +93,12 @@ type reachRejectionBody struct {
 	Reason     string    `json:"reason,omitempty" doc:"Why the gate holds (endpoint-rejection-reason): the class and the component's own text (auth: the agent answered authorizationError for the community), scrubbed by the node of anything it sent. Published beside the gate by whatever the node was connecting with, its reachability probe, a poll or a held session, so an endpoint holding no session still says why it was refused. Absent when the node recorded none (a gate published before it did). Cut to 500 characters; the property's series keeps the whole"`
 	TS         time.Time `json:"ts" doc:"When the node last published the gate: a retry that lifts it and a refusal that sets it again each move it"`
 	PinnedKey  string    `json:"pinned_key,omitempty" doc:"A refusal of a changed key only (class host-key, or certificate for a pinned tls key): the SHA256 fingerprint of the key the endpoint pins, as the node refused against it. Present with offered_key or not at all"`
-	OfferedKey string    `json:"offered_key,omitempty" doc:"A refusal of a changed key only: the SHA256 fingerprint of the key the component offered instead. Trusting it is POST /endpoints/{id}:retry with this exact value as host_key (a tls endpoint also takes it as certificate); while the refusal holds, any other value is refused (409)"`
+	OfferedKey string    `json:"offered_key,omitempty" doc:"A refusal of a changed key only: the SHA256 fingerprint of the key the component offered instead. Trusting it is POST /endpoints/{id}:retry with this exact value as host_key (a tls or https endpoint also takes it as certificate); while the refusal holds, any other value is refused (409)"`
 }
 
-// reachTLSBody is a tls endpoint's handshake and certificate (#1035): how it
-// verifies, the key it pins, the latest handshake time, and the certificate's
-// expiry and days left.
+// reachTLSBody is the handshake and certificate of an endpoint over the tls
+// handshake (tls #1035, https #902): how it verifies, the key it pins, the
+// latest handshake time, and the certificate's expiry and days left.
 type reachTLSBody struct {
 	Mode        string     `json:"mode" doc:"How the endpoint's connections judge the certificate (its driver's tls-mode input, verify when none is set): verify (against the node's system roots, the server name the host), pin (the public key trusted on first use, any other refused) or skip (nothing checked, the operator's explicit choice)"`
 	Key         string     `json:"key,omitempty" doc:"The public key the endpoint pins (tls-certificate), a SHA256 fingerprint; served in pin mode alone, and absent before first use"`
@@ -119,7 +120,7 @@ type reachEndpointBody struct {
 	Authenticated *reachVerdictBody   `json:"authenticated,omitempty" doc:"The auth rung (the probe's credential was accepted, or a held session's login passed), present only when a credential was tried"`
 	Session       *reachSessionBody   `json:"session,omitempty" doc:"The endpoint's held session, while it is configured to hold one (a standing listen task, or a driver declaring a session): its latest state, when it changed, and why"`
 	Rejection     *reachRejectionBody `json:"rejection,omitempty" doc:"The gate a terminal refusal holds on the endpoint, its rung, class and reason, whether or not the endpoint holds a session (a reachability probe's refusal gates it too); absent when none holds"`
-	TLS           *reachTLSBody       `json:"tls,omitempty" doc:"A tls endpoint's handshake and certificate: its verification mode, pinned key, handshake time, expiry and days left; absent on every other transport"`
+	TLS           *reachTLSBody       `json:"tls,omitempty" doc:"A tls or https endpoint's handshake and certificate: its verification mode, pinned key, handshake time, expiry and days left; absent on every other transport"`
 	Layers        []reachLayerBody    `json:"layers" doc:"The per-layer probe signals that compose the verdict"`
 	History       []reachHistoryBody  `json:"history" doc:"The recent verdict transitions, oldest first, for the availability strip"`
 }
@@ -256,7 +257,7 @@ func composeEndpoint(ctx context.Context, gw storage.Gateway, comp string, it st
 			row.Rejection.Reason = capReason(why.Value)
 		}
 	}
-	if it.Transport == "tls" {
+	if transport.UsesTLS(it.Transport) {
 		if row.TLS, err = composeTLS(ctx, gw, comp, it, row.Rejection); err != nil {
 			return row, err
 		}

@@ -86,10 +86,16 @@ describe("collectionState", () => {
   // credential holds no poll, and the card keeps reading the verdict.
   const gated = (transport: string, rung: "responsive" | "authenticated") =>
     ({ ...iface({ value: "down", ts: iso(10) }, "edge-1"), transport, last_seen: iso(3), rejection: { rung, class: "auth", ts: iso(30) } }) as ReachEndpoint;
+  // An http or https poll carries its driver's credential (#902), so a
+  // refused credential holds the polls as an snmp community's refusal does,
+  // and an https certificate gate holds them at the transport rung.
   it.each([
     ["snmp", "authenticated"],
     ["udp", "responsive"],
     ["tls", "responsive"],
+    ["http", "authenticated"],
+    ["https", "authenticated"],
+    ["https", "responsive"],
   ] as const)("a %s probe's gate at the %s rung stops collection", (transport, rung) => {
     expect(collectionState(gated(transport, rung), node(5), now).kind).toBe("rejected");
   });

@@ -14,6 +14,7 @@ import (
 
 	"github.com/hyperscaleav/omniglass/internal/collection"
 	"github.com/hyperscaleav/omniglass/internal/driver"
+	"github.com/hyperscaleav/omniglass/internal/transport"
 )
 
 // The node's held sessions (#816) and the listeners that live on them
@@ -132,7 +133,7 @@ func holdsSession(task collection.TaskSpec) bool {
 	if task.Mode == "listen" {
 		return true
 	}
-	return driver.IsBaked(task.Spec) && (task.Session != nil || task.Transport != "tcp")
+	return driver.IsBaked(task.Spec) && !driver.IsHTTP(task.Transport) && (task.Session != nil || task.Transport != "tcp")
 }
 
 // channelOf reads the ssh channel the driver declares.
@@ -444,6 +445,60 @@ type sessionManager struct {
 	// once. Touched on the run loop only.
 	datagrams       map[string]*heldDatagram
 	datagramRefused map[string]string
+	// httpEndpoints is each http or https endpoint's credential and trust,
+	// read off its worklist tasks (#902): what an http command, which the
+	// delivery carries without either, actuates with. Touched on the run
+	// loop only.
+	httpEndpoints map[string]httpEndpoint
+}
+
+// httpEndpoint is what an http command needs of its endpoint: a task to key
+// its pin by, its params (the target, the timeout, the tls mode), and the
+// session block and secrets its driver tasks carry.
+type httpEndpoint struct {
+	task    collection.TaskSpec
+	params  endpointParams
+	timeout time.Duration
+	session *driver.SessionSpec
+	secrets map[string]map[string]string
+}
+
+// syncHTTPEndpoints reads each http endpoint's credential and trust off the
+// worklist: the params any of its tasks carries, the session and secrets its
+// driver tasks carry (a probe carries neither).
+func (m *sessionManager) syncHTTPEndpoints(tasks []collection.TaskSpec) {
+	eps := map[string]httpEndpoint{}
+	for _, t := range tasks {
+		if !driver.IsHTTP(t.Transport) || t.EndpointID == "" {
+			continue
+		}
+		ep, seen := eps[t.EndpointID]
+		if !seen {
+			ep.task = t
+			_ = json.Unmarshal(t.EndpointParams, &ep.params)
+			if d, err := time.ParseDuration(ep.params.Timeout); err == nil {
+				ep.timeout = d
+			}
+		}
+		if t.Session != nil {
+			ep.session = t.Session
+		}
+		if len(t.Secrets) > 0 {
+			ep.secrets = t.Secrets
+		}
+		eps[t.EndpointID] = ep
+	}
+	m.httpEndpoints = eps
+}
+
+// httpEndpointOf is an http endpoint's credential and trust, as the worklist
+// last delivered them.
+func (m *sessionManager) httpEndpointOf(endpointID string) (httpEndpoint, bool) {
+	if m == nil {
+		return httpEndpoint{}, false
+	}
+	ep, ok := m.httpEndpoints[endpointID]
+	return ep, ok
 }
 
 func newSessionManager(dialers map[string]collection.SessionDialer, hooks sessionHooks) *sessionManager {
@@ -461,7 +516,7 @@ func newSessionManager(dialers map[string]collection.SessionDialer, hooks sessio
 func (m *sessionManager) syncCertPins(tasks []collection.TaskSpec) {
 	delivered := map[string]string{}
 	for _, t := range tasks {
-		if t.Transport != "tls" || t.EndpointID == "" {
+		if !transport.UsesTLS(t.Transport) || t.EndpointID == "" {
 			continue
 		}
 		if _, seen := delivered[t.EndpointID]; !seen || t.CertificatePin != "" {
@@ -643,6 +698,7 @@ func (m *sessionManager) observe(tasks []collection.TaskSpec) {
 func (m *sessionManager) reconcile(tasks []collection.TaskSpec) {
 	m.observe(tasks)
 	m.syncCertPins(tasks)
+	m.syncHTTPEndpoints(tasks)
 	m.reconcileDatagrams(tasks)
 	want, refused := desiredSessions(tasks, m.dialers)
 	for id := range m.pins {
