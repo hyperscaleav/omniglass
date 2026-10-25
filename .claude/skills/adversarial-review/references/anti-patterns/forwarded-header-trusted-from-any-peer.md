@@ -10,4 +10,5 @@
 - **Fix:** parse the address (`netip`), believe the header only from a trusted proxy network and
   take the rightmost untrusted hop, and group IPv6 by /64 (`ingress.Source`,
   internal/ingress/source.go). `clientIP` (internal/api/auth.go), which stamps a session's
-  address, still reads the first hop; it is not a limiter key.
+  address, still reads the first hop; it is not a limiter key, and #1185 moves it onto the same
+  primitive with a configured proxy list.
