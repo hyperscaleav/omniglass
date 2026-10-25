@@ -393,11 +393,14 @@ func compiled(pattern string) (*regexp.Regexp, error) {
 
 // validateReply refuses a reply shape on a request with no line, or a
 // malformed one.
-func validateReply(what string, req Request) error {
+func validateReply(transportName, what string, req Request) error {
 	if req.Reply == nil {
 		return nil
 	}
-	if req.Line == "" && len(req.Body) == 0 {
+	// A reply shape picks an answer out of what a held session reads: a
+	// line, or a websocket's frame (a line or a JSON body). An http request
+	// is answered by its own response.
+	if IsHTTP(transportName) || (req.Line == "" && !(IsWebSocket(transportName) && len(req.Body) > 0)) {
 		return fmt.Errorf("driver: %s declares a reply shape, which only a line or a frame request has", what)
 	}
 	rep := req.Reply
@@ -411,7 +414,7 @@ func validateReply(what string, req Request) error {
 		return fmt.Errorf("driver: %s reply declares %d shapes; want one of a prefix, a regex, a field or a correlate", what, kinds)
 	}
 	switch {
-	case rep.Correlate != "" && len(req.Body) == 0:
+	case rep.Correlate != "" && (!IsWebSocket(transportName) || len(req.Body) == 0):
 		return fmt.Errorf("driver: %s reply correlates by %s, which needs a JSON object frame (a websocket body)", what, rep.Correlate)
 	case rep.Field != nil:
 		if err := validateListenerMatch(what+" reply", Match{Field: rep.Field}, "", nil); err != nil {
@@ -576,7 +579,7 @@ func (s *Spec) Validate(cat Catalog) error {
 				return err
 			}
 		}
-		if err := validateReply(fmt.Sprintf("poll %q", p.Name), p.Request); err != nil {
+		if err := validateReply(s.Transport, fmt.Sprintf("poll %q", p.Name), p.Request); err != nil {
 			return err
 		}
 		if err := validateRetries(s.Transport, fmt.Sprintf("poll %q", p.Name), p.Request); err != nil {
@@ -689,7 +692,7 @@ func (s *Spec) Validate(cat Catalog) error {
 			if err := validateFrameSettle(c); err != nil {
 				return err
 			}
-			if err := validateReply(what, c.Request); err != nil {
+			if err := validateReply(s.Transport, what, c.Request); err != nil {
 				return err
 			}
 			refs, err := httpTemplateRefs(c.Request)
@@ -721,7 +724,7 @@ func (s *Spec) Validate(cat Catalog) error {
 		if err := validateSettle(c, false); err != nil {
 			return err
 		}
-		if err := validateReply(fmt.Sprintf("command binding %q", c.CommandType), c.Request); err != nil {
+		if err := validateReply(s.Transport, fmt.Sprintf("command binding %q", c.CommandType), c.Request); err != nil {
 			return err
 		}
 		// Template references are checked at write: only ${value} (the

@@ -145,6 +145,15 @@ func TestWebSocketRefusals(t *testing.T) {
 	if err := corr.Validate(catalog()); err == nil || !strings.Contains(err.Error(), "correlate") {
 		t.Fatalf("a correlate over tcp = %v, want a refusal", err)
 	}
+	// An http request is answered by its own response: no reply shape, a
+	// body beside it or not.
+	for _, rep := range []*driver.Reply{{Correlate: "id"}, {Prefix: "{"}, {Field: &driver.FieldMatch{Path: "ok", Equals: "true"}}} {
+		h := httpSpec()
+		h.Commands[0].Request.Reply = rep
+		if err := h.Validate(httpCatalog()); err == nil || !strings.Contains(err.Error(), "reply") {
+			t.Fatalf("an http command with reply %+v = %v, want a refusal", rep, err)
+		}
+	}
 }
 
 func TestAFrameAndItsCorrelatedReply(t *testing.T) {
