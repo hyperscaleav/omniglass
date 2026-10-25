@@ -3,6 +3,7 @@ package storage
 import (
 	"context"
 	"encoding/json"
+	"github.com/hyperscaleav/omniglass/internal/driver"
 	"time"
 
 	"github.com/google/uuid"
@@ -991,4 +992,13 @@ func (UnimplementedGateway) ListUnclaimedSources(context.Context) ([]UnclaimedSo
 }
 func (UnimplementedGateway) ClaimUnclaimedSource(context.Context, string, string, string) (bool, error) {
 	return false, nil
+}
+func (UnimplementedGateway) DriverSpecFindings(context.Context, []byte) ([]driver.Finding, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) PlanDriverPreview(context.Context, string, PreviewInput) (*PreviewPlan, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) PlanEndpointRun(context.Context, string, string, string, scope.Set, scope.Set) (*EndpointPoll, error) {
+	return nil, nil
 }

@@ -51,6 +51,11 @@ type options struct {
 	simHub SimHub
 	// version is the server's build version, reported to MCP clients.
 	version string
+	// nodeRunner reaches the nodes for on-demand runs (#1163); nil answers
+	// those routes 503. nodeRuns and nodeRunsPerPrincipal bound the runs in
+	// flight, in all and per caller; zero takes the defaults.
+	nodeRunner                     NodeRunner
+	nodeRuns, nodeRunsPerPrincipal int
 	// commandWaiters and commandWaitersPerPrincipal bound the command issues
 	// waiting on their outcome at once, in all and per caller; zero takes the
 	// defaults.
@@ -327,6 +332,7 @@ func registerRoutes(api huma.API, gw storage.Gateway, svc *settings.Service, o o
 	registerExpressionRoutes(api, a, gw)
 	registerCommandTypeRoutes(api, a, gw)
 	registerCommandRoutes(api, a, gw, newWaitLimiter(o.commandWaiters, o.commandWaitersPerPrincipal))
+	registerNodeRunRoutes(api, a, gw, o.nodeRunner, newRunLimiter(o.nodeRuns, o.nodeRunsPerPrincipal))
 	registerProductPropertyRoutes(api, a, gw)
 	registerComponentPropertyRoutes(api, a, gw)
 	registerStandardPropertyRoutes(api, a, gw)

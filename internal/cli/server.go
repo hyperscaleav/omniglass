@@ -110,7 +110,7 @@ func runServer(ctx context.Context, version string) error {
 		return err
 	}
 	srv := &http.Server{
-		Handler:           api.NewHandler(gw, api.WithVersion(version), api.WithSecureCookies(c.SecureCookies), api.WithNatsURL(natsURL), api.WithSettingsService(gw.Settings()), api.WithTelemetryPublisher(busSrv), api.WithSimHub(busSrv)),
+		Handler:           api.NewHandler(gw, api.WithVersion(version), api.WithSecureCookies(c.SecureCookies), api.WithNatsURL(natsURL), api.WithSettingsService(gw.Settings()), api.WithTelemetryPublisher(busSrv), api.WithSimHub(busSrv), api.WithNodeRunner(busSrv)),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 	log.Info("http api listening", "addr", ln.Addr().String())

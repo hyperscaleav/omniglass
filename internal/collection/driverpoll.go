@@ -45,6 +45,10 @@ type DriverPollTask struct {
 	// polls and commands share: the cookie jar, the digest challenge, a
 	// login's session. Nil runs each poll on a throwaway (a login per poll).
 	HTTPState *HTTPAuthState
+	// Capture, when set, receives what the fetch answered before any emit
+	// reads it: how an on-demand run (#1163) shows the raw answer beside
+	// what was extracted. A scheduled poll sets none.
+	Capture func(driver.Payload)
 }
 
 // HeldExchanger is the slice of a held session a poll borrows: one request,
@@ -140,6 +144,9 @@ func (r *Runner) CollectDriverPoll(ctx context.Context, t DriverPollTask) ([]Sam
 		return nil, []error{fmt.Errorf("collection: driver poll %s/%s: no fetcher for transport %q", t.Fn.Driver, t.Fn.Function, t.Transport)}
 	}
 
+	if t.Capture != nil {
+		t.Capture(payload)
+	}
 	emitted, faults := t.Fn.Interpret(payload, time.Now().UTC())
 	out := make([]Sample, 0, len(emitted)+len(proven))
 	out = append(out, proven...)

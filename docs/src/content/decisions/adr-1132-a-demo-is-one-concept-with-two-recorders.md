@@ -49,3 +49,9 @@ refs: [1132, 939, 1131]
   (about 3 GB) per CI run that records a tape. asciinema was not needed. The evidence ref keeps the
   name it had when walkthroughs were the only demos, so the prune and every earlier comment stay as
   they are.
+- **Amended (#1180):** the selection is explicit. A PR records exactly the demos its body tags
+  (`demo: <id>`, or `demo: none (<reason>)`) plus any it adds or changes; the widening on a recorder,
+  `web/` or stack change, and recording every demo when a PR names none, are retired, and a nightly
+  run on main re-records every demo instead. Each demo records on a runner of its own, and the
+  publish job also writes each demo's clip into the PR body. See
+  [ADR-1180](#adr-1180-a-pr-records-only-the-demos-it-tags-carries-its-clip-in-its-body-and-main-re-records-every-demo-nightly).

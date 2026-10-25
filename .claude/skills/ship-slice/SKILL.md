@@ -127,10 +127,14 @@ Each is a gate; a red one blocks the ship.
    - **n/a only with a reason**, in one clause: test-only, docs-only, a refactor with no behavior
      an operator or a client can observe.
 
-   **The ship-review's Demo line is required, and the verdict cannot be `ready` without it**: a PR
-   whose Demo line is missing, empty, or `n/a` with no reason, or `n/a` for a diff that changes CLI,
-   API or console behavior, is a red gate, exactly like a UI PR with no screenshots. Refuse it;
-   build the demo.
+   **The PR body's demo tag is required, and the verdict cannot be `ready` without it** (#1180): a
+   line of its own in the Demo section naming the demo or demos the PR is about, `demo: <id>
+   [<id>...]`, or `demo: none (<reason>)`. `run:demo` records exactly the tagged demos (plus any
+   tape or walkthrough the PR adds or changes), and nothing else, so the tag is the selection. A PR
+   with no tag, `none` with no reason, `none` for a diff that changes CLI, API or console behavior,
+   or a tag naming a demo the tree lacks (`demo-tag.yml` fails it; check locally with
+   `PR_BODY="$(cat body.md)" node web/e2e/walkthrough-pr.mjs tag`) is a red gate, exactly like a UI
+   PR with no screenshots. Refuse it; build and tag the demo.
 
    How:
    - **Write it.** A tape opens with its title and description as a comment block, then types the
@@ -149,18 +153,21 @@ Each is a gate; a red one blocks the ship.
      asking CI: read a walkthrough's stills with `/assess-ui` (its walkthrough rubric), and a
      terminal demo's frames (ffmpeg pulls them from the MP4); the agent cannot watch video. A demo
      is a test: a failing command, a wait that runs out or a result that never appears fails it.
+   - **Tag it.** The PR body's Demo section carries the tag on a line of its own (`demo: <id>`),
+     the demo this PR is about; a PR touching a recorder or the stack tags one demo of each kind it
+     could break, since nothing fans out on its own.
    - **Record it on the PR.** Resolve any merge conflicts (GitHub runs no `pull_request` workflow
-     on a conflicted PR), push, then apply the `run:demo` label. CI records the branch tip: the
-     tapes and walkthrough scripts the PR adds or changes, widened to every tape or every
-     walkthrough when the PR changes that recorder (or, for walkthroughs, anything under `web/`),
-     and every demo when it names none. It commits each demo's files to the PR's evidence ref
+     on a conflicted PR), push, then apply the `run:demo` label. CI records the branch tip: exactly
+     the tagged demos plus any tape or walkthrough script the PR adds or changes, each on a runner
+     of its own, in parallel. It commits each demo's files to the PR's evidence ref
      (`refs/walkthroughs/pr-<n>`, never the PR branch, so there is nothing to pull and the head's
-     checks are untouched) and upserts **one comment listing every demo**: a terminal demo's GIF
-     inline with its MP4 linked, a walkthrough's scrubbable video, preview, poster and stills. A
-     failed demo fails the job and is named in the comment (a stack that never came up says so
-     instead); fix it and re-run.
-   - **Link it.** The PR body's **Demo** section carries the demo comment's link, and the
-     ship-review's Demo line names it.
+     checks are untouched), upserts **one comment listing every demo** (the full record: a terminal
+     demo's GIF with its MP4 linked, a walkthrough's scrubbable video, preview, poster and stills),
+     and **writes each demo's clip into the PR body** under the tag, between its own markers, so
+     the body plays its video. A failed demo fails its job and is named in the comment and the clip
+     (a stack that never came up says so instead); fix it and re-run.
+   - **Leave the clip alone.** Edit the body around the marked block freely; a re-run replaces only
+     the block. Do not paste the clip markers anywhere else in the body.
 
 11. **Audit coverage.** Every privileged **mutation** and every **auth event** the slice adds
    writes an `audit_log` row: a fleet or IAM mutation through `writeAuditRes` **in the same
@@ -196,7 +203,7 @@ Proof (ran fresh)
   Tiers:     unit X / integration Y / e2e Z
   make gen:  clean
 Visual:    <screenshots in the PR for any UI surface | n/a>
-Demo:      <the run:demo comment link: terminal demo <id> / walkthrough <id> | n/a (why: test-only, docs-only)>
+Demo:      <demo: <id> [<id>...], the clip in the body and the run:demo comment link | demo: none (why: test-only, docs-only)>
 Dev seed:  <new-entity example rows added to internal/devseed | n/a>
 
 Docs:      <what shipped; arch-of-record consistent | divergence note; lint: green;
@@ -212,9 +219,9 @@ Diff:      N files, ~M LOC   <PR link>
 Risk:      <outward-facing? invariant-changing? reversible?>
 ```
 
-`ready` is not available while a gate is red: a ship-review with no Demo line, a Demo line that is
-empty or `n/a` with no reason, or `n/a` for a diff that changes CLI, API or console behavior, ships
-as neither `ready` nor `ready-pending-your-call` until the demo comment exists.
+`ready` is not available while a gate is red: a PR body with no demo tag, `demo: none` with no
+reason, or `none` for a diff that changes CLI, API or console behavior, ships as neither `ready` nor
+`ready-pending-your-call` until the tag is there and its clip has landed in the body.
 
 The two lines the architect reads first are **Decisions I need from you** and **Risk**.
 Approval means squash-merge; a redirect adjusts the slice.

@@ -82,9 +82,10 @@ A fork that can wait goes to the ship-review's "Decisions I need from you" line 
 1. When the queue is empty, run `/ship-slice` over the **whole integration diff** against
    `main`: fresh full `make test` with output pasted, `make gen` drift, the em-dash and
    attribution scan, docs-with-everything across every slice, screenshots for any operator
-   surface, and the demo: apply `run:demo` to the rollup PR, which records every slice's tape
-   and walkthrough into one comment, linked in the Demo section. Fix reds on the integration
-   branch.
+   surface, and the demo: tag every slice's demo in the rollup PR body's Demo section
+   (`demo: <id> <id> ...`), then apply `run:demo`, which records each tagged demo (and any the
+   integration diff adds or changes) in parallel into one comment and writes their clips into
+   the body. Fix reds on the integration branch.
 2. Open **one PR** from the integration branch to `main`, titled `<type>: <definition>`,
    body = the ship-review, `closes #<definition>`.
 3. After the PR opens: review-response fixes within the approved scope may be pushed

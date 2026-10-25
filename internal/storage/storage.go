@@ -15,6 +15,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/hyperscaleav/omniglass/internal/driver"
 	"strings"
 	"sync"
 	"time"
@@ -447,6 +448,16 @@ type Gateway interface {
 	// declared as the endpoint's pin.
 	RetryEndpoint(ctx context.Context, actorID, ref string, pin RetryPin, read, action scope.Set) (*Endpoint, error)
 	DeleteEndpoint(ctx context.Context, actorID, ref string, read, action scope.Set) error
+	// DriverSpecFindings checks a spec by the write-time rules and writes
+	// nothing (#1163): no findings is a spec a save accepts.
+	DriverSpecFindings(ctx context.Context, raw []byte) ([]driver.Finding, error)
+	// PlanDriverPreview plans a preview: the tasks a node runs to read a
+	// spec's polls once against a target, secrets unsealed only where the
+	// caller may reveal them, the asking audited (#1163).
+	PlanDriverPreview(ctx context.Context, actorID string, in PreviewInput) (*PreviewPlan, error)
+	// PlanEndpointRun resolves an attached endpoint's poll for a run now,
+	// under the caller's read and run scopes, the asking audited (#1163).
+	PlanEndpointRun(ctx context.Context, actorID, ref, poll string, read, action scope.Set) (*EndpointPoll, error)
 
 	// The task tier: read-only over DERIVED collection work. A task is not
 	// operator-authored: it is derived when an interface is created (the node's

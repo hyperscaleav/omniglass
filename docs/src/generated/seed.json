@@ -15,13 +15,14 @@
   {
    "id": "operator",
    "label": "Operator",
-   "description": "Day-to-day operations: create or edit components, endpoints (and retry an endpoint's rejected session), secrets, variables, and the property, metric, event, and command catalogs, issue commands in scope, and impair simulated devices. Sees and reveals the device secrets in its scope (never the admin-sensitive platform credentials). Inherits Viewer.",
+   "description": "Day-to-day operations: create or edit components, endpoints (retry an endpoint's rejected session, or run its poll now), secrets, variables, and the property, metric, event, and command catalogs, issue commands in scope, preview a driver spec through a node, and impair simulated devices. Sees and reveals the device secrets in its scope (never the admin-sensitive platform credentials). Inherits Viewer.",
    "inherits": [
     "viewer"
    ],
    "declared": [
     "component:create,update,rename,move",
-    "endpoint:create,update,retry",
+    "endpoint:create,update,retry,run",
+    "driver:preview",
     "secret:read,reveal,create,update",
     "variable:create,update",
     "property_type:create,update",
@@ -42,6 +43,8 @@
     "endpoint:create",
     "endpoint:update",
     "endpoint:retry",
+    "endpoint:run",
+    "driver:preview",
     "secret:read",
     "secret:reveal",
     "secret:create",
@@ -208,6 +211,8 @@
     "endpoint:create",
     "endpoint:update",
     "endpoint:retry",
+    "endpoint:run",
+    "driver:preview",
     "secret:read",
     "secret:reveal",
     "secret:create",

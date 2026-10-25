@@ -46,26 +46,30 @@ promise: if a label runs automation it is named `run:<task>`, and if a label is 
 | Label | Applying it | Wired |
 | --- | --- | --- |
 | `run:preview` | spins up a live [PR preview environment](/guides/pr-previews/); removing it tears the preview down | yes |
-| `run:demo` | records the PR's [demos](/contributing/demos/) in CI (its terminal demos and its walkthroughs) and upserts one comment listing every demo, each with a scrubbable video and what plays inline | yes |
+| `run:demo` | records the [demos](/contributing/demos/) the PR body tags (`demo: <id>`) in CI, upserts one comment listing every demo, and writes each demo's clip into the PR body's Demo section | yes |
 | `run:build` | rebuilds the release binaries and container image for the PR head on demand | reserved |
 | `run:test` | runs the full test suite on demand | reserved |
 
 `run:preview` is live today (the [PR previews guide](/guides/pr-previews/) covers it, and
 `preview-comment.yml` is the workflow behind it). So is `run:demo` (`demo.yml`). Applying it
-records the PR's demos on the walkthrough stack, each with its own recorder: the tapes
-(`scripts/demo/<id>.tape`, terminal demos) and walkthrough scripts it adds or changes; every tape
-when it changes the terminal recorder, and every walkthrough when it changes anything else under
-`web/`, since any console change can move a flow; every demo when it names none. It then commits
+records the demos the PR is about, each on a runner and a walkthrough stack of its own, in
+parallel: exactly the demos its body tags in its Demo section (`demo: <id>`, a tape or a
+walkthrough), plus any tape (`scripts/demo/<id>.tape`) or walkthrough script it adds or changes.
+Nothing else fans out: touching the console, a recorder or the stack records no demo the PR did
+not name (the nightly freshness run records every demo instead). A PR with no tag fails the run,
+saying how to tag; `demo: none (<reason>)` records nothing. It then commits
 each passing demo's files under `<id>/` to the PR's own evidence ref, `refs/walkthroughs/pr-<n>`,
 as a fresh tree (so a renamed or deleted demo leaves nothing behind) on top of the ref's last
 commit, and keeps **one comment** on the PR listing every demo and reaching its files by that
 commit's SHA: each demo leads with a **Watch (scrubbable)** link to its video through jsDelivr,
 which serves it as video with range requests so the browser's player seeks, then what plays on the
 PR page (a terminal demo's GIF; a walkthrough's animated preview, then its poster and its captioned
-stills folded below). The comment also links the run's workflow artifact (which keeps a failed
-demo's partial output) and names any demo that failed (a demo is a test, so a failure fails the
-job; a recorder whose stack never came up is reported as that, not as every one of its demos
-failing). Why a ref rather than a branch is in [demos](/contributing/demos/#show-it-on-the-pr).
+stills folded below). The comment also links the run's workflow artifacts (which keep a failed
+demo's partial output) and names any demo that failed (a demo is a test, so a failure fails its
+job; a demo whose stack never came up is reported as that, not as a failure). The run also writes
+each demo's clip (its GIF or animated preview and its scrubbable link) into the PR body's Demo
+section, replacing only its own marked block. Why a ref rather than a branch is in
+[demos](/contributing/demos/#show-it-on-the-pr).
 
 `run:walkthrough` is `run:demo`'s earlier name, from when walkthroughs were the only demos. The
 workflow still honors it, so a PR that carries it (or a re-run of a run it started) records as

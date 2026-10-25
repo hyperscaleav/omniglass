@@ -1,12 +1,19 @@
-// The command line of walkthroughpr.mjs (#925, #1132), run by the run:demo
-// workflow on the runner's node (no dependencies, no build step). A demo id
-// names a tape (scripts/demo/<id>.tape, a terminal demo) or a walkthrough
-// script (web/e2e/walkthroughs/<id>.yaml), never both:
+// The command line of walkthroughpr.mjs (#925, #1132, #1180), run by the
+// run:demo workflow on the runner's node (no dependencies, no build step). A
+// demo id names a tape (scripts/demo/<id>.tape, a terminal demo) or a
+// walkthrough script (web/e2e/walkthroughs/<id>.yaml), never both:
 //
 //   node web/e2e/walkthrough-pr.mjs select < changed.txt
-//       the ids to record, space-separated, tapes first: the demos among the
-//       changed paths (one per line on stdin), widened by any recorder they
-//       change, else every demo in the tree
+//       the demos a PR records, as JSON [{id, kind, why}, ...], tapes first:
+//       those its body (env PR_BODY) tags with demo: <id>, plus any tape or
+//       walkthrough script among the changed paths (one per line on stdin);
+//       a tag naming no demo in the tree fails, naming it
+//   node web/e2e/walkthrough-pr.mjs every
+//       every demo in the tree, the same JSON: what the freshness run records
+//   node web/e2e/walkthrough-pr.mjs tag
+//       the demo tag lint: the PR body (env PR_BODY) must tag its demos
+//       (demo: <id> ...), each naming a demo in the tree, or say demo: none
+//       (<reason>); prints what it read, and exits 1 naming any problem
 //   node web/e2e/walkthrough-pr.mjs ref <pr>
 //       the ref the PR's demo evidence is committed to
 //   node web/e2e/walkthrough-pr.mjs files <id>
@@ -23,16 +30,41 @@
 //       than <days> ago (demo-prune.yml)
 //   node web/e2e/walkthrough-pr.mjs comment
 //       the PR comment body, from env REPO, PR, SHA (the evidence commit),
-//       HEAD_SHA, RUN_URL, ARTIFACT_URL and IDS (the selected ids). A selected
-//       demo counts as recorded only if its recorder did not list it in its
-//       out/failed.txt and its manifest carries the budget mark the recorder
-//       writes only on a pass; with no out/stack-up from its recorder (each
-//       writes one once its stack is up), the comment says that recorder's
-//       stack never came up instead of blaming each demo.
-import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync } from 'node:fs';
+//       HEAD_SHA, RUN_URL, ARTIFACT_URL and IDS (the selected ids)
+//   node web/e2e/walkthrough-pr.mjs clip
+//       the clip for the PR body's Demo section, from env REPO, SHA,
+//       HEAD_SHA and IDS
+//   node web/e2e/walkthrough-pr.mjs report <dir>
+//       the freshness run's verdict, from env RUN_URL, HEAD_SHA and IDS, into
+//       <dir>: status (pass or fail), summary.md and body.md (the issue body)
+//
+// Where a demo's recording is read from: with env LEGS set (the run:demo
+// workflow, which records each demo on a runner of its own and downloads each
+// runner's out/ as LEGS/demo-leg-<id>/), that directory; else its recorder's
+// out/ (make demo). Either holds the recorder's <id>/ directory, its
+// failed.txt and its stack-up mark; a leg also holds head, the commit it
+// recorded, and one marking another commit than HEAD_SHA (an earlier
+// attempt's, left in the run) counts as never run. A selected demo counts as recorded only if
+// failed.txt does not list it and its manifest carries the budget mark the
+// recorder writes only on a pass; with no stack-up mark beside it, it never ran
+// (its stack never came up, or its job ended first), which the comment, the
+// clip and the report name as the stack's fault rather than the demo's.
+import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { commentBody, evidenceFiles, evidenceRef, evidenceRefsToPrune, selectDemos, tapeEvidenceFiles } from './walkthroughpr.mjs';
+import {
+  clipBody,
+  commentBody,
+  demoTag,
+  everyDemo,
+  evidenceFiles,
+  evidenceRef,
+  evidenceRefsToPrune,
+  freshnessReport,
+  legOutcome,
+  selectDemos,
+  tapeEvidenceFiles,
+} from './walkthroughpr.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 // Each recorder: where its scripts are, their extension, the manifest a pass
@@ -57,9 +89,17 @@ function kindOf(id) {
   return existsSync(join(RECORDERS.tape.dir, `${id}.tape`)) ? 'tape' : 'walkthrough';
 }
 
-/** @param {'tape' | 'walkthrough'} kind @returns {string[]} */
-function listedFailed(kind) {
-  const f = join(out(kind), 'failed.txt');
+// Where demo `id`'s recording is read from: its runner's downloaded out/
+// under LEGS, else its recorder's out/.
+/** @param {string} id @returns {string} */
+function outOf(id) {
+  const legs = process.env.LEGS;
+  return legs ? join(legs, `demo-leg-${id}`) : out(kindOf(id));
+}
+
+/** @param {string} id @returns {string[]} */
+function listedFailed(id) {
+  const f = join(outOf(id), 'failed.txt');
   return existsSync(f) ? readFileSync(f, 'utf8').split(/\s+/).filter(Boolean) : [];
 }
 
@@ -67,7 +107,7 @@ function listedFailed(kind) {
 /** @param {string} id @returns {any} */
 function manifestOf(id) {
   const kind = kindOf(id);
-  const m = JSON.parse(readFileSync(join(out(kind), id, RECORDERS[kind].manifest), 'utf8'));
+  const m = JSON.parse(readFileSync(join(outOf(id), id, RECORDERS[kind].manifest), 'utf8'));
   if (m.id !== id) throw new Error(`${kind} out/${id}/${RECORDERS[kind].manifest} is demo "${m.id}", not "${id}"`);
   return m;
 }
@@ -77,10 +117,43 @@ function manifestOf(id) {
 /** @param {string} id @returns {any} */
 function passed(id) {
   const kind = kindOf(id);
-  if (listedFailed(kind).includes(id) || !existsSync(join(out(kind), id, RECORDERS[kind].manifest))) return null;
+  if (listedFailed(id).includes(id) || !existsSync(join(outOf(id), id, RECORDERS[kind].manifest))) return null;
   const m = manifestOf(id);
   return m.budget ? m : null;
 }
+
+// The commit demo `id`'s leg marked (its out/head), read only under LEGS,
+// where it is checked against the run's HEAD_SHA; empty when it marked none.
+/** @param {string} id @returns {string | undefined} */
+function legHead(id) {
+  if (!process.env.LEGS) return undefined;
+  const f = join(outOf(id), 'head');
+  return existsSync(f) ? readFileSync(f, 'utf8').trim() : '';
+}
+
+// Every selected demo's result, by recorder (walkthroughpr.mjs legOutcome):
+// recorded (its manifest), failed, or never ran.
+function results() {
+  /** @type {Record<'tape' | 'walkthrough', { recorded: any[], failed: string[], unstarted: string[] }>} */
+  const r = { tape: { recorded: [], failed: [], unstarted: [] }, walkthrough: { recorded: [], failed: [], unstarted: [] } };
+  for (const id of selected()) {
+    const kind = kindOf(id);
+    const head = legHead(id);
+    const outcome = legOutcome({
+      manifest: passed(id),
+      listedFailed: listedFailed(id).includes(id),
+      stackUp: existsSync(join(outOf(id), 'stack-up')),
+      legHead: head,
+      headSha: head === undefined ? undefined : env('HEAD_SHA'),
+    });
+    if (outcome === 'recorded') r[kind].recorded.push(passed(id));
+    else r[kind][outcome].push(id);
+  }
+  return { tapes: r.tape, walkthroughs: r.walkthrough };
+}
+
+/** @returns {string} */
+const body = () => process.env.PR_BODY ?? '';
 
 /** @param {string} k @returns {string} */
 function env(k) {
@@ -96,7 +169,27 @@ function main([cmd, ...args]) {
   switch (cmd) {
     case 'select': {
       const changed = readFileSync(0, 'utf8').split('\n').map((l) => l.trim()).filter(Boolean);
-      console.log(selectDemos(changed, ids('tape'), ids('walkthrough')).join(' '));
+      console.log(JSON.stringify(selectDemos(changed, demoTag(body()), ids('tape'), ids('walkthrough'))));
+      return 0;
+    }
+    case 'every':
+      console.log(JSON.stringify(everyDemo(ids('tape'), ids('walkthrough'))));
+      return 0;
+    case 'tag': {
+      const tag = demoTag(body());
+      if (!tag) {
+        console.error(
+          "demo tag: the PR body tags no demo. Add a line to its Demo section: demo: <id> (the tape or walkthrough this PR is about, " +
+            'several ids allowed), or demo: none (<reason>) for a PR with nothing to demo (docs-only, test-only, a refactor no one can observe).',
+        );
+        return 1;
+      }
+      if ('none' in tag) {
+        console.log(`demo tag: none (${tag.none})`);
+        return 0;
+      }
+      const picked = selectDemos([], tag, ids('tape'), ids('walkthrough'));
+      console.log(`demo tag: ${picked.map((d) => `${d.id} (${d.kind === 'tape' ? 'terminal demo' : 'walkthrough'})`).join(', ')}`);
       return 0;
     }
     case 'ref':
@@ -113,9 +206,8 @@ function main([cmd, ...args]) {
       for (const id of selected()) {
         const m = passed(id);
         if (!m) continue;
-        const kind = kindOf(id);
-        for (const f of RECORDERS[kind].files(m)) {
-          const src = join(out(kind), f);
+        for (const f of RECORDERS[kindOf(id)].files(m)) {
+          const src = join(outOf(id), f);
           if (!existsSync(src)) {
             console.log(`::warning::${id} has no ${f}; it is left out of the evidence`);
             continue;
@@ -133,14 +225,7 @@ function main([cmd, ...args]) {
       if (doomed.length) console.log(doomed.join('\n'));
       return 0;
     }
-    case 'comment': {
-      /** @type {Record<'tape' | 'walkthrough', { recorded: any[], failed: string[] }>} */
-      const results = { tape: { recorded: [], failed: [] }, walkthrough: { recorded: [], failed: [] } };
-      for (const id of selected()) {
-        const m = passed(id);
-        if (m) results[kindOf(id)].recorded.push(m);
-        else results[kindOf(id)].failed.push(id);
-      }
+    case 'comment':
       process.stdout.write(
         commentBody({
           repo: env('REPO'),
@@ -149,14 +234,26 @@ function main([cmd, ...args]) {
           headSha: env('HEAD_SHA'),
           runUrl: env('RUN_URL'),
           artifactUrl: env('ARTIFACT_URL'),
-          tapes: { ...results.tape, stackUp: existsSync(join(out('tape'), 'stack-up')) },
-          walkthroughs: { ...results.walkthrough, stackUp: existsSync(join(out('walkthrough'), 'stack-up')) },
+          ...results(),
         }),
       );
       return 0;
+    case 'clip':
+      process.stdout.write(clipBody({ repo: env('REPO'), sha: env('SHA'), headSha: env('HEAD_SHA'), ...results() }));
+      return 0;
+    case 'report': {
+      const dir = args[0];
+      if (!dir) throw new Error('walkthrough-pr report: name the directory to write the report into');
+      const r = freshnessReport({ runUrl: env('RUN_URL'), headSha: env('HEAD_SHA'), ...results() });
+      mkdirSync(dir, { recursive: true });
+      writeFileSync(join(dir, 'status'), r.ok ? 'pass\n' : 'fail\n');
+      writeFileSync(join(dir, 'summary.md'), r.summary + '\n');
+      writeFileSync(join(dir, 'body.md'), r.body);
+      console.log(r.summary);
+      return 0;
     }
     default:
-      console.error('usage: walkthrough-pr.mjs select | ref <pr> | files <id> | stage <dir> | prune <days> | comment');
+      console.error('usage: walkthrough-pr.mjs select | every | tag | ref <pr> | files <id> | stage <dir> | prune <days> | comment | clip | report <dir>');
       return 2;
   }
 }
