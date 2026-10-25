@@ -59,8 +59,8 @@ func (p *PG) DriverSpecFindings(ctx context.Context, raw []byte) ([]driver.Findi
 // PreviewInput is a preview asked for: the node to run it, the spec (a stored
 // driver by reference, or a spec inline), the inputs an attach would take,
 // and the polls to run (none is every poll). The scopes are the caller's:
-// node read, and secret read and reveal, since a secret a preview uses leaves
-// for a target the caller names, which is a reveal in effect.
+// node read, and secret reveal, since a secret a preview uses leaves for a
+// target the caller names, which is a reveal in effect.
 type PreviewInput struct {
 	Node         string
 	Driver       string
@@ -68,7 +68,6 @@ type PreviewInput struct {
 	Inputs       map[string]string
 	Polls        []string
 	NodeRead     scope.Set
-	SecretRead   scope.Set
 	SecretReveal scope.Set
 	CanAdmin     bool
 }
@@ -166,7 +165,9 @@ func (p *PG) PlanDriverPreview(ctx context.Context, actorID string, in PreviewIn
 		if input.Kind != "secret" || !ok {
 			continue
 		}
-		row, shape, err := p.secretRowForAction(ctx, tx, ref, in.SecretRead, in.SecretReveal, in.CanAdmin, true)
+		// Resolved under the reveal scope alone, the same candidates the input
+		// check above narrowed to, so the row unsealed is the row it accepted.
+		row, shape, err := p.secretRowForAction(ctx, tx, ref, in.SecretReveal, in.SecretReveal, in.CanAdmin, true)
 		if err != nil {
 			return nil, fmt.Errorf("%w: input %q references a secret you may not reveal, and a preview hands it to the target you name: %v", ErrAttachInvalid, input.Name, err)
 		}

@@ -168,7 +168,6 @@ func registerNodeRunRoutes(api huma.API, a *authenticator, gw storage.Gateway, r
 		plan, err := gw.PlanDriverPreview(ctx, principal, storage.PreviewInput{
 			Node: in.Body.Node, Driver: in.Body.Driver, Spec: in.Body.Spec, Inputs: in.Body.Inputs, Polls: in.Body.Polls,
 			NodeRead:     a.scopeFor(ctx, "node", "read"),
-			SecretRead:   a.scopeFor(ctx, "secret", "read"),
 			SecretReveal: a.scopeFor(ctx, "secret", "reveal"),
 			CanAdmin:     a.canSecretAdmin(ctx, "reveal"),
 		})

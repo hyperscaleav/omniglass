@@ -50,7 +50,7 @@ func runStack(t *testing.T) (*storage.PG, context.Context) {
 
 func previewOf(driverRef string, inputs map[string]string) storage.PreviewInput {
 	all := scope.Set{All: true}
-	return storage.PreviewInput{Node: "edge-p", Driver: driverRef, Inputs: inputs, NodeRead: all, SecretRead: all, SecretReveal: all, CanAdmin: true}
+	return storage.PreviewInput{Node: "edge-p", Driver: driverRef, Inputs: inputs, NodeRead: all, SecretReveal: all, CanAdmin: true}
 }
 
 func TestDriverSpecFindings(t *testing.T) {
