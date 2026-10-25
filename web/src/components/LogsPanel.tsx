@@ -2,7 +2,8 @@ import { For, Match, Show, Switch, createMemo, createSignal } from "solid-js";
 import { useQuery } from "@tanstack/solid-query";
 import { rel } from "../lib/format";
 import { formatAttributes } from "../lib/events";
-import { LOGS_KEY, getLogs, severityVariant, type ComponentLog } from "../lib/logs";
+import { LOGS_KEY, arrivedApart, getLogs, severityVariant, type ComponentLog, type ComponentLogs, type LogFilter } from "../lib/logs";
+import LogFilters from "./LogFilters";
 
 // LogsPanel: a component's recent raw log lines (ADR-0066, the ingest lane). Where
 // the events panel above shows discrete typed occurrences, this shows the untyped
@@ -36,8 +37,17 @@ function LogRow(p: { line: ComponentLog }) {
         <span class="min-w-0 flex-1 text-sm text-base-content/80">{p.line.message}</span>
       </div>
       <div class="flex flex-wrap items-center gap-2 pl-[4.5rem] text-[11px] text-base-content/45">
-        <Show when={p.line.source}>
+        {/* The source is the channel; the endpoint that collected the line
+            usually shares its name (an endpoint is named by its transport),
+            so the source is shown only where it says something more. */}
+        <Show when={p.line.source && p.line.source !== p.line.instance}>
           <span class="font-data">{p.line.source}</span>
+        </Show>
+        <Show when={p.line.instance}>
+          <span title="The endpoint that collected the line">via <span class="font-data">{p.line.instance}</span></span>
+        </Show>
+        <Show when={arrivedApart(p.line)}>
+          <span title={`The line says ${p.line.ts}; the server received it ${p.line.received_at}`}>· arrived {rel(p.line.received_at!)}</span>
         </Show>
         <Show when={p.line.facility}>
           <span>· {p.line.facility}</span>
@@ -77,8 +87,10 @@ function LogRow(p: { line: ComponentLog }) {
 }
 
 // LogsPanel reads a raw-log stream (ADR-0066) and renders it. It defaults to a
-// component's logs, but accepts an explicit source (query key + fetcher) and copy
-// so the same panel serves a node's self-logs; both are the same LogBody row.
+// component's logs, which it filters by a severity threshold and a source
+// (#1145), but accepts an explicit source (query key + fetcher) and copy so the
+// same panel serves a node's self-logs, which take no filter; both are the same
+// LogBody row.
 export default function LogsPanel(p: {
   name: string;
   title?: string;
@@ -86,11 +98,18 @@ export default function LogsPanel(p: {
   queryKey?: readonly unknown[];
   queryFn?: () => Promise<{ logs: ComponentLog[] }>;
 }) {
+  const [filter, setFilter] = createSignal<LogFilter>({});
+  const filterable = () => !p.queryFn;
+  const filtered = () => Boolean(filter().severity || filter().source);
   const q = useQuery(() => ({
-    queryKey: [...(p.queryKey ?? LOGS_KEY(p.name))],
-    queryFn: () => (p.queryFn ? p.queryFn() : getLogs(p.name)),
+    queryKey: [...(p.queryKey ?? LOGS_KEY(p.name, filter()))],
+    queryFn: () => (p.queryFn ? p.queryFn() : getLogs(p.name, filter())),
+    // A changed filter keeps the last answer on screen until the new one
+    // lands, so the panel does not flash empty between them.
+    placeholderData: (prev: { logs: ComponentLog[] } | undefined) => prev,
   }));
   const lines = createMemo(() => q.data?.logs ?? []);
+  const sources = createMemo(() => (q.data as ComponentLogs | undefined)?.sources ?? []);
   return (
     <div class="flex flex-col gap-1.5">
       <div class="flex items-center gap-2">
@@ -101,13 +120,16 @@ export default function LogsPanel(p: {
       </div>
       <p class="text-[12px] text-base-content/50">
         {p.intro ??
-          "Raw log lines the component emitted, the ingest lane, untyped and unfiltered, that a rule may later derive events from. Newest first, last 24 hours."}
+          "Raw log lines the component emitted, the ingest lane, untyped, that a rule may later derive events from: what its driver read as a log line, and anything its listeners did not claim. Newest first, last 24 hours."}
       </p>
+      <Show when={filterable()}>
+        <LogFilters filter={filter()} sources={sources()} onChange={setFilter} />
+      </Show>
       <Show
         when={lines().length}
         fallback={
           <div class="rounded-box border border-dashed border-base-300 px-3 py-4 text-center text-[12px] text-base-content/45">
-            <Switch fallback="No log lines in the last 24 hours.">
+            <Switch fallback={filtered() ? "No line matches the filter in the last 24 hours." : "No log lines in the last 24 hours."}>
               <Match when={q.isLoading}>Loading logs…</Match>
               <Match when={q.isError}>Could not load logs.</Match>
             </Switch>

@@ -85,7 +85,7 @@ func TestLogsAPI(t *testing.T) {
 		t.Fatalf("logs: want disp-1 with 2 lines, got %+v", r)
 	}
 	// Newest first: the err/daemon line with its structured attributes.
-	if r.Logs[0].Message != "codec unreachable" || r.Logs[0].Severity != "err" || r.Logs[0].Facility != "daemon" {
+	if r.Logs[0].Message != "codec unreachable" || r.Logs[0].Severity != "error" || r.Logs[0].Facility != "daemon" {
 		t.Fatalf("newest log: want 'codec unreachable' err/daemon, got %+v", r.Logs[0])
 	}
 	if string(r.Logs[0].Attributes) != `{"code":504}` {
@@ -112,6 +112,33 @@ func TestLogsAPI(t *testing.T) {
 	viewerTok := setupScopedViewer(t, ctx, dsn, "viewer-other", "viewer", "component", otherID)
 	c.do(viewerTok, http.MethodGet, "/components/disp-1/logs", nil, http.StatusNotFound)
 	c.do(viewerTok, http.MethodGet, "/components/other-1/logs", nil, http.StatusOK)
+
+	// The filters (#1145): a severity threshold and a source narrow the read,
+	// the sources facet lists the window's channels whatever the filter, and
+	// a severity outside the canonical set is refused before any read.
+	out = c.do(ownerTok, http.MethodGet, "/components/disp-1/logs?severity=warning", nil, http.StatusOK)
+	var f struct {
+		Logs []struct {
+			Message    string     `json:"message"`
+			ReceivedAt *time.Time `json:"received_at"`
+		} `json:"logs"`
+		Sources []string `json:"sources"`
+	}
+	if err := json.Unmarshal(out, &f); err != nil {
+		t.Fatalf("decode filtered: %v", err)
+	}
+	if len(f.Logs) != 1 || f.Logs[0].Message != "codec unreachable" || f.Logs[0].ReceivedAt == nil {
+		t.Fatalf("warning and worse = %+v, want the error line with its receipt", f.Logs)
+	}
+	if len(f.Sources) != 1 || f.Sources[0] != "syslog" {
+		t.Fatalf("sources = %v, want [syslog]", f.Sources)
+	}
+	out = c.do(ownerTok, http.MethodGet, "/components/disp-1/logs?source=nowhere", nil, http.StatusOK)
+	f.Logs, f.Sources = nil, nil
+	if err := json.Unmarshal(out, &f); err != nil || len(f.Logs) != 0 || len(f.Sources) != 1 {
+		t.Fatalf("an unknown source = %+v %v, want no lines and the sources still listed", f, err)
+	}
+	c.do(ownerTok, http.MethodGet, "/components/disp-1/logs?severity=loud", nil, http.StatusUnprocessableEntity)
 }
 
 // nodeLogsResp mirrors the node self-log read body: the node and its own lines.

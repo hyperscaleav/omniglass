@@ -1,6 +1,12 @@
 package node
 
-import "time"
+import (
+	"strconv"
+	"time"
+
+	"github.com/hyperscaleav/omniglass/internal/collection"
+	"github.com/hyperscaleav/omniglass/internal/driver"
+)
 
 // The poll schedule (#822): a driver poll declares how often it runs
 // (schedule.every, baked into its task), and the node honors it rather than
@@ -18,12 +24,17 @@ type pollSchedule struct {
 	refused map[string]bool
 	// fingerprint is the connection fingerprint each poll was booked under.
 	fingerprint map[string]string
+	// occurred is what each poll's events and log lines last landed (#1145),
+	// keyed by task, then by emit: a plain poll fires an occurrence when its
+	// content changes, not on every run. Node memory alone, so a restart may
+	// fire one again.
+	occurred map[string]map[string]string
 }
 
 // newPollSchedule keeps the schedule for a node ticking every heartbeat,
 // which is also where a failed poll's retry backoff starts.
 func newPollSchedule(heartbeat time.Duration) *pollSchedule {
-	return &pollSchedule{heartbeat: heartbeat, next: map[string]time.Time{}, backoff: map[string]time.Duration{}, refused: map[string]bool{}, fingerprint: map[string]string{}}
+	return &pollSchedule{heartbeat: heartbeat, next: map[string]time.Time{}, backoff: map[string]time.Duration{}, refused: map[string]bool{}, fingerprint: map[string]string{}, occurred: map[string]map[string]string{}}
 }
 
 // failed rebooks a poll that ran at now and landed nothing (its fetch
@@ -145,4 +156,53 @@ func (s *pollSchedule) retain(ids map[string]bool) {
 			delete(s.fingerprint, id)
 		}
 	}
+	for id := range s.occurred {
+		if !ids[id] {
+			delete(s.occurred, id)
+		}
+	}
+}
+
+// changed holds a poll run's events and log lines to what that task last
+// landed (#1145): one whose content (its message, attributes, severity) is
+// unchanged since is dropped, so a status page's last error lands when it
+// changes rather than every tick. Metrics and properties pass through: the
+// property lane has its transition guard, and a metric is a reading each
+// run. Pure: commitChanged records what landed.
+func (s *pollSchedule) changed(taskID string, dps []collection.Sample) []collection.Sample {
+	last := s.occurred[taskID]
+	out := dps[:0:0]
+	for _, d := range dps {
+		if d.Lane == driver.LaneEvent || d.Lane == driver.LaneLog {
+			if last != nil && last[occurrenceSlot(d)] == occurrenceContent(d) {
+				continue
+			}
+		}
+		out = append(out, d)
+	}
+	return out
+}
+
+// commitChanged records the occurrences a run landed, once published, so a
+// run whose publish failed fires them again next time.
+func (s *pollSchedule) commitChanged(taskID string, landed []collection.Sample) {
+	for _, d := range landed {
+		if d.Lane != driver.LaneEvent && d.Lane != driver.LaneLog {
+			continue
+		}
+		if s.occurred[taskID] == nil {
+			s.occurred[taskID] = map[string]string{}
+		}
+		s.occurred[taskID][occurrenceSlot(d)] = occurrenceContent(d)
+	}
+}
+
+// occurrenceSlot names the emit an occurrence came from: its index in the
+// poll's function, since two log lines share a name ("") and two events may
+// share a type.
+func occurrenceSlot(d collection.Sample) string { return d.Lane + "\x00" + strconv.Itoa(d.Emit) }
+
+// occurrenceContent is what an occurrence says, its time aside.
+func occurrenceContent(d collection.Sample) string {
+	return d.Text + "\x00" + string(d.Attributes) + "\x00" + d.Severity + "\x00" + d.Facility
 }

@@ -1342,17 +1342,31 @@ func generatedCommands() []*cobra.Command {
 			}
 			parent.AddCommand(func() *cobra.Command {
 				cmd := func() *cobra.Command {
+					var qSeverity string
+					var qSource string
 					cmd := &cobra.Command{
 						Use:     "list <name>",
 						Short:   "List a component's recent log lines",
-						Long:    "Returns the component's recent raw log lines (the ingest lane of ADR-0066, distinct from typed events), newest first, bounded to the last 24 hours. Gated by component:read; an out-of-scope component is a non-disclosing 404.",
+						Long:    "Returns the component's recent raw log lines (the ingest lane of ADR-0066, distinct from typed events), newest first, bounded to the last 24 hours, narrowed by an optional severity threshold and source, with the sources the window carries. Gated by component:read; an out-of-scope component is a non-disclosing 404.",
 						Example: "  omniglass component log list <name>",
 						Args:    pathArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
 							path := fmt.Sprintf("/api/v1/components/%s/logs", pathSegment(args[0]))
+							q := url.Values{}
+							if cmd.Flags().Changed("severity") {
+								q.Set("severity", fmt.Sprintf("%v", qSeverity))
+							}
+							if cmd.Flags().Changed("source") {
+								q.Set("source", fmt.Sprintf("%v", qSource))
+							}
+							if enc := q.Encode(); enc != "" {
+								path += "?" + enc
+							}
 							return runAPICommand(cmd, "GET", path, nil)
 						},
 					}
+					cmd.Flags().StringVar(&qSeverity, "severity", "", "Only lines at this severity or more severe (RFC 5424's eight levels); a line with no severity is left out")
+					cmd.Flags().StringVar(&qSource, "source", "", "Only lines that arrived on this channel")
 					return cmd
 				}()
 				return cmd
@@ -6704,17 +6718,31 @@ func generatedCommands() []*cobra.Command {
 			}
 			parent.AddCommand(func() *cobra.Command {
 				cmd := func() *cobra.Command {
+					var qSeverity string
+					var qSource string
 					cmd := &cobra.Command{
 						Use:     "list <name>",
 						Short:   "List a system's members' recent log lines",
-						Long:    "Returns the members' raw log lines merged newest first, bounded to the last 24 hours and capped, each naming the component that wrote it. Gated by system:read; an out-of-scope system is a non-disclosing 404.",
+						Long:    "Returns the members' raw log lines merged newest first, bounded to the last 24 hours and capped, each naming the component that wrote it, narrowed by an optional severity threshold and source, with the sources the window carries. Gated by system:read; an out-of-scope system is a non-disclosing 404.",
 						Example: "  omniglass system log list <name>",
 						Args:    pathArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
 							path := fmt.Sprintf("/api/v1/systems/%s/logs", pathSegment(args[0]))
+							q := url.Values{}
+							if cmd.Flags().Changed("severity") {
+								q.Set("severity", fmt.Sprintf("%v", qSeverity))
+							}
+							if cmd.Flags().Changed("source") {
+								q.Set("source", fmt.Sprintf("%v", qSource))
+							}
+							if enc := q.Encode(); enc != "" {
+								path += "?" + enc
+							}
 							return runAPICommand(cmd, "GET", path, nil)
 						},
 					}
+					cmd.Flags().StringVar(&qSeverity, "severity", "", "Only lines at this severity or more severe (RFC 5424's eight levels); a line with no severity is left out")
+					cmd.Flags().StringVar(&qSource, "source", "", "Only lines that arrived on this channel")
 					return cmd
 				}()
 				return cmd

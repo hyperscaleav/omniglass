@@ -144,13 +144,7 @@ func (r *Runner) CollectDriverPoll(ctx context.Context, t DriverPollTask) ([]Sam
 	out := make([]Sample, 0, len(emitted)+len(proven))
 	out = append(out, proven...)
 	for _, e := range emitted {
-		out = append(out, Sample{
-			Name:   e.Name,
-			Value:  e.Value,
-			Text:   e.Text,
-			IsText: e.IsText,
-			TS:     e.TS,
-		})
+		out = append(out, FromEmitted(e))
 	}
 	return out, faults
 }

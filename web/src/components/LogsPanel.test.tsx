@@ -103,4 +103,83 @@ describe("LogsPanel", () => {
     expect(getByText("worklist pulled")).toBeTruthy();
     expect(getByText(/collection/)).toBeTruthy();
   });
+
+  // A node's self-log read takes no filter: the controls belong to a
+  // component's (and a system's) read alone.
+  it("offers no filter on a node's self-logs", () => {
+    const node: NodeLogs = { node: "site-b", logs: [{ ts: nowIso, message: "connected" }] };
+    const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
+    qc.setQueryData([...NODE_LOGS_KEY(node.node)], node);
+    const { queryByLabelText } = render(() => (
+      <QueryClientProvider client={qc}>
+        <LogsPanel name={node.node} queryKey={NODE_LOGS_KEY(node.node)} queryFn={() => Promise.resolve(node)} />
+      </QueryClientProvider>
+    ));
+    expect(queryByLabelText("Severity at least")).toBeNull();
+  });
+});
+
+// The filters (#1145): a severity threshold on RFC 5424's eight levels and the
+// sources the window carries, each a narrowing the read applies server-side,
+// so the filtered rows are the read's own answer under the filter's key.
+describe("LogsPanel filters", () => {
+  const unfiltered: ComponentLogs = {
+    component: "panel-1",
+    sources: ["nvp", "tcp"],
+    logs: [
+      { ts: nowIso, source: "tcp", severity: "warning", message: "backlight driver reset", instance: "tcp" },
+      { ts: nowIso, source: "tcp", message: "EVT SCENE presentation", instance: "tcp" },
+    ],
+  };
+
+  function mountFiltered() {
+    const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
+    qc.setQueryData([...LOGS_KEY("panel-1")], unfiltered);
+    qc.setQueryData([...LOGS_KEY("panel-1", { severity: "warning" })], { ...unfiltered, logs: [unfiltered.logs[0]] });
+    qc.setQueryData([...LOGS_KEY("panel-1", { source: "nvp" })], { ...unfiltered, logs: [] });
+    return render(() => (
+      <QueryClientProvider client={qc}>
+        <LogsPanel name="panel-1" />
+      </QueryClientProvider>
+    ));
+  }
+
+  it("offers RFC 5424's levels and the window's sources", () => {
+    const { getByLabelText } = mountFiltered();
+    const severity = getByLabelText("Severity at least") as HTMLSelectElement;
+    expect([...severity.options].map((o) => o.value)).toEqual(["", "emergency", "alert", "critical", "error", "warning", "notice", "info", "debug"]);
+    const source = getByLabelText("Source") as HTMLSelectElement;
+    expect([...source.options].map((o) => o.value)).toEqual(["", "nvp", "tcp"]);
+  });
+
+  it("reads the lines at a severity or worse", async () => {
+    const { getByLabelText, findByText, queryByText } = mountFiltered();
+    expect(queryByText("EVT SCENE presentation")).toBeTruthy();
+    fireEvent.change(getByLabelText("Severity at least"), { target: { value: "warning" } });
+    expect(await findByText("backlight driver reset")).toBeTruthy();
+    expect(queryByText("EVT SCENE presentation")).toBeNull();
+  });
+
+  it("says a filter matched nothing rather than that the component is silent", async () => {
+    const { getByLabelText, findByText } = mountFiltered();
+    fireEvent.change(getByLabelText("Source"), { target: { value: "nvp" } });
+    expect(await findByText(/no line matches the filter/i)).toBeTruthy();
+  });
+
+  it("names the endpoint that collected a line, and the source only where it differs", () => {
+    const { getAllByTitle, queryByText } = mountFiltered();
+    const via = getAllByTitle("The endpoint that collected the line");
+    expect(via.map((e) => e.textContent)).toEqual(["via tcp", "via tcp"]);
+    // Source and endpoint are both "tcp": the source is not said twice.
+    expect(queryByText("tcp", { selector: "span.font-data:not([title] *)" })).toBeNull();
+  });
+
+  it("shows when a line arrived where its own time differs", () => {
+    const own = new Date(Date.now() - 3 * 3600_000).toISOString();
+    const { getByText } = mount({
+      component: "disp-1",
+      logs: [{ ts: own, received_at: nowIso, message: "booted before the node read it" }],
+    });
+    expect(getByText(/arrived/)).toBeTruthy();
+  });
 });

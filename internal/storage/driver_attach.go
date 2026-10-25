@@ -29,7 +29,10 @@ var (
 // names loaded in one pass, so validation never interleaves queries with the
 // pure walk.
 type catalogMaps struct {
-	lanes    map[string]string
+	lanes map[string]string
+	// schemas is each event type's payload_schema, which an event emit's
+	// attributes are held to at write (#1145).
+	schemas  map[string][]byte
 	commands map[string]bool
 	secrets  map[string]bool
 	// calcOwned are the metric and property names a calc rule outputs: keys
@@ -41,38 +44,48 @@ func (c catalogMaps) LaneOf(name string) (string, bool) {
 	lane, ok := c.lanes[name]
 	return lane, ok
 }
-func (c catalogMaps) CommandTypeExists(name string) bool { return c.commands[name] }
-func (c catalogMaps) SecretTypeExists(name string) bool  { return c.secrets[name] }
+func (c catalogMaps) EventPayloadSchema(name string) []byte { return c.schemas[name] }
+func (c catalogMaps) CommandTypeExists(name string) bool    { return c.commands[name] }
+func (c catalogMaps) SecretTypeExists(name string) bool     { return c.secrets[name] }
 func (c catalogMaps) WriterClass(name string) writerclass.Class {
 	return writerclass.Of(name, c.calcOwned[name])
 }
 
-// loadDriverCatalog snapshots the names a spec may reference: the metric and
-// property catalogs as emit lanes, the command types, the secret types.
+// loadDriverCatalog snapshots the names a spec may reference: the metric,
+// property and event catalogs as emit lanes (an event type's payload schema
+// beside it, #1145), the command types, the secret types.
 func loadDriverCatalog(ctx context.Context, q querier) (catalogMaps, error) {
 	cat := catalogMaps{
 		lanes:     map[string]string{},
+		schemas:   map[string][]byte{},
 		commands:  map[string]bool{},
 		secrets:   map[string]bool{},
 		calcOwned: map[string]bool{},
 	}
 	rows, err := q.Query(ctx, `
-		select name, 'metric' from metric_type
+		select name, 'metric', null::jsonb from metric_type
 		union all
-		select name, 'property' from property_type`)
+		select name, 'property', null::jsonb from property_type
+		union all
+		select name, 'event', payload_schema from event_type`)
 	if err != nil {
 		return cat, fmt.Errorf("storage: load emit catalogs: %w", err)
 	}
 	defer rows.Close()
 	for rows.Next() {
 		var name, lane string
-		if err := rows.Scan(&name, &lane); err != nil {
+		var schema []byte
+		if err := rows.Scan(&name, &lane, &schema); err != nil {
 			return cat, fmt.Errorf("storage: scan emit catalog: %w", err)
 		}
-		// The canon test keeps the lanes disjoint; first write wins if a
-		// stranger ever collides, and validation still resolves.
+		// The three ingest catalogs share one namespace (a create is refused
+		// when a sibling holds the name); first write wins if a stranger ever
+		// collides, and validation still resolves.
 		if _, dup := cat.lanes[name]; !dup {
 			cat.lanes[name] = lane
+			if len(schema) > 0 {
+				cat.schemas[name] = schema
+			}
 		}
 	}
 	if err := rows.Err(); err != nil {
@@ -350,6 +363,12 @@ func loadDriverRef(ctx context.Context, q querier, ref string) (*Driver, error) 
 func bakeEmits(emits []driver.Emit, cat catalogMaps) ([]driver.BakedEmit, error) {
 	out := make([]driver.BakedEmit, 0, len(emits))
 	for _, em := range emits {
+		if em.Log != nil {
+			// A log line has no catalog name and no writer class: it is
+			// untyped arrival (ADR-0066), landed on the task's component.
+			out = append(out, driver.BakedEmit{Lane: driver.LaneLog, Message: em.Message, Attributes: em.Attributes, Log: em.Log, TS: em.TS})
+			continue
+		}
 		if !emitAdmitted(em.Name, cat.calcOwned) {
 			continue
 		}
@@ -359,7 +378,8 @@ func bakeEmits(emits []driver.Emit, cat catalogMaps) ([]driver.BakedEmit, error)
 			// path here, and refusing names it.
 			return nil, fmt.Errorf("%w: emitted name %q is no longer in any catalog", ErrAttachInvalid, em.Name)
 		}
-		out = append(out, driver.BakedEmit{Name: em.Name, Lane: lane, Extract: em.Extract, Transform: em.Transform})
+		out = append(out, driver.BakedEmit{Name: em.Name, Lane: lane, Extract: em.Extract, Transform: em.Transform,
+			Message: em.Message, Attributes: em.Attributes, TS: em.TS})
 	}
 	return out, nil
 }

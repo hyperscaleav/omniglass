@@ -1946,7 +1946,7 @@
    "version": "1.0.0",
    "transport": "https",
    "polls": 3,
-   "listeners": 5,
+   "listeners": 7,
    "commands": 3
   },
   {
@@ -1964,7 +1964,7 @@
    "version": "1.0.0",
    "transport": "tcp",
    "polls": 1,
-   "listeners": 1,
+   "listeners": 2,
    "commands": 1
   },
   {

@@ -15,6 +15,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"regexp"
+	"sort"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -28,9 +29,12 @@ import (
 // A nil Catalog validates structure only: that is the parse-time floor, and
 // name resolution is explicitly the write gate's job.
 type Catalog interface {
-	// LaneOf resolves an emitted sample's name to its lane ("metric" or
-	// "property"); ok is false for a name no catalog holds.
+	// LaneOf resolves an emitted name to its lane ("metric", "property" or
+	// "event", #1145); ok is false for a name no catalog holds.
 	LaneOf(name string) (lane string, ok bool)
+	// EventPayloadSchema is an event type's payload_schema (nil when it
+	// declares none), which an event emit's attributes are held to at write.
+	EventPayloadSchema(name string) []byte
 	// CommandTypeExists reports whether the command-type catalog holds name.
 	CommandTypeExists(name string) bool
 	// SecretTypeExists reports whether the secret-type catalog holds name.
@@ -69,6 +73,9 @@ type Spec struct {
 const (
 	UnmatchedDiscard          = "discard"
 	UnmatchedCollectionFailed = "collection-failed"
+	// UnmatchedLog lands each unclaimed message as a log line on the
+	// endpoint's component (#1145): raw arrival, ADR-0066.
+	UnmatchedLog = "log"
 )
 
 // Input is one parameter an attachment must supply. Kind "secret" carries a
@@ -245,14 +252,107 @@ type Transform struct {
 	Map   map[string]string `json:"map,omitempty"`
 }
 
-// Emit is one sample a function emits: a lane-catalog name (the lane itself
-// is resolved from the catalogs at write and baked at attach, per ADR-0065's
-// split: the name is the signal, the emission is a sample), where to find it
-// in the response, and an optional transform.
+// Emit is one thing a function emits, onto any of the four collected lanes
+// (#1145). A metric or a property names its key (the lane resolved from the
+// catalogs at write and baked at attach, per ADR-0065's split: the name is
+// the signal, the emission is a sample) and where to find its value, with an
+// optional transform. An event names its event type and carries a message
+// and attributes, rendered into its payload. A log line has no catalog name:
+// it declares log instead, with its message, severity, facility, source and
+// attributes. Any emit may read its time out of the payload.
 type Emit struct {
-	Name      string     `json:"name"`
-	Extract   Extract    `json:"extract"`
+	Name      string     `json:"name,omitempty"`
+	Extract   Extract    `json:"extract,omitzero"`
 	Transform *Transform `json:"transform,omitempty"`
+	// Message is an event's or a log line's text: a constant or an extract,
+	// by default the whole claimed message or answer.
+	Message *Field `json:"message,omitempty"`
+	// Attributes are an event's payload fields or a log line's attributes,
+	// each a constant or an extract; a cast to int or float renders a JSON
+	// number, anything else a string.
+	Attributes map[string]Field `json:"attributes,omitempty"`
+	// Log marks a log line emit.
+	Log *LogEmit `json:"log,omitempty"`
+	// TS reads the record's time out of the payload; absent, the time it
+	// arrived at the node.
+	TS *TimeField `json:"ts,omitempty"`
+}
+
+// LogEmit is what a log line carries beside its message: its severity (an
+// extract or a constant, mapped onto RFC 5424's eight levels through
+// internal/logline's one alias table), its facility, and its source (by
+// default the endpoint's transport).
+type LogEmit struct {
+	Severity *Field `json:"severity,omitempty"`
+	Facility *Field `json:"facility,omitempty"`
+	Source   string `json:"source,omitempty"`
+}
+
+// Field is one value an emit carries: a constant (Value) or an extract with
+// an optional transform, exactly one of the two.
+type Field struct {
+	Value     string     `json:"value,omitempty"`
+	Extract   *Extract   `json:"extract,omitempty"`
+	Transform *Transform `json:"transform,omitempty"`
+}
+
+// TimeField reads a record's time: an extract, parsed in its layout
+// (rfc3339; rfc3164, which carries no year; unix; unix-ms; or go:<a Go
+// reference layout>), a time without a zone read in Zone (an IANA name, UTC
+// by default).
+type TimeField struct {
+	Extract Extract `json:"extract"`
+	Layout  string  `json:"layout"`
+	Zone    string  `json:"zone,omitempty"`
+}
+
+// The lanes an emit lands on: three catalogs, and the untyped log line.
+const (
+	LaneMetric   = "metric"
+	LaneProperty = "property"
+	LaneEvent    = "event"
+	LaneLog      = "log"
+)
+
+// label names an emit in a refusal: its key, or "log" for a log line.
+func (em Emit) label() string {
+	if em.Log != nil && em.Name == "" {
+		return "log"
+	}
+	return em.Name
+}
+
+// extracts is every extract an emit carries, so a transport's shape check
+// reads them all (a severity read by jsonpath is as uninterpretable over a
+// line as a metric would be).
+func (em Emit) extracts() []Extract {
+	out := []Extract{em.Extract}
+	fields := []*Field{em.Message}
+	if em.Log != nil {
+		fields = append(fields, em.Log.Severity, em.Log.Facility)
+	}
+	for _, k := range sortedKeys(em.Attributes) {
+		f := em.Attributes[k]
+		fields = append(fields, &f)
+	}
+	for _, f := range fields {
+		if f != nil && f.Extract != nil {
+			out = append(out, *f.Extract)
+		}
+	}
+	if em.TS != nil {
+		out = append(out, em.TS.Extract)
+	}
+	return out
+}
+
+func sortedKeys[V any](m map[string]V) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
 }
 
 // Poll is a scheduled ask: send Request every Schedule, extract Emits from
@@ -510,9 +610,9 @@ func (s *Spec) Validate(cat Catalog) error {
 		return fmt.Errorf("driver: spec declares no function of any family")
 	}
 	switch s.Unmatched {
-	case "", UnmatchedDiscard, UnmatchedCollectionFailed:
+	case "", UnmatchedDiscard, UnmatchedCollectionFailed, UnmatchedLog:
 	default:
-		return fmt.Errorf("driver: unmatched policy %q; want discard or collection-failed", s.Unmatched)
+		return fmt.Errorf("driver: unmatched policy %q; want discard, collection-failed or log", s.Unmatched)
 	}
 
 	inputs := map[string]bool{}
@@ -628,8 +728,10 @@ func (s *Spec) Validate(cat Catalog) error {
 		}
 		if stream != nil {
 			for _, e := range l.Emits {
-				if err := checkHTTPEmit(fmt.Sprintf("listener %q emit %q", l.Name, e.Name), e.Extract, *stream); err != nil {
-					return err
+				for _, ex := range e.extracts() {
+					if err := checkHTTPEmit(fmt.Sprintf("listener %q emit %q", l.Name, e.label()), ex, *stream); err != nil {
+						return err
+					}
 				}
 			}
 		}
@@ -750,33 +852,198 @@ func validateEmits(family, fn string, emits []Emit, cat Catalog) error {
 		return fmt.Errorf("driver: %s %q emits nothing", family, fn)
 	}
 	for _, em := range emits {
+		if err := validateEmit(family, fn, em, cat); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// validateEmit holds one emit to its lane's shape (#1145). A log line names
+// no key and reads its text through message; an event names its event type
+// and carries a message and attributes; a metric or a property names its key
+// and reads its value through exactly one extract. With no catalog the lane
+// of a named emit is unknown, so only the shape every lane shares is held.
+func validateEmit(family, fn string, em Emit, cat Catalog) error {
+	lane := ""
+	if em.Log != nil {
+		if em.Name != "" {
+			return fmt.Errorf("driver: %s %q emit %q declares log, and a log line has no catalog name; drop the name", family, fn, em.Name)
+		}
+		lane = LaneLog
+	} else {
 		if em.Name == "" {
-			return fmt.Errorf("driver: %s %q emits a sample with no name", family, fn)
+			return fmt.Errorf("driver: %s %q emits a sample with no name (a log line declares log instead)", family, fn)
 		}
 		// A reserved key (a pin, the gate, a held session's account of
-		// itself, a verdict or a probe timing, collection-failed, health) has
-		// one writer, never a driver's emits: emitted by a driver it would land
-		// as the observed value, and for a pin the worklist would deliver it
-		// back as the pin (#1035 review). The writer-class ruling decides it
-		// (ADR-0161), the one the push lane and the gateway read.
+		// itself, a verdict or a probe timing, collection-failed, health,
+		// command-issued) has one writer, never a driver's emits: emitted by
+		// a driver it would land as the observed value, and for a pin the
+		// worklist would deliver it back as the pin (#1035 review). The
+		// writer-class ruling decides it (ADR-0161), the one the push lane
+		// and the gateway read.
 		if err := emittable(em.Name); err != nil {
 			return fmt.Errorf("driver: %s %q may not emit %w", family, fn, err)
 		}
 		if cat != nil {
-			if _, ok := cat.LaneOf(em.Name); !ok {
+			l, ok := cat.LaneOf(em.Name)
+			if !ok {
 				return fmt.Errorf("driver: %s %q emits %q, which no catalog holds", family, fn, em.Name)
 			}
 			if c := cat.WriterClass(em.Name); c != writerclass.Collected {
 				return fmt.Errorf("driver: %s %q may not emit %q: %s", family, fn, em.Name, writerclass.Refusal(c, em.Name, writerclass.Node, ""))
 			}
+			lane = l
+		}
+	}
+	what := fmt.Sprintf("%s emit %q", fn, em.label())
+	switch lane {
+	case LaneLog, LaneEvent:
+		if !em.Extract.empty() || em.Transform != nil {
+			return fmt.Errorf("driver: %s is an event or a log line, which reads its text through message (a constant or an extract), not a top-level extract", what)
+		}
+	case LaneMetric, LaneProperty:
+		if em.Message != nil || len(em.Attributes) > 0 {
+			return fmt.Errorf("driver: %s is a %s: message and attributes ride an event or a log line", what, lane)
 		}
 		if err := validateExtract(fn, em); err != nil {
 			return err
 		}
-		if em.Transform != nil {
-			if err := validateTransform(fn, em.Name, *em.Transform); err != nil {
+	default:
+		// No catalog: at most one extract, its regex compiling.
+		if em.Extract.count() > 1 {
+			return validateExtract(fn, em)
+		}
+		if em.Extract.Regex != "" {
+			if _, err := regexp.Compile(em.Extract.Regex); err != nil {
+				return fmt.Errorf("driver: %s has an uncompilable regex: %v", what, err)
+			}
+		}
+	}
+	if em.Transform != nil {
+		if err := validateTransform(fn, em.Name, *em.Transform); err != nil {
+			return err
+		}
+	}
+	if em.Message != nil {
+		if err := validateField(what+" message", *em.Message); err != nil {
+			return err
+		}
+	}
+	for _, k := range sortedKeys(em.Attributes) {
+		if !attributeName.MatchString(k) {
+			return fmt.Errorf("driver: %s attribute %q is not a name (letters, digits, - and _, at most 64)", what, k)
+		}
+		if err := validateField(fmt.Sprintf("%s attribute %q", what, k), em.Attributes[k]); err != nil {
+			return err
+		}
+	}
+	if em.Log != nil {
+		if em.Log.Severity != nil {
+			if err := validateField(what+" severity", *em.Log.Severity); err != nil {
 				return err
 			}
+		}
+		if em.Log.Facility != nil {
+			if err := validateField(what+" facility", *em.Log.Facility); err != nil {
+				return err
+			}
+		}
+		if len(em.Log.Source) > 100 {
+			return fmt.Errorf("driver: %s source is longer than 100 characters", what)
+		}
+	}
+	if em.TS != nil {
+		if err := validateTimeField(what, *em.TS); err != nil {
+			return err
+		}
+	}
+	if lane == LaneEvent && cat != nil {
+		if err := checkPayloadSchema(what, em, cat.EventPayloadSchema(em.Name)); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// attributeName is the shape of an attribute's name: a JSON key an operator
+// reads and a rule can name.
+var attributeName = regexp.MustCompile(`^[A-Za-z0-9_-]{1,64}$`)
+
+// validateField holds a constant-or-extract to exactly one of the two, the
+// extract to one kind and a compiling regex, and the transform to its known
+// casts.
+func validateField(what string, f Field) error {
+	if (f.Value != "") == (f.Extract != nil) {
+		return fmt.Errorf("driver: %s declares one of value or extract", what)
+	}
+	if f.Extract != nil {
+		if n := f.Extract.count(); n != 1 {
+			return fmt.Errorf("driver: %s needs exactly one extract kind, has %d", what, n)
+		}
+		if f.Extract.Regex != "" {
+			if _, err := regexp.Compile(f.Extract.Regex); err != nil {
+				return fmt.Errorf("driver: %s has an uncompilable regex: %v", what, err)
+			}
+		}
+	}
+	if f.Transform != nil {
+		if err := validateTransform(what, "", *f.Transform); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// validateTimeField holds a payload time to one extract, a layout the
+// interpreter knows, and a zone the node can load.
+func validateTimeField(what string, tf TimeField) error {
+	if n := tf.Extract.count(); n != 1 {
+		return fmt.Errorf("driver: %s ts needs exactly one extract kind, has %d", what, n)
+	}
+	if tf.Extract.Regex != "" {
+		if _, err := regexp.Compile(tf.Extract.Regex); err != nil {
+			return fmt.Errorf("driver: %s ts has an uncompilable regex: %v", what, err)
+		}
+	}
+	if err := checkLayout(tf.Layout); err != nil {
+		return fmt.Errorf("driver: %s ts %v", what, err)
+	}
+	if tf.Zone != "" {
+		if _, err := time.LoadLocation(tf.Zone); err != nil {
+			return fmt.Errorf("driver: %s ts zone %q is not a time zone the node knows: %v", what, tf.Zone, err)
+		}
+	}
+	return nil
+}
+
+// checkPayloadSchema holds an event emit's attributes to its type's
+// payload_schema where the schema says which fields there are: a field the
+// schema closes out is refused, and so is leaving out a field it requires
+// (every event would then fail the schema at ingest). The values are the
+// ingest's to check.
+func checkPayloadSchema(what string, em Emit, schema []byte) error {
+	if len(schema) == 0 {
+		return nil
+	}
+	var sc struct {
+		Properties           map[string]json.RawMessage `json:"properties"`
+		Required             []string                   `json:"required"`
+		AdditionalProperties *bool                      `json:"additionalProperties"`
+	}
+	if err := json.Unmarshal(schema, &sc); err != nil {
+		return nil // a schema of another shape: the ingest holds the values to it
+	}
+	if sc.AdditionalProperties != nil && !*sc.AdditionalProperties {
+		for _, k := range sortedKeys(em.Attributes) {
+			if _, ok := sc.Properties[k]; !ok {
+				return fmt.Errorf("driver: %s attribute %q is not a field %q's payload_schema allows", what, k, em.Name)
+			}
+		}
+	}
+	for _, k := range sc.Required {
+		if _, ok := em.Attributes[k]; !ok {
+			return fmt.Errorf("driver: %s leaves out %q, which %q's payload_schema requires", what, k, em.Name)
 		}
 	}
 	return nil
@@ -794,14 +1061,22 @@ func emittable(name string) error {
 	return nil
 }
 
-func validateExtract(fn string, em Emit) error {
+// count is how many extract kinds an extract declares.
+func (ex Extract) count() int {
 	set := 0
-	for _, v := range []string{em.Extract.OID, em.Extract.Regex, em.Extract.JSONPath, em.Extract.Key, em.Extract.XPath} {
+	for _, v := range []string{ex.OID, ex.Regex, ex.JSONPath, ex.Key, ex.XPath} {
 		if v != "" {
 			set++
 		}
 	}
-	if set != 1 {
+	return set
+}
+
+// empty reports an extract that declares no kind.
+func (ex Extract) empty() bool { return ex.count() == 0 }
+
+func validateExtract(fn string, em Emit) error {
+	if set := em.Extract.count(); set != 1 {
 		return fmt.Errorf("driver: %s emit %q needs exactly one extract kind, has %d", fn, em.Name, set)
 	}
 	if em.Extract.Regex != "" {
@@ -813,13 +1088,17 @@ func validateExtract(fn string, em Emit) error {
 }
 
 func validateTransform(fn, name string, tr Transform) error {
+	what := fmt.Sprintf("%s emit %q", fn, name)
+	if name == "" {
+		what = fn
+	}
 	if tr.Cast == "" && tr.Scale == 0 && len(tr.Map) == 0 {
-		return fmt.Errorf("driver: %s emit %q declares an empty transform", fn, name)
+		return fmt.Errorf("driver: %s declares an empty transform", what)
 	}
 	switch tr.Cast {
 	case "", "int", "float", "text":
 	default:
-		return fmt.Errorf("driver: %s emit %q has unknown cast %q", fn, name, tr.Cast)
+		return fmt.Errorf("driver: %s has unknown cast %q", what, tr.Cast)
 	}
 	return nil
 }
@@ -829,21 +1108,40 @@ func validateTransform(fn, name string, tr Transform) error {
 // https and the line transports have wired poll fetchers (internal/collection);
 // a poll on any other transport refuses rather than faulting every tick.
 func checkPollShape(tr string, p Poll) error {
+	// Every extract an emit carries is read from the one answer (#1145): its
+	// value, a message, an attribute, a severity, a time.
+	type located struct {
+		emit string
+		ex   Extract
+	}
+	var all []located
+	for _, em := range p.Emits {
+		for _, ex := range em.extracts() {
+			if !ex.empty() {
+				all = append(all, located{em.label(), ex})
+			}
+		}
+	}
 	switch tr {
 	case "snmp":
 		if len(p.Request.Get) == 0 {
 			return fmt.Errorf("driver: snmp poll %q needs a get request (the scalar OIDs to read)", p.Name)
 		}
 		for _, em := range p.Emits {
-			if em.Extract.OID == "" {
-				return fmt.Errorf("driver: snmp poll %q emit %q must locate by oid", p.Name, em.Name)
+			if (em.Log != nil || em.Extract.empty()) && em.Message == nil {
+				return fmt.Errorf("driver: snmp poll %q emit %q needs a message (an oid or a value): an snmp answer has no whole text to carry", p.Name, em.label())
+			}
+		}
+		for _, l := range all {
+			if l.ex.OID == "" {
+				return fmt.Errorf("driver: snmp poll %q emit %q must locate by oid", p.Name, l.emit)
 			}
 		}
 	case "http", "https":
 		// The request is checked whole by validateHTTPRequest; here each
-		// emit's selector is bound to the response's declared format.
-		for _, em := range p.Emits {
-			if err := checkHTTPEmit(fmt.Sprintf("http poll %q emit %q", p.Name, em.Name), em.Extract, p.Request); err != nil {
+		// selector is bound to the response's declared format.
+		for _, l := range all {
+			if err := checkHTTPEmit(fmt.Sprintf("http poll %q emit %q", p.Name, l.emit), l.ex, p.Request); err != nil {
 				return err
 			}
 		}
@@ -853,17 +1151,17 @@ func checkPollShape(tr string, p Poll) error {
 		if p.Request.Line == "" {
 			return fmt.Errorf("driver: udp poll %q needs a line request (the datagram it sends)", p.Name)
 		}
-		for _, em := range p.Emits {
-			if em.Extract.OID != "" || em.Extract.Key != "" || em.Extract.JSONPath != "" || em.Extract.XPath != "" {
-				return fmt.Errorf("driver: udp poll %q emit %q must locate by regex (a datagram's line carries no keyed or json body)", p.Name, em.Name)
+		for _, l := range all {
+			if l.ex.OID != "" || l.ex.Key != "" || l.ex.JSONPath != "" || l.ex.XPath != "" {
+				return fmt.Errorf("driver: udp poll %q emit %q must locate by regex (a datagram's line carries no keyed or json body)", p.Name, l.emit)
 			}
 		}
 	case "websocket", "wss":
 		// A frame is a line or a JSON document: a regex reads either, a
 		// jsonpath a JSON one.
-		for _, em := range p.Emits {
-			if em.Extract.OID != "" || em.Extract.Key != "" || em.Extract.XPath != "" {
-				return fmt.Errorf("driver: websocket poll %q emit %q locates by jsonpath or regex (a frame carries no oid, key or markup)", p.Name, em.Name)
+		for _, l := range all {
+			if l.ex.OID != "" || l.ex.Key != "" || l.ex.XPath != "" {
+				return fmt.Errorf("driver: websocket poll %q emit %q locates by jsonpath or regex (a frame carries no oid, key or markup)", p.Name, l.emit)
 			}
 		}
 	case "tcp", "tls", "telnet", "ssh":
@@ -873,14 +1171,14 @@ func checkPollShape(tr string, p Poll) error {
 		if p.Request.Line == "" {
 			return fmt.Errorf("driver: %s poll %q needs a line request", tr, p.Name)
 		}
-		for _, em := range p.Emits {
+		for _, l := range all {
 			// A line response is text: only a regex extractor can read it. An
-			// emit that names an oid, key, or jsonpath (the keyed and json forms)
-			// would validate clean yet fault every tick, so refuse it here. An
-			// emit with no extractor at all is the general "exactly one extractor"
-			// refusal's job, not this one.
-			if em.Extract.OID != "" || em.Extract.Key != "" || em.Extract.JSONPath != "" || em.Extract.XPath != "" {
-				return fmt.Errorf("driver: %s poll %q emit %q must locate by regex (a line response carries no keyed or json body to read an oid, key, jsonpath or xpath from)", tr, p.Name, em.Name)
+			// extract that names an oid, key, or jsonpath (the keyed and json
+			// forms) would validate clean yet fault every tick, so refuse it
+			// here. An emit with no extractor at all is the general "exactly
+			// one extractor" refusal's job, not this one.
+			if l.ex.OID != "" || l.ex.Key != "" || l.ex.JSONPath != "" || l.ex.XPath != "" {
+				return fmt.Errorf("driver: %s poll %q emit %q must locate by regex (a line response carries no keyed or json body to read an oid, key, jsonpath or xpath from)", tr, p.Name, l.emit)
 			}
 		}
 	default:

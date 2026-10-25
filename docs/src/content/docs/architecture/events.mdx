@@ -23,7 +23,7 @@ A sample and an event are different shapes, so each gets its own registry: [the 
 
 An event arrives one of four ways; none is auto-manufactured from a value flip (a transition is already two consecutive sample rows, derivable by query).
 
-1. **caught**: a component publishes a structured occurrence natively (an xAPI Event channel, a webhook, an SNMP trap).
+1. **caught**: a component publishes a structured occurrence natively (an xAPI Event channel, a webhook, an SNMP trap), and a driver's emit maps it to its event type, a message and attributes rendered into the payload ([an emit lands on any lane](/architecture/collection/#an-emit-lands-on-any-lane), [ADR-1145](/architecture/decisions/#adr-1145-a-driver-emit-lands-on-any-of-the-four-lanes-and-a-log-lines-severity-is-rfc-5424s)).
 2. **caused**: we issued a command, recorded as an event; this is what opens an [intended](/architecture/properties/#intended-the-declared-effect-of-a-command) sample.
 
 :::design[The `derived` and `scheduled` producers: the `event_rule` (ADR-0050), log derivation (#410), and the clock (#419)]

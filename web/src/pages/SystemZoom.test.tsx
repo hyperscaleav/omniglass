@@ -553,16 +553,16 @@ describe("the events and logs tabs (#793)", () => {
 
   it("the logs tab renders the members' lines with severity colouring the row, and an empty room says so", async () => {
     const r = mount(`/web/systems/${uuidFor("szp-sys")}?tab=logs`);
-    r.qc.setQueryData([...systemLogsKey(uuidFor("szp-sys"))], [
+    r.qc.setQueryData([...systemLogsKey(uuidFor("szp-sys"))], { sources: ["syslog"], logs: [
       { ts: "2026-08-18T16:45:02Z", severity: "error", message: "connect timeout", component: "videobar-1" },
       { ts: "2026-08-18T16:42:11Z", severity: "info", message: "qrc poll ok", component: "dsp" },
-    ]);
+    ] });
     const tab = screen.getByTestId("logs-tab");
     expect(await within(tab).findByText(/connect timeout/)).toBeTruthy();
     expect(within(tab).getByText(/qrc poll ok/)).toBeTruthy();
     cleanup();
     const r2 = mount(`/web/systems/${uuidFor("szp-sys")}?tab=logs`);
-    r2.qc.setQueryData([...systemLogsKey(uuidFor("szp-sys"))], []);
+    r2.qc.setQueryData([...systemLogsKey(uuidFor("szp-sys"))], { sources: [], logs: [] });
     expect(await screen.findByText(/No lines in the window/)).toBeTruthy();
   });
 });

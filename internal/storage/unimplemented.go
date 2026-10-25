@@ -445,7 +445,10 @@ func (UnimplementedGateway) InsertLogLines(context.Context, []LogLineWrite) erro
 func (UnimplementedGateway) InsertNodeLogs(context.Context, []NodeLogWrite) error {
 	return nil
 }
-func (UnimplementedGateway) ListComponentLogs(context.Context, string, time.Duration, int) ([]LogLine, error) {
+func (UnimplementedGateway) ListComponentLogSources(context.Context, string, time.Duration) ([]string, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) ListComponentLogs(context.Context, string, time.Duration, int, LogFilter) ([]LogLine, error) {
 	return nil, nil
 }
 func (UnimplementedGateway) ListNodeLogs(context.Context, string, time.Duration, int) ([]LogLine, error) {
@@ -871,7 +874,10 @@ func (UnimplementedGateway) ListSystemAlarms(context.Context, string, time.Durat
 	return nil, nil
 }
 
-func (UnimplementedGateway) ListSystemLogs(context.Context, string, time.Duration, int) ([]LogLine, error) {
+func (UnimplementedGateway) ListSystemLogSources(context.Context, string, time.Duration) ([]string, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) ListSystemLogs(context.Context, string, time.Duration, int, LogFilter) ([]LogLine, error) {
 	return nil, nil
 }
 

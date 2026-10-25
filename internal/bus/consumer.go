@@ -124,10 +124,11 @@ func (s *Server) handleTelemetry(msg jetstream.Msg) {
 	// destinations and the binding states both.
 	bind := ingestBinding{LogNode: node}
 
-	// Samples are owner-bound to the task's component, resolved only when there are
-	// samples to bind: a logs-only batch (a node's self-log tick) carries no task_id,
-	// and asking the resolver about an empty task would read as an orphan.
-	if sampleCount(&ev) > 0 {
+	// Samples, and a task's collected log lines (#1145), are owner-bound to the
+	// task's component, resolved only when there is something to bind: a
+	// logs-only batch (a node's self-log tick) carries no task_id, and asking
+	// the resolver about an empty task would read as an orphan.
+	if taskBound(&ev) > 0 {
 		// Owner + confinement: the owner is the task's interface component, and the
 		// task must belong to THIS node. A task on another node, an unknown task, or
 		// a shared interface resolves to !ok: the samples are orphans, never written
@@ -207,10 +208,16 @@ type ingestBinding struct {
 }
 
 // sampleCount is how many registry-resolved observations a batch carries across
-// its three typed lanes. Zero means a logs-only batch: no owner to resolve, no
-// registry to read.
+// its three typed lanes. Zero means no registry to read.
 func sampleCount(ev *ogv1.TelemetryBatch) int {
 	return len(ev.GetMetrics()) + len(ev.GetProperties()) + len(ev.GetEvents())
+}
+
+// taskBound is how much of a batch belongs to its task: its samples and the
+// log lines the task collected (#1145). Zero means a self-log batch: no owner
+// to resolve.
+func taskBound(ev *ogv1.TelemetryBatch) int {
+	return sampleCount(ev) + len(ev.GetTaskLogs())
 }
 
 // land writes one batch to its sinks: the raw log lines, then the three typed
@@ -246,7 +253,25 @@ func (s *Server) land(ctx context.Context, ev *ogv1.TelemetryBatch, bind ingestB
 			return err
 		}
 	}
+	// A task's collected log lines (#1145), on the node lane alone: they land
+	// on the task's component, owner-bound server-side from the task as every
+	// sample is, so a node can land a line only for a component its own task
+	// collects for. An orphan batch (no resolved owner) lands none.
+	if bind.LogNode != "" && bind.SampleOwner != nil {
+		if logs := taskLogWrites(ev, *bind.SampleOwner); len(logs) > 0 {
+			if err := s.store.InsertLogLines(ctx, logs); err != nil {
+				return err
+			}
+		}
+	}
 	if bind.SampleOwner == nil || sampleCount(ev) == 0 {
+		if bind.SampleOwner != nil && len(ev.GetTaskLogs()) > 0 {
+			// The endpoint delivered this batch: its freshness is the
+			// server's receipt (#933), whichever lane carried it.
+			if id := bind.SampleOwner.EndpointID; id != "" {
+				return s.store.StampEndpointsSeen(ctx, []string{id})
+			}
+		}
 		return nil
 	}
 
@@ -387,6 +412,39 @@ func logLineWrites(ev *ogv1.TelemetryBatch, component string) []storage.LogLineW
 			OwnerKind:     "component",
 			OwnerID:       component,
 			Source:        lineSource(ev, l),
+			Severity:      l.GetSeverity(),
+			Facility:      l.GetFacility(),
+			Message:       l.GetMessage(),
+			Attributes:    l.GetAttributes(),
+			Labels:        l.GetLabels(),
+			CorrelationID: l.GetCorrelationId(),
+			TS:            lineTime(ev, l),
+		})
+	}
+	return out
+}
+
+// taskLogWrites turns a node-lane batch's task_logs (#1145) into log_line
+// writes on the task's component: its collecting endpoint is the line's
+// instance, and a line naming no source takes the endpoint's transport. Pure,
+// and the same ts resolution as a push's lines; the severity table and the
+// caps are the Storage Gateway's, held on every log_line write.
+func taskLogWrites(ev *ogv1.TelemetryBatch, owner storage.TaskOwner) []storage.LogLineWrite {
+	logs := ev.GetTaskLogs()
+	if len(logs) == 0 {
+		return nil
+	}
+	out := make([]storage.LogLineWrite, 0, len(logs))
+	for _, l := range logs {
+		source := l.GetSource()
+		if source == "" {
+			source = owner.Transport
+		}
+		out = append(out, storage.LogLineWrite{
+			OwnerKind:     "component",
+			OwnerID:       owner.ComponentID,
+			Instance:      owner.EndpointName,
+			Source:        source,
 			Severity:      l.GetSeverity(),
 			Facility:      l.GetFacility(),
 			Message:       l.GetMessage(),

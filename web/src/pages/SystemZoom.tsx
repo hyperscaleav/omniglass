@@ -39,7 +39,9 @@ import RuleLink from "../components/RuleLink";
 import SeverityBadge from "../components/SeverityBadge";
 import { incidentReasons, incidentRows, incidentsOf, markerX, uptimePct, type MemberAlarms } from "../lib/system_history";
 import { spans as timelineSpans } from "../lib/timeline";
-import { systemEvents, systemEventsKey, systemLogs, systemLogsKey } from "../lib/system_activity";
+import { systemEvents, systemEventsKey, systemLogs, systemLogsKey, type SystemLogs } from "../lib/system_activity";
+import type { LogFilter } from "../lib/logs";
+import LogFilters from "../components/LogFilters";
 import { metricSeries, metricSeriesKey } from "../lib/series";
 import { CalcRuleLink } from "../components/RuleLink";
 import { memberModel, systemCrumbs, systemsAtPlace } from "../lib/detail";
@@ -195,7 +197,17 @@ export default function SystemZoom() {
   }));
   const metricSeriesData = () => kpiMetrics().map((_, i) => seriesQueries[i]?.data);
   const eventsQ = useQuery(() => ({ queryKey: systemEventsKey(id()), queryFn: () => systemEvents(id()), enabled: tab() === "activity", refetchInterval: LEAF_POLL_MS }));
-  const logsQ = useQuery(() => ({ queryKey: systemLogsKey(id()), queryFn: () => systemLogs(id()), enabled: tab() === "activity", refetchInterval: LEAF_POLL_MS }));
+  // The members' lines under the Logs filter (#1145): a severity threshold
+  // and a source, applied by the read.
+  const [logFilter, setLogFilter] = createSignal<LogFilter>({});
+  const logsQ = useQuery(() => ({
+    queryKey: systemLogsKey(id(), logFilter()),
+    queryFn: () => systemLogs(id(), logFilter()),
+    enabled: tab() === "activity",
+    refetchInterval: LEAF_POLL_MS,
+    placeholderData: (prev: SystemLogs | undefined) => prev,
+  }));
+  const logLines = () => logsQ.data?.logs ?? [];
   // The history's now: the coarse clock, but never behind the report's own
   // last edge, which a poll can bring in between two ticks (an incident that
   // opened seconds ago would otherwise have a negative length and vanish).
@@ -514,11 +526,15 @@ export default function SystemZoom() {
         <Show when={tab() === "activity"}>
           <section data-testid="logs-tab" class="flex flex-col gap-2 p-4">
             <Eyebrow label="Logs" hint="The members' raw log lines merged newest first, each naming the component that wrote it. The last 24 hours, capped; a node's own logs live on the node." />
-            <Show when={(logsQ.data ?? []).length > 0} fallback={<p class="text-sm text-base-content/50">No lines in the window.</p>}>
+            <LogFilters filter={logFilter()} sources={logsQ.data?.sources ?? []} onChange={setLogFilter} />
+            <Show
+              when={logLines().length > 0}
+              fallback={<p class="text-sm text-base-content/50">{logFilter().severity || logFilter().source ? "No line matches the filter in the window." : "No lines in the window."}</p>}
+            >
               <div class="overflow-x-auto rounded-box border border-base-300 bg-base-100 p-2 font-mono text-[11.5px] leading-relaxed">
-                <For each={logsQ.data ?? []}>
+                <For each={logLines()}>
                   {(l) => (
-                    <div class="whitespace-pre" classList={{ "text-error": l.severity === "error" || l.severity === "critical", "text-warning": l.severity === "warning", "text-base-content/70": !l.severity || l.severity === "info" }}>
+                    <div class="whitespace-pre" classList={{ "text-error": l.severity === "error" || l.severity === "critical" || l.severity === "alert" || l.severity === "emergency", "text-warning": l.severity === "warning", "text-base-content/70": !l.severity || l.severity === "info" || l.severity === "notice" || l.severity === "debug" }}>
                       {`${fmtTime(l.ts)}  ${(l.component ?? "").padEnd(12)} ${(l.severity ?? "").padEnd(7)} ${l.message}`}
                     </div>
                   )}

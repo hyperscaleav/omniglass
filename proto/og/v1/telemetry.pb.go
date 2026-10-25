@@ -64,8 +64,10 @@ type TelemetryBatch struct {
 	// to a later checkpoint.
 	Raw []byte `protobuf:"bytes,6,opt,name=raw,proto3" json:"raw,omitempty"`
 	// logs is the raw log lines in this batch (ADR-0066): untyped arrival, not
-	// registry-resolved samples. The consumer writes them to log_line, owner-confined
-	// like samples. A node's self-logs ride here.
+	// registry-resolved samples. On the API lane the consumer writes them to
+	// log_line on the batch's owner; on a node's lane they are the node's own
+	// self-logs, written to node_log. A component's lines a node collected ride
+	// task_logs instead.
 	Logs []*LogLine `protobuf:"bytes,7,rep,name=logs,proto3" json:"logs,omitempty"`
 	// owner is the estate address this batch belongs to, set ONLY on the API push
 	// lane (og.v1.api.telemetry), where the route already authorized the caller
@@ -90,7 +92,14 @@ type TelemetryBatch struct {
 	// events is the occurrence lane: each entry must name a registered event_type
 	// and lands in event with origin caught (a natively published occurrence, an
 	// xAPI event or an SNMP trap; ADR-0066). Raw log text rides logs instead.
-	Events        []*EventSample `protobuf:"bytes,12,rep,name=events,proto3" json:"events,omitempty"`
+	Events []*EventSample `protobuf:"bytes,12,rep,name=events,proto3" json:"events,omitempty"`
+	// task_logs is the log lines a task collected from its component (#1145): a
+	// driver's log line emits and the messages a listener policy lands unclaimed.
+	// The consumer writes them to log_line on the task's component, owner-bound
+	// server-side from the task as every sample is, never to node_log. A field of
+	// its own, beside the node's self-logs in logs, so one batch carries both and
+	// neither lands in the other's table. Set only on a node's lane.
+	TaskLogs      []*LogLine `protobuf:"bytes,13,rep,name=task_logs,json=taskLogs,proto3" json:"task_logs,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -198,6 +207,13 @@ func (x *TelemetryBatch) GetProperties() []*PropertySample {
 func (x *TelemetryBatch) GetEvents() []*EventSample {
 	if x != nil {
 		return x.Events
+	}
+	return nil
+}
+
+func (x *TelemetryBatch) GetTaskLogs() []*LogLine {
+	if x != nil {
+		return x.TaskLogs
 	}
 	return nil
 }
@@ -629,7 +645,7 @@ var File_proto_og_v1_telemetry_proto protoreflect.FileDescriptor
 
 const file_proto_og_v1_telemetry_proto_rawDesc = "" +
 	"\n" +
-	"\x1bproto/og/v1/telemetry.proto\x12\x05og.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\xf7\x03\n" +
+	"\x1bproto/og/v1/telemetry.proto\x12\x05og.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\xa4\x04\n" +
 	"\x0eTelemetryBatch\x12\x17\n" +
 	"\atask_id\x18\x01 \x01(\tR\x06taskId\x12\x17\n" +
 	"\anode_id\x18\x02 \x01(\tR\x06nodeId\x12*\n" +
@@ -644,7 +660,8 @@ const file_proto_og_v1_telemetry_proto_rawDesc = "" +
 	"\n" +
 	"properties\x18\v \x03(\v2\x15.og.v1.PropertySampleR\n" +
 	"properties\x12*\n" +
-	"\x06events\x18\f \x03(\v2\x12.og.v1.EventSampleR\x06events\x1a9\n" +
+	"\x06events\x18\f \x03(\v2\x12.og.v1.EventSampleR\x06events\x12+\n" +
+	"\ttask_logs\x18\r \x03(\v2\x0e.og.v1.LogLineR\btaskLogs\x1a9\n" +
 	"\vLabelsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01J\x04\b\x05\x10\x06R\asamples\"-\n" +
@@ -721,17 +738,18 @@ var file_proto_og_v1_telemetry_proto_depIdxs = []int32{
 	2,  // 4: og.v1.TelemetryBatch.metrics:type_name -> og.v1.MetricSample
 	3,  // 5: og.v1.TelemetryBatch.properties:type_name -> og.v1.PropertySample
 	4,  // 6: og.v1.TelemetryBatch.events:type_name -> og.v1.EventSample
-	9,  // 7: og.v1.MetricSample.ts:type_name -> google.protobuf.Timestamp
-	7,  // 8: og.v1.MetricSample.labels:type_name -> og.v1.MetricSample.LabelsEntry
-	9,  // 9: og.v1.PropertySample.ts:type_name -> google.protobuf.Timestamp
-	8,  // 10: og.v1.PropertySample.labels:type_name -> og.v1.PropertySample.LabelsEntry
-	9,  // 11: og.v1.EventSample.ts:type_name -> google.protobuf.Timestamp
-	9,  // 12: og.v1.LogLine.ts:type_name -> google.protobuf.Timestamp
-	13, // [13:13] is the sub-list for method output_type
-	13, // [13:13] is the sub-list for method input_type
-	13, // [13:13] is the sub-list for extension type_name
-	13, // [13:13] is the sub-list for extension extendee
-	0,  // [0:13] is the sub-list for field type_name
+	5,  // 7: og.v1.TelemetryBatch.task_logs:type_name -> og.v1.LogLine
+	9,  // 8: og.v1.MetricSample.ts:type_name -> google.protobuf.Timestamp
+	7,  // 9: og.v1.MetricSample.labels:type_name -> og.v1.MetricSample.LabelsEntry
+	9,  // 10: og.v1.PropertySample.ts:type_name -> google.protobuf.Timestamp
+	8,  // 11: og.v1.PropertySample.labels:type_name -> og.v1.PropertySample.LabelsEntry
+	9,  // 12: og.v1.EventSample.ts:type_name -> google.protobuf.Timestamp
+	9,  // 13: og.v1.LogLine.ts:type_name -> google.protobuf.Timestamp
+	14, // [14:14] is the sub-list for method output_type
+	14, // [14:14] is the sub-list for method input_type
+	14, // [14:14] is the sub-list for extension type_name
+	14, // [14:14] is the sub-list for extension extendee
+	0,  // [0:14] is the sub-list for field type_name
 }
 
 func init() { file_proto_og_v1_telemetry_proto_init() }

@@ -80,7 +80,7 @@ export default function EventsPanel(p: { name: string }) {
         </Show>
       </div>
       <p class="text-[12px] text-base-content/50">
-        Discrete occurrences a component published natively or a rule derived, as opposed to the sampled metric and state values above. Newest first, last 24 hours.
+        Discrete occurrences a component published natively (its driver maps them to their event types) or a rule derived, as opposed to the sampled metric and state values above. Newest first, last 24 hours.
       </p>
       <Show
         when={events().length}

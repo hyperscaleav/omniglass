@@ -2,6 +2,8 @@ package storage_test
 
 import (
 	"context"
+	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -42,16 +44,17 @@ func TestInsertLogLines(t *testing.T) {
 		t.Fatalf("insert log lines: %v", err)
 	}
 
-	got, err := gw.ListComponentLogs(ctx, "disp-1", time.Hour, 10)
+	got, err := gw.ListComponentLogs(ctx, "disp-1", time.Hour, 10, storage.LogFilter{})
 	if err != nil {
 		t.Fatalf("list logs: %v", err)
 	}
 	if len(got) != 2 {
 		t.Fatalf("list logs: want 2, got %d", len(got))
 	}
-	// Newest first: the err/daemon line with its structured attributes and labels.
+	// Newest first: the err/daemon line with its structured attributes and
+	// labels, its severity on the canonical set (#1145).
 	n := got[0]
-	if n.Message != "codec unreachable" || n.Severity != "err" || n.Facility != "daemon" ||
+	if n.Message != "codec unreachable" || n.Severity != "error" || n.Facility != "daemon" ||
 		n.Source != "syslog" || n.CorrelationID != "sess-9" ||
 		string(n.Attributes) != `{"code": 504}` || string(n.Labels) != `{"class": "firmware"}` {
 		t.Fatalf("newest log: unexpected row %+v", n)
@@ -60,13 +63,15 @@ func TestInsertLogLines(t *testing.T) {
 		t.Fatalf("oldest log: want info 'link state changed to up', got %+v", got[1])
 	}
 
-	// The since window excludes the older line.
-	windowed, err := gw.ListComponentLogs(ctx, "disp-1", time.Minute, 10)
+	// The window counts back over arrival (#1145): both lines arrived just
+	// now, so a one-minute window holds both, though one claims a time two
+	// minutes old, and the newer arrival reads first.
+	windowed, err := gw.ListComponentLogs(ctx, "disp-1", time.Minute, 10, storage.LogFilter{})
 	if err != nil {
 		t.Fatalf("list windowed logs: %v", err)
 	}
-	if len(windowed) != 1 || windowed[0].Message != "codec unreachable" {
-		t.Fatalf("windowed logs: want only 'codec unreachable', got %+v", windowed)
+	if len(windowed) != 2 || windowed[0].Message != "codec unreachable" {
+		t.Fatalf("windowed logs: want both lines, the later arrival first, got %+v", windowed)
 	}
 
 	// An owner component that does not exist violates the component FK.
@@ -129,7 +134,7 @@ func TestInsertNodeLogs(t *testing.T) {
 	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "disp-x"}, all, all, all, all); err != nil {
 		t.Fatalf("create component: %v", err)
 	}
-	compLogs, err := gw.ListComponentLogs(ctx, "disp-x", time.Hour, 10)
+	compLogs, err := gw.ListComponentLogs(ctx, "disp-x", time.Hour, 10, storage.LogFilter{})
 	if err != nil {
 		t.Fatalf("list component logs: %v", err)
 	}
@@ -182,11 +187,136 @@ func TestListSystemLogs(t *testing.T) {
 		t.Fatalf("insert logs: %v", err)
 	}
 
-	got, err := gw.ListSystemLogs(ctx, sys.ID, time.Hour, 10)
+	got, err := gw.ListSystemLogs(ctx, sys.ID, time.Hour, 10, storage.LogFilter{})
 	if err != nil {
 		t.Fatalf("list system logs: %v", err)
 	}
 	if len(got) != 1 || got[0].Message != "link up" || got[0].Component != "disp-9" {
 		t.Fatalf("got %+v, want only the member's line, named", got)
+	}
+}
+
+// TestEveryLogLineWriteSharesTheTableTheCapsAndTheFilters (#1145): the
+// gateway holds every log_line write to RFC 5424's canonical severity (an
+// alias mapped, an unknown word kept as severity_raw) and to the caps, stamps
+// its receipt, and the reads filter by a severity threshold and a source,
+// listing the window's sources whatever the filter.
+func TestEveryLogLineWriteSharesTheTableTheCapsAndTheFilters(t *testing.T) {
+	if testing.Short() {
+		t.Skip("integration test needs Postgres")
+	}
+	ctx := context.Background()
+	gw, err := storage.NewPG(ctx, storagetest.NewDSN(t))
+	if err != nil {
+		t.Fatalf("open gateway: %v", err)
+	}
+	defer gw.Close()
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	all := scope.Set{All: true}
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "panel-9"}, all, all, all, all); err != nil {
+		t.Fatalf("create component: %v", err)
+	}
+	now := time.Now().UTC()
+	long := strings.Repeat("x", 40<<10)
+	if err := gw.InsertLogLines(ctx, []storage.LogLineWrite{
+		{OwnerKind: "component", OwnerID: "panel-9", Source: "nvp", Severity: "WARN", Message: "backlight driver reset", TS: now.Add(-4 * time.Minute)},
+		{OwnerKind: "component", OwnerID: "panel-9", Source: "nvp", Severity: "loud", Message: "a stray word", TS: now.Add(-3 * time.Minute)},
+		{OwnerKind: "component", OwnerID: "panel-9", Source: "syslog", Severity: "crit", Message: "fan stalled", TS: now.Add(-2 * time.Minute)},
+		{OwnerKind: "component", OwnerID: "panel-9", Source: "syslog", Severity: "info", Message: long, TS: now.Add(-time.Minute)},
+	}); err != nil {
+		t.Fatalf("insert: %v", err)
+	}
+	got, err := gw.ListComponentLogs(ctx, "panel-9", time.Hour, 10, storage.LogFilter{})
+	if err != nil || len(got) != 4 {
+		t.Fatalf("list = %d %v", len(got), err)
+	}
+	byMsg := map[string]storage.LogLine{}
+	for _, l := range got {
+		if len(l.Message) > 64 {
+			byMsg["long"] = l
+			continue
+		}
+		byMsg[l.Message] = l
+	}
+	if byMsg["backlight driver reset"].Severity != "warning" || byMsg["fan stalled"].Severity != "critical" {
+		t.Fatalf("aliases = %q / %q", byMsg["backlight driver reset"].Severity, byMsg["fan stalled"].Severity)
+	}
+	stray := byMsg["a stray word"]
+	if stray.Severity != "" || !strings.Contains(string(stray.Attributes), `"severity_raw": "loud"`) {
+		t.Fatalf("an unknown word = %q %s", stray.Severity, stray.Attributes)
+	}
+	if l := byMsg["long"]; len(l.Message) != 16<<10 || !strings.Contains(string(l.Attributes), `"truncated": true`) {
+		t.Fatalf("a 40 KiB line = %d bytes %s", len(l.Message), l.Attributes)
+	}
+	for _, l := range got {
+		if l.ReceivedAt == nil || time.Since(*l.ReceivedAt) > time.Minute {
+			t.Fatalf("received_at = %v, want the database's receipt", l.ReceivedAt)
+		}
+	}
+
+	warnUp, err := gw.ListComponentLogs(ctx, "panel-9", time.Hour, 10, storage.LogFilter{Severity: "warning"})
+	if err != nil || len(warnUp) != 2 {
+		t.Fatalf("warning and worse = %+v %v, want the warning and the critical line", warnUp, err)
+	}
+	nvp, err := gw.ListComponentLogs(ctx, "panel-9", time.Hour, 10, storage.LogFilter{Source: "nvp"})
+	if err != nil || len(nvp) != 2 {
+		t.Fatalf("source nvp = %d %v, want 2", len(nvp), err)
+	}
+	both, err := gw.ListComponentLogs(ctx, "panel-9", time.Hour, 10, storage.LogFilter{Severity: "error", Source: "syslog"})
+	if err != nil || len(both) != 1 || both[0].Message != "fan stalled" {
+		t.Fatalf("error and worse from syslog = %+v %v", both, err)
+	}
+	if _, err := gw.ListComponentLogs(ctx, "panel-9", time.Hour, 10, storage.LogFilter{Severity: "warn"}); !errors.Is(err, storage.ErrUnknownSeverity) {
+		t.Fatalf("an alias as a filter = %v, want ErrUnknownSeverity (the filter takes the canonical word)", err)
+	}
+	sources, err := gw.ListComponentLogSources(ctx, "panel-9", time.Hour)
+	if err != nil || strings.Join(sources, ",") != "nvp,syslog" {
+		t.Fatalf("sources = %v %v", sources, err)
+	}
+}
+
+// TestALogLineWithANulOrAnOldClockStillLands (adversarial review of #1145,
+// findings 2 and 7): a NUL in any field is replaced rather than failing the
+// insert (and the batch with it), and a line whose own time is far in the
+// past (a component whose clock reset) still reads in the last 24 hours,
+// since the reads window and order on its arrival.
+func TestALogLineWithANulOrAnOldClockStillLands(t *testing.T) {
+	if testing.Short() {
+		t.Skip("integration test needs Postgres")
+	}
+	ctx := context.Background()
+	gw, err := storage.NewPG(ctx, storagetest.NewDSN(t))
+	if err != nil {
+		t.Fatalf("open gateway: %v", err)
+	}
+	defer gw.Close()
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	all := scope.Set{All: true}
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "panel-nul"}, all, all, all, all); err != nil {
+		t.Fatalf("create component: %v", err)
+	}
+	if err := gw.InsertLogLines(ctx, []storage.LogLineWrite{{
+		OwnerKind: "component", OwnerID: "panel-nul", Instance: "tel\x00net", Source: "tel\x00net", Facility: "pa\x00nel",
+		Message: "\x00EVT SCENE presentation\r\x00", Attributes: []byte(`{"raw":"a\u0000b"}`),
+		TS: time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC),
+	}}); err != nil {
+		t.Fatalf("a line carrying NUL failed its insert: %v", err)
+	}
+	got, err := gw.ListComponentLogs(ctx, "panel-nul", 24*time.Hour, 10, storage.LogFilter{})
+	if err != nil || len(got) != 1 {
+		t.Fatalf("a line from a reset clock in the 24h read = %d %v, want it there by its arrival", len(got), err)
+	}
+	l := got[0]
+	for _, field := range []string{l.Message, l.Facility, l.Source, l.Instance, string(l.Attributes)} {
+		if strings.ContainsRune(field, 0) || strings.Contains(field, `\u0000`) {
+			t.Fatalf("a NUL reached the stored line: %+v %s", l, l.Attributes)
+		}
+	}
+	if l.TS.Year() != 2000 || l.ReceivedAt == nil || time.Since(*l.ReceivedAt) > time.Minute {
+		t.Fatalf("ts %v received %v, want the line's own time kept beside its arrival", l.TS, l.ReceivedAt)
 	}
 }

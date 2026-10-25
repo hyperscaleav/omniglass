@@ -21,7 +21,7 @@ families (poll functions, listeners, command bindings). The detail blade renders
 the **menu it is**: what each poll asks and what lands, what each listener waits for, what each
 command binding actuates. On a line protocol a listener's **arm** commands (the subscribe
 conversation) are sent on every connection the node holds, its **match** rule claims the
-component's pushes, and each claimed line lands as a sample with no poll involved (a listener rides a
+component's pushes, and each claimed line lands as a sample, an event or a log line with no poll involved (a listener rides a
 held line session or a udp socket, and is refused at write on any other transport, where nothing
 would run it); a request may
 declare its **reply** shape (`request.reply`, a `prefix` or `regex`) so its answer is picked out of
@@ -29,7 +29,7 @@ those pushes, plus an optional `error` shape (`reply.error`) for the device's re
 answer the request as a failure carrying the device's text instead of timing out. Every `regex` in
 a spec is Go RE2 with **substring** semantics: `INPUT \S+` also matches `EVT INPUT hdmi2`, so anchor
 a pattern meant to match a whole line (`^INPUT \S+$`). `unmatched: collection-failed` makes a line
-nobody claims a collection fault rather than a counted discard ([routing](/architecture/collection/#listeners-over-a-held-session)).
+nobody claims a collection fault, and `unmatched: log` a log line on the component, rather than a counted discard ([routing](/architecture/collection/#listeners-over-a-held-session)).
 An emit names a **collected** key. A key only the node writes (every native probe key: the
 reachability verdicts and probe timings, `tls-certificate`, `ssh-host-key`, `endpoint-rejection` and
 its `endpoint-rejection-reason`, a held session's `session-state` and `session-reason`, and
@@ -40,6 +40,47 @@ the node would otherwise take a driver's value as its own observation, the pin o
 stored before that refusal is held to it where it acts: the worklist strips such an emit from the
 tasks a node receives (the rest still run), a re-derivation never bakes one, and the server names the
 spec and its tasks in a warning at boot so you can mend it.
+
+An emit lands on **any of the four lanes** ([an emit lands on any lane](/architecture/collection/#an-emit-lands-on-any-lane)).
+A metric or a property names its key and one `extract`. An **event** names its event type and
+carries a `message` and `attributes`, each a constant (`value`) or an `extract` with an optional
+`transform` (a cast to `int` or `float` renders a number in the payload); the message defaults to
+the whole claimed line or answer, and attributes the event type's `payload_schema` closes out, or
+leaves out a field it requires, are refused at write. A **log line** declares `log` instead of a
+name, with its `severity` and `facility` (each a constant or an extract), its `source` (by default
+the endpoint's transport), a `message` and `attributes`; its severity maps onto RFC 5424's eight
+levels (`warn` reads `warning`, `err` reads `error`, and a word the table does not know is kept as
+the `severity_raw` attribute). A log line always lands: a message that does not extract falls back
+to the whole line, and a severity or attribute that does not is left out, each a
+`collection-failed` naming it. Any emit may read its time from what it reads (`ts`, an `extract`
+and a `layout`: `rfc3339`, `rfc3164` with an optional `zone`, `unix`, `unix-ms`, or `go:` a Go
+reference layout); a time more than five minutes ahead lands at arrival. On a plain poll an event or
+a log line lands when its content changes, not every run. `unmatched: log` lands each line no
+listener claims as a log line, whole. The shipped `newtron-nvp` lands an input push as the
+`video-input` property and an `input-changed` event, the panel's diagnostics lines as log lines
+with their severity, and anything else it pushes as raw log lines:
+
+```yaml
+unmatched: log
+listeners:
+  - name: events
+    arm: ["SUBSCRIBE INPUT", "SUBSCRIBE SCENE"]
+    match: { prefix: "EVT INPUT " }
+    emits:
+      - { name: video-input, extract: { regex: "^EVT INPUT (\\S+)$" } }
+      - name: input-changed
+        message: { value: "Video input changed" }
+        attributes:
+          input: { extract: { regex: "^EVT INPUT (\\S+)$" } }
+  - name: logs
+    arm: ["SUBSCRIBE LOG"]
+    match: { prefix: "LOG " }
+    emits:
+      - log:
+          severity: { extract: { regex: "^LOG (\\S+)" } }
+          facility: { value: panel }
+        message: { extract: { regex: "^LOG (?:\\S+\\s+)?(.+)$" } }
+```
 A spec may declare a **session** block, the auth step the held session runs before anything rides
 it ([auth and rejection](/architecture/collection/#auth-and-rejection)). `session.login` is a login
 dialog: its `steps` each wait for a prompt (`expect`, a `prefix` or `regex` that may match a prompt

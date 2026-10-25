@@ -5313,12 +5313,16 @@ components:
           description: The line's facility, when classified
           type: string
         instance:
-          description: The series discriminator, when set
+          description: The endpoint that collected the line, when a node collected it
           type: string
         labels:
           description: Freeform classification labels, when present
         message:
           description: The raw log text
+          type: string
+        received_at:
+          description: When the server received the line, beside the time it claims; absent for a line stored before it was recorded
+          format: date-time
           type: string
         severity:
           description: The line's severity, when classified
@@ -5327,7 +5331,7 @@ components:
           description: The channel the line arrived on (e.g. syslog)
           type: string
         ts:
-          description: When the line arrived
+          description: "The line's time: the one it carried when its collector read it from the line, else when it arrived"
           format: date-time
           type: string
       required:
@@ -5372,9 +5376,17 @@ components:
           type:
             - array
             - "null"
+        sources:
+          description: "The channels the window's lines arrived on, whatever the filter: the source filter's choices"
+          items:
+            type: string
+          type:
+            - array
+            - "null"
       required:
         - component
         - logs
+        - sources
       type: object
     MeOutputBody:
       additionalProperties: false
@@ -8431,12 +8443,16 @@ components:
           description: The line's facility, when classified
           type: string
         instance:
-          description: The series discriminator, when set
+          description: The endpoint that collected the line, when a node collected it
           type: string
         labels:
           description: Freeform classification labels, when present
         message:
           description: The raw log text
+          type: string
+        received_at:
+          description: When the server received the line, beside the time it claims; absent for a line stored before it was recorded
+          format: date-time
           type: string
         severity:
           description: The line's severity, when classified
@@ -8445,7 +8461,7 @@ components:
           description: The channel the line arrived on (e.g. syslog)
           type: string
         ts:
-          description: When the line arrived
+          description: "The line's time: the one it carried when its collector read it from the line, else when it arrived"
           format: date-time
           type: string
       required:
@@ -8469,11 +8485,19 @@ components:
           type:
             - array
             - "null"
+        sources:
+          description: "The channels the window's lines arrived on, whatever the filter: the source filter's choices"
+          items:
+            type: string
+          type:
+            - array
+            - "null"
         system:
           type: string
       required:
         - system
         - logs
+        - sources
       type: object
     SystemMemberBody:
       additionalProperties: false
@@ -11187,7 +11211,7 @@ paths:
       x-omniglass-permission: simulation:update
   /components/{name}/logs:
     get:
-      description: Returns the component's recent raw log lines (the ingest lane of ADR-0066, distinct from typed events), newest first, bounded to the last 24 hours. Gated by component:read; an out-of-scope component is a non-disclosing 404.
+      description: Returns the component's recent raw log lines (the ingest lane of ADR-0066, distinct from typed events), newest first, bounded to the last 24 hours, narrowed by an optional severity threshold and source, with the sources the window carries. Gated by component:read; an out-of-scope component is a non-disclosing 404.
       operationId: list-component-logs
       parameters:
         - description: The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
@@ -11196,6 +11220,30 @@ paths:
           required: true
           schema:
             description: The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
+            type: string
+        - description: Only lines at this severity or more severe (RFC 5424's eight levels); a line with no severity is left out
+          explode: false
+          in: query
+          name: severity
+          schema:
+            description: Only lines at this severity or more severe (RFC 5424's eight levels); a line with no severity is left out
+            enum:
+              - emergency
+              - alert
+              - critical
+              - error
+              - warning
+              - notice
+              - info
+              - debug
+            type: string
+        - description: Only lines that arrived on this channel
+          explode: false
+          in: query
+          name: source
+          schema:
+            description: Only lines that arrived on this channel
+            maxLength: 100
             type: string
       responses:
         "200":
@@ -16706,7 +16754,7 @@ paths:
       x-omniglass-permission: system:read
   /systems/{name}/logs:
     get:
-      description: Returns the members' raw log lines merged newest first, bounded to the last 24 hours and capped, each naming the component that wrote it. Gated by system:read; an out-of-scope system is a non-disclosing 404.
+      description: Returns the members' raw log lines merged newest first, bounded to the last 24 hours and capped, each naming the component that wrote it, narrowed by an optional severity threshold and source, with the sources the window carries. Gated by system:read; an out-of-scope system is a non-disclosing 404.
       operationId: list-system-logs
       parameters:
         - description: The system's name, or a dotted address (e.g. boi.17c.$sys.av)
@@ -16715,6 +16763,30 @@ paths:
           required: true
           schema:
             description: The system's name, or a dotted address (e.g. boi.17c.$sys.av)
+            type: string
+        - description: Only lines at this severity or more severe (RFC 5424's eight levels); a line with no severity is left out
+          explode: false
+          in: query
+          name: severity
+          schema:
+            description: Only lines at this severity or more severe (RFC 5424's eight levels); a line with no severity is left out
+            enum:
+              - emergency
+              - alert
+              - critical
+              - error
+              - warning
+              - notice
+              - info
+              - debug
+            type: string
+        - description: Only lines that arrived on this channel
+          explode: false
+          in: query
+          name: source
+          schema:
+            description: Only lines that arrived on this channel
+            maxLength: 100
             type: string
       responses:
         "200":

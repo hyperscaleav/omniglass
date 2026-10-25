@@ -22,6 +22,7 @@ import { EVENTS_KEY } from "../lib/events";
 import { ENDPOINTS_KEY } from "../lib/endpoints";
 import { DRIVERS_KEY } from "../lib/drivers";
 import { uuidFor } from "../lib/testids";
+import { LOGS_KEY } from "../lib/logs";
 import { seedSeverityLevels } from "../lib/testseverity";
 
 const acked: string[] = [];
@@ -502,5 +503,23 @@ describe("the component leaf refreshes (#934)", () => {
     expect(screen.getByTestId("collection-ssh").textContent).toBe("collecting");
     await vi.advanceTimersByTimeAsync(200_000);
     expect(screen.getByTestId("collection-ssh").textContent).toBe("node offline");
+  });
+});
+
+// The Activity tab carries the component's own words beside its occurrences
+// (#1145): its events, then its log lines, with the log filters.
+describe("the leaf's activity", () => {
+  it("shows the component's events and its log lines, filterable", async () => {
+    mount(`/web/components/${uuidFor("cf-c-bar")}?tab=activity`);
+    leafClient!.setQueryData([...EVENTS_KEY(uuidFor("cf-c-bar"))], { component: "videobar-1", events: [
+      { ts: iso(30), key: "call-started", message: "Call started", provenance: "observed", origin: "caught", attributes: { call_id: "c9001" } },
+    ] });
+    leafClient!.setQueryData([...LOGS_KEY(uuidFor("cf-c-bar"))], { component: "videobar-1", sources: ["https"], logs: [
+      { ts: iso(20), source: "https", severity: "warning", message: "uplink degraded", instance: "https" },
+    ] });
+    const tab = await screen.findByTestId("activity-tab");
+    expect(await within(tab).findByText("Call started")).toBeTruthy();
+    expect(await within(tab).findByText("uplink degraded")).toBeTruthy();
+    expect(within(tab).getByLabelText("Severity at least")).toBeTruthy();
   });
 });

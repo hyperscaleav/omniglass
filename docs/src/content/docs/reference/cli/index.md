@@ -962,10 +962,15 @@ Commands for the log resource
 List a component's recent log lines
 
 ```
-omniglass component log list <name>
+omniglass component log list <name> [flags]
 ```
 
-Returns the component's recent raw log lines (the ingest lane of ADR-0066, distinct from typed events), newest first, bounded to the last 24 hours. Gated by component:read; an out-of-scope component is a non-disclosing 404.
+Returns the component's recent raw log lines (the ingest lane of ADR-0066, distinct from typed events), newest first, bounded to the last 24 hours, narrowed by an optional severity threshold and source, with the sources the window carries. Gated by component:read; an out-of-scope component is a non-disclosing 404.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--severity` | string | (none) | Only lines at this severity or more severe (RFC 5424's eight levels); a line with no severity is left out |
+| `--source` | string | (none) | Only lines that arrived on this channel |
 
 Example:
 
@@ -5000,10 +5005,15 @@ Commands for the log resource
 List a system's members' recent log lines
 
 ```
-omniglass system log list <name>
+omniglass system log list <name> [flags]
 ```
 
-Returns the members' raw log lines merged newest first, bounded to the last 24 hours and capped, each naming the component that wrote it. Gated by system:read; an out-of-scope system is a non-disclosing 404.
+Returns the members' raw log lines merged newest first, bounded to the last 24 hours and capped, each naming the component that wrote it, narrowed by an optional severity threshold and source, with the sources the window carries. Gated by system:read; an out-of-scope system is a non-disclosing 404.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--severity` | string | (none) | Only lines at this severity or more severe (RFC 5424's eight levels); a line with no severity is left out |
+| `--source` | string | (none) | Only lines that arrived on this channel |
 
 Example:
 

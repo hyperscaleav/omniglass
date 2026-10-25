@@ -178,7 +178,7 @@ The structural and template entities relate as shown on [core entities](/archite
 
 The immutable, append-only records: the lineage targets and what a backtest reads, none derived. Columns for `audit_log` live on [audit](/architecture/audit/), `session_log` on [nodes](/architecture/nodes/#sessions):
 
-- **`log_line`** (a **component's** own words, the untyped raw ingest lane, not a sample, component-only, [ADR-0066](/architecture/decisions/#adr-0066-logs-are-a-raw-ingest-lane-not-events));
+- **`log_line`** (a **component's** own words, the untyped raw ingest lane, not a sample, component-only, [ADR-0066](/architecture/decisions/#adr-0066-logs-are-a-raw-ingest-lane-not-events)): every write is held at the Storage Gateway to RFC 5424's eight severities through one alias table (a word outside it kept as `severity_raw`) and to 16 KiB each for the message and the attributes, and carries `received_at`, the server's receipt, beside the time it claims ([ADR-1145](/architecture/decisions/#adr-1145-a-driver-emit-lands-on-any-of-the-four-lanes-and-a-log-lines-severity-is-rfc-5424s));
 - **`node_log`** (a **node's** self-logs, the same payload shape without the owner arc, split by origin, [ADR-0079](/architecture/decisions/#adr-0079-five-telemetry-lanes-and-property-stops-being-the-genus));
 - **`audit_log`** (operator actions: actor, verb, resource, `old -> new`; the lineage target for operator writes; secret decrypts always recorded, [audit](/architecture/audit/)).
 

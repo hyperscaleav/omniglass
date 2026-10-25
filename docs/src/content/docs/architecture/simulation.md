@@ -317,6 +317,15 @@ inspect a component it unplugged. A profile that enforces HTTP authentication is
 own credentials, as an authorized client would; a face that signs in (a form, a token, digest)
 trusts the console's own operations, as it would an operator at the component's screen.
 
+A route may also report **named events** on the component's events face once its changes apply
+(#1145): the Kestrel bar's dial route (its body names the call's `id` and its `participants`) and
+its disconnect route report `call-started` and `call-ended` carrying the call's id, as a codec's
+xAPI reports a call starting and ending, beside the state changes the feed streams. The Newtron
+panel's NVP face pushes its diagnostics log (`SUBSCRIBE LOG`, a line its diagnostics route writes
+arriving as `LOG <severity> <text>`) and its scene changes
+(`SUBSCRIBE SCENE`, `EVT SCENE <scene>`) beside its input changes, the faces the shipped drivers'
+event and log line emits are proven against ([ADR-1145](/architecture/decisions/#adr-1145-a-driver-emit-lands-on-any-of-the-four-lanes-and-a-log-lines-severity-is-rfc-5424s)).
+
 ## Adding a simulated component
 
 Adding a simulated component is adding a component the simulator can serve:

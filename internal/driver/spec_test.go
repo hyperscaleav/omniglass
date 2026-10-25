@@ -15,15 +15,17 @@ type fakeCatalog struct {
 	lanes     map[string]string // emitted name -> lane ("metric" | "property")
 	commands  map[string]bool
 	secrets   map[string]bool
-	calcOwned map[string]bool // names a calc rule outputs
+	calcOwned map[string]bool   // names a calc rule outputs
+	schemas   map[string][]byte // event type -> payload_schema
 }
 
 func (f fakeCatalog) LaneOf(name string) (string, bool) {
 	lane, ok := f.lanes[name]
 	return lane, ok
 }
-func (f fakeCatalog) CommandTypeExists(name string) bool { return f.commands[name] }
-func (f fakeCatalog) SecretTypeExists(name string) bool  { return f.secrets[name] }
+func (f fakeCatalog) CommandTypeExists(name string) bool    { return f.commands[name] }
+func (f fakeCatalog) SecretTypeExists(name string) bool     { return f.secrets[name] }
+func (f fakeCatalog) EventPayloadSchema(name string) []byte { return f.schemas[name] }
 func (f fakeCatalog) WriterClass(name string) writerclass.Class {
 	return writerclass.Of(name, f.calcOwned[name])
 }
@@ -194,8 +196,12 @@ func TestValidateStructureOnly(t *testing.T) {
 	if err := s.Validate(nil); err != nil {
 		t.Fatalf("structure-only validation resolved names: %v", err)
 	}
-	s.Polls[0].Emits[0].Extract = driver.Extract{}
+	// An event's emit reads no extract (its message defaults to the whole
+	// answer, #1145), so with no catalog to say the lane a missing extract
+	// is the write gate's to refuse; two extract kinds are wrong on every
+	// lane, so structure alone refuses them.
+	s.Polls[0].Emits[0].Extract = driver.Extract{Regex: "x", Key: "y"}
 	if err := s.Validate(nil); err == nil {
-		t.Fatal("structure-only validation must still refuse a missing extractor")
+		t.Fatal("structure-only validation must still refuse two extractors")
 	}
 }

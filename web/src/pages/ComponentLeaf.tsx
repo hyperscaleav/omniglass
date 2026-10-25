@@ -7,6 +7,7 @@ import TabRail from "../components/TabRail";
 import ConfigureFace from "../components/ConfigureFace";
 import BladeStack from "../components/BladeStack";
 import EventsPanel from "../components/EventsPanel";
+import LogsPanel from "../components/LogsPanel";
 import CommandsPanel from "../components/CommandsPanel";
 import { BladesContext, createBladeController } from "../lib/blades";
 import { fleetRegistry } from "../lib/fleetBlades";
@@ -256,6 +257,10 @@ export default function ComponentLeaf() {
                   <CommandsPanel component={id()} name={component()?.name ?? id()} componentId={component()?.id} open={openCommand()} />
                 </Show>
                 <EventsPanel name={id()} />
+                {/* The component's own words beside its occurrences (#1145):
+                    the log lines its driver read and its listeners left
+                    unclaimed. */}
+                <LogsPanel name={id()} />
               </div>
             </Show>
             <Show when={leafTab() === "overview"}>

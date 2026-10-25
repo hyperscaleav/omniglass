@@ -330,6 +330,21 @@ type Route struct {
 	// one). Runtime dispatch never consults this field, it is
 	// documentation/console metadata only.
 	Visibility string `yaml:"visibility"`
+
+	// Events are named occurrences the route reports once its mutations
+	// apply (#1145): a codec reporting a call starting and ending as named
+	// events carrying the call's id, as xAPI's CallSuccessful and
+	// CallDisconnect do, beside the state changes its events face streams.
+	// Each data is a template rendered against the state the mutations
+	// left. A device with no events face ignores them.
+	Events []RouteEvent `yaml:"events"`
+}
+
+// RouteEvent is one named event a route reports: its name and its data (a
+// template, usually a JSON document).
+type RouteEvent struct {
+	Name string `yaml:"name"`
+	Data string `yaml:"data"`
 }
 
 // Command defines a console command match and its template.

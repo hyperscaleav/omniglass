@@ -77,6 +77,24 @@ drivers:
           match: { event: change, field: { path: path, equals: status.device.power } }
           emits:
             - { name: power-state, extract: { jsonpath: value } }
+        # A call starting and ending are named occurrences on the feed
+        # (#1145), each carrying the call's id: one event each, beside the
+        # call-state property the change stream keeps current.
+        - name: call-started
+          match: { event: call-started }
+          emits:
+            - name: call-started
+              message: { value: "Call started" }
+              attributes:
+                call_id: { extract: { jsonpath: id } }
+                participants: { extract: { jsonpath: participants }, transform: { cast: int } }
+        - name: call-ended
+          match: { event: call-ended }
+          emits:
+            - name: call-ended
+              message: { value: "Call ended" }
+              attributes:
+                call_id: { extract: { jsonpath: id } }
       polls:
         - name: system
           schedule: { every: 5m }
@@ -208,18 +226,37 @@ drivers:
           emits:
             - { name: video-input, extract: { regex: "^INPUT (\\S+)$" } }
       # The NVP conversation is line-oriented over a held TCP session: the
-      # subscribe arms on establish (and re-arms on every recover), and the
-      # device pushes EVT lines the listener claims by prefix. The standing
-      # listen task is what makes the node hold the endpoint's session (#816):
-      # SUBSCRIBE INPUT is sent on every connection before it reads up, the
-      # EVT pushes land as video-input samples with no poll involved, and the
-      # status poll and set-input command borrow the same connection (#817).
+      # subscribes arm on establish (and re-arm on every recover), and the
+      # device pushes lines the listeners claim by prefix. The standing
+      # listen tasks are what make the node hold the endpoint's session
+      # (#816): the subscribes are sent on every connection before it reads
+      # up, the pushes land with no poll involved, and the status poll and
+      # set-input command borrow the same connection (#817).
+      #
+      # One push lands on several lanes (#1145): an input change is the
+      # video-input property and an input-changed event carrying the new
+      # input; a diagnostics line is a log line, its severity read off the
+      # line; and anything no listener claims (the scene changes SUBSCRIBE
+      # SCENE pushes) lands whole as a log line, raw arrival.
+      unmatched: log
       listeners:
         - name: events
-          arm: ["SUBSCRIBE INPUT"]
-          match: { prefix: "EVT " }
+          arm: ["SUBSCRIBE INPUT", "SUBSCRIBE SCENE"]
+          match: { prefix: "EVT INPUT " }
           emits:
             - { name: video-input, extract: { regex: "^EVT INPUT (\\S+)$" } }
+            - name: input-changed
+              message: { value: "Video input changed" }
+              attributes:
+                input: { extract: { regex: "^EVT INPUT (\\S+)$" } }
+        - name: logs
+          arm: ["SUBSCRIBE LOG"]
+          match: { prefix: "LOG " }
+          emits:
+            - log:
+                severity: { extract: { regex: "^LOG (\\S+)" } }
+                facility: { value: panel }
+              message: { extract: { regex: "^LOG (?:\\S+\\s+)?(.+)$" } }
       commands:
         # The panel answers SET INPUT with the input it now shows, so the
         # reply settles the command (ADR-0141).
