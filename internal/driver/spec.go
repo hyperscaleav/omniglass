@@ -179,9 +179,18 @@ func validateRetries(transportName, what string, r Request) error {
 type Reply struct {
 	Prefix string `json:"prefix,omitempty"`
 	Regex  string `json:"regex,omitempty"`
-	Error  *Match `json:"error,omitempty"`
+	// Field picks a JSON answer by one field (#1034); Correlate names the
+	// field of a JSON frame a node writes a fresh id into, the answer being
+	// the frame that carries it back (websocket, #1034).
+	Field     *FieldMatch `json:"field,omitempty"`
+	Correlate string      `json:"correlate,omitempty"`
+	Error     *Match      `json:"error,omitempty"`
 	// any makes the shape match every line (AnyLine), never authored.
 	any bool
+	// bound marks a reply Correlated made for one exchange: its error shape
+	// answers only a frame carrying the exchange's id, and a frame carrying
+	// it that the error shape matches is the refusal, not the answer.
+	bound bool
 }
 
 // AnyLine is the answer shape that takes the first line of any kind, one a
@@ -195,12 +204,19 @@ func (r *Reply) Accepts(line string) bool {
 	if r == nil || r.any {
 		return true
 	}
+	if r.Field != nil {
+		return r.Field.matches(line) && !(r.bound && r.Error != nil && r.Error.Matches(line))
+	}
 	return Match{Prefix: r.Prefix, Regex: r.Regex}.Matches(line)
 }
 
-// Fails reports a line matching the declared error shape.
+// Fails reports a line matching the declared error shape; a correlated
+// exchange's, only one carrying its id.
 func (r *Reply) Fails(line string) bool {
-	return r != nil && r.Error != nil && r.Error.Matches(line)
+	if r == nil || r.Error == nil || !r.Error.Matches(line) {
+		return false
+	}
+	return !r.bound || r.Field.matches(line)
 }
 
 // Empty reports whether the request says nothing at all.
@@ -329,7 +345,8 @@ func (b CommandBinding) JudgeReply(reply string) ReplyVerdict {
 // an http answer in its request's declared format.
 func (b CommandBinding) replyPayload(reply string) Payload {
 	if b.Request.Path == "" {
-		return Payload{Text: reply}
+		// A line or a frame: text a regex reads, a JSON one a jsonpath too.
+		return Payload{Text: reply, JSON: []byte(reply)}
 	}
 	p := HTTPPayload([]byte(reply), &b.Request)
 	p.docs = &parsedDocs{}
@@ -380,16 +397,44 @@ func validateReply(what string, req Request) error {
 	if req.Reply == nil {
 		return nil
 	}
-	if req.Line == "" {
-		return fmt.Errorf("driver: %s declares a reply shape, which only a line request has", what)
+	if req.Line == "" && len(req.Body) == 0 {
+		return fmt.Errorf("driver: %s declares a reply shape, which only a line or a frame request has", what)
 	}
-	if err := validateMatch(what+" reply", Match{Prefix: req.Reply.Prefix, Regex: req.Reply.Regex}); err != nil {
-		return err
+	rep := req.Reply
+	kinds := 0
+	for _, set := range []bool{rep.Prefix != "", rep.Regex != "", rep.Field != nil, rep.Correlate != ""} {
+		if set {
+			kinds++
+		}
+	}
+	if kinds != 1 {
+		return fmt.Errorf("driver: %s reply declares %d shapes; want one of a prefix, a regex, a field or a correlate", what, kinds)
+	}
+	switch {
+	case rep.Correlate != "" && len(req.Body) == 0:
+		return fmt.Errorf("driver: %s reply correlates by %s, which needs a JSON object frame (a websocket body)", what, rep.Correlate)
+	case rep.Field != nil:
+		if err := validateListenerMatch(what+" reply", Match{Field: rep.Field}, "", nil); err != nil {
+			return err
+		}
+	case rep.Correlate == "":
+		if err := validateMatch(what+" reply", Match{Prefix: rep.Prefix, Regex: rep.Regex}); err != nil {
+			return err
+		}
 	}
 	if req.Reply.Error != nil {
 		return validateMatch(what+" reply error shape", *req.Reply.Error)
 	}
 	return nil
+}
+
+// argRefs lists a template's references.
+func argRefs(s string) []string {
+	var out []string
+	for _, m := range argPattern.FindAllStringSubmatch(s, -1) {
+		out = append(out, m[1])
+	}
+	return out
 }
 
 // validateSettle refuses a malformed settle declaration; httpBinding reads
@@ -519,7 +564,11 @@ func (s *Spec) Validate(cat Catalog) error {
 		if err := validateEmits("poll", p.Name, p.Emits, cat); err != nil {
 			return err
 		}
-		if err := validateHTTPFieldsOff(s.Transport, fmt.Sprintf("poll %q", p.Name), p.Request); err != nil {
+		if IsWebSocket(s.Transport) {
+			if err := validateFrameRequest(fmt.Sprintf("poll %q", p.Name), p.Request); err != nil {
+				return err
+			}
+		} else if err := validateHTTPFieldsOff(s.Transport, fmt.Sprintf("poll %q", p.Name), p.Request); err != nil {
 			return err
 		}
 		if IsHTTP(s.Transport) {
@@ -562,6 +611,11 @@ func (s *Spec) Validate(cat Catalog) error {
 			stream = s.Session.Stream
 		case !canListen(s.Transport):
 			return fmt.Errorf("driver: listener %q rides %q, which has no listen path (a listener runs over a held line session, a udp socket or an http stream), so no node would run it", l.Name, s.Transport)
+		}
+		for i, a := range l.Arm {
+			if strings.ContainsAny(a, "\r\n") {
+				return fmt.Errorf("driver: listener %q arm %d carries a line break; each arm is sent as one line (one frame over a websocket), so write it compact", l.Name, i+1)
+			}
 		}
 		if err := validateListenerMatch(fmt.Sprintf("listener %q", l.Name), l.Match, s.Transport, stream); err != nil {
 			return err
@@ -628,6 +682,27 @@ func (s *Spec) Validate(cat Catalog) error {
 			return err
 		}
 		what := fmt.Sprintf("command binding %q", c.CommandType)
+		if IsWebSocket(s.Transport) {
+			if err := validateFrameRequest(what, c.Request); err != nil {
+				return err
+			}
+			if err := validateFrameSettle(c); err != nil {
+				return err
+			}
+			if err := validateReply(what, c.Request); err != nil {
+				return err
+			}
+			refs, err := httpTemplateRefs(c.Request)
+			if err != nil {
+				return fmt.Errorf("driver: %s %v", what, err)
+			}
+			for _, tpl := range append(refs, argRefs(c.Request.Line)...) {
+				if tpl != "value" && !strings.HasPrefix(tpl, "arg.") {
+					return fmt.Errorf("driver: command binding %q references unknown template field %q", c.CommandType, tpl)
+				}
+			}
+			continue
+		}
 		if err := validateHTTPFieldsOff(s.Transport, what, c.Request); err != nil {
 			return err
 		}
@@ -778,6 +853,14 @@ func checkPollShape(tr string, p Poll) error {
 		for _, em := range p.Emits {
 			if em.Extract.OID != "" || em.Extract.Key != "" || em.Extract.JSONPath != "" || em.Extract.XPath != "" {
 				return fmt.Errorf("driver: udp poll %q emit %q must locate by regex (a datagram's line carries no keyed or json body)", p.Name, em.Name)
+			}
+		}
+	case "websocket", "wss":
+		// A frame is a line or a JSON document: a regex reads either, a
+		// jsonpath a JSON one.
+		for _, em := range p.Emits {
+			if em.Extract.OID != "" || em.Extract.Key != "" || em.Extract.XPath != "" {
+				return fmt.Errorf("driver: websocket poll %q emit %q locates by jsonpath or regex (a frame carries no oid, key or markup)", p.Name, em.Name)
 			}
 		}
 	case "tcp", "tls", "telnet", "ssh":

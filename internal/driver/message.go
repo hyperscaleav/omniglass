@@ -37,7 +37,9 @@ func LineMessage(line string) Message { return Message{Data: line} }
 // http answer is.
 func (m Message) Payload() Payload {
 	if m.Format == "" {
-		return Payload{Text: m.Data, docs: &parsedDocs{}}
+		// A line, or a websocket frame, is text a regex reads, and a JSON
+		// one a jsonpath reads too.
+		return Payload{Text: m.Data, JSON: []byte(m.Data), docs: &parsedDocs{}}
 	}
 	p := HTTPPayload([]byte(m.Data), &Request{Format: m.Format})
 	p.docs = &parsedDocs{}

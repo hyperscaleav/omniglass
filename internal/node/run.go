@@ -67,6 +67,10 @@ type Config struct {
 	// TLSSession is the held tls dialer (#1035). Nil defaults to the real
 	// collection.NewTLSSessionDialer(); tests inject a fake.
 	TLSSession collection.SessionDialer
+	// WebSocketSession is the held websocket dialer (#1034), websocket and
+	// wss. Nil defaults to the real collection.NewWebSocketDialer(); tests
+	// shorten its keepalive.
+	WebSocketSession collection.SessionDialer
 }
 
 // Run claims the node's NATS credential, connects outbound-only to the bus,
@@ -177,8 +181,14 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 	// An http endpoint's server-sent events stream is held as a session
 	// (#1038), over plain http or the https handshake.
 	streamSession := collection.NewHTTPStreamDialer()
+	// A websocket is held as a session (#1034), over plain websocket or the
+	// wss handshake.
+	wsSession := cfg.WebSocketSession
+	if wsSession == nil {
+		wsSession = collection.NewWebSocketDialer()
+	}
 	sessions := newSessionManager(map[string]collection.SessionDialer{"tcp": lineSession, "tls": tlsSession, "telnet": telnetSession, "ssh": sshSession,
-		"http": streamSession, "https": streamSession}, sessionHooks{
+		"http": streamSession, "https": streamSession, "websocket": wsSession, "wss": wsSession}, sessionHooks{
 		transition: func(taskID, endpoint string, tr collection.SessionTransition) {
 			// A rejection is logged once, at the transition, never per tick
 			// (#1049): the rejected session dials no more, so nothing repeats.

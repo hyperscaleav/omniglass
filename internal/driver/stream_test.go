@@ -163,13 +163,13 @@ func TestAMatchReadsAMessage(t *testing.T) {
 		}
 	}
 	// A message's payload reads in its format: a JSON event by jsonpath, a
-	// line as text.
+	// line as text, and a JSON line by jsonpath too (#1034).
 	fn := &driver.BakedFunction{Driver: "d", Function: "volume", Emits: []driver.BakedEmit{{Name: "volume", Lane: "metric", Extract: driver.Extract{JSONPath: "value"}}}}
 	got, faults := fn.Interpret(change.Payload(), time.Now())
 	if len(faults) != 0 || len(got) != 1 || got[0].Value != 42 {
 		t.Fatalf("interpret a json event = %+v, %v", got, faults)
 	}
-	if p := driver.LineMessage("INPUT hdmi1").Payload(); p.Text != "INPUT hdmi1" || p.JSON != nil {
+	if p := driver.LineMessage("INPUT hdmi1").Payload(); p.Text != "INPUT hdmi1" || string(p.JSON) != "INPUT hdmi1" {
 		t.Fatalf("a line's payload = %+v", p)
 	}
 }

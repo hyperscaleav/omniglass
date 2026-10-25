@@ -153,9 +153,10 @@
             "tcp",
             "snmp",
             "udp",
+            "websocket",
             "icmp"
           ],
-          "description": "Wire protocol.  icmp is answered by the kernel, so it declares reachability without a listener."
+          "description": "Wire protocol.  icmp is answered by the kernel, so it declares reachability without a listener; websocket serves a JSON control socket (see websocket)."
         },
         "port": {
           "type": "integer",
@@ -205,6 +206,38 @@
             "drop_path": {
               "type": "string",
               "description": "The path the console fires (POST) to drop every stream, as a restart would."
+            }
+          },
+          "required": [
+            "path"
+          ],
+          "additionalProperties": false
+        },
+        "websocket": {
+          "type": "object",
+          "description": "A websocket face's control socket: a JSON message per text frame. A subscribe is acknowledged and then pushes every change to its paths; a get or a set is answered by a result carrying the request's id, after any push it causes. Behind the face's own auth (basic, header, bearer or query).",
+          "properties": {
+            "path": {
+              "type": "string",
+              "description": "The path the upgrade is served at."
+            },
+            "paths": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "The state paths a subscriber may watch and a get may read, each with everything beneath it; none is every path."
+            },
+            "settable": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "The state paths a set may write."
+            },
+            "drop_path": {
+              "type": "string",
+              "description": "The path the console fires (POST) to drop every socket, as a restart would."
             }
           },
           "required": [

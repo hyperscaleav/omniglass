@@ -131,7 +131,17 @@ func executeDelivery(ctx context.Context, runner *collection.Runner, d collectio
 		return ans.Line, ""
 	case collection.IsLineTransport(d.Transport):
 		if held := sessions.lookup(d.EndpointID); held != nil {
-			reply, err := held.Exchange(ctx, d.Line, d.Reply, 0)
+			line, shape := d.Line, d.Reply
+			if driver.IsWebSocket(d.Transport) {
+				// The frame takes a fresh id when its reply correlates
+				// (#1034): minted here, at execute, so a redelivery never
+				// reuses one.
+				var err error
+				if line, shape, err = d.Reply.Correlated(d.Line, driver.MintCorrelation()); err != nil {
+					return "", err.Error()
+				}
+			}
+			reply, err := held.Exchange(ctx, line, shape, 0)
 			var refused *collection.RefusedError
 			if errors.As(err, &refused) {
 				// The device answered with its refusal: the execution error

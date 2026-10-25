@@ -46,6 +46,10 @@ type SessionSpec struct {
 	// in the request's format (json or text). It rides the session's scheme
 	// or its login, as every request does.
 	Stream *Request `json:"stream,omitempty"`
+	// Upgrade is a websocket session's upgrade request (#1034): the path
+	// (the root when absent), the query and the headers of the GET that
+	// opens it, riding the session's scheme or login.
+	Upgrade *Request `json:"upgrade,omitempty"`
 }
 
 // Login is a declared login dialog: each step waits for its prompt and then
@@ -220,10 +224,16 @@ func (s *Spec) validateSession() error {
 		return nil
 	}
 	httpSession := IsHTTP(s.Transport)
+	// httpAuth is a session whose credential rides an http request: http's
+	// every request, a websocket's upgrade (#1034).
+	httpAuth := httpSession || IsWebSocket(s.Transport)
 	if ss.Stream != nil && !httpSession {
 		return fmt.Errorf("driver: a session stream is a server-sent events stream over http; %q has none", s.Transport)
 	}
-	if (ss.Scheme != "" || ss.APIKey != nil) && !httpSession {
+	if ss.Upgrade != nil && !IsWebSocket(s.Transport) {
+		return fmt.Errorf("driver: a session upgrade opens a websocket; %q has none", s.Transport)
+	}
+	if (ss.Scheme != "" || ss.APIKey != nil) && !httpAuth {
 		return fmt.Errorf("driver: a session scheme rides every http request; %q is not http", s.Transport)
 	}
 	switch {
@@ -237,10 +247,14 @@ func (s *Spec) validateSession() error {
 		if err := s.validateHTTPSession(); err != nil {
 			return err
 		}
+	case IsWebSocket(s.Transport):
+		if err := s.validateWebSocketSession(); err != nil {
+			return err
+		}
 	case !isLineTransport(s.Transport):
 		return fmt.Errorf("driver: a session block rides a held line transport; %q has none", s.Transport)
 	}
-	if l := ss.Login; l != nil && !httpSession {
+	if l := ss.Login; l != nil && !httpAuth {
 		if len(l.Steps) == 0 {
 			return fmt.Errorf("driver: the login declares no step")
 		}
@@ -282,13 +296,13 @@ func (s *Spec) validateSession() error {
 		if !known {
 			return fmt.Errorf("driver: terminal rule %d has unknown class %q; want one of %s", i+1, r.Class, strings.Join(TerminalClasses(), ", "))
 		}
-		if r.Status != 0 && !httpSession {
+		if r.Status != 0 && !httpAuth {
 			return fmt.Errorf("driver: terminal rule %d matches a status, which only an http response has", i+1)
 		}
 		if r.Status != 0 && (r.Status < 100 || r.Status > 599) {
 			return fmt.Errorf("driver: terminal rule %d status %d is not an http status (100 to 599)", i+1, r.Status)
 		}
-		if httpSession && r.Status != 0 && r.Match == (Match{}) {
+		if httpAuth && r.Status != 0 && r.Match == (Match{}) {
 			continue // a status alone is a whole rule over http
 		}
 		if err := validateMatch(fmt.Sprintf("terminal rule %d", i+1), r.Match); err != nil {
@@ -312,7 +326,7 @@ func (s *Spec) validateSession() error {
 	if ss.PTY && ss.Exec != "" {
 		return fmt.Errorf("driver: a session runs a shell (with a pty) or an exec, not both")
 	}
-	if ss.Credential != "" && !httpSession {
+	if ss.Credential != "" && !httpAuth {
 		if s.Transport != "ssh" {
 			return fmt.Errorf("driver: a session credential is the transport's own auth, which only ssh and http have; %q authenticates through its login dialog", s.Transport)
 		}

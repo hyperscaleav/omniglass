@@ -1,6 +1,9 @@
 package profile
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 // The simulator serves one SSH and one Telnet listener per device, so a
 // profile declaring a second of either fails to load instead of serving
@@ -87,6 +90,36 @@ func TestValidateInterfacesRefusedCommunity(t *testing.T) {
 		p := DeviceProfile{Interfaces: []Interface{tc.iface}}
 		if err := validateInterfaces(&p); (err != nil) != tc.wantErr {
 			t.Errorf("%s: err = %v, wantErr %v", tc.name, err, tc.wantErr)
+		}
+	}
+}
+
+// A websocket block shapes a websocket face (#1034): one on another face is
+// a profile mistake, a websocket face needs the path its upgrade is served
+// at, and its auth is its own, one of the static modes (a login face issues
+// its credential on another port).
+func TestValidateInterfacesWebSocket(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		iface Interface
+		want  string
+	}{
+		{"a websocket face", Interface{Name: "ws", Protocol: "websocket", WebSocket: WebSocket{Path: "/ws", DropPath: "/drop"}, Auth: Auth{Type: "basic"}}, ""},
+		{"a websocket block on http", Interface{Name: "web", Protocol: "http", WebSocket: WebSocket{Path: "/ws"}}, "not a websocket face"},
+		{"no path", Interface{Name: "ws", Protocol: "websocket"}, "websocket.path"},
+		{"a relative drop path", Interface{Name: "ws", Protocol: "websocket", WebSocket: WebSocket{Path: "/ws", DropPath: "drop"}}, "drop_path"},
+		{"a login auth", Interface{Name: "ws", Protocol: "websocket", WebSocket: WebSocket{Path: "/ws"}, Auth: Auth{Type: "form"}}, "form auth"},
+	} {
+		p := DeviceProfile{Interfaces: []Interface{tc.iface}}
+		err := validateInterfaces(&p)
+		if tc.want == "" {
+			if err != nil {
+				t.Errorf("%s: err = %v, want none", tc.name, err)
+			}
+			continue
+		}
+		if err == nil || !strings.Contains(err.Error(), tc.want) {
+			t.Errorf("%s: err = %v, want %q", tc.name, err, tc.want)
 		}
 	}
 }

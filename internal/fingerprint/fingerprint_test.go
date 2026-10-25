@@ -134,3 +134,33 @@ func TestEveryHTTPLoginInputMovesTheFingerprint(t *testing.T) {
 		}
 	}
 }
+
+// Every input a websocket upgrade is made with moves the fingerprint
+// (#1034): its path, its query and its headers, so editing where or how a
+// driver upgrades lifts a gate a refusal set, as rotating its secret does.
+func TestEveryWebSocketUpgradeInputMovesTheFingerprint(t *testing.T) {
+	upgrade := func() *driver.Request {
+		return &driver.Request{Path: "/api/ws", Query: map[string]string{"room": "huddle"}, Headers: map[string]string{"Origin": "https://bar"}}
+	}
+	with := func(u *driver.Request) string {
+		in := base()
+		in.Transport = "wss"
+		in.Session = &driver.SessionSpec{Credential: "login", Scheme: driver.SchemeBasic, Upgrade: u}
+		return fingerprint.Of(in)
+	}
+	ref := with(upgrade())
+	for name, edit := range map[string]func(*driver.Request){
+		"path":    func(u *driver.Request) { u.Path = "/ws" },
+		"query":   func(u *driver.Request) { u.Query = map[string]string{"room": "boardroom"} },
+		"headers": func(u *driver.Request) { u.Headers = map[string]string{"Origin": "https://other"} },
+	} {
+		u := upgrade()
+		edit(u)
+		if with(u) == ref {
+			t.Errorf("changing the upgrade's %s left the fingerprint unchanged", name)
+		}
+	}
+	if with(nil) == ref {
+		t.Error("declaring an upgrade left the fingerprint unchanged")
+	}
+}

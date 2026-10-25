@@ -199,6 +199,31 @@ interfaces:
           - { path: status.peripherals.touch_pair, value: "{{ .Defaults.status.peripherals.touch_pair }}" }
           - { path: status.presentation.local_active, value: "{{ .Defaults.status.presentation.local_active }}" }
 
+  # The control socket the room's touch panel drives the bar over (#1034):
+  # a JSON message per text frame, behind the same basic auth as the web
+  # API but its own port. A subscribe is acknowledged and then pushes every
+  # change to the subscribed paths; a get or a set is answered by a result
+  # carrying the id the request sent, after any push it causes. The console
+  # drops every socket by firing POST at drop_path.
+  - name: ws-api
+    protocol: websocket
+    port: 9443
+    tls: true
+    doc:
+      summary: "Kestrel control socket (JSON over a websocket): subscribe, get, set"
+      tags: [management, api, control]
+    auth:
+      type: basic
+      default_user: admin
+      default_password: kestrel
+      realm: "Kestrel VRoom"
+      enforce: true
+    websocket:
+      path: /api/ws
+      paths: [status.audio.volume, status.audio.mic_mute, status.call, status.device.power]
+      settable: [status.audio.volume, status.audio.mic_mute]
+      drop_path: /api/admin/sockets/drop
+
   - name: icmp
     protocol: icmp
     doc: { summary: "ICMP ping reachability", tags: [monitoring] }

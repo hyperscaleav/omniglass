@@ -86,6 +86,9 @@ func (d *Device) operateHTTP(op Operation) OperationResult {
 	if d.events != nil && d.events.cfg.DropPath != "" && u.Path == d.events.cfg.DropPath && method == http.MethodPost {
 		return d.operateEventsDrop()
 	}
+	if d.ws != nil && d.ws.cfg.DropPath != "" && u.Path == d.ws.cfg.DropPath && method == http.MethodPost {
+		return d.operateSocketsDrop()
+	}
 	if d.events != nil && u.Path == d.events.cfg.Path && method == http.MethodGet {
 		// The stream is held open: an operation answers once, so it would
 		// never return, and hold every operation behind it.

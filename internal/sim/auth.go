@@ -121,15 +121,24 @@ func (d *Device) checkHTTPAuth(w http.ResponseWriter, r *http.Request) bool {
 	if allowed, handled := d.checkLoginFace(w, r); handled {
 		return allowed
 	}
+	return d.checkStaticAuth(w, r, d.HTTPAuth)
+}
 
-	switch d.HTTPAuth.Mode {
+// checkStaticAuth enforces one of the static modes (basic, a header key, a
+// bearer token, a query key) of a, writing a 401 and returning false when
+// the request does not carry the credential: the http face's gate, and a
+// websocket face's own (#1034). An unknown mode fails closed.
+func (d *Device) checkStaticAuth(w http.ResponseWriter, r *http.Request, a HTTPAuth) bool {
+	switch a.Mode {
+	case HTTPAuthNone:
+		return true
 
 	case HTTPAuthBasic:
 		user, pass, ok := r.BasicAuth()
-		if ok && constantTimeEqual(user, d.HTTPAuth.User) && constantTimeEqual(pass, d.HTTPAuth.Password) {
+		if ok && constantTimeEqual(user, a.User) && constantTimeEqual(pass, a.Password) {
 			return true
 		}
-		realm := d.HTTPAuth.Realm
+		realm := a.Realm
 		if realm == "" {
 			realm = d.Hostname
 		}
@@ -144,12 +153,12 @@ func (d *Device) checkHTTPAuth(w http.ResponseWriter, r *http.Request) bool {
 		return false
 
 	case HTTPAuthHeader:
-		header := d.HTTPAuth.HeaderName
+		header := a.HeaderName
 		if header == "" {
 			header = defaultAPIKeyHeader
 		}
 		got := r.Header.Get(header)
-		if got != "" && constantTimeEqual(got, d.HTTPAuth.APIKey) {
+		if got != "" && constantTimeEqual(got, a.APIKey) {
 			return true
 		}
 		w.Header().Set("Content-Type", "application/json")
@@ -159,10 +168,10 @@ func (d *Device) checkHTTPAuth(w http.ResponseWriter, r *http.Request) bool {
 
 	case HTTPAuthBearer:
 		got, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
-		if ok && got != "" && constantTimeEqual(got, d.HTTPAuth.APIKey) {
+		if ok && got != "" && constantTimeEqual(got, a.APIKey) {
 			return true
 		}
-		realm := strings.ReplaceAll(d.HTTPAuth.Realm, `"`, "")
+		realm := strings.ReplaceAll(a.Realm, `"`, "")
 		if realm == "" {
 			realm = d.Hostname
 		}
@@ -173,12 +182,12 @@ func (d *Device) checkHTTPAuth(w http.ResponseWriter, r *http.Request) bool {
 		return false
 
 	case HTTPAuthQuery:
-		name := d.HTTPAuth.QueryName
+		name := a.QueryName
 		if name == "" {
 			name = defaultAPIKeyQuery
 		}
 		got := r.URL.Query().Get(name)
-		if got != "" && constantTimeEqual(got, d.HTTPAuth.APIKey) {
+		if got != "" && constantTimeEqual(got, a.APIKey) {
 			return true
 		}
 		w.Header().Set("Content-Type", "application/json")
@@ -191,7 +200,7 @@ func (d *Device) checkHTTPAuth(w http.ResponseWriter, r *http.Request) bool {
 		// rather than silently wide-open.
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusUnauthorized)
-		_, _ = fmt.Fprintf(w, `{"error":"unauthorized","auth":"unknown:%s"}`+"\n", d.HTTPAuth.Mode)
+		_, _ = fmt.Fprintf(w, `{"error":"unauthorized","auth":"unknown:%s"}`+"\n", a.Mode)
 		return false
 	}
 }

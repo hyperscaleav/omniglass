@@ -62,8 +62,11 @@ var rungsOf = map[string][]string{
 	"ssh":    {RungHandshake, RungConnect},
 	"http":   {RungConnect, RungRequest},
 	"https":  {RungHandshake, RungConnect},
-	"udp":    {RungRequest},
-	"snmp":   {RungRequest},
+	// A websocket's rung draws an answer to an upgrade (#1034).
+	"websocket": {RungConnect},
+	"wss":       {RungHandshake, RungConnect},
+	"udp":       {RungRequest},
+	"snmp":      {RungRequest},
 }
 
 // EffectiveLadder is a resolved ladder: every rung decided.
