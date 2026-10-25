@@ -62,15 +62,16 @@ Internal traffic splits by what is moving:
 
 :::
 
-## The three ingest paths
+## The ingest paths
 
-Three ingest paths exist today, and this list is the enumeration's one home:
+Four ingest paths exist today, and this list is the enumeration's one home:
 
 - **The node bus path.** A node publishes a `TelemetryBatch` on its own subject (`og.v1.telemetry.<node>`), and the server binds each sample's owner from the task's endpoint ([collection](/architecture/collection/)).
 - **The API push path.** `POST /telemetry:push` is the first-party HTTP ingest write: a scoped caller declares the owner and the route's scope check is the fence. The API publishes the batch onto the bus (`og.v1.api.telemetry`, trusted by subject, below) rather than writing Postgres directly, so pushed records are visible to the same stream consumers and land in history the same way ([API](/architecture/api/)).
+- **The webhook path.** A sender posts to `POST /webhooks/{token}`, the server-hosted listener for the webhook transport: the token names one endpoint, its driver's scheme authenticates the post and its listeners map the body, and the server publishes the batch on the same trusted `og.v1.api.telemetry` subject with the endpoint's component as owner, its writer the push lane's, which admits only collected keys ([collection](/architecture/collection/), [ADR-1024](/architecture/decisions/#adr-1024-omniglass-receives-webhooks-on-the-server-and-a-webhook-token-is-a-sealed-secret)).
 - **The raw log path.** A raw log line rides either transport in the same batch but lands on its own untyped lane, `log_line`: no property name, no registry gate ([ADR-0066](/architecture/decisions/#adr-0066-logs-are-a-raw-ingest-lane-not-events)).
 
-The two transports meet at one `land()` write path, so neither can drift from the other's semantics; the mechanics of `land()` (reject-not-project, the transition-only state guard, the current-value derive) belong to [samples](/architecture/properties/).
+The transports meet at one `land()` write path, so neither can drift from the other's semantics; the mechanics of `land()` (reject-not-project, the transition-only state guard, the current-value derive) belong to [samples](/architecture/properties/).
 
 ## Streams and consumers
 

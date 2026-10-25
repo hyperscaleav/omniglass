@@ -100,10 +100,11 @@ that describes the target:
    through one extraction primitive, authenticated by a declared scheme (#902, the first slice of
    #1113) or by a login whose session the node keeps, or digest (#1114), a server-sent events
    stream held as a session over either (#1038), and a websocket held over `websocket` and `wss`,
-   its replies matched by a minted id (#1034, which completes #1113). Still ahead: [templates](/architecture/templates/) (the reusable
+   its replies matched by a minted id (#1034, which completes #1113), and webhooks received on the
+   server, signed and mapped onto any lane (#1024, the first slice of #1146). Still ahead: [templates](/architecture/templates/) (the reusable
    device shape, #827), SNMP v3 (#1083), the held transports beyond those (#1036, #1039 to
    #1041), protocols that move whole files (#1043 to
-   #1047), and server-hosted listeners (webhook, trap, syslog ingress, #1024).
+   #1047), and the node's push listeners (shared tcp and udp ports, syslog, traps: #1148 to #1150).
 2. **The data model.** Landed except one piece: [properties](/architecture/properties/) (the
    canonical-signal registry and the exclusive-arc owner columns), the sample sinks,
    [config and variables](/architecture/variables/) resolved down the

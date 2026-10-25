@@ -50,8 +50,11 @@ Ask in order; the first yes decides.
    reached only through an IP-to-serial gateway, which is the tcp transport (or tls or
    telnet). No serial transport. Same reasoning for any field bus with an IP gateway: the
    gateway's IP protocol decides, not the bus.
-6. **Does the component push to us rather than us reaching it?** Syslog, SNMP traps,
-   webhooks: server-hosted ingress (#1024), not a node transport.
+6. **Does the component push to us rather than us reaching it?** Then it is a push transport
+   over the one listener primitive (ADR-1024): the listener runs where its placement puts it.
+   Webhooks are hosted by the server (#1024); shared tcp and udp ports, syslog and SNMP traps by
+   the node next to the gear (#1148, #1149, #1150). Scope the attribution (the channel authorizes,
+   a payload identity only selects within it), the scheme, and the abuse limits.
 
 Discovery (WS-Discovery, Who-Is, mDNS, SSDP) is never part of a collection issue; it
 belongs with discovery and is named out of scope.

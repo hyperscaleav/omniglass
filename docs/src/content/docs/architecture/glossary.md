@@ -127,6 +127,10 @@ The **authoritative glossary**: every official term in the architecture, defined
 | **principal / role / grant** | IAM subject (kind `human` / `service` / `node`; identity is an opaque uuid, never a name); an RBAC capability set crossed with a scope. The base `principal` holds identity + kind only; a human's `label` lives on the `human` per-kind table. A `principal_group` is a group of principals used as a grant subject. An AI tool acts via OAuth as a `human` / `service` principal (first-class agent identity is deferred, [identity and access](/architecture/identity-access/)). See [identity and access](/architecture/identity-access/). |
 | **secret:read** | The IAM permission to read a credential in plaintext; gated per role, and every decrypt is audited. |
 | **file / blob** | Searchable metadata over content-addressed bytes (pgblobs/S3/disk); dedup. |
+| **push endpoint** | An endpoint a sender pushes to rather than one a node dials, on a push transport (`webhook` today, #1024): it has no reachability ladder and reads **last heard**, stamped by every message that lands, never down for silence ([ADR-1024](/architecture/decisions/#adr-1024-omniglass-receives-webhooks-on-the-server-and-a-webhook-token-is-a-sealed-secret)). |
+| **listener host** | What runs the listener primitive for a push transport (bound, authenticate, attribute, route, extract, land): the server for webhooks, a node for the push transports that should not cross a WAN. |
+| **attribution** | Deciding which endpoint, and so which component, a pushed message speaks for. The channel authorizes it (a webhook's token names one endpoint); a payload identity may only select within what the channel authorized, never past it. |
+| **unclaimed source** | A sender a listener heard from that no endpoint claims (a post to an unknown or rotated webhook token), held in the bounded inbox by its address with a count, first and last heard and its last message cut to 512 bytes, read under `node:read`. Claiming it is creating its endpoint. |
 
 ## Design-only terms
 
