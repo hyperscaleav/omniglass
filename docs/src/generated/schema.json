@@ -3412,6 +3412,11 @@
       "nullable": true,
       "fk": true,
       "fk_target": "metric_type.id"
+     },
+     {
+      "name": "window_seconds",
+      "type": "integer",
+      "nullable": true
      }
     ],
     "checks": [
@@ -3426,6 +3431,10 @@
      {
       "name": "calc_rule_input_position_check",
       "expr": "CHECK ((\"position\" \u003e= 0))"
+     },
+     {
+      "name": "calc_rule_input_window_seconds_check",
+      "expr": "CHECK (((window_seconds IS NULL) OR ((window_seconds \u003e= 1) AND (window_seconds \u003c= 3600))))"
      }
     ],
     "uniques": [
@@ -3512,6 +3521,11 @@
      },
      {
       "name": "no_members_since",
+      "type": "timestamp with time zone",
+      "nullable": true
+     },
+     {
+      "name": "window_due_at",
       "type": "timestamp with time zone",
       "nullable": true
      }

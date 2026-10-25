@@ -29,6 +29,11 @@ import (
 // the same length ($an, $al, $su), so every position in the source stays
 // where the author wrote it.
 //
+// A list of records with a value field (a windowed calc input's samples,
+// #1142) folds by that field: avg over samples is the mean of their values.
+// Each function reads its list's fold type (foldElem) and its values
+// (asList) through the record's value, so no function says it twice.
+//
 // A function's argument types are checked on the typed tree (listCheck),
 // placed on the argument at fault, rather than by Expr's validation, which
 // can only place a refusal on the call.
@@ -221,7 +226,7 @@ func majorityValidate(args []reflect.Type) (reflect.Type, error) {
 	if len(args) != 1 {
 		return nil, fmt.Errorf("majority takes one list of text or bools, not %d arguments", len(args))
 	}
-	if el, ok := listElem(args[0]); ok && (el.Kind() == reflect.String || el.Kind() == reflect.Bool) {
+	if el, ok := foldElem(args[0]); ok && (el.Kind() == reflect.String || el.Kind() == reflect.Bool) {
 		return el, nil
 	}
 	return reflect.TypeFor[any](), nil
@@ -271,7 +276,7 @@ func extremeFunc(name string, sign int) *builtin.Function {
 			}
 			ts := args
 			if len(args) == 1 {
-				if el, ok := listElem(args[0]); ok {
+				if el, ok := foldElem(args[0]); ok {
 					ts = []reflect.Type{el}
 				}
 			}
@@ -290,7 +295,7 @@ func sumValidate(args []reflect.Type) (reflect.Type, error) {
 	if len(args) != 1 {
 		return nil, fmt.Errorf("sum takes one list, or a list and a predicate, not %d arguments", len(args))
 	}
-	if el, ok := listElem(args[0]); ok && isIntKind(el.Kind()) {
+	if el, ok := foldElem(args[0]); ok && isIntKind(el.Kind()) {
 		return reflect.TypeFor[int](), nil
 	}
 	return reflect.TypeFor[float64](), nil
@@ -396,19 +401,59 @@ func anyAllFunc(want bool) func(args ...any) (any, error) {
 	}
 }
 
+// asList is a list's values, each record with a value field read as its
+// value.
 func asList(v any) ([]any, bool) {
+	var out []any
 	if l, ok := v.([]any); ok {
-		return l, true
+		out = slices.Clone(l)
+	} else {
+		rv := reflect.ValueOf(v)
+		if rv.Kind() != reflect.Slice && rv.Kind() != reflect.Array {
+			return nil, false
+		}
+		out = make([]any, rv.Len())
+		for i := range out {
+			out[i] = rv.Index(i).Interface()
+		}
 	}
-	rv := reflect.ValueOf(v)
-	if rv.Kind() != reflect.Slice && rv.Kind() != reflect.Array {
-		return nil, false
-	}
-	out := make([]any, rv.Len())
-	for i := range out {
-		out[i] = rv.Index(i).Interface()
+	for i, x := range out {
+		rv := reflect.ValueOf(x)
+		if rv.Kind() != reflect.Struct {
+			continue
+		}
+		if f, ok := valueField(rv.Type()); ok {
+			out[i] = rv.Field(f).Interface()
+		}
 	}
 	return out, true
+}
+
+// valueField is the index of a record type's value field (tagged
+// expr:"value"), the field a list of the records folds by.
+func valueField(t reflect.Type) (int, bool) {
+	if t.Kind() != reflect.Struct {
+		return 0, false
+	}
+	for i := 0; i < t.NumField(); i++ {
+		if t.Field(i).Tag.Get("expr") == "value" {
+			return i, true
+		}
+	}
+	return 0, false
+}
+
+// foldElem is the type a list function folds a list type by: its element
+// type, or a record element's value field's type.
+func foldElem(t reflect.Type) (reflect.Type, bool) {
+	el, ok := listElem(t)
+	if !ok {
+		return nil, false
+	}
+	if f, ok := valueField(el); ok {
+		return el.Field(f).Type, true
+	}
+	return el, true
 }
 
 func number(v any) (float64, bool, bool) {
@@ -450,6 +495,9 @@ func typeWords(t reflect.Type) string {
 		return "nil"
 	}
 	if el, ok := listElem(t); ok {
+		if f, ok := valueField(el); ok && el.Field(f).Type.Kind() != reflect.Struct {
+			return "a list of records whose value is " + typeWords(el.Field(f).Type)
+		}
 		switch {
 		case isNumberKind(el.Kind()):
 			return "a list of numbers"
@@ -510,7 +558,7 @@ func listCheck(node ast.Node, fail func(n ast.Node, format string, args ...any))
 	typ := func(a ast.Node) reflect.Type { return unwrapCharge(a).Type() }
 	listOf := func(a ast.Node, ok func(reflect.Kind) bool, want string) {
 		t := typ(a)
-		el, isList := listElem(t)
+		el, isList := foldElem(t)
 		if !isList {
 			fail(unwrapCharge(a), "%s takes %s, not %s", name, want, typeWords(t))
 			return

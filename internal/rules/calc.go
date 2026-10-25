@@ -38,11 +38,16 @@ const MaxCalcInputs = 16
 // registry (KeyID, Lane) so a key rename changes nothing; Key is the key's
 // name, resolved when the rule is read (on a write, Key may name the key or
 // give its id).
+//
+// Window, in seconds, reads the key over a time window instead of its current
+// values (#1142): the list of its samples in the last Window seconds, oldest
+// first, each a record (CalcSample). Zero is the current values.
 type CalcInput struct {
-	Alias string `json:"alias"`
-	Key   string `json:"key"`
-	KeyID string `json:"key_id,omitempty"`
-	Lane  Lane   `json:"lane,omitempty"`
+	Alias  string `json:"alias"`
+	Key    string `json:"key"`
+	KeyID  string `json:"key_id,omitempty"`
+	Lane   Lane   `json:"lane,omitempty"`
+	Window int    `json:"window_seconds,omitempty"`
 }
 
 // TypedInput is an input with its key's value type resolved from the
@@ -51,7 +56,18 @@ type TypedInput struct {
 	Alias, Key, KeyID string
 	Lane              Lane
 	ValueType         string
+	Window            int
 }
+
+// MaxCalcWindow is the longest window an input may read over: the staleness
+// bound on a current value (an hour), so a window never reaches past what a
+// current-value input would still trust.
+const MaxCalcWindow = time.Hour
+
+// MaxCalcWindowSamples bounds one window's read: the newest this many samples
+// in the window are kept, so a key sampled faster than its window expects
+// cannot make one computation unbounded.
+const MaxCalcWindowSamples = 1000
 
 // CalcReduce is how a rule folds its inputs into its output: always an
 // expression over the inputs by alias (#1018 retired the named reducers;
@@ -195,14 +211,45 @@ func checkCalcInputs(ownerKind string, inputs []TypedInput) error {
 		if _, ok := valueGoType(x.ValueType); !ok {
 			return calcErr(fmt.Sprintf("inputs[%d].key", i), "%q has no value type a calc rule reads (%q)", x.Key, x.ValueType)
 		}
+		if err := checkWindow(ownerKind, x.Window); err != nil {
+			return &CalcError{Field: fmt.Sprintf("inputs[%d].window_seconds", i), Err: err}
+		}
 		seenAlias[x.Alias], seenKey[key] = true, true
 	}
 	return nil
 }
 
+// checkWindow refuses a window outside 1s to MaxCalcWindow, and any window on
+// a system rule (a system's windows are #1143's).
+func checkWindow(ownerKind string, seconds int) error {
+	switch {
+	case seconds == 0:
+		return nil
+	case ownerKind == OwnerSystem:
+		return errors.New("a system rule's inputs read current values; a window is a component rule's for now (#1143)")
+	case seconds < 0 || time.Duration(seconds)*time.Second > MaxCalcWindow:
+		return fmt.Errorf("a window is 1 to %d seconds, not %d", int(MaxCalcWindow/time.Second), seconds)
+	}
+	return nil
+}
+
+// sampleType is the record a windowed input's list holds, of a value type:
+// the sample's value, when it was taken (at, unix seconds, since an
+// expression environment holds no time.Time) and its instance. A list of
+// these folds by value in the list functions.
+func sampleType(valueType string) reflect.Type {
+	t, _ := valueGoType(valueType)
+	return reflect.StructOf([]reflect.StructField{
+		{Name: "Value", Type: t, Tag: `expr:"value" doc:"The sample's value"`},
+		{Name: "At", Type: reflect.TypeFor[float64](), Tag: `expr:"at" doc:"When the sample was taken, in unix seconds"`},
+		{Name: "Instance", Type: reflect.TypeFor[string](), Tag: `expr:"instance" doc:"The sample's instance; empty for the aggregate instance"`},
+	})
+}
+
 // CalcEnv is the environment a rule's expression compiles against: each
 // input bound by its alias as the list of its current values, of its key's
-// type (#1018): on a component owner one per instance (the named instances,
+// type (#1018), or, for a windowed input, the list of its samples in the
+// window, one record each (#1142): on a component owner one per instance (the named instances,
 // the aggregate instance ” only when it is the key's one, a stale one left
 // out), on a system owner every role-bound member's, in member order. A
 // system owner also binds members, one record per member. It yields the
@@ -226,6 +273,10 @@ func calcEnv(ownerKind string, inputs []TypedInput, output string) (expression.E
 		doc := x.Key + ": the component's current values, one per instance"
 		if ownerKind == OwnerSystem {
 			doc = x.Key + ": every member's current values, one per instance, by member name"
+		}
+		if x.Window > 0 {
+			t = sampleType(x.ValueType)
+			doc = fmt.Sprintf("%s: the component's samples over the last %ds, oldest first, one record each", x.Key, x.Window)
 		}
 		lists[i] = reflect.StructField{Name: fmt.Sprintf("In%d", i), Type: reflect.SliceOf(t),
 			Tag: reflect.StructTag(fmt.Sprintf("expr:%q doc:%q", x.Alias, doc))}
