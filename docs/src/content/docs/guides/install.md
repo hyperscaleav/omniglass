@@ -127,15 +127,35 @@ It does not attach to a `make dev` already running on the host: that server's bu
 host's loopback only, so a containerized node could reach it only on the host's network, where the
 simulator's `NET_ADMIN` would rewrite the host's own firewall. The stack carries its own server instead.
 
-The same stack is what the console walkthroughs are recorded against: `make walkthrough-stack` holds it
+The same stack is what demos are recorded against, the terminal demos and the console walkthroughs
+alike: `make walkthrough-stack` holds it
 up without publishing anything and prints how a Playwright container on its network reaches it, and
 `make test-walkthrough-stack` proves it (the node collects, and an impairment set through the API
 takes a component's reachability down and its repair brings it back). The recipe is
 `stack_walkthrough_up` in `web/e2e/lib/stack.sh`.
 
-#### Recording a walkthrough
+#### Recording a demo
 
-A walkthrough is a script, `web/e2e/walkthroughs/<id>.yaml` (the id is lowercase letters, digits and
+A demo is a recording of a feature working, by one of two recorders: a terminal demo for CLI and API
+work, a walkthrough for a console flow. `make demo ID=<id>` records one demo of either kind
+(`ID="<a> <b>"` several, no `ID` every demo), each recorder on a stack of its own; when a PR needs
+which, and how to write and review each, are in [demos](/contributing/demos/).
+
+**A terminal demo** is a [VHS](https://github.com/charmbracelet/vhs) tape, `scripts/demo/<id>.tape`.
+VHS runs from its own image, `ghcr.io/charmbracelet/vhs` at v0.12.1, pinned by digest in
+[`web/e2e/tape/Dockerfile`](https://github.com/hyperscaleav/omniglass/blob/main/web/e2e/tape/Dockerfile);
+the image bundles what VHS drives (ttyd for the terminal, chromium to render it, ffmpeg to encode the
+GIF and MP4) and the fonts the house settings name, and publishes a multi-platform index, so it runs
+on amd64 and arm64 hosts alike. The recorder adds `jq`, the prelude every tape sources, and this
+tree's `omniglass` binary, copied out of the stack's image, so a tape types the CLI the stack serves.
+Nothing is installed on the host. `make demo` writes `scripts/demo/out/<id>/`: the GIF, the MP4 and
+`demo.json`, the manifest a passing recording carries. A terminal demo is a test: a command it types
+that exits non-zero, a wait in it that runs out, or a recording over its budget (`MAX_GIF_BYTES` and
+`MAX_SECONDS` in
+[`web/e2e/tapelib.mjs`](https://github.com/hyperscaleav/omniglass/blob/main/web/e2e/tapelib.mjs))
+fails the run, naming the tape and the cause. `make test-demos` proves each of those failures.
+
+**A walkthrough** is a script, `web/e2e/walkthroughs/<id>.yaml` (the id is lowercase letters, digits and
 hyphens): a `title`, an optional `description`, and `steps`, each one kind of action or a wait for a
 visible result, with a `caption` shown while it runs. The step kinds, their fields and the rules are
 defined, with an annotated example, at the top of
@@ -168,4 +188,4 @@ for, and keeps the stills taken so far; so does a recording over the budget, who
 size and preview size are `MAX_SECONDS`, `MAX_BYTES` and `MAX_PREVIEW_BYTES` in
 [`web/e2e/walkthroughlib.mjs`](https://github.com/hyperscaleav/omniglass/blob/main/web/e2e/walkthroughlib.mjs). `make test-walkthroughs` proves both failures, an over-budget preview among them.
 When a PR needs a walkthrough, how to review its stills, and how a docs page embeds one are in
-[walkthroughs](/contributing/walkthroughs/).
+[demos](/contributing/demos/).

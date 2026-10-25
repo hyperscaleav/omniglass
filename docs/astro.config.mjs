@@ -41,6 +41,8 @@ export default defineConfig({
     '/guides/admin/types/': '/guides/admin/location-types/',
     // Find things in your fleet folded into the outline guide (#861).
     '/guides/operator/inventory/': '/guides/operator/fleet/',
+    // Walkthroughs became one of a demo's two recorders (#1132).
+    '/contributing/walkthroughs/': '/contributing/demos/',
   },
   integrations: [
     // Diagrams are authored in D2 and rendered to inline SVG. ELK layout; dark theme
@@ -162,7 +164,7 @@ export default defineConfig({
             { label: 'Learning tool', slug: 'contributing/learning-tool' },
             { label: 'Primitive first', slug: 'contributing/primitive-first' },
             { label: 'Design system', slug: 'contributing/design-system' },
-            { label: 'Walkthroughs', slug: 'contributing/walkthroughs' },
+            { label: 'Demos', slug: 'contributing/demos' },
             { label: 'Slice workflow', slug: 'contributing/slice-workflow' },
             { label: 'Feature loops', slug: 'contributing/feature-loops' },
             { label: 'Autopilot', slug: 'contributing/autopilot' },

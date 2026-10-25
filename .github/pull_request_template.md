@@ -46,15 +46,20 @@ $ make test
 
 ![](...)
 
-<!-- WALKTHROUGH: REQUIRED for a PR that adds or changes an operator flow (a form,
-     a multi-step path, a navigation change); a visual-only change keeps
-     screenshots alone. Add or update its script under web/e2e/walkthroughs/,
-     prove it locally with `make walkthroughs ID=<id>`, then apply the
-     `run:walkthrough` label: CI records it and posts the walkthrough comment
-     (scrubbable video, preview, poster, stills). Link that comment here, or write
-     "n/a (no operator flow changed)". -->
+## Demo
 
-- **Walkthrough:**
+<!-- REQUIRED: every PR demos its feature live, as a recording on the PR.
+     - CLI or API behavior: a terminal demo, a VHS tape at scripts/demo/<id>.tape.
+     - An operator flow in the console (a form, a multi-step path, a navigation
+       change): a walkthrough, a script at web/e2e/walkthroughs/<id>.yaml.
+     - Both, when the PR has both.
+     Prove it locally with `make demo ID=<id>`, then apply the `run:demo` label: CI
+     records it and posts one comment listing every demo (a terminal demo's GIF
+     inline with its MP4 linked; a walkthrough's scrubbable video, preview, poster
+     and stills). Link that comment here. "n/a" only with a reason, e.g.
+     "n/a (test-only change)". /ship-slice refuses a PR with no Demo line. -->
+
+- **Demo:**
 
 ## Docs and review
 
@@ -74,7 +79,7 @@ $ make test
 
 - [ ] Tests failed before, pass after; `make test` green run fresh, **output pasted above**
 - [ ] **Screenshots** of any operator-facing change, driven live (or "n/a")
-- [ ] **Walkthrough** comment from `run:walkthrough` for any added or changed operator flow (or "n/a")
+- [ ] **Demo** comment from `run:demo`: a terminal demo for CLI or API behavior, a walkthrough for a console flow (or "n/a" with a reason)
 - [ ] Docs ship in this PR (or `no-docs` label with justification); status build-progress noted
 - [ ] Operator-facing surface teaches its concept (learning-tool), if applicable
 - [ ] `make gen` clean; no em dashes; no AI attribution

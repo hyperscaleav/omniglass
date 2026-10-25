@@ -35,10 +35,11 @@ Nine workflows carry it: `test`, `pr-title`, `image`, `docs-shots`, `gen-drift`,
 
 Three more PR workflows: **`image.yml`** builds the multi-arch container image (see
 [Container image](/guides/container-image/)), **`preview-comment.yml`** reacts to the
-`run:preview` label (see [PR previews](/guides/pr-previews/)), and **`walkthrough.yml`**
-reacts to the `run:walkthrough` label, recording the PR's walkthroughs to the PR's evidence ref
-and keeping one comment with a scrubbable video, preview, poster and stills of each (see
-[Labels](/contributing/labels/)).
+`run:preview` label (see [PR previews](/guides/pr-previews/)), and **`demo.yml`**
+reacts to the `run:demo` label, recording the PR's [demos](/contributing/demos/) (its terminal
+demos and its walkthroughs) to the PR's evidence ref and keeping one comment listing every demo,
+each with a scrubbable video and what plays inline (see [Labels](/contributing/labels/)).
+**`demo-prune.yml`** deletes an evidence ref 30 days after its PR closes.
 
 ## Cutting a release (manual)
 

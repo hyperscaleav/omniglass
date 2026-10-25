@@ -113,9 +113,11 @@ jobs:
           for id in $ids; do
             if [ -f "web/e2e/walkthroughs/$id.yaml" ]; then walkthroughs=1; fi
           done
-          echo "ids=$ids" >>"$GITHUB_OUTPUT"
-          echo "walkthroughs=$walkthroughs" >>"$GITHUB_OUTPUT"
-          echo "head=$(git rev-parse HEAD)" >>"$GITHUB_OUTPUT"
+          {
+            echo "ids=$ids"
+            echo "walkthroughs=$walkthroughs"
+            echo "head=$(git rev-parse HEAD)"
+          } >>"$GITHUB_OUTPUT"
           echo "recording: $ids"
 
       # The walkthrough recorder runs in the pinned Playwright container against

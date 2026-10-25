@@ -102,9 +102,9 @@ clean only when every line passes on fresh captures.
 
 ## Grade the walkthrough stills (an operator flow)
 
-A PR that adds or changes an operator flow carries a walkthrough (`/ship-slice` gate 10). You
-cannot watch the video, so the **per-step stills are the evidence**: `make walkthroughs
-ID=<id>` writes `web/e2e/walkthroughs/out/<id>/step-NN.png` (one per step, taken after the
+A PR that adds or changes an operator flow demos it with a walkthrough (`/ship-slice` gate 10,
+the console's half of the PR's demo). You cannot watch the video, so the **per-step stills are
+the evidence**: `make demo ID=<id>` writes `web/e2e/walkthroughs/out/<id>/step-NN.png` (one per step, taken after the
 step's action settles, with the cursor, highlight ring and caption bar drawn in) and
 `poster.png`. Open every still in order, beside its caption in the script, and grade each line
 pass or fail with a word of evidence:
@@ -125,7 +125,7 @@ pass or fail with a word of evidence:
    console (kinship, hierarchy, legibility and the rest).
 
 A failing line is a fix (to the surface or the script), then a re-record and a regrade. The
-same stills are what the `run:walkthrough` comment embeds, so a clean grade here is what the
+same stills are what the `run:demo` comment embeds, so a clean grade here is what the
 architect reviews there.
 
 ## Interaction proof (pixels are not behavior)
@@ -160,7 +160,7 @@ Rubric:    kinship PASS (matches <sibling>) / hierarchy PASS / states PASS /
            density PASS / legibility PASS / affordances PASS (tab walk clean) /
            pedagogy PASS (hints: <fields>) / honesty PASS (seed fleet, fontguard green)
 Walkthrough: <id>: <n> stills graded, lands / follow / captions / path / poster PASS;
-           comment <run:walkthrough comment link> | n/a (no operator flow changed)
+           comment <run:demo comment link> | n/a (no operator flow changed)
 First-pass failures fixed: <what the loop caught, one line each | none>
 Interaction: make test-web green; e2e <ran: routes+flows | n/a>
 Evidence:  <committed raw-SHA links>

@@ -37,3 +37,7 @@ summary: "A PR's walkthrough evidence (mp4, preview, poster, stills) is committe
   is public; a private repository would need another host for scrubbable PR video. The docs mp4 costs
   about 1 MB per walkthrough per re-record in main's history, accepted so the deployed docs and their PR
   previews play the flow with controls. Supersedes the #884 ruling on where PR evidence lives.
+- **Amended (#1132):** the job is now `run:demo` (`demo.yml`, with `demo-prune.yml` the cleanup),
+  which records terminal demos beside walkthroughs and commits both to the same per-PR ref under the
+  same prune, listing every demo in one comment; `run:walkthrough` still triggers it. The hosting
+  above is unchanged. See [ADR-1132](#adr-1132-a-demo-is-one-concept-with-two-recorders-and-every-pr-demos-its-feature).

@@ -1,6 +1,6 @@
 ---
 name: ship-slice
-description: Use when a vertical-slice PR is built and about to be proposed for merge. Runs the pre-ship validation (fresh make test, make gen drift check, em-dash and attribution scan, a reviewer pass, the docs-with-everything check, the walkthrough an operator-flow PR requires) and emits the standard ship-review report the architect approves from. Invoke at PR-ready, before asking for approval; re-run after addressing review findings.
+description: Use when a vertical-slice PR is built and about to be proposed for merge. Runs the pre-ship validation (fresh make test, make gen drift check, em-dash and attribution scan, a reviewer pass, the docs-with-everything check, the demo every PR carries) and emits the standard ship-review report the architect approves from. Invoke at PR-ready, before asking for approval; re-run after addressing review findings.
 ---
 
 # Ship a slice
@@ -114,37 +114,54 @@ Each is a gate; a red one blocks the ship.
    `::screenshot{#id}` directive in the prose, not a code change. **PR bodies, comments, and
    issues embed the clean renders, never the baselines** (a masked strip teaches nothing);
    the baselines exist only for the gate.
-10. **Walkthrough, for an operator flow.** A PR that **adds or changes an operator flow** (a
-   form, a multi-step path, a navigation change: anything an operator now does in a different
-   order or with different input) carries a **walkthrough**, ruled on #884. A visual-only change
-   (a restyle, a new column, a moved badge) keeps screenshots alone. Decide it from the diff,
-   not from intent: a changed form, dialog, drawer action, route, or the steps between them is a
-   flow. **The verdict cannot be `ready` for an operator-flow PR without the walkthrough
-   comment**; that is a red gate, not a note, exactly like a UI PR with no screenshots.
+10. **Demo, for every PR.** Every PR demos its feature live, as a recording on the PR the
+   architect watches rather than a transcript (#1132, the [demos](/contributing/demos/) page). A
+   demo is one concept with two recorders; decide which from the diff, not from intent:
+   - **CLI or API behavior** (a new or changed route, command, flag or answer) takes a **terminal
+     demo**: a VHS tape, `scripts/demo/<id>.tape`, that drives it through the CLI.
+   - **An operator flow** (a form, a multi-step path, a drawer action, a route, or the steps
+     between them: anything an operator now does in a different order or with different input)
+     takes a **walkthrough** (ruled on #884). A visual-only change (a restyle, a new column, a moved
+     badge) keeps screenshots alone.
+   - Both, when the PR has both.
+   - **n/a only with a reason**, in one clause: test-only, docs-only, a refactor with no behavior
+     an operator or a client can observe.
+
+   **The ship-review's Demo line is required, and the verdict cannot be `ready` without it**: a PR
+   whose Demo line is missing, empty, or `n/a` with no reason, or `n/a` for a diff that changes CLI,
+   API or console behavior, is a red gate, exactly like a UI PR with no screenshots. Refuse it;
+   build the demo.
 
    How:
-   - **Script it.** Add or update `web/e2e/walkthroughs/<id>.yaml` (steps of `goto`, `click`,
-     `type`, `select`, `press`, `wait`, a caption each; the format is documented at the top of
-     `web/e2e/walkthroughlib.mjs`). End each action on a `wait` for its visible result: a
-     walkthrough is a test, and a result that never appears fails the run naming the step.
-     `make test-web` validates every script in the tree.
-   - **Prove it locally.** `make walkthroughs ID=<id>` (Docker only) records it to
-     `web/e2e/walkthroughs/out/<id>/`: the mp4, `poster.png`, a still per step. Read the stills
-     with `/assess-ui` (its walkthrough rubric) before asking CI to record; the agent cannot
-     watch video, so the stills are what gets graded.
-   - **Record it on the PR.** Resolve any merge conflicts (GitHub runs no `pull_request`
-     workflow on a conflicted PR), push, then apply the `run:walkthrough` label. CI records the
-     branch tip: every walkthrough, or, when the PR changes nothing under `web/` but scripts,
-     just the scripts it adds or changes. It commits each walkthrough's mp4, preview, poster and
-     stills to the PR's evidence ref (`refs/walkthroughs/pr-<n>`, never the PR branch, so there
-     is nothing to pull and the head's checks are untouched) and upserts one PR comment that links
-     a scrubbable video per walkthrough and embeds the rest by commit SHA. A failed walkthrough
-     fails the job and is named in the comment (a stack that never came up says so instead);
-     fix it and re-run.
-   - **Link it.** The PR body's Visual confirmation carries the walkthrough comment's link on
-     its **Walkthrough** line, and the ship-review's Walkthrough line names it.
+   - **Write it.** A tape opens with its title and description as a comment block, then types the
+     real commands an operator or integrator would (narrated with typed `# ...` lines), waiting on
+     each (`Enter`, then `Wait`). Address by name or dotted address, never a uuid (the rules refuse
+     one; look an id up by name inside the tape). Show only what holds still (pick stable fields
+     with `jq`), and hide the waits in a `Hide` block with `demo_until` and `demo_hush`, which erase
+     themselves. The rules and an annotated example are the header of `web/e2e/tapelib.mjs`. A
+     walkthrough is `web/e2e/walkthroughs/<id>.yaml` (steps of `goto`, `click`, `type`, `select`,
+     `press`, `wait`, a caption each; the format is the header of `web/e2e/walkthroughlib.mjs`),
+     ending each action on a `wait` for its visible result. `make test-web` validates every tape
+     and script in the tree.
+   - **Prove it locally.** `make demo ID=<id>` (Docker only) records a demo of either kind: a tape
+     to `scripts/demo/out/<id>/` (the GIF, the MP4, `demo.json`), a walkthrough to
+     `web/e2e/walkthroughs/out/<id>/` (the mp4, `poster.png`, a still per step). Look at it before
+     asking CI: read a walkthrough's stills with `/assess-ui` (its walkthrough rubric), and a
+     terminal demo's frames (ffmpeg pulls them from the MP4); the agent cannot watch video. A demo
+     is a test: a failing command, a wait that runs out or a result that never appears fails it.
+   - **Record it on the PR.** Resolve any merge conflicts (GitHub runs no `pull_request` workflow
+     on a conflicted PR), push, then apply the `run:demo` label. CI records the branch tip: the
+     tapes and walkthrough scripts the PR adds or changes, widened to every tape or every
+     walkthrough when the PR changes that recorder (or, for walkthroughs, anything under `web/`),
+     and every demo when it names none. It commits each demo's files to the PR's evidence ref
+     (`refs/walkthroughs/pr-<n>`, never the PR branch, so there is nothing to pull and the head's
+     checks are untouched) and upserts **one comment listing every demo**: a terminal demo's GIF
+     inline with its MP4 linked, a walkthrough's scrubbable video, preview, poster and stills. A
+     failed demo fails the job and is named in the comment (a stack that never came up says so
+     instead); fix it and re-run.
+   - **Link it.** The PR body's **Demo** section carries the demo comment's link, and the
+     ship-review's Demo line names it.
 
-   `n/a` when no operator flow changed; say why in one clause ("visual only", "no UI surface").
 11. **Audit coverage.** Every privileged **mutation** and every **auth event** the slice adds
    writes an `audit_log` row: a fleet or IAM mutation through `writeAuditRes` **in the same
    transaction** as the change (a committed change without its audit row is a red gate), and an
@@ -179,7 +196,7 @@ Proof (ran fresh)
   Tiers:     unit X / integration Y / e2e Z
   make gen:  clean
 Visual:    <screenshots in the PR for any UI surface | n/a>
-Walkthrough: <the run:walkthrough comment link, per flow | n/a (why: visual only, no UI)>
+Demo:      <the run:demo comment link: terminal demo <id> / walkthrough <id> | n/a (why: test-only, docs-only)>
 Dev seed:  <new-entity example rows added to internal/devseed | n/a>
 
 Docs:      <what shipped; arch-of-record consistent | divergence note; lint: green;
@@ -195,9 +212,9 @@ Diff:      N files, ~M LOC   <PR link>
 Risk:      <outward-facing? invariant-changing? reversible?>
 ```
 
-`ready` is not available while a gate is red: an operator-flow PR whose Walkthrough line is
-empty, or `n/a` for a diff that changes a flow, ships as neither `ready` nor
-`ready-pending-your-call` until the walkthrough comment exists.
+`ready` is not available while a gate is red: a ship-review with no Demo line, a Demo line that is
+empty or `n/a` with no reason, or `n/a` for a diff that changes CLI, API or console behavior, ships
+as neither `ready` nor `ready-pending-your-call` until the demo comment exists.
 
 The two lines the architect reads first are **Decisions I need from you** and **Risk**.
 Approval means squash-merge; a redirect adjusts the slice.
