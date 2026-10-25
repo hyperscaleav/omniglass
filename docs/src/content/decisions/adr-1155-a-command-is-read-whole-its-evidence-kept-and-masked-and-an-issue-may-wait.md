@@ -29,9 +29,15 @@ refs: [1155]
      observation, none) are functions of the row and its binding, computed on read, so no write path
      has a second fact to keep in step.
   4. **The row keeps its evidence and its why.** The execution report's reply and error are stored,
-     masked first of every form of the dispatched endpoint's secret fields (and a basic login's
-     authorization value) and of any pair the text labels a credential, then made valid text and
-     capped at 4 KiB; the judgment still reads the reply whole. The outcome records `settled_by`
+     masked first of the dispatched endpoint's secret fields in the forms a component commonly echoes
+     them (raw, url-escaped, JSON-escaped any way, html-escaped, base64, in any case, and a basic
+     login's authorization value) and of any pair, element, header or config keyword the text labels
+     a credential, then made valid text and capped at 4 KiB; the judgment still reads the reply
+     whole. The masking **fails closed**: when the server cannot read the endpoint's secrets (no key
+     provider, an envelope that will not open, a driver detached since the dispatch) the node may
+     still hold them, so the reply and the error are withheld rather than stored half-masked, and the
+     report's confining stamp runs before any secret is read, so a report a node had no standing to
+     make reads nothing. The outcome records `settled_by`
      (issue, reply, observation, window), a `reason` in operator words, and the observed sample when
      an observation decided it. A timeout's reason says where the command stopped: answered with
      nothing observed, delivered with no report, queued for a node that never took it, or carried by
@@ -40,7 +46,10 @@ refs: [1155]
   5. **Each terminal status lands its lifecycle event.** `command-settled`, `command-failed` and
      `command-timed-out` join `command-issued` in `command-lifecycle`, written with the outcome in
      its transaction and linked from the row (`settled_event_id`); a fire-and-forget command, settled
-     by its issue, writes none. This amends
+     by its issue, writes none. The event names the command and carries no evidence or reason, which
+     stay on the command behind `command:read` rather than on a timeline `event:read` reaches. Before
+     this release the three names were ordinary, so a one-time backfill retires an event of them that
+     no command wrote into `retired_sample`, as ADR-1100's did for `command-issued`. This amends
      [ADR-1100](#adr-1100-legacy-rows-and-stored-declarations-honor-the-one-writer-ruling) point 7,
      which named `command-issued` alone.
   6. **An issue may wait, bounded.** `wait` blocks the issue until the command is terminal or
@@ -49,6 +58,16 @@ refs: [1155]
      timeout at the window rather than at the next sweep. At most 64 waits run at once, 4 per
      principal; a wait past either is a 429 refused before anything is issued, so a refusal leaves
      nothing to retry around. A wait that runs out answers with the command as it stands.
+- **Stated limits, recorded rather than hidden:**
+  1. **The mask is an equality oracle.** A principal that may issue a command whose reply echoes its
+     value learns, from which value reads back `[redacted]`, whether it guessed the endpoint's secret.
+     Issuing is already the stronger authority (it actuates the component), and the read refuses
+     nobody the issue admits, so this is recorded rather than closed.
+  2. **What a component echoes in a form the mask does not know** (a hash, a partial echo, a
+     multi-word value past its first word after a label) is stored as echoed; masking is a second
+     line behind a driver that does not ask a component to echo its login.
+  3. **A row stored before this release** carries its execution error as the node reported it; the
+     read masks what it labels a credential, and nothing more.
 - **Context:** The issue answered `{id, status: "issued"}` and nothing read a command back, so the
   #1154 demo could not show a `set-volume` settling and only an end-to-end test asserted it. The
   state existed on the row but the evidence did not: a failed command could say that it failed and

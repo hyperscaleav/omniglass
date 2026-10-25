@@ -54,7 +54,7 @@ func recordOutcome(ctx context.Context, q txQuerier, id int64, o settlementOutco
 
 // writeLifecycleEvent lands a terminal command's lifecycle event (command-
 // settled, command-failed or command-timed-out) on its owner's timeline, a
-// caused event carrying the reason, and points the command at it. It is held
+// caused event naming the command, and points the command at it. It is held
 // to the key's writer class like every event (ADR-0161): command-lifecycle
 // admits a command alone.
 func writeLifecycleEvent(ctx context.Context, q txQuerier, id int64, ownerKind, arc, instance, commandType string, o settlementOutcome) error {
@@ -73,10 +73,11 @@ func writeLifecycleEvent(ctx context.Context, q txQuerier, id int64, ownerKind, 
 	if err != nil {
 		return err
 	}
-	msg := fmt.Sprintf("command %s %s", commandType, statusWords(o.status))
-	if o.reason != "" {
-		msg += ": " + o.reason
-	}
+	// The event says what happened and to which command, and no more: the
+	// reason and the evidence (a reply, an execution error, an observed
+	// value) stay on the command, behind command:read, rather than on a
+	// timeline that event:read reaches.
+	msg := fmt.Sprintf("command %s %s (id %d)", commandType, statusWords(o.status), id)
 	var eventID int64
 	sql := fmt.Sprintf(`insert into event (owner_kind, %s, event_type_id, instance, origin, message, attributes, provenance, source)
 		values ($1, $2, (select id from event_type where name = $3), $4, 'caused', $5, $6, 'observed', 'command')

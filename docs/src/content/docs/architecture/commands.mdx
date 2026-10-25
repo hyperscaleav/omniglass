@@ -171,15 +171,21 @@ its address, the component taking every spelling the component routes take. Each
 - **who issued it**, by name and uuid, the actor on its audit row.
 
 **The reply is masked before it is stored.** A reply crosses from a component the operator does not
-control, so the execution report's reply and error are masked of every form of the dispatched
-endpoint's secret fields (and a basic login's authorization value) and of any pair the text labels a
-credential, then made valid text and capped at 4 KiB, before they reach the row; the binding's
-judgment reads the reply whole. The masking is one primitive (`internal/redact`) that the node's
-own http scrub runs too.
+control, so the execution report's reply and error are masked of the dispatched endpoint's secret
+fields in the forms a component commonly echoes them (raw, url-escaped, JSON-escaped, html-escaped,
+base64, in any case, and a basic login's authorization value) and of any pair, element, header or
+config keyword the text labels a credential, then made valid text and capped at 4 KiB, before they
+reach the row; the binding's judgment reads the reply whole. The masking fails closed: a server that
+cannot read the endpoint's secrets withholds the reply and the error rather than store them
+half-masked. The masking is one primitive (`internal/redact`) that the node's own http scrub runs
+too. A form it does not know (a hash, a partial echo) is stored as echoed, which is why a driver
+should not ask a component to echo its login
+([ADR-1155](/architecture/decisions/#adr-1155-a-command-is-read-whole-its-evidence-kept-and-masked-and-an-issue-may-wait)).
 
 **Each terminal status lands on the component's timeline.** Settling, failing and timing out write
-`command-settled`, `command-failed` and `command-timed-out`, caused events carrying the reason and
-linked from the row (`settled_event_id`), in the transaction that records the outcome. They are
+`command-settled`, `command-failed` and `command-timed-out`, caused events naming the command and
+linked from the row (`settled_event_id`), in the transaction that records the outcome. They carry no
+evidence and no reason: those stay on the command, behind `command:read`. They are
 `command-lifecycle` keys beside `command-issued`, so only a command writes one, and a failure reads
 by its type rather than out of a message. A fire-and-forget command, settled by its issue, writes no second event.
 

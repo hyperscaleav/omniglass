@@ -213,8 +213,9 @@ func (p *PG) PendingNodeCommands(ctx context.Context, node string) ([]CommandDel
 // The reply and the execution error are stored as evidence (#1155), masked of
 // the dispatched endpoint's credentials and of anything the text labels a
 // credential, then made storable and capped: a component that echoes its
-// login never has it stored or served. The judgment below reads the reply
-// whole, as the node sent it.
+// login never has it stored or served. When the endpoint's secrets cannot be
+// read the masking fails closed and both are withheld (endpointMask). The
+// judgment below reads the reply whole, as the node sent it.
 //
 // When the binding settles from the response (ADR-0141), the reply decides
 // the command in the same transaction: a value it carries is recorded as an
@@ -222,18 +223,6 @@ func (p *PG) PendingNodeCommands(ctx context.Context, node string) ([]CommandDel
 // the command against its intent; a confirmation settles it; a reply that
 // fails the binding's reading, or an execution error, fails it at once.
 func (p *PG) RecordCommandExecution(ctx context.Context, node string, commandID int64, execErr, reply string) error {
-	var dispatchedTo *string
-	if err := p.pool.QueryRow(ctx, `select dispatched_endpoint_id::text from command where id = $1`, commandID).Scan(&dispatchedTo); err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return ErrCommandNotDispatchedHere
-		}
-		return fmt.Errorf("storage: command %d's endpoint: %w", commandID, err)
-	}
-	mask := redactNothing
-	if dispatchedTo != nil {
-		mask = p.endpointMask(ctx, p.pool, *dispatchedTo)
-	}
-	storedErr := storedText(mask(execErr))
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("storage: begin record execution: %w", err)
@@ -242,8 +231,12 @@ func (p *PG) RecordCommandExecution(ctx context.Context, node string, commandID 
 	var (
 		ownerKind, arc, instance, commandType, endpointID string
 	)
+	// The confining stamp first: a report the node had no standing to make
+	// is refused before anything about the endpoint (its secrets included)
+	// is read, and the mask below is the endpoint this stamp names, never a
+	// guess read before it.
 	err = tx.QueryRow(ctx, `
-		update command c set executed_at = now(), exec_error = nullif($3, ''), reply = nullif($4, '')
+		update command c set executed_at = now()
 		where c.id = $1
 		  and c.executed_at is null
 		  and c.dispatched_endpoint_id is not null
@@ -253,12 +246,18 @@ func (p *PG) RecordCommandExecution(ctx context.Context, node string, commandID 
 			  and i.node_name = (select principal_id from node where name = $2))
 		returning c.owner_kind, coalesce(c.component_id, c.system_id, c.location_id, c.node_id)::text,
 			c.instance, (select name from command_type where id = c.command_type_id), c.dispatched_endpoint_id::text`,
-		commandID, node, storedErr, storedText(mask(reply))).Scan(&ownerKind, &arc, &instance, &commandType, &endpointID)
+		commandID, node).Scan(&ownerKind, &arc, &instance, &commandType, &endpointID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return ErrCommandNotDispatchedHere
 	}
 	if err != nil {
 		return fmt.Errorf("storage: record execution of command %d: %w", commandID, err)
+	}
+	mask := p.endpointMask(ctx, p.pool, endpointID)
+	storedErr := storedText(mask(execErr))
+	if _, err := tx.Exec(ctx, `update command set exec_error = nullif($2, ''), reply = nullif($3, '') where id = $1`,
+		commandID, storedErr, storedText(mask(reply))); err != nil {
+		return fmt.Errorf("storage: record the report of command %d: %w", commandID, err)
 	}
 	// Settling is judged under a savepoint: whatever goes wrong reading the
 	// reply fails the command, never the execution stamp, so an actuated
@@ -296,10 +295,6 @@ func (p *PG) RecordCommandExecution(ctx context.Context, node string, commandID 
 	}
 	return nil
 }
-
-// redactNothing is the mask for a command dispatched over no endpoint: there
-// is no report for it to mask.
-func redactNothing(s string) string { return s }
 
 // settleFromResponse applies the dispatched endpoint's binding to the reply,
 // when that binding settles from the response, and returns the outcome it

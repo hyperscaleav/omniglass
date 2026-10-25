@@ -405,8 +405,8 @@ The arrow at a row's end opens the command in place: its **arc**, the issue's ti
 step (delivered to its node, answered, settled) as how long after the issue it came; **why** it
 settled, failed or timed out; how it **settles** (from the component's reply or an observation of
 what it sets), its window, the **endpoint**, **node** and **driver** that carried it, and who
-**issued** it; and the **evidence**: the component's **reply** (any credential in it masked before it
-was stored), or the **observed** sample that matched. A timed-out command says where it stopped:
+**issued** it; and the **evidence**: the component's **reply** (the endpoint's login and anything it labels a
+credential masked before it was stored, or withheld when that login could not be read), or the **observed** sample that matched. A timed-out command says where it stopped:
 queued for a node that never took it, delivered with no answer, or answered with nothing observed
 after.
 

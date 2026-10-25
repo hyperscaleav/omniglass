@@ -17,12 +17,18 @@ path (the issue's zero window, the execution report, an observation, the sweep) 
 `recordOutcome` (`internal/storage/command_outcome.go`), which builds the reason from where the command
 stopped.
 
-The reply is masked before it is stored, by a new pure primitive, `internal/redact`: every form of the
-dispatched endpoint's secret fields (raw, url-escaped, JSON-escaped either way, html-escaped, a basic
-login's authorization value) and any pair the text labels a credential; the node's http scrub now
-calls it too. The issue gains `wait` and `wait_timeout` (`--wait` on the CLI), bounded in time and to
-64 waiters (4 a principal), a 429 refused before anything is issued, and it judges the command at its
-deadline so a timeout answers at the window.
+The reply is masked before it is stored, by a new pure primitive, `internal/redact`: the dispatched
+endpoint's secret fields in the forms a component commonly echoes them (raw, url-escaped, JSON-escaped
+any way, html-escaped, base64, any case, a basic login's authorization value) and any pair, element,
+header or config keyword the text labels a credential; the node's http scrub now calls it too. It fails
+closed: when the server cannot read the endpoint's secrets, the reply and the error are withheld, and
+the confining stamp runs before any secret is read. Lifecycle events name the command and carry no
+evidence, so the evidence stays behind `command:read`, and a one-time backfill retires events of the
+three newly reserved names that no command wrote.
+
+The issue gains `wait` and `wait_timeout` (`--wait` on the CLI), bounded in time and to 64 waiters (4
+a principal), a 429 refused before anything is issued, and it judges the command at its deadline so a
+timeout answers at the window.
 
 The console's component Activity tab carries the command history above the events, each row opening
 in place to its arc (each leg timed from the issue), its evidence and what carried it; **Issue a
@@ -32,8 +38,19 @@ command** offers the commands the component's drivers bind and raises a toast, a
 Proven at every tier: the redact forms and the phase, settle-mode, timeout-reason and stored-text
 functions as unit tests; the read model against Postgres (a reply-settled arc, the failures and their
 reasons, a never-answered command timing out with where it stopped, an observation-settled command's
-sample, a reply masked of the endpoint's login, the cap, the filters); the routes end to end (the
+sample, a reply masked of the endpoint's login, a reply withheld when the server cannot read that
+login, a refused report storing nothing, a legacy error read masked, the cap, the filters, and the
+backfill retiring a forged outcome event); the routes end to end (the
 reads, the scope split, the wait answering timed out at its window and in flight at its timeout, the
 waiter limits refusing before anything is issued); and over a real node and the simulated Kestrel bar
 (`run_command_status_test.go`: `set-volume` with wait settles over the websocket with the answer frame
 as its evidence, and over https with the bar's confirmation, each on the component's timeline).
+
+An adversarial review with a security lens (reply masking, scope on the reads, the wait's limits)
+found the reads' scope and the wait's bounds sound and shaped the rest, each fixed test-first: the
+masking failed open when the server could not unseal the endpoint's secrets while its node still held
+them (now withheld), it missed common forms and labels (now any case, base64, lowercase hex, ASCII
+JSON, every quote spelling, config keywords, elements, cookies, and an object or list value masked
+whole), the report read the endpoint before it was confined, the three new reserved names inherited
+rows nobody's command wrote (now retired), and the lifecycle event's message carried the evidence
+past `command:read` (now it names the command only).

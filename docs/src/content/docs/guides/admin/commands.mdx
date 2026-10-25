@@ -141,7 +141,9 @@ read but whose commands you may not is a 403. Each command carries:
 - who **issued** it.
 
 Each terminal status also lands on the component's [event log](/guides/admin/events/#the-occurrences-behind-the-catalog)
-as `command-settled`, `command-failed` or `command-timed-out`, with the reason.
+as `command-settled`, `command-failed` or `command-timed-out`, naming the command (its reason and
+evidence stay on the command, which takes `command:read`). A reply the server cannot mask, because
+it could not read the endpoint's credentials, is withheld rather than stored.
 
 **Waiting on an issue.** Add `wait=true` to the issue (`--wait` on the CLI) and it answers once the
 command settles, fails or times out, or once `wait_timeout` passes (1 to 120 seconds, 30 by default),

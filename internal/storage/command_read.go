@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strconv"
 	"strings"
 	"time"
@@ -242,6 +243,14 @@ func scanCommandRecord(row pgx.Row, specs specCache) (*CommandRecord, error) {
 		return nil, err
 	}
 	r.Issuer = principalIdent(username, service, nodeName)
+	// A row stored before replies were masked carries its execution error as
+	// the node reported it; the labeled-pair pass runs on every read, a
+	// no-op on text already masked.
+	r.ExecError = redact.Keyed(r.ExecError)
+	if r.Reply != nil {
+		masked := redact.Keyed(*r.Reply)
+		r.Reply = &masked
+	}
 	switch {
 	case propTarget != "":
 		r.TargetKind, r.Target = "property", propTarget
@@ -333,38 +342,63 @@ func storedText(s string) string {
 	return s[:cut] + " [truncated]"
 }
 
+// Withheld is what a component's text reads as when the server could not
+// read the endpoint's secrets to mask it.
+const Withheld = "[withheld: the endpoint's credentials could not be read to mask it]"
+
 // endpointMask is the masker for what came back over an endpoint: every
 // secret field the endpoint's driver inputs name (and a basic login's
 // authorization value), in every form redact knows, then anything the text
-// labels a credential. It never fails: a secret it cannot unseal (no key
-// provider, a secret since deleted) leaves the labeled-pair pass, which is
-// still applied, and the server logs nothing a node could not already see.
+// labels a credential. It fails closed: when the secrets cannot be read (no
+// key provider, an envelope that will not open, a driver detached since the
+// dispatch), the node that sent the text may still hold them, so every
+// non-empty text is withheld rather than stored half-masked. A secret input
+// that names nothing the component owns was delivered to the node as
+// absence, so there is nothing of it to mask.
 func (p *PG) endpointMask(ctx context.Context, q querier, endpointID string) func(string) string {
-	secrets := p.endpointSecretValues(ctx, q, endpointID)
+	secrets, err := p.endpointSecretValues(ctx, q, endpointID)
+	if err != nil {
+		slog.Warn("a command's reply is withheld: its endpoint's credentials could not be read to mask it",
+			"facility", "command", "endpoint", endpointID, "error", err.Error())
+		return func(s string) string {
+			if s == "" {
+				return s
+			}
+			return Withheld
+		}
+	}
 	return func(s string) string { return redact.Text(s, secrets...) }
 }
 
 // endpointSecretValues unseals the secret fields an endpoint authenticates
 // with, through the same cascade-confined lookup its node's worklist uses.
-func (p *PG) endpointSecretValues(ctx context.Context, q querier, endpointID string) []string {
-	if endpointID == "" || p.secret == nil {
-		return nil
-	}
+// An error is a secret that may exist and could not be read.
+func (p *PG) endpointSecretValues(ctx context.Context, q querier, endpointID string) ([]string, error) {
 	var spec, inputs []byte
 	var componentID *string
 	if err := q.QueryRow(ctx, `select d.spec, e.inputs, e.component::text from endpoint e join driver d on d.id = e.driver_id where e.id = $1`,
-		endpointID).Scan(&spec, &inputs, &componentID); err != nil || componentID == nil {
-		return nil
+		endpointID).Scan(&spec, &inputs, &componentID); err != nil {
+		return nil, fmt.Errorf("storage: the driver of endpoint %s: %w", endpointID, err)
 	}
 	refs, err := secretRefsOf(spec, inputs)
 	if err != nil {
-		return nil
+		return nil, err
+	}
+	if len(refs) == 0 {
+		return nil, nil
+	}
+	if componentID == nil {
+		return nil, fmt.Errorf("storage: endpoint %s names secrets but has no component", endpointID)
 	}
 	var out []string
 	for _, ref := range refs {
 		fields, _, shape, err := p.nodeSecretShaped(ctx, ref, *componentID)
+		var amb *ErrAmbiguousName
+		if errors.Is(err, ErrSecretNotFound) || errors.As(err, &amb) {
+			continue // delivered to the node as absence: nothing of it to mask
+		}
 		if err != nil {
-			continue
+			return nil, err
 		}
 		for _, f := range shape.Fields {
 			if f.Secret {
@@ -373,5 +407,5 @@ func (p *PG) endpointSecretValues(ctx context.Context, q querier, endpointID str
 		}
 		out = append(out, redact.BasicAuth(fields["username"], fields["password"]))
 	}
-	return out
+	return out, nil
 }

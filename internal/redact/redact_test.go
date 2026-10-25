@@ -85,3 +85,49 @@ func TestTextRunsBoth(t *testing.T) {
 		t.Fatalf("got %q, want %q", got, want)
 	}
 }
+
+// The forms a review found a component could still echo (#1155): a case
+// change, the secret's own base64, lowercase percent-hex, an ASCII-only JSON
+// encoder's unicode escapes, and the other html spellings of a quote.
+func TestSecretsMasksTheLessCommonForms(t *testing.T) {
+	for _, tc := range []struct{ secret, text string }{
+		{"hunter2", "PASSWORD IS HUNTER2"},
+		{"hunter2", "echo aHVudGVyMg== back"},
+		{"hunter2", "echo aHVudGVyMg back"},
+		{"a/b&c", "q=a%2fb%26c"},
+		{"Pässw0rd", `{"p":"P` + `\` + `u00e4ssw0rd"}`},
+		{"it's", "it&apos;s"},
+		{"it's", "it&#x27;s"},
+		{`say "hi"`, "say &quot;hi&quot;"},
+	} {
+		got := redact.Secrets(tc.text, tc.secret)
+		if !strings.Contains(got, "[redacted]") {
+			t.Errorf("secret %q in %q: got %q, want it masked", tc.secret, tc.text, got)
+		}
+	}
+}
+
+// A credential a config line or a markup document labels: a keyword and a
+// space, an element, a cookie, and a value whose quote never closes. A value
+// that is an object or a list is masked whole, never mangled.
+func TestKeyedMasksTheLessCommonLabels(t *testing.T) {
+	for in, want := range map[string]string{
+		`set password hunter2`:                     `set password [redacted]`,
+		`snmp-server community s3cret RO`:          `snmp-server community [redacted] RO`,
+		`<password>hunter2</password>`:             `<password>[redacted]</password>`,
+		`<Token type="x">abc</Token>`:              `<Token type="x">[redacted]</Token>`,
+		`{"pass":"hunter2"}`:                       `{"pass":"[redacted]"}`,
+		`{"secret_value":"s3"}`:                    `{"secret_value":"[redacted]"}`,
+		"Cookie: sid=abc; theme=dark":              "Cookie: [redacted]",
+		"Set-Cookie: sid=abc; HttpOnly":            "Set-Cookie: [redacted]",
+		`{"password":"hunter2`:                     `{"password":"[redacted]"`,
+		`{"token": {"value":"abc123"}, "ok":true}`: `{"token": "[redacted]", "ok":true}`,
+		`{"keys": ["a1", "b2"]}`:                   `{"keys": ["a1", "b2"]}`,
+		`{"api_key": ["a1", "b2"]}`:                `{"api_key": "[redacted]"}`,
+		`INPUT hdmi3`:                              `INPUT hdmi3`,
+	} {
+		if got := redact.Keyed(in); got != want {
+			t.Errorf("Keyed(%q) = %q, want %q", in, got, want)
+		}
+	}
+}

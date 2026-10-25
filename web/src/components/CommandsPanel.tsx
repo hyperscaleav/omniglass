@@ -228,7 +228,7 @@ function CommandDetail(props: { c: Command; id: string }): JSX.Element {
       </div>
       <Show when={props.c.reply}>
         <div class="flex flex-col gap-1">
-          <Eyebrow label="Reply" hint="The component's answer, as its node reported it, with any credential masked." />
+          <Eyebrow label="Reply" hint="The component's answer, as its node reported it, with the endpoint's login and anything labeled a credential masked." />
           <pre class="overflow-x-auto whitespace-pre-wrap break-all rounded-md bg-base-200/60 px-2 py-1.5 font-data text-[11px] text-base-content/75" data-testid="command-reply">{props.c.reply}</pre>
         </div>
       </Show>

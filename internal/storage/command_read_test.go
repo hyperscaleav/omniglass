@@ -33,6 +33,7 @@ import (
 // basic-auth secret whose password is statusPassword.
 type statusRig struct {
 	ctx    context.Context
+	dsn    string
 	gw     *storage.PG
 	conn   *pgx.Conn
 	actor  string
@@ -101,7 +102,7 @@ func newStatusRig(t *testing.T, settle string) *statusRig {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { conn.Close(ctx) })
-	r := &statusRig{ctx: ctx, gw: gw, conn: conn, compID: comp.ID}
+	r := &statusRig{ctx: ctx, dsn: dsn, gw: gw, conn: conn, compID: comp.ID}
 	if err := conn.QueryRow(ctx, `select principal_id from human where username = 'root'`).Scan(&r.actor); err != nil {
 		t.Fatal(err)
 	}
@@ -270,8 +271,11 @@ func TestNeverAnsweredCommandTimesOutWithAReason(t *testing.T) {
 				t.Errorf("command %d: reason %q, want it to mention %q", id, rec.Reason, w)
 			}
 		}
-		if typ, msg := r.lifecycleEvent(t, rec); typ != "command-timed-out" || !strings.Contains(msg, rec.Reason) {
-			t.Errorf("command %d: lifecycle event %s %q, want command-timed-out carrying the reason", id, typ, msg)
+		// The event says what happened and which command; the evidence and
+		// the reason stay on the command, behind command:read, rather than
+		// on a timeline event:read reaches (#1155 review).
+		if typ, msg := r.lifecycleEvent(t, rec); typ != "command-timed-out" || strings.Contains(msg, rec.Reason) || !strings.Contains(msg, fmt.Sprintf("id %d", id)) {
+			t.Errorf("command %d: lifecycle event %s %q, want command-timed-out naming the command and not its reason", id, typ, msg)
 		}
 	}
 }
@@ -347,6 +351,75 @@ func TestReplyIsStoredMaskedOfCredentials(t *testing.T) {
 	rec = r.read(t, failed)
 	if strings.Contains(rec.ExecError, "Pa55") || strings.Contains(rec.Reason, "Pa55") {
 		t.Fatalf("exec error %q reason %q, want the password masked", rec.ExecError, rec.Reason)
+	}
+}
+
+// Masking fails closed (#1155 review): a server that cannot unseal the
+// endpoint's secrets (its key provider holds another key) cannot know what to
+// mask, while the node that sent the reply may still hold them, so the reply,
+// the error and any reason built from them are withheld rather than stored
+// half-masked. The execution still lands and the command is still judged.
+func TestReplyIsWithheldWhenTheEndpointsSecretsCannotBeRead(t *testing.T) {
+	r := newStatusRig(t, `{"from": "response", "success": {"regex": "OK"}}`)
+	other, err := storage.NewPG(r.ctx, r.dsn, storage.WithSecretProvider(secret.NewStaticProvider(bytes.Repeat([]byte{0x9}, 32))))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(other.Close)
+	id := r.issue(t, "hdmi3")
+	r.dispatch(t, id)
+	if err := other.RecordCommandExecution(r.ctx, "edge", id, "", "OK "+statusPassword); err != nil {
+		t.Fatal(err)
+	}
+	rec := r.read(t, id)
+	if rec.Status != "settled" || rec.ExecutedAt == nil {
+		t.Fatalf("status %q executed %v, want the execution recorded and judged on the whole reply", rec.Status, rec.ExecutedAt)
+	}
+	if rec.Reply == nil || strings.Contains(*rec.Reply, "Pa55") || !strings.Contains(*rec.Reply, "withheld") {
+		t.Fatalf("stored reply = %v, want it withheld", rec.Reply)
+	}
+
+	failed := r.issue(t, "hdmi2")
+	r.dispatch(t, failed)
+	if err := other.RecordCommandExecution(r.ctx, "edge", failed, "refused: "+statusPassword, ""); err != nil {
+		t.Fatal(err)
+	}
+	rec = r.read(t, failed)
+	if strings.Contains(rec.ExecError, "Pa55") || strings.Contains(rec.Reason, "Pa55") || !strings.Contains(rec.ExecError, "withheld") {
+		t.Fatalf("exec error %q reason %q, want both withheld", rec.ExecError, rec.Reason)
+	}
+}
+
+// A report the node had no standing to make is refused before the server
+// touches the endpoint's secrets, and a report it may make is masked by the
+// endpoint the confining stamp names, never by a guess read before it.
+func TestARefusedReportStoresNothing(t *testing.T) {
+	r := newStatusRig(t, valueReply)
+	id := r.issue(t, "hdmi3")
+	r.dispatch(t, id)
+	if _, err := r.gw.CreateNode(r.ctx, "", storage.NodeSpec{Name: "intruder"}, scope.Set{All: true}, scope.Set{All: true}); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.gw.RecordCommandExecution(r.ctx, "intruder", id, "", "INPUT hdmi3 "+statusPassword); !errors.Is(err, storage.ErrCommandNotDispatchedHere) {
+		t.Fatalf("a report from another node = %v, want ErrCommandNotDispatchedHere", err)
+	}
+	if rec := r.read(t, id); rec.Reply != nil || rec.ExecutedAt != nil || rec.Status != "issued" {
+		t.Fatalf("a refused report left reply %v executed %v status %q", rec.Reply, rec.ExecutedAt, rec.Status)
+	}
+}
+
+// A row stored before replies were masked (its execution error as the node
+// reported it) still reads with what it labels a credential masked: the
+// read applies the labeled-pair pass to every row, a no-op on one already
+// masked.
+func TestALegacyExecErrorReadsMasked(t *testing.T) {
+	r := newStatusRig(t, valueReply)
+	id := r.issue(t, "hdmi3")
+	if _, err := r.conn.Exec(r.ctx, `update command set executed_at = now(), exec_error = 'login refused: password=hunter2' where id = $1`, id); err != nil {
+		t.Fatal(err)
+	}
+	if rec := r.read(t, id); strings.Contains(rec.ExecError, "hunter2") || !strings.Contains(rec.ExecError, "[redacted]") {
+		t.Fatalf("legacy exec error reads %q, want its labeled credential masked", rec.ExecError)
 	}
 }
 
