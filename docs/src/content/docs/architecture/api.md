@@ -542,8 +542,9 @@ out-of-scope component is a non-disclosing 404 (a deliberate early exception to
   carries both the same way, and names each row's owner by uuid as well (`owner_id`), since names
   repeat across a system's members.
 - `GET /components/{name}/logs` is the component's raw **log lines**
-  ([ADR-0066](/architecture/decisions/#adr-0066-logs-are-a-raw-ingest-lane-not-events)), newest
-  first, bounded to the last 24 hours and capped at 200 rows: each row's `ts` (the time the line
+  ([ADR-0066](/architecture/decisions/#adr-0066-logs-are-a-raw-ingest-lane-not-events)), the
+  newest arrival first, bounded to those that arrived in the last 24 hours (a line kept before its
+  arrival was recorded counts by its own time) and capped at 200 rows: each row's `ts` (the time the line
   states), its `received_at` (the server's receipt, absent on a line stored before it was kept),
   `severity` (one of RFC 5424's eight levels), `facility`, `source`, `instance` (the endpoint that
   collected it), `message`, and optional `attributes` and `labels`. It takes two filters (#1145):

@@ -331,3 +331,89 @@ func TestALogLineIsNeverLostToAClassificationMiss(t *testing.T) {
 		t.Fatalf("an event whose attribute missed = %+v %v, want a fault and nothing landed", out, faults)
 	}
 }
+
+// TestANonFiniteValueFaultsAndNeverPanics (adversarial review, finding 1): a
+// component reporting NaN or Inf where an attribute casts to a number, or a
+// scale pushing past the float range, is a fault naming the field, never a
+// panic that takes the node down. A log line still lands without it.
+func TestANonFiniteValueFaultsAndNeverPanics(t *testing.T) {
+	arrival := time.Now().UTC()
+	for _, raw := range []string{"NaN", "inf", "-Infinity", "1e308"} {
+		ev := lineFn(driver.BakedEmit{Name: "input-changed", Lane: "event", Attributes: map[string]driver.Field{
+			"temp": {Extract: rx(`temp=(\S+)`), Transform: &driver.Transform{Cast: "float", Scale: 10}},
+		}})
+		out, faults := ev.Interpret(driver.LineMessage("temp="+raw).Payload(), arrival)
+		if len(out) != 0 || len(faults) != 1 || !strings.Contains(faults[0].Error(), "finite") {
+			t.Fatalf("event with temp=%s = %+v %v, want a fault naming a non-finite value", raw, out, faults)
+		}
+		lg := lineFn(driver.BakedEmit{Lane: "log", Log: &driver.LogEmit{}, Attributes: map[string]driver.Field{
+			"temp": {Extract: rx(`temp=(\S+)`), Transform: &driver.Transform{Cast: "float", Scale: 10}},
+		}})
+		out, faults = lg.Interpret(driver.LineMessage("temp="+raw).Payload(), arrival)
+		if len(out) != 1 || out[0].Attributes != nil || len(faults) != 1 {
+			t.Fatalf("log line with temp=%s = %+v %v, want the line without the field, and a fault", raw, out, faults)
+		}
+	}
+}
+
+// TestANulByteNeverReachesTheRecord (finding 2): Postgres text refuses a NUL
+// and jsonb refuses \u0000, so an event or a log line carrying one (telnet's
+// CR NUL, NUL padding) has it replaced where it is read, never landed.
+func TestANulByteNeverReachesTheRecord(t *testing.T) {
+	arrival := time.Now().UTC()
+	ev := lineFn(driver.BakedEmit{Name: "input-changed", Lane: "event", Attributes: map[string]driver.Field{"raw": {Extract: rx(`^(.*)$`)}}})
+	out, _ := ev.Interpret(driver.LineMessage("\x00EVT\x00").Payload(), arrival)
+	if len(out) != 1 || strings.Contains(out[0].Text, "\x00") || strings.Contains(string(out[0].Attributes), `\u0000`) {
+		t.Fatalf("event = %q %s, want no NUL", out[0].Text, out[0].Attributes)
+	}
+	lg := lineFn(driver.BakedEmit{Lane: "log", Log: &driver.LogEmit{Facility: &driver.Field{Extract: rx(`^(\S+)`)}}})
+	out, _ = lg.Interpret(driver.LineMessage("a\x00b rest\r\x00").Payload(), arrival)
+	if len(out) != 1 || strings.Contains(out[0].Text, "\x00") || strings.Contains(out[0].Facility, "\x00") {
+		t.Fatalf("log line = %q facility %q, want no NUL", out[0].Text, out[0].Facility)
+	}
+}
+
+// TestEachEmitCarriesItsIndex (finding 3): an interpreted emit names its
+// place in the function, so two emits that share a name (two log lines, two
+// of one event type) are told apart by whatever remembers them.
+func TestEachEmitCarriesItsIndex(t *testing.T) {
+	fn := lineFn(
+		driver.BakedEmit{Lane: "log", Log: &driver.LogEmit{}, Message: &driver.Field{Value: "first"}},
+		driver.BakedEmit{Lane: "log", Log: &driver.LogEmit{}, Message: &driver.Field{Value: "second"}},
+	)
+	out, _ := fn.Interpret(driver.LineMessage("x").Payload(), time.Now())
+	if len(out) != 2 || out[0].Emit != 0 || out[1].Emit != 1 {
+		t.Fatalf("out = %+v, want each emit's index", out)
+	}
+}
+
+// TestALayoutWithoutADateIsRefused (finding 4): a time-only Go layout would
+// land every line on 1 January; a layout must carry a month and a day (the
+// year may be left out, and is the one nearest arrival).
+func TestALayoutWithoutADateIsRefused(t *testing.T) {
+	for _, layout := range []string{"go:15:04:05", "go:2006 15:04"} {
+		s := listenerSpec(driver.Emit{Log: &driver.LogEmit{}, TS: &driver.TimeField{Extract: driver.Extract{Regex: `(.*)`}, Layout: layout}})
+		if err := s.Validate(laneCatalog()); err == nil || !strings.Contains(err.Error(), "month and a day") {
+			t.Fatalf("layout %s = %v, want a refusal naming the missing date", layout, err)
+		}
+	}
+	ok := listenerSpec(driver.Emit{Log: &driver.LogEmit{}, TS: &driver.TimeField{Extract: driver.Extract{Regex: `(.*)`}, Layout: "go:Jan 2 15:04"}})
+	if err := ok.Validate(laneCatalog()); err != nil {
+		t.Fatalf("a yearless layout with a date refused: %v", err)
+	}
+}
+
+// TestAnOutOfRangeTimeLandsAtArrivalAndFaults (finding 5): a unix time that
+// is not finite, or one no timestamp can hold, is unparsable: the record lands
+// at arrival and the fault names the layout.
+func TestAnOutOfRangeTimeLandsAtArrivalAndFaults(t *testing.T) {
+	arrival := time.Date(2026, 10, 25, 12, 0, 0, 0, time.UTC)
+	for _, c := range []struct{ raw, layout string }{{"NaN", "unix"}, {"Inf", "unix"}, {"1e300", "unix"}, {"-1e15", "unix"}, {"-9999999999999999", "unix-ms"}} {
+		fn := lineFn(driver.BakedEmit{Lane: "log", Log: &driver.LogEmit{},
+			TS: &driver.TimeField{Extract: driver.Extract{Regex: `at (\S+)$`}, Layout: c.layout}})
+		out, faults := fn.Interpret(driver.LineMessage("boot at "+c.raw).Payload(), arrival)
+		if len(out) != 1 || !out[0].TS.Equal(arrival) || len(faults) != 1 || !strings.Contains(faults[0].Error(), c.layout) {
+			t.Fatalf("%s %s = %+v %v, want the line at arrival and a fault", c.layout, c.raw, out, faults)
+		}
+	}
+}

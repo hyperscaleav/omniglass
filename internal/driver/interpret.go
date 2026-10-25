@@ -129,6 +129,10 @@ type Emitted struct {
 	Facility   string
 	Source     string
 	Clamped    bool
+	// Emit is the emit's index in its function, which tells apart two emits
+	// that share a name (two log lines, two of one event type) wherever an
+	// emit is remembered (a plain poll's change memory).
+	Emit int
 }
 
 // ClampWindow is how far ahead of its arrival a payload's time may claim to
@@ -147,12 +151,13 @@ func (fn *BakedFunction) Interpret(p Payload, ts time.Time) ([]Emitted, []error)
 	}
 	var out []Emitted
 	var faults []error
-	for _, em := range fn.Emits {
+	for i, em := range fn.Emits {
 		e, landed, err := interpretEmit(em, p, ts)
 		if err != nil {
 			faults = append(faults, fmt.Errorf("driver: %s/%s emit %q: %w", fn.Driver, fn.Function, em.label(), err))
 		}
 		if landed {
+			e.Emit = i
 			out = append(out, e)
 		}
 	}
@@ -275,7 +280,7 @@ func numericText(raw string, tr *Transform) (string, error) {
 // into its payload. An event is a semantic assertion, so a field that does
 // not locate lands nothing, as a metric that does not locate lands nothing.
 func interpretEvent(em BakedEmit, p Payload) (Emitted, error) {
-	e := Emitted{Name: em.Name, Lane: em.Lane, IsText: true, Text: p.Text}
+	e := Emitted{Name: em.Name, Lane: em.Lane, IsText: true, Text: logline.Clean(p.Text)}
 	if em.Message != nil {
 		text, _, err := em.Message.resolve(p)
 		if err != nil {
@@ -292,7 +297,11 @@ func interpretEvent(em BakedEmit, p Payload) (Emitted, error) {
 		attrs[k] = typed
 	}
 	if len(attrs) > 0 {
-		e.Attributes = mustJSON(attrs)
+		b, err := json.Marshal(attrs)
+		if err != nil {
+			return Emitted{}, fmt.Errorf("attributes: %w", err)
+		}
+		e.Attributes = b
 	}
 	if e.Text == "" && len(attrs) == 0 {
 		return Emitted{}, fmt.Errorf("the event carries no message and no attributes, so it says nothing")
@@ -306,7 +315,7 @@ func interpretEvent(em BakedEmit, p Payload) (Emitted, error) {
 // and a severity, facility or attribute that misses is left out. missed
 // names every field that did, which the caller reports as a fault.
 func interpretLogLine(em BakedEmit, p Payload) (Emitted, []string) {
-	e := Emitted{Lane: LaneLog, IsText: true, Text: p.Text}
+	e := Emitted{Lane: LaneLog, IsText: true, Text: logline.Clean(p.Text)}
 	var missed []string
 	if em.Message != nil {
 		if text, _, err := em.Message.resolve(p); err != nil {
@@ -325,7 +334,11 @@ func interpretLogLine(em BakedEmit, p Payload) (Emitted, []string) {
 		attrs[k] = typed
 	}
 	if len(attrs) > 0 {
-		e.Attributes = mustJSON(attrs)
+		if b, err := json.Marshal(attrs); err != nil {
+			missed = append(missed, "no attributes: "+err.Error())
+		} else {
+			e.Attributes = b
+		}
 	}
 	if em.Log != nil {
 		if em.Log.Severity != nil {
@@ -372,10 +385,17 @@ func (f Field) resolve(p Payload) (string, any, error) {
 	if err != nil {
 		return "", nil, err
 	}
+	text = logline.Clean(text)
 	if tr != nil && (tr.Cast == "int" || tr.Cast == "float") {
 		v, err := strconv.ParseFloat(strings.TrimSpace(text), 64)
 		if err != nil {
 			return "", nil, fmt.Errorf("value %q is not numeric, and the transform declares a %s cast", text, tr.Cast)
+		}
+		// NaN and Inf parse without error, and no JSON can carry them (a
+		// payload refuses to encode), so a non-finite value is a fault, as a
+		// calc rule's non-finite output is.
+		if math.IsNaN(v) || math.IsInf(v, 0) {
+			return "", nil, fmt.Errorf("value %q is not a finite number", text)
 		}
 		return text, v, nil
 	}
@@ -426,8 +446,14 @@ func checkLayout(layout string) error {
 		return fmt.Errorf("layout %q is not one of rfc3339, rfc3164, unix, unix-ms or go:<a Go reference layout>", layout)
 	}
 	ref := time.Date(2006, 1, 2, 15, 4, 5, 0, time.UTC)
-	if _, err := time.Parse(l, ref.Format(l)); err != nil {
+	back, err := time.Parse(l, ref.Format(l))
+	if err != nil {
 		return fmt.Errorf("layout %q does not read back what it writes: %v", layout, err)
+	}
+	// A layout without a date would land every line on 1 January: it must
+	// carry a month and a day (a year left out is the one nearest arrival).
+	if back.Month() != ref.Month() || back.Day() != ref.Day() {
+		return fmt.Errorf("layout %q carries no month and a day, so every line would land on 1 January; give it a month and a day", layout)
 	}
 	return nil
 }
@@ -459,12 +485,18 @@ func parseTime(raw, layout, zone string, arrival time.Time) (time.Time, error) {
 		if err != nil {
 			return time.Time{}, err
 		}
+		if math.IsNaN(f) || f < minUnix || f > maxUnix {
+			return time.Time{}, fmt.Errorf("it is not a time between the years 1 and 9999")
+		}
 		sec, frac := math.Modf(f)
 		return time.Unix(int64(sec), int64(math.Round(frac*1e9))).UTC(), nil
 	case LayoutUnixMS:
 		ms, err := strconv.ParseInt(raw, 10, 64)
 		if err != nil {
 			return time.Time{}, err
+		}
+		if float64(ms) < minUnix*1000 || float64(ms) > maxUnix*1000 {
+			return time.Time{}, fmt.Errorf("it is not a time between the years 1 and 9999")
 		}
 		return time.UnixMilli(ms).UTC(), nil
 	}
@@ -478,6 +510,14 @@ func parseTime(raw, layout, zone string, arrival time.Time) (time.Time, error) {
 	}
 	return t, nil
 }
+
+// The unix seconds a stored timestamp can hold, the years 1 to 9999: a time
+// outside them (or not a number at all) is unparsable rather than a row that
+// lands at a wrapped instant or fails its insert.
+const (
+	minUnix = -62135596800
+	maxUnix = 253402300799
+)
 
 // nearestYear places a yearless time in the year (arrival's, or one either
 // side) that puts it nearest arrival.

@@ -318,7 +318,9 @@ untyped text a rule may later derive events from, what its driver read as a log 
 listeners left unclaimed ([an emit lands on any lane](/architecture/collection/#an-emit-lands-on-any-lane)),
 each row showing its **time**, a **severity** badge (one of RFC 5424's eight levels), the **source**
 and the endpoint that collected it, the **message**, and its structured **attributes** on demand;
-where the time the line states differs from when it arrived, the row says when it arrived. Two
+where the time the line states differs from when it arrived, the row says when it arrived, and the
+panel orders and windows the lines by their arrival, so a component whose clock reset still shows
+what it logged today. Two
 filters narrow the read: **At least** a severity (that level and every more severe one) and
 **From** a source, its choices the sources the window carries. The system workspace's Logs section
 takes the same filters. Most log lines never become events.

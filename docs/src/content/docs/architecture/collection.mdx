@@ -1324,10 +1324,12 @@ listeners:
 
 Any emit may read its **time** out of the payload (`ts`: an extract and a `layout`, one of
 `rfc3339`, `rfc3164`, whose missing year is the one nearest arrival, read in the declared `zone`,
-`unix`, `unix-ms`, or `go:` a Go reference layout); without one, the time it arrived at the node.
-A time more than five minutes ahead of arrival lands at arrival instead, a log line keeping the
-claim as its `ts_claimed` attribute and the node saying so in its self-log; a time that does not
-parse lands the record at arrival and faults. On a plain poll an event or a log line fires only
+`unix`, `unix-ms`, or `go:` a Go reference layout carrying at least a month and a day); without
+one, the time it arrived at the node. A time more than five minutes ahead of arrival lands at
+arrival instead, a log line keeping the claim as its `ts_claimed` attribute and the node saying so
+in its self-log; a time that does not parse, or no timestamp could hold (outside the years 1 to
+9999, or not a number), lands the record at arrival and faults. A value cast to a number that is
+not finite (`NaN`, `Inf`) is a fault naming the field, never a payload that cannot be written. On a plain poll an event or a log line fires only
 when its content changes from what that task last landed (remembered in the node's memory, so a
 restart may fire one again), so a status page's last error lands once per change.
 
@@ -1338,8 +1340,11 @@ component its own task collects for, and never as its own. Every writer's line i
 Storage Gateway to one severity vocabulary, RFC 5424's eight levels (`emergency`, `alert`,
 `critical`, `error`, `warning`, `notice`, `info`, `debug`) through one alias table (`warn` reads
 `warning`, `err` reads `error`), a word outside it kept as the `severity_raw` attribute with no
-severity, and to 16 KiB each for the message and the attributes, cut and marked past it. The
-component's Logs panel filters by a severity threshold and a source. Proven end to end against the
+severity, to 16 KiB each for the message and the attributes, cut and marked past it, and to no
+NUL byte (which Postgres refuses, and which telnet's CR NUL makes ordinary), each replaced. The
+component's and the system's log reads window and order on a line's arrival, so a component whose
+clock reset still reads in the last day, its own time shown beside when it arrived; the Logs panel
+filters by a severity threshold and a source. Proven end to end against the
 simulator: the Newtron panel's input push lands as the `video-input` property and an
 `input-changed` event carrying the input, its diagnostics line as a `warning` log line, and a scene
 change no listener claims as a raw log line, none of them in the node's self-logs; the Kestrel

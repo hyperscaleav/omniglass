@@ -144,3 +144,51 @@ func mustJSON(v any) []byte {
 	}
 	return b
 }
+
+// Clean replaces every NUL in a string with the replacement character: a
+// Postgres text column refuses byte 0x00 and jsonb refuses \u0000, and a
+// component's text may carry one (telnet's CR NUL, NUL padding), so a NUL
+// reaching an insert would fail the whole batch (adversarial review of #1145).
+func Clean(s string) string {
+	if !strings.ContainsRune(s, 0) {
+		return s
+	}
+	return strings.ReplaceAll(s, "\x00", "\uFFFD")
+}
+
+// CleanAttributes is Clean over every string, key and value, in a JSON
+// document of attributes. Attributes that do not parse are returned as they
+// came (the insert refuses them as it always did).
+func CleanAttributes(attrs []byte) []byte {
+	if len(attrs) == 0 || !strings.Contains(string(attrs), `\u0000`) && !strings.ContainsRune(string(attrs), 0) {
+		return attrs
+	}
+	var v any
+	if err := json.Unmarshal(attrs, &v); err != nil {
+		return attrs
+	}
+	out, err := json.Marshal(cleanValue(v))
+	if err != nil {
+		return attrs
+	}
+	return out
+}
+
+func cleanValue(v any) any {
+	switch t := v.(type) {
+	case string:
+		return Clean(t)
+	case map[string]any:
+		m := make(map[string]any, len(t))
+		for k, x := range t {
+			m[Clean(k)] = cleanValue(x)
+		}
+		return m
+	case []any:
+		for i := range t {
+			t[i] = cleanValue(t[i])
+		}
+		return t
+	}
+	return v
+}

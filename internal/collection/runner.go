@@ -57,11 +57,14 @@ type Sample struct {
 	// Clamped marks a payload time past the clamp window ahead of arrival,
 	// landed at arrival instead (#1145): the node says so in its self-log.
 	Clamped bool
+	// Emit is a driver emit's index in its function, which tells apart two
+	// that share a name in a plain poll's change memory.
+	Emit int
 }
 
 // FromEmitted maps one interpreted driver emit to the sample a batch carries.
 func FromEmitted(e driver.Emitted) Sample {
-	s := Sample{Name: e.Name, Value: e.Value, Text: e.Text, IsText: e.IsText, TS: e.TS, Clamped: e.Clamped}
+	s := Sample{Name: e.Name, Value: e.Value, Text: e.Text, IsText: e.IsText, TS: e.TS, Clamped: e.Clamped, Emit: e.Emit}
 	if e.Lane == driver.LaneEvent || e.Lane == driver.LaneLog {
 		s.Lane, s.Attributes, s.Severity, s.Facility, s.Source = e.Lane, e.Attributes, e.Severity, e.Facility, e.Source
 	}

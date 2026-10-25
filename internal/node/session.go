@@ -452,7 +452,7 @@ func unclaimedLogLine(msg driver.Message, at time.Time) collection.Sample {
 	if msg.Event != "" {
 		attrs, _ = json.Marshal(map[string]string{"event": msg.Event})
 	}
-	text, attrs := logline.Cap(msg.Data, attrs)
+	text, attrs := logline.Cap(logline.Clean(msg.Data), attrs)
 	return collection.Sample{Lane: driver.LaneLog, Text: text, IsText: true, Attributes: attrs, TS: at}
 }
 

@@ -172,8 +172,16 @@ func TestSeededSpecChangeReachesAttachedEndpoints(t *testing.T) {
 			listens++
 		}
 	}
-	if polls != 1 || listens != 1 {
-		t.Fatalf("worklist holds %d driver polls and %d listens, want one each (the superseded retired)", polls, listens)
+	// One standing listen task per listener the shipped spec declares, so
+	// the count follows the spec rather than a number written here.
+	var shipped struct {
+		Listeners []json.RawMessage `json:"listeners"`
+	}
+	if err := json.Unmarshal(d.Spec, &shipped); err != nil {
+		t.Fatal(err)
+	}
+	if polls != 1 || listens != len(shipped.Listeners) {
+		t.Fatalf("worklist holds %d driver polls and %d listens, want 1 and %d (the superseded retired)", polls, listens, len(shipped.Listeners))
 	}
 }
 

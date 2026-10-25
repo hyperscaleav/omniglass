@@ -146,3 +146,24 @@ func TestAPlainPollFiresOccurrencesOnChange(t *testing.T) {
 		t.Fatalf("a task the worklist dropped and returned landed %d, want all 3", len(back))
 	}
 }
+
+// TestTwoNamelessOccurrencesKeepTheirOwnMemory (adversarial review, finding
+// 3): two log lines from one poll share a name ("") and two events may share
+// a type; each is remembered by its emit, so neither repeats on an unchanged
+// run.
+func TestTwoNamelessOccurrencesKeepTheirOwnMemory(t *testing.T) {
+	s := newPollSchedule(time.Second)
+	tick := func() []collection.Sample {
+		return []collection.Sample{
+			{Lane: driver.LaneLog, Text: "last error: lamp", IsText: true, Emit: 0},
+			{Lane: driver.LaneLog, Text: "last warning: fan", IsText: true, Emit: 1},
+		}
+	}
+	first := s.changed("p1", tick())
+	s.commitChanged("p1", first)
+	for run := 2; run <= 4; run++ {
+		if again := s.changed("p1", tick()); len(again) != 0 {
+			t.Fatalf("run %d of an unchanged poll landed %+v, want nothing", run, again)
+		}
+	}
+}

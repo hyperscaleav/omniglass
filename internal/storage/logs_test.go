@@ -63,13 +63,15 @@ func TestInsertLogLines(t *testing.T) {
 		t.Fatalf("oldest log: want info 'link state changed to up', got %+v", got[1])
 	}
 
-	// The since window excludes the older line.
+	// The window counts back over arrival (#1145): both lines arrived just
+	// now, so a one-minute window holds both, though one claims a time two
+	// minutes old, and the newer arrival reads first.
 	windowed, err := gw.ListComponentLogs(ctx, "disp-1", time.Minute, 10, storage.LogFilter{})
 	if err != nil {
 		t.Fatalf("list windowed logs: %v", err)
 	}
-	if len(windowed) != 1 || windowed[0].Message != "codec unreachable" {
-		t.Fatalf("windowed logs: want only 'codec unreachable', got %+v", windowed)
+	if len(windowed) != 2 || windowed[0].Message != "codec unreachable" {
+		t.Fatalf("windowed logs: want both lines, the later arrival first, got %+v", windowed)
 	}
 
 	// An owner component that does not exist violates the component FK.
@@ -272,5 +274,49 @@ func TestEveryLogLineWriteSharesTheTableTheCapsAndTheFilters(t *testing.T) {
 	sources, err := gw.ListComponentLogSources(ctx, "panel-9", time.Hour)
 	if err != nil || strings.Join(sources, ",") != "nvp,syslog" {
 		t.Fatalf("sources = %v %v", sources, err)
+	}
+}
+
+// TestALogLineWithANulOrAnOldClockStillLands (adversarial review of #1145,
+// findings 2 and 7): a NUL in any field is replaced rather than failing the
+// insert (and the batch with it), and a line whose own time is far in the
+// past (a component whose clock reset) still reads in the last 24 hours,
+// since the reads window and order on its arrival.
+func TestALogLineWithANulOrAnOldClockStillLands(t *testing.T) {
+	if testing.Short() {
+		t.Skip("integration test needs Postgres")
+	}
+	ctx := context.Background()
+	gw, err := storage.NewPG(ctx, storagetest.NewDSN(t))
+	if err != nil {
+		t.Fatalf("open gateway: %v", err)
+	}
+	defer gw.Close()
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	all := scope.Set{All: true}
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "panel-nul"}, all, all, all, all); err != nil {
+		t.Fatalf("create component: %v", err)
+	}
+	if err := gw.InsertLogLines(ctx, []storage.LogLineWrite{{
+		OwnerKind: "component", OwnerID: "panel-nul", Instance: "tel\x00net", Source: "tel\x00net", Facility: "pa\x00nel",
+		Message: "\x00EVT SCENE presentation\r\x00", Attributes: []byte(`{"raw":"a\u0000b"}`),
+		TS: time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC),
+	}}); err != nil {
+		t.Fatalf("a line carrying NUL failed its insert: %v", err)
+	}
+	got, err := gw.ListComponentLogs(ctx, "panel-nul", 24*time.Hour, 10, storage.LogFilter{})
+	if err != nil || len(got) != 1 {
+		t.Fatalf("a line from a reset clock in the 24h read = %d %v, want it there by its arrival", len(got), err)
+	}
+	l := got[0]
+	for _, field := range []string{l.Message, l.Facility, l.Source, l.Instance, string(l.Attributes)} {
+		if strings.ContainsRune(field, 0) || strings.Contains(field, `\u0000`) {
+			t.Fatalf("a NUL reached the stored line: %+v %s", l, l.Attributes)
+		}
+	}
+	if l.TS.Year() != 2000 || l.ReceivedAt == nil || time.Since(*l.ReceivedAt) > time.Minute {
+		t.Fatalf("ts %v received %v, want the line's own time kept beside its arrival", l.TS, l.ReceivedAt)
 	}
 }

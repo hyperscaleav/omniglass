@@ -123,3 +123,26 @@ func TestCapTruncatesAndMarks(t *testing.T) {
 		t.Fatalf("attributes marker = %s, %v", attrs, err)
 	}
 }
+
+// TestCleanReplacesEveryNul: Postgres text and jsonb refuse NUL, so Clean
+// replaces it in a string and CleanAttributes in every key and value of a
+// JSON document; text with none comes back as it was.
+func TestCleanReplacesEveryNul(t *testing.T) {
+	if got := Clean("a\x00b\r\x00"); strings.ContainsRune(got, 0) || got != "a�b\r�" {
+		t.Fatalf("Clean = %q", got)
+	}
+	if got := Clean("plain"); got != "plain" {
+		t.Fatalf("Clean changed clean text: %q", got)
+	}
+	got := CleanAttributes([]byte(`{"k\u0000":"v\u0000","n":[1,"x\u0000"],"m":{"y":"\u0000"}}`))
+	if strings.Contains(string(got), `\u0000`) {
+		t.Fatalf("CleanAttributes left a NUL: %s", got)
+	}
+	var m map[string]any
+	if err := json.Unmarshal(got, &m); err != nil || m["n"].([]any)[0] != float64(1) {
+		t.Fatalf("CleanAttributes broke the document: %s %v", got, err)
+	}
+	if got := CleanAttributes([]byte(`{"a":1}`)); string(got) != `{"a":1}` {
+		t.Fatalf("CleanAttributes re-encoded clean attributes: %s", got)
+	}
+}

@@ -76,6 +76,13 @@ type LogLine struct {
 	ReceivedAt *time.Time
 }
 
+// logArrival is when a component's line arrived, the axis its reads window
+// and order on (#1145): the time a line claims may come from its payload, so
+// a component whose clock reset would otherwise log into the past, out of
+// every window; a line stored before received_at was kept falls back to its
+// own time. The expression matches the (component_id, arrival) index.
+const logArrival = "coalesce(log_line.received_at, log_line.ts)"
+
 // LogFilter narrows a component or system log read (#1145): Severity is a
 // threshold on the canonical set (that level and every more severe one; a
 // line with no severity is left out), Source an exact channel. Empty fields
@@ -139,12 +146,14 @@ func (p *PG) InsertLogLines(ctx context.Context, lines []LogLineWrite) error {
 		// know kept as severity_raw), the message and attributes within
 		// their caps. The gateway is the one write path, so no writer can
 		// land a stray word a retention window by severity would miss.
-		severity, attributes := logline.Normalize(l.Severity, l.Attributes)
-		message, attributes := logline.Cap(l.Message, attributes)
-		sev, fac, corr, attrs, labels := nullableLogFields(severity, l.Facility, l.CorrelationID, attributes, l.Labels)
+		// A NUL anywhere is replaced first: Postgres text and jsonb refuse it,
+		// and one refused line would fail the batch it rode in.
+		severity, attributes := logline.Normalize(logline.Clean(l.Severity), logline.CleanAttributes(l.Attributes))
+		message, attributes := logline.Cap(logline.Clean(l.Message), attributes)
+		sev, fac, corr, attrs, labels := nullableLogFields(severity, logline.Clean(l.Facility), logline.Clean(l.CorrelationID), attributes, logline.CleanAttributes(l.Labels))
 		if _, err := tx.Exec(ctx, `insert into log_line (ts, component_id, instance, source, severity, facility, message, attributes, labels, correlation_id)
 			values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
-			ts, arc, l.Instance, l.Source, sev, fac, message, attrs, labels, corr); err != nil {
+			ts, arc, logline.Clean(l.Instance), logline.Clean(l.Source), sev, fac, message, attrs, labels, corr); err != nil {
 			return fmt.Errorf("storage: insert log line %s: %w", l.OwnerID, err)
 		}
 	}
@@ -220,7 +229,7 @@ func (p *PG) ListComponentLogs(ctx context.Context, componentRef string, window 
 	} else if err != nil {
 		return nil, err
 	}
-	bound, args := tsSince("ts", window, c.ID, limit)
+	bound, args := tsSince(logArrival, window, c.ID, limit)
 	cond, args, err := filter.where(args)
 	if err != nil {
 		return nil, err
@@ -230,8 +239,8 @@ func (p *PG) ListComponentLogs(ctx context.Context, componentRef string, window 
 			coalesce(severity, ''), coalesce(facility, ''), message, attributes, labels, coalesce(correlation_id, ''), received_at
 		from log_line
 		where component_id = $1::uuid and %s%s
-		order by ts desc
-		limit $2`, bound, cond), args...)
+		order by %s desc, id desc
+		limit $2`, bound, cond, logArrival), args...)
 	if err != nil {
 		return nil, fmt.Errorf("storage: list logs %s: %w", componentRef, err)
 	}
@@ -260,7 +269,7 @@ func (p *PG) ListComponentLogSources(ctx context.Context, componentRef string, w
 	} else if err != nil {
 		return nil, err
 	}
-	bound, args := tsSince("ts", window, c.ID)
+	bound, args := tsSince(logArrival, window, c.ID)
 	return p.logSources(ctx, fmt.Sprintf(`
 		select distinct source from log_line
 		where component_id = $1::uuid and source <> '' and %s
@@ -314,7 +323,7 @@ func (p *PG) ListNodeLogs(ctx context.Context, nodeName string, window time.Dura
 // narrowed by filter (#1145). Mirrors ListSystemEvents; log lines are
 // component-owned (#589), so the system's own arc contributes nothing here.
 func (p *PG) ListSystemLogs(ctx context.Context, systemID string, window time.Duration, limit int, filter LogFilter) ([]LogLine, error) {
-	bound, args := tsSince("ts", window, systemID, limit)
+	bound, args := tsSince(logArrival, window, systemID, limit)
 	cond, args, err := filter.where(args)
 	if err != nil {
 		return nil, err
@@ -327,8 +336,8 @@ func (p *PG) ListSystemLogs(ctx context.Context, systemID string, window time.Du
 		from log_line
 		where log_line.component_id in (select m.component_id from system_member m where m.system_id = $1::uuid)
 		  and %s%s
-		order by ts desc
-		limit $2`, bound, cond), args...)
+		order by %s desc, log_line.id desc
+		limit $2`, bound, cond, logArrival), args...)
 	if err != nil {
 		return nil, fmt.Errorf("storage: list system logs %s: %w", systemID, err)
 	}
@@ -347,7 +356,7 @@ func (p *PG) ListSystemLogs(ctx context.Context, systemID string, window time.Du
 // ListSystemLogSources lists the channels the members' lines inside window
 // arrived on (#1145), sorted.
 func (p *PG) ListSystemLogSources(ctx context.Context, systemID string, window time.Duration) ([]string, error) {
-	bound, args := tsSince("ts", window, systemID)
+	bound, args := tsSince(logArrival, window, systemID)
 	return p.logSources(ctx, fmt.Sprintf(`
 		select distinct source from log_line
 		where component_id in (select m.component_id from system_member m where m.system_id = $1::uuid)

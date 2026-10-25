@@ -1,6 +1,7 @@
 package node
 
 import (
+	"strconv"
 	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/collection"
@@ -196,10 +197,10 @@ func (s *pollSchedule) commitChanged(taskID string, landed []collection.Sample) 
 	}
 }
 
-// occurrenceSlot names the emit an occurrence came from: its lane and key
-// (a log line has none, and a poll's emits keep their order, so a log line
-// is told apart from an event by its lane).
-func occurrenceSlot(d collection.Sample) string { return d.Lane + "\x00" + d.Name }
+// occurrenceSlot names the emit an occurrence came from: its index in the
+// poll's function, since two log lines share a name ("") and two events may
+// share a type.
+func occurrenceSlot(d collection.Sample) string { return d.Lane + "\x00" + strconv.Itoa(d.Emit) }
 
 // occurrenceContent is what an occurrence says, its time aside.
 func occurrenceContent(d collection.Sample) string {
