@@ -183,18 +183,19 @@ type Gateway interface {
 	// RevokeBearerByID deletes one bearer credential by id, scoped to the owning
 	// principal (so a caller revokes only their own). Returns false when nothing
 	// matched (wrong/already-revoked id, another principal's credential, or a
-	// malformed id).
-	RevokeBearerByID(ctx context.Context, principalID, credentialID string) (bool, error)
+	// malformed id). actorID is who revokes, the actor of the audit row a token's
+	// revoke writes (#1162).
+	RevokeBearerByID(ctx context.Context, actorID, principalID, credentialID string) (bool, error)
 	// RevokeBearersByPurpose deletes every one of a principal's bearer credentials of
 	// the given purpose ('session' or 'token'), scoped to the owning principal, and
 	// returns the count deleted. It backs the admin "revoke all sessions" / "revoke
 	// all tokens" blade actions: end all of one kind at once without touching the other.
-	RevokeBearersByPurpose(ctx context.Context, principalID, purpose string) (int, error)
+	RevokeBearersByPurpose(ctx context.Context, actorID, principalID, purpose string) (int, error)
 	// RevokeBearersByPurposeExcept is RevokeBearersByPurpose keeping any credential
 	// whose sha256 secret hash is in keep (empty keep is the plain bulk revoke). It backs
 	// "revoke my OTHER sessions" on a password change and the self-service "revoke all
 	// sessions" that keeps the session the caller is on, tokens untouched.
-	RevokeBearersByPurposeExcept(ctx context.Context, principalID, purpose string, keep [][]byte) (int, error)
+	RevokeBearersByPurposeExcept(ctx context.Context, actorID, principalID, purpose string, keep [][]byte) (int, error)
 	// AnyHuman reports whether any human principal exists (drives the login
 	// screen's bootstrap hint).
 	AnyHuman(ctx context.Context) (bool, error)

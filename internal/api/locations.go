@@ -239,6 +239,7 @@ func registerLocationRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 	registerLocationLabelDraft(api, a, gw)
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "list-locations",
+		Extensions:  mcpExposed(),
 		Method:      http.MethodGet,
 		Path:        "/locations",
 		Summary:     "List locations in scope",
@@ -367,6 +368,7 @@ func registerLocationRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "get-location",
+		Extensions:  mcpExposed(),
 		Method:      http.MethodGet,
 		Path:        "/locations/{name}",
 		Summary:     "Get a location",

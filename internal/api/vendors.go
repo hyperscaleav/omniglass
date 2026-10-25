@@ -99,6 +99,7 @@ func validWebsiteScheme(website string) bool {
 func registerVendorRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "list-vendors",
+		Extensions:  mcpExposed(),
 		Method:      http.MethodGet,
 		Path:        "/vendors",
 		Summary:     "List vendors",

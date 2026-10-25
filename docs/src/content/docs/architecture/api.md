@@ -25,7 +25,8 @@ fenced by the caller's scope, every native probe key refused by name, every key 
 class), the per-component reachability read, the type registries, the
 `/products` and `/standards` catalogs, the classifier-contract and instance-value property routes, the
 role declaration, resolution, and staffing routes, and the component alarm plus system and location
-[health](#health-the-verdict-and-why) reads. The node `:enroll` and `:claim` custom methods are the
+[health](#health-the-verdict-and-why) reads, and the [MCP surface](#also-an-mcp-surface) generated from
+the same document. The node `:enroll` and `:claim` custom methods are the
 first `:verb` routes in the wild. See [implementation status](/architecture/status/).
 :::
 
@@ -1031,17 +1032,26 @@ new major version. Because the [OpenAPI 3.1 document is generated](/contributing
 structs and the clients from that, the contract cannot drift from the implementation: a drift check fails
 the PR on an unregenerated route change.
 
-:::design[The MCP surface, tracked in #522]
 ## Also an MCP surface
 
-The same OpenAPI document that generates the typed SPA client and the CLI also generates an **MCP
-server**, one more [generated client](/contributing/api-first/) over the same gateway: every tool call is
-the same route permission, the same gateway scope, the same same-transaction
-[audit](/architecture/audit/), **not a side channel**. The **tool catalog is curated, not a raw
-one-method-per-tool dump**: task-oriented tools, the [views](/architecture/views/) exposed as search and
-query tools, errors shaped for a model. The MCP server runs under the **authenticated `human` or
-`service` principal's** credential, so its reach is exactly that principal's grants
-([AI](/architecture/ai/)).
+The same OpenAPI document that generates the typed SPA client and the CLI also generates the **MCP
+server**, one more [generated client](/contributing/api-first/) over the same gateway
+([ADR-1162](/architecture/decisions/#adr-1162-the-mcp-server-is-a-generated-client-of-the-operations-stamped-for-it-run-as-the-callers-token)).
+An operation is exposed by a stamp at its registration in Go, and `cmd/mcpgen` turns every stamped
+operation into a tool, listed in the generated [MCP tools reference](/reference/mcp/): a **curated
+catalog**, not a raw one-method-per-tool dump, but never a hand list either. A tool call **is the route**,
+not a side channel: the server, at `/mcp` over streamable HTTP and over stdio through `omniglass mcp`,
+admits only a bearer token the API accepts and dispatches every call through the router with that
+token, so the route permission, the gateway scope and the same-transaction [audit](/architecture/audit/)
+row are exactly a direct call's, the row marked with the MCP channel. Each tool carries the MCP
+annotations one rule derives from its method and gate (read-only, destructive, idempotent, open-world),
+so any client can gate the writes behind its user's confirmation, and an error is the route's own
+problem+json. The server runs as the **authenticated `human` or `service` principal's** token, so its
+reach is exactly that principal's grants ([AI](/architecture/ai/)). Connecting one:
+[connect an agent](/guides/agents/).
+
+:::design[Views as MCP tools, tracked in #523]
+The [views](/architecture/views/) exposed as search and query tools arrive with the views contract.
 :::
 
 :::design[The full node NATS contract, per ADR-0036]

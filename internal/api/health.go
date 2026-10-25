@@ -175,6 +175,7 @@ type systemVerdictBody struct {
 func registerHealthRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "get-system-health",
+		Extensions:  mcpExposed(),
 		Method:      http.MethodGet,
 		Path:        "/systems/{name}/health",
 		Summary:     "Read a system's health",
@@ -208,6 +209,7 @@ func registerHealthRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "get-location-health",
+		Extensions:  mcpExposed(),
 		Method:      http.MethodGet,
 		Path:        "/locations/{name}/health",
 		Summary:     "Read a location's health",

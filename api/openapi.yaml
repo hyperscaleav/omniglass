@@ -301,6 +301,12 @@ components:
           type: string
         actor_name:
           type: string
+        channel:
+          description: "How the action arrived: mcp for a tool call on the MCP server; absent for a direct API call. Set by the server, never by the caller"
+          type: string
+        client:
+          description: The name and version the MCP client declared about itself, recorded as asserted; absent when there is none
+          type: string
         id:
           type: string
         new:
@@ -9875,6 +9881,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: The authenticated principal, its permissions, and grants
+      x-omniglass-mcp: {}
     patch:
       description: Updates the caller's own label (email is administrator-set). Requires authentication; self-scoped (edits only your own principal).
       operationId: update-auth-me
@@ -10470,6 +10477,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: List component types
+      x-omniglass-mcp: {}
       x-omniglass-permission: component_type:read
     post:
       description: Creates a custom (non-official) component_type, optionally under a parent. Gated by component_type:create.
@@ -10601,6 +10609,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: List components in scope
+      x-omniglass-mcp: {}
       x-omniglass-permission: component:read
     post:
       description: "Creates a component, optionally under a parent (a root needs an all-scoped grant), bound to a system and a location, and classified by a product (required; naming a generic is fine until a real product is modeled). Gated by component:create. The location reference resolves within the caller's location:read scope, because the label this stores is rendered from it, and one outside that scope is refused (422) exactly as :renderLabel refuses to preview it. Naming a system additionally requires system:update, and resolves within that scope, because the component's primary membership is inserted from it: it is the same row the membership route writes, so the two paths cost the same permission. A system outside that scope is refused with a 403 naming it when the caller may read the system (denying its existence to someone who can GET it would be a lie) and with the non-disclosing 422 when the caller may not."
@@ -10626,6 +10635,7 @@ paths:
           description: Error
       summary: Create a component
       x-omniglass-conditional-permission: system:update
+      x-omniglass-mcp: {}
       x-omniglass-permission: component:create
   /components/{name}:
     delete:
@@ -10675,6 +10685,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Get a component
+      x-omniglass-mcp: {}
       x-omniglass-permission: component:read
     patch:
       description: "Patches a component's label or product. The name is not patchable: renaming is the :rename custom method. Placement is not patchable either: relocating or re-parenting is the :move custom method, gated separately, because a placement change is an authorization act. Product is required, so it is unchanged when omitted and reclassified when named, but an explicit empty string is refused (422), not a clear. Gated by component:update; read and update scopes drive the 404 versus 403 split."
@@ -10748,6 +10759,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: List a component's alarms
+      x-omniglass-mcp: {}
       x-omniglass-permission: component:read
     post:
       description: "Records a condition on this component, then recomputes health in the same transaction: the component's own verdict moves, and if it is now outage (an alarm at or above the high level), any role it occupies loses it as an occupant while the alarm is active, which can move its system and location verdicts with it; a lesser alarm degrades the component but leaves it occupying its roles. Gated by component:update; read and update scopes drive the 404 versus 403 split."
@@ -10944,6 +10956,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: List a component's commands
+      x-omniglass-mcp: {}
       x-omniglass-permission: command:read
   /components/{name}/commands/{id}:
     get:
@@ -10983,6 +10996,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Read a command
+      x-omniglass-mcp: {}
       x-omniglass-permission: command:read
   /components/{name}/commands:issue:
     post:
@@ -11034,6 +11048,9 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Issue a command to a component
+      x-omniglass-mcp:
+        destructive: true
+        open_world: true
       x-omniglass-permission: command:issue
   /components/{name}/effective-secrets:
     get:
@@ -11149,6 +11166,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: List a component's recent events
+      x-omniglass-mcp: {}
       x-omniglass-permission: component:read
   /components/{name}/impairment:
     get:
@@ -11259,6 +11277,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: List a component's recent log lines
+      x-omniglass-mcp: {}
       x-omniglass-permission: component:read
   /components/{name}/memberships:
     get:
@@ -11313,6 +11332,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: List a component's effective metrics
+      x-omniglass-mcp: {}
       x-omniglass-permission: component:read
   /components/{name}/metrics/{metric}/samples:
     get:
@@ -11367,6 +11387,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Read one metric series' raw samples
+      x-omniglass-mcp: {}
       x-omniglass-permission: component:read
   /components/{name}/properties:
     get:
@@ -11394,6 +11415,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: List a component's effective properties
+      x-omniglass-mcp: {}
       x-omniglass-permission: component:read
   /components/{name}/properties/{property}:
     delete:
@@ -11517,6 +11539,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Read one property series' change history
+      x-omniglass-mcp: {}
       x-omniglass-permission: component:read
   /components/{name}/reachability:
     get:
@@ -11544,6 +11567,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Read a component's per-endpoint reachability
+      x-omniglass-mcp: {}
       x-omniglass-permission: component:read
   /components/{name}/reconciliation:
     get:
@@ -11571,6 +11595,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Read a component's property reconciliation (want/told/is)
+      x-omniglass-mcp: {}
       x-omniglass-permission: component:read
   /components/{name}/simulation:
     get:
@@ -11921,6 +11946,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: List drivers
+      x-omniglass-mcp: {}
       x-omniglass-permission: driver:read
     post:
       description: Creates a custom (non-official) driver. Gated by driver:create.
@@ -11945,6 +11971,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Create a driver
+      x-omniglass-mcp: {}
       x-omniglass-permission: driver:create
   /drivers/{id}:
     delete:
@@ -11998,6 +12025,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Get a driver
+      x-omniglass-mcp: {}
       x-omniglass-permission: driver:read
     patch:
       description: Patches a custom driver's label or version. Official drivers are read-only (422). Gated by driver:update.
@@ -12032,6 +12060,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Update a driver
+      x-omniglass-mcp: {}
       x-omniglass-permission: driver:update
   /endpoints:
     get:
@@ -12051,6 +12080,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: List endpoints in scope
+      x-omniglass-mcp: {}
       x-omniglass-permission: endpoint:read
     post:
       description: Creates an endpoint owned by a component (or a server-hosted one, which needs an all-scoped grant), named by its transport; the optional label is the only identity string an operator types, and is where what the connection is FOR goes. The create scope cascades through the owning component. Gated by endpoint:create.
@@ -12075,6 +12105,8 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Create an endpoint
+      x-omniglass-mcp:
+        open_world: true
       x-omniglass-permission: endpoint:create
   /endpoints/{endpoint}:
     delete:
@@ -12100,6 +12132,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Delete an endpoint
+      x-omniglass-mcp: {}
       x-omniglass-permission: endpoint:delete
     get:
       description: Fetches an endpoint by its address (<component>/<endpoint name>) or uuid. An endpoint whose component is out of the caller's read scope is a non-disclosing 404, and a name no endpoint the caller can see answers to is a 404 naming what was looked up (listing each match when more than one does). Gated by endpoint:read.
@@ -12128,6 +12161,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Get an endpoint
+      x-omniglass-mcp: {}
       x-omniglass-permission: endpoint:read
     patch:
       description: "Patches an endpoint's node placement, params, label, or (driver-attached) its connection inputs in place: the host, port and attached secret references, validated against the driver's declared inputs, the endpoint's tasks re-derived in the same transaction. A value the driver refuses is a 400 naming the field. An empty label clears it and the surface falls back to the derived name. Gated by endpoint:update; read and update scopes (through the component) drive the 404 versus 403 split."
@@ -12162,6 +12196,8 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Update an endpoint
+      x-omniglass-mcp:
+        open_world: true
       x-omniglass-permission: endpoint:update
   /endpoints/{endpoint}:retry:
     post:
@@ -12196,6 +12232,9 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Retry an endpoint's gated connections
+      x-omniglass-mcp:
+        destructive: true
+        open_world: true
       x-omniglass-permission: endpoint:retry
   /event-rules:
     get:
@@ -13051,6 +13090,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: List locations in scope
+      x-omniglass-mcp: {}
       x-omniglass-permission: location:read
     post:
       description: Creates a location, optionally under a parent (a root needs an all-scoped grant). Omit name and the platform generates one from the location_type's name rule, taking the lowest free ordinal among the siblings in that placement; a type carrying no name rule refuses (422), since a building's real name is not something the platform can know. Gated by location:create.
@@ -13124,6 +13164,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Get a location
+      x-omniglass-mcp: {}
       x-omniglass-permission: location:read
     patch:
       description: "Patches a location's label or location_type. The name is not patchable: renaming is the :rename custom method. Placement is not patchable either: re-parenting is the :move custom method, gated separately, because a placement change is an authorization act. Changing the location_type of a location the PLATFORM named re-mints the name from the new type's name rule, and is refused (422) when the new type carries none, which is every shipped type: :rename the location first to claim its name, then reclassify it. A location an operator named is never renamed by a reclassify. Gated by location:update; the read and update scopes drive the 404 versus 403 split."
@@ -13183,6 +13224,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Read a location's health
+      x-omniglass-mcp: {}
       x-omniglass-permission: location:read
   /locations/{name}/metrics:
     get:
@@ -13719,6 +13761,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: List nodes
+      x-omniglass-mcp: {}
       x-omniglass-permission: node:read
     post:
       description: "Registers an edge node server-side (day-one enrollment: create, then :enroll to mint its token). Gated by node:create."
@@ -13792,6 +13835,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Get a node
+      x-omniglass-mcp: {}
       x-omniglass-permission: node:read
     patch:
       description: Patches a node's label, description, and location (a nil field is unchanged; a location of "" clears it). The name is immutable. Requires an all-scope action. Gated by node:update.
@@ -13849,6 +13893,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: List a node's recent self-logs
+      x-omniglass-mcp: {}
       x-omniglass-permission: node:read
   /nodes/{name}/simulation:
     get:
@@ -15067,6 +15112,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: List products
+      x-omniglass-mcp: {}
       x-omniglass-permission: product:read
     post:
       description: Creates a custom (non-official) product, classified under a component_type. kind and component_type are both required; kind refuses vm (retired, folded into app). Gated by product:create.
@@ -15144,6 +15190,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Get a product
+      x-omniglass-mcp: {}
       x-omniglass-permission: product:read
     patch:
       description: Patches a custom product's label, vendor, driver, kind, component_type, icon, or parent. component_type is required, so an empty string on it is a 422 (a reclassify names a real type; it never clears). Official products are read-only (422). Gated by product:update.
@@ -15544,6 +15591,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: List secret types
+      x-omniglass-mcp: {}
       x-omniglass-permission: secret:read
   /secrets:
     get:
@@ -15563,6 +15611,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: List secrets
+      x-omniglass-mcp: {}
       x-omniglass-permission: secret:read
     post:
       description: Seals a secret at an owner scope. Fields are validated and encrypted against the type shape. Gated by secret:create, plus platform:create when owner_kind is platform (the install-wide tier).
@@ -15587,6 +15636,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Create a secret
+      x-omniglass-mcp: {}
       x-omniglass-permission: secret:create
       x-omniglass-platform-permission: platform:create
   /secrets/{secret}:
@@ -16565,6 +16615,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: List systems in scope
+      x-omniglass-mcp: {}
       x-omniglass-permission: system:read
     post:
       description: Creates a system, optionally under a parent (a root needs an all-scoped grant), at a location, conforming to a standard, and classified as a system_type. Gated by system:create; the location reference resolves within the caller's location:read scope, because the label this stores is rendered from it, and a location outside that scope is refused (422) exactly as :renderLabel refuses to preview it.
@@ -16638,6 +16689,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Get a system
+      x-omniglass-mcp: {}
       x-omniglass-permission: system:read
     patch:
       description: "Patches a system's label, standard, or system_type. The name is not patchable: renaming is the :rename custom method. Placement is not patchable either: relocating or re-parenting is the :move custom method, gated separately, because a placement change is an authorization act. The standard and system_type fields both follow the three-state convention: an omitted field is unchanged, an explicit empty string clears (a one-off system, an unclassified system), a name sets. Gated by system:update; read and update scopes drive the 404 versus 403 split."
@@ -16751,6 +16803,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Read a system's health
+      x-omniglass-mcp: {}
       x-omniglass-permission: system:read
   /systems/{name}/logs:
     get:
@@ -16999,6 +17052,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Read one metric series' raw samples
+      x-omniglass-mcp: {}
       x-omniglass-permission: system:read
   /systems/{name}/properties:
     get:
@@ -17149,6 +17203,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Read one property series' change history
+      x-omniglass-mcp: {}
       x-omniglass-permission: system:read
   /systems/{name}/roles:
     get:
@@ -17845,6 +17900,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: List tasks in scope
+      x-omniglass-mcp: {}
       x-omniglass-permission: task:read
   /tasks/{id}:
     get:
@@ -17916,6 +17972,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: List the transports the platform speaks
+      x-omniglass-mcp: {}
       x-omniglass-permission: endpoint:read
   /variables:
     get:
@@ -18040,6 +18097,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: List vendors
+      x-omniglass-mcp: {}
       x-omniglass-permission: vendor:read
     post:
       description: Creates a custom (non-official) vendor. Gated by vendor:create.

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/hyperscaleav/omniglass/internal/mcp/tooldef"
 	"net/http"
 	"strings"
 
@@ -117,6 +118,7 @@ type listTransportsOutput struct {
 func registerEndpointRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "list-transports",
+		Extensions:  mcpExposed(),
 		Method:      http.MethodGet,
 		Path:        "/transports",
 		Summary:     "List the transports the platform speaks",
@@ -129,6 +131,7 @@ func registerEndpointRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "list-endpoints",
+		Extensions:  mcpExposed(),
 		Method:      http.MethodGet,
 		Path:        "/endpoints",
 		Summary:     "List endpoints in scope",
@@ -148,6 +151,7 @@ func registerEndpointRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "get-endpoint",
+		Extensions:  mcpExposed(),
 		Method:      http.MethodGet,
 		Path:        "/endpoints/{endpoint}",
 		Summary:     "Get an endpoint",
@@ -162,6 +166,7 @@ func registerEndpointRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID:   "create-endpoint",
+		Extensions:    mcpExposed(tooldef.Hints{OpenWorld: true}),
 		Method:        http.MethodPost,
 		Path:          "/endpoints",
 		DefaultStatus: http.StatusCreated,
@@ -194,6 +199,7 @@ func registerEndpointRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "update-endpoint",
+		Extensions:  mcpExposed(tooldef.Hints{OpenWorld: true}),
 		Method:      http.MethodPatch,
 		Path:        "/endpoints/{endpoint}",
 		Summary:     "Update an endpoint",
@@ -218,6 +224,7 @@ func registerEndpointRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "retry-endpoint",
+		Extensions:  mcpExposed(tooldef.Hints{Destructive: true, OpenWorld: true}),
 		Method:      http.MethodPost,
 		Path:        "/endpoints/{endpoint}:retry",
 		Summary:     "Retry an endpoint's gated connections",
@@ -237,6 +244,7 @@ func registerEndpointRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID:   "delete-endpoint",
+		Extensions:    mcpExposed(),
 		Method:        http.MethodDelete,
 		Path:          "/endpoints/{endpoint}",
 		DefaultStatus: http.StatusNoContent,

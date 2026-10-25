@@ -68,6 +68,7 @@ type driverOutput struct {
 func registerDriverRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "list-drivers",
+		Extensions:  mcpExposed(),
 		Method:      http.MethodGet,
 		Path:        "/drivers",
 		Summary:     "List drivers",
@@ -87,6 +88,7 @@ func registerDriverRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID:   "create-driver",
+		Extensions:    mcpExposed(),
 		Method:        http.MethodPost,
 		Path:          "/drivers",
 		DefaultStatus: http.StatusCreated,
@@ -105,6 +107,7 @@ func registerDriverRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "get-driver",
+		Extensions:  mcpExposed(),
 		Method:      http.MethodGet,
 		Path:        "/drivers/{id}",
 		Summary:     "Get a driver",
@@ -119,6 +122,7 @@ func registerDriverRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "update-driver",
+		Extensions:  mcpExposed(),
 		Method:      http.MethodPatch,
 		Path:        "/drivers/{id}",
 		Summary:     "Update a driver",

@@ -98,6 +98,7 @@ func logBodies(rows []storage.LogLine) []logBody {
 func registerLogRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "list-component-logs",
+		Extensions:  mcpExposed(),
 		Method:      http.MethodGet,
 		Path:        "/components/{name}/logs",
 		Summary:     "List a component's recent log lines",
@@ -136,6 +137,7 @@ func registerLogRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 	// through GetNode; an out-of-scope node is a non-disclosing 404.
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "list-node-logs",
+		Extensions:  mcpExposed(),
 		Method:      http.MethodGet,
 		Path:        "/nodes/{name}/logs",
 		Summary:     "List a node's recent self-logs",

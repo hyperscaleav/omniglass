@@ -95,6 +95,7 @@ type claimOutput struct {
 func registerNodeRoutes(api huma.API, a *authenticator, gw storage.Gateway, natsURL string) {
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "list-nodes",
+		Extensions:  mcpExposed(),
 		Method:      http.MethodGet,
 		Path:        "/nodes",
 		Summary:     "List nodes",
@@ -124,6 +125,7 @@ func registerNodeRoutes(api huma.API, a *authenticator, gw storage.Gateway, nats
 
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "get-node",
+		Extensions:  mcpExposed(),
 		Method:      http.MethodGet,
 		Path:        "/nodes/{name}",
 		Summary:     "Get a node",

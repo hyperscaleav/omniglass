@@ -23,15 +23,15 @@ failing the PR on any diff in the committed generated artifacts.
 | `cmd/openapigen` | Huma Go structs | `api/openapi.json` (+ `.yaml`) | everything below |
 | `cd web && npm run gen:api` | `openapi.json` | `web/src/api/schema.gen.ts` | typed `openapi-fetch` SPA client |
 | `cmd/cligen` | `openapi.json` | `internal/cli/api_gen.go` (cobra) | the CLI, patched via `api_hooks.go` |
+| `cmd/mcpgen` | `openapi.json` (the operations stamped `x-omniglass-mcp` in Go) | `internal/mcp/catalog_gen.go` and the [MCP tools reference](/reference/mcp/) | the [MCP server](/architecture/api/#also-an-mcp-surface) at `/mcp` and `omniglass mcp` |
 | `cmd/docsgen` | the live cobra tree | `docs/src/content/docs/reference/cli/index.md` | the published CLI reference |
 | `cmd/erdgen` | the embedded migrations, applied to a throwaway Postgres and introspected | the D2 region of `docs/src/content/docs/architecture/data-model.md` and the schema facts `docs/src/generated/schema.json` | the published ERD and every docs storage table |
 | `cmd/seedgen` | the twelve embedded seed YAMLs, parsed in-process (no database) | `docs/src/generated/seed.json`, roles carrying effective permissions | the docs' shipped-set claims |
 | `cmd/configgen` | the declarative env registry in `internal/config` | `docs/src/generated/config.json` | the deployment guides' env tables |
 | `gen-proto` | `proto/og/v1/*.proto` | committed `*.pb.go` | the NATS `TelemetryBatch` telemetry message |
 
-Two more stages are planned but have **no generator yet**: an MCP tool catalog for AI agents
-over the [API contract](/architecture/api/), and a JSONSchema for YAML editor validation. They
-land with their consuming slices.
+One more stage is planned but has **no generator yet**: a JSONSchema for YAML editor validation.
+It lands with its consuming slice.
 
 One command runs them all (`make gen`); two focused targets regenerate a subset
 (`make gen-proto` for the protobuf wire, `make gen-web` for the spec plus the typed SPA

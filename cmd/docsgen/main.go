@@ -72,12 +72,18 @@ func writeGlobalFlags(b *bytes.Buffer, root *cobra.Command) {
 }
 
 // render walks one command. A command with subcommands becomes a heading and its
-// children recurse a level deeper; a runnable leaf becomes a detail block.
+// children recurse a level deeper; a runnable leaf becomes a detail block. A
+// group that is itself runnable (`omniglass mcp` serves, and its subcommands are
+// clients of it) gets its own detail block before its children.
 func render(b *bytes.Buffer, cmd *cobra.Command, depth int) {
 	if cmd.HasAvailableSubCommands() {
-		heading(b, depth, "`"+cmd.CommandPath()+"`")
-		if cmd.Short != "" {
-			b.WriteString(cmd.Short + "\n\n")
+		if cmd.Runnable() {
+			writeLeaf(b, cmd, depth)
+		} else {
+			heading(b, depth, "`"+cmd.CommandPath()+"`")
+			if cmd.Short != "" {
+				b.WriteString(cmd.Short + "\n\n")
+			}
 		}
 		for _, c := range sortedVisible(cmd.Commands()) {
 			render(b, c, depth+1)
@@ -92,7 +98,12 @@ func writeLeaf(b *bytes.Buffer, cmd *cobra.Command, depth int) {
 	if cmd.Short != "" {
 		b.WriteString(cmd.Short + "\n\n")
 	}
-	b.WriteString("```\n" + cmd.UseLine() + "\n```\n\n")
+	use := cmd.UseLine()
+	if cmd.HasAvailableSubCommands() {
+		// cobra appends [command] to a group's UseLine; its own run takes flags only.
+		use = cmd.CommandPath() + " [flags]"
+	}
+	b.WriteString("```\n" + use + "\n```\n\n")
 	if long := strings.TrimSpace(cmd.Long); long != "" && long != strings.TrimSpace(cmd.Short) {
 		b.WriteString(long + "\n\n")
 	}

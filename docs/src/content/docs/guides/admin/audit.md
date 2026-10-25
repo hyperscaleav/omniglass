@@ -57,5 +57,11 @@ one-sided. Auth events (sign-ins, password changes)
 record no row images at all, and the drawer says so. Sealed material never appears: a secret's audit
 row carries its metadata only, and password changes record that the credential changed, never a value.
 
+An action an AI agent took through the [MCP server](/guides/agents/) is the user's own row, and the
+trail also records how it arrived: `GET /audit-log` (and `omniglass audit-log list`) returns
+`"channel": "mcp"` and the `client` the agent declared on such a row, and neither on a direct call. Minting
+and revoking an API token each write a row too (resource `credential`), naming the token by its prefix
+and description, never its secret.
+
 The model behind the trail, what is recorded and the dual-actor rule for impersonation, is
 [identity and access](/architecture/identity-access/) and [audit](/architecture/audit/).

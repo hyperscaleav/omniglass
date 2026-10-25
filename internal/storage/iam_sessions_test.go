@@ -88,7 +88,7 @@ func TestListAndRevokeBearerCredentials(t *testing.T) {
 		t.Fatalf("create mallory: %v", err)
 	}
 	sessionID := byPrefix[prefix2].ID
-	if ok, err := gw.RevokeBearerByID(ctx, mallory.ID, sessionID); err != nil || ok {
+	if ok, err := gw.RevokeBearerByID(ctx, mallory.ID, mallory.ID, sessionID); err != nil || ok {
 		t.Fatalf("cross-principal revoke = (%v, %v), want (false, nil)", ok, err)
 	}
 	if creds, err := gw.ListBearerCredentials(ctx, pid, hash1); err != nil || len(creds) != 2 {
@@ -97,7 +97,7 @@ func TestListAndRevokeBearerCredentials(t *testing.T) {
 
 	// The owner revokes its own session by id: it drops from the list, and the
 	// remaining credential still authenticates.
-	if ok, err := gw.RevokeBearerByID(ctx, pid, sessionID); err != nil || !ok {
+	if ok, err := gw.RevokeBearerByID(ctx, pid, pid, sessionID); err != nil || !ok {
 		t.Fatalf("revoke own = (%v, %v), want (true, nil)", ok, err)
 	}
 	after, err := gw.ListBearerCredentials(ctx, pid, hash1)
@@ -113,10 +113,10 @@ func TestListAndRevokeBearerCredentials(t *testing.T) {
 
 	// Revoking the same id again is a no-op (already gone), and a malformed id is a
 	// clean false, not an error (the API maps it to 404, never a 500).
-	if ok, err := gw.RevokeBearerByID(ctx, pid, sessionID); err != nil || ok {
+	if ok, err := gw.RevokeBearerByID(ctx, pid, pid, sessionID); err != nil || ok {
 		t.Fatalf("re-revoke = (%v, %v), want (false, nil)", ok, err)
 	}
-	if ok, err := gw.RevokeBearerByID(ctx, pid, "not-a-uuid"); err != nil || ok {
+	if ok, err := gw.RevokeBearerByID(ctx, pid, pid, "not-a-uuid"); err != nil || ok {
 		t.Fatalf("malformed id revoke = (%v, %v), want (false, nil)", ok, err)
 	}
 }
@@ -236,7 +236,7 @@ func TestRevokeBearersByPurpose(t *testing.T) {
 
 	// Revoke all of root's SESSIONS: both sessions go, the two tokens (bootstrap +
 	// issued) remain, and the count is 2.
-	n, err := gw.RevokeBearersByPurpose(ctx, pid, "session")
+	n, err := gw.RevokeBearersByPurpose(ctx, pid, pid, "session")
 	if err != nil {
 		t.Fatalf("revoke sessions: %v", err)
 	}
@@ -262,7 +262,7 @@ func TestRevokeBearersByPurpose(t *testing.T) {
 	}
 
 	// Revoke all of root's TOKENS: both remaining tokens go, count 2, none left.
-	n, err = gw.RevokeBearersByPurpose(ctx, pid, "token")
+	n, err = gw.RevokeBearersByPurpose(ctx, pid, pid, "token")
 	if err != nil {
 		t.Fatalf("revoke tokens: %v", err)
 	}
@@ -274,7 +274,7 @@ func TestRevokeBearersByPurpose(t *testing.T) {
 	}
 
 	// Revoking again is a clean zero, not an error.
-	if n, err := gw.RevokeBearersByPurpose(ctx, pid, "session"); err != nil || n != 0 {
+	if n, err := gw.RevokeBearersByPurpose(ctx, pid, pid, "session"); err != nil || n != 0 {
 		t.Fatalf("re-revoke = (%d, %v), want (0, nil)", n, err)
 	}
 }
@@ -312,7 +312,7 @@ func TestRevokeBearersByPurposeExcept(t *testing.T) {
 
 	// Revoke sessions EXCEPT the current one: the other session goes (count 1), the
 	// kept session and both tokens (bootstrap + none here) survive.
-	n, err := gw.RevokeBearersByPurposeExcept(ctx, pid, "session", [][]byte{keepH})
+	n, err := gw.RevokeBearersByPurposeExcept(ctx, pid, pid, "session", [][]byte{keepH})
 	if err != nil {
 		t.Fatalf("revoke except: %v", err)
 	}
@@ -345,7 +345,7 @@ func TestRevokeBearersByPurposeExcept(t *testing.T) {
 
 	// Empty keep behaves like the plain bulk revoke (delete all of the purpose): the
 	// kept session now goes too, and RevokeBearersByPurpose is the nil-keep alias.
-	if n, err := gw.RevokeBearersByPurpose(ctx, pid, "session"); err != nil || n != 1 {
+	if n, err := gw.RevokeBearersByPurpose(ctx, pid, pid, "session"); err != nil || n != 1 {
 		t.Fatalf("plain purpose revoke = (%d, %v), want (1, nil)", n, err)
 	}
 	if after, err := gw.ListBearerCredentials(ctx, pid, bh); err != nil || len(after) != 1 {

@@ -2721,6 +2721,46 @@ Example:
 omniglass location-type update room
 ```
 
+## `omniglass mcp`
+
+Serve the omniglass MCP tools over stdio, for a local agent
+
+```
+omniglass mcp [flags]
+```
+
+Serves the omniglass MCP server over stdio by relaying to the server's /mcp endpoint with your token, so a local agent (Claude Code, or any MCP client that launches a command) drives omniglass through the same generated tools, with your permissions and scope, audited as you via MCP. Configure the agent to run `omniglass mcp` with OMNIGLASS_SERVER and OMNIGLASS_TOKEN in its environment. Standard output carries only the MCP protocol; anything else goes to standard error.
+
+### `omniglass mcp call`
+
+Call one MCP tool, as an MCP client over stdio does
+
+```
+omniglass mcp call <tool> [flags]
+```
+
+Calls one tool on the omniglass MCP server, connecting over stdio to `omniglass mcp` exactly as an agent does, and prints its result. A tool error (the route's own refusal) is printed and exits non-zero.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--args` | string | (none) | the tool's arguments, a JSON object |
+
+Example:
+
+```sh
+omniglass mcp call get-component-reachability --args '{"name":"panel-1"}'
+```
+
+### `omniglass mcp tools`
+
+List the MCP tools, as an MCP client over stdio sees them
+
+```
+omniglass mcp tools
+```
+
+Lists every tool the omniglass MCP server serves, with what a client may assume of each (read-only, destructive, idempotent, open-world), by connecting over stdio to `omniglass mcp` exactly as an agent does.
+
 ## `omniglass metric-type`
 
 Commands for the metric-type resource
@@ -4947,6 +4987,18 @@ omniglass system get <name>
 ### `omniglass system health`
 
 Read every system's health verdict
+
+```
+omniglass system health [flags]
+```
+
+The current verdict for every system in the caller's read scope, in one call: the bulk counterpart of the per-system health read, carrying the one fact a list's health column renders and none of the explanation. A console painting a page of systems reads this once instead of resolving every role, occupant, alarm and transition per row. A system that has never been recomputed reads healthy. Gated by system:read; an empty scope is an empty list, not a 403.
+
+Example:
+
+```sh
+omniglass system health
+```
 
 #### `omniglass system health list`
 

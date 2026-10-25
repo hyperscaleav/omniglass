@@ -11,7 +11,8 @@ The audit log answers "who changed this, and to what?": every mutation is record
 
 :::note[Partial]
 Built today: the `audit_log` row written in the same transaction as every entity mutation; the
-secret-decrypt audit (distinct `reveal` and `copy` verbs); the auth-event lane; and the
+secret-decrypt audit (distinct `reveal` and `copy` verbs); the auth-event lane; a token's minting and
+revoking; the channel an MCP tool call arrived through; and the
 `GET /audit-log` read, rendered by the console Admin > Audit page with a per-row before/after diff
 drawer. See [implementation status](/architecture/status/).
 :::
@@ -32,7 +33,8 @@ drawer. See [implementation status](/architecture/status/).
   every `writeAuditRes` call site and fails on an argument that is not primary-key **shaped**, which
   catches the two ways this went wrong (a name, and a dual-accept route's reference) without being
   able to prove that a given uuid is the right table's. The remaining gap is narrow and known: a
-  `credential` row is keyed on its principal's uuid rather than its own.
+  password change or reset row (`resource = 'credential'`) is keyed on its principal's uuid rather
+  than the credential's own; a token's rows are keyed on the token's credential id.
 - **The actor** is resolved by IAM ([identity and access](/architecture/identity-access/)): the
   human, service, or node. The read resolves it to the actor's **identifier**, a human's username, a
   service account's name, or a node's name, through the gateway's one resolution
@@ -41,9 +43,20 @@ drawer. See [implementation status](/architecture/status/).
   resolve, so only a principal with no profile row at all reads empty; a **node** actor read blank
   until [#738](https://github.com/hyperscaleav/omniglass/issues/738) made `node.name` the third
   source. Nothing here surfaces a raw uuid where a name was expected.
-- **An AI-accepted suggestion is one row.** An AI tool acts via OAuth as a `human` or `service`
-  principal, so the actor is that principal; the AI-sourced marking rides alongside the row
-  ([AI](/architecture/ai/)).
+- **How it arrived rides beside the actor.** A row carries `channel` and `client`: an
+  [MCP](/architecture/api/#also-an-mcp-surface) tool call's row reads `channel = 'mcp'` and the name
+  and version the MCP client declared about itself (sanitized, and recorded as asserted); a direct API
+  call carries neither. The MCP dispatch sets them on the request context, which no HTTP header or body
+  reaches, so a caller cannot claim a channel, and a check holds the column to the channels the server
+  knows ([ADR-1162](/architecture/decisions/#adr-1162-the-mcp-server-is-a-generated-client-of-the-operations-stamped-for-it-run-as-the-callers-token)).
+  `GET /audit-log` returns both.
+- **An AI-taken action is one row.** An AI tool acts with a bearer token as a `human` or `service`
+  principal, so the actor is that principal, and the channel is the AI-sourced marking riding
+  alongside the row ([AI](/architecture/ai/)).
+- **A token is audited.** Minting one writes a `create` row (the bootstrap token's with no actor)
+  and revoking one (singly, in bulk, or by logging out with it) a `revoke` row on
+  `resource = 'credential'`, carrying the token's prefix, purpose, description and
+  expiry, never the token or its hash: a token is how an agent or a script is given access.
 
 :::design[The backtest and reconcile consumers, tracked in #526]
 - **Ground truth a backtest reads.** Operator-driven transitions and config changes are not

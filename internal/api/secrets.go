@@ -194,6 +194,7 @@ func registerSecretRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "list-secret-types",
+		Extensions:  mcpExposed(),
 		Method:      http.MethodGet,
 		Path:        "/secret-types",
 		Summary:     "List secret types",
@@ -217,6 +218,7 @@ func registerSecretRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "list-secrets",
+		Extensions:  mcpExposed(),
 		Method:      http.MethodGet,
 		Path:        "/secrets",
 		Summary:     "List secrets",
@@ -236,6 +238,7 @@ func registerSecretRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 
 	huma.Register(api, a.platformGated(a.gated(huma.Operation{
 		OperationID:   "create-secret",
+		Extensions:    mcpExposed(),
 		Method:        http.MethodPost,
 		Path:          "/secrets",
 		DefaultStatus: http.StatusCreated,

@@ -632,8 +632,11 @@ non-disclosing 404 on the read and on the write. The registry and its contract s
 - **Hand-written** (`internal/cli/api_hooks.go` and the run-mode files): the client
   runtime the generated tree calls, plus commands that are not API operations, the
   `server`, `node run`, and `migrate` run modes, the trusted direct-DB owner lane
-  (`bootstrap`, `token`, `set-password`), and the idempotent dev-fleet seeder
-  (`seed-dev`, the same trusted lane, never for production).
+  (`bootstrap`, `token`, `set-password`), the idempotent dev-fleet seeder
+  (`seed-dev`, the same trusted lane, never for production), and `mcp`, which serves the
+  [MCP tools](/reference/mcp/) over stdio for a local agent, with `mcp tools` and `mcp call`
+  as a small client of it ([connect an agent](/guides/agents/)). The MCP tools are generated
+  too, by `cmd/mcpgen` from the same OpenAPI document.
 
 To add a hand-written command, write a `newXxxCmd()` returning a `*cobra.Command` and add
 it in `newRoot`, exactly as `bootstrap` does. Regenerating the API commands never touches

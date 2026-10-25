@@ -127,7 +127,8 @@ that describes the target:
    [storage](/architecture/storage/).
 5. **The read side, in full.** [Views](/architecture/views/) and the `ViewResult` renderer, composable
    dashboards, and the exploration surfaces on the [UI](/architecture/ui/), plus the
-   [MCP](/architecture/api/#also-an-mcp-surface) and [AI](/architecture/ai/) seams over the same gateway.
+   [MCP](/architecture/api/#also-an-mcp-surface) and [AI](/architecture/ai/) seams over the same gateway
+   (the MCP server itself shipped with #1162; its view-backed tools arrive with views).
 
 This arc is a reading order, not a schedule. Each numbered band becomes one or more epics with their own
 scope and approval before any branch; when a slice in it ships, the relevant spine page moves off

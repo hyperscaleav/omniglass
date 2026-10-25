@@ -183,6 +183,7 @@ export default defineConfig({
             { label: 'Nodes and reachability', slug: 'guides/operator/collection' },
             { label: 'Simulate a fleet', slug: 'guides/operator/simulation' },
             { label: 'The CLI', slug: 'guides/cli' },
+            { label: 'Connect an agent', slug: 'guides/agents' },
           ],
         },
         {
@@ -223,9 +224,10 @@ export default defineConfig({
         {
           label: 'Reference',
           items: [
-            // Both generated: the CLI page by cmd/docsgen, the API groups by
-            // starlight-openapi. Neither is hand-maintained.
+            // All generated: the CLI page by cmd/docsgen, the MCP tools page by
+            // cmd/mcpgen, the API groups by starlight-openapi. None is hand-maintained.
             { label: 'CLI', slug: 'reference/cli' },
+            { label: 'MCP tools', slug: 'reference/mcp' },
             ...openAPISidebarGroups,
           ],
         },

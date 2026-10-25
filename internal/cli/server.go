@@ -44,7 +44,7 @@ func newServerCmd(version string) *cobra.Command {
 
 // runServer boots the control plane: apply migrations, open the Storage
 // Gateway, serve the HTTP API, and shut down gracefully on SIGINT/SIGTERM.
-func runServer(ctx context.Context, _ string) error {
+func runServer(ctx context.Context, version string) error {
 	c := cfg()
 	log := slog.New(slog.NewTextHandler(os.Stdout, nil))
 
@@ -110,7 +110,7 @@ func runServer(ctx context.Context, _ string) error {
 		return err
 	}
 	srv := &http.Server{
-		Handler:           api.NewHandler(gw, api.WithSecureCookies(c.SecureCookies), api.WithNatsURL(natsURL), api.WithSettingsService(gw.Settings()), api.WithTelemetryPublisher(busSrv), api.WithSimHub(busSrv)),
+		Handler:           api.NewHandler(gw, api.WithVersion(version), api.WithSecureCookies(c.SecureCookies), api.WithNatsURL(natsURL), api.WithSettingsService(gw.Settings()), api.WithTelemetryPublisher(busSrv), api.WithSimHub(busSrv)),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 	log.Info("http api listening", "addr", ln.Addr().String())

@@ -70,6 +70,26 @@
       "name": "seq",
       "type": "bigint",
       "nullable": false
+     },
+     {
+      "name": "channel",
+      "type": "text",
+      "nullable": true
+     },
+     {
+      "name": "client",
+      "type": "text",
+      "nullable": true
+     }
+    ],
+    "checks": [
+     {
+      "name": "audit_log_channel_check",
+      "expr": "CHECK (((channel IS NULL) OR (channel = ANY (ARRAY['mcp'::text, 'omnibot'::text]))))"
+     },
+     {
+      "name": "audit_log_client_length_check",
+      "expr": "CHECK (((client IS NULL) OR (char_length(client) \u003c= 200)))"
      }
     ]
    },

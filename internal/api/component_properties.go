@@ -98,6 +98,7 @@ type setComponentPropertyInput struct {
 func registerComponentPropertyRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "list-component-properties",
+		Extensions:  mcpExposed(),
 		Method:      http.MethodGet,
 		Path:        "/components/{name}/properties",
 		Summary:     "List a component's effective properties",

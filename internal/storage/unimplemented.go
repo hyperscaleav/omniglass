@@ -163,13 +163,13 @@ func (UnimplementedGateway) RevokeBearer(context.Context, []byte) error { return
 func (UnimplementedGateway) ListBearerCredentials(context.Context, string, []byte) ([]BearerCredential, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) RevokeBearerByID(context.Context, string, string) (bool, error) {
+func (UnimplementedGateway) RevokeBearerByID(context.Context, string, string, string) (bool, error) {
 	return false, nil
 }
-func (UnimplementedGateway) RevokeBearersByPurpose(context.Context, string, string) (int, error) {
+func (UnimplementedGateway) RevokeBearersByPurpose(context.Context, string, string, string) (int, error) {
 	return 0, nil
 }
-func (UnimplementedGateway) RevokeBearersByPurposeExcept(context.Context, string, string, [][]byte) (int, error) {
+func (UnimplementedGateway) RevokeBearersByPurposeExcept(context.Context, string, string, string, [][]byte) (int, error) {
 	return 0, nil
 }
 func (UnimplementedGateway) AnyHuman(context.Context) (bool, error)    { return false, nil }

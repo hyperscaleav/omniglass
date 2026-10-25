@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/hyperscaleav/omniglass/internal/mcp/tooldef"
 	"net/http"
 	"sync"
 	"time"
@@ -184,6 +185,7 @@ func (l *waitLimiter) release(principal string) {
 func registerCommandRoutes(api huma.API, a *authenticator, gw storage.Gateway, waits *waitLimiter) {
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "issue-component-command",
+		Extensions:  mcpExposed(tooldef.Hints{Destructive: true, OpenWorld: true}),
 		Method:      http.MethodPost,
 		Path:        "/components/{name}/commands:issue",
 		Summary:     "Issue a command to a component",
@@ -243,6 +245,7 @@ func registerCommandRoutes(api huma.API, a *authenticator, gw storage.Gateway, w
 
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "get-component-command",
+		Extensions:  mcpExposed(),
 		Method:      http.MethodGet,
 		Path:        "/components/{name}/commands/{id}",
 		Summary:     "Read a command",
@@ -261,6 +264,7 @@ func registerCommandRoutes(api huma.API, a *authenticator, gw storage.Gateway, w
 
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "list-component-commands",
+		Extensions:  mcpExposed(),
 		Method:      http.MethodGet,
 		Path:        "/components/{name}/commands",
 		Summary:     "List a component's commands",
