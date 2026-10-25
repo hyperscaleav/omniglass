@@ -32,9 +32,12 @@ dropped when its fingerprint moves, on a terminal refusal, and on restart
 ([logging in over http](/architecture/collection/#logging-in-over-http)); and an http endpoint's
 server-sent events stream (#1038), held as a session sharing that state, its events routed to the
 listeners as a line is, resumed from its last event id after a drop
-([a server-sent events stream](/architecture/collection/#a-server-sent-events-stream)). Still `Design`: the
-durable JetStream command queue, the session pool knobs and the held transports beyond the line
-protocol (#1034 (websocket), #1036 (mqtt), #1039 (modbus/tcp), #1040 (bacnet/ip), #1041 (knxnet/ip), [ADR-0153](/architecture/decisions/#adr-0153-the-held-session-proof-is-the-line-protocol-over-tcp-other-held-transports-are-their-own-issues)),
+([a server-sent events stream](/architecture/collection/#a-server-sent-events-stream)); and a
+websocket or wss endpoint's socket (#1034), held as a session whose upgrade rides that state, its
+frames routed as a line is, a poll's or a command's answer matched by the id the node minted into it,
+kept alive by ping and pong ([websocket and wss](/architecture/collection/#websocket-and-wss)). Still `Design`: the
+durable JetStream command queue, the session pool knobs and the held transports beyond these
+(#1036 (mqtt), #1039 (modbus/tcp), #1040 (bacnet/ip), #1041 (knxnet/ip), [ADR-0153](/architecture/decisions/#adr-0153-the-held-session-proof-is-the-line-protocol-over-tcp-other-held-transports-are-their-own-issues)),
 config-generation-driven cache invalidation, node self-telemetry, the node-down sweep, the JetStream
 publish-ack delivery contract (telemetry publish is fire-and-forget today, #430), tick
 scheduling and concurrency knobs, and config apply (the `:apply` flow). The credential is a shared
@@ -220,7 +223,7 @@ connect
 [ADR-0160](/architecture/decisions/#adr-0160-tls-is-its-own-transport-over-a-shared-primitive-and-its-pin-is-the-public-key)).
 Still design below: the pool knobs.
 
-::::design[Target design: sessions and the session pool, tracked in #603; the held transports beyond the line protocol and the http stream are #1034 (websocket), #1036 (mqtt), #1039 (modbus/tcp), #1040 (bacnet/ip), #1041 (knxnet/ip)]
+::::design[Target design: sessions and the session pool, tracked in #603; the held transports beyond the line protocol, the http stream and the websocket are #1036 (mqtt), #1039 (modbus/tcp), #1040 (bacnet/ip), #1041 (knxnet/ip)]
 A stateful endpoint (`ssh`, `mqtt`, anything held open) becomes a **session** at runtime: one
 connection keyed by `(node, endpoint)`, shared by every task and command under it, handshake and
 auth paid once. A pool holds it open across ticks (reconnect, backoff, keepalive); a listener

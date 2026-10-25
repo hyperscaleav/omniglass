@@ -183,6 +183,16 @@ it was sent, which the component replays after), so nothing is lost or counted t
 reads **rejected** with the reason, and holds the endpoint's polls beneath the same refusal until you
 fix the secret ([a server-sent events stream](/architecture/collection/#a-server-sent-events-stream)).
 
+A **websocket** or **wss** endpoint (the seeded Kestrel control socket driver is one) holds one
+socket that carries everything: its session pill reads **up** while the socket is open, a change the
+component pushes lands the moment it happens, and its polls and commands ride the same socket, each
+answered by the reply that carries back the id the node gave it. A dropped socket, or one whose
+component stops answering the node's pings, reads **recovering** and comes back with its
+subscription sent again; a component that refuses the upgrade's credential reads **rejected** with
+the reason after one attempt, until you fix the secret. A wss endpoint pins its component's key as
+an https endpoint does, and **Trust this key** works the same way
+([websocket and wss](/architecture/collection/#websocket-and-wss)).
+
 A **udp** endpoint has no port to open, so its breakdown lists its **request** rung beside the ping:
 the driver's named request, answered (with its round trip) or not, which is the layer its verdict
 follows. A component

@@ -75,7 +75,12 @@ Built since: **a server-sent events stream** (#1038): an http session may declar
 open as a session riding the session's scheme or login, its events offered to the listeners, which
 claim one by its event name, a prefix or regex on its data, or a JSON field; a drop resumes from the
 last event id with nothing landed twice ([below](#a-server-sent-events-stream),
-[ADR-1038](/architecture/decisions/#adr-1038-an-http-session-holds-a-server-sent-events-stream-and-a-held-connection-carries-messages)). See
+[ADR-1038](/architecture/decisions/#adr-1038-an-http-session-holds-a-server-sent-events-stream-and-a-held-connection-carries-messages)).
+Built since: **websocket and wss** (#1034): a held session whose messages are text frames, its
+upgrade riding the session's scheme or login, a subscription armed on every connection, pushes
+claimed by the listeners, and a poll or a command answered by the frame carrying back an id the node
+mints into it, whatever pushes interleave ([below](#websocket-and-wss),
+[ADR-1034](/architecture/decisions/#adr-1034-a-websocket-is-a-held-session-of-text-frames-and-a-reply-is-matched-by-a-minted-id)). See
 [ADR-0037](/architecture/decisions/#adr-0037-telemetry-is-a-protobuf-event-over-jetstream-with-an-inline-owner-confining-consumer),
 [ADR-0038](/architecture/decisions/#adr-0038-the-reachability-verdict-is-a-built-in-state),
 [ADR-0039](/architecture/decisions/#adr-0039-an-endpoint-is-a-device-api-the-endpoint-type-is-its-transport-not-its-driver),
@@ -174,7 +179,7 @@ All four cells are real:
 | | **poll** (we ask) | **listen** (we wait) |
 |---|---|---|
 | **stateless** | SNMP get, an HTTP request (a driver's poll over http or https), a udp datagram request | webhook, SNMP trap, syslog, a udp push to the endpoint's own port |
-| **stateful** | SSH-exec or xAPI `xStatus` on a held session | MQTT subscribe, xAPI feedback, an http server-sent events stream |
+| **stateful** | SSH-exec or xAPI `xStatus` on a held session, a get frame over a websocket | MQTT subscribe, xAPI feedback, an http server-sent events stream, a websocket subscription |
 
 Waiting for a frame is one mode (**listen**) regardless of transport; statefulness lives on the endpoint.
 
@@ -182,8 +187,8 @@ Waiting for a frame is one mode (**listen**) regardless of transport; statefulne
 
 Built (#816): a session **holds its connection** across ticks. The node holds one per endpoint
 whose worklist carries a standing listen task over a transport with a session dialer (the line
-protocol over `tcp`, `tls` (#1035), `telnet` (#1033) and `ssh` (#1032), and a server-sent events
-stream over `http` and `https` (#1038)), or any driver poll over `tls`, `telnet` or `ssh`, or a driver poll whose driver declares a `session` block (a login a
+protocol over `tcp`, `tls` (#1035), `telnet` (#1033) and `ssh` (#1032), a server-sent events
+stream over `http` and `https` (#1038), and a socket over `websocket` and `wss` (#1034)), or any driver poll over `tls`, `telnet`, `ssh`, `websocket` or `wss`, or a driver poll whose driver declares a `session` block (a login a
 throwaway connection would skip, #1049), keyed by the endpoint's id, which the worklist carries
 beside its name (endpoint names are unique only per component). The machine runs on its own:
 
@@ -411,6 +416,8 @@ the endpoint's `params` JSON, unmarshalled on the node:
 | `telnet` | inline probe | `target` (`host:port`), `timeout` | the tcp pair, `telnet-response-time` (the first negotiation or banner bytes), `endpoint-responsive`; the login is the held session's auth step, never the probe's |
 | `ssh` | inline probe | `target` (`host:port`), `timeout`, optional `username`/`password` (secret references arrive with the driver spec) | the tcp pair, `ssh-handshake-time`, `endpoint-responsive`, `endpoint-authenticated` (only when a credential was tried) |
 | `tls` | inline probe | `target` (`host:port`), `timeout`, `tls-mode` (`verify`, `pin` or `skip`; derived from the driver's `tls-mode` input, verify when unset) | the tcp pair, `tls-handshake-time` (one per probe the component answered), `endpoint-responsive`, and for a certificate the mode accepted `tls-certificate-expiry` and `tls-certificate-days-left` |
+| `websocket` | inline probe | as `http` | as `http`: a credential-free `GET /` is the rung, so reachability stays observed beneath a refused upgrade (#1034) |
+| `wss` | inline probe | as `https` | as `https`: the handshake is the rung, then a credential-free `GET /` |
 | `udp` | the driver's request rung | `target` (`host:port`), `timeout`, `listen-port` (derived from the driver's `listen-port` input; unset, the node picks one) | `endpoint-responsive` (here the verdict too), `udp-response-time` (one per probe the component answered); never `tcp-open`. A bare `udp` endpoint has no request to send and lands nothing |
 
 The `raw-tcp` row below is built in its driver form: the line protocol over `tcp` holds a session
@@ -446,8 +453,8 @@ Built (#1035,
 `tls` is the line protocol over a TLS connection, its own transport rather than an option on `tcp`, since an
 endpoint is named by its transport (a component holds a raw control port and a TLS one side by side)
 and its rung is the handshake. The handshake is one primitive: `https` consumes it as its own
-registry entry by the same rule ([http and https](#http-and-https)), and the websocket and mqtt
-carriers consume it later. Each connection, the held session's and the probe's,
+registry entry by the same rule ([http and https](#http-and-https)), as does `wss`
+([websocket and wss](#websocket-and-wss)), and the mqtt carrier consumes it later. Each connection, the held session's and the probe's,
 runs the TCP connect and then the handshake under the endpoint's **verification mode**, its driver's
 `tls-mode` input, edited in place like a host or a port:
 
@@ -747,6 +754,85 @@ lands within a second with no poll; a dropped stream reads recovering and resume
 once; a wrong password reads rejected with its reason, sent once under the fingerprint, across a
 restart; the secret fixed in place brings it back; a stream behind a form login logs in first).
 
+#### websocket and wss
+
+Built (#1034, [ADR-1034](/architecture/decisions/#adr-1034-a-websocket-is-a-held-session-of-text-frames-and-a-reply-is-matched-by-a-minted-id)):
+many components' control APIs are a websocket, one socket carrying a subscription's pushes and the
+answers to requests at once. `websocket` holds it, and `wss` holds it over the shared TLS handshake
+(its own registry entry, its key pinned on first use and trusted again with `:retry` and
+`certificate`, as `tls` and `https` are). A message is a **text frame**, routed by the precedence a
+line session's is ([below](#listeners-over-a-held-session)), and a request is a frame: a
+`line` sent verbatim, or a JSON `body` rendered injection-safe as an http body is (a whole-leaf
+`${value}` keeps its type).
+
+```yaml
+transport: wss
+session:
+  credential: login
+  scheme: basic                          # basic, bearer or api-key; or an http login
+  upgrade: { path: /api/ws }             # a GET: its path, query and headers
+listeners:
+  - name: volume-change
+    arm: ['{"type":"subscribe","paths":["status.audio.volume"]}']
+    match: { field: { path: path, equals: status.audio.volume } }
+    emits:
+      - { name: volume, extract: { jsonpath: value } }
+polls:
+  - name: volume
+    schedule: { every: 60s }
+    request: { body: { type: get, path: status.audio.volume }, reply: { correlate: id, error: { regex: '"type":"error"' } } }
+    emits:
+      - { name: volume, extract: { jsonpath: value } }
+```
+
+**The upgrade is the auth step.** The socket is a held session through the staged dialer every
+held session uses: the connect is the TCP connect (and the handshake over `wss`), the auth step logs
+in first when the session declares an http login, then sends the upgrade, a `GET` built as every
+http request is (`session.upgrade`'s path, the root when none is declared, its query and headers,
+the scheme's credential, the login's session headers and its cookies), and reads the answer through
+a 64 KiB head bound. A `101` that completes the opening handshake opens the socket. The upgrade is
+one request, so a `401` or a `403` to it refuses the session as a terminal `auth` (a credential
+refused, one the component wants and the driver does not send, or an origin it will not admit),
+where the status table lets a request's `403` fault that request alone; a lapsed login logs in once
+more and upgrades again; anything else (a `200` from a web page, a `404`) is a failed attempt on the
+session's backoff. `digest` is refused at validation, since it answers a challenge per request.
+`session-state`, `session-reason` and `endpoint-authenticated` land as for any held session, and
+the socket coming up lifts the endpoint's gate.
+
+**A reply is matched by a minted id.** A request whose `reply` declares `correlate: <field>` (a
+dotted path of object keys, on a JSON object body) has a fresh random id written into that field by
+the node when it sends the frame (at execute, so a redelivered command never reuses one), and its
+answer is the frame carrying the id back: a push before it goes to the listeners, and another
+request's answer is never taken for it. Its `error` shape answers only a frame carrying its id. A
+reply may instead declare a `prefix` or a `regex`, as a line's does, or a JSON `field` match (on any
+held line session). A correlated or shaped request that gets no answer in time fails alone, the
+socket kept; an unshaped one recycles the socket, since its late answer would answer the next.
+
+**Keepalive, bounds and the probe.** The node pings every 30 s and the socket is dead when it hears
+neither a frame nor a pong for two intervals, so a component that stops answering reads
+`recovering` without waiting for a poll. A frame past 1 MiB is read off the wire, dropped and named
+unclaimed, and the socket reads on; a binary frame is named unclaimed, since a listener reads text.
+The node sends no `Origin`; a component that admits only its own pages takes one from
+`session.upgrade`'s headers (which may not set `Upgrade`, `Connection` or a `Sec-WebSocket-*`
+header the handshake owns, bar a subprotocol). The probe is http's (`https`'s over `wss`): a
+credential-free `GET /` whose answer, any status, is the transport rung, so reachability stays
+observed beneath a refused upgrade.
+
+The seeded `kestrel-ws` holds the simulated Kestrel bar's control socket over `wss`: its subscribe
+armed on every connection, its call, volume, mute and power pushed as they change, polls and the
+`set-volume` and `set-mute` commands answered by their ids (a command settling from its answer).
+Proven by the driver's validation and correlation tests (`internal/driver/websocket_test.go`), over
+real sockets (`internal/collection/websocket_integration_test.go`: an arm on connect, pushes to the
+listeners, an exchange answered by its id past a push and another id's answer, a refusal carrying
+the id, a drop recovered and armed again, a wrong credential refused once whether `401` or `403`,
+basic, bearer and both api-key placements, a form login first and again on a lapse, a silent
+component caught by the keepalive, an oversize and a binary frame dropped, a pinned key, the head
+bound and a redacted key), in the simulator's websocket face, and end to end
+(`internal/node/run_websocket_test.go`: the subscription armed on connect, a change on the bar
+landing within a second, a command settled from the answer to its id, a drop recovered and armed
+again, a wrong password rejected after one upgrade across a restart and fixed in place, and a
+replaced bar's key held beneath the certificate gate until `:retry` trusts it).
+
 #### udp
 
 Built (#1037, [ADR-0163](/architecture/decisions/#adr-0163-a-udp-endpoint-binds-its-own-socket-and-its-rung-is-a-request-answered)):
@@ -836,12 +922,13 @@ silent and never rejected, the refused community gated and not sent again until 
 rotated, a stopped agent down), with loss injected through the impairments under NET_ADMIN.
 
 The other held transports are each their own
-issue: #1034 (websocket), #1036 (mqtt), #1039 (modbus/tcp), #1040 (bacnet/ip), #1041 (knxnet/ip); a
-server-sent events stream is held over http and https ([above](#a-server-sent-events-stream)). There is no serial transport: an RS-232 or RS-485 device is reached
+issue: #1036 (mqtt), #1039 (modbus/tcp), #1040 (bacnet/ip), #1041 (knxnet/ip); a
+server-sent events stream is held over http and https ([above](#a-server-sent-events-stream)), and a
+socket over websocket and wss ([above](#websocket-and-wss)). There is no serial transport: an RS-232 or RS-485 device is reached
 through an IP-to-serial gateway, which is the `tcp` transport (or `tls` or `telnet`), so its driver is
 a line protocol like any other ([ADR-0153](/architecture/decisions/#adr-0153-the-held-session-proof-is-the-line-protocol-over-tcp-other-held-transports-are-their-own-issues)).
 
-:::design[The remaining transports and their per-task spec, tracked in #603 and #1034 (websocket), #1036 (mqtt), #1039 (modbus/tcp), #1040 (bacnet/ip), #1041 (knxnet/ip)]
+:::design[The remaining transports and their per-task spec, tracked in #603 and #1036 (mqtt), #1039 (modbus/tcp), #1040 (bacnet/ip), #1041 (knxnet/ip)]
 
 | endpoint type | shape | host/target | per-task params | samples |
 |---|---|---|---|---|
@@ -851,7 +938,7 @@ a line protocol like any other ([ADR-0153](/architecture/decisions/#adr-0153-the
 
 `icmp`/`tcp` are inline probes (config on `endpoint.params`); `snmp` is built as its own stateless transport, configured by its driver's inputs ([snmp](#snmp)), and `http` and `https` as request transports configured by their driver's spec, a declared stream held as a session ([http and https](#http-and-https)); the rest, in the design model, are held connections: the connection lives on the endpoint, the task names what to read. The ship-with registry seeds the probe built-ins above, the endpoint verdicts, and `session-state` (`internal/seed/metric_types.yaml`, `internal/seed/property_types.yaml`; the [metrics](/guides/admin/metrics/) and [properties](/guides/admin/properties/) guides render each set from the seed); the wider per-transport set (`<proto>-reachable`/`<proto>-response-time` for the remaining text family; an http answer's status is a poll fault's reason, never a sample of its own; `telnet-response-time`, `udp-response-time` and `snmp-response-time` are seeded, and there is no `udp-open`, since an open udp port cannot be detected) is Design, and unregistered names would be reject-not-project dropped at ingest.
 
-:::design[The held-connection transports in detail, tracked in #603 and #1034 (websocket), #1036 (mqtt), #1039 (modbus/tcp), #1040 (bacnet/ip), #1041 (knxnet/ip)]
+:::design[The held-connection transports in detail, tracked in #603 and #1036 (mqtt), #1039 (modbus/tcp), #1040 (bacnet/ip), #1041 (knxnet/ip)]
 
 For `snmp`, each OID keeps its **native SNMP type**: numeric OIDs land as `metric`, string OIDs
 (OctetString / IPAddress / OID) as `property`, the lane decided at ingest by catalog membership;
@@ -894,9 +981,11 @@ node runs every listen task on an endpoint over that endpoint's one held session
   attempt, while the connection dying during the arm does.
 - **Match** (`prefix` or `regex`): classifies an inbound line. Listeners are offered a line in
   function-name order and the first whose rule picks it claims it. The unit is a **message**
-  (#1038): a line on a line session, an event on an http stream, which a match may also claim by
-  its event name (`event`) or by a JSON field of its data (`field: { path, equals | regex }`)
-  ([a server-sent events stream](#a-server-sent-events-stream)).
+  (#1038): a line on a line session, an event on an http stream, a text frame on a websocket
+  (#1034), which a match may also claim by its event name (`event`, a stream's only) or by a JSON
+  field of its data (`field: { path, equals | regex }`)
+  ([a server-sent events stream](#a-server-sent-events-stream)). An arm is sent as one line (one
+  frame), so it carries no line break.
 - **Extraction**: the claimed line runs through the same emit shape a poll's answer does (locate,
   transform, type by the baked lane), and lands at once as a sample under the listen task: the
   component owns it, the endpoint is its instance, and no poll schedule is involved. A claimed line
@@ -908,7 +997,8 @@ Every inbound line on a held session is routed by one precedence
 1. A line a listener claims is the listener's. It is never an exchange's answer, unless the
    exchange declared a reply shape the line matches, in which case both have it.
 2. An exchange in flight (a poll, a command) takes the first line its declared reply shape
-   (`request.reply`, a `prefix` or `regex`) matches, or, when it declares none, the first line no
+   (`request.reply`, a `prefix`, a `regex`, a JSON `field`, or over a websocket the `correlate`d
+   id, [below](#websocket-and-wss)) matches, or, when it declares none, the first line no
    listener claims. When the shape also declares an `error` shape, an unclaimed line matching it
    answers the exchange as a **refusal** carrying the device's text. A line that began before the
    request was written is never its answer.
