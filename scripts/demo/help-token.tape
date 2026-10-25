@@ -22,13 +22,19 @@ Enter
 Wait
 Sleep 2s
 
-Type "# Search every page of help below for the token itself"
+Type "# Five pages of help: the root, a generated command, a secret's, a public one, a hand-written one"
 Enter
 Wait
-Type `for c in "" "component list" "secret reveal" "node claim" "bootstrap"; do omniglass $c --help; done | wc -l`
+Type `pages() { for c in "" "component list" "secret reveal" "node claim" "bootstrap"; do omniglass $c --help; done; }`
 Enter
 Wait
-Type `! (for c in "" "component list" "secret reveal" "node claim" "bootstrap"; do omniglass $c --help; done | grep -qF "$OMNIGLASS_TOKEN") && echo "the token appears on none of them"`
+Type `pages | grep -c -- '--token string'`
+Enter
+Wait
+Type "# Search them for the token itself"
+Enter
+Wait
+Type `test "$(pages | grep -cF "$OMNIGLASS_TOKEN" || true)" = 0 && echo "the token appears on none of them"`
 Enter
 Wait
 Sleep 2s
@@ -36,7 +42,7 @@ Sleep 2s
 Type "# Shell completion describes the flag the same way"
 Enter
 Wait
-Type `omniglass __complete component list -- | grep -- --token`
+Type `omniglass __complete component list -- 2>/dev/null | grep -- --token`
 Enter
 Wait
 Sleep 1s
@@ -44,7 +50,7 @@ Sleep 1s
 Type "# And the token still authenticates, read when the command runs"
 Enter
 Wait
-Type `omniglass auth me | jq -c '{username}'`
+Type `omniglass auth me | jq -c '{username: .human.username}'`
 Enter
 Wait
 Sleep 3s
