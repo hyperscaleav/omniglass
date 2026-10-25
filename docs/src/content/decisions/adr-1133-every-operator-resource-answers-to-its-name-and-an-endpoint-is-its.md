@@ -80,9 +80,10 @@ refs: [1133]
   1. **A bare name lands on whatever single row the caller can see by it.** A secret rotation by a
      bare name, where the row the operator meant is gone and another principal has sealed a secret of
      that name within the caller's view, rotates that other secret. That is the positional honesty
-     ADR-0089 already accepts for a dotted path, and the mitigation is the same: the write answers
-     with the owner it landed on (`owner_kind`, `owner_id`, `owner_name`), and automation that must
-     not drift addresses `<owner>/<name>` or the uuid. Refusing a bare name on a write would have
+     ADR-0089 already accepts for a dotted path, and the mitigation is the same: an update answers
+     with the owner it landed on (`owner_kind`, `owner_id`, `owner_name`; a delete has no body to
+     answer with), after the fact, and automation that must not drift addresses `<owner>/<name>` or
+     the uuid. Refusing a bare name on a write would have
      broken the acceptance this decision was built to (`omniglass secret update demo-panel-login`).
   2. **A qualified name's slash crosses every hop percent-encoded.** The server decodes it; whether
      the chart's default Traefik ingress passes it through is unverified and tracked as #1138. The

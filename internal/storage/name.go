@@ -64,3 +64,10 @@ var uuidRe = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4
 // the dual-accept disambiguation: a name cannot take this shape, so a match here
 // means the caller gave an id.
 func isUUID(ref string) bool { return uuidRe.MatchString(ref) }
+
+// IsUUID reports whether ref is the canonical uuid form every resolver tries
+// first. A caller that must decide "uuid or name" the way the gateway will
+// (the principal routes' directory check, #1133) uses this rather than a
+// lenient parser, which also reads 32 bare hex digits, a legal username, as a
+// uuid.
+func IsUUID(ref string) bool { return isUUID(ref) }

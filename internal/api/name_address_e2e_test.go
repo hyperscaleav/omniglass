@@ -266,12 +266,18 @@ func TestPrincipalNameNeedsTheDirectoryAPI(t *testing.T) {
 	roomA := entityID(t, s.c, s.owner, "/locations", "room-a")
 	siteAdmin := principalWithGrants(t, s.ctx, s.dsn, "site-admin", []grant{{role: "admin", scopeKind: "location", scopeID: roomA}})
 
+	// A username may be 32 hex digits, which a lenient uuid parser reads as a
+	// uuid without hyphens; it is a name all the same, refused like any other.
+	s.c.do(s.owner, http.MethodPost, "/principals", map[string]any{"username": "0123456789abcdef0123456789abcdef", "password": "orange-boat-42x"}, http.StatusCreated)
 	refusal := func(ref, verb, method string) string {
 		t.Helper()
 		return string(s.c.do(siteAdmin, method, "/principals/"+ref+verb, nil, http.StatusForbidden))
 	}
 	want := refusal("nobody", "", http.MethodGet)
-	for _, ref := range []string{"alice", "deploy-bot"} {
+	if got := refusal("fedcba9876543210fedcba9876543210", "", http.MethodGet); got != want {
+		t.Errorf("an absent 32-hex username refuses %s, want %s", got, want)
+	}
+	for _, ref := range []string{"alice", "deploy-bot", "0123456789abcdef0123456789abcdef"} {
 		if got := refusal(ref, "", http.MethodGet); got != want {
 			t.Errorf("a scoped admin's GET /principals/%s = %s, want the same refusal as a name that does not exist (%s)", ref, got, want)
 		}

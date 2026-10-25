@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/danielgtaylor/huma/v2"
-	"github.com/google/uuid"
 	"github.com/hyperscaleav/omniglass/internal/auth"
 	"github.com/hyperscaleav/omniglass/internal/avatar"
 	"github.com/hyperscaleav/omniglass/internal/storage"
@@ -691,7 +690,7 @@ func normalizeAvatar(imageB64 string) (string, error) {
 // same all-scope 403 for every name. A uuid passes straight through, and the
 // gateway decides it exactly as before.
 func (a *authenticator) resolvePrincipalRef(ctx context.Context, ref string) (string, error) {
-	if _, err := uuid.Parse(ref); err != nil && !a.canListPrincipals(ctx) {
+	if !storage.IsUUID(ref) && !a.canListPrincipals(ctx) {
 		return "", mapPrincipalErr(storage.ErrPrincipalForbidden)
 	}
 	id, err := a.gw.ResolvePrincipalRef(ctx, ref)
