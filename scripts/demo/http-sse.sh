@@ -20,6 +20,8 @@
 #      reason, then fixes the secret in place and shows it recover.
 #
 # Usage: scripts/demo/http-sse.sh [--skip-build]
+# SHOTS=<dir> also captures the console's view of the bar's endpoint (its
+# session pill up, then rejected) into that directory.
 # Needs: go, node/npm (for the embedded console, unless --skip-build), docker,
 # jq, curl. Leaves nothing running; its scratch directory is printed at the
 # end. Nothing is listening on 127.60.0.0/16 when it starts (a make dev-sim
@@ -120,6 +122,14 @@ wait_reach() {
 	return 1
 }
 latest_volume() { $OG component metric sample list "$BAR" volume --limit 1 | jq -r '.samples[0].value // empty'; }
+# shot captures the bar's component page in the console when SHOTS is set.
+shot() {
+	[ -n "${SHOTS:-}" ] || return 0
+	mkdir -p "$SHOTS"
+	local id
+	id=$($OG component get "$BAR" | jq -r .id)
+	(cd web && node e2e/shot.mjs "$SERVER/web/components/$id" "$SHOTS/$1" --token "$OMNIGLASS_TOKEN" --wait 2500 --full >/dev/null 2>&1) || echo "(screenshot $1 failed)"
+}
 wait_volume() {
 	local i
 	for i in $(seq 1 200); do
@@ -142,6 +152,7 @@ run "$OG secret create --name demo-bar-login --owner-kind platform --secret-type
 run "$OG endpoint create --component '$BAR' --driver kestrel-feed --node edge-hq --label 'Bar live feed' --inputs '{\"host\":\"$ADDR\",\"port\":\"10443\",\"login\":\"demo-bar-login\"}' | jq -c '{component, name, driver, label, inputs}'"
 wait_reach '.session == "up"'
 run "$OG component reachability list '$BAR' | jq -c '$REACH'"
+shot sse-session-up.png
 
 say "2. A change on the bar lands within a second, with no poll"
 echo "(kestrel-feed polls only the bar's system document, every 5m; the volume can only arrive on the stream)"
@@ -172,6 +183,7 @@ say "4. A wrong password: the stream reads rejected, with its reason"
 run "$OG secret update \$($OG secret list | jq -r '.secrets[] | select(.name == \"demo-bar-login\") | .id') --fields '{\"password\":\"wrong-password\"}' | jq -c '{name, fields: [.fields[] | {name, value}]}'"
 wait_reach '.session == "rejected"'
 run "$OG component reachability list '$BAR' | jq -c '$REACH'"
+shot sse-session-rejected.png
 echo "(waiting 10s: the stream does not try again under the fingerprint, and the polls are held beneath the same gate)"
 sleep 10
 run "grep -c 'msg=\"session rejected\".*endpoint=https' $SCRATCH/node.log"

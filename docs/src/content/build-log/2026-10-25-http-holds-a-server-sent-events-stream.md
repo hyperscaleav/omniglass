@@ -15,7 +15,9 @@ staged dialer: it connects (and runs the handshake over https), logs in first wh
 declares a login, sends the stream request with the scheme's credential, the login's session, the
 cookies and the Last-Event-ID, and judges the answer's head; the reader feeds the WHATWG
 event-stream interpretation (`internal/collection/sse.go`). A drop resumes from the last event id
-after the server's retry, held to the backoff's bounds, and an event already landed is dropped. The
+after the server's retry, held to the backoff's bounds (the last id carried across a reconnect that
+saw no event), and the event a resume is sent again first is dropped; an adversarial review shaped
+the bounds on a held answer, an id, an oversize event and the head. The
 node holds an http endpoint's stream as its session, sharing the endpoint's learned auth and a
 resume that outlives a recycle; a stream refusal gates the polls, a poll's refusal stops the stream,
 and the polls wait for the stream's first verdict under a fingerprint. The registry's `http` and

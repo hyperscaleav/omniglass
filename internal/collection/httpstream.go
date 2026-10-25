@@ -44,6 +44,10 @@ type HTTPStreamAuth struct {
 	Fetcher    HTTPFetcher
 	TLS        *TLSTrust
 	Resume     *StreamResume
+	// Gate is the endpoint's gate, checked before every attempt sends
+	// anything: a refusal a poll or a command met holds the stream's
+	// reconnect too, under the same fingerprint. Nil checks none.
+	Gate func() *TerminalError
 }
 
 // credentialed reports a stream whose every connection carries a
@@ -96,10 +100,42 @@ type pendingStream struct {
 	timeout time.Duration
 	trust   *TLSTrust
 	conn    net.Conn
+	head    *headLimit
 	br      *bufio.Reader
 	resp    *http.Response
 	format  string
 	resume  *StreamResume
+	// resumedFrom is the Last-Event-ID the open request sent: the one event
+	// a server's replay may send again.
+	resumedFrom string
+}
+
+// maxStreamHead bounds an answer's head: a stream's head is a few headers,
+// and a hostile component cannot make the node hold more.
+const maxStreamHead = 64 << 10
+
+// headLimit bounds the bytes read off a connection until it is lifted:
+// the answer's head is read through it, the stream's body after it with no
+// bound but the parser's.
+type headLimit struct {
+	r       io.Reader
+	n       int64
+	limited bool
+}
+
+func (h *headLimit) Read(b []byte) (int, error) {
+	if !h.limited {
+		return h.r.Read(b)
+	}
+	if h.n <= 0 {
+		return 0, fmt.Errorf("the answer's head exceeds %d bytes", maxStreamHead)
+	}
+	if int64(len(b)) > h.n {
+		b = b[:h.n]
+	}
+	n, err := h.r.Read(b)
+	h.n -= int64(n)
+	return n, err
 }
 
 // dial makes the connection: the TCP connect, then the handshake for https.
@@ -120,7 +156,9 @@ func (p *pendingStream) dial(ctx context.Context) error {
 		}
 		c = tc
 	}
-	p.conn, p.br = c, bufio.NewReader(c)
+	p.conn = c
+	p.head = &headLimit{r: c, n: maxStreamHead, limited: true}
+	p.br = bufio.NewReader(p.head)
 	return nil
 }
 
@@ -161,6 +199,11 @@ func (p *pendingStream) Authenticate(ctx context.Context, auth *SessionAuth, _ C
 	if timeout <= 0 {
 		timeout = p.timeout
 	}
+	if a.Gate != nil {
+		if terr := a.Gate(); terr != nil {
+			return terr
+		}
+	}
 	r := &Runner{HTTPFetch: a.Fetcher}
 	x := HTTPExchange{Target: p.target, TLS: a.TLS, Request: a.Request, Credential: a.Credential, Session: a.Session, Timeout: timeout, State: a.State}
 	login := a.Session != nil && a.Session.Login != nil
@@ -192,16 +235,27 @@ func (p *pendingStream) Authenticate(ctx context.Context, auth *SessionAuth, _ C
 		sx := x
 		sx.SessionHeaders = headers
 		sx.Redact = a.State.redactions()
+		// The attempt's deadline holds from the request through a refusal's
+		// body, and the session's end cuts it short; only an opened stream
+		// reads with no deadline.
+		conn := p.conn
+		_ = conn.SetDeadline(time.Now().Add(timeout))
+		stop := context.AfterFunc(ctx, func() { _ = conn.SetDeadline(time.Now()) })
 		resp, answered, nonce, err := p.send(ctx, sx, a, login, digest)
 		if err != nil {
+			stop()
 			return err
 		}
 		if resp.StatusCode == http.StatusOK && isEventStream(resp.Header) {
+			stop()
+			_ = conn.SetDeadline(time.Time{})
+			p.head.limited = false
 			p.resp = resp
 			return nil
 		}
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, refusedStreamBodyCap))
 		_ = resp.Body.Close()
+		stop()
 		if login {
 			a.State.cookieJar().SetCookies(resp.Request.URL, resp.Cookies())
 		}
@@ -256,8 +310,9 @@ func (p *pendingStream) send(ctx context.Context, x HTTPExchange, a *HTTPStreamA
 	}
 	req.Header.Set("Accept", "text/event-stream")
 	req.Header.Set("Cache-Control", "no-cache")
-	if id := a.Resume.LastID(); id != "" {
-		req.Header.Set("Last-Event-ID", id)
+	p.resumedFrom = a.Resume.LastID()
+	if p.resumedFrom != "" {
+		req.Header.Set("Last-Event-ID", p.resumedFrom)
 	}
 	if login {
 		for _, c := range a.State.cookieJar().Cookies(req.URL) {
@@ -269,13 +324,11 @@ func (p *pendingStream) send(ctx context.Context, x HTTPExchange, a *HTTPStreamA
 			return nil, false, "", err
 		}
 	}
-	_ = p.conn.SetDeadline(time.Now().Add(x.Timeout))
 	wrote := false
 	if err = req.Write(p.conn); err == nil {
 		wrote = true
 		resp, err = http.ReadResponse(p.br, req)
 	}
-	_ = p.conn.SetDeadline(time.Time{})
 	if err != nil {
 		return nil, false, "", redactedRequestError(req, x, err, wrote)
 	}
@@ -296,7 +349,7 @@ func (p *pendingStream) Open(in Inbound, _ ChannelOptions) (HeldConn, error) {
 	if p.resp == nil {
 		return nil, errors.New("collection: the stream opened with no answer")
 	}
-	c := &streamConn{conn: p.conn, body: p.resp.Body, in: in, format: p.format, resume: p.resume, done: make(chan struct{})}
+	c := &streamConn{conn: p.conn, body: p.resp.Body, in: in, format: p.format, resume: p.resume, resumedFrom: p.resumedFrom, done: make(chan struct{})}
 	go c.read()
 	return c, nil
 }
@@ -316,6 +369,12 @@ type streamConn struct {
 	in     Inbound
 	format string
 	resume *StreamResume
+	// resumedFrom is the Last-Event-ID this connection resumed from: a
+	// server that replays from that event (it included) sends it again as
+	// its first, which is dropped. Nothing else can be a duplicate: every
+	// event after it was never landed, and a later event carrying the same
+	// id (a component that rebooted and counts again) is new.
+	resumedFrom string
 
 	once sync.Once
 	done chan struct{}
@@ -354,15 +413,21 @@ func (c *streamConn) die(err error) {
 	})
 }
 
-// read is the reader goroutine: lines in, events out. The last event ID
-// moves at every dispatch, an event whose own id was already landed is
-// dropped, and anything the stream ends with is why the connection died.
+// read is the reader goroutine: lines in, events out. The parser starts
+// from the last event ID the stream was sent, so a connection that drops
+// before its first event resumes from the same place; the last event ID
+// moves at every dispatch; the replayed event a resume was sent again is
+// dropped; an event past the data cap is dropped whole (its id still
+// counts) and named unclaimed; and anything the stream ends with is why the
+// connection died.
 func (c *streamConn) read() {
 	defer func() { _ = c.body.Close() }()
 	br := bufio.NewReader(c.body)
-	p := &sseParser{}
+	last := c.resume.LastID()
+	p := &sseParser{idBuffer: last, lastEventID: last}
+	skip := c.resumedFrom
 	for {
-		line, err := readSSELine(br, maxSSELine)
+		line, truncated, err := readSSELine(br, maxSSELine)
 		if err != nil {
 			if errors.Is(err, io.EOF) {
 				err = errors.New("the component ended the stream")
@@ -370,27 +435,33 @@ func (c *streamConn) read() {
 			c.die(err)
 			return
 		}
-		ev, ok, err := p.line(line)
-		if err != nil {
-			c.die(err)
-			_ = c.conn.Close()
-			return
-		}
+		ev, ok := p.feed(line, truncated)
 		if p.retrySet {
 			c.resume.setRetry(p.retry)
 		}
-		if line == "" {
+		if line == "" && !truncated {
 			c.resume.setLastID(p.lastEventID)
 		}
 		if !ok {
 			continue
 		}
-		if ev.hasID && ev.id != "" && !c.resume.land(ev.id) {
-			continue // a replay of an event this stream already landed
+		// A replay comes first: only the connection's first event can be
+		// the one it resumed from, sent again.
+		again := skip != "" && ev.hasID && ev.id == skip
+		skip = ""
+		if again {
+			continue
 		}
 		msg := driver.Message{Data: ev.data, Event: ev.event, Format: c.format}
 		if ev.hasID {
 			msg.ID = ev.id
+		}
+		if ev.oversize {
+			msg.Data = fmt.Sprintf("(an event past %d bytes, dropped)", maxSSEData)
+			if c.in != nil {
+				c.in.Unclaimed(msg)
+			}
+			continue
 		}
 		if c.in != nil && !c.in.Claim(msg) {
 			c.in.Unclaimed(msg)

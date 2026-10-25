@@ -2,7 +2,6 @@ package collection
 
 import (
 	"bufio"
-	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -18,15 +17,11 @@ func parseAll(t *testing.T, stream string) ([]sseEvent, *sseParser) {
 	br := bufio.NewReader(strings.NewReader(stream))
 	var out []sseEvent
 	for {
-		line, err := readSSELine(br, 1<<10)
+		line, truncated, err := readSSELine(br, 1<<10)
 		if err != nil {
 			return out, p
 		}
-		ev, ok, err := p.line(line)
-		if err != nil {
-			t.Fatalf("line %q: %v", line, err)
-		}
-		if ok {
+		if ev, ok := p.feed(line, truncated); ok {
 			out = append(out, ev)
 		}
 	}
@@ -86,29 +81,48 @@ func TestSSEParserReadsTheSpecExamples(t *testing.T) {
 }
 
 func TestSSEParserBoundsWhatAComponentCanMakeItHold(t *testing.T) {
+	// An event past the data cap is dropped whole, its id still counted,
+	// and the stream reads on: one oversize event never wedges it.
 	p := &sseParser{maxData: 16}
-	if _, _, err := p.line("data: " + strings.Repeat("x", 32)); err == nil {
-		t.Fatal("an event past the data cap was kept")
+	evs := []sseEvent{}
+	for _, l := range []string{"id: 3", "data: " + strings.Repeat("x", 32), "data: more", "", "id: 4", "data: small", ""} {
+		if ev, ok := p.feed(l, false); ok {
+			evs = append(evs, ev)
+		}
 	}
-	br := bufio.NewReader(strings.NewReader(strings.Repeat("y", 64) + "\n"))
-	if _, err := readSSELine(br, 16); err == nil {
-		t.Fatal("a line past the line cap was read")
+	if len(evs) != 2 || !evs[0].oversize || evs[0].id != "3" || evs[0].data != "" || evs[1].oversize || evs[1].data != "small" {
+		t.Fatalf("events = %+v, want the oversize one dropped and the next whole", evs)
+	}
+	if p.lastEventID != "4" {
+		t.Fatalf("last event id = %q, want 4", p.lastEventID)
+	}
+	// A line past the line cap is read to its end and cut; the next line
+	// reads whole.
+	br := bufio.NewReader(strings.NewReader("data: " + strings.Repeat("y", 64) + "\nid: 5\n"))
+	line, truncated, err := readSSELine(br, 16)
+	if err != nil || !truncated || len(line) != 16 {
+		t.Fatalf("an oversize line = %q, %v, %v", line, truncated, err)
+	}
+	if line, truncated, err := readSSELine(br, 16); err != nil || truncated || line != "id: 5" {
+		t.Fatalf("the next line = %q, %v, %v", line, truncated, err)
+	}
+	// An id past its cap is ignored, never sent back as Last-Event-ID.
+	q := &sseParser{}
+	q.feed("id: "+strings.Repeat("i", maxSSEID+1), false)
+	q.feed("data: x", false)
+	if ev, ok := q.feed("", false); !ok || ev.hasID || q.lastEventID != "" {
+		t.Fatalf("an oversize id = %+v, last %q", ev, q.lastEventID)
 	}
 }
 
-func TestStreamResumeLandsAnIdOnce(t *testing.T) {
+func TestStreamResumeCarriesTheLastIDAndRetry(t *testing.T) {
 	r := NewStreamResume()
-	if !r.land("1") || r.land("1") || !r.land("2") {
-		t.Fatal("an id landed twice, or a new one was refused")
+	if r.LastID() != "" || r.Retry() != 0 {
+		t.Fatal("a new resume resumes from something")
 	}
-	for i := range maxResumeIDs + 10 {
-		r.land("id-" + strconv.Itoa(i))
-	}
-	if len(r.seen) > maxResumeIDs || len(r.order) > maxResumeIDs {
-		t.Fatalf("the resume holds %d ids, want at most %d", len(r.seen), maxResumeIDs)
-	}
+	r.setLastID("7")
 	r.setRetry(5 * time.Millisecond)
-	if r.Retry() != 5*time.Millisecond {
-		t.Fatalf("retry = %v", r.Retry())
+	if r.LastID() != "7" || r.Retry() != 5*time.Millisecond {
+		t.Fatalf("resume = %q, %v", r.LastID(), r.Retry())
 	}
 }

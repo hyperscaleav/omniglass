@@ -117,6 +117,23 @@ func TestStreamRefusals(t *testing.T) {
 	if err := term.Validate(httpCatalog()); err == nil {
 		t.Fatal("a terminal rule took a field match")
 	}
+	// Beside a status too: a field the status table would ignore never
+	// makes every such status terminal.
+	term.Session.Terminal[0].Status = 403
+	if err := term.Validate(httpCatalog()); err == nil {
+		t.Fatal("a status terminal rule took a field match")
+	}
+	ready := tokenLoginSpec()
+	ready.Session.Login.Ready = driver.Match{Field: &driver.FieldMatch{Path: "ok", Equals: "true"}}
+	if err := ready.Validate(httpCatalog()); err == nil {
+		t.Fatal("a login's ready took a field match")
+	}
+	// A stream is http's alone.
+	tcp := validSpec()
+	tcp.Session = &driver.SessionSpec{Stream: &driver.Request{Path: "/events"}}
+	if err := tcp.Validate(catalog()); err == nil || !strings.Contains(err.Error(), "stream") {
+		t.Fatalf("a stream over tcp = %v, want a refusal", err)
+	}
 }
 
 func TestAMatchReadsAMessage(t *testing.T) {

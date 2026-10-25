@@ -220,6 +220,9 @@ func (s *Spec) validateSession() error {
 		return nil
 	}
 	httpSession := IsHTTP(s.Transport)
+	if ss.Stream != nil && !httpSession {
+		return fmt.Errorf("driver: a session stream is a server-sent events stream over http; %q has none", s.Transport)
+	}
 	if (ss.Scheme != "" || ss.APIKey != nil) && !httpSession {
 		return fmt.Errorf("driver: a session scheme rides every http request; %q is not http", s.Transport)
 	}
@@ -285,7 +288,7 @@ func (s *Spec) validateSession() error {
 		if r.Status != 0 && (r.Status < 100 || r.Status > 599) {
 			return fmt.Errorf("driver: terminal rule %d status %d is not an http status (100 to 599)", i+1, r.Status)
 		}
-		if httpSession && r.Status != 0 && r.Match.Prefix == "" && r.Match.Regex == "" {
+		if httpSession && r.Status != 0 && r.Match == (Match{}) {
 			continue // a status alone is a whole rule over http
 		}
 		if err := validateMatch(fmt.Sprintf("terminal rule %d", i+1), r.Match); err != nil {

@@ -75,7 +75,10 @@ func runTasks(ctx context.Context, nc *nats.Conn, node string, wl collection.Wor
 				continue
 			}
 			sched.rebook(task.ID, task.Fingerprint)
-			sched.releaseRefused(task.ID, sessions.isUp(task.EndpointID))
+			// A poll that rides the held session is released when it comes
+			// up; an http poll is its own request, and an up stream beside it
+			// says nothing of what refused it (#1038).
+			sched.releaseRefused(task.ID, sessions.isUp(task.EndpointID) && !driver.IsHTTP(task.Transport))
 			if !sched.due(task.ID, interval, now) {
 				continue
 			}

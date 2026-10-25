@@ -496,9 +496,16 @@ type sessionManager struct {
 	// event id and the ids it landed, carried across a session's recycle
 	// (a fingerprint move) so a stream resumes where it left off, dropped
 	// when the endpoint leaves the worklist. Touched on the run loop only.
-	streamResumes map[string]*collection.StreamResume
+	streamResumes map[string]heldResume
 	// httpFetch sends a stream login's steps; nil is the real fetcher.
 	httpFetch collection.HTTPFetcher
+}
+
+// heldResume is an endpoint's stream resume and the target it was learned
+// from.
+type heldResume struct {
+	target string
+	resume *collection.StreamResume
 }
 
 // heldHTTPAuth is an endpoint's http auth state and the fingerprint it was
@@ -589,7 +596,7 @@ func newSessionManager(dialers map[string]collection.SessionDialer, hooks sessio
 	return &sessionManager{dialers: dialers, hooks: hooks, held: map[string]*heldSession{}, refused: map[string]string{}, pins: map[string]string{},
 		gates: newGates(), published: map[string]string{}, reasonSent: map[string]string{}, pubTask: map[string][2]string{}, certPins: map[string]*collection.HostKeyPin{},
 		datagrams: map[string]*heldDatagram{}, datagramRefused: map[string]string{}, httpAuth: map[string]heldHTTPAuth{},
-		streamResumes: map[string]*collection.StreamResume{}}
+		streamResumes: map[string]heldResume{}}
 }
 
 // syncCertPins brings each tls endpoint's pin to what the worklist
@@ -919,10 +926,20 @@ func (m *sessionManager) start(id string, w sessionWant) {
 			a.Fetcher = collection.NewHTTPFetcher()
 		}
 		a.TLS = trust
-		if m.streamResumes[id] == nil {
-			m.streamResumes[id] = collection.NewStreamResume()
+		// The resume is the endpoint's while it reaches the same component:
+		// a new target is another component, whose ids mean nothing here.
+		if held, ok := m.streamResumes[id]; !ok || held.target != w.conn.target {
+			m.streamResumes[id] = heldResume{target: w.conn.target, resume: collection.NewStreamResume()}
 		}
-		a.Resume = m.streamResumes[id]
+		a.Resume = m.streamResumes[id].resume
+		// A refusal a poll or a command met holds the stream's reconnects
+		// too, under the same fingerprint.
+		a.Gate = func() *collection.TerminalError {
+			if gt, ok := m.gates.blocked(id, rungAuthenticated); ok {
+				return gt.refusal()
+			}
+			return nil
+		}
 		w.auth = &collection.SessionAuth{HTTP: &a}
 	}
 	var rejected *collection.TerminalError
@@ -967,7 +984,9 @@ func (m *sessionManager) start(id string, w sessionWant) {
 				// refusal is the node's placeholder, #1110): a refusal met,
 				// a re-probe's under the same fingerprint included.
 				m.refuse(id, w.fingerprint, tr.Refusal)
-			case tr.State == collection.SessionUp:
+			case tr.State == collection.SessionUp && !driver.IsHTTP(w.conn.transport):
+				// An http stream coming up proves its own request only; a
+				// gate its endpoint's poll or command met stands (#1038).
 				m.pass(id)
 			}
 		},

@@ -182,7 +182,8 @@ Waiting for a frame is one mode (**listen**) regardless of transport; statefulne
 
 Built (#816): a session **holds its connection** across ticks. The node holds one per endpoint
 whose worklist carries a standing listen task over a transport with a session dialer (the line
-protocol over `tcp`, `tls` (#1035), `telnet` (#1033) and `ssh` (#1032)), or any driver poll over `tls`, `telnet` or `ssh`, or a driver poll whose driver declares a `session` block (a login a
+protocol over `tcp`, `tls` (#1035), `telnet` (#1033) and `ssh` (#1032), and a server-sent events
+stream over `http` and `https` (#1038)), or any driver poll over `tls`, `telnet` or `ssh`, or a driver poll whose driver declares a `session` block (a login a
 throwaway connection would skip, #1049), keyed by the endpoint's id, which the worklist carries
 beside its name (endpoint names are unique only per component). The machine runs on its own:
 
@@ -716,17 +717,24 @@ stream has no upstream, so its listeners declare no `arm`.
 
 **Resume.** The event-stream interpretation is the WHATWG standard's (`event`, `data`, `id`,
 `retry`, comments, every line terminator). A dropped stream reads `recovering` and reconnects with
-`Last-Event-ID`, the last event id it was sent, after the server's `retry` (held between 250 ms and
-30 s, the session backoff's bounds); an event whose own id the stream already landed is dropped, so a
-server that replays from that event (or before it) lands nothing twice. The resume lives with the
-endpoint in the node's memory, across a session's recycle, never persisted. A line or an event past
-1 MiB ends the connection with a reason.
+`Last-Event-ID`, the last event id it was sent (carried across a reconnect that saw no event), after
+the server's `retry` (held between 250 ms and 30 s, the session backoff's bounds). A server replays
+the events after that id, so nothing is lost and nothing comes twice; one that replays from that
+event, sending it again first, has that one event dropped. A component that reboots and numbers its
+events from 1 again has every new event land. The resume lives with the endpoint in the node's
+memory, across a session's recycle while the endpoint reaches the same address, never persisted. An
+event whose data passes 1 MiB is dropped whole (its id still counts, and it is named unclaimed) and
+the stream reads on; an id past 1 KiB is ignored; an answer's head is held to 64 KiB, and to the
+endpoint's timeout, as a refused answer's body is. A component must send the stream's head when it
+opens it: one that holds the head back until its first event never opens while quiet.
 
 **Beside polls.** The endpoint's polls and commands stay requests of their own. A refusal on the
 stream gates them through the one fingerprint gate; a refusal a poll or a command meets stops the
-stream too, which restarts rejected under the gate; and while the stream makes its first attempt
-under a fingerprint, the endpoint's polls wait for its verdict rather than sending the same
-credential beside it.
+stream too (it restarts rejected, and every reconnect checks the gate before it sends), and the
+stream coming up never lifts a gate one of them met; and while the stream makes its first attempt
+under a fingerprint, the endpoint's polls and commands wait for its verdict rather than sending the
+same credential beside it. A poll's own fault (a 404, a redirect) waits its interval, whatever the
+stream beside it reads.
 
 The seeded `kestrel-api` holds the simulated Kestrel bar's stream beside its polls: its call, volume,
 mute and power arrive the moment they change. Proven by the event-stream interpretation's tests

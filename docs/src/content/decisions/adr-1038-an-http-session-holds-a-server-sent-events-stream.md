@@ -3,7 +3,7 @@ title: "An http session holds a server-sent events stream, and a held connection
 date: 2026-10-25
 status: "Accepted"
 refs: [1038, 1113]
-summary: "An http session may declare `session.stream` (#1038, slice 3 of epic #1113): a GET held open as the endpoint's session through the staged dialer every held session uses, its auth step the session's scheme or login (shared with the endpoint's polls and commands), its events offered to the listeners. The held connection's unit widens from a line to a message (a line, an event, later a frame), and the router gains an event-name match and a JSON field match beside prefix and regex. A drop resumes with Last-Event-ID after the server's retry, held to the session backoff's bounds, and an event already landed is dropped. A stream refusal gates the polls, a poll's refusal stops the stream, and the polls wait for the stream's first verdict under a fingerprint"
+summary: "An http session may declare `session.stream` (#1038, slice 3 of epic #1113): a GET held open as the endpoint's session through the staged dialer every held session uses, its auth step the session's scheme or login (shared with the endpoint's polls and commands), its events offered to the listeners. The held connection's unit widens from a line to a message (a line, an event, later a frame), and the router gains an event-name match and a JSON field match beside prefix and regex. A drop resumes with Last-Event-ID (carried across a reconnect that saw no event) after the server's retry, held to the session backoff's bounds, and the replayed event a resume is sent again first is dropped. A stream refusal gates the polls, a poll's refusal stops the stream, and the polls wait for the stream's first verdict under a fingerprint"
 ---
 
 - **Date:** 2026-10-25 | **Status:** Accepted | **Pages:** [collection](/architecture/collection/), [nodes](/architecture/nodes/), [glossary](/architecture/glossary/), [drivers](/guides/admin/drivers/), [simulation](/architecture/simulation/)
@@ -31,16 +31,21 @@ summary: "An http session may declare `session.stream` (#1038, slice 3 of epic #
      the one extraction primitive in its format. Slice 4 extends a reply shape with the field match
      for its correlation.
   4. **Resume.** The event-stream interpretation is the WHATWG standard's. A dropped stream
-     reconnects with the last event id it was sent, after the server's `retry` held to the backoff's
-     bounds (250 ms to 30 s); an event whose own id the stream already landed (the last 1024
-     remembered) is dropped, so a replay duplicates nothing. The resume lives with the endpoint in
-     node memory, across a session's recycle, never persisted. A line or an event past 1 MiB ends
-     the connection.
+     reconnects with the last event id it was sent, carried across a reconnect that saw no event,
+     after the server's `retry` held to the backoff's bounds (250 ms to 30 s). A server replays the
+     events after that id; one that replays from it sends it again first, and that first event,
+     carrying the id the connection resumed from, is dropped. Nothing else can be a duplicate, so no
+     set of landed ids is kept: a component that reboots and counts from 1 again lands every new
+     event. The resume lives with the endpoint in node memory while it reaches the same address,
+     across a session's recycle, never persisted. An event past 1 MiB is dropped whole (its id
+     counted) and the stream reads on; an id past 1 KiB is ignored; an answer's head is held to 64
+     KiB and to the timeout, as a refused answer's body is.
   5. **Beside polls, through one gate.** The endpoint's polls and commands stay requests of their
      own and share the stream's learned auth (one login serves all). A stream refusal gates them; a
-     refusal a poll or a command meets stops the stream, which restarts rejected under the gate; and
-     while the stream makes its first attempt under a fingerprint, the polls wait for its verdict,
-     so a wrong credential is sent once, by the stream.
+     refusal a poll or a command meets stops the stream, which restarts rejected, and every stream
+     attempt checks the gate before it sends; the stream coming up lifts no gate; and while the
+     stream makes its first attempt under a fingerprint, the polls and commands wait for its
+     verdict, so a wrong credential is sent once, by the stream.
   6. **The simulated face.** An http face may declare `events`: every change to its named state
      paths is one numbered event, the last 256 kept, replayed from a reconnect's Last-Event-ID (the
      event itself included, as some servers resend it), behind the face's auth, with a console drop.

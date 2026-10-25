@@ -119,6 +119,17 @@ func TestEventsFaceStreamsEveryChangeAndReplays(t *testing.T) {
 	}
 	for range lines {
 	}
+	// The console cannot hold the stream: an operation answers once.
+	done := make(chan OperationResult, 1)
+	go func() { done <- dev.Operate(Operation{Kind: "http", Path: "/api/events"}) }()
+	select {
+	case res := <-done:
+		if res.Error == "" {
+			t.Fatalf("the console's read of the stream = %+v, want it refused", res)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("the console's read of the stream never returned")
+	}
 	// Changes while nobody listens are kept, and a reconnect from id 2
 	// replays 2 (the overlap) and then 3.
 	post(t, addr, "/api/power", `{"power":"off"}`)

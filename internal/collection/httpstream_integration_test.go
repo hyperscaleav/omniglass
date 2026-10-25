@@ -34,6 +34,11 @@ type sseComponent struct {
 	other    http.Handler // a login's paths
 	connects atomic.Int32
 	resumed  []string // the Last-Event-ID each connection sent
+	// strict replays only the events after a Last-Event-ID, as the
+	// standard asks, rather than that event again too.
+	strict bool
+	// raw, when set, is written instead of the next pushed event's lines.
+	raw string
 }
 
 func newSSEComponent(t *testing.T, retryMS int) (*sseComponent, string) {
@@ -54,6 +59,15 @@ func (c *sseComponent) push(event, data string) {
 		default:
 		}
 	}
+	c.mu.Unlock()
+}
+
+// restart forgets every event and ends every stream: a component that
+// reboots, its ids starting again at 1.
+func (c *sseComponent) restart() {
+	c.drop()
+	c.mu.Lock()
+	c.events = nil
 	c.mu.Unlock()
 }
 
@@ -91,6 +105,12 @@ func (c *sseComponent) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	from := len(c.events) + 1
 	if n, err := strconv.Atoi(last); err == nil {
 		from = n // an overlap of one: the last event comes again
+		if c.strict {
+			from = n + 1
+		}
+		if from > len(c.events)+1 {
+			from = len(c.events) + 1 // an id this component never sent
+		}
 	}
 	replay := []int{}
 	for id := from; id <= len(c.events); id++ {
@@ -437,5 +457,149 @@ func TestHTTPStreamThatIsNotAStreamIsNotARefusal(t *testing.T) {
 		if s.State == collection.SessionRejected {
 			t.Fatalf("a json answer rejected the session: %+v", s)
 		}
+	}
+}
+
+// A component that reboots numbers its events from 1 again: they land, as
+// new events, whatever ids the stream saw before.
+func TestHTTPStreamLandsARebootedComponentsEvents(t *testing.T) {
+	if testing.Short() {
+		t.Skip("real-socket integration test")
+	}
+	comp, target := newSSEComponent(t, 100)
+	in, tr := newHeard(), &transitions{}
+	sess := startStream(target, in, &collection.HTTPStreamAuth{Request: driver.Request{Path: "/events"}}, tr)
+	defer sess.Close()
+	tr.waitState(t, collection.SessionUp)
+	for i := 1; i <= 3; i++ {
+		comp.push("change", fmt.Sprintf(`{"n":%d}`, i))
+	}
+	in.waitFor(t, 3)
+	before := comp.connects.Load()
+	comp.restart()
+	deadline := time.Now().Add(5 * time.Second)
+	for comp.connects.Load() == before && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+	for i := 4; i <= 6; i++ {
+		comp.push("change", fmt.Sprintf(`{"n":%d}`, i))
+	}
+	got := in.waitFor(t, 6)
+	if got[3].ID != "1" || got[5].Data != `{"n":6}` {
+		t.Fatalf("after the reboot = %+v, want its events numbered from 1, every one landed", got[3:])
+	}
+}
+
+// A standard component replays only after the Last-Event-ID: a stream that
+// drops again before its next event still resumes from the same id, so
+// nothing in either gap is lost.
+func TestHTTPStreamKeepsItsLastIDAcrossAnEmptyReconnect(t *testing.T) {
+	if testing.Short() {
+		t.Skip("real-socket integration test")
+	}
+	comp, target := newSSEComponent(t, 100)
+	comp.strict = true
+	in, tr := newHeard(), &transitions{}
+	sess := startStream(target, in, &collection.HTTPStreamAuth{Request: driver.Request{Path: "/events"}}, tr)
+	defer sess.Close()
+	tr.waitState(t, collection.SessionUp)
+	comp.push("change", `{"n":1}`)
+	comp.push("change", `{"n":2}`)
+	in.waitFor(t, 2)
+	for range 2 {
+		comp.drop()
+		deadline := time.Now().Add(5 * time.Second)
+		before := comp.connects.Load()
+		for comp.connects.Load() == before && time.Now().Before(deadline) {
+			time.Sleep(10 * time.Millisecond)
+		}
+	}
+	comp.drop()
+	comp.push("change", `{"n":3}`)
+	got := in.waitFor(t, 3)
+	if got[2].ID != "3" {
+		t.Fatalf("after two empty reconnects = %+v, want event 3", got)
+	}
+	comp.mu.Lock()
+	defer comp.mu.Unlock()
+	for i, id := range comp.resumed[1:] {
+		if id != "2" {
+			t.Fatalf("reconnect %d resumed from %q, want 2: %q", i+1, id, comp.resumed)
+		}
+	}
+}
+
+// An event past the data cap is dropped (and named unclaimed), and the
+// stream reads on: the next event lands, and the stream never drops for it.
+func TestHTTPStreamDropsAnOversizeEventAndReadsOn(t *testing.T) {
+	if testing.Short() {
+		t.Skip("real-socket integration test")
+	}
+	comp, target := newSSEComponent(t, 100)
+	in, tr := newHeard(), &transitions{}
+	sess := startStream(target, in, &collection.HTTPStreamAuth{Request: driver.Request{Path: "/events"}}, tr)
+	defer sess.Close()
+	tr.waitState(t, collection.SessionUp)
+	comp.push("change", strings.Repeat("x", 2<<20))
+	comp.push("change", `{"n":2}`)
+	got := in.waitFor(t, 1)
+	if got[0].ID != "2" || comp.connects.Load() != 1 {
+		t.Fatalf("after an oversize event = %+v over %d connections, want event 2 on the one", got, comp.connects.Load())
+	}
+}
+
+// An answer that is not a stream, held open, is a failed attempt within the
+// timeout, never a session stuck establishing; and closing the session
+// returns at once.
+func TestHTTPStreamAHeldAnswerThatIsNotAStreamTimesOut(t *testing.T) {
+	if testing.Short() {
+		t.Skip("real-socket integration test")
+	}
+	release := make(chan struct{})
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/x-ndjson")
+		w.WriteHeader(http.StatusOK)
+		w.(http.Flusher).Flush()
+		select {
+		case <-release:
+		case <-r.Context().Done():
+		}
+	}))
+	defer srv.Close()
+	defer close(release)
+	tr := &transitions{}
+	sess := collection.StartSession(collection.SessionConfig{
+		Target: srv.Listener.Addr().String(), Timeout: 300 * time.Millisecond, Dialer: collection.NewHTTPStreamDialer(), Inbound: newHeard(),
+		Auth: &collection.SessionAuth{HTTP: &collection.HTTPStreamAuth{Request: driver.Request{Path: "/events"}}}, OnTransition: tr.on,
+		Backoff: func(int) time.Duration { return 10 * time.Millisecond },
+	})
+	down := tr.waitState(t, collection.SessionDown)
+	if !strings.Contains(down.Reason, "not text/event-stream") {
+		t.Fatalf("down = %+v, want the media type named", down)
+	}
+	closed := make(chan struct{})
+	go func() { sess.Close(); close(closed) }()
+	select {
+	case <-closed:
+	case <-time.After(3 * time.Second):
+		t.Fatal("closing the session hung on a held answer")
+	}
+}
+
+// A gate the endpoint holds stops the stream's attempt before it sends
+// anything.
+func TestHTTPStreamHonoursTheEndpointsGate(t *testing.T) {
+	if testing.Short() {
+		t.Skip("real-socket integration test")
+	}
+	comp, target := newSSEComponent(t, 100)
+	tr := &transitions{}
+	refusal := &collection.TerminalError{Class: driver.ClassAuth, Reason: "the component refused the credential (401)"}
+	sess := startStream(target, newHeard(), &collection.HTTPStreamAuth{Request: driver.Request{Path: "/events"},
+		Gate: func() *collection.TerminalError { return refusal }}, tr)
+	defer sess.Close()
+	rejected := tr.waitState(t, collection.SessionRejected)
+	if rejected.Refusal != refusal || comp.connects.Load() != 0 {
+		t.Fatalf("rejected = %+v after %d connects, want the gate's refusal and nothing sent", rejected, comp.connects.Load())
 	}
 }

@@ -2,7 +2,6 @@ package collection
 
 import (
 	"bufio"
-	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -26,6 +25,9 @@ type sseEvent struct {
 	// deduplicated by it).
 	id    string
 	hasID bool
+	// oversize marks an event whose data passed the cap: its data is
+	// dropped, its id still counts.
+	oversize bool
 }
 
 // sseParser builds events from a stream's lines.
@@ -43,20 +45,37 @@ type sseParser struct {
 	// it has.
 	retry    time.Duration
 	retrySet bool
+	// overflow marks the event being built as past the data cap.
+	overflow bool
 }
 
-// The bounds on what a stream can make a node hold: a line, and one event's
-// data. Past either, the connection ends with a reason and the session
-// reconnects.
+// The bounds on what a stream can make a node hold: a line, one event's
+// data, and an id. A line past its cap is read to its end and kept to the
+// cap; an event whose data passes its cap is dropped whole, its id still
+// counted; an id past its cap is ignored. None ends the connection, so one
+// oversize event never wedges a stream that would replay it.
 const (
 	maxSSELine = 1 << 20
 	maxSSEData = 1 << 20
+	maxSSEID   = 1 << 10
 )
 
-// errSSELine is a line past maxSSELine.
-var errSSELine = errors.New("a stream line exceeds the line cap")
+// feed feeds one line (truncated when it passed the line cap); ok is true
+// when it dispatched an event.
+func (p *sseParser) feed(l string, truncated bool) (sseEvent, bool) {
+	if truncated {
+		// Only a data line's length matters: the event it belongs to is
+		// past the cap. Any other field this long is ignored.
+		if field, _, _ := strings.Cut(l, ":"); field == "data" {
+			p.overflow = true
+		}
+		return sseEvent{}, false
+	}
+	ev, ok, _ := p.line(l)
+	return ev, ok
+}
 
-// line feeds one line, its terminator stripped; ok is true when it
+// line feeds one whole line, its terminator stripped; ok is true when it
 // dispatched an event.
 func (p *sseParser) line(l string) (ev sseEvent, ok bool, err error) {
 	if l == "" {
@@ -77,13 +96,15 @@ func (p *sseParser) line(l string) (ev sseEvent, ok bool, err error) {
 		if max <= 0 {
 			max = maxSSEData
 		}
-		if p.data.Len()+len(value)+1 > max {
+		if p.overflow || p.data.Len()+len(value)+1 > max {
+			p.overflow = true
+			p.data.Reset()
 			return sseEvent{}, false, fmt.Errorf("an event's data exceeds %d bytes", max)
 		}
 		p.data.WriteString(value)
 		p.data.WriteByte('\n')
 	case "id":
-		if !strings.ContainsRune(value, 0) {
+		if !strings.ContainsRune(value, 0) && len(value) <= maxSSEID {
 			p.idBuffer, p.id, p.hasID = value, value, true
 		}
 	case "retry":
@@ -101,8 +122,15 @@ func (p *sseParser) dispatch() (sseEvent, bool, error) {
 	p.lastEventID = p.idBuffer
 	defer func() {
 		p.data.Reset()
-		p.event, p.id, p.hasID = "", "", false
+		p.event, p.id, p.hasID, p.overflow = "", "", false, false
 	}()
+	if p.overflow {
+		ev := sseEvent{event: p.event, id: p.id, hasID: p.hasID, oversize: true}
+		if ev.event == "" {
+			ev.event = "message"
+		}
+		return ev, true, nil
+	}
 	if p.data.Len() == 0 {
 		return sseEvent{}, false, nil
 	}
@@ -114,49 +142,44 @@ func (p *sseParser) dispatch() (sseEvent, bool, error) {
 }
 
 // readSSELine reads one line terminated by CRLF, LF or CR, the terminator
-// stripped; a line past max is an error.
-func readSSELine(br *bufio.Reader, max int) (string, error) {
+// stripped; a line past max is read to its end and returned cut to max,
+// truncated.
+func readSSELine(br *bufio.Reader, max int) (line string, truncated bool, err error) {
 	var b []byte
 	for {
 		c, err := br.ReadByte()
 		if err != nil {
-			return "", err
+			return "", false, err
 		}
 		switch c {
 		case '\n':
-			return string(b), nil
+			return string(b), truncated, nil
 		case '\r':
 			if next, err := br.Peek(1); err == nil && next[0] == '\n' {
 				_, _ = br.ReadByte()
 			}
-			return string(b), nil
+			return string(b), truncated, nil
 		}
 		if len(b) >= max {
-			return "", errSSELine
+			truncated = true
+			continue
 		}
 		b = append(b, c)
 	}
 }
 
 // StreamResume is what a held stream carries across its reconnects: the
-// last event ID a reconnect resumes from, the ids it already landed (so a
-// server's replay lands nothing twice), and the reconnection time the
+// last event ID a reconnect resumes from, and the reconnection time the
 // server asked for. It lives in the node's memory with the endpoint, never
 // persisted. Safe for concurrent use.
 type StreamResume struct {
 	mu     sync.Mutex
 	lastID string
-	seen   map[string]struct{}
-	order  []string
 	retry  time.Duration
 }
 
-// maxResumeIDs bounds the ids a resume remembers: a replay reaches back a
-// few events, never thousands.
-const maxResumeIDs = 1024
-
-// NewStreamResume is a resume with nothing landed.
-func NewStreamResume() *StreamResume { return &StreamResume{seen: map[string]struct{}{}} }
+// NewStreamResume is a resume from nothing.
+func NewStreamResume() *StreamResume { return &StreamResume{} }
 
 // LastID is the id a reconnect resumes from, empty before any.
 func (r *StreamResume) LastID() string {
@@ -169,22 +192,6 @@ func (r *StreamResume) setLastID(id string) {
 	r.mu.Lock()
 	r.lastID = id
 	r.mu.Unlock()
-}
-
-// land records an event's id as landed; false when it already was.
-func (r *StreamResume) land(id string) bool {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	if _, ok := r.seen[id]; ok {
-		return false
-	}
-	r.seen[id] = struct{}{}
-	r.order = append(r.order, id)
-	if len(r.order) > maxResumeIDs {
-		delete(r.seen, r.order[0])
-		r.order = r.order[1:]
-	}
-	return true
 }
 
 // Retry is the reconnection time the server last asked for, zero before it
