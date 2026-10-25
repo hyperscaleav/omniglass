@@ -567,7 +567,7 @@ func (s *Spec) Validate(cat Catalog) error {
 	// bindings derive none. Commands that ride only a held session (the driver
 	// declares one, or the transport has no stateless line) need a poll or a
 	// listener to hold it, or they could never run (#1049).
-	if IsHTTP(s.Transport) && len(s.Polls) == 0 && s.Session != nil && s.Session.Credential != "" {
+	if IsHTTP(s.Transport) && len(s.Polls) == 0 && s.Session.IsCredentialed() {
 		// A credential reaches a node only with a task (#902): a credentialed
 		// http driver with commands alone could never authenticate one.
 		return fmt.Errorf("driver: a credentialed http driver needs a poll to carry its credential to the node; its commands alone derive no task")
