@@ -6,11 +6,11 @@ package migrate
 import (
 	"errors"
 	"fmt"
-	"net/url"
 
 	"github.com/amacneil/dbmate/v2/pkg/dbmate"
 	_ "github.com/amacneil/dbmate/v2/pkg/driver/postgres"
 	"github.com/hyperscaleav/omniglass/db"
+	"github.com/hyperscaleav/omniglass/internal/redact"
 )
 
 // Run applies all pending migrations against dsn.
@@ -76,9 +76,11 @@ func RollbackBelow(dsn, version string) error {
 }
 
 func withDBMate(dsn string, fn func(*dbmate.DB) error) error {
-	u, err := url.Parse(dsn)
+	// Through redact: a DSN carries the database password, which url.Parse's
+	// error quotes, and every direct-database command migrates first.
+	u, err := redact.ParseURL(dsn, "the database DSN ($OMNIGLASS_DSN or $DATABASE_URL)")
 	if err != nil {
-		return fmt.Errorf("migrate: parse dsn: %w", err)
+		return fmt.Errorf("migrate: %w", err)
 	}
 	mate := dbmate.New(u)
 	mate.FS = db.FS

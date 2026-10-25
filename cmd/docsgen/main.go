@@ -23,23 +23,25 @@ import (
 const dst = "docs/src/content/docs/reference/cli/index.md"
 
 func main() {
-	root := cli.Root("(version)")
-
-	var b bytes.Buffer
-	writeHeader(&b)
-	writeGlobalFlags(&b, root)
-
-	for _, c := range sortedVisible(root.Commands()) {
-		render(&b, c, 2)
-	}
-
+	page := reference(cli.Root("(version)"))
 	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
 		log.Fatalf("docsgen: mkdir: %v", err)
 	}
-	if err := os.WriteFile(dst, b.Bytes(), 0o644); err != nil {
+	if err := os.WriteFile(dst, page, 0o644); err != nil {
 		log.Fatalf("docsgen: write: %v", err)
 	}
 	log.Printf("wrote %s", dst)
+}
+
+// reference renders the whole page from a command tree.
+func reference(root *cobra.Command) []byte {
+	var b bytes.Buffer
+	writeHeader(&b)
+	writeGlobalFlags(&b, root)
+	for _, c := range sortedVisible(root.Commands()) {
+		render(&b, c, 2)
+	}
+	return b.Bytes()
 }
 
 func writeHeader(b *bytes.Buffer) {
@@ -63,7 +65,9 @@ func writeGlobalFlags(b *bytes.Buffer, root *cobra.Command) {
 	if !pf.HasFlags() {
 		return
 	}
-	b.WriteString("## Global flags\n\nEvery command accepts these, each with an environment-variable default:\n\n")
+	b.WriteString("## Global flags\n\nEvery command accepts these. An omitted flag falls back to its environment " +
+		"variable, read when the command runs, so this page and every `--help` name the variable and never " +
+		"print its value:\n\n")
 	writeFlagTable(b, pf)
 }
 

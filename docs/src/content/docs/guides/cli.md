@@ -56,17 +56,27 @@ server this way ([test-driven](/contributing/test-driven/#tiers)).
 
 ## Connecting
 
-Every generated command is a client of a running server and takes two shared flags, each
-with an environment default:
-
-| Flag | Env | Default |
-|---|---|---|
-| `--server` | `OMNIGLASS_SERVER` | `http://localhost:8080` |
-| `--token` | `OMNIGLASS_TOKEN` | (none) |
+Every generated command is a client of a running server and takes two shared flags,
+`--server` and `--token` (the reference's [global flags](/reference/cli/#global-flags) table
+is generated from the binary). Each resolves in one order when the command runs: the flag
+when you give it, else its environment variable (`OMNIGLASS_SERVER`, `OMNIGLASS_TOKEN`), else
+the flag's built-in default, which the token does not have.
 
 The token is a bearer credential (mint the first one with `omniglass bootstrap`; see
 [Authentication](#authentication) below). The server enforces the same capability and scope
 for the CLI as for any caller: the CLI is just another client, with no privileged path.
+
+The environment is read at that moment, never copied into a flag's default, because a default
+is what `--help`, shell completion and the CLI reference print. So every one of them names
+`$OMNIGLASS_TOKEN` and never shows its value, and help output is safe to paste into a ticket or
+a chat ([#979](https://github.com/hyperscaleav/omniglass/issues/979)). Errors hold the same line:
+a server URL or a database DSN carrying a `user:password` that does not parse is reported by
+name, with the parser's detail withheld (it can quote the password), so percent-encode any
+reserved character in it. A server URL is refused the same way when such a password would be
+misread rather than refused (an `@` past the host, a query or a fragment, or no `http://` or
+`https://` before it): the error would otherwise print the password, and the request could go,
+token and all, to a host named after the user. Prefer the variable to typing `--token` itself,
+which leaves the secret in your shell history and the process list.
 
 ```sh
 export OMNIGLASS_SERVER=https://omniglass.example.com

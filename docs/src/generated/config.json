@@ -71,22 +71,22 @@
   {
    "key": "OMNIGLASS_SERVER",
    "scope": "cli",
-   "doc": "server base URL the CLI and the node default their --server flag from"
+   "doc": "server base URL the CLI and the node use when --server is omitted, read when the command runs"
   },
   {
    "key": "OMNIGLASS_TOKEN",
    "scope": "cli",
-   "doc": "bearer token the CLI defaults its --token flag from"
+   "doc": "bearer token the CLI uses when --token is omitted, read when the command runs and never printed by help"
   },
   {
    "key": "OMNIGLASS_NODE_NAME",
    "scope": "node",
-   "doc": "the node's registered name, the --name default for omniglass node run"
+   "doc": "the node's registered name, used by omniglass node run and sim run when --name is omitted"
   },
   {
    "key": "OMNIGLASS_NODE_TOKEN",
    "scope": "node",
-   "doc": "the node's enrollment token, the --token default for omniglass node run"
+   "doc": "the node's enrollment token, used by omniglass node run and sim run when --token is omitted, read when the command runs and never printed by help"
   },
   {
    "key": "OMNIGLASS_TEST_ADMIN_DSN",

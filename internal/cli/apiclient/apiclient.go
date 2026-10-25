@@ -13,6 +13,8 @@ import (
 	"io"
 	"net/http"
 	"strings"
+
+	"github.com/hyperscaleav/omniglass/internal/redact"
 )
 
 // Client issues authenticated requests against a running Omniglass server.
@@ -55,6 +57,17 @@ func (c *Client) Do(ctx context.Context, method, path string, body any) (Result,
 			return Result{}, fmt.Errorf("apiclient: marshal body: %w", err)
 		}
 		rdr = bytes.NewReader(b)
+	}
+	// Checked through redact first: the server URL can carry a user:password,
+	// which the request's own parse error would quote on every command, and
+	// which a misread would send the token toward and print in the dial error.
+	// The base is what is checked, since a typed positional may carry an @.
+	const what = "the server URL (--server or $OMNIGLASS_SERVER)"
+	if _, err := redact.ParseBaseURL(c.server, what); err != nil {
+		return Result{}, fmt.Errorf("apiclient: %w", err)
+	}
+	if _, err := redact.ParseURL(c.server+path, what); err != nil {
+		return Result{}, fmt.Errorf("apiclient: %w", err)
 	}
 	req, err := http.NewRequestWithContext(ctx, method, c.server+path, rdr)
 	if err != nil {
