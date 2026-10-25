@@ -203,9 +203,12 @@ which demos it chose and why. One job then combines every demo into one result:
 - **The clip in the PR body.** Each recorded demo's clip, its GIF (a terminal demo) or animated
   preview (a walkthrough) with its **Watch (scrubbable)** link, is written into the PR body's Demo
   section, between two HTML-comment markers, so the PR carries its video where a reviewer starts
-  reading. A re-run replaces only that block; the author's text around it is never touched. With
-  no block yet, it goes after the tag line (or at the end of a body with no tag). A body whose
-  markers are unpaired or doubled is left alone and the job fails, saying so.
+  reading. A re-run replaces only that block; the author's text around it is never touched. A
+  marker counts only on a line of its own outside a code block, so a body that quotes one keeps
+  its text. With no block yet, it goes after the tag line (or at the end of a body with no tag). A
+  body whose marker lines are unpaired or doubled is left alone and the job fails, saying so. The
+  run reads the body as it is when it starts, so re-running an older run records what the tag
+  says now.
 - **The demo comment, the full record.** **One PR comment** lists every demo: a terminal demo's GIF
   with its MP4 linked as **Watch (scrubbable)**; a walkthrough's video linked the same way, then its
   animated preview, its poster and its stills folded below; the run and its artifacts; and any demo

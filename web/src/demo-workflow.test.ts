@@ -89,6 +89,20 @@ describe("the run:demo workflow's matrix", () => {
     expect(demo.jobs.report.if).toContain("refs/heads/main");
   });
 
+  it("reads the PR body live in select, so a re-run of an older run selects what the body says now", () => {
+    const select = demo.jobs.select;
+    expect(select.permissions).toEqual({ contents: "read", "pull-requests": "read" });
+    expect(JSON.stringify(select)).not.toContain("github.event.pull_request.body");
+    expect(select.steps.map((s) => s.run ?? "").join("\n")).toContain('gh api "repos/${REPO}/pulls/${PR}"');
+  });
+
+  it("marks each leg with the commit it records, before anything can fail, so a stale leg from an earlier attempt is never read as this run's", () => {
+    const steps = demo.jobs.record.steps;
+    const mark = steps.findIndex((s) => s.run?.includes("git rev-parse HEAD") && s.run.includes("/head"));
+    expect(mark).toBeGreaterThan(steps.findIndex((s) => s.uses?.startsWith("actions/checkout")));
+    expect(mark).toBeLessThan(steps.findIndex((s) => s.name === "Install web deps"));
+  });
+
   it("swaps the pending SHA the staged clip and comment are written against for the evidence commit's", () => {
     const run = demo.jobs.publish.steps.map((s) => s.run ?? "").join("\n");
     expect(run).toContain(PENDING_SHA);
@@ -167,6 +181,27 @@ describe("the publish job's splice of the clip into the PR body", () => {
       const r = splice("demo: t", clip);
       expect(r.ok).toBe(false);
       expect(r.err).toContain("marker");
+    }
+  });
+
+  it("counts a marker only on a line of its own outside a code fence, so a body quoting one keeps its text", () => {
+    const prose = `## Outcome\nThe clip goes after \`${CLIP_START}\`.\n## Demo\ndemo: foo\n## Docs\nIt ends at \`${CLIP_END}\`, author text.\n`;
+    const r = splice(prose, "clip");
+    expect(r.ok, r.err).toBe(true);
+    expect(r.out).toBe(prose.replace("demo: foo\n", `demo: foo\n\n${block("clip")}\n\n`));
+    const fenced = `demo: t\n\n\`\`\`\n${CLIP_START}\nexample\n${CLIP_END}\n\`\`\`\n`;
+    const f = splice(fenced, "clip");
+    expect(f.ok, f.err).toBe(true);
+    expect(f.out).toBe(`demo: t\n\n${block("clip")}\n\n\`\`\`\n${CLIP_START}\nexample\n${CLIP_END}\n\`\`\`\n`);
+    const one = splice(`demo: t\nsee \`${CLIP_START}\``, "clip");
+    expect(one.ok, one.err).toBe(true);
+  });
+
+  it("refuses a staged clip carrying HTML or a code fence, which could hide or swallow the author's text after the block", () => {
+    for (const clip of ["a\n<details>\nb", "<img src=x>", "a\n```\nb", "~~~"]) {
+      const r = splice("demo: t", clip);
+      expect(r.ok, clip).toBe(false);
+      expect(r.err).toContain("HTML or a code fence");
     }
   });
 

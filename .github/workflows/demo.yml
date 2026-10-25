@@ -104,6 +104,7 @@ jobs:
     timeout-minutes: 5
     permissions:
       contents: read
+      pull-requests: read
     outputs:
       matrix: ${{ steps.select.outputs.matrix }}
       ids: ${{ steps.select.outputs.ids }}
@@ -111,8 +112,19 @@ jobs:
     env:
       EVENT: ${{ github.event_name }}
       BASE_REF: ${{ github.event.pull_request.base.ref }}
-      PR_BODY: ${{ github.event.pull_request.body }}
+      PR: ${{ github.event.pull_request.number }}
+      REPO: ${{ github.repository }}
     steps:
+      # The body as it is now, not as the event carried it: a re-run replays
+      # its original event, so reading the event's body would let a re-run of
+      # an older run record the tag the body no longer has. Read by gh alone,
+      # in a step of its own, so the token is never in the tree's code's env.
+      - name: Read the PR body as it is now
+        if: ${{ github.event_name == 'pull_request' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api "repos/${REPO}/pulls/${PR}" --jq '.body // ""' >"$RUNNER_TEMP/pr-body.md"
+
       # A PR's branch tip at run time (not the event's SHA), so a re-run
       # records the current head; main's commit for the freshness run.
       - uses: actions/checkout@v4
@@ -140,6 +152,8 @@ jobs:
         run: |
           set -euo pipefail
           if [ "$EVENT" = pull_request ]; then
+            PR_BODY=$(cat "$RUNNER_TEMP/pr-body.md")
+            export PR_BODY
             git diff --name-only "origin/${BASE_REF}...HEAD" >"$RUNNER_TEMP/changed.txt"
             node web/e2e/walkthrough-pr.mjs select <"$RUNNER_TEMP/changed.txt" >"$RUNNER_TEMP/selected.json"
           else
@@ -189,6 +203,19 @@ jobs:
         with:
           ref: ${{ needs.select.outputs.head }}
           persist-credentials: false
+
+      # The commit this leg records, marked before anything can fail, so the
+      # upload below always replaces an earlier attempt's artifact of this
+      # name, and combine counts a leg that marked another commit (an earlier
+      # attempt's, left by a job that ended before uploading) as never run.
+      - name: Mark the commit this leg records
+        env:
+          KIND: ${{ matrix.kind }}
+        run: |
+          out=web/e2e/walkthroughs/out
+          [ "$KIND" != tape ] || out=scripts/demo/out
+          mkdir -p "$out"
+          git rev-parse HEAD >"$out/head"
 
       # The walkthrough recorder runs in the pinned Playwright container
       # against the repo mounted from the runner, so it needs the web deps
@@ -294,7 +321,8 @@ jobs:
           name: demo-evidence-pr${{ github.event.pull_request.number }}
           path: ${{ runner.temp }}/evidence/
           if-no-files-found: error
-          retention-days: 1
+          overwrite: true
+          retention-days: 30
 
       - name: Judge the freshness run
         id: report
@@ -311,6 +339,7 @@ jobs:
           name: demo-fresh-report
           path: ${{ runner.temp }}/report/
           if-no-files-found: error
+          overwrite: true
           retention-days: 14
 
   publish:
@@ -418,13 +447,19 @@ jobs:
           echo "cid=$cid" >>"$GITHUB_OUTPUT"
 
       # The clip into the PR body's Demo section (#1180): read the body as it
-      # is now, replace only what lies between the clip markers (or, with none
-      # yet, add the block after the tag line, else at the end), and write it
-      # back only if it changed. The staged clip is pinned to the evidence
-      # commit here and may carry no marker, so it can never move the block's
-      # edge; the line linking the comment is written here, from the comment
-      # this job upserted. The splice is the inline program in SPLICE (the
-      # workflow's own text, nothing from the tree), played against fixtures by
+      # is now, replace only the block between the clip markers (each a line of
+      # its own outside a code fence, so a body that quotes one keeps its text),
+      # or, with none yet, add the block after the tag line, else at the end;
+      # read the body again, and splice again if it changed meanwhile, then
+      # write it back only if the splice changed it. The REST API has no
+      # conditional write, so the re-read narrows an author's concurrent save
+      # to the one PATCH rather than closing it. The staged clip is pinned to
+      # the evidence commit here and may carry no marker, no HTML and no code
+      # fence (the escaped clip combine writes has none), so it can neither
+      # move the block's edge nor hide or swallow the text after it; the line
+      # linking the comment is written here, from the comment this job
+      # upserted. The splice is the inline program in SPLICE (the workflow's
+      # own text, nothing from the tree), played against fixtures by
       # web/src/demo-workflow.test.ts.
       - name: Write the clip into the PR body
         env:
@@ -435,38 +470,41 @@ jobs:
             const fs = require('fs');
             const START = '<!-- omniglass-demo-clip -->';
             const END = '<!-- /omniglass-demo-clip -->';
+            const FENCE = /^[ \t]*(?:```|~~~)/;
             const fail = (m) => { console.error(m); process.exit(1); };
             const body = fs.readFileSync(process.env.BODY_FILE, 'utf8');
             const clip = fs.readFileSync(process.env.CLIP_FILE, 'utf8').replace(/\s+$/, '');
             if (clip.includes(START) || clip.includes(END)) fail('the staged clip carries a clip marker; refusing to edit the PR body');
+            if (/<|^[ \t]*(?:```|~~~)/m.test(clip)) fail('the staged clip carries HTML or a code fence; refusing to edit the PR body');
             const eol = body.includes('\r\n') ? '\r\n' : '\n';
-            const block = [START, ...clip.split(/\r?\n/), END].join(eol);
-            const count = (m) => body.split(m).length - 1;
-            const s = body.indexOf(START);
-            const e = body.indexOf(END);
+            const lines = body.split(eol);
+            const masked = body.replace(/<!--[\s\S]*?-->/g, (c) => c.replace(/[^\r\n]/g, ' ')).split(eol);
+            const starts = [];
+            const ends = [];
+            let tag = -1;
+            let fenced = false;
+            for (let i = 0; i < lines.length; i++) {
+              const m = masked[i].replace(/\r$/, '');
+              if (FENCE.test(m)) { fenced = !fenced; continue; }
+              if (fenced) continue;
+              const t = lines[i].trim();
+              if (t === START) starts.push(i);
+              else if (t === END) ends.push(i);
+              else if (tag < 0 && /^[ \t]*(?:[-*+][ \t]+)?demo:/.test(m)) tag = i;
+            }
+            const block = [START, ...clip.split(/\r?\n/), END];
             let out;
-            if (count(START) === 1 && count(END) === 1 && s < e) {
-              out = body.slice(0, s) + block + body.slice(e + END.length);
-            } else if (count(START) + count(END) > 0) {
-              fail('the PR body has an unpaired, doubled or reversed clip marker; fix it by hand, then re-run');
+            if (starts.length === 1 && ends.length === 1 && starts[0] < ends[0]) {
+              out = [...lines.slice(0, starts[0]), ...block, ...lines.slice(ends[0] + 1)].join(eol);
+            } else if (starts.length + ends.length > 0) {
+              fail('the PR body has an unpaired, doubled or reversed clip marker line; fix it by hand, then re-apply run:demo');
+            } else if (tag < 0) {
+              const kept = body.replace(/\s+$/, '');
+              out = kept ? kept + eol + eol + block.join(eol) : block.join(eol);
             } else {
-              const lines = body.split(eol);
-              const masked = body.replace(/<!--[\s\S]*?-->/g, (c) => c.replace(/[^\r\n]/g, ' ')).split(eol);
-              let fenced = false;
-              let at = -1;
-              for (let i = 0; i < masked.length && at < 0; i++) {
-                const l = masked[i].replace(/\r$/, '');
-                if (/^[ \t]*(?:```|~~~)/.test(l)) fenced = !fenced;
-                else if (!fenced && /^[ \t]*(?:[-*+][ \t]+)?demo:/.test(l)) at = i;
-              }
-              if (at < 0) {
-                const kept = body.replace(/\s+$/, '');
-                out = kept ? kept + eol + eol + block : block;
-              } else {
-                const after = lines.slice(at + 1);
-                const gap = after.length && after[0].trim() !== '' ? [''] : [];
-                out = [...lines.slice(0, at + 1), '', block, ...gap, ...after].join(eol);
-              }
+              const after = lines.slice(tag + 1);
+              const gap = after.length && after[0].trim() !== '' ? [''] : [];
+              out = [...lines.slice(0, tag + 1), '', ...block, ...gap, ...after].join(eol);
             }
             fs.writeFileSync(process.env.OUT_FILE, out);
         run: |
@@ -479,9 +517,15 @@ jobs:
             printf '%s\n\n' "${clip//$pending/$SHA}"
             printf 'Every step, the run and its artifacts: [the demo comment](https://github.com/%s/pull/%s#issuecomment-%s).\n' "$REPO" "$PR" "$CID"
           } >"$RUNNER_TEMP/clip.md"
-          gh api "repos/${REPO}/pulls/${PR}" >"$RUNNER_TEMP/pr.json"
-          jq -j '.body // ""' "$RUNNER_TEMP/pr.json" >"$RUNNER_TEMP/pr-body.md"
-          BODY_FILE="$RUNNER_TEMP/pr-body.md" CLIP_FILE="$RUNNER_TEMP/clip.md" OUT_FILE="$RUNNER_TEMP/new-body.md" node -e "$SPLICE"
+          read_body() { gh api "repos/${REPO}/pulls/${PR}" | jq -j '.body // ""' >"$1"; }
+          for attempt in 1 2 3; do
+            read_body "$RUNNER_TEMP/pr-body.md"
+            BODY_FILE="$RUNNER_TEMP/pr-body.md" CLIP_FILE="$RUNNER_TEMP/clip.md" OUT_FILE="$RUNNER_TEMP/new-body.md" node -e "$SPLICE"
+            read_body "$RUNNER_TEMP/pr-body-again.md"
+            if cmp -s "$RUNNER_TEMP/pr-body.md" "$RUNNER_TEMP/pr-body-again.md"; then break; fi
+            [ "$attempt" -lt 3 ] || { echo "the PR body kept changing while the clip was spliced in; left it alone" >&2; exit 1; }
+            echo "the PR body changed while the clip was spliced in; splicing again"
+          done
           if cmp -s "$RUNNER_TEMP/pr-body.md" "$RUNNER_TEMP/new-body.md"; then
             echo "the PR body's clip is already current"
           else

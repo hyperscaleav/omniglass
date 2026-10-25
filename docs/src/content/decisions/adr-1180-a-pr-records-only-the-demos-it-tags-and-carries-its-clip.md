@@ -20,8 +20,11 @@ refs: [1180, 1132, 939]
      clip (a terminal demo's GIF, a walkthrough's animated preview or poster, each under its
      scrubbable link, pinned to the evidence commit) into the PR body between
      `<!-- omniglass-demo-clip -->` and its closing marker, replacing only that block; with none
-     yet, after the tag line, else at the end. A staged clip carrying a marker, or a body whose
-     markers are unpaired or doubled, is refused. The comment stays, as the full record (every
+     yet, after the tag line, else at the end. A marker counts only on a line of its own outside a
+     code fence. A staged clip carrying a marker, HTML or a code fence, or a body whose marker
+     lines are unpaired or doubled, is refused. Each recording leg marks the commit it recorded,
+     and one marking another commit (an earlier attempt's, left in the run) counts as never run;
+     the selection reads the PR body live, so a re-run records what the tag says now. The comment stays, as the full record (every
      step's still, the run, the artifacts, the failures), and the clip links it.
   3. **Freshness off the PR path.** The same workflow runs nightly (and by hand) on main and
      records every demo; a failure opens one issue, or updates the open one, and a green run closes

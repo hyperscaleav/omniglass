@@ -210,6 +210,25 @@ export function everyDemo(tapes, walkthroughs) {
   ];
 }
 
+// What a selected demo's recording says happened: recorded (a manifest with
+// the budget mark only a pass writes, not listed as failed), failed (it ran
+// and did not pass), or unstarted (its stack never came up, or its job ended
+// first). In the run:demo workflow each demo's leg marks the commit it
+// checked out (`legHead`) before anything can fail, and a leg that marked
+// another commit than the run's (`headSha`), or none, is an earlier attempt's
+// recording left in the run, never this run's: it counts as unstarted (#1180).
+// With no leg (make demo on this machine) there is no commit to compare.
+/**
+ * @param {{ manifest: { budget?: unknown } | null, listedFailed: boolean, stackUp: boolean,
+ *   legHead?: string, headSha?: string }} rec
+ * @returns {'recorded' | 'failed' | 'unstarted'}
+ */
+export function legOutcome({ manifest, listedFailed, stackUp, legHead, headSha }) {
+  if (headSha !== undefined && legHead !== headSha) return 'unstarted';
+  if (manifest && manifest.budget && !listedFailed) return 'recorded';
+  return stackUp ? 'failed' : 'unstarted';
+}
+
 // The ref PR `pr`'s evidence is committed to. Each run commits a fresh tree on
 // top of the ref's last commit, so a renamed or deleted script leaves nothing
 // behind while an older comment's SHA stays reachable.

@@ -14,6 +14,7 @@ import {
   evidenceRef,
   evidenceRefsToPrune,
   everyDemo,
+  legOutcome,
   freshnessReport,
   demoTag,
   rawUrl,
@@ -207,6 +208,34 @@ describe("every demo, as the freshness run on main records them", () => {
   it("holds the same id rules as a PR's selection", () => {
     expect(() => everyDemo(["same"], ["same"])).toThrow("names both");
     expect(() => everyDemo([], [])).toThrow("no demos");
+  });
+});
+
+describe("what a demo's recording says happened", () => {
+  const m = tapeManifest("t");
+  const base = { manifest: m, listedFailed: false, stackUp: true, legHead: HEAD, headSha: HEAD };
+
+  it("is recorded when its manifest carries the budget mark and its recorder did not list it as failed", () => {
+    expect(legOutcome(base)).toBe("recorded");
+  });
+
+  it("is failed when it ran but has no passing manifest, or its recorder listed it", () => {
+    expect(legOutcome({ ...base, manifest: null })).toBe("failed");
+    expect(legOutcome({ ...base, manifest: tapeManifest("t", { budget: undefined }) })).toBe("failed");
+    expect(legOutcome({ ...base, listedFailed: true })).toBe("failed");
+  });
+
+  it("never ran when its stack never came up", () => {
+    expect(legOutcome({ ...base, manifest: null, stackUp: false })).toBe("unstarted");
+  });
+
+  it("never ran when its leg recorded another commit, or says none: an earlier attempt's recording is not this run's", () => {
+    expect(legOutcome({ ...base, legHead: SHA })).toBe("unstarted");
+    expect(legOutcome({ ...base, legHead: "" })).toBe("unstarted");
+  });
+
+  it("checks no commit when it was recorded on this machine, with no leg to compare", () => {
+    expect(legOutcome({ ...base, legHead: undefined, headSha: undefined })).toBe("recorded");
   });
 });
 

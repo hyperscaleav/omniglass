@@ -42,7 +42,9 @@
 // workflow, which records each demo on a runner of its own and downloads each
 // runner's out/ as LEGS/demo-leg-<id>/), that directory; else its recorder's
 // out/ (make demo). Either holds the recorder's <id>/ directory, its
-// failed.txt and its stack-up mark. A selected demo counts as recorded only if
+// failed.txt and its stack-up mark; a leg also holds head, the commit it
+// recorded, and one marking another commit than HEAD_SHA (an earlier
+// attempt's, left in the run) counts as never run. A selected demo counts as recorded only if
 // failed.txt does not list it and its manifest carries the budget mark the
 // recorder writes only on a pass; with no stack-up mark beside it, it never ran
 // (its stack never came up, or its job ended first), which the comment, the
@@ -59,6 +61,7 @@ import {
   evidenceRef,
   evidenceRefsToPrune,
   freshnessReport,
+  legOutcome,
   selectDemos,
   tapeEvidenceFiles,
 } from './walkthroughpr.mjs';
@@ -119,17 +122,32 @@ function passed(id) {
   return m.budget ? m : null;
 }
 
-// Every selected demo's result, by recorder: recorded (its manifest), failed,
-// or never ran (no stack-up mark beside it).
+// The commit demo `id`'s leg marked (its out/head), read only under LEGS,
+// where it is checked against the run's HEAD_SHA; empty when it marked none.
+/** @param {string} id @returns {string | undefined} */
+function legHead(id) {
+  if (!process.env.LEGS) return undefined;
+  const f = join(outOf(id), 'head');
+  return existsSync(f) ? readFileSync(f, 'utf8').trim() : '';
+}
+
+// Every selected demo's result, by recorder (walkthroughpr.mjs legOutcome):
+// recorded (its manifest), failed, or never ran.
 function results() {
   /** @type {Record<'tape' | 'walkthrough', { recorded: any[], failed: string[], unstarted: string[] }>} */
   const r = { tape: { recorded: [], failed: [], unstarted: [] }, walkthrough: { recorded: [], failed: [], unstarted: [] } };
   for (const id of selected()) {
     const kind = kindOf(id);
-    const m = passed(id);
-    if (m) r[kind].recorded.push(m);
-    else if (existsSync(join(outOf(id), 'stack-up'))) r[kind].failed.push(id);
-    else r[kind].unstarted.push(id);
+    const head = legHead(id);
+    const outcome = legOutcome({
+      manifest: passed(id),
+      listedFailed: listedFailed(id).includes(id),
+      stackUp: existsSync(join(outOf(id), 'stack-up')),
+      legHead: head,
+      headSha: head === undefined ? undefined : env('HEAD_SHA'),
+    });
+    if (outcome === 'recorded') r[kind].recorded.push(passed(id));
+    else r[kind][outcome].push(id);
   }
   return { tapes: r.tape, walkthroughs: r.walkthrough };
 }
