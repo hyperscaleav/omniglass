@@ -1177,6 +1177,37 @@ A function runs the parse at the **edge**, not server-side:
 
 An opt-in **`raw_sample`** policy keeps a bounded window of raw frames so a corrected extractor can re-derive its samples over that window, without reintroducing a telemetry table. It is **cascade-resolved** (settable on an endpoint, task, or template) to **`off`** (default, no raw retained), **`all`** (every frame buffered), or **`1-in-N`** (sampled, bounding a high-cadence source). Kept frames carry the **immutable function version** that parsed them, so the window re-parses against that exact version and corrects retroactively; outside it, a wrong-but-conforming parse is **forward-fixable only**, the raw being gone. A short-TTL holding pen, range-partitioned and cold-tierable ([storage](/architecture/storage/)), not a parallel history of record.
 
+### On demand: validate, preview, and run a poll now
+
+Three routes let an author (or an agent) build a driver against the real component without waiting
+on a schedule ([ADR-1163](/architecture/decisions/#adr-1163-a-poll-runs-once-on-demand-through-its-node-as-a-preview-that-stores-nothing-or-a-run-now-that-lands)):
+
+- **Validate** (`POST /drivers:validate`, `driver:read`) checks a spec by the rules a save applies
+  and writes nothing. Where a save names a spec's first fault, validate names every fault it can pin
+  down, each on the function it is in (a poll, a listener, a command binding), the first always the
+  one a save would name.
+- **Preview** (`POST /drivers:preview`, `driver:preview`) runs a spec's polls **once** through the
+  node named, against the target its inputs name, and answers with what each read: its samples,
+  each emit that did not locate, and an excerpt of the raw answer, before any emit read it, masked
+  of every secret the preview used. **Nothing is stored.** The spec is a stored driver or an unsaved
+  one, refused with its findings when it does not validate. A preview runs a poll that is its own
+  request (http, https, an snmp get, a tcp line on a throwaway connection); a poll that rides a held
+  session or a bound udp socket needs an endpoint, so it is attached and run now instead. A secret
+  input must be one the caller may **reveal**, since the preview hands it to the target named, and
+  each secret used is audited.
+- **Run now** (`POST /endpoints/{endpoint}/polls/{poll}:run`, `endpoint:run`) runs one of an
+  attached endpoint's polls on the node that holds it, outside its schedule, and **lands** what it
+  reads as a scheduled run does. A gated endpoint refuses the run with the gate's reason and nothing
+  is sent.
+
+Preview and run now share one primitive, the **on-demand node run** ([nodes](/architecture/nodes/)):
+the server asks the node and waits for its one answer. A poll's request is whatever its spec says (a
+POST, any line), so a preview reaches the component as a command does; its MCP tool says so
+(destructive, open-world). Both hold a request open while a node works, so they are bounded by a
+stricter class than the API's own (#962 is the API-wide limit): a few runs in flight across the
+server, fewer per caller, a run past either refused (429) before anything is asked. Each asking is
+audited: a preview on the node (and on each secret it used), a run now on the endpoint.
+
 ## Shared-API collection: one component, many owners
 
 Some sources describe **many entities at once**: a SaaS / UCC platform (Zoom, Teams), a controller fronting many devices, a building gateway. The API is **one component** (one endpoint, one credential) whose data **fans out** to the entities it describes, not one component per described entity.

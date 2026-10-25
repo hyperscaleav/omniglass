@@ -416,3 +416,29 @@ driver this way. It is a leaf catalog beside the vendor registry. See
 Minting a driver is admin-gated; the picker that consumes it lives on the
 [product](/guides/admin/products/) create and edit forms. The same operations are `omniglass driver
 list/get/create/update/delete` from the CLI (see the [CLI reference](/reference/cli/)).
+
+## Check, preview, and run a poll now
+
+Three commands take the guesswork out of writing a spec, each a route an agent can call as an
+[MCP tool](/reference/mcp/) too:
+
+```sh
+# Check a spec as a save would, writing nothing: every fault, each on its function
+omniglass driver validate --spec "$(cat display-web.json)" | jq '.findings[] | {function, message}'
+
+# Run its polls once through a node against the component, storing nothing
+omniglass driver preview --node edge-hq --spec "$(cat display-web.json)" \
+  --inputs '{"host":"10.20.4.31","login":"display-login"}' | jq '.results[] | {poll, samples, faults}'
+
+# Once attached, run an endpoint's poll now; its samples land
+omniglass endpoint poll run 'hq.west.level-2.huddle.$comp.display-1/http' identity
+```
+
+Validate needs only `driver:read`. A preview (`driver:preview`) answers with the samples each poll
+extracted, each emit that did not locate, and an excerpt of the raw answer to write the next extractor
+against, masked of the secret it used; a secret input must be one you may reveal, since the preview
+hands it to the target you name. A preview runs a poll that is its own request (http, https, snmp, a
+tcp line); a poll riding a held session (telnet, ssh, a websocket, a tls line, a login session) is
+attached first and run now (`endpoint:run`), which lands its samples and is refused, with the reason,
+while the endpoint is gated. Both are operator grants, audited
+([collection](/architecture/collection/#on-demand-validate-preview-and-run-a-poll-now)).
