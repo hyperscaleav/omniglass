@@ -12,6 +12,7 @@ import (
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/spf13/cobra"
 
+	"github.com/hyperscaleav/omniglass/internal/config"
 	"github.com/hyperscaleav/omniglass/internal/mcp"
 )
 
@@ -148,11 +149,21 @@ func stdioSession(cmd *cobra.Command, version string) (*sdk.ClientSession, error
 	return cs, nil
 }
 
-// connection is the --server and --token pair every client command shares.
+// connection is the --server and --token pair every client command shares: a
+// flag the operator gave, else its environment variable, read now (never from a
+// flag default, which --help would print), else the flag's literal default.
 func connection(cmd *cobra.Command) (server, token string) {
-	server, _ = cmd.Flags().GetString("server")
-	token, _ = cmd.Flags().GetString("token")
-	return server, token
+	resolve := func(flag, env string) string {
+		v, _ := cmd.Flags().GetString(flag)
+		if cmd.Flags().Changed(flag) {
+			return v
+		}
+		if e := config.Get(env); e != "" {
+			return e
+		}
+		return v
+	}
+	return resolve("server", "OMNIGLASS_SERVER"), resolve("token", "OMNIGLASS_TOKEN")
 }
 
 // endpointOf is the MCP endpoint of a server root.
