@@ -879,7 +879,7 @@ var exampleLogs = []struct {
 // already carrying lines (ListComponentLogs unwindowed, limit 1) and skip
 // when present. componentID is the row the fixture key resolved to.
 func seedLogs(ctx context.Context, gw storage.Gateway, componentID string) error {
-	existing, err := gw.ListComponentLogs(ctx, componentID, 0, 1)
+	existing, err := gw.ListComponentLogs(ctx, componentID, 0, 1, storage.LogFilter{})
 	if err != nil {
 		return fmt.Errorf("devseed: check logs: %w", err)
 	}

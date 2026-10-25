@@ -133,7 +133,7 @@ func TestTelemetryPushAPI(t *testing.T) {
 		return false
 	})
 	waitFor(t, "the log line", func() bool {
-		logs, err := gw.ListComponentLogs(ctx, "bar-1", time.Hour, 50)
+		logs, err := gw.ListComponentLogs(ctx, "bar-1", time.Hour, 50, storage.LogFilter{})
 		if err != nil {
 			return false
 		}

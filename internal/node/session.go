@@ -14,6 +14,7 @@ import (
 
 	"github.com/hyperscaleav/omniglass/internal/collection"
 	"github.com/hyperscaleav/omniglass/internal/driver"
+	"github.com/hyperscaleav/omniglass/internal/logline"
 	"github.com/hyperscaleav/omniglass/internal/transport"
 )
 
@@ -332,8 +333,8 @@ func desiredSessions(tasks []collection.TaskSpec, dialers map[string]collection.
 		w.policy = driver.UnmatchedDiscard
 		for _, l := range w.listeners {
 			arm = append(arm, l.fn.Arm...)
-			if l.fn.Unmatched == driver.UnmatchedCollectionFailed {
-				w.policy = driver.UnmatchedCollectionFailed
+			if l.fn.Unmatched != "" {
+				w.policy = l.fn.Unmatched
 			}
 		}
 		w.conn.arm = strings.Join(arm, "\n")
@@ -353,9 +354,16 @@ type listenerRouter struct {
 	mu        sync.Mutex
 	listeners []routedListener
 	policy    string
+	// logTask is the listen task an unclaimed message lands under when the
+	// policy is log (#1145): the endpoint's first listener, so the line is
+	// owner-bound to the endpoint's component like any of its samples.
+	logTask   string
 	faultseen map[string]string // last fault per listen task: one event per change
 	unclaimed int
 	last      string
+	// clamped counts the claimed messages whose payload time was past the
+	// clamp window ahead of arrival since the last drain (#1145).
+	clamped int
 }
 
 func newListenerRouter(hooks sessionHooks) *listenerRouter {
@@ -366,7 +374,10 @@ func newListenerRouter(hooks sessionHooks) *listenerRouter {
 // its connection).
 func (r *listenerRouter) set(ls []routedListener, policy string) {
 	r.mu.Lock()
-	r.listeners, r.policy = ls, policy
+	r.listeners, r.policy, r.logTask = ls, policy, ""
+	if len(ls) > 0 {
+		r.logTask = ls[0].taskID
+	}
 	r.mu.Unlock()
 }
 
@@ -389,7 +400,13 @@ func (r *listenerRouter) Claim(msg driver.Message) bool {
 	}
 	emitted, faults := claimer.fn.Interpret(msg.Payload(), time.Now().UTC())
 	if len(emitted) > 0 && r.hooks.samples != nil {
-		r.hooks.samples(claimer.taskID, samplesOf(emitted))
+		dps := samplesOf(emitted)
+		if n := clampedCount(dps); n > 0 {
+			r.mu.Lock()
+			r.clamped += n
+			r.mu.Unlock()
+		}
+		r.hooks.samples(claimer.taskID, dps)
 	}
 	current := ""
 	for _, f := range faults {
@@ -420,7 +437,23 @@ func (r *listenerRouter) Unclaimed(msg driver.Message) {
 	r.mu.Lock()
 	r.unclaimed++
 	r.last = last
+	policy, task := r.policy, r.logTask
 	r.mu.Unlock()
+	if policy == driver.UnmatchedLog && task != "" && r.hooks.samples != nil {
+		r.hooks.samples(task, []collection.Sample{unclaimedLogLine(msg, time.Now().UTC())})
+	}
+}
+
+// unclaimedLogLine is a message no listener claimed, as the log line the log
+// policy lands (#1145): the whole message, raw arrival, an event's name kept
+// as an attribute, held to the log line's caps.
+func unclaimedLogLine(msg driver.Message, at time.Time) collection.Sample {
+	var attrs json.RawMessage
+	if msg.Event != "" {
+		attrs, _ = json.Marshal(map[string]string{"event": msg.Event})
+	}
+	text, attrs := logline.Cap(msg.Data, attrs)
+	return collection.Sample{Lane: driver.LaneLog, Text: text, IsText: true, Attributes: attrs, TS: at}
 }
 
 // maxUnclaimedShown bounds the unclaimed message a log line or a fault names:
@@ -437,11 +470,21 @@ func (r *listenerRouter) drain() (n int, last, policy string) {
 	return n, last, policy
 }
 
+// drainClamped returns and resets the count of clamped payload times since
+// the last drain.
+func (r *listenerRouter) drainClamped() int {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	n := r.clamped
+	r.clamped = 0
+	return n
+}
+
 // samplesOf maps interpreted emits to the samples a batch carries.
 func samplesOf(emitted []driver.Emitted) []collection.Sample {
 	out := make([]collection.Sample, 0, len(emitted))
 	for _, e := range emitted {
-		out = append(out, collection.Sample{Name: e.Name, Value: e.Value, Text: e.Text, IsText: e.IsText, TS: e.TS})
+		out = append(out, collection.FromEmitted(e))
 	}
 	return out
 }
@@ -1045,11 +1088,14 @@ func (m *sessionManager) flushUnclaimed() {
 	}
 	m.flushDatagrams()
 	for _, h := range m.held {
+		taskID, endpoint := h.publishTo()
+		if c := h.router.drainClamped(); c > 0 {
+			slog.Info("payload time ahead of arrival, landed at arrival", "facility", "collection", "task", taskID, "endpoint", endpoint, "count", c, "window", driver.ClampWindow.String())
+		}
 		n, last, policy := h.router.drain()
 		if n == 0 {
 			continue
 		}
-		taskID, endpoint := h.publishTo()
 		slog.Info("unclaimed lines", "facility", "session", "task", taskID, "endpoint", endpoint, "count", n, "last", last, "policy", policy)
 		if policy == driver.UnmatchedCollectionFailed && m.hooks.fault != nil {
 			m.hooks.fault(taskID, fmt.Errorf("%d inbound lines no listener claimed since the last tick, last: %q", n, last))

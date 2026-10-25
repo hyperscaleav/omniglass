@@ -9,6 +9,11 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	// The zone database rides the binary, so a payload time read in a
+	// declared zone parses on a node whose image carries none.
+	_ "time/tzdata"
+
+	"github.com/hyperscaleav/omniglass/internal/logline"
 )
 
 // The compiled runtime unit and its interpreter (#814). Attach bakes each spec
@@ -19,12 +24,19 @@ import (
 // transport clients in internal/collection.
 
 // BakedEmit is one emit with its lane resolved at attach: the compile step,
-// so interpretation never consults a catalog.
+// so interpretation never consults a catalog. A log line's lane is "log" and
+// it has no name. The fields beside the extract (#1145) are omitted when
+// unset, so a spec that declares none bakes to the bytes it always did and
+// its task keeps its content hash.
 type BakedEmit struct {
-	Name      string     `json:"name"`
-	Lane      string     `json:"lane"`
-	Extract   Extract    `json:"extract"`
-	Transform *Transform `json:"transform,omitempty"`
+	Name       string           `json:"name,omitempty"`
+	Lane       string           `json:"lane"`
+	Extract    Extract          `json:"extract,omitzero"`
+	Transform  *Transform       `json:"transform,omitempty"`
+	Message    *Field           `json:"message,omitempty"`
+	Attributes map[string]Field `json:"attributes,omitempty"`
+	Log        *LogEmit         `json:"log,omitempty"`
+	TS         *TimeField       `json:"ts,omitempty"`
 }
 
 // BakedFunction is one derived task's spec: the driver function carried whole.
@@ -98,16 +110,31 @@ func HTTPPayload(body []byte, req *Request) Payload {
 	return p
 }
 
-// Emitted is one interpreted sample: the emit's catalog name, its baked lane,
-// and the typed value (Value on the metric lane, Text elsewhere).
+// Emitted is one interpreted emit: its catalog name (none for a log line),
+// its baked lane, and the typed value (Value on the metric lane, Text
+// elsewhere: a property's value, an event's or a log line's message). An
+// event's payload and a log line's attributes ride Attributes as a JSON
+// object; a log line's severity (canonical), facility and source beside
+// them. Clamped marks a payload time ahead of arrival past the window,
+// landed at arrival instead.
 type Emitted struct {
-	Name   string
-	Lane   string
-	Value  float64
-	Text   string
-	IsText bool
-	TS     time.Time
+	Name       string
+	Lane       string
+	Value      float64
+	Text       string
+	IsText     bool
+	TS         time.Time
+	Attributes json.RawMessage
+	Severity   string
+	Facility   string
+	Source     string
+	Clamped    bool
 }
+
+// ClampWindow is how far ahead of its arrival a payload's time may claim to
+// be before it lands at arrival instead (#1145 decision 3): the node-probe
+// cap's figure (ADR-0161 point 7).
+const ClampWindow = 5 * time.Minute
 
 // Interpret locates and transforms every emit against one payload. Emits that
 // resolve land in the returned samples; each one that does not is a fault
@@ -121,20 +148,57 @@ func (fn *BakedFunction) Interpret(p Payload, ts time.Time) ([]Emitted, []error)
 	var out []Emitted
 	var faults []error
 	for _, em := range fn.Emits {
-		e, err := interpretEmit(em, p, ts)
+		e, landed, err := interpretEmit(em, p, ts)
 		if err != nil {
-			faults = append(faults, fmt.Errorf("driver: %s/%s emit %q: %w", fn.Driver, fn.Function, em.Name, err))
-			continue
+			faults = append(faults, fmt.Errorf("driver: %s/%s emit %q: %w", fn.Driver, fn.Function, em.label(), err))
 		}
-		out = append(out, e)
+		if landed {
+			out = append(out, e)
+		}
 	}
 	return out, faults
 }
 
-func interpretEmit(em BakedEmit, p Payload, ts time.Time) (Emitted, error) {
-	if err := emittable(em.Name); err != nil {
-		return Emitted{}, err
+// label names a baked emit in a fault: its key, or "log" for a log line.
+func (em BakedEmit) label() string {
+	if em.Lane == LaneLog && em.Name == "" {
+		return "log"
 	}
+	return em.Name
+}
+
+// interpretEmit reads one emit off a payload. landed reports an emit that
+// lands; err is a fault, which may come with a landed emit (a payload time
+// that does not parse lands the record at arrival and says so).
+func interpretEmit(em BakedEmit, p Payload, arrival time.Time) (Emitted, bool, error) {
+	if em.Lane != LaneLog {
+		if err := emittable(em.Name); err != nil {
+			return Emitted{}, false, err
+		}
+	}
+	ts, claimed, tsErr := emitTime(em.TS, p, arrival)
+	clamped := claimed != ""
+	if em.Lane == LaneEvent || em.Lane == LaneLog {
+		e, err := interpretRecord(em, p)
+		if err != nil {
+			return Emitted{}, false, err
+		}
+		e.TS, e.Clamped = ts, clamped
+		if clamped && em.Lane == LaneLog {
+			e.Attributes = mergeAttributes(e.Attributes, map[string]any{"ts_claimed": claimed})
+		}
+		return e, true, tsErr
+	}
+	e, err := interpretSample(em, p)
+	if err != nil {
+		return Emitted{}, false, err
+	}
+	e.TS, e.Clamped = ts, clamped
+	return e, true, tsErr
+}
+
+// interpretSample reads a metric or a property: locate, transform, type.
+func interpretSample(em BakedEmit, p Payload) (Emitted, error) {
 	raw, err := locate(em.Extract, p)
 	if err != nil {
 		return Emitted{}, err
@@ -147,8 +211,8 @@ func interpretEmit(em BakedEmit, p Payload, ts time.Time) (Emitted, error) {
 		raw = mapped
 	}
 
-	e := Emitted{Name: em.Name, Lane: em.Lane, TS: ts}
-	if em.Lane == "metric" {
+	e := Emitted{Name: em.Name, Lane: em.Lane}
+	if em.Lane == LaneMetric {
 		v, err := strconv.ParseFloat(strings.TrimSpace(raw), 64)
 		if err != nil {
 			return Emitted{}, fmt.Errorf("value %q is not numeric, and the metric lane carries numbers", raw)
@@ -165,22 +229,259 @@ func interpretEmit(em BakedEmit, p Payload, ts time.Time) (Emitted, error) {
 
 	// Every other lane carries the value as text. A scale on a text lane
 	// still means "this is numeric": parse, scale, and render it back.
-	if em.Transform != nil && em.Transform.Scale != 0 {
-		v, err := strconv.ParseFloat(strings.TrimSpace(raw), 64)
-		if err != nil {
-			return Emitted{}, fmt.Errorf("value %q is not numeric, and the transform declares a scale", raw)
-		}
-		raw = strconv.FormatFloat(v*em.Transform.Scale, 'f', -1, 64)
+	text, err := numericText(raw, em.Transform)
+	if err != nil {
+		return Emitted{}, err
 	}
-	if em.Transform != nil && em.Transform.Cast == "int" {
+	e.Text, e.IsText = text, true
+	return e, nil
+}
+
+// numericText applies a text lane's scale and int cast to a raw value (the
+// map has already run): a scale or an int cast means the value is numeric,
+// so it is parsed, shaped, and rendered back.
+func numericText(raw string, tr *Transform) (string, error) {
+	if tr != nil && tr.Scale != 0 {
 		v, err := strconv.ParseFloat(strings.TrimSpace(raw), 64)
 		if err != nil {
-			return Emitted{}, fmt.Errorf("value %q is not numeric, and the transform declares an int cast", raw)
+			return "", fmt.Errorf("value %q is not numeric, and the transform declares a scale", raw)
+		}
+		raw = strconv.FormatFloat(v*tr.Scale, 'f', -1, 64)
+	}
+	if tr != nil && tr.Cast == "int" {
+		v, err := strconv.ParseFloat(strings.TrimSpace(raw), 64)
+		if err != nil {
+			return "", fmt.Errorf("value %q is not numeric, and the transform declares an int cast", raw)
 		}
 		raw = strconv.FormatInt(int64(math.Trunc(v)), 10)
 	}
-	e.Text, e.IsText = raw, true
+	return raw, nil
+}
+
+// interpretRecord reads an event or a log line (#1145): its message (a
+// constant or an extract, by default the whole payload text), its
+// attributes, and for a log line its severity, facility and source, held to
+// the log line's caps.
+func interpretRecord(em BakedEmit, p Payload) (Emitted, error) {
+	e := Emitted{Name: em.Name, Lane: em.Lane, IsText: true}
+	if em.Message != nil {
+		text, _, err := em.Message.resolve(p)
+		if err != nil {
+			return Emitted{}, fmt.Errorf("message: %w", err)
+		}
+		e.Text = text
+	} else {
+		e.Text = p.Text
+	}
+	attrs := map[string]any{}
+	for _, k := range sortedKeys(em.Attributes) {
+		_, typed, err := em.Attributes[k].resolve(p)
+		if err != nil {
+			return Emitted{}, fmt.Errorf("attribute %q: %w", k, err)
+		}
+		attrs[k] = typed
+	}
+	if len(attrs) > 0 {
+		e.Attributes = mustJSON(attrs)
+	}
+	if em.Lane == LaneEvent {
+		if e.Text == "" && len(attrs) == 0 {
+			return Emitted{}, fmt.Errorf("the event carries no message and no attributes, so it says nothing")
+		}
+		return e, nil
+	}
+	if em.Log != nil {
+		if em.Log.Severity != nil {
+			word, _, err := em.Log.Severity.resolve(p)
+			if err != nil {
+				return Emitted{}, fmt.Errorf("severity: %w", err)
+			}
+			e.Severity, e.Attributes = logline.Normalize(word, e.Attributes)
+		}
+		if em.Log.Facility != nil {
+			fac, _, err := em.Log.Facility.resolve(p)
+			if err != nil {
+				return Emitted{}, fmt.Errorf("facility: %w", err)
+			}
+			e.Facility = fac
+		}
+		e.Source = em.Log.Source
+	}
+	e.Text, e.Attributes = logline.Cap(e.Text, e.Attributes)
 	return e, nil
+}
+
+// resolve reads a field: its constant, or its extract located in the
+// payload, shaped by its transform (the map, then the scale and int cast a
+// text lane applies). typed is the value as a payload carries it: a JSON
+// number for a cast to int or float, a string otherwise.
+func (f Field) resolve(p Payload) (string, any, error) {
+	raw := f.Value
+	if f.Extract != nil {
+		v, err := locate(*f.Extract, p)
+		if err != nil {
+			return "", nil, err
+		}
+		raw = v
+	}
+	tr := f.Transform
+	if tr != nil && len(tr.Map) > 0 {
+		mapped, ok := tr.Map[raw]
+		if !ok {
+			return "", nil, fmt.Errorf("value %q has no entry in the declared map", raw)
+		}
+		raw = mapped
+	}
+	text, err := numericText(raw, tr)
+	if err != nil {
+		return "", nil, err
+	}
+	if tr != nil && (tr.Cast == "int" || tr.Cast == "float") {
+		v, err := strconv.ParseFloat(strings.TrimSpace(text), 64)
+		if err != nil {
+			return "", nil, fmt.Errorf("value %q is not numeric, and the transform declares a %s cast", text, tr.Cast)
+		}
+		return text, v, nil
+	}
+	return text, text, nil
+}
+
+// emitTime is an emit's time: arrival when it declares none, else the
+// payload's time in its layout. claimed is set (the time as the payload
+// stated it) when that time is past ClampWindow ahead of arrival, which
+// lands the record at arrival instead. A time that does not parse lands the
+// record at arrival and is a fault naming the layout.
+func emitTime(tf *TimeField, p Payload, arrival time.Time) (ts time.Time, claimed string, err error) {
+	if tf == nil {
+		return arrival, "", nil
+	}
+	raw, err := locate(tf.Extract, p)
+	if err != nil {
+		return arrival, "", fmt.Errorf("ts: %w", err)
+	}
+	t, err := parseTime(strings.TrimSpace(raw), tf.Layout, tf.Zone, arrival)
+	if err != nil {
+		return arrival, "", fmt.Errorf("ts %q does not parse as %s: %w", raw, tf.Layout, err)
+	}
+	if t.After(arrival.Add(ClampWindow)) {
+		return arrival, t.UTC().Format(time.RFC3339Nano), nil
+	}
+	return t.UTC(), "", nil
+}
+
+// The payload time layouts.
+const (
+	LayoutRFC3339 = "rfc3339"
+	LayoutRFC3164 = "rfc3164"
+	LayoutUnix    = "unix"
+	LayoutUnixMS  = "unix-ms"
+	layoutGo      = "go:"
+)
+
+// checkLayout refuses a layout the interpreter cannot read: one of the named
+// layouts, or go: and a Go reference layout that reads back what it writes.
+func checkLayout(layout string) error {
+	switch layout {
+	case LayoutRFC3339, LayoutRFC3164, LayoutUnix, LayoutUnixMS:
+		return nil
+	}
+	l, ok := strings.CutPrefix(layout, layoutGo)
+	if !ok || l == "" {
+		return fmt.Errorf("layout %q is not one of rfc3339, rfc3164, unix, unix-ms or go:<a Go reference layout>", layout)
+	}
+	ref := time.Date(2006, 1, 2, 15, 4, 5, 0, time.UTC)
+	if _, err := time.Parse(l, ref.Format(l)); err != nil {
+		return fmt.Errorf("layout %q does not read back what it writes: %v", layout, err)
+	}
+	return nil
+}
+
+// parseTime reads raw in a layout. A time with no year (rfc3164, or a Go
+// layout without one) takes the year that puts it nearest arrival, so a
+// line from 31 December read on 1 January lands in the year it was written;
+// a time with no zone is read in zone (UTC when empty).
+func parseTime(raw, layout, zone string, arrival time.Time) (time.Time, error) {
+	loc := time.UTC
+	if zone != "" {
+		l, err := time.LoadLocation(zone)
+		if err != nil {
+			return time.Time{}, err
+		}
+		loc = l
+	}
+	switch layout {
+	case LayoutRFC3339:
+		return time.Parse(time.RFC3339Nano, raw)
+	case LayoutRFC3164:
+		t, err := time.ParseInLocation("Jan 2 15:04:05", strings.Join(strings.Fields(raw), " "), loc)
+		if err != nil {
+			return time.Time{}, err
+		}
+		return nearestYear(t, arrival, loc), nil
+	case LayoutUnix:
+		f, err := strconv.ParseFloat(raw, 64)
+		if err != nil {
+			return time.Time{}, err
+		}
+		sec, frac := math.Modf(f)
+		return time.Unix(int64(sec), int64(math.Round(frac*1e9))).UTC(), nil
+	case LayoutUnixMS:
+		ms, err := strconv.ParseInt(raw, 10, 64)
+		if err != nil {
+			return time.Time{}, err
+		}
+		return time.UnixMilli(ms).UTC(), nil
+	}
+	l, _ := strings.CutPrefix(layout, layoutGo)
+	t, err := time.ParseInLocation(l, raw, loc)
+	if err != nil {
+		return time.Time{}, err
+	}
+	if t.Year() == 0 {
+		t = nearestYear(t, arrival, loc)
+	}
+	return t, nil
+}
+
+// nearestYear places a yearless time in the year (arrival's, or one either
+// side) that puts it nearest arrival.
+func nearestYear(t, arrival time.Time, loc *time.Location) time.Time {
+	y := arrival.In(loc).Year()
+	best := time.Time{}
+	for _, cand := range []int{y - 1, y, y + 1} {
+		c := time.Date(cand, t.Month(), t.Day(), t.Hour(), t.Minute(), t.Second(), t.Nanosecond(), loc)
+		if best.IsZero() || absDuration(c.Sub(arrival)) < absDuration(best.Sub(arrival)) {
+			best = c
+		}
+	}
+	return best
+}
+
+func absDuration(d time.Duration) time.Duration {
+	if d < 0 {
+		return -d
+	}
+	return d
+}
+
+// mergeAttributes adds fields to a JSON object of attributes.
+func mergeAttributes(attrs json.RawMessage, extra map[string]any) json.RawMessage {
+	m := map[string]any{}
+	if len(attrs) > 0 {
+		_ = json.Unmarshal(attrs, &m)
+	}
+	for k, v := range extra {
+		m[k] = v
+	}
+	return mustJSON(m)
+}
+
+func mustJSON(v any) json.RawMessage {
+	b, err := json.Marshal(v)
+	if err != nil {
+		panic(err) // maps of strings, numbers and booleans always encode
+	}
+	return b
 }
 
 // locate finds an emit's raw value in the payload by its one extractor.

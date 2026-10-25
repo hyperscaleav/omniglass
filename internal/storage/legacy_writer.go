@@ -39,7 +39,8 @@ func rulingEmits(spec []byte, calcOwned map[string]bool) ([]byte, []string) {
 	var dropped []string
 	kept := fn.Emits[:0:0]
 	for _, em := range fn.Emits {
-		if emitAdmitted(em.Name, calcOwned) {
+		// A log line names no key, so no writer class refuses it.
+		if em.Lane == driver.LaneLog || emitAdmitted(em.Name, calcOwned) {
 			kept = append(kept, em)
 			continue
 		}
@@ -118,7 +119,8 @@ type RulingViolation struct {
 
 // WriterRulingViolations audits the stored declarations against the ruling,
 // for the boot audit: every driver spec and derived task emitting a key the
-// node lane may not carry, every contract line on a reserved key, every event
+// node lane may not carry (a log line names no key, so none is audited; an
+// event names its event type, which is), every contract line on a reserved key, every event
 // rule firing or clearing with an event type a rule may not write, every
 // command type targeting a key a command may not, and every endpoint left
 // pinning nothing because its node offers a key retired as a pin. Each is
@@ -141,12 +143,12 @@ func (p *PG) WriterRulingViolations(ctx context.Context) ([]RulingViolation, err
 		from driver d
 		cross join lateral jsonb_array_elements(coalesce(d.spec->'polls', '[]') || coalesce(d.spec->'listeners', '[]')) f
 		cross join lateral jsonb_array_elements(coalesce(f->'emits', '[]')) e
-		where d.spec is not null and jsonb_typeof(d.spec) = 'object'
+		where d.spec is not null and jsonb_typeof(d.spec) = 'object' and e ? 'name'
 		union all
 		select 'task ' || t.id, e->>'name'
 		from task t
 		cross join lateral jsonb_array_elements(coalesce(t.spec->'emits', '[]')) e
-		where t.spec->>'driver' is not null`)
+		where t.spec->>'driver' is not null and e ? 'name'`)
 	if err != nil {
 		return nil, fmt.Errorf("storage: audit the stored emits: %w", err)
 	}

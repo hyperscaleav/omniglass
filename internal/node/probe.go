@@ -117,12 +117,20 @@ func runTasks(ctx context.Context, nc *nats.Conn, node string, wl collection.Wor
 				// failed is told again next tick rather than lost.
 				faultseen[task.ID] = current
 			}
+			// The run is booked on what it fetched; what it lands is held to
+			// change for its events and log lines (#1145), so a status
+			// page's last error lands when it changes, not every tick.
+			if n := clampedCount(dps); n > 0 {
+				slog.Info("payload time ahead of arrival, landed at arrival", "facility", "collection", "task", task.ID, "count", n, "window", driver.ClampWindow.String())
+			}
+			dps = sched.changed(task.ID, dps)
 			if len(dps) == 0 {
 				continue
 			}
 			if err := publishBatch(nc, node, task.ID, dps); err != nil {
 				return err
 			}
+			sched.commitChanged(task.ID, dps)
 			continue
 		}
 		// The ladder's informational ping runs beside the probe, bounded,
@@ -214,6 +222,18 @@ func pollInterval(task collection.TaskSpec) time.Duration {
 		return 0
 	}
 	return fn.Schedule.Interval()
+}
+
+// clampedCount is how many of a run's samples claimed a time past the clamp
+// window ahead of their arrival and landed at arrival instead (#1145).
+func clampedCount(dps []collection.Sample) int {
+	n := 0
+	for _, d := range dps {
+		if d.Clamped {
+			n++
+		}
+	}
+	return n
 }
 
 // publishBatch maps samples to a per-lane TelemetryBatch and publishes it on
@@ -658,6 +678,31 @@ func buildBatch(taskID, node string, dps []collection.Sample) *ogv1.TelemetryBat
 		var ts *timestamppb.Timestamp
 		if !d.TS.IsZero() {
 			ts = timestamppb.New(d.TS)
+		}
+		switch d.Lane {
+		case driver.LaneEvent:
+			// A driver's event (#1145): its message and payload, validated
+			// against the event type at ingest.
+			ev.Events = append(ev.Events, &ogv1.EventSample{
+				Name:    d.Name,
+				Message: strings.ToValidUTF8(d.Text, "\uFFFD"),
+				Payload: d.Attributes,
+				Ts:      ts,
+			})
+			continue
+		case driver.LaneLog:
+			// A component's log line the task collected (#1145): its own
+			// lane, so ingest lands it on the task's component, never as the
+			// node's self-log.
+			ev.TaskLogs = append(ev.TaskLogs, &ogv1.LogLine{
+				Message:    strings.ToValidUTF8(d.Text, "\uFFFD"),
+				Severity:   d.Severity,
+				Facility:   strings.ToValidUTF8(d.Facility, "\uFFFD"),
+				Source:     strings.ToValidUTF8(d.Source, "\uFFFD"),
+				Attributes: d.Attributes,
+				Ts:         ts,
+			})
+			continue
 		}
 		if d.IsText {
 			// json.Marshal of a string cannot fail; it yields the quoted canonical form.

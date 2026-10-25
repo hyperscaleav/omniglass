@@ -2,10 +2,12 @@ package collection
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/collection/probekeys"
+	"github.com/hyperscaleav/omniglass/internal/driver"
 )
 
 // The canonical reachability sample names the tcp probe emits, declared once
@@ -42,6 +44,28 @@ type Sample struct {
 	IsText bool
 	TS     time.Time
 	Labels map[string]string
+	// Lane is "event" or "log" for a driver's event or log line (#1145),
+	// where Text is the message; empty for a metric or a property, which
+	// IsText tells apart. Attributes is an event's payload or a log line's
+	// attributes (a JSON object); Severity (canonical), Facility and Source
+	// are a log line's.
+	Lane       string
+	Attributes json.RawMessage
+	Severity   string
+	Facility   string
+	Source     string
+	// Clamped marks a payload time past the clamp window ahead of arrival,
+	// landed at arrival instead (#1145): the node says so in its self-log.
+	Clamped bool
+}
+
+// FromEmitted maps one interpreted driver emit to the sample a batch carries.
+func FromEmitted(e driver.Emitted) Sample {
+	s := Sample{Name: e.Name, Value: e.Value, Text: e.Text, IsText: e.IsText, TS: e.TS, Clamped: e.Clamped}
+	if e.Lane == driver.LaneEvent || e.Lane == driver.LaneLog {
+		s.Lane, s.Attributes, s.Severity, s.Facility, s.Source = e.Lane, e.Attributes, e.Severity, e.Facility, e.Source
+	}
+	return s
 }
 
 // TCPTask is the parsed tcp reachability unit a node runs: the dial target

@@ -22,11 +22,12 @@ const (
 )
 
 type logBody struct {
-	TS            time.Time       `json:"ts" doc:"When the line arrived"`
+	TS            time.Time       `json:"ts" doc:"The line's time: the one it carried when its collector read it from the line, else when it arrived"`
+	ReceivedAt    *time.Time      `json:"received_at,omitempty" doc:"When the server received the line, beside the time it claims; absent for a line stored before it was recorded"`
 	Source        string          `json:"source,omitempty" doc:"The channel the line arrived on (e.g. syslog)"`
 	Severity      string          `json:"severity,omitempty" doc:"The line's severity, when classified"`
 	Facility      string          `json:"facility,omitempty" doc:"The line's facility, when classified"`
-	Instance      string          `json:"instance,omitempty" doc:"The series discriminator, when set"`
+	Instance      string          `json:"instance,omitempty" doc:"The endpoint that collected the line, when a node collected it"`
 	Message       string          `json:"message" doc:"The raw log text"`
 	Attributes    json.RawMessage `json:"attributes,omitempty" doc:"Structured fields parsed from the line, when present"`
 	Labels        json.RawMessage `json:"labels,omitempty" doc:"Freeform classification labels, when present"`
@@ -37,7 +38,31 @@ type logsOutput struct {
 	Body struct {
 		Component string    `json:"component"`
 		Logs      []logBody `json:"logs"`
+		Sources   []string  `json:"sources" doc:"The channels the window's lines arrived on, whatever the filter: the source filter's choices"`
 	}
+}
+
+// The log reads' filter (#1145): a severity threshold on the canonical RFC
+// 5424 set and an exact source. Spelled out on each input, since Huma reads
+// parameters off an input's own fields.
+type componentLogsInput struct {
+	Name     string `path:"name" doc:"The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)"`
+	Severity string `query:"severity" enum:"emergency,alert,critical,error,warning,notice,info,debug" doc:"Only lines at this severity or more severe (RFC 5424's eight levels); a line with no severity is left out"`
+	Source   string `query:"source" maxLength:"100" doc:"Only lines that arrived on this channel"`
+}
+
+func (in *componentLogsInput) filter() storage.LogFilter {
+	return storage.LogFilter{Severity: in.Severity, Source: in.Source}
+}
+
+type systemLogsInput struct {
+	Name     string `path:"name" doc:"The system's name, or a dotted address (e.g. boi.17c.$sys.av)"`
+	Severity string `query:"severity" enum:"emergency,alert,critical,error,warning,notice,info,debug" doc:"Only lines at this severity or more severe (RFC 5424's eight levels); a line with no severity is left out"`
+	Source   string `query:"source" maxLength:"100" doc:"Only lines that arrived on this channel"`
+}
+
+func (in *systemLogsInput) filter() storage.LogFilter {
+	return storage.LogFilter{Severity: in.Severity, Source: in.Source}
 }
 
 type nodeLogsOutput struct {
@@ -54,6 +79,7 @@ func logBodies(rows []storage.LogLine) []logBody {
 	for _, l := range rows {
 		out = append(out, logBody{
 			TS:            l.TS,
+			ReceivedAt:    l.ReceivedAt,
 			Source:        l.Source,
 			Severity:      l.Severity,
 			Facility:      l.Facility,
@@ -75,13 +101,13 @@ func registerLogRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		Method:      http.MethodGet,
 		Path:        "/components/{name}/logs",
 		Summary:     "List a component's recent log lines",
-		Description: "Returns the component's recent raw log lines (the ingest lane of ADR-0066, distinct from typed events), newest first, bounded to the last 24 hours. Gated by component:read; an out-of-scope component is a non-disclosing 404.",
-	}, "component", "read"), func(ctx context.Context, in *componentPathInput) (*logsOutput, error) {
+		Description: "Returns the component's recent raw log lines (the ingest lane of ADR-0066, distinct from typed events), newest first, bounded to the last 24 hours, narrowed by an optional severity threshold and source, with the sources the window carries. Gated by component:read; an out-of-scope component is a non-disclosing 404.",
+	}, "component", "read"), func(ctx context.Context, in *componentLogsInput) (*logsOutput, error) {
 		comp, err := gw.GetComponent(ctx, in.Name, a.scopeFor(ctx, "component", "read"))
 		if err != nil {
 			return nil, mapComponentErr(err)
 		}
-		rows, err := gw.ListComponentLogs(ctx, comp.ID, logHistoryWindow, logReadLimit)
+		rows, err := gw.ListComponentLogs(ctx, comp.ID, logHistoryWindow, logReadLimit, in.filter())
 		if err != nil {
 			// mapRefErr first: comp.ID is always a uuid (GetComponent above
 			// already resolved it), so ListComponentLogs's own resolve can
@@ -94,9 +120,14 @@ func registerLogRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 			}
 			return nil, huma.Error500InternalServerError("read logs")
 		}
+		sources, err := gw.ListComponentLogSources(ctx, comp.ID, logHistoryWindow)
+		if err != nil {
+			return nil, huma.Error500InternalServerError("read log sources")
+		}
 		out := &logsOutput{}
 		out.Body.Component = comp.Name
 		out.Body.Logs = logBodies(rows)
+		out.Body.Sources = nonNilStrings(sources)
 		return out, nil
 	})
 
@@ -130,11 +161,12 @@ func registerLogRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 // Spelled out for the same reason systemEventBody is: Huma does not flatten
 // an embedded struct into the schema.
 type systemLogBody struct {
-	TS            time.Time       `json:"ts" doc:"When the line arrived"`
+	TS            time.Time       `json:"ts" doc:"The line's time: the one it carried when its collector read it from the line, else when it arrived"`
+	ReceivedAt    *time.Time      `json:"received_at,omitempty" doc:"When the server received the line, beside the time it claims; absent for a line stored before it was recorded"`
 	Source        string          `json:"source,omitempty" doc:"The channel the line arrived on (e.g. syslog)"`
 	Severity      string          `json:"severity,omitempty" doc:"The line's severity, when classified"`
 	Facility      string          `json:"facility,omitempty" doc:"The line's facility, when classified"`
-	Instance      string          `json:"instance,omitempty" doc:"The series discriminator, when set"`
+	Instance      string          `json:"instance,omitempty" doc:"The endpoint that collected the line, when a node collected it"`
 	Message       string          `json:"message" doc:"The raw log text"`
 	Attributes    json.RawMessage `json:"attributes,omitempty" doc:"Structured fields parsed from the line, when present"`
 	Labels        json.RawMessage `json:"labels,omitempty" doc:"Freeform classification labels, when present"`
@@ -144,8 +176,9 @@ type systemLogBody struct {
 
 type systemLogsOutput struct {
 	Body struct {
-		System string          `json:"system"`
-		Logs   []systemLogBody `json:"logs"`
+		System  string          `json:"system"`
+		Logs    []systemLogBody `json:"logs"`
+		Sources []string        `json:"sources" doc:"The channels the window's lines arrived on, whatever the filter: the source filter's choices"`
 	}
 }
 
@@ -155,26 +188,39 @@ func registerSystemLogRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 		Method:      http.MethodGet,
 		Path:        "/systems/{name}/logs",
 		Summary:     "List a system's members' recent log lines",
-		Description: "Returns the members' raw log lines merged newest first, bounded to the last 24 hours and capped, each naming the component that wrote it. Gated by system:read; an out-of-scope system is a non-disclosing 404.",
-	}, "system", "read"), func(ctx context.Context, in *systemPathInput) (*systemLogsOutput, error) {
+		Description: "Returns the members' raw log lines merged newest first, bounded to the last 24 hours and capped, each naming the component that wrote it, narrowed by an optional severity threshold and source, with the sources the window carries. Gated by system:read; an out-of-scope system is a non-disclosing 404.",
+	}, "system", "read"), func(ctx context.Context, in *systemLogsInput) (*systemLogsOutput, error) {
 		sys, err := gw.GetSystem(ctx, in.Name, a.scopeFor(ctx, "system", "read"))
 		if err != nil {
 			return nil, mapSystemErr(err)
 		}
-		rows, err := gw.ListSystemLogs(ctx, sys.ID, logHistoryWindow, logReadLimit)
+		rows, err := gw.ListSystemLogs(ctx, sys.ID, logHistoryWindow, logReadLimit, in.filter())
 		if err != nil {
 			return nil, huma.Error500InternalServerError("read system logs")
 		}
+		sources, err := gw.ListSystemLogSources(ctx, sys.ID, logHistoryWindow)
+		if err != nil {
+			return nil, huma.Error500InternalServerError("read system log sources")
+		}
 		out := &systemLogsOutput{}
 		out.Body.System = sys.Name
+		out.Body.Sources = nonNilStrings(sources)
 		out.Body.Logs = make([]systemLogBody, 0, len(rows))
 		for _, l := range rows {
 			out.Body.Logs = append(out.Body.Logs, systemLogBody{
-				TS: l.TS, Source: l.Source, Severity: l.Severity, Facility: l.Facility, Instance: l.Instance,
+				TS: l.TS, ReceivedAt: l.ReceivedAt, Source: l.Source, Severity: l.Severity, Facility: l.Facility, Instance: l.Instance,
 				Message: l.Message, Attributes: l.Attributes, Labels: l.Labels, CorrelationID: l.CorrelationID,
 				Component: l.Component,
 			})
 		}
 		return out, nil
 	})
+}
+
+// nonNilStrings keeps an empty list an empty JSON array, never null.
+func nonNilStrings(s []string) []string {
+	if s == nil {
+		return []string{}
+	}
+	return s
 }

@@ -66,7 +66,7 @@ func TestHistoryWindowsAreBoundedByTheDatabaseClock(t *testing.T) {
 			return err
 		}},
 		{"a component's logs", func() error {
-			_, err := gw.ListComponentLogs(ctx, comp.ID, 24*time.Hour, 50)
+			_, err := gw.ListComponentLogs(ctx, comp.ID, 24*time.Hour, 50, storage.LogFilter{})
 			return err
 		}},
 		{"a node's logs", func() error {

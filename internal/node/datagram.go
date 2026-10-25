@@ -140,8 +140,8 @@ func desiredDatagrams(tasks []collection.TaskSpec) (map[string]datagramWant, map
 		w.arm = nil
 		for _, l := range w.listeners {
 			w.arm = append(w.arm, l.fn.Arm...)
-			if l.fn.Unmatched == driver.UnmatchedCollectionFailed {
-				w.policy = driver.UnmatchedCollectionFailed
+			if l.fn.Unmatched != "" {
+				w.policy = l.fn.Unmatched
 			}
 		}
 		want[id] = w
@@ -353,6 +353,9 @@ func (m *sessionManager) flushDatagrams() {
 		taskID, endpoint := h.publishTo()
 		if n, last := h.sock.DrainForeign(); n > 0 {
 			slog.Warn("foreign datagrams dropped", "facility", "session", "task", taskID, "endpoint", endpoint, "count", n, "last_source", last, "component", h.conn.target)
+		}
+		if c := h.router.drainClamped(); c > 0 {
+			slog.Info("payload time ahead of arrival, landed at arrival", "facility", "collection", "task", taskID, "endpoint", endpoint, "count", c, "window", driver.ClampWindow.String())
 		}
 		n, last, policy := h.router.drain()
 		if n == 0 {

@@ -56,8 +56,10 @@ message TelemetryBatch {
   bytes raw = 6;
 
   // logs is the raw log lines in this batch (ADR-0066): untyped arrival, not
-  // registry-resolved samples. The consumer writes them to log_line, owner-confined
-  // like samples. A node's self-logs ride here.
+  // registry-resolved samples. On the API lane the consumer writes them to
+  // log_line on the batch's owner; on a node's lane they are the node's own
+  // self-logs, written to node_log. A component's lines a node collected ride
+  // task_logs instead.
   repeated LogLine logs = 7;
 
   // owner is the estate address this batch belongs to, set ONLY on the API push
@@ -88,6 +90,14 @@ message TelemetryBatch {
   // and lands in event with origin caught (a natively published occurrence, an
   // xAPI event or an SNMP trap; ADR-0066). Raw log text rides logs instead.
   repeated EventSample events = 12;
+
+  // task_logs is the log lines a task collected from its component (#1145): a
+  // driver's log line emits and the messages a listener policy lands unclaimed.
+  // The consumer writes them to log_line on the task's component, owner-bound
+  // server-side from the task as every sample is, never to node_log. A field of
+  // its own, beside the node's self-logs in logs, so one batch carries both and
+  // neither lands in the other's table. Set only on a node's lane.
+  repeated LogLine task_logs = 13;
 }
 
 // Owner is an exclusive-arc address: which kind of estate entity owns the batch,

@@ -616,10 +616,15 @@ type Gateway interface {
 	// backs the component log panel; ListNodeLogs backs the node self-log panel.
 	InsertLogLines(ctx context.Context, lines []LogLineWrite) error
 	InsertNodeLogs(ctx context.Context, lines []NodeLogWrite) error
-	ListComponentLogs(ctx context.Context, componentName string, window time.Duration, limit int) ([]LogLine, error)
+	// The component and system reads take a LogFilter (#1145): a severity
+	// threshold and a source, either empty for all; the sources reads list
+	// the channels the window carries, the filter's facet.
+	ListComponentLogs(ctx context.Context, componentName string, window time.Duration, limit int, filter LogFilter) ([]LogLine, error)
+	ListComponentLogSources(ctx context.Context, componentName string, window time.Duration) ([]string, error)
 	// ListSystemLogs merges the members' raw log lines newest first, each
 	// naming its writer (#793).
-	ListSystemLogs(ctx context.Context, systemID string, window time.Duration, limit int) ([]LogLine, error)
+	ListSystemLogs(ctx context.Context, systemID string, window time.Duration, limit int, filter LogFilter) ([]LogLine, error)
+	ListSystemLogSources(ctx context.Context, systemID string, window time.Duration) ([]string, error)
 	ListNodeLogs(ctx context.Context, nodeName string, window time.Duration, limit int) ([]LogLine, error)
 
 	// The node tier: the edge runtime's enrollment lifecycle and worklist. A node
