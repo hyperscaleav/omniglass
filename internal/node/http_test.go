@@ -99,6 +99,24 @@ func TestAnHTTPCommandTakesItsCredentialFromTheWorklist(t *testing.T) {
 	}
 }
 
+// A command rides the worklist's address with the worklist's credential:
+// one naming an address the worklist does not is never sent.
+func TestAnHTTPCommandIsNeverSentWhereTheWorklistDoesNotPoint(t *testing.T) {
+	m := newSessionManager(nil, sessionHooks{})
+	m.reconcile(httpTasks())
+	f := &recordingFetcher{ans: collection.HTTPAnswer{Status: 200, Body: []byte(`{"ok":true}`)}}
+	runner := &collection.Runner{HTTPFetch: f}
+	d := collection.CommandDelivery{ID: 10, CommandType: "set-volume", Transport: "https", Target: "10.0.0.99:443", EndpointID: "ep-k",
+		Request: &driver.Request{Method: "POST", Path: "/api/audio/volume", Body: json.RawMessage(`{"volume":40}`)}}
+	if _, out := executeDelivery(t.Context(), runner, d, m); !strings.Contains(out, "moved") || len(f.sent) != 0 {
+		t.Fatalf("a delivery to another address = %q, sent %d", out, len(f.sent))
+	}
+	d.Target = ""
+	if _, out := executeDelivery(t.Context(), runner, d, m); out != "" || len(f.sent) != 1 || f.sent[0].Target != "10.0.0.7:443" {
+		t.Fatalf("a delivery naming no address = %q, sent %v", out, f.sent)
+	}
+}
+
 func TestBookPollRunForHTTPAnswers(t *testing.T) {
 	now := time.Now()
 	s := newPollSchedule(time.Second)

@@ -25,7 +25,11 @@ driver polls on their declared schedule (#822), and, for the line protocol over 
 protocol as datagrams over `udp` (#1037), stateless, each endpoint on its own bound socket
 ([udp](/architecture/collection/#udp)), and http polls and commands over `http` and `https`
 (#902), stateless, each its own request with the endpoint's declared credential, the https pin shared
-with the endpoint's probe ([http and https](/architecture/collection/#http-and-https)). Still `Design`: the
+with the endpoint's probe ([http and https](/architecture/collection/#http-and-https)); an http
+endpoint whose driver logs in (#1114) has one auth state on its node (the cookie jar, the login's
+captured values, a digest challenge), shared by its polls and commands, held in memory alone and
+dropped when its fingerprint moves, on a terminal refusal, and on restart
+([logging in over http](/architecture/collection/#logging-in-over-http)). Still `Design`: the
 durable JetStream command queue, the session pool knobs and the held transports beyond the line
 protocol (#1034 (websocket), #1036 (mqtt), #1038 (SSE over http), #1039 (modbus/tcp), #1040 (bacnet/ip), #1041 (knxnet/ip), [ADR-0153](/architecture/decisions/#adr-0153-the-held-session-proof-is-the-line-protocol-over-tcp-other-held-transports-are-their-own-issues)),
 config-generation-driven cache invalidation, node self-telemetry, the node-down sweep, the JetStream

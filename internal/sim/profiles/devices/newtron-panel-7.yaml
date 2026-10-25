@@ -7,11 +7,14 @@
 # and shades. It integrates with a Kestrel codec for VC control and
 # can live standalone as a room UI.
 #
-# Auth pattern: open HTTP. The auth block declares default credentials
-# for documentation only; enforce is left at false so the listener
-# does not gate traffic. This demonstrates the backward-compat default
-# alongside the basic-auth (Boreal, Kestrel) and header-auth (Polaris)
-# variants.
+# Auth pattern: a form login (#1114). The https API sits behind the
+# panel's sign-in page, as a touchpanel's web admin does: POST /login with
+# the user and password as a form opens a session cookie, a request with
+# no live session is redirected to /login, and a wrong password is sent
+# back to /login?error=1. Sessions live in the panel's memory; the console
+# expires them all by firing POST /api/admin/sessions/expire, as a reboot
+# would, so a collector's re-login can be watched. Beside the digest
+# (Boreal), basic (Kestrel) and header (Polaris) variants.
 
 name: newtron-panel-7
 manufacturer: Newtron
@@ -39,12 +42,12 @@ interfaces:
       summary: "Newtron HTTP API"
       tags: [management, api]
     auth:
-      type: basic
+      type: form
       default_user: admin
-      default_password: ""
-      # enforce: false (default) leaves this listener open. Set
-      # enforce: true when the lab needs to demonstrate a credentialed
-      # touchpanel.
+      default_password: newtron
+      enforce: true
+      login_path: /login
+      expire_path: /api/admin/sessions/expire
     api_surface: newtron-panel
     routes:
       - match: "GET /"

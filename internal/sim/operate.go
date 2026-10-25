@@ -80,7 +80,10 @@ func (d *Device) operateHTTP(op Operation) OperationResult {
 	if err != nil || !strings.HasPrefix(op.Path, "/") || strings.ContainsAny(op.Path, " \t\r\n") {
 		return OperationResult{Error: fmt.Sprintf("%q is not a request path", op.Path)}
 	}
-	req := httptest.NewRequest(method, u.RequestURI(), strings.NewReader(op.Body))
+	if d.HTTPAuth.ExpirePath != "" && u.Path == d.HTTPAuth.ExpirePath && method == http.MethodPost {
+		return d.operateSessionExpiry()
+	}
+	req := asConsole(httptest.NewRequest(method, u.RequestURI(), strings.NewReader(op.Body)))
 	req.RemoteAddr = "console"
 	switch d.HTTPAuth.Mode {
 	case HTTPAuthBasic:

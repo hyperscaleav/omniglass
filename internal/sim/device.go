@@ -186,6 +186,21 @@ const (
 	// (#902), named by QueryName (default "apikey"), the shape some gear's
 	// web API takes its key in.
 	HTTPAuthQuery HTTPAuthMode = "query"
+
+	// HTTPAuthForm is a form login (#1114): POST LoginPath with the user
+	// and password as a form opens a session cookie and redirects home; a
+	// request with no live session is redirected to LoginPath.
+	HTTPAuthForm HTTPAuthMode = "form"
+
+	// HTTPAuthToken is a JSON login (#1114): POST LoginPath with the user
+	// and password as JSON answers a token and its lifetime, which every
+	// later request carries as a bearer token.
+	HTTPAuthToken HTTPAuthMode = "token"
+
+	// HTTPAuthDigest is RFC 7616 digest (#1114): a request with no answer
+	// is challenged with a nonce, which goes stale when the sessions are
+	// expired (a nonce rotation) or a count is replayed.
+	HTTPAuthDigest HTTPAuthMode = "digest"
 )
 
 // HTTPAuth holds the per-device HTTP auth gate. Zero value (Mode = "")
@@ -207,6 +222,15 @@ type HTTPAuth struct {
 	QueryName   string
 	Realm       string
 	PublicPaths []string
+	// LoginPath is a form or token login's path (#1114); SessionTTL the
+	// seconds a session lives (zero: until expired); Algorithm a digest
+	// face's hash (MD5 or SHA-256); ExpirePath the path the console alone
+	// fires to expire every session (and rotate the digest nonce), as a
+	// component's reboot would.
+	LoginPath  string
+	SessionTTL int
+	Algorithm  string
+	ExpirePath string
 }
 
 // Device represents a single simulated device with per-protocol listeners.
@@ -312,6 +336,14 @@ type Device struct {
 	// tells a gated collector (no credentialed request) from a retrying one.
 	httpRequests atomic.Int64
 	httpRefusals atomic.Int64
+	// httpLogins counts the logins a form or token face was sent (#1114),
+	// and logins the sessions they opened, by id to expiry, with the
+	// digest face's nonce and the counts answered under it.
+	httpLogins atomic.Int64
+	logins     loginSessions
+	// httpDigestAnswers counts the requests that answered a digest face's
+	// challenge, right or wrong.
+	httpDigestAnswers atomic.Int64
 	// httpsID is the key and certificate the device's https faces serve
 	// (#902): an ECDSA key derived from its id, so it is the same on every
 	// run and a pinned https endpoint survives a simulator restart.
@@ -1063,6 +1095,9 @@ func (d *Device) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// preserves the open-by-default behavior every existing profile
 	// relies on.
 	d.httpRequests.Add(1)
+	if d.answerLogin(rec, r) {
+		return
+	}
 	if !d.checkHTTPAuth(rec, r) {
 		d.httpRefusals.Add(1)
 		return

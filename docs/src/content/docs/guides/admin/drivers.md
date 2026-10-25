@@ -195,8 +195,10 @@ commands:
 ```
 
 `session.scheme` says how the credential `session.credential` names rides every request: `basic` (a
-`basic-auth` secret), `bearer` (a `bearer-token`), or `api-key` (an `api-key`, placed by
-`session.api_key: { in: header, name: X-Census-Key }` or `{ in: query, name: apikey }`). A 401 to a
+`basic-auth` secret), `bearer` (a `bearer-token`), `api-key` (an `api-key`, placed by
+`session.api_key: { in: header, name: X-Census-Key }` or `{ in: query, name: apikey }`), or `digest`
+(a `basic-auth` secret answered as HTTP digest, MD5 or SHA-256: the node holds the component's
+challenge, answers a stale nonce afresh, and never sends the password). A 401 to a
 credentialed request reads `rejected`, class `auth`, and nothing credentialed is sent again until the
 endpoint's connection fingerprint changes; a `session.terminal` rule may name a `status` (a gear's
 403 for a wrong credential) or a body match. Any other 4xx faults that request alone and waits its
@@ -205,6 +207,49 @@ not followed. The reachability probe never sends the credential, so an http endp
 `endpoint-authenticated` is proven by its polls; a driver whose commands carry a credential needs a
 poll to carry it to the node. Over `https` the `tls-mode` input and the pinned key work as over `tls`
 (above), and `omniglass endpoint retry <id> --certificate <the offered key>` trusts a changed key.
+
+Gear whose web API signs in once declares `session.login` instead of a scheme
+([logging in over http](/architecture/collection/#logging-in-over-http)): the login dialog a telnet
+driver declares, its steps requests. A step names only the secret fields it sends
+(`${secret.login.password}`); the node keeps the session it opens (the component's cookies, the
+values `capture` locates in the last answer, the `headers` that send them) in its memory alone, per
+endpoint, and logs in again only when a request draws a 401, a redirect to the declared login
+`path`, or the declared `expired` text, then replays that request once. A form login:
+
+```yaml
+session:
+  login:
+    path: /login
+    steps:
+      - request:
+          method: POST
+          path: /login
+          body_format: form
+          body: { username: "${secret.login.username}", password: "${secret.login.password}" }
+```
+
+A token login captures the token and sends it as a bearer; `expiry` renews it before it lapses:
+
+```yaml
+session:
+  login:
+    steps:
+      - request: { method: POST, path: /api/login, body: { username: "${secret.login.username}", password: "${secret.login.password}" } }
+    capture: [{ name: token, extract: { jsonpath: token } }]
+    expiry: { jsonpath: expires_in }
+    headers: { Authorization: "Bearer ${session.token}" }
+    expired: { regex: "token expired" }
+```
+
+A login the component refuses (a 401, a redirect back to the login page, another 4xx, or a last
+answer without its `ready` text or a value it captures) is tried once: the endpoint reads
+`rejected`, class `auth`, with the component's reason, and logs in again only when the fingerprint
+moves (fix the secret in place with `omniglass secret update`, or edit the endpoint's inputs). A
+login answered with a 5xx or a dropped connection is retried, but the third in a row reads
+`rejected` too. A session refused right after a fresh login reads `rejected`, never a second login.
+`expiry` is seconds, held between 10 seconds and 30 days; zero or a missing value means none. A
+login declares no scheme beside it, its step paths open with a literal `/`, and a header it sends
+names only a capture, never a secret, `Cookie` or a header a poll or command sets.
 
 A telnet driver:
 
@@ -256,7 +301,8 @@ driver this way. It is a leaf catalog beside the vendor registry. See
   greyed, with the reason on hover: "Official: ships with Omniglass and updates with it."
   Omniglass ships a starter set of official drivers (Generic SNMP, Newtron NVP, and Newtron NVP
   over Telnet, its login a session block, over SSH, and over TLS, pinning the panel's key, the Kestrel
-  Device API over https with basic auth, and HTTP JSON over http with a header key, all with real
+  Device API over https with basic auth, HTTP JSON over http with a header key, Newtron Panel Web
+  over https behind its form login, and Boreal Edge Web Admin over http with digest, all with real
   specs), upserted idempotently at boot so the
   shared set cannot drift install to install; add a custom driver for anything else.
 - **Delete** refuses while an **endpoint is attached** through the driver (422): an attach

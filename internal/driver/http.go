@@ -67,13 +67,17 @@ const (
 	// SchemeAPIKey sends an api-key secret's key in a header or a query
 	// parameter, placed and named by the driver (session.api_key).
 	SchemeAPIKey = "api-key"
+	// SchemeDigest answers the component's RFC 7616 digest challenge with a
+	// basic-auth secret's username and password (#1114): the scheme is the
+	// driver's declaration, the secret the same shape basic reads.
+	SchemeDigest = "digest"
 )
 
 // schemeSecretType is the secret type each scheme reads.
-var schemeSecretType = map[string]string{SchemeBasic: "basic-auth", SchemeBearer: "bearer-token", SchemeAPIKey: "api-key"}
+var schemeSecretType = map[string]string{SchemeBasic: "basic-auth", SchemeBearer: "bearer-token", SchemeAPIKey: "api-key", SchemeDigest: "basic-auth"}
 
 // Schemes is every http auth scheme, in the order refusals name them.
-func Schemes() []string { return []string{SchemeBasic, SchemeBearer, SchemeAPIKey} }
+func Schemes() []string { return []string{SchemeBasic, SchemeBearer, SchemeAPIKey, SchemeDigest} }
 
 // APIKeyPlacement is where an api-key scheme's key rides and under what
 // name: a header (X-API-Key) or a query parameter (apikey). The driver
@@ -328,7 +332,13 @@ func checkHTTPEmit(what string, ex Extract, r Request) error {
 func (s *Spec) validateHTTPSession() error {
 	ss := s.Session
 	if ss.Login != nil {
-		return fmt.Errorf("driver: an http session declares no login yet (#1114); declare a scheme and its credential")
+		if ss.Scheme != "" || ss.Credential != "" || ss.APIKey != nil {
+			return fmt.Errorf("driver: an http session declares a scheme or a login, not both")
+		}
+		if ss.Reprobe != "" || ss.PTY || ss.Exec != "" {
+			return fmt.Errorf("driver: an http session holds no connection, so it declares no reprobe, pty or exec")
+		}
+		return s.validateHTTPLogin()
 	}
 	if ss.Reprobe != "" || ss.PTY || ss.Exec != "" {
 		return fmt.Errorf("driver: an http session holds no connection, so it declares no reprobe, pty or exec")
@@ -417,7 +427,7 @@ func ResolveHTTPCredential(ss *SessionSpec, secrets map[string]map[string]string
 	c := &HTTPCredential{Scheme: ss.Scheme}
 	var err error
 	switch ss.Scheme {
-	case SchemeBasic:
+	case SchemeBasic, SchemeDigest:
 		if c.Username, err = need("username"); err != nil {
 			return nil, err
 		}
@@ -457,15 +467,54 @@ func ResolveHTTPCredential(ss *SessionSpec, secrets map[string]map[string]string
 // rendered leaf by leaf and then encoded, and an xml body's substitutions
 // are escaped as text.
 func renderHTTP(req Request, value string, typed json.RawMessage, params map[string]any) (Request, error) {
+	return renderHTTPWith(req, commandRefs(value, typed, params))
+}
+
+// refs resolves a request's template references: text is a reference's
+// text, wherever it lands; whole is the typed value a JSON body leaf that is
+// exactly one reference takes (ok false renders the text instead).
+type refs struct {
+	text  func(ref string) (string, error)
+	whole func(ref string) (v any, ok bool, err error)
+}
+
+// commandRefs resolves a command's ${value} and ${arg.key}.
+func commandRefs(value string, typed json.RawMessage, params map[string]any) refs {
+	return refs{
+		text: func(ref string) (string, error) { return lookupRef(ref, value, params) },
+		whole: func(ref string) (any, bool, error) {
+			if ref == "value" && len(typed) > 0 {
+				dec := json.NewDecoder(bytes.NewReader(typed))
+				dec.UseNumber()
+				var out any
+				if err := dec.Decode(&out); err != nil {
+					return nil, false, fmt.Errorf("driver: request's ${value} is not JSON: %v", err)
+				}
+				return out, true, nil
+			}
+			if key, ok := strings.CutPrefix(ref, "arg."); ok {
+				p, present := params[key]
+				if !present || p == nil {
+					return nil, false, fmt.Errorf("driver: request references ${arg.%s}, and the command's params carry no %q", key, key)
+				}
+				return p, true, nil
+			}
+			return nil, false, nil
+		},
+	}
+}
+
+// renderHTTPWith renders a request against its references.
+func renderHTTPWith(req Request, r refs) (Request, error) {
 	out := req
 	var err error
-	if out.Path, err = renderTemplate(req.Path, value, params, func(s string) (string, error) { return url.PathEscape(s), nil }); err != nil {
+	if out.Path, err = renderTemplate(req.Path, r, func(s string) (string, error) { return url.PathEscape(s), nil }); err != nil {
 		return Request{}, err
 	}
 	if len(req.Query) > 0 {
 		out.Query = make(map[string]string, len(req.Query))
 		for k, v := range req.Query {
-			if out.Query[k], err = renderTemplate(v, value, params, plain); err != nil {
+			if out.Query[k], err = renderTemplate(v, r, plain); err != nil {
 				return Request{}, err
 			}
 		}
@@ -473,13 +522,13 @@ func renderHTTP(req Request, value string, typed json.RawMessage, params map[str
 	if len(req.Headers) > 0 {
 		out.Headers = make(map[string]string, len(req.Headers))
 		for k, v := range req.Headers {
-			if out.Headers[k], err = renderTemplate(v, value, params, noControl); err != nil {
+			if out.Headers[k], err = renderTemplate(v, r, noControl); err != nil {
 				return Request{}, fmt.Errorf("driver: header %s: %w", k, err)
 			}
 		}
 	}
 	if len(req.Body) > 0 {
-		if out.Body, err = renderBody(req, value, typed, params); err != nil {
+		if out.Body, err = renderBody(req, r); err != nil {
 			return Request{}, err
 		}
 	}
@@ -500,15 +549,15 @@ func noControl(s string) (string, error) {
 	return s, nil
 }
 
-// renderTemplate resolves ${value} and ${arg.key} in s, passing each
-// substitution through place. A reference nothing supplies refuses.
-func renderTemplate(s, value string, params map[string]any, place func(string) (string, error)) (string, error) {
+// renderTemplate resolves the references in s, passing each substitution
+// through place. A reference nothing supplies refuses.
+func renderTemplate(s string, r refs, place func(string) (string, error)) (string, error) {
 	var fault error
 	out := argPattern.ReplaceAllStringFunc(s, func(m string) string {
 		if fault != nil {
 			return m
 		}
-		raw, err := lookupRef(m[2:len(m)-1], value, params)
+		raw, err := r.text(m[2 : len(m)-1])
 		if err != nil {
 			fault = err
 			return m
@@ -567,7 +616,7 @@ func textOf(v any) string {
 // substitutions already escaped for where they land), a json body the JSON
 // it renders to. The body stays JSON on the command wire so it marshals;
 // BodyBytes encodes it in its format at the moment it is sent.
-func renderBody(req Request, value string, typed json.RawMessage, params map[string]any) (json.RawMessage, error) {
+func renderBody(req Request, r refs) (json.RawMessage, error) {
 	dec := json.NewDecoder(bytes.NewReader(req.Body))
 	dec.UseNumber()
 	var v any
@@ -581,16 +630,16 @@ func renderBody(req Request, value string, typed json.RawMessage, params map[str
 		out := make(map[string]string, len(obj))
 		for k, raw := range obj {
 			str, _ := raw.(string)
-			r, err := renderTemplate(str, value, params, plain)
+			rendered, err := renderTemplate(str, r, plain)
 			if err != nil {
 				return nil, err
 			}
-			out[k] = r
+			out[k] = rendered
 		}
 		rendered = out
 	case BodyFormatXML:
 		str, _ := v.(string)
-		r, err := renderTemplate(str, value, params, func(s string) (string, error) {
+		x, err := renderTemplate(str, r, func(s string) (string, error) {
 			var b strings.Builder
 			if err := xml.EscapeText(&b, []byte(s)); err != nil {
 				return "", err
@@ -600,20 +649,20 @@ func renderBody(req Request, value string, typed json.RawMessage, params map[str
 		if err != nil {
 			return nil, err
 		}
-		rendered = r
+		rendered = x
 	case BodyFormatText:
 		str, _ := v.(string)
-		r, err := renderTemplate(str, value, params, plain)
+		x, err := renderTemplate(str, r, plain)
 		if err != nil {
 			return nil, err
 		}
-		rendered = r
+		rendered = x
 	default:
-		r, err := renderJSONValue(v, value, typed, params)
+		x, err := renderJSONValue(v, r)
 		if err != nil {
 			return nil, err
 		}
-		rendered = r
+		rendered = x
 	}
 	b, err := json.Marshal(rendered)
 	if err != nil {
@@ -660,47 +709,37 @@ func (r Request) BodyBytes() ([]byte, error) {
 // exactly one reference takes the referenced value's own JSON type (an
 // intended metric's number, a param's number or boolean); any other leaf is
 // a string with its references rendered as text, which encoding escapes.
-func renderJSONValue(v any, value string, typed json.RawMessage, params map[string]any) (any, error) {
+func renderJSONValue(v any, r refs) (any, error) {
 	switch t := v.(type) {
 	case string:
-		if m := argPattern.FindStringSubmatchIndex(t); m != nil && m[0] == 0 && m[1] == len(t) {
-			ref := t[m[2]:m[3]]
-			if ref == "value" && len(typed) > 0 {
-				dec := json.NewDecoder(bytes.NewReader(typed))
-				dec.UseNumber()
-				var out any
-				if err := dec.Decode(&out); err != nil {
-					return nil, fmt.Errorf("driver: request's ${value} is not JSON: %v", err)
-				}
-				return out, nil
-			}
-			if key, ok := strings.CutPrefix(ref, "arg."); ok {
-				p, present := params[key]
-				if !present || p == nil {
-					return nil, fmt.Errorf("driver: request references ${arg.%s}, and the command's params carry no %q", key, key)
-				}
-				return p, nil
-			}
-		}
-		return renderTemplate(t, value, params, plain)
-	case []any:
-		out := make([]any, len(t))
-		for i, e := range t {
-			r, err := renderJSONValue(e, value, typed, params)
+		if m := argPattern.FindStringSubmatchIndex(t); m != nil && m[0] == 0 && m[1] == len(t) && r.whole != nil {
+			typedV, ok, err := r.whole(t[m[2]:m[3]])
 			if err != nil {
 				return nil, err
 			}
-			out[i] = r
+			if ok {
+				return typedV, nil
+			}
+		}
+		return renderTemplate(t, r, plain)
+	case []any:
+		out := make([]any, len(t))
+		for i, e := range t {
+			x, err := renderJSONValue(e, r)
+			if err != nil {
+				return nil, err
+			}
+			out[i] = x
 		}
 		return out, nil
 	case map[string]any:
 		out := make(map[string]any, len(t))
 		for k, e := range t {
-			r, err := renderJSONValue(e, value, typed, params)
+			x, err := renderJSONValue(e, r)
 			if err != nil {
 				return nil, err
 			}
-			out[k] = r
+			out[k] = x
 		}
 		return out, nil
 	default:

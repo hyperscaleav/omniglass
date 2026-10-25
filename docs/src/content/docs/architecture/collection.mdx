@@ -64,7 +64,13 @@ Built since: **http polls and commands** (#902): a driver's http or `https` requ
 method, path, query, headers, body and response format, its answer read as JSON, XML, HTML or text
 through the one extraction primitive, its credential the session block's declared scheme, a refused
 credential reading `rejected` with class `auth` ([below](#http-and-https),
-[ADR-0902](/architecture/decisions/#adr-0902-http-polls-and-commands-send-real-requests-read-through-one-extraction-authenticated-by-a-declared-scheme)). See
+[ADR-0902](/architecture/decisions/#adr-0902-http-polls-and-commands-send-real-requests-read-through-one-extraction-authenticated-by-a-declared-scheme)).
+Built since: **http logins and digest** (#1114): an http session may declare a login, the login
+dialog carried over to http (request steps naming secret fields, a capture of what the answer
+carries, the headers that send it), its cookies and captured values kept per endpoint in the node's
+memory alone, a lapsed session logged in once more and replayed once; and `digest` answers its
+challenge on the `basic-auth` shape ([below](#logging-in-over-http),
+[ADR-1114](/architecture/decisions/#adr-1114-an-http-login-is-the-login-dialog-carried-over-to-http-and-its-session-lives-in-node-memory-alone)). See
 [ADR-0037](/architecture/decisions/#adr-0037-telemetry-is-a-protobuf-event-over-jetstream-with-an-inline-owner-confining-consumer),
 [ADR-0038](/architecture/decisions/#adr-0038-the-reachability-verdict-is-a-built-in-state),
 [ADR-0039](/architecture/decisions/#adr-0039-an-endpoint-is-a-device-api-the-endpoint-type-is-its-transport-not-its-driver),
@@ -476,7 +482,8 @@ onto the same key, a changed key held beneath the gate across a node restart and
 
 Built (#902, [ADR-0902](/architecture/decisions/#adr-0902-http-polls-and-commands-send-real-requests-read-through-one-extraction-authenticated-by-a-declared-scheme)):
 `http` is a full collection transport, stateless: every poll and every command is a request of its
-own, with no session held. `https` is the same over the shared TLS primitive, its own registry
+own, with no connection held (a login's session, below, is state the node keeps, never a held
+connection). `https` is the same over the shared TLS primitive, its own registry
 entry as `tls` is ([ADR-0160](/architecture/decisions/#adr-0160-tls-is-its-own-transport-over-a-shared-primitive-and-its-pin-is-the-public-key)'s
 rule: its rung is the handshake, and a component may serve a plain web port beside a TLS one).
 
@@ -502,8 +509,9 @@ read it.
 
 **Auth is the session block's scheme.** `session.credential` names the secret input and
 `session.scheme` says how it rides every request: `basic` (a `basic-auth` username and password),
-`bearer` (a `bearer-token`), or `api-key` (an `api-key`, in a header or a query parameter as the
-driver's `session.api_key` places and names it). The credential is written only into the outgoing
+`bearer` (a `bearer-token`), `api-key` (an `api-key`, in a header or a query parameter as the
+driver's `session.api_key` places and names it), or `digest` (a `basic-auth` username and
+password, [below](#logging-in-over-http)). The credential is written only into the outgoing
 request: no error, reason, label or log line carries it, a query key is masked in every URL the node
 names, and a component's text is scrubbed of it before it reaches a reason.
 
@@ -514,9 +522,9 @@ locked" body). Then:
 | answer | reads as |
 |---|---|
 | 2xx | success: the body is the payload |
-| 401 to a credentialed request | a terminal `auth` refusal at the session rung |
+| 401 to a credentialed request | a terminal `auth` refusal at the session rung (over a login session, a lapse first: [below](#logging-in-over-http)) |
 | 408, 429, 5xx | retryable: the poll backs off, never sooner than its `Retry-After`, never later than its interval |
-| 3xx | not followed: the request's own fault, naming where it pointed |
+| 3xx | not followed: the request's own fault, naming where it pointed (a redirect to a login session's declared login page is a lapse) |
 | any other 4xx (a 403, a 404) | the request's own fault: a `collection-failed` naming the status, the poll waiting its interval, nothing gated |
 | no answer (refused, reset, timed out) | retryable, at the transport rung |
 | a certificate the mode refuses | `certificate` at the transport rung, as `tls` |
@@ -559,6 +567,106 @@ end against the simulator (`internal/node/run_http_test.go`: the bar polled and 
 each command settled from its reply, a replaced key held beneath the gate across a restart until
 trusted; a wrong header key sent once per fingerprint across a restart, a rotated key bringing it
 up; a bearer token over namespaced XML and a query key over an HTML status page).
+
+#### Logging in over http
+
+Built (#1114, [ADR-1114](/architecture/decisions/#adr-1114-an-http-login-is-the-login-dialog-carried-over-to-http-and-its-session-lives-in-node-memory-alone)):
+much gear's web API has no per-request credential. It has a sign-in: a form post that sets a
+session cookie, or a JSON login that answers a token. An http session declares it as
+`session.login`, the same login dialog a line session runs (#1061), carried over to http: each step
+is a `request` rather than a prompt, and its references are only the secret fields it sends,
+`${secret.<input>.<field>}`.
+
+```yaml
+session:
+  login:
+    path: /login                       # a redirect back here means the session lapsed
+    steps:
+      - request:
+          method: POST
+          path: /login
+          body_format: form
+          body: { username: "${secret.login.username}", password: "${secret.login.password}" }
+```
+
+A JSON login that answers a token captures it through the one extraction primitive and names the
+headers that carry it on every later request, `${session.<capture>}`; an `expiry` reads how long
+the session lasts (seconds), and `expired` is the text a request draws once it has lapsed:
+
+```yaml
+session:
+  login:
+    steps:
+      - request: { method: POST, path: /api/login, body: { username: "${secret.login.username}", password: "${secret.login.password}" } }
+    capture: [{ name: token, extract: { jsonpath: token } }]
+    expiry: { jsonpath: expires_in }
+    headers: { Authorization: "Bearer ${session.token}" }
+    expired: { regex: "token expired" }
+```
+
+**The session lives in the node's memory alone.** Each http endpoint has one auth state on its
+node, shared by its polls and its commands: a cookie jar holding the component's cookies, the
+values the login captured and the headers they fill, and a digest challenge. It is never logged,
+published or persisted, and it is dropped whole when the endpoint's connection fingerprint moves
+(every login input is a fingerprint input: the steps, the captures, the headers, the paths, each
+secret's sealed version), on a terminal refusal, and with the node process. A login runs on a fresh
+jar before the first request, and again before a declared expiry lapses (with a tenth of the
+lifetime to spare), never once per poll. A declared lifetime is held between 10 seconds and 30 days
+(gear says "never" with a huge number); one the answer omits, or gives as zero or a word, declares
+none, and the session lasts until a request finds it lapsed. Only a login session keeps cookies:
+a request under a scheme is its own, as before, and a jar holds at most 64 cookies of at most 4 KiB.
+
+**A lapse logs in once.** A request over a login session whose answer is a 401, a redirect to the
+declared login `path`, or the declared `expired` text has lapsed: the node logs in once more and
+replays the request once. A lapse right after a fresh login is the credential's terminal `auth`
+refusal (`auth: the component refused the session a fresh login opened (401)`), never a second
+login.
+
+**A refused login is one attempt.** A login step's answer is judged as a login: a rule the driver
+declares terminal, a 401, a redirect back to the login page, any other 4xx, or a 2xx at the last
+step without the declared `ready` text (or without a value it captures) is the component refusing
+the login, a terminal `auth` at the session rung (`auth: the login was sent back to the login page
+(302 to /login)`). It is held as refused for the life of the auth state, the gate holds every
+request beneath it across a restart, and the next login is the one the moved fingerprint brings.
+No retry loop can lock an account out. A login that draws no verdict after its secrets were sent (a
+5xx, a 408, a 429, a connection dropped once the request was written) is retried on the poll's
+backoff, but three in a row spend the login budget, as a line session's does, and read `rejected`
+with the component's last answer; a connection never made sends nothing and charges nothing. A
+redirect anywhere else passes (a form login's way of saying yes).
+
+**Digest** (RFC 7616) is `scheme: digest` on a `basic-auth` secret. The first request draws the
+component's challenge, which the node answers (MD5, SHA-256, or their `-sess` forms; `qop=auth`, or
+the legacy form with none), then holds, answering every later request at once with a rising count.
+A challenge the component marks `stale`, or one under a nonce it rotated without saying so, is
+answered afresh, never read as a refusal; a 401 to an answer of the nonce it still offers is the
+credential's refusal. A 401 offering no digest challenge the node answers (Basic alone, an
+algorithm other than MD5 or SHA-256) is the request's own fault, its schemes named: the credential
+was never sent, so it says nothing about it. The password never crosses the wire.
+
+**Never logged.** The values the auth state holds (the secret fields a login sent, the values it
+captured, the component's cookies) are scrubbed from every reason and error as the credential is,
+in every form a component could echo them, and from every URL the node names (a login step may
+render a secret into its query, though never into its host: a step's path opens with a literal
+`/`). What a login would capture is scrubbed even from the reason that refuses it. A captured
+value with a control character, or longer than 8 KiB, refuses rather than riding a header, and a
+command whose delivery names an address the node's worklist does not is never sent, so a session
+opened with one component never rides a request to another. The node logs that it logged in and why (`opening`, `renewing
+before expiry`, `the session lapsed`), never a value.
+
+**Shaped for OAuth2.** A client-credentials grant (#1119) is this shape with no new primitive: a
+request step posting the client's secret fields, a captured `access_token`, its `expires_in`, and a
+bearer header.
+
+The seeded `newtron-panel-web` reads the simulated Newtron panel's https API behind its form login,
+and `boreal-edge-web` the simulated Boreal display's web admin over digest (and drives its power).
+Proven over real sockets (`internal/collection/httpsession_integration_test.go`: one session across
+many requests, one re-login and replay on a lapse, a wrong password one attempt and never retried, a
+token renewed before its expiry, concurrent requests sharing one login, digest with MD5 and SHA-256
+and a stale nonce, nothing the state holds in any reason) and end to end against the simulator
+(`internal/node/run_http_login_test.go`: a form and a token login keep one session across many polls
+and log in exactly once more when the component forgets it; digest answers its challenge, a stale
+nonce, and a command; a wrong password reads `rejected` with its reason after exactly one attempt,
+across a node restart, and the secret fixed in place brings each back).
 
 #### udp
 

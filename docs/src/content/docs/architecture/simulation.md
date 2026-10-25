@@ -144,7 +144,16 @@ replaces it with `RotateHTTPSKey` and reads it with `HTTPSCertificate`. An http 
 `basic`, `header` (an api key in a named header), `bearer` (an `Authorization: Bearer` token) or
 `query` (an api key in the query parameter `query` names, `apikey` by default), each answering a
 wrong or missing credential with 401; `HTTPRequests` and `HTTPRefusals` count what the faces were
-sent and what the gate refused, so a test tells a gated collector from a retrying one. The DSP serves
+sent and what the gate refused, so a test tells a gated collector from a retrying one. A face's
+`auth` may also sign in (#1114): `form` (a sign-in page at `login_path`, `/login` by default, whose
+post opens a session cookie; a request with no live session is redirected there, a wrong password
+back to it with `?error=1`), `token` (a JSON login at `login_path`, `/api/login` by default,
+answering a token and its `expires_in`, `session_ttl` seconds), or `digest` (RFC 7616, `algorithm`
+MD5 or SHA-256, its nonce going stale on a replayed count or a rotation). The sessions live in the
+component's memory; the console expires them all (and rotates the digest nonce) by firing `POST` at
+the face's `expire_path`, as a reboot would, so a collector's re-login can be watched. The Newtron
+panel's https API signs in with a form and the Boreal display's web admin answers digest;
+`HTTPLogins` and `HTTPDigestAnswers` count the logins and the answered challenges a test reads. The DSP serves
 its status as namespaced XML (`GET /api/status.xml`) beside its JSON and its HTML dashboard, the
 three formats an http driver reads. A test that drives the run mode out of
 process (the end-to-end tests run `omniglass sim run` beside a node) cannot take an ephemeral
@@ -287,7 +296,8 @@ commands and OID map its listeners use: a command's change sticks, so the collec
 next poll, and the operation counts as a hit, so its row lights up. Because it runs beside the
 listeners rather than through the network, an impairment does not stop it: the console can still
 inspect a component it unplugged. A profile that enforces HTTP authentication is called with its
-own credentials, as an authorized client would.
+own credentials, as an authorized client would; a face that signs in (a form, a token, digest)
+trusts the console's own operations, as it would an operator at the component's screen.
 
 ## Adding a simulated component
 

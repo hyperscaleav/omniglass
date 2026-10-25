@@ -185,11 +185,19 @@ func executeHTTP(ctx context.Context, runner *collection.Runner, d collection.Co
 	if err != nil {
 		return "", err.Error()
 	}
-	target := d.Target
-	if target == "" {
-		target = ep.params.Target
+	// The credential, the session and the trust are the worklist's, so the
+	// address is too: a delivery naming another (the endpoint moved since
+	// this node last read its worklist) is not sent, so a session opened
+	// with one component never rides a request to another.
+	target := ep.params.Target
+	if d.Target != "" && target != "" && d.Target != target {
+		return "", "node: the endpoint's address moved since this node last read its worklist, so the command was not sent to it"
 	}
-	x := collection.HTTPExchange{Target: target, Request: *d.Request, Credential: cred, Session: ep.session, Timeout: ep.timeout, BodyCap: commandBodyCap}
+	if target == "" {
+		target = d.Target
+	}
+	x := collection.HTTPExchange{Target: target, Request: *d.Request, Credential: cred, Session: ep.session, Timeout: ep.timeout, BodyCap: commandBodyCap,
+		State: sessions.httpAuthOf(d.EndpointID, ep.task.Fingerprint)}
 	if d.Transport == "https" {
 		trust, err := tlsTrustOf(ep.params)
 		if err != nil {
@@ -200,15 +208,17 @@ func executeHTTP(ctx context.Context, runner *collection.Runner, d collection.Co
 		}
 		x.TLS = &trust
 	}
-	ans, err := runner.HTTPFetch.Exchange(ctx, x)
+	// Over a login session (#1114) the command logs in when no session is
+	// held, and once more on a lapse, sharing the session the polls keep.
+	ans, sx, err := runner.DoHTTP(ctx, x, ep.secrets)
 	if err != nil {
 		if terr, ok := collection.AsTerminal(err); ok {
 			sessions.refuseOver(d.Transport, d.EndpointID, sessions.currentFingerprint(d.EndpointID), terr)
 		}
 		return "", err.Error()
 	}
-	body := collection.Scrub(string(ans.Body), cred)
-	if judged := collection.JudgeHTTPAnswer(ans, x); judged != nil {
+	body := collection.Scrub(string(ans.Body), cred, sx.Redact...)
+	if judged := collection.JudgeHTTPAnswer(ans, sx); judged != nil {
 		if terr, ok := collection.AsTerminal(judged); ok {
 			sessions.refuseOver(d.Transport, d.EndpointID, sessions.currentFingerprint(d.EndpointID), terr)
 		}

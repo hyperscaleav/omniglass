@@ -41,6 +41,10 @@ type DriverPollTask struct {
 	// its probe shares), nil over plain http.
 	Auth *driver.SessionSpec
 	TLS  *TLSTrust
+	// HTTPState is the endpoint's learned http auth (#1114), which its
+	// polls and commands share: the cookie jar, the digest challenge, a
+	// login's session. Nil runs each poll on a throwaway (a login per poll).
+	HTTPState *HTTPAuthState
 }
 
 // HeldExchanger is the slice of a held session a poll borrows: one request,
@@ -156,29 +160,40 @@ func (r *Runner) fetchHTTPPoll(ctx context.Context, t DriverPollTask) (driver.Pa
 	if err != nil {
 		return driver.Payload{}, nil, []error{fmt.Errorf("collection: driver poll %s: %w", name, err)}
 	}
-	x := HTTPExchange{Target: t.Target, Request: *t.Fn.Request, Credential: cred, Session: t.Auth, Timeout: t.Timeout}
+	x := HTTPExchange{Target: t.Target, Request: *t.Fn.Request, Credential: cred, Session: t.Auth, Timeout: t.Timeout, State: t.HTTPState}
 	if t.Transport == "https" {
 		if t.TLS == nil {
 			return driver.Payload{}, nil, []error{fmt.Errorf("collection: driver poll %s: no tls trust for the https endpoint", name)}
 		}
 		x.TLS = t.TLS
 	}
-	ans, err := r.HTTPFetch.Exchange(ctx, x)
+	ans, sx, err := r.DoHTTP(ctx, x, t.Secrets)
 	if err != nil {
-		return driver.Payload{}, nil, []error{fmt.Errorf("collection: driver poll %s: %w", name, err)}
+		// A login the component refused proves the credential wrong, as a
+		// refused request does.
+		var proven []Sample
+		if terr, ok := AsTerminal(err); ok && terr.Class == driver.ClassAuth {
+			proven = authenticatedSample("no", terr.Error())
+		}
+		return driver.Payload{}, proven, []error{fmt.Errorf("collection: driver poll %s: %w", name, err)}
 	}
-	judged := JudgeHTTPAnswer(ans, x)
+	judged := JudgeHTTPAnswer(ans, sx)
 	var proven []Sample
 	if verdict, ok := Authenticated(ans, judged); ok {
 		reason := "the component accepted the credential"
 		if verdict == "no" {
 			reason = judged.Error()
 		}
-		proven = append(proven, Sample{Name: SignalEndpointAuthenticated, Text: verdict, IsText: true, TS: time.Now().UTC(),
-			Labels: map[string]string{ReasonLabel: reason}})
+		proven = authenticatedSample(verdict, reason)
 	}
 	if judged != nil {
 		return driver.Payload{}, proven, []error{fmt.Errorf("collection: driver poll %s: %w", name, judged)}
 	}
 	return driver.HTTPPayload(ans.Body, t.Fn.Request), proven, nil
+}
+
+// authenticatedSample is the endpoint-authenticated rung's sample.
+func authenticatedSample(verdict, reason string) []Sample {
+	return []Sample{{Name: SignalEndpointAuthenticated, Text: verdict, IsText: true, TS: time.Now().UTC(),
+		Labels: map[string]string{ReasonLabel: reason}}}
 }

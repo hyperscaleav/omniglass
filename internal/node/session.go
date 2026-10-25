@@ -450,6 +450,20 @@ type sessionManager struct {
 	// delivery carries without either, actuates with. Touched on the run
 	// loop only.
 	httpEndpoints map[string]httpEndpoint
+	// httpAuth is each http endpoint's learned auth (#1114): its cookie
+	// jar, its digest challenge and its login session, under the
+	// fingerprint it was learned with. Memory only (decision 3 of #1113):
+	// dropped when the fingerprint moves, on a terminal refusal, when the
+	// endpoint leaves the worklist, and with the process. Touched on the
+	// run loop only.
+	httpAuth map[string]heldHTTPAuth
+}
+
+// heldHTTPAuth is an endpoint's http auth state and the fingerprint it was
+// learned under.
+type heldHTTPAuth struct {
+	fingerprint string
+	state       *collection.HTTPAuthState
 }
 
 // httpEndpoint is what an http command needs of its endpoint: a task to key
@@ -489,6 +503,30 @@ func (m *sessionManager) syncHTTPEndpoints(tasks []collection.TaskSpec) {
 		eps[t.EndpointID] = ep
 	}
 	m.httpEndpoints = eps
+	for id, held := range m.httpAuth {
+		if ep, ok := eps[id]; !ok || ep.task.Fingerprint != held.fingerprint {
+			delete(m.httpAuth, id)
+		}
+	}
+}
+
+// httpAuthOf is the endpoint's http auth state under fingerprint: the one
+// held, or a fresh one when none is or the fingerprint moved (a rotated
+// secret, a changed login, an operator's :retry), so nothing learned under
+// one fingerprint is sent under another. Nil without a session manager.
+func (m *sessionManager) httpAuthOf(endpointID, fingerprint string) *collection.HTTPAuthState {
+	if m == nil {
+		return nil
+	}
+	if held, ok := m.httpAuth[endpointID]; ok && held.fingerprint == fingerprint {
+		return held.state
+	}
+	s := collection.NewHTTPAuthState()
+	s.OnLogin = func(why string) {
+		slog.Info("http login", "facility", "session", "endpoint_id", endpointID, "why", why)
+	}
+	m.httpAuth[endpointID] = heldHTTPAuth{fingerprint: fingerprint, state: s}
+	return s
 }
 
 // httpEndpointOf is an http endpoint's credential and trust, as the worklist
@@ -504,7 +542,7 @@ func (m *sessionManager) httpEndpointOf(endpointID string) (httpEndpoint, bool) 
 func newSessionManager(dialers map[string]collection.SessionDialer, hooks sessionHooks) *sessionManager {
 	return &sessionManager{dialers: dialers, hooks: hooks, held: map[string]*heldSession{}, refused: map[string]string{}, pins: map[string]string{},
 		gates: newGates(), published: map[string]string{}, reasonSent: map[string]string{}, pubTask: map[string][2]string{}, certPins: map[string]*collection.HostKeyPin{},
-		datagrams: map[string]*heldDatagram{}, datagramRefused: map[string]string{}}
+		datagrams: map[string]*heldDatagram{}, datagramRefused: map[string]string{}, httpAuth: map[string]heldHTTPAuth{}}
 }
 
 // syncCertPins brings each tls endpoint's pin to what the worklist
@@ -615,6 +653,7 @@ func (m *sessionManager) refuse(endpointID, fingerprint string, terr *collection
 	if m == nil {
 		return
 	}
+	delete(m.httpAuth, endpointID)
 	if m.gates.record(endpointID, fingerprint, terr) {
 		m.syncRejection(endpointID)
 	}
@@ -627,6 +666,10 @@ func (m *sessionManager) refuseOver(transportName, endpointID, fingerprint strin
 	if m == nil {
 		return
 	}
+	// A terminal refusal drops what the endpoint's http auth learned
+	// (decision 3 of #1113): the gate holds every request until the
+	// fingerprint moves, and the next login starts clean.
+	delete(m.httpAuth, endpointID)
 	if m.gates.recordAt(endpointID, fingerprint, terr, rungIn(transportName, terr.Class)) {
 		m.syncRejection(endpointID)
 	}

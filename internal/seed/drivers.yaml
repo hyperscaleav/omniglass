@@ -301,3 +301,71 @@ drivers:
           request: { path: /api/occupancy }
           emits:
             - { name: occupancy-state, extract: { jsonpath: vacant }, transform: { map: { "true": vacant, "false": occupied } } }
+  - id: newtron-panel-web
+    label: Newtron Panel Web
+    version: "1.0.0"
+    spec:
+      version: 1
+      # The Newtron panel's https API sits behind its sign-in page (#1114).
+      # The login is the session's auth step, carried over to http: one form
+      # post naming the login secret's fields, the session cookie the panel
+      # sets kept in the node's memory alone, and a redirect back to /login
+      # read as the session lapsing, which logs in once more and replays.
+      # The panel sending the login itself back to /login is a wrong
+      # password: one attempt, and the endpoint reads rejected.
+      transport: https
+      inputs:
+        - { name: host, kind: string, required: true }
+        - { name: port, kind: number, default: "443" }
+        - { name: tls-mode, kind: string, default: pin }
+        - { name: login, kind: secret, secret_type: basic-auth, required: true }
+      session:
+        login:
+          path: /login
+          steps:
+            - request:
+                method: POST
+                path: /login
+                body_format: form
+                body: { username: "${secret.login.username}", password: "${secret.login.password}" }
+      polls:
+        - name: status
+          schedule: { every: 30s }
+          request: { path: /api/status }
+          emits:
+            - { name: model-number, extract: { jsonpath: device.model } }
+            - { name: serial-number, extract: { jsonpath: device.serial } }
+            - { name: firmware-version, extract: { jsonpath: device.firmware } }
+            - { name: uptime, extract: { jsonpath: device.uptime } }
+  - id: boreal-edge-web
+    label: Boreal Edge Web Admin
+    version: "1.0.0"
+    spec:
+      version: 1
+      # The Boreal display's web admin answers HTTP digest (#1114): the
+      # password never crosses the wire, only a hash of it with the
+      # display's nonce. The node holds the challenge and answers each
+      # request preemptively; a nonce the display calls stale is answered
+      # afresh, and an answer refused outright is a wrong password.
+      transport: http
+      inputs:
+        - { name: host, kind: string, required: true }
+        - { name: port, kind: number, default: "80" }
+        - { name: login, kind: secret, secret_type: basic-auth, required: true }
+      session:
+        credential: login
+        scheme: digest
+      polls:
+        - name: identity
+          schedule: { every: 60s }
+          request: { path: /api/status }
+          emits:
+            - { name: model-number, extract: { jsonpath: device.model } }
+            - { name: serial-number, extract: { jsonpath: device.serial } }
+            - { name: uptime, extract: { jsonpath: device.uptime } }
+      commands:
+        # The power acknowledgement names the state the display entered,
+        # which settles the command against its intent.
+        - command_type: set-power
+          request: { method: POST, path: /api/display/power, body: { power: "${value}" } }
+          settle: { from: response, extract: { jsonpath: power } }

@@ -48,15 +48,29 @@ type SessionSpec struct {
 // prompt need not end a line ("login: " waits for the reply on the same
 // line). A step's Send may reference a secret input's field as
 // ${secret.<input>.<field>}; nothing else renders.
+//
+// Over http (#1114) the same dialog's steps are requests: each step's
+// Request names the secret fields it sends, Ready (optional) matches the
+// last answer's body, Capture reads values out of it through the one
+// extraction primitive, Headers carry them on every later request
+// (${session.<capture>}), Expiry reads how many seconds the session lasts,
+// and Path and Expired say how the component tells a lapsed session: a
+// redirect to its login page, or a body that says so.
 type Login struct {
-	Steps []LoginStep `json:"steps"`
-	Ready Match       `json:"ready"`
+	Steps   []LoginStep       `json:"steps"`
+	Ready   Match             `json:"ready"`
+	Path    string            `json:"path,omitempty"`
+	Capture []Capture         `json:"capture,omitempty"`
+	Headers map[string]string `json:"headers,omitempty"`
+	Expired *Match            `json:"expired,omitempty"`
+	Expiry  *Extract          `json:"expiry,omitempty"`
 }
 
-// LoginStep is one prompt and the answer to it.
+// LoginStep is one prompt and the answer to it, or over http one request.
 type LoginStep struct {
-	Expect Match  `json:"expect"`
-	Send   string `json:"send"`
+	Expect  Match    `json:"expect"`
+	Send    string   `json:"send"`
+	Request *Request `json:"request,omitempty"`
 }
 
 // TerminalRule classifies a reply retrying cannot fix. Over http a rule may
@@ -218,11 +232,17 @@ func (s *Spec) validateSession() error {
 	case !isLineTransport(s.Transport):
 		return fmt.Errorf("driver: a session block rides a held line transport; %q has none", s.Transport)
 	}
-	if l := ss.Login; l != nil {
+	if l := ss.Login; l != nil && !httpSession {
 		if len(l.Steps) == 0 {
 			return fmt.Errorf("driver: the login declares no step")
 		}
 		for i, st := range l.Steps {
+			if st.Request != nil {
+				return fmt.Errorf("driver: login step %d declares a request, which only an http login sends; a line login waits for a prompt", i+1)
+			}
+			if l.Path != "" || len(l.Capture) > 0 || len(l.Headers) > 0 || l.Expired != nil || l.Expiry != nil {
+				return fmt.Errorf("driver: a line login declares no path, capture, headers, expired or expiry; those are an http login's")
+			}
 			if err := validateMatch(fmt.Sprintf("login step %d expect", i+1), st.Expect); err != nil {
 				return err
 			}

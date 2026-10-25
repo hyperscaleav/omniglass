@@ -258,6 +258,7 @@ func collectDriverTask(ctx context.Context, runner *collection.Runner, task coll
 		// credential from the session block, its trust (https) the one the
 		// endpoint's probe shares, the pin included.
 		pt.Session, pt.SessionOnly = nil, false
+		pt.HTTPState = sessions.httpAuthOf(task.EndpointID, task.Fingerprint)
 		if task.Transport == "https" {
 			trust, err := tlsTrustOf(p)
 			if err != nil {

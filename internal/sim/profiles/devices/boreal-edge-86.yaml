@@ -6,12 +6,15 @@
 # meeting rooms. It exposes an HTTP web admin + JSON API and SNMP. No
 # command-line interface.
 #
-# Auth pattern: HTTP Basic. The web admin gates every request behind
-# the configured user/password and returns 401 + WWW-Authenticate when
-# the credentials are missing or wrong, so a browser shows the native
-# credential dialog. Default credentials are admin / boreal, baked into
-# the profile so the lab is self-explanatory; a real Boreal device
-# would force a password change on first boot.
+# Auth pattern: HTTP Digest (RFC 7616, #1114). The web admin challenges
+# every request with a nonce and accepts a hash of the user, the password,
+# the nonce and the request, so the password never crosses the wire; a
+# browser shows its native credential dialog. The nonce goes stale when
+# the console expires the sessions (POST /api/admin/sessions/expire, a
+# reboot's effect), which a client answers afresh rather than reading as a
+# refusal. Default credentials are admin / boreal, baked into the profile
+# so the lab is self-explanatory; a real Boreal device would force a
+# password change on first boot.
 
 name: boreal-edge-86
 manufacturer: Boreal
@@ -36,11 +39,13 @@ interfaces:
       summary: "Web-based management"
       tags: [management, configuration]
     auth:
-      type: basic
+      type: digest
       default_user: admin
       default_password: boreal
       realm: "Boreal Edge Admin"
+      algorithm: MD5
       enforce: true
+      expire_path: /api/admin/sessions/expire
     api_surface: boreal-edge
     routes:
       - match: "GET /"

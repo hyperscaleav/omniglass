@@ -1972,6 +1972,21 @@
    "version": "1.0.0",
    "transport": "http",
    "polls": 2
+  },
+  {
+   "id": "newtron-panel-web",
+   "label": "Newtron Panel Web",
+   "version": "1.0.0",
+   "transport": "https",
+   "polls": 1
+  },
+  {
+   "id": "boreal-edge-web",
+   "label": "Boreal Edge Web Admin",
+   "version": "1.0.0",
+   "transport": "http",
+   "polls": 1,
+   "commands": 1
   }
  ],
  "products": [
