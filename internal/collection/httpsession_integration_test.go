@@ -18,6 +18,7 @@ import (
 
 	"github.com/hyperscaleav/omniglass/internal/collection"
 	"github.com/hyperscaleav/omniglass/internal/driver"
+	"github.com/hyperscaleav/omniglass/internal/nettest"
 )
 
 // http logins and digest over real sockets (#1114): a component behind a
@@ -491,9 +492,7 @@ func TestHTTPLoginNeverNamesItsSecretsInAnError(t *testing.T) {
 	if testing.Short() {
 		t.Skip("real-socket integration test")
 	}
-	srv := httptest.NewServer(http.NotFoundHandler())
-	target := srv.Listener.Addr().String()
-	srv.Close() // nothing answers there now
+	target := nettest.RefusedAddr(t) // nothing answers there
 	session := &driver.SessionSpec{Login: &driver.Login{Steps: []driver.LoginStep{{Request: &driver.Request{Path: "/login",
 		Query: map[string]string{"user": "${secret.login.username}", "pass": "${secret.login.password}"}}}}}}
 	r := &collection.Runner{HTTPFetch: collection.NewHTTPFetcher()}
@@ -579,10 +578,7 @@ func TestHTTPLoginsThatDrawNoVerdictSpendTheBudget(t *testing.T) {
 		t.Fatalf("logins %d, want the budget of three and no more", comp.loginHits.Load())
 	}
 
-	srv := httptest.NewServer(http.NotFoundHandler())
-	closed := srv.Listener.Addr().String()
-	srv.Close()
-	x.Target, x.State = closed, collection.NewHTTPAuthState()
+	x.Target, x.State = nettest.RefusedAddr(t), collection.NewHTTPAuthState()
 	for i := 1; i <= 5; i++ {
 		if _, err := doHTTP(t, r, x, "s3cret-pass"); err == nil {
 			t.Fatal("a login to a closed port succeeded")
