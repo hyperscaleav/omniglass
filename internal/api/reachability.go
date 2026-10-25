@@ -108,21 +108,22 @@ type reachTLSBody struct {
 }
 
 type reachEndpointBody struct {
-	ID            string              `json:"id" doc:"The endpoint's uuid, the address its custom methods take (POST /endpoints/{endpoint}:retry)"`
-	Endpoint      string              `json:"endpoint" doc:"The endpoint's derived name (its transport)"`
-	Label         string              `json:"label,omitempty" doc:"The friendly string an operator reads; absent when unset, and the row then reads the derived name verbatim"`
-	Transport     string              `json:"transport" doc:"The transport (icmp, tcp, ...)"`
-	Address       string              `json:"address,omitempty" doc:"The probed address (target[:port]) from the endpoint params"`
-	Node          string              `json:"node,omitempty" doc:"The node that probes this endpoint"`
-	LastSeen      *time.Time          `json:"last_seen,omitempty" doc:"When the endpoint last delivered a batch, by the server's clock and to within a few seconds, whatever it carried (any lane, any series, an unchanged value); absent until one lands"`
-	Verdict       *reachVerdictBody   `json:"verdict" doc:"The latest reachability verdict, or null if none yet"`
-	Responsive    *reachVerdictBody   `json:"responsive,omitempty" doc:"The layer-7 responds rung (the protocol itself answered), when a probe has climbed it"`
-	Authenticated *reachVerdictBody   `json:"authenticated,omitempty" doc:"The auth rung (the probe's credential was accepted, or a held session's login passed), present only when a credential was tried"`
-	Session       *reachSessionBody   `json:"session,omitempty" doc:"The endpoint's held session, while it is configured to hold one (a standing listen task, or a driver declaring a session): its latest state, when it changed, and why"`
-	Rejection     *reachRejectionBody `json:"rejection,omitempty" doc:"The gate a terminal refusal holds on the endpoint, its rung, class and reason, whether or not the endpoint holds a session (a reachability probe's refusal gates it too); absent when none holds"`
-	TLS           *reachTLSBody       `json:"tls,omitempty" doc:"A tls or https endpoint's handshake and certificate: its verification mode, pinned key, handshake time, expiry and days left; absent on every other transport"`
-	Layers        []reachLayerBody    `json:"layers" doc:"The per-layer probe signals that compose the verdict"`
-	History       []reachHistoryBody  `json:"history" doc:"The recent verdict transitions, oldest first, for the availability strip"`
+	ID            string               `json:"id" doc:"The endpoint's uuid, the address its custom methods take (POST /endpoints/{endpoint}:retry)"`
+	Endpoint      string               `json:"endpoint" doc:"The endpoint's derived name (its transport)"`
+	Label         string               `json:"label,omitempty" doc:"The friendly string an operator reads; absent when unset, and the row then reads the derived name verbatim"`
+	Transport     string               `json:"transport" doc:"The transport (icmp, tcp, ...)"`
+	Address       string               `json:"address,omitempty" doc:"The probed address (target[:port]) from the endpoint params"`
+	Node          string               `json:"node,omitempty" doc:"The node that probes this endpoint"`
+	LastSeen      *time.Time           `json:"last_seen,omitempty" doc:"When the endpoint last delivered a batch, by the server's clock and to within a few seconds, whatever it carried (any lane, any series, an unchanged value); absent until one lands"`
+	Verdict       *reachVerdictBody    `json:"verdict" doc:"The latest reachability verdict, or null if none yet"`
+	Responsive    *reachVerdictBody    `json:"responsive,omitempty" doc:"The layer-7 responds rung (the protocol itself answered), when a probe has climbed it"`
+	Authenticated *reachVerdictBody    `json:"authenticated,omitempty" doc:"The auth rung (the probe's credential was accepted, or a held session's login passed), present only when a credential was tried"`
+	Session       *reachSessionBody    `json:"session,omitempty" doc:"The endpoint's held session, while it is configured to hold one (a standing listen task, or a driver declaring a session): its latest state, when it changed, and why"`
+	Rejection     *reachRejectionBody  `json:"rejection,omitempty" doc:"The gate a terminal refusal holds on the endpoint, its rung, class and reason, whether or not the endpoint holds a session (a reachability probe's refusal gates it too); absent when none holds"`
+	TLS           *reachTLSBody        `json:"tls,omitempty" doc:"A tls or https endpoint's handshake and certificate: its verification mode, pinned key, handshake time, expiry and days left; absent on every other transport"`
+	Webhook       *endpointWebhookBody `json:"webhook,omitempty" doc:"A webhook endpoint's block (#1024): a push endpoint has no ladder and reads last_seen (last heard) in place of a verdict, never down for silence; its scheme, whether it is signed, its token's secret and what its scheme refused. Absent on every dialed transport"`
+	Layers        []reachLayerBody     `json:"layers" doc:"The per-layer probe signals that compose the verdict"`
+	History       []reachHistoryBody   `json:"history" doc:"The recent verdict transitions, oldest first, for the availability strip"`
 }
 
 type reachabilityOutput struct {
@@ -194,6 +195,16 @@ func composeEndpoint(ctx context.Context, gw storage.Gateway, comp string, it st
 	}
 
 	row.LastSeen = it.LastSeenAt
+	if transport.IsPush(it.Transport) {
+		// A push endpoint has nothing to dial: no verdict, no layers, no
+		// history, only when it was last heard and how it is authenticated.
+		w, err := gw.GetEndpointWebhook(ctx, it.ID)
+		if err != nil {
+			return row, err
+		}
+		row.Webhook = webhookBody(w)
+		return row, nil
+	}
 
 	verdict, err := gw.LatestProperty(ctx, comp, verdictKey, it.Name)
 	if err != nil {

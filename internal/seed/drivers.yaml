@@ -511,3 +511,42 @@ drivers:
         - command_type: set-power
           request: { method: POST, path: /api/display/power, body: { power: "${value}" } }
           settle: { from: response, extract: { jsonpath: power } }
+  - id: ucc-webhook
+    label: UCC Webhooks
+    version: "1.0.0"
+    spec:
+      version: 1
+      # The simulated UCC service's webhooks (#1024, ADR-1024): the cloud
+      # posts each meeting's start and end to the endpoint's URL on the
+      # server, signed with an hmac sha256 over its unix timestamp, a dot and
+      # the body, sent as hex after "sha256="; a timestamp more than five
+      # minutes off is refused, and each post's delivery id lands once.
+      # Nothing is dialed: the driver declares listeners only, each claiming
+      # a post by the sender's event header and reading the body by jsonpath.
+      transport: webhook
+      inputs:
+        - { name: signing-key, kind: secret, secret_type: hmac-key, required: true }
+      session:
+        scheme: hmac
+        credential: signing-key
+        webhook:
+          signature: { header: X-UCC-Signature, prefix: "sha256=", timestamp: X-UCC-Timestamp }
+          delivery: X-UCC-Delivery
+      listeners:
+        - name: meeting-started
+          match: { header: { name: X-UCC-Event, equals: meeting.started } }
+          emits:
+            - name: call-started
+              message: { value: "Meeting started" }
+              attributes:
+                meeting: { extract: { jsonpath: meeting } }
+                room: { extract: { jsonpath: room } }
+            - { name: call-state, extract: { jsonpath: event }, transform: { map: { meeting.started: active } } }
+        - name: meeting-ended
+          match: { header: { name: X-UCC-Event, equals: meeting.ended } }
+          emits:
+            - name: call-ended
+              message: { value: "Meeting ended" }
+              attributes:
+                meeting: { extract: { jsonpath: meeting } }
+            - { name: call-state, extract: { jsonpath: event }, transform: { map: { meeting.ended: idle } } }

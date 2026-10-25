@@ -970,3 +970,25 @@ func (UnimplementedGateway) PreviewEventRule(context.Context, RulePreviewSpec, s
 func (UnimplementedGateway) EventRuleState(context.Context, string, scope.Set) (*EventRuleLive, error) {
 	return nil, ErrEventRuleNotFound
 }
+
+func (UnimplementedGateway) ResolveWebhook(context.Context, []byte) (*WebhookTarget, error) {
+	return nil, ErrWebhookNotFound
+}
+func (UnimplementedGateway) RotateWebhookToken(context.Context, string, string, scope.Set, scope.Set) (*Endpoint, error) {
+	return nil, ErrEndpointNotFound
+}
+func (UnimplementedGateway) GetEndpointWebhook(context.Context, string) (*EndpointWebhook, error) {
+	return nil, ErrEndpointNotFound
+}
+func (UnimplementedGateway) RecordWebhookRefusals(context.Context, []WebhookRefusal) error {
+	return nil
+}
+func (UnimplementedGateway) RecordUnclaimedSources(context.Context, []UnclaimedSource) error {
+	return nil
+}
+func (UnimplementedGateway) ListUnclaimedSources(context.Context) ([]UnclaimedSource, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) ClaimUnclaimedSource(context.Context, string, string, string) (bool, error) {
+	return false, nil
+}

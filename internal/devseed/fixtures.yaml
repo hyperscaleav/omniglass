@@ -2085,8 +2085,22 @@ sim_secrets:
     label: Simulated SNMP community (revoked)
     secret_type: snmp-community
     fields: { community: revoked }
+  # The key the simulated UCC service signs its webhooks with (#1024).
+  - name: sim-ucc-signing
+    label: Simulated UCC webhook signing key
+    secret_type: hmac-key
+    fields: { key: ucc-lab-signing-key }
 
 sim_endpoints:
+  # The meeting platform's webhooks (#1024): a server-hosted endpoint, so
+  # no node and no address. Its token is minted at creation; point the
+  # simulated service at it (its http api's POST /api/webhooks, with the
+  # endpoint's URL and this key) and each meeting it starts or ends lands as
+  # call-started or call-ended and the call-state property.
+  - component: ucc-service
+    driver: ucc-webhook
+    label: Meeting webhooks
+    inputs: { signing-key: sim-ucc-signing }
   - component: huddle-touch
     driver: newtron-nvp-telnet
     label: Panel console
@@ -2133,3 +2147,11 @@ sim_endpoints:
     driver: snmp-generic
     label: Panel SNMP
     inputs: { community: sim-snmp-revoked }
+
+# Components that exist only beside the simulator (#1024), so the docs'
+# screenshots, seeded without it, carry none of them: the meeting platform's
+# cloud service, at headquarters, whose webhooks the server receives.
+sim_components:
+  - key: ucc-service
+    product: ucc-service
+    location: hq

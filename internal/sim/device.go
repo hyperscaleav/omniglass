@@ -626,6 +626,8 @@ type routeEntry struct {
 	// Events are the named events the route reports after its mutations
 	// (#1145), each data template compiled once.
 	Events []routeEvent
+	// Emit is the webhook the route posts after its mutations (#1024).
+	Emit *emitAction
 }
 
 // routeEvent is one compiled named event a route reports.
@@ -1005,7 +1007,7 @@ func (d *Device) SetDefaults(defaults map[string]any) {
 // declare the list-of-objects mutation shape (with enum / pattern
 // validation).
 func (d *Device) AddRoute(match, tmplPath string, tmplContent string, mutate map[string]any) error {
-	return d.addRoute(match, tmplPath, tmplContent, mutate, nil, nil)
+	return d.addRoute(match, tmplPath, tmplContent, mutate, nil, nil, nil)
 }
 
 // AddRouteFromProfile registers a route from a profile.Route. Accepts
@@ -1014,10 +1016,10 @@ func (d *Device) AddRoute(match, tmplPath string, tmplContent string, mutate map
 // list with list items running first. Pattern regex compile errors
 // surface here so a malformed profile fails loudly at load time.
 func (d *Device) AddRouteFromProfile(route *profile.Route, tmplContent string) error {
-	return d.addRoute(route.Match, route.Template, tmplContent, route.Mutate, route.Mutations, route.Events)
+	return d.addRoute(route.Match, route.Template, tmplContent, route.Mutate, route.Mutations, route.Events, route.Emit)
 }
 
-func (d *Device) addRoute(match, tmplPath, tmplContent string, mutate map[string]any, items []profile.Mutation, events []profile.RouteEvent) error {
+func (d *Device) addRoute(match, tmplPath, tmplContent string, mutate map[string]any, items []profile.Mutation, events []profile.RouteEvent, emit *profile.Emit) error {
 	method, path, err := parseMatch(match)
 	if err != nil {
 		return err
@@ -1045,12 +1047,18 @@ func (d *Device) addRoute(match, tmplPath, tmplContent string, mutate map[string
 		evs = append(evs, routeEvent{name: e.Name, data: dt})
 	}
 
+	em, err := compileEmit(emit, templateFuncs)
+	if err != nil {
+		return fmt.Errorf("route %q: %w", match, err)
+	}
+
 	d.routes = append(d.routes, routeEntry{
 		Method:    method,
 		Path:      path,
 		Template:  tmpl,
 		Mutations: muts,
 		Events:    evs,
+		Emit:      em,
 	})
 	return nil
 }
@@ -1232,6 +1240,9 @@ func (d *Device) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				d.events.publish(ev.name, buf.String())
 			}
 		}
+		// The route's webhook (#1024), rendered under the lock against the
+		// state its mutations left, posted off it.
+		d.runEmit(route.Emit, "route:"+route.Method+" "+route.Path, data)
 
 		// Render against resolved state so a response template that emits
 		// a computed field (e.g. status.device.uptime) reflects the

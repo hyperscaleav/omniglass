@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/scope"
+	"github.com/hyperscaleav/omniglass/internal/transport"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 )
@@ -1037,12 +1038,12 @@ func (p *PG) ListComponentEndpoints(ctx context.Context, componentRef string) ([
 	}
 	rows, err := p.pool.Query(ctx, `
 		select i.id::text, i.name, coalesce(i.label, ''), i.transport, coalesce((select n.name from node n where n.principal_id = i.node_name), ''), i.params, l.last_seen_at,
-			exists (select 1 from task t where t.endpoint_id = i.id and t.mode = 'listen' and t.enabled)
-				or exists (select 1 from driver d where d.id = i.driver_id and d.spec ? 'session')
+			i.transport <> all($2::text[]) and (exists (select 1 from task t where t.endpoint_id = i.id and t.mode = 'listen' and t.enabled)
+				or exists (select 1 from driver d where d.id = i.driver_id and d.spec ? 'session'))
 		from endpoint i
 		left join endpoint_live l on l.endpoint_id = i.id
 		where i.component = $1::uuid
-		order by i.label nulls last, i.name asc`, c.ID)
+		order by i.label nulls last, i.name asc`, c.ID, pushTransports())
 	if err != nil {
 		return nil, fmt.Errorf("storage: list endpoints for %s: %w", componentRef, err)
 	}
@@ -1085,4 +1086,16 @@ func mapComponentWriteErr(err error) error {
 		}
 	}
 	return fmt.Errorf("storage: component write: %w", err)
+}
+
+// pushTransports names the push transports (#1024): their listeners run on
+// the server and hold no session.
+func pushTransports() []string {
+	var out []string
+	for _, t := range transport.All() {
+		if t.Push {
+			out = append(out, t.Name)
+		}
+	}
+	return out
 }
