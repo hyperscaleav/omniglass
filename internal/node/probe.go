@@ -68,20 +68,32 @@ func runTasks(ctx context.Context, nc *nats.Conn, node string, wl collection.Wor
 			// A driver poll runs on its declared schedule (#822), not on
 			// every heartbeat.
 			interval := pollInterval(task)
+			if driver.IsHTTP(task.Transport) && sessions.streamPending(task.EndpointID) {
+				// The endpoint's stream is making its first attempt under
+				// this fingerprint (#1038): the poll waits a tick for its
+				// verdict rather than sending the credential beside it.
+				continue
+			}
 			sched.rebook(task.ID, task.Fingerprint)
-			sched.releaseRefused(task.ID, sessions.isUp(task.EndpointID))
+			// A poll that rides the held session is released when it comes
+			// up; an http poll is its own request, and an up stream beside it
+			// says nothing of what refused it (#1038).
+			sched.releaseRefused(task.ID, sessions.isUp(task.EndpointID) && !driver.IsHTTP(task.Transport))
 			if !sched.due(task.ID, interval, now) {
 				continue
 			}
 			var dps []collection.Sample
 			var faults []error
-			if gt, gated := sessions.blocked(task.EndpointID, statelessRung(task)); gated && sessions.lookup(task.EndpointID) == nil {
+			// An http poll is its own request even beside a held stream
+			// (#1038): it answers to the gate itself, as a stateless poll does.
+			ownRequest := sessions.lookup(task.EndpointID) == nil || driver.IsHTTP(task.Transport)
+			if gt, gated := sessions.blocked(task.EndpointID, statelessRung(task)); gated && ownRequest {
 				// A stateless poll on a gated endpoint is not retried under
 				// the fingerprint it was refused under (#1056 ruling).
 				faults = []error{fmt.Errorf("node: task %s: the endpoint is gated: %w", task.ID, gt.refusal())}
 			} else {
 				dps, faults = collectDriverTask(ctx, runner, task, sessions)
-				if sessions.lookup(task.EndpointID) == nil {
+				if ownRequest {
 					for _, f := range faults {
 						if terr, ok := collection.AsTerminal(f); ok {
 							sessions.refuseOver(task.Transport, task.EndpointID, task.Fingerprint, terr)

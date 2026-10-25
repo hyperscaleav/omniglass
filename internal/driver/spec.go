@@ -249,10 +249,14 @@ type Poll struct {
 }
 
 // Match classifies an unsolicited inbound payload to its listener: exactly
-// one of a literal prefix or a regex.
+// one of a literal prefix or a regex. A listener's match may also name a
+// server-sent event (Event) and claim JSON data by a field (Field) (#1038),
+// which only the router reads (MatchesMessage).
 type Match struct {
-	Prefix string `json:"prefix,omitempty"`
-	Regex  string `json:"regex,omitempty"`
+	Prefix string      `json:"prefix,omitempty"`
+	Regex  string      `json:"regex,omitempty"`
+	Event  string      `json:"event,omitempty"`
+	Field  *FieldMatch `json:"field,omitempty"`
 }
 
 // Listener is a declared wait: Arm holds the instantiation commands sent on
@@ -541,14 +545,36 @@ func (s *Spec) Validate(cat Catalog) error {
 			return fmt.Errorf("driver: duplicate function name %q", l.Name)
 		}
 		functions[l.Name] = true
-		if !canListen(s.Transport) {
-			return fmt.Errorf("driver: listener %q rides %q, which has no listen path (a listener runs over a held line session or a udp socket), so no node would run it", l.Name, s.Transport)
+		var stream *Request
+		switch {
+		case IsHTTP(s.Transport):
+			// Over http a listener rides the session's server-sent events
+			// stream (#1038), which has no upstream to arm.
+			if s.Session == nil || s.Session.Stream == nil {
+				return fmt.Errorf("driver: listener %q rides %s, whose listen path is a server-sent events stream; declare session.stream", l.Name, s.Transport)
+			}
+			if len(l.Arm) > 0 {
+				return fmt.Errorf("driver: listener %q declares arm, and a server-sent events stream has no upstream to send it on", l.Name)
+			}
+			if err := validateStreamShape(s.Session.Stream); err != nil {
+				return err
+			}
+			stream = s.Session.Stream
+		case !canListen(s.Transport):
+			return fmt.Errorf("driver: listener %q rides %q, which has no listen path (a listener runs over a held line session, a udp socket or an http stream), so no node would run it", l.Name, s.Transport)
 		}
-		if err := validateMatch(fmt.Sprintf("listener %q", l.Name), l.Match); err != nil {
+		if err := validateListenerMatch(fmt.Sprintf("listener %q", l.Name), l.Match, s.Transport, stream); err != nil {
 			return err
 		}
 		if err := validateEmits("listener", l.Name, l.Emits, cat); err != nil {
 			return err
+		}
+		if stream != nil {
+			for _, e := range l.Emits {
+				if err := checkHTTPEmit(fmt.Sprintf("listener %q emit %q", l.Name, e.Name), e.Extract, *stream); err != nil {
+					return err
+				}
+			}
 		}
 	}
 	if err := s.validateTLSInputs(); err != nil {
@@ -567,10 +593,10 @@ func (s *Spec) Validate(cat Catalog) error {
 	// bindings derive none. Commands that ride only a held session (the driver
 	// declares one, or the transport has no stateless line) need a poll or a
 	// listener to hold it, or they could never run (#1049).
-	if IsHTTP(s.Transport) && len(s.Polls) == 0 && s.Session.IsCredentialed() {
+	if IsHTTP(s.Transport) && len(s.Polls) == 0 && len(s.Listeners) == 0 && s.Session.IsCredentialed() {
 		// A credential reaches a node only with a task (#902): a credentialed
 		// http driver with commands alone could never authenticate one.
-		return fmt.Errorf("driver: a credentialed http driver needs a poll to carry its credential to the node; its commands alone derive no task")
+		return fmt.Errorf("driver: a credentialed http driver needs a poll or a listener to carry its credential to the node; its commands alone derive no task")
 	}
 	if !IsHTTP(s.Transport) && len(s.Polls) == 0 && len(s.Listeners) == 0 && (s.Session != nil || (isLineTransport(s.Transport) && s.Transport != "tcp")) {
 		return fmt.Errorf("driver: commands that ride only a held session need a poll or a listener to hold it")
@@ -778,6 +804,9 @@ func checkPollShape(tr string, p Poll) error {
 }
 
 func validateMatch(what string, m Match) error {
+	if m.Event != "" || m.Field != nil {
+		return fmt.Errorf("driver: %s names an event or a field, which only a listener's match reads; declare a prefix or a regex", what)
+	}
 	set := 0
 	if m.Prefix != "" {
 		set++

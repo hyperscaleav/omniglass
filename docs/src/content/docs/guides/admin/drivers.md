@@ -251,6 +251,32 @@ login answered with a 5xx or a dropped connection is retried, but the third in a
 login declares no scheme beside it, its step paths open with a literal `/`, and a header it sends
 names only a capture, never a secret, `Cookie` or a header a poll or command sets.
 
+A component whose web page updates live from a server-sent events stream declares the stream in its
+session block, and listeners claim its events ([a server-sent events
+stream](/architecture/collection/#a-server-sent-events-stream)). The stream is a `GET` (a `path`, a
+`query`, `headers` other than `Accept` and `Last-Event-ID`, which the node sends), read as `json`
+(the default) or `text`, and it rides the session's scheme or login like every request. A listener
+over http declares no `arm` (a stream has no upstream); its `match` may name the event (`event:
+change`), and carry one data rule: a `prefix`, a `regex`, or a JSON `field` (`{ path: path, equals:
+status.audio.volume }`, or a `regex` in place of `equals`):
+
+```yaml
+session:
+  credential: login
+  scheme: basic
+  stream: { path: /api/events }
+listeners:
+  - name: volume-change
+    match: { event: change, field: { path: path, equals: status.audio.volume } }
+    emits:
+      - { name: volume, extract: { jsonpath: value } }
+```
+
+The node holds the stream as the endpoint's session: it reads `up`, `recovering` after a drop (it
+resumes from the last event id after the server's `retry`, landing nothing twice), and `rejected`
+when the component refuses its credential, which also gates the endpoint's polls and commands. A
+stream needs a listener (with none, nothing holds it), and a listener over http needs the stream.
+
 A telnet driver:
 
 ```yaml

@@ -175,6 +175,14 @@ endpoint stays up. A wrong password is one login attempt: the endpoint reads **r
 ([logging in over http](/architecture/collection/#logging-in-over-http)). A component answering
 HTTP digest is read the same way, its password never sent.
 
+An http or https endpoint whose driver holds the component's server-sent events stream (the seeded
+Kestrel driver does) has a session like a line endpoint's: its session pill reads **up** while the
+stream is open, and every change the component announces lands the moment it happens, no poll
+involved. A dropped stream reads **recovering**, then picks up where it left off (from the last event
+it was sent, which the component replays after), so nothing is lost or counted twice; a component that refuses the stream's credential
+reads **rejected** with the reason, and holds the endpoint's polls beneath the same refusal until you
+fix the secret ([a server-sent events stream](/architecture/collection/#a-server-sent-events-stream)).
+
 A **udp** endpoint has no port to open, so its breakdown lists its **request** rung beside the ping:
 the driver's named request, answered (with its round trip) or not, which is the layer its verdict
 follows. A component
@@ -273,8 +281,9 @@ the gate at its next check-in and tries once, and a refusal met again sets it an
 `endpoint:retry` the button is greyed and its tooltip says so, while the reason still reads. Where
 the gate holds the endpoint's polls too (any refusal at the transport rung, and a credential every
 poll carries: an snmp community, or an http or https driver's credential), the Collection card reads
-**polls stopped** beside it. An **http** or **https** endpoint holds no session either (a login's
-session lives in its node's memory, never as a held connection): a 401 to a request carrying its
+**polls stopped** beside it. An **http** or **https** endpoint holds no session unless its driver
+holds the component's event stream (above; a login's session lives in its node's memory, never as a
+held connection), and its refusals read the same with or without one: a 401 to a request carrying its
 credential gates it, class `auth`, with the reason `auth: the component refused the credential
 (401)`, a login the component refuses gates it the same way with its own reason (`auth: the login
 was sent back to the login page (302 to /login)`), and an https certificate the endpoint refuses

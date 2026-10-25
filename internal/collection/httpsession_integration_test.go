@@ -399,10 +399,18 @@ func (d *digestComponent) challenge(w http.ResponseWriter, stale bool) {
 
 func (d *digestComponent) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	d.hits.Add(1)
+	if d.gate(w, r) {
+		_, _ = w.Write([]byte(`{"power":"on"}`))
+	}
+}
+
+// gate admits a request whose digest answer is right, under the current
+// nonce and a fresh count, and challenges any other.
+func (d *digestComponent) gate(w http.ResponseWriter, r *http.Request) bool {
 	auth := r.Header.Get("Authorization")
 	if !strings.HasPrefix(auth, "Digest ") {
 		d.challenge(w, false)
-		return
+		return false
 	}
 	d.answered.Add(1)
 	p := map[string]string{}
@@ -423,21 +431,21 @@ func (d *digestComponent) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	want := hx(ha1 + ":" + p["nonce"] + ":" + p["nc"] + ":" + p["cnonce"] + ":auth:" + ha2)
 	if p["response"] != want || p["algorithm"] != alg || p["opaque"] != "op-1" {
 		d.challenge(w, false)
-		return
+		return false
 	}
 	if p["nonce"] != nonce {
 		d.challenge(w, true)
-		return
+		return false
 	}
 	d.mu.Lock()
 	if p["nc"] <= d.lastNC {
 		d.mu.Unlock()
 		d.challenge(w, true)
-		return
+		return false
 	}
 	d.lastNC = p["nc"]
 	d.mu.Unlock()
-	_, _ = w.Write([]byte(`{"power":"on"}`))
+	return true
 }
 
 func TestHTTPDigestAnswersItsChallengeAndAStaleNonce(t *testing.T) {

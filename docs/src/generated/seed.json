@@ -676,14 +676,14 @@
   },
   {
    "name": "http",
-   "description": "HTTP, stateless: a driver's polls and commands send real requests (method, path, query, headers, body) and read JSON, XML, HTML or text answers, authenticated by the endpoint's declared scheme (basic, bearer, an API key); the probe draws a real response off the API without a credential (responds), any status counting as an answer.",
-   "held": false,
+   "description": "HTTP: a driver's polls and commands send real requests (method, path, query, headers, body) and read JSON, XML, HTML or text answers, authenticated by the endpoint's declared scheme (basic, bearer, an API key, digest) or a login whose session the node keeps; a declared server-sent events stream is held as a session, its events landing through the listeners; the probe draws a real response off the API without a credential (responds), any status counting as an answer.",
+   "held": true,
    "built": true
   },
   {
    "name": "https",
-   "description": "HTTPS: http over a TLS connection, its own entry so a component can serve a plain web port beside a TLS one; the probe runs the handshake (responds), reports the certificate's expiry, then draws a response, the certificate verified against the node's roots, pinned to the public key on first use, or (by the operator's explicit choice) not verified.",
-   "held": false,
+   "description": "HTTPS: http over a TLS connection, its own entry so a component can serve a plain web port beside a TLS one, a server-sent events stream held over it as over http; the probe runs the handshake (responds), reports the certificate's expiry, then draws a response, the certificate verified against the node's roots, pinned to the public key on first use, or (by the operator's explicit choice) not verified.",
+   "held": true,
    "built": true
   },
   {
@@ -1919,6 +1919,7 @@
    "version": "1.0.0",
    "transport": "https",
    "polls": 3,
+   "listeners": 5,
    "commands": 3
   },
   {

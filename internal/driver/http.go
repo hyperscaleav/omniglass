@@ -336,12 +336,18 @@ func (s *Spec) validateHTTPSession() error {
 			return fmt.Errorf("driver: an http session declares a scheme or a login, not both")
 		}
 		if ss.Reprobe != "" || ss.PTY || ss.Exec != "" {
-			return fmt.Errorf("driver: an http session holds no connection, so it declares no reprobe, pty or exec")
+			return fmt.Errorf("driver: an http session declares no reprobe, pty or exec")
+		}
+		if err := s.validateStream(); err != nil {
+			return err
 		}
 		return s.validateHTTPLogin()
 	}
 	if ss.Reprobe != "" || ss.PTY || ss.Exec != "" {
-		return fmt.Errorf("driver: an http session holds no connection, so it declares no reprobe, pty or exec")
+		return fmt.Errorf("driver: an http session declares no reprobe, pty or exec")
+	}
+	if err := s.validateStream(); err != nil {
+		return err
 	}
 	switch {
 	case ss.Scheme == "" && ss.Credential != "":
@@ -768,8 +774,9 @@ func (r Request) ContentTypeOf() string {
 }
 
 // canListen reports a transport a listener can run over: a held line
-// session's reader, or udp's own socket (#1037). Anywhere else nothing would
-// run its standing listen task (#1115); SSE on http is #1038.
+// session's reader, or udp's own socket (#1037); http and https listen on a
+// declared stream (#1038), which the listener validation requires. Anywhere
+// else nothing would run its standing listen task (#1115).
 func canListen(name string) bool {
 	t, ok := transport.ByName(name)
 	return ok && (t.Line || name == "udp")

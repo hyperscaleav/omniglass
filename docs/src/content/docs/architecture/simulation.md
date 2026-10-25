@@ -153,7 +153,16 @@ MD5 or SHA-256, its nonce going stale on a replayed count or a rotation). The se
 component's memory; the console expires them all (and rotates the digest nonce) by firing `POST` at
 the face's `expire_path`, as a reboot would, so a collector's re-login can be watched. The Newtron
 panel's https API signs in with a form and the Boreal display's web admin answers digest;
-`HTTPLogins` and `HTTPDigestAnswers` count the logins and the answered challenges a test reads. The DSP serves
+`HTTPLogins` and `HTTPDigestAnswers` count the logins and the answered challenges a test reads. An
+http face may also declare `events` (#1038), a server-sent events stream at its `path`, behind the
+face's auth: every change to the state paths it names (each with everything beneath it) is one
+numbered event (`event: change`, its data the path and the new value as JSON), the last 256 kept,
+and a reconnect's `Last-Event-ID` replays from that event (the event itself included, as some
+servers resend it, so a collector's dedup is exercised on every resume); `retry_ms` is the
+reconnection time it asks for, and the console drops every stream by firing `POST` at its
+`drop_path`, as a restart would. The Kestrel bar streams its call, volume, mute and power;
+`EventStreams`, `EventStreamAttempts`, `DropEventStreams` and `HTTPCredentialRefusals` are what a
+test reads and drives. The DSP serves
 its status as namespaced XML (`GET /api/status.xml`) beside its JSON and its HTML dashboard, the
 three formats an http driver reads. A test that drives the run mode out of
 process (the end-to-end tests run `omniglass sim run` beside a node) cannot take an ephemeral

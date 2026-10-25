@@ -60,6 +60,9 @@ func runCommands(ctx context.Context, nc *nats.Conn, name string, runner *collec
 		return
 	}
 	for _, d := range reply.Commands {
+		if commandWaits(d, sessions) {
+			continue
+		}
 		o, done := executed[d.ID]
 		outcome, reply := o.outcome, o.reply
 		if !done {
@@ -77,6 +80,14 @@ func runCommands(ctx context.Context, nc *nats.Conn, name string, runner *collec
 		}
 		_ = nc.Publish(collection.CommandStatusSubject(name), st)
 	}
+}
+
+// commandWaits reports a command that waits a tick: an http command whose
+// endpoint's stream is making its first attempt under this fingerprint
+// (#1038) waits for the stream's verdict rather than sending the credential
+// beside it, and the server redelivers it.
+func commandWaits(d collection.CommandDelivery, sessions *sessionManager) bool {
+	return driver.IsHTTP(d.Transport) && sessions.streamPending(d.EndpointID)
 }
 
 // executeDelivery actuates one rendered command over its transport, returning

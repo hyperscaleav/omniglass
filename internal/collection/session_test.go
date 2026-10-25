@@ -748,15 +748,15 @@ func TestSessionBackoffIsJitteredAndCapped(t *testing.T) {
 // push delivers an inbound line the way a real reader does: offered to the
 // listeners, unclaimed if none takes it.
 func (c *fakeHeldConn) push(line string) {
-	if c.in != nil && !c.in.Claim(line) {
-		c.in.Unclaimed(line)
+	if c.in != nil && !c.in.Claim(driver.LineMessage(line)) {
+		c.in.Unclaimed(driver.LineMessage(line))
 	}
 }
 
 type prefixInbound struct{ prefix string }
 
-func (p prefixInbound) Claim(line string) bool { return strings.HasPrefix(line, p.prefix) }
-func (p prefixInbound) Unclaimed(string)       {}
+func (p prefixInbound) Claim(msg driver.Message) bool { return strings.HasPrefix(msg.Data, p.prefix) }
+func (p prefixInbound) Unclaimed(driver.Message)      {}
 
 // Review of #822 with sessions: polls are gated by their schedule, so a down
 // session must not wait for a poll to prove its returning connection. A line

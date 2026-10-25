@@ -119,7 +119,8 @@ type fakeInbound struct {
 	unclaimed []string
 }
 
-func (f *fakeInbound) Claim(line string) bool {
+func (f *fakeInbound) Claim(msg driver.Message) bool {
+	line := msg.Data
 	if !strings.HasPrefix(line, f.prefix) {
 		return false
 	}
@@ -129,9 +130,9 @@ func (f *fakeInbound) Claim(line string) bool {
 	return true
 }
 
-func (f *fakeInbound) Unclaimed(line string) {
+func (f *fakeInbound) Unclaimed(msg driver.Message) {
 	f.mu.Lock()
-	f.unclaimed = append(f.unclaimed, line)
+	f.unclaimed = append(f.unclaimed, msg.Data)
 	f.mu.Unlock()
 }
 

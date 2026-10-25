@@ -149,6 +149,9 @@ func channelOf(ss *driver.SessionSpec) collection.ChannelOptions {
 // the worklist did not deliver refuses the session, naming the reference.
 func sessionAuthOf(task collection.TaskSpec) (*collection.SessionAuth, error) {
 	ss := task.Session
+	if driver.IsHTTP(task.Transport) {
+		return streamAuthOf(task)
+	}
 	auth := &collection.SessionAuth{}
 	if ss != nil && ss.Login != nil {
 		sends, err := ss.Login.Render(task.Secrets)
@@ -178,6 +181,25 @@ func sessionAuthOf(task collection.TaskSpec) (*collection.SessionAuth, error) {
 		return nil, nil
 	}
 	return auth, nil
+}
+
+// streamAuthOf is an http endpoint's stream as its session's auth step
+// (#1038): the stream request, the session block whose scheme or login it
+// rides, and the credential resolved from the delivered secrets. The
+// endpoint's learned auth, the fetcher, the trust and the resume join at
+// start, from the session manager.
+func streamAuthOf(task collection.TaskSpec) (*collection.SessionAuth, error) {
+	ss := task.Session
+	if ss == nil || ss.Stream == nil {
+		return nil, fmt.Errorf("an http listener needs the session's stream, and the driver declares none")
+	}
+	cred, err := driver.ResolveHTTPCredential(ss, task.Secrets)
+	if err != nil {
+		return nil, err
+	}
+	return &collection.SessionAuth{HTTP: &collection.HTTPStreamAuth{
+		Request: *ss.Stream, Session: ss, Credential: cred, Secrets: task.Secrets,
+	}}, nil
 }
 
 // tlsTrustOf reads a tls endpoint's handshake off its params (#1035): the
@@ -256,7 +278,7 @@ func desiredSessions(tasks []collection.TaskSpec, dialers map[string]collection.
 			continue
 		}
 		var trust *collection.TLSTrust
-		if task.Transport == "tls" {
+		if transport.UsesTLS(task.Transport) {
 			t, err := tlsTrustOf(p)
 			if err != nil {
 				refused[task.EndpointID] = err.Error()
@@ -329,11 +351,11 @@ func (r *listenerRouter) set(ls []routedListener, policy string) {
 // claims it, and its emits are interpreted at once and published (push, not
 // poll). A claimed line whose emits do not extract is a collection-failed
 // fault, landed once per change so a repeating push cannot flood the lane.
-func (r *listenerRouter) Claim(line string) bool {
+func (r *listenerRouter) Claim(msg driver.Message) bool {
 	r.mu.Lock()
 	var claimer *routedListener
 	for i := range r.listeners {
-		if m := r.listeners[i].fn.Match; m != nil && m.Matches(line) {
+		if m := r.listeners[i].fn.Match; m != nil && m.MatchesMessage(msg) {
 			claimer = &r.listeners[i]
 			break
 		}
@@ -342,7 +364,7 @@ func (r *listenerRouter) Claim(line string) bool {
 	if claimer == nil {
 		return false
 	}
-	emitted, faults := claimer.fn.Interpret(driver.Payload{Text: line}, time.Now().UTC())
+	emitted, faults := claimer.fn.Interpret(msg.Payload(), time.Now().UTC())
 	if len(emitted) > 0 && r.hooks.samples != nil {
 		r.hooks.samples(claimer.taskID, samplesOf(emitted))
 	}
@@ -362,13 +384,25 @@ func (r *listenerRouter) Claim(line string) bool {
 	return true
 }
 
-// Unclaimed counts a line no listener claimed and no exchange was owed.
-func (r *listenerRouter) Unclaimed(line string) {
+// Unclaimed counts a message no listener claimed and no exchange was owed:
+// a line, or an event named by its event name.
+func (r *listenerRouter) Unclaimed(msg driver.Message) {
+	last := msg.Data
+	if msg.Event != "" {
+		last = msg.Event + ": " + msg.Data
+	}
+	if len(last) > maxUnclaimedShown {
+		last = strings.ToValidUTF8(last[:maxUnclaimedShown], "") + "..."
+	}
 	r.mu.Lock()
 	r.unclaimed++
-	r.last = line
+	r.last = last
 	r.mu.Unlock()
 }
+
+// maxUnclaimedShown bounds the unclaimed message a log line or a fault names:
+// an event's data may be a whole document.
+const maxUnclaimedShown = 256
 
 // drain returns and resets the unclaimed count since the last drain, with
 // the last such line and the policy that decides what becomes of them.
@@ -454,9 +488,24 @@ type sessionManager struct {
 	// jar, its digest challenge and its login session, under the
 	// fingerprint it was learned with. Memory only (decision 3 of #1113):
 	// dropped when the fingerprint moves, on a terminal refusal, when the
-	// endpoint leaves the worklist, and with the process. Touched on the
-	// run loop only.
+	// endpoint leaves the worklist, and with the process. Behind authMu: a
+	// held session's refusal drops it from the session's own goroutine.
+	authMu   sync.Mutex
 	httpAuth map[string]heldHTTPAuth
+	// streamResumes is each http endpoint's stream resume (#1038): the last
+	// event id and the ids it landed, carried across a session's recycle
+	// (a fingerprint move) so a stream resumes where it left off, dropped
+	// when the endpoint leaves the worklist. Touched on the run loop only.
+	streamResumes map[string]heldResume
+	// httpFetch sends a stream login's steps; nil is the real fetcher.
+	httpFetch collection.HTTPFetcher
+}
+
+// heldResume is an endpoint's stream resume and the target it was learned
+// from.
+type heldResume struct {
+	target string
+	resume *collection.StreamResume
 }
 
 // heldHTTPAuth is an endpoint's http auth state and the fingerprint it was
@@ -503,6 +552,8 @@ func (m *sessionManager) syncHTTPEndpoints(tasks []collection.TaskSpec) {
 		eps[t.EndpointID] = ep
 	}
 	m.httpEndpoints = eps
+	m.authMu.Lock()
+	defer m.authMu.Unlock()
 	for id, held := range m.httpAuth {
 		if ep, ok := eps[id]; !ok || ep.task.Fingerprint != held.fingerprint {
 			delete(m.httpAuth, id)
@@ -518,6 +569,8 @@ func (m *sessionManager) httpAuthOf(endpointID, fingerprint string) *collection.
 	if m == nil {
 		return nil
 	}
+	m.authMu.Lock()
+	defer m.authMu.Unlock()
 	if held, ok := m.httpAuth[endpointID]; ok && held.fingerprint == fingerprint {
 		return held.state
 	}
@@ -542,7 +595,8 @@ func (m *sessionManager) httpEndpointOf(endpointID string) (httpEndpoint, bool) 
 func newSessionManager(dialers map[string]collection.SessionDialer, hooks sessionHooks) *sessionManager {
 	return &sessionManager{dialers: dialers, hooks: hooks, held: map[string]*heldSession{}, refused: map[string]string{}, pins: map[string]string{},
 		gates: newGates(), published: map[string]string{}, reasonSent: map[string]string{}, pubTask: map[string][2]string{}, certPins: map[string]*collection.HostKeyPin{},
-		datagrams: map[string]*heldDatagram{}, datagramRefused: map[string]string{}, httpAuth: map[string]heldHTTPAuth{}}
+		datagrams: map[string]*heldDatagram{}, datagramRefused: map[string]string{}, httpAuth: map[string]heldHTTPAuth{},
+		streamResumes: map[string]heldResume{}}
 }
 
 // syncCertPins brings each tls endpoint's pin to what the worklist
@@ -646,6 +700,13 @@ func (m *sessionManager) syncRejection(endpointID string) {
 	m.hooks.rejection(task[0], task[1], want, reason)
 }
 
+// dropHTTPAuth forgets what an endpoint's http auth learned.
+func (m *sessionManager) dropHTTPAuth(endpointID string) {
+	m.authMu.Lock()
+	delete(m.httpAuth, endpointID)
+	m.authMu.Unlock()
+}
+
 // refuse gates an endpoint for a terminal refusal and publishes it.
 // fingerprint is the one the refused attempt was made under; a refusal
 // from an older one gates nothing.
@@ -653,7 +714,7 @@ func (m *sessionManager) refuse(endpointID, fingerprint string, terr *collection
 	if m == nil {
 		return
 	}
-	delete(m.httpAuth, endpointID)
+	m.dropHTTPAuth(endpointID)
 	if m.gates.record(endpointID, fingerprint, terr) {
 		m.syncRejection(endpointID)
 	}
@@ -669,7 +730,7 @@ func (m *sessionManager) refuseOver(transportName, endpointID, fingerprint strin
 	// A terminal refusal drops what the endpoint's http auth learned
 	// (decision 3 of #1113): the gate holds every request until the
 	// fingerprint moves, and the next login starts clean.
-	delete(m.httpAuth, endpointID)
+	m.dropHTTPAuth(endpointID)
 	if m.gates.recordAt(endpointID, fingerprint, terr, rungIn(transportName, terr.Class)) {
 		m.syncRejection(endpointID)
 	}
@@ -749,6 +810,11 @@ func (m *sessionManager) reconcile(tasks []collection.TaskSpec) {
 			delete(m.pins, id)
 		}
 	}
+	for id := range m.streamResumes {
+		if _, ok := want[id]; !ok {
+			delete(m.streamResumes, id)
+		}
+	}
 	for id, h := range m.held {
 		w, ok := want[id]
 		// Only a key this node learned on first use is carried across a
@@ -778,6 +844,11 @@ func (m *sessionManager) reconcile(tasks []collection.TaskSpec) {
 			// The endpoint's tls pin was replaced (an operator's :retry with
 			// certificate): the session redials onto the new one.
 			m.teardown(id, h, "its certificate pin changed")
+		case driver.IsHTTP(w.conn.transport) && m.authGated(id) && !h.rejected():
+			// A poll or a command met the refusal (#1038): the stream sends
+			// the same credential, so it stops too, and restarts rejected
+			// under the gate rather than trying once more.
+			m.teardown(id, h, "its endpoint's credential was refused")
 		default:
 			h.mu.Lock()
 			h.taskID, h.endpoint = w.taskID, w.endpoint
@@ -844,6 +915,33 @@ func (m *sessionManager) start(id string, w sessionWant) {
 		}
 		trust = &t
 	}
+	if w.auth != nil && w.auth.HTTP != nil {
+		// The stream shares the endpoint's learned auth with its polls and
+		// commands (one login serves all), runs a login's steps over the
+		// same trust, and resumes where the endpoint's last stream left off.
+		a := *w.auth.HTTP
+		a.State = m.httpAuthOf(id, w.fingerprint)
+		a.Fetcher = m.httpFetch
+		if a.Fetcher == nil {
+			a.Fetcher = collection.NewHTTPFetcher()
+		}
+		a.TLS = trust
+		// The resume is the endpoint's while it reaches the same component:
+		// a new target is another component, whose ids mean nothing here.
+		if held, ok := m.streamResumes[id]; !ok || held.target != w.conn.target {
+			m.streamResumes[id] = heldResume{target: w.conn.target, resume: collection.NewStreamResume()}
+		}
+		a.Resume = m.streamResumes[id].resume
+		// A refusal a poll or a command met holds the stream's reconnects
+		// too, under the same fingerprint.
+		a.Gate = func() *collection.TerminalError {
+			if gt, ok := m.gates.blocked(id, rungAuthenticated); ok {
+				return gt.refusal()
+			}
+			return nil
+		}
+		w.auth = &collection.SessionAuth{HTTP: &a}
+	}
 	var rejected *collection.TerminalError
 	if gt, ok := m.gates.blocked(id, rungAuthenticated); ok {
 		// A gate this node holds for this fingerprint, or carried back from
@@ -886,7 +984,9 @@ func (m *sessionManager) start(id string, w sessionWant) {
 				// refusal is the node's placeholder, #1110): a refusal met,
 				// a re-probe's under the same fingerprint included.
 				m.refuse(id, w.fingerprint, tr.Refusal)
-			case tr.State == collection.SessionUp:
+			case tr.State == collection.SessionUp && !driver.IsHTTP(w.conn.transport):
+				// An http stream coming up proves its own request only; a
+				// gate its endpoint's poll or command met stands (#1038).
 				m.pass(id)
 			}
 		},
@@ -921,6 +1021,42 @@ func (m *sessionManager) flushUnclaimed() {
 			m.hooks.fault(taskID, fmt.Errorf("%d inbound lines no listener claimed since the last tick, last: %q", n, last))
 		}
 	}
+}
+
+// streamPending reports an http endpoint whose held stream has made its
+// first attempt yet to decide (#1038): its polls wait for the stream's
+// verdict, so a credential the stream is about to have refused is not sent
+// a second time beside it.
+func (m *sessionManager) streamPending(endpointID string) bool {
+	if m == nil || endpointID == "" {
+		return false
+	}
+	h, ok := m.held[endpointID]
+	if !ok || !driver.IsHTTP(h.conn.transport) {
+		return false
+	}
+	switch st, _ := h.sess.State(); st {
+	case "", collection.SessionEstablishing:
+		// "" is a session started and not yet running its machine.
+		return true
+	case collection.SessionRejected:
+		// Rejected and its gate not yet recorded: the session reads its
+		// state before it reports the refusal that gates the endpoint.
+		return !m.authGated(endpointID)
+	}
+	return false
+}
+
+// authGated reports an endpoint gated at the session rung.
+func (m *sessionManager) authGated(endpointID string) bool {
+	_, ok := m.gates.blocked(endpointID, rungAuthenticated)
+	return ok
+}
+
+// rejected reports a held session that reads rejected.
+func (h *heldSession) rejected() bool {
+	st, _ := h.sess.State()
+	return st == collection.SessionRejected
 }
 
 // lookup is the session a poll or a command on endpointID borrows, or nil (a

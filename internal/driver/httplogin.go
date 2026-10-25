@@ -58,7 +58,7 @@ func (s *Spec) validateHTTPLogin() error {
 		}
 		last = *st.Request
 	}
-	if l.Ready.Prefix != "" || l.Ready.Regex != "" {
+	if l.Ready != (Match{}) {
 		if err := validateMatch("login ready", l.Ready); err != nil {
 			return err
 		}

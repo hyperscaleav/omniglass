@@ -419,6 +419,9 @@ func (e *Engine) bindInterface(dev *Device, iface profile.Interface) (net.Addr, 
 		// without gating traffic, which keeps existing devices
 		// open-by-default until they opt in.
 		dev.HTTPAuth = httpAuthFromProfile(iface.Auth)
+		if iface.Events.Path != "" {
+			dev.SetEvents(iface.Events)
+		}
 		if iface.TLS {
 			// The device's own https identity (#902), the same on every
 			// run, so a pinned https endpoint survives a restart.

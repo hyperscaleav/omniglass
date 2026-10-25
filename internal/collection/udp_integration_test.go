@@ -86,7 +86,8 @@ type claimer struct {
 	unclaimed []string
 }
 
-func (c *claimer) Claim(line string) bool {
+func (c *claimer) Claim(msg driver.Message) bool {
+	line := msg.Data
 	if !strings.HasPrefix(line, c.prefix) {
 		return false
 	}
@@ -96,9 +97,9 @@ func (c *claimer) Claim(line string) bool {
 	return true
 }
 
-func (c *claimer) Unclaimed(line string) {
+func (c *claimer) Unclaimed(msg driver.Message) {
 	c.mu.Lock()
-	c.unclaimed = append(c.unclaimed, line)
+	c.unclaimed = append(c.unclaimed, msg.Data)
 	c.mu.Unlock()
 }
 

@@ -41,6 +41,11 @@ type SessionSpec struct {
 	// names; APIKey places an api key in a header or a query parameter.
 	Scheme string           `json:"scheme,omitempty"`
 	APIKey *APIKeyPlacement `json:"api_key,omitempty"`
+	// Stream is the server-sent events stream an http session holds
+	// (#1038): a GET held open, its events offered to the listeners, read
+	// in the request's format (json or text). It rides the session's scheme
+	// or its login, as every request does.
+	Stream *Request `json:"stream,omitempty"`
 }
 
 // Login is a declared login dialog: each step waits for its prompt and then
@@ -215,6 +220,9 @@ func (s *Spec) validateSession() error {
 		return nil
 	}
 	httpSession := IsHTTP(s.Transport)
+	if ss.Stream != nil && !httpSession {
+		return fmt.Errorf("driver: a session stream is a server-sent events stream over http; %q has none", s.Transport)
+	}
 	if (ss.Scheme != "" || ss.APIKey != nil) && !httpSession {
 		return fmt.Errorf("driver: a session scheme rides every http request; %q is not http", s.Transport)
 	}
@@ -280,7 +288,7 @@ func (s *Spec) validateSession() error {
 		if r.Status != 0 && (r.Status < 100 || r.Status > 599) {
 			return fmt.Errorf("driver: terminal rule %d status %d is not an http status (100 to 599)", i+1, r.Status)
 		}
-		if httpSession && r.Status != 0 && r.Match.Prefix == "" && r.Match.Regex == "" {
+		if httpSession && r.Status != 0 && r.Match == (Match{}) {
 			continue // a status alone is a whole rule over http
 		}
 		if err := validateMatch(fmt.Sprintf("terminal rule %d", i+1), r.Match); err != nil {

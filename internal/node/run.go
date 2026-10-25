@@ -174,7 +174,11 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 		tlsSession = collection.NewTLSSessionDialer()
 	}
 	certLogged := map[string]string{}
-	sessions := newSessionManager(map[string]collection.SessionDialer{"tcp": lineSession, "tls": tlsSession, "telnet": telnetSession, "ssh": sshSession}, sessionHooks{
+	// An http endpoint's server-sent events stream is held as a session
+	// (#1038), over plain http or the https handshake.
+	streamSession := collection.NewHTTPStreamDialer()
+	sessions := newSessionManager(map[string]collection.SessionDialer{"tcp": lineSession, "tls": tlsSession, "telnet": telnetSession, "ssh": sshSession,
+		"http": streamSession, "https": streamSession}, sessionHooks{
 		transition: func(taskID, endpoint string, tr collection.SessionTransition) {
 			// A rejection is logged once, at the transition, never per tick
 			// (#1049): the rejected session dials no more, so nothing repeats.
@@ -258,6 +262,7 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 			logger.Info("session armed", "facility", "session", "task", taskID, "endpoint", endpoint, "line", line, "reply", reply)
 		},
 	})
+	sessions.httpFetch = httpFetcher
 	defer sessions.closeAll()
 
 	// verdicts remembers the last reachability verdict per task (keyed by the

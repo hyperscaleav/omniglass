@@ -159,3 +159,56 @@ func TestABatchCarryingAComponentsBytesStillMarshals(t *testing.T) {
 		t.Fatalf("a batch with a component's bytes in a label does not marshal: %v", err)
 	}
 }
+
+// blockingDialer holds every attempt until released: a stream making its
+// first attempt.
+type blockingDialer struct{ release chan struct{} }
+
+func (d blockingDialer) wait(ctx context.Context) error {
+	select {
+	case <-d.release:
+	case <-ctx.Done():
+	}
+	return errors.New("refused")
+}
+
+func (d blockingDialer) Dial(ctx context.Context, _ string, _ time.Duration, _ collection.Inbound) (collection.HeldConn, error) {
+	return nil, d.wait(ctx)
+}
+
+func (d blockingDialer) Connect(ctx context.Context, _ string, _ time.Duration) (collection.PendingConn, error) {
+	return nil, d.wait(ctx)
+}
+
+func (d blockingDialer) ConnectTLS(ctx context.Context, _ string, _ time.Duration, _ collection.TLSTrust) (collection.PendingConn, error) {
+	return nil, d.wait(ctx)
+}
+
+// An http endpoint's polls and commands wait while its stream makes its
+// first attempt under the fingerprint, so a credential the stream is about
+// to have refused is not sent beside it (#1038).
+func TestHTTPPollsAndCommandsWaitForTheStreamsFirstVerdict(t *testing.T) {
+	d := blockingDialer{release: make(chan struct{})}
+	m := newSessionManager(map[string]collection.SessionDialer{"https": d}, sessionHooks{})
+	defer m.closeAll()
+	tasks := httpTasks()
+	session := *tasks[1].Session
+	session.Stream = &driver.Request{Path: "/api/events"}
+	listen := tasks[1]
+	listen.ID, listen.Mode, listen.Session = "c-listen", "listen", &session
+	listen.Spec = json.RawMessage(`{"driver":"kestrel-api","function":"volume-change","match":{"event":"change"},"emits":[{"name":"volume","lane":"metric","extract":{"jsonpath":"value"}}]}`)
+	tasks[1].Session = &session
+	m.reconcile(append(tasks, listen))
+	time.Sleep(100 * time.Millisecond)
+	if !m.streamPending("ep-k") {
+		st, why := m.held["ep-k"].sess.State()
+		t.Fatalf("a stream making its first attempt is not pending: %s (%s)", st, why)
+	}
+	if !commandWaits(collection.CommandDelivery{Transport: "https", EndpointID: "ep-k"}, m) {
+		t.Fatal("an http command did not wait for the stream's verdict")
+	}
+	if commandWaits(collection.CommandDelivery{Transport: "tcp", EndpointID: "ep-k"}, m) {
+		t.Fatal("a line command waited on an http stream")
+	}
+	close(d.release)
+}

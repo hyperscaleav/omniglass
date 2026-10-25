@@ -135,13 +135,14 @@ type HeldConn interface {
 	Close() error
 }
 
-// Inbound is how a held connection disposes of an inbound line (#817): Claim
-// offers it to the listeners (true when one took it, which also delivers
-// it), and Unclaimed reports a line nothing took, neither a listener nor an
-// exchange. Both are called on the connection's reader goroutine, in order.
+// Inbound is how a held connection disposes of an inbound message (#817): a
+// line, or a server-sent event (#1038). Claim offers it to the listeners
+// (true when one took it, which also delivers it), and Unclaimed reports one
+// nothing took, neither a listener nor an exchange. Both are called on the
+// connection's reader goroutine, in order.
 type Inbound interface {
-	Claim(line string) bool
-	Unclaimed(line string)
+	Claim(msg driver.Message) bool
+	Unclaimed(msg driver.Message)
 }
 
 // SessionDialer establishes a held connection to a target, routing its
@@ -179,6 +180,16 @@ type SessionAuth struct {
 	Login *LoginDialog
 	// SSH is the transport's own credential and host key pin (#1032).
 	SSH *SSHAuth
+	// HTTP is an http stream's request and the auth it rides (#1038).
+	HTTP *HTTPStreamAuth
+}
+
+// judges reports an auth step whose passing proves a credential, the
+// endpoint-authenticated rung: a login, ssh userauth, or a stream that
+// carries a credential. An uncredentialed stream's step only sends its
+// request, which proves nothing about a credential.
+func (a *SessionAuth) judges() bool {
+	return a.Login != nil || a.SSH != nil || (a.HTTP != nil && a.HTTP.credentialed())
 }
 
 // SSHAuth is an ssh session's credential and its host key pin.
@@ -576,9 +587,9 @@ func (s *Session) transition(state SessionState, reason string, conn HeldConn) {
 // pushes must not wait a poll's interval to read up again.
 type provingInbound struct{ s *Session }
 
-func (p provingInbound) Claim(line string) bool {
+func (p provingInbound) Claim(msg driver.Message) bool {
 	in := p.s.cfg.Inbound
-	if in == nil || !in.Claim(line) {
+	if in == nil || !in.Claim(msg) {
 		return false
 	}
 	p.s.mu.Lock()
@@ -593,9 +604,9 @@ func (p provingInbound) Claim(line string) bool {
 	return true
 }
 
-func (p provingInbound) Unclaimed(line string) {
+func (p provingInbound) Unclaimed(msg driver.Message) {
 	if in := p.s.cfg.Inbound; in != nil {
-		in.Unclaimed(line)
+		in.Unclaimed(msg)
 	}
 }
 
@@ -673,8 +684,19 @@ func (s *Session) run(ctx context.Context) {
 			return
 		}
 	}
+	// hint is the wait a dropped connection asked for before the next
+	// attempt (a stream's retry, #1038), held to the backoff's bounds.
+	var hint time.Duration
 	for {
-		if failures > 0 && !s.sleep(ctx, s.cfg.Backoff(failures)) {
+		var wait time.Duration
+		if failures > 0 {
+			wait = s.cfg.Backoff(failures)
+		}
+		if hint > wait {
+			wait = hint
+		}
+		hint = 0
+		if wait > 0 && !s.sleep(ctx, wait) {
 			return
 		}
 		conn, err := s.connect(ctx)
@@ -778,6 +800,9 @@ func (s *Session) run(ctx context.Context) {
 		}
 		stopTimer(stableTimer)
 		cause := conn.Err()
+		if h, ok := conn.(retryHinter); ok {
+			hint = clampRetry(h.RetryHint())
+		}
 		_ = conn.Close()
 		s.lend(nil, nil, nil, nil, nil)
 		// An exchange in flight when the connection died may yet classify a
@@ -872,7 +897,9 @@ func (s *Session) authenticateAndOpen(ctx context.Context, pc PendingConn) (Held
 			return nil, err
 		}
 		s.loginDrops = 0
-		s.reportAuth(true, "the auth step passed on "+s.cfg.Target)
+		if s.cfg.Auth.judges() {
+			s.reportAuth(true, "the auth step passed on "+s.cfg.Target)
+		}
 	}
 	conn, err := pc.Open(provingInbound{s}, s.cfg.Channel)
 	if err != nil {
@@ -964,6 +991,26 @@ func (s *Session) firstDialDone() {
 	s.dialing = false
 	close(s.changed)
 	s.changed = make(chan struct{})
+}
+
+// retryHinter is a held connection that asks how long to wait before the
+// next attempt: a server-sent events stream's retry field (#1038).
+type retryHinter interface {
+	RetryHint() time.Duration
+}
+
+// clampRetry holds a connection's asked-for wait to the backoff's bounds;
+// zero (nothing asked) stays zero.
+func clampRetry(d time.Duration) time.Duration {
+	switch {
+	case d <= 0:
+		return 0
+	case d < SessionBackoffBase:
+		return SessionBackoffBase
+	case d > SessionBackoffMax:
+		return SessionBackoffMax
+	}
+	return d
 }
 
 func stopTimer(t *time.Timer) {

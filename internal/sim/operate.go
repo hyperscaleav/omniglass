@@ -83,6 +83,14 @@ func (d *Device) operateHTTP(op Operation) OperationResult {
 	if d.HTTPAuth.ExpirePath != "" && u.Path == d.HTTPAuth.ExpirePath && method == http.MethodPost {
 		return d.operateSessionExpiry()
 	}
+	if d.events != nil && d.events.cfg.DropPath != "" && u.Path == d.events.cfg.DropPath && method == http.MethodPost {
+		return d.operateEventsDrop()
+	}
+	if d.events != nil && u.Path == d.events.cfg.Path && method == http.MethodGet {
+		// The stream is held open: an operation answers once, so it would
+		// never return, and hold every operation behind it.
+		return OperationResult{Status: http.StatusBadRequest, Error: "the event stream is held open by a client; an operation answers once (fire the drop path to end the streams)"}
+	}
 	req := asConsole(httptest.NewRequest(method, u.RequestURI(), strings.NewReader(op.Body)))
 	req.RemoteAddr = "console"
 	switch d.HTTPAuth.Mode {

@@ -98,9 +98,10 @@ that describes the target:
    #1033, #1032), the same line protocol as datagrams over `udp` (#1037), snmp's reachability
    rung, a standard get (#821), and http and https polls and commands that read JSON, XML and HTML
    through one extraction primitive, authenticated by a declared scheme (#902, the first slice of
-   #1113) or by a login whose session the node keeps, or digest (#1114). Still ahead: [templates](/architecture/templates/) (the reusable
+   #1113) or by a login whose session the node keeps, or digest (#1114), and a server-sent events
+   stream held as a session over either (#1038). Still ahead: [templates](/architecture/templates/) (the reusable
    device shape, #827), SNMP v3 (#1083), the held transports beyond those (#1034,
-   #1036, #1038 to #1041), protocols that move whole files (#1043 to
+   #1036, #1039 to #1041), protocols that move whole files (#1043 to
    #1047), and server-hosted listeners (webhook, trap, syslog ingress, #1024).
 2. **The data model.** Landed except one piece: [properties](/architecture/properties/) (the
    canonical-signal registry and the exclusive-arc owner columns), the sample sinks,

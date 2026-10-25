@@ -76,9 +76,11 @@ type Interface struct {
 	// LossPct is the share of datagrams a udp face drops, in percent, each
 	// way (#1037): seeded from the device and the face, so a run's losses
 	// repeat, and a loss test needs no NET_ADMIN. Only on a udp face.
-	LossPct       int               `yaml:"loss_pct"`
-	Doc           Doc               `yaml:"doc"`
-	Auth          Auth              `yaml:"auth"`
+	LossPct int  `yaml:"loss_pct"`
+	Doc     Doc  `yaml:"doc"`
+	Auth    Auth `yaml:"auth"`
+	// Events is an http face's server-sent events stream (#1038).
+	Events        Events            `yaml:"events"`
 	APISurface    string            `yaml:"api_surface"`
 	Routes        []Route           `yaml:"routes"`
 	Commands      []Command         `yaml:"commands"`
@@ -272,6 +274,19 @@ type Auth struct {
 	SessionTTL int    `yaml:"session_ttl"`
 	Algorithm  string `yaml:"algorithm"`
 	ExpirePath string `yaml:"expire_path"`
+}
+
+// Events declares an http face's server-sent events stream (#1038): the
+// path it serves (behind the face's auth), the reconnection time it asks
+// for (milliseconds; zero asks none), the state paths whose changes it
+// streams (each with everything beneath it; none streams every change),
+// and the path the console fires (POST) to drop every stream, as a restart
+// would.
+type Events struct {
+	Path     string   `yaml:"path"`
+	RetryMS  int      `yaml:"retry_ms"`
+	Paths    []string `yaml:"paths"`
+	DropPath string   `yaml:"drop_path"`
 }
 
 // Route defines an HTTP route match and its template.
