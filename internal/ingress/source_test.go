@@ -31,6 +31,11 @@ func TestASourceIsAParsedAddressHonouringOnlyATrustedProxy(t *testing.T) {
 			t.Errorf("%s: Source(%q, %q) = %q, want %q", c.name, c.remote, c.xff, got, c.want)
 		}
 	}
+	// A proxy that appends its own header line, after the client's forged
+	// one, is read from the right all the same.
+	if got := ingress.Source("10.0.0.1:1", ingress.JoinForwarded([]string{"203.0.113.66", "198.51.100.1"})); got != "198.51.100.1" {
+		t.Fatalf("two forwarded lines = %q, want the proxy-appended rightmost one", got)
+	}
 	// A header of any size is never kept or stored: the source stays an
 	// address.
 	huge := strings.Repeat("\xff", 1<<16) + ", 198.51.100.1"

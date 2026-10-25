@@ -29,6 +29,11 @@ func trusted(a netip.Addr) bool {
 	return false
 }
 
+// JoinForwarded joins every X-Forwarded-For line of a request in order, so
+// a proxy that appends its own line (rather than extending the client's)
+// is read from the right like one that extends it.
+func JoinForwarded(lines []string) string { return strings.Join(lines, ", ") }
+
 // maxForwarded bounds how much of a forwarded header is read: its rightmost
 // hops are the ones a trusted proxy appended.
 const maxForwarded = 512

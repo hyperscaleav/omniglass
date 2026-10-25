@@ -71,3 +71,34 @@ func TestTheInboxMirrorStaysWithinTheTablesBound(t *testing.T) {
 		t.Fatalf("the receiver holds %d sources, past the inbox's bound of %d", n, storage.UnclaimedBound)
 	}
 }
+
+// Bodies being read hold memory, so the listener budgets them by their
+// declared length (a chunked post counts as the cap): past the budget a new
+// post waits, however its sender drips it, and each read's deadline follows
+// its size.
+func TestBodiesBeingReadAreBudgeted(t *testing.T) {
+	rc := newWebhookReceiver(storage.UnimplementedGateway{}, nil)
+	held := 0
+	for rc.reserveReading(declaredSize("")) {
+		held++
+	}
+	if want := webhookReadingBytes / webhookBodyLimit; held != want {
+		t.Fatalf("held %d unsized bodies at once, want the budget's %d", held, want)
+	}
+	if rc.reserveReading(declaredSize("2048")) {
+		t.Fatal("a body past the budget was admitted")
+	}
+	rc.releaseReading(webhookBodyLimit)
+	if !rc.reserveReading(declaredSize("2048")) {
+		t.Fatal("a released budget did not readmit a small body")
+	}
+	if got := declaredSize("999999999"); got != webhookBodyLimit {
+		t.Fatalf("an over-cap length counts as %d, want the cap", got)
+	}
+	if d := readDeadline(2048); d > 3*time.Second {
+		t.Fatalf("a 2 KiB body may take %s to arrive, want about two seconds", d)
+	}
+	if d := readDeadline(webhookBodyLimit); d != webhookReadDeadline {
+		t.Fatalf("a 1 MiB body's deadline = %s, want the ceiling", d)
+	}
+}

@@ -8,6 +8,7 @@ import (
 	"net/textproto"
 	"net/url"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -39,8 +40,14 @@ const (
 	// reading on.
 	webhookBodyLimit = 1 << 20
 	// webhookReadDeadline bounds reading a post, so a sender dripping a
-	// body cannot hold a connection.
+	// body cannot hold a connection: two seconds plus the body at
+	// webhookReadRate, never more than the ceiling.
 	webhookReadDeadline = 10 * time.Second
+	webhookReadRate     = 64 << 10 // bytes a second
+	// webhookReadingBytes is the listener's budget for bodies being read at
+	// once, each counted at its declared length (the cap when it declares
+	// none), so slow senders cannot hold more memory than this.
+	webhookReadingBytes = 32 << 20
 	// The token buckets: per source address, per endpoint (once a token
 	// resolves), and the listener as a whole.
 	webhookSourceRate, webhookSourceBurst     = 10, 20
@@ -78,6 +85,7 @@ type webhookReceiver struct {
 
 	mu         sync.Mutex
 	inFlight   int
+	reading    int64
 	perSource  map[string]int
 	flushArmed bool
 	// unclaimed is the sources the inbox holds a row for, so a post landing
@@ -113,8 +121,20 @@ type webhookInput struct {
 func (in *webhookInput) Resolve(ctx huma.Context) []error {
 	in.header = http.Header{}
 	ctx.EachHeader(func(name, value string) { in.header.Add(name, value) })
-	in.source = ingress.Source(ctx.RemoteAddr(), ctx.Header("X-Forwarded-For"))
+	in.source = ingress.Source(ctx.RemoteAddr(), forwardedFor(ctx))
 	return nil
+}
+
+// forwardedFor is every X-Forwarded-For line of the request, joined in
+// order.
+func forwardedFor(ctx huma.Context) string {
+	var lines []string
+	ctx.EachHeader(func(name, value string) {
+		if strings.EqualFold(name, "X-Forwarded-For") {
+			lines = append(lines, value)
+		}
+	})
+	return ingress.JoinForwarded(lines)
 }
 
 type webhookOutput struct {
@@ -179,18 +199,57 @@ func registerWebhookRoutes(api huma.API, gw storage.Gateway, pub TelemetryPublis
 // the read deadline.
 func (rc *webhookReceiver) bound(api huma.API) func(huma.Context, func(huma.Context)) {
 	return func(ctx huma.Context, next func(huma.Context)) {
-		src := ingress.Source(ctx.RemoteAddr(), ctx.Header("X-Forwarded-For"))
+		src := ingress.Source(ctx.RemoteAddr(), forwardedFor(ctx))
 		ok, wait := rc.admit(src, rc.now())
 		if !ok {
 			tooMany(api, ctx, wait)
 			return
 		}
 		defer rc.releaseSource(src)
+		size := declaredSize(ctx.Header("Content-Length"))
+		if !rc.reserveReading(size) {
+			tooMany(api, ctx, time.Second)
+			return
+		}
+		defer rc.releaseReading(size)
 		if _, w := humachi.Unwrap(ctx); w != nil {
-			_ = http.NewResponseController(w).SetReadDeadline(time.Now().Add(webhookReadDeadline))
+			_ = http.NewResponseController(w).SetReadDeadline(time.Now().Add(readDeadline(size)))
 		}
 		next(ctx)
 	}
+}
+
+// declaredSize is what a body is counted as while it is read: its declared
+// length, or the cap when it declares none (a chunked post) or more.
+func declaredSize(contentLength string) int64 {
+	n, err := strconv.ParseInt(contentLength, 10, 64)
+	if err != nil || n < 0 || n > webhookBodyLimit {
+		return webhookBodyLimit
+	}
+	return n
+}
+
+// readDeadline is how long a body of size may take to arrive: two seconds
+// plus the size at the minimum rate, never past the ceiling.
+func readDeadline(size int64) time.Duration {
+	return min(webhookReadDeadline, 2*time.Second+time.Duration(size)*time.Second/webhookReadRate)
+}
+
+// reserveReading takes size from the budget for bodies being read.
+func (rc *webhookReceiver) reserveReading(size int64) bool {
+	rc.mu.Lock()
+	defer rc.mu.Unlock()
+	if rc.reading+size > webhookReadingBytes {
+		return false
+	}
+	rc.reading += size
+	return true
+}
+
+func (rc *webhookReceiver) releaseReading(size int64) {
+	rc.mu.Lock()
+	defer rc.mu.Unlock()
+	rc.reading -= size
 }
 
 // admit applies the limits narrowest first: the source's bucket, then its
