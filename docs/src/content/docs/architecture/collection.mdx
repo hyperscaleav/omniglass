@@ -80,7 +80,13 @@ Built since: **websocket and wss** (#1034): a held session whose messages are te
 upgrade riding the session's scheme or login, a subscription armed on every connection, pushes
 claimed by the listeners, and a poll or a command answered by the frame carrying back an id the node
 mints into it, whatever pushes interleave ([below](#websocket-and-wss),
-[ADR-1034](/architecture/decisions/#adr-1034-a-websocket-is-a-held-session-of-text-frames-and-a-reply-is-matched-by-a-minted-id)). See
+[ADR-1034](/architecture/decisions/#adr-1034-a-websocket-is-a-held-session-of-text-frames-and-a-reply-is-matched-by-a-minted-id)).
+Built since: **a driver emit lands on any lane** (#1145): a poll or a listener maps what it reads
+onto a metric, a property, an event (its message and attributes) or a log line (its message,
+severity, facility, source and attributes), its time read from the payload where it carries one; a
+task's log lines land on its component, never as the node's own, and a listener may land what it
+does not claim as raw log lines ([below](#an-emit-lands-on-any-lane),
+[ADR-1145](/architecture/decisions/#adr-1145-a-driver-emit-lands-on-any-of-the-four-lanes-and-a-log-lines-severity-is-rfc-5424s)). See
 [ADR-0037](/architecture/decisions/#adr-0037-telemetry-is-a-protobuf-event-over-jetstream-with-an-inline-owner-confining-consumer),
 [ADR-0038](/architecture/decisions/#adr-0038-the-reachability-verdict-is-a-built-in-state),
 [ADR-0039](/architecture/decisions/#adr-0039-an-endpoint-is-a-device-api-the-endpoint-type-is-its-transport-not-its-driver),
@@ -998,9 +1004,10 @@ node runs every listen task on an endpoint over that endpoint's one held session
   ([a server-sent events stream](#a-server-sent-events-stream)). An arm is sent as one line (one
   frame), so it carries no line break.
 - **Extraction**: the claimed line runs through the same emit shape a poll's answer does (locate,
-  transform, type by the baked lane), and lands at once as a sample under the listen task: the
-  component owns it, the endpoint is its instance, and no poll schedule is involved. A claimed line
-  whose emits do not extract is a `collection-failed`, landed once per change.
+  transform, type by the baked lane), and lands at once under the listen task as a sample, an event
+  or a log line ([an emit lands on any lane](#an-emit-lands-on-any-lane)): the component owns it,
+  the endpoint is its instance, and no poll schedule is involved. A claimed line whose emits do not
+  extract is a `collection-failed`, landed once per change.
 
 Every inbound line on a held session is routed by one precedence
 ([ADR-0151](/architecture/decisions/#adr-0151-a-held-line-session-routes-every-inbound-line-listeners-first-answers-by-reply-shape)):
@@ -1015,7 +1022,8 @@ Every inbound line on a held session is routed by one precedence
    request was written is never its answer.
 3. Anything left is **unclaimed**: counted, and once per tick the node logs the count and the last
    such line; a spec declaring `unmatched: collection-failed` also lands one `collection-failed`
-   per tick naming them (the default is `discard`).
+   per tick naming them, and one declaring `unmatched: log` lands each as a log line on the
+   endpoint's component, the whole message as raw arrival (#1145); the default is `discard`.
 
 A request with a reply shape closes the window #816 left open (a stray line arriving just before
 the device reads the request); without one, a line no listener claims in that instant can still be
@@ -1212,7 +1220,8 @@ spec declares:
     line for a line protocol, a method, path, query, headers, body and response format for http,
     [#902](#http-and-https)), and per-emit **extraction**, one primitive with a selector per format
     (`oid`, `regex` capture, `jsonpath`, `key`, `xpath`), with an optional declared **transform**
-    (`cast`, `scale`, enum `map`; the expression engine is deliberately not a dependency).
+    (`cast`, `scale`, enum `map`; the expression engine is deliberately not a dependency). An emit
+    lands on any of the four lanes ([below](#an-emit-lands-on-any-lane)).
   - **Listeners**: the `arm` conversation sent on session establish and re-sent on every recover
     (session **plumbing**, not recorded command rows), a `match` rule that claims an unsolicited
     inbound payload, and the same extraction shape. A listener rides a held line session or a udp
@@ -1270,6 +1279,71 @@ delivered as absence, which the node reports as the missing credential. Sessions
 listeners over them are built ([above](#sessions)). The ship-with set:
 
 <SeededSet kind="drivers" />
+
+### An emit lands on any lane
+
+Built (#1145, [ADR-1145](/architecture/decisions/#adr-1145-a-driver-emit-lands-on-any-of-the-four-lanes-and-a-log-lines-severity-is-rfc-5424s)):
+a poll's or a listener's emit maps what it reads onto any of the four collected lanes. A **metric**
+or a **property** names its key and locates its value with one extract. An **event** names its
+event type (the emit's name resolves against the metric, property and event catalogs, one
+namespace) and carries a `message`, a constant or an extract, by default the whole claimed message
+or answer, and `attributes`, each a constant or an extract (a cast to int or float renders a JSON
+number), rendered into its payload and held at write to the type's `payload_schema` where it
+closes or requires fields; it lands as a `caught` event, its endpoint the instance. A **log line**
+names no key: it declares `log`, with its `severity` and `facility` (each a constant or an
+extract) and its `source` (by default the endpoint's transport), beside a `message` and
+`attributes`. A log line is raw arrival ([ADR-0066](/architecture/decisions/#adr-0066-logs-are-a-raw-ingest-lane-not-events)),
+so it always lands: a message extract that misses falls back to the whole text, and a severity,
+facility or attribute that misses is left out, each miss a `collection-failed` naming it; an event
+is an assertion, so an attribute that misses lands nothing. A reserved event type
+(`collection-failed`, `command-issued`) is refused at the spec's write naming its writer, as a
+reserved metric is.
+
+```yaml
+listeners:
+  - name: events
+    arm: ["SUBSCRIBE INPUT"]
+    match: { prefix: "EVT INPUT " }
+    emits:
+      - { name: video-input, extract: { regex: "^EVT INPUT (\\S+)$" } }   # a property
+      - name: input-changed                                                # an event
+        message: { value: "Video input changed" }
+        attributes:
+          input: { extract: { regex: "^EVT INPUT (\\S+)$" } }
+  - name: logs
+    arm: ["SUBSCRIBE LOG"]
+    match: { prefix: "LOG " }
+    emits:
+      - log:                                                               # a log line
+          severity: { extract: { regex: "^LOG (\\S+)" } }
+          facility: { value: panel }
+        message: { extract: { regex: "^LOG (?:\\S+\\s+)?(.+)$" } }
+        ts: { extract: { regex: "at (\\S+)$" }, layout: rfc3339 }
+```
+
+Any emit may read its **time** out of the payload (`ts`: an extract and a `layout`, one of
+`rfc3339`, `rfc3164`, whose missing year is the one nearest arrival, read in the declared `zone`,
+`unix`, `unix-ms`, or `go:` a Go reference layout); without one, the time it arrived at the node.
+A time more than five minutes ahead of arrival lands at arrival instead, a log line keeping the
+claim as its `ts_claimed` attribute and the node saying so in its self-log; a time that does not
+parse lands the record at arrival and faults. On a plain poll an event or a log line fires only
+when its content changes from what that task last landed (remembered in the node's memory, so a
+restart may fire one again), so a status page's last error lands once per change.
+
+The node carries a task's log lines in a field of their own (`task_logs`), beside its self-logs, and
+ingest writes them to `log_line` on the task's component, the endpoint that collected them as the
+line's instance, owner-bound from the task as every sample is: a node lands a line only for a
+component its own task collects for, and never as its own. Every writer's line is held at the
+Storage Gateway to one severity vocabulary, RFC 5424's eight levels (`emergency`, `alert`,
+`critical`, `error`, `warning`, `notice`, `info`, `debug`) through one alias table (`warn` reads
+`warning`, `err` reads `error`), a word outside it kept as the `severity_raw` attribute with no
+severity, and to 16 KiB each for the message and the attributes, cut and marked past it. The
+component's Logs panel filters by a severity threshold and a source. Proven end to end against the
+simulator: the Newtron panel's input push lands as the `video-input` property and an
+`input-changed` event carrying the input, its diagnostics line as a `warning` log line, and a scene
+change no listener claims as a raw log line, none of them in the node's self-logs; the Kestrel
+bar's feed reports a call starting and ending as named events, which `kestrel-api` lands as
+`call-started` and `call-ended` carrying the call's id.
 
 ## Storage
 

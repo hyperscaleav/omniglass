@@ -307,15 +307,21 @@ refused, class `auth`; pointing its `community` input at `sim-community` lifts t
 
 ## Events
 
-Alongside sampled readings, a component carries two occurrence panels, both read-only and gated by
-`component:read`. The **Events** panel shows the most recent typed **events**, newest first, over the
-last 24 hours (capped at 200): discrete things that *happened* (a `call-started`) that a component
-published natively or a rule derived, each row showing its **time**, the **event type** it is typed by,
-the **message**, and any structured **attributes**. Below it, the **Logs** panel shows the component's raw **log lines**
-(the ingest lane, [ADR-0066](/architecture/decisions/#adr-0066-logs-are-a-raw-ingest-lane-not-events)):
-untyped device text a rule may later derive events from, each row showing its **time**, a **severity**
-badge, the **facility** and **source**, the **message**, and its structured **fields** on demand. Most
-log lines never become events.
+Alongside sampled readings, a component carries two occurrence panels on its **Activity** tab, both
+read-only and gated by `component:read`. The **Events** panel shows the most recent typed **events**,
+newest first, over the last 24 hours (capped at 200): discrete things that *happened* (a
+`call-started`) that a component published natively, its driver mapped from what it read, or a rule
+derived, each row showing its **time**, the **event type** it is typed by, the **message**, and any
+structured **attributes**. Below it, the **Logs** panel shows the component's raw **log lines** (the
+ingest lane, [ADR-0066](/architecture/decisions/#adr-0066-logs-are-a-raw-ingest-lane-not-events)):
+untyped text a rule may later derive events from, what its driver read as a log line and what its
+listeners left unclaimed ([an emit lands on any lane](/architecture/collection/#an-emit-lands-on-any-lane)),
+each row showing its **time**, a **severity** badge (one of RFC 5424's eight levels), the **source**
+and the endpoint that collected it, the **message**, and its structured **attributes** on demand;
+where the time the line states differs from when it arrived, the row says when it arrived. Two
+filters narrow the read: **At least** a severity (that level and every more severe one) and
+**From** a source, its choices the sources the window carries. The system workspace's Logs section
+takes the same filters. Most log lines never become events.
 
 Where a reachability verdict is a sampled state, an event or a log line is a past occurrence, so the
 panels are read differently: the verdict answers "is it reachable *now*", the logs and events answer
