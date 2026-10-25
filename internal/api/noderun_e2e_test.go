@@ -170,6 +170,13 @@ func TestOnDemandRunPermissions(t *testing.T) {
 		"inputs": map[string]string{"host": "10.20.4.31", "login": "display-login"}}, http.StatusCreated), &ep); err != nil {
 		t.Fatal(err)
 	}
+	// Nodes take an all-scope node:read, so an operator scoped to one
+	// component may not name one for a preview: a 403, not a 500.
+	compID := entityID(t, s.c, s.owner, "/components", "display-api")
+	scoped := principalWithGrants(t, s.ctx, s.dsn, "run-scoped", []grant{{role: "operator", scopeKind: "component", scopeID: compID}})
+	if code, _ := s.c.send(scoped, http.MethodPost, "/drivers:preview", previewBody); code != http.StatusForbidden {
+		t.Errorf("a component-scoped preview = %d, want 403", code)
+	}
 	path := "/endpoints/display-api%2F" + ep.Name + "/polls/identity:run"
 	if code, _ := s.c.send(viewer, http.MethodPost, path, nil); code != http.StatusForbidden {
 		t.Errorf("viewer run now = %d, want 403", code)

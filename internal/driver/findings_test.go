@@ -89,3 +89,22 @@ func TestADuplicateFunctionIsFound(t *testing.T) {
 		t.Fatalf("findings = %+v, want the duplicate named first", got)
 	}
 }
+
+// A command on a transport whose bindings ride a held session is still pinned:
+// its isolation keeps the functions that validated on their own as the
+// session's holder.
+func TestFindingsPinACommandOnAHeldSessionTransport(t *testing.T) {
+	s := validSpec()
+	s.Transport = "telnet"
+	s.Session = nil
+	s.Commands[0].CommandType = "no-such-command"
+	s.Polls[0].Emits[0].Name = "no-such-key"
+	got := driver.Findings(specJSON(t, s), catalog())
+	byFn := map[string]bool{}
+	for _, f := range got {
+		byFn[f.Function] = true
+	}
+	if !byFn["status"] || !byFn["no-such-command"] {
+		t.Fatalf("findings on telnet = %+v, want the bad emit and the bad command both pinned", got)
+	}
+}

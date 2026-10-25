@@ -71,7 +71,7 @@ func TestPreviewRunRefusesWhatOnlyAnEndpointHolds(t *testing.T) {
 func TestRunNowRefusesANonPoll(t *testing.T) {
 	probe := snmpPreviewTask()
 	probe.Mode = "probe"
-	if r := runNowTask(t.Context(), nil, "edge", &collection.Runner{}, nil, probe, time.Second); r.Error == "" {
+	if r := runNowTask(t.Context(), nil, "edge", &collection.Runner{}, nil, newPollSchedule(time.Second), probe, time.Now().Add(time.Second)); r.Error == "" {
 		t.Errorf("a non-poll run = %+v, want a refusal", r)
 	}
 }
@@ -79,3 +79,45 @@ func TestRunNowRefusesANonPoll(t *testing.T) {
 type errTimeout struct{}
 
 func (errTimeout) Error() string { return "i/o timeout" }
+
+// A run now lands what a scheduled run would: an event or a log line that has
+// not changed since the last run, scheduled or now, is not landed again, and
+// what a run now lands is what the next scheduled run compares against (the
+// #1145 change memory, shared). The answer still carries every sample.
+func TestRunNowSharesTheChangeMemory(t *testing.T) {
+	sched := newPollSchedule(time.Second)
+	ev := collection.Sample{Name: "last-error", Lane: driver.LaneEvent, Text: "A"}
+	if got := landableRun(sched, "t1", []collection.Sample{ev}); len(got) != 1 {
+		t.Fatalf("first run lands %v, want the event", got)
+	}
+	if got := landableRun(sched, "t1", []collection.Sample{ev}); len(got) != 0 {
+		t.Fatalf("an unchanged event landed again: %v", got)
+	}
+	if got := sched.changed("t1", []collection.Sample{ev}); len(got) != 0 {
+		t.Fatalf("the scheduled path would land the run's event again: %v", got)
+	}
+	metric := collection.Sample{Name: "uptime", Value: 1}
+	if got := landableRun(sched, "t1", []collection.Sample{metric, metric}); len(got) != 2 {
+		t.Fatalf("metrics are not change-held: %v", got)
+	}
+}
+
+// A preview's excerpt is scrubbed of its credential before it is cut, in
+// every form an answer echoes it: a secret straddling the cut leaves no prefix
+// behind, and a basic credential's header value is masked too.
+func TestPreviewExcerptIsScrubbedBeforeTheCut(t *testing.T) {
+	secret := "straddle-s3cret"
+	body := strings.Repeat("x", collection.ExcerptLimit-6) + secret + " Authorization: Basic YWRtaW46c3RyYWRkbGUtczNjcmV0"
+	got, _ := previewExcerpt(driver.Payload{Text: body}, &driver.HTTPCredential{Scheme: driver.SchemeBasic, Username: "admin", Password: secret}, nil)
+	if strings.Contains(got, "strad") {
+		t.Errorf("the excerpt keeps a prefix of the secret at the cut: %q", got[len(got)-20:])
+	}
+	short, _ := previewExcerpt(driver.Payload{Text: "echo Authorization: Basic YWRtaW46c3RyYWRkbGUtczNjcmV0 and " + secret}, &driver.HTTPCredential{Scheme: driver.SchemeBasic, Username: "admin", Password: secret}, nil)
+	if strings.Contains(short, secret) || strings.Contains(short, "YWRtaW46c3RyYWRkbGUtczNjcmV0") {
+		t.Errorf("the excerpt carries the credential: %q", short)
+	}
+	snmp, _ := previewExcerpt(driver.Payload{Values: map[string]string{"1.3.6.1.4.1.9.1": "community=lab-public"}}, nil, []string{"lab-public"})
+	if strings.Contains(snmp, "lab-public") {
+		t.Errorf("an snmp excerpt carries the community: %q", snmp)
+	}
+}

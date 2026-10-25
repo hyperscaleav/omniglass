@@ -41,25 +41,35 @@ func Findings(raw []byte, cat Catalog) []Finding {
 		return nil
 	}
 	var perFn []Finding
-	isolated := func(kind, name string, only Spec) {
+	isolated := func(kind, name string, only Spec) bool {
 		err := only.Validate(cat)
 		if err != nil && strings.Contains(err.Error(), strconv.Quote(name)) {
 			perFn = append(perFn, Finding{Kind: kind, Function: name, Message: err.Error()})
 		}
+		return err == nil
 	}
+	// The polls and listeners that validate on their own hold a session for a
+	// command binding's isolation, so a binding on a transport whose commands
+	// ride a held session is checked as itself, not refused for want of one.
+	var cleanPolls []Poll
+	var cleanListeners []Listener
 	for _, p := range sp.Polls {
 		only := *sp
 		only.Polls, only.Listeners, only.Commands = []Poll{p}, nil, nil
-		isolated(FindingPoll, p.Name, only)
+		if isolated(FindingPoll, p.Name, only) {
+			cleanPolls = append(cleanPolls, p)
+		}
 	}
 	for _, l := range sp.Listeners {
 		only := *sp
 		only.Polls, only.Listeners, only.Commands = nil, []Listener{l}, nil
-		isolated(FindingListener, l.Name, only)
+		if isolated(FindingListener, l.Name, only) {
+			cleanListeners = append(cleanListeners, l)
+		}
 	}
 	for _, c := range sp.Commands {
 		only := *sp
-		only.Polls, only.Listeners, only.Commands = nil, nil, []CommandBinding{c}
+		only.Polls, only.Listeners, only.Commands = cleanPolls, cleanListeners, []CommandBinding{c}
 		isolated(FindingCommand, c.CommandType, only)
 	}
 

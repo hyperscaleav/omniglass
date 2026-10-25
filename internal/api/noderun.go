@@ -262,6 +262,9 @@ func pollRunOf(r collection.RunResult, sealed []string) pollRunBody {
 	}
 	for i := range b.Samples {
 		b.Samples[i].Text = redact.Secrets(b.Samples[i].Text, sealed...)
+		for k, v := range b.Samples[i].Labels {
+			b.Samples[i].Labels[k] = redact.Secrets(v, sealed...)
+		}
 	}
 	for _, f := range r.Faults {
 		b.Faults = append(b.Faults, redact.Secrets(f, sealed...))
@@ -298,6 +301,8 @@ func mapNodeRunErr(err error) error {
 		return huma.Error409Conflict(strings.TrimPrefix(strings.TrimPrefix(err.Error(), "storage: "), "endpoint unplaced: "))
 	case errors.Is(err, storage.ErrNodeNotFound):
 		return huma.Error404NotFound("node not found")
+	case errors.Is(err, storage.ErrNodeForbidden):
+		return huma.Error403Forbidden("a preview names a node, and nodes need an all-scope node:read")
 	case errors.Is(err, storage.ErrTypeNotFound):
 		return huma.Error404NotFound("driver not found")
 	}

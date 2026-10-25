@@ -28,4 +28,10 @@ Proof: a node test drives the whole flow over the real wire against the simulato
 display (validate a broken spec to its finding, preview the fixed one with nothing landing, run the
 attached poll now and watch it land, then a wrong password gates the endpoint and the next run is a
 409 naming the refusal); API tests hold the permissions, the masking, the findings, the 503 without a
-bus and the 429 past the bound. The `driver-preview` tape demos it.
+bus and the 429 past the bound. The `driver-preview` tape demos it. The adversarial review caught two
+blocking defects, each fixed with its test: a run now skipped the change memory a scheduled run keeps
+(so it could land an event twice; the new `side-run-skips-change-memory` catalog entry), and a
+preview's excerpt was masked after it was cut (a secret at the cut, or a basic header's value, could
+survive; it is now scrubbed on the node, credential and all, before the cut). It also tightened a late
+run now (dropped once its budget passed), the reply's permission window, a stream's first attempt,
+the 403 for a scoped preview, and validate's findings for a command on a held-session transport.

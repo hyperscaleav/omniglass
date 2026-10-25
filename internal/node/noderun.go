@@ -27,9 +27,12 @@ const defaultRunTimeout = 20 * time.Second
 // runJob is a run now handed to the run loop: the task, its budget, and the
 // one answer the request is owed.
 type runJob struct {
-	task    collection.TaskSpec
-	timeout time.Duration
-	respond func(collection.RunReply)
+	task collection.TaskSpec
+	// deadline is stamped when the request arrives, so a job the loop takes
+	// late runs only in what remains of its caller's budget, and one whose
+	// budget is gone is dropped unrun (its caller was already answered).
+	deadline time.Time
+	respond  func(collection.RunReply)
 }
 
 // subscribeRuns takes the server's run requests for this node. A preview runs
@@ -62,7 +65,7 @@ func subscribeRuns(ctx context.Context, nc *nats.Conn, node string, runner *coll
 				return
 			}
 			select {
-			case jobs <- runJob{task: req.Tasks[0], timeout: timeout, respond: respond}:
+			case jobs <- runJob{task: req.Tasks[0], deadline: time.Now().Add(timeout), respond: respond}:
 			default:
 				respond(collection.RunReply{Error: "the node is already running a run now; retry in a moment"})
 			}
@@ -122,6 +125,16 @@ func collectPreviewTask(ctx context.Context, runner *collection.Runner, task col
 	case !driver.IsHTTP(task.Transport) && task.Session != nil:
 		return nil, []error{fmt.Errorf("node: a %s poll whose driver declares a session rides a held session, which a preview does not open", task.Transport)}, "", false
 	}
+	// The excerpt is scrubbed here, where the credential is known, in every
+	// form an answer echoes it (a basic header's value too), and only then cut,
+	// so a secret straddling the cut leaves no prefix behind.
+	cred, _ := driver.ResolveHTTPCredential(task.Session, task.Secrets)
+	var fieldValues []string
+	for _, fields := range task.Secrets {
+		for _, v := range fields {
+			fieldValues = append(fieldValues, v)
+		}
+	}
 	pt := collection.DriverPollTask{
 		Fn:        fn,
 		Transport: task.Transport,
@@ -129,7 +142,7 @@ func collectPreviewTask(ctx context.Context, runner *collection.Runner, task col
 		Secrets:   task.Secrets,
 		Auth:      task.Session,
 		Capture: func(payload driver.Payload) {
-			excerpt, cut = collection.PayloadExcerpt(payload, collection.ExcerptLimit)
+			excerpt, cut = previewExcerpt(payload, cred, fieldValues)
 		},
 	}
 	if p.Timeout != "" {
@@ -148,21 +161,47 @@ func collectPreviewTask(ctx context.Context, runner *collection.Runner, task col
 	return dps, faults, excerpt, cut
 }
 
+// previewExcerpt renders what a fetch answered, scrubbed of the credential
+// and every secret field value before it is cut to the excerpt's bound.
+func previewExcerpt(payload driver.Payload, cred *driver.HTTPCredential, secretValues []string) (string, bool) {
+	full, _ := collection.PayloadExcerpt(payload, int(^uint(0)>>1))
+	return collection.PayloadExcerpt(driver.Payload{Text: collection.Scrub(full, cred, secretValues...)}, collection.ExcerptLimit)
+}
+
+// landableRun is what a run now publishes: its samples held to the #1145
+// change memory a scheduled run keeps (an event or a log line that has not
+// changed since the last run, either kind, is not landed again), and what it
+// lands committed to that memory, so the next scheduled run compares against
+// it. Metrics and properties pass whole.
+func landableRun(sched *pollSchedule, taskID string, dps []collection.Sample) []collection.Sample {
+	landed := sched.changed(taskID, dps)
+	sched.commitChanged(taskID, landed)
+	return landed
+}
+
 // runNowTask runs one of the node's poll tasks now, on the run loop, exactly
 // as a scheduled run would, its schedule untouched: the endpoint's held
 // session borrowed where it has one, its gate honored (a gated stateless
 // poll is refused with the gate's refusal and nothing is sent), a terminal
 // refusal it meets gating the endpoint, and what it reads published (its
 // faults as collection-failed, its samples as a batch), so it lands.
-func runNowTask(ctx context.Context, nc *nats.Conn, node string, runner *collection.Runner, sessions *sessionManager, task collection.TaskSpec, timeout time.Duration) collection.RunReply {
+func runNowTask(ctx context.Context, nc *nats.Conn, node string, runner *collection.Runner, sessions *sessionManager, sched *pollSchedule, task collection.TaskSpec, deadline time.Time) collection.RunReply {
 	if task.Mode != "poll" || !driver.IsBaked(task.Spec) {
 		return collection.RunReply{Error: "a run now runs a driver poll, and this task is not one"}
+	}
+	if !time.Now().Before(deadline) {
+		return collection.RunReply{Error: "the run's budget passed before the node could take it"}
+	}
+	if driver.IsHTTP(task.Transport) && sessions.streamPending(task.EndpointID) {
+		// The endpoint's stream is making its first attempt under this
+		// fingerprint (#1038): a poll would send the credential beside it.
+		return collection.RunReply{Gated: true, Error: "the endpoint's stream is still making its first attempt; run the poll again once it has"}
 	}
 	ownRequest := sessions.lookup(task.EndpointID) == nil || driver.IsHTTP(task.Transport)
 	if gt, gated := sessions.blocked(task.EndpointID, statelessRung(task)); gated && ownRequest {
 		return collection.RunReply{Gated: true, Error: gt.refusal().Error()}
 	}
-	ctx, cancel := context.WithTimeout(ctx, timeout)
+	ctx, cancel := context.WithDeadline(ctx, deadline)
 	defer cancel()
 	start := time.Now()
 	res := collection.RunResult{TaskID: task.ID, Samples: []collection.RunSample{}}
@@ -183,8 +222,8 @@ func runNowTask(ctx context.Context, nc *nats.Conn, node string, runner *collect
 			return collection.RunReply{Error: "the node could not publish the run's faults: " + err.Error()}
 		}
 	}
-	if len(dps) > 0 {
-		if err := publishBatch(nc, node, task.ID, dps); err != nil {
+	if landed := landableRun(sched, task.ID, dps); len(landed) > 0 {
+		if err := publishBatch(nc, node, task.ID, landed); err != nil {
 			return collection.RunReply{Error: "the node could not publish the run's samples: " + err.Error()}
 		}
 	}

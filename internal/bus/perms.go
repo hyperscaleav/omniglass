@@ -49,7 +49,7 @@ func nodePermissions(node string) *server.Permissions {
 		// answer an operation, and the node a run, without a grant to publish
 		// anywhere else. A run may take its whole budget, so the reply stays
 		// permitted that long.
-		Response: &server.ResponsePermission{MaxMsgs: 1, Expires: max(simopTimeout, runTimeout)},
+		Response: &server.ResponsePermission{MaxMsgs: 1, Expires: max(simopTimeout, runTimeout+runReplySlack)},
 	}
 }
 

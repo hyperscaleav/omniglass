@@ -22,6 +22,11 @@ import (
 // reply to a request stays permitted.
 const runTimeout = 30 * time.Second
 
+// runReplySlack is how long past a run's budget its answer is still waited
+// for, and still permitted: a run that uses its whole budget answers a little
+// after it.
+const runReplySlack = 3 * time.Second
+
 // The answers a run gets when the node does not run it (the collection
 // package's, so the API names them without importing the bus).
 var (
@@ -67,7 +72,7 @@ func (s *Server) runOnNode(ctx context.Context, node, kind string, tasks []colle
 	}
 	// The node is told the budget and the wait outlasts it a little, so a run
 	// that uses its whole budget still gets its answer back.
-	ctx, cancel := context.WithTimeout(ctx, timeout+2*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, timeout+runReplySlack)
 	defer cancel()
 	msg, err := s.nc.RequestWithContext(ctx, collection.RunSubject(node), b)
 	switch {

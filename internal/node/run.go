@@ -337,7 +337,9 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 			_ = nc.Flush()
 			return wl, nil
 		case job := <-runJobs:
-			job.respond(runNowTask(ctx, nc, cfg.Name, runner, sessions, job.task, job.timeout))
+			if time.Now().Before(job.deadline) {
+				job.respond(runNowTask(ctx, nc, cfg.Name, runner, sessions, sched, job.task, job.deadline))
+			}
 			publishSelfLogs(nc, cfg.Name, sink)
 		case <-ticker.C:
 			_ = publishHeartbeat(nc, cfg.Name)
