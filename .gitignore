@@ -49,6 +49,8 @@ coverage.txt
 /web/test-results/
 # walkthrough recordings (make walkthroughs)
 /web/e2e/walkthroughs/out/
+# terminal demo recordings (make demo)
+/scripts/demo/out/
 /web/e2e/probe/out/
 
 

@@ -1,0 +1,273 @@
+// @ts-check
+// Terminal demos (#1132): the pure half of the terminal recorder
+// (web/e2e/tapes.sh). A demo of CLI or API work is a VHS tape,
+// scripts/demo/<id>.tape, typed into a real terminal against the walkthrough
+// stack and rendered as a GIF (what plays inline on the PR) and an MP4 (the
+// scrubbable video). This module reads a tape's title and description, holds
+// it to the house rules, wraps it in the house settings the recorder plays,
+// and judges the recording. Plain ESM with no dependencies, so the recorder
+// runs it in the Playwright container with no install, and its types are the
+// JSDoc below, checked by tsc (web/tsconfig.json); unit-tested in
+// web/src/tape.test.ts.
+//
+// A tape is VHS's own format (one command per line), opened by a comment block:
+//
+//   # HTTP logins keep a session                 <- the title (the first line)
+//   #
+//   # A simulated touch panel logs in ...        <- the description (the rest)
+//
+//   Type `omniglass component get 'hq.west.lobby.$comp.display-1' | jq -c .`
+//   Enter
+//   Wait                                         <- every Enter is waited on
+//
+//   Hide                                         <- unseen: a wait or a lookup
+//   Type `demo_until 120 'omniglass ... | jq -e ...'`
+//   Enter
+//   Wait@150s
+//   Show
+//
+// The house rules, each a refusal naming the line:
+// - only the commands a demo types and waits on: Type, Enter, Wait (Wait@<t>,
+//   Wait+Screen /re/, Wait+Line /re/), Sleep, Hide, Show and the editing keys;
+//   a Set, Output, Require, Source, Env, Screenshot, Copy or Paste is the
+//   recorder's, since the house settings below fix the size, font, theme,
+//   typing speed and outputs (a Type@<speed> is refused for the same reason);
+// - every Enter is followed by a Wait before the next Type (or the end), so
+//   every command finishes on screen, and a failing one is caught (the prelude
+//   lists each command that exits non-zero, and any such fails the demo);
+// - no uuid in typed text: a demo addresses a resource by name or dotted
+//   address, and looks an id up by name inside the tape;
+// - Hide and Show alternate, ending shown, and something is typed on screen.
+//
+// Inside the terminal (web/e2e/tape/prelude.sh, sourced unseen first): the
+// stack's server and an owner token are in the CLI's env; the stack's container
+// logs are files under /stack/logs/ (server.log, node.log, sim.log); and
+// demo_hush '<code>' runs code unseen, demo_until <seconds> '<code>' retries it
+// until it succeeds, each erasing its own command line, so a hidden block
+// leaves the screen as it found it.
+
+import { ID } from './walkthroughcore.mjs';
+
+// The house settings every tape is played in (#1132): one size, font, theme and
+// typing speed, so every demo reads alike and a re-recording differs only where
+// the product did. The font and theme ship in the recorder's pinned image.
+export const HOUSE = Object.freeze({
+  width: 1280,
+  height: 720,
+  fontFamily: 'JetBrains Mono',
+  fontSize: 15,
+  padding: 20,
+  theme: 'Catppuccin Mocha',
+  typingSpeed: '20ms',
+  framerate: 20,
+  // A plain Wait's limit; a long wait says its own (Wait@150s).
+  waitTimeout: '60s',
+  // The last frame's hold before the GIF loops.
+  hold: '3s',
+});
+
+// The budget: the GIF plays inline on the PR page, so it is held to the
+// walkthrough preview's ceiling; the length keeps a demo watchable (its waits
+// are hidden, so what plays is typing and answers).
+export const MAX_GIF_BYTES = 5_000_000;
+export const MAX_SECONDS = 120;
+
+const MAX_TITLE = 100;
+const UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
+const DURATION = /^\d+(?:\.\d+)?(?:ms|s|m)$/;
+// The recorder's commands: a tape that names one is refused.
+const RECORDERS = new Set(['Set', 'Output', 'Require', 'Source', 'Env', 'Screenshot', 'Copy', 'Paste']);
+const KEYS = new Set(['Enter', 'Backspace', 'Delete', 'Tab', 'Space', 'Up', 'Down', 'Left', 'Right', 'Escape']);
+
+/** @typedef {{ id: string, title: string, description: string, body: string[] }} Tape */
+/**
+ * What tapes.sh writes as demo.json once a recording passes; `budget` is the
+ * mark only a pass carries.
+ * @typedef {{ id: string, title: string, description: string, gif: string, mp4: string,
+ *   budget?: { seconds: number, gifBytes: number, mp4Bytes: number } }} TapeManifest
+ */
+
+/** @param {unknown} id @returns {string} */
+export function checkTapeId(id) {
+  if (typeof id !== 'string' || !ID.test(id)) {
+    throw new Error(`tape id "${id}" must be lowercase letters, digits and dashes (it names a directory)`);
+  }
+  return id;
+}
+
+// The one quoted string a Type carries ("...", '...' or `...`), or null.
+/** @param {string} rest @returns {string | null} */
+function quoted(rest) {
+  const q = rest[0];
+  if (!q || !'"\'`'.includes(q) || rest.length < 2 || rest.at(-1) !== q) return null;
+  const inner = rest.slice(1, -1);
+  return inner.includes(q) ? null : inner;
+}
+
+// Parses tape `text` (file `file`, demo `id`) and holds it to the house rules;
+// throws naming the file and line of the first problem.
+/** @param {string} id @param {string} text @param {string} file @returns {Tape} */
+export function parseTape(id, text, file) {
+  checkTapeId(id);
+  const lines = text.replace(/\r\n?/g, '\n').replace(/\n$/, '').split('\n');
+  /** @type {(n: number, msg: string) => never} */
+  const fail = (n, msg) => {
+    throw new Error(`${file}:${n}: ${msg}`);
+  };
+  const comment = (/** @type {string} */ l) => l.startsWith('#');
+  let head = 0;
+  while (head < lines.length && comment(lines[head])) head++;
+  const block = lines.slice(0, head).map((l) => l.replace(/^#\s?/, '').trim());
+  const title = block[0] ?? '';
+  if (!title) throw new Error(`${file}: a tape opens with its title as a comment (# <title>)`);
+  if (title.length > MAX_TITLE) throw new Error(`${file}: the title is over ${MAX_TITLE} characters`);
+  const description = block.slice(1).filter(Boolean).join(' ');
+
+  let hidden = false;
+  let hiddenAt = 0;
+  let pendingEnter = 0;
+  let typedOnScreen = false;
+  for (let i = head; i < lines.length; i++) {
+    const n = i + 1;
+    const line = lines[i].trim();
+    if (line === '' || comment(line)) continue;
+    const sp = line.search(/\s/);
+    const word = sp < 0 ? line : line.slice(0, sp);
+    const rest = sp < 0 ? '' : line.slice(sp + 1).trim();
+    const [name, speed] = word.split('@');
+    if (RECORDERS.has(name)) {
+      fail(n, `${name} is the recorder's to set, not a tape's (the house settings fix the size, font, theme, typing speed and outputs)`);
+    }
+    if (name === 'Type') {
+      if (speed !== undefined) fail(n, `${word} changes the typing speed, which the house settings fix`);
+      const s = quoted(rest);
+      if (s === null) fail(n, 'Type takes one quoted string ("...", \'...\' or `...`)');
+      if (UUID.test(/** @type {string} */ (s))) fail(n, 'types a uuid; address it by name or dotted address, or look its id up by name inside the tape');
+      if (pendingEnter) fail(pendingEnter, 'the command entered here is not waited on (a Wait) before the next Type');
+      if (!hidden) typedOnScreen = true;
+    } else if (name === 'Enter') {
+      if (rest !== '' && !/^\d+$/.test(rest)) fail(n, 'Enter takes an optional repeat count');
+      pendingEnter = n;
+    } else if (/^Wait(\+Screen|\+Line)?$/.test(name)) {
+      if ((speed !== undefined && !DURATION.test(speed)) || (rest !== '' && !/^\/.*\/$/.test(rest))) {
+        fail(n, `malformed Wait (Wait, Wait@<duration>, Wait+Screen /regex/): ${line}`);
+      }
+      pendingEnter = 0;
+    } else if (name === 'Sleep') {
+      if (!DURATION.test(rest) || speed !== undefined) fail(n, `malformed Sleep (Sleep <duration>, e.g. Sleep 2s): ${line}`);
+    } else if (name === 'Hide') {
+      if (hidden) fail(n, 'Hide while already hidden');
+      hidden = true;
+      hiddenAt = n;
+    } else if (name === 'Show') {
+      if (!hidden) fail(n, 'Show with no Hide before it');
+      hidden = false;
+    } else if (KEYS.has(name) || /^Ctrl\+[A-Za-z@[\]\\^_]$/.test(name)) {
+      if (rest !== '' && !/^\d+$/.test(rest)) fail(n, `${name} takes an optional repeat count`);
+    } else {
+      fail(n, `unknown command "${name}"`);
+    }
+  }
+  if (pendingEnter) fail(pendingEnter, 'the command entered here is not waited on (a Wait) before the tape ends');
+  if (hidden) fail(hiddenAt, 'Hide is never followed by a Show, so the end of the tape would not be recorded');
+  if (!typedOnScreen) throw new Error(`${file}: the tape types nothing on screen`);
+  return { id, title, description, body: lines.slice(head) };
+}
+
+// The tape the recorder plays: the outputs, the house settings, the prelude
+// sourced unseen (folding the tape's own opening Hide into it, so no frame
+// shows before its setup), the tape, and a held last frame. VHS reads settings
+// only before the first command, so they lead.
+/** @param {Tape} tape @returns {string} */
+export function wrapTape(tape) {
+  const id = checkTapeId(tape.id);
+  const body = [...tape.body];
+  const first = body.findIndex((l) => l.trim() !== '' && !l.trim().startsWith('#'));
+  const opensHidden = first >= 0 && body[first].trim() === 'Hide';
+  if (opensHidden) body.splice(first, 1);
+  return [
+    `# Generated by web/e2e/tapelib.mjs from the tape "${id}": the outputs and house settings, then the tape.`,
+    `Output "/out/${id}.gif"`,
+    `Output "/out/${id}.mp4"`,
+    'Require omniglass',
+    'Require jq',
+    'Set Shell "bash"',
+    `Set FontFamily "${HOUSE.fontFamily}"`,
+    `Set FontSize ${HOUSE.fontSize}`,
+    `Set Width ${HOUSE.width}`,
+    `Set Height ${HOUSE.height}`,
+    `Set Padding ${HOUSE.padding}`,
+    `Set Theme "${HOUSE.theme}"`,
+    `Set TypingSpeed ${HOUSE.typingSpeed}`,
+    `Set Framerate ${HOUSE.framerate}`,
+    'Set CursorBlink false',
+    `Set WaitTimeout ${HOUSE.waitTimeout}`,
+    'Hide',
+    'Type "source /demo/prelude.sh && clear"',
+    'Enter',
+    'Wait',
+    ...(opensHidden ? [] : ['Show']),
+    ...body,
+    `Sleep ${HOUSE.hold}`,
+  ].join('\n');
+}
+
+// The limits a recording is judged by: the house budget, lowered (never
+// raised) by OG_TAPE_MAX_GIF_BYTES and OG_TAPE_MAX_SECONDS, which the
+// recorder's own test sets to prove the over-budget path.
+/** @param {Record<string, string | undefined>} env @returns {{ maxGifBytes: number, maxSeconds: number }} */
+export function tapeLimits(env) {
+  /** @type {(v: string | undefined, max: number) => number} */
+  const lower = (v, max) => {
+    const n = v === undefined || v.trim() === '' ? NaN : Number(v);
+    return Number.isFinite(n) && n > 0 ? Math.min(n, max) : max;
+  };
+  return { maxGifBytes: lower(env.OG_TAPE_MAX_GIF_BYTES, MAX_GIF_BYTES), maxSeconds: lower(env.OG_TAPE_MAX_SECONDS, MAX_SECONDS) };
+}
+
+// The verdict on one recording: empty when it passes, else one line per
+// problem, naming the tape. `failures` is the prelude's list of commands the
+// tape typed that exited non-zero (one "exit <n>: <command line>" per line);
+// gifBytes and mp4Bytes are 0 for a file never rendered; seconds is the MP4's
+// length, NaN when it could not be read.
+/**
+ * @param {string} id
+ * @param {{ failures: string, gifBytes: number, mp4Bytes: number, seconds: number }} rec
+ * @param {{ maxGifBytes: number, maxSeconds: number }} limits
+ * @returns {string[]}
+ */
+export function tapeProblems(id, rec, limits) {
+  const out = rec.failures
+    .split('\n')
+    .map((l) => l.trim())
+    .filter(Boolean)
+    .map((l) => `tape ${id}: a command it typed failed (${l})`);
+  if (!(rec.gifBytes > 0)) out.push(`tape ${id}: no GIF was rendered`);
+  if (!(rec.mp4Bytes > 0)) out.push(`tape ${id}: no MP4 was rendered`);
+  if (!(rec.seconds > 0)) out.push(`tape ${id}: the MP4's length could not be read`);
+  if (rec.gifBytes >= limits.maxGifBytes) {
+    out.push(`tape ${id}: over budget: the GIF is ${rec.gifBytes} bytes, and the limit is under ${limits.maxGifBytes} bytes (it plays inline on the PR page)`);
+  }
+  if (rec.seconds >= limits.maxSeconds) {
+    out.push(`tape ${id}: over budget: it runs ${rec.seconds}s, and the limit is under ${limits.maxSeconds}s (hide the waits; split a tape that will not fit)`);
+  }
+  return out;
+}
+
+// The manifest a passing recording carries (demo.json), with the budget mark.
+/**
+ * @param {Tape} tape
+ * @param {{ gifBytes: number, mp4Bytes: number, seconds: number }} rec
+ * @returns {TapeManifest}
+ */
+export function tapeManifest(tape, rec) {
+  const id = checkTapeId(tape.id);
+  return {
+    id,
+    title: tape.title,
+    description: tape.description,
+    gif: `${id}.gif`,
+    mp4: `${id}.mp4`,
+    budget: { seconds: rec.seconds, gifBytes: rec.gifBytes, mp4Bytes: rec.mp4Bytes },
+  };
+}
