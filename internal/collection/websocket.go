@@ -143,9 +143,9 @@ func (p *pendingWS) redial(ctx context.Context) error {
 
 // Authenticate logs in first when the session declares a login, then sends
 // the upgrade and judges its answer: a 101 that completes the opening
-// handshake opens; a lapsed login session logs in once more and upgrades
-// again; and anything else is judged by the status table, a refusal of a
-// credentialed upgrade terminal.
+// handshake opens; a lapsed login session (or a 403 to a session this attempt
+// did not just open) logs in once more and upgrades again; and anything else
+// is judged by the status table, a refusal of the upgrade terminal.
 func (p *pendingWS) Authenticate(ctx context.Context, auth *SessionAuth, _ Classifier, timeout time.Duration) error {
 	if auth == nil || auth.HTTP == nil {
 		return &TerminalError{Class: driver.ClassProtocol, Reason: "a websocket has no upgrade to send"}
@@ -206,7 +206,12 @@ func (p *pendingWS) Authenticate(ctx context.Context, auth *SessionAuth, _ Class
 		ans := HTTPAnswer{Status: resp.StatusCode, Body: body, RetryAfter: resp.Header.Get("Retry-After"),
 			Credentialed: a.credentialed(), Location: resp.Header.Get("Location")}
 		if login {
-			if _, lapsed := SessionLapse(ans, sx); lapsed && !opened {
+			// A 403 to an upgrade riding a session this attempt did not just
+			// open may be that session forgotten, not the credential refused:
+			// it logs in once more, and only a 403 to a fresh login's session
+			// is judged.
+			_, lapsed := SessionLapse(ans, sx)
+			if (lapsed || resp.StatusCode == http.StatusForbidden) && !opened {
 				a.State.lapse(gen)
 				if gen, headers, err = r.ensureLogin(ctx, x, a.Secrets, gen, "the session lapsed"); err != nil {
 					return err
@@ -321,10 +326,13 @@ func (p *pendingWS) Close() error {
 }
 
 // wsFrame is one inbound frame as the reader hands it to the router: its
-// text, or a note of what was dropped (a binary frame, one past the bound).
+// text, or a note of what was dropped (a binary frame, one past the bound),
+// or the reader's end (why it stopped), sent in order behind every frame
+// read before it.
 type wsFrame struct {
 	text    string
 	dropped bool
+	end     error
 }
 
 // wsConn is one held websocket. xmu serializes exchanges, so at most one
@@ -352,15 +360,26 @@ type wsConn struct {
 func (c *wsConn) silence() time.Duration { return 2 * c.ping }
 
 // read is the reader goroutine: frames in, bounded, to the router. Every
-// frame and every pong extends the deadline a silent component dies at.
+// frame and every pong extends the deadline a silent component dies at. It
+// never fails the connection itself: its end travels to the router in order,
+// behind every frame read before it, so an answer, a terminal reply or a push
+// the component sent before it hung up is routed before the connection dies.
 func (c *wsConn) read() {
 	alive := func() { _ = c.ws.SetReadDeadline(time.Now().Add(c.silence())) }
 	alive()
 	c.ws.SetPongHandler(func(string) error { alive(); return nil })
+	hand := func(f wsFrame) bool {
+		select {
+		case c.frames <- f:
+			return true
+		case <-c.done:
+			return false
+		}
+	}
 	for {
 		kind, r, err := c.ws.NextReader()
 		if err != nil {
-			c.fail(c.readCause(err))
+			hand(wsFrame{end: c.readCause(err)})
 			return
 		}
 		data, err := io.ReadAll(io.LimitReader(r, maxWebSocketFrame+1))
@@ -371,7 +390,7 @@ func (c *wsConn) read() {
 			kind = -1
 		}
 		if err != nil {
-			c.fail(c.readCause(err))
+			hand(wsFrame{end: c.readCause(err)})
 			return
 		}
 		alive()
@@ -383,9 +402,7 @@ func (c *wsConn) read() {
 		default:
 			f.dropped = true
 		}
-		select {
-		case c.frames <- f:
-		case <-c.done:
+		if !hand(f) {
 			return
 		}
 	}
@@ -419,6 +436,12 @@ func (c *wsConn) route() {
 		case <-c.done:
 			return
 		case f := <-c.frames:
+			if f.end != nil {
+				// Every frame read before the end is routed: the connection
+				// dies now.
+				c.fail(f.end)
+				return
+			}
 			armed = c.deliver(f, armed, false)
 		case ask := <-c.asks:
 			// One ask at a time: an armed one still here gave up.
@@ -444,6 +467,11 @@ drain:
 	for {
 		select {
 		case f := <-c.frames:
+			if f.end != nil {
+				c.fail(f.end)
+				ask.answer <- lineAnswer{err: fmt.Errorf("collection: websocket %s: %w", c.target, f.end)}
+				return false
+			}
 			c.deliver(f, nil, true)
 		case <-t.C:
 			break drain
@@ -568,8 +596,7 @@ func (c *wsConn) Exchange(ctx context.Context, frame string, reply *driver.Reply
 	}
 	t := time.NewTimer(timeout)
 	defer t.Stop()
-	select {
-	case a := <-ask.answer:
+	settle := func(a lineAnswer) (string, error) {
 		if a.err != nil {
 			return "", a.err
 		}
@@ -577,7 +604,17 @@ func (c *wsConn) Exchange(ctx context.Context, frame string, reply *driver.Reply
 			return "", &RefusedError{Request: frame, Line: a.line}
 		}
 		return a.line, nil
+	}
+	select {
+	case a := <-ask.answer:
+		return settle(a)
 	case <-c.done:
+		// An answer routed before the connection died is the answer.
+		select {
+		case a := <-ask.answer:
+			return settle(a)
+		default:
+		}
 		return "", fmt.Errorf("collection: websocket %s: %w", c.target, c.Err())
 	case <-ctx.Done():
 		if reply != nil {

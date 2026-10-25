@@ -62,7 +62,8 @@ var rungsOf = map[string][]string{
 	"ssh":    {RungHandshake, RungConnect},
 	"http":   {RungConnect, RungRequest},
 	"https":  {RungHandshake, RungConnect},
-	// A websocket's rung draws an answer to an upgrade (#1034).
+	// A websocket's rung is http's: a connect answered by a credential-free
+	// GET / (#1034), the handshake first over wss.
 	"websocket": {RungConnect},
 	"wss":       {RungHandshake, RungConnect},
 	"udp":       {RungRequest},

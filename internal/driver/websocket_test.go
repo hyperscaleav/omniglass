@@ -121,6 +121,25 @@ func TestWebSocketRefusals(t *testing.T) {
 			s.Session = &driver.SessionSpec{Login: &driver.Login{Steps: []driver.LoginStep{{Expect: driver.Match{Prefix: "login:"}, Send: "${secret.login.username}"}}, Ready: driver.Match{Prefix: "OK"}}}
 		}, "request"},
 		{"a pty", func(s *driver.Spec) { s.Session.PTY = true }, "pty"},
+		{"a re-probe", func(s *driver.Spec) { s.Session.Reprobe = "10m" }, "reprobe"},
+		{"an api key in a header the handshake owns", func(s *driver.Spec) {
+			s.Inputs[3] = driver.Input{Name: "login", Kind: "secret", SecretType: "api-key", Required: true}
+			s.Session = &driver.SessionSpec{Credential: "login", Scheme: driver.SchemeAPIKey, Upgrade: &driver.Request{Path: "/ws"},
+				APIKey: &driver.APIKeyPlacement{In: driver.APIKeyInHeader, Name: "Sec-WebSocket-Version"}}
+		}, "Sec-WebSocket-Version"},
+		{"a login header the handshake owns", func(s *driver.Spec) {
+			s.Session = &driver.SessionSpec{Upgrade: &driver.Request{Path: "/ws"}, Login: &driver.Login{Path: "/login",
+				Steps:   []driver.LoginStep{{Request: &driver.Request{Method: "POST", Path: "/login", Body: json.RawMessage(`{"u":"${secret.login.username}"}`)}}},
+				Capture: []driver.Capture{{Name: "token", Extract: driver.Extract{JSONPath: "token"}}},
+				Headers: map[string]string{"Sec-WebSocket-Extensions": "${session.token}"}}}
+		}, "Sec-WebSocket-Extensions"},
+		{"a correlate through a field that is not an object", func(s *driver.Spec) {
+			s.Polls[0].Request.Body = json.RawMessage(`{"type":"get","meta":"keep-me"}`)
+			s.Polls[0].Request.Reply.Correlate = "meta.id"
+		}, "meta"},
+		{"a body that sets the correlated field", func(s *driver.Spec) {
+			s.Polls[0].Request.Body = json.RawMessage(`{"type":"get","id":"fixed"}`)
+		}, "id"},
 		{"an arm frame across lines", func(s *driver.Spec) {
 			s.Listeners[0].Arm = []string{"{\n  \"type\": \"subscribe\"\n}"}
 		}, "line break"},
@@ -195,6 +214,11 @@ func TestAFrameAndItsCorrelatedReply(t *testing.T) {
 	if err != nil || a == b || !ra.Accepts(a) {
 		t.Fatalf("bind = %q, %q, %v", a, b, err)
 	}
+	// A path through a value that is not an object is refused, never
+	// overwritten (a rendered ${value} can land one there).
+	if _, _, err := nested.Correlated(`{"meta":[1,2]}`, "z2"); err == nil {
+		t.Fatal("a correlation through a list overwrote it")
+	}
 	// A reply with no correlation binds nothing.
 	plain := &driver.Reply{Prefix: "OK"}
 	if sent, got, err := plain.Correlated("PING", "x"); err != nil || sent != "PING" || got != plain {
@@ -208,5 +232,28 @@ func TestAFrameAndItsCorrelatedReply(t *testing.T) {
 	got, faults := fn.Interpret(driver.LineMessage(`{"type":"change","value":9}`).Payload(), time.Now())
 	if len(faults) != 0 || len(got) != 1 || got[0].Value != 9 {
 		t.Fatalf("a json frame = %+v, %v", got, faults)
+	}
+}
+
+// A terminal rule that names a status judges the upgrade's answer alone: a
+// frame has no status, so its text never rejects the session by a rule
+// scoped to one.
+func TestAStatusScopedRuleJudgesOnlyTheUpgrade(t *testing.T) {
+	s := wsSpec()
+	s.Session.Terminal = []driver.TerminalRule{
+		{Status: 403, Match: driver.Match{Regex: "locked"}, Class: driver.ClassAuth},
+		{Match: driver.Match{Prefix: `{"type":"fatal"`}, Class: driver.ClassProtocol},
+	}
+	if err := s.Validate(wsCatalog()); err != nil {
+		t.Fatalf("validate = %v", err)
+	}
+	if class, ok := s.Session.TerminalFor(`{"type":"result","id":"k1","value":"locked"}`); ok {
+		t.Fatalf("a healthy frame matched a status-scoped rule: %s", class)
+	}
+	if class, ok := s.Session.TerminalFor(`{"type":"fatal","error":"license expired"}`); !ok || class != driver.ClassProtocol {
+		t.Fatalf("a statusless rule = %q, %v, want protocol", class, ok)
+	}
+	if class, ok := s.Session.TerminalForResponse(403, "account locked"); !ok || class != driver.ClassAuth {
+		t.Fatalf("the upgrade's 403 = %q, %v, want auth", class, ok)
 	}
 }

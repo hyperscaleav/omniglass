@@ -70,10 +70,14 @@ func (r *Reply) Correlated(frame, id string) (string, *Reply, error) {
 	keys := strings.Split(r.Correlate, ".")
 	node := doc
 	for _, k := range keys[:len(keys)-1] {
-		next, ok := node[k].(map[string]any)
-		if !ok {
+		v, present := node[k]
+		next, ok := v.(map[string]any)
+		switch {
+		case !present:
 			next = map[string]any{}
 			node[k] = next
+		case !ok:
+			return "", nil, fmt.Errorf("driver: a correlated frame's %s is not an object, so %s cannot be written into it", k, r.Correlate)
 		}
 		node = next
 	}
@@ -123,11 +127,35 @@ func validateFrameRequest(what string, r Request) error {
 		if !correlatePath.MatchString(rep.Correlate) {
 			return fmt.Errorf("driver: %s reply correlate %q is a dotted path of object keys", what, rep.Correlate)
 		}
-		if _, ok := doc.(map[string]any); !ok {
+		obj, ok := doc.(map[string]any)
+		if !ok {
 			return fmt.Errorf("driver: %s reply correlates by %s, which needs a body that is a JSON object", what, rep.Correlate)
+		}
+		// The path runs through objects (or keys the node creates), and its
+		// last key is the node's to write: a body that sets it would have
+		// its value silently replaced.
+		keys := strings.Split(rep.Correlate, ".")
+		for i, k := range keys {
+			v, present := obj[k]
+			if !present {
+				break
+			}
+			if i == len(keys)-1 {
+				return fmt.Errorf("driver: %s body sets %s, which the node writes a fresh id into; leave it out", what, rep.Correlate)
+			}
+			next, isObj := v.(map[string]any)
+			if !isObj {
+				return fmt.Errorf("driver: %s reply correlates by %s, and the body's %s is not an object to write it into", what, rep.Correlate, k)
+			}
+			obj = next
 		}
 	}
 	return nil
+}
+
+// reservedUpgradeHeader reports a header the opening handshake owns.
+func reservedUpgradeHeader(name string) bool {
+	return slices.Contains(upgradeReserved, strings.ToLower(name))
 }
 
 // validateWebSocketSession refuses a websocket session block no node could
@@ -139,6 +167,22 @@ func (s *Spec) validateWebSocketSession() error {
 	ss := s.Session
 	if ss.PTY || ss.Exec != "" {
 		return fmt.Errorf("driver: a websocket session declares no pty or exec, which shape an ssh channel")
+	}
+	if ss.Reprobe != "" {
+		// A refused upgrade gates the endpoint, and the auth step reads the
+		// gate before it sends, so a re-probe could only replay the refusal
+		// (#1034); an operator's retry or a fixed secret moves it.
+		return fmt.Errorf("driver: a websocket session declares no reprobe; a refused upgrade waits for its fingerprint to move (a fixed secret, an operator's retry)")
+	}
+	if k := ss.APIKey; k != nil && k.In == APIKeyInHeader && reservedUpgradeHeader(k.Name) {
+		return fmt.Errorf("driver: the api key may not ride the %s header, which the websocket handshake sets itself", k.Name)
+	}
+	if l := ss.Login; l != nil {
+		for h := range l.Headers {
+			if reservedUpgradeHeader(h) {
+				return fmt.Errorf("driver: the login may not send the %s header, which the websocket handshake sets itself", h)
+			}
+		}
 	}
 	if ss.Scheme == SchemeDigest {
 		return fmt.Errorf("driver: a websocket upgrade is one request; digest answers a challenge per request, so declare basic, bearer or api-key")
@@ -161,7 +205,7 @@ func (s *Spec) validateWebSocketSession() error {
 			return fmt.Errorf("driver: session.upgrade sends no body")
 		}
 		for h := range u.Headers {
-			if slices.Contains(upgradeReserved, strings.ToLower(h)) {
+			if reservedUpgradeHeader(h) {
 				return fmt.Errorf("driver: session.upgrade may not set the %s header, which the upgrade sets itself", h)
 			}
 		}

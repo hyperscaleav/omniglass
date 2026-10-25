@@ -20,7 +20,10 @@ bounds each frame, a router owns every data frame written and routes what it rea
 session's precedence, and a pinger keeps the socket proven. The node holds the endpoint's socket as
 its session, its upgrade sharing the endpoint's learned auth, binds each correlated poll and command
 at execute, and probes it as http and https are probed. An adversarial review with a security lens
-(upgrade auth, origin, frame limits) shaped the bounds.
+(upgrade auth, origin, frame limits) found three blocking faults, each fixed test-first: a frame
+read just before the component's close could be lost (now routed in order before the connection
+dies), a re-probe could only replay the gate (refused at validation), and a status-scoped terminal
+rule judged a frame's text (it now judges the upgrade alone).
 
 The simulator gains a `websocket` face, a JSON control socket behind its own auth with subscribe,
 get and set and a console drop; the Kestrel bar serves one over wss on 9443, and the seeded

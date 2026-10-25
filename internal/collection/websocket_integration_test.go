@@ -670,3 +670,148 @@ func openWS(t *testing.T, target string, a *collection.HTTPStreamAuth, in collec
 	}
 	return conn
 }
+
+// hangUp serves one socket that answers its first frame with reply, then
+// closes at once: a component that refuses (or acknowledges) and goes.
+func hangUp(t *testing.T, before []string, reply string) *httptest.Server {
+	t.Helper()
+	up := websocket.Upgrader{}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		c, err := up.Upgrade(w, r, nil)
+		if err != nil {
+			return
+		}
+		defer c.Close()
+		for _, f := range before {
+			_ = c.WriteMessage(websocket.TextMessage, []byte(f))
+		}
+		if reply == "" {
+			_ = c.WriteControl(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.ClosePolicyViolation, "bye"), time.Now().Add(time.Second))
+			return
+		}
+		if _, _, err := c.ReadMessage(); err != nil {
+			return
+		}
+		_ = c.WriteMessage(websocket.TextMessage, []byte(reply))
+		_ = c.WriteControl(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.ClosePolicyViolation, "bye"), time.Now().Add(time.Second))
+	}))
+	t.Cleanup(srv.Close)
+	return srv
+}
+
+// slowClaims claims every frame, slowly, and records each.
+type slowClaims struct {
+	mu  sync.Mutex
+	got []string
+}
+
+func (s *slowClaims) Claim(m driver.Message) bool {
+	time.Sleep(20 * time.Millisecond)
+	s.mu.Lock()
+	s.got = append(s.got, m.Data)
+	s.mu.Unlock()
+	return true
+}
+func (s *slowClaims) Unclaimed(driver.Message) {}
+
+// Everything read off the wire before a close is routed before the
+// connection dies: an answer followed by the component's hang-up answers the
+// exchange, and a push before it reaches the listener however slow.
+func TestWebSocketRoutesWhatCameBeforeTheClose(t *testing.T) {
+	if testing.Short() {
+		t.Skip("real-socket integration test")
+	}
+	srv := hangUp(t, nil, `{"type":"fatal","error":"license expired"}`)
+	for i := 0; i < 50; i++ {
+		conn := openWS(t, wsTarget(srv), &collection.HTTPStreamAuth{Request: driver.Request{Path: "/"}}, newChanges())
+		ans, err := conn.Exchange(context.Background(), `{"type":"get"}`, nil, 2*time.Second)
+		_ = conn.Close()
+		if err != nil || !strings.Contains(ans, "license expired") {
+			t.Fatalf("run %d: an answer before the close = %q, %v, want the answer", i, ans, err)
+		}
+	}
+	pushed := hangUp(t, []string{`{"type":"change","value":1}`, `{"type":"change","value":2}`}, "")
+	for i := 0; i < 10; i++ {
+		in := &slowClaims{}
+		conn := openWS(t, wsTarget(pushed), &collection.HTTPStreamAuth{Request: driver.Request{Path: "/"}}, in)
+		select {
+		case <-conn.Done():
+		case <-time.After(5 * time.Second):
+			t.Fatal("the connection outlived the close")
+		}
+		in.mu.Lock()
+		got := len(in.got)
+		in.mu.Unlock()
+		if got != 2 {
+			t.Fatalf("run %d: pushes claimed before the close = %d, want both", i, got)
+		}
+		_ = conn.Close()
+	}
+}
+
+// A terminal reply followed by a hang-up rejects the session every time,
+// rather than booking an ordinary drop and redialling into the lockout.
+func TestWebSocketTerminalReplyBeforeAHangUpRejects(t *testing.T) {
+	if testing.Short() {
+		t.Skip("real-socket integration test")
+	}
+	srv := hangUp(t, nil, `{"type":"fatal","error":"license expired"}`)
+	terminal := collection.TerminalClassifier(&driver.SessionSpec{Terminal: []driver.TerminalRule{{Match: driver.Match{Regex: "license expired"}, Class: driver.ClassAuth}}})
+	for i := 0; i < 10; i++ {
+		tr := &transitions{}
+		sess := collection.StartSession(collection.SessionConfig{
+			Target: wsTarget(srv), Timeout: 2 * time.Second, Dialer: collection.WebSocketDialer{Ping: time.Second},
+			Auth: &collection.SessionAuth{HTTP: &collection.HTTPStreamAuth{Request: driver.Request{Path: "/"}}}, OnTransition: tr.on,
+			Arm: []string{subscribe}, Terminal: terminal,
+		})
+		rejected := tr.waitState(t, collection.SessionRejected)
+		sess.Close()
+		if rejected.Refusal == nil || rejected.Refusal.Class != driver.ClassAuth {
+			t.Fatalf("run %d: rejected = %+v, want the terminal reply's auth refusal", i, rejected)
+		}
+	}
+}
+
+// A login's session the component forgot, answered with a 403 rather than
+// sent to the login page, logs in once more before the 403 is judged: the
+// credential was never refused, only the session it opened.
+func TestWebSocketLogsInAgainBeforeJudgingAForbiddenUpgrade(t *testing.T) {
+	if testing.Short() {
+		t.Skip("real-socket integration test")
+	}
+	login, _ := newLoginComponent(t)
+	comp, srv := newWSComponent(t)
+	comp.other = login
+	comp.gate = func(w http.ResponseWriter, r *http.Request) bool {
+		if c, err := r.Cookie("sid"); err == nil && login.live(c.Value) {
+			return true
+		}
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return false
+	}
+	in, tr := newChanges(), &transitions{}
+	sess := startWS(wsTarget(srv), in, &collection.HTTPStreamAuth{
+		Request: driver.Request{Path: "/ws"}, Session: formLoginSession(), Secrets: loginSecrets("s3cret-pass"),
+		State: collection.NewHTTPAuthState(), Fetcher: collection.NewHTTPFetcher(),
+	}, tr, nil)
+	defer sess.Close()
+	tr.waitState(t, collection.SessionUp)
+	login.expire()
+	comp.drop()
+	deadline := time.Now().Add(10 * time.Second)
+	for comp.upgrades.Load() < 2 && time.Now().Before(deadline) {
+		time.Sleep(20 * time.Millisecond)
+	}
+	comp.push(13)
+	in.heard.waitFor(t, 1)
+	if n := login.loginHits.Load(); n != 2 {
+		t.Fatalf("logins = %d, want the first and exactly one more after the 403", n)
+	}
+	tr.mu.Lock()
+	defer tr.mu.Unlock()
+	for _, s := range tr.seen {
+		if s.State == collection.SessionRejected {
+			t.Fatalf("a forgotten session's 403 rejected the session: %+v", s)
+		}
+	}
+}

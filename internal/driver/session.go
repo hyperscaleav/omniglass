@@ -124,13 +124,15 @@ func (s *SessionSpec) ReprobeInterval() time.Duration {
 }
 
 // TerminalFor classifies a line against the declared terminal rules: the
-// first rule whose match picks it decides the class.
+// first rule whose match picks it decides the class. A line (or a websocket
+// frame) has no status, so a rule scoped to one judges only an http answer
+// (TerminalForResponse, #1034): its text alone never rejects a session.
 func (s *SessionSpec) TerminalFor(line string) (class string, ok bool) {
 	if s == nil {
 		return "", false
 	}
 	for _, r := range s.Terminal {
-		if r.Match.Matches(line) {
+		if r.Status == 0 && r.Match.Matches(line) {
 			return r.Class, true
 		}
 	}

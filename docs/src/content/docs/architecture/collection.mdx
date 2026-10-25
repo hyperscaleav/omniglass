@@ -793,14 +793,20 @@ the scheme's credential, the login's session headers and its cookies), and reads
 a 64 KiB head bound. A `101` that completes the opening handshake opens the socket. The upgrade is
 one request, so a `401` or a `403` to it refuses the session as a terminal `auth` (a credential
 refused, one the component wants and the driver does not send, or an origin it will not admit),
-where the status table lets a request's `403` fault that request alone; a lapsed login logs in once
-more and upgrades again; anything else (a `200` from a web page, a `404`) is a failed attempt on the
-session's backoff. `digest` is refused at validation, since it answers a challenge per request.
+where the status table lets a request's `403` fault that request alone; a lapsed login (or a `403` to
+a login session the attempt did not just open, which may be that session forgotten) logs in once
+more and upgrades again, and only a `403` to a fresh login's session is judged; anything else (a
+`200` from a web page, a `404`) is a failed attempt on the session's backoff. A terminal rule that
+names a status judges the upgrade's answer alone: a frame has no status, so a status-scoped rule's
+text never rejects the session from a reply. `digest` is refused at validation, since it answers a
+challenge per request, and so is a `reprobe`, since a refused upgrade gates the endpoint and the
+auth step reads the gate before it sends.
 `session-state`, `session-reason` and `endpoint-authenticated` land as for any held session, and
 the socket coming up lifts the endpoint's gate.
 
 **A reply is matched by a minted id.** A request whose `reply` declares `correlate: <field>` (a
-dotted path of object keys, on a JSON object body) has a fresh random id written into that field by
+dotted path of object keys, on a JSON object body that does not set that field itself and holds an
+object at every step of the path it does carry) has a fresh random id written into that field by
 the node when it sends the frame (at execute, so a redelivered command never reuses one), and its
 answer is the frame carrying the id back: a push before it goes to the listeners, and another
 request's answer is never taken for it. Its `error` shape answers only a frame carrying its id. A
@@ -810,11 +816,14 @@ socket kept; an unshaped one recycles the socket, since its late answer would an
 
 **Keepalive, bounds and the probe.** The node pings every 30 s and the socket is dead when it hears
 neither a frame nor a pong for two intervals, so a component that stops answering reads
-`recovering` without waiting for a poll. A frame past 1 MiB is read off the wire, dropped and named
+`recovering` without waiting for a poll. Whatever the component sent before it closed the socket
+is routed before the connection dies: an answer (a terminal reply among them, which rejects the
+session) or a push read just before the close is never lost to it. A frame past 1 MiB is read off the wire, dropped and named
 unclaimed, and the socket reads on; a binary frame is named unclaimed, since a listener reads text.
 The node sends no `Origin`; a component that admits only its own pages takes one from
-`session.upgrade`'s headers (which may not set `Upgrade`, `Connection` or a `Sec-WebSocket-*`
-header the handshake owns, bar a subprotocol). The probe is http's (`https`'s over `wss`): a
+`session.upgrade`'s headers. No header the handshake owns (`Upgrade`, `Connection`, a
+`Sec-WebSocket-*` header bar a subprotocol) may be set by the upgrade, an api key's placement or a
+login's headers. The probe is http's (`https`'s over `wss`): a
 credential-free `GET /` whose answer, any status, is the transport rung, so reachability stays
 observed beneath a refused upgrade.
 
@@ -825,7 +834,9 @@ Proven by the driver's validation and correlation tests (`internal/driver/websoc
 real sockets (`internal/collection/websocket_integration_test.go`: an arm on connect, pushes to the
 listeners, an exchange answered by its id past a push and another id's answer, a refusal carrying
 the id, a drop recovered and armed again, a wrong credential refused once whether `401` or `403`,
-basic, bearer and both api-key placements, a form login first and again on a lapse, a silent
+basic, bearer and both api-key placements, a form login first and again on a lapse or a forgotten
+session's `403`, an answer and pushes before a close routed and a terminal reply before a hang-up
+rejecting every time, a silent
 component caught by the keepalive, an oversize and a binary frame dropped, a pinned key, the head
 bound and a redacted key), in the simulator's websocket face, and end to end
 (`internal/node/run_websocket_test.go`: the subscription armed on connect, a change on the bar

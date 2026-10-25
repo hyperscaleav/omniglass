@@ -688,13 +688,13 @@
   },
   {
    "name": "websocket",
-   "description": "WebSocket: a held session whose messages are text frames, routed as a line session's are: a frame sent to arm a subscription on every connection, pushes landing through the listeners, and a request answered by the frame carrying back an id the node mints into it, whatever pushes interleave; the upgrade rides the endpoint's scheme (basic, bearer, an API key) or a login whose cookie the node keeps, and the session is kept alive by ping and pong; the probe draws an answer to an upgrade without a credential (responds), any http status counting.",
+   "description": "WebSocket: a held session whose messages are text frames, routed as a line session's are: a frame sent to arm a subscription on every connection, pushes landing through the listeners, and a request answered by the frame carrying back an id the node mints into it, whatever pushes interleave; the upgrade rides the endpoint's scheme (basic, bearer, an API key) or a login whose cookie the node keeps, and the session is kept alive by ping and pong; the probe is http's, a credential-free GET / whose answer, any status, is the rung (responds), so reachability stays observed beneath a refused upgrade.",
    "held": true,
    "built": true
   },
   {
    "name": "wss",
-   "description": "WSS: websocket over a TLS connection, its own entry so a component can serve a plain socket beside a TLS one; the probe runs the handshake, reports the certificate's expiry, then draws an answer to an upgrade, the certificate verified against the node's roots, pinned to the public key on first use, or (by the operator's explicit choice) not verified.",
+   "description": "WSS: websocket over a TLS connection, its own entry so a component can serve a plain socket beside a TLS one; the probe is https's: it runs the handshake (responds), reports the certificate's expiry, then draws a credential-free response, the certificate verified against the node's roots, pinned to the public key on first use, or (by the operator's explicit choice) not verified.",
    "held": true,
    "built": true
   },

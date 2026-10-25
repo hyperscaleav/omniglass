@@ -24,18 +24,25 @@ summary: "A `websocket` endpoint, and a `wss` one over the shared TLS primitive,
      login's session headers and its cookies, and reads the answer through a 64 KiB head bound. A
      `101` that completes the opening handshake opens the socket. The upgrade is one request, so a
      `401` or a `403` to it is a terminal `auth` whether or not it carried a credential (the status
-     table lets a request's `403` fault that request alone); a lapsed login logs in once more and
-     upgrades again; anything else is a failed attempt on the session's backoff. `digest` is refused
-     at validation, since it answers a challenge per request.
+     table lets a request's `403` fault that request alone); a lapsed login, or a `403` to a login
+     session the attempt did not just open, logs in once more and upgrades again, and only a `403` to
+     a fresh login's session is judged; anything else is a failed attempt on the session's backoff.
+     A terminal rule that names a status judges the upgrade alone, never a frame's text. `digest` is
+     refused at validation, since it answers a challenge per request, and so is `reprobe`, since the
+     auth step reads the endpoint's gate before it sends and a re-probe could only replay the
+     refusal. No header the handshake owns may ride the upgrade, an api key or a login.
   3. **A frame is a message.** A text frame is the held connection's message (ADR-1038), offered to
      the listeners first and handed to an exchange by the line session's precedence: one router goroutine owns every data frame the
      node writes and draws an exchange's boundary as the line reader does, so a frame received
-     before a request was sent is never its answer. A request is a frame: a `line` sent as is, or a
+     before a request was sent is never its answer. The reader never fails the connection itself:
+     its end travels to the router behind every frame read before it, so an answer, a terminal
+     reply or a push the component sent before it hung up is routed first. A request is a frame: a `line` sent as is, or a
      JSON `body` rendered injection-safe as an http body is (a whole-leaf `${value}` keeps its
      type). An arm is a frame too, so it carries no line break (refused at validation, on every held
      line transport, since a node joins arms by line).
   4. **A reply is matched by a minted id.** `reply.correlate` names a field of a JSON object body (a
-     dotted path of object keys). The node writes a fresh random id into it each time it sends the
+     dotted path of object keys, through objects, never a field the body sets itself). The node
+     writes a fresh random id into it each time it sends the
      frame (a command's at execute, so a redelivery never reuses one), and the reply it waits for
      accepts only a frame whose field carries that id; its `error` shape answers only a frame
      carrying the id too, as the exchange's refusal. A reply may instead be a `prefix`, a `regex`, or
