@@ -165,6 +165,16 @@ session](#a-refusal-with-no-session)), and nothing that carries the credential i
 the endpoint changes (point it at the right secret, or rotate the secret) or you retry it, while its
 ping and its transport keep reporting ([http and https](/architecture/collection/#http-and-https)).
 
+A driver whose component signs in once (a form login that sets a cookie, a JSON login that answers
+a token) logs in before its first request and keeps that session for every poll and command after,
+in the node's memory alone: never in the database, the console or a log line. When the component
+forgets the session (a reboot, an idle timeout) the next request logs in exactly once more, and the
+endpoint stays up. A wrong password is one login attempt: the endpoint reads **rejected**, class
+`auth`, with the component's reason (`auth: the login was sent back to the login page (302 to
+/login)`), and logs in again only once you fix the secret (or point the endpoint at the right one)
+([logging in over http](/architecture/collection/#logging-in-over-http)). A component answering
+HTTP digest is read the same way, its password never sent.
+
 A **udp** endpoint has no port to open, so its breakdown lists its **request** rung beside the ping:
 the driver's named request, answered (with its round trip) or not, which is the layer its verdict
 follows. A component
