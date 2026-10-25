@@ -93,8 +93,10 @@ describe("which demos a PR records", () => {
     expect(select(["scripts/demo/README"])).toEqual(tapes);
   });
 
-  it("records every demo of both kinds when the PR changes the stack both recorders play on", () => {
-    expect(select(["web/e2e/lib/stack.sh"])).toEqual([...tapes, ...walks]);
+  it("records every demo of both kinds when the PR changes the stack or the evidence pipeline both recorders share", () => {
+    for (const p of ["web/e2e/lib/stack.sh", "web/e2e/demo.sh", "web/e2e/walkthroughcore.mjs", "web/e2e/walkthroughpr.mjs", "web/e2e/walkthrough-pr.mjs"]) {
+      expect(select([p])).toEqual([...tapes, ...walks]);
+    }
   });
 
   it("records every demo when the PR names none and moves no recorder, as the walkthrough label always has", () => {
@@ -418,6 +420,33 @@ describe("the demo comment's terminal demos", () => {
     expect(b).not.toContain("<img src=x>");
     expect(b).toContain("#### T &lt;img src=x&gt; \\[l\\]");
     expect(b).not.toMatch(/^# h/m);
+  });
+
+  it("blames no stack for a recorder that had nothing to record", () => {
+    const walksOnly = commentBody({
+      repo: REPO,
+      pr: 925,
+      sha: SHA,
+      headSha: HEAD,
+      runUrl: RUN,
+      artifactUrl: ARTIFACT,
+      tapes: { recorded: [], failed: [], stackUp: false },
+      walkthroughs: { recorded: [manifest("a")], failed: [], stackUp: true },
+    });
+    expect(walksOnly).not.toContain("never came up");
+    expect(walksOnly).toContain("1 walkthrough recorded");
+    const tapesOnly = commentBody({
+      repo: REPO,
+      pr: 925,
+      sha: SHA,
+      headSha: HEAD,
+      runUrl: RUN,
+      artifactUrl: ARTIFACT,
+      tapes: { recorded: [tapeManifest("t")], failed: [], stackUp: true },
+      walkthroughs: { recorded: [], failed: [], stackUp: false },
+    });
+    expect(tapesOnly).not.toContain("never came up");
+    expect(tapesOnly).not.toContain("Nothing was recorded");
   });
 
   it("refuses a terminal demo that never passed its budget", () => {

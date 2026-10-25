@@ -70,7 +70,9 @@ failing). Why a ref rather than a branch is in [demos](/contributing/demos/#show
 `run:walkthrough` is `run:demo`'s earlier name, from when walkthroughs were the only demos. The
 workflow still honors it, so a PR that carries it (or a re-run of a run it started) records as
 before, and a PR's existing walkthrough comment is found and updated in place rather than joined by
-a second one. It is not a second task: apply `run:demo`.
+a second one. It is not a second task: apply `run:demo`. The run plays the branch's own recorders,
+so a branch cut before demos merges main first; the job says so if it has not. Retiring the old
+name is [#1136](https://github.com/hyperscaleav/omniglass/issues/1136).
 
 - **What it costs:** nothing on main. The evidence never touches the PR branch, so a squash-merge
   carries none of it, and a default clone does not fetch the ref. It does sit in the repository's

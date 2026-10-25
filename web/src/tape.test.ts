@@ -78,10 +78,11 @@ describe("the house rules a tape is held to", () => {
         "Type 'echo done'",
         "Enter 1",
         "Wait+Screen /done/",
+        "Wait",
         "",
       ].join("\n"),
     );
-    expect(t.body.filter((l) => l.trim() && !l.startsWith("#"))).toHaveLength(15);
+    expect(t.body.filter((l) => l.trim() && !l.startsWith("#"))).toHaveLength(16);
   });
 
   it("refuses a setting, an output, a require, a source, an env, a screenshot or the clipboard: the recorder owns those", () => {
@@ -109,6 +110,19 @@ describe("the house rules a tape is held to", () => {
     expect(bad('Type "a"\nEnter\nType "b"\nEnter\nWait\n')).toBe(`${F}:6: the command entered here is not waited on (a Wait) before the next Type`);
     expect(bad('Type "a"\nEnter\n')).toBe(`${F}:6: the command entered here is not waited on (a Wait) before the tape ends`);
     expect(bad('Type "a"\nEnter\nSleep 5s\n')).toContain("before the tape ends");
+  });
+
+  it("waits on an Enter only with a prompt Wait: a Wait+Screen or Wait+Line pattern can match the command's own typed text", () => {
+    expect(bad('Type "omniglass node list"\nEnter\nWait+Screen /node/\n')).toBe(`${F}:6: the command entered here is not waited on (a Wait) before the tape ends`);
+    expect(bad('Type "a"\nEnter\nWait+Line /a/\nType "b"\nEnter\nWait\n')).toContain(`${F}:6: the command entered here is not waited on`);
+  });
+
+  it("refuses a second command smuggled onto a Hide, Show or Wait line, since VHS reads several to a line", () => {
+    expect(bad(`Hide Set FontSize 40\n${CMD}`)).toBe(`${F}:5: Hide takes nothing after it`);
+    expect(bad(`Hide\nType "a"\nEnter\nWait\nShow Env VHS_PUBLISH "true"\n${CMD}`)).toBe(`${F}:9: Show takes nothing after it`);
+    expect(bad(`Hide Output "/out/extra.webm"\n${CMD}`)).toBe(`${F}:5: Hide takes nothing after it`);
+    expect(bad(`${CMD}Show Source "/out/x.tape"\n`)).toBe(`${F}:8: Show takes nothing after it`);
+    expect(bad(`${CMD}Wait /x/ Set Theme "Dracula" Wait /y/\n`)).toContain(`${F}:8: malformed Wait`);
   });
 
   it("refuses a Hide with no Show after it, a Show with no Hide, and a second Hide", () => {
@@ -151,6 +165,7 @@ describe("the tape the recorder plays", () => {
       `Set TypingSpeed ${HOUSE.typingSpeed}`,
       'Set Shell "bash"',
       "Set CursorBlink false",
+      "Set WaitPattern /^>$/",
     ]) {
       expect(w.indexOf(line)).toBeGreaterThan(-1);
       expect(w.indexOf(line)).toBeLessThan(w.indexOf('Type "omniglass component list"'));

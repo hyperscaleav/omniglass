@@ -11,8 +11,9 @@
 #                            came up (the run:demo workflow reads both), and
 #                            out/stack-logs/ keeps the stack's container logs
 #   tapes.sh selftest        the recorder's own test: a tape whose command fails, one
-#                            whose unseen wait runs out and one stuck past its Wait
-#                            each fail naming the tape and the cause; an over-budget
+#                            whose command fails inside an && list, one whose unseen
+#                            wait runs out and one stuck past its Wait each fail
+#                            naming the tape and the cause; an over-budget
 #                            recording fails naming its limit; a passing one renders
 #                            its GIF and MP4 and carries the budget mark
 #
@@ -204,8 +205,9 @@ fail() {
 }
 ST=$OUT/_selftest
 
-# 1. A passing tape (an unseen lookup and wait, then a visible read): its GIF
-#    and MP4, and the manifest with the budget mark.
+# 1. A passing tape (an unseen lookup and wait, a visible read, and a command
+#    expected to fail, guarded with ||): its GIF and MP4, and the manifest with
+#    the budget mark.
 log=$(tape_one "$FIX/passes.tape" "$ST/passes" 2>&1) || { echo "$log" | sed 's/^/  | /'; fail "the passing tape failed"; }
 echo "$log" | sed 's/^/  | /'
 [ -s "$ST/passes/passes.gif" ] || fail "no GIF was rendered"
@@ -224,14 +226,23 @@ grep -qF "$want" <<<"$log" || fail "the failure did not say: $want"
 [ ! -e "$ST/command-fails/demo.json" ] || fail "a failed tape wrote a manifest"
 echo "ok: a command that exits non-zero fails the demo, naming the command"
 
-# 3. An unseen wait that runs out fails the demo, naming the wait.
+# 3. A command failing inside an && list (no ERR trap fires for it) fails the
+#    demo too, caught as the prompt returns, and is listed once.
+log=$(tape_one "$FIX/and-list-fails.tape" "$ST/and-list-fails" 2>&1) && fail "the tape whose list fails passed"
+echo "$log" | sed 's/^/  | /'
+want="tape and-list-fails: a command it typed failed (exit 1: test -e /never-there && echo unreachable)"
+grep -qF "$want" <<<"$log" || fail "the failure did not say: $want"
+[ "$(grep -c . "$ST/and-list-fails/failed-commands.txt")" -eq 1 ] || fail "the failing line was not listed exactly once"
+echo "ok: a command that fails inside an && list fails the demo, listed once"
+
+# 4. An unseen wait that runs out fails the demo, naming the wait.
 log=$(tape_one "$FIX/wait-runs-out.tape" "$ST/wait-runs-out" 2>&1) && fail "the tape whose wait runs out passed"
 echo "$log" | sed 's/^/  | /'
 want="tape wait-runs-out: a command it typed failed (exit 1: demo_until 3 'test -e /never-there')"
 grep -qF "$want" <<<"$log" || fail "the failure did not say: $want"
 echo "ok: an unseen wait that runs out fails the demo, naming the wait"
 
-# 4. A command that outlasts its Wait: VHS times out, and the demo fails
+# 5. A command that outlasts its Wait: VHS times out, and the demo fails
 #    naming the tape and the Wait.
 log=$(tape_one "$FIX/stuck.tape" "$ST/stuck" 2>&1) && fail "the stuck tape passed"
 echo "$log" | sed 's/^/  | /'
@@ -239,7 +250,7 @@ grep -qF "tape stuck: VHS failed" <<<"$log" || fail "the stuck tape's failure di
 grep -qiF "timeout waiting" <<<"$log" || fail "the stuck tape's failure did not say its Wait ran out"
 echo "ok: a command stuck past its Wait fails the demo"
 
-# 5. Over budget: the passing recording, judged against limits lowered below
+# 6. Over budget: the passing recording, judged against limits lowered below
 #    what it measures, fails naming both, and its manifest is taken back.
 seconds=$(mp4_seconds "$ST/passes" passes)
 TAPE_ENV=(-e OG_TAPE_MAX_GIF_BYTES=1000 -e OG_TAPE_MAX_SECONDS=1)

@@ -55,8 +55,8 @@ export const DEMO_MARKERS = [DEMO_MARKER, WALKTHROUGH_MARKER];
 
 // The SHA the record job writes the comment against, before the evidence
 // commit exists; the publish job (which runs nothing from the PR) replaces
-// every occurrence with the evidence commit's SHA. walkthrough.yml spells it
-// out in both jobs.
+// every occurrence with the evidence commit's SHA. demo.yml spells it out in
+// both jobs.
 export const PENDING_SHA = '0'.repeat(40);
 
 const SCRIPT_DIR = 'web/e2e/walkthroughs/';
@@ -67,8 +67,16 @@ const REPO = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
 // every tape, and is no reason to re-record a walkthrough.
 const TAPE_RECORDER = new Set(['web/e2e/tapes.sh', 'web/e2e/tapelib.mjs', 'web/e2e/tape.mjs']);
 const TAPE_RECORDER_DIR = 'web/e2e/tape/';
-// The stack both recorders play on: a change to it re-records every demo.
-const SHARED = new Set(['web/e2e/lib/stack.sh', 'web/e2e/demo.sh']);
+// What both recorders share (the stack they play on, the dispatcher, and the
+// evidence pipeline that stages and lists them): a change to it re-records
+// every demo, so the run exercises both kinds' paths.
+const SHARED = new Set([
+  'web/e2e/lib/stack.sh',
+  'web/e2e/demo.sh',
+  'web/e2e/walkthroughcore.mjs',
+  'web/e2e/walkthroughpr.mjs',
+  'web/e2e/walkthrough-pr.mjs',
+]);
 
 // The id of the top-level script under `dir` with extension `ext` that path
 // `p` names, or null.
@@ -269,8 +277,10 @@ function section(repo, sha, m) {
  * @returns {string}
  */
 export function commentBody({ repo, pr, sha, headSha, runUrl, artifactUrl, tapes, walkthroughs }) {
-  const tapesUp = tapes.stackUp !== false;
-  const walksUp = walkthroughs.stackUp !== false;
+  // A recorder with nothing selected never ran, so it brought up no stack:
+  // only one that had demos to record can be said to have failed to.
+  const tapesUp = tapes.stackUp !== false || tapes.recorded.length + tapes.failed.length === 0;
+  const walksUp = walkthroughs.stackUp !== false || walkthroughs.recorded.length + walkthroughs.failed.length === 0;
   const failed = [
     ...(tapesUp ? tapes.failed.map((id) => `- \`${checkTapeId(id)}\` (terminal demo)`) : []),
     ...(walksUp ? walkthroughs.failed.map((id) => `- \`${checkId(id)}\` (walkthrough)`) : []),

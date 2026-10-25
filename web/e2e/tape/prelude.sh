@@ -4,10 +4,13 @@
 # starts bash with no profile, no rc file and no history; this makes the
 # shell a test:
 #
-# - every command the tape types that exits non-zero (a pipeline's failure
-#   included) is listed in $DEMO_FAILED as "exit <n>: <the line typed>", and
-#   any listed command fails the demo; a command expected to fail says so,
-#   on screen, with `|| true`;
+# - every command line the tape types that fails is listed in $DEMO_FAILED as
+#   "exit <n>: <the line typed>", once, and any listed line fails the demo: a
+#   line whose status is non-zero (a pipeline's or an && list's failure
+#   included, caught as the prompt returns), and a line in which any command
+#   fails unguarded, a function's body included (the ERR trap, with errtrace);
+#   a command expected to fail says so, on screen, with `|| true`. A command
+#   interrupted with Ctrl+C (status 130) is the tape's own doing, not a failure;
 # - demo_hush '<code>' runs code unseen: its output goes to $DEMO_LOG, and
 #   once it returns its own command line is erased, so a lookup in a Hide
 #   block leaves the screen as it found it (an assignment in it sticks);
@@ -29,8 +32,33 @@ PS1='\[\e[38;2;90;86;224m\]> \[\e[0m\]'
 cd "$(mktemp -d)" || return 1
 
 demo__line() { HISTTIMEFORMAT='' history 1 | sed 's/^ *[0-9]* *//'; }
-demo__failed() { printf 'exit %s: %s\n' "$1" "$(demo__line)" >>"$DEMO_FAILED"; }
+demo__histno() { HISTTIMEFORMAT='' history 1 | awk '{ print $1 }'; }
+# Lists the line typed last as failed with status $1, once per line however
+# many of its commands fail.
+demo__listed=""
+demo__failed() {
+  local n
+  [ "$1" -ne 130 ] || return 0
+  n=$(demo__histno)
+  [ "$n" != "$demo__listed" ] || return 0
+  demo__listed=$n
+  printf 'exit %s: %s\n' "$1" "$(demo__line)" >>"$DEMO_FAILED"
+}
+# The line's own status, as its prompt returns: catches what the ERR trap does
+# not (a command failing inside an && list), and only for a line that ran (a
+# blank Enter leaves the history number where it was).
+demo__seen=""
+demo__prompt() {
+  local rc=$? n
+  n=$(demo__histno)
+  if [ "$n" != "$demo__seen" ]; then
+    demo__seen=$n
+    if [ "$rc" -ne 0 ]; then demo__failed "$rc"; fi
+  fi
+}
+set -o errtrace
 trap 'demo__failed $?' ERR
+PROMPT_COMMAND=demo__prompt
 
 # Erases the command line just entered: the prompt and the line, over as
 # many rows as they wrapped to.

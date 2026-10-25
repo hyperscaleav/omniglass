@@ -32,9 +32,11 @@
 //   a Set, Output, Require, Source, Env, Screenshot, Copy or Paste is the
 //   recorder's, since the house settings below fix the size, font, theme,
 //   typing speed and outputs (a Type@<speed> is refused for the same reason);
-// - every Enter is followed by a Wait before the next Type (or the end), so
-//   every command finishes on screen, and a failing one is caught (the prelude
-//   lists each command that exits non-zero, and any such fails the demo);
+// - every Enter is followed by a prompt Wait (a plain Wait or Wait@<t>, not a
+//   pattern, which could match the command's own typed text) before the next
+//   Type or the end, so every command finishes on screen, and a failing one is
+//   caught (the prelude lists each command line that exits non-zero, and any
+//   such fails the demo); nothing rides after a Hide, Show or Wait on its line;
 // - no uuid in typed text: a demo addresses a resource by name or dotted
 //   address, and looks an id up by name inside the tape;
 // - Hide and Show alternate, ending shown, and something is typed on screen.
@@ -149,19 +151,21 @@ export function parseTape(id, text, file) {
       if (rest !== '' && !/^\d+$/.test(rest)) fail(n, 'Enter takes an optional repeat count');
       pendingEnter = n;
     } else if (/^Wait(\+Screen|\+Line)?$/.test(name)) {
-      if ((speed !== undefined && !DURATION.test(speed)) || (rest !== '' && !/^\/.*\/$/.test(rest))) {
+      if ((speed !== undefined && !DURATION.test(speed)) || (rest !== '' && !/^\/[^/]*\/$/.test(rest))) {
         fail(n, `malformed Wait (Wait, Wait@<duration>, Wait+Screen /regex/): ${line}`);
       }
-      pendingEnter = 0;
+      // Only a wait for the prompt finishes a command: a pattern can match the
+      // command's own typed text, and let the next step run before it ends.
+      if (name === 'Wait' && rest === '') pendingEnter = 0;
     } else if (name === 'Sleep') {
       if (!DURATION.test(rest) || speed !== undefined) fail(n, `malformed Sleep (Sleep <duration>, e.g. Sleep 2s): ${line}`);
-    } else if (name === 'Hide') {
-      if (hidden) fail(n, 'Hide while already hidden');
-      hidden = true;
-      hiddenAt = n;
-    } else if (name === 'Show') {
-      if (!hidden) fail(n, 'Show with no Hide before it');
-      hidden = false;
+    } else if (name === 'Hide' || name === 'Show') {
+      // VHS reads several commands to a line: nothing may ride after these.
+      if (rest !== '' || speed !== undefined) fail(n, `${name} takes nothing after it`);
+      if (name === 'Hide' && hidden) fail(n, 'Hide while already hidden');
+      if (name === 'Show' && !hidden) fail(n, 'Show with no Hide before it');
+      hidden = name === 'Hide';
+      if (hidden) hiddenAt = n;
     } else if (KEYS.has(name) || /^Ctrl\+[A-Za-z@[\]\\^_]$/.test(name)) {
       if (rest !== '' && !/^\d+$/.test(rest)) fail(n, `${name} takes an optional repeat count`);
     } else {
@@ -202,6 +206,9 @@ export function wrapTape(tape) {
     `Set Framerate ${HOUSE.framerate}`,
     'Set CursorBlink false',
     `Set WaitTimeout ${HOUSE.waitTimeout}`,
+    // A plain Wait is for the prompt alone (the trimmed line is just "> "),
+    // never an output line that happens to end in ">".
+    'Set WaitPattern /^>$/',
     'Hide',
     'Type "source /demo/prelude.sh && clear"',
     'Enter',

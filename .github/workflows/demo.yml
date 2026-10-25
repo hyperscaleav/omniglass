@@ -99,6 +99,16 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
+      # The record steps run the branch's own scripts, so a branch cut before
+      # demos (#1132) cannot record under this workflow; say so plainly rather
+      # than fail somewhere downstream.
+      - name: Check the branch carries the demo recorders
+        run: |
+          if [ ! -f web/e2e/demo.sh ]; then
+            echo "::error::this branch predates run:demo (#1132): merge main into it, then re-apply the label"
+            exit 1
+          fi
+
       - uses: actions/setup-node@v4
         with:
           node-version: "22"

@@ -166,7 +166,8 @@ Recording details for both, including the image each recorder pins, are in the
 
 ## Show it on the PR
 
-Push, then apply the **`run:demo`** label (its earlier name, `run:walkthrough`, still works). CI
+Push, then apply the **`run:demo`** label (its earlier name, `run:walkthrough`, still works, on a
+branch that has merged main since demos landed). CI
 records the PR's demos: the tapes and walkthrough scripts it adds or changes; every tape when it
 changes the terminal recorder, and every walkthrough when it changes anything else under `web/`,
 since any console change can move a flow; every demo when it names none. It keeps **one PR
