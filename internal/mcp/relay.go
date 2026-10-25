@@ -7,10 +7,11 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"strings"
 	"sync"
 
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
+
+	"github.com/hyperscaleav/omniglass/internal/redact"
 )
 
 // metaKeyClientInfo is the per-request _meta key a client's identity travels
@@ -134,9 +135,9 @@ func (c *remoteConn) close() {
 // with token, identifying as impl. The token rides only to the endpoint's own
 // origin, and a redirect is never followed, so it cannot be carried elsewhere.
 func Dial(ctx context.Context, endpoint, token string, impl *sdk.Implementation) (*sdk.ClientSession, error) {
-	u, err := url.Parse(endpoint)
-	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
-		return nil, fmt.Errorf("omniglass mcp: the server URL %q is not an http(s) URL", redactURL(endpoint))
+	u, err := redact.ParseBaseURL(endpoint, "the server URL")
+	if err != nil {
+		return nil, fmt.Errorf("omniglass mcp: %w", err)
 	}
 	if token == "" {
 		return nil, errors.New("omniglass mcp: no token: set OMNIGLASS_TOKEN (or pass --token)")
@@ -152,7 +153,7 @@ func Dial(ctx context.Context, endpoint, token string, impl *sdk.Implementation)
 	// connection open between them.
 	cs, err := cl.Connect(ctx, &sdk.StreamableClientTransport{Endpoint: endpoint, HTTPClient: hc, MaxRetries: -1, DisableStandaloneSSE: true}, nil)
 	if err != nil {
-		return nil, fmt.Errorf("omniglass mcp: connect to %s: %s", redactURL(endpoint), scrub(err.Error(), token))
+		return nil, fmt.Errorf("omniglass mcp: connect to %s: %s", redactURL(u), redact.Secrets(err.Error(), token))
 	}
 	return cs, nil
 }
@@ -172,22 +173,11 @@ func (o originBearer) RoundTrip(r *http.Request) (*http.Response, error) {
 	return o.base.RoundTrip(r)
 }
 
-// redactURL drops any userinfo from a URL before it is shown.
-func redactURL(s string) string {
-	u, err := url.Parse(s)
-	if err != nil {
-		return "(unparseable URL)"
-	}
-	u.User = nil
-	return u.String()
-}
-
-// scrub removes the token from a message, should any layer below have echoed it.
-func scrub(msg, token string) string {
-	if token == "" {
-		return msg
-	}
-	return strings.ReplaceAll(msg, token, "[token]")
+// redactURL is a URL as it may be shown: its userinfo dropped.
+func redactURL(u *url.URL) string {
+	c := *u
+	c.User = nil
+	return c.String()
 }
 
 type nopWriteCloser struct{ io.Writer }
