@@ -59,7 +59,7 @@ export default function WebhookEndpointRow(p: { iface: ReachEndpoint; manageId?:
           <span class={`shrink-0 text-base-content/40 transition-transform ${open() ? "rotate-90" : ""}`}><ChevronRight size={14} /></span>
           <div class="flex w-52 shrink-0 flex-col gap-0.5">
             <span class="truncate text-sm">{label()}</span>
-            <span class="truncate font-data text-[11px] text-base-content/50">{p.iface.transport} · hosted by the server</span>
+            <span class="truncate font-data text-[11px] text-base-content/50">{p.iface.transport} · on the server</span>
           </div>
           <div class="min-w-0 flex-1 text-[12px] text-base-content/60">
             <Show when={p.iface.last_seen} fallback={<span>never heard</span>}>
