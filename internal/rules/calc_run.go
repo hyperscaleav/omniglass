@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // ErrMissingInput is an input with no current value on the owner: the rule
@@ -61,6 +62,14 @@ func FormatCalcValue(v any) string {
 		return strconv.FormatFloat(x, 'g', -1, 64)
 	}
 	return fmt.Sprint(v)
+}
+
+// CalcSample is one sample a windowed input reads: its value, of the
+// input's type, when it was taken, and its instance.
+type CalcSample struct {
+	Value    any
+	At       time.Time
+	Instance string
 }
 
 // CalcMember is one role-bound member of a system as a system rule reads
@@ -156,6 +165,13 @@ func (c *CalcProgram) checkLists(lists [][]any) error {
 			return &MissingInputError{Alias: c.inputs[i].Alias, Key: c.inputs[i].Key}
 		}
 		for _, v := range vs {
+			if c.inputs[i].Window > 0 {
+				s, ok := v.(CalcSample)
+				if !ok {
+					return fmt.Errorf("input %s: a windowed input takes samples, not %T", c.inputs[i].Alias, v)
+				}
+				v = s.Value
+			}
 			if !valueIs(c.inputs[i].ValueType, v) {
 				return fmt.Errorf("input %s: %v is not a %s", c.inputs[i].Alias, v, c.inputs[i].ValueType)
 			}
@@ -170,6 +186,13 @@ func (c *CalcProgram) bindLists(in reflect.Value, lists [][]any) error {
 		f := in.Field(i)
 		l := reflect.MakeSlice(f.Type(), len(vs), len(vs))
 		for j, v := range vs {
+			if s, ok := v.(CalcSample); ok {
+				r := l.Index(j)
+				r.Field(0).Set(reflect.ValueOf(s.Value))
+				r.Field(1).SetFloat(float64(s.At.UnixNano()) / 1e9)
+				r.Field(2).SetString(s.Instance)
+				continue
+			}
 			l.Index(j).Set(reflect.ValueOf(v))
 		}
 		f.Set(l)

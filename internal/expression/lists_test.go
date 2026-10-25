@@ -16,6 +16,23 @@ type listEnv struct {
 	Flags []bool    `expr:"flags"`
 	One   float64   `expr:"one"`
 	Pts   []listPt  `expr:"pts"`
+	// Records with a value field: a windowed calc input's samples (#1142).
+	Samples []listSample `expr:"samples"`
+	Tags    []listTag    `expr:"tags"`
+	Ups     []listUp     `expr:"ups"`
+}
+
+type listSample struct {
+	Value float64 `expr:"value"`
+	At    float64 `expr:"at"`
+}
+
+type listTag struct {
+	Value string `expr:"value"`
+}
+
+type listUp struct {
+	Value bool `expr:"value"`
 }
 
 type listPt struct {
@@ -39,12 +56,15 @@ func listSite(t *testing.T, r Result, lists bool) Env {
 }
 
 var listIn = listEnv{
-	Nums:  []float64{2, 3, 1},
-	Ints:  []int{4, 9, 2},
-	Words: []string{"b", "a", "b", "a", "c"},
-	Flags: []bool{true, false, false},
-	One:   7,
-	Pts:   []listPt{{V: 1, Has: true}, {V: 5}, {V: 3, Has: true}},
+	Nums:    []float64{2, 3, 1},
+	Ints:    []int{4, 9, 2},
+	Words:   []string{"b", "a", "b", "a", "c"},
+	Flags:   []bool{true, false, false},
+	One:     7,
+	Pts:     []listPt{{V: 1, Has: true}, {V: 5}, {V: 3, Has: true}},
+	Samples: []listSample{{Value: 4, At: 1}, {Value: 8, At: 2}, {Value: 3, At: 3}},
+	Tags:    []listTag{{Value: "on"}, {Value: "off"}, {Value: "on"}},
+	Ups:     []listUp{{Value: true}, {Value: false}},
 }
 
 // The list functions (#1018): each folds one list into one value, and the
@@ -81,6 +101,16 @@ func TestListFunctions(t *testing.T) {
 		{"count(pts, .has && .v > 2)", Int, 1},
 		{"any(flags) && all(pts, .v > 0)", Bool, true},
 		{"any(\n  flags\n)", Bool, true},
+		// A list of records with a value field folds by its value (#1142).
+		{"max(samples)", Float, 8.0},
+		{"min(samples)", Float, 3.0},
+		{"avg(samples)", Float, 5.0},
+		{"sum(samples)", Float, 15.0},
+		{"majority(tags)", String, "on"},
+		{"any(ups)", Bool, true},
+		{"all(ups)", Bool, false},
+		{"sum(samples, .at)", Float, 6.0},
+		{"count(samples, .value > 3)", Int, 2},
 	} {
 		p, err := Compile(tc.src, listSite(t, tc.r, true))
 		if err != nil {
@@ -113,6 +143,11 @@ func TestListFunctionsRefuseMistyped(t *testing.T) {
 		{"avg(nums, nums)", Float, 1, 1, "one list"},
 		{"max(nums, 2)", Float, 1, 5, "number"},
 		{"majority()", String, 1, 1, "one list"},
+		// A record without a value field does not fold; a value of the
+		// wrong type is refused as its list would be.
+		{"avg(pts)", Float, 1, 5, "list of records"},
+		{"avg(tags)", Float, 1, 5, "number"},
+		{"any(samples)", Bool, 1, 5, "bools"},
 		// A sum of bools is explained as the counting it meant (#1021).
 		{"sum(pts, .has)", Bool, 1, 1, "count(...)"},
 	} {
