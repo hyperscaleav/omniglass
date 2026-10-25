@@ -19,8 +19,8 @@ export default function LogFilters(p: {
   const sources = () => (p.filter.source && !p.sources.includes(p.filter.source) ? [...p.sources, p.filter.source] : p.sources);
   return (
     <div data-testid="log-filters" class="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[11px] text-base-content/55">
-      <label class="flex items-center gap-1.5">
-        <span>At least</span>
+      <div class="flex items-center gap-1.5">
+        <span class="whitespace-nowrap" aria-hidden="true">At least</span>
         <select
           class="select select-bordered select-xs min-w-0"
           aria-label="Severity at least"
@@ -30,9 +30,9 @@ export default function LogFilters(p: {
           <option value="">any severity</option>
           <For each={LOG_SEVERITIES}>{(l) => <option value={l}>{l}</option>}</For>
         </select>
-      </label>
-      <label class="flex items-center gap-1.5">
-        <span>From</span>
+      </div>
+      <div class="flex items-center gap-1.5">
+        <span class="whitespace-nowrap" aria-hidden="true">From</span>
         <select
           class="select select-bordered select-xs min-w-0"
           aria-label="Source"
@@ -42,7 +42,7 @@ export default function LogFilters(p: {
           <option value="">any source</option>
           <For each={sources()}>{(s) => <option value={s}>{s}</option>}</For>
         </select>
-      </label>
+      </div>
     </div>
   );
 }

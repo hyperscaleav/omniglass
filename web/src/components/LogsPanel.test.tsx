@@ -166,9 +166,12 @@ describe("LogsPanel filters", () => {
     expect(await findByText(/no line matches the filter/i)).toBeTruthy();
   });
 
-  it("names the endpoint that collected a line", () => {
-    const { getAllByText } = mountFiltered();
-    expect(getAllByText("via tcp").length).toBe(2);
+  it("names the endpoint that collected a line, and the source only where it differs", () => {
+    const { getAllByTitle, queryByText } = mountFiltered();
+    const via = getAllByTitle("The endpoint that collected the line");
+    expect(via.map((e) => e.textContent)).toEqual(["via tcp", "via tcp"]);
+    // Source and endpoint are both "tcp": the source is not said twice.
+    expect(queryByText("tcp", { selector: "span.font-data:not([title] *)" })).toBeNull();
   });
 
   it("shows when a line arrived where its own time differs", () => {

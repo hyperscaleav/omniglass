@@ -37,11 +37,14 @@ function LogRow(p: { line: ComponentLog }) {
         <span class="min-w-0 flex-1 text-sm text-base-content/80">{p.line.message}</span>
       </div>
       <div class="flex flex-wrap items-center gap-2 pl-[4.5rem] text-[11px] text-base-content/45">
-        <Show when={p.line.source}>
+        {/* The source is the channel; the endpoint that collected the line
+            usually shares its name (an endpoint is named by its transport),
+            so the source is shown only where it says something more. */}
+        <Show when={p.line.source && p.line.source !== p.line.instance}>
           <span class="font-data">{p.line.source}</span>
         </Show>
         <Show when={p.line.instance}>
-          <span title="The endpoint that collected the line">via {p.line.instance}</span>
+          <span title="The endpoint that collected the line">via <span class="font-data">{p.line.instance}</span></span>
         </Show>
         <Show when={arrivedApart(p.line)}>
           <span title={`The line says ${p.line.ts}; the server received it ${p.line.received_at}`}>· arrived {rel(p.line.received_at!)}</span>
