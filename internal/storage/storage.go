@@ -13,6 +13,7 @@ package storage
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -28,6 +29,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/settings"
 	"github.com/hyperscaleav/omniglass/internal/sim/impair"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -1009,7 +1011,7 @@ func NewPG(ctx context.Context, dsn string, opts ...Option) (*PG, error) {
 	}
 	cfg, err := pgxpool.ParseConfig(dsn)
 	if err != nil {
-		return nil, fmt.Errorf("storage: parse dsn: %w", err)
+		return nil, fmt.Errorf("storage: the database DSN ($OMNIGLASS_DSN or $DATABASE_URL) does not parse: %s", pgParseReason(err))
 	}
 	if p.tracer != nil {
 		cfg.ConnConfig.Tracer = p.tracer
@@ -1081,3 +1083,23 @@ func (p *PG) Ping(ctx context.Context) error {
 
 // Close releases the pool.
 func (p *PG) Close() { p.pool.Close() }
+
+// pgParseReason is pgx's reason a DSN does not parse, without the DSN. pgx
+// quotes the DSN in its error with the user:password masked, but not a
+// `?password=` query parameter, so a parameter pgx refuses (one lib/pq, and so
+// the migrations, accepts) printed the password (#979's review). Its message is
+// "cannot parse `<dsn>`: <reason>", and the reason (the parameter at fault and
+// why) is the part an operator acts on. Taking what follows the LAST "`: "
+// keeps only the reason, however the DSN itself is spelled, since the
+// separator after the DSN is always at or before it.
+func pgParseReason(err error) string {
+	var pce *pgconn.ParseConfigError
+	if !errors.As(err, &pce) {
+		return "the parse error is withheld, since it can quote the DSN"
+	}
+	msg := pce.Error()
+	if i := strings.LastIndex(msg, "`: "); i >= 0 {
+		return msg[i+len("`: "):]
+	}
+	return "the parse error is withheld, since it can quote the DSN"
+}

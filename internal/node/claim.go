@@ -34,14 +34,16 @@ func Claim(ctx context.Context, serverURL, name, token string) (Credentials, err
 	if err != nil {
 		return Credentials{}, fmt.Errorf("node: encode claim: %w", err)
 	}
-	// The server URL can carry a user:password, so neither error below names
-	// the raw URL: redact checks it without quoting it, and net/http's own
-	// transport error already names the URL with the password masked. sim run
-	// logs a failed claim on every retry, so a raw URL here reached the logs.
-	url := strings.TrimRight(serverURL, "/") + "/api/v1/nodes:claim"
-	if _, err := redact.ParseURL(url, "the server URL (--server or $OMNIGLASS_SERVER)"); err != nil {
+	// The server URL can carry a user:password, so no error below names the
+	// raw URL: redact checks the base without quoting it (refusing a password
+	// misread into the path, which nothing would mask), and net/http's own
+	// transport error names the URL with the password masked. sim run logs a
+	// failed claim on every retry, so a raw URL here reached the logs.
+	base := strings.TrimRight(serverURL, "/")
+	if _, err := redact.ParseBaseURL(base, "the server URL (--server or $OMNIGLASS_SERVER)"); err != nil {
 		return Credentials{}, fmt.Errorf("node: claim: %w", err)
 	}
+	url := base + "/api/v1/nodes:claim"
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
 	if err != nil {
 		return Credentials{}, fmt.Errorf("node: build claim request: %w", err)

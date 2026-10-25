@@ -25,3 +25,22 @@ func TestAMalformedDSNNeverEchoesItsPasswordFromTheGateway(t *testing.T) {
 		}
 	}
 }
+
+// TestADSNQueryPasswordNeverReachesTheGatewaysError: a valid URL-form DSN may
+// carry its password as a query parameter, which pgx's own redaction does not
+// mask; a parameter pgx refuses (one lib/pq, and so the migrations, accepts)
+// had pgx quote the whole DSN, password and all (#979's review). The error
+// keeps pgx's reason and drops the DSN.
+func TestADSNQueryPasswordNeverReachesTheGatewaysError(t *testing.T) {
+	_, err := storage.NewPG(context.Background(),
+		"postgres://postgres@127.0.0.1:1/postgres?password=QSECRETpw&sslmode=disable&connect_timeout=-1")
+	if err == nil {
+		t.Fatal("a DSN with a negative connect_timeout opened a gateway")
+	}
+	if strings.Contains(err.Error(), "QSECRETpw") {
+		t.Errorf("the gateway error %q carries the DSN's password", err)
+	}
+	if !strings.Contains(err.Error(), "connect_timeout") {
+		t.Errorf("the gateway error %q dropped pgx's reason along with the DSN", err)
+	}
+}

@@ -38,3 +38,14 @@ the value and withholding the detail. A claim that could not reach its server wr
 URL around net/http's already masked error, which `sim run` logged on every retry; it now carries
 the masked one alone. The node variables' reference entries stop calling the token a flag
 default.
+
+The review's second pass found two more, fixed the same way. A password whose first reserved
+character comes first, or after digits alone (`operator:/abc...@host`), parses without an error
+but wrongly: the parser takes `operator` for the host and the rest of the password for the path,
+nothing masks it, and the dial error printed it while the request carried the token toward a host
+named after the user. `redact.ParseBaseURL` refuses a server base URL with an `@` past the host, a
+query or a fragment, which is where every such misread lands, and the CLI and the node claim parse
+their server through it (the base only, so a typed positional may still carry an `@`). And pgx
+masks a DSN's `user:password` but not a `?password=` parameter, so a parameter pgx refuses after
+the migrations accepted it printed the whole DSN; the Gateway now reports pgx's reason without the
+DSN.

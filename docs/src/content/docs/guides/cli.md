@@ -72,7 +72,9 @@ is what `--help`, shell completion and the CLI reference print. So every one of 
 a chat ([#979](https://github.com/hyperscaleav/omniglass/issues/979)). Errors hold the same line:
 a server URL or a database DSN carrying a `user:password` that does not parse is reported by
 name, with the parser's detail withheld (it can quote the password), so percent-encode any
-reserved character in it. Prefer the variable to typing `--token` itself, which leaves the
+reserved character in it. A server URL is refused the same way when such a password would be
+misread rather than refused (an `@` past the host, a query or a fragment), which would otherwise
+send the request, token and all, to a host named after the user. Prefer the variable to typing `--token` itself, which leaves the
 secret in your shell history and the process list.
 
 ```sh
