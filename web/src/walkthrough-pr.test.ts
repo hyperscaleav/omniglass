@@ -1,5 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
+  DEMO_MARKER,
+  DEMO_MARKERS,
   PENDING_SHA,
   WALKTHROUGH_MARKER,
   cdnUrl,
@@ -8,16 +10,19 @@ import {
   evidenceRef,
   evidenceRefsToPrune,
   rawUrl,
-  selectWalkthroughs,
+  selectDemos,
+  tapeEvidenceFiles,
   type Manifest,
+  type TapeManifest,
 } from "../e2e/walkthroughpr.mjs";
 
-// Walkthroughs as PR evidence (#925, #939): the run:walkthrough workflow records
-// the PR's walkthroughs, commits their preview, poster, stills and video to the
-// PR's own evidence ref (refs/walkthroughs/pr-<n>, never the PR branch, so
-// nothing reaches main), and upserts one comment. The choices it makes (which
-// walkthroughs, which files, where they go, what the comment says) are pure and
-// pinned here; the workflow itself only runs them.
+// Demos as PR evidence (#925, #939, #1132): the run:demo workflow records the
+// PR's demos, terminal recordings of its tapes and walkthroughs of its console
+// flows, commits their files to the PR's own evidence ref
+// (refs/walkthroughs/pr-<n>, never the PR branch, so nothing reaches main), and
+// upserts one comment listing every demo. The choices it makes (which demos,
+// which files, where they go, what the comment says) are pure and pinned here;
+// the workflow itself only runs them.
 const REPO = "hyperscaleav/omniglass";
 const SHA = "0123456789abcdef0123456789abcdef01234567";
 const HEAD = "fedcba9876543210fedcba9876543210fedcba98";
@@ -36,44 +41,87 @@ const manifest = (id: string, extra: Partial<Manifest> = {}): Manifest => ({
   ...extra,
 });
 
+const tapeManifest = (id: string, extra: Partial<TapeManifest> = {}): TapeManifest => ({
+  id,
+  title: `Tape ${id}`,
+  description: `What tape ${id} shows.`,
+  gif: `${id}.gif`,
+  mp4: `${id}.mp4`,
+  budget: { seconds: 68.4, gifBytes: 3_000_000, mp4Bytes: 2_000_000 },
+  ...extra,
+});
+
+const NONE = { recorded: [], failed: [], stackUp: true };
 const body = (recorded: Manifest[], failed: string[] = [], stackUp = true) =>
-  commentBody({ repo: REPO, pr: 925, sha: SHA, headSha: HEAD, runUrl: RUN, artifactUrl: ARTIFACT, recorded, failed, stackUp });
+  commentBody({ repo: REPO, pr: 925, sha: SHA, headSha: HEAD, runUrl: RUN, artifactUrl: ARTIFACT, walkthroughs: { recorded, failed, stackUp }, tapes: NONE });
+const tapeBody = (recorded: TapeManifest[], failed: string[] = [], stackUp = true, walkthroughs: Manifest[] = []) =>
+  commentBody({
+    repo: REPO,
+    pr: 925,
+    sha: SHA,
+    headSha: HEAD,
+    runUrl: RUN,
+    artifactUrl: ARTIFACT,
+    walkthroughs: { recorded: walkthroughs, failed: [], stackUp: true },
+    tapes: { recorded, failed, stackUp },
+  });
 
-describe("which walkthroughs a PR records", () => {
-  const all = ["find-a-place", "monitoring", "sample-simulation"];
+describe("which demos a PR records", () => {
+  const tapes = ["http-logins", "node-enroll"];
+  const walks = ["find-a-place", "monitoring", "sample-simulation"];
+  const select = (changed: string[]) => selectDemos(changed, tapes, walks);
 
-  it("records only the scripts a scripts-only PR adds or changes", () => {
-    const changed = ["web/e2e/walkthroughs/find-a-place.yaml", "docs/x.md"];
-    expect(selectWalkthroughs(changed, all)).toEqual(["find-a-place"]);
+  it("records only the tapes and walkthrough scripts a PR adds or changes, when nothing else moves a recorder", () => {
+    expect(select(["scripts/demo/http-logins.tape", "internal/api/x.go", "docs/x.md"])).toEqual(["http-logins"]);
+    expect(select(["web/e2e/walkthroughs/find-a-place.yaml", "docs/x.md"])).toEqual(["find-a-place"]);
+    expect(select(["scripts/demo/node-enroll.tape", "web/e2e/walkthroughs/monitoring.yaml"])).toEqual(["node-enroll", "monitoring"]);
   });
 
   it("records every walkthrough when the PR changes anything else under web/, even beside a script", () => {
-    expect(selectWalkthroughs(["web/src/pages/Explore.tsx", "web/e2e/walkthroughs/find-a-place.yaml"], all)).toEqual(all);
-    expect(selectWalkthroughs(["web/src/pages/Explore.tsx"], all)).toEqual(all);
-    expect(selectWalkthroughs(["web/e2e/walkthrough.mjs"], all)).toEqual(all);
-    expect(selectWalkthroughs(["web/e2e/walkthroughs/fixtures/tiny.yaml"], all)).toEqual(all);
+    expect(select(["web/src/pages/Explore.tsx", "web/e2e/walkthroughs/find-a-place.yaml"])).toEqual(walks);
+    expect(select(["web/src/pages/Explore.tsx"])).toEqual(walks);
+    expect(select(["web/e2e/walkthrough.mjs"])).toEqual(walks);
+    expect(select(["web/e2e/walkthroughs/fixtures/tiny.yaml"])).toEqual(walks);
+    expect(select(["web/src/pages/Explore.tsx", "scripts/demo/http-logins.tape"])).toEqual(["http-logins", ...walks]);
   });
 
-  it("records every walkthrough when the PR touches no script", () => {
-    expect(selectWalkthroughs(["internal/api/x.go"], all)).toEqual(all);
-    expect(selectWalkthroughs([], all)).toEqual(all);
+  it("records every tape when the PR changes the terminal recorder, and not every walkthrough for that alone", () => {
+    expect(select(["web/e2e/tapes.sh"])).toEqual(tapes);
+    expect(select(["web/e2e/tapelib.mjs", "web/e2e/tape.mjs"])).toEqual(tapes);
+    expect(select(["web/e2e/tape/prelude.sh"])).toEqual(tapes);
+    expect(select(["web/e2e/tape/fixtures/passes.tape"])).toEqual(tapes);
+    expect(select(["scripts/demo/README"])).toEqual(tapes);
   });
 
-  it("records every walkthrough when the only script the PR touched is one it deleted", () => {
-    expect(selectWalkthroughs(["web/e2e/walkthroughs/retired.yaml"], all)).toEqual(all);
+  it("records every demo of both kinds when the PR changes the stack both recorders play on", () => {
+    expect(select(["web/e2e/lib/stack.sh"])).toEqual([...tapes, ...walks]);
   });
 
-  it("keeps the tree's order and drops duplicates", () => {
-    const changed = ["web/e2e/walkthroughs/sample-simulation.yaml", "web/e2e/walkthroughs/find-a-place.yaml", "web/e2e/walkthroughs/find-a-place.yaml"];
-    expect(selectWalkthroughs(changed, all)).toEqual(["find-a-place", "sample-simulation"]);
+  it("records every demo when the PR names none and moves no recorder, as the walkthrough label always has", () => {
+    expect(select(["internal/api/x.go"])).toEqual([...tapes, ...walks]);
+    expect(select([])).toEqual([...tapes, ...walks]);
+  });
+
+  it("records every demo when the only script the PR touched is one it deleted", () => {
+    expect(select(["web/e2e/walkthroughs/retired.yaml", "scripts/demo/retired.tape"])).toEqual([...tapes, ...walks]);
+  });
+
+  it("keeps the tree's order, tapes first, and drops duplicates", () => {
+    const changed = ["scripts/demo/node-enroll.tape", "scripts/demo/http-logins.tape", "web/e2e/walkthroughs/sample-simulation.yaml", "web/e2e/walkthroughs/find-a-place.yaml", "web/e2e/walkthroughs/find-a-place.yaml"];
+    expect(select(changed)).toEqual(["http-logins", "node-enroll", "find-a-place", "sample-simulation"]);
   });
 
   it("refuses an id that is not a safe path segment, naming it", () => {
-    expect(() => selectWalkthroughs([], ["ok", "Bad Name"])).toThrow('walkthrough id "Bad Name"');
+    expect(() => selectDemos([], ["ok"], ["Bad Name"])).toThrow('walkthrough id "Bad Name"');
+    expect(() => selectDemos([], ["Bad Tape"], ["ok"])).toThrow('tape id "Bad Tape"');
+  });
+
+  it("refuses an id two demos share, since a demo id names one demo and one evidence directory", () => {
+    expect(() => selectDemos([], ["same"], ["same", "other"])).toThrow('demo id "same" names both a tape and a walkthrough');
   });
 
   it("fails when there is nothing to record", () => {
-    expect(() => selectWalkthroughs([], [])).toThrow("no walkthroughs");
+    expect(() => selectDemos([], [], [])).toThrow("no demos");
   });
 });
 
@@ -150,6 +198,19 @@ describe("the files a walkthrough's evidence carries", () => {
   });
 });
 
+describe("the files a terminal demo's evidence carries", () => {
+  it("is the GIF and the MP4, under the demo's directory", () => {
+    expect(tapeEvidenceFiles(tapeManifest("t"))).toEqual(["t/t.gif", "t/t.mp4"]);
+  });
+
+  it("refuses a manifest whose id or files could escape the directory, or that never passed", () => {
+    expect(() => tapeEvidenceFiles(tapeManifest("../x"))).toThrow('tape id "../x"');
+    expect(() => tapeEvidenceFiles(tapeManifest("t", { gif: "../../x.gif" }))).toThrow("t.gif");
+    expect(() => tapeEvidenceFiles(tapeManifest("t", { mp4: "other.mp4" }))).toThrow("t.mp4");
+    expect(() => tapeEvidenceFiles(tapeManifest("t", { budget: undefined }))).toThrow("budget mark");
+  });
+});
+
 describe("the raw URL a still is embedded by", () => {
   it("pins an immutable commit SHA, never a branch", () => {
     expect(rawUrl(REPO, SHA, "a/poster.png")).toBe(
@@ -174,16 +235,31 @@ describe("the CDN URL a video is linked by", () => {
   });
 });
 
-describe("the walkthrough comment", () => {
+describe("the demo comment", () => {
   it("written against the pending SHA, becomes the pinned comment once publish swaps in the evidence commit's", () => {
     expect(PENDING_SHA).toBe("0000000000000000000000000000000000000000");
     const recorded = [manifest("a", { preview: "preview.webp" }), manifest("b")];
-    const pending = commentBody({ repo: REPO, pr: 925, sha: PENDING_SHA, headSha: HEAD, runUrl: RUN, artifactUrl: ARTIFACT, recorded, failed: ["c"] });
+    const pending = commentBody({
+      repo: REPO,
+      pr: 925,
+      sha: PENDING_SHA,
+      headSha: HEAD,
+      runUrl: RUN,
+      artifactUrl: ARTIFACT,
+      walkthroughs: { recorded, failed: ["c"], stackUp: true },
+      tapes: NONE,
+    });
     expect(pending.replaceAll(PENDING_SHA, SHA)).toBe(body(recorded, ["c"]));
   });
 
   it("opens with the marker the upsert finds it by", () => {
-    expect(body([manifest("a")]).startsWith(`${WALKTHROUGH_MARKER}\n`)).toBe(true);
+    expect(body([manifest("a")]).startsWith(`${DEMO_MARKER}\n`)).toBe(true);
+    expect(tapeBody([tapeManifest("t")]).startsWith(`${DEMO_MARKER}\n`)).toBe(true);
+  });
+
+  it("is found again by its own marker or by the walkthrough comment's earlier one, so a PR labelled before demos keeps one comment", () => {
+    expect(DEMO_MARKERS).toEqual([DEMO_MARKER, WALKTHROUGH_MARKER]);
+    expect(DEMO_MARKER).not.toBe(WALKTHROUGH_MARKER);
   });
 
   it("says what was recorded, from which head, and links the run and the artifact", () => {
@@ -252,7 +328,7 @@ describe("the walkthrough comment", () => {
 
   it("still reads when every walkthrough failed", () => {
     const b = body([], ["x", "y"]);
-    expect(b).toContain("0 walkthroughs recorded, 2 failed");
+    expect(b).toContain("0 demos recorded, 2 failed");
     expect(b).not.toContain("raw.githubusercontent.com");
     expect(b).not.toContain("cdn.jsdelivr.net");
   });
@@ -285,10 +361,70 @@ describe("the walkthrough comment", () => {
     expect(b).toContain("The walkthrough stack never came up");
     expect(b).not.toContain("failed:");
     expect(b).not.toContain("`a`");
-    expect(b).toContain("0 walkthroughs recorded");
+    expect(b).toContain("0 demos recorded");
   });
 
   it("refuses a manifest whose stills are not the recorder's names", () => {
     expect(() => body([manifest("a", { poster: "../../x.png" })])).toThrow("still");
+  });
+});
+
+describe("the demo comment's terminal demos", () => {
+  const raw = `https://raw.githubusercontent.com/${REPO}/${SHA}`;
+  const cdn = `https://cdn.jsdelivr.net/gh/${REPO}@${SHA}`;
+
+  it("plays each terminal demo's GIF inline by the evidence commit's SHA, under its title and description", () => {
+    const b = tapeBody([tapeManifest("t")]);
+    expect(b).toContain("### Demos");
+    expect(b).toContain("#### Tape t");
+    expect(b).toContain("What tape t shows.");
+    expect(b).toContain(`![Tape t: terminal recording](${raw}/t/t.gif)`);
+    expect(b.indexOf("#### Tape t")).toBeLessThan(b.indexOf("t.gif)"));
+  });
+
+  it("links its MP4 through jsDelivr as the scrubbable video, above the GIF", () => {
+    const b = tapeBody([tapeManifest("t")]);
+    const watch = b.indexOf(`[Watch (scrubbable)](${cdn}/t/t.mp4)`);
+    expect(watch).toBeGreaterThan(b.indexOf("#### Tape t"));
+    expect(watch).toBeLessThan(b.indexOf("t.gif)"));
+    expect(b).toContain("`t`, terminal demo, 1m 8s:");
+  });
+
+  it("lists every demo in one comment, terminal demos first, then walkthroughs", () => {
+    const b = tapeBody([tapeManifest("t")], [], true, [manifest("a", { preview: "preview.webp" })]);
+    expect(b).toContain("1 terminal demo and 1 walkthrough recorded");
+    expect(b.indexOf("#### Tape t")).toBeLessThan(b.indexOf("#### Title of a"));
+    expect(b).toContain(`(${cdn}/a/a.mp4)`);
+    expect(b).toContain(`(${raw}/a/preview.webp)`);
+    expect(b.match(new RegExp(DEMO_MARKER, "g"))).toHaveLength(1);
+  });
+
+  it("names a failed terminal demo with its kind", () => {
+    const b = tapeBody([tapeManifest("t")], ["broken"]);
+    expect(b).toContain("1 terminal demo recorded, 1 failed");
+    expect(b).toContain("- `broken` (terminal demo)");
+    expect(b).toMatch(/a command it typed exited non-zero/);
+  });
+
+  it("says the terminal demos' stack never came up, rather than blaming every tape", () => {
+    const b = tapeBody([], ["t", "u"], false);
+    expect(b).toContain("The terminal demos' stack never came up");
+    expect(b).not.toContain("- `t`");
+    expect(b).toContain("0 demos recorded");
+  });
+
+  it("escapes markup in a tape's title and description", () => {
+    const b = tapeBody([tapeManifest("t", { title: "T <img src=x> [l]", description: "a\n# h" })]);
+    expect(b).not.toContain("<img src=x>");
+    expect(b).toContain("#### T &lt;img src=x&gt; \\[l\\]");
+    expect(b).not.toMatch(/^# h/m);
+  });
+
+  it("refuses a terminal demo that never passed its budget", () => {
+    expect(() => tapeBody([tapeManifest("t", { budget: undefined })])).toThrow("budget mark");
+  });
+
+  it("tells the author how to record the current head again, by the demo label", () => {
+    expect(tapeBody([tapeManifest("t")])).toContain("remove and re-add the `run:demo` label");
   });
 });

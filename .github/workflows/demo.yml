@@ -1,44 +1,54 @@
-name: walkthrough
+name: demo
 
-# Walkthroughs as PR evidence (#925, #939). Applying the `run:walkthrough` label
-# records the PR's walkthroughs (web/e2e/walkthroughs/*.yaml) on the walkthrough
-# stack, exactly as `make walkthroughs` does locally, then:
+# Demos as PR evidence (#925, #939, #1132). A demo is a recording of the PR's
+# feature working, made by one of two recorders: a terminal demo, a VHS tape
+# (scripts/demo/<id>.tape) typed into a real terminal, for CLI and API work; or
+# a walkthrough, a Playwright script (web/e2e/walkthroughs/<id>.yaml) played in
+# the console, for a console flow. Applying the `run:demo` label (its earlier
+# name, `run:walkthrough`, still works) records the PR's demos on the
+# walkthrough stack, exactly as `make demo` does locally, then:
 #
-# - uploads the recorder's output as a workflow artifact (it keeps a failed
-#   walkthrough's partial stills too);
-# - commits each passing walkthrough's mp4, animated preview (preview.webp,
-#   #937), poster and per-step stills under <id>/ to the PR's own evidence ref,
-#   refs/walkthroughs/pr-<n> (#939, ADR-0149), never to the PR branch: the PR
-#   head and its checks are untouched, a squash-merge carries none of it into
-#   main, and a ref outside refs/heads/ is not fetched by a default clone, while
-#   GitHub's raw host and jsDelivr serve its commits by SHA like any other;
-# - upserts one PR comment (found again by its marker, the preview comment's
-#   pattern) leading each walkthrough with a "Watch (scrubbable)" link to its
-#   mp4 through jsDelivr (video/mp4 with range requests, so the browser's player
-#   seeks), then its animated preview, its poster and folded stills by the raw
-#   host, all pinned to the evidence commit's SHA, linking the run and the
-#   artifact, and naming any walkthrough that failed. A failed walkthrough fails
-#   the record job: a walkthrough is a test.
+# - uploads the recorders' output as a workflow artifact (it keeps a failed
+#   demo's partial output, and the stack's logs);
+# - commits each passing demo's files under <id>/ to the PR's own evidence
+#   ref, refs/walkthroughs/pr-<n> (#939, ADR-0149; named when walkthroughs were
+#   the only demos), never to the PR branch: a terminal demo's GIF and MP4, a
+#   walkthrough's mp4, animated preview (#937), poster and per-step stills. The
+#   PR head and its checks are untouched, a squash-merge carries none of it
+#   into main, and a ref outside refs/heads/ is not fetched by a default clone,
+#   while GitHub's raw host and jsDelivr serve its commits by SHA like any
+#   other;
+# - upserts one PR comment listing every demo (found again by its marker, or
+#   by the walkthrough comment's earlier one): each leads with a "Watch
+#   (scrubbable)" link to its video through jsDelivr (video/mp4 with range
+#   requests, so the browser's player seeks), then what plays inline from the
+#   raw host (a terminal demo's GIF; a walkthrough's animated preview, poster
+#   and folded stills), all pinned to the evidence commit's SHA, linking the
+#   run and the artifact, and naming any demo that failed. A failed demo fails
+#   the record job: a demo is a test.
 #
-# Which walkthroughs: for a PR that changes nothing under web/ but scripts, the
-# scripts it adds or changes; otherwise every one (web/e2e/walkthroughpr.mjs,
-# unit-tested). The run records the branch tip at run time. Re-run the
-# workflow, or remove and re-add the label, to record the current head again;
-# the comment updates in place. GitHub runs no pull_request workflow on a PR
-# with merge conflicts, so resolve them first. walkthrough-prune.yml deletes an
-# evidence ref 30 days after its PR closes.
+# Which demos (web/e2e/walkthroughpr.mjs selectDemos, unit-tested): the tapes
+# and walkthrough scripts the PR adds or changes; every tape when it changes
+# the terminal recorder, every walkthrough when it changes anything else under
+# web/; every demo when it changes the stack both play on, or names none. The
+# run records the branch tip at run time. Re-run the workflow, or remove and
+# re-add the label, to record the current head again; the comment updates in
+# place. GitHub runs no pull_request workflow on a PR with merge conflicts, so
+# resolve them first. demo-prune.yml deletes an evidence ref 30 days after its
+# PR closes.
 #
 # Two jobs, so no write token ever shares a runner with the PR's code. `record`
-# runs the PR's code (npm install scripts, the recorder, the walkthrough-pr.mjs
-# that stages the evidence and writes the comment) with a read-only token, and
-# hands the staged files and the comment body on as an artifact. `publish`
-# holds the write token, checks nothing out and runs nothing from the PR: it
-# builds the evidence commit in a fresh repository under a random temporary
-# directory with no global, system, hook or fsmonitor configuration, pushes
-# only to the ref it derives from the event's PR number, and upserts the
-# comment with gh. An earlier step on the same runner can plant a git config,
-# a hook, an env var or a PATH entry for every later step ($GITHUB_ENV,
-# $GITHUB_PATH, ~/.gitconfig); a separate job on a fresh runner shares none.
+# runs the PR's code (npm install scripts, both recorders and every command a
+# tape types, the walkthrough-pr.mjs that stages the evidence and writes the
+# comment) with a read-only token, and hands the staged files and the comment
+# body on as an artifact. `publish` holds the write token, checks nothing out
+# and runs nothing from the PR: it builds the evidence commit in a fresh
+# repository under a random temporary directory with no global, system, hook
+# or fsmonitor configuration, pushes only to the ref it derives from the
+# event's PR number, and upserts the comment with gh. An earlier step on the
+# same runner can plant a git config, a hook, an env var or a PATH entry for
+# every later step ($GITHUB_ENV, $GITHUB_PATH, ~/.gitconfig); a separate job on
+# a fresh runner shares none.
 #
 # No loop: the workflow runs only on the `labeled` event, never on a push, and
 # GitHub starts no workflow for a push made with the workflow token; the only
@@ -59,17 +69,17 @@ jobs:
     # and a workflow-level group would let an unrelated label's skipped run
     # cancel a recording in flight.
     concurrency:
-      group: walkthrough-record-${{ github.event.pull_request.number }}
+      group: demo-record-${{ github.event.pull_request.number }}
       cancel-in-progress: true
     if: >-
-      github.event.label.name == 'run:walkthrough' &&
+      (github.event.label.name == 'run:demo' || github.event.label.name == 'run:walkthrough') &&
       github.event.pull_request.head.repo.full_name == github.repository &&
       github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
-    # Generous: building the image, the stack, and every walkthrough with its
-    # mp4 and preview encodes; a wedged container must not hold the runner
-    # for the default six hours.
-    timeout-minutes: 45
+    # Generous: building the images, a stack per recorder, and every demo with
+    # its encodes; a wedged container must not hold the runner for the
+    # default six hours.
+    timeout-minutes: 60
     permissions:
       contents: read
     outputs:
@@ -93,53 +103,63 @@ jobs:
         with:
           node-version: "22"
 
-      # The recorder runs in the pinned Playwright container against the repo
-      # mounted from the runner, so it needs the web deps installed here.
-      - name: Install web deps
-        run: cd web && npm ci
-
-      - name: Choose the walkthroughs
+      - name: Choose the demos
         id: select
         run: |
           set -euo pipefail
           git diff --name-only "origin/${BASE_REF}...HEAD" >"$RUNNER_TEMP/changed.txt"
           ids=$(node web/e2e/walkthrough-pr.mjs select <"$RUNNER_TEMP/changed.txt")
+          walkthroughs=0
+          for id in $ids; do
+            if [ -f "web/e2e/walkthroughs/$id.yaml" ]; then walkthroughs=1; fi
+          done
           echo "ids=$ids" >>"$GITHUB_OUTPUT"
+          echo "walkthroughs=$walkthroughs" >>"$GITHUB_OUTPUT"
           echo "head=$(git rev-parse HEAD)" >>"$GITHUB_OUTPUT"
           echo "recording: $ids"
 
-      # The walkthrough stack is all Docker (the simulator's NET_ADMIN is a
-      # container capability inside its own namespace, as make test-netadmin
-      # already uses on this runner). A failure is recorded, not fatal yet, so
-      # the passing walkthroughs still reach the PR.
+      # The walkthrough recorder runs in the pinned Playwright container against
+      # the repo mounted from the runner, so it needs the web deps installed
+      # here; the terminal recorder needs none.
+      - name: Install web deps
+        if: ${{ steps.select.outputs.walkthroughs == '1' }}
+        run: cd web && npm ci
+
+      # Each recorder brings up a walkthrough stack of its own, all in Docker
+      # (the simulator's NET_ADMIN is a container capability inside its own
+      # namespace, as make test-netadmin already uses on this runner). A
+      # failure is recorded, not fatal yet, so the passing demos still reach
+      # the PR.
       - name: Record
         id: record
         env:
           IDS: ${{ steps.select.outputs.ids }}
         run: |
           # shellcheck disable=SC2086
-          if bash web/e2e/walkthroughs.sh record $IDS; then
+          if bash web/e2e/demo.sh record $IDS; then
             echo "failed=0" >>"$GITHUB_OUTPUT"
           else
             echo "failed=1" >>"$GITHUB_OUTPUT"
           fi
 
-      - name: Upload the videos
+      - name: Upload the recordings
         id: artifact
         if: ${{ !cancelled() && steps.select.outcome == 'success' }}
         uses: actions/upload-artifact@v4
         with:
-          name: walkthroughs-pr${{ github.event.pull_request.number }}
+          name: demos-pr${{ github.event.pull_request.number }}
           path: |
             web/e2e/walkthroughs/out/
+            scripts/demo/out/
             !web/e2e/walkthroughs/out/_selftest/
+            !scripts/demo/out/_selftest/
           if-no-files-found: warn
 
       # The evidence is staged here, by the PR's code and with no write token:
-      # the files each passing walkthrough's evidence carries (a fresh set, so
-      # a removed step or a renamed or deleted script leaves nothing behind),
-      # the ref they go to, and the comment body, written against a placeholder
-      # SHA that publish swaps for the evidence commit's once it exists.
+      # the files each passing demo's evidence carries (a fresh set, so a
+      # removed step or a renamed or deleted demo leaves nothing behind), the
+      # ref they go to, and the comment body, written against a placeholder SHA
+      # that publish swaps for the evidence commit's once it exists.
       - name: Stage the evidence
         id: stage
         if: ${{ !cancelled() && steps.select.outcome == 'success' }}
@@ -149,25 +169,9 @@ jobs:
           ARTIFACT_URL: ${{ steps.artifact.outputs.artifact-url || format('{0}/{1}/actions/runs/{2}', github.server_url, github.repository, github.run_id) }}
         run: |
           set -euo pipefail
-          out=web/e2e/walkthroughs/out
           stage="$RUNNER_TEMP/evidence"
           mkdir -p "$stage/tree"
-          for id in $IDS; do
-            if grep -qx "$id" "$out/failed.txt" 2>/dev/null || [ ! -f "$out/$id/walkthrough.json" ]; then
-              continue
-            fi
-            # Assigned first, so a refused manifest fails the step (set -e does
-            # not see a failure inside a for loop's word list).
-            files=$(node web/e2e/walkthrough-pr.mjs files "$id")
-            for f in $files; do
-              if [ ! -f "$out/$f" ]; then
-                echo "::warning::$id has no $f; it is left out of the evidence"
-                continue
-              fi
-              mkdir -p "$stage/tree/$(dirname "$f")"
-              cp "$out/$f" "$stage/tree/$f"
-            done
-          done
+          node web/e2e/walkthrough-pr.mjs stage "$stage/tree"
           node web/e2e/walkthrough-pr.mjs ref "$PR" >"$stage/ref"
           # walkthroughpr.mjs PENDING_SHA, which publish replaces.
           SHA=0000000000000000000000000000000000000000 node web/e2e/walkthrough-pr.mjs comment >"$stage/body.md"
@@ -177,33 +181,32 @@ jobs:
         if: ${{ !cancelled() && steps.stage.outcome == 'success' }}
         uses: actions/upload-artifact@v4
         with:
-          name: walkthrough-evidence-pr${{ github.event.pull_request.number }}
+          name: demo-evidence-pr${{ github.event.pull_request.number }}
           path: ${{ runner.temp }}/evidence/
           if-no-files-found: error
           retention-days: 1
 
-      - name: Fail on a failed walkthrough
+      - name: Fail on a failed demo
         if: ${{ steps.record.outputs.failed == '1' }}
         run: |
-          out=web/e2e/walkthroughs/out
-          if [ ! -f "$out/stack-up" ]; then
-            echo "the walkthrough stack never came up, so no walkthrough ran (see the Record step)" >&2
-          elif [ -s "$out/failed.txt" ]; then
-            echo "walkthroughs failed: $(tr '\n' ' ' <"$out/failed.txt")" >&2
-          else
-            echo "the recording failed after the walkthroughs (see the Record step)" >&2
-          fi
+          for pair in "web/e2e/walkthroughs/out:walkthroughs" "scripts/demo/out:terminal demos"; do
+            out=${pair%%:*}
+            if [ -s "$out/failed.txt" ]; then
+              echo "${pair#*:} failed: $(tr '\n' ' ' <"$out/failed.txt")" >&2
+            fi
+          done
+          echo "a demo failed, or a recorder's stack never came up (the Record step says which)" >&2
           exit 1
 
   publish:
     needs: record
-    # Runs whether or not a walkthrough failed (record then fails), so the
-    # passing ones still reach the PR; not when nothing was staged.
+    # Runs whether or not a demo failed (record then fails), so the passing
+    # ones still reach the PR; not when nothing was staged.
     if: ${{ !cancelled() && needs.record.outputs.staged == 'true' }}
     # Its own group, queued rather than cancelled, so a new run's recording
     # never cancels an older run's publish mid-push, or the reverse.
     concurrency:
-      group: walkthrough-publish-${{ github.event.pull_request.number }}
+      group: demo-publish-${{ github.event.pull_request.number }}
       cancel-in-progress: false
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -216,7 +219,7 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with:
-          name: walkthrough-evidence-pr${{ github.event.pull_request.number }}
+          name: demo-evidence-pr${{ github.event.pull_request.number }}
           path: ${{ runner.temp }}/evidence
 
       # Each run commits the staged tree on top of the evidence ref's last
@@ -264,7 +267,7 @@ jobs:
             sha=$parent
             echo "evidence unchanged at $sha"
           else
-            sha=$(g commit-tree "$tree" "${parents[@]}" -m "ci: walkthrough evidence for #${PR}")
+            sha=$(g commit-tree "$tree" "${parents[@]}" -m "ci: demo evidence for #${PR}")
             authed push -q "$url" "${sha}:${ref}"
             echo "committed $sha to $ref"
           fi
@@ -272,23 +275,28 @@ jobs:
 
       # The body was written by record against a placeholder SHA
       # (walkthroughpr.mjs PENDING_SHA); it is pinned to the evidence commit
-      # here. Slurp every page into one array and match the marker through a
-      # jq --arg, so it is never interpolated into the filter. Only the bot's
-      # own comment counts: anyone can paste the marker into theirs.
-      - name: Upsert the walkthrough comment
+      # here, and must open with the demo marker. Slurp every page into one
+      # array and match the markers through jq --arg, so neither is ever
+      # interpolated into the filter. Only the bot's own comment counts, and
+      # only one that opens with a marker (the demo comment's, or the
+      # walkthrough comment's earlier one, which this run takes over): anyone
+      # can paste a marker into theirs.
+      - name: Upsert the demo comment
         env:
           GH_TOKEN: ${{ github.token }}
           SHA: ${{ steps.commit.outputs.sha }}
         run: |
           set -euo pipefail
-          MARKER='<!-- omniglass-walkthrough -->'
+          MARKER='<!-- omniglass-demo -->'
+          LEGACY='<!-- omniglass-walkthrough -->'
           pending=0000000000000000000000000000000000000000
           [[ "$SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "not a commit SHA: $SHA" >&2; exit 1; }
           body=$(cat "$RUNNER_TEMP/evidence/body.md")
           printf '%s\n' "${body//$pending/$SHA}" >"$RUNNER_TEMP/body.md"
-          grep -q "$MARKER" "$RUNNER_TEMP/body.md" || { echo "the staged body has no marker" >&2; exit 1; }
+          [ "$(head -n1 "$RUNNER_TEMP/body.md")" = "$MARKER" ] || { echo "the staged body does not open with the marker" >&2; exit 1; }
           cid=$(gh api "repos/${REPO}/issues/${PR}/comments" --paginate \
-                | jq -rs --arg m "$MARKER" 'add | map(select(.user.login == "github-actions[bot]" and (.body | contains($m))))[0].id // empty')
+                | jq -rs --arg m "$MARKER" --arg l "$LEGACY" \
+                  'add | map(select(.user.login == "github-actions[bot]" and ((.body | startswith($m)) or (.body | startswith($l)))))[0].id // empty')
           if [ -n "$cid" ]; then
             gh api "repos/${REPO}/issues/comments/${cid}" -X PATCH -F body=@"$RUNNER_TEMP/body.md" >/dev/null
             echo "updated comment $cid"
