@@ -43,11 +43,14 @@ func TestAMalformedClaimURLNeverEchoesItsPassword(t *testing.T) {
 // without failing landed in the dial error whole, and sim run logged it on
 // every retry (#979's review).
 func TestAMisreadClaimPasswordIsNeverShown(t *testing.T) {
-	_, err := node.Claim(context.Background(), "http://operator:/abcSECRET@"+nettest.RefusedAddr(t), "edge-hq", "ogp_enroll")
-	if err == nil {
-		t.Fatal("a claim to a misread server URL succeeded")
-	}
-	if strings.Contains(err.Error(), "SECRET") {
-		t.Errorf("the claim error %q carries the server's password", err)
+	addr := nettest.RefusedAddr(t)
+	for _, server := range []string{"http://operator:/abcSECRET@" + addr, "operator:abcSECRET@" + addr} {
+		_, err := node.Claim(context.Background(), server, "edge-hq", "ogp_enroll")
+		if err == nil {
+			t.Fatalf("a claim to a misread server URL succeeded")
+		}
+		if strings.Contains(err.Error(), "SECRET") {
+			t.Errorf("the claim error %q carries the server's password", err)
+		}
 	}
 }

@@ -73,9 +73,10 @@ a chat ([#979](https://github.com/hyperscaleav/omniglass/issues/979)). Errors ho
 a server URL or a database DSN carrying a `user:password` that does not parse is reported by
 name, with the parser's detail withheld (it can quote the password), so percent-encode any
 reserved character in it. A server URL is refused the same way when such a password would be
-misread rather than refused (an `@` past the host, a query or a fragment), which would otherwise
-send the request, token and all, to a host named after the user. Prefer the variable to typing `--token` itself, which leaves the
-secret in your shell history and the process list.
+misread rather than refused (an `@` past the host, a query or a fragment, or no `http://` or
+`https://` before it): the error would otherwise print the password, and the request could go,
+token and all, to a host named after the user. Prefer the variable to typing `--token` itself,
+which leaves the secret in your shell history and the process list.
 
 ```sh
 export OMNIGLASS_SERVER=https://omniglass.example.com

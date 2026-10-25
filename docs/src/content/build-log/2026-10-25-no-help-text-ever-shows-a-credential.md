@@ -45,7 +45,9 @@ but wrongly: the parser takes `operator` for the host and the rest of the passwo
 nothing masks it, and the dial error printed it while the request carried the token toward a host
 named after the user. `redact.ParseBaseURL` refuses a server base URL with an `@` past the host, a
 query or a fragment, which is where every such misread lands, and the CLI and the node claim parse
-their server through it (the base only, so a typed positional may still carry an `@`). And pgx
+their server through it (the base only, so a typed positional may still carry an `@`). A third
+pass caught curl's `user:pass@host` habit, with no `https://`: the parser names the scheme after
+the user and keeps the rest opaque, so a base URL also needs `http` or `https` and a host. And pgx
 masks a DSN's `user:password` but not a `?password=` parameter, so a parameter pgx refuses after
 the migrations accepted it printed the whole DSN; the Gateway now reports pgx's reason without the
 DSN.

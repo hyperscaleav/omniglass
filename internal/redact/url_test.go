@@ -68,6 +68,11 @@ func TestABaseURLRefusesAMisreadPassword(t *testing.T) {
 		"https://operator:123#abcSECRET@omniglass.example",
 		"https://operator:?abcSECRET@omniglass.example",
 		"https://operator:#abcSECRET@omniglass.example",
+		// No // before the host (curl's user:pass@host habit): the parser takes
+		// the user for the scheme and keeps the rest as one opaque string.
+		"operator:abcSECRET@omniglass.example",
+		"https:operator:abcSECRET@omniglass.example",
+		"operator:abcSECRET@127.0.0.1:8080",
 	} {
 		_, err := redact.ParseBaseURL(raw, "the server URL")
 		if err == nil {
@@ -94,6 +99,8 @@ func TestABaseURLAcceptsAServer(t *testing.T) {
 		"https://omniglass.example/under/a/prefix",
 		"https://operator:s3c%2Fret@omniglass.example",
 		"https://operator:hunter2@omniglass.example:8443",
+		"HTTP://LOCALHOST:8080",
+		"https://[::1]:8080",
 	} {
 		if _, err := redact.ParseBaseURL(raw, "the server URL"); err != nil {
 			t.Errorf("%q refused: %v", raw, err)

@@ -123,6 +123,7 @@ func TestAMisreadServerPasswordIsNeverSentOrShown(t *testing.T) {
 	for _, server := range []string{
 		"https://operator:/abcSECRET@omniglass.example",
 		"https://operator:123#abcSECRET@omniglass.example",
+		"operator:abcSECRET@omniglass.example",
 	} {
 		_, err := apiclient.New(server, "ogp_x").Do(context.Background(), http.MethodGet, "/api/v1/auth/me", nil)
 		if err == nil {

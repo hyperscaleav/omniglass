@@ -33,11 +33,16 @@ func ParseURL(raw, what string) (*url.URL, error) {
 // only a parsed user:password), so every error naming the URL would print it,
 // and the request would go to a host named after the username. Each misread
 // leaves an @ past the host, or a query or fragment a base URL never carries,
-// so both are refused, again without quoting the input.
+// so both are refused, again without quoting the input. So is a URL with no
+// http:// or https:// before its host (curl's user:pass@host habit), which the
+// parser reads as a scheme named after the user and one opaque remainder.
 func ParseBaseURL(raw, what string) (*url.URL, error) {
 	u, err := ParseURL(raw, what)
 	if err != nil {
 		return nil, err
+	}
+	if (u.Scheme != "http" && u.Scheme != "https") || u.Opaque != "" || u.Host == "" {
+		return nil, fmt.Errorf("%s does not read as a server's base URL: it needs http:// or https:// and a host", what)
 	}
 	if strings.ContainsAny(raw, "?#") || strings.Contains(u.EscapedPath(), "@") {
 		return nil, fmt.Errorf("%s does not read as a server's base URL: it carries a query, a fragment, or an @ past the host, "+
