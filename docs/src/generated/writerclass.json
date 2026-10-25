@@ -8,6 +8,7 @@
       "endpoint-authenticated",
       "endpoint-reachable",
       "endpoint-rejection",
+      "endpoint-rejection-reason",
       "endpoint-responsive",
       "http-response-time",
       "icmp-reachable",

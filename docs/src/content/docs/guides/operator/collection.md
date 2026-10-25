@@ -6,6 +6,7 @@ walkthroughs:
   - id: fix-an-endpoint-in-place
   - id: fix-a-rejected-session
   - id: trust-a-changed-host-key
+  - id: fix-a-refused-probe
 ---
 
 Collection is how the fleet learns whether a device is reachable and what it reports. An **edge
@@ -158,10 +159,11 @@ offered key>` trusts the new one ([tls](/architecture/collection/#tls)).
 An **http** or **https** endpoint's driver sends real requests, each carrying the endpoint's
 credential (a basic login, a bearer token, or an API key, by the driver's declared scheme). Its
 **authenticated** rung is proven by those requests, never the probe, which sends no credential: the
-first answer that accepts the credential reads yes. A component that refuses it (a 401) reads
-**rejected** with class `auth`, and nothing that carries the credential is sent again until the
-endpoint changes (point it at the right secret, or rotate the secret) or you retry it, while its ping
-and its transport keep reporting ([http and https](/architecture/collection/#http-and-https)).
+first answer that accepts the credential reads yes. A component that refuses it (a 401) gates the
+endpoint, class `auth`, its row saying why and offering **Retry** ([a refusal with no
+session](#a-refusal-with-no-session)), and nothing that carries the credential is sent again until
+the endpoint changes (point it at the right secret, or rotate the secret) or you retry it, while its
+ping and its transport keep reporting ([http and https](/architecture/collection/#http-and-https)).
 
 A **udp** endpoint has no port to open, so its breakdown lists its **request** rung beside the ping:
 the driver's named request, answered (with its round trip) or not, which is the layer its verdict
@@ -244,6 +246,33 @@ In the simulated fleet, the touch panel in the place named `briefing` pins the k
 was reimaged, so it reads rejected for a changed host key; trusting the offered key brings it up.
 
 ::walkthrough{#trust-a-changed-host-key}
+
+#### A refusal with no session
+
+An endpoint that holds no session is still checked by its reachability probe, and a probe can be
+refused in a way retrying cannot fix too: an snmp agent answering `authorizationError` for the
+endpoint's community, a udp reply its driver declares terminal, a tls certificate that fails
+verification, or the ssh probe's credential. The node gates the endpoint exactly as it gates a
+session, and the row says so the same way, with no session pill beside the ladder: the held rung
+wears the refusal glyph, and beneath the row **Why it was refused** gives the class and the
+component's own words (`auth: the agent answered authorizationError for the community`), with
+**Retry** and the way into the endpoint, whose own notice offers **Edit credential** with the secret
+input focused (an snmp endpoint's `community`). A changed key the probe met names both keys and
+offers **Trust this key**, as above. Retry holds its spinner until the refusal moves: the node lifts
+the gate at its next check-in and tries once, and a refusal met again sets it anew. Without
+`endpoint:retry` the button is greyed and its tooltip says so, while the reason still reads. Where
+the gate holds the endpoint's polls too (any refusal at the transport rung, and a credential every
+poll carries: an snmp community, or an http or https driver's credential), the Collection card reads
+**polls stopped** beside it. An **http** or **https** endpoint holds no session either: a 401 to a
+request carrying its credential gates it, class `auth`, with the reason
+`auth: the component refused the credential (401)`, and an https certificate the endpoint refuses
+gates it at the handshake, a changed key offering **Trust this key**.
+
+In the simulated fleet, the touch panel in the place named `auditorium` answers SNMP, and its
+endpoint reads its community from a secret holding the one the panel's agent refuses, so it reads
+refused, class `auth`; pointing its `community` input at `sim-community` lifts the gate.
+
+::walkthrough{#fix-a-refused-probe}
 
 ## Events
 

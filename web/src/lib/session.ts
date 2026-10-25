@@ -31,15 +31,52 @@ export function sessionWord(iface: ReachEndpoint, now: number = Date.now()): Ses
   return s.state;
 }
 
-// sessionShowsReason: the reason is what an operator acts on, so it shows for
-// the two states where it says something, down (why the node gave up for now)
-// and rejected (what refused it). A rejected session keeps showing its reason
-// once stale, since the refusal is what needs fixing however old it is.
-export function sessionShowsReason(iface: ReachEndpoint, now: number = Date.now()): boolean {
+// ---- the notice (#1059, #1110) ----------------------------------------------
+
+// A Notice is what an endpoint's notice says: a refusal (whatever met it: a
+// held session, the reachability probe, a poll) or a down session, why, and
+// the time a retry waits to see move (lib/session's retryWaiting).
+export type Notice = { kind: "rejected" | "down"; reason: string; waitTS: string };
+
+// What each class refuses, for a gate that carries no reason of its own (one
+// published before the node said why): the class is named either way.
+const CLASS_REFUSED: Record<string, string> = {
+  auth: "the component refused the credential",
+  "host-key": "the component presented a host key that is not the one pinned",
+  certificate: "the component's certificate was refused",
+  protocol: "the component refused the protocol",
+};
+
+// retryMark is what a retry waits to see move: the held session's transition
+// time where the endpoint holds one (a retry redials it), else the gate's
+// publish time (a retry lifts it, and a refusal met again sets it anew).
+export function retryMark(iface: ReachEndpoint): string {
+  return iface.session?.ts ?? iface.rejection?.ts ?? "";
+}
+
+// endpointNotice is the endpoint's notice, or null. A refusal shows whatever
+// met it: the gate (endpoint-rejection) holds whether or not a session is held,
+// so an endpoint refused by its reachability probe alone reads the same as a
+// rejected session (#1110), and a rejected session keeps showing once stale,
+// since the refusal is what needs fixing however old it is. Its reason is the
+// gate's (the refusal's own words, which a restart never overwrites), else a
+// rejected session's (one published before the gate carried a reason), else
+// the class. A restarted node starts a session rejected under the gate it
+// adopted, and that session's reason is then the node's placeholder, which is
+// why the gate's leads. A down session says why the node gave up for now,
+// while it is fresh. Everything else is not news.
+export function endpointNotice(iface: ReachEndpoint, now: number = Date.now()): Notice | null {
   const s = iface.session;
-  if (!s?.reason) return false;
-  if (s.state === "rejected") return true;
-  return s.state === "down" && sessionWord(iface, now) === "down";
+  const gate = iface.rejection;
+  if (gate || s?.state === "rejected") {
+    const reason =
+      gate?.reason ||
+      (s?.state === "rejected" && s.reason) ||
+      (gate ? `${gate.class}: ${CLASS_REFUSED[gate.class] ?? "refused in a way retrying cannot fix"}` : "");
+    return reason ? { kind: "rejected", reason, waitTS: retryMark(iface) } : null;
+  }
+  if (s?.state === "down" && s.reason && sessionWord(iface, now) === "down") return { kind: "down", reason: s.reason, waitTS: s.ts };
+  return null;
 }
 
 // ---- the ladder (ADR-0158) -------------------------------------------------
@@ -99,6 +136,23 @@ export function ladder(iface: ReachEndpoint): Rung[] {
   });
 }
 
+// CREDENTIALED_POLLS are the transports whose every stateless poll carries
+// the credential: an snmp get its community (#821), an http or https request
+// its driver's scheme (#902). An auth gate on one of these holds the polls.
+const CREDENTIALED_POLLS = new Set(["snmp", "http", "https"]);
+
+// pollsHeld reports a gate beneath which the node sends no stateless poll
+// (#1110): a poll is sent at the transport rung, or at the session rung where
+// it carries the credential, and a gate at or below that rung holds it (the
+// node's statelessRung). A login refused over a transport whose polls carry no
+// credential holds none, and neither does a gate beside a held session: its
+// polls ride the session, which says for itself whether they run.
+export function pollsHeld(iface: ReachEndpoint): boolean {
+  const rung = iface.rejection?.rung;
+  if (!rung || iface.session) return false;
+  return RANK[rung] <= RANK[CREDENTIALED_POLLS.has(iface.transport) ? "authenticated" : "responsive"];
+}
+
 // What each rung is, then what it says now: the tooltip a rung chip carries,
 // so the ladder teaches itself one hover at a time.
 const RUNG_WHAT: Record<RungRole, string> = {
@@ -146,8 +200,9 @@ export function retryRefusal(me: Me | null | undefined): string | null {
   return can(me, "endpoint", "retry") ? null : "Retrying needs the endpoint:retry permission.";
 }
 
-// A retry in hand, per endpoint: the session's transition time when it was
-// asked for, and when. Kept in the query cache rather than in one notice, so
+// A retry in hand, per endpoint: its retryMark when it was asked for (the
+// session's transition time, or for an endpoint holding none the gate's
+// publish time), and when. Kept in the query cache rather than in one notice, so
 // every notice for the endpoint (the component's Collection card and the
 // endpoint's blade show one each) holds the retry, and neither can stack a
 // second redial while the node has not picked up the first.
@@ -158,10 +213,10 @@ export const RETRY_PENDING_KEY = (endpointID: string) => ["session-retry", endpo
 // never answered (offline, the endpoint moved) no longer keeps Retry spinning.
 export const RETRY_WAIT_MS = 60_000;
 
-// retryWaiting: a retry is in hand while the session has not moved since it was
-// asked for (its transition time unchanged) and the wait has not run out.
-export function retryWaiting(pending: RetryPending | null | undefined, sessionTS: string | undefined, now: number): boolean {
-  return !!pending && pending.ts === (sessionTS ?? "") && now - pending.at < RETRY_WAIT_MS;
+// retryWaiting: a retry is in hand while what it waits on has not moved since
+// it was asked for (its retryMark unchanged) and the wait has not run out.
+export function retryWaiting(pending: RetryPending | null | undefined, mark: string | undefined, now: number): boolean {
+  return !!pending && pending.ts === (mark ?? "") && now - pending.at < RETRY_WAIT_MS;
 }
 
 // retryEndpoint moves the endpoint's retry counter (POST /endpoints/{id}:retry):

@@ -46,6 +46,8 @@ var bornUnderTheRuling = map[string]bool{
 	// before it, under the gateway's one-writer ruling: no row of it predates
 	// the ruling (#1117).
 	"snmp-response-time": true,
+	// Why a gate holds (#1110), declared after the backfill.
+	"endpoint-rejection-reason": true,
 }
 
 // TestLegacyBackfillNamesTheRuling: the key lists the backfill holds rows to

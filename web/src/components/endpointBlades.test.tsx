@@ -235,7 +235,7 @@ describe("endpoint blade, held session", () => {
       id: row.id, endpoint: "telnet", transport: "telnet", node: "edge-hq", last_seen: now,
       verdict: { value: "up", ts: now }, responsive: { value: "up", ts: now }, authenticated: { value: "no", ts: now },
       session: { state: "rejected", ts: now, reason: "auth: auth rejected" },
-      rejection: { rung: "authenticated", class: "auth" },
+      rejection: { rung: "authenticated", class: "auth", ts: "2026-10-23T11:58:00.000Z" },
       layers: [{ layer: "ping", check: "icmp-reachable", value: 1, ts: now }], history: [],
     }],
   };
@@ -284,5 +284,63 @@ describe("endpoint blade, held session", () => {
     expect((screen.getByRole("button", { name: /retry/i }) as HTMLButtonElement).disabled).toBe(true);
     expect(screen.getByLabelText(/needs the endpoint:retry permission/i)).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Edit credential" })).toBeNull();
+  });
+});
+
+// #1110: an endpoint gated by its reachability probe alone (an snmp community
+// the agent refuses) holds no session, and its blade reads the refusal the
+// same way: the reason, Retry, and Edit credential into the community input.
+describe("endpoint blade, a probe's gate with no held session", () => {
+  const snmp: Driver = {
+    id: uuidFor("snmp-generic"), name: "snmp-generic", label: "Generic SNMP", official: true,
+    spec: { version: 1, transport: "snmp", inputs: [
+      { name: "host", kind: "string", required: true },
+      { name: "port", kind: "number", default: "161" },
+      { name: "community", kind: "secret", secret_type: "snmp-community", required: true },
+    ], polls: [] },
+  };
+  const compId = uuidFor("panel-3");
+  const row = {
+    id: uuidFor("ep-snmp-gated"), name: "snmp", transport: "snmp", component: "panel-3", component_id: compId,
+    params: { target: "127.60.0.9:10161" }, driver: "snmp-generic", driver_id: uuidFor("snmp-generic"),
+    inputs: { host: "127.60.0.9", port: "10161", community: "snmp-revoked" },
+  };
+  const now = new Date().toISOString();
+  const reach: Reachability = {
+    component: "panel-3",
+    endpoints: [{
+      id: row.id, endpoint: "snmp", transport: "snmp", node: "edge-hq", last_seen: now,
+      verdict: { value: "down", ts: now }, responsive: { value: "down", ts: now }, authenticated: { value: "no", ts: now },
+      rejection: { rung: "authenticated", class: "auth", ts: now, reason: "auth: the agent answered authorizationError for the community" },
+      layers: [{ layer: "ping", check: "icmp-reachable", value: 1, ts: now }], history: [],
+    }],
+  };
+  const operator: Me = { principal: { id: "op", kind: "human" }, permissions: ["*:read", "endpoint:update", "endpoint:retry"], grants: [] };
+
+  it("reads the refusal and fixes the community in place", async () => {
+    const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
+    qc.setQueryData([...ENDPOINTS_KEY], [row]);
+    qc.setQueryData([...DRIVERS_KEY], [snmp]);
+    qc.setQueryData([...ME_KEY], operator);
+    qc.setQueryData([...REACHABILITY_KEY(compId)], reach);
+    const slot = createEditSlot();
+    const blades = { pop: () => {} } as unknown as BladeController;
+    render(() => (
+      <QueryClientProvider client={qc}>
+        <BladesContext.Provider value={blades}>
+          <BladeEditContext.Provider value={slot}>
+            <endpointBlade.Body id={row.id} />
+          </BladeEditContext.Provider>
+        </BladesContext.Provider>
+      </QueryClientProvider>
+    ));
+    expect(screen.queryByTestId("session-pill")).toBeNull();
+    expect(screen.getByTestId("session-reason").textContent).toBe("auth: the agent answered authorizationError for the community");
+    expect((screen.getByRole("button", { name: /retry/i }) as HTMLButtonElement).disabled).toBe(false);
+    fireEvent.click(screen.getByRole("button", { name: "Edit credential" }));
+    expect(slot.editing()).toBe(true);
+    const community = (await screen.findByLabelText("community")) as HTMLInputElement;
+    expect(community.value).toBe("snmp-revoked");
+    await waitFor(() => expect(document.activeElement).toBe(community));
   });
 });

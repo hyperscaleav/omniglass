@@ -75,8 +75,9 @@ const CAUSE_LOOK: { icon: Component<{ size?: number }>; badge: string }[] = [
 // refusal as it was when it opened, so what it sends is exactly what the
 // operator read; a live read that moves the offered key while it is open
 // disables it (the server would refuse the stale key anyway, 409). After a
-// trust it waits on the session the way Retry does, sharing Retry's
-// in-hand marker, so neither can stack a second redial.
+// trust it waits the way Retry does (on the session, or for an endpoint
+// holding none on the gate), sharing Retry's in-hand marker, so neither can
+// stack a second attempt.
 export function TrustKeyButton(props: {
   endpointID: string;
   // The owning component's uuid: the reachability read's cache key.
@@ -84,7 +85,9 @@ export function TrustKeyButton(props: {
   // The endpoint as an operator names it, for the confirm's title.
   endpointLabel: string;
   refusal: KeyRefusal;
-  sessionTS?: string;
+  // What a trust waits to see move: the held session's transition time, else
+  // the gate's publish time (lib/session's retryMark).
+  waitTS?: string;
   now: number;
 }) {
   const me = useMe();
@@ -99,7 +102,7 @@ export function TrustKeyButton(props: {
     staleTime: Infinity,
   }));
   const refusal = () => trustRefusal(me.data);
-  const waiting = () => retryWaiting(pending.data, props.sessionTS, props.now);
+  const waiting = () => retryWaiting(pending.data, props.waitTS, props.now);
   const moved = () => {
     const s = shown();
     return !!s && s.offered !== props.refusal.offered;
@@ -114,11 +117,12 @@ export function TrustKeyButton(props: {
   async function trust() {
     const s = shown();
     if (!s || busy() || moved() || refusal()) return;
+    const mark = props.waitTS ?? "";
     setBusy(true);
     setErr(null);
     try {
       await trustOfferedKey(props.endpointID, s.offered);
-      qc.setQueryData<RetryPending>([...RETRY_PENDING_KEY(props.endpointID)], { ts: props.sessionTS ?? "", at: Date.now() });
+      qc.setQueryData<RetryPending>([...RETRY_PENDING_KEY(props.endpointID)], { ts: mark, at: Date.now() });
       setShown(null);
       await Promise.all([
         qc.invalidateQueries({ queryKey: [...REACHABILITY_KEY(props.component)] }),

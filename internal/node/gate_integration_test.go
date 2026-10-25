@@ -16,13 +16,15 @@ import (
 // the ssh probe's credential try (#1060), stateless polls and commands.
 
 type rejectionLog struct {
-	mu  sync.Mutex
-	got []string
+	mu      sync.Mutex
+	got     []string
+	reasons []string
 }
 
-func (l *rejectionLog) record(_, _ string, value string) {
+func (l *rejectionLog) record(_, _ string, value, reason string) {
 	l.mu.Lock()
 	l.got = append(l.got, value)
+	l.reasons = append(l.reasons, reason)
 	l.mu.Unlock()
 }
 
@@ -30,6 +32,20 @@ func (l *rejectionLog) all() []string {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	return append([]string(nil), l.got...)
+}
+
+// gatePublish is one publish of the gate: its value and the reason beside it.
+type gatePublish struct{ value, reason string }
+
+// each is every publish, in order, with its reason.
+func (l *rejectionLog) each() []gatePublish {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	out := make([]gatePublish, len(l.got))
+	for i := range l.got {
+		out[i] = gatePublish{l.got[i], l.reasons[i]}
+	}
+	return out
 }
 
 func withFingerprint(task collection.TaskSpec, fp, rejection string) collection.TaskSpec {
@@ -197,11 +213,11 @@ func TestTheRejectionIsRepublishedUntilReflectedUnderACurrentTask(t *testing.T) 
 	rej := &rejectionLog{}
 	var mu sync.Mutex
 	var under []string
-	m := newSessionManager(nil, sessionHooks{rejection: func(taskID, _ string, v string) {
+	m := newSessionManager(nil, sessionHooks{rejection: func(taskID, _ string, v, reason string) {
 		mu.Lock()
 		under = append(under, taskID)
 		mu.Unlock()
-		rej.record("", "", v)
+		rej.record("", "", v, reason)
 	}})
 	task := func(id, rejection string) collection.TaskSpec {
 		return withFingerprint(collection.TaskSpec{ID: id, Transport: "ssh", EndpointID: "ep-1", EndpointName: "ssh",
@@ -226,6 +242,114 @@ func TestTheRejectionIsRepublishedUntilReflectedUnderACurrentTask(t *testing.T) 
 	defer mu.Unlock()
 	if len(under) != n {
 		t.Fatalf("published again after the worklist reflected the gate: %v", under)
+	}
+}
+
+// #1110: a gate publishes its reason beside it, in the same publish, since
+// an endpoint with no held session has no session-reason to say why it was
+// refused, and the console's refusal notice reads it. A lost publish goes out
+// again with its reason. A gate a restarted node adopts from the worklist
+// knows no reason of its own, so it publishes none rather than overwrite the
+// one on record, and a gate that lifts publishes none.
+func TestAGatePublishesItsReasonBesideIt(t *testing.T) {
+	const why = "auth: the agent answered authorizationError for the community"
+	task := func(fp, rejection string) collection.TaskSpec {
+		return withFingerprint(collection.TaskSpec{ID: "r1", Transport: "snmp", EndpointID: "ep-1", EndpointName: "snmp",
+			EndpointParams: json.RawMessage(`{"target":"10.0.0.5:161"}`), Spec: json.RawMessage(`{}`)}, fp, rejection)
+	}
+	rej := &rejectionLog{}
+	m := newSessionManager(nil, sessionHooks{rejection: rej.record})
+	m.reconcile([]collection.TaskSpec{task("fp-1", "")})
+	m.refuseOver("snmp", "ep-1", "fp-1", &collection.TerminalError{Class: "auth", Reason: "the agent answered authorizationError for the community"})
+	gated := gatePublish{"authenticated auth fp-1", why}
+	if got := rej.each(); len(got) != 1 || got[0] != gated {
+		t.Fatalf("published %+v, want the gate with its reason once", got)
+	}
+	// The publish was lost: it goes out again, its reason with it.
+	m.reconcile([]collection.TaskSpec{task("fp-1", "")})
+	if got := rej.each(); len(got) != 2 || got[1] != gated {
+		t.Fatalf("republished %+v, want the gate with its reason again", got)
+	}
+	m.pass("ep-1")
+	if got := rej.each(); got[len(got)-1] != (gatePublish{rejectionNone, ""}) {
+		t.Fatalf("a lifted gate published %+v, want none with no reason", got[len(got)-1])
+	}
+
+	// A restarted node adopts the gate; when the worklist stops reflecting
+	// it, the adopted gate goes out again with no reason of its own.
+	restarted := &rejectionLog{}
+	m2 := newSessionManager(nil, sessionHooks{rejection: restarted.record})
+	m2.reconcile([]collection.TaskSpec{task("fp-1", "authenticated auth fp-1")})
+	m2.reconcile([]collection.TaskSpec{task("fp-1", "")})
+	got := restarted.each()
+	if len(got) == 0 {
+		t.Fatal("the adopted gate was not republished once the worklist lost it")
+	}
+	for _, p := range got {
+		if p.value != "authenticated auth fp-1" || p.reason != "" {
+			t.Fatalf("the adopted gate published %+v, want its value with no reason", p)
+		}
+	}
+	if _, ok := m2.blocked("ep-1", rungAuthenticated); !ok {
+		t.Fatal("the adopted gate does not hold")
+	}
+}
+
+// Review of #1110, finding 1: a restarted node's held session starts
+// rejected under the gate it adopted, and the session's replayed transition
+// carries the adopted gate's placeholder refusal. Re-recorded as a fresh
+// refusal, the placeholder would go out as the gate's reason and overwrite
+// the component's own words; the replay keeps the gate adopted, reasonless.
+func TestAnAdoptedGatesSessionReplayPublishesNoReason(t *testing.T) {
+	dialer := &authFakeDialer{}
+	log, rej := &transitionLog{}, &rejectionLog{}
+	m := newSessionManager(map[string]collection.SessionDialer{"tcp": dialer}, sessionHooks{transition: log.record, rejection: rej.record})
+	defer m.closeAll()
+	m.reconcile([]collection.TaskSpec{withFingerprint(pollTaskWithLogin("p1", "ep-1", "wrong", 0), "fp-1", "authenticated auth fp-1")})
+	log.waitFor(t, "p1", collection.SessionRejected)
+	// The transition hook runs before the gate hears the replay: give it a
+	// moment to land, so a re-record would have happened by the next look.
+	time.Sleep(50 * time.Millisecond)
+	if n := dialer.connectCount(); n != 0 {
+		t.Fatalf("the restarted session dialed %d times under the adopted gate", n)
+	}
+	// The worklist stops reflecting the gate: it goes out again, reasonless.
+	m.reconcile([]collection.TaskSpec{withFingerprint(pollTaskWithLogin("p1", "ep-1", "wrong", 0), "fp-1", "")})
+	waitFor(t, func() bool { return len(rej.each()) > 0 }, "the gate republished")
+	for _, p := range rej.each() {
+		if p.value != "authenticated auth fp-1" || p.reason != "" {
+			t.Fatalf("the adopted gate published %+v after its session's replay, want its value with no reason", p)
+		}
+	}
+}
+
+// Re-review of #1110, finding 1: a driver's re-probe redials a rejected
+// session under the gate's own fingerprint, and the refusal it meets is a
+// real one, so it records the component's words as the gate's reason, even
+// when the gate was adopted and its value does not change: the reason goes
+// out beside the unchanged value. Only the session's replay of the refusal
+// it was started with is not re-recorded.
+func TestAReprobedRefusalPublishesItsReasonUnderAnUnchangedGate(t *testing.T) {
+	dialer := &authFakeDialer{}
+	rej := &rejectionLog{}
+	m := newSessionManager(map[string]collection.SessionDialer{"tcp": dialer}, sessionHooks{rejection: rej.record})
+	defer m.closeAll()
+	task := withFingerprint(pollTaskWithLogin("p1", "ep-1", "wrong", 0), "fp-1", "authenticated auth fp-1")
+	task.Session.Reprobe = "30ms"
+	m.reconcile([]collection.TaskSpec{task})
+	waitFor(t, func() bool { return dialer.connectCount() >= 1 }, "the re-probe dialed under the gate")
+	waitFor(t, func() bool {
+		for _, p := range rej.each() {
+			if p.value == "authenticated auth fp-1" && p.reason == "auth: auth rejected" {
+				return true
+			}
+		}
+		return false
+	}, "the re-probed refusal's own words published beside the unchanged gate")
+	for _, p := range rej.each() {
+		if strings.Contains(p.reason, "before the node restarted") {
+			t.Fatalf("the adopted gate's placeholder went out as its reason: %+v", p)
+		}
 	}
 }
 

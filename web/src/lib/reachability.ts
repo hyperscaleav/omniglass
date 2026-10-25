@@ -45,8 +45,9 @@ export type ReachEndpoint = {
   // The held session, when the endpoint has held one (#1059): its latest
   // state, when it changed, and why (lib/session reads it).
   session?: components["schemas"]["ReachSessionBody"];
-  // The gate a terminal refusal holds: its rung and class (ADR-0158), and
-  // for a changed key the pinned and offered keys (#1035).
+  // The gate a terminal refusal holds, whether or not a session is held: its
+  // rung and class (ADR-0158), for a changed key the pinned and offered keys
+  // (#1035), and why it holds and since when (#1110).
   rejection?: components["schemas"]["ReachRejectionBody"];
   // A tls endpoint's handshake and certificate (#1035): lib/tls reads it.
   tls?: components["schemas"]["ReachTLSBody"];

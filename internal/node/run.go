@@ -195,13 +195,11 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 				logger.Warn("auth verdict not published", "facility", "session", "task", taskID, "error", err.Error())
 			}
 		},
-		rejection: func(taskID, endpoint, value string) {
+		rejection: func(taskID, endpoint, value, reason string) {
 			// The endpoint's gate, published when it changes so the server
 			// carries it back to a restarted node (ADR-0158). The value holds
 			// the connection fingerprint, a digest only.
-			if err := publishBatch(nc, cfg.Name, taskID, []collection.Sample{{
-				Name: collection.SignalEndpointRejection, Text: value, IsText: true, TS: time.Now().UTC(),
-			}}); err != nil {
+			if err := publishBatch(nc, cfg.Name, taskID, rejectionSamples(value, reason, time.Now().UTC())); err != nil {
 				logger.Warn("endpoint rejection not published", "facility", "session", "task", taskID, "error", err.Error())
 			}
 		},

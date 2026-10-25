@@ -81,6 +81,8 @@ func rejectionOf(r rung, class, fingerprint string) string {
 
 // gate is one endpoint's held refusal. pinned and offered are a key
 // refusal's evidence (#1078), published with the gate and adopted with it.
+// adopted marks a gate taken from the worklist after a restart: its reason is
+// the node's placeholder, not the refusal's, so it is never published (#1110).
 type gate struct {
 	fingerprint string
 	rung        rung
@@ -88,6 +90,7 @@ type gate struct {
 	reason      string
 	pinned      string
 	offered     string
+	adopted     bool
 }
 
 // value renders the gate as its endpoint-rejection value.
@@ -122,7 +125,8 @@ func (g *gates) observe(endpointID, fingerprint, published string) {
 		g.held[endpointID] = gate{fingerprint: fingerprint, rung: rung(gt.Rung), class: gt.Class,
 			reason:  gt.Class + ": refused under this connection fingerprint before the node restarted",
 			pinned:  gt.PinnedKey,
-			offered: gt.OfferedKey}
+			offered: gt.OfferedKey,
+			adopted: true}
 	}
 }
 
@@ -177,15 +181,21 @@ func (g *gates) blocked(endpointID string, r rung) (gate, bool) {
 	return gt, true
 }
 
-// rejectionOf is the endpoint-rejection value the endpoint publishes now.
-func (g *gates) rejectionOf(endpointID string) string {
+// rejectionOf is the endpoint-rejection value the endpoint publishes now,
+// and the reason beside it (#1110): the refusal's own, for a gate this node
+// recorded; empty for a gate it adopted from the worklist, whose refusal it
+// never saw, and when no gate holds.
+func (g *gates) rejectionOf(endpointID string) (value, reason string) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	gt, ok := g.held[endpointID]
 	if !ok {
-		return rejectionNone
+		return rejectionNone, ""
 	}
-	return gt.value()
+	if gt.adopted {
+		return gt.value(), ""
+	}
+	return gt.value(), gt.reason
 }
 
 // refusal renders a held gate as the terminal error a gated attempt fails

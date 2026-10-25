@@ -191,7 +191,9 @@ dials no more: a poll over it fails fast and waits its interval (or runs at the 
 session is up again, so a fixed credential lands data within a tick), a command fails with the reason, and
 neither falls back to a throwaway connection. The node gates the endpoint at the refusal's ladder
 rung for its fingerprint, across its probes, polls, commands and session, publishes the gate as
-`endpoint-rejection`, and adopts it back from the worklist after a restart, so it makes no attempt
+`endpoint-rejection` with the refusal's reason beside it as `endpoint-rejection-reason` (so a probe's
+gate on an endpoint holding no session still says why, #1110), and adopts it back from the worklist
+after a restart (publishing no reason for a refusal it never saw), so it makes no attempt
 against an unchanged fingerprint; a rotated secret, a new address, port or transport, a changed login
 declaration, or an operator's `:retry` moves the fingerprint and lifts it
 ([auth and rejection](/architecture/collection/#auth-and-rejection),

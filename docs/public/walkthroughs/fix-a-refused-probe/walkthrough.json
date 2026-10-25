@@ -1,0 +1,80 @@
+{
+  "id": "fix-a-refused-probe",
+  "title": "Fix a refused probe",
+  "description": "A touch panel's SNMP agent refused the endpoint's community, so the node stopped asking. Read why, point the endpoint at the right community, and watch the refusal lift.",
+  "steps": [
+    {
+      "n": 1,
+      "kind": "goto",
+      "caption": "This place's system. Its touch panel fills the touch-control role, and a node collects it.",
+      "still": "step-01.png"
+    },
+    {
+      "n": 2,
+      "kind": "click",
+      "caption": "Open the touch panel.",
+      "still": "step-02.png"
+    },
+    {
+      "n": 3,
+      "kind": "click",
+      "caption": "Expand it to the component's view, where collection is read.",
+      "still": "step-03.png"
+    },
+    {
+      "n": 4,
+      "kind": "wait",
+      "caption": "Its SNMP endpoint holds no session, yet it reads refused, in the agent's words. The node sends no more gets, so nothing hammers it.",
+      "still": "step-04.png"
+    },
+    {
+      "n": 5,
+      "kind": "click",
+      "caption": "Open the endpoint. The ladder shows the ping answering and the community held.",
+      "still": "step-05.png"
+    },
+    {
+      "n": 6,
+      "kind": "click",
+      "caption": "The community is one of the endpoint's inputs, edited in place.",
+      "still": "step-06.png"
+    },
+    {
+      "n": 7,
+      "kind": "press",
+      "caption": "Select the secret it names now.",
+      "still": "step-07.png"
+    },
+    {
+      "n": 8,
+      "kind": "press",
+      "caption": "Clear it.",
+      "still": "step-08.png"
+    },
+    {
+      "n": 9,
+      "kind": "type",
+      "caption": "Name the secret holding the community the agent answers.",
+      "still": "step-09.png"
+    },
+    {
+      "n": 10,
+      "kind": "click",
+      "caption": "Save. What the endpoint connects with changed, so the refusal no longer holds.",
+      "still": "step-10.png"
+    },
+    {
+      "n": 11,
+      "kind": "wait",
+      "caption": "The node asks again at its next check-in, the agent answers the community, and the refusal is gone.",
+      "still": "step-11.png"
+    }
+  ],
+  "poster": "step-11.png",
+  "preview": "preview.webp",
+  "budget": {
+    "seconds": 34.8,
+    "bytes": 1020750,
+    "previewBytes": 1037400
+  }
+}

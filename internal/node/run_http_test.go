@@ -304,6 +304,9 @@ func TestNodeHTTPSKestrelPollsActuatesAndPinsItsKey(t *testing.T) {
 	s.waitFor("bar-1", ep.Name, "endpoint-rejection", func(v string) bool {
 		return strings.HasPrefix(v, "responsive certificate ") && strings.HasSuffix(v, pinned+" "+offered)
 	}, "the certificate gate naming both keys")
+	s.waitFor("bar-1", ep.Name, "endpoint-rejection-reason", func(v string) bool {
+		return strings.HasPrefix(v, "certificate: the certificate's public key changed")
+	}, "the certificate gate's reason, for the notice")
 	requests := bar.HTTPRequests
 	s.settles("requests beneath the certificate gate", requests, requests())
 	// A restarted node honours the gate it adopts: still nothing.
@@ -412,6 +415,7 @@ func TestNodeHTTPAuthVariantsAndTheRefusedCredential(t *testing.T) {
 	// The wrong header key: refused once, held at the session rung.
 	s.waitFor("sensor-1", sep.Name, "endpoint-authenticated", is("no"), "no: the sensor refused the key")
 	s.waitFor("sensor-1", sep.Name, "endpoint-rejection", func(v string) bool { return strings.HasPrefix(v, "authenticated auth ") }, "the auth gate")
+	s.waitFor("sensor-1", sep.Name, "endpoint-rejection-reason", is("auth: the component refused the credential (401)"), "the gate's reason, for the notice")
 	s.waitFor("sensor-1", sep.Name, "endpoint-responsive", is("up"), "up: the credential-free probe still reports")
 	refusals := sensor.HTTPRefusals
 	s.settles("refused requests", refusals, 1)

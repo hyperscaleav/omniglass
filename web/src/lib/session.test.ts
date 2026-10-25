@@ -4,7 +4,7 @@ import {
   ladder,
   rungHint,
   sessionWord,
-  sessionShowsReason,
+  endpointNotice,
   retryRefusal,
   retryEndpoint,
   retryWaiting,
@@ -47,22 +47,86 @@ describe("sessionWord", () => {
   });
 });
 
-// The reason is what an operator acts on, so it shows for the two states where
-// it says something: down (why the node gave up for now) and rejected (what
-// refused it). An up session's empty reason, or a recovering one's, is not
-// news.
-describe("sessionShowsReason", () => {
-  it("shows for rejected and down with a reason", () => {
-    expect(sessionShowsReason(ep({ session: { state: "rejected", ts: ago(1_000), reason: "auth: auth rejected" } }), now)).toBe(true);
-    expect(sessionShowsReason(ep({ session: { state: "down", ts: ago(1_000), reason: "5 consecutive attempts failed" } }), now)).toBe(true);
+// The notice says why an endpoint is not collecting where an operator can act
+// on it (#1059, #1110): a refusal, whatever met it (a held session, the
+// reachability probe, a poll), and a down session. An up session's empty
+// reason, or a recovering one's, is not news.
+describe("endpointNotice", () => {
+  const gate = (over: Partial<NonNullable<ReachEndpoint["rejection"]>> = {}) => ({ rung: "authenticated" as const, class: "auth", ts: ago(20_000), ...over });
+
+  // http and https hold no session (#902): a credentialed request's 401 and a
+  // changed certificate key gate the endpoint, and the notice reads the gate's
+  // own reason, its Retry waiting on the gate's publish time; the certificate
+  // gate's keys are what Trust this key renders.
+  it("says why an http credential or an https certificate was refused, with no session", () => {
+    const authGate = ep({ endpoint: "http", transport: "http", rejection: gate({ reason: "auth: the component refused the credential (401)" }) });
+    expect(endpointNotice(authGate, now)).toEqual({ kind: "rejected", reason: "auth: the component refused the credential (401)", waitTS: ago(20_000) });
+    const certGate = ep({
+      endpoint: "https",
+      transport: "https",
+      rejection: gate({ rung: "responsive", class: "certificate", reason: "certificate: the certificate's public key changed", pinned_key: "SHA256:aaa", offered_key: "SHA256:bbb" }),
+    });
+    expect(endpointNotice(certGate, now)?.reason).toBe("certificate: the certificate's public key changed");
+    expect(keyRefusal(certGate)).toEqual({ class: "certificate", pinned: "SHA256:aaa", offered: "SHA256:bbb" });
+    expect(keyRefusal(authGate)).toBeNull();
   });
-  it("hides for the other states and for an empty reason", () => {
-    expect(sessionShowsReason(ep({ session: { state: "up", ts: ago(1_000), reason: "connected" } }), now)).toBe(false);
-    expect(sessionShowsReason(ep({ session: { state: "recovering", ts: ago(1_000), reason: "connection lost: EOF" } }), now)).toBe(false);
-    expect(sessionShowsReason(ep({ session: { state: "rejected", ts: ago(1_000) } }), now)).toBe(false);
+
+  it("says why a rejected session was refused, in its own words where its gate carries none", () => {
+    const e = ep({ session: { state: "rejected", ts: ago(1_000), reason: "auth: auth rejected" }, rejection: gate() });
+    expect(endpointNotice(e, now)).toEqual({ kind: "rejected", reason: "auth: auth rejected", waitTS: ago(1_000) });
   });
-  it("still shows a rejected reason once stale: the last thing it said is what needs fixing", () => {
-    expect(sessionShowsReason(ep({ session: { state: "rejected", ts: ago(STALENESS_WINDOW_MS + 1), reason: "auth: auth rejected" } }), now)).toBe(true);
+
+  // A restarted node starts the session rejected under the gate it adopted,
+  // and the session's reason is then the node's placeholder; the gate keeps
+  // the refusal's own words (review of #1110), so they lead.
+  it("reads the gate's reason over a restarted session's placeholder", () => {
+    const e = ep({
+      session: { state: "rejected", ts: ago(1_000), reason: "auth: refused under this connection fingerprint before the node restarted" },
+      rejection: gate({ reason: "auth: auth rejected" }),
+    });
+    expect(endpointNotice(e, now)?.reason).toBe("auth: auth rejected");
+  });
+
+  it("says why a down session gave up, while it is fresh", () => {
+    const e = ep({ session: { state: "down", ts: ago(1_000), reason: "5 consecutive attempts failed" }, last_seen: ago(1_000) });
+    expect(endpointNotice(e, now)).toEqual({ kind: "down", reason: "5 consecutive attempts failed", waitTS: ago(1_000) });
+    expect(endpointNotice({ ...e, last_seen: ago(STALENESS_WINDOW_MS + 1) }, now)).toBeNull();
+  });
+
+  it("says nothing for the other states, an empty reason, or an endpoint with neither session nor gate", () => {
+    expect(endpointNotice(ep({ session: { state: "up", ts: ago(1_000), reason: "connected" } }), now)).toBeNull();
+    expect(endpointNotice(ep({ session: { state: "recovering", ts: ago(1_000), reason: "connection lost: EOF" } }), now)).toBeNull();
+    expect(endpointNotice(ep({ session: { state: "rejected", ts: ago(1_000) } }), now)).toBeNull();
+    expect(endpointNotice(ep({}), now)).toBeNull();
+  });
+
+  it("still says why a rejected session was refused once stale: the last thing it said is what needs fixing", () => {
+    const e = ep({ session: { state: "rejected", ts: ago(STALENESS_WINDOW_MS + 1), reason: "auth: auth rejected" } });
+    expect(endpointNotice(e, now)?.kind).toBe("rejected");
+  });
+
+  // #1110: a gate set by the reachability probe alone, on an endpoint holding
+  // no session, is the same refusal and says why in the gate's own reason.
+  it.each([
+    ["tls", "responsive", "certificate", "certificate: the certificate failed verification: x509: certificate signed by unknown authority"],
+    ["udp", "responsive", "auth", "auth: ERR 401 not authorized"],
+    ["snmp", "authenticated", "auth", "auth: the agent answered authorizationError for the community"],
+    ["ssh", "authenticated", "auth", "auth: the component refused the probe's credential"],
+  ] as const)("says why a %s probe was refused with no held session", (transport, rung, cls, reason) => {
+    const e = ep({ endpoint: transport, transport, rejection: gate({ rung, class: cls, reason }) });
+    expect(endpointNotice(e, now)).toEqual({ kind: "rejected", reason, waitTS: ago(20_000) });
+  });
+
+  it("names the class when the gate carries no reason (a gate published before it did)", () => {
+    const n = endpointNotice(ep({ transport: "snmp", rejection: gate() }), now);
+    expect(n?.kind).toBe("rejected");
+    expect(n?.reason).toMatch(/^auth: /);
+    expect(endpointNotice(ep({ transport: "tls", rejection: gate({ rung: "responsive", class: "certificate" }) }), now)?.reason).toMatch(/^certificate: /);
+  });
+
+  it("holds a refusal over a session that has not caught up, waiting on the session's own transitions", () => {
+    const e = ep({ session: { state: "up", ts: ago(1_000) }, rejection: gate({ reason: "auth: the component refused the credential" }) });
+    expect(endpointNotice(e, now)).toEqual({ kind: "rejected", reason: "auth: the component refused the credential", waitTS: ago(1_000) });
   });
 });
 
@@ -103,7 +167,7 @@ describe("ladder", () => {
         layers: [ping(1)],
         responsive: { value: "up", ts: ago(1) },
         authenticated: { value: "no", ts: ago(1) },
-        rejection: { rung: "authenticated", class: "auth" },
+        rejection: { rung: "authenticated", class: "auth", ts: "2026-10-23T11:58:00.000Z" },
       }),
     );
     expect(rungs.map((r) => [r.key, r.status])).toEqual([
@@ -118,7 +182,7 @@ describe("ladder", () => {
         transport: "ssh",
         layers: [ping(1), port(1)],
         authenticated: { value: "yes", ts: ago(60_000) },
-        rejection: { rung: "responsive", class: "host-key" },
+        rejection: { rung: "responsive", class: "host-key", ts: "2026-10-23T11:58:00.000Z" },
       }),
     );
     expect(rungs.map((r) => [r.key, r.status])).toEqual([
@@ -154,7 +218,7 @@ describe("ladder", () => {
         layers: [ping(1)],
         responsive: { value: "down", ts: ago(1) },
         authenticated: { value: "no", ts: ago(1) },
-        rejection: { rung: "authenticated", class: "auth" },
+        rejection: { rung: "authenticated", class: "auth", ts: "2026-10-23T11:58:00.000Z" },
       }),
     );
     expect(rungs.map((r) => [r.key, r.status])).toEqual([
@@ -165,11 +229,11 @@ describe("ladder", () => {
     expect(rungHint(rungs[1])).toMatch(/community/i);
   });
   it("shows the login rung a gate holds even before an auth verdict landed", () => {
-    const rungs = ladder(ep({ responsive: { value: "up", ts: ago(1) }, rejection: { rung: "authenticated", class: "auth" } }));
+    const rungs = ladder(ep({ responsive: { value: "up", ts: ago(1) }, rejection: { rung: "authenticated", class: "auth", ts: "2026-10-23T11:58:00.000Z" } }));
     expect(rungs.at(-1)).toMatchObject({ key: "authenticated", status: "held" });
   });
   it("invents no login rung for a session that has no login, whatever its gate", () => {
-    const rungs = ladder(ep({ transport: "tcp", layers: [ping(1), port(1)], session: { state: "rejected", ts: ago(1_000) }, rejection: { rung: "responsive", class: "protocol" } }));
+    const rungs = ladder(ep({ transport: "tcp", layers: [ping(1), port(1)], session: { state: "rejected", ts: ago(1_000) }, rejection: { rung: "responsive", class: "protocol", ts: "2026-10-23T11:58:00.000Z" } }));
     expect(rungs.map((r) => [r.key, r.status])).toEqual([
       ["reachable", "pass"],
       ["responsive", "held"],
@@ -225,13 +289,13 @@ describe("keyRefusal", () => {
   it("reads both keys and the class off the gate, never the reason", () => {
     const e = ep({
       session: { state: "rejected", ts: ago(1_000), reason: "host-key: the host key changed: pinned SHA256:xxx, offered SHA256:yyy" },
-      rejection: { rung: "responsive", class: "host-key", pinned_key: pinned, offered_key: offered },
+      rejection: { rung: "responsive", class: "host-key", ts: "2026-10-23T11:58:00.000Z", pinned_key: pinned, offered_key: offered },
     });
     expect(keyRefusal(e)).toEqual({ class: "host-key", pinned, offered });
   });
   it("is null without both keys, or without a gate", () => {
-    expect(keyRefusal(ep({ rejection: { rung: "responsive", class: "host-key", offered_key: offered } }))).toBeNull();
-    expect(keyRefusal(ep({ rejection: { rung: "authenticated", class: "auth" } }))).toBeNull();
+    expect(keyRefusal(ep({ rejection: { rung: "responsive", class: "host-key", ts: "2026-10-23T11:58:00.000Z", offered_key: offered } }))).toBeNull();
+    expect(keyRefusal(ep({ rejection: { rung: "authenticated", class: "auth", ts: "2026-10-23T11:58:00.000Z" } }))).toBeNull();
     expect(keyRefusal(ep({}))).toBeNull();
   });
   it("names the key by its class, so a certificate's pinned key reads as one", () => {
