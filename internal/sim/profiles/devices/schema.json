@@ -182,6 +182,36 @@
         "auth": {
           "$ref": "#/$defs/auth"
         },
+        "events": {
+          "type": "object",
+          "description": "An http face's server-sent events stream: every change to the declared state paths, one numbered event each, replayed from a reconnect's Last-Event-ID, behind the face's auth.",
+          "properties": {
+            "path": {
+              "type": "string",
+              "description": "The path the stream serves (GET)."
+            },
+            "retry_ms": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "The reconnection time the stream asks for, in milliseconds; zero asks none."
+            },
+            "paths": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "The state paths whose changes it streams, each with everything beneath it; none streams every change."
+            },
+            "drop_path": {
+              "type": "string",
+              "description": "The path the console fires (POST) to drop every stream, as a restart would."
+            }
+          },
+          "required": [
+            "path"
+          ],
+          "additionalProperties": false
+        },
         "api_surface": {
           "type": "string",
           "description": "Logical surface name shared with sibling interfaces that route to the same response set."

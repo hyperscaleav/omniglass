@@ -75,13 +75,16 @@ func runTasks(ctx context.Context, nc *nats.Conn, node string, wl collection.Wor
 			}
 			var dps []collection.Sample
 			var faults []error
-			if gt, gated := sessions.blocked(task.EndpointID, statelessRung(task)); gated && sessions.lookup(task.EndpointID) == nil {
+			// An http poll is its own request even beside a held stream
+			// (#1038): it answers to the gate itself, as a stateless poll does.
+			ownRequest := sessions.lookup(task.EndpointID) == nil || driver.IsHTTP(task.Transport)
+			if gt, gated := sessions.blocked(task.EndpointID, statelessRung(task)); gated && ownRequest {
 				// A stateless poll on a gated endpoint is not retried under
 				// the fingerprint it was refused under (#1056 ruling).
 				faults = []error{fmt.Errorf("node: task %s: the endpoint is gated: %w", task.ID, gt.refusal())}
 			} else {
 				dps, faults = collectDriverTask(ctx, runner, task, sessions)
-				if sessions.lookup(task.EndpointID) == nil {
+				if ownRequest {
 					for _, f := range faults {
 						if terr, ok := collection.AsTerminal(f); ok {
 							sessions.refuseOver(task.Transport, task.EndpointID, task.Fingerprint, terr)

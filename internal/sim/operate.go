@@ -83,6 +83,9 @@ func (d *Device) operateHTTP(op Operation) OperationResult {
 	if d.HTTPAuth.ExpirePath != "" && u.Path == d.HTTPAuth.ExpirePath && method == http.MethodPost {
 		return d.operateSessionExpiry()
 	}
+	if d.events != nil && d.events.cfg.DropPath != "" && u.Path == d.events.cfg.DropPath && method == http.MethodPost {
+		return d.operateEventsDrop()
+	}
 	req := asConsole(httptest.NewRequest(method, u.RequestURI(), strings.NewReader(op.Body)))
 	req.RemoteAddr = "console"
 	switch d.HTTPAuth.Mode {

@@ -341,6 +341,9 @@ type Device struct {
 	// digest face's nonce and the counts answered under it.
 	httpLogins atomic.Int64
 	logins     loginSessions
+	// events is the http face's server-sent events stream (#1038), nil for
+	// none.
+	events *eventHub
 	// httpDigestAnswers counts the requests that answered a digest face's
 	// challenge, right or wrong.
 	httpDigestAnswers atomic.Int64
@@ -426,6 +429,9 @@ func (d *Device) CommandList() []string {
 // write lock; the registry's Fanout reads from `diffs` and the
 // session Out channel without re-entering Device methods.
 func (d *Device) fanoutToSessions(diffs map[string]any) {
+	if d.events != nil {
+		d.events.fanout(diffs)
+	}
 	if d.sshSession != nil {
 		d.sshSession.Fanout(diffs)
 	}
@@ -561,6 +567,13 @@ type statusRecorder struct {
 	body     bytes.Buffer
 	bodyCap  int  // max bytes to retain; 0 = capture everything
 	bodyTrim bool // true once a Write was truncated
+}
+
+// Flush passes a stream's flush through to the connection (#1038).
+func (r *statusRecorder) Flush() {
+	if f, ok := r.ResponseWriter.(http.Flusher); ok {
+		f.Flush()
+	}
 }
 
 func (r *statusRecorder) WriteHeader(code int) {
@@ -1100,6 +1113,10 @@ func (d *Device) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if !d.checkHTTPAuth(rec, r) {
 		d.httpRefusals.Add(1)
+		return
+	}
+	if d.isEventStream(r) {
+		d.serveEvents(rec, r)
 		return
 	}
 

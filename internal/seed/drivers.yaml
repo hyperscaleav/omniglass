@@ -48,6 +48,35 @@ drivers:
       session:
         credential: login
         scheme: basic
+        # The bar's live feed (#1038), held open as a session behind the
+        # same basic auth: every change to the call, the volume, the mute
+        # and the power state arrives as an event the moment it happens, so
+        # the listeners below land it with no poll. A drop resumes from the
+        # last event id; the polls stay requests of their own.
+        stream: { path: /api/events }
+      listeners:
+        # Each event's data names the state path it changed and the new
+        # value: a JSON field match claims it, a jsonpath reads the value.
+        - name: volume-change
+          match: { event: change, field: { path: path, equals: status.audio.volume } }
+          emits:
+            - { name: volume, extract: { jsonpath: value } }
+        - name: mute-change
+          match: { event: change, field: { path: path, equals: status.audio.mic_mute } }
+          emits:
+            - { name: mute, extract: { jsonpath: value } }
+        - name: call-change
+          match: { event: change, field: { path: path, equals: status.call.active } }
+          emits:
+            - { name: call-state, extract: { jsonpath: value }, transform: { map: { "true": active, "false": idle } } }
+        - name: participants-change
+          match: { event: change, field: { path: path, equals: status.call.participants } }
+          emits:
+            - { name: participant-count, extract: { jsonpath: value } }
+        - name: power-change
+          match: { event: change, field: { path: path, equals: status.device.power } }
+          emits:
+            - { name: power-state, extract: { jsonpath: value } }
       polls:
         - name: system
           schedule: { every: 5m }

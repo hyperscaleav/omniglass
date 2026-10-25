@@ -64,6 +64,17 @@ interfaces:
       default_password: kestrel
       realm: "Kestrel VRoom"
       enforce: true
+    # The live feed the web admin page updates from (#1038): every change
+    # to the call, the volume, the mute and the power state, one numbered
+    # event each
+    # (event: change, its data the path and the value as JSON), behind the
+    # same basic auth. A reconnect's Last-Event-ID replays from that event,
+    # and the console drops every stream by firing POST at drop_path.
+    events:
+      path: /api/events
+      retry_ms: 2000
+      paths: [status.audio.volume, status.audio.mic_mute, status.call, status.device.power]
+      drop_path: /api/admin/streams/drop
     api_surface: kestrel-vroom
     routes:
       - match: "GET /"
