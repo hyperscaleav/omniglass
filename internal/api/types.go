@@ -200,17 +200,30 @@ func mapTypeErr(err error, kind string) error {
 	}
 }
 
+// maxListedCandidates caps the spellings an unresolved name's 404 lists.
+const maxListedCandidates = 10
+
 // unresolvedRefMessage is the operator-facing 404 for a name that resolves to no
 // single resource: what was looked up, and either nothing more (no row the
 // caller can see answers to it) or each row that does, spelled so it resolves.
+// It lists at most maxListedCandidates of them: a bare name a whole fleet
+// shares (every room's display-1/snmp) would otherwise answer with a page of
+// addresses, and the first few already show the operator the spelling to type.
 func unresolvedRefMessage(e *storage.ErrUnresolvedRef) string {
 	msg := fmt.Sprintf("%s %q not found", e.Kind, e.Ref)
-	switch n := len(e.Candidates); {
+	listed, more := e.Candidates, 0
+	if len(listed) > maxListedCandidates {
+		listed, more = listed[:maxListedCandidates], len(listed)-maxListedCandidates
+	}
+	switch n := len(listed); {
+	case more > 0:
+		msg += fmt.Sprintf(": %d you can see answer to it; address one as %s (and %d more)",
+			len(e.Candidates), strings.Join(listed, ", "), more)
 	case n == 2:
-		msg += fmt.Sprintf(": 2 you can see answer to it; address one as %s or %s", e.Candidates[0], e.Candidates[1])
+		msg += fmt.Sprintf(": 2 you can see answer to it; address one as %s or %s", listed[0], listed[1])
 	case n > 2:
 		msg += fmt.Sprintf(": %d you can see answer to it; address one as %s or %s",
-			n, strings.Join(e.Candidates[:n-1], ", "), e.Candidates[n-1])
+			n, strings.Join(listed[:n-1], ", "), listed[n-1])
 	}
 	if e.Hint != "" {
 		msg += "; " + e.Hint

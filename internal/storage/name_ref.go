@@ -74,14 +74,20 @@ func unresolved(kind, ref string, notFound error) *ErrUnresolvedRef {
 	return &ErrUnresolvedRef{Kind: kind, Ref: ref, notFound: notFound}
 }
 
-// addressOf renders a tree row's dotted address, the spelling a candidate list
-// names it by. It is PathOf joined, the exact inverse of resolvePath.
-func addressOf(ctx context.Context, q querier, tbl scopeTable, id string) (string, error) {
-	segs, err := PathOf(ctx, q, tbl, id)
+// addressesOf renders the dotted address of every id in ids, keyed by id, the
+// spelling a candidate list names a tree row by: PathsOf joined, the exact
+// inverse of resolvePath, in a constant number of queries however many
+// candidates an ambiguous name matched.
+func addressesOf(ctx context.Context, q querier, tbl scopeTable, ids []string) (map[string]string, error) {
+	paths, err := PathsOf(ctx, q, tbl, ids)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-	return strings.Join(segs, "."), nil
+	out := make(map[string]string, len(paths))
+	for id, segs := range paths {
+		out[id] = strings.Join(segs, ".")
+	}
+	return out, nil
 }
 
 // --- endpoint ----------------------------------------------------------------
@@ -147,12 +153,16 @@ func endpointIDByRef(ctx context.Context, q querier, ref string, read scope.Set)
 		return endpointIDs[0], nil
 	}
 	e := unresolved("endpoint", ref, ErrEndpointNotFound)
+	ids := make([]string, 0, len(endpointIDs))
 	for _, epID := range endpointIDs {
-		addr, err := addressOf(ctx, q, componentTable, compIDs[epID])
-		if err != nil {
-			return "", err
-		}
-		e.Candidates = append(e.Candidates, addr+"/"+name)
+		ids = append(ids, compIDs[epID])
+	}
+	addrs, err := addressesOf(ctx, q, componentTable, ids)
+	if err != nil {
+		return "", err
+	}
+	for _, epID := range endpointIDs {
+		e.Candidates = append(e.Candidates, addrs[compIDs[epID]]+"/"+name)
 	}
 	return "", e
 }
@@ -259,12 +269,12 @@ func ownedIDByRef(ctx context.Context, q querier, t ownedTable, ref string, visi
 		return seen[0].id, nil
 	}
 	e := unresolved(t.kind, ref, t.notFound)
+	spelled, err := ownerSpellings(ctx, q, seen)
+	if err != nil {
+		return "", err
+	}
 	for _, c := range seen {
-		spelled, err := ownerSpelling(ctx, q, c)
-		if err != nil {
-			return "", err
-		}
-		e.Candidates = append(e.Candidates, spelled+"/"+name)
+		e.Candidates = append(e.Candidates, spelled[c.id]+"/"+name)
 	}
 	return "", e
 }
@@ -343,17 +353,38 @@ func treeRefIDs[T any](ctx context.Context, q querier, cfg scopedConfig[T], ref 
 	return out, nil
 }
 
-// ownerSpelling is how a candidate's owner is written in a refusal: the
-// platform sigil, or the owner's dotted address.
-func ownerSpelling(ctx context.Context, q querier, c ownedCandidate) (string, error) {
-	if c.ownerKind == "platform" || c.ownerID == nil {
-		return PlatformOwner, nil
+// ownerSpellings is how each candidate's owner is written in a refusal, keyed
+// by the candidate's id: the platform sigil, or the owner's dotted address,
+// batched per owner tier.
+func ownerSpellings(ctx context.Context, q querier, cands []ownedCandidate) (map[string]string, error) {
+	byTier := map[scopeTable][]string{}
+	for _, c := range cands {
+		if tbl, ok := scopeKindTable(c.ownerKind); ok && c.ownerID != nil {
+			byTier[tbl] = append(byTier[tbl], *c.ownerID)
+		}
 	}
-	tbl, ok := scopeKindTable(c.ownerKind)
-	if !ok {
-		return *c.ownerID, nil
+	addrs := map[string]string{}
+	for tbl, ids := range byTier {
+		got, err := addressesOf(ctx, q, tbl, ids)
+		if err != nil {
+			return nil, err
+		}
+		for id, a := range got {
+			addrs[id] = a
+		}
 	}
-	return addressOf(ctx, q, tbl, *c.ownerID)
+	out := make(map[string]string, len(cands))
+	for _, c := range cands {
+		switch {
+		case c.ownerKind == "platform" || c.ownerID == nil:
+			out[c.id] = PlatformOwner
+		case addrs[*c.ownerID] != "":
+			out[c.id] = addrs[*c.ownerID]
+		default:
+			out[c.id] = *c.ownerID
+		}
+	}
+	return out, nil
 }
 
 // --- file --------------------------------------------------------------------
