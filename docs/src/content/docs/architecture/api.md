@@ -541,6 +541,18 @@ out-of-scope component is a non-disclosing 404 (a deliberate early exception to
   same transaction opened or resolved an alarm, its `alarm_id` (#949); `GET /systems/{name}/events`
   carries both the same way, and names each row's owner by uuid as well (`owner_id`), since names
   repeat across a system's members.
+- `GET /components/{name}/logs` is the component's raw **log lines**
+  ([ADR-0066](/architecture/decisions/#adr-0066-logs-are-a-raw-ingest-lane-not-events)), newest
+  first, bounded to the last 24 hours and capped at 200 rows: each row's `ts` (the time the line
+  states), its `received_at` (the server's receipt, absent on a line stored before it was kept),
+  `severity` (one of RFC 5424's eight levels), `facility`, `source`, `instance` (the endpoint that
+  collected it), `message`, and optional `attributes` and `labels`. It takes two filters (#1145):
+  `severity`, a threshold (that level and every more severe one, a line with no severity left out;
+  a word outside the eight is a 422 before any read), and `source`, an exact channel; and it
+  returns `sources`, the channels the window carries whatever the filter. `GET
+  /systems/{name}/logs` merges the members' lines the same way, each naming its component. Both are
+  `component:read` and `system:read` gated, scope cascading through the owner (out of scope, a
+  non-disclosing 404).
 - `GET /components/{name}/reconciliation` pivots want/told/is over the series: per declared
   property, the **want** (the current declared value, with the contract default coalesced in), the
   **told** (the `intended` value a command

@@ -21,7 +21,7 @@ families (poll functions, listeners, command bindings). The detail blade renders
 the **menu it is**: what each poll asks and what lands, what each listener waits for, what each
 command binding actuates. On a line protocol a listener's **arm** commands (the subscribe
 conversation) are sent on every connection the node holds, its **match** rule claims the
-component's pushes, and each claimed line lands as a sample with no poll involved (a listener rides a
+component's pushes, and each claimed line lands as a sample, an event or a log line with no poll involved (a listener rides a
 held line session or a udp socket, and is refused at write on any other transport, where nothing
 would run it); a request may
 declare its **reply** shape (`request.reply`, a `prefix` or `regex`) so its answer is picked out of
@@ -29,7 +29,7 @@ those pushes, plus an optional `error` shape (`reply.error`) for the device's re
 answer the request as a failure carrying the device's text instead of timing out. Every `regex` in
 a spec is Go RE2 with **substring** semantics: `INPUT \S+` also matches `EVT INPUT hdmi2`, so anchor
 a pattern meant to match a whole line (`^INPUT \S+$`). `unmatched: collection-failed` makes a line
-nobody claims a collection fault rather than a counted discard ([routing](/architecture/collection/#listeners-over-a-held-session)).
+nobody claims a collection fault, and `unmatched: log` a log line on the component, rather than a counted discard ([routing](/architecture/collection/#listeners-over-a-held-session)).
 An emit names a **collected** key. A key only the node writes (every native probe key: the
 reachability verdicts and probe timings, `tls-certificate`, `ssh-host-key`, `endpoint-rejection` and
 its `endpoint-rejection-reason`, a held session's `session-state` and `session-reason`, and

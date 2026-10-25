@@ -1215,7 +1215,8 @@ spec declares:
 - **Inputs** an attachment must supply: typed (`string`, `number`, `secret`), required or
   defaulted. A `secret` input carries a `secret_type` and is supplied as a **reference** (the name
   of a secret row of that shape), never a value; the reference is checked at attach.
-- **Three function families**, every emitted sample referencing its lane catalog **by name**:
+- **Three function families**, every emit a metric, a property or an event referencing its lane
+  catalog **by name**, or a log line, which names none ([an emit lands on any lane](#an-emit-lands-on-any-lane)):
   - **Poll functions**: a `schedule`, a transport-shaped `request` (scalar OIDs for an SNMP get, a
     line for a line protocol, a method, path, query, headers, body and response format for http,
     [#902](#http-and-https)), and per-emit **extraction**, one primitive with a selector per format
