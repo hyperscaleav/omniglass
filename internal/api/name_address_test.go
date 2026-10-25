@@ -42,6 +42,7 @@ var referenceFields = map[string]string{
 	"system_type_id":     "system_type",
 	"vendor_id":          "vendor",
 	"driver_id":          "driver",
+	"issuer_id":          "issuer",
 	"standard_id":        "standard",
 	"parent_standard_id": "parent_standard",
 	"property_type_id":   "property_type_name",
@@ -79,16 +80,17 @@ var reverseNameOnlyOK = map[string]bool{}
 // Schemas where a *_id field addresses something with no name to pair it with.
 // Each entry is a real decision: if the target has a name, carry the name too.
 var idOnlyIsCorrect = map[string]string{
-	"resource_id":     "an audit row's target is polymorphic and may since have been deleted",
-	"value_id":        "a stored property value has no name, only the property it answers",
-	"endpoint_id":     "an endpoint's name is unique only within its component: a body carries it beside the component, and the two are its address, <component>/<name> (#1133)",
-	"principal_id":    "a principal's identifier is per kind (a username, a service account's name), so a body carries it in a kind-specific field, never a generic name pair",
-	"scope_id":        "a scope root is a uuid handle on a subtree",
-	"group_id":        "an inherited grant names its source group for display (group_name, its label today: #1135); the group itself is addressed by name or uuid (#1133)",
-	"target_id":       "an impersonation target is a principal, as above",
-	"node_id":         "a node is addressed by its enrollment identity, which is its primary key",
-	"caused_event_id": "an event is addressed by its bigint id; an occurrence has no name handle",
-	"correlation_id":  "a freeform string that threads related log lines and events, not a reference to a named entity",
+	"resource_id":      "an audit row's target is polymorphic and may since have been deleted",
+	"value_id":         "a stored property value has no name, only the property it answers",
+	"endpoint_id":      "an endpoint's name is unique only within its component: a body carries it beside the component, and the two are its address, <component>/<name> (#1133)",
+	"principal_id":     "a principal's identifier is per kind (a username, a service account's name), so a body carries it in a kind-specific field, never a generic name pair",
+	"scope_id":         "a scope root is a uuid handle on a subtree",
+	"group_id":         "an inherited grant names its source group for display (group_name, its label today: #1135); the group itself is addressed by name or uuid (#1133)",
+	"target_id":        "an impersonation target is a principal, as above",
+	"node_id":          "a node is addressed by its enrollment identity, which is its primary key",
+	"caused_event_id":  "an event is addressed by its bigint id; an occurrence has no name handle",
+	"settled_event_id": "an event is addressed by its bigint id; an occurrence has no name handle",
+	"correlation_id":   "a freeform string that threads related log lines and events, not a reference to a named entity",
 }
 
 // References exempt from the both-forms rule, each for a reason of its own.

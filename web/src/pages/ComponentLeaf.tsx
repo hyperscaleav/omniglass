@@ -8,6 +8,7 @@ import ConfigureFace from "../components/ConfigureFace";
 import BladeStack from "../components/BladeStack";
 import EventsPanel from "../components/EventsPanel";
 import LogsPanel from "../components/LogsPanel";
+import CommandsPanel from "../components/CommandsPanel";
 import { BladesContext, createBladeController } from "../lib/blades";
 import { fleetRegistry } from "../lib/fleetBlades";
 import HealthBadge from "../components/HealthBadge";
@@ -80,6 +81,12 @@ export default function ComponentLeaf() {
     ...(can(me.data, "component", "update") ? [{ key: "configure", label: "Configure" }] : []),
   ]);
   const LEGACY_TAB: Record<string, string> = { events: "activity" };
+  // A command asked for by address (an issue's toast opens its row).
+  const openCommand = () => {
+    const raw = Array.isArray(leafSearch.command) ? leafSearch.command[0] : leafSearch.command;
+    const n = raw ? Number(raw) : NaN;
+    return Number.isInteger(n) && n > 0 ? n : undefined;
+  };
   const leafTab = () => {
     const raw = Array.isArray(leafSearch.tab) ? leafSearch.tab[0] : leafSearch.tab;
     const t = raw ? (LEGACY_TAB[raw] ?? raw) : raw;
@@ -243,7 +250,12 @@ export default function ComponentLeaf() {
               <ConfigureFace kind="component" id={id()} />
             </Show>
             <Show when={leafTab() === "activity"}>
-              <div data-testid="activity-tab" class="flex flex-col gap-6 p-4">
+              <div data-testid="activity-tab" class="flex flex-col gap-5 p-4">
+                {/* What it was told and where each command stands (#1155),
+                    above what it has been saying. */}
+                <Show when={can(me.data, "command", "read")}>
+                  <CommandsPanel component={id()} name={component()?.name ?? id()} componentId={component()?.id} open={openCommand()} />
+                </Show>
                 <EventsPanel name={id()} />
                 {/* The component's own words beside its occurrences (#1145):
                     the log lines its driver read and its listeners left

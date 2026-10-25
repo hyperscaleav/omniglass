@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/hyperscaleav/omniglass/internal/cli/apiclient"
@@ -88,5 +89,65 @@ func TestDoOmitsAuthWhenTokenEmpty(t *testing.T) {
 	}
 	if hadAuth {
 		t.Error("Authorization header sent with an empty token")
+	}
+}
+
+// TestAMalformedServerNeverEchoesItsPassword: a server URL whose password
+// carries a reserved character does not parse, and the parser's error quotes
+// the whole URL, so every generated command printed the password (#979's
+// review). The error names the server URL and holds no piece of the password.
+func TestAMalformedServerNeverEchoesItsPassword(t *testing.T) {
+	for _, server := range []string{
+		"https://operator:hunter2@omniglass.example:80a",
+		"https://operator:hun/ter2@omniglass.example",
+	} {
+		_, err := apiclient.New(server, "ogp_x").Do(context.Background(), http.MethodGet, "/api/v1/auth/me", nil)
+		if err == nil {
+			t.Fatalf("%q: Do succeeded; the case needs a server URL that does not parse", server)
+		}
+		if strings.Contains(err.Error(), "hunter2") || strings.Contains(err.Error(), "hun") {
+			t.Errorf("%q: the error %q carries the password", server, err)
+		}
+		if !strings.Contains(err.Error(), "server URL") {
+			t.Errorf("%q: the error %q does not name the server URL", server, err)
+		}
+	}
+}
+
+// TestAMisreadServerPasswordIsNeverSentOrShown: a password the parser misreads
+// without failing (`operator:/abc...@host` reads `operator` as the host) sent
+// the bearer token to a host named after the username and printed the rest of
+// the password in the dial error (#979's review). The client refuses the
+// server before any request, naming it and quoting none of it.
+func TestAMisreadServerPasswordIsNeverSentOrShown(t *testing.T) {
+	for _, server := range []string{
+		"https://operator:/abcSECRET@omniglass.example",
+		"https://operator:123#abcSECRET@omniglass.example",
+		"operator:abcSECRET@omniglass.example",
+	} {
+		_, err := apiclient.New(server, "ogp_x").Do(context.Background(), http.MethodGet, "/api/v1/auth/me", nil)
+		if err == nil {
+			t.Fatalf("%q: Do succeeded", server)
+		}
+		if strings.Contains(err.Error(), "SECRET") || !strings.Contains(err.Error(), "server URL") {
+			t.Errorf("%q: the error %q carries the password or does not name the server URL", server, err)
+		}
+	}
+}
+
+// TestAPathMayCarryAnAt: the server is checked, not the path, so a positional
+// an operator types with an @ in it still reaches the server.
+func TestAPathMayCarryAnAt(t *testing.T) {
+	var gotPath string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+	if _, err := apiclient.New(srv.URL, "").Do(context.Background(), http.MethodGet, "/api/v1/principals/ops@example.com", nil); err != nil {
+		t.Fatalf("Do: %v", err)
+	}
+	if gotPath != "/api/v1/principals/ops@example.com" {
+		t.Errorf("path = %q", gotPath)
 	}
 }

@@ -1005,8 +1005,16 @@ func (p *PG) nodeSecretFieldsVersioned(ctx context.Context, name, componentID st
 }
 
 func (p *PG) nodeSecretRow(ctx context.Context, name, componentID string) (map[string]string, *secretRow, error) {
+	fields, row, _, err := p.nodeSecretShaped(ctx, name, componentID)
+	return fields, row, err
+}
+
+// nodeSecretShaped is nodeSecretRow with the secret type's shape, which says
+// which of the unsealed fields are the secret ones (a password, not the
+// username beside it).
+func (p *PG) nodeSecretShaped(ctx context.Context, name, componentID string) (map[string]string, *secretRow, secret.Shape, error) {
 	if p.secret == nil {
-		return nil, nil, ErrNoSecretProvider
+		return nil, nil, secret.Shape{}, ErrNoSecretProvider
 	}
 	rows, err := p.pool.Query(ctx, `
 		select s.id, s.name, s.owner_kind,
@@ -1015,7 +1023,7 @@ func (p *PG) nodeSecretRow(ctx context.Context, name, componentID string) (map[s
 		from secret s join secret_type st on st.id = s.secret_type
 		where s.name = $1`, name)
 	if err != nil {
-		return nil, nil, fmt.Errorf("storage: node secret %q: %w", name, err)
+		return nil, nil, secret.Shape{}, fmt.Errorf("storage: node secret %q: %w", name, err)
 	}
 	defer rows.Close()
 	var found []struct {
@@ -1027,12 +1035,12 @@ func (p *PG) nodeSecretRow(ctx context.Context, name, componentID string) (map[s
 		var ownerID *string
 		var typeName string
 		if err := rows.Scan(&r.id, &r.name, &r.ownerKind, &ownerID, &r.value, &typeName); err != nil {
-			return nil, nil, fmt.Errorf("storage: scan node secret %q: %w", name, err)
+			return nil, nil, secret.Shape{}, fmt.Errorf("storage: scan node secret %q: %w", name, err)
 		}
 		r.ownerID = ownerID
 		covers, err := p.secretCoversComponent(ctx, r.ownerKind, ownerID, componentID)
 		if err != nil {
-			return nil, nil, fmt.Errorf("storage: cascade node secret %q: %w", name, err)
+			return nil, nil, secret.Shape{}, fmt.Errorf("storage: cascade node secret %q: %w", name, err)
 		}
 		if !covers {
 			continue
@@ -1043,21 +1051,21 @@ func (p *PG) nodeSecretRow(ctx context.Context, name, componentID string) (map[s
 		}{r, typeName})
 	}
 	if err := rows.Err(); err != nil {
-		return nil, nil, fmt.Errorf("storage: node secret %q: %w", name, err)
+		return nil, nil, secret.Shape{}, fmt.Errorf("storage: node secret %q: %w", name, err)
 	}
 	if len(found) == 0 {
-		return nil, nil, ErrSecretNotFound
+		return nil, nil, secret.Shape{}, ErrSecretNotFound
 	}
 	if len(found) > 1 {
-		return nil, nil, &ErrAmbiguousName{Kind: "secret", Ref: name}
+		return nil, nil, secret.Shape{}, &ErrAmbiguousName{Kind: "secret", Ref: name}
 	}
 	shapes, err := p.shapeIndex(ctx)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, secret.Shape{}, err
 	}
 	shape, ok := shapes[found[0].typeName]
 	if !ok {
-		return nil, nil, fmt.Errorf("storage: node secret %q: unknown secret type %q", name, found[0].typeName)
+		return nil, nil, secret.Shape{}, fmt.Errorf("storage: node secret %q: unknown secret type %q", name, found[0].typeName)
 	}
 	row := found[0].row
 	out := make(map[string]string, len(row.value))
@@ -1069,20 +1077,20 @@ func (p *PG) nodeSecretRow(ctx context.Context, name, componentID string) (map[s
 		if !f.Secret {
 			var v string
 			if err := json.Unmarshal(raw, &v); err != nil {
-				return nil, nil, fmt.Errorf("storage: decode node secret field %q: %w", f.Name, err)
+				return nil, nil, secret.Shape{}, fmt.Errorf("storage: decode node secret field %q: %w", f.Name, err)
 			}
 			out[f.Name] = v
 			continue
 		}
 		var env secret.Envelope
 		if err := json.Unmarshal(raw, &env); err != nil {
-			return nil, nil, fmt.Errorf("storage: decode node secret envelope %q: %w", f.Name, err)
+			return nil, nil, secret.Shape{}, fmt.Errorf("storage: decode node secret envelope %q: %w", f.Name, err)
 		}
 		pt, err := secret.Open(ctx, p.secret, env, secretAAD(row.ownerKind, row.ownerID, row.name, f.Name))
 		if err != nil {
-			return nil, nil, fmt.Errorf("storage: unseal node secret field %q: %w", f.Name, err)
+			return nil, nil, secret.Shape{}, fmt.Errorf("storage: unseal node secret field %q: %w", f.Name, err)
 		}
 		out[f.Name] = string(pt)
 	}
-	return out, &row, nil
+	return out, &row, shape, nil
 }

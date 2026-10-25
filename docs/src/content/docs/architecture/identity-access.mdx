@@ -443,6 +443,11 @@ recording that a human saw an alarm is not editing the component, and neither is
 do something. The command one is the sharper case, because what a wide read used to widen there was
 not what a caller could learn but what it could physically actuate.
 
+The same split resolves a **read** that hangs off a component on its own permission: a command's
+reads (`GET /components/{name}/commands` and `GET /components/{name}/commands/{id}`, #1155) resolve the component through
+`component:read` for the refusal owed and through `command:read`, on the component tier, for whether
+its commands may be seen, so a role that reads components but not commands gets the truthful 403.
+
 The read set is the caller's own `<resource>:read` at every one of them, and that is a
 **condition rather than a convention**: the truthful 403 names a row, so it may only ever be
 reached by a caller who could have read that row anyway. A route that checked a wider set here

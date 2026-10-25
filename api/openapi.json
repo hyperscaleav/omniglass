@@ -1377,48 +1377,219 @@
         ],
         "type": "object"
       },
-      "CommandOutputBody": {
+      "CommandBody": {
         "additionalProperties": false,
         "properties": {
           "$schema": {
             "description": "A URL to the JSON Schema for this object.",
             "examples": [
-              "/api/v1/schemas/CommandOutputBody.json"
+              "/api/v1/schemas/CommandBody.json"
             ],
             "format": "uri",
             "readOnly": true,
             "type": "string"
           },
           "caused_event_id": {
-            "description": "The caused event this command recorded",
+            "description": "The command-issued event it put on the component's timeline",
             "format": "int64",
             "type": "integer"
           },
           "command_type": {
+            "description": "What the component was told to do",
+            "type": "string"
+          },
+          "component": {
+            "description": "The component it was issued to, by name",
+            "type": "string"
+          },
+          "component_id": {
+            "description": "The component's uuid, the stable form of component",
+            "type": "string"
+          },
+          "deadline": {
+            "description": "When its settle window closes; a command still issued past it is timed out by the next sweep",
+            "format": "date-time",
+            "type": "string"
+          },
+          "delivered_at": {
+            "description": "When a node last took it from its queue",
+            "format": "date-time",
+            "type": "string"
+          },
+          "driver": {
+            "description": "The driver whose binding renders and settles it, by name",
+            "type": "string"
+          },
+          "endpoint": {
+            "description": "The endpoint it rides, by name: the one a node took it over, else the one a node would (its driver binds the type); absent when no endpoint can carry it",
+            "type": "string"
+          },
+          "endpoint_id": {
+            "description": "The endpoint's uuid",
+            "type": "string"
+          },
+          "exec_error": {
+            "description": "The execution's failure, as its node reported it, masked of credentials",
+            "type": "string"
+          },
+          "executed_at": {
+            "description": "When its node's execution report landed",
+            "format": "date-time",
             "type": "string"
           },
           "id": {
+            "description": "The command's id: with its component, its address (a command has no name)",
             "format": "int64",
             "type": "integer"
           },
           "instance": {
+            "description": "The series discriminator it was issued with, if any",
             "type": "string"
           },
+          "intended": {
+            "description": "The value it set; absent for a fire-and-forget command"
+          },
+          "issued_at": {
+            "description": "When it was issued",
+            "format": "date-time",
+            "type": "string"
+          },
+          "issuer": {
+            "description": "Who issued it, by name; empty once that principal is purged (the audit log keeps the name)",
+            "type": "string"
+          },
+          "issuer_id": {
+            "description": "The issuer's uuid, the actor on the command's audit row",
+            "type": "string"
+          },
+          "node": {
+            "description": "The node that endpoint is placed on, by name",
+            "type": "string"
+          },
+          "observed": {
+            "$ref": "#/components/schemas/CommandObservation",
+            "description": "The sample of its target that decided it, when an observation did"
+          },
+          "params": {
+            "description": "The invocation params"
+          },
+          "phase": {
+            "description": "Where it sits now: queued for its node; delivered to it (a binding that settles on observation); awaiting the reply that settles it; awaiting the observation that does, within its window; or, once terminal, its status",
+            "enum": [
+              "queued",
+              "delivered",
+              "awaiting-reply",
+              "awaiting-observation",
+              "settled",
+              "failed",
+              "timed-out"
+            ],
+            "type": "string"
+          },
+          "reason": {
+            "description": "Why it reached its terminal status, in words: the reply that confirmed it, the value observed instead, where it stopped when it timed out",
+            "type": "string"
+          },
+          "reply": {
+            "description": "The component's answer, as its execution report carried it, masked of the endpoint's credentials and anything labeled a credential, and capped; absent until a report lands",
+            "type": "string"
+          },
+          "settle_mode": {
+            "description": "How its driver binding says it settles: from the component's reply, from the next observation of its target, or not at all (it sets nothing)",
+            "enum": [
+              "reply",
+              "observation",
+              "none"
+            ],
+            "type": "string"
+          },
+          "settle_window_seconds": {
+            "description": "How long it waits for its evidence",
+            "format": "int64",
+            "type": "integer"
+          },
+          "settled_at": {
+            "description": "When it reached its terminal status",
+            "format": "date-time",
+            "type": "string"
+          },
+          "settled_by": {
+            "description": "What decided it, once terminal: its issue (it sets nothing), its reply, an observation of its target, or its window closing on no evidence",
+            "enum": [
+              "issue",
+              "reply",
+              "observation",
+              "window"
+            ],
+            "type": "string"
+          },
+          "settled_event_id": {
+            "description": "The event its terminal status put there: command-settled, command-failed or command-timed-out",
+            "format": "int64",
+            "type": "integer"
+          },
           "settlement": {
-            "description": "The computed settlement verdict (none/pending/settled/failed)",
+            "description": "On an issue's answer only: the computed settlement verdict at that moment (none/pending/settled/failed)",
+            "enum": [
+              "none",
+              "pending",
+              "settled",
+              "failed"
+            ],
             "type": "string"
           },
           "status": {
-            "description": "The recorded command status (issued/settled/failed/timed-out); issued until a settle-check records the terminal outcome",
+            "description": "The recorded status: issued until a terminal settled, failed, or timed-out",
+            "enum": [
+              "issued",
+              "settled",
+              "failed",
+              "timed-out"
+            ],
+            "type": "string"
+          },
+          "target": {
+            "description": "The property or metric it sets, by name",
+            "type": "string"
+          },
+          "target_kind": {
+            "description": "The lane of the value it sets; absent for a fire-and-forget command",
+            "enum": [
+              "property",
+              "metric"
+            ],
             "type": "string"
           }
         },
         "required": [
           "id",
+          "component",
+          "component_id",
           "command_type",
-          "caused_event_id",
-          "settlement",
-          "status"
+          "status",
+          "phase",
+          "settle_mode",
+          "settle_window_seconds",
+          "deadline",
+          "issued_at"
+        ],
+        "type": "object"
+      },
+      "CommandObservation": {
+        "additionalProperties": false,
+        "properties": {
+          "at": {
+            "description": "When it was observed",
+            "format": "date-time",
+            "type": "string"
+          },
+          "value": {
+            "description": "The observed value"
+          }
+        },
+        "required": [
+          "value",
+          "at"
         ],
         "type": "object"
       },
@@ -5508,6 +5679,39 @@
         },
         "required": [
           "command_types"
+        ],
+        "type": "object"
+      },
+      "ListCommandsOutputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "$schema": {
+            "description": "A URL to the JSON Schema for this object.",
+            "examples": [
+              "/api/v1/schemas/ListCommandsOutputBody.json"
+            ],
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "commands": {
+            "description": "Its commands, newest first",
+            "items": {
+              "$ref": "#/components/schemas/CommandBody"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "component": {
+            "description": "The component, by name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "component",
+          "commands"
         ],
         "type": "object"
       },
@@ -14739,9 +14943,163 @@
         "x-omniglass-permission": "alarm:read"
       }
     },
+    "/components/{name}/commands": {
+      "get": {
+        "description": "The component's command history, newest first, each command whole (as the single read returns it), narrowed by recorded status and by when it was issued, a page at a time. status=issued is what is in flight now. Gated by command:read, resolved on the component tier; a component outside the caller's component:read is a non-disclosing 404, and one it can read but whose commands it may not is a 403.",
+        "operationId": "list-component-commands",
+        "parameters": [
+          {
+            "description": "The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)",
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "description": "The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)",
+              "examples": [
+                "hq.west.level-2.boardroom-a.$comp.videobar-1"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "description": "Only the commands with this recorded status; issued is every command still in flight",
+            "explode": false,
+            "in": "query",
+            "name": "status",
+            "schema": {
+              "description": "Only the commands with this recorded status; issued is every command still in flight",
+              "enum": [
+                "issued",
+                "settled",
+                "failed",
+                "timed-out"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "description": "Only the commands issued at or after this RFC3339 time",
+            "explode": false,
+            "in": "query",
+            "name": "since",
+            "schema": {
+              "description": "Only the commands issued at or after this RFC3339 time",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Only the commands issued at or before this RFC3339 time",
+            "explode": false,
+            "in": "query",
+            "name": "until",
+            "schema": {
+              "description": "Only the commands issued at or before this RFC3339 time",
+              "type": "string"
+            }
+          },
+          {
+            "description": "How many to return, newest first (1 to 500)",
+            "explode": false,
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "default": 50,
+              "description": "How many to return, newest first (1 to 500)",
+              "format": "int64",
+              "maximum": 500,
+              "minimum": 1,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListCommandsOutputBody"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "List a component's commands",
+        "x-omniglass-permission": "command:read"
+      }
+    },
+    "/components/{name}/commands/{id}": {
+      "get": {
+        "description": "One command, whole: what it was told and the value it set, its recorded status with a time for each transition (issued, delivered, executed, settled), where it sits now while in flight (queued, delivered, awaiting the reply, awaiting the observation), how its binding settles it, the evidence that decided it (the reply, masked of credentials, or the observed sample) and why, the endpoint, node and driver that carry it, and who issued it. Gated by command:read, resolved on the component tier; a component outside the caller's component:read, or a command not on that component, is a non-disclosing 404, and a component it can read but whose commands it may not is a 403.",
+        "operationId": "get-component-command",
+        "parameters": [
+          {
+            "description": "The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)",
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "description": "The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)",
+              "examples": [
+                "hq.west.level-2.boardroom-a.$comp.videobar-1"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "description": "The command's id, as its issue answered it",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "The command's id, as its issue answered it",
+              "examples": [
+                42
+              ],
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommandBody"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Read a command",
+        "x-omniglass-permission": "command:read"
+      }
+    },
     "/components/{name}/commands:issue": {
       "post": {
-        "description": "Records a command invocation, writes a caused event, and (for a settleable command) opens an intended value the observed value settles against. Returns the computed settlement verdict. Gated by command:issue, whose scope is resolved on the component tier from that permission (not from component:read); a component outside the caller's component:read is a non-disclosing 404, and one it can read but not command is a 403.",
+        "description": "Records a command invocation, writes a caused event, and (for a settleable command) opens an intended value the observed value settles against. Answers with the command as it stands (as the command read returns it) and the computed settlement verdict; with wait, once it settles, fails or times out, or wait_timeout passes. Gated by command:issue, whose scope is resolved on the component tier from that permission (not from component:read); a component outside the caller's component:read is a non-disclosing 404, and one it can read but not command is a 403.",
         "operationId": "issue-component-command",
         "parameters": [
           {
@@ -14752,6 +15110,30 @@
             "schema": {
               "description": "The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)",
               "type": "string"
+            }
+          },
+          {
+            "description": "Block until the command settles, fails or times out, or until wait_timeout passes, and answer with where it stands then. Refused with a 429, before anything is issued, while too many commands are already being waited on",
+            "explode": false,
+            "in": "query",
+            "name": "wait",
+            "schema": {
+              "description": "Block until the command settles, fails or times out, or until wait_timeout passes, and answer with where it stands then. Refused with a 429, before anything is issued, while too many commands are already being waited on",
+              "type": "boolean"
+            }
+          },
+          {
+            "description": "How long a wait may block, in seconds (1 to 120). A command still in flight when it passes is answered as it stands, its phase saying where",
+            "explode": false,
+            "in": "query",
+            "name": "wait_timeout",
+            "schema": {
+              "default": 30,
+              "description": "How long a wait may block, in seconds (1 to 120). A command still in flight when it passes is answered as it stands, its phase saying where",
+              "format": "int64",
+              "maximum": 120,
+              "minimum": 1,
+              "type": "integer"
             }
           }
         ],
@@ -14770,7 +15152,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/CommandOutputBody"
+                  "$ref": "#/components/schemas/CommandBody"
                 }
               }
             },

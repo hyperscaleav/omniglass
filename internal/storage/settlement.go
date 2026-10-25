@@ -74,21 +74,6 @@ func Settle(intended, observed *CurrentValue, windowSeconds int, now time.Time) 
 	return SettlementFailed
 }
 
-// terminalStatus maps a terminal settlement verdict onto the recorded command
-// status. The computed verdict keeps its shipped meaning (past the window,
-// anything but a match is failed); the record splits that collapsed failure into
-// what the series can distinguish: a device that reported a different value
-// failed, a window that expired with nothing observed timed out.
-func terminalStatus(verdict SettlementVerdict, observed *CurrentValue) string {
-	if verdict == SettlementSettled {
-		return "settled"
-	}
-	if observed == nil {
-		return "timed-out"
-	}
-	return "failed"
-}
-
 // dbNow reads the caller's transaction timestamp: the one clock a settlement
 // comparison is allowed to use (#667).
 //
@@ -203,25 +188,17 @@ func (p *PG) judgeCommands(ctx context.Context, q txQuerier, ct *CommandType, ow
 		if err != nil {
 			return err
 		}
-		var status string
+		var o settlementOutcome
 		if intended == nil {
-			status = "settled"
+			o = settlementOutcome{status: "settled", by: SettledByIssue, reason: "nothing was told, so there was nothing to settle"}
 		} else if verdict := Settle(intended, observed, ct.SettleWindowSeconds, now); verdict == SettlementPending {
 			continue
-		} else {
-			status = terminalStatus(verdict, observed)
-		}
-		if err := markSettlement(ctx, q, pc.id, status, now); err != nil {
+		} else if o, err = p.observationOutcome(ctx, q, ct, pc.id, verdict, intended, observed); err != nil {
 			return err
 		}
-	}
-	return nil
-}
-
-// markSettlement stamps a command's terminal status, once.
-func markSettlement(ctx context.Context, q txQuerier, id int64, status string, now time.Time) error {
-	if _, err := q.Exec(ctx, `update command set status = $2, settled_at = $3 where id = $1 and status = 'issued'`, id, status, now); err != nil {
-		return fmt.Errorf("storage: record command %d settlement: %w", id, err)
+		if err := recordOutcome(ctx, q, pc.id, o, now); err != nil {
+			return err
+		}
 	}
 	return nil
 }

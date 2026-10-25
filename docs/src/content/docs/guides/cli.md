@@ -56,17 +56,27 @@ server this way ([test-driven](/contributing/test-driven/#tiers)).
 
 ## Connecting
 
-Every generated command is a client of a running server and takes two shared flags, each
-with an environment default:
-
-| Flag | Env | Default |
-|---|---|---|
-| `--server` | `OMNIGLASS_SERVER` | `http://localhost:8080` |
-| `--token` | `OMNIGLASS_TOKEN` | (none) |
+Every generated command is a client of a running server and takes two shared flags,
+`--server` and `--token` (the reference's [global flags](/reference/cli/#global-flags) table
+is generated from the binary). Each resolves in one order when the command runs: the flag
+when you give it, else its environment variable (`OMNIGLASS_SERVER`, `OMNIGLASS_TOKEN`), else
+the flag's built-in default, which the token does not have.
 
 The token is a bearer credential (mint the first one with `omniglass bootstrap`; see
 [Authentication](#authentication) below). The server enforces the same capability and scope
 for the CLI as for any caller: the CLI is just another client, with no privileged path.
+
+The environment is read at that moment, never copied into a flag's default, because a default
+is what `--help`, shell completion and the CLI reference print. So every one of them names
+`$OMNIGLASS_TOKEN` and never shows its value, and help output is safe to paste into a ticket or
+a chat ([#979](https://github.com/hyperscaleav/omniglass/issues/979)). Errors hold the same line:
+a server URL or a database DSN carrying a `user:password` that does not parse is reported by
+name, with the parser's detail withheld (it can quote the password), so percent-encode any
+reserved character in it. A server URL is refused the same way when such a password would be
+misread rather than refused (an `@` past the host, a query or a fragment, or no `http://` or
+`https://` before it): the error would otherwise print the password, and the request could go,
+token and all, to a host named after the user. Prefer the variable to typing `--token` itself,
+which leaves the secret in your shell history and the process list.
 
 ```sh
 export OMNIGLASS_SERVER=https://omniglass.example.com
@@ -556,6 +566,29 @@ omniglass component command issue disp-1 --command-type set-input --value '"hdmi
 
 A target must be a key a command may write: a native probe key, `health` or a calc rule's output is
 refused (422) naming the key.
+
+### A command's status, from issue to settlement
+
+The issue answers with the command as it stands: its `status`, its `phase` (where it sits while in
+flight: `queued` for its node, `delivered`, `awaiting-reply` or `awaiting-observation`), and the
+evidence once there is some. `--wait` holds the issue until the command settles, fails or times out,
+or until `--wait-timeout` seconds pass (1 to 120, 30 by default), which is what a script wants; a
+server holds 64 waits at once and a principal 4, and a wait past either is a 429 refused before
+anything is issued. Every command reads back by its id under its component, with `command:read`
+([commands](/architecture/commands/#reading-a-command-from-issue-to-settlement)):
+
+```sh
+bar='depot.bay-1.$comp.videobar-1'
+omniglass component command issue "$bar" --command-type set-volume --value 42 --wait \
+  | jq -c '{status, settled_by, reason, reply}'
+# {"status":"settled","settled_by":"reply","reason":"the reply confirmed it","reply":"{\"ok\": true}\n"}
+omniglass component command list "$bar" --status timed-out --since 2026-10-25T09:00:00Z
+omniglass component command get "$bar" 42 | jq -c '{status, phase, reason, endpoint, node, driver}'
+```
+
+The `reply` is the component's answer as its node reported it, masked of the endpoint's credentials
+and of anything labeled a credential before it was stored; a timed-out command's `reason` says where
+it stopped (`queued for node edge-depot-dark, which did not take it within its 15s settle window`).
 
 ## Property contracts and values
 

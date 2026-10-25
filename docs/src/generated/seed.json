@@ -487,6 +487,21 @@
    "description": "A command was issued to a component (the caused event a command records). It opens the intended value the command sets and is the lineage cause of that intended value."
   },
   {
+   "name": "command-settled",
+   "label": "Command Settled",
+   "description": "A command took effect: its reply confirmed it or carried the intended value, or an observation of its target matched. Its message says which, and the command row keeps the evidence."
+  },
+  {
+   "name": "command-failed",
+   "label": "Command Failed",
+   "description": "A command did not take effect: its execution failed, its reply contradicted it, or the value observed when its settle window closed was another. Its message gives the reason."
+  },
+  {
+   "name": "command-timed-out",
+   "label": "Command Timed Out",
+   "description": "A command's settle window closed with no evidence either way: no reply that decided it and no observation of its target. Its message says where it stopped (never taken by a node, delivered with no report, or answered with nothing observed after)."
+  },
+  {
    "name": "call-ended",
    "label": "Call Ended",
    "description": "A conferencing endpoint left an active call: call-started's closing half, caught natively or derived. The pair brackets a session for usage reads."

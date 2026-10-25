@@ -12,12 +12,12 @@ hand-written split, see [the CLI guide](/guides/cli/).
 
 ## Global flags
 
-Every command accepts these, each with an environment-variable default:
+Every command accepts these. An omitted flag falls back to its environment variable, read when the command runs, so this page and every `--help` name the variable and never print its value:
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--server` | string | `http://localhost:8080` | Omniglass server base URL (env OMNIGLASS_SERVER) |
-| `--token` | string | (none) | bearer token (env OMNIGLASS_TOKEN) |
+| `--server` | string | `http://localhost:8080` | Omniglass server base URL; when omitted, $OMNIGLASS_SERVER, else the default |
+| `--token` | string | (none) | bearer token; when omitted, $OMNIGLASS_TOKEN (read at run time, never printed) |
 
 ## `omniglass audit-log`
 
@@ -671,6 +671,22 @@ omniglass component checkName --name name
 
 Commands for the command resource
 
+#### `omniglass component command get`
+
+Read a command
+
+```
+omniglass component command get <name> <id>
+```
+
+One command, whole: what it was told and the value it set, its recorded status with a time for each transition (issued, delivered, executed, settled), where it sits now while in flight (queued, delivered, awaiting the reply, awaiting the observation), how its binding settles it, the evidence that decided it (the reply, masked of credentials, or the observed sample) and why, the endpoint, node and driver that carry it, and who issued it. Gated by command:read, resolved on the component tier; a component outside the caller's component:read, or a command not on that component, is a non-disclosing 404, and a component it can read but whose commands it may not is a 403.
+
+Example:
+
+```sh
+omniglass component command get 'hq.west.level-2.boardroom-a.$comp.videobar-1' 42
+```
+
 #### `omniglass component command issue`
 
 Issue a command to a component
@@ -679,7 +695,7 @@ Issue a command to a component
 omniglass component command issue <name> [flags]
 ```
 
-Records a command invocation, writes a caused event, and (for a settleable command) opens an intended value the observed value settles against. Returns the computed settlement verdict. Gated by command:issue, whose scope is resolved on the component tier from that permission (not from component:read); a component outside the caller's component:read is a non-disclosing 404, and one it can read but not command is a 403.
+Records a command invocation, writes a caused event, and (for a settleable command) opens an intended value the observed value settles against. Answers with the command as it stands (as the command read returns it) and the computed settlement verdict; with wait, once it settles, fails or times out, or wait_timeout passes. Gated by command:issue, whose scope is resolved on the component tier from that permission (not from component:read); a component outside the caller's component:read is a non-disclosing 404, and one it can read but not command is a 403.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -687,11 +703,36 @@ Records a command invocation, writes a caused event, and (for a settleable comma
 | `--instance` | string | (none) | The series discriminator (e.g. an endpoint), when the target is instanced |
 | `--params` | string | (none) | The invocation params, stored on the command and the caused event |
 | `--value` | string | (none) | The intended value for the target property (a settleable command) |
+| `--wait` | bool | `false` | Block until the command settles, fails or times out, or until wait_timeout passes, and answer with where it stands then. Refused with a 429, before anything is issued, while too many commands are already being waited on |
+| `--wait-timeout` | int | `0` | How long a wait may block, in seconds (1 to 120). A command still in flight when it passes is answered as it stands, its phase saying where |
 
 Example:
 
 ```sh
 omniglass component command issue <name> --command-type command_type
+```
+
+#### `omniglass component command list`
+
+List a component's commands
+
+```
+omniglass component command list <name> [flags]
+```
+
+The component's command history, newest first, each command whole (as the single read returns it), narrowed by recorded status and by when it was issued, a page at a time. status=issued is what is in flight now. Gated by command:read, resolved on the component tier; a component outside the caller's component:read is a non-disclosing 404, and one it can read but whose commands it may not is a 403.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--limit` | int | `0` | How many to return, newest first (1 to 500) |
+| `--since` | string | (none) | Only the commands issued at or after this RFC3339 time |
+| `--status` | string | (none) | Only the commands with this recorded status; issued is every command still in flight |
+| `--until` | string | (none) | Only the commands issued at or before this RFC3339 time |
+
+Example:
+
+```sh
+omniglass component command list 'hq.west.level-2.boardroom-a.$comp.videobar-1'
 ```
 
 ### `omniglass component create`

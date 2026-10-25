@@ -1,0 +1,35 @@
+# Issue a command and follow it to settlement (#1155): the Briefing Room's
+# Kestrel bar is simulated and collected over https by the shipped
+# kestrel-api driver, whose set-volume binding settles from the bar's reply.
+# Issuing from the bar's Activity tab raises a toast that follows the command
+# live (queued, awaiting its reply, settled) and opens its row, where the arc,
+# the reply and what carried it read in place. The briefing place holds one
+# system, so its address lands on that system.
+title: Issue a command and follow it
+description: Tell a video bar its volume from its Activity tab, watch the toast follow the command until the bar's reply settles it, and open the command to read its reply and timing.
+steps:
+  - goto: /locations/briefing
+    caption: The Briefing Room's system. Its video bar is collected by a node over https.
+  - click: 'button:has([data-label]:text-is("Video Bar 1"))'
+    caption: Open the video bar.
+  - click: 'aside[data-blade] button[aria-label=Expand]'
+    caption: Expand it to the component's view.
+  - click: { role: tab, name: Activity }
+    caption: Activity carries what the bar was told, above what it has been saying.
+  - click: { role: button, name: Issue a command }
+    caption: Issue a command. Only the commands its driver binds are offered, since only those reach it.
+  - select: { target: 'form select', value: set-volume }
+    caption: Set its volume. A metric takes a number.
+  - type: { target: 'form input', text: '35' }
+    caption: The value it should hold.
+  - click: { role: button, name: Issue, exact: true }
+    caption: Issue it. The node takes it from its queue and sends it to the bar.
+  - wait: { selector: '[data-testid=command-toast]:has-text("settled")', timeout: 20000 }
+    caption: The toast follows it live. The bar's reply confirmed the change, so it settled.
+    hold: 1500
+  - click: { role: button, name: Open }
+    caption: Open the command.
+  - wait: { selector: '[data-testid=command-detail] [data-testid=command-reply]' }
+    caption: Its arc, each leg timed from the issue; the reply that settled it; and what carried it.
+    poster: true
+    hold: 2000

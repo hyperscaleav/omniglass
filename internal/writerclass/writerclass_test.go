@@ -232,3 +232,24 @@ func TestFactsRenderTheRuling(t *testing.T) {
 		t.Fatal("docs/src/generated/writerclass.json is stale: run make gen")
 	}
 }
+
+// Each terminal status a command records writes its own lifecycle event, a
+// reserved key only a command writes; a status that is not terminal writes
+// none.
+func TestCommandOutcomeEvents(t *testing.T) {
+	for status, want := range map[string]string{"settled": CommandSettled, "failed": CommandFailed, "timed-out": CommandTimedOut} {
+		got, ok := CommandOutcomeEvent(status)
+		if !ok || got != want {
+			t.Errorf("CommandOutcomeEvent(%q) = %q, %v; want %q", status, got, ok, want)
+		}
+		if c, reserved := Reserved(got); !reserved || c != CommandLifecycle {
+			t.Errorf("%s resolves to %q (%v), want command-lifecycle", got, c, reserved)
+		}
+		if !Admits(CommandLifecycle, Command, got) || Admits(CommandLifecycle, EventRule, got) || Admits(CommandLifecycle, Push, got) {
+			t.Errorf("%s admits a writer other than a command", got)
+		}
+	}
+	if got, ok := CommandOutcomeEvent("issued"); ok {
+		t.Errorf("issued writes %q, want no outcome event", got)
+	}
+}

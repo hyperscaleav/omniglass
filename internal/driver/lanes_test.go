@@ -22,7 +22,9 @@ func laneCatalog() fakeCatalog {
 	c.lanes["call-started"] = "event"
 	c.lanes["strict-event"] = "event"
 	c.lanes["collection-failed"] = "event"
-	c.lanes["command-issued"] = "event"
+	for _, k := range []string{"command-issued", "command-settled", "command-failed", "command-timed-out"} {
+		c.lanes[k] = "event"
+	}
 	c.schemas = map[string][]byte{
 		"strict-event": []byte(`{"type":"object","properties":{"input":{"type":"string"},"count":{"type":"integer"}},"required":["input"],"additionalProperties":false}`),
 	}
@@ -59,7 +61,7 @@ func TestAnEventEmitWrites(t *testing.T) {
 }
 
 func TestReservedEventsAreRefusedNamingTheWriter(t *testing.T) {
-	for _, name := range []string{"collection-failed", "command-issued"} {
+	for _, name := range []string{"collection-failed", "command-issued", "command-settled", "command-failed", "command-timed-out"} {
 		err := listenerSpec(driver.Emit{Name: name}).Validate(laneCatalog())
 		if err == nil || !strings.Contains(err.Error(), name) {
 			t.Fatalf("emitting %s = %v, want a refusal naming it", name, err)

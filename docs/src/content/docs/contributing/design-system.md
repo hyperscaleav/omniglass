@@ -213,7 +213,15 @@ confirm whose body has to teach cannot be a native prompt.
 
 `ListShell` (with its `FlatList` / `TreeList` bodies), `FilterBar`, `Drawer`, `ConfirmDialog`,
 `PanelFooter`, `Badge`, `Page`, `DataTable`, `IdentityCell`, `KVStacked` / `KVRow` / `FieldRow` /
-`BladeField`, `CommandPalette`, plus the `Sidebar` / `TopBar` shell. New inventory pages consume these; new
+`BladeField`, `CommandPalette`, the toast (`lib/toast`'s store, drawn by the shell's `Toaster`), plus
+the `Sidebar` / `TopBar` shell.
+
+**A toast points at an outcome; it never holds the only copy.** Any surface raises one with
+`pushToast` (a tone, a title, an optional live body and one action), and the shell's `Toaster` draws
+it bottom right, a polite live region, each toast a raised card edged in its tone's hue (a soft fill
+alone sinks into the dark page). It goes away by itself, or when dismissed, and a burst keeps the
+newest four. Its body is a render function, so it can show something that moves (a command's phase,
+#1155) rather than a string frozen when it was raised; its action opens where the outcome lives. New inventory pages consume these; new
 surface *classes* (dashboards, alarms, explore, learn) add their own primitive rather than
 bending `ListShell`.
 

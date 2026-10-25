@@ -4,13 +4,15 @@ import Sidebar from "./components/Sidebar";
 import TopBar from "./components/TopBar";
 import ImpersonationBanner from "./components/ImpersonationBanner";
 import CommandPalette from "./components/CommandPalette";
+import Toaster from "./components/Toaster";
 import { sectionLabel } from "./lib/nav";
 import { useTheme, applyTheme, themeFromMe } from "./lib/theme";
 import { useSettingsMe } from "./lib/settings";
 
 // App is the authenticated shell: the nav rail, the sticky top bar, the routed
-// page, and the global ⌘K command palette. It owns the rail collapse state, the
-// theme effect (mirrors the mode onto <html>), and the ⌘K keybinding.
+// page, the global ⌘K command palette, and the toasts any surface raises. It
+// owns the rail collapse state, the theme effect (mirrors the mode onto
+// <html>), and the ⌘K keybinding.
 const App: ParentComponent = (props) => {
   const location = useLocation();
   const section = createMemo(() => sectionLabel(location.pathname));
@@ -49,6 +51,7 @@ const App: ParentComponent = (props) => {
         </main>
       </div>
       <CommandPalette open={paletteOpen()} onClose={() => setPaletteOpen(false)} />
+      <Toaster />
     </div>
   );
 };

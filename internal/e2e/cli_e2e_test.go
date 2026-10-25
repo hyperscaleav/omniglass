@@ -56,6 +56,23 @@ func TestCLIEndToEnd(t *testing.T) {
 		return runCLI(t, root, binPath, os.Environ())(append(base, args...)...)
 	}
 
+	// The token only in the environment, as a script exports it (#979): a
+	// generated command still authenticates with it, read at run time, and no
+	// help the binary prints carries it, while each names where it is read from.
+	envCLI := runCLI(t, root, binPath, append(os.Environ(), "OMNIGLASS_SERVER="+server, "OMNIGLASS_TOKEN="+tok))
+	if out, code := envCLI("auth", "me"); code != 0 || !strings.Contains(out, `"username": "root"`) {
+		t.Fatalf("auth me with the token in the environment exit %d:\n%s", code, out)
+	}
+	for _, args := range [][]string{{"--help"}, {"auth", "me", "--help"}, {"help", "location", "list"}} {
+		out, code := envCLI(args...)
+		if strings.Contains(out, tok) {
+			t.Fatalf("omniglass %s printed the bearer token from the environment", strings.Join(args, " "))
+		}
+		if code != 0 || !strings.Contains(out, "$OMNIGLASS_TOKEN") {
+			t.Fatalf("omniglass %s exit %d, or it does not name $OMNIGLASS_TOKEN:\n%s", strings.Join(args, " "), code, out)
+		}
+	}
+
 	// Create, then it appears in the scoped list, and a targeted get returns it.
 	if out, code := cli("location", "create", "--name", "hq", "--location-type", "campus"); code != 0 || !strings.Contains(out, `"name": "hq"`) {
 		t.Fatalf("location create exit %d:\n%s", code, out)
