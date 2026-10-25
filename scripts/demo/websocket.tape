@@ -53,7 +53,7 @@ Wait
 Type "# The subscription went out on connect, and the bar acknowledged it"
 Enter
 Wait
-Type `armed() { omniglass node log list edge-hq | jq -c '[.logs[] | select(.message == "session armed" and .attributes.endpoint == "wss") | .attributes.reply]'; }`
+Type `armed() { omniglass node log list edge-hq | jq -c '[.logs[] | select(.message == "session armed" and .attributes.endpoint == "wss") | .attributes | {sent: (.line | fromjson | .type), answered: (.reply | fromjson | .type)}]'; }`
 Enter
 Wait
 Type `armed`
@@ -83,7 +83,7 @@ Wait
 Type `vols`
 Enter
 Wait
-Type "# A command rides the same socket: the bar pushes the change, then answers the set by its id"
+Type "# A command rides the same socket: its set frame carries a fresh id, and the bar's answer carries it back"
 Enter
 Wait
 Type `omniglass component command issue "$bar" --command-type set-volume --value 42 | jq -c '{command_type, settlement}'`
