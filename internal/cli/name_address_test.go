@@ -126,3 +126,26 @@ func TestPathArgumentsAreOneSegment(t *testing.T) {
 		}
 	}
 }
+
+// TestDotSegmentArgumentsAreRefused pins #1133's security review, finding 6: a
+// positional of `.` or `..` would ride the request path as a dot segment, which
+// a normalizing hop rewrites into the route above it (`.../members/..` into a
+// DELETE of the group itself). No name, address or filename is either, so the
+// CLI refuses one before any request leaves.
+func TestDotSegmentArgumentsAreRefused(t *testing.T) {
+	sent := false
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		sent = true
+		_, _ = w.Write([]byte(`{}`))
+	}))
+	defer srv.Close()
+	for _, arg := range []string{"..", "."} {
+		out, err := runCLI(t, "principal-group", "member", "delete", "night-shift", arg, "--server", srv.URL)
+		if err == nil || !strings.Contains(err.Error(), "dot segment") {
+			t.Errorf("member delete night-shift %s = %v (%s), want a refusal naming the dot segment", arg, err, out)
+		}
+	}
+	if sent {
+		t.Errorf("a dot-segment positional reached the server")
+	}
+}

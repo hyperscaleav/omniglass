@@ -207,6 +207,9 @@ func (p *PG) UpdateVariable(ctx context.Context, actorID, ref string, patch Vari
 	if err != nil {
 		return nil, mapVariableWriteErr(err)
 	}
+	if v.OwnerName, err = arcOwnerName(ctx, tx, v.OwnerKind, v.OwnerID); err != nil {
+		return nil, err
+	}
 	if err := writeAuditRes(ctx, tx, actorID, "update", "variable", v.ID, nil, auditVariable(v)); err != nil {
 		return nil, err
 	}
@@ -441,9 +444,7 @@ func (p *PG) variableRowForAction(ctx context.Context, q querier, ref string, re
 		comp, sys, loc *string
 		value          []byte
 	)
-	id, err := ownedIDByRef(ctx, q, variableOwned, ref, func(c ownedCandidate) (bool, error) {
-		return p.variableOwnerInScope(ctx, q, c.ownerKind, c.ownerID, read)
-	})
+	id, err := ownedIDByRef(ctx, q, variableOwned, ref, read, true)
 	if err != nil {
 		return variableRow{}, err
 	}

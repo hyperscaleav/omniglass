@@ -30,6 +30,16 @@ as printed. The guides, the CLI guide and the http-logins demo now type names, a
 `TestDocsCarryNoHardCodedUUIDs` / `TestDemoScriptsCarryNoHardCodedUUIDs` keep it that way. The console
 still addresses everything by uuid (ADR-0089), so it moved only where a path parameter was renamed.
 
+An adversarial security review found the authorization sound (every name narrowed to the caller's
+read scope before ambiguity, the existing split run on the resolved row) and six edges, each fixed
+test-first: the principal routes resolve a name only for a caller who may list the directory, so a
+scoped admin cannot probe usernames or service names; the candidate narrowing moved into SQL, a
+constant number of statements however many rooms share a name (`TestNameRefCostIsFlatInCandidates`);
+a uuid-shaped or dot-segment filename is refused at create; the CLI refuses a dot-segment positional;
+a secret or variable write answers with the owner it landed on; and the break-glass `set-password`
+revokes sessions by the human it rotated (`ResolveUsername`), never a same-named service account. A
+qualified name through the chart's Traefik ingress is unverified (#1138).
+
 Proven in storage against real Postgres (each form, ambiguity judged in scope, an out-of-scope row
 refusing byte-for-byte as an absent one, the write split and the audit key unchanged), over HTTP (the
 same through every changed route, and a scoped caller's refusal leaking no uuid), and end to end

@@ -251,3 +251,45 @@ func TestGroupFileVariableGrantNamesAPI(t *testing.T) {
 	}
 	_ = alice
 }
+
+// TestPrincipalNameNeedsTheDirectoryAPI pins #1133's security review, finding 1:
+// a principal route resolves a NAME only for a caller who may list the whole
+// principal directory (principal:read:admin on an all-scope grant), since that
+// caller learns nothing from a name it could not already read. Anyone else gets
+// the gateway's own all-scope 403 for every name, existing or not, so a scoped
+// admin can probe neither usernames nor service names, and an ambiguous name's
+// uuids are listed only to a caller entitled to see them.
+func TestPrincipalNameNeedsTheDirectoryAPI(t *testing.T) {
+	s := newNameAddressStack(t)
+	alice := s.idOf(s.c.do(s.owner, http.MethodPost, "/principals", map[string]any{"username": "alice", "password": "orange-boat-42x"}, http.StatusCreated))
+	principalWithGrants(t, s.ctx, s.dsn, "deploy-bot", nil)
+	roomA := entityID(t, s.c, s.owner, "/locations", "room-a")
+	siteAdmin := principalWithGrants(t, s.ctx, s.dsn, "site-admin", []grant{{role: "admin", scopeKind: "location", scopeID: roomA}})
+
+	refusal := func(ref, verb, method string) string {
+		t.Helper()
+		return string(s.c.do(siteAdmin, method, "/principals/"+ref+verb, nil, http.StatusForbidden))
+	}
+	want := refusal("nobody", "", http.MethodGet)
+	for _, ref := range []string{"alice", "deploy-bot"} {
+		if got := refusal(ref, "", http.MethodGet); got != want {
+			t.Errorf("a scoped admin's GET /principals/%s = %s, want the same refusal as a name that does not exist (%s)", ref, got, want)
+		}
+		if got := refusal(ref, ":disable", http.MethodPost); got != refusal("nobody", ":disable", http.MethodPost) {
+			t.Errorf("a scoped admin's disable of %s refused differently from a name that does not exist: %s", ref, got)
+		}
+	}
+
+	if got := s.idOf(s.c.do(s.owner, http.MethodGet, "/principals/deploy-bot", nil, http.StatusOK)); got == "" {
+		t.Errorf("the owner's GET by a service account's name answered no id")
+	}
+	shared := principalWithGrants(t, s.ctx, s.dsn, "alice", nil)
+	_ = shared
+	msg := detail(t, s.c.do(s.owner, http.MethodGet, "/principals/alice", nil, http.StatusNotFound))
+	if !strings.Contains(msg, `principal "alice" not found`) || !strings.Contains(msg, alice) {
+		t.Errorf("the owner's GET of a name both a human and a service carry = %q, want it named with both uuids", msg)
+	}
+	if strings.Contains(refusal("alice", "", http.MethodGet), alice) {
+		t.Errorf("a scoped admin's refusal leaked alice's uuid")
+	}
+}

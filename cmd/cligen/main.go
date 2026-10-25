@@ -754,7 +754,7 @@ func generatedCommands() []*cobra.Command {
 			Short:   {{quote .Short}},
 			Long:    {{quote .Long}},
 			Example: {{quote .Example}},
-			Args:    cobra.ExactArgs({{len .Args}}),
+			Args:    pathArgs({{len .Args}}),
 			RunE: func(cmd *cobra.Command, args []string) error {
 				path := fmt.Sprintf({{quote .APIPath}}{{range $i, $a := .Args}}, pathSegment(args[{{$i}}]){{end}})
 				{{- if .Query}}

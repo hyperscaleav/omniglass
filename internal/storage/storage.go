@@ -61,6 +61,11 @@ type Gateway interface {
 	// both a username and a service name is refused. Backs addressing a principal
 	// by name.
 	ResolvePrincipalRef(ctx context.Context, ref string) (string, error)
+	// ResolveUsername maps a human's username, and nothing else, to its principal
+	// id; an unknown one is ErrPrincipalNotFound. The break-glass set-password
+	// uses it so the sessions it revokes are the human's whose password it just
+	// rotated, whatever a service account shares the name.
+	ResolveUsername(ctx context.Context, username string) (string, error)
 	// The impersonation surface: an admin views/acts as another principal, audited
 	// with the real actor. BeginImpersonation persists a session (the API enforces
 	// the escalation guard first); AuthenticateImpersonation is the authn fallback

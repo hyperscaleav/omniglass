@@ -49,3 +49,25 @@ func TestValidateRejectsOversizeName(t *testing.T) {
 		t.Fatalf("oversize name: got %v, want ErrNameInvalid", err)
 	}
 }
+
+// TestValidateRejectsANameThatReadsAsAnotherReference pins #1133's security
+// review, finding 4 and 6: a file is addressed by its uuid or its filename, the
+// uuid tried first, so a filename shaped like a uuid would reach a DIFFERENT
+// file when typed back, and a filename of `.` or `..` is a dot segment a path
+// normalizer rewrites into its parent route. Neither is a label anybody needs.
+func TestValidateRejectsANameThatReadsAsAnotherReference(t *testing.T) {
+	for _, name := range []string{
+		"01a03c92-5cd8-757a-8b3c-82623d8ff57e",
+		"01A03C92-5CD8-757A-8B3C-82623D8FF57E",
+		".", "..",
+	} {
+		if err := file.Validate(name, "text/plain", []byte("x")); !errors.Is(err, file.ErrNameInvalid) {
+			t.Errorf("Validate(%q) = %v, want ErrNameInvalid", name, err)
+		}
+	}
+	for _, name := range []string{"01a03c92-5cd8-757a-8b3c-82623d8ff57e.txt", "...", ".env", "notes:v2.txt"} {
+		if err := file.Validate(name, "text/plain", []byte("x")); err != nil {
+			t.Errorf("Validate(%q) = %v, want it accepted", name, err)
+		}
+	}
+}

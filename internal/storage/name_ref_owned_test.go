@@ -87,6 +87,11 @@ func TestSecretAnswersToItsName(t *testing.T) {
 		if got.ID != want {
 			t.Errorf("update %q landed on %s, want %s", ref, got.ID, want)
 		}
+		// The write names the owner it landed on, so a bare name that resolved
+		// somewhere unexpected is visible in the answer (#1133's review).
+		if wantOwner := map[string]string{f.platform: "", f.room: "room", f.comp: "codec-1", f.solo: "room"}[want]; got.OwnerName != wantOwner {
+			t.Errorf("update %q answered owner %q, want %q", ref, got.OwnerName, wantOwner)
+		}
 	}
 
 	fields, err := f.gw.RevealSecret(ctx, "", "$platform/panel-login", all, all, true)
@@ -211,6 +216,9 @@ func TestVariableAnswersToItsName(t *testing.T) {
 		got, err := f.gw.UpdateVariable(ctx, "", ref, storage.VariablePatch{Value: json.RawMessage(`60`)}, all, all, true)
 		if err != nil || got.ID != want {
 			t.Fatalf("update %q = %+v (err %v), want %s", ref, got, err, want)
+		}
+		if wantOwner := map[string]string{plat: "", room: "room"}[want]; got.OwnerName != wantOwner {
+			t.Errorf("update %q answered owner %q, want %q", ref, got.OwnerName, wantOwner)
 		}
 	}
 	_, err := f.gw.UpdateVariable(ctx, "", "poll-interval", storage.VariablePatch{Value: json.RawMessage(`60`)}, all, all, true)

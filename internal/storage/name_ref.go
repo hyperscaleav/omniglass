@@ -100,12 +100,12 @@ const EndpointRefHint = "address an endpoint as <component>/<endpoint> (the comp
 // the caller's read scope: a uuid passes through untouched (the caller's own
 // load-then-check runs for it), and `<component>/<name>` resolves the component
 // through the component resolver's own lookup (loadByRef: a uuid, a dotted
-// address, or a bare name) narrowed to the components the caller may read AND
-// that carry an endpoint of that name, before ambiguity is judged. Narrowing by
-// the relation is loadByRefWithin's reason to exist: a component that carries no
-// such endpoint was never a candidate for this reference, so `display-1/ssh`
-// resolves even where two rooms each hold a display-1 and only one of them
-// speaks ssh.
+// address, or a bare name) narrowed to the components that carry an endpoint of
+// that name AND that the caller may read, before ambiguity is judged (the shape
+// loadByRefWithin gives the tree resolvers, done here in two set-wide
+// statements). A component that carries no such endpoint was never a candidate
+// for this reference, so `display-1/ssh` resolves even where two rooms each hold
+// a display-1 and only one of them speaks ssh.
 //
 // A component-less (server-hosted) endpoint has no unique name, since
 // endpoint_component_name_key admits any number of null-component rows, so it
@@ -120,49 +120,65 @@ func endpointIDByRef(ctx context.Context, q querier, ref string, read scope.Set)
 		e.Hint = EndpointRefHint
 		return "", e
 	}
-	var endpointIDs []string
-	compIDs := map[string]string{} // endpoint id -> component id
-	_, within, err := loadByRefWithin(ctx, q, componentConfig, compRef, func(compID string) (bool, error) {
-		readable, err := componentInScope(ctx, q, &compID, read)
-		if err != nil || !readable {
-			return false, err
-		}
-		var epID string
-		err = q.QueryRow(ctx, `select id from endpoint where component = $1 and name = $2`, compID, name).Scan(&epID)
-		if errors.Is(err, pgx.ErrNoRows) {
-			return false, nil
-		}
-		if err != nil {
-			return false, fmt.Errorf("storage: resolve endpoint %q: %w", ref, err)
-		}
-		endpointIDs = append(endpointIDs, epID)
-		compIDs[epID] = compID
-		return true, nil
-	})
-	var pathMiss *ErrPathNotFound
-	switch {
-	case errors.As(err, &pathMiss):
-		return "", unresolved("endpoint", ref, ErrEndpointNotFound)
-	case err != nil:
+	compIDs, err := treeRefIDs(ctx, q, componentConfig, compRef)
+	if err != nil {
 		return "", err
+	}
+	if len(compIDs) == 0 {
+		return "", unresolved("endpoint", ref, ErrEndpointNotFound)
+	}
+	// The relation first (the components that carry an endpoint of this name),
+	// then the scope, each one statement over the whole candidate set however
+	// many components share the name.
+	rows, err := q.Query(ctx, `select id, component from endpoint where component = any($1::uuid[]) and name = $2 order by component`, compIDs, name)
+	if err != nil {
+		return "", fmt.Errorf("storage: resolve endpoint %q: %w", ref, err)
+	}
+	type match struct{ endpoint, component string }
+	var carrying []match
+	for rows.Next() {
+		var m match
+		if err := rows.Scan(&m.endpoint, &m.component); err != nil {
+			rows.Close()
+			return "", fmt.Errorf("storage: scan endpoint %q: %w", ref, err)
+		}
+		carrying = append(carrying, m)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return "", fmt.Errorf("storage: resolve endpoint %q: %w", ref, err)
+	}
+	carrierIDs := make([]string, 0, len(carrying))
+	for _, m := range carrying {
+		carrierIDs = append(carrierIDs, m.component)
+	}
+	readable, err := inScopeIDs(ctx, q, componentTable, carrierIDs, read)
+	if err != nil {
+		return "", err
+	}
+	var within []match
+	for _, m := range carrying {
+		if readable[m.component] {
+			within = append(within, m)
+		}
 	}
 	switch len(within) {
 	case 0:
 		return "", unresolved("endpoint", ref, ErrEndpointNotFound)
 	case 1:
-		return endpointIDs[0], nil
+		return within[0].endpoint, nil
 	}
-	e := unresolved("endpoint", ref, ErrEndpointNotFound)
-	ids := make([]string, 0, len(endpointIDs))
-	for _, epID := range endpointIDs {
-		ids = append(ids, compIDs[epID])
+	ids := make([]string, 0, len(within))
+	for _, m := range within {
+		ids = append(ids, m.component)
 	}
 	addrs, err := addressesOf(ctx, q, componentTable, ids)
 	if err != nil {
 		return "", err
 	}
-	for _, epID := range endpointIDs {
-		e.Candidates = append(e.Candidates, addrs[compIDs[epID]]+"/"+name)
+	e := unresolved("endpoint", ref, ErrEndpointNotFound)
+	for _, m := range within {
+		e.Candidates = append(e.Candidates, addrs[m.component]+"/"+name)
 	}
 	return "", e
 }
@@ -183,37 +199,39 @@ type ownedTable struct {
 	table    string
 	kind     string
 	notFound error
-	// sensitive is the column (or constant) that fences a row to the admin tier.
+	// sensitive is the expression over the row (aliased s) that fences it to
+	// the admin tier.
 	sensitive string
 }
 
 var (
-	secretOwned   = ownedTable{table: "secret", kind: "secret", notFound: ErrSecretNotFound, sensitive: "admin_sensitive"}
+	secretOwned   = ownedTable{table: "secret", kind: "secret", notFound: ErrSecretNotFound, sensitive: "s.admin_sensitive"}
 	variableOwned = ownedTable{table: "variable", kind: "variable", notFound: ErrVariableNotFound, sensitive: "false"}
 )
 
-// ownedCandidate is one row a name matched, as much of it as visibility and the
-// owner match need.
+// ownedCandidate is one visible row a name matched, as much of it as the owner
+// match and the refusal's spelling need.
 type ownedCandidate struct {
 	id        string
 	ownerKind string
 	ownerID   *string
-	sensitive bool
 }
 
 // ownedIDByRef resolves a secret or variable reference to the row's uuid: a uuid
 // passes through, `<name>` matches every row so named, and `<owner>/<name>`
-// keeps the ones whose owner the owner part names. visible narrows the matches
-// to what the caller may read (its read scope on the owner, and for a secret the
-// admin tier) BEFORE the owner is matched or ambiguity judged, so neither step
-// can be told apart from absence for a row the caller cannot see.
+// keeps the ones whose owner the owner part names. The matches are narrowed to
+// what the caller may read IN the query (the arc-scope primitive over the
+// owner, the platform tier only with the all scope, and an admin-sensitive row
+// only with canAdmin), one statement however many owners share the name, and
+// BEFORE the owner is matched or ambiguity judged, so neither step can be told
+// apart from absence for a row the caller cannot see.
 //
 // The owner part is `$platform`, a uuid, or any reference a tree resolver takes
 // (a bare name or a dotted address), matched against each visible candidate's
 // own owner: it resolves scope-blind, which is safe because it only ever
 // intersects with rows already proven visible, and it reports no outcome of its
 // own (a dotted address that misses its plane is simply no match).
-func ownedIDByRef(ctx context.Context, q querier, t ownedTable, ref string, visible func(ownedCandidate) (bool, error)) (string, error) {
+func ownedIDByRef(ctx context.Context, q querier, t ownedTable, ref string, read scope.Set, canAdmin bool) (string, error) {
 	if isUUID(ref) {
 		return ref, nil
 	}
@@ -226,34 +244,34 @@ func ownedIDByRef(ctx context.Context, q querier, t ownedTable, ref string, visi
 		e.Hint = "address a " + t.kind + " as <name> or <owner>/<name> (the owner by name, dotted address, uuid, or " + PlatformOwner + ") or by its uuid"
 		return "", e
 	}
-	rows, err := q.Query(ctx, `select id, owner_kind, coalesce(component_id, system_id, location_id), `+t.sensitive+`
-		from `+t.table+` where name = $1 order by id`, name)
+	if read.Empty() {
+		return "", unresolved(t.kind, ref, t.notFound)
+	}
+	sel := `
+		select s.id, s.owner_kind, coalesce(s.component_id, s.system_id, s.location_id)
+		from ` + t.table + ` s where s.name = $1 and (not ` + t.sensitive + ` or $2)`
+	args := []any{name, canAdmin}
+	if !read.All {
+		inclusive, excluded, selfIDs := arcScopeArgs(read)
+		sel = arcScopeCTEs(3, 4) + sel + ` and ` + arcScopePredicate("s", 5)
+		args = append(args, inclusive, excluded, selfIDs)
+	}
+	rows, err := q.Query(ctx, sel+` order by s.id`, args...)
 	if err != nil {
 		return "", fmt.Errorf("storage: resolve %s %q: %w", t.kind, ref, err)
 	}
-	var matches []ownedCandidate
+	var seen []ownedCandidate
 	for rows.Next() {
 		var c ownedCandidate
-		if err := rows.Scan(&c.id, &c.ownerKind, &c.ownerID, &c.sensitive); err != nil {
+		if err := rows.Scan(&c.id, &c.ownerKind, &c.ownerID); err != nil {
 			rows.Close()
 			return "", fmt.Errorf("storage: scan %s %q: %w", t.kind, ref, err)
 		}
-		matches = append(matches, c)
+		seen = append(seen, c)
 	}
 	rows.Close()
 	if err := rows.Err(); err != nil {
 		return "", fmt.Errorf("storage: resolve %s %q: %w", t.kind, ref, err)
-	}
-
-	var seen []ownedCandidate
-	for _, c := range matches {
-		ok, err := visible(c)
-		if err != nil {
-			return "", err
-		}
-		if ok {
-			seen = append(seen, c)
-		}
 	}
 	if qualified {
 		owned, err := ownerMatches(ctx, q, owner, seen)
@@ -534,4 +552,20 @@ func resolveScopeRoot(ctx context.Context, q querier, kind, ref string) (string,
 		return "", err
 	}
 	return id, nil
+}
+
+// arcOwnerName is the current name of an owner-arc row's owner, "" for the
+// platform tier. A secret or variable write answers with it (#1133), so a name
+// reference that resolved to an owner the caller did not expect says where it
+// landed in the very answer.
+func arcOwnerName(ctx context.Context, q querier, kind string, id *string) (string, error) {
+	tbl, ok := scopeKindTable(kind)
+	if !ok || id == nil {
+		return "", nil
+	}
+	var name string
+	if err := q.QueryRow(ctx, `select name from `+string(tbl)+` where id = $1`, *id).Scan(&name); err != nil {
+		return "", fmt.Errorf("storage: owner name of %s %q: %w", kind, *id, err)
+	}
+	return name, nil
 }

@@ -291,6 +291,20 @@ func (p *PG) ResolvePrincipalRef(ctx context.Context, ref string) (string, error
 	return principalIDByRef(ctx, p.pool, ref)
 }
 
+// ResolveUsername maps a human's username to its principal id, matching the
+// human table alone; an unknown username is ErrPrincipalNotFound.
+func (p *PG) ResolveUsername(ctx context.Context, username string) (string, error) {
+	var id string
+	err := p.pool.QueryRow(ctx, `select principal_id from human where username = $1`, username).Scan(&id)
+	switch {
+	case errors.Is(err, pgx.ErrNoRows):
+		return "", ErrPrincipalNotFound
+	case err != nil:
+		return "", fmt.Errorf("storage: resolve username %q: %w", username, err)
+	}
+	return id, nil
+}
+
 // AuthenticateBearer resolves a bearer credential by its sha256 hash to the
 // principal, its kind profile, and its grants. ErrCredentialNotFound if none, which
 // includes a credential whose expiry has passed (an expired session is treated as

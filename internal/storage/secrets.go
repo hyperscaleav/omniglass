@@ -406,6 +406,9 @@ func (p *PG) UpdateSecret(ctx context.Context, actorID, ref string, patch Secret
 	if err != nil {
 		return nil, mapSecretWriteErr(err)
 	}
+	if s.OwnerName, err = arcOwnerName(ctx, tx, s.OwnerKind, s.OwnerID); err != nil {
+		return nil, err
+	}
 	if err := writeAuditRes(ctx, tx, actorID, "update", "secret", s.ID, nil, auditSecret(s)); err != nil {
 		return nil, err
 	}
@@ -795,12 +798,7 @@ func (p *PG) secretRowForAction(ctx context.Context, q querier, ref string, read
 		comp, sys, loc *string
 		value          []byte
 	)
-	id, err := ownedIDByRef(ctx, q, secretOwned, ref, func(c ownedCandidate) (bool, error) {
-		if c.sensitive && !canAdmin {
-			return false, nil
-		}
-		return p.secretOwnerInScope(ctx, q, c.ownerKind, c.ownerID, read)
-	})
+	id, err := ownedIDByRef(ctx, q, secretOwned, ref, read, canAdmin)
 	if err != nil {
 		return secretRow{}, secret.Shape{}, err
 	}

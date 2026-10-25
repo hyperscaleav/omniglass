@@ -502,7 +502,10 @@ found and nothing about what may be done to it. A name no visible row answers to
 is a 404 naming the reference, listing each visible match in a spelling that resolves; an out-of-scope
 match never appears, so the refusal reads the same as for an absent row. The owner part of a secret
 reference resolves scope-blind but only ever intersects with secrets already proven visible, so it
-discloses nothing on its own.
+discloses nothing on its own. A **principal** route resolves a name only for a caller who may list
+the whole directory (`principal:read:admin` on an all-scope grant); anyone else gets the same
+all-scope 403 for every name, existing or not, since the route resolves before the gateway's own
+all-scope check would otherwise answer.
 
 The primitive carries one policy axis, not one behaviour, and the two policies do not make the same
 promise:

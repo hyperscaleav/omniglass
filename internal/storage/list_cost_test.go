@@ -1,13 +1,16 @@
 package storage_test
 
 import (
+	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"testing"
 
 	"github.com/google/uuid"
 
 	"github.com/hyperscaleav/omniglass/internal/scope"
+	"github.com/hyperscaleav/omniglass/internal/secret"
 	"github.com/hyperscaleav/omniglass/internal/seed"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
@@ -577,4 +580,91 @@ func mustSystemTypeID(t *testing.T, gw storage.Gateway, name string) *uuid.UUID 
 		t.Fatalf("GetSystemType(%q): %v", name, err)
 	}
 	return &st.ID
+}
+
+// TestNameRefCostIsFlatInCandidates pins the cost of resolving a name a whole
+// fleet shares (#1133's security review, finding 5): every room's display-1
+// carries an snmp endpoint and every room seals its own core-snmp, so a bare
+// `display-1/snmp` or `core-snmp` matches one row per room. Narrowing those to
+// the caller's scope and spelling the ambiguous ones must be a constant number
+// of statements however many rooms share the name, not a scope query per
+// candidate, for the all scope that sees every match and for a scope that sees
+// one.
+func TestNameRefCostIsFlatInCandidates(t *testing.T) {
+	gw, counter := storagetest.NewCountingDB(t, storage.WithSecretProvider(secret.NewStaticProvider(bytes.Repeat([]byte{0x7}, 32))))
+	ctx := context.Background()
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "boi", LocationType: "building"}, all); err != nil {
+		t.Fatalf("create building: %v", err)
+	}
+	var firstDisplay, firstRoom string
+	add := func(i int) {
+		t.Helper()
+		room := fmt.Sprintf("room-%d", i)
+		if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: room, LocationType: "room", ParentName: strptr("boi")}, all); err != nil {
+			t.Fatalf("create %s: %v", room, err)
+		}
+		c := mustCreateComponent(t, gw, storage.ComponentSpec{Name: "display-1", LocationName: strptr(room)}, all)
+		if _, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{Transport: "snmp", Component: strptr("boi." + room + ".$comp.display-1")}, all); err != nil {
+			t.Fatalf("endpoint in %s: %v", room, err)
+		}
+		if _, err := gw.CreateSecret(ctx, "", storage.SecretSpec{Name: "core-snmp", SecretType: "snmp-community", OwnerKind: "location",
+			OwnerName: strptr("boi." + room), Fields: map[string]string{"community": room}}, all, true); err != nil {
+			t.Fatalf("secret in %s: %v", room, err)
+		}
+		if i == 0 {
+			firstDisplay, firstRoom = c.ID, mustLocID(t, gw, room)
+		}
+	}
+	unresolved := func(err error) (int, error) {
+		var u *storage.ErrUnresolvedRef
+		if !errors.As(err, &u) {
+			return 0, fmt.Errorf("want an ambiguous refusal, got %v", err)
+		}
+		return len(u.Candidates), nil
+	}
+	resolveEndpointAll := func() (int, error) { _, err := gw.GetEndpoint(ctx, "display-1/snmp", all); return unresolved(err) }
+	resolveSecretAll := func() (int, error) {
+		_, err := gw.RevealSecret(ctx, "", "core-snmp", all, all, true)
+		return unresolved(err)
+	}
+	scoped := func(get func() error) func() (int, error) {
+		return func() (int, error) { return 1, get() }
+	}
+	resolveEndpointScoped := scoped(func() error {
+		_, err := gw.GetEndpoint(ctx, "display-1/snmp", scope.Set{IDs: []string{firstDisplay}})
+		return err
+	})
+	resolveSecretScoped := scoped(func() error {
+		roomScope := scope.Set{IDs: []string{firstRoom}}
+		_, err := gw.RevealSecret(ctx, "", "core-snmp", roomScope, roomScope, false)
+		return err
+	})
+
+	add(0)
+	add(1)
+	small := map[string]reading{
+		"endpoint all": measure(t, counter, resolveEndpointAll), "secret all": measure(t, counter, resolveSecretAll),
+		"endpoint scoped": measure(t, counter, resolveEndpointScoped), "secret scoped": measure(t, counter, resolveSecretScoped),
+	}
+	for i := 2; i <= widePage; i++ {
+		add(i)
+	}
+	large := map[string]reading{
+		"endpoint all": measure(t, counter, resolveEndpointAll), "secret all": measure(t, counter, resolveSecretAll),
+		"endpoint scoped": measure(t, counter, resolveEndpointScoped), "secret scoped": measure(t, counter, resolveSecretScoped),
+	}
+	for name, s := range small {
+		l := large[name]
+		if s.n != l.n {
+			t.Errorf("%s: %d statements over 2 rooms, %d over %d rooms: the resolve does per-candidate work\n  small: %q\n  large: %q",
+				name, s.n, l.n, widePage+1, s.stmts, l.stmts)
+		}
+	}
+	if large["endpoint all"].rows != widePage+1 || large["secret all"].rows != widePage+1 {
+		t.Errorf("the all-scope refusals named %d endpoints and %d secrets, want %d each",
+			large["endpoint all"].rows, large["secret all"].rows, widePage+1)
+	}
 }

@@ -39,10 +39,14 @@ refs: [1133]
      never collide with a location named `platform`.
   3. **The rest of the operator surface.** A file answers to its filename where exactly one file the
      caller can see carries it, refusing with each candidate's uuid where several do (a filename is
-     unique nowhere, so the uuid is its only unique spelling); a principal group to its name, every
-     group route resolving it after the all-scope check so a scoped caller learns nothing; a group
-     member and every `/principals/{id}` route to a username or a service account's name, a word
-     that is both naming neither; a grant's `scope_id` to a name or a dotted address, stored as the
+     unique nowhere, so the uuid is its only unique spelling, and a uuid-shaped or dot-segment
+     filename is refused at create, since it would read back as another reference); a principal
+     group to its name, every group route resolving it after the all-scope check so a scoped caller
+     learns nothing; a group member and every `/principals/{id}` route to a username or a service
+     account's name, a word that is both naming neither, and a principal route resolving a name only
+     for a caller who may list the whole directory (`principal:read:admin` on an all-scope grant),
+     anyone else getting the gateway's all-scope 403 for every name, so neither a username nor a
+     service name can be probed; a grant's `scope_id` to a name or a dotted address, stored as the
      uuid. What stays uuid-only has no name: an alarm, an audit row, a grant, a session or token, a
      task (its id is its content hash); a node principal is reached by its name on `/nodes`.
   4. **Scope decides before ambiguity does, and an unresolved name is a 404 naming it.** Every
@@ -50,10 +54,13 @@ refs: [1133]
      `endpoint:read` scope and to those carrying an endpoint of that name; a secret's owners to its
      `secret:read` scope and its admin tier), so an out-of-scope row sharing a name never makes an
      in-scope one ambiguous, and an absent row and an out-of-scope one give byte-identical refusals.
-     The resolve runs in the request's own transaction and yields the uuid, and the route's existing
-     read-then-action split, permission tier and audit row then run on that row unchanged: a name
-     changes how a row is found, never what may be done to it, and an audit row keys on the uuid,
-     never the spelling. A name no visible row answers to, or that several do, is a 404 naming the
+     The narrowing runs in SQL over the whole candidate set (the arc-scope primitive for a secret or
+     a variable, a batch scope check for an endpoint's components), so a name a whole fleet shares
+     costs a constant number of statements. The resolve yields the uuid, inside a write's own
+     transaction where the write has one (a file delete and the principal routes resolve first, on
+     properties that cannot change in between), and the route's existing read-then-action split,
+     permission tier and audit row then run on that row unchanged: a name changes how a row is found,
+     never what may be done to it, and an audit row keys on the uuid, never the spelling. A name no visible row answers to, or that several do, is a 404 naming the
      reference (`storage.ErrUnresolvedRef`, unwrapping to the resource's own not-found), and where
      several do it lists each in the spelling that resolves, every one a row the caller could list.
      This diverges from the tree entities, whose ambiguous bare name stays the #697 409 listing
@@ -69,10 +76,26 @@ refs: [1133]
      the generated CLI reference, the append-only log entries, and an explicit allowlist that is
      empty today. A path parameter's OpenAPI example renders in the generated CLI's examples, so the
      help teaches `omniglass endpoint retry 'boi.17c.415a.$comp.display-1/https'`, not `<id>`.
+- **Stated limits, recorded rather than hidden:**
+  1. **A bare name lands on whatever single row the caller can see by it.** A secret rotation by a
+     bare name, where the row the operator meant is gone and another principal has sealed a secret of
+     that name within the caller's view, rotates that other secret. That is the positional honesty
+     ADR-0089 already accepts for a dotted path, and the mitigation is the same: the write answers
+     with the owner it landed on (`owner_kind`, `owner_id`, `owner_name`), and automation that must
+     not drift addresses `<owner>/<name>` or the uuid. Refusing a bare name on a write would have
+     broken the acceptance this decision was built to (`omniglass secret update demo-panel-login`).
+  2. **A qualified name's slash crosses every hop percent-encoded.** The server decodes it; whether
+     the chart's default Traefik ingress passes it through is unverified and tracked as #1138. The
+     uuid form is unaffected.
+  3. **The CLI refuses a `.` or `..` positional**, a dot segment a normalizing proxy would rewrite
+     into the route above it; no name, address or filename can be either.
 - **Context:** The tree entities had answered to a name and a dotted address since #627, but an
   endpoint, a secret, a variable, a file and a principal group took only a uuid, so the #1131 demo
   looked each component's uuid up with `jq` before it could retry an endpoint or rotate a secret, and
   the CLI guide said "endpoints are addressed by id". A non-uuid reference on those routes used to
   reach Postgres as a uuid cast and answer 500. The adversarial security review this slice ran
   (name resolution against scope, existence disclosure, the window between resolve and act, secret
-  name enumeration) shaped the rule in point 4.
+  name enumeration) found the core authorization sound and shaped the rest: the principal routes'
+  directory precondition, the in-SQL narrowing, the refused filenames, the dot-segment refusal, the
+  owner a write answers with, and the human-only lookup the break-glass `set-password` now revokes
+  sessions by.

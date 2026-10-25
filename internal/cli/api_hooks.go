@@ -90,3 +90,25 @@ func addClientFlags(root *cobra.Command) {
 func pathSegment(s string) string {
 	return strings.ReplaceAll(url.PathEscape(s), ":", "%3A")
 }
+
+// pathArgs is every generated command's positional check: exactly n arguments,
+// none of them a dot segment. A positional rides the request path as one
+// segment, and `.` or `..` there is a segment a normalizing hop (a proxy, an
+// ingress) rewrites into the route above it, so `member delete night-shift ..`
+// could reach `DELETE /principal-groups/night-shift`. No name, dotted address or
+// filename is either (the name rule opens on a letter or digit, and a file may
+// not be named one, #1133), so refusing them loses nothing.
+func pathArgs(n int) cobra.PositionalArgs {
+	exact := cobra.ExactArgs(n)
+	return func(cmd *cobra.Command, args []string) error {
+		if err := exact(cmd, args); err != nil {
+			return err
+		}
+		for _, a := range args {
+			if a == "." || a == ".." {
+				return fmt.Errorf("argument %q is a dot segment, which addresses no resource", a)
+			}
+		}
+		return nil
+	}
+}

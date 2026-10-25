@@ -433,10 +433,10 @@ func NewDB(t testing.TB) storage.Gateway {
 // The counter is reset before it is returned, so the pool's own connectivity
 // ping is not charged to the first measurement. Reset it again between
 // measurements: it counts everything the gateway does, fixture writes included.
-func NewCountingDB(t testing.TB) (storage.Gateway, *querycount.Counter) {
+func NewCountingDB(t testing.TB, opts ...storage.Option) (storage.Gateway, *querycount.Counter) {
 	t.Helper()
 	counter := querycount.New()
-	gw, err := storage.NewPG(context.Background(), NewDSN(t), storage.WithQueryTracer(counter))
+	gw, err := storage.NewPG(context.Background(), NewDSN(t), append([]storage.Option{storage.WithQueryTracer(counter)}, opts...)...)
 	if err != nil {
 		t.Fatalf("storage.NewPG (counting): %v", err)
 	}

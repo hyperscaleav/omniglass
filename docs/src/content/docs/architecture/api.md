@@ -91,7 +91,9 @@ Everything lives under `/api/v1`. The path shape is derivable, not special-cased
 - **A principal is addressable by uuid, username, or service account name.** Every
   `/principals/{id}` route resolves any of them server-side (a value that parses as a uuid is used
   directly, else a username or a service account's name, an unknown one a 404, and a word that is
-  both a username and a service name a 404 listing both uuids). The uuid stays the stable identity (a
+  both a username and a service name a 404 listing both uuids). A name resolves only for a caller who
+  may list the whole directory (`principal:read:admin` on an all-scope grant); anyone else gets the
+  all-scope 403 for every name, so a name cannot be probed. The uuid stays the stable identity (a
   username is mutable, nothing keys on it).
 
 ### Every operator resource answers to its name
@@ -123,7 +125,9 @@ up**; when more than one answers, the 404 lists each in the spelling that does r
 (`$platform/demo-panel-login`, `boi.17c/demo-panel-login`). Resolution runs inside the request's own
 transaction and yields the uuid; the permission check, the read-then-action scope split, and the audit
 row then run on that resolved row exactly as they do for a uuid. The tree entities keep their own
-ambiguity refusal, a 409 listing candidates (#697).
+ambiguity refusal, a 409 listing candidates (#697; aligning the two is #1134). A write answers with
+the row it reached (a secret's or variable's `owner_kind`, `owner_id` and `owner_name`), because a
+name is a lookup: automation that must never drift addresses `<owner>/<name>` or stores the uuid.
 
 **What stays uuid-only, and why**: an alarm, an audit row, a grant, a session or API token, and a task
 have no name (a task's id is its content hash); a component-less (server-hosted) endpoint's name is not

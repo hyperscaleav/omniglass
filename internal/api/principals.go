@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/danielgtaylor/huma/v2"
+	"github.com/google/uuid"
 	"github.com/hyperscaleav/omniglass/internal/auth"
 	"github.com/hyperscaleav/omniglass/internal/avatar"
 	"github.com/hyperscaleav/omniglass/internal/storage"
@@ -680,7 +681,19 @@ func normalizeAvatar(imageB64 string) (string, error) {
 // unknown username is a 404, the same as an unknown id. Handlers call it at the top
 // and use the returned id (including before any self-check, so addressing yourself by
 // username is caught).
+//
+// A NAME resolves only for a caller who may list the whole principal directory
+// (principal:read:admin on an all-scope grant, the list route's own gate and
+// scope), since that caller learns nothing from a name it could not already
+// read. Every principal route's gateway refuses a non-all caller anyway; doing
+// it here, before the lookup, is what keeps that caller from telling a name
+// that exists from one that does not (#1133's security review): it gets the
+// same all-scope 403 for every name. A uuid passes straight through, and the
+// gateway decides it exactly as before.
 func (a *authenticator) resolvePrincipalRef(ctx context.Context, ref string) (string, error) {
+	if _, err := uuid.Parse(ref); err != nil && !a.canListPrincipals(ctx) {
+		return "", mapPrincipalErr(storage.ErrPrincipalForbidden)
+	}
 	id, err := a.gw.ResolvePrincipalRef(ctx, ref)
 	if refErr, ok := mapRefErr(err); ok {
 		return "", refErr
@@ -692,6 +705,13 @@ func (a *authenticator) resolvePrincipalRef(ctx context.Context, ref string) (st
 		return "", huma.Error500InternalServerError("resolve principal")
 	}
 	return id, nil
+}
+
+// canListPrincipals reports whether the caller may list every principal: the
+// principal:read:admin permission, held on an all-scope grant.
+func (a *authenticator) canListPrincipals(ctx context.Context) bool {
+	perms, ok := permsFrom(ctx)
+	return ok && perms.Allows("principal", "read", "admin") && a.scopeFor(ctx, "principal", "read").All
 }
 
 func mapPrincipalErr(err error) error {

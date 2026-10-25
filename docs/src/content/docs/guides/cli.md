@@ -138,6 +138,10 @@ resolves, so the error tells you what to type next:
 secret "demo-panel-login" not found: 2 you can see answer to it; address one as $platform/demo-panel-login or boi.17c/demo-panel-login
 ```
 
+A name is a lookup, so it lands on whatever the one row you can see by that name is now: a write
+answers with the row it reached (a secret's `owner_kind` and `owner_name`), and a script that must
+never drift, a credential rotation above all, addresses `<owner>/<name>` or stores the uuid.
+
 ## Authentication
 
 There are two ways to authenticate, both accepted on every request. A **bearer token** in

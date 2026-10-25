@@ -102,10 +102,20 @@ func inScopeTree(ctx context.Context, q querier, tbl scopeTable, targetID string
 // inclusive-subtree plus exclude-root-descendants logic the enforcement uses, so
 // the UI hint can never disagree with the gateway's per-action decision.
 func (p *PG) InScopeIDs(ctx context.Context, resource string, ids []string, set scope.Set) (map[string]bool, error) {
-	out := make(map[string]bool, len(ids))
 	tbl, ok := scopeKindTable(resource)
-	if !ok || len(ids) == 0 {
-		return out, nil // a non-tree resource or no candidates: nothing in scope
+	if !ok {
+		return map[string]bool{}, nil // a non-tree resource: nothing in scope
+	}
+	return inScopeIDs(ctx, p.pool, tbl, ids, set)
+}
+
+// inScopeIDs is InScopeIDs over a querier and a known tree table, so a caller
+// already inside a transaction (a name resolve, #1133) narrows a whole candidate
+// set in one statement rather than an inScopeTree per candidate.
+func inScopeIDs(ctx context.Context, q querier, tbl scopeTable, ids []string, set scope.Set) (map[string]bool, error) {
+	out := make(map[string]bool, len(ids))
+	if len(ids) == 0 {
+		return out, nil
 	}
 	if set.All {
 		for _, id := range ids {
@@ -121,7 +131,7 @@ func (p *PG) InScopeIDs(ctx context.Context, resource string, ids []string, set 
 	}
 	excluded := uuidRoots(set.ExcludeRootIDs)
 	inclusive := subtractRoots(roots, excluded)
-	rows, err := p.pool.Query(ctx, `
+	rows, err := q.Query(ctx, `
 		with recursive sub(id) as (
 			select id from `+string(tbl)+` where id = any($1::uuid[])
 			union all
