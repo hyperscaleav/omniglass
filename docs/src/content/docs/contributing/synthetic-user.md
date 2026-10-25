@@ -19,7 +19,7 @@ fleet, the example fleet having a bad day, or the example fleet at enterprise si
 
 `make probe` brings up the [walkthrough stack](/guides/install/#the-whole-loop-in-docker) (the
 fleet picked by `STACK_SCENARIO`), visits every route in the console's route manifest, and replays
-every [walkthrough](/contributing/walkthroughs/) at machine speed, a beat after each action rather
+every [walkthrough](/contributing/demos/) at machine speed, a beat after each action rather
 than a person's pace. On every surface it records:
 
 - console errors and uncaught page errors;

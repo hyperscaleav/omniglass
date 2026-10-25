@@ -1,7 +1,7 @@
-name: walkthrough-prune
+name: demo-prune
 
-# Deletes the walkthrough evidence refs (refs/walkthroughs/pr-<n>, written by
-# walkthrough.yml, #939, ADR-0149) of PRs closed more than 30 days ago. The
+# Deletes the demo evidence refs (refs/walkthroughs/pr-<n>, written by
+# demo.yml, #939, ADR-0149, #1132) of PRs closed more than 30 days ago. The
 # evidence matters while a PR is under review; after that it only costs
 # repository size on GitHub and in every mirror that fetches all refs. Not on
 # close: a merged or closed PR is still read for a while, and its comment's

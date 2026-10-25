@@ -56,6 +56,9 @@ skill is the run-book. The loop never merges to `main`; merge is the architect's
      for the rollup), its build-log entry and any ADR each **a new file** in their fragment
      directories (`docs/src/content/build-log/`, `docs/src/content/decisions/`), never an
      append to a shared page, so slices merging inward never conflict on the logs;
+   - the slice's demo, in the same slice: a tape under `scripts/demo/` for the CLI or API
+     behavior it adds, a walkthrough script for a console flow, each recorded green with
+     `make demo ID=<id>` (`n/a` with a reason for a test-only or docs-only slice);
    - an `/adversarial-review` pass over the slice diff, findings fixed or refuted with
      evidence.
 5. Merge inward and **close the sub-issue** with the commit named in the closing comment.
@@ -79,7 +82,9 @@ A fork that can wait goes to the ship-review's "Decisions I need from you" line 
 1. When the queue is empty, run `/ship-slice` over the **whole integration diff** against
    `main`: fresh full `make test` with output pasted, `make gen` drift, the em-dash and
    attribution scan, docs-with-everything across every slice, screenshots for any operator
-   surface. Fix reds on the integration branch.
+   surface, and the demo: apply `run:demo` to the rollup PR, which records every slice's tape
+   and walkthrough into one comment, linked in the Demo section. Fix reds on the integration
+   branch.
 2. Open **one PR** from the integration branch to `main`, titled `<type>: <definition>`,
    body = the ship-review, `closes #<definition>`.
 3. After the PR opens: review-response fixes within the approved scope may be pushed

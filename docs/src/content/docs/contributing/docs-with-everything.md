@@ -247,6 +247,17 @@ a varying value adds its case there. Every capture logs what each mask resolved 
 so a mask that lands on the wrong element shows up in the capture output rather than in a raster
 nobody diffs by hand: a selector mask whose box is as wide as its text is the tell.
 
+## Every PR demos its feature
+
+The docs teach a feature; a **demo** shows it working, on the PR itself, as a recording the
+reviewer watches rather than a transcript they read. Every PR carries one: a **terminal demo** (a
+VHS tape typed into a real terminal) for CLI and API behavior, a **walkthrough** (a Playwright
+recording of the console) for an operator flow, both when it has both, and "n/a" only with a
+reason in one clause (a test-only or docs-only change). The PR body's Demo section links the
+comment the `run:demo` label posts, and `/ship-slice` holds a PR that needs a demo to it, as it
+holds a UI PR to its screenshots. Writing, recording and reviewing either kind is
+[demos](/contributing/demos/).
+
 ## Walkthroughs embed the same way
 
 A page that teaches an operator flow can embed its **walkthrough** (the recorded, captioned flow a
@@ -255,7 +266,7 @@ PR carries as evidence) exactly as it embeds a screenshot: the id in `walkthroug
 and stills come from the recording, copied into `docs/public/walkthroughs/<id>/` by
 `make docs-walkthroughs`, so a re-recorded flow updates the docs by a copy, never by an edit, and
 the embed plays the video with controls. Writing,
-recording, reviewing and embedding one is [walkthroughs](/contributing/walkthroughs/).
+recording, reviewing and embedding one is [demos](/contributing/demos/#embed-a-walkthrough-in-the-docs).
 
 ## Style
 

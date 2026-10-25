@@ -2,7 +2,7 @@
 // The shared pure core of a recorded walkthrough's manifest (walkthrough.json,
 // written by web/e2e/walkthrough.mjs): its types, the id and still-name rules,
 // and their checks. Both of the manifest's readers import it: the
-// run:walkthrough PR comment (walkthroughpr.mjs) and the docs embed
+// run:demo PR comment (walkthroughpr.mjs) and the docs embed
 // (docs/src/plugins/walkthrough-embed.mjs). Plain ESM with no dependencies, so
 // the runner's node and the docs build load it with no install or build step.
 

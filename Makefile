@@ -1,7 +1,7 @@
 # Local dev loop + the build/run flow for the single binary. Production deploy
 # is BYO Postgres; tests use ephemeral testcontainer Postgres.
 
-.PHONY: build build-web web image gen gen-proto gen-web adr-renumber test test-web test-short test-e2e bench clean-testcontainers tidy up down dev release-plan release-apply release-snapshot docs-shots docs-shots-check docs-shots-verify docs-walkthroughs dev-sim bench-sim test-netadmin walkthrough-stack dev-sim-container test-walkthrough-stack walkthroughs test-walkthroughs probe
+.PHONY: build build-web web image gen gen-proto gen-web adr-renumber test test-web test-short test-e2e bench clean-testcontainers tidy up down dev release-plan release-apply release-snapshot docs-shots docs-shots-check docs-shots-verify docs-walkthroughs dev-sim bench-sim test-netadmin walkthrough-stack dev-sim-container test-walkthrough-stack walkthroughs test-walkthroughs demo test-demos probe
 
 # Build the single binary (no console embedded; serves the build-the-console
 # placeholder under /web).
@@ -219,6 +219,23 @@ walkthroughs:
 
 test-walkthroughs:
 	bash web/e2e/walkthroughs.sh selftest
+
+# Demos (#1132): a demo is a recording of a feature working, by one of two
+# recorders. A terminal demo is a VHS tape, scripts/demo/<id>.tape, for CLI and
+# API work: VHS (pinned by digest to its own image, which bundles ttyd, ffmpeg
+# and chromium) types it into a real terminal against the walkthrough stack and
+# renders scripts/demo/out/<id>/: a GIF (inline on the PR) and an MP4
+# (scrubbable). A walkthrough (above) is the console's. make demo ID=<id>
+# records one demo of either kind (ID="<a> <b>", several; no ID, every demo),
+# each recorder on a stack of its own. A demo is a test: a command a tape types
+# that exits non-zero, a wait that runs out, or a recording over budget
+# (tapelib.mjs) fails the run. test-demos is the terminal recorder's own test.
+# Neither is part of make test: both build the release image.
+demo:
+	bash web/e2e/demo.sh record $(ID)
+
+test-demos:
+	bash web/e2e/tapes.sh selftest
 
 # The probe (#965): bring up the walkthrough stack (STACK_SCENARIO picks its
 # fleet), drive every console route and replay every walkthrough at machine
