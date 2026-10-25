@@ -447,3 +447,30 @@ func TestHTTPDigestAnswersItsChallengeAndAStaleNonce(t *testing.T) {
 		})
 	}
 }
+
+// A login step may carry a secret field in its query: a request that draws
+// no answer names its URL with every one masked, however short.
+func TestHTTPLoginNeverNamesItsSecretsInAnError(t *testing.T) {
+	if testing.Short() {
+		t.Skip("real-socket integration test")
+	}
+	srv := httptest.NewServer(http.NotFoundHandler())
+	target := srv.Listener.Addr().String()
+	srv.Close() // nothing answers there now
+	session := &driver.SessionSpec{Login: &driver.Login{Steps: []driver.LoginStep{{Request: &driver.Request{Path: "/login",
+		Query: map[string]string{"user": "${secret.login.username}", "pass": "${secret.login.password}"}}}}}}
+	r := &collection.Runner{HTTPFetch: collection.NewHTTPFetcher()}
+	x := collection.HTTPExchange{Target: target, Request: driver.Request{Path: "/status"}, Session: session, Timeout: time.Second, State: collection.NewHTTPAuthState()}
+	_, _, err := r.DoHTTP(context.Background(), x, map[string]map[string]string{"login": {"username": "operator-7", "password": "p&w"}})
+	if err == nil {
+		t.Fatal("a login to a closed port succeeded")
+	}
+	if _, terminal := collection.AsTerminal(err); terminal {
+		t.Fatalf("a refused connect = %v, want a retryable fault, not a refusal", err)
+	}
+	for _, leak := range []string{"p&w", "p%26w", "operator-7"} {
+		if strings.Contains(err.Error(), leak) {
+			t.Fatalf("the error names %q: %v", leak, err)
+		}
+	}
+}

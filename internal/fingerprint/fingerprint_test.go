@@ -83,3 +83,54 @@ func TestEveryInputMovesTheFingerprint(t *testing.T) {
 		}
 	}
 }
+
+// Every input an http login is made with moves the fingerprint (#1114): each
+// field of the login declaration, the step requests among them, so editing
+// how a driver logs in lifts a gate a refusal set, as rotating its secret
+// does. A field the session's hash skipped fails.
+func TestEveryHTTPLoginInputMovesTheFingerprint(t *testing.T) {
+	login := func() *driver.Login {
+		return &driver.Login{
+			Steps:   []driver.LoginStep{{Request: &driver.Request{Method: "POST", Path: "/login", Body: json.RawMessage(`{"u":"${secret.login.username}"}`)}}},
+			Path:    "/login",
+			Capture: []driver.Capture{{Name: "token", Extract: driver.Extract{JSONPath: "token"}}},
+			Headers: map[string]string{"Authorization": "Bearer ${session.token}"},
+			Expired: &driver.Match{Regex: "expired"},
+			Expiry:  &driver.Extract{JSONPath: "expires_in"},
+		}
+	}
+	with := func(l *driver.Login) string {
+		in := base()
+		in.Transport = "http"
+		in.Session = &driver.SessionSpec{Login: l}
+		return fingerprint.Of(in)
+	}
+	ref := with(login())
+	typ := reflect.TypeOf(driver.Login{})
+	for i := 0; i < typ.NumField(); i++ {
+		f := typ.Field(i)
+		l := login()
+		v := reflect.ValueOf(l).Elem().Field(i)
+		switch v.Interface().(type) {
+		case string:
+			v.SetString(v.String() + "-changed")
+		case []driver.LoginStep:
+			v.Set(reflect.ValueOf([]driver.LoginStep{{Request: &driver.Request{Method: "POST", Path: "/signin"}}}))
+		case driver.Match:
+			v.Set(reflect.ValueOf(driver.Match{Prefix: "welcome"}))
+		case *driver.Match:
+			v.Set(reflect.ValueOf(&driver.Match{Regex: "lapsed"}))
+		case []driver.Capture:
+			v.Set(reflect.ValueOf([]driver.Capture{{Name: "sid", Extract: driver.Extract{JSONPath: "sid"}}}))
+		case map[string]string:
+			v.Set(reflect.ValueOf(map[string]string{"X-Token": "${session.token}"}))
+		case *driver.Extract:
+			v.Set(reflect.ValueOf(&driver.Extract{JSONPath: "ttl"}))
+		default:
+			t.Fatalf("login field %s has type %s, which this test cannot vary: teach it", f.Name, f.Type)
+		}
+		if with(l) == ref {
+			t.Errorf("changing the login's %s left the fingerprint unchanged", f.Name)
+		}
+	}
+}

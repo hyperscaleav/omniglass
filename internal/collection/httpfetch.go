@@ -141,7 +141,7 @@ func (httpFetcher) Exchange(ctx context.Context, x HTTPExchange) (HTTPAnswer, er
 		body, err := io.ReadAll(io.LimitReader(resp.Body, x.BodyCap+1))
 		_ = resp.Body.Close()
 		if err != nil {
-			return HTTPAnswer{}, fmt.Errorf("collection: %s %s: reading the body: %w", req.Method, RedactedURL(req.URL, x.Credential), err)
+			return HTTPAnswer{}, fmt.Errorf("collection: %s %s: reading the body: %w", req.Method, x.redactedURL(req.URL), err)
 		}
 		if digest && resp.StatusCode == http.StatusUnauthorized && attempt < 2 {
 			if ch, ok := parseDigestChallenges(resp.Header); ok && (!answered || ch.stale) {
@@ -187,14 +187,14 @@ func BuildHTTPRequest(ctx context.Context, x HTTPExchange) (*http.Request, error
 	var body io.Reader
 	encoded, err := r.BodyBytes()
 	if err != nil {
-		return nil, fmt.Errorf("collection: http request %s: %v", RedactedURL(u, c), err)
+		return nil, fmt.Errorf("collection: http request %s: %v", x.redactedURL(u), Scrub(err.Error(), c, x.Redact...))
 	}
 	if len(encoded) > 0 {
 		body = bytes.NewReader(encoded)
 	}
 	req, err := http.NewRequestWithContext(ctx, r.MethodOf(), u.String(), body)
 	if err != nil {
-		return nil, fmt.Errorf("collection: http request %s: %v", RedactedURL(u, c), errors.Unwrap(err))
+		return nil, fmt.Errorf("collection: http request %s: %v", x.redactedURL(u), Scrub(fmt.Sprint(errors.Unwrap(err)), c, x.Redact...))
 	}
 	req.Header.Set("User-Agent", "omniglass-node")
 	for k, v := range r.Headers {
@@ -252,7 +252,13 @@ func redactedRequestError(req *http.Request, x HTTPExchange, err error) error {
 	if errors.As(err, &uerr) {
 		cause = uerr.Err
 	}
-	return &httpTransportError{msg: fmt.Sprintf("collection: %s %s: %s", req.Method, RedactedURL(req.URL, x.Credential), Scrub(strings.ToValidUTF8(cause.Error(), "\uFFFD"), x.Credential, x.Redact...)), cause: cause}
+	return &httpTransportError{msg: fmt.Sprintf("collection: %s %s: %s", req.Method, x.redactedURL(req.URL), Scrub(strings.ToValidUTF8(cause.Error(), "\uFFFD"), x.Credential, x.Redact...)), cause: cause}
+}
+
+// redactedURL is RedactedURL scrubbed of every further secret the exchange
+// carries: a login step may render a secret field into its path or query.
+func (x HTTPExchange) redactedURL(u *url.URL) string {
+	return Scrub(RedactedURL(u, x.Credential), x.Credential, x.Redact...)
 }
 
 // httpTransportError is a request that drew no answer, its message free of
@@ -284,13 +290,7 @@ func Scrub(text string, c *driver.HTTPCredential, extra ...string) string {
 			secrets = append(secrets, base64.StdEncoding.EncodeToString([]byte(c.Username+":"+c.Password)))
 		}
 	}
-	for _, v := range extra {
-		// A value too short to be a secret (a cookie's "1") would mask every
-		// such digit of a reason and hide nothing.
-		if len(v) >= 4 {
-			secrets = append(secrets, v)
-		}
-	}
+	secrets = append(secrets, extra...)
 	var forms []string
 	for _, v := range secrets {
 		if v == "" {

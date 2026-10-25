@@ -143,16 +143,27 @@ func (j *recordingJar) SetCookies(u *url.URL, cookies []*http.Cookie) {
 	j.CookieJar.SetCookies(u, cookies)
 }
 
+// minCookieSecret is the shortest cookie value treated as a secret: a
+// session id is long, and masking a short value (a language's "en", a
+// flag's "1") would mangle every reason and hide nothing.
+const minCookieSecret = 8
+
 func (j *recordingJar) values() []string {
 	j.mu.Lock()
 	defer j.mu.Unlock()
 	out := make([]string, 0, len(j.seen))
 	for _, v := range j.seen {
-		out = append(out, v)
+		if len(v) >= minCookieSecret {
+			out = append(out, v)
+		}
 	}
 	sort.Strings(out)
 	return out
 }
+
+// maxCaptureLen bounds a captured value: it rides a header on every later
+// request, and a token or session id is far shorter.
+const maxCaptureLen = 8 << 10
 
 // renewFraction is how much of a declared session lifetime is used before
 // the session is renewed: a tenth is left as margin for the clock and the
@@ -284,6 +295,9 @@ func (r *Runner) httpLogin(ctx context.Context, x HTTPExchange, secrets map[stri
 		v, err := driver.ExtractValue(c.Extract, p)
 		if err != nil || v == "" {
 			return &TerminalError{Class: driver.ClassAuth, Reason: fmt.Sprintf("the login answered without the %s it captures, so it opened no session", c.Name)}
+		}
+		if len(v) > maxCaptureLen {
+			return &TerminalError{Class: driver.ClassAuth, Reason: fmt.Sprintf("the login's %s is longer than %d bytes, more than any header carries", c.Name, maxCaptureLen)}
 		}
 		values[c.Name] = v
 		redact = append(redact, v)
