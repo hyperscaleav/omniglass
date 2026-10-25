@@ -157,12 +157,17 @@ func TestHTTPDigestChallengesAndGoesStale(t *testing.T) {
 			if w := req(digestAnswer(ch, "GET", "/api/status", "admin", "boreal", "00000001")); w.Code != 200 {
 				t.Fatalf("the right answer = %d", w.Code)
 			}
-			// A count already answered is a replay: stale, answered afresh.
-			if w := req(digestAnswer(ch, "GET", "/api/status", "admin", "boreal", "00000001")); w.Code != http.StatusUnauthorized || !strings.Contains(digestChallengeOf(w), "stale=true") {
-				t.Fatalf("a replayed count = %d %q, want a stale challenge", w.Code, digestChallengeOf(w))
-			}
 			if w := req(digestAnswer(ch, "GET", "/api/status", "admin", "boreal", "00000002")); w.Code != 200 {
 				t.Fatalf("the next count = %d", w.Code)
+			}
+			// A count already answered is a replay: stale, under a new nonce.
+			w = req(digestAnswer(ch, "GET", "/api/status", "admin", "boreal", "00000001"))
+			if replayed := digestChallengeOf(w); w.Code != http.StatusUnauthorized || !strings.Contains(replayed, "stale=true") || replayed == ch {
+				t.Fatalf("a replayed count = %d %q, want a stale challenge with a new nonce", w.Code, replayed)
+			}
+			ch = digestChallengeOf(w)
+			if w := req(digestAnswer(ch, "GET", "/api/status", "admin", "boreal", "00000001")); w.Code != 200 {
+				t.Fatalf("an answer to the new nonce = %d", w.Code)
 			}
 			// The expired sessions rotate the nonce: the old one is stale.
 			dev.ExpireHTTPSessions()
@@ -178,6 +183,9 @@ func TestHTTPDigestChallengesAndGoesStale(t *testing.T) {
 			w = req(digestAnswer(fresh, "GET", "/api/status", "admin", "wrong", "00000002"))
 			if w.Code != http.StatusUnauthorized || strings.Contains(digestChallengeOf(w), "stale") {
 				t.Fatalf("a wrong password = %d %q, want a challenge that is not stale", w.Code, digestChallengeOf(w))
+			}
+			if dev.HTTPDigestAnswers() != 7 {
+				t.Fatalf("answers = %d, want the seven answered requests and not the bare one", dev.HTTPDigestAnswers())
 			}
 		})
 	}

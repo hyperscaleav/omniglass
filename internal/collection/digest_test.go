@@ -59,3 +59,29 @@ func TestDigestChallengesPickTheStrongest(t *testing.T) {
 		t.Fatalf("quote = %s", q)
 	}
 }
+
+// A count once sent under a nonce is never sent again: a stale challenge
+// naming the held nonce keeps the count rising, and a new nonce restarts it.
+func TestDigestCountNeverRepeatsUnderANonce(t *testing.T) {
+	var d DigestState
+	nc := func() string {
+		r, _ := http.NewRequest("GET", "http://x/s", nil)
+		if ok, err := d.authorize(r, "u", "p"); !ok || err != nil {
+			t.Fatalf("authorize = %v, %v", ok, err)
+		}
+		_, rest, _ := strings.Cut(r.Header.Get("Authorization"), "nc=")
+		return rest[:8]
+	}
+	d.learn(digestChallenge{realm: "r", nonce: "n1", algorithm: "MD5", qop: "auth"})
+	if got := nc(); got != "00000001" {
+		t.Fatalf("first count = %s", got)
+	}
+	d.learn(digestChallenge{realm: "r", nonce: "n1", algorithm: "MD5", qop: "auth", stale: true})
+	if got := nc(); got != "00000002" {
+		t.Fatalf("a stale challenge under the held nonce restarted the count: %s", got)
+	}
+	d.learn(digestChallenge{realm: "r", nonce: "n2", algorithm: "MD5", qop: "auth", stale: true})
+	if got := nc(); got != "00000001" {
+		t.Fatalf("a new nonce = %s, want the count from one", got)
+	}
+}

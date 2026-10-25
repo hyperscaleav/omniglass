@@ -341,6 +341,9 @@ type Device struct {
 	// digest face's nonce and the counts answered under it.
 	httpLogins atomic.Int64
 	logins     loginSessions
+	// httpDigestAnswers counts the requests that answered a digest face's
+	// challenge, right or wrong.
+	httpDigestAnswers atomic.Int64
 	// httpsID is the key and certificate the device's https faces serve
 	// (#902): an ECDSA key derived from its id, so it is the same on every
 	// run and a pinned https endpoint survives a simulator restart.

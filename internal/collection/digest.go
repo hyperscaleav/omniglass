@@ -256,9 +256,14 @@ func (d *DigestState) authorize(r *http.Request, user, pass string) (bool, error
 	return true, nil
 }
 
-// learn holds a new challenge, its count from zero.
+// learn holds a new challenge, its count from zero; a challenge naming the
+// nonce already held keeps its count rising, since a count once sent under a
+// nonce is never sent again.
 func (d *DigestState) learn(ch digestChallenge) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	d.ch, d.nc = &ch, 0
+	if d.ch == nil || d.ch.nonce != ch.nonce {
+		d.nc = 0
+	}
+	d.ch = &ch
 }

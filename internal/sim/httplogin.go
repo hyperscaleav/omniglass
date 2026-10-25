@@ -63,6 +63,11 @@ func randomID() string {
 // HTTPLogins counts the logins the device's form or token face was sent.
 func (d *Device) HTTPLogins() int64 { return d.httpLogins.Load() }
 
+// HTTPDigestAnswers counts the requests that answered the device's digest
+// challenge, right or wrong: a collector's attempts, beside the
+// unanswered requests a challenge meets first.
+func (d *Device) HTTPDigestAnswers() int64 { return d.httpDigestAnswers.Load() }
+
 // openSession opens one session, living ttl (zero: until expired).
 func (d *Device) openSession() string {
 	id := randomID()
@@ -256,6 +261,7 @@ func (d *Device) checkDigest(w http.ResponseWriter, r *http.Request) bool {
 		d.digestChallenge(w, false)
 		return false
 	}
+	d.httpDigestAnswers.Add(1)
 	p := parseDigestParams(raw)
 	h := digestHasher(d.HTTPAuth.Algorithm)
 	if h == nil || !strings.EqualFold(p["algorithm"], nonEmptyAlg(d.HTTPAuth.Algorithm)) || p["qop"] != "auth" || p["uri"] != r.URL.RequestURI() {
@@ -274,15 +280,20 @@ func (d *Device) checkDigest(w http.ResponseWriter, r *http.Request) bool {
 		return false
 	}
 	// The answer is right: a nonce that is not the current one, or a count
-	// already answered, is stale, which a client answers afresh.
+	// already answered under it (a replay, or a second client sharing the
+	// nonce), is stale, which a client answers afresh. A replay retires the
+	// nonce, so the stale challenge carries a new one.
 	current := d.digestNonce()
 	d.logins.mu.Lock()
 	fresh := p["nonce"] == current && !d.logins.answered[p["nc"]]
-	if fresh {
+	switch {
+	case fresh:
 		d.logins.answered[p["nc"]] = true
 		if len(d.logins.answered) > maxDigestCounts {
 			d.logins.nonce, d.logins.answered = "", nil
 		}
+	case p["nonce"] == current:
+		d.logins.nonce, d.logins.answered = "", nil
 	}
 	d.logins.mu.Unlock()
 	if !fresh {

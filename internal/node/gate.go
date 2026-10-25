@@ -62,10 +62,10 @@ func rungIn(transportName, class string) rung {
 
 // statelessRung is the rung a stateless poll sends at: the transport's,
 // except where its request carries the credential (an snmp get carries the
-// community, #821; an http request carries its session's scheme, #902), so
-// an auth gate holds the poll too.
+// community, #821; an http request carries its session's scheme, #902, or
+// rides its login's session, #1114), so an auth gate holds the poll too.
 func statelessRung(task collection.TaskSpec) rung {
-	if task.Transport == "snmp" || (driver.IsHTTP(task.Transport) && task.Session != nil && task.Session.Credential != "") {
+	if task.Transport == "snmp" || (driver.IsHTTP(task.Transport) && task.Session.IsCredentialed()) {
 		return rungAuthenticated
 	}
 	return rungResponsive
