@@ -4717,6 +4717,10 @@ export interface components {
         AuditEventBody: {
             actor?: string;
             actor_name?: string;
+            /** @description How the action arrived: mcp for a tool call on the MCP server; absent for a direct API call. Set by the server, never by the caller */
+            channel?: string;
+            /** @description The name and version the MCP client declared about itself, recorded as asserted; absent when there is none */
+            client?: string;
             id: string;
             /** @description The row image after the write, absent on a delete */
             new?: unknown;

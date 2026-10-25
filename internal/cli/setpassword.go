@@ -64,13 +64,13 @@ func runSetPassword(ctx context.Context, username, password string, revokeTokens
 	if err != nil {
 		return fmt.Errorf("resolve %q after set-password: %w", username, err)
 	}
-	nSessions, err := gw.RevokeBearersByPurpose(ctx, pid, "session")
+	nSessions, err := gw.RevokeBearersByPurpose(ctx, "", pid, "session")
 	if err != nil {
 		return err
 	}
 	nTokens := 0
 	if revokeTokens {
-		if nTokens, err = gw.RevokeBearersByPurpose(ctx, pid, "token"); err != nil {
+		if nTokens, err = gw.RevokeBearersByPurpose(ctx, "", pid, "token"); err != nil {
 			return err
 		}
 	}

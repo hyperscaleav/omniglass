@@ -595,7 +595,7 @@ func registerPrincipalRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 		// The delete is bounded to the target principal in SQL, so a sid that is not
 		// the target's matches nothing and is a non-disclosing 404 (never a 500, never
 		// a cross-principal revoke).
-		revoked, err := gw.RevokeBearerByID(ctx, in.ID, in.SID)
+		revoked, err := gw.RevokeBearerByID(ctx, actorID(ctx), in.ID, in.SID)
 		if err != nil {
 			return nil, huma.Error500InternalServerError("revoke session")
 		}
@@ -638,7 +638,7 @@ func registerPrincipalRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 		case err != nil:
 			return nil, huma.Error500InternalServerError("revoke sessions")
 		}
-		n, err := gw.RevokeBearersByPurpose(ctx, in.ID, in.Body.Purpose)
+		n, err := gw.RevokeBearersByPurpose(ctx, actorID(ctx), in.ID, in.Body.Purpose)
 		if err != nil {
 			return nil, huma.Error500InternalServerError("revoke sessions")
 		}

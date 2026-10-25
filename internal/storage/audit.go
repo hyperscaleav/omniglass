@@ -25,6 +25,11 @@ type AuditEntry struct {
 	// here, see auditSecret and the credential writes).
 	Old []byte
 	New []byte
+	// Channel is how the action arrived (#1162): "mcp" for an MCP tool call,
+	// empty for a direct API call. Client is the name and version the MCP client
+	// declared about itself, as asserted; empty when there is none.
+	Channel string
+	Client  string
 }
 
 // AuditFilter bounds a ListAuditLog read. Limit caps the rows (a sane default is
@@ -66,7 +71,8 @@ func (p *PG) ListAuditLog(ctx context.Context, f AuditFilter) ([]AuditEntry, err
 		       `+principalIdentJoinedCols("ac")+`, coalesce(a.actor_username, ''),
 		       coalesce(a.real_actor_principal_id::text, ''),
 		       `+principalIdentJoinedCols("ra")+`, coalesce(a.real_actor_username, ''),
-		       a.verb, a.resource, coalesce(a.resource_id, ''), a.old, a.new
+		       a.verb, a.resource, coalesce(a.resource_id, ''), a.old, a.new,
+		       coalesce(a.channel, ''), coalesce(a.client, '')
 		from audit_log a`+
 		principalIdentJoins("ac", "a.actor_principal_id")+
 		principalIdentJoins("ra", "a.real_actor_principal_id")+`
@@ -94,7 +100,7 @@ func (p *PG) ListAuditLog(ctx context.Context, f AuditFilter) ([]AuditEntry, err
 		if err := rows.Scan(&e.ID, &e.TS,
 			&e.ActorID, &actorUser, &actorSvc, &actorNode, &actorSnap,
 			&e.RealActorID, &realUser, &realSvc, &realNode, &realSnap,
-			&e.Verb, &e.Resource, &e.ResourceID, &e.Old, &e.New); err != nil {
+			&e.Verb, &e.Resource, &e.ResourceID, &e.Old, &e.New, &e.Channel, &e.Client); err != nil {
 			return nil, fmt.Errorf("storage: scan audit row: %w", err)
 		}
 		e.ActorName = liveOrSnapshot(principalIdent(actorUser, actorSvc, actorNode), actorSnap)
@@ -124,10 +130,11 @@ func liveOrSnapshot(live string, snapshot *string) string {
 // records the real actor from context, for consistency, though auth events are
 // not impersonated.
 func (p *PG) WriteAuthEvent(ctx context.Context, actorID, verb string) error {
+	channel, client := auditChannelFrom(ctx)
 	if _, err := p.pool.Exec(ctx, `
-		insert into audit_log (actor_principal_id, real_actor_principal_id, actor_username, real_actor_username, verb, resource)
-		values ($1, $2, `+principalIdentSQL("$1")+`, `+principalIdentSQL("$2")+`, $3, 'auth')`,
-		nullize(actorID), nullize(realActorFrom(ctx)), verb); err != nil {
+		insert into audit_log (actor_principal_id, real_actor_principal_id, actor_username, real_actor_username, verb, resource, channel, client)
+		values ($1, $2, `+principalIdentSQL("$1")+`, `+principalIdentSQL("$2")+`, $3, 'auth', $4, $5)`,
+		nullize(actorID), nullize(realActorFrom(ctx)), verb, channel, client); err != nil {
 		return fmt.Errorf("storage: write auth event: %w", err)
 	}
 	return nil

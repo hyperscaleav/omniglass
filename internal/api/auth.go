@@ -712,7 +712,7 @@ func (a *authenticator) changePasswordHandler(ctx context.Context, in *changePas
 	if h, ok := sessionHashFrom(ctx); ok {
 		keep = append(keep, h)
 	}
-	if _, err := a.gw.RevokeBearersByPurposeExcept(ctx, pr.ID, "session", keep); err != nil {
+	if _, err := a.gw.RevokeBearersByPurposeExcept(ctx, actorID(ctx), pr.ID, "session", keep); err != nil {
 		return nil, huma.Error500InternalServerError("change password")
 	}
 	return nil, nil
@@ -818,7 +818,7 @@ func (a *authenticator) revokeMeSessionHandler(ctx context.Context, in *revokeMe
 	if !ok {
 		return nil, huma.Error401Unauthorized("unauthenticated")
 	}
-	revoked, err := a.gw.RevokeBearerByID(ctx, pr.ID, in.ID)
+	revoked, err := a.gw.RevokeBearerByID(ctx, actorID(ctx), pr.ID, in.ID)
 	if err != nil {
 		return nil, huma.Error500InternalServerError("revoke session")
 	}
@@ -856,7 +856,7 @@ func (a *authenticator) revokeAllMeSessionsHandler(ctx context.Context, in *revo
 	if h, ok := sessionHashFrom(ctx); ok {
 		keep = append(keep, h)
 	}
-	n, err := a.gw.RevokeBearersByPurposeExcept(ctx, pr.ID, in.Body.Purpose, keep)
+	n, err := a.gw.RevokeBearersByPurposeExcept(ctx, actorID(ctx), pr.ID, in.Body.Purpose, keep)
 	if err != nil {
 		return nil, huma.Error500InternalServerError("revoke sessions")
 	}
@@ -908,7 +908,7 @@ func (a *authenticator) createMeTokenHandler(ctx context.Context, in *createMeTo
 	expiresAt := time.Now().Add(ttl)
 	ua, ip := clientMetaFrom(ctx)
 	issued, err := a.gw.IssueBearerCredential(ctx, storage.BearerIssue{
-		Username: pr.Human.Username, SecretHash: hash, Prefix: prefix, Purpose: "token",
+		ActorID: actorID(ctx), Username: pr.Human.Username, SecretHash: hash, Prefix: prefix, Purpose: "token",
 		ExpiresAt: &expiresAt, Description: in.Body.Description, UserAgent: ua, ClientIP: ip,
 	})
 	if err != nil || !issued {

@@ -138,6 +138,10 @@ func (p *PG) BootstrapOwner(ctx context.Context, spec OwnerSpec) (created bool, 
 // token carries a Description (what it is for); a session leaves it empty. UserAgent and
 // ClientIP record the device and address that created it, empty when unknown (a CLI).
 type BearerIssue struct {
+	// ActorID is who is minting the credential, recorded as the audit row's actor
+	// when a token is issued (#1162): the principal itself for self-service, empty
+	// for the trusted lane (the direct-database CLI), which has no API actor.
+	ActorID     string
 	Username    string
 	SecretHash  []byte
 	Prefix      string
@@ -157,14 +161,93 @@ func (p *PG) IssueBearerCredential(ctx context.Context, spec BearerIssue) (bool,
 	case err != nil:
 		return false, fmt.Errorf("storage: lookup human %q: %w", spec.Username, err)
 	}
-	if _, err := p.pool.Exec(ctx,
+	tx, err := p.pool.Begin(ctx)
+	if err != nil {
+		return false, fmt.Errorf("storage: begin issue credential: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	var credID string
+	if err := tx.QueryRow(ctx,
 		`insert into credential (principal_id, kind, secret_hash, prefix, purpose, expires_at, description, user_agent, client_ip)
-			values ($1, 'bearer', $2, $3, $4, $5, nullif($6,''), nullif($7,''), nullif($8,''))`,
-		pid, spec.SecretHash, spec.Prefix, spec.Purpose, spec.ExpiresAt, spec.Description, spec.UserAgent, spec.ClientIP); err != nil {
+			values ($1, 'bearer', $2, $3, $4, $5, nullif($6,''), nullif($7,''), nullif($8,''))
+			returning id`,
+		pid, spec.SecretHash, spec.Prefix, spec.Purpose, spec.ExpiresAt, spec.Description, spec.UserAgent, spec.ClientIP).Scan(&credID); err != nil {
 		return false, fmt.Errorf("storage: issue credential: %w", err)
+	}
+	// A token is how an agent or a script is given access, so its minting is
+	// audited (#1162). A web-login session is the auth lane's (login, logout).
+	if spec.Purpose == credentialPurposeToken {
+		img := credentialAuditImage{PrincipalID: pid, Prefix: spec.Prefix, Purpose: spec.Purpose, Description: spec.Description, ExpiresAt: spec.ExpiresAt}
+		if err := writeAuditRes(ctx, tx, spec.ActorID, "create", "credential", credID, nil, img); err != nil {
+			return false, err
+		}
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return false, fmt.Errorf("storage: commit issue credential: %w", err)
 	}
 	return true, nil
 }
+
+// credentialPurposeToken is the purpose of a CLI or API token, the credential
+// minting and revoking audit (#1162).
+const credentialPurposeToken = "token"
+
+// credentialAuditImage is a token's audit image: its non-secret metadata only.
+// The secret hash never reaches the trail; the prefix is the non-secret locator
+// the session list shows, so a reader can tell which token a row is about.
+type credentialAuditImage struct {
+	PrincipalID string     `json:"principal_id"`
+	Prefix      string     `json:"prefix"`
+	Purpose     string     `json:"purpose"`
+	Description string     `json:"description,omitempty"`
+	ExpiresAt   *time.Time `json:"expires_at,omitempty"`
+}
+
+// revokedCredential is one deleted credential's identity and metadata, read
+// back from a revoke's delete so a token's end can be audited.
+type revokedCredential struct {
+	id  string
+	img credentialAuditImage
+}
+
+// auditRevokedTokens writes a revoke row for each token among the deleted
+// credentials, in the delete's transaction.
+func auditRevokedTokens(ctx context.Context, tx pgx.Tx, actorID string, revoked []revokedCredential) error {
+	for _, r := range revoked {
+		if r.img.Purpose != credentialPurposeToken {
+			continue
+		}
+		credID := r.id
+		if err := writeAuditRes(ctx, tx, actorID, "revoke", "credential", credID, r.img, nil); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// scanRevoked reads a revoke delete's returning rows.
+func scanRevoked(rows pgx.Rows) ([]revokedCredential, error) {
+	defer rows.Close()
+	var out []revokedCredential
+	for rows.Next() {
+		var r revokedCredential
+		var purpose, description *string
+		if err := rows.Scan(&r.id, &r.img.PrincipalID, &r.img.Prefix, &purpose, &description, &r.img.ExpiresAt); err != nil {
+			return nil, fmt.Errorf("storage: scan revoked credential: %w", err)
+		}
+		if purpose != nil {
+			r.img.Purpose = *purpose
+		}
+		if description != nil {
+			r.img.Description = *description
+		}
+		out = append(out, r)
+	}
+	return out, rows.Err()
+}
+
+// revokedCols is what a revoke's delete returns for its audit rows.
+const revokedCols = `returning id, principal_id, prefix, purpose, description, expires_at`
 
 // nullize maps an empty string to a SQL NULL so optional text columns stay null
 // rather than empty.
@@ -760,10 +843,19 @@ func (p *PG) ListBearerCredentials(ctx context.Context, principalID string, curr
 // another principal is untouched). Returns false when nothing matched: a wrong or
 // already-revoked id, a credential owned by a different principal, or a malformed id
 // (which the API maps to a 404, never a 500). This backs self-service revoke (#172).
-func (p *PG) RevokeBearerByID(ctx context.Context, principalID, credentialID string) (bool, error) {
-	tag, err := p.pool.Exec(ctx,
-		`delete from credential where id = $1 and principal_id = $2 and kind = 'bearer'`,
+func (p *PG) RevokeBearerByID(ctx context.Context, actorID, principalID, credentialID string) (bool, error) {
+	tx, err := p.pool.Begin(ctx)
+	if err != nil {
+		return false, fmt.Errorf("storage: begin revoke bearer by id: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	rows, err := tx.Query(ctx,
+		`delete from credential where id = $1 and principal_id = $2 and kind = 'bearer' `+revokedCols,
 		credentialID, principalID)
+	var revoked []revokedCredential
+	if err == nil {
+		revoked, err = scanRevoked(rows)
+	}
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "22P02" {
@@ -772,37 +864,57 @@ func (p *PG) RevokeBearerByID(ctx context.Context, principalID, credentialID str
 		}
 		return false, fmt.Errorf("storage: revoke bearer by id: %w", err)
 	}
-	return tag.RowsAffected() > 0, nil
+	if err := auditRevokedTokens(ctx, tx, actorID, revoked); err != nil {
+		return false, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return false, fmt.Errorf("storage: commit revoke bearer by id: %w", err)
+	}
+	return len(revoked) > 0, nil
 }
 
 // RevokeBearersByPurpose deletes every bearer credential of one purpose ('session'
 // or 'token') for a principal, scoped to the owning principal, and returns the count.
 // Purpose is the authoritative discriminator (both kinds carry an expiry now), so a
 // caller ending all sessions never touches a token, and vice versa.
-func (p *PG) RevokeBearersByPurpose(ctx context.Context, principalID, purpose string) (int, error) {
-	return p.RevokeBearersByPurposeExcept(ctx, principalID, purpose, nil)
+func (p *PG) RevokeBearersByPurpose(ctx context.Context, actorID, principalID, purpose string) (int, error) {
+	return p.RevokeBearersByPurposeExcept(ctx, actorID, principalID, purpose, nil)
 }
 
 // RevokeBearersByPurposeExcept deletes bearers of one purpose except any whose
 // secret_hash is in keep, scoped to the principal, returning the count. An empty keep
 // deletes all of the purpose (the plain bulk revoke); a non-empty keep preserves the
 // caller's current session while ending its others, tokens untouched.
-func (p *PG) RevokeBearersByPurposeExcept(ctx context.Context, principalID, purpose string, keep [][]byte) (int, error) {
-	var tag pgconn.CommandTag
-	var err error
+func (p *PG) RevokeBearersByPurposeExcept(ctx context.Context, actorID, principalID, purpose string, keep [][]byte) (int, error) {
+	tx, err := p.pool.Begin(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("storage: begin revoke bearers by purpose: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	var rows pgx.Rows
 	if len(keep) == 0 {
-		tag, err = p.pool.Exec(ctx,
-			`delete from credential where principal_id = $1 and kind = 'bearer' and purpose = $2`,
+		rows, err = tx.Query(ctx,
+			`delete from credential where principal_id = $1 and kind = 'bearer' and purpose = $2 `+revokedCols,
 			principalID, purpose)
 	} else {
-		tag, err = p.pool.Exec(ctx,
-			`delete from credential where principal_id = $1 and kind = 'bearer' and purpose = $2 and secret_hash <> all($3::bytea[])`,
+		rows, err = tx.Query(ctx,
+			`delete from credential where principal_id = $1 and kind = 'bearer' and purpose = $2 and secret_hash <> all($3::bytea[]) `+revokedCols,
 			principalID, purpose, keep)
+	}
+	var revoked []revokedCredential
+	if err == nil {
+		revoked, err = scanRevoked(rows)
 	}
 	if err != nil {
 		return 0, fmt.Errorf("storage: revoke bearers by purpose: %w", err)
 	}
-	return int(tag.RowsAffected()), nil
+	if err := auditRevokedTokens(ctx, tx, actorID, revoked); err != nil {
+		return 0, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return 0, fmt.Errorf("storage: commit revoke bearers by purpose: %w", err)
+	}
+	return len(revoked), nil
 }
 
 // ErrPrincipalForbidden is returned by the principal directory methods when the

@@ -404,6 +404,14 @@
           "actor_name": {
             "type": "string"
           },
+          "channel": {
+            "description": "How the action arrived: mcp for a tool call on the MCP server; absent for a direct API call. Set by the server, never by the caller",
+            "type": "string"
+          },
+          "client": {
+            "description": "The name and version the MCP client declared about itself, recorded as asserted; absent when there is none",
+            "type": "string"
+          },
           "id": {
             "type": "string"
           },

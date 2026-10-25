@@ -37,6 +37,9 @@ type auditEventBody struct {
 	// never written), so the read passes them through verbatim.
 	Old any `json:"old,omitempty" doc:"The row image before the write, absent on a create"`
 	New any `json:"new,omitempty" doc:"The row image after the write, absent on a delete"`
+	// How the action arrived (#1162): set by the server, never by a caller.
+	Channel string `json:"channel,omitempty" doc:"How the action arrived: mcp for a tool call on the MCP server; absent for a direct API call. Set by the server, never by the caller"`
+	Client  string `json:"client,omitempty" doc:"The name and version the MCP client declared about itself, recorded as asserted; absent when there is none"`
 }
 
 type auditListOutput struct {
@@ -81,6 +84,7 @@ func registerAuditRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 				RealActor: e.RealActorID, RealActorName: e.RealActorName,
 				Verb: e.Verb, Resource: e.Resource, ResourceID: e.ResourceID,
 				Old: auditImage(e.Old), New: auditImage(e.New),
+				Channel: e.Channel, Client: e.Client,
 			})
 		}
 		return out, nil
