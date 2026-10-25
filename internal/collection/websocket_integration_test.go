@@ -451,7 +451,7 @@ func TestWebSocketOpensBehindALoginAndLogsInOnceOnLapse(t *testing.T) {
 	login.expire()
 	comp.drop()
 	deadline := time.Now().Add(10 * time.Second)
-	for comp.upgrades.Load() < 2 && time.Now().Before(deadline) {
+	for comp.subscribes.Load() < 2 && time.Now().Before(deadline) {
 		time.Sleep(20 * time.Millisecond)
 	}
 	comp.push(12)
@@ -799,7 +799,7 @@ func TestWebSocketLogsInAgainBeforeJudgingAForbiddenUpgrade(t *testing.T) {
 	login.expire()
 	comp.drop()
 	deadline := time.Now().Add(10 * time.Second)
-	for comp.upgrades.Load() < 2 && time.Now().Before(deadline) {
+	for comp.subscribes.Load() < 2 && time.Now().Before(deadline) {
 		time.Sleep(20 * time.Millisecond)
 	}
 	comp.push(13)
