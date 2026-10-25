@@ -340,6 +340,16 @@ func TestWriterMismatchRefused(t *testing.T) {
 				return err
 			}},
 		},
+		"writeLifecycleEvent": {
+			{"an event rule settling a command", func() error { return f.gw.AdmitWrite(f.ctx, "event", writerclass.EventRule, "command-settled", "") }},
+			{"a push failing a command", func() error { return f.gw.AdmitWrite(f.ctx, "event", writerclass.Push, "command-failed", "") }},
+			{"a node timing a command out", func() error {
+				return f.gw.AdmitWrite(f.ctx, "event", writerclass.Node, "command-timed-out", "ssh")
+			}},
+			{"a command's outcome on a probe key", func() error {
+				return f.gw.AdmitWrite(f.ctx, "event", writerclass.Command, "collection-failed", "ssh")
+			}},
+		},
 		"writeReplyObservation": {
 			{"a reply observing the verdict", func() error { return f.gw.WriteReplyObservation(f.ctx, comp.ID, "endpoint-reachable", "ssh", "up") }},
 			{"a reply observing a calc output", func() error { return f.gw.WriteReplyObservation(f.ctx, comp.ID, "health", "", "healthy") }},
@@ -411,6 +421,7 @@ func TestWriterMismatchRefused(t *testing.T) {
 		"a reply on a collected":  func() error { return f.gw.WriteReplyObservation(f.ctx, comp.ID, "video-input", "ssh", "hdmi1") },
 		"a rule firing its event": func() error { return f.gw.WriteRuleEvent(f.ctx, ruleID, "condition-started", comp.ID, "ssh") },
 		"the process on health":   func() error { return f.gw.AdmitWrite(f.ctx, "property", writerclass.Process, "health", "") },
+		"a command's own outcome": func() error { return f.gw.AdmitWrite(f.ctx, "event", writerclass.Command, "command-timed-out", "") },
 		"the pin on the host key": func() error {
 			_, err := f.gw.RetryEndpoint(f.ctx, f.actor, epID, storage.RetryPin{HostKey: "SHA256:" + strings.Repeat("c", 43)}, all, all)
 			return err

@@ -559,6 +559,14 @@ type Gateway interface {
 	// narrows a resolve by scope any more.
 	IssueCommand(ctx context.Context, actorID, ownerKind, ownerID, commandType, instance string, value, params json.RawMessage) (*Command, error)
 	CommandSettlement(ctx context.Context, ownerKind, ownerID, commandType, instance string) (SettlementVerdict, error)
+	// GetComponentCommand and ListComponentCommands read a component's
+	// commands back whole (#1155): the state machine with a time per
+	// transition, the in-flight phase, the evidence and the reason, and the
+	// issuer. Both take the component's RESOLVED id, on ListAlarms's
+	// contract: the route resolves it through the caller's read sets, and a
+	// command id under another component is ErrCommandNotFound.
+	GetComponentCommand(ctx context.Context, componentID string, id int64) (*CommandRecord, error)
+	ListComponentCommands(ctx context.Context, componentID string, f CommandFilter) ([]CommandRecord, error)
 
 	// The observed-metric sink, for the writer a batch speaks for (NodeWriter
 	// or PushWriter), held to each key's writer class (ADR-0161).

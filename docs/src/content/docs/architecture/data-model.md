@@ -285,6 +285,7 @@ telemetry: {
     dispatched_endpoint_id: uuid {constraint: foreign_key}
     location_id: uuid {constraint: foreign_key}
     node_id: uuid {constraint: foreign_key}
+    settled_event_id: bigint {constraint: foreign_key}
     system_id: uuid {constraint: foreign_key}
   }
   command_type: {
@@ -572,6 +573,7 @@ telemetry.command.component_id -> fleet.component.id
 telemetry.command.dispatched_endpoint_id -> fleet.endpoint.id
 telemetry.command.location_id -> fleet.location.id
 telemetry.command.node_id -> collection.node.principal_id
+telemetry.command.settled_event_id -> telemetry.event.id
 telemetry.command.system_id -> fleet.system.id
 telemetry.command_type.target_metric_type_id -> telemetry.metric_type.id
 telemetry.command_type.target_property_type_id -> telemetry.property_type.id

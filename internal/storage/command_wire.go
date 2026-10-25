@@ -210,12 +210,30 @@ func (p *PG) PendingNodeCommands(ctx context.Context, node string) ([]CommandDel
 // command dispatched to a different node, or already stamped) is ErrCommandNotDispatchedHere,
 // which the bus logs rather than silently dropping.
 //
+// The reply and the execution error are stored as evidence (#1155), masked of
+// the dispatched endpoint's credentials and of anything the text labels a
+// credential, then made storable and capped: a component that echoes its
+// login never has it stored or served. The judgment below reads the reply
+// whole, as the node sent it.
+//
 // When the binding settles from the response (ADR-0141), the reply decides
 // the command in the same transaction: a value it carries is recorded as an
 // observation of the target on the dispatched endpoint and settles or fails
 // the command against its intent; a confirmation settles it; a reply that
 // fails the binding's reading, or an execution error, fails it at once.
 func (p *PG) RecordCommandExecution(ctx context.Context, node string, commandID int64, execErr, reply string) error {
+	var dispatchedTo *string
+	if err := p.pool.QueryRow(ctx, `select dispatched_endpoint_id::text from command where id = $1`, commandID).Scan(&dispatchedTo); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ErrCommandNotDispatchedHere
+		}
+		return fmt.Errorf("storage: command %d's endpoint: %w", commandID, err)
+	}
+	mask := redactNothing
+	if dispatchedTo != nil {
+		mask = p.endpointMask(ctx, p.pool, *dispatchedTo)
+	}
+	storedErr := storedText(mask(execErr))
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("storage: begin record execution: %w", err)
@@ -225,7 +243,7 @@ func (p *PG) RecordCommandExecution(ctx context.Context, node string, commandID 
 		ownerKind, arc, instance, commandType, endpointID string
 	)
 	err = tx.QueryRow(ctx, `
-		update command c set executed_at = now(), exec_error = nullif($3, '')
+		update command c set executed_at = now(), exec_error = nullif($3, ''), reply = nullif($4, '')
 		where c.id = $1
 		  and c.executed_at is null
 		  and c.dispatched_endpoint_id is not null
@@ -235,7 +253,7 @@ func (p *PG) RecordCommandExecution(ctx context.Context, node string, commandID 
 			  and i.node_name = (select principal_id from node where name = $2))
 		returning c.owner_kind, coalesce(c.component_id, c.system_id, c.location_id, c.node_id)::text,
 			c.instance, (select name from command_type where id = c.command_type_id), c.dispatched_endpoint_id::text`,
-		commandID, node, execErr).Scan(&ownerKind, &arc, &instance, &commandType, &endpointID)
+		commandID, node, storedErr, storedText(mask(reply))).Scan(&ownerKind, &arc, &instance, &commandType, &endpointID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return ErrCommandNotDispatchedHere
 	}
@@ -249,15 +267,26 @@ func (p *PG) RecordCommandExecution(ctx context.Context, node string, commandID 
 	if err != nil {
 		return fmt.Errorf("storage: savepoint for command %d settlement: %w", commandID, err)
 	}
-	if serr := p.settleFromResponse(ctx, sp, commandID, ownerKind, arc, instance, commandType, endpointID, execErr, reply); serr != nil {
-		_ = sp.Rollback(ctx)
-		slog.Warn("command reply could not settle it", "facility", "command", "command", commandID, "error", serr.Error())
-		now, err := dbNow(ctx, tx)
+	serr := func() error {
+		o, err := p.settleFromResponse(ctx, sp, commandID, ownerKind, arc, instance, commandType, endpointID, storedErr, reply)
+		if err != nil || o == nil {
+			return err
+		}
+		o.reason = mask(o.reason)
+		now, err := dbNow(ctx, sp)
 		if err != nil {
 			return err
 		}
-		if err := markSettlement(ctx, tx, commandID, "failed", now); err != nil {
-			return err
+		return recordOutcome(ctx, sp, commandID, *o, now)
+	}()
+	if serr != nil {
+		_ = sp.Rollback(ctx)
+		slog.Warn("command reply could not settle it", "facility", "command", "command", commandID, "error", serr.Error())
+		// The fallback records the failure plainly, with no lifecycle event:
+		// what failed may be the very write that event needs.
+		if _, err := tx.Exec(ctx, `update command set status = 'failed', settled_at = now(), settled_by = $2,
+				reason = 'the reply could not be judged' where id = $1 and status = 'issued'`, commandID, SettledByReply); err != nil {
+			return fmt.Errorf("storage: record command %d settlement: %w", commandID, err)
 		}
 	} else if err := sp.Commit(ctx); err != nil {
 		return fmt.Errorf("storage: release savepoint for command %d: %w", commandID, err)
@@ -268,23 +297,29 @@ func (p *PG) RecordCommandExecution(ctx context.Context, node string, commandID 
 	return nil
 }
 
+// redactNothing is the mask for a command dispatched over no endpoint: there
+// is no report for it to mask.
+func redactNothing(s string) string { return s }
+
 // settleFromResponse applies the dispatched endpoint's binding to the reply,
-// when that binding settles from the response; otherwise it decides nothing
-// and the command waits on observation.
-func (p *PG) settleFromResponse(ctx context.Context, tx pgx.Tx, commandID int64, ownerKind, arc, instance, commandType, endpointID, execErr, reply string) error {
+// when that binding settles from the response, and returns the outcome it
+// reaches; nil when it decides nothing and the command waits on observation.
+// execErr is the stored (masked) execution error, which a failure's reason
+// carries.
+func (p *PG) settleFromResponse(ctx context.Context, tx pgx.Tx, commandID int64, ownerKind, arc, instance, commandType, endpointID, execErr, reply string) (*settlementOutcome, error) {
 	var epName, transport string
 	var spec []byte
 	err := tx.QueryRow(ctx, `select e.name, e.transport, d.spec from endpoint e join driver d on d.id = e.driver_id where e.id = $1`,
 		endpointID).Scan(&epName, &transport, &spec)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return nil
+		return nil, nil
 	}
 	if err != nil {
-		return fmt.Errorf("storage: dispatched endpoint of command %d: %w", commandID, err)
+		return nil, fmt.Errorf("storage: dispatched endpoint of command %d: %w", commandID, err)
 	}
 	sp, err := driver.Parse(spec)
 	if err != nil {
-		return nil // a stored spec is validated at write; nothing to read it by
+		return nil, nil // a stored spec is validated at write; nothing to read it by
 	}
 	var binding *driver.CommandBinding
 	for i := range sp.Commands {
@@ -293,29 +328,31 @@ func (p *PG) settleFromResponse(ctx context.Context, tx pgx.Tx, commandID int64,
 		}
 	}
 	if binding == nil || binding.Settle == nil || binding.Settle.From != driver.SettleFromResponse {
-		return nil
+		return nil, nil
 	}
-	now, err := dbNow(ctx, tx)
-	if err != nil {
-		return err
+	failed := func(reason string) (*settlementOutcome, error) {
+		return &settlementOutcome{status: "failed", by: SettledByReply, reason: reason}, nil
 	}
 	if execErr != "" {
-		return markSettlement(ctx, tx, commandID, "failed", now)
+		return failed("the execution failed: " + execErr)
 	}
 	// A reply that is not readable text says nothing a binding can read.
 	if !utf8.ValidString(reply) || strings.ContainsRune(reply, 0) {
-		return markSettlement(ctx, tx, commandID, "failed", now)
+		return failed("the reply is not readable text")
 	}
 	verdict := binding.JudgeReply(reply)
 	if !verdict.Succeeded {
-		return markSettlement(ctx, tx, commandID, "failed", now)
+		if binding.Settle.Extract != nil {
+			return failed("the reply did not carry a value the binding reads")
+		}
+		return failed("the reply did not confirm it")
 	}
 	if !verdict.HasValue {
-		return markSettlement(ctx, tx, commandID, "settled", now)
+		return &settlementOutcome{status: "settled", by: SettledByReply, reason: "the reply confirmed it"}, nil
 	}
 	ct, err := scanCommandType(tx.QueryRow(ctx, `select `+commandTypeCols+` from command_type where name = $1`, commandType))
 	if err != nil {
-		return fmt.Errorf("storage: command type %s: %w", commandType, err)
+		return nil, fmt.Errorf("storage: command type %s: %w", commandType, err)
 	}
 	series := instance
 	if series == "" {
@@ -329,30 +366,33 @@ func (p *PG) settleFromResponse(ctx context.Context, tx pgx.Tx, commandID int64,
 		var dataType string
 		var validation []byte
 		if err := tx.QueryRow(ctx, `select data_type, validation from property_type where name = $1`, ct.TargetPropertyType).Scan(&dataType, &validation); err != nil {
-			return fmt.Errorf("storage: property type %s: %w", ct.TargetPropertyType, err)
+			return nil, fmt.Errorf("storage: property type %s: %w", ct.TargetPropertyType, err)
 		}
 		if err := key.ValidateValue(dataType, replyJSON(dataType, verdict.Value), validation); err != nil {
-			return markSettlement(ctx, tx, commandID, "failed", now)
+			return failed(fmt.Sprintf("the reply carried %s, which %s does not accept", verdict.Value, ct.TargetPropertyType))
 		}
 		latest, err := p.latestTargetValue(ctx, tx, ct, ownerKind, arc, series, "observed")
 		if err != nil {
-			return err
+			return nil, err
 		}
 		if latest == nil || !replyMatchesIntent(latest.Value, verdict.Value) {
+			now, err := dbNow(ctx, tx)
+			if err != nil {
+				return nil, err
+			}
 			if err := writeReplyObservation(ctx, tx, ownerKind, arc, ct.TargetPropertyType, series, verdict.Value, transport, now); err != nil {
-				return fmt.Errorf("storage: record command %d reply as an observation: %w", commandID, err)
+				return nil, fmt.Errorf("storage: record command %d reply as an observation: %w", commandID, err)
 			}
 		}
 	}
 	intended, err := p.commandIntendedValue(ctx, tx, ct, commandID)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	status := "settled"
 	if intended != nil && !replyMatchesIntent(intended.Value, verdict.Value) {
-		status = "failed"
+		return failed(fmt.Sprintf("the reply carried %s, not the intended %s", verdict.Value, valueText(intended.Value)))
 	}
-	return markSettlement(ctx, tx, commandID, status, now)
+	return &settlementOutcome{status: "settled", by: SettledByReply, reason: fmt.Sprintf("the reply carried %s, the intended value", verdict.Value)}, nil
 }
 
 // writeReplyObservation records a command's reply, read through its driver

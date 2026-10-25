@@ -656,6 +656,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/components/{name}/commands": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List a component's commands
+         * @description The component's command history, newest first, each command whole (as the single read returns it), narrowed by recorded status and by when it was issued, a page at a time. status=issued is what is in flight now. Gated by command:read, resolved on the component tier; a component outside the caller's component:read is a non-disclosing 404, and one it can read but whose commands it may not is a 403.
+         */
+        get: operations["list-component-commands"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/components/{name}/commands/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read a command
+         * @description One command, whole: what it was told and the value it set, its recorded status with a time for each transition (issued, delivered, executed, settled), where it sits now while in flight (queued, delivered, awaiting the reply, awaiting the observation), how its binding settles it, the evidence that decided it (the reply, masked of credentials, or the observed sample) and why, the endpoint, node and driver that carry it, and who issued it. Gated by command:read, resolved on the component tier; a component outside the caller's component:read, or a command not on that component, is a non-disclosing 404, and a component it can read but whose commands it may not is a 403.
+         */
+        get: operations["get-component-command"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/components/{name}/commands:issue": {
         parameters: {
             query?: never;
@@ -667,7 +707,7 @@ export interface paths {
         put?: never;
         /**
          * Issue a command to a component
-         * @description Records a command invocation, writes a caused event, and (for a settleable command) opens an intended value the observed value settles against. Returns the computed settlement verdict. Gated by command:issue, whose scope is resolved on the component tier from that permission (not from component:read); a component outside the caller's component:read is a non-disclosing 404, and one it can read but not command is a 403.
+         * @description Records a command invocation, writes a caused event, and (for a settleable command) opens an intended value the observed value settles against. Answers with the command as it stands (as the command read returns it) and the computed settlement verdict; with wait, once it settles, fails or times out, or wait_timeout passes. Gated by command:issue, whose scope is resolved on the component tier from that permission (not from component:read); a component outside the caller's component:read is a non-disclosing 404, and one it can read but not command is a 403.
          */
         post: operations["issue-component-command"];
         delete?: never;
@@ -5135,26 +5175,131 @@ export interface components {
             /** @description The node's NATS username (its node name) */
             username: string;
         };
-        CommandOutputBody: {
+        CommandBody: {
             /**
              * Format: uri
              * @description A URL to the JSON Schema for this object.
-             * @example /api/v1/schemas/CommandOutputBody.json
+             * @example /api/v1/schemas/CommandBody.json
              */
             readonly $schema?: string;
             /**
              * Format: int64
-             * @description The caused event this command recorded
+             * @description The command-issued event it put on the component's timeline
              */
-            caused_event_id: number;
+            caused_event_id?: number;
+            /** @description What the component was told to do */
             command_type: string;
-            /** Format: int64 */
+            /** @description The component it was issued to, by name */
+            component: string;
+            /** @description The component's uuid, the stable form of component */
+            component_id: string;
+            /**
+             * Format: date-time
+             * @description When its settle window closes; a command still issued past it is timed out by the next sweep
+             */
+            deadline: string;
+            /**
+             * Format: date-time
+             * @description When a node last took it from its queue
+             */
+            delivered_at?: string;
+            /** @description The driver whose binding renders and settles it, by name */
+            driver?: string;
+            /** @description The endpoint it rides, by name: the one a node took it over, else the one a node would (its driver binds the type); absent when no endpoint can carry it */
+            endpoint?: string;
+            /** @description The endpoint's uuid */
+            endpoint_id?: string;
+            /** @description The execution's failure, as its node reported it, masked of credentials */
+            exec_error?: string;
+            /**
+             * Format: date-time
+             * @description When its node's execution report landed
+             */
+            executed_at?: string;
+            /**
+             * Format: int64
+             * @description The command's id: with its component, its address (a command has no name)
+             */
             id: number;
+            /** @description The series discriminator it was issued with, if any */
             instance?: string;
-            /** @description The computed settlement verdict (none/pending/settled/failed) */
-            settlement: string;
-            /** @description The recorded command status (issued/settled/failed/timed-out); issued until a settle-check records the terminal outcome */
-            status: string;
+            /** @description The value it set; absent for a fire-and-forget command */
+            intended?: unknown;
+            /**
+             * Format: date-time
+             * @description When it was issued
+             */
+            issued_at: string;
+            /** @description Who issued it, by name; empty once that principal is purged (the audit log keeps the name) */
+            issuer?: string;
+            /** @description The issuer's uuid, the actor on the command's audit row */
+            issuer_id?: string;
+            /** @description The node that endpoint is placed on, by name */
+            node?: string;
+            /** @description The sample of its target that decided it, when an observation did */
+            observed?: components["schemas"]["CommandObservation"];
+            /** @description The invocation params */
+            params?: unknown;
+            /**
+             * @description Where it sits now: queued for its node; delivered to it (a binding that settles on observation); awaiting the reply that settles it; awaiting the observation that does, within its window; or, once terminal, its status
+             * @enum {string}
+             */
+            phase: "queued" | "delivered" | "awaiting-reply" | "awaiting-observation" | "settled" | "failed" | "timed-out";
+            /** @description Why it reached its terminal status, in words: the reply that confirmed it, the value observed instead, where it stopped when it timed out */
+            reason?: string;
+            /** @description The component's answer, as its execution report carried it, masked of the endpoint's credentials and anything labeled a credential, and capped; absent until a report lands */
+            reply?: string;
+            /**
+             * @description How its driver binding says it settles: from the component's reply, from the next observation of its target, or not at all (it sets nothing)
+             * @enum {string}
+             */
+            settle_mode: "reply" | "observation" | "none";
+            /**
+             * Format: int64
+             * @description How long it waits for its evidence
+             */
+            settle_window_seconds: number;
+            /**
+             * Format: date-time
+             * @description When it reached its terminal status
+             */
+            settled_at?: string;
+            /**
+             * @description What decided it, once terminal: its issue (it sets nothing), its reply, an observation of its target, or its window closing on no evidence
+             * @enum {string}
+             */
+            settled_by?: "issue" | "reply" | "observation" | "window";
+            /**
+             * Format: int64
+             * @description The event its terminal status put there: command-settled, command-failed or command-timed-out
+             */
+            settled_event_id?: number;
+            /**
+             * @description On an issue's answer only: the computed settlement verdict at that moment (none/pending/settled/failed)
+             * @enum {string}
+             */
+            settlement?: "none" | "pending" | "settled" | "failed";
+            /**
+             * @description The recorded status: issued until a terminal settled, failed, or timed-out
+             * @enum {string}
+             */
+            status: "issued" | "settled" | "failed" | "timed-out";
+            /** @description The property or metric it sets, by name */
+            target?: string;
+            /**
+             * @description The lane of the value it sets; absent for a fire-and-forget command
+             * @enum {string}
+             */
+            target_kind?: "property" | "metric";
+        };
+        CommandObservation: {
+            /**
+             * Format: date-time
+             * @description When it was observed
+             */
+            at: string;
+            /** @description The observed value */
+            value: unknown;
         };
         CommandTypeBody: {
             /**
@@ -6928,6 +7073,18 @@ export interface components {
              */
             readonly $schema?: string;
             command_types: components["schemas"]["CommandTypeBody"][] | null;
+        };
+        ListCommandsOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/ListCommandsOutputBody.json
+             */
+            readonly $schema?: string;
+            /** @description Its commands, newest first */
+            commands: components["schemas"]["CommandBody"][] | null;
+            /** @description The component, by name */
+            component: string;
         };
         ListComponentMembershipsOutputBody: {
             /**
@@ -11371,9 +11528,89 @@ export interface operations {
             };
         };
     };
-    "issue-component-command": {
+    "list-component-commands": {
+        parameters: {
+            query?: {
+                /** @description Only the commands with this recorded status; issued is every command still in flight */
+                status?: "issued" | "settled" | "failed" | "timed-out";
+                /** @description Only the commands issued at or after this RFC3339 time */
+                since?: string;
+                /** @description Only the commands issued at or before this RFC3339 time */
+                until?: string;
+                /** @description How many to return, newest first (1 to 500) */
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                /** @description The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1) */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListCommandsOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "get-component-command": {
         parameters: {
             query?: never;
+            header?: never;
+            path: {
+                /** @description The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1) */
+                name: string;
+                /** @description The command's id, as its issue answered it */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommandBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "issue-component-command": {
+        parameters: {
+            query?: {
+                /** @description Block until the command settles, fails or times out, or until wait_timeout passes, and answer with where it stands then. Refused with a 429, before anything is issued, while too many commands are already being waited on */
+                wait?: boolean;
+                /** @description How long a wait may block, in seconds (1 to 120). A command still in flight when it passes is answered as it stands, its phase saying where */
+                wait_timeout?: number;
+            };
             header?: never;
             path: {
                 /** @description The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1) */
@@ -11393,7 +11630,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["CommandOutputBody"];
+                    "application/json": components["schemas"]["CommandBody"];
                 };
             };
             /** @description Error */

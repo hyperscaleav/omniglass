@@ -74,6 +74,9 @@ type Command struct {
 // commandIssuedEvent is the event type of a command's caused occurrence.
 const commandIssuedEvent = writerclass.CommandIssued
 
+// fireAndForgetReason is why a command that sets nothing reads settled.
+const fireAndForgetReason = "fire-and-forget: it sets no value, so it settles at its issue"
+
 func (p *PG) IssueCommand(ctx context.Context, actorID, ownerKind, ownerID, commandType, instance string, value, params json.RawMessage) (*Command, error) {
 	col, err := ownerColumn(ownerKind)
 	if err != nil {
@@ -164,9 +167,15 @@ func (p *PG) IssueCommand(ctx context.Context, actorID, ownerKind, ownerID, comm
 		status = "settled"
 	}
 	var cmd Command
-	cmdSQL := fmt.Sprintf(`insert into command (owner_kind, %s, command_type_id, instance, params, actor, caused_event_id, status, settled_at)
+	// A fire-and-forget command records what decided it (its issue) and
+	// why, the way every terminal command does (#1155); it writes no second
+	// lifecycle event, since nothing settled it but the issue itself.
+	cmdSQL := fmt.Sprintf(`insert into command (owner_kind, %s, command_type_id, instance, params, actor, caused_event_id, status, settled_at,
+			settled_by, reason)
 		values ($1, $2, (select id from command_type where name = $3), $4, $5, $6, $7, $8,
-		        case when $8 = 'issued' then null else now() end)
+		        case when $8 = 'issued' then null else now() end,
+		        case when $8 = 'issued' then null else '`+SettledByIssue+`' end,
+		        case when $8 = 'issued' then null else '`+fireAndForgetReason+`' end)
 		returning id, ts`, col)
 	if err := tx.QueryRow(ctx, cmdSQL, ownerKind, arc, commandType, instance, params, actorID, causedID, status).Scan(&cmd.ID, &cmd.TS); err != nil {
 		return nil, fmt.Errorf("storage: insert command %q: %w", commandType, err)

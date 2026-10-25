@@ -9,7 +9,8 @@
 // probekeys), platform (keys only the Omniglass process itself writes: the
 // health rollup's verdict today, its self-monitoring later) and
 // command-lifecycle (the events a command's own lifecycle writes:
-// command-issued). Their names are declared in code and reserved against
+// command-issued, and its terminal command-settled, command-failed or
+// command-timed-out). Their names are declared in code and reserved against
 // operator-created types. The other two are resolved from the catalogs: calc (a
 // calc rule names the key as its output) and collected (every other key: a
 // driver's emits on the node lane, a push, the observers fusion reconciles by
@@ -99,11 +100,38 @@ var platform = map[string]string{
 // the event its intended value is caused by.
 const CommandIssued = "command-issued"
 
+// The events a command's terminal status lands on its owner's timeline
+// (#1155), one per recorded outcome, so an event rule can match a failure
+// without reading a status out of a message.
+const (
+	CommandSettled  = "command-settled"
+	CommandFailed   = "command-failed"
+	CommandTimedOut = "command-timed-out"
+)
+
 // commandLifecycle maps each event of a command's lifecycle to what it says.
 // Only a command writes one: a push, a node, a driver or an event rule landing
-// one would put a command on the timeline that nobody issued.
+// one would put a command on the timeline that nobody issued, or settle one
+// nobody's evidence decided.
 var commandLifecycle = map[string]string{
-	CommandIssued: "a command's issue, on the timeline of the owner it was issued to",
+	CommandIssued:   "a command's issue, on the timeline of the owner it was issued to",
+	CommandSettled:  "a command settling, from its reply or an observation of its target",
+	CommandFailed:   "a command failing: its execution failed, or its evidence contradicted its intent",
+	CommandTimedOut: "a command timing out: its settle window closed with no evidence",
+}
+
+// CommandOutcomeEvent is the lifecycle event a command's terminal status
+// writes, and false for a status that is not terminal.
+func CommandOutcomeEvent(status string) (string, bool) {
+	switch status {
+	case "settled":
+		return CommandSettled, true
+	case "failed":
+		return CommandFailed, true
+	case "timed-out":
+		return CommandTimedOut, true
+	}
+	return "", false
 }
 
 // pinnable are the node-probe keys an operator may also declare, each with its
@@ -124,7 +152,8 @@ func Pinnable(key string) bool { return pinnable[key] != "" }
 //     push, a calc rule, a command, an operator or an event rule never writes
 //     what the console reads as the node's own observation.
 //   - platform: the process alone.
-//   - command-lifecycle: a command alone, its issue landing command-issued.
+//   - command-lifecycle: a command alone, its issue landing command-issued
+//     and its terminal status the outcome event.
 //   - calc: the rule that outputs it, and an operator's declared value, which
 //     resolves ahead of the calculated one by design (properties page).
 //   - collected: every observer (the node lane carrying a driver's emits, a
