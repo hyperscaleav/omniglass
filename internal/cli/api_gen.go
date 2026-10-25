@@ -2178,6 +2178,55 @@ func generatedCommands() []*cobra.Command {
 		}())
 		parent.AddCommand(func() *cobra.Command {
 			cmd := func() *cobra.Command {
+				var fDriver string
+				var fInputs string
+				var fNode string
+				var fPolls string
+				var fSpec string
+				var fTimeoutSeconds int
+				cmd := &cobra.Command{
+					Use:     "preview",
+					Short:   "Preview a driver spec's polls through a node",
+					Long:    "Runs a driver spec's polls once through the node named, against the target its inputs name, and answers with what each poll read: the samples its emits extracted, each emit that did not locate, and an excerpt of the raw answer, masked of every secret the preview used. Nothing is stored. The spec is a stored driver (driver) or an unsaved one (spec); an invalid spec is a 422 listing its findings, as validate-driver-spec gives them. A preview runs a poll that is its own request (http, https, an snmp get, a tcp line); a poll that rides a held session or a bound socket needs an attached endpoint (run-endpoint-poll). A secret input must be one the caller may reveal (secret:reveal), since the preview hands it to the target named. A node that is not connected is a 503, one that does not answer in time a 504; too many runs in flight is a 429. Audited on the node and on each secret used. Gated by driver:preview.",
+					Example: "  omniglass driver preview --node node",
+					Args:    pathArgs(0),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/drivers:preview")
+						body := map[string]any{}
+						if cmd.Flags().Changed("driver") {
+							body["driver"] = fDriver
+						}
+						if cmd.Flags().Changed("inputs") {
+							body["inputs"] = jsonOrString(fInputs)
+						}
+						if cmd.Flags().Changed("node") {
+							body["node"] = fNode
+						}
+						if cmd.Flags().Changed("polls") {
+							body["polls"] = jsonOrString(fPolls)
+						}
+						if cmd.Flags().Changed("spec") {
+							body["spec"] = jsonOrString(fSpec)
+						}
+						if cmd.Flags().Changed("timeout-seconds") {
+							body["timeout_seconds"] = fTimeoutSeconds
+						}
+						return runAPICommand(cmd, "POST", path, body)
+					},
+				}
+				cmd.Flags().StringVar(&fDriver, "driver", "", "A stored driver to preview, by name; or give spec")
+				cmd.Flags().StringVar(&fInputs, "inputs", "", "The inputs an attach would take (host, port, a secret by name); a secret must be one you may reveal, since a preview hands it to the target")
+				cmd.Flags().StringVar(&fNode, "node", "", "The node that runs the preview, by name: the one that reaches the target")
+				_ = cmd.MarkFlagRequired("node")
+				cmd.Flags().StringVar(&fPolls, "polls", "", "The polls to run, by name; absent runs every poll")
+				cmd.Flags().StringVar(&fSpec, "spec", "", "A driver spec to preview inline, unsaved; or give driver")
+				cmd.Flags().IntVar(&fTimeoutSeconds, "timeout-seconds", 0, "How long the node may take for the whole preview (default 15, at most 30)")
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
 				var fLabel string
 				var fSpec string
 				var fVersion string
@@ -2205,6 +2254,30 @@ func generatedCommands() []*cobra.Command {
 				cmd.Flags().StringVar(&fLabel, "label", "", "A new operator-facing label")
 				cmd.Flags().StringVar(&fSpec, "spec", "", "A replacement spec body; validated like the create's, refused with a 422 when it cannot be interpreted")
 				cmd.Flags().StringVar(&fVersion, "version", "", "A new version string, e.g. 1.0.1")
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				var fSpec string
+				cmd := &cobra.Command{
+					Use:     "validate",
+					Short:   "Check a driver spec without saving it",
+					Long:    "Checks a driver spec by the rules a save applies (the strict parse, then validation against the live catalogs) and writes nothing. The answer lists every fault the validator can pin down, each pinned on the function it is in, the first always the fault a save would name; an empty list is a spec create-driver accepts. Gated by driver:read.",
+					Example: "  omniglass driver validate --spec <json>",
+					Args:    pathArgs(0),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/drivers:validate")
+						body := map[string]any{}
+						if cmd.Flags().Changed("spec") {
+							body["spec"] = jsonOrString(fSpec)
+						}
+						return runAPICommand(cmd, "POST", path, body)
+					},
+				}
+				cmd.Flags().StringVar(&fSpec, "spec", "", "The driver spec to check, as create-driver takes it")
+				_ = cmd.MarkFlagRequired("spec")
 				return cmd
 			}()
 			return cmd
@@ -2319,6 +2392,39 @@ func generatedCommands() []*cobra.Command {
 				return cmd
 			}()
 			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			parent := &cobra.Command{
+				Use:   "poll",
+				Short: "Commands for the poll resource",
+			}
+			parent.AddCommand(func() *cobra.Command {
+				cmd := func() *cobra.Command {
+					var qTimeoutSeconds int
+					cmd := &cobra.Command{
+						Use:     "run <endpoint> <poll>",
+						Short:   "Run an endpoint's poll now",
+						Long:    "Runs one of an attached endpoint's polls now, on the node that holds the endpoint, outside its schedule (which is unchanged), and answers with what it read. The samples land as a scheduled run's do. The run borrows the endpoint's held session where it has one and honors its gate: a gated endpoint refuses the run with the gate's reason (409) and nothing is sent. A poll the endpoint does not have is a 404 naming the polls it has; an endpoint on no node is a 409. A node that is not connected is a 503, one that does not answer in time a 504; too many runs in flight is a 429. Audited on the endpoint. Gated by endpoint:run; read and run scopes (through the component) drive the 404 versus 403 split.",
+						Example: "  omniglass endpoint poll run 'hq.west.level-2.huddle.$comp.panel-1/telnet' status",
+						Args:    pathArgs(2),
+						RunE: func(cmd *cobra.Command, args []string) error {
+							path := fmt.Sprintf("/api/v1/endpoints/%s/polls/%s:run", pathSegment(args[0]), pathSegment(args[1]))
+							q := url.Values{}
+							if cmd.Flags().Changed("timeout-seconds") {
+								q.Set("timeout_seconds", fmt.Sprintf("%v", qTimeoutSeconds))
+							}
+							if enc := q.Encode(); enc != "" {
+								path += "?" + enc
+							}
+							return runAPICommand(cmd, "POST", path, nil)
+						},
+					}
+					cmd.Flags().IntVar(&qTimeoutSeconds, "timeout-seconds", 0, "How long the node may take (default 15, at most 30)")
+					return cmd
+				}()
+				return cmd
+			}())
+			return parent
 		}())
 		parent.AddCommand(func() *cobra.Command {
 			cmd := func() *cobra.Command {

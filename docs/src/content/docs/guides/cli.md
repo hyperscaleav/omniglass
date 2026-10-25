@@ -214,6 +214,15 @@ other resource (`POST /endpoints` is `endpoint create`, `GET /endpoints/{endpoin
 <endpoint>`), so nothing here is special-cased. All examples require the matching permission on
 the running server.
 
+Check a driver spec, preview its polls through a node (storing nothing), and run an attached
+endpoint's poll now (landing it), each covered in the [drivers guide](/guides/admin/drivers/#check-preview-and-run-a-poll-now):
+
+```sh
+omniglass driver validate --spec "$(cat spec.json)"
+omniglass driver preview --node edge-hq --driver boreal-edge-web --inputs '{"host":"10.20.4.31","login":"display-login"}'
+omniglass endpoint poll run 'hq.west.level-2.huddle.$comp.display-1/http' identity
+```
+
 Register and enroll an edge node (the day-one handshake):
 
 ```sh

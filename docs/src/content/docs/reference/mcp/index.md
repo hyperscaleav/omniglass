@@ -21,7 +21,7 @@ Each tool says what a client may assume of it, from one rule over the route's me
 
 A tool that is not read-only and not destructive adds something (a create).
 
-46 tools.
+49 tools.
 
 | Tool | What it does | Gate | Assume |
 |---|---|---|---|
@@ -46,11 +46,14 @@ A tool that is not read-only and not destructive adds something (a create).
 | [`create-driver`](#create-driver) | Create a driver | `driver:create` | adds |
 | [`get-driver`](#get-driver) | Get a driver | `driver:read` | read-only, idempotent |
 | [`update-driver`](#update-driver) | Update a driver | `driver:update` | destructive |
+| [`preview-driver`](#preview-driver) | Preview a driver spec's polls through a node | `driver:preview` | destructive, open-world |
+| [`validate-driver-spec`](#validate-driver-spec) | Check a driver spec without saving it | `driver:read` | read-only, idempotent |
 | [`list-endpoints`](#list-endpoints) | List endpoints in scope | `endpoint:read` | read-only, idempotent |
 | [`create-endpoint`](#create-endpoint) | Create an endpoint | `endpoint:create` | open-world |
 | [`get-endpoint`](#get-endpoint) | Get an endpoint | `endpoint:read` | read-only, idempotent |
 | [`update-endpoint`](#update-endpoint) | Update an endpoint | `endpoint:update` | destructive, open-world |
 | [`delete-endpoint`](#delete-endpoint) | Delete an endpoint | `endpoint:delete` | destructive, idempotent |
+| [`run-endpoint-poll`](#run-endpoint-poll) | Run an endpoint's poll now | `endpoint:run` | open-world |
 | [`retry-endpoint`](#retry-endpoint) | Retry an endpoint's gated connections | `endpoint:retry` | destructive, open-world |
 | [`list-locations`](#list-locations) | List locations in scope | `location:read` | read-only, idempotent |
 | [`get-location`](#get-location) | Get a location | `location:read` | read-only, idempotent |
@@ -387,6 +390,39 @@ Patches a custom driver's label or version. Official drivers are read-only (422)
 | `spec` | any | no | A replacement spec body; validated like the create's, refused with a 422 when it cannot be interpreted |
 | `version` | string | no | A new version string, e.g. 1.0.1 |
 
+## `preview-driver`
+
+Preview a driver spec's polls through a node
+
+Runs a driver spec's polls once through the node named, against the target its inputs name, and answers with what each poll read: the samples its emits extracted, each emit that did not locate, and an excerpt of the raw answer, masked of every secret the preview used. Nothing is stored. The spec is a stored driver (driver) or an unsaved one (spec); an invalid spec is a 422 listing its findings, as validate-driver-spec gives them. A preview runs a poll that is its own request (http, https, an snmp get, a tcp line); a poll that rides a held session or a bound socket needs an attached endpoint (run-endpoint-poll). A secret input must be one the caller may reveal (secret:reveal), since the preview hands it to the target named. A node that is not connected is a 503, one that does not answer in time a 504; too many runs in flight is a 429. Audited on the node and on each secret used. Gated by driver:preview.
+
+- Route: `POST /api/v1/drivers:preview`
+- Gate: `driver:preview`
+- Assume: destructive, open-world
+
+| Argument | Type | Required | Description |
+|---|---|---|---|
+| `driver` | string | no | A stored driver to preview, by name; or give spec |
+| `inputs` | object | no | The inputs an attach would take (host, port, a secret by name); a secret must be one you may reveal, since a preview hands it to the target |
+| `node` | string | yes | The node that runs the preview, by name: the one that reaches the target |
+| `polls` | array | no | The polls to run, by name; absent runs every poll |
+| `spec` | any | no | A driver spec to preview inline, unsaved; or give driver |
+| `timeout_seconds` | integer | no | How long the node may take for the whole preview (default 15, at most 30) |
+
+## `validate-driver-spec`
+
+Check a driver spec without saving it
+
+Checks a driver spec by the rules a save applies (the strict parse, then validation against the live catalogs) and writes nothing. The answer lists every fault the validator can pin down, each pinned on the function it is in, the first always the fault a save would name; an empty list is a spec create-driver accepts. Gated by driver:read.
+
+- Route: `POST /api/v1/drivers:validate`
+- Gate: `driver:read`
+- Assume: read-only, idempotent
+
+| Argument | Type | Required | Description |
+|---|---|---|---|
+| `spec` | any | yes | The driver spec to check, as create-driver takes it |
+
 ## `list-endpoints`
 
 List endpoints in scope
@@ -464,6 +500,22 @@ Deletes an endpoint, refused while a task still references it. Gated by endpoint
 | Argument | Type | Required | Description |
 |---|---|---|---|
 | `endpoint` | string | yes | The endpoint, as <component>/<endpoint name> (the component by name, dotted address or uuid) or by its uuid. The slash is percent-encoded in a URL, as the CLI does |
+
+## `run-endpoint-poll`
+
+Run an endpoint's poll now
+
+Runs one of an attached endpoint's polls now, on the node that holds the endpoint, outside its schedule (which is unchanged), and answers with what it read. The samples land as a scheduled run's do. The run borrows the endpoint's held session where it has one and honors its gate: a gated endpoint refuses the run with the gate's reason (409) and nothing is sent. A poll the endpoint does not have is a 404 naming the polls it has; an endpoint on no node is a 409. A node that is not connected is a 503, one that does not answer in time a 504; too many runs in flight is a 429. Audited on the endpoint. Gated by endpoint:run; read and run scopes (through the component) drive the 404 versus 403 split.
+
+- Route: `POST /api/v1/endpoints/{endpoint}/polls/{poll}:run`
+- Gate: `endpoint:run`
+- Assume: open-world
+
+| Argument | Type | Required | Description |
+|---|---|---|---|
+| `endpoint` | string | yes | The endpoint, as <component>/<endpoint name> or its id |
+| `poll` | string | yes | The poll to run, by its function name |
+| `timeout_seconds` | integer | no | How long the node may take (default 15, at most 30) |
 
 ## `retry-endpoint`
 

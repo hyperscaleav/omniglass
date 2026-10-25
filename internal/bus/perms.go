@@ -42,10 +42,14 @@ func nodePermissions(node string) *server.Permissions {
 			// The simulator beside the node takes the server's operation
 			// requests for it.
 			collection.SimopSubject(node),
+			// The node takes the server's on-demand runs for it (#1163).
+			collection.RunSubject(node),
 		}},
-		// One reply to each request the node received, so the simulator
-		// can answer an operation without a grant to publish anywhere else.
-		Response: &server.ResponsePermission{MaxMsgs: 1, Expires: simopTimeout},
+		// One reply to each request the node received, so the simulator can
+		// answer an operation, and the node a run, without a grant to publish
+		// anywhere else. A run may take its whole budget, so the reply stays
+		// permitted that long.
+		Response: &server.ResponsePermission{MaxMsgs: 1, Expires: max(simopTimeout, runTimeout+runReplySlack)},
 	}
 }
 

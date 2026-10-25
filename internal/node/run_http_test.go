@@ -98,7 +98,7 @@ func newHTTPStack(t *testing.T, nodeName string, shape func(*profile.Store), pic
 		t.Fatal(err)
 	}
 	t.Cleanup(srv.Shutdown)
-	apiSrv := httptest.NewServer(api.NewHandler(gw, api.WithNatsURL(srv.ClientURL())))
+	apiSrv := httptest.NewServer(api.NewHandler(gw, api.WithNatsURL(srv.ClientURL()), api.WithNodeRunner(srv)))
 	t.Cleanup(apiSrv.Close)
 	s := &httpStack{gateStack: &gateStack{t: t, ctx: ctx, gw: gw, all: all, apiURL: apiSrv.URL, token: token, panels: map[string]*sim.Device{}},
 		dsn: dsn, devices: map[string]*sim.Device{}, ips: ips}

@@ -40,6 +40,13 @@ func TestScanPermissionsResolves(t *testing.T) {
 		{"a comma action list checks each", "operator holds `component:create,frobnicate`", 1},
 		{"an illustrative mention is exempt", "the illustrative `alarm:ack` example", 0},
 	}
+	// A permission verb that shares a label task's word (driver:preview beside
+	// the run:preview label) does not make the label a claim.
+	withPreview := append(append([][]string(nil), stamps...), []string{"driver", "preview"})
+	pres, pacts := stampVocab(withPreview)
+	if got := scanPermissionsIn("apply `run:preview`", withPreview, pres, pacts); len(got) != 0 {
+		t.Errorf("a label sharing a verb's word = %v, want no finding", got)
+	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			got := scanPermissionsIn(c.line, stamps, resources, actions)

@@ -116,6 +116,21 @@ update on a known `action` row by id. **Events are not shipped from the edge**: 
 next poll is the **alarm** model's job (one stateful open alarm, fire and clear).
 :::
 
+### On-demand runs: asked, answered once
+
+The server can ask a node to **run work now** on the node's own run subject (`og.v1.run.<node>`), a
+request the node answers once, the simulator operation's shape rather than the command queue's
+([ADR-1163](/architecture/decisions/#adr-1163-a-poll-runs-once-on-demand-through-its-node-as-a-preview-that-stores-nothing-or-a-run-now-that-lands)). A run is wanted now or not at all, so nothing is queued: a node that is
+not connected is an answer (the API's 503), and one that does not answer within the run's budget
+another (504). A **preview** runs on the request's own goroutine, touches no held session and
+publishes nothing, its excerpt scrubbed of the credential before it is cut. A **run now** waits for
+the run loop, which owns every held session and gate, so the poll borrows the endpoint's session and
+honors its gate exactly as a scheduled run does, and its samples and faults publish as a scheduled
+run's would, through the same change memory (an event or a log line that has not changed is not
+landed twice); the schedule is untouched. A run now the loop could not take within its caller's
+budget is dropped unrun, since its caller was already answered. The node's grant
+covers its own run subject only, and its one reply stays permitted for the run's whole budget.
+
 ### Buffering and retention are cascade settings
 
 :::design[Target design: the edge buffer, tracked in #430; retention is #417]

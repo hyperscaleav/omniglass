@@ -1296,6 +1296,46 @@ export interface paths {
         patch: operations["update-driver"];
         trace?: never;
     };
+    "/drivers:preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview a driver spec's polls through a node
+         * @description Runs a driver spec's polls once through the node named, against the target its inputs name, and answers with what each poll read: the samples its emits extracted, each emit that did not locate, and an excerpt of the raw answer, masked of every secret the preview used. Nothing is stored. The spec is a stored driver (driver) or an unsaved one (spec); an invalid spec is a 422 listing its findings, as validate-driver-spec gives them. A preview runs a poll that is its own request (http, https, an snmp get, a tcp line); a poll that rides a held session or a bound socket needs an attached endpoint (run-endpoint-poll). A secret input must be one the caller may reveal (secret:reveal), since the preview hands it to the target named. A node that is not connected is a 503, one that does not answer in time a 504; too many runs in flight is a 429. Audited on the node and on each secret used. Gated by driver:preview.
+         */
+        post: operations["preview-driver"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/drivers:validate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Check a driver spec without saving it
+         * @description Checks a driver spec by the rules a save applies (the strict parse, then validation against the live catalogs) and writes nothing. The answer lists every fault the validator can pin down, each pinned on the function it is in, the first always the fault a save would name; an empty list is a spec create-driver accepts. Gated by driver:read.
+         */
+        post: operations["validate-driver-spec"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/endpoints": {
         parameters: {
             query?: never;
@@ -1346,6 +1386,26 @@ export interface paths {
          * @description Patches an endpoint's node placement, params, label, or (driver-attached) its connection inputs in place: the host, port and attached secret references, validated against the driver's declared inputs, the endpoint's tasks re-derived in the same transaction. A value the driver refuses is a 400 naming the field. An empty label clears it and the surface falls back to the derived name. Gated by endpoint:update; read and update scopes (through the component) drive the 404 versus 403 split.
          */
         patch: operations["update-endpoint"];
+        trace?: never;
+    };
+    "/endpoints/{endpoint}/polls/{poll}:run": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Run an endpoint's poll now
+         * @description Runs one of an attached endpoint's polls now, on the node that holds the endpoint, outside its schedule (which is unchanged), and answers with what it read. The samples land as a scheduled run's do. The run borrows the endpoint's held session where it has one and honors its gate: a gated endpoint refuses the run with the gate's reason (409) and nothing is sent. A poll the endpoint does not have is a 404 naming the polls it has; an endpoint on no node is a 409. A node that is not connected is a 503, one that does not answer in time a 504; too many runs in flight is a 429. Audited on the endpoint. Gated by endpoint:run; read and run scopes (through the component) drive the 404 versus 403 split.
+         */
+        post: operations["run-endpoint-poll"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/endpoints/{endpoint}:retry": {
@@ -6679,6 +6739,17 @@ export interface components {
             /** Format: int64 */
             size: number;
         };
+        Finding: {
+            /** @description The function the fault is pinned on: a poll's or a listener's name, a command binding's command type */
+            function?: string;
+            /**
+             * @description What the fault is in: parse (the spec is not a spec), spec (the spec itself), or the family of the function it is pinned on
+             * @enum {string}
+             */
+            kind: "parse" | "spec" | "poll" | "listener" | "command";
+            /** @description The fault, as the validator names it */
+            message: string;
+        };
         FireSimInputBody: {
             /**
              * Format: uri
@@ -7822,6 +7893,69 @@ export interface components {
             /** @description The bound value */
             value: string;
         };
+        PollRunBody: {
+            /** @description What the fetch answered, before any emit read it, bounded and masked of every secret the preview used */
+            excerpt?: string;
+            /** @description The answer was longer than the excerpt */
+            excerpt_truncated?: boolean;
+            /** @description Each emit that did not locate or type, or the fetch that failed */
+            faults?: string[] | null;
+            /** @description The poll that ran */
+            poll: string;
+            /** @description What its emits extracted */
+            samples: components["schemas"]["RunSample"][] | null;
+            /**
+             * Format: int64
+             * @description How long the poll took on the node
+             */
+            took_ms: number;
+        };
+        PreviewDriverInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/PreviewDriverInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description A stored driver to preview, by name; or give spec */
+            driver?: string;
+            /** @description The inputs an attach would take (host, port, a secret by name); a secret must be one you may reveal, since a preview hands it to the target */
+            inputs?: {
+                [key: string]: string;
+            };
+            /**
+             * @description The node that runs the preview, by name: the one that reaches the target
+             * @example edge-hq
+             */
+            node: string;
+            /** @description The polls to run, by name; absent runs every poll */
+            polls?: string[] | null;
+            /** @description A driver spec to preview inline, unsaved; or give driver */
+            spec?: unknown;
+            /**
+             * Format: int64
+             * @description How long the node may take for the whole preview (default 15, at most 30)
+             */
+            timeout_seconds?: number;
+        };
+        PreviewDriverOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/PreviewDriverOutputBody.json
+             */
+            readonly $schema?: string;
+            /** @description The stored driver previewed; absent for an inline spec */
+            driver?: string;
+            /** @description The node that ran it */
+            node: string;
+            /** @description One per poll */
+            results: components["schemas"]["PollRunBody"][] | null;
+            /** @description Always false: a preview stores no sample */
+            stored: boolean;
+            /** @description Where the polls were sent */
+            target: string;
+        };
         PreviewEdgeBody: {
             /**
              * Format: date-time
@@ -8699,6 +8833,55 @@ export interface components {
              * @description When the streak began
              */
             since: string;
+        };
+        RunEndpointPollOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/RunEndpointPollOutputBody.json
+             */
+            readonly $schema?: string;
+            /** @description Its component, by name */
+            component?: string;
+            /** @description The endpoint, by name */
+            endpoint: string;
+            /** @description Each emit that did not locate or type, or the fetch that failed, each landed as collection-failed */
+            faults?: string[] | null;
+            /** @description The node that ran the poll */
+            node: string;
+            /** @description The poll that ran */
+            poll: string;
+            /** @description What its emits extracted, landed as a scheduled run's are */
+            samples: components["schemas"]["RunSample"][] | null;
+            /** @description Always true: a run now lands its samples as a scheduled run does */
+            stored: boolean;
+            /**
+             * Format: int64
+             * @description How long the poll took on the node
+             */
+            took_ms: number;
+        };
+        RunSample: {
+            /** @description The sample's labels, its instance among them */
+            labels?: {
+                [key: string]: string;
+            };
+            /** @description event or log for an event or a log line; absent for a metric or a property */
+            lane?: string;
+            /** @description The key the emit landed */
+            name: string;
+            /** @description A property's value, or an event's or log line's message */
+            text?: string;
+            /**
+             * Format: date-time
+             * @description When the sample was taken
+             */
+            ts: string;
+            /**
+             * Format: double
+             * @description A metric's number
+             */
+            value?: number;
         };
         SecretBody: {
             /**
@@ -10026,6 +10209,28 @@ export interface components {
             support_phone?: string;
             /** @description A new website (http or https) */
             website?: string;
+        };
+        ValidateDriverInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/ValidateDriverInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description The driver spec to check, as create-driver takes it */
+            spec: unknown;
+        };
+        ValidateDriverOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/ValidateDriverOutputBody.json
+             */
+            readonly $schema?: string;
+            /** @description Every fault the validator can pin down, the first the one a save names; empty when valid */
+            findings: components["schemas"]["Finding"][] | null;
+            /** @description Whether a save would accept the spec */
+            valid: boolean;
         };
         ValidateExpressionInputBody: {
             /**
@@ -12774,6 +12979,72 @@ export interface operations {
             };
         };
     };
+    "preview-driver": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PreviewDriverInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PreviewDriverOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "validate-driver-spec": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ValidateDriverInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidateDriverOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     "list-endpoints": {
         parameters: {
             query?: never;
@@ -12921,6 +13192,43 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EndpointBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "run-endpoint-poll": {
+        parameters: {
+            query?: {
+                /** @description How long the node may take (default 15, at most 30) */
+                timeout_seconds?: number;
+            };
+            header?: never;
+            path: {
+                /** @description The endpoint, as <component>/<endpoint name> or its id */
+                endpoint: string;
+                /** @description The poll to run, by its function name */
+                poll: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunEndpointPollOutputBody"];
                 };
             };
             /** @description Error */

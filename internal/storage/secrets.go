@@ -455,29 +455,9 @@ func (p *PG) decryptSecret(ctx context.Context, actorID, ref, verb string, read,
 	if err != nil {
 		return nil, err
 	}
-	out := make(map[string]string, len(row.value))
-	for _, f := range shape.Fields {
-		raw, ok := row.value[f.Name]
-		if !ok {
-			continue
-		}
-		if !f.Secret {
-			var v string
-			if err := json.Unmarshal(raw, &v); err != nil {
-				return nil, fmt.Errorf("storage: decode secret field %q: %w", f.Name, err)
-			}
-			out[f.Name] = v
-			continue
-		}
-		var env secret.Envelope
-		if err := json.Unmarshal(raw, &env); err != nil {
-			return nil, fmt.Errorf("storage: decode envelope %q: %w", f.Name, err)
-		}
-		pt, err := secret.Open(ctx, p.secret, env, secretAAD(row.ownerKind, row.ownerID, row.name, f.Name))
-		if err != nil {
-			return nil, fmt.Errorf("storage: unseal secret field %q: %w", f.Name, err)
-		}
-		out[f.Name] = string(pt)
+	out, _, err := p.unsealSecretFields(ctx, row, shape)
+	if err != nil {
+		return nil, err
 	}
 	// The decrypt is audited against the secret's primary key, taken from the row
 	// that was fetched, never against the reference the caller reached it by.
@@ -489,6 +469,39 @@ func (p *PG) decryptSecret(ctx context.Context, actorID, ref, verb string, read,
 		return nil, fmt.Errorf("storage: commit %s secret: %w", verb, err)
 	}
 	return out, nil
+}
+
+// unsealSecretFields opens a secret row's fields: a secret field through the
+// provider (the (owner, name, field) AAD must match), a non-secret one as
+// stored. sealed lists the plaintext of the secret fields alone, what a caller
+// that hands the fields on must mask wherever they could be echoed back.
+func (p *PG) unsealSecretFields(ctx context.Context, row secretRow, shape secret.Shape) (fields map[string]string, sealed []string, err error) {
+	fields = make(map[string]string, len(row.value))
+	for _, f := range shape.Fields {
+		raw, ok := row.value[f.Name]
+		if !ok {
+			continue
+		}
+		if !f.Secret {
+			var v string
+			if err := json.Unmarshal(raw, &v); err != nil {
+				return nil, nil, fmt.Errorf("storage: decode secret field %q: %w", f.Name, err)
+			}
+			fields[f.Name] = v
+			continue
+		}
+		var env secret.Envelope
+		if err := json.Unmarshal(raw, &env); err != nil {
+			return nil, nil, fmt.Errorf("storage: decode envelope %q: %w", f.Name, err)
+		}
+		pt, err := secret.Open(ctx, p.secret, env, secretAAD(row.ownerKind, row.ownerID, row.name, f.Name))
+		if err != nil {
+			return nil, nil, fmt.Errorf("storage: unseal secret field %q: %w", f.Name, err)
+		}
+		fields[f.Name] = string(pt)
+		sealed = append(sealed, string(pt))
+	}
+	return fields, sealed, nil
 }
 
 // --- cascade resolver --------------------------------------------------------

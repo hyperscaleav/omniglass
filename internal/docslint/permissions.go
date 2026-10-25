@@ -132,6 +132,10 @@ func matchExplicit(pat, path []string) bool {
 // pairs like action:login out of scope.
 var permToken = regexp.MustCompile(`^([a-z_*]+):([a-z,*-]+)(?::([a-z]+))?$`)
 
+// labelFamilies are the prefixes of the label taxonomy (contributing/labels.md):
+// a span under one is a label, never a permission claim.
+var labelFamilies = map[string]bool{"area": true, "run": true}
+
 func stampVocab(stamps [][]string) (resources, actions map[string]bool) {
 	resources = map[string]bool{}
 	actions = map[string]bool{}
@@ -158,6 +162,12 @@ func scanPermissionsIn(line string, stamps [][]string, resources, actions map[st
 			continue
 		}
 		res := tok[1]
+		if labelFamilies[res] {
+			// The label taxonomy (area:<subsystem>, run:<task>) names no
+			// resource, so a label stays a label even when a permission verb
+			// shares its task's word (run:preview beside driver:preview).
+			continue
+		}
 		if res != "*" && !resources[res] {
 			// An unknown resource is in scope only when it claims at least one
 			// real permission verb; otherwise the span is a label glob, a

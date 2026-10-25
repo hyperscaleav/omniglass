@@ -14,16 +14,23 @@ roles:
   - id: operator
     label: Operator
     description: >-
-      Day-to-day operations: create or edit components, endpoints (and retry
-      an endpoint's rejected session), secrets,
+      Day-to-day operations: create or edit components, endpoints (retry an
+      endpoint's rejected session, or run its poll now), secrets,
       variables, and the property, metric, event, and command catalogs, issue
-      commands in scope, and impair simulated devices.
+      commands in scope, preview a driver spec through a node, and impair
+      simulated devices.
       Sees and reveals the device secrets in its scope (never the admin-sensitive
       platform credentials). Inherits Viewer.
     inherits: ["viewer"]
     permissions:
       - "component:create,update,rename,move"
-      - "endpoint:create,update,retry"
+      - "endpoint:create,update,retry,run"
+      # driver:preview runs a spec's polls once through a node against a target
+      # the caller names, storing nothing (#1163). A poll's request is whatever
+      # the spec says, so it reaches the component as a command would: it sits
+      # with command:issue, and the secrets it hands over must be ones the
+      # caller may reveal.
+      - "driver:preview"
       - "secret:read,reveal,create,update"
       - "variable:create,update"
       - "property_type:create,update"
