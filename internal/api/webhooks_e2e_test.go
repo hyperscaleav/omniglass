@@ -255,6 +255,14 @@ func TestWebhookIngressEndToEnd(t *testing.T) {
 	if len(inbox.Sources) != 0 {
 		t.Fatalf("inbox = %d sources after the sender's post landed, want it claimed", len(inbox.Sources))
 	}
+	// The inbox is fleet-wide, as nodes are: a viewer bounded to one
+	// component reads none of it.
+	uccComp, err := gw.GetComponent(ctx, "ucc-1", all)
+	if err != nil {
+		t.Fatalf("get component: %v", err)
+	}
+	scoped := principalWithGrants(t, ctx, dsn, "scoped-viewer", []grant{{role: "viewer", scopeKind: "component", scopeID: uccComp.ID}})
+	c.do(scoped, http.MethodGet, "/unclaimed-sources", nil, http.StatusForbidden)
 
 	// A wrong signature and a stale timestamp are refused, counted, and
 	// land nothing.

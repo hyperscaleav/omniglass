@@ -58,38 +58,45 @@ func TestBucketsAreBoundedUnderAFloodOfKeys(t *testing.T) {
 }
 
 // A delivery id is remembered per endpoint for the replay window: the
-// sender's redelivery is seen, another endpoint's same id is not, and an id
-// whose publish failed is forgotten so the retry lands.
+// sender's redelivery is seen, another endpoint's same id is not, an id
+// still publishing reads pending (so the redelivery is told to retry, never
+// told it landed), and an id whose publish failed is forgotten so the retry
+// lands.
 func TestADeliveryLandsOncePerEndpointWithinTheWindow(t *testing.T) {
 	d := ingress.NewDeduper(ingress.ReplayWindow, 8)
-	if !d.Begin("ep-1", "d-1", now) {
-		t.Fatal("a first delivery read as a redelivery")
+	if got := d.Begin("ep-1", "d-1", now); got != ingress.DeliveryNew {
+		t.Fatalf("a first delivery = %v, want new", got)
 	}
-	if d.Begin("ep-1", "d-1", now.Add(time.Minute)) {
-		t.Fatal("a redelivery inside the window read as new")
+	if got := d.Begin("ep-1", "d-1", now.Add(time.Second)); got != ingress.DeliveryPending {
+		t.Fatalf("a redelivery while the first still publishes = %v, want pending", got)
 	}
-	if !d.Begin("ep-2", "d-1", now) {
-		t.Fatal("another endpoint's delivery of the same id read as a redelivery")
+	d.Commit("ep-1", "d-1")
+	if got := d.Begin("ep-1", "d-1", now.Add(time.Minute)); got != ingress.DeliveryDone {
+		t.Fatalf("a redelivery inside the window = %v, want done", got)
 	}
-	if !d.Begin("ep-1", "d-1", now.Add(ingress.ReplayWindow+time.Second)) {
-		t.Fatal("a delivery past the window still remembered")
+	if got := d.Begin("ep-2", "d-1", now); got != ingress.DeliveryNew {
+		t.Fatalf("another endpoint's delivery of the same id = %v, want new", got)
 	}
-	if !d.Begin("ep-1", "d-2", now) {
-		t.Fatal("a fresh id read as a redelivery")
+	if got := d.Begin("ep-1", "d-1", now.Add(ingress.ReplayWindow+time.Second)); got != ingress.DeliveryNew {
+		t.Fatalf("a delivery past the window = %v, want new", got)
+	}
+	if got := d.Begin("ep-1", "d-2", now); got != ingress.DeliveryNew {
+		t.Fatalf("a fresh id = %v", got)
 	}
 	d.Abandon("ep-1", "d-2")
-	if !d.Begin("ep-1", "d-2", now) {
+	if got := d.Begin("ep-1", "d-2", now); got != ingress.DeliveryNew {
 		t.Fatal("an abandoned delivery (its publish failed) still remembered, so the retry would land nothing")
 	}
 	// An endpoint's memory is bounded: the oldest is let go first.
 	b := ingress.NewDeduper(ingress.ReplayWindow, 3)
 	for i := 0; i < 5; i++ {
 		b.Begin("ep", fmt.Sprintf("d-%d", i), now.Add(time.Duration(i)*time.Second))
+		b.Commit("ep", fmt.Sprintf("d-%d", i))
 	}
 	if b.Len("ep") > 3 {
 		t.Fatalf("remembered %d ids past the cap of 3", b.Len("ep"))
 	}
-	if b.Begin("ep", "d-4", now.Add(10*time.Second)) {
+	if b.Begin("ep", "d-4", now.Add(10*time.Second)) != ingress.DeliveryDone {
 		t.Fatal("the newest id was let go before the oldest")
 	}
 }

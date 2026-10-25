@@ -40,8 +40,13 @@ func registerUnclaimedRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 		Method:      http.MethodGet,
 		Path:        "/unclaimed-sources",
 		Summary:     "List the sources no endpoint claims",
-		Description: "The unclaimed-source inbox: each source a listener heard from that no endpoint claims (a webhook post to an unknown or rotated token), with how often, when first and last, and its last message cut to 512 bytes. Bounded at 256 sources per listener, the least recently heard evicted, and aged out after seven days; a source is let go once its messages land on an endpoint. Claim one by creating its endpoint. Gated by node:read: it is the listener's own observation.",
+		Description: "The unclaimed-source inbox: each source a listener heard from that no endpoint claims (a webhook post to an unknown or rotated token), with how often, when first and last, and its last message cut to 512 bytes. Bounded at 256 sources per listener, the least recently heard evicted, and aged out after seven days; a source is let go once its messages land on an endpoint. Claim one by creating its endpoint. Gated by node:read on an all-scope grant: it is the listener's own observation, and listeners are fleet-wide as nodes are.",
 	}, "node", "read"), func(ctx context.Context, _ *struct{}) (*listUnclaimedSourcesOutput, error) {
+		// The listeners are fleet-wide, as nodes are: a node:read bounded to a
+		// place reads none of them, the same 403 a node read gives.
+		if !a.scopeFor(ctx, "node", "read").All {
+			return nil, huma.Error403Forbidden("forbidden: the unclaimed-source inbox needs node:read on an all-scope grant")
+		}
 		us, err := gw.ListUnclaimedSources(ctx)
 		if err != nil {
 			return nil, huma.Error500InternalServerError("list unclaimed sources")

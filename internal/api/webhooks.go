@@ -47,9 +47,13 @@ const (
 	webhookEndpointRate, webhookEndpointBurst = 20, 40
 	webhookListenerRate, webhookListenerBurst = 200, 400
 	webhookBucketKeys                         = 10000
-	// The posts in flight at once, in all and per source.
+	// The posts in flight at once: per source while its body is read, and in
+	// all once it is (a slow-dripping sender holds only its own slots).
 	webhookInFlight          = 64
 	webhookInFlightPerSource = 8
+	// webhookDeliveries is how many delivery ids an endpoint remembers: its
+	// bucket's rate over the replay window, so none is let go early.
+	webhookDeliveries = 8192
 	// webhookFlushEvery is the tick the tally of refusals and unclaimed
 	// sources flushes on, one write per source per tick.
 	webhookFlushEvery = 2 * time.Second
@@ -89,7 +93,7 @@ func newWebhookReceiver(gw storage.Gateway, pub TelemetryPublisher) *webhookRece
 		sources:   ingress.NewBuckets(webhookSourceRate, webhookSourceBurst, webhookBucketKeys),
 		endpoints: ingress.NewBuckets(webhookEndpointRate, webhookEndpointBurst, webhookBucketKeys),
 		listener:  ingress.NewBuckets(webhookListenerRate, webhookListenerBurst, 1),
-		dedup:     ingress.NewDeduper(ingress.ReplayWindow, 4096),
+		dedup:     ingress.NewDeduper(ingress.ReplayWindow, webhookDeliveries),
 		tally:     ingress.NewTally(storage.UnclaimedBound),
 		perSource: map[string]int{},
 		unclaimed: map[string]bool{},
@@ -109,7 +113,7 @@ type webhookInput struct {
 func (in *webhookInput) Resolve(ctx huma.Context) []error {
 	in.header = http.Header{}
 	ctx.EachHeader(func(name, value string) { in.header.Add(name, value) })
-	_, in.source = clientMetaFrom(ctx.Context())
+	in.source = ingress.Source(ctx.RemoteAddr(), ctx.Header("X-Forwarded-For"))
 	return nil
 }
 
@@ -171,26 +175,17 @@ func registerWebhookRoutes(api huma.API, gw storage.Gateway, pub TelemetryPublis
 	return rc
 }
 
-// bound is the route's own limits, applied before the body is read: the
-// listener's and the source's token buckets, the posts in flight in all and
-// per source, and the read deadline.
+// bound is the route's own limits, applied before the body is read, with
+// the read deadline.
 func (rc *webhookReceiver) bound(api huma.API) func(huma.Context, func(huma.Context)) {
 	return func(ctx huma.Context, next func(huma.Context)) {
-		_, src := clientMetaFrom(ctx.Context())
-		now := rc.now()
-		if ok, retry := rc.listener.Allow("", now); !ok {
-			tooMany(api, ctx, retry)
+		src := ingress.Source(ctx.RemoteAddr(), ctx.Header("X-Forwarded-For"))
+		ok, wait := rc.admit(src, rc.now())
+		if !ok {
+			tooMany(api, ctx, wait)
 			return
 		}
-		if ok, retry := rc.sources.Allow(src, now); !ok {
-			tooMany(api, ctx, retry)
-			return
-		}
-		if !rc.acquire(src) {
-			tooMany(api, ctx, time.Second)
-			return
-		}
-		defer rc.release(src)
+		defer rc.releaseSource(src)
 		if _, w := humachi.Unwrap(ctx); w != nil {
 			_ = http.NewResponseController(w).SetReadDeadline(time.Now().Add(webhookReadDeadline))
 		}
@@ -198,24 +193,52 @@ func (rc *webhookReceiver) bound(api huma.API) func(huma.Context, func(huma.Cont
 	}
 }
 
-func (rc *webhookReceiver) acquire(src string) bool {
-	rc.mu.Lock()
-	defer rc.mu.Unlock()
-	if rc.inFlight >= webhookInFlight || rc.perSource[src] >= webhookInFlightPerSource {
-		return false
+// admit applies the limits narrowest first: the source's bucket, then its
+// posts in flight, and only then the listener's shared bucket, so a source's
+// refused flood never spends what every other sender shares. An admitted
+// post holds a source slot until releaseSource.
+func (rc *webhookReceiver) admit(src string, now time.Time) (bool, time.Duration) {
+	if ok, wait := rc.sources.Allow(src, now); !ok {
+		return false, wait
 	}
-	rc.inFlight++
+	rc.mu.Lock()
+	if rc.perSource[src] >= webhookInFlightPerSource {
+		rc.mu.Unlock()
+		return false, time.Second
+	}
 	rc.perSource[src]++
-	return true
+	rc.mu.Unlock()
+	if ok, wait := rc.listener.Allow("", now); !ok {
+		rc.releaseSource(src)
+		return false, wait
+	}
+	return true, 0
 }
 
-func (rc *webhookReceiver) release(src string) {
+func (rc *webhookReceiver) releaseSource(src string) {
 	rc.mu.Lock()
 	defer rc.mu.Unlock()
-	rc.inFlight--
 	if rc.perSource[src]--; rc.perSource[src] <= 0 {
 		delete(rc.perSource, src)
 	}
+}
+
+// acquireWork takes one of the listener's slots for a post whose body is
+// read, so the slots measure work, never a sender dripping its body.
+func (rc *webhookReceiver) acquireWork() bool {
+	rc.mu.Lock()
+	defer rc.mu.Unlock()
+	if rc.inFlight >= webhookInFlight {
+		return false
+	}
+	rc.inFlight++
+	return true
+}
+
+func (rc *webhookReceiver) releaseWork() {
+	rc.mu.Lock()
+	defer rc.mu.Unlock()
+	rc.inFlight--
 }
 
 // retryAfter is a wait as whole seconds, at least one.
@@ -265,6 +288,10 @@ func (rc *webhookReceiver) receive(ctx context.Context, in *webhookInput) (*webh
 	if rc.pub == nil {
 		return nil, huma.Error503ServiceUnavailable("webhook ingest is unavailable (no bus)")
 	}
+	if !rc.acquireWork() {
+		return nil, tooManyErr(time.Second)
+	}
+	defer rc.releaseWork()
 	now := rc.now()
 	t, err := rc.resolve(ctx, in.Token)
 	if errors.Is(err, storage.ErrWebhookNotFound) {
@@ -276,9 +303,6 @@ func (rc *webhookReceiver) receive(ctx context.Context, in *webhookInput) (*webh
 	}
 	if err != nil {
 		return nil, huma.Error500InternalServerError("resolve webhook")
-	}
-	if ok, wait := rc.endpoints.Allow(t.EndpointID, now); !ok {
-		return nil, tooManyErr(wait)
 	}
 	post := ingress.Post{Header: in.header, Body: in.RawBody}
 	// Fail closed: a scheme whose credential no longer resolves (its secret
@@ -300,11 +324,23 @@ func (rc *webhookReceiver) receive(ctx context.Context, in *webhookInput) (*webh
 		rc.armFlush()
 		return nil, huma.Error401Unauthorized("unauthorized")
 	}
+	// The endpoint's budget is spent only by posts its scheme admitted, so a
+	// leaked URL's unsigned flood cannot silence the real sender.
+	if ok, wait := rc.endpoints.Allow(t.EndpointID, now); !ok {
+		return nil, tooManyErr(wait)
+	}
 	id := ingress.DeliveryID(t.Webhook, in.header)
-	if id != "" && !rc.dedup.Begin(t.EndpointID, id, now) {
-		// A redelivery inside the window: accepted, so the sender stops
-		// retrying, and landed once already.
-		return &webhookOutput{Status: http.StatusAccepted}, nil
+	if id != "" {
+		switch rc.dedup.Begin(t.EndpointID, id, now) {
+		case ingress.DeliveryDone:
+			// A redelivery inside the window: accepted, so the sender stops
+			// retrying, and landed once already.
+			return &webhookOutput{Status: http.StatusAccepted}, nil
+		case ingress.DeliveryPending:
+			// Its first arrival is still publishing: retry, since it may yet
+			// fail, and a 202 now would lose it.
+			return nil, huma.ErrorWithHeaders(huma.Error409Conflict("this delivery is still landing; retry"), http.Header{"Retry-After": {"1"}})
+		}
 	}
 	msg := driver.WebhookMessage(in.RawBody, t.Webhook.FormatOf(), routable(in.header, t.Webhook))
 	batch := ingress.Batch(t.ComponentID, t.EndpointName, ingress.Route(t.Listeners, msg, now))
@@ -313,6 +349,9 @@ func (rc *webhookReceiver) receive(ctx context.Context, in *webhookInput) (*webh
 			rc.dedup.Abandon(t.EndpointID, id)
 		}
 		return nil, huma.Error503ServiceUnavailable("publish failed; retry")
+	}
+	if id != "" {
+		rc.dedup.Commit(t.EndpointID, id)
 	}
 	// Last heard: every attributed post stamps its endpoint, the push
 	// endpoint's read in place of a verdict.
@@ -351,6 +390,10 @@ func routable(h http.Header, w *driver.WebhookSpec) http.Header {
 }
 
 func (rc *webhookReceiver) verify(ctx context.Context, in *webhookVerifyInput) (*webhookVerifyOutput, error) {
+	if !rc.acquireWork() {
+		return nil, tooManyErr(time.Second)
+	}
+	defer rc.releaseWork()
 	t, err := rc.resolve(ctx, in.Token)
 	if errors.Is(err, storage.ErrWebhookNotFound) {
 		return nil, webhookNotFound()
@@ -406,9 +449,10 @@ func (rc *webhookReceiver) flush() {
 	if err := rc.gw.RecordUnclaimedSources(ctx, us); err != nil {
 		slog.Warn("webhook: record unclaimed sources", "error", err)
 	}
+	held := rc.loadUnclaimed(ctx)
 	rc.mu.Lock()
-	for _, u := range us {
-		rc.unclaimed[u.Source] = true
+	if held != nil {
+		rc.unclaimed, rc.unclaimedLoaded = held, true
 	}
 	rc.flushArmed = false
 	rc.mu.Unlock()
@@ -423,18 +467,12 @@ func (rc *webhookReceiver) flush() {
 func (rc *webhookReceiver) claim(ctx context.Context, src string) {
 	rc.mu.Lock()
 	if !rc.unclaimedLoaded {
-		rc.unclaimedLoaded = true
 		rc.mu.Unlock()
-		if us, err := rc.gw.ListUnclaimedSources(ctx); err == nil {
-			rc.mu.Lock()
-			for _, u := range us {
-				if u.Host == webhookHost && u.Transport == "webhook" {
-					rc.unclaimed[u.Source] = true
-				}
-			}
-			rc.mu.Unlock()
-		}
+		loaded := rc.loadUnclaimed(ctx)
 		rc.mu.Lock()
+		if loaded != nil && !rc.unclaimedLoaded {
+			rc.unclaimed, rc.unclaimedLoaded = loaded, true
+		}
 	}
 	held := rc.unclaimed[src]
 	delete(rc.unclaimed, src)
@@ -444,4 +482,22 @@ func (rc *webhookReceiver) claim(ctx context.Context, src string) {
 			slog.Warn("webhook: claim unclaimed source", "source", src, "error", err)
 		}
 	}
+}
+
+// loadUnclaimed reads the sources the inbox holds for this listener: the
+// receiver's mirror of them is the table's own rows, reloaded after every
+// flush, so it is bounded as the table is (UnclaimedBound) and never grows
+// with what strangers send. Nil when the read fails.
+func (rc *webhookReceiver) loadUnclaimed(ctx context.Context) map[string]bool {
+	us, err := rc.gw.ListUnclaimedSources(ctx)
+	if err != nil {
+		return nil
+	}
+	held := make(map[string]bool, len(us))
+	for _, u := range us {
+		if u.Host == webhookHost && u.Transport == "webhook" && len(held) < storage.UnclaimedBound {
+			held[u.Source] = true
+		}
+	}
+	return held
 }

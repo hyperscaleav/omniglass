@@ -23,8 +23,9 @@ code paths named here over architecture prose; api.md carries known drift.
   second permission.
 - **Never register a gated route without `gated(...)`.** The spec-contract tests
   (`internal/api/authz_guard_test.go`) fail any operation with no stamp unless it is in
-  the deliberate ungated allow-list (authn-only self routes and the public
-  `POST /nodes:claim`); do not grow that list casually.
+  the deliberate ungated allow-list (authn-only self routes, the public
+  `POST /nodes:claim`, and the webhook receiver `/webhooks/{token}`, ADR-1024, whose
+  token and declared scheme are the authentication); do not grow that list casually.
 - The permission must resolve against the seeded role matrix (`internal/seed/roles.yaml`):
   a stamp no role holds gates nothing and teaches a phantom permission in the Roles view.
 

@@ -77,8 +77,10 @@ func (bs *Buckets) Len() int {
 }
 
 // Deduper remembers each endpoint's delivery ids for the replay window, so
-// a sender's redelivery of one delivery lands once. Each endpoint's memory
-// is bounded, the oldest let go first.
+// a sender's redelivery of one delivery lands once. An id is pending from
+// its first arrival until its publish commits, and a redelivery meanwhile
+// is told to retry rather than told it landed. Each endpoint's memory is
+// bounded, the oldest let go first.
 type Deduper struct {
 	window time.Duration
 	max    int
@@ -87,8 +89,21 @@ type Deduper struct {
 	seen map[string]*deliveries
 }
 
+// DeliveryState is what Begin found for a delivery id.
+type DeliveryState int
+
+const (
+	// DeliveryNew is an id not seen inside the window: land it.
+	DeliveryNew DeliveryState = iota
+	// DeliveryPending is an id whose first arrival is still publishing.
+	DeliveryPending
+	// DeliveryDone is an id that landed inside the window.
+	DeliveryDone
+)
+
 type deliveries struct {
 	at    map[string]time.Time
+	done  map[string]bool
 	order []string // oldest first
 }
 
@@ -97,27 +112,42 @@ func NewDeduper(window time.Duration, max int) *Deduper {
 	return &Deduper{window: window, max: max, seen: map[string]*deliveries{}}
 }
 
-// Begin reports whether endpoint's delivery id is new at now, and holds it
-// as seen; a redelivery inside the window reports false.
-func (d *Deduper) Begin(endpoint, id string, now time.Time) bool {
+// Begin reports what endpoint's delivery id is at now, holding a new one as
+// pending until Commit or Abandon.
+func (d *Deduper) Begin(endpoint, id string, now time.Time) DeliveryState {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	ds := d.seen[endpoint]
 	if ds == nil {
-		ds = &deliveries{at: map[string]time.Time{}}
+		ds = &deliveries{at: map[string]time.Time{}, done: map[string]bool{}}
 		d.seen[endpoint] = ds
 	}
 	ds.expire(now.Add(-d.window))
 	if at, ok := ds.at[id]; ok && now.Sub(at) <= d.window {
-		return false
+		if ds.done[id] {
+			return DeliveryDone
+		}
+		return DeliveryPending
 	}
 	for len(ds.order) >= d.max {
 		delete(ds.at, ds.order[0])
+		delete(ds.done, ds.order[0])
 		ds.order = ds.order[1:]
 	}
 	ds.at[id] = now
 	ds.order = append(ds.order, id)
-	return true
+	return DeliveryNew
+}
+
+// Commit marks a delivery landed: a redelivery inside the window is done.
+func (d *Deduper) Commit(endpoint, id string) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if ds := d.seen[endpoint]; ds != nil {
+		if _, ok := ds.at[id]; ok {
+			ds.done[id] = true
+		}
+	}
 }
 
 // Abandon forgets a delivery whose publish failed, so the sender's retry
@@ -130,6 +160,7 @@ func (d *Deduper) Abandon(endpoint, id string) {
 		return
 	}
 	delete(ds.at, id)
+	delete(ds.done, id)
 	for i, o := range ds.order {
 		if o == id {
 			ds.order = append(ds.order[:i:i], ds.order[i+1:]...)
@@ -146,6 +177,7 @@ func (ds *deliveries) expire(cutoff time.Time) {
 	n := 0
 	for n < len(ds.order) && ds.at[ds.order[n]].Before(cutoff) {
 		delete(ds.at, ds.order[n])
+		delete(ds.done, ds.order[n])
 		n++
 	}
 	ds.order = ds.order[n:]

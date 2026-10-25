@@ -1089,7 +1089,8 @@ every post as a log line.
 
 **The answers.** Senders retry on anything but 2xx, so: `202` only once the post is published;
 `401` for a refused scheme, saying nothing of which part failed; `404` for an unknown, rotated or
-malformed token, byte for byte the same; `413` past 1 MiB; `429` with `Retry-After` past a limit;
+malformed token, byte for byte the same; `409` with `Retry-After` for a redelivery whose first copy
+is still landing; `413` past 1 MiB; `429` with `Retry-After` past a limit;
 `5xx` only for omniglass's own fault. A `GET` verifying the URL answers the query parameter the
 driver declares as its challenge (`webhook.challenge`), echoed as text, or `204`.
 
