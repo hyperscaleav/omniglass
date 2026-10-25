@@ -337,15 +337,26 @@ pin set (`new.host_key`, `new.certificate`) and the actor (#1078,
 [generated API reference](/reference/api/), rendered from the OpenAPI document on every build, each
 operation's description naming its permission gate verbatim (a guard test enforces that, alongside the
 spec-contract test that every gated operation carries its `x-omniglass-permission` stamp and
-`POST /nodes:claim` stays the deliberate public write).
+`POST /nodes:claim` and the webhook receiver stay the deliberate public writes).
 
 **The node custom methods are the day-one enrollment handshake.** `POST /nodes/{name}:enroll` (gated
 `node:enroll`) mints or re-mints the node's enrollment token and returns it **once**; the server stores
 only its hash and never logs it, so a re-enroll invalidates the previous token. `POST /nodes:claim` is
 the **node-facing** side: a node presents its token and receives its NATS credential (url, username,
-password). It is the surface's **one public route**, unauthenticated because the token itself is the
-authentication, and an invalid token is a **401** (a claim must not disclose which nodes exist). A node
-is fleet-wide, so `node:read` and `node:create` require an **all-scope** grant.
+password). It is unauthenticated because the token itself is the authentication, and an invalid token
+is a **401** (a claim must not disclose which nodes exist). A node is fleet-wide, so `node:read` and
+`node:create` require an **all-scope** grant.
+
+**The webhook receiver is the other public write** (#1024,
+[ADR-1024](/architecture/decisions/#adr-1024-omniglass-receives-webhooks-on-the-server-and-a-webhook-token-is-a-sealed-secret)).
+`POST /webhooks/{token}` takes a sender's post for the webhook endpoint the token names, the scheme
+its driver declares authenticating it, and answers `202` once published, `401` refused, one identical
+`404` for an unknown, rotated or malformed token, `413` past 1 MiB, and `429` with `Retry-After`;
+`GET` and `HEAD` on the same path answer a sender verifying its URL. `POST
+/endpoints/{endpoint}:rotateToken` (gated `endpoint:update`) mints the endpoint's token anew, and a
+webhook endpoint's read carries its masked path, its scheme, whether it is signed, the secret its
+token is revealed through and its refusals. `GET /unclaimed-sources` (gated `node:read`) is the inbox
+of senders posting to a token no endpoint holds.
 
 **A simulated device can be broken on purpose.** `GET` and `PUT /components/{name}/impairment`
 (gated `simulation:read` and `simulation:update`, component-scoped, the write audited) read and set

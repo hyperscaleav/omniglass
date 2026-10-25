@@ -162,7 +162,15 @@ rollout mints no per-node token.
 
 ## Placement (ETL, cascaded)
 
-:::design[Target design: cascaded placement, tracked in #1024]
+A listener runs where its transport's placement puts it
+([ADR-1024](/architecture/decisions/#adr-1024-omniglass-receives-webhooks-on-the-server-and-a-webhook-token-is-a-sealed-secret)):
+a webhook endpoint is hosted by the **server**, which a cloud sender can reach over its public
+HTTPS and a node behind NAT cannot, so it takes no node and its URL is the server's
+(`/api/v1/webhooks/<token>`). The push transports that should not cross a WAN (shared tcp and udp
+ports, syslog, SNMP traps) are hosted by the **node** next to the gear (#1148, #1149, #1150), one
+listener primitive serving both placements.
+
+:::design[Target design: cascaded placement, the cross pairings tracked in #1157 and #1158]
 Collection follows **ETL**: extract **and transform** (including the extractor's Expr transform)
 default to the **edge**; the shaped samples **load** to the server, where resolve / bind / calc /
 evaluate default to **central**. Placement is a **cascaded property**

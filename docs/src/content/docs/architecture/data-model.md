@@ -395,6 +395,15 @@ collection: {
     id: text {constraint: primary_key}
     endpoint_id: uuid {constraint: foreign_key}
   }
+  unclaimed_source: {
+    shape: sql_table
+    id: uuid {constraint: primary_key}
+  }
+  webhook_token: {
+    shape: sql_table
+    endpoint_id: uuid {constraint: primary_key}
+    secret_id: uuid {constraint: foreign_key}
+  }
 }
 
 config: {
@@ -492,6 +501,8 @@ collection.node.principal_id -> identity.principal.id
 collection.node_log.node_id -> collection.node.principal_id
 collection.sim_impairment.component_id -> fleet.component.id
 collection.task.endpoint_id -> fleet.endpoint.id
+collection.webhook_token.endpoint_id -> fleet.endpoint.id
+collection.webhook_token.secret_id -> config.secret.id
 config.credential.principal_id -> identity.principal.id
 config.secret.component_id -> fleet.component.id
 config.secret.location_id -> fleet.location.id

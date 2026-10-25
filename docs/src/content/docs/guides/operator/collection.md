@@ -144,6 +144,17 @@ real reading from the node, and the panel is also the authoring surface: its hea
 endpoint** (with `endpoint:create`) and each row that maps to an endpoint a **Manage** affordance
 opening that endpoint's detail.
 
+A **webhook** endpoint is a push endpoint, hosted by the server (#1024): a sender posts to its URL,
+nothing is dialed, so its row carries no ladder, no strip and no verdict. It reads **last heard**
+(never heard until a post lands, and silence is never read as down), the scheme that checks each
+post (`hmac`, `token`, `basic`, or **unsigned** for scheme none, where anyone holding the URL can
+post), and a red count of the posts the scheme refused, whose hover names the latest reason and
+sender. Expanded, it shows the URL the sender posts to with the token masked; **Reveal** and
+**Copy** (with `secret:reveal`, each audited) show and copy it whole. The Collection card lists it
+as **hosted by the server** and **listening**. The CLI's `omniglass unclaimed-source list` shows
+the senders posting to a URL no endpoint holds, the inbox you claim one from by creating its
+endpoint.
+
 A **tls** or **https** endpoint's breakdown adds three rows, each teaching itself on hover: the **handshake** (the
 transport rung, the TLS handshake answered, and how long it took), the **certificate** (its days
 left, amber inside a month and red once expired, and its expiry date; while a certificate is

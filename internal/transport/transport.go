@@ -33,6 +33,11 @@ type Transport struct {
 	// tls-mode input, pins the certificate's public key on first use, and
 	// accepts a changed key through :retry with certificate.
 	TLS bool `json:"tls,omitempty"`
+	// Push marks a transport a sender pushes over rather than one a node
+	// dials (#1024, ADR-1024): nothing is dialed, so it has no rung, no
+	// reachability task and no ladder, and its endpoint reads last heard
+	// instead of a verdict. A webhook is one, hosted by the server.
+	Push bool `json:"push,omitempty"`
 }
 
 // registry is the one authoritative list, in the order surfaces render it:
@@ -56,6 +61,7 @@ var registry = []Transport{
 	{Name: "websocket", Description: "WebSocket: a held session whose messages are text frames, routed as a line session's are: a frame sent to arm a subscription on every connection, pushes landing through the listeners, and a request answered by the frame carrying back an id the node mints into it, whatever pushes interleave; the upgrade rides the endpoint's scheme (basic, bearer, an API key) or a login whose cookie the node keeps, and the session is kept alive by ping and pong; the probe is http's, a credential-free GET / whose answer, any status, is the rung (responds), so reachability stays observed beneath a refused upgrade.", Held: true, Built: true, Line: true, Rung: "connect"},
 	{Name: "wss", Description: "WSS: websocket over a TLS connection, its own entry so a component can serve a plain socket beside a TLS one; the probe is https's: it runs the handshake (responds), reports the certificate's expiry, then draws a credential-free response, the certificate verified against the node's roots, pinned to the public key on first use, or (by the operator's explicit choice) not verified.", Held: true, Built: true, Line: true, Rung: "handshake", TLS: true},
 	{Name: "snmp", Description: "SNMP v2c, stateless: the probe gets a standard OID (sysUpTime.0 unless the driver names another) with the endpoint's community, and an answer is the rung; a wrong community is dropped silently and reads as no answer, while an authorizationError reads as an auth refusal.", Held: false, Built: true, Rung: "request"},
+	{Name: "webhook", Description: "Webhook: a push transport the server hosts, not one a node dials: a component or a cloud service posts each message to the endpoint's own URL (/api/v1/webhooks/ and a token the server mints, held as a secret), authenticated by the scheme its driver declares (an hmac signature over a signed timestamp, a token, basic, or none, which reads unsigned) and mapped by its listeners onto any lane; nothing is dialed, so it has no reachability ladder and reads last heard.", Held: false, Built: true, Push: true},
 }
 
 // byName indexes the registry; built once at init since the registry is
@@ -81,6 +87,12 @@ func All() []Transport {
 func UsesTLS(name string) bool {
 	t, ok := byName[name]
 	return ok && t.TLS
+}
+
+// IsPush reports a push transport (#1024): false for an unknown name.
+func IsPush(name string) bool {
+	t, ok := byName[name]
+	return ok && t.Push
 }
 
 // ByName resolves one transport; ok is false for a name the binary does not

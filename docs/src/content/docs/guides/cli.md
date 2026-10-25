@@ -133,6 +133,8 @@ that survives a rename:
 ```sh
 omniglass component get 'boi.17c.415a.$comp.display-1'      # a dotted address (quote the $comp)
 omniglass endpoint retry 'boi.17c.415a.$comp.display-1/https'   # <component>/<endpoint name>
+omniglass endpoint rotateToken 'hq.$comp.service-1/webhook'      # a webhook endpoint's URL, minted anew
+omniglass unclaimed-source list                             # senders posting to a token no endpoint holds
 omniglass secret update demo-panel-login --fields '{"password":"rotated"}'   # its name
 omniglass secret reveal '$platform/demo-panel-login'        # <owner>/<name> where the name is shared
 omniglass file download codec-firmware-2.1.4.txt            # a filename

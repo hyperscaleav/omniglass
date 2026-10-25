@@ -221,6 +221,11 @@ func (p *PG) CreateSecret(ctx context.Context, actorID string, spec SecretSpec, 
 		return nil, ErrSecretForbidden
 	}
 	shape := st.Shape()
+	if len(shape.Fields) > 0 && len(shape.OperatorFields()) == 0 {
+		// Every field is the platform's to fill (a webhook endpoint's token,
+		// #1024): such a secret is minted by what owns it, never created.
+		return nil, fmt.Errorf("%w: a %s secret is minted by the platform (a webhook endpoint mints its own token), not created", ErrSecretFieldInvalid, spec.SecretType)
+	}
 	if err := shape.ValidateInput(spec.Fields); err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrSecretFieldInvalid, err)
 	}

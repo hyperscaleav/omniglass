@@ -391,13 +391,25 @@ export default function ComponentLeaf() {
                                     visible: the ping answers the path, the
                                     transport answers the service, the login
                                     answers the credential. */}
-                                <ReachLadder iface={iface()} />
-                                <SessionPill iface={iface()} now={pageNow()} />
+                                {/* A push endpoint (#1024) has no ladder and
+                                    no session: a sender posts to it on the
+                                    server, and it reads last heard. */}
+                                <Show
+                                  when={iface().webhook}
+                                  fallback={
+                                    <>
+                                      <ReachLadder iface={iface()} />
+                                      <SessionPill iface={iface()} now={pageNow()} />
+                                    </>
+                                  }
+                                >
+                                  <span class="text-base-content/60">hosted by the server</span>
+                                </Show>
                                 <Show when={iface().node}>
                                   <span class="text-base-content/60">via {iface().node}</span>
                                 </Show>
                                 <Show when={lastSeenAt(iface())}>
-                                  {(ts) => <span class="text-base-content/50">last seen {ageWords(ts(), pageNow())}</span>}
+                                  {(ts) => <span class="text-base-content/50">{iface().webhook ? "last heard" : "last seen"} {ageWords(ts(), pageNow())}</span>}
                                 </Show>
                                 <span data-testid={`collection-${iface().endpoint}`} class="rounded border border-base-content/20 px-1.5 py-0.5">
                                   {
@@ -409,6 +421,7 @@ export default function ComponentLeaf() {
                                       rejected: "polls stopped",
                                       "session-down": "polls failing",
                                       unknown: "no sample yet",
+                                      listening: "listening",
                                     }[state().kind]
                                   }
                                 </span>

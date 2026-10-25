@@ -1753,6 +1753,22 @@ Example:
 omniglass endpoint retry 'boi.17c.415a.$comp.display-1/https'
 ```
 
+### `omniglass endpoint rotateToken`
+
+Rotate a webhook endpoint's token
+
+```
+omniglass endpoint rotateToken <endpoint>
+```
+
+Mints a webhook endpoint's token anew (#1024): a post bearing the old one answers 404 at once, exactly as a token that never existed, and the new one is revealed through the endpoint's secret, to give the sender. A token deleted with its secret is minted again. A dialed endpoint has no token, a 422. Audited on the endpoint and the secret. Gated by endpoint:update; read and update scopes (through the component) drive the 404 versus 403 split.
+
+Example:
+
+```sh
+omniglass endpoint rotateToken 'boi.17c.415a.$comp.display-1/https'
+```
+
 ### `omniglass endpoint update`
 
 Update an endpoint
@@ -5955,6 +5971,26 @@ Example:
 omniglass transport list
 ```
 
+## `omniglass unclaimed-source`
+
+Commands for the unclaimed-source resource
+
+### `omniglass unclaimed-source list`
+
+List the sources no endpoint claims
+
+```
+omniglass unclaimed-source list
+```
+
+The unclaimed-source inbox: each source a listener heard from that no endpoint claims (a webhook post to an unknown or rotated token), with how often, when first and last, and its last message cut to 512 bytes. Bounded at 256 sources per listener, the least recently heard evicted, and aged out after seven days; a source is let go once its messages land on an endpoint. Claim one by creating its endpoint. Gated by node:read on an all-scope grant: it is the listener's own observation, and listeners are fleet-wide as nodes are.
+
+Example:
+
+```sh
+omniglass unclaimed-source list
+```
+
 ## `omniglass variable`
 
 Commands for the variable resource
@@ -6160,5 +6196,25 @@ Example:
 
 ```sh
 omniglass view fleet list
+```
+
+## `omniglass webhook`
+
+Commands for the webhook resource
+
+### `omniglass webhook get`
+
+Receive a webhook post for an endpoint
+
+```
+omniglass webhook get <token>
+```
+
+The webhook transport's listener (#1024): a component or a cloud service posts here, to the URL its webhook endpoint was given. The token names one endpoint; the scheme its driver declares authenticates the post (an hmac signature over a signed timestamp, a token, basic, or none, which reads unsigned); a signed timestamp outside five minutes is refused, and a declared delivery id lands once. The driver's listeners map the body (json, xml, form or text) onto any lane, and the post also lands as a log line unless its listener says otherwise. Public by necessity: the sender is not a principal, and the endpoint's scheme is the authentication. Answers 202 once the post is published, 401 for a refused scheme (saying nothing of which part failed), 404 for an unknown or rotated token (identical either way), 413 past 1 MiB, 429 with Retry-After past a rate limit.
+
+Example:
+
+```sh
+omniglass webhook get <token>
 ```
 

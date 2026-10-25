@@ -387,8 +387,8 @@ func TestRunIdempotent(t *testing.T) {
 	if err := conn.QueryRow(ctx, `select count(*) from component`).Scan(&comps); err != nil {
 		t.Fatalf("count components: %v", err)
 	}
-	if want := len(fixtures.Components) + 1; comps != want {
-		t.Errorf("components = %d, want %d (the fixture devices, all platform-named, plus the operator-named DSP)", comps, want)
+	if want := len(fixtures.Components) + len(fixtures.SimComponents) + 1; comps != want {
+		t.Errorf("components = %d, want %d (the fixture devices and the simulator's own, all platform-named, plus the operator-named DSP)", comps, want)
 	}
 	if err := conn.QueryRow(ctx, `select count(*) from system`).Scan(&systems); err != nil {
 		t.Fatalf("count systems: %v", err)
@@ -872,8 +872,8 @@ func TestASeededComponentNameAgreesWithItsProductsStem(t *testing.T) {
 	// Every fixture component counts, the deliberately product-free power
 	// conditioner included: a component created with no product classifies as
 	// the generic-device product, so its stem resolves like any other row's.
-	if seen != len(fixtures.Components) {
-		t.Errorf("platform-named components with a resolvable stem = %d, want %d (every fixture device)", seen, len(fixtures.Components))
+	if want := len(fixtures.Components) + len(fixtures.SimComponents); seen != want {
+		t.Errorf("platform-named components with a resolvable stem = %d, want %d (every fixture device, the simulator's own included)", seen, want)
 	}
 }
 

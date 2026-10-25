@@ -4,11 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"github.com/hyperscaleav/omniglass/internal/mcp/tooldef"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/danielgtaylor/huma/v2"
+	"github.com/hyperscaleav/omniglass/internal/driver"
+	"github.com/hyperscaleav/omniglass/internal/mcp/tooldef"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 	"github.com/hyperscaleav/omniglass/internal/transport"
 )
@@ -24,18 +26,73 @@ import (
 // picker.
 
 type endpointBody struct {
-	ID          string          `json:"id" doc:"The endpoint's uuid, the stable handle; <component>/<name> is the address an operator types"`
-	Name        string          `json:"name" doc:"The derived name (its transport), unique within the owning component"`
-	Label       string          `json:"label,omitempty" doc:"The friendly string an operator reads, and the only identity string an operator types here: the name is derived from the transport. Absent when unset, and a surface with none renders the name verbatim"`
-	Transport   string          `json:"transport" doc:"The transport name (the wire this endpoint speaks over), from the code registry"`
-	Component   *string         `json:"component,omitempty" doc:"The owning component name; absent for a server-hosted endpoint"`
-	ComponentID *string         `json:"component_id,omitempty" doc:"The owning component's id; the stable form of component"`
-	Node        *string         `json:"node,omitempty" doc:"The node placement name, if assigned"`
-	NodeID      *string         `json:"node_id,omitempty" doc:"The placed node's id; the stable form of node"`
-	Params      json.RawMessage `json:"params,omitempty" doc:"The address/target settings (jsonb)"`
-	Driver      *string         `json:"driver,omitempty" doc:"The driver this endpoint was attached through (#813); absent for a bare probe endpoint"`
-	DriverID    *string         `json:"driver_id,omitempty" doc:"The attached driver's id; the stable form of driver"`
-	Inputs      json.RawMessage `json:"inputs,omitempty" doc:"The effective inputs supplied at attach, defaults baked; secret inputs are reference names, never values"`
+	ID          string               `json:"id" doc:"The endpoint's uuid, the stable handle; <component>/<name> is the address an operator types"`
+	Name        string               `json:"name" doc:"The derived name (its transport), unique within the owning component"`
+	Label       string               `json:"label,omitempty" doc:"The friendly string an operator reads, and the only identity string an operator types here: the name is derived from the transport. Absent when unset, and a surface with none renders the name verbatim"`
+	Transport   string               `json:"transport" doc:"The transport name (the wire this endpoint speaks over), from the code registry"`
+	Component   *string              `json:"component,omitempty" doc:"The owning component name; absent for a server-hosted endpoint"`
+	ComponentID *string              `json:"component_id,omitempty" doc:"The owning component's id; the stable form of component"`
+	Node        *string              `json:"node,omitempty" doc:"The node placement name, if assigned"`
+	NodeID      *string              `json:"node_id,omitempty" doc:"The placed node's id; the stable form of node"`
+	Params      json.RawMessage      `json:"params,omitempty" doc:"The address/target settings (jsonb)"`
+	Driver      *string              `json:"driver,omitempty" doc:"The driver this endpoint was attached through (#813); absent for a bare probe endpoint"`
+	DriverID    *string              `json:"driver_id,omitempty" doc:"The attached driver's id; the stable form of driver"`
+	Inputs      json.RawMessage      `json:"inputs,omitempty" doc:"The effective inputs supplied at attach, defaults baked; secret inputs are reference names, never values"`
+	Webhook     *endpointWebhookBody `json:"webhook,omitempty" doc:"A webhook endpoint's own block (#1024): where a sender posts, the scheme that checks it, and what the scheme has refused; absent on every other transport, and on a list"`
+}
+
+// endpointWebhookBody is a webhook endpoint's block: the URL path a sender
+// posts to (its token masked; reveal it through the secret), the scheme its
+// driver declares, whether it is signed (none reads unsigned), and the
+// refusals its scheme has counted.
+type endpointWebhookBody struct {
+	Path     string              `json:"path" doc:"The path a sender posts to, under the server's /api/v1 base, its token masked: reveal the token through secret (gated by secret:reveal, audited)"`
+	Scheme   string              `json:"scheme" doc:"The scheme the driver declares: hmac, token, basic, or none for a bare endpoint or a driver that checks nothing"`
+	Signed   bool                `json:"signed" doc:"False when the scheme is none: the endpoint reads unsigned, anyone holding its URL can post, and there is no replay protection"`
+	Secret   string              `json:"secret,omitempty" doc:"The secret holding the token, <component id>/webhook-token; absent once deleted (rotate to mint another)"`
+	MintedAt *time.Time          `json:"minted_at,omitempty" doc:"When the token was minted or last rotated"`
+	Refused  *webhookRefusedBody `json:"refused,omitempty" doc:"What the scheme has refused: the count, and the latest one's time, source and reason (never the credential); absent until one is"`
+}
+
+type webhookRefusedBody struct {
+	Count  int64     `json:"count" doc:"Posts the scheme refused, each answered 401"`
+	At     time.Time `json:"at" doc:"When the latest was refused, flushed once per tick"`
+	Reason string    `json:"reason" doc:"Why the latest was refused: a missing or mismatched signature, a timestamp outside the window, a mismatched token or login"`
+	Source string    `json:"source" doc:"The latest refused sender's address"`
+}
+
+// webhookBodyOf reads a webhook endpoint's block; nil for any other
+// transport.
+func webhookBodyOf(ctx context.Context, gw storage.Gateway, it *storage.Endpoint) (*endpointWebhookBody, error) {
+	if !transport.IsPush(it.Transport) {
+		return nil, nil
+	}
+	w, err := gw.GetEndpointWebhook(ctx, it.ID)
+	if err != nil {
+		return nil, err
+	}
+	return webhookBody(w), nil
+}
+
+func webhookBody(w *storage.EndpointWebhook) *endpointWebhookBody {
+	b := &endpointWebhookBody{Path: "/webhooks/" + strings.Repeat("•", 8), Scheme: w.Scheme, Signed: w.Scheme != driver.WebhookNone,
+		Secret: w.Secret, MintedAt: w.MintedAt}
+	if w.RefusedCount > 0 && w.RefusedAt != nil {
+		b.Refused = &webhookRefusedBody{Count: w.RefusedCount, At: *w.RefusedAt, Reason: w.RefusedReason, Source: w.RefusedSource}
+	}
+	return b
+}
+
+// endpointWithWebhook is an endpoint's single read: its body, and a webhook
+// endpoint's block.
+func endpointWithWebhook(ctx context.Context, gw storage.Gateway, it *storage.Endpoint) (*endpointOutput, error) {
+	out := &endpointOutput{Body: toEndpointBody(it)}
+	w, err := webhookBodyOf(ctx, gw, it)
+	if err != nil {
+		return nil, mapEndpointErr(err)
+	}
+	out.Body.Webhook = w
+	return out, nil
 }
 
 func toEndpointBody(it *storage.Endpoint) endpointBody {
@@ -161,7 +218,7 @@ func registerEndpointRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 		if err != nil {
 			return nil, mapEndpointErr(err)
 		}
-		return &endpointOutput{Body: toEndpointBody(it)}, nil
+		return endpointWithWebhook(ctx, gw, it)
 	})
 
 	huma.Register(api, a.gated(huma.Operation{
@@ -194,7 +251,7 @@ func registerEndpointRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 		if err != nil {
 			return nil, mapEndpointErr(err)
 		}
-		return &endpointOutput{Body: toEndpointBody(it)}, nil
+		return endpointWithWebhook(ctx, gw, it)
 	})
 
 	huma.Register(api, a.gated(huma.Operation{
@@ -240,6 +297,21 @@ func registerEndpointRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 			return nil, mapEndpointErr(err)
 		}
 		return &endpointOutput{Body: toEndpointBody(it)}, nil
+	})
+
+	huma.Register(api, a.gated(huma.Operation{
+		OperationID: "rotate-endpoint-token",
+		Extensions:  mcpExposed(tooldef.Hints{Destructive: true}),
+		Method:      http.MethodPost,
+		Path:        "/endpoints/{endpoint}:rotateToken",
+		Summary:     "Rotate a webhook endpoint's token",
+		Description: "Mints a webhook endpoint's token anew (#1024): a post bearing the old one answers 404 at once, exactly as a token that never existed, and the new one is revealed through the endpoint's secret, to give the sender. A token deleted with its secret is minted again. A dialed endpoint has no token, a 422. Audited on the endpoint and the secret. Gated by endpoint:update; read and update scopes (through the component) drive the 404 versus 403 split.",
+	}, "endpoint", "update"), func(ctx context.Context, in *endpointPathInput) (*endpointOutput, error) {
+		it, err := gw.RotateWebhookToken(ctx, actorID(ctx), in.Endpoint, a.scopeFor(ctx, "endpoint", "read"), a.scopeFor(ctx, "endpoint", "update"))
+		if err != nil {
+			return nil, mapEndpointErr(err)
+		}
+		return endpointWithWebhook(ctx, gw, it)
 	})
 
 	huma.Register(api, a.gated(huma.Operation{
@@ -291,6 +363,10 @@ func mapEndpointErr(err error) error {
 		return huma.Error409Conflict(strings.TrimPrefix(err.Error(), "storage: retry host key stale: "))
 	case errors.Is(err, storage.ErrEndpointPatchInvalid):
 		return huma.Error400BadRequest(strings.TrimPrefix(err.Error(), "storage: endpoint patch invalid: "))
+	case errors.Is(err, storage.ErrNotPushEndpoint):
+		return huma.Error422UnprocessableEntity("only a push endpoint (a webhook) has a token")
+	case errors.Is(err, storage.ErrSecretExists):
+		return huma.Error409Conflict("the component already holds a secret named webhook-token, which a webhook endpoint's token takes")
 	case errors.Is(err, storage.ErrEndpointParamsInvalid):
 		return huma.Error422UnprocessableEntity(strings.TrimPrefix(err.Error(), "storage: endpoint params invalid: "))
 	default:

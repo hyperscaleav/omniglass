@@ -431,6 +431,20 @@ func (p *PG) createEndpointTx(ctx context.Context, tx pgx.Tx, actorID string, sp
 			return nil, fmt.Errorf("%w: %v", ErrEndpointParamsInvalid, err)
 		}
 	}
+	// A push endpoint (#1024, ADR-1024) is hosted by the server: nothing is
+	// dialed, so it takes no node and no address, and it posts as one
+	// component, which it must name.
+	push := transport.IsPush(spec.Transport)
+	if push {
+		switch {
+		case nodeID != nil:
+			return nil, fmt.Errorf("%w: node: a %s endpoint is hosted by the server, so it takes no node", ErrEndpointParamsInvalid, spec.Transport)
+		case componentID == nil:
+			return nil, fmt.Errorf("%w: component: a %s endpoint lands what it is sent on one component; name it", ErrEndpointParamsInvalid, spec.Transport)
+		case plan == nil && string(params) != "{}" && string(params) != "null":
+			return nil, fmt.Errorf("%w: params: a %s endpoint dials nothing, so it takes no params", ErrEndpointParamsInvalid, spec.Transport)
+		}
+	}
 	it, err := scanEndpoint(tx.QueryRow(ctx, `
 		insert into endpoint (name, transport, component, node_name, params, label, driver_id, inputs)
 		values ($1, $1, $2, $3, $4, $5, $6, $7)
@@ -442,7 +456,13 @@ func (p *PG) createEndpointTx(ctx context.Context, tx pgx.Tx, actorID string, sp
 	// The endpoint is transport-named: its name IS its transport (unique per
 	// component). Deriving the reachability poll task here, the node's unit of work
 	// over this connection, makes task a derived artifact, never operator-authored.
-	if err := deriveReachabilityTask(ctx, tx, it.ID); err != nil {
+	// A push endpoint has nothing to dial, so no reachability task; its token
+	// is minted instead, a secret on its component.
+	if push {
+		if err := p.mintWebhookToken(ctx, tx, actorID, it.ID, *componentID); err != nil {
+			return nil, err
+		}
+	} else if err := deriveReachabilityTask(ctx, tx, it.ID); err != nil {
 		return nil, err
 	}
 	// An attach also derives the spec's functions: a poll task per poll
@@ -498,6 +518,9 @@ func (p *PG) UpdateEndpoint(ctx context.Context, actorID, ref string, patch Endp
 	nodeID, err := endpointNodeID(ctx, tx, patch.Node)
 	if err != nil {
 		return nil, err
+	}
+	if nodeID != nil && transport.IsPush(before.Transport) {
+		return nil, fmt.Errorf("%w: node: a %s endpoint is hosted by the server, so it takes no node", ErrEndpointPatchInvalid, before.Transport)
 	}
 	setLabel, labelVal := labelPatch(patch.Label)
 	after, err := scanEndpoint(tx.QueryRow(ctx, `
@@ -907,6 +930,9 @@ func (p *PG) DeleteEndpoint(ctx context.Context, actorID, ref string, read, acti
 
 	before, err := resolveEndpointScoped(ctx, tx, ref, read, action)
 	if err != nil {
+		return err
+	}
+	if err := deleteWebhookToken(ctx, tx, actorID, before.ID); err != nil {
 		return err
 	}
 	if _, err := tx.Exec(ctx, `delete from endpoint where id = $1`, before.ID); err != nil {

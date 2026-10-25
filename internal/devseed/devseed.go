@@ -45,6 +45,7 @@ type Doc struct {
 	PropertyValues    []Property        `yaml:"property_values"`
 	SimSecrets        []SimSecret       `yaml:"sim_secrets"`
 	SimEndpoints      []SimEndpoint     `yaml:"sim_endpoints"`
+	SimComponents     []Component       `yaml:"sim_components"`
 }
 
 // SimSecret is a platform secret the simulated fleet's endpoints reference
@@ -471,7 +472,7 @@ func runDoc(ctx context.Context, gw storage.Gateway, actorID string, doc Doc, op
 	if err != nil {
 		return err
 	}
-	for _, c := range doc.Components {
+	seedComponent := func(c Component) error {
 		var locID string
 		if c.Location != "" {
 			id, ok := locIDs[c.Location]
@@ -496,7 +497,7 @@ func runDoc(ctx context.Context, gw storage.Gateway, actorID string, doc Doc, op
 		}
 		if id != "" {
 			compIDs[c.Key] = id
-			continue
+			return nil
 		}
 		spec := storage.ComponentSpec{Name: c.Name, Label: c.Label}
 		if locID != "" {
@@ -512,6 +513,12 @@ func runDoc(ctx context.Context, gw storage.Gateway, actorID string, doc Doc, op
 			return fmt.Errorf("devseed: create component %q: %w", c.Key, err)
 		}
 		compIDs[c.Key] = created.ID
+		return nil
+	}
+	for _, c := range doc.Components {
+		if err := seedComponent(c); err != nil {
+			return err
+		}
 	}
 
 	// Systems: the thing in the room that either works or does not, conforming to a
@@ -696,8 +703,15 @@ func runDoc(ctx context.Context, gw storage.Gateway, actorID string, doc Doc, op
 	if err != nil {
 		return err
 	}
+	// The components that exist only beside the simulator (#1024): a cloud
+	// service the docs' screenshots, seeded without it, carry none of.
+	for _, c := range base.SimComponents {
+		if err := seedComponent(c); err != nil {
+			return err
+		}
+	}
 	only := map[string]bool{}
-	for _, c := range base.Components {
+	for _, c := range append(append([]Component(nil), base.Components...), base.SimComponents...) {
 		if id, ok := compIDs[c.Key]; ok {
 			only[id] = true
 		}

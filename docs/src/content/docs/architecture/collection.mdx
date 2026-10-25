@@ -1041,40 +1041,77 @@ the row rather than timing out.
 
 ### Listeners and their config
 
-:::design[Server-hosted listeners: syslog, SNMP trap, and webhook ingress, tracked in #1024]
+### Push ingress: webhooks on the server
 
-A **listener** waits for pushed data (`mode: listen`): a webhook POST, an MQTT/subscribe stream, an
-SNMP trap or syslog line, or a line on a held session; a webhook is one transport, not the
-definition. A `webhook` listener is **server-hosted**: `placement: central` makes the listen-task
-**server-executed and unassigned** (`node_name IS NULL`), its runtime the server's
-`POST /webhooks/{path}` route, not a node tick.
+A **push endpoint** is one a sender pushes to rather than one a node dials
+([ADR-1024](/architecture/decisions/#adr-1024-omniglass-receives-webhooks-on-the-server-and-a-webhook-token-is-a-sealed-secret)).
+`webhook` is the first push transport in the registry: nothing is dialed, so its endpoint has no
+reachability task and no ladder (a ladder declared on one refuses at write), and it reads **last
+heard**, stamped by every post that lands, in place of a verdict. It is never shown down for
+silence. A webhook endpoint is hosted by the server (it takes no node) and names one component.
 
-| field | where | meaning |
+Every message pushed at omniglass runs one pipeline, the **listener primitive**, whichever host
+runs it: **bound** (token buckets per source, per endpoint and for the listener, a cap on posts in
+flight, a 1 MiB body whose read stops at the cap, a read deadline), **authenticate**, **attribute**,
+**route** (listeners first), **extract**, **land**. The server hosts it for webhooks; a node hosts it
+for the push transports of #1148, #1149 and #1150.
+
+**The URL and its token.** Creating a webhook endpoint mints its token (128 random bits) as the
+`webhook-token` secret on the endpoint's component: sealed, revealed and copied only under
+`secret:reveal`, audited, deleted with the endpoint, and rotated by
+`POST /endpoints/{endpoint}:rotateToken`, after which the old token resolves to nothing. A sender
+posts to `/api/v1/webhooks/<token>`. The token names one endpoint, and so one component: nothing in
+the payload selects further.
+
+**The scheme.** A webhook driver declares how a post is authenticated in its session block, and
+never by default:
+
+| `session.scheme` | credential | what is checked |
 |---|---|---|
-| `path` | `endpoint.params.path` | the opaque, unguessable token in the inbound URL (`/webhooks/{path}`); a bearer locator, not the endpoint name |
-| `secret` | `endpoint.params.secret` | shared secret the sender presents in the `X-Omniglass-Token` header (or `?token=`), constant-time compared |
-| `component` | `endpoint.component` | when set, samples pre-bind to that component (trivial owner); when empty, shared-endpoint ingress is owner-bound server-side by labels |
-| `extract` | `task.params.extract` | comma-separated `name=json:dot.path`; numeric -> metric, string or bool -> property (same extractor as the http poller) |
-| `raw_log` | `task.params.raw_log` | optional key to store the whole raw frame under (as JSON when the body parses, else text), the holding-pen an event_rule can later promote |
+| `hmac` | an `hmac-key` secret input | `webhook.signature`: the header the signature rides, `algorithm` (`sha256`, or `sha1`), `encoding` (`hex`, or `base64`), a `prefix` the sender puts before it, and a `timestamp` header the sender signs, joined to the body by a `separator` (`.`) |
+| `token` | a `bearer-token` secret input | `webhook.token`: the header the shared token rides, behind an optional `prefix` |
+| `basic` | a `basic-auth` secret input | the request's basic login |
+| `none` | none | nothing: the endpoint reads **unsigned**, anyone holding its URL can post, and there is no replay protection |
 
-Each inbound POST runs every enabled listen task bound to the endpoint, **publishing** under that
-task's id to the JetStream [samples](/architecture/properties/) stream, the same data lane the node
-uses. Ingest is **owner-confined by the admission consumer** against the endpoint's declared owner,
-keyed off the trusted server-set `endpoint` label, never a payload claim: a leaked path secret
-publishes only under that endpoint's owner ([identity and access](/architecture/identity-access/)).
+hmac over a signed timestamp is the scheme to reach for first. A signed timestamp more than five
+minutes from arrival refuses, and a declared delivery id (`webhook.delivery`, a header) is
+remembered per endpoint for that window, so a sender's redelivery lands once. Every comparison of a
+secret runs in constant time, and the check fails closed: a scheme whose secret no longer resolves,
+or holds an empty field, refuses every post. A bare webhook endpoint (no driver) is `none`.
 
-**Response contract** (senders retry on non-2xx): **202** durably accepted; **401** bad/absent
-secret, **404** unknown path, **413** over the 1 MiB cap (4xx = sender fault, don't retry);
-**5xx** = our fault, retry. `GET`/`HEAD` answers the endpoint-verification ping, echoing
-`?challenge=`; JSON-only parsing mirrors the http poller (a non-JSON body makes declared extractions
-absent, not an error).
+**The body.** The driver declares its format (`webhook.format`: `json`, `xml`, `form` or `text`),
+and the listeners claim a post and read it through the one extraction primitive: a json body by
+`jsonpath`, a form body by `key`, an xml body by `xpath`, any body by a regex. A listener's match
+may also read a header the sender sets (`match.header`, by name, `equals` or `regex`), never a
+credential's. What no listener claims lands as a log line, and a claimed post lands its raw log
+line beside its emits unless the listener declares `log: false`. A bare webhook endpoint lands
+every post as a log line.
 
-**Auth and spoofing**: the secret is a plaintext `endpoint.params` value or an `auth_secret`
-credential, or the sender presents an HMAC signature verified behind the auth seam. Body fields copy
-into attributes **only** via the declared `extract` set, so a body field cannot impersonate another
-endpoint; shared ingress scopes on `event.labels.endpoint`, per-component endpoints preferred for
-high-trust sources. A node-hosted variant covers LAN-local sources (idempotency/dedup, form-encoded
-bodies).
+**The answers.** Senders retry on anything but 2xx, so: `202` only once the post is published;
+`401` for a refused scheme, saying nothing of which part failed; `404` for an unknown, rotated or
+malformed token, byte for byte the same; `409` with `Retry-After` for a redelivery whose first copy
+is still landing; `413` past 1 MiB; `429` with `Retry-After` past a limit;
+`5xx` only for omniglass's own fault. A `GET` verifying the URL answers the query parameter the
+driver declares as its challenge (`webhook.challenge`), echoed as text, or `204`.
+
+**Writers, refusals and strangers.** A post is published on the push lane with its endpoint's
+component as owner, whose writer admits only `collected` keys, so a leaked token can write only
+collected keys on one component. A refused post is counted, never gated: it never reads rejected.
+Refusals are tallied per endpoint, source and reason, and land on the endpoint's read once per tick
+(the count, the latest time, source and reason, never the credential). A post to a token no
+endpoint holds lands its sender in the **unclaimed-source inbox** (`GET /unclaimed-sources`, under
+`node:read`): one row per source address, with a count, first and last heard, and the last message
+cut to 512 bytes, bounded at 256 sources per listener and aged out after seven days. The token a
+stranger tried is never kept. Claiming a source is creating its endpoint, and its row is let go once
+its posts land.
+
+:::design[Node-hosted push: shared tcp and udp ports, syslog and SNMP traps, tracked in #1148, #1149 and #1150]
+
+A node hosts the listener primitive for the push transports that should not cross a WAN: a shared
+udp or tcp port routed by source address, syslog over udp, tcp and tls, and SNMP traps and informs.
+The source address authorizes the endpoints placed on the node that declare it, and a declared
+payload identity only selects within that set. Node-hosted webhooks for LAN senders, and
+server-hosted syslog where the source address survives, are later.
 
 :::
 

@@ -326,6 +326,21 @@ arriving as `LOG <severity> <text>`) and its scene changes
 (`SUBSCRIBE SCENE`, `EVT SCENE <scene>`) beside its input changes, the faces the shipped drivers'
 event and log line emits are proven against ([ADR-1145](/architecture/decisions/#adr-1145-a-driver-emit-lands-on-any-of-the-four-lanes-and-a-log-lines-severity-is-rfc-5424s)).
 
+A route, or a behavior, may also **post a webhook** once its changes apply (#1024), signed as a
+real sender signs one: its `emit` names the URL, the body and headers, and a `sign` block (the
+scheme, `hmac`, `token`, `basic` or `none`; the secret; the header the signature or token rides
+and its prefix; the header carrying the signed unix timestamp; the header carrying each post's
+delivery id), each value a template over the device's state. The UCC service is the face the
+webhook transport is proven against: its admin API takes a **webhook subscription**
+(its webhooks route takes the receiver's `url`, the `scheme`, the `secret` and an optional
+`fault`), and its meeting routes (a start naming the meeting's `id` and `room`, and an end) post
+`meeting.started` and `meeting.ended` to it, hmac sha256 over the
+timestamp, a dot and the body. A fault posts as a sender gone wrong: `bad-signature` signs with the
+wrong key, `stale` signs a timestamp ten minutes old, and `redeliver` sends one delivery twice. The
+shipped `ucc-webhook` driver maps them; the dev fleet carries the service at headquarters with its
+webhook endpoint, which a subscription to the endpoint's URL and the fleet's signing key
+(`sim-ucc-signing`) brings to life ([ADR-1024](/architecture/decisions/#adr-1024-omniglass-receives-webhooks-on-the-server-and-a-webhook-token-is-a-sealed-secret)).
+
 ## Adding a simulated component
 
 Adding a simulated component is adding a component the simulator can serve:

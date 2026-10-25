@@ -16,6 +16,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/sim/profiles"
 	"github.com/hyperscaleav/omniglass/internal/simfleet"
 	"github.com/hyperscaleav/omniglass/internal/storage"
+	"github.com/hyperscaleav/omniglass/internal/transport"
 )
 
 // The simulated fleet: every dev-seed component whose product the simulator
@@ -255,10 +256,16 @@ func seedSimEndpoints(ctx context.Context, gw storage.Gateway, actorID string, d
 		if held {
 			continue
 		}
-		if host == "" {
+		// A push endpoint (#1024) is the server's, dialing nothing: no host,
+		// no port, no node.
+		push := transport.IsPush(spec.Transport)
+		if host == "" && !push {
 			return fmt.Errorf("devseed: simulated endpoint on %s: the component has no simulated address", se.Component)
 		}
-		inputs := map[string]string{"host": host}
+		inputs := map[string]string{}
+		if !push {
+			inputs["host"] = host
+		}
 		for _, in := range spec.Inputs {
 			if in.Name == "port" && in.Default != "" {
 				port, err := strconv.Atoi(in.Default)
@@ -272,8 +279,12 @@ func seedSimEndpoints(ctx context.Context, gw storage.Gateway, actorID string, d
 			inputs[k] = v
 		}
 		comp, drv := compID, se.Driver
+		placed := &node
+		if push {
+			placed = nil
+		}
 		created, err := gw.CreateEndpoint(ctx, actorID, storage.EndpointSpec{
-			Driver: &drv, Inputs: inputs, Label: se.Label, Component: &comp, Node: &node, SecretRead: all, CanAdmin: true,
+			Driver: &drv, Inputs: inputs, Label: se.Label, Component: &comp, Node: placed, SecretRead: all, CanAdmin: true,
 		}, all)
 		if err != nil {
 			return fmt.Errorf("devseed: create simulated %s endpoint on %s: %w", se.Driver, se.Component, err)

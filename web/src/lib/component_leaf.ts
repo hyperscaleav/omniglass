@@ -37,7 +37,9 @@ export type CollectionState = {
   // delivering, and freshness alone would read collecting. A gate the probe
   // set with no session held reads rejected too where it holds the polls
   // (#1110, lib/session's pollsHeld).
-  kind: "collecting" | "component-or-path" | "node-offline" | "down" | "rejected" | "session-down" | "unknown";
+  // listening: a push endpoint (#1024), which the server hosts and a sender
+  // posts to; silence is never read as down, so it has no other state.
+  kind: "collecting" | "component-or-path" | "node-offline" | "down" | "rejected" | "session-down" | "unknown" | "listening";
   node?: string;
 };
 
@@ -48,6 +50,7 @@ export type CollectionState = {
 // a probe endpoint carries a verdict, and only its down value says more than
 // freshness does.
 export function collectionState(iface: ReachEndpoint, node: Node | undefined, now: number = Date.now()): CollectionState {
+  if (iface.webhook) return { kind: "listening" };
   const nodeDown = !node || nodeStatus(node, now) !== "up";
   const last = lastSeenAt(iface) ?? iface.verdict?.ts ?? null;
   if (!last) return { kind: nodeDown ? "node-offline" : "unknown", node: iface.node };

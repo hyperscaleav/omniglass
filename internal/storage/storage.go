@@ -612,6 +612,25 @@ type Gateway interface {
 	// StampEndpointsSeen records that an ingest batch delivered by each
 	// endpoint landed, by the server's clock, coalesced (#933).
 	StampEndpointsSeen(ctx context.Context, endpointIDs []string) error
+	// ResolveWebhook finds the endpoint a webhook token's digest names
+	// (#1024): its component, its scheme and credential, its listeners;
+	// ErrWebhookNotFound for an unknown or rotated token.
+	ResolveWebhook(ctx context.Context, tokenHash []byte) (*WebhookTarget, error)
+	// RotateWebhookToken mints a webhook endpoint's token anew, the old one
+	// resolving to nothing at once.
+	RotateWebhookToken(ctx context.Context, actorID, ref string, read, action scope.Set) (*Endpoint, error)
+	// GetEndpointWebhook reads a webhook endpoint's scheme, token secret and
+	// refusal counters.
+	GetEndpointWebhook(ctx context.Context, endpointID string) (*EndpointWebhook, error)
+	// RecordWebhookRefusals adds a listener tally's refusals to their
+	// endpoints' counters.
+	RecordWebhookRefusals(ctx context.Context, rs []WebhookRefusal) error
+	// RecordUnclaimedSources folds a listener tally's unclaimed sources into
+	// the bounded inbox; ListUnclaimedSources reads it; ClaimUnclaimedSource
+	// lets go of a source once its messages land on an endpoint.
+	RecordUnclaimedSources(ctx context.Context, us []UnclaimedSource) error
+	ListUnclaimedSources(ctx context.Context) ([]UnclaimedSource, error)
+	ClaimUnclaimedSource(ctx context.Context, host, transport, source string) (bool, error)
 	// ComponentVerdict is one component's own verdict, by its id, from its
 	// active alarms: what a component's view reads without the fleet (#934).
 	ComponentVerdict(ctx context.Context, componentID string) (string, error)

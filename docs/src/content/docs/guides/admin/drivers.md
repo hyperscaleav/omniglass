@@ -384,6 +384,49 @@ edit in place on the endpoint's blade or with `omniglass endpoint update <compon
 against the spec's declared inputs; no re-attach. Clearing an optional input restores its default;
 a required one cannot be cleared.
 
+A cloud service or a component that posts to omniglass declares `transport: webhook`
+([push ingress](/architecture/collection/#push-ingress-webhooks-on-the-server)). Nothing is dialed,
+so the spec declares listeners alone (no poll, no command, no ladder), and the server hosts them.
+The session block says how a post is authenticated, never by default: `scheme: hmac` with a
+`credential` naming an `hmac-key` secret input and a `webhook.signature` (the `header` it rides,
+`algorithm` sha256 or sha1, `encoding` hex or base64, a `prefix` such as `sha256=`, and the
+`timestamp` header the sender signs, joined to the body by a `separator`), `scheme: token` with a
+`bearer-token` input and `webhook.token` (its `header` and `prefix`), `scheme: basic` with a
+`basic-auth` input, or `scheme: none`, which checks nothing and leaves the endpoint reading
+unsigned. Teach hmac over a signed timestamp first: a timestamp more than five minutes off is
+refused, and `webhook.delivery` (the header carrying each post's delivery id) makes a sender's
+redelivery land once. `webhook.format` says how the body is read (`json`, `xml`, `form` read by
+`key`, or `text`), `webhook.challenge` names the query parameter a sender's `GET` verifies the URL
+with, and a listener's `match` may read a header the sender sets (`header: { name, equals }` or
+`regex`). What no listener claims lands as a log line, and a claimed post also lands its raw line
+unless the listener says `log: false`. The shipped `ucc-webhook` driver maps the simulated UCC
+service's meetings:
+
+```yaml
+transport: webhook
+inputs:
+  - { name: signing-key, kind: secret, secret_type: hmac-key, required: true }
+session:
+  scheme: hmac
+  credential: signing-key
+  webhook:
+    signature: { header: X-UCC-Signature, prefix: "sha256=", timestamp: X-UCC-Timestamp }
+    delivery: X-UCC-Delivery
+listeners:
+  - name: meeting-started
+    match: { header: { name: x-ucc-event, equals: meeting.started } }
+    emits:
+      - name: call-started
+        message: { value: "Meeting started" }
+        attributes: { meeting: { extract: { jsonpath: meeting } } }
+      - { name: call-state, extract: { jsonpath: event }, transform: { map: { meeting.started: active } } }
+```
+
+Attaching it creates the endpoint and mints its token, the `webhook-token` secret on the component:
+reveal it with `omniglass secret reveal <component id>/webhook-token` (audited) and give the sender
+`/api/v1/webhooks/<token>` on the server's address and the signing key. `omniglass endpoint
+rotateToken <component>/webhook` mints another, and the old URL answers 404 at once.
+
 A driver is consumed by the [product](/guides/admin/products/) catalog: a `product` references
 its driver through an optional `driver_id` to say which driver reads it, chosen from a driver
 picker on the product's create and edit forms, and three of the shipped official products bind a
@@ -404,8 +447,8 @@ driver this way. It is a leaf catalog beside the vendor registry. See
   Omniglass ships a starter set of official drivers (Generic SNMP, Newtron NVP, and Newtron NVP
   over Telnet, its login a session block, over SSH, and over TLS, pinning the panel's key, the Kestrel
   Device API over https with basic auth, HTTP JSON over http with a header key, Newtron Panel Web
-  over https behind its form login, and Boreal Edge Web Admin over http with digest, all with real
-  specs), upserted idempotently at boot so the
+  over https behind its form login, Boreal Edge Web Admin over http with digest, and UCC Webhooks,
+  the server's listener for signed meeting posts, all with real specs), upserted idempotently at boot so the
   shared set cannot drift install to install; add a custom driver for anything else.
 - **Delete** refuses while an **endpoint is attached** through the driver (422): an attach
   derives real collection work from the spec, so the driver cannot vanish out from under it.

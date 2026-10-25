@@ -11,7 +11,7 @@ import (
 // source the storage validator, the API route, and the node's probe dispatch
 // all read. These tests pin the contract the rest of slice 1 hangs off.
 
-func TestRegistryCarriesTheElevenTransports(t *testing.T) {
+func TestRegistryCarriesTheTwelveTransports(t *testing.T) {
 	want := map[string]struct{ held, built bool }{
 		"icmp":      {held: false, built: true},
 		"tcp":       {held: true, built: true},  // the line protocol holds a session over it (#817)
@@ -24,6 +24,7 @@ func TestRegistryCarriesTheElevenTransports(t *testing.T) {
 		"websocket": {held: true, built: true},  // text frames over a held upgrade, a reply matched by its minted id (#1034)
 		"wss":       {held: true, built: true},  // websocket over the tls handshake (#1034)
 		"snmp":      {held: false, built: true}, // stateless: its rung is a standard get answered (#821)
+		"webhook":   {held: false, built: true}, // a push transport the server hosts: nothing is dialed (#1024)
 	}
 	all := transport.All()
 	if len(all) != len(want) {
@@ -54,7 +55,7 @@ func TestRegistryOrderIsStable(t *testing.T) {
 	for _, tr := range transport.All() {
 		names = append(names, tr.Name)
 	}
-	want := []string{"icmp", "tcp", "tls", "udp", "telnet", "ssh", "http", "https", "websocket", "wss", "snmp"}
+	want := []string{"icmp", "tcp", "tls", "udp", "telnet", "ssh", "http", "https", "websocket", "wss", "snmp", "webhook"}
 	for i, n := range want {
 		if names[i] != n {
 			t.Fatalf("order = %v, want %v", names, want)
@@ -88,7 +89,7 @@ func TestAllReturnsACopy(t *testing.T) {
 // connect where an open port can be detected, the protocol's handshake for
 // ssh, a named request where it cannot (udp, snmp); icmp has none.
 func TestRegistryCarriesTheTransportRung(t *testing.T) {
-	want := map[string]string{"icmp": "", "tcp": "connect", "tls": "handshake", "udp": "request", "telnet": "connect", "ssh": "handshake", "http": "connect", "https": "handshake", "websocket": "connect", "wss": "handshake", "snmp": "request"}
+	want := map[string]string{"icmp": "", "tcp": "connect", "tls": "handshake", "udp": "request", "telnet": "connect", "ssh": "handshake", "http": "connect", "https": "handshake", "websocket": "connect", "wss": "handshake", "snmp": "request", "webhook": ""}
 	for _, tr := range transport.All() {
 		if tr.Rung != want[tr.Name] {
 			t.Errorf("%s: rung %q, want %q", tr.Name, tr.Rung, want[tr.Name])
@@ -137,5 +138,28 @@ func TestTLSMarksTheTransportsOverTheHandshake(t *testing.T) {
 	}
 	if !transport.UsesTLS("https") || transport.UsesTLS("http") || transport.UsesTLS("nope") {
 		t.Fatal("UsesTLS reads the flag")
+	}
+}
+
+// webhook is a push transport (#1024, ADR-1024): a sender posts to the
+// endpoint's own URL on the server, so nothing is dialed, no session is held,
+// and there is no rung to climb. It is the only push transport in the
+// registry today, and the flag is what every consumer reads: the ladder's
+// absence, the server placement, the last-heard read.
+func TestWebhookIsAPushTransportWithNoRung(t *testing.T) {
+	tr, ok := transport.ByName("webhook")
+	if !ok {
+		t.Fatal("the registry has no webhook transport")
+	}
+	if !tr.Push || !tr.Built || tr.Held || tr.Line || tr.Rung != "" || tr.TLS {
+		t.Fatalf("webhook = %+v, want push, built, not held, not a line, no rung, no tls", tr)
+	}
+	for _, other := range transport.All() {
+		if other.Name != "webhook" && other.Push {
+			t.Errorf("%s: Push set on a transport a node dials", other.Name)
+		}
+	}
+	if !transport.IsPush("webhook") || transport.IsPush("http") || transport.IsPush("nope") {
+		t.Fatal("IsPush reads the registry's flag, false for an unknown name")
 	}
 }

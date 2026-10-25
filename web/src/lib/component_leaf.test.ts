@@ -21,6 +21,15 @@ const node = (heartbeatSecondsAgo: number | null): Node =>
   ({ name: "edge-1", enrolled: true, last_heartbeat_at: heartbeatSecondsAgo === null ? undefined : iso(heartbeatSecondsAgo), tags: {} }) as Node;
 
 describe("collectionState", () => {
+  // A push endpoint (#1024) is never down for silence: no node collects it,
+  // so neither a missing node nor an old last heard reads as offline or stale.
+  it("a push endpoint listens, however long it has been silent", () => {
+    const hook = { endpoint: "webhook", transport: "webhook", verdict: null, layers: [], history: [], last_seen: iso(86_400),
+      webhook: { path: "/webhooks/x", scheme: "hmac", signed: true } } as unknown as ReachEndpoint;
+    expect(collectionState(hook, undefined, now).kind).toBe("listening");
+    expect(collectionState({ ...hook, last_seen: undefined }, undefined, now).kind).toBe("listening");
+  });
+
   it("a fresh up verdict under a live node is collecting", () => {
     expect(collectionState(iface({ value: "up", ts: iso(10) }, "edge-1"), node(5), now).kind).toBe("collecting");
   });

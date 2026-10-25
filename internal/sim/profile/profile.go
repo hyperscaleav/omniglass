@@ -338,6 +338,11 @@ type Route struct {
 	// Each data is a template rendered against the state the mutations
 	// left. A device with no events face ignores them.
 	Events []RouteEvent `yaml:"events"`
+
+	// Emit is a webhook the route posts once its mutations apply (#1024),
+	// rendered against the state they left and the request: a cloud
+	// service posting a meeting's start the moment it begins.
+	Emit *Emit `yaml:"emit"`
 }
 
 // RouteEvent is one named event a route reports: its name and its data (a
@@ -483,6 +488,30 @@ type Behavior struct {
 type Emit struct {
 	URL  string `yaml:"url"`
 	Body string `yaml:"body"`
+	// Headers are sent with the post, each value a template (a sender's
+	// event-type header).
+	Headers map[string]string `yaml:"headers"`
+	// Sign signs the post as a webhook sender does (#1024).
+	Sign *EmitSign `yaml:"sign"`
+}
+
+// EmitSign is how a sender authenticates its webhook (#1024): its scheme
+// (hmac, token, basic, or none; a template, so a subscription the device's
+// own api took can set it), its secret (the hmac key, the token, or
+// user:password; a template), the header the signature or token rides and
+// the prefix before it, the header carrying the signed unix timestamp (hmac
+// then signs the timestamp, a dot and the body), the header carrying each
+// post's delivery id, and a fault (a template) that posts as a sender gone
+// wrong: bad-signature, stale (a timestamp ten minutes old) or redeliver
+// (the same delivery twice).
+type EmitSign struct {
+	Scheme    string `yaml:"scheme"`
+	Secret    string `yaml:"secret"`
+	Header    string `yaml:"header"`
+	Prefix    string `yaml:"prefix"`
+	Timestamp string `yaml:"timestamp"`
+	Delivery  string `yaml:"delivery"`
+	Fault     string `yaml:"fault"`
 }
 
 // Computed declares a read-derived field: its value is calculated at

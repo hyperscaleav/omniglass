@@ -51,6 +51,9 @@ export type ReachEndpoint = {
   rejection?: components["schemas"]["ReachRejectionBody"];
   // A tls endpoint's handshake and certificate (#1035): lib/tls reads it.
   tls?: components["schemas"]["ReachTLSBody"];
+  // A webhook endpoint's block (#1024): a push endpoint, no ladder, read by
+  // last_seen (last heard), its scheme and refusals.
+  webhook?: components["schemas"]["EndpointWebhookBody"];
   layers: ReachLayer[];
   history: ReachHistory[];
 };

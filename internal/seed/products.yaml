@@ -188,6 +188,15 @@ products:
     driver_id: http-json
     kind: device
     component_type: occupancy-sensor
+  # Shinra Cloud: the meeting platform's cloud service (the simulator's
+  # ucc-service), which posts each meeting's start and end as a signed
+  # webhook (#1024). No driver of its own: its webhook endpoint attaches
+  # ucc-webhook, which the server hosts.
+  - id: ucc-service
+    label: Shinra UCC Platform
+    vendor_id: shinra-cloud
+    kind: service
+    component_type: generic-service
   # The generic floor.
   - id: generic-device
     label: Generic Device

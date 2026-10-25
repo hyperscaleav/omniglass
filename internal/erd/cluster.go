@@ -39,6 +39,9 @@ var Subsystems = []Cluster{
 		// sim_impairment is what an operator broke on a simulated device (#889),
 		// applied by the simulator beside its node.
 		"sim_impairment",
+		// The webhook transport (#1024): a webhook endpoint's token binding,
+		// and the inbox of senders no endpoint claims.
+		"webhook_token", "unclaimed_source",
 	}},
 	{Name: "config", Tables: []string{
 		"setting_override", "variable",

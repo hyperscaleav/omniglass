@@ -373,6 +373,9 @@ type Match struct {
 	Regex  string      `json:"regex,omitempty"`
 	Event  string      `json:"event,omitempty"`
 	Field  *FieldMatch `json:"field,omitempty"`
+	// Header claims a push transport's message by one of its headers (a
+	// webhook sender's event-type header, #1024), beside its data rule.
+	Header *HeaderMatch `json:"header,omitempty"`
 }
 
 // Listener is a declared wait: Arm holds the instantiation commands sent on
@@ -384,6 +387,11 @@ type Listener struct {
 	Arm   []string `json:"arm,omitempty"`
 	Match Match    `json:"match"`
 	Emits []Emit   `json:"emits"`
+	// Log is whether a message this listener claims also lands as its raw
+	// log line (decision 5 of #1146): true when absent, on a push transport
+	// alone, so the component's own words stay searchable; false where a
+	// driver fully maps a high-volume message.
+	Log *bool `json:"log,omitempty"`
 }
 
 // CommandBinding declares how one command type actuates over this protocol,
@@ -641,6 +649,12 @@ func (s *Spec) Validate(cat Catalog) error {
 		}
 	}
 
+	if transport.IsPush(s.Transport) {
+		if err := s.validatePush(); err != nil {
+			return err
+		}
+	}
+
 	functions := map[string]bool{}
 	for _, p := range s.Polls {
 		if p.Name == "" {
@@ -698,7 +712,17 @@ func (s *Spec) Validate(cat Catalog) error {
 		}
 		functions[l.Name] = true
 		var stream *Request
+		if l.Log != nil && !transport.IsPush(s.Transport) {
+			return fmt.Errorf("driver: listener %q declares log, which keeps or drops a claimed message's raw log line on a push transport alone; a %s listener lands only its emits", l.Name, s.Transport)
+		}
 		switch {
+		case transport.IsPush(s.Transport):
+			// A push transport's sender posts on its own: there is no
+			// upstream to arm, and the body is read in the session's format.
+			if len(l.Arm) > 0 {
+				return fmt.Errorf("driver: listener %q declares arm, and a push transport's sender has no upstream to send it on", l.Name)
+			}
+			stream = &Request{Format: s.Session.Webhook.FormatOf()}
 		case IsHTTP(s.Transport):
 			// Over http a listener rides the session's server-sent events
 			// stream (#1038), which has no upstream to arm.
@@ -729,7 +753,14 @@ func (s *Spec) Validate(cat Catalog) error {
 		if stream != nil {
 			for _, e := range l.Emits {
 				for _, ex := range e.extracts() {
-					if err := checkHTTPEmit(fmt.Sprintf("listener %q emit %q", l.Name, e.label()), ex, *stream); err != nil {
+					what := fmt.Sprintf("listener %q emit %q", l.Name, e.label())
+					var err error
+					if transport.IsPush(s.Transport) {
+						err = checkWebhookEmit(what, ex, stream.FormatOf())
+					} else {
+						err = checkHTTPEmit(what, ex, *stream)
+					}
+					if err != nil {
 						return err
 					}
 				}
@@ -1188,8 +1219,8 @@ func checkPollShape(tr string, p Poll) error {
 }
 
 func validateMatch(what string, m Match) error {
-	if m.Event != "" || m.Field != nil {
-		return fmt.Errorf("driver: %s names an event or a field, which only a listener's match reads; declare a prefix or a regex", what)
+	if m.Event != "" || m.Field != nil || m.Header != nil {
+		return fmt.Errorf("driver: %s names an event, a field or a header, which only a listener's match reads; declare a prefix or a regex", what)
 	}
 	set := 0
 	if m.Prefix != "" {
