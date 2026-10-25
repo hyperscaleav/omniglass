@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"net/url"
+	"strings"
 
 	"github.com/hyperscaleav/omniglass/internal/cli/apiclient"
 	"github.com/hyperscaleav/omniglass/internal/config"
@@ -75,4 +77,16 @@ func addClientFlags(root *cobra.Command) {
 	}
 	root.PersistentFlags().String("server", server, "Omniglass server base URL (env OMNIGLASS_SERVER)")
 	root.PersistentFlags().String("token", config.Get("OMNIGLASS_TOKEN"), "bearer token (env OMNIGLASS_TOKEN)")
+}
+
+// pathSegment renders a positional argument as exactly one URL path segment, the
+// way every generated command builds its request path. url.PathEscape already
+// encodes a slash, so a qualified name (`<component>/<endpoint>`,
+// `<owner>/<name>`, #1133) stays one segment; a colon it leaves alone, and the
+// router reads the first colon in a segment as the start of a `:verb` custom
+// method, so a filename carrying one would never reach its route. Encoding it too
+// keeps the segment whole, and the server decodes both back. No name or dotted
+// address carries either character, so for them this is url.PathEscape.
+func pathSegment(s string) string {
+	return strings.ReplaceAll(url.PathEscape(s), ":", "%3A")
 }

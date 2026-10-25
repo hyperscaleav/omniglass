@@ -36,4 +36,5 @@ label reads as its name exactly.
   holding only the variable half leaves the blade read-only with a note naming what is missing.
 
 From the CLI the same surface is `omniglass variable list` / `create` / `update` / `delete` (see the
-[CLI reference](/reference/cli/)).
+[CLI reference](/reference/cli/)), each taking the variable by name, or by `<owner>/<name>` where the
+cascade has it at more than one owner (`omniglass variable update '$platform/poll-interval' --value 60`).

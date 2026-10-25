@@ -50,7 +50,7 @@ login passed. `session.terminal` lists the replies retrying cannot fix, each a `
 answering any request, moves the session to `rejected`, where the node attempts nothing more until
 the endpoint's connection fingerprint changes (its secret is rotated, its address, port or transport
 changes, the driver's login declaration changes) or an operator retries it (**Retry** on the
-rejected session's notice in the console, or `omniglass endpoint retry <id>`, with
+rejected session's notice in the console, or `omniglass endpoint retry <component>/<endpoint>`, with
 `endpoint:retry`); a label edit changes nothing. `session.reprobe`
 (at least `5m`, default never) lets a rejected session try once more on its own. A wrong password the
 component answers with a declared refusal then costs one attempt rather than a retry every 30 seconds;
@@ -67,7 +67,7 @@ on first use and kept as the endpoint's `ssh-host-key`; when it changes the sess
 naming both keys, which the gate carries as data (`endpoint-rejection` ends with the pinned and the
 offered key). The console's **Trust this key** on the session's notice trusts the offered one after
 a confirm ([held sessions](/guides/operator/collection/#a-changed-key)), and so does
-`omniglass endpoint retry <id> --host-key <the offered key>`. While the refusal holds, the key must be
+`omniglass endpoint retry <component>/ssh --host-key <the offered key>`. While the refusal holds, the key must be
 the offered one it names (any other is refused, 409, and changes nothing; retry without a key first
 to have the node read a key the component presents since); with no refusal held, `--host-key`
 declares a pin ahead of time, for a replacement whose key you already know.
@@ -83,7 +83,7 @@ write, since skipping verification is only ever an operator's choice. An operato
 place on the endpoint like any input, which moves its connection fingerprint, so a session a
 certificate refused tries again under the new mode with no retry. A refused certificate reads
 `rejected` with class `certificate` and its reason; for a pinned key that changed, the reason names
-both keys and `omniglass endpoint retry <id> --certificate <the offered key>` trusts the new one.
+both keys and `omniglass endpoint retry <component>/tls --certificate <the offered key>` trusts the new one.
 
 ```yaml
 transport: tls
@@ -206,7 +206,7 @@ interval; a 408, 429 or 5xx retries on the backoff, no sooner than a `Retry-Afte
 not followed. The reachability probe never sends the credential, so an http endpoint's
 `endpoint-authenticated` is proven by its polls; a driver whose commands carry a credential needs a
 poll to carry it to the node. Over `https` the `tls-mode` input and the pinned key work as over `tls`
-(above), and `omniglass endpoint retry <id> --certificate <the offered key>` trusts a changed key.
+(above), and `omniglass endpoint retry <component>/https --certificate <the offered key>` trusts a changed key.
 
 Gear whose web API signs in once declares `session.login` instead of a scheme
 ([logging in over http](/architecture/collection/#logging-in-over-http)): the login dialog a telnet
@@ -278,7 +278,7 @@ so a spec that references an unregistered sample name, an unknown secret shape, 
 template refuses with the fault named (422). Attaching a driver to a component happens on the
 component's own detail ([nodes and reachability](/guides/operator/collection/)): the spec
 derives the endpoint and its tasks. Its inputs (the host, the port, an attached secret's name) then
-edit in place on the endpoint's blade or with `omniglass endpoint update <id> --inputs ...`, checked
+edit in place on the endpoint's blade or with `omniglass endpoint update <component>/<endpoint> --inputs ...`, checked
 against the spec's declared inputs; no re-attach. Clearing an optional input restores its default;
 a required one cannot be cleared.
 

@@ -45,12 +45,15 @@ refused today with a 422).
 A group's name is an ordinary entity name (`^[a-z0-9][a-z0-9-]*$`, 100 characters, a uuid refused),
 enforced by the Storage Gateway on create and on rename rather than by the request schema alone
 ([ADR-0077](/architecture/decisions/#adr-0077-a-group-name-obeys-the-entity-name-rule-tightening-a-pattern-the-code-had-excused)).
-Moving it is the `:rename` custom method, `POST /principal-groups/{id}:rename` gated by
+Moving it is the `:rename` custom method, `POST /principal-groups/{group}:rename` gated by
 `principal_group:rename`; the PATCH body does not carry a name at all
 ([ADR-0076](/architecture/decisions/#adr-0076-a-renameable-human-typed-identifier-stays-in-the-url-and-the-write-returns-the-uuid)).
-The whole collection is addressed by the uuid, so a group is the one case where the rename route
-takes an `{id}` rather than the name it is about to move; nothing inside the platform notices,
-since membership and grants both key on that uuid.
+Every group route takes the group by its name or its uuid, and a member by a username, a service
+account's name, or its uuid
+([ADR-1133](/architecture/decisions/#adr-1133-every-operator-resource-answers-to-its-name-and-an-endpoint-is-its-component-and-its-name)),
+each resolved only after the all-scope check, so a scoped caller learns nothing about which names
+exist (`omniglass principal-group member create night-shift --principal-id alice`). A rename moves
+nothing inside the platform, since membership and grants both key on the group's uuid.
 
 <SchemaTable table="principal_group" />
 

@@ -90,9 +90,9 @@ defaults to. It is the same editor as a product's contract, on the system side.
 - **Withdraw** (with `standard:delete`, from the blade's edit mode, so the pencil's `standard:update` is also in the path; behind a confirm) removes a line. Conforming systems **keep**
   any value they set for it; it simply reads as **off contract** from then on.
 
-From the CLI the contract is `omniglass standard property list <id>`,
-`omniglass standard property update <id> <property>`, and
-`omniglass standard property delete <id> <property>`.
+From the CLI the contract is `omniglass standard property list meeting-room`,
+`omniglass standard property update meeting-room <property>`, and
+`omniglass standard property delete meeting-room <property>`.
 
 ## Roles: what a conforming system needs filled
 
@@ -150,9 +150,9 @@ Two shipped roles come with **Meeting Room**, and they are the worked example: *
 themselves they are **seeded only if absent**, so retuning quorum to what your rooms actually run
 survives the next restart.
 
-From the CLI: `omniglass standard role list <id>`,
-`omniglass standard role update <id> <role> --label <label> --quorum <n> --accepted-types <types>
---pinned-products <ids> --impact <outage|degraded|none>`, and `omniglass standard role delete <id> <role>`.
+From the CLI: `omniglass standard role list meeting-room`,
+`omniglass standard role update meeting-room <role> --label <label> --quorum <n> --accepted-types <types>
+--pinned-products <ids> --impact <outage|degraded|none>`, and `omniglass standard role delete meeting-room <role>`.
 
 ## Staff a system against its standard
 

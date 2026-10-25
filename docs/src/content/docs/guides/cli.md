@@ -113,6 +113,31 @@ runbooks, integration config). Inside it nothing breaks, since every reference h
 `id`, which every write returns ([ADR-0076](/architecture/decisions/)). A taken name is a 409, an
 illegal or uuid-shaped one a 422.
 
+### Every command takes a name, never only a uuid
+
+Every resource you type the name of answers to it, so a script or a runbook never has to look a uuid
+up first ([ADR-1133](/architecture/decisions/#adr-1133-every-operator-resource-answers-to-its-name-and-an-endpoint-is-its-component-and-its-name)).
+The uuid each command prints keeps working as well, and it is what to store when you need a handle
+that survives a rename:
+
+```sh
+omniglass component get 'boi.17c.415a.$comp.display-1'      # a dotted address (quote the $comp)
+omniglass endpoint retry 'boi.17c.415a.$comp.display-1/https'   # <component>/<endpoint name>
+omniglass secret update demo-panel-login --fields '{"password":"rotated"}'   # its name
+omniglass secret reveal '$platform/demo-panel-login'        # <owner>/<name> where the name is shared
+omniglass file download codec-firmware-2.1.4.txt            # a filename
+omniglass principal-group member create night-shift --principal-id alice
+omniglass principal grant create alice --role viewer --scope-kind location --scope-id boi.17c
+```
+
+A name only you can see resolves for you even where someone else's out-of-scope row shares it, and
+a name more than one row you can see answers to is a 404 listing each one in the spelling that
+resolves, so the error tells you what to type next:
+
+```text
+secret "demo-panel-login" not found: 2 you can see answer to it; address one as $platform/demo-panel-login or boi.17c/demo-panel-login
+```
+
 ## Authentication
 
 There are two ways to authenticate, both accepted on every request. A **bearer token** in
@@ -162,8 +187,8 @@ omniglass auth avatar                                   # read your picture back
 `--image-base64` takes a plain base64 string, not a file path (base64-encode the image
 yourself, as the `$(base64 …)` above does); the server accepts JPEG, PNG, or WebP and
 normalizes it to a 256x256 JPEG. An administrator manages **any** principal's picture with
-`omniglass principal setAvatar <id> --image-base64 …` and `omniglass principal removeAvatar <id>`
-(gated by `principal:set-avatar`), reading one back with `omniglass principal avatar list <id>` (gated by
+`omniglass principal setAvatar alice --image-base64 …` and `omniglass principal removeAvatar alice`
+(gated by `principal:set-avatar`), reading one back with `omniglass principal avatar list alice` (gated by
 `principal:read:admin`). A principal with no picture is a 404.
 
 ## Collection commands
@@ -171,8 +196,8 @@ normalizes it to a 256x256 JPEG. An administrator manages **any** principal's pi
 The [collection](/architecture/collection/) surface regenerates into three top-level command
 groups, `node`, `endpoint`, and `task`; the composed reachability read hangs off the component
 that owns it (`component reachability`). They follow the same derivation as every
-other resource (`POST /endpoints` is `endpoint create`, `GET /tasks/{id}` is `task get
-<id>`), so nothing here is special-cased. All examples require the matching permission on
+other resource (`POST /endpoints` is `endpoint create`, `GET /endpoints/{endpoint}` is `endpoint get
+<endpoint>`), so nothing here is special-cased. All examples require the matching permission on
 the running server.
 
 Register and enroll an edge node (the day-one handshake):
@@ -252,21 +277,23 @@ omniglass endpoint create \
   --inputs '{"host":"10.0.0.40","community":"lab-community"}'  # needs endpoint:create
 
 omniglass endpoint list
-omniglass endpoint get <id>                                     # endpoints are addressed by id
-omniglass endpoint update <id> --node edge-hq --params '{"target":"10.0.0.2:22"}'
+# An endpoint is <component>/<endpoint name>: its name is its transport, unique on its component,
+# and the component is any spelling the component commands take (a name, a dotted address, a uuid).
+omniglass endpoint get disp-1/tcp
+omniglass endpoint update disp-1/tcp --node edge-hq --params '{"target":"10.0.0.2:22"}'
 # A driver-attached endpoint's address and secret edit in place, through its inputs
 # (validated against the driver; its tasks re-derive in the same transaction):
-omniglass endpoint update <id> --inputs '{"port":"2323","login":"panel-login-2"}'
-omniglass endpoint delete <id>                                  # refused (409) while its task references it
+omniglass endpoint update amp-1/snmp --inputs '{"port":"2323","community":"lab-community-2"}'
+omniglass endpoint delete disp-1/tcp                            # refused (409) while its task references it
 
 # An endpoint a refusal gated (endpoint-rejection names the rung, endpoint-rejection-reason says why,
 # held session or not) is not attempted again until what it connects with changes, or an operator
 # retries it:
-omniglass endpoint retry <id>                                   # needs endpoint:retry; audited
-omniglass endpoint retry <id> --host-key SHA256:...             # ssh: trust the offered key the refusal names (409 for any other)
-omniglass endpoint retry <id> --certificate SHA256:...          # tls or https: the same for a certificate's public key (--host-key works too)
+omniglass endpoint retry disp-1/ssh                             # needs endpoint:retry; audited
+omniglass endpoint retry disp-1/ssh --host-key SHA256:...       # ssh: trust the offered key the refusal names (409 for any other)
+omniglass endpoint retry disp-1/https --certificate SHA256:...  # tls or https: the same for a certificate's public key (--host-key works too)
 # A tls or https endpoint's verification mode is one of its driver's inputs, edited in place:
-omniglass endpoint update <id> --inputs '{"tls-mode":"verify"}'  # verify, pin or skip
+omniglass endpoint update disp-1/https --inputs '{"tls-mode":"verify"}'  # verify, pin or skip
 
 # The poll task is derived from the endpoint, so the task surface is read-only.
 omniglass task list
@@ -312,9 +339,9 @@ omniglass secret-type list                           # the shape registry (snmp-
 omniglass secret list                               # the all-scope admin directory (masked fields)
 omniglass secret create --name core-snmp --secret-type snmp-community \
   --owner-kind location --owner hq --fields '{"community":"public"}'
-omniglass secret update <id> --fields '{"community":"s3cret"}'   # an omitted field keeps its value
-omniglass secret reveal <id>                        # audited plaintext decrypt (secret:reveal)
-omniglass secret delete <id>
+omniglass secret update core-snmp --fields '{"community":"s3cret"}'   # an omitted field keeps its value
+omniglass secret reveal hq/core-snmp                # audited plaintext decrypt (secret:reveal), by <owner>/<name>
+omniglass secret delete core-snmp
 
 omniglass component effective-secret list codec-1   # the masked cascade resolved onto a component
 ```
@@ -326,6 +353,12 @@ ever `secret reveal`. It rides `secret:read`, which the viewer floor does not ca
 `--owner-kind` is one of `platform | location | system | component`; `--owner` names the owning entity
 and is omitted for a `platform` secret (the install-wide tier, which needs an all-scope grant plus
 `platform:create`). Field maps pass as a JSON object to `--fields`, validated against the type's shape.
+
+A secret's name is unique within its owner, and the cascade makes one name at several owners the
+ordinary case (a room's `core-snmp` overriding the platform's), so the bare name resolves only where
+exactly one secret you can see carries it. `<owner>/<name>` always resolves: the owner by name,
+dotted address or uuid, or `$platform` for the install-wide tier, which has no name of its own
+(`omniglass secret reveal '$platform/core-snmp'`).
 
 ## Variables
 
@@ -339,8 +372,8 @@ omniglass variable create --name poll-interval --value-type int \
   --owner-kind system --owner east-auditorium-av --value 30
 omniglass variable create --name retry --value-type json --owner-kind platform \
   --value '{"retries":3,"backoff":"1s"}'
-omniglass variable update <id> --value 60           # validated against the fixed value_type
-omniglass variable delete <id>
+omniglass variable update east-auditorium-av/poll-interval --value 60   # validated against the fixed value_type
+omniglass variable delete retry
 
 omniglass component effective-variable list codec-1   # the cascade resolved onto a component
 ```

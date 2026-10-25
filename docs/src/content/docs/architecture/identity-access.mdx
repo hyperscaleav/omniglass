@@ -488,6 +488,22 @@ narrow it). A dotted address skips this step entirely on its own: the placement-
 indexes it walks admit at most one row per hop, so there is no ambiguity to decide, only the same scope
 check every other reference gets once it resolves to a uuid.
 
+The same rule reaches the resources whose name is unique only inside something else, or nowhere
+([ADR-1133](/architecture/decisions/#adr-1133-every-operator-resource-answers-to-its-name-and-an-endpoint-is-its-component-and-its-name)):
+an **endpoint** (`<component>/<endpoint name>`), a **secret** or **variable** (`<name>` or
+`<owner>/<name>`), a **file** (its filename), a **principal group** (its name) and a group **member**
+(a username or a service account's name). Each name is narrowed to what the caller may read before
+anything else is decided: an endpoint's candidate components to those in its `endpoint:read` scope
+that carry an endpoint of that name; a secret's candidates to the owners in its `secret:read` scope
+and, for an admin-sensitive one, to the admin tier; a file's to the files it may see; a group's only
+after the all-scope check every group route already makes. The resolved uuid then runs the route's
+existing read-then-action split unchanged, inside the same transaction, so a name changes how a row is
+found and nothing about what may be done to it. A name no visible row answers to, or that several do,
+is a 404 naming the reference, listing each visible match in a spelling that resolves; an out-of-scope
+match never appears, so the refusal reads the same as for an absent row. The owner part of a secret
+reference resolves scope-blind but only ever intersects with secrets already proven visible, so it
+discloses nothing on its own.
+
 The primitive carries one policy axis, not one behaviour, and the two policies do not make the same
 promise:
 

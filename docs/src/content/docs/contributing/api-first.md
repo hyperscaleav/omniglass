@@ -82,9 +82,11 @@ The test is a **round trip**: a response body can be fed back to the write that 
 fails, every client has to fetch a second collection and join by uuid to render one label, each
 slightly differently.
 
-One exception, narrow: **an entity addressed by id**, either because nobody names it (a stored
-property value, an audit row, a grant, a principal) or because its name is not unique fleet-wide
-(an endpoint, named after its transport and unique only within its component). A **registry**
+One exception, narrow: **an entity addressed by id**, because nobody names it (a stored property
+value, an audit row, a grant). A name that is unique only inside something else is not an exception
+to addressing: it is addressed by that something and its name, `<component>/<endpoint name>` for an
+endpoint named after its transport, `<owner>/<name>` for a secret or a variable
+([ADR-1133](/architecture/decisions/#adr-1133-every-operator-resource-answers-to-its-name-and-an-endpoint-is-its-component-and-its-name)). A **registry**
 used to be a second exception, a slug-keyed catalog whose id *was* its
 name (`product_id: "kestrel-vroom"`); that is gone. Every registry now has a uuid primary key and
 a renameable `name` ([ADR-0062](/architecture/decisions/#adr-0062-a-registry-takes-a-uuid-primary-key-and-a-renameable-handle)),
@@ -97,7 +99,11 @@ is now retired everywhere, including the last place it lived, the registries.
 
 **A path or a join field accepts either form.** `GET /components/{ref}` and a body's
 `{"parent": "..."}` both take a uuid or a name; the uuid is tried first, so an id never
-collides with a name.
+collides with a name. That holds on every operator resource, not just the tree entities: a route
+that takes a uuid takes the name too, and the docs and demos type the name
+([API](/architecture/api/#every-operator-resource-answers-to-its-name)), which `TestDocsCarryNoHardCodedUUIDs`
+and `TestDemoScriptsCarryNoHardCodedUUIDs` (`internal/docslint`) enforce on every page and every
+committed demo, excusing only an id field a response returns and the generated reference.
 
 `TestReferencesCarryBothForms` enforces this over the generated OpenAPI in both directions, so a body
 cannot silently reintroduce a uuid-only reference (a `*_id` with no name) nor a name-only registry

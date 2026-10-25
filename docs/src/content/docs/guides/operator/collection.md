@@ -153,7 +153,7 @@ pins), or **not verified**. Skipping verification is an operator's choice, never
 so its row reads it in amber and the endpoint's row wears **unverified** without being expanded. The
 mode is one of the endpoint's driver inputs (`tls-mode`), edited on the endpoint's detail like its
 host or port. A pinned key that changes reads **rejected** with class `certificate`, naming both
-keys; once you know the component was replaced, `omniglass endpoint retry <id> --certificate <the
+keys; once you know the component was replaced, `omniglass endpoint retry <component>/https --certificate <the
 offered key>` trusts the new one ([tls](/architecture/collection/#tls)).
 
 An **http** or **https** endpoint's driver sends real requests, each carrying the endpoint's

@@ -396,7 +396,7 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass calc-rule delete <name>",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/calc-rules/%s", url.PathEscape(args[0]))
+						path := fmt.Sprintf("/api/v1/calc-rules/%s", pathSegment(args[0]))
 						return runAPICommand(cmd, "DELETE", path, nil)
 					},
 				}
@@ -413,7 +413,7 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass calc-rule get <name>",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/calc-rules/%s", url.PathEscape(args[0]))
+						path := fmt.Sprintf("/api/v1/calc-rules/%s", pathSegment(args[0]))
 						return runAPICommand(cmd, "GET", path, nil)
 					},
 				}
@@ -500,7 +500,7 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass calc-rule rename <name> --name name",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/calc-rules/%s:rename", url.PathEscape(args[0]))
+						path := fmt.Sprintf("/api/v1/calc-rules/%s:rename", pathSegment(args[0]))
 						body := map[string]any{}
 						if cmd.Flags().Changed("name") {
 							body["name"] = fName
@@ -529,7 +529,7 @@ func generatedCommands() []*cobra.Command {
 						Example: "  omniglass calc-rule state list <name>",
 						Args:    cobra.ExactArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/calc-rules/%s/state", url.PathEscape(args[0]))
+							path := fmt.Sprintf("/api/v1/calc-rules/%s/state", pathSegment(args[0]))
 							q := url.Values{}
 							if cmd.Flags().Changed("limit") {
 								q.Set("limit", fmt.Sprintf("%v", qLimit))
@@ -563,7 +563,7 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass calc-rule update <name>",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/calc-rules/%s", url.PathEscape(args[0]))
+						path := fmt.Sprintf("/api/v1/calc-rules/%s", pathSegment(args[0]))
 						body := map[string]any{}
 						if cmd.Flags().Changed("description") {
 							body["description"] = fDescription
@@ -670,7 +670,7 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass command-type delete <name>",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/command-types/%s", url.PathEscape(args[0]))
+						path := fmt.Sprintf("/api/v1/command-types/%s", pathSegment(args[0]))
 						return runAPICommand(cmd, "DELETE", path, nil)
 					},
 				}
@@ -687,7 +687,7 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass command-type get <name>",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/command-types/%s", url.PathEscape(args[0]))
+						path := fmt.Sprintf("/api/v1/command-types/%s", pathSegment(args[0]))
 						return runAPICommand(cmd, "GET", path, nil)
 					},
 				}
@@ -727,7 +727,7 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass command-type update <name>",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/command-types/%s", url.PathEscape(args[0]))
+						path := fmt.Sprintf("/api/v1/command-types/%s", pathSegment(args[0]))
 						body := map[string]any{}
 						if cmd.Flags().Changed("description") {
 							body["description"] = fDescription
@@ -781,7 +781,7 @@ func generatedCommands() []*cobra.Command {
 						Example: "  omniglass component alarm acknowledge <name> <id>",
 						Args:    cobra.ExactArgs(2),
 						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/components/%s/alarms/%s:acknowledge", url.PathEscape(args[0]), url.PathEscape(args[1]))
+							path := fmt.Sprintf("/api/v1/components/%s/alarms/%s:acknowledge", pathSegment(args[0]), pathSegment(args[1]))
 							return runAPICommand(cmd, "POST", path, nil)
 						},
 					}
@@ -801,7 +801,7 @@ func generatedCommands() []*cobra.Command {
 						Example: "  omniglass component alarm create <name> --severity severity",
 						Args:    cobra.ExactArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/components/%s/alarms", url.PathEscape(args[0]))
+							path := fmt.Sprintf("/api/v1/components/%s/alarms", pathSegment(args[0]))
 							body := map[string]any{}
 							if cmd.Flags().Changed("dedup-key") {
 								body["dedup_key"] = fDedupKey
@@ -832,7 +832,7 @@ func generatedCommands() []*cobra.Command {
 						Example: "  omniglass component alarm delete <name> <id>",
 						Args:    cobra.ExactArgs(2),
 						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/components/%s/alarms/%s", url.PathEscape(args[0]), url.PathEscape(args[1]))
+							path := fmt.Sprintf("/api/v1/components/%s/alarms/%s", pathSegment(args[0]), pathSegment(args[1]))
 							return runAPICommand(cmd, "DELETE", path, nil)
 						},
 					}
@@ -851,7 +851,7 @@ func generatedCommands() []*cobra.Command {
 						Example: "  omniglass component alarm list <name>",
 						Args:    cobra.ExactArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/components/%s/alarms", url.PathEscape(args[0]))
+							path := fmt.Sprintf("/api/v1/components/%s/alarms", pathSegment(args[0]))
 							q := url.Values{}
 							if cmd.Flags().Changed("include-cleared") {
 								q.Set("include_cleared", fmt.Sprintf("%v", qIncludeCleared))
@@ -880,7 +880,7 @@ func generatedCommands() []*cobra.Command {
 						Example: "  omniglass component alarm timeline <name> <id>",
 						Args:    cobra.ExactArgs(2),
 						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/components/%s/alarms/%s:timeline", url.PathEscape(args[0]), url.PathEscape(args[1]))
+							path := fmt.Sprintf("/api/v1/components/%s/alarms/%s:timeline", pathSegment(args[0]), pathSegment(args[1]))
 							return runAPICommand(cmd, "GET", path, nil)
 						},
 					}
@@ -942,7 +942,7 @@ func generatedCommands() []*cobra.Command {
 						Example: "  omniglass component command issue <name> --command-type command_type",
 						Args:    cobra.ExactArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/components/%s/commands:issue", url.PathEscape(args[0]))
+							path := fmt.Sprintf("/api/v1/components/%s/commands:issue", pathSegment(args[0]))
 							body := map[string]any{}
 							if cmd.Flags().Changed("command-type") {
 								body["command_type"] = fCommandType
@@ -1032,7 +1032,7 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass component delete <name>",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/components/%s", url.PathEscape(args[0]))
+						path := fmt.Sprintf("/api/v1/components/%s", pathSegment(args[0]))
 						return runAPICommand(cmd, "DELETE", path, nil)
 					},
 				}
@@ -1054,7 +1054,7 @@ func generatedCommands() []*cobra.Command {
 						Example: "  omniglass component effective-secret list <name>",
 						Args:    cobra.ExactArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/components/%s/effective-secrets", url.PathEscape(args[0]))
+							path := fmt.Sprintf("/api/v1/components/%s/effective-secrets", pathSegment(args[0]))
 							return runAPICommand(cmd, "GET", path, nil)
 						},
 					}
@@ -1079,7 +1079,7 @@ func generatedCommands() []*cobra.Command {
 						Example: "  omniglass component effective-tag list <name>",
 						Args:    cobra.ExactArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/components/%s/effective-tags", url.PathEscape(args[0]))
+							path := fmt.Sprintf("/api/v1/components/%s/effective-tags", pathSegment(args[0]))
 							q := url.Values{}
 							if cmd.Flags().Changed("system") {
 								q.Set("system", fmt.Sprintf("%v", qSystem))
@@ -1111,7 +1111,7 @@ func generatedCommands() []*cobra.Command {
 						Example: "  omniglass component effective-variable list <name>",
 						Args:    cobra.ExactArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/components/%s/effective-variables", url.PathEscape(args[0]))
+							path := fmt.Sprintf("/api/v1/components/%s/effective-variables", pathSegment(args[0]))
 							return runAPICommand(cmd, "GET", path, nil)
 						},
 					}
@@ -1135,7 +1135,7 @@ func generatedCommands() []*cobra.Command {
 						Example: "  omniglass component event list <name>",
 						Args:    cobra.ExactArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/components/%s/events", url.PathEscape(args[0]))
+							path := fmt.Sprintf("/api/v1/components/%s/events", pathSegment(args[0]))
 							return runAPICommand(cmd, "GET", path, nil)
 						},
 					}
@@ -1154,7 +1154,7 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass component get <name>",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/components/%s", url.PathEscape(args[0]))
+						path := fmt.Sprintf("/api/v1/components/%s", pathSegment(args[0]))
 						return runAPICommand(cmd, "GET", path, nil)
 					},
 				}
@@ -1176,7 +1176,7 @@ func generatedCommands() []*cobra.Command {
 						Example: "  omniglass component impairment get <name>",
 						Args:    cobra.ExactArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/components/%s/impairment", url.PathEscape(args[0]))
+							path := fmt.Sprintf("/api/v1/components/%s/impairment", pathSegment(args[0]))
 							return runAPICommand(cmd, "GET", path, nil)
 						},
 					}
@@ -1198,7 +1198,7 @@ func generatedCommands() []*cobra.Command {
 						Example: "  omniglass component impairment set <name>",
 						Args:    cobra.ExactArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/components/%s/impairment", url.PathEscape(args[0]))
+							path := fmt.Sprintf("/api/v1/components/%s/impairment", pathSegment(args[0]))
 							body := map[string]any{}
 							if cmd.Flags().Changed("jitter-ms") {
 								body["jitter_ms"] = fJitterMs
@@ -1255,7 +1255,7 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass component listTags <name>",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/components/%s:listTags", url.PathEscape(args[0]))
+						path := fmt.Sprintf("/api/v1/components/%s:listTags", pathSegment(args[0]))
 						return runAPICommand(cmd, "GET", path, nil)
 					},
 				}
@@ -1277,7 +1277,7 @@ func generatedCommands() []*cobra.Command {
 						Example: "  omniglass component log list <name>",
 						Args:    cobra.ExactArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/components/%s/logs", url.PathEscape(args[0]))
+							path := fmt.Sprintf("/api/v1/components/%s/logs", pathSegment(args[0]))
 							return runAPICommand(cmd, "GET", path, nil)
 						},
 					}
@@ -1301,7 +1301,7 @@ func generatedCommands() []*cobra.Command {
 						Example: "  omniglass component membership list <name>",
 						Args:    cobra.ExactArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/components/%s/memberships", url.PathEscape(args[0]))
+							path := fmt.Sprintf("/api/v1/components/%s/memberships", pathSegment(args[0]))
 							return runAPICommand(cmd, "GET", path, nil)
 						},
 					}
@@ -1325,7 +1325,7 @@ func generatedCommands() []*cobra.Command {
 						Example: "  omniglass component metric list <name>",
 						Args:    cobra.ExactArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/components/%s/metrics", url.PathEscape(args[0]))
+							path := fmt.Sprintf("/api/v1/components/%s/metrics", pathSegment(args[0]))
 							return runAPICommand(cmd, "GET", path, nil)
 						},
 					}
@@ -1349,7 +1349,7 @@ func generatedCommands() []*cobra.Command {
 							Example: "  omniglass component metric sample list <name> <metric>",
 							Args:    cobra.ExactArgs(2),
 							RunE: func(cmd *cobra.Command, args []string) error {
-								path := fmt.Sprintf("/api/v1/components/%s/metrics/%s/samples", url.PathEscape(args[0]), url.PathEscape(args[1]))
+								path := fmt.Sprintf("/api/v1/components/%s/metrics/%s/samples", pathSegment(args[0]), pathSegment(args[1]))
 								q := url.Values{}
 								if cmd.Flags().Changed("hours") {
 									q.Set("hours", fmt.Sprintf("%v", qHours))
@@ -1384,7 +1384,7 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass component move <name>",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/components/%s:move", url.PathEscape(args[0]))
+						path := fmt.Sprintf("/api/v1/components/%s:move", pathSegment(args[0]))
 						body := map[string]any{}
 						if cmd.Flags().Changed("location") {
 							body["location"] = fLocation
@@ -1432,7 +1432,7 @@ func generatedCommands() []*cobra.Command {
 						Example: "  omniglass component property delete <name> <property>",
 						Args:    cobra.ExactArgs(2),
 						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/components/%s/properties/%s", url.PathEscape(args[0]), url.PathEscape(args[1]))
+							path := fmt.Sprintf("/api/v1/components/%s/properties/%s", pathSegment(args[0]), pathSegment(args[1]))
 							return runAPICommand(cmd, "DELETE", path, nil)
 						},
 					}
@@ -1449,7 +1449,7 @@ func generatedCommands() []*cobra.Command {
 						Example: "  omniglass component property list <name>",
 						Args:    cobra.ExactArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/components/%s/properties", url.PathEscape(args[0]))
+							path := fmt.Sprintf("/api/v1/components/%s/properties", pathSegment(args[0]))
 							return runAPICommand(cmd, "GET", path, nil)
 						},
 					}
@@ -1473,7 +1473,7 @@ func generatedCommands() []*cobra.Command {
 							Example: "  omniglass component property sample list <name> <property>",
 							Args:    cobra.ExactArgs(2),
 							RunE: func(cmd *cobra.Command, args []string) error {
-								path := fmt.Sprintf("/api/v1/components/%s/properties/%s/samples", url.PathEscape(args[0]), url.PathEscape(args[1]))
+								path := fmt.Sprintf("/api/v1/components/%s/properties/%s/samples", pathSegment(args[0]), pathSegment(args[1]))
 								q := url.Values{}
 								if cmd.Flags().Changed("hours") {
 									q.Set("hours", fmt.Sprintf("%v", qHours))
@@ -1505,7 +1505,7 @@ func generatedCommands() []*cobra.Command {
 						Example: "  omniglass component property update <name> <property> --value <json>",
 						Args:    cobra.ExactArgs(2),
 						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/components/%s/properties/%s", url.PathEscape(args[0]), url.PathEscape(args[1]))
+							path := fmt.Sprintf("/api/v1/components/%s/properties/%s", pathSegment(args[0]), pathSegment(args[1]))
 							body := map[string]any{}
 							if cmd.Flags().Changed("value") {
 								body["value"] = jsonOrString(fValue)
@@ -1535,7 +1535,7 @@ func generatedCommands() []*cobra.Command {
 						Example: "  omniglass component reachability list <name>",
 						Args:    cobra.ExactArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/components/%s/reachability", url.PathEscape(args[0]))
+							path := fmt.Sprintf("/api/v1/components/%s/reachability", pathSegment(args[0]))
 							return runAPICommand(cmd, "GET", path, nil)
 						},
 					}
@@ -1576,7 +1576,7 @@ func generatedCommands() []*cobra.Command {
 						Example: "  omniglass component reconciliation list <name>",
 						Args:    cobra.ExactArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/components/%s/reconciliation", url.PathEscape(args[0]))
+							path := fmt.Sprintf("/api/v1/components/%s/reconciliation", pathSegment(args[0]))
 							return runAPICommand(cmd, "GET", path, nil)
 						},
 					}
@@ -1596,7 +1596,7 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass component removeTag <name> --key key",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/components/%s:removeTag", url.PathEscape(args[0]))
+						path := fmt.Sprintf("/api/v1/components/%s:removeTag", pathSegment(args[0]))
 						body := map[string]any{}
 						if cmd.Flags().Changed("key") {
 							body["key"] = fKey
@@ -1620,7 +1620,7 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass component rename <name> --name name",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/components/%s:rename", url.PathEscape(args[0]))
+						path := fmt.Sprintf("/api/v1/components/%s:rename", pathSegment(args[0]))
 						body := map[string]any{}
 						if cmd.Flags().Changed("name") {
 							body["name"] = fName
@@ -1687,7 +1687,7 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass component resetName <name>",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/components/%s:resetName", url.PathEscape(args[0]))
+						path := fmt.Sprintf("/api/v1/components/%s:resetName", pathSegment(args[0]))
 						return runAPICommand(cmd, "POST", path, nil)
 					},
 				}
@@ -1706,7 +1706,7 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass component setTag <name> --key key --value value",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/components/%s:setTag", url.PathEscape(args[0]))
+						path := fmt.Sprintf("/api/v1/components/%s:setTag", pathSegment(args[0]))
 						body := map[string]any{}
 						if cmd.Flags().Changed("key") {
 							body["key"] = fKey
@@ -1745,7 +1745,7 @@ func generatedCommands() []*cobra.Command {
 						Example: "  omniglass component simulation fire <name> --surface surface",
 						Args:    cobra.ExactArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/components/%s/simulation:fire", url.PathEscape(args[0]))
+							path := fmt.Sprintf("/api/v1/components/%s/simulation:fire", pathSegment(args[0]))
 							body := map[string]any{}
 							if cmd.Flags().Changed("body") {
 								body["body"] = fBody
@@ -1788,7 +1788,7 @@ func generatedCommands() []*cobra.Command {
 						Example: "  omniglass component simulation get <name>",
 						Args:    cobra.ExactArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/components/%s/simulation", url.PathEscape(args[0]))
+							path := fmt.Sprintf("/api/v1/components/%s/simulation", pathSegment(args[0]))
 							return runAPICommand(cmd, "GET", path, nil)
 						},
 					}
@@ -1809,7 +1809,7 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass component update <name>",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/components/%s", url.PathEscape(args[0]))
+						path := fmt.Sprintf("/api/v1/components/%s", pathSegment(args[0]))
 						body := map[string]any{}
 						if cmd.Flags().Changed("label") {
 							body["label"] = fLabel
@@ -1902,7 +1902,7 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass component-type delete display",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/component-types/%s", url.PathEscape(args[0]))
+						path := fmt.Sprintf("/api/v1/component-types/%s", pathSegment(args[0]))
 						return runAPICommand(cmd, "DELETE", path, nil)
 					},
 				}
@@ -1936,7 +1936,7 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass component-type restore display",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/component-types/%s:restore", url.PathEscape(args[0]))
+						path := fmt.Sprintf("/api/v1/component-types/%s:restore", pathSegment(args[0]))
 						return runAPICommand(cmd, "POST", path, nil)
 					},
 				}
@@ -1959,7 +1959,7 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass component-type update display",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/component-types/%s", url.PathEscape(args[0]))
+						path := fmt.Sprintf("/api/v1/component-types/%s", pathSegment(args[0]))
 						body := map[string]any{}
 						if cmd.Flags().Changed("abbrev") {
 							body["abbrev"] = fAbbrev
@@ -2048,7 +2048,7 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass driver delete snmp-generic",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/drivers/%s", url.PathEscape(args[0]))
+						path := fmt.Sprintf("/api/v1/drivers/%s", pathSegment(args[0]))
 						return runAPICommand(cmd, "DELETE", path, nil)
 					},
 				}
@@ -2065,7 +2065,7 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass driver get snmp-generic",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/drivers/%s", url.PathEscape(args[0]))
+						path := fmt.Sprintf("/api/v1/drivers/%s", pathSegment(args[0]))
 						return runAPICommand(cmd, "GET", path, nil)
 					},
 				}
@@ -2102,7 +2102,7 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass driver update snmp-generic",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/drivers/%s", url.PathEscape(args[0]))
+						path := fmt.Sprintf("/api/v1/drivers/%s", pathSegment(args[0]))
 						body := map[string]any{}
 						if cmd.Flags().Changed("label") {
 							body["label"] = fLabel
@@ -2192,7 +2192,7 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass endpoint delete 'boi.17c.415a.$comp.display-1/https'",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/endpoints/%s", url.PathEscape(args[0]))
+						path := fmt.Sprintf("/api/v1/endpoints/%s", pathSegment(args[0]))
 						return runAPICommand(cmd, "DELETE", path, nil)
 					},
 				}
@@ -2209,7 +2209,7 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass endpoint get 'boi.17c.415a.$comp.display-1/https'",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/endpoints/%s", url.PathEscape(args[0]))
+						path := fmt.Sprintf("/api/v1/endpoints/%s", pathSegment(args[0]))
 						return runAPICommand(cmd, "GET", path, nil)
 					},
 				}
@@ -2245,7 +2245,7 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass endpoint retry 'boi.17c.415a.$comp.display-1/https'",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/endpoints/%s:retry", url.PathEscape(args[0]))
+						path := fmt.Sprintf("/api/v1/endpoints/%s:retry", pathSegment(args[0]))
 						body := map[string]any{}
 						if cmd.Flags().Changed("certificate") {
 							body["certificate"] = fCertificate
@@ -2276,7 +2276,7 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass endpoint update 'boi.17c.415a.$comp.display-1/https'",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/endpoints/%s", url.PathEscape(args[0]))
+						path := fmt.Sprintf("/api/v1/endpoints/%s", pathSegment(args[0]))
 						body := map[string]any{}
 						if cmd.Flags().Changed("inputs") {
 							body["inputs"] = jsonOrString(fInputs)
@@ -2413,7 +2413,7 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass event-rule delete <name>",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/event-rules/%s", url.PathEscape(args[0]))
+						path := fmt.Sprintf("/api/v1/event-rules/%s", pathSegment(args[0]))
 						return runAPICommand(cmd, "DELETE", path, nil)
 					},
 				}
@@ -2430,7 +2430,7 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass event-rule get <name>",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/event-rules/%s", url.PathEscape(args[0]))
+						path := fmt.Sprintf("/api/v1/event-rules/%s", pathSegment(args[0]))
 						return runAPICommand(cmd, "GET", path, nil)
 					},
 				}
@@ -2515,7 +2515,7 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass event-rule rename <name> --name name",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/event-rules/%s:rename", url.PathEscape(args[0]))
+						path := fmt.Sprintf("/api/v1/event-rules/%s:rename", pathSegment(args[0]))
 						body := map[string]any{}
 						if cmd.Flags().Changed("name") {
 							body["name"] = fName
@@ -2543,7 +2543,7 @@ func generatedCommands() []*cobra.Command {
 						Example: "  omniglass event-rule state list <name>",
 						Args:    cobra.ExactArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/event-rules/%s/state", url.PathEscape(args[0]))
+							path := fmt.Sprintf("/api/v1/event-rules/%s/state", pathSegment(args[0]))
 							return runAPICommand(cmd, "GET", path, nil)
 						},
 					}
@@ -2576,7 +2576,7 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass event-rule update <name>",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/event-rules/%s", url.PathEscape(args[0]))
+						path := fmt.Sprintf("/api/v1/event-rules/%s", pathSegment(args[0]))
 						body := map[string]any{}
 						if cmd.Flags().Changed("clear-criteria") {
 							body["clear_criteria"] = jsonOrString(fClearCriteria)
@@ -2696,7 +2696,7 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass event-type delete <name>",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/event-types/%s", url.PathEscape(args[0]))
+						path := fmt.Sprintf("/api/v1/event-types/%s", pathSegment(args[0]))
 						return runAPICommand(cmd, "DELETE", path, nil)
 					},
 				}
@@ -2713,7 +2713,7 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass event-type get <name>",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/event-types/%s", url.PathEscape(args[0]))
+						path := fmt.Sprintf("/api/v1/event-types/%s", pathSegment(args[0]))
 						return runAPICommand(cmd, "GET", path, nil)
 					},
 				}
@@ -2750,7 +2750,7 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass event-type update <name>",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/event-types/%s", url.PathEscape(args[0]))
+						path := fmt.Sprintf("/api/v1/event-types/%s", pathSegment(args[0]))
 						body := map[string]any{}
 						if cmd.Flags().Changed("description") {
 							body["description"] = fDescription
@@ -2880,7 +2880,7 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass file delete codec-firmware-2.1.4.txt",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/files/%s", url.PathEscape(args[0]))
+						path := fmt.Sprintf("/api/v1/files/%s", pathSegment(args[0]))
 						return runAPICommand(cmd, "DELETE", path, nil)
 					},
 				}
@@ -2897,7 +2897,7 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass file download codec-firmware-2.1.4.txt",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/files/%s:download", url.PathEscape(args[0]))
+						path := fmt.Sprintf("/api/v1/files/%s:download", pathSegment(args[0]))
 						return runAPICommand(cmd, "GET", path, nil)
 					},
 				}
@@ -2914,7 +2914,7 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass file get codec-firmware-2.1.4.txt",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/files/%s", url.PathEscape(args[0]))
+						path := fmt.Sprintf("/api/v1/files/%s", pathSegment(args[0]))
 						return runAPICommand(cmd, "GET", path, nil)
 					},
 				}
@@ -3050,7 +3050,7 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass location delete <name>",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/locations/%s", url.PathEscape(args[0]))
+						path := fmt.Sprintf("/api/v1/locations/%s", pathSegment(args[0]))
 						return runAPICommand(cmd, "DELETE", path, nil)
 					},
 				}
@@ -3067,7 +3067,7 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass location get <name>",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/locations/%s", url.PathEscape(args[0]))
+						path := fmt.Sprintf("/api/v1/locations/%s", pathSegment(args[0]))
 						return runAPICommand(cmd, "GET", path, nil)
 					},
 				}
@@ -3089,7 +3089,7 @@ func generatedCommands() []*cobra.Command {
 						Example: "  omniglass location health list <name>",
 						Args:    cobra.ExactArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/locations/%s/health", url.PathEscape(args[0]))
+							path := fmt.Sprintf("/api/v1/locations/%s/health", pathSegment(args[0]))
 							return runAPICommand(cmd, "GET", path, nil)
 						},
 					}
@@ -3125,7 +3125,7 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass location listTags <name>",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/locations/%s:listTags", url.PathEscape(args[0]))
+						path := fmt.Sprintf("/api/v1/locations/%s:listTags", pathSegment(args[0]))
 						return runAPICommand(cmd, "GET", path, nil)
 					},
 				}
@@ -3147,7 +3147,7 @@ func generatedCommands() []*cobra.Command {
 						Example: "  omniglass location metric list <name>",
 						Args:    cobra.ExactArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/locations/%s/metrics", url.PathEscape(args[0]))
+							path := fmt.Sprintf("/api/v1/locations/%s/metrics", pathSegment(args[0]))
 							return runAPICommand(cmd, "GET", path, nil)
 						},
 					}
@@ -3167,7 +3167,7 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass location move <name>",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/locations/%s:move", url.PathEscape(args[0]))
+						path := fmt.Sprintf("/api/v1/locations/%s:move", pathSegment(args[0]))
 						body := map[string]any{}
 						if cmd.Flags().Changed("parent") {
 							body["parent"] = fParent
@@ -3211,7 +3211,7 @@ func generatedCommands() []*cobra.Command {
 						Example: "  omniglass location property delete <name> <property>",
 						Args:    cobra.ExactArgs(2),
 						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/locations/%s/properties/%s", url.PathEscape(args[0]), url.PathEscape(args[1]))
+							path := fmt.Sprintf("/api/v1/locations/%s/properties/%s", pathSegment(args[0]), pathSegment(args[1]))
 							return runAPICommand(cmd, "DELETE", path, nil)
 						},
 					}
@@ -3228,7 +3228,7 @@ func generatedCommands() []*cobra.Command {
 						Example: "  omniglass location property list <name>",
 						Args:    cobra.ExactArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/locations/%s/properties", url.PathEscape(args[0]))
+							path := fmt.Sprintf("/api/v1/locations/%s/properties", pathSegment(args[0]))
 							return runAPICommand(cmd, "GET", path, nil)
 						},
 					}
@@ -3246,7 +3246,7 @@ func generatedCommands() []*cobra.Command {
 						Example: "  omniglass location property update <name> <property> --value <json>",
 						Args:    cobra.ExactArgs(2),
 						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/locations/%s/properties/%s", url.PathEscape(args[0]), url.PathEscape(args[1]))
+							path := fmt.Sprintf("/api/v1/locations/%s/properties/%s", pathSegment(args[0]), pathSegment(args[1]))
 							body := map[string]any{}
 							if cmd.Flags().Changed("value") {
 								body["value"] = jsonOrString(fValue)
@@ -3289,7 +3289,7 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass location removeTag <name> --key key",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/locations/%s:removeTag", url.PathEscape(args[0]))
+						path := fmt.Sprintf("/api/v1/locations/%s:removeTag", pathSegment(args[0]))
 						body := map[string]any{}
 						if cmd.Flags().Changed("key") {
 							body["key"] = fKey
@@ -3313,7 +3313,7 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass location rename <name> --name name",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/locations/%s:rename", url.PathEscape(args[0]))
+						path := fmt.Sprintf("/api/v1/locations/%s:rename", pathSegment(args[0]))
 						body := map[string]any{}
 						if cmd.Flags().Changed("name") {
 							body["name"] = fName
@@ -3370,7 +3370,7 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass location resetName <name>",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/locations/%s:resetName", url.PathEscape(args[0]))
+						path := fmt.Sprintf("/api/v1/locations/%s:resetName", pathSegment(args[0]))
 						return runAPICommand(cmd, "POST", path, nil)
 					},
 				}
@@ -3389,7 +3389,7 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass location setTag <name> --key key --value value",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/locations/%s:setTag", url.PathEscape(args[0]))
+						path := fmt.Sprintf("/api/v1/locations/%s:setTag", pathSegment(args[0]))
 						body := map[string]any{}
 						if cmd.Flags().Changed("key") {
 							body["key"] = fKey
@@ -3419,7 +3419,7 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass location update <name>",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/locations/%s", url.PathEscape(args[0]))
+						path := fmt.Sprintf("/api/v1/locations/%s", pathSegment(args[0]))
 						body := map[string]any{}
 						if cmd.Flags().Changed("label") {
 							body["label"] = fLabel
@@ -3502,7 +3502,7 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass location-type delete room",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/location-types/%s", url.PathEscape(args[0]))
+						path := fmt.Sprintf("/api/v1/location-types/%s", pathSegment(args[0]))
 						return runAPICommand(cmd, "DELETE", path, nil)
 					},
 				}
@@ -3541,7 +3541,7 @@ func generatedCommands() []*cobra.Command {
 						Example: "  omniglass location-type metric delete room <metric>",
 						Args:    cobra.ExactArgs(2),
 						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/location-types/%s/metrics/%s", url.PathEscape(args[0]), url.PathEscape(args[1]))
+							path := fmt.Sprintf("/api/v1/location-types/%s/metrics/%s", pathSegment(args[0]), pathSegment(args[1]))
 							return runAPICommand(cmd, "DELETE", path, nil)
 						},
 					}
@@ -3558,7 +3558,7 @@ func generatedCommands() []*cobra.Command {
 						Example: "  omniglass location-type metric list room",
 						Args:    cobra.ExactArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/location-types/%s/metrics", url.PathEscape(args[0]))
+							path := fmt.Sprintf("/api/v1/location-types/%s/metrics", pathSegment(args[0]))
 							return runAPICommand(cmd, "GET", path, nil)
 						},
 					}
@@ -3577,7 +3577,7 @@ func generatedCommands() []*cobra.Command {
 						Example: "  omniglass location-type metric update room <metric>",
 						Args:    cobra.ExactArgs(2),
 						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/location-types/%s/metrics/%s", url.PathEscape(args[0]), url.PathEscape(args[1]))
+							path := fmt.Sprintf("/api/v1/location-types/%s/metrics/%s", pathSegment(args[0]), pathSegment(args[1]))
 							body := map[string]any{}
 							if cmd.Flags().Changed("default-value") {
 								body["default_value"] = jsonOrString(fDefaultValue)
@@ -3610,7 +3610,7 @@ func generatedCommands() []*cobra.Command {
 						Example: "  omniglass location-type property delete room <property>",
 						Args:    cobra.ExactArgs(2),
 						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/location-types/%s/properties/%s", url.PathEscape(args[0]), url.PathEscape(args[1]))
+							path := fmt.Sprintf("/api/v1/location-types/%s/properties/%s", pathSegment(args[0]), pathSegment(args[1]))
 							return runAPICommand(cmd, "DELETE", path, nil)
 						},
 					}
@@ -3627,7 +3627,7 @@ func generatedCommands() []*cobra.Command {
 						Example: "  omniglass location-type property list room",
 						Args:    cobra.ExactArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/location-types/%s/properties", url.PathEscape(args[0]))
+							path := fmt.Sprintf("/api/v1/location-types/%s/properties", pathSegment(args[0]))
 							return runAPICommand(cmd, "GET", path, nil)
 						},
 					}
@@ -3646,7 +3646,7 @@ func generatedCommands() []*cobra.Command {
 						Example: "  omniglass location-type property update room <property>",
 						Args:    cobra.ExactArgs(2),
 						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/location-types/%s/properties/%s", url.PathEscape(args[0]), url.PathEscape(args[1]))
+							path := fmt.Sprintf("/api/v1/location-types/%s/properties/%s", pathSegment(args[0]), pathSegment(args[1]))
 							body := map[string]any{}
 							if cmd.Flags().Changed("default-value") {
 								body["default_value"] = jsonOrString(fDefaultValue)
@@ -3674,7 +3674,7 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass location-type restore room",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/location-types/%s:restore", url.PathEscape(args[0]))
+						path := fmt.Sprintf("/api/v1/location-types/%s:restore", pathSegment(args[0]))
 						return runAPICommand(cmd, "POST", path, nil)
 					},
 				}
@@ -3697,7 +3697,7 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass location-type update room",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/location-types/%s", url.PathEscape(args[0]))
+						path := fmt.Sprintf("/api/v1/location-types/%s", pathSegment(args[0]))
 						body := map[string]any{}
 						if cmd.Flags().Changed("allowed-parent-types") {
 							body["allowed_parent_types"] = jsonOrString(fAllowedParentTypes)
@@ -3796,7 +3796,7 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass metric-type delete <name>",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/metric-types/%s", url.PathEscape(args[0]))
+						path := fmt.Sprintf("/api/v1/metric-types/%s", pathSegment(args[0]))
 						return runAPICommand(cmd, "DELETE", path, nil)
 					},
 				}
@@ -3813,7 +3813,7 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass metric-type get <name>",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/metric-types/%s", url.PathEscape(args[0]))
+						path := fmt.Sprintf("/api/v1/metric-types/%s", pathSegment(args[0]))
 						return runAPICommand(cmd, "GET", path, nil)
 					},
 				}
@@ -3851,7 +3851,7 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass metric-type update <name>",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/metric-types/%s", url.PathEscape(args[0]))
+						path := fmt.Sprintf("/api/v1/metric-types/%s", pathSegment(args[0]))
 						body := map[string]any{}
 						if cmd.Flags().Changed("description") {
 							body["description"] = fDescription
@@ -3961,7 +3961,7 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass node delete <name>",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/nodes/%s", url.PathEscape(args[0]))
+						path := fmt.Sprintf("/api/v1/nodes/%s", pathSegment(args[0]))
 						return runAPICommand(cmd, "DELETE", path, nil)
 					},
 				}
@@ -3978,7 +3978,7 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass node enroll <name>",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/nodes/%s:enroll", url.PathEscape(args[0]))
+						path := fmt.Sprintf("/api/v1/nodes/%s:enroll", pathSegment(args[0]))
 						return runAPICommand(cmd, "POST", path, nil)
 					},
 				}
@@ -3995,7 +3995,7 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass node get <name>",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/nodes/%s", url.PathEscape(args[0]))
+						path := fmt.Sprintf("/api/v1/nodes/%s", pathSegment(args[0]))
 						return runAPICommand(cmd, "GET", path, nil)
 					},
 				}
@@ -4029,7 +4029,7 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass node listTags <name>",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/nodes/%s:listTags", url.PathEscape(args[0]))
+						path := fmt.Sprintf("/api/v1/nodes/%s:listTags", pathSegment(args[0]))
 						return runAPICommand(cmd, "GET", path, nil)
 					},
 				}
@@ -4051,7 +4051,7 @@ func generatedCommands() []*cobra.Command {
 						Example: "  omniglass node log list <name>",
 						Args:    cobra.ExactArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/nodes/%s/logs", url.PathEscape(args[0]))
+							path := fmt.Sprintf("/api/v1/nodes/%s/logs", pathSegment(args[0]))
 							return runAPICommand(cmd, "GET", path, nil)
 						},
 					}
@@ -4071,7 +4071,7 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass node removeTag <name> --key key",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/nodes/%s:removeTag", url.PathEscape(args[0]))
+						path := fmt.Sprintf("/api/v1/nodes/%s:removeTag", pathSegment(args[0]))
 						body := map[string]any{}
 						if cmd.Flags().Changed("key") {
 							body["key"] = fKey
@@ -4096,7 +4096,7 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass node setTag <name> --key key --value value",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/nodes/%s:setTag", url.PathEscape(args[0]))
+						path := fmt.Sprintf("/api/v1/nodes/%s:setTag", pathSegment(args[0]))
 						body := map[string]any{}
 						if cmd.Flags().Changed("key") {
 							body["key"] = fKey
@@ -4124,7 +4124,7 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass node simulation <name>",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/nodes/%s/simulation", url.PathEscape(args[0]))
+						path := fmt.Sprintf("/api/v1/nodes/%s/simulation", pathSegment(args[0]))
 						return runAPICommand(cmd, "GET", path, nil)
 					},
 				}
@@ -4144,7 +4144,7 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass node update <name>",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/nodes/%s", url.PathEscape(args[0]))
+						path := fmt.Sprintf("/api/v1/nodes/%s", pathSegment(args[0]))
 						body := map[string]any{}
 						if cmd.Flags().Changed("description") {
 							body["description"] = fDescription
@@ -4181,7 +4181,7 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass principal archive <id>",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/principals/%s:archive", url.PathEscape(args[0]))
+						path := fmt.Sprintf("/api/v1/principals/%s:archive", pathSegment(args[0]))
 						return runAPICommand(cmd, "POST", path, nil)
 					},
 				}
@@ -4203,7 +4203,7 @@ func generatedCommands() []*cobra.Command {
 						Example: "  omniglass principal avatar list <id>",
 						Args:    cobra.ExactArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/principals/%s/avatar", url.PathEscape(args[0]))
+							path := fmt.Sprintf("/api/v1/principals/%s/avatar", pathSegment(args[0]))
 							return runAPICommand(cmd, "GET", path, nil)
 						},
 					}
@@ -4261,7 +4261,7 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass principal disable <id>",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/principals/%s:disable", url.PathEscape(args[0]))
+						path := fmt.Sprintf("/api/v1/principals/%s:disable", pathSegment(args[0]))
 						return runAPICommand(cmd, "POST", path, nil)
 					},
 				}
@@ -4278,7 +4278,7 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass principal enable <id>",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/principals/%s:enable", url.PathEscape(args[0]))
+						path := fmt.Sprintf("/api/v1/principals/%s:enable", pathSegment(args[0]))
 						return runAPICommand(cmd, "POST", path, nil)
 					},
 				}
@@ -4295,7 +4295,7 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass principal get <id>",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/principals/%s", url.PathEscape(args[0]))
+						path := fmt.Sprintf("/api/v1/principals/%s", pathSegment(args[0]))
 						return runAPICommand(cmd, "GET", path, nil)
 					},
 				}
@@ -4321,7 +4321,7 @@ func generatedCommands() []*cobra.Command {
 						Example: "  omniglass principal grant create <id> --role role --scope-kind scope_kind",
 						Args:    cobra.ExactArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/principals/%s/grants", url.PathEscape(args[0]))
+							path := fmt.Sprintf("/api/v1/principals/%s/grants", pathSegment(args[0]))
 							body := map[string]any{}
 							if cmd.Flags().Changed("role") {
 								body["role"] = fRole
@@ -4357,7 +4357,7 @@ func generatedCommands() []*cobra.Command {
 						Example: "  omniglass principal grant delete <id> <grantId>",
 						Args:    cobra.ExactArgs(2),
 						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/principals/%s/grants/%s", url.PathEscape(args[0]), url.PathEscape(args[1]))
+							path := fmt.Sprintf("/api/v1/principals/%s/grants/%s", pathSegment(args[0]), pathSegment(args[1]))
 							return runAPICommand(cmd, "DELETE", path, nil)
 						},
 					}
@@ -4378,7 +4378,7 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass principal impersonate <id> --mode mode",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/principals/%s:impersonate", url.PathEscape(args[0]))
+						path := fmt.Sprintf("/api/v1/principals/%s:impersonate", pathSegment(args[0]))
 						body := map[string]any{}
 						if cmd.Flags().Changed("duration-minutes") {
 							body["duration_minutes"] = fDurationMinutes
@@ -4436,7 +4436,7 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass principal purge <id>",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/principals/%s:purge", url.PathEscape(args[0]))
+						path := fmt.Sprintf("/api/v1/principals/%s:purge", pathSegment(args[0]))
 						return runAPICommand(cmd, "POST", path, nil)
 					},
 				}
@@ -4453,7 +4453,7 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass principal removeAvatar <id>",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/principals/%s:removeAvatar", url.PathEscape(args[0]))
+						path := fmt.Sprintf("/api/v1/principals/%s:removeAvatar", pathSegment(args[0]))
 						return runAPICommand(cmd, "POST", path, nil)
 					},
 				}
@@ -4471,7 +4471,7 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass principal resetPassword <id> --password password",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/principals/%s:resetPassword", url.PathEscape(args[0]))
+						path := fmt.Sprintf("/api/v1/principals/%s:resetPassword", pathSegment(args[0]))
 						body := map[string]any{}
 						if cmd.Flags().Changed("password") {
 							body["password"] = fPassword
@@ -4494,7 +4494,7 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass principal restore <id>",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/principals/%s:restore", url.PathEscape(args[0]))
+						path := fmt.Sprintf("/api/v1/principals/%s:restore", pathSegment(args[0]))
 						return runAPICommand(cmd, "POST", path, nil)
 					},
 				}
@@ -4516,7 +4516,7 @@ func generatedCommands() []*cobra.Command {
 						Example: "  omniglass principal session list <id>",
 						Args:    cobra.ExactArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/principals/%s/sessions", url.PathEscape(args[0]))
+							path := fmt.Sprintf("/api/v1/principals/%s/sessions", pathSegment(args[0]))
 							return runAPICommand(cmd, "GET", path, nil)
 						},
 					}
@@ -4533,7 +4533,7 @@ func generatedCommands() []*cobra.Command {
 						Example: "  omniglass principal session revoke <id> <sid>",
 						Args:    cobra.ExactArgs(2),
 						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/principals/%s/sessions/%s:revoke", url.PathEscape(args[0]), url.PathEscape(args[1]))
+							path := fmt.Sprintf("/api/v1/principals/%s/sessions/%s:revoke", pathSegment(args[0]), pathSegment(args[1]))
 							return runAPICommand(cmd, "POST", path, nil)
 						},
 					}
@@ -4551,7 +4551,7 @@ func generatedCommands() []*cobra.Command {
 						Example: "  omniglass principal session revokeAll <id> --purpose purpose",
 						Args:    cobra.ExactArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/principals/%s/sessions:revokeAll", url.PathEscape(args[0]))
+							path := fmt.Sprintf("/api/v1/principals/%s/sessions:revokeAll", pathSegment(args[0]))
 							body := map[string]any{}
 							if cmd.Flags().Changed("purpose") {
 								body["purpose"] = fPurpose
@@ -4577,7 +4577,7 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass principal setAvatar <id> --image-base64 image_base64",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/principals/%s:setAvatar", url.PathEscape(args[0]))
+						path := fmt.Sprintf("/api/v1/principals/%s:setAvatar", pathSegment(args[0]))
 						body := map[string]any{}
 						if cmd.Flags().Changed("image-base64") {
 							body["image_base64"] = fImageBase64
@@ -4603,7 +4603,7 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass principal update <id>",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/principals/%s", url.PathEscape(args[0]))
+						path := fmt.Sprintf("/api/v1/principals/%s", pathSegment(args[0]))
 						body := map[string]any{}
 						if cmd.Flags().Changed("email") {
 							body["email"] = fEmail
@@ -4674,7 +4674,7 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass principal-group delete night-shift",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/principal-groups/%s", url.PathEscape(args[0]))
+						path := fmt.Sprintf("/api/v1/principal-groups/%s", pathSegment(args[0]))
 						return runAPICommand(cmd, "DELETE", path, nil)
 					},
 				}
@@ -4691,7 +4691,7 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass principal-group get night-shift",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/principal-groups/%s", url.PathEscape(args[0]))
+						path := fmt.Sprintf("/api/v1/principal-groups/%s", pathSegment(args[0]))
 						return runAPICommand(cmd, "GET", path, nil)
 					},
 				}
@@ -4717,7 +4717,7 @@ func generatedCommands() []*cobra.Command {
 						Example: "  omniglass principal-group grant create night-shift --role role --scope-kind scope_kind",
 						Args:    cobra.ExactArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/principal-groups/%s/grants", url.PathEscape(args[0]))
+							path := fmt.Sprintf("/api/v1/principal-groups/%s/grants", pathSegment(args[0]))
 							body := map[string]any{}
 							if cmd.Flags().Changed("role") {
 								body["role"] = fRole
@@ -4753,7 +4753,7 @@ func generatedCommands() []*cobra.Command {
 						Example: "  omniglass principal-group grant delete night-shift <grantId>",
 						Args:    cobra.ExactArgs(2),
 						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/principal-groups/%s/grants/%s", url.PathEscape(args[0]), url.PathEscape(args[1]))
+							path := fmt.Sprintf("/api/v1/principal-groups/%s/grants/%s", pathSegment(args[0]), pathSegment(args[1]))
 							return runAPICommand(cmd, "DELETE", path, nil)
 						},
 					}
@@ -4770,7 +4770,7 @@ func generatedCommands() []*cobra.Command {
 						Example: "  omniglass principal-group grant list night-shift",
 						Args:    cobra.ExactArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/principal-groups/%s/grants", url.PathEscape(args[0]))
+							path := fmt.Sprintf("/api/v1/principal-groups/%s/grants", pathSegment(args[0]))
 							return runAPICommand(cmd, "GET", path, nil)
 						},
 					}
@@ -4812,7 +4812,7 @@ func generatedCommands() []*cobra.Command {
 						Example: "  omniglass principal-group member create night-shift --principal-id principal_id",
 						Args:    cobra.ExactArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/principal-groups/%s/members", url.PathEscape(args[0]))
+							path := fmt.Sprintf("/api/v1/principal-groups/%s/members", pathSegment(args[0]))
 							body := map[string]any{}
 							if cmd.Flags().Changed("principal-id") {
 								body["principal_id"] = fPrincipalId
@@ -4835,7 +4835,7 @@ func generatedCommands() []*cobra.Command {
 						Example: "  omniglass principal-group member delete night-shift alice",
 						Args:    cobra.ExactArgs(2),
 						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/principal-groups/%s/members/%s", url.PathEscape(args[0]), url.PathEscape(args[1]))
+							path := fmt.Sprintf("/api/v1/principal-groups/%s/members/%s", pathSegment(args[0]), pathSegment(args[1]))
 							return runAPICommand(cmd, "DELETE", path, nil)
 						},
 					}
@@ -4852,7 +4852,7 @@ func generatedCommands() []*cobra.Command {
 						Example: "  omniglass principal-group member list night-shift",
 						Args:    cobra.ExactArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/principal-groups/%s/members", url.PathEscape(args[0]))
+							path := fmt.Sprintf("/api/v1/principal-groups/%s/members", pathSegment(args[0]))
 							return runAPICommand(cmd, "GET", path, nil)
 						},
 					}
@@ -4872,7 +4872,7 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass principal-group rename night-shift --name name",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/principal-groups/%s:rename", url.PathEscape(args[0]))
+						path := fmt.Sprintf("/api/v1/principal-groups/%s:rename", pathSegment(args[0]))
 						body := map[string]any{}
 						if cmd.Flags().Changed("name") {
 							body["name"] = fName
@@ -4897,7 +4897,7 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass principal-group update night-shift",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/principal-groups/%s", url.PathEscape(args[0]))
+						path := fmt.Sprintf("/api/v1/principal-groups/%s", pathSegment(args[0]))
 						body := map[string]any{}
 						if cmd.Flags().Changed("description") {
 							body["description"] = fDescription
@@ -4997,7 +4997,7 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass product delete boreal-edge-55",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/products/%s", url.PathEscape(args[0]))
+						path := fmt.Sprintf("/api/v1/products/%s", pathSegment(args[0]))
 						return runAPICommand(cmd, "DELETE", path, nil)
 					},
 				}
@@ -5014,7 +5014,7 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass product get boreal-edge-55",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/products/%s", url.PathEscape(args[0]))
+						path := fmt.Sprintf("/api/v1/products/%s", pathSegment(args[0]))
 						return runAPICommand(cmd, "GET", path, nil)
 					},
 				}
@@ -5053,7 +5053,7 @@ func generatedCommands() []*cobra.Command {
 						Example: "  omniglass product metric delete boreal-edge-55 <metric>",
 						Args:    cobra.ExactArgs(2),
 						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/products/%s/metrics/%s", url.PathEscape(args[0]), url.PathEscape(args[1]))
+							path := fmt.Sprintf("/api/v1/products/%s/metrics/%s", pathSegment(args[0]), pathSegment(args[1]))
 							return runAPICommand(cmd, "DELETE", path, nil)
 						},
 					}
@@ -5070,7 +5070,7 @@ func generatedCommands() []*cobra.Command {
 						Example: "  omniglass product metric list boreal-edge-55",
 						Args:    cobra.ExactArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/products/%s/metrics", url.PathEscape(args[0]))
+							path := fmt.Sprintf("/api/v1/products/%s/metrics", pathSegment(args[0]))
 							return runAPICommand(cmd, "GET", path, nil)
 						},
 					}
@@ -5089,7 +5089,7 @@ func generatedCommands() []*cobra.Command {
 						Example: "  omniglass product metric update boreal-edge-55 <metric>",
 						Args:    cobra.ExactArgs(2),
 						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/products/%s/metrics/%s", url.PathEscape(args[0]), url.PathEscape(args[1]))
+							path := fmt.Sprintf("/api/v1/products/%s/metrics/%s", pathSegment(args[0]), pathSegment(args[1]))
 							body := map[string]any{}
 							if cmd.Flags().Changed("default-value") {
 								body["default_value"] = jsonOrString(fDefaultValue)
@@ -5122,7 +5122,7 @@ func generatedCommands() []*cobra.Command {
 						Example: "  omniglass product property delete boreal-edge-55 <property>",
 						Args:    cobra.ExactArgs(2),
 						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/products/%s/properties/%s", url.PathEscape(args[0]), url.PathEscape(args[1]))
+							path := fmt.Sprintf("/api/v1/products/%s/properties/%s", pathSegment(args[0]), pathSegment(args[1]))
 							return runAPICommand(cmd, "DELETE", path, nil)
 						},
 					}
@@ -5139,7 +5139,7 @@ func generatedCommands() []*cobra.Command {
 						Example: "  omniglass product property list boreal-edge-55",
 						Args:    cobra.ExactArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/products/%s/properties", url.PathEscape(args[0]))
+							path := fmt.Sprintf("/api/v1/products/%s/properties", pathSegment(args[0]))
 							return runAPICommand(cmd, "GET", path, nil)
 						},
 					}
@@ -5158,7 +5158,7 @@ func generatedCommands() []*cobra.Command {
 						Example: "  omniglass product property update boreal-edge-55 <property>",
 						Args:    cobra.ExactArgs(2),
 						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/products/%s/properties/%s", url.PathEscape(args[0]), url.PathEscape(args[1]))
+							path := fmt.Sprintf("/api/v1/products/%s/properties/%s", pathSegment(args[0]), pathSegment(args[1]))
 							body := map[string]any{}
 							if cmd.Flags().Changed("default-value") {
 								body["default_value"] = jsonOrString(fDefaultValue)
@@ -5194,7 +5194,7 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass product update boreal-edge-55",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/products/%s", url.PathEscape(args[0]))
+						path := fmt.Sprintf("/api/v1/products/%s", pathSegment(args[0]))
 						body := map[string]any{}
 						if cmd.Flags().Changed("component-type") {
 							body["component_type"] = fComponentType
@@ -5296,7 +5296,7 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass property-type delete <name>",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/property-types/%s", url.PathEscape(args[0]))
+						path := fmt.Sprintf("/api/v1/property-types/%s", pathSegment(args[0]))
 						return runAPICommand(cmd, "DELETE", path, nil)
 					},
 				}
@@ -5313,7 +5313,7 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass property-type get <name>",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/property-types/%s", url.PathEscape(args[0]))
+						path := fmt.Sprintf("/api/v1/property-types/%s", pathSegment(args[0]))
 						return runAPICommand(cmd, "GET", path, nil)
 					},
 				}
@@ -5350,7 +5350,7 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass property-type update <name>",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/property-types/%s", url.PathEscape(args[0]))
+						path := fmt.Sprintf("/api/v1/property-types/%s", pathSegment(args[0]))
 						body := map[string]any{}
 						if cmd.Flags().Changed("description") {
 							body["description"] = fDescription
@@ -5411,7 +5411,7 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass secret copy demo-panel-login",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/secrets/%s:copy", url.PathEscape(args[0]))
+						path := fmt.Sprintf("/api/v1/secrets/%s:copy", pathSegment(args[0]))
 						return runAPICommand(cmd, "POST", path, nil)
 					},
 				}
@@ -5485,7 +5485,7 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass secret delete demo-panel-login",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/secrets/%s", url.PathEscape(args[0]))
+						path := fmt.Sprintf("/api/v1/secrets/%s", pathSegment(args[0]))
 						return runAPICommand(cmd, "DELETE", path, nil)
 					},
 				}
@@ -5519,7 +5519,7 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass secret reveal demo-panel-login",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/secrets/%s:reveal", url.PathEscape(args[0]))
+						path := fmt.Sprintf("/api/v1/secrets/%s:reveal", pathSegment(args[0]))
 						return runAPICommand(cmd, "POST", path, nil)
 					},
 				}
@@ -5538,7 +5538,7 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass secret update demo-panel-login",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/secrets/%s", url.PathEscape(args[0]))
+						path := fmt.Sprintf("/api/v1/secrets/%s", pathSegment(args[0]))
 						body := map[string]any{}
 						if cmd.Flags().Changed("fields") {
 							body["fields"] = jsonOrString(fFields)
@@ -5612,7 +5612,7 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass session revoke <id>",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/auth/me/sessions/%s:revoke", url.PathEscape(args[0]))
+						path := fmt.Sprintf("/api/v1/auth/me/sessions/%s:revoke", pathSegment(args[0]))
 						return runAPICommand(cmd, "POST", path, nil)
 					},
 				}
@@ -5660,7 +5660,7 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass setting delete <namespace>",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/settings/%s", url.PathEscape(args[0]))
+						path := fmt.Sprintf("/api/v1/settings/%s", pathSegment(args[0]))
 						return runAPICommand(cmd, "DELETE", path, nil)
 					},
 				}
@@ -5735,7 +5735,7 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass setting update <namespace>",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/settings/%s", url.PathEscape(args[0]))
+						path := fmt.Sprintf("/api/v1/settings/%s", pathSegment(args[0]))
 						return runAPICommand(cmd, "PATCH", path, nil)
 					},
 				}
@@ -5800,7 +5800,7 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass severity-level delete <name>",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/severity-levels/%s", url.PathEscape(args[0]))
+						path := fmt.Sprintf("/api/v1/severity-levels/%s", pathSegment(args[0]))
 						return runAPICommand(cmd, "DELETE", path, nil)
 					},
 				}
@@ -5817,7 +5817,7 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass severity-level get <name>",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/severity-levels/%s", url.PathEscape(args[0]))
+						path := fmt.Sprintf("/api/v1/severity-levels/%s", pathSegment(args[0]))
 						return runAPICommand(cmd, "GET", path, nil)
 					},
 				}
@@ -5855,7 +5855,7 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass severity-level update <name>",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/severity-levels/%s", url.PathEscape(args[0]))
+						path := fmt.Sprintf("/api/v1/severity-levels/%s", pathSegment(args[0]))
 						body := map[string]any{}
 						if cmd.Flags().Changed("color") {
 							body["color"] = fColor
@@ -5899,7 +5899,7 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass simulation add-component <name> --name name --product product",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/nodes/%s/simulation/components", url.PathEscape(args[0]))
+						path := fmt.Sprintf("/api/v1/nodes/%s/simulation/components", pathSegment(args[0]))
 						body := map[string]any{}
 						if cmd.Flags().Changed("location") {
 							body["location"] = fLocation
@@ -5935,7 +5935,7 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass simulation add-system <name> --standard standard --system-type system_type",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/nodes/%s/simulation/systems", url.PathEscape(args[0]))
+						path := fmt.Sprintf("/api/v1/nodes/%s/simulation/systems", pathSegment(args[0]))
 						body := map[string]any{}
 						if cmd.Flags().Changed("location") {
 							body["location"] = fLocation
@@ -5988,7 +5988,7 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass simulation plan-system <standard>",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/simulation/standards/%s:plan", url.PathEscape(args[0]))
+						path := fmt.Sprintf("/api/v1/simulation/standards/%s:plan", pathSegment(args[0]))
 						return runAPICommand(cmd, "GET", path, nil)
 					},
 				}
@@ -6064,7 +6064,7 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass standard delete meeting-room",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/standards/%s", url.PathEscape(args[0]))
+						path := fmt.Sprintf("/api/v1/standards/%s", pathSegment(args[0]))
 						return runAPICommand(cmd, "DELETE", path, nil)
 					},
 				}
@@ -6081,7 +6081,7 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass standard get meeting-room",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/standards/%s", url.PathEscape(args[0]))
+						path := fmt.Sprintf("/api/v1/standards/%s", pathSegment(args[0]))
 						return runAPICommand(cmd, "GET", path, nil)
 					},
 				}
@@ -6120,7 +6120,7 @@ func generatedCommands() []*cobra.Command {
 						Example: "  omniglass standard metric delete meeting-room <metric>",
 						Args:    cobra.ExactArgs(2),
 						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/standards/%s/metrics/%s", url.PathEscape(args[0]), url.PathEscape(args[1]))
+							path := fmt.Sprintf("/api/v1/standards/%s/metrics/%s", pathSegment(args[0]), pathSegment(args[1]))
 							return runAPICommand(cmd, "DELETE", path, nil)
 						},
 					}
@@ -6137,7 +6137,7 @@ func generatedCommands() []*cobra.Command {
 						Example: "  omniglass standard metric list meeting-room",
 						Args:    cobra.ExactArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/standards/%s/metrics", url.PathEscape(args[0]))
+							path := fmt.Sprintf("/api/v1/standards/%s/metrics", pathSegment(args[0]))
 							return runAPICommand(cmd, "GET", path, nil)
 						},
 					}
@@ -6156,7 +6156,7 @@ func generatedCommands() []*cobra.Command {
 						Example: "  omniglass standard metric update meeting-room <metric>",
 						Args:    cobra.ExactArgs(2),
 						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/standards/%s/metrics/%s", url.PathEscape(args[0]), url.PathEscape(args[1]))
+							path := fmt.Sprintf("/api/v1/standards/%s/metrics/%s", pathSegment(args[0]), pathSegment(args[1]))
 							body := map[string]any{}
 							if cmd.Flags().Changed("default-value") {
 								body["default_value"] = jsonOrString(fDefaultValue)
@@ -6189,7 +6189,7 @@ func generatedCommands() []*cobra.Command {
 						Example: "  omniglass standard property delete meeting-room <property>",
 						Args:    cobra.ExactArgs(2),
 						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/standards/%s/properties/%s", url.PathEscape(args[0]), url.PathEscape(args[1]))
+							path := fmt.Sprintf("/api/v1/standards/%s/properties/%s", pathSegment(args[0]), pathSegment(args[1]))
 							return runAPICommand(cmd, "DELETE", path, nil)
 						},
 					}
@@ -6206,7 +6206,7 @@ func generatedCommands() []*cobra.Command {
 						Example: "  omniglass standard property list meeting-room",
 						Args:    cobra.ExactArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/standards/%s/properties", url.PathEscape(args[0]))
+							path := fmt.Sprintf("/api/v1/standards/%s/properties", pathSegment(args[0]))
 							return runAPICommand(cmd, "GET", path, nil)
 						},
 					}
@@ -6225,7 +6225,7 @@ func generatedCommands() []*cobra.Command {
 						Example: "  omniglass standard property update meeting-room <property>",
 						Args:    cobra.ExactArgs(2),
 						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/standards/%s/properties/%s", url.PathEscape(args[0]), url.PathEscape(args[1]))
+							path := fmt.Sprintf("/api/v1/standards/%s/properties/%s", pathSegment(args[0]), pathSegment(args[1]))
 							body := map[string]any{}
 							if cmd.Flags().Changed("default-value") {
 								body["default_value"] = jsonOrString(fDefaultValue)
@@ -6258,7 +6258,7 @@ func generatedCommands() []*cobra.Command {
 						Example: "  omniglass standard role delete meeting-room <role>",
 						Args:    cobra.ExactArgs(2),
 						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/standards/%s/roles/%s", url.PathEscape(args[0]), url.PathEscape(args[1]))
+							path := fmt.Sprintf("/api/v1/standards/%s/roles/%s", pathSegment(args[0]), pathSegment(args[1]))
 							return runAPICommand(cmd, "DELETE", path, nil)
 						},
 					}
@@ -6275,7 +6275,7 @@ func generatedCommands() []*cobra.Command {
 						Example: "  omniglass standard role list meeting-room",
 						Args:    cobra.ExactArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/standards/%s/roles", url.PathEscape(args[0]))
+							path := fmt.Sprintf("/api/v1/standards/%s/roles", pathSegment(args[0]))
 							return runAPICommand(cmd, "GET", path, nil)
 						},
 					}
@@ -6301,7 +6301,7 @@ func generatedCommands() []*cobra.Command {
 						Example: "  omniglass standard role update meeting-room <role>",
 						Args:    cobra.ExactArgs(2),
 						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/standards/%s/roles/%s", url.PathEscape(args[0]), url.PathEscape(args[1]))
+							path := fmt.Sprintf("/api/v1/standards/%s/roles/%s", pathSegment(args[0]), pathSegment(args[1]))
 							body := map[string]any{}
 							if cmd.Flags().Changed("accepted-types") {
 								body["accepted_types"] = jsonOrString(fAcceptedTypes)
@@ -6360,7 +6360,7 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass standard update meeting-room",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/standards/%s", url.PathEscape(args[0]))
+						path := fmt.Sprintf("/api/v1/standards/%s", pathSegment(args[0]))
 						body := map[string]any{}
 						if cmd.Flags().Changed("label") {
 							body["label"] = fLabel
@@ -6402,7 +6402,7 @@ func generatedCommands() []*cobra.Command {
 						Example: "  omniglass system alarm list <name>",
 						Args:    cobra.ExactArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/systems/%s/alarms", url.PathEscape(args[0]))
+							path := fmt.Sprintf("/api/v1/systems/%s/alarms", pathSegment(args[0]))
 							return runAPICommand(cmd, "GET", path, nil)
 						},
 					}
@@ -6508,7 +6508,7 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass system delete <name>",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/systems/%s", url.PathEscape(args[0]))
+						path := fmt.Sprintf("/api/v1/systems/%s", pathSegment(args[0]))
 						return runAPICommand(cmd, "DELETE", path, nil)
 					},
 				}
@@ -6530,7 +6530,7 @@ func generatedCommands() []*cobra.Command {
 						Example: "  omniglass system event list <name>",
 						Args:    cobra.ExactArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/systems/%s/events", url.PathEscape(args[0]))
+							path := fmt.Sprintf("/api/v1/systems/%s/events", pathSegment(args[0]))
 							return runAPICommand(cmd, "GET", path, nil)
 						},
 					}
@@ -6549,7 +6549,7 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass system get <name>",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/systems/%s", url.PathEscape(args[0]))
+						path := fmt.Sprintf("/api/v1/systems/%s", pathSegment(args[0]))
 						return runAPICommand(cmd, "GET", path, nil)
 					},
 				}
@@ -6581,7 +6581,7 @@ func generatedCommands() []*cobra.Command {
 						Example: "  omniglass system health list <name>",
 						Args:    cobra.ExactArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/systems/%s/health", url.PathEscape(args[0]))
+							path := fmt.Sprintf("/api/v1/systems/%s/health", pathSegment(args[0]))
 							return runAPICommand(cmd, "GET", path, nil)
 						},
 					}
@@ -6617,7 +6617,7 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass system listTags <name>",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/systems/%s:listTags", url.PathEscape(args[0]))
+						path := fmt.Sprintf("/api/v1/systems/%s:listTags", pathSegment(args[0]))
 						return runAPICommand(cmd, "GET", path, nil)
 					},
 				}
@@ -6639,7 +6639,7 @@ func generatedCommands() []*cobra.Command {
 						Example: "  omniglass system log list <name>",
 						Args:    cobra.ExactArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/systems/%s/logs", url.PathEscape(args[0]))
+							path := fmt.Sprintf("/api/v1/systems/%s/logs", pathSegment(args[0]))
 							return runAPICommand(cmd, "GET", path, nil)
 						},
 					}
@@ -6663,7 +6663,7 @@ func generatedCommands() []*cobra.Command {
 						Example: "  omniglass system member delete <name> <component>",
 						Args:    cobra.ExactArgs(2),
 						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/systems/%s/members/%s", url.PathEscape(args[0]), url.PathEscape(args[1]))
+							path := fmt.Sprintf("/api/v1/systems/%s/members/%s", pathSegment(args[0]), pathSegment(args[1]))
 							return runAPICommand(cmd, "DELETE", path, nil)
 						},
 					}
@@ -6680,7 +6680,7 @@ func generatedCommands() []*cobra.Command {
 						Example: "  omniglass system member list <name>",
 						Args:    cobra.ExactArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/systems/%s/members", url.PathEscape(args[0]))
+							path := fmt.Sprintf("/api/v1/systems/%s/members", pathSegment(args[0]))
 							return runAPICommand(cmd, "GET", path, nil)
 						},
 					}
@@ -6697,7 +6697,7 @@ func generatedCommands() []*cobra.Command {
 						Example: "  omniglass system member setPrimary <name> <component>",
 						Args:    cobra.ExactArgs(2),
 						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/systems/%s/members/%s:setPrimary", url.PathEscape(args[0]), url.PathEscape(args[1]))
+							path := fmt.Sprintf("/api/v1/systems/%s/members/%s:setPrimary", pathSegment(args[0]), pathSegment(args[1]))
 							return runAPICommand(cmd, "POST", path, nil)
 						},
 					}
@@ -6714,7 +6714,7 @@ func generatedCommands() []*cobra.Command {
 						Example: "  omniglass system member update <name> <component>",
 						Args:    cobra.ExactArgs(2),
 						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/systems/%s/members/%s", url.PathEscape(args[0]), url.PathEscape(args[1]))
+							path := fmt.Sprintf("/api/v1/systems/%s/members/%s", pathSegment(args[0]), pathSegment(args[1]))
 							return runAPICommand(cmd, "PUT", path, nil)
 						},
 					}
@@ -6738,7 +6738,7 @@ func generatedCommands() []*cobra.Command {
 						Example: "  omniglass system metric list <name>",
 						Args:    cobra.ExactArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/systems/%s/metrics", url.PathEscape(args[0]))
+							path := fmt.Sprintf("/api/v1/systems/%s/metrics", pathSegment(args[0]))
 							return runAPICommand(cmd, "GET", path, nil)
 						},
 					}
@@ -6762,7 +6762,7 @@ func generatedCommands() []*cobra.Command {
 							Example: "  omniglass system metric sample list <name> <metric>",
 							Args:    cobra.ExactArgs(2),
 							RunE: func(cmd *cobra.Command, args []string) error {
-								path := fmt.Sprintf("/api/v1/systems/%s/metrics/%s/samples", url.PathEscape(args[0]), url.PathEscape(args[1]))
+								path := fmt.Sprintf("/api/v1/systems/%s/metrics/%s/samples", pathSegment(args[0]), pathSegment(args[1]))
 								q := url.Values{}
 								if cmd.Flags().Changed("hours") {
 									q.Set("hours", fmt.Sprintf("%v", qHours))
@@ -6797,7 +6797,7 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass system move <name>",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/systems/%s:move", url.PathEscape(args[0]))
+						path := fmt.Sprintf("/api/v1/systems/%s:move", pathSegment(args[0]))
 						body := map[string]any{}
 						if cmd.Flags().Changed("location") {
 							body["location"] = fLocation
@@ -6845,7 +6845,7 @@ func generatedCommands() []*cobra.Command {
 						Example: "  omniglass system property delete <name> <property>",
 						Args:    cobra.ExactArgs(2),
 						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/systems/%s/properties/%s", url.PathEscape(args[0]), url.PathEscape(args[1]))
+							path := fmt.Sprintf("/api/v1/systems/%s/properties/%s", pathSegment(args[0]), pathSegment(args[1]))
 							return runAPICommand(cmd, "DELETE", path, nil)
 						},
 					}
@@ -6862,7 +6862,7 @@ func generatedCommands() []*cobra.Command {
 						Example: "  omniglass system property list <name>",
 						Args:    cobra.ExactArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/systems/%s/properties", url.PathEscape(args[0]))
+							path := fmt.Sprintf("/api/v1/systems/%s/properties", pathSegment(args[0]))
 							return runAPICommand(cmd, "GET", path, nil)
 						},
 					}
@@ -6886,7 +6886,7 @@ func generatedCommands() []*cobra.Command {
 							Example: "  omniglass system property sample list <name> <property>",
 							Args:    cobra.ExactArgs(2),
 							RunE: func(cmd *cobra.Command, args []string) error {
-								path := fmt.Sprintf("/api/v1/systems/%s/properties/%s/samples", url.PathEscape(args[0]), url.PathEscape(args[1]))
+								path := fmt.Sprintf("/api/v1/systems/%s/properties/%s/samples", pathSegment(args[0]), pathSegment(args[1]))
 								q := url.Values{}
 								if cmd.Flags().Changed("hours") {
 									q.Set("hours", fmt.Sprintf("%v", qHours))
@@ -6918,7 +6918,7 @@ func generatedCommands() []*cobra.Command {
 						Example: "  omniglass system property update <name> <property> --value <json>",
 						Args:    cobra.ExactArgs(2),
 						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/systems/%s/properties/%s", url.PathEscape(args[0]), url.PathEscape(args[1]))
+							path := fmt.Sprintf("/api/v1/systems/%s/properties/%s", pathSegment(args[0]), pathSegment(args[1]))
 							body := map[string]any{}
 							if cmd.Flags().Changed("value") {
 								body["value"] = jsonOrString(fValue)
@@ -6961,7 +6961,7 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass system removeTag <name> --key key",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/systems/%s:removeTag", url.PathEscape(args[0]))
+						path := fmt.Sprintf("/api/v1/systems/%s:removeTag", pathSegment(args[0]))
 						body := map[string]any{}
 						if cmd.Flags().Changed("key") {
 							body["key"] = fKey
@@ -6985,7 +6985,7 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass system rename <name> --name name",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/systems/%s:rename", url.PathEscape(args[0]))
+						path := fmt.Sprintf("/api/v1/systems/%s:rename", pathSegment(args[0]))
 						body := map[string]any{}
 						if cmd.Flags().Changed("name") {
 							body["name"] = fName
@@ -7051,7 +7051,7 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass system resetName <name>",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/systems/%s:resetName", url.PathEscape(args[0]))
+						path := fmt.Sprintf("/api/v1/systems/%s:resetName", pathSegment(args[0]))
 						return runAPICommand(cmd, "POST", path, nil)
 					},
 				}
@@ -7078,7 +7078,7 @@ func generatedCommands() []*cobra.Command {
 							Example: "  omniglass system role assignment delete <name> <role> <component>",
 							Args:    cobra.ExactArgs(3),
 							RunE: func(cmd *cobra.Command, args []string) error {
-								path := fmt.Sprintf("/api/v1/systems/%s/roles/%s/assignments/%s", url.PathEscape(args[0]), url.PathEscape(args[1]), url.PathEscape(args[2]))
+								path := fmt.Sprintf("/api/v1/systems/%s/roles/%s/assignments/%s", pathSegment(args[0]), pathSegment(args[1]), pathSegment(args[2]))
 								return runAPICommand(cmd, "DELETE", path, nil)
 							},
 						}
@@ -7095,7 +7095,7 @@ func generatedCommands() []*cobra.Command {
 							Example: "  omniglass system role assignment update <name> <role> <component>",
 							Args:    cobra.ExactArgs(3),
 							RunE: func(cmd *cobra.Command, args []string) error {
-								path := fmt.Sprintf("/api/v1/systems/%s/roles/%s/assignments/%s", url.PathEscape(args[0]), url.PathEscape(args[1]), url.PathEscape(args[2]))
+								path := fmt.Sprintf("/api/v1/systems/%s/roles/%s/assignments/%s", pathSegment(args[0]), pathSegment(args[1]), pathSegment(args[2]))
 								return runAPICommand(cmd, "PUT", path, nil)
 							},
 						}
@@ -7114,7 +7114,7 @@ func generatedCommands() []*cobra.Command {
 						Example: "  omniglass system role delete <name> <role>",
 						Args:    cobra.ExactArgs(2),
 						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/systems/%s/roles/%s", url.PathEscape(args[0]), url.PathEscape(args[1]))
+							path := fmt.Sprintf("/api/v1/systems/%s/roles/%s", pathSegment(args[0]), pathSegment(args[1]))
 							return runAPICommand(cmd, "DELETE", path, nil)
 						},
 					}
@@ -7131,7 +7131,7 @@ func generatedCommands() []*cobra.Command {
 						Example: "  omniglass system role list <name>",
 						Args:    cobra.ExactArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/systems/%s/roles", url.PathEscape(args[0]))
+							path := fmt.Sprintf("/api/v1/systems/%s/roles", pathSegment(args[0]))
 							return runAPICommand(cmd, "GET", path, nil)
 						},
 					}
@@ -7150,7 +7150,7 @@ func generatedCommands() []*cobra.Command {
 						Example: "  omniglass system role swapPositions <name> <role> --position <int> --with <int>",
 						Args:    cobra.ExactArgs(2),
 						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/systems/%s/roles/%s:swapPositions", url.PathEscape(args[0]), url.PathEscape(args[1]))
+							path := fmt.Sprintf("/api/v1/systems/%s/roles/%s:swapPositions", pathSegment(args[0]), pathSegment(args[1]))
 							body := map[string]any{}
 							if cmd.Flags().Changed("position") {
 								body["position"] = fPosition
@@ -7187,7 +7187,7 @@ func generatedCommands() []*cobra.Command {
 						Example: "  omniglass system role update <name> <role>",
 						Args:    cobra.ExactArgs(2),
 						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/systems/%s/roles/%s", url.PathEscape(args[0]), url.PathEscape(args[1]))
+							path := fmt.Sprintf("/api/v1/systems/%s/roles/%s", pathSegment(args[0]), pathSegment(args[1]))
 							body := map[string]any{}
 							if cmd.Flags().Changed("accepted-types") {
 								body["accepted_types"] = jsonOrString(fAcceptedTypes)
@@ -7245,7 +7245,7 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass system setTag <name> --key key --value value",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/systems/%s:setTag", url.PathEscape(args[0]))
+						path := fmt.Sprintf("/api/v1/systems/%s:setTag", pathSegment(args[0]))
 						body := map[string]any{}
 						if cmd.Flags().Changed("key") {
 							body["key"] = fKey
@@ -7276,7 +7276,7 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass system update <name>",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/systems/%s", url.PathEscape(args[0]))
+						path := fmt.Sprintf("/api/v1/systems/%s", pathSegment(args[0]))
 						body := map[string]any{}
 						if cmd.Flags().Changed("label") {
 							body["label"] = fLabel
@@ -7368,7 +7368,7 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass system-type delete av",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/system-types/%s", url.PathEscape(args[0]))
+						path := fmt.Sprintf("/api/v1/system-types/%s", pathSegment(args[0]))
 						return runAPICommand(cmd, "DELETE", path, nil)
 					},
 				}
@@ -7407,7 +7407,7 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass system-type update av",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/system-types/%s", url.PathEscape(args[0]))
+						path := fmt.Sprintf("/api/v1/system-types/%s", pathSegment(args[0]))
 						body := map[string]any{}
 						if cmd.Flags().Changed("abbrev") {
 							body["abbrev"] = fAbbrev
@@ -7452,7 +7452,7 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass tag clearPlatform <name>",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/tags/%s:clearPlatform", url.PathEscape(args[0]))
+						path := fmt.Sprintf("/api/v1/tags/%s:clearPlatform", pathSegment(args[0]))
 						return runAPICommand(cmd, "POST", path, nil)
 					},
 				}
@@ -7513,7 +7513,7 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass tag delete <name>",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/tags/%s", url.PathEscape(args[0]))
+						path := fmt.Sprintf("/api/v1/tags/%s", pathSegment(args[0]))
 						return runAPICommand(cmd, "DELETE", path, nil)
 					},
 				}
@@ -7548,7 +7548,7 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass tag setPlatform <name> --value value",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/tags/%s:setPlatform", url.PathEscape(args[0]))
+						path := fmt.Sprintf("/api/v1/tags/%s:setPlatform", pathSegment(args[0]))
 						body := map[string]any{}
 						if cmd.Flags().Changed("value") {
 							body["value"] = fValue
@@ -7575,7 +7575,7 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass tag update <name>",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/tags/%s", url.PathEscape(args[0]))
+						path := fmt.Sprintf("/api/v1/tags/%s", pathSegment(args[0]))
 						body := map[string]any{}
 						if cmd.Flags().Changed("allowed-values") {
 							body["allowed_values"] = jsonOrString(fAllowedValues)
@@ -7609,7 +7609,7 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass tag values <name>",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/tags/%s:values", url.PathEscape(args[0]))
+						path := fmt.Sprintf("/api/v1/tags/%s:values", pathSegment(args[0]))
 						return runAPICommand(cmd, "GET", path, nil)
 					},
 				}
@@ -7633,7 +7633,7 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass task get <id>",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/tasks/%s", url.PathEscape(args[0]))
+						path := fmt.Sprintf("/api/v1/tasks/%s", pathSegment(args[0]))
 						return runAPICommand(cmd, "GET", path, nil)
 					},
 				}
@@ -7811,7 +7811,7 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass variable delete poll-interval",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/variables/%s", url.PathEscape(args[0]))
+						path := fmt.Sprintf("/api/v1/variables/%s", pathSegment(args[0]))
 						return runAPICommand(cmd, "DELETE", path, nil)
 					},
 				}
@@ -7847,7 +7847,7 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass variable update poll-interval",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/variables/%s", url.PathEscape(args[0]))
+						path := fmt.Sprintf("/api/v1/variables/%s", pathSegment(args[0]))
 						body := map[string]any{}
 						if cmd.Flags().Changed("label") {
 							body["label"] = fLabel
@@ -7930,7 +7930,7 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass vendor delete boreal",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/vendors/%s", url.PathEscape(args[0]))
+						path := fmt.Sprintf("/api/v1/vendors/%s", pathSegment(args[0]))
 						return runAPICommand(cmd, "DELETE", path, nil)
 					},
 				}
@@ -7947,7 +7947,7 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass vendor get boreal",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/vendors/%s", url.PathEscape(args[0]))
+						path := fmt.Sprintf("/api/v1/vendors/%s", pathSegment(args[0]))
 						return runAPICommand(cmd, "GET", path, nil)
 					},
 				}
@@ -7986,7 +7986,7 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass vendor update boreal",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/vendors/%s", url.PathEscape(args[0]))
+						path := fmt.Sprintf("/api/v1/vendors/%s", pathSegment(args[0]))
 						body := map[string]any{}
 						if cmd.Flags().Changed("icon") {
 							body["icon"] = fIcon

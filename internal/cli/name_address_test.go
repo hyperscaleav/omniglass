@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
@@ -94,5 +95,34 @@ func TestCLIAddressesByName(t *testing.T) {
 	revealed := run("secret", "reveal", id)
 	if fields, _ := revealed["fields"].(map[string]any); fields["password"] != "rotated" {
 		t.Errorf("reveal by the uuid it answered with = %v, want the rotated password", revealed)
+	}
+}
+
+// TestPathArgumentsAreOneSegment pins how a positional reaches the URL: as ONE
+// path segment, whatever it holds. A slash (an endpoint's or a secret's
+// qualified name) and a colon (a filename may carry one) are both
+// percent-encoded, so neither splits the segment nor reads as the start of a
+// :verb custom method; the server decodes them back.
+func TestPathArgumentsAreOneSegment(t *testing.T) {
+	for _, tc := range []struct {
+		args []string
+		want string
+	}{
+		{[]string{"endpoint", "retry", "hq.huddle.$comp.touch-panel-1/https"}, "/api/v1/endpoints/hq.huddle.$comp.touch-panel-1%2Fhttps:retry"},
+		{[]string{"file", "download", "notes:v2.txt"}, "/api/v1/files/notes%3Av2.txt:download"},
+		{[]string{"secret", "reveal", "$platform/demo-panel-login"}, "/api/v1/secrets/$platform%2Fdemo-panel-login:reveal"},
+	} {
+		var got string
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			got = r.RequestURI
+			_, _ = w.Write([]byte(`{}`))
+		}))
+		if out, err := runCLI(t, append(tc.args, "--server", srv.URL)...); err != nil {
+			t.Fatalf("omniglass %v: %v (%s)", tc.args, err, out)
+		}
+		srv.Close()
+		if got != tc.want {
+			t.Errorf("omniglass %v requested %s, want %s", tc.args, got, tc.want)
+		}
 	}
 }

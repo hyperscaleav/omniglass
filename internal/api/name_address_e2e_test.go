@@ -223,6 +223,18 @@ func TestGroupFileVariableGrantNamesAPI(t *testing.T) {
 		t.Errorf("GET file by filename answered %s, want %s", got, file)
 	}
 	s.c.do(s.owner, http.MethodGet, refPath("/files", "codec-firmware-2.1.4.txt", ":download"), nil, http.StatusOK)
+	// A filename may carry a colon, which the router would read as a :verb; the
+	// CLI percent-encodes it (pathSegment) and the server decodes it back.
+	colon := s.idOf(s.c.do(s.owner, http.MethodPost, "/files", map[string]any{"name": "notes:v2.txt", "content_type": "text/plain", "content": content}, http.StatusCreated))
+	var dl struct {
+		Name string `json:"name"`
+	}
+	if err := json.Unmarshal(s.c.do(s.owner, http.MethodGet, "/files/notes%3Av2.txt:download", nil, http.StatusOK), &dl); err != nil || dl.Name != "notes:v2.txt" {
+		t.Errorf("download a colon-bearing filename = %+v (err %v)", dl, err)
+	}
+	if got := s.idOf(s.c.do(s.owner, http.MethodGet, "/files/notes%3Av2.txt", nil, http.StatusOK)); got != colon {
+		t.Errorf("GET a colon-bearing filename answered %s, want %s", got, colon)
+	}
 
 	v := s.idOf(s.c.do(s.owner, http.MethodPost, "/variables", map[string]any{"name": "poll-interval", "value_type": "int", "owner_kind": "platform", "value": 30}, http.StatusCreated))
 	if got := s.idOf(s.c.do(s.owner, http.MethodPatch, refPath("/variables", "poll-interval", ""), map[string]any{"value": 60}, http.StatusOK)); got != v {

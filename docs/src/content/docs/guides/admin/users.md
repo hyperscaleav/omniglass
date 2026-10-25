@@ -67,7 +67,7 @@ users. Because a principal is not part of any location or system tree, that gran
   WebP, normalized server-side to a small square), **Remove** clears it, and the change is audited with
   **you** as the actor. Without the capability the panel does not render, though the user's picture still
   shows in the blade header and the directory. This is a console path for `omniglass principal setAvatar
-  <id>` / `removeAvatar <id>` on the CLI.
+  alice` / `removeAvatar alice` on the CLI.
 - With `principal:revoke-session`, another user's blade gains **Sessions** and **API tokens** sections:
   every credential the account holds, listed with its `ogp_` locator, the **device** and **address** that
   created it, when it was **last active**, its expiry, and a token's **description**. **Revoke** any one, or
@@ -78,6 +78,6 @@ users. Because a principal is not part of any location or system tree, that gran
   unless you hold the capability.
 
 From the CLI the same surface is `omniglass principal list` / `get` / `create` / `update` /
-`disable` / `enable` / `archive` / `restore` / `purge`, plus `principal session list <id>` /
-`principal session revoke <id> <sid>` / `principal session revokeAll <id>` (see the
+`disable` / `enable` / `archive` / `restore` / `purge`, plus `principal session list alice` /
+`principal session revoke alice <session-id>` / `principal session revokeAll alice` (see the
 [CLI reference](/reference/cli/)).

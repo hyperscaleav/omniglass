@@ -143,15 +143,16 @@ var IdentityShapes = map[string]TableIdentity{
 	"calc_rule":      {Shape: ShapeKeyBearing, Reason: "temp-mean, a rule a calculated sample names as its producer"},
 
 	// A human identifier that is not a name. These are the exceptions worth stating.
-	"human": {Shape: ShapeHumanNotAKey, Reason: "a username: its own rule, its own uniqueness, and not an " +
-		"address, since a principal is addressed by uuid"},
+	"human": {Shape: ShapeHumanNotAKey, Reason: "a username: its own rule and its own uniqueness, not the " +
+		"entity name rule; a principal route takes it beside the uuid (#163, #1133)"},
 	"service": {Shape: ShapeHumanNotAKey, Reason: "the username analogue for kind=service: unique like one " +
-		"(#563), on its own rule rather than the entity name rule, and not an address, since a " +
-		"principal is addressed by uuid",
+		"(#563), on its own rule rather than the entity name rule; a principal route takes it beside " +
+		"the uuid, and a word that is both a username and a service name addresses neither (#1133)",
 		NoLabel: "the identifier IS what every surface shows: principalIdent resolves a service " +
 			"principal to service.name, and it cannot resolve to a label, which is optional and not unique"},
 	"file": {Shape: ShapeHumanNotAKey, Reason: "a filename with an extension (codec-firmware-2.1.4.txt): not " +
-		"unique, already the label, and addressed by uuid",
+		"unique and already the label; a file route takes it where exactly one file the caller can see " +
+		"carries it, and the uuid always (#1133)",
 		NoLabel: "its name is already the label, so a second string would be a second label rather " +
 			"than the identifier a label sits beside (#613 out of scope, D1 deferred to #755)"},
 	"task": {Shape: ShapeHumanNotAKey, Reason: "content-addressed, the id IS hash(interface, kind, schedule, " +

@@ -81,10 +81,10 @@ var reverseNameOnlyOK = map[string]bool{}
 var idOnlyIsCorrect = map[string]string{
 	"resource_id":     "an audit row's target is polymorphic and may since have been deleted",
 	"value_id":        "a stored property value has no name, only the property it answers",
-	"endpoint_id":     "an endpoint's name is unique only within its component",
-	"principal_id":    "a principal is addressed by uuid; a username is a credential, not an address",
+	"endpoint_id":     "an endpoint's name is unique only within its component: a body carries it beside the component, and the two are its address, <component>/<name> (#1133)",
+	"principal_id":    "a principal's identifier is per kind (a username, a service account's name), so a body carries it in a kind-specific field, never a generic name pair",
 	"scope_id":        "a scope root is a uuid handle on a subtree",
-	"group_id":        "a principal group is uuid-keyed",
+	"group_id":        "an inherited grant names its source group for display (group_name, its label today: #1135); the group itself is addressed by name or uuid (#1133)",
 	"target_id":       "an impersonation target is a principal, as above",
 	"node_id":         "a node is addressed by its enrollment identity, which is its primary key",
 	"caused_event_id": "an event is addressed by its bigint id; an occurrence has no name handle",
