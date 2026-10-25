@@ -3656,6 +3656,38 @@
       "nullable": true,
       "fk": true,
       "fk_target": "endpoint.id"
+     },
+     {
+      "name": "reply",
+      "type": "text",
+      "nullable": true
+     },
+     {
+      "name": "reason",
+      "type": "text",
+      "nullable": true
+     },
+     {
+      "name": "settled_by",
+      "type": "text",
+      "nullable": true
+     },
+     {
+      "name": "observed_value",
+      "type": "jsonb",
+      "nullable": true
+     },
+     {
+      "name": "observed_at",
+      "type": "timestamp with time zone",
+      "nullable": true
+     },
+     {
+      "name": "settled_event_id",
+      "type": "bigint",
+      "nullable": true,
+      "fk": true,
+      "fk_target": "event.id"
      }
     ],
     "checks": [
@@ -3666,6 +3698,10 @@
      {
       "name": "command_owner_kind_check",
       "expr": "CHECK ((owner_kind = ANY (ARRAY['component'::text, 'system'::text, 'location'::text, 'node'::text])))"
+     },
+     {
+      "name": "command_settled_by_check",
+      "expr": "CHECK (((settled_by IS NULL) OR (settled_by = ANY (ARRAY['issue'::text, 'reply'::text, 'observation'::text, 'window'::text]))))"
      },
      {
       "name": "command_settlement_recorded_check",

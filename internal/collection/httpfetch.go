@@ -3,11 +3,8 @@ package collection
 import (
 	"bytes"
 	"context"
-	"encoding/base64"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"html"
 	"io"
 	"log/slog"
 	"net"
@@ -15,13 +12,13 @@ import (
 	"net/http/httptrace"
 	"net/url"
 	"slices"
-	"sort"
 	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/driver"
+	"github.com/hyperscaleav/omniglass/internal/redact"
 )
 
 // The http fetcher (#902): one real request a driver's poll or command
@@ -336,12 +333,11 @@ func (e *httpTransportError) Unwrap() error { return e.cause }
 
 // Scrub masks every form of the credential a component could echo back in
 // its text (the password, the token, the key, the basic authorization's
-// base64, each raw, url-escaped, JSON-escaped with or without an escaped
-// slash, and html-escaped), so it never reaches an error or a reason. It
-// runs on the whole text before anything collapses or cuts it, so no
-// transform can hide a form from it. extra are further secrets the request
-// carried (a login's secret fields, its captures, the component's cookies),
-// masked in the same forms.
+// base64, in every form redact.Secrets knows), so it never reaches an error
+// or a reason. It runs on the whole text before anything collapses or cuts
+// it, so no transform can hide a form from it. extra are further secrets the
+// request carried (a login's secret fields, its captures, the component's
+// cookies), masked in the same forms.
 func Scrub(text string, c *driver.HTTPCredential, extra ...string) string {
 	if c == nil && len(extra) == 0 {
 		return text
@@ -350,30 +346,10 @@ func Scrub(text string, c *driver.HTTPCredential, extra ...string) string {
 	if c != nil {
 		secrets = append(secrets, c.Password, c.Token, c.Key)
 		if c.Scheme == driver.SchemeBasic {
-			secrets = append(secrets, base64.StdEncoding.EncodeToString([]byte(c.Username+":"+c.Password)))
+			secrets = append(secrets, redact.BasicAuth(c.Username, c.Password))
 		}
 	}
-	secrets = append(secrets, extra...)
-	var forms []string
-	for _, v := range secrets {
-		if v == "" {
-			continue
-		}
-		forms = append(forms, v, url.QueryEscape(v), url.PathEscape(v), html.EscapeString(v))
-		if b, err := json.Marshal(v); err == nil {
-			j := string(b[1 : len(b)-1])
-			forms = append(forms, j, strings.ReplaceAll(j, "/", `\/`))
-		}
-	}
-	// The longest form first, so a shorter one never leaves a longer one's
-	// remainder behind.
-	sort.Slice(forms, func(i, j int) bool { return len(forms[i]) > len(forms[j]) })
-	for _, f := range forms {
-		if f != "" {
-			text = strings.ReplaceAll(text, f, "[redacted]")
-		}
-	}
-	return text
+	return redact.Secrets(text, append(secrets, extra...)...)
 }
 
 // RequestFault is an answer that faults the request itself (decision 5 of

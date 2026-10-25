@@ -17,6 +17,10 @@ import { LOCATION_TYPES_KEY } from "../lib/location_types";
 import { TAGS_KEY } from "../lib/tags";
 import { systemRolesKey } from "../lib/system_roles";
 import { ME_KEY, type Me } from "../lib/auth";
+import { componentCommandsKey, type Command } from "../lib/commands";
+import { EVENTS_KEY } from "../lib/events";
+import { ENDPOINTS_KEY } from "../lib/endpoints";
+import { DRIVERS_KEY } from "../lib/drivers";
 import { uuidFor } from "../lib/testids";
 import { seedSeverityLevels } from "../lib/testseverity";
 
@@ -72,7 +76,7 @@ const nodes: Node[] = [{ name: "edge-1", enrolled: true, last_heartbeat_at: iso(
 // The cache the last mount rendered from, so a test can land a poll on it.
 let leafClient: QueryClient | undefined;
 
-function mount(path = `/web/components/${uuidFor("cf-c-bar")}`, memberships?: unknown[], component: Component = bar, meOverride: Me = me, alarms?: unknown[], seed?: { reach?: Reachability; nodes?: Node[] }) {
+function mount(path = `/web/components/${uuidFor("cf-c-bar")}`, memberships?: unknown[], component: Component = bar, meOverride: Me = me, alarms?: unknown[], seed?: { reach?: Reachability; nodes?: Node[]; commands?: Command[] }) {
   const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
   leafClient = qc;
   seedSeverityLevels(qc);
@@ -103,6 +107,10 @@ function mount(path = `/web/components/${uuidFor("cf-c-bar")}`, memberships?: un
   qc.setQueryData([...effectiveMetricsKey(uuidFor("cf-c-bar"))], [
     { metric_type_name: "icmp-rtt-avg", label: "RTT avg", data_type: "float", value: 6.1, is_sampled: true, from_contract: false, required: false },
   ]);
+  qc.setQueryData([...componentCommandsKey(uuidFor("cf-c-bar"))], seed?.commands ?? []);
+  qc.setQueryData([...EVENTS_KEY(uuidFor("cf-c-bar"))], { component: "videobar-1", events: [] });
+  qc.setQueryData([...ENDPOINTS_KEY], []);
+  qc.setQueryData([...DRIVERS_KEY], []);
   window.history.pushState({}, "", path);
   return render(() => (
     <QueryClientProvider client={qc}>
@@ -356,6 +364,27 @@ describe("endpoints live on the leaf configure (#800)", () => {
 });
 
 describe("the miss face (#800)", () => {
+  // What it was told (#1155): the Activity tab carries the commands above the
+  // events, for a caller who may read them, and opens the one an issue's
+  // toast asks for.
+  it("carries its commands on Activity, opening the one asked for", async () => {
+    const cmd = {
+      id: 12, component: "videobar-1", component_id: uuidFor("cf-c-bar"), command_type: "set-volume", intended: 42,
+      target_kind: "metric", target: "volume", status: "settled", phase: "settled", settle_mode: "reply", settled_by: "reply",
+      reason: "the reply carried 42, the intended value", reply: '{"type":"result","value":42}', settle_window_seconds: 15,
+      deadline: iso(0), issued_at: iso(15), settled_at: iso(14), issuer: "root", issuer_id: "u-root",
+    } as unknown as Command;
+    mount(`/web/components/${uuidFor("cf-c-bar")}?tab=activity&command=12`, undefined, bar, me, undefined, { commands: [cmd] });
+    const panel = await screen.findByTestId("commands-panel");
+    await waitFor(() => expect(within(panel).getByTestId("command-reply").textContent).toBe('{"type":"result","value":42}'));
+    expect(within(screen.getByTestId("activity-tab")).getByText("Events")).toBeTruthy();
+  });
+
+  it("carries no commands for a caller who may not read them", () => {
+    mount(`/web/components/${uuidFor("cf-c-bar")}?tab=activity`, undefined, bar, { ...me, permissions: ["component:read", "event:read", "location:read", "system:read", "product:read"] });
+    expect(screen.queryByTestId("commands-panel")).toBeNull();
+  });
+
   it("an address matching no component renders the explicit miss, not a silent fallback", async () => {
     mount("/web/components/no-such-widget");
     expect(await screen.findByText(/No component answers this address/)).toBeTruthy();

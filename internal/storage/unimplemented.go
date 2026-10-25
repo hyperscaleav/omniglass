@@ -370,6 +370,12 @@ func (UnimplementedGateway) IssueCommand(context.Context, string, string, string
 func (UnimplementedGateway) CommandSettlement(context.Context, string, string, string, string) (SettlementVerdict, error) {
 	return "", nil
 }
+func (UnimplementedGateway) GetComponentCommand(context.Context, string, int64) (*CommandRecord, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) ListComponentCommands(context.Context, string, CommandFilter) ([]CommandRecord, error) {
+	return nil, nil
+}
 func (UnimplementedGateway) GetPropertyType(context.Context, string) (*PropertyType, error) {
 	return nil, nil
 }

@@ -931,18 +931,47 @@ func generatedCommands() []*cobra.Command {
 			}
 			parent.AddCommand(func() *cobra.Command {
 				cmd := func() *cobra.Command {
+					cmd := &cobra.Command{
+						Use:     "get <name> <id>",
+						Short:   "Read a command",
+						Long:    "One command, whole: what it was told and the value it set, its recorded status with a time for each transition (issued, delivered, executed, settled), where it sits now while in flight (queued, delivered, awaiting the reply, awaiting the observation), how its binding settles it, the evidence that decided it (the reply, masked of credentials, or the observed sample) and why, the endpoint, node and driver that carry it, and who issued it. Gated by command:read, resolved on the component tier; a component outside the caller's component:read, or a command not on that component, is a non-disclosing 404, and a component it can read but whose commands it may not is a 403.",
+						Example: "  omniglass component command get 'hq.west.level-2.boardroom-a.$comp.videobar-1' 42",
+						Args:    pathArgs(2),
+						RunE: func(cmd *cobra.Command, args []string) error {
+							path := fmt.Sprintf("/api/v1/components/%s/commands/%s", pathSegment(args[0]), pathSegment(args[1]))
+							return runAPICommand(cmd, "GET", path, nil)
+						},
+					}
+					return cmd
+				}()
+				return cmd
+			}())
+			parent.AddCommand(func() *cobra.Command {
+				cmd := func() *cobra.Command {
 					var fCommandType string
 					var fInstance string
 					var fParams string
 					var fValue string
+					var qWait bool
+					var qWaitTimeout int
 					cmd := &cobra.Command{
 						Use:     "issue <name>",
 						Short:   "Issue a command to a component",
-						Long:    "Records a command invocation, writes a caused event, and (for a settleable command) opens an intended value the observed value settles against. Returns the computed settlement verdict. Gated by command:issue, whose scope is resolved on the component tier from that permission (not from component:read); a component outside the caller's component:read is a non-disclosing 404, and one it can read but not command is a 403.",
+						Long:    "Records a command invocation, writes a caused event, and (for a settleable command) opens an intended value the observed value settles against. Answers with the command as it stands (as the command read returns it) and the computed settlement verdict; with wait, once it settles, fails or times out, or wait_timeout passes. Gated by command:issue, whose scope is resolved on the component tier from that permission (not from component:read); a component outside the caller's component:read is a non-disclosing 404, and one it can read but not command is a 403.",
 						Example: "  omniglass component command issue <name> --command-type command_type",
 						Args:    pathArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
 							path := fmt.Sprintf("/api/v1/components/%s/commands:issue", pathSegment(args[0]))
+							q := url.Values{}
+							if cmd.Flags().Changed("wait") {
+								q.Set("wait", fmt.Sprintf("%v", qWait))
+							}
+							if cmd.Flags().Changed("wait-timeout") {
+								q.Set("wait_timeout", fmt.Sprintf("%v", qWaitTimeout))
+							}
+							if enc := q.Encode(); enc != "" {
+								path += "?" + enc
+							}
 							body := map[string]any{}
 							if cmd.Flags().Changed("command-type") {
 								body["command_type"] = fCommandType
@@ -964,6 +993,49 @@ func generatedCommands() []*cobra.Command {
 					cmd.Flags().StringVar(&fInstance, "instance", "", "The series discriminator (e.g. an endpoint), when the target is instanced")
 					cmd.Flags().StringVar(&fParams, "params", "", "The invocation params, stored on the command and the caused event")
 					cmd.Flags().StringVar(&fValue, "value", "", "The intended value for the target property (a settleable command)")
+					cmd.Flags().BoolVar(&qWait, "wait", false, "Block until the command settles, fails or times out, or until wait_timeout passes, and answer with where it stands then. Refused with a 429, before anything is issued, while too many commands are already being waited on")
+					cmd.Flags().IntVar(&qWaitTimeout, "wait-timeout", 0, "How long a wait may block, in seconds (1 to 120). A command still in flight when it passes is answered as it stands, its phase saying where")
+					return cmd
+				}()
+				return cmd
+			}())
+			parent.AddCommand(func() *cobra.Command {
+				cmd := func() *cobra.Command {
+					var qStatus string
+					var qSince string
+					var qUntil string
+					var qLimit int
+					cmd := &cobra.Command{
+						Use:     "list <name>",
+						Short:   "List a component's commands",
+						Long:    "The component's command history, newest first, each command whole (as the single read returns it), narrowed by recorded status and by when it was issued, a page at a time. status=issued is what is in flight now. Gated by command:read, resolved on the component tier; a component outside the caller's component:read is a non-disclosing 404, and one it can read but whose commands it may not is a 403.",
+						Example: "  omniglass component command list 'hq.west.level-2.boardroom-a.$comp.videobar-1'",
+						Args:    pathArgs(1),
+						RunE: func(cmd *cobra.Command, args []string) error {
+							path := fmt.Sprintf("/api/v1/components/%s/commands", pathSegment(args[0]))
+							q := url.Values{}
+							if cmd.Flags().Changed("status") {
+								q.Set("status", fmt.Sprintf("%v", qStatus))
+							}
+							if cmd.Flags().Changed("since") {
+								q.Set("since", fmt.Sprintf("%v", qSince))
+							}
+							if cmd.Flags().Changed("until") {
+								q.Set("until", fmt.Sprintf("%v", qUntil))
+							}
+							if cmd.Flags().Changed("limit") {
+								q.Set("limit", fmt.Sprintf("%v", qLimit))
+							}
+							if enc := q.Encode(); enc != "" {
+								path += "?" + enc
+							}
+							return runAPICommand(cmd, "GET", path, nil)
+						},
+					}
+					cmd.Flags().StringVar(&qStatus, "status", "", "Only the commands with this recorded status; issued is every command still in flight")
+					cmd.Flags().StringVar(&qSince, "since", "", "Only the commands issued at or after this RFC3339 time")
+					cmd.Flags().StringVar(&qUntil, "until", "", "Only the commands issued at or before this RFC3339 time")
+					cmd.Flags().IntVar(&qLimit, "limit", 0, "How many to return, newest first (1 to 500)")
 					return cmd
 				}()
 				return cmd

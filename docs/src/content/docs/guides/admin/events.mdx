@@ -82,8 +82,9 @@ writers today:
   ingest**: a violating payload is refused with the reason, so a schema on the catalog entry is
   a real contract, not advice.
 - A **caused** occurrence is the record a [command](/guides/admin/commands/) writes when it is
-  issued: every invocation lands a `command-issued` event beside the command row. Only a command
-  writes one: a push or an event rule naming `command-issued` is refused.
+  issued: every invocation lands a `command-issued` event beside the command row, and its terminal
+  status lands `command-settled`, `command-failed` or `command-timed-out`, naming the command. Only a
+  command writes one: a push or an event rule naming any of them is refused.
 
 **derived** (a rule infers the happening from other signals) and **scheduled** (the clock fires)
 complete the vocabulary; nothing writes them yet.
