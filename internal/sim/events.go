@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/sim/profile"
@@ -44,8 +45,10 @@ type eventHub struct {
 	seq  uint64
 	ring []streamEvent
 	subs map[*eventSub]struct{}
-	// opened counts the streams the face opened.
-	opened int
+	// opened counts the streams the face opened, and attempts the requests
+	// for one, refused or not.
+	opened   int
+	attempts atomic.Int64
 }
 
 // eventSub is one connected stream: the events it has yet to write, and its
@@ -179,6 +182,15 @@ func (d *Device) EventStreams() int {
 	d.events.mu.Lock()
 	defer d.events.mu.Unlock()
 	return d.events.opened
+}
+
+// EventStreamAttempts counts the requests for the device's event stream,
+// the ones its auth gate refused included.
+func (d *Device) EventStreamAttempts() int64 {
+	if d.events == nil {
+		return 0
+	}
+	return d.events.attempts.Load()
 }
 
 // DropEventStreams ends every connected event stream, as a restart would,

@@ -1004,6 +1004,30 @@ func (m *sessionManager) flushUnclaimed() {
 	}
 }
 
+// streamPending reports an http endpoint whose held stream has made its
+// first attempt yet to decide (#1038): its polls wait for the stream's
+// verdict, so a credential the stream is about to have refused is not sent
+// a second time beside it.
+func (m *sessionManager) streamPending(endpointID string) bool {
+	if m == nil || endpointID == "" {
+		return false
+	}
+	h, ok := m.held[endpointID]
+	if !ok || !driver.IsHTTP(h.conn.transport) {
+		return false
+	}
+	switch st, _ := h.sess.State(); st {
+	case "", collection.SessionEstablishing:
+		// "" is a session started and not yet running its machine.
+		return true
+	case collection.SessionRejected:
+		// Rejected and its gate not yet recorded: the session reads its
+		// state before it reports the refusal that gates the endpoint.
+		return !m.authGated(endpointID)
+	}
+	return false
+}
+
 // authGated reports an endpoint gated at the session rung.
 func (m *sessionManager) authGated(endpointID string) bool {
 	_, ok := m.gates.blocked(endpointID, rungAuthenticated)

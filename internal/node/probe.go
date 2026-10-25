@@ -68,6 +68,12 @@ func runTasks(ctx context.Context, nc *nats.Conn, node string, wl collection.Wor
 			// A driver poll runs on its declared schedule (#822), not on
 			// every heartbeat.
 			interval := pollInterval(task)
+			if driver.IsHTTP(task.Transport) && sessions.streamPending(task.EndpointID) {
+				// The endpoint's stream is making its first attempt under
+				// this fingerprint (#1038): the poll waits a tick for its
+				// verdict rather than sending the credential beside it.
+				continue
+			}
 			sched.rebook(task.ID, task.Fingerprint)
 			sched.releaseRefused(task.ID, sessions.isUp(task.EndpointID))
 			if !sched.due(task.ID, interval, now) {

@@ -336,6 +336,10 @@ type Device struct {
 	// tells a gated collector (no credentialed request) from a retrying one.
 	httpRequests atomic.Int64
 	httpRefusals atomic.Int64
+	// httpCredentialRefusals counts the refused requests that carried an
+	// Authorization header (#1038): a collector's credentialed attempts,
+	// beside the credential-free probes the gate refuses too.
+	httpCredentialRefusals atomic.Int64
 	// httpLogins counts the logins a form or token face was sent (#1114),
 	// and logins the sessions they opened, by id to expiry, with the
 	// digest face's nonce and the counts answered under it.
@@ -1108,11 +1112,17 @@ func (d *Device) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// preserves the open-by-default behavior every existing profile
 	// relies on.
 	d.httpRequests.Add(1)
+	if d.isEventStream(r) {
+		d.events.attempts.Add(1)
+	}
 	if d.answerLogin(rec, r) {
 		return
 	}
 	if !d.checkHTTPAuth(rec, r) {
 		d.httpRefusals.Add(1)
+		if r.Header.Get("Authorization") != "" {
+			d.httpCredentialRefusals.Add(1)
+		}
 		return
 	}
 	if d.isEventStream(r) {
@@ -1464,6 +1474,10 @@ func (d *Device) startHTTPWith(port int, tlsCfg *tls.Config) (net.Addr, error) {
 
 // HTTPRequests counts the requests the device's http faces were sent.
 func (d *Device) HTTPRequests() int64 { return d.httpRequests.Load() }
+
+// HTTPCredentialRefusals counts the refused requests that carried an
+// Authorization header.
+func (d *Device) HTTPCredentialRefusals() int64 { return d.httpCredentialRefusals.Load() }
 
 // HTTPRefusals counts the requests the device's http auth gate refused.
 func (d *Device) HTTPRefusals() int64 { return d.httpRefusals.Load() }

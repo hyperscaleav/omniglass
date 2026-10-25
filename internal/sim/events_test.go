@@ -151,8 +151,8 @@ func TestEventsFaceSitsBehindTheAuthGate(t *testing.T) {
 	if ev := nextEvent(t, lines); ev[0] != "id: 1" {
 		t.Fatalf("event = %q", ev)
 	}
-	if dev.EventStreams() != 1 {
-		t.Fatalf("streams opened = %d, want only the authorized one", dev.EventStreams())
+	if dev.EventStreams() != 1 || dev.EventStreamAttempts() != 2 {
+		t.Fatalf("streams opened = %d of %d attempts, want only the authorized one of two", dev.EventStreams(), dev.EventStreamAttempts())
 	}
 }
 
