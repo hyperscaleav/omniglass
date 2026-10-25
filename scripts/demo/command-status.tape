@@ -50,7 +50,7 @@ Sleep 2s
 Type "# Each reads back by its id under its component, the whole arc stamped"
 Enter
 Wait
-Type `omniglass component command list "$socket" --limit 1 | jq -c '.commands[0] | {id, command_type, intended, phase, settle_mode, issuer, stamped: ([.issued_at, .delivered_at, .executed_at, .settled_at] | map(. != null))}'`
+Type `omniglass component command list "$socket" --limit 1 | jq -c '.commands[0] | {command_type, intended, phase, settle_mode, issuer, stamped: ([.issued_at, .delivered_at, .executed_at, .settled_at] | map(. != null))}'`
 Enter
 Wait
 Sleep 2s
@@ -59,9 +59,16 @@ Hide
 Type "clear"
 Enter
 Wait
+Show
+
+Type "# A third bar, collected by a node that is powered off: the command waits in its queue"
+Enter
+Wait
 Type `dark='depot.bay-1.$comp.dark-bar'`
 Enter
 Wait
+
+Hide
 Type `demo_hush 'omniglass node create --name edge-depot-dark --label "Depot edge (powered off)"'`
 Enter
 Wait
@@ -73,13 +80,7 @@ Enter
 Wait
 Show
 
-Type "# A third bar, collected by a node that is powered off: the command waits in its queue"
-Enter
-Wait
-Type `dark='depot.bay-1.$comp.dark-bar'`
-Enter
-Wait
-Type `omniglass component command issue "$dark" --command-type set-volume --value 30 | jq -c '{id, status, phase, endpoint, node, settle_window_seconds}'`
+Type `omniglass component command issue "$dark" --command-type set-volume --value 30 | jq -c '{status, phase, endpoint, node, settle_window_seconds}'`
 Enter
 Wait
 

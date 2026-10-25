@@ -22,7 +22,7 @@ export default function Toaster(): JSX.Element {
       <div class="toast toast-end toast-bottom z-70" role="status" aria-live="polite" data-testid="toaster">
         <For each={toasts()}>
           {(t) => (
-            <div class={`alert flex w-88 max-w-[calc(100vw-2rem)] items-start gap-3 border bg-base-200 py-2.5 text-sm text-base-content shadow-xl ${TONE_CLASS[t.tone]}`} data-testid="toast">
+            <div class={`alert flex w-80 max-w-[calc(100vw-2rem)] items-start gap-3 border bg-base-200 py-2.5 text-sm text-base-content shadow-xl ${TONE_CLASS[t.tone]}`} data-testid="toast">
               <div class="flex min-w-0 flex-1 flex-col gap-1">
                 <span class="font-medium">{t.title}</span>
                 <Show when={t.body}>{(body) => <div class="min-w-0">{body()()}</div>}</Show>
