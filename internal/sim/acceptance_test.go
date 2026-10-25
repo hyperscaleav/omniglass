@@ -193,17 +193,33 @@ func TestFleetServesSharedStateAcrossProtocols(t *testing.T) {
 	// over SNMP.
 	display := deviceByProfile(t, e, "boreal-edge-86")
 	dip := display.LoopbackIP.String()
-	preq, _ := http.NewRequest(http.MethodPost,
-		"http://"+faceAddr(t, display, "web-admin")+"/api/display/power",
-		bytes.NewBufferString(`{"power": "off"}`))
-	preq.Header.Set("Content-Type", "application/json")
-	preq.SetBasicAuth("admin", "boreal")
-	presp, err := http.DefaultClient.Do(preq)
-	if err != nil {
-		t.Fatalf("display power write: %v", err)
+	// The display's web admin answers digest (#1114): the challenge, then
+	// the answer to it.
+	powerOff := func(auth string) *http.Response {
+		preq, _ := http.NewRequest(http.MethodPost,
+			"http://"+faceAddr(t, display, "web-admin")+"/api/display/power",
+			bytes.NewBufferString(`{"power": "off"}`))
+		preq.Header.Set("Content-Type", "application/json")
+		if auth != "" {
+			preq.Header.Set("Authorization", auth)
+		}
+		presp, err := http.DefaultClient.Do(preq)
+		if err != nil {
+			t.Fatalf("display power write: %v", err)
+		}
+		presp.Body.Close()
+		return presp
 	}
-	presp.Body.Close()
-	if presp.StatusCode != http.StatusOK {
+	var challenge string
+	for _, v := range powerOff("").Header.Values("WWW-Authenticate") {
+		if strings.HasPrefix(v, "Digest ") {
+			challenge = v
+		}
+	}
+	if challenge == "" {
+		t.Fatal("the display's web admin sent no digest challenge")
+	}
+	if presp := powerOff(digestAnswer(challenge, http.MethodPost, "/api/display/power", "admin", "boreal", "00000001")); presp.StatusCode != http.StatusOK {
 		t.Fatalf("display power write status = %d", presp.StatusCode)
 	}
 	dg := &gosnmp.GoSNMP{

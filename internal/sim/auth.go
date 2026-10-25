@@ -49,6 +49,28 @@ func httpAuthFromProfile(a profile.Auth) HTTPAuth {
 			QueryName:   a.Query,
 			PublicPaths: append([]string(nil), a.PublicPaths...),
 		}
+	case "form", "token", "digest":
+		h := HTTPAuth{
+			Mode:        HTTPAuthMode(a.Type),
+			User:        a.DefaultUser,
+			Password:    a.DefaultPassword,
+			Realm:       a.Realm,
+			PublicPaths: append([]string(nil), a.PublicPaths...),
+			LoginPath:   a.LoginPath,
+			SessionTTL:  a.SessionTTL,
+			Algorithm:   a.Algorithm,
+			ExpirePath:  a.ExpirePath,
+		}
+		switch {
+		case h.LoginPath == "" && h.Mode == HTTPAuthForm:
+			h.LoginPath = "/login"
+		case h.LoginPath == "" && h.Mode == HTTPAuthToken:
+			h.LoginPath = "/api/login"
+		}
+		if h.Mode == HTTPAuthDigest && h.Algorithm == "" {
+			h.Algorithm = "MD5"
+		}
+		return h
 	default:
 		return HTTPAuth{}
 	}
@@ -86,6 +108,18 @@ func (d *Device) checkHTTPAuth(w http.ResponseWriter, r *http.Request) bool {
 		if r.URL.Path == p {
 			return true
 		}
+	}
+
+	// The console's own operations are trusted past a login face (#1114),
+	// as an operator at the component's screen would be.
+	switch d.HTTPAuth.Mode {
+	case HTTPAuthForm, HTTPAuthToken, HTTPAuthDigest:
+		if isConsole(r) {
+			return true
+		}
+	}
+	if allowed, handled := d.checkLoginFace(w, r); handled {
+		return allowed
 	}
 
 	switch d.HTTPAuth.Mode {

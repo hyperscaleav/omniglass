@@ -262,6 +262,16 @@ type Auth struct {
 	Query       string   `yaml:"query"`
 	Realm       string   `yaml:"realm"`
 	PublicPaths []string `yaml:"public_paths"`
+	// LoginPath is a form or token face's login path (#1114): /login and
+	// /api/login when empty. SessionTTL is the seconds a session it opens
+	// lives (a token's expires_in; zero keeps a form session until it is
+	// expired, and gives a token an hour). Algorithm is a digest face's
+	// hash, MD5 (the default) or SHA-256. ExpirePath is the path the
+	// console fires to expire every session and rotate the digest nonce.
+	LoginPath  string `yaml:"login_path"`
+	SessionTTL int    `yaml:"session_ttl"`
+	Algorithm  string `yaml:"algorithm"`
+	ExpirePath string `yaml:"expire_path"`
 }
 
 // Route defines an HTTP route match and its template.

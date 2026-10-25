@@ -259,7 +259,10 @@
             "header",
             "bearer",
             "query",
-            "password"
+            "password",
+            "form",
+            "token",
+            "digest"
           ]
         },
         "default_user": {
@@ -299,6 +302,27 @@
           "items": {
             "type": "string"
           }
+        },
+        "login_path": {
+          "type": "string",
+          "description": "A form or token http face's login path: /login (form) and /api/login (token) when empty."
+        },
+        "session_ttl": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "The seconds a session a form or token face opens lives: a token's expires_in (an hour when zero), and a form session until it is expired when zero."
+        },
+        "algorithm": {
+          "type": "string",
+          "enum": [
+            "MD5",
+            "SHA-256"
+          ],
+          "description": "A digest http face's hash: MD5 when empty."
+        },
+        "expire_path": {
+          "type": "string",
+          "description": "The path the console fires (POST) to expire every session a form or token face opened and rotate a digest face's nonce, as a reboot would."
         }
       },
       "additionalProperties": false
