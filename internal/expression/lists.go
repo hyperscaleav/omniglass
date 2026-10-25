@@ -495,6 +495,9 @@ func typeWords(t reflect.Type) string {
 		return "nil"
 	}
 	if el, ok := listElem(t); ok {
+		if f, ok := valueField(el); ok && el.Field(f).Type.Kind() != reflect.Struct {
+			return "a list of records whose value is " + typeWords(el.Field(f).Type)
+		}
 		switch {
 		case isNumberKind(el.Kind()):
 			return "a list of numbers"

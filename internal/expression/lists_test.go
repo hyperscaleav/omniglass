@@ -146,7 +146,7 @@ func TestListFunctionsRefuseMistyped(t *testing.T) {
 		// A record without a value field does not fold; a value of the
 		// wrong type is refused as its list would be.
 		{"avg(pts)", Float, 1, 5, "list of records"},
-		{"avg(tags)", Float, 1, 5, "number"},
+		{"avg(tags)", Float, 1, 5, "records whose value is text"},
 		{"any(samples)", Bool, 1, 5, "bools"},
 		// A sum of bools is explained as the counting it meant (#1021).
 		{"sum(pts, .has)", Bool, 1, 1, "count(...)"},

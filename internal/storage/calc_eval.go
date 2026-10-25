@@ -245,9 +245,14 @@ pass:
 // rule's oldest sample has left its window since the rule last computed there
 // (calc_rule_state.window_due_at, set by that computation), so a window that
 // ages out with no new sample still recomputes (#1142). Each mark is its own
-// statement: it holds no lock while it waits on a mark a serve holds, so it
-// joins no lock cycle. A due time stays set until the recompute replaces it,
-// so a mark lost to a crash is made again on the next tick.
+// statement, so it holds no other mark while it waits on one a serve holds.
+// It takes the rule's row FOR SHARE SKIP LOCKED, as a serve does: a rule a
+// write holds FOR UPDATE (whose reset re-marks its owners anyway, or whose
+// delete takes its state with it) is passed over rather than waited on,
+// since the mark's foreign key check would otherwise wait on the write while
+// the write's reset waits on the mark. A due time stays set until the
+// recompute replaces it, so a mark passed over or lost to a crash is made
+// again on the next tick.
 func (p *PG) markCalcWindowsDue(ctx context.Context, limit int) error {
 	rows, err := p.pool.Query(ctx, `select rule_id::text, component_id::text from calc_rule_state
 		where window_due_at <= now() and computed_at < window_due_at and component_id is not null
@@ -271,7 +276,7 @@ func (p *PG) markCalcWindowsDue(ctx context.Context, limit int) error {
 	}
 	for _, x := range found {
 		if _, err := p.pool.Exec(ctx, `insert into calc_pending (rule_id, owner_kind, component_id)
-			select $1::uuid, 'component', $2::uuid where exists (select 1 from calc_rule where id = $1::uuid and enabled)
+			select r.id, 'component', $2::uuid from calc_rule r where r.id = $1::uuid and r.enabled for share skip locked
 			on conflict on constraint calc_pending_key do update set marked_at = calc_pending.marked_at`, x.rule, x.comp); err != nil {
 			return fmt.Errorf("storage: mark a due calc window: %w", err)
 		}
@@ -650,8 +655,11 @@ func calcSeries(lane rules.Lane) (table, typeCol, value string) {
 // calculated values only, as readCalcInput reads; the named instances' when
 // the window holds one, else the aggregate instance's; the newest
 // rules.MaxCalcWindowSamples kept. due is when the oldest kept sample leaves
-// the window (nil for an empty window). One range read of the series index,
-// which leads with owner and type.
+// the window (nil for an empty window). The series index leads with owner
+// and type, then instance, so the read touches every in-window sample of the
+// key before it keeps the newest: its cost is the window's volume, bounded by
+// rules.MaxCalcWindow. The window is in the samples' own time (ts) against
+// the server's now.
 func readCalcWindow(ctx context.Context, tx pgx.Tx, owner calcOwner, in rules.TypedInput) (samples []any, due *time.Time, err error) {
 	table, typeCol, value := calcSeries(in.Lane)
 	rows, err := tx.Query(ctx, fmt.Sprintf(`select instance, %[3]s, ts from %[1]s

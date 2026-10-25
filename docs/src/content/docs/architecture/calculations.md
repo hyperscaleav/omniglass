@@ -193,8 +193,14 @@ and `len(rtt)` how many samples it holds; a predicate reads a record's fields as
   trusts what a current-value input would leave out. One read keeps the window's newest 1000 samples,
   so a key sampled faster than its window expects cannot make a computation unbounded. A window or a
   ceiling outside them is refused at write on the input's `window_seconds`.
-- **Reading.** One range read of the series index (owner, type, then time), through the gateway's
-  calc read like every other input; intended values are never read.
+- **Reading.** Through the gateway's calc read like every other input, by the series index (owner and
+  type lead it, then instance and time), so the read touches every sample of the key on the component
+  inside the window before it keeps the newest 1000: its cost is the window's volume, which the hour
+  ceiling bounds. Intended values are never read. The window is in the samples' own time (`ts`, the
+  producer's clock) against the server's: a collector whose clock lags by more than the window has no
+  sample in it, and the input reads missing while a current-value input over the same key still works.
+- **Preview.** A preview weighs a windowed input on its work cap as a range read (a hundred
+  current-value reads), so a windowed candidate previews fewer owners before it says it truncated.
 - **Aging out.** A window moves with no new sample, so its value must too. Each computation records,
   in the owner's `calc_rule_state.window_due_at`, when its oldest kept sample leaves the window, and the
   tick marks every owner whose due time has passed since it last computed there, one statement a mark
@@ -204,7 +210,8 @@ and `len(rtt)` how many samples it holds; a predicate reads a record's fields as
 - **Not yet** (#1143): a sample's outcome (a lost probe) and `rate`, which need the observation model
   #1063 introduces; windows on a system rule; the console's window field and editor completion (a
   windowed rule is written from the CLI or the API today, and the console shows its other fields); a cap
-  refused at write from the key's declared cadence; and a backtest over the window.
+  refused at write from the key's declared cadence; naming a truncated window in the state; a window
+  measured in arrival time rather than the producer's; and a backtest over the window.
 
 ### System rules
 

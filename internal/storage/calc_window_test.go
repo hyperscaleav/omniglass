@@ -147,3 +147,40 @@ func TestCalcWindowRefused(t *testing.T) {
 		t.Errorf("update to a 2h window: %v, want ErrCalcRuleInvalid", err)
 	}
 }
+
+// TestCalcWindowPreview proves a windowed candidate previews the window's
+// mean, and that a windowed input weighs on the preview's work cap as the
+// range read it is, not as one current-value read (#1142 review).
+func TestCalcWindowPreview(t *testing.T) {
+	r := newEvalRig(t)
+	other, err := r.gw.CreateComponent(r.ctx, "", storage.ComponentSpec{Name: "calc-other"}, r.all, r.all, r.all, r.all)
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now()
+	r.metricAt("room-temperature", 10, now.Add(-time.Minute))
+	r.metricAt("room-temperature", 30, now)
+	if err := r.gw.InsertMetricSamples(r.ctx, storage.PushWriter(), []storage.MetricSampleWrite{{OwnerKind: "component", OwnerID: other.ID,
+		Key: "room-temperature", Value: 5, Source: "test", TS: now}}); err != nil {
+		t.Fatal(err)
+	}
+	pv, err := r.gw.PreviewCalcRule(r.ctx, windowSpec("", 300), r.all, r.all)
+	if err != nil || pv.OwnersJudged != 2 || pv.Truncated {
+		t.Fatalf("preview %+v (%v), want both owners judged", pv, err)
+	}
+	mean := ""
+	for _, o := range pv.Owners {
+		if o.OwnerID == r.comp {
+			mean = string(o.Value)
+		}
+	}
+	if mean != "20" {
+		t.Fatalf("the window's preview on calc-target is %v, want 20", mean)
+	}
+	restore := storage.SetCalcPreviewWorkCap(150)
+	pv, err = r.gw.PreviewCalcRule(r.ctx, windowSpec("", 300), r.all, r.all)
+	restore()
+	if err != nil || pv.OwnersJudged != 1 || !pv.Truncated {
+		t.Fatalf("a work-capped windowed preview %+v (%v), want 1 of 2, truncated", pv, err)
+	}
+}
